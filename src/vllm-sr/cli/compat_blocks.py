@@ -16,8 +16,8 @@ from cli.compat_blocks_inline_models import (
     HallucinationMitigationCompatConfig,
     ModalityDetectorCompatConfig,
 )
+from cli.compat_blocks_model_selection import ModelSelectionCompatConfig
 from cli.compat_blocks_runtime_misc import (
-    ProviderDefaultsCompatConfig,
     RuntimeTopLevelCompatConfig,
     VectorStoreCompatConfig,
 )
@@ -34,6 +34,7 @@ _NAMED_TYPED_COMPAT_KEYS = (
     "image_gen_backends",
     "looper",
     "modality_detector",
+    "model_selection",
     "observability",
     "prompt_guard",
     "provider_profiles",
@@ -56,11 +57,6 @@ _RUNTIME_TOP_LEVEL_KEYS = (
     "config_source",
     "mom_registry",
     "strategy",
-)
-_PROVIDER_DEFAULT_KEYS = (
-    "default_model",
-    "default_reasoning_effort",
-    "reasoning_families",
 )
 
 
@@ -408,9 +404,9 @@ class TypedCompatBlocks(BaseModel):
     image_gen_backends: ImageGenBackendsCompatConfig | None = None
     looper: LooperCompatConfig | None = None
     modality_detector: ModalityDetectorCompatConfig | None = None
+    model_selection: ModelSelectionCompatConfig | None = None
     observability: ObservabilityCompatConfig | None = None
     prompt_guard: PromptGuardCompatConfig | None = None
-    provider_defaults: ProviderDefaultsCompatConfig | None = None
     provider_profiles: ProviderProfilesCompatConfig | None = None
     ratelimit: RateLimitCompatConfig | None = None
     router_options: RouterOptionsCompatConfig | None = None
@@ -441,13 +437,10 @@ def extract_typed_compat_blocks(
     typed_input = _pop_present_keys(sanitized_data, _NAMED_TYPED_COMPAT_KEYS)
     router_options_input = _pop_present_keys(sanitized_data, _ROUTER_OPTION_KEYS)
     runtime_top_level_input = _pop_present_keys(sanitized_data, _RUNTIME_TOP_LEVEL_KEYS)
-    provider_defaults_input = _pop_present_keys(sanitized_data, _PROVIDER_DEFAULT_KEYS)
     if router_options_input:
         typed_input["router_options"] = router_options_input
     if runtime_top_level_input:
         typed_input["runtime_top_level"] = runtime_top_level_input
-    if provider_defaults_input:
-        typed_input["provider_defaults"] = provider_defaults_input
 
     compat_blocks = TypedCompatBlocks(**typed_input)
     return sanitized_data, compat_blocks

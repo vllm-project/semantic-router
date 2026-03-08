@@ -93,6 +93,7 @@ _NAMED_TYPED_COMPAT_MERGES = (
         "modality_detector",
         "  Added modality_detector configuration",
     ),
+    ("model_selection", "model_selection", "  Added model_selection configuration"),
     ("observability", "observability", "  Added observability configuration"),
     ("prompt_guard", "prompt_guard", "  Added prompt_guard configuration"),
     (
@@ -228,10 +229,6 @@ def _merge_typed_compat_blocks(merged: dict[str, Any], user_config: UserConfig) 
     if compat_blocks.runtime_top_level is not None:
         merged.update(dump_typed_compat_block(compat_blocks.runtime_top_level))
         log.info("  Added runtime top-level compatibility keys")
-
-    if compat_blocks.provider_defaults is not None:
-        merged.update(dump_typed_compat_block(compat_blocks.provider_defaults))
-        log.info("  Added root provider default compatibility keys")
 
 
 def _merge_named_typed_compat_block(

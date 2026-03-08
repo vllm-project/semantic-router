@@ -7,6 +7,7 @@ import yaml
 from pydantic import ValidationError
 
 from cli.compat_blocks import attach_typed_compat_blocks, extract_typed_compat_blocks
+from cli.legacy_normalization import normalize_legacy_user_config
 from cli.models import UserConfig
 from cli.user_config_top_level import validate_user_config_top_level_keys
 from cli.utils import getLogger
@@ -56,6 +57,7 @@ def parse_user_config(config_path: str) -> UserConfig:
 
     # Validate with Pydantic
     try:
+        data = normalize_legacy_user_config(data)
         validate_user_config_top_level_keys(data)
         sanitized_data, compat_blocks = extract_typed_compat_blocks(data)
         config = UserConfig(**sanitized_data)

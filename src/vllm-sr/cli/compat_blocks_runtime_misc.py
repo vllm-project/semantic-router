@@ -15,25 +15,6 @@ class RuntimeTopLevelCompatConfig(BaseModel):
     strategy: str | None = None
 
 
-class ReasoningFamilyCompatConfig(BaseModel):
-    """Typed schema for root-level reasoning_families legacy aliases."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    type: str | None = None
-    parameter: str | None = None
-
-
-class ProviderDefaultsCompatConfig(BaseModel):
-    """Typed schema for root-level provider default aliases."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    default_model: str | None = None
-    default_reasoning_effort: str | None = None
-    reasoning_families: dict[str, ReasoningFamilyCompatConfig] | None = None
-
-
 class VectorStoreMemoryCompatConfig(BaseModel):
     """Typed schema for vector_store.memory."""
 

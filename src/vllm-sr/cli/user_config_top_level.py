@@ -15,6 +15,7 @@ EXPLICIT_TYPED_TOP_LEVEL_KEYS = {
     "looper",
     "max_streamed_body_bytes",
     "modality_detector",
+    "model_selection",
     "mom_registry",
     "observability",
     "prompt_guard",
@@ -33,8 +34,7 @@ EXPLICIT_TYPED_TOP_LEVEL_KEYS = {
     "vector_store",
 }
 
-
-LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS = {
+NORMALIZED_LEGACY_TOP_LEVEL_KEYS = {
     "categories",
     "complexity_rules",
     "context_rules",
@@ -45,13 +45,14 @@ LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS = {
     "language_rules",
     "modality_rules",
     "model_config",
-    "model_selection",
     "pii",
     "preference_rules",
     "role_bindings",
     "user_feedback_rules",
     "vllm_endpoints",
 }
+
+LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS: set[str] = set()
 
 ALLOWED_USER_CONFIG_TOP_LEVEL_KEYS = (
     {
@@ -64,6 +65,7 @@ ALLOWED_USER_CONFIG_TOP_LEVEL_KEYS = (
         "version",
     }
     | EXPLICIT_TYPED_TOP_LEVEL_KEYS
+    | NORMALIZED_LEGACY_TOP_LEVEL_KEYS
     | LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS
 )
 

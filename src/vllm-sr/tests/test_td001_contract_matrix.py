@@ -21,6 +21,14 @@ AUTHORING_FIXTURE = (
     REPO_ROOT / "config" / "testing" / "td001-first-slice-authoring.yaml"
 )
 RUNTIME_FIXTURE = REPO_ROOT / "config" / "testing" / "td001-first-slice-runtime.yaml"
+FIRST_SLICE_LEGACY_RUNTIME_KEYS = {
+    "default_model",
+    "default_reasoning_effort",
+    "keyword_rules",
+    "model_config",
+    "reasoning_families",
+    "vllm_endpoints",
+}
 
 
 def _load_yaml(path: Path):
@@ -108,6 +116,20 @@ class TestTD001ContractMatrix(unittest.TestCase):
         merged_errors = validate_merged_config(merged)
         self.assertEqual([], merged_errors)
 
+        self.assertEqual(_load_yaml(RUNTIME_FIXTURE), _extract_runtime_slice(merged))
+
+    def test_cli_dual_read_normalizes_shared_first_slice_runtime_fixture(self):
+        user_config = parse_user_config(str(RUNTIME_FIXTURE))
+
+        self.assertEqual("v0.1", user_config.version)
+        self.assertEqual([], validate_user_config(user_config))
+
+        extra = getattr(user_config, "model_extra", {}) or {}
+        self.assertFalse(FIRST_SLICE_LEGACY_RUNTIME_KEYS & set(extra))
+
+        merged = merge_configs(user_config, load_embedded_defaults())
+
+        self.assertEqual([], validate_merged_config(merged))
         self.assertEqual(_load_yaml(RUNTIME_FIXTURE), _extract_runtime_slice(merged))
 
 

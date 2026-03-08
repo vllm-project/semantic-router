@@ -11,6 +11,7 @@ CLI_ROOT = Path(__file__).resolve().parents[1]
 if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
 
+from cli.compat_blocks import dump_typed_compat_block, get_typed_compat_blocks
 from cli.defaults import load_embedded_defaults
 from cli.merger import merge_configs
 from cli.parser import ConfigParseError, parse_user_config
@@ -77,15 +78,114 @@ class TestCLITopLevelCompatibility(unittest.TestCase):
         self.assertIn("unsupported top-level config keys", str(ctx.exception))
         self.assertIn("totally_unknown_block", str(ctx.exception))
 
-    def test_merge_preserves_remaining_named_legacy_top_level_block(self):
+    def test_model_selection_uses_typed_compat_path(self):
         defaults = load_embedded_defaults()
         config_data = _base_user_config()
-        config_data["model_selection"] = defaults["model_selection"]
+        config_data["model_selection"] = {
+            "enabled": True,
+            "method": "elo",
+            "elo": {
+                "k_factor": 24,
+                "category_weighted": True,
+                "storage_path": "/tmp/elo.json",
+            },
+            "ml": {
+                "models_path": "models/model_selection",
+                "embedding_dim": 1024,
+                "knn": {
+                    "k": 5,
+                    "pretrained_path": "models/model_selection/knn_model.json",
+                },
+            },
+        }
 
         user_config = _parse_config_dict(config_data)
+        compat_blocks = get_typed_compat_blocks(user_config)
         merged = merge_configs(user_config, defaults)
+        typed_model_selection = dump_typed_compat_block(compat_blocks.model_selection)
 
-        self.assertEqual(defaults["model_selection"], merged["model_selection"])
+        self.assertIsNotNone(compat_blocks.model_selection)
+        self.assertTrue(typed_model_selection["enabled"])
+        self.assertEqual("elo", typed_model_selection["method"])
+        self.assertEqual(24.0, typed_model_selection["elo"]["k_factor"])
+        self.assertTrue(typed_model_selection["elo"]["category_weighted"])
+        self.assertEqual("/tmp/elo.json", typed_model_selection["elo"]["storage_path"])
+        self.assertEqual(
+            config_data["model_selection"]["ml"], typed_model_selection["ml"]
+        )
+        self.assertNotIn(
+            "model_selection", getattr(user_config, "model_extra", {}) or {}
+        )
+        self.assertEqual(typed_model_selection, merged["model_selection"])
+
+    def test_merge_rejects_unnormalized_legacy_provider_runtime_key(self):
+        defaults = load_embedded_defaults()
+        config_data = _base_user_config()
+        config_data["model_config"] = "not-a-dict"
+
+        user_config = _parse_config_dict(config_data)
+
+        with self.assertRaises(ValueError) as ctx:
+            merge_configs(user_config, defaults)
+
+        self.assertIn(
+            "unsupported passthrough top-level config key: model_config",
+            str(ctx.exception),
+        )
+
+    def test_parse_normalizes_legacy_signal_runtime_blocks(self):
+        defaults = load_embedded_defaults()
+        config_data = _base_user_config()
+        config_data.update(
+            {
+                "categories": [
+                    {
+                        "name": "billing",
+                        "description": "Billing domain",
+                        "mmlu_categories": ["business"],
+                    }
+                ],
+                "language_rules": [
+                    {
+                        "name": "english",
+                        "description": "Match English prompts",
+                    }
+                ],
+                "context_rules": [
+                    {
+                        "name": "long_context",
+                        "min_tokens": "8K",
+                        "max_tokens": "128K",
+                        "description": "Long context requests",
+                    }
+                ],
+                "role_bindings": [
+                    {
+                        "name": "admin_binding",
+                        "role": "admin",
+                        "subjects": [{"kind": "User", "name": "alice"}],
+                        "description": "Bind alice to admin",
+                    }
+                ],
+            }
+        )
+
+        user_config = _parse_config_dict(config_data)
+        extra = getattr(user_config, "model_extra", {}) or {}
+
+        for key in ("categories", "language_rules", "context_rules", "role_bindings"):
+            self.assertNotIn(key, extra)
+
+        self.assertEqual("billing", user_config.signals.domains[0].name)
+        self.assertEqual("english", user_config.signals.language[0].name)
+        self.assertEqual("long_context", user_config.signals.context[0].name)
+        self.assertEqual("admin", user_config.signals.role_bindings[0].role)
+
+        merged = merge_configs(user_config, defaults)
+        self.assertEqual(config_data["categories"], merged["categories"])
+        self.assertEqual(config_data["language_rules"], merged["language_rules"])
+        self.assertEqual(config_data["context_rules"], merged["context_rules"])
+        self.assertEqual(config_data["role_bindings"], merged["role_bindings"])
 
 
 if __name__ == "__main__":

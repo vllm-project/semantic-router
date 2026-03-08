@@ -68,9 +68,10 @@ def _parse_config_dict(config_data: dict):
 
 
 class TestCLITypedRuntimeMiscCompat(unittest.TestCase):
-    def test_root_provider_defaults_use_typed_compat_path(self):
+    def test_root_provider_defaults_normalize_into_nested_providers(self):
         defaults = load_embedded_defaults()
         config_data = _base_user_config()
+        config_data["providers"].pop("default_model", None)
         config_data.update(
             {
                 "default_model": "qwen3-4b",
@@ -82,18 +83,21 @@ class TestCLITypedRuntimeMiscCompat(unittest.TestCase):
         )
 
         user_config = _parse_config_dict(config_data)
-        compat_blocks = get_typed_compat_blocks(user_config)
 
-        self.assertIsNotNone(compat_blocks.provider_defaults)
         self.assertEqual(
+            "qwen3-4b",
+            user_config.providers.default_model,
+        )
+        self.assertEqual(
+            "medium",
+            user_config.providers.default_reasoning_effort,
+        )
+        self.assertEqual(
+            {"qwen3": {"type": "effort", "parameter": "reasoning_effort"}},
             {
-                "default_model": "qwen3-4b",
-                "default_reasoning_effort": "medium",
-                "reasoning_families": {
-                    "qwen3": {"type": "effort", "parameter": "reasoning_effort"}
-                },
+                name: family.model_dump()
+                for name, family in user_config.providers.reasoning_families.items()
             },
-            dump_typed_compat_block(compat_blocks.provider_defaults),
         )
         extra = getattr(user_config, "model_extra", {}) or {}
         self.assertNotIn("default_model", extra)
