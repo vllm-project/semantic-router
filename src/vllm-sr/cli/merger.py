@@ -1,500 +1,66 @@
 """Configuration merger for vLLM Semantic Router."""
 
 import copy
-from typing import Dict, Any, List, Tuple
-from urllib.parse import urlparse
+from typing import Any
 
-from cli.models import (
-    UserConfig,
-    PluginType,
-    AlgorithmConfig,
-    LatencyAwareAlgorithmConfig,
+from cli.compat_blocks import get_typed_compat_blocks
+from cli.models import UserConfig
+from cli.router_translation import (
+    extract_categories_from_decisions,
+    translate_complexity_signals,
+    translate_context_signals,
+    translate_decisions,
+    translate_embedding_signals,
+    translate_fact_check_signals,
+    translate_jailbreak_signals,
+    translate_keyword_signals,
+    translate_language_signals,
+    translate_listeners,
+    translate_pii_signals,
+    translate_preference_signals,
+    translate_providers_to_router_format,
+    translate_user_feedback_signals,
 )
-from cli.defaults import load_embedded_defaults
+from cli.user_config_top_level import LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS
 from cli.utils import getLogger
 
 log = getLogger(__name__)
 
-
-def _condition_to_dict(condition) -> Dict[str, Any]:
-    """Serialize recursive condition node to router rule dict."""
-    node: Dict[str, Any] = {}
-    ctype = getattr(condition, "type", None)
-    cname = getattr(condition, "name", None)
-    cop = getattr(condition, "operator", None)
-    cchildren = getattr(condition, "conditions", None)
-
-    if ctype is not None:
-        node["type"] = ctype
-    if cname is not None:
-        node["name"] = cname
-    if cop is not None:
-        node["operator"] = cop
-    if cchildren:
-        node["conditions"] = [_condition_to_dict(c) for c in cchildren]
-    return node
-
-
-def _iter_condition_nodes(conditions):
-    """Depth-first traversal over recursive condition trees."""
-    if not conditions:
-        return
-    for condition in conditions:
-        yield condition
-        if getattr(condition, "conditions", None):
-            yield from _iter_condition_nodes(condition.conditions)
-
-
-def translate_keyword_signals(keywords: list) -> list:
-    """
-    Translate keyword signals to router format.
-
-    Args:
-        keywords: List of KeywordSignal objects
-
-    Returns:
-        list: Router keyword rules
-    """
-    rules = []
-    for signal in keywords:
-        rules.append(
-            {
-                "name": signal.name,
-                "operator": signal.operator,
-                "keywords": signal.keywords,
-                "case_sensitive": signal.case_sensitive,
-            }
-        )
-    return rules
-
-
-def translate_embedding_signals(embeddings: list) -> list:
-    """
-    Translate embedding signals to router format.
-
-    Args:
-        embeddings: List of EmbeddingSignal objects
-
-    Returns:
-        list: Router embedding rules
-    """
-    rules = []
-    for signal in embeddings:
-        rules.append(
-            {
-                "name": signal.name,
-                "threshold": signal.threshold,
-                "candidates": signal.candidates,
-                "aggregation_method": signal.aggregation_method,
-            }
-        )
-    return rules
-
-
-def translate_fact_check_signals(fact_checks: list) -> list:
-    """
-    Translate fact check signals to router format.
-
-    Args:
-        fact_checks: List of FactCheck objects
-
-    Returns:
-        list: Router fact check rules
-    """
-    rules = []
-    for signal in fact_checks:
-        rule = {
-            "name": signal.name,
-        }
-        if signal.description:
-            rule["description"] = signal.description
-        rules.append(rule)
-    return rules
-
-
-def translate_user_feedback_signals(user_feedbacks: list) -> list:
-    """
-    Translate user feedback signals to router format.
-
-    Args:
-        user_feedbacks: List of UserFeedback objects
-
-    Returns:
-        list: Router user feedback rules
-    """
-    rules = []
-    for signal in user_feedbacks:
-        rule = {
-            "name": signal.name,
-        }
-        if signal.description:
-            rule["description"] = signal.description
-        rules.append(rule)
-    return rules
-
-
-def translate_preference_signals(preferences: list) -> list:
-    """
-    Translate preference signals to router format.
-
-    Args:
-        preferences: List of Preference objects
-
-    Returns:
-        list: Router preference rules
-    """
-    rules = []
-    for signal in preferences:
-        rule = {
-            "name": signal.name,
-        }
-        if signal.description:
-            rule["description"] = signal.description
-        if signal.threshold is not None:
-            rule["threshold"] = signal.threshold
-        if signal.examples:
-            rule["examples"] = signal.examples
-        rules.append(rule)
-    return rules
-
-
-def translate_language_signals(languages: list) -> list:
-    """
-    Translate language signals to router format.
-
-    Args:
-        languages: List of Language objects
-
-    Returns:
-        list: Router language rules
-    """
-    rules = []
-    for signal in languages:
-        rule = {
-            "name": signal.name,
-        }
-        if signal.description:
-            rule["description"] = signal.description
-        rules.append(rule)
-    return rules
-
-
-def translate_context_signals(context_rules: list) -> list:
-    """
-    Translate context signals to router format.
-
-    Args:
-        context_rules: List of ContextRule objects
-
-    Returns:
-        list: Router context rules
-    """
-    rules = []
-    for signal in context_rules:
-        rule = {
-            "name": signal.name,
-            "min_tokens": signal.min_tokens,
-            "max_tokens": signal.max_tokens,
-        }
-        if signal.description:
-            rule["description"] = signal.description
-        rules.append(rule)
-    return rules
-
-
-def translate_complexity_signals(complexity_rules: list) -> list:
-    """
-    Translate complexity signals to router format.
-
-    Args:
-        complexity_rules: List of ComplexityRule objects
-
-    Returns:
-        list: Router complexity rules
-    """
-    rules = []
-    for signal in complexity_rules:
-        rule = {
-            "name": signal.name,
-            "threshold": signal.threshold,
-            "hard": {"candidates": signal.hard.candidates},
-            "easy": {"candidates": signal.easy.candidates},
-        }
-        if signal.description:
-            rule["description"] = signal.description
-        if signal.composer:
-            rule["composer"] = _condition_to_dict(signal.composer)
-        rules.append(rule)
-    return rules
-
-
-def translate_jailbreak_signals(jailbreak_rules: list) -> list:
-    """
-    Translate jailbreak signals to router format.
-
-    Args:
-        jailbreak_rules: List of JailbreakRule objects
-
-    Returns:
-        list: Router jailbreak rules
-    """
-    rules = []
-    for signal in jailbreak_rules:
-        rule = {
-            "name": signal.name,
-            "threshold": signal.threshold,
-        }
-        if signal.method:
-            rule["method"] = signal.method
-        if signal.include_history:
-            rule["include_history"] = signal.include_history
-        if signal.jailbreak_patterns:
-            rule["jailbreak_patterns"] = signal.jailbreak_patterns
-        if signal.benign_patterns:
-            rule["benign_patterns"] = signal.benign_patterns
-        if signal.description:
-            rule["description"] = signal.description
-        rules.append(rule)
-    return rules
-
-
-def translate_pii_signals(pii_rules: list) -> list:
-    """
-    Translate PII signals to router format.
-
-    Args:
-        pii_rules: List of PIIRule objects
-
-    Returns:
-        list: Router PII rules
-    """
-    rules = []
-    for signal in pii_rules:
-        rule = {
-            "name": signal.name,
-            "threshold": signal.threshold,
-        }
-        if signal.pii_types_allowed:
-            rule["pii_types_allowed"] = signal.pii_types_allowed
-        if signal.include_history:
-            rule["include_history"] = signal.include_history
-        if signal.description:
-            rule["description"] = signal.description
-        rules.append(rule)
-    return rules
-
-
-def _parse_endpoint(endpoint_str: str) -> Tuple[str, int, str]:
-    """Parse an endpoint string into (address, port, protocol).
-
-    Supports formats: "host:port", "http://host:port", "https://host:port",
-    and bare "host" (defaults to port 8000, protocol http).
-    """
-    if "://" in endpoint_str:
-        parsed = urlparse(endpoint_str)
-        address = parsed.hostname or ""
-        port = parsed.port or (443 if parsed.scheme == "https" else 80)
-        protocol = parsed.scheme
-    elif ":" in endpoint_str:
-        address, port_str = endpoint_str.rsplit(":", 1)
-        port = int(port_str)
-        protocol = "https" if port == 443 else "http"
-    else:
-        address = endpoint_str
-        port = 8000
-        protocol = "http"
-    return address, port, protocol
-
-
-def translate_external_models(external_models: list) -> list:
-    """
-    Translate external models to router format.
-
-    Args:
-        external_models: List of ExternalModel objects
-
-    Returns:
-        list: Router external model configurations
-    """
-    models = []
-    for model in external_models:
-        address, port, protocol = _parse_endpoint(model.endpoint)
-
-        config = {
-            "llm_provider": model.provider,
-            "model_role": model.role,
-            "llm_endpoint": {
-                "address": address,
-                "port": port,
-                "protocol": protocol,
-            },
-            "llm_model_name": model.model_name,
-            "llm_timeout_seconds": model.timeout_seconds,
-            "parser_type": model.parser_type,
-        }
-
-        if model.access_key:
-            config["access_key"] = model.access_key
-
-        models.append(config)
-    return models
-
-
-def translate_domains_to_categories(domains: list) -> list:
-    """
-    Translate domains to router categories format.
-
-    Args:
-        domains: List of Domain objects
-
-    Returns:
-        list: Router categories
-    """
-    categories = []
-    for domain in domains:
-        categories.append(
-            {
-                "name": domain.name,
-                "description": domain.description,
-                "mmlu_categories": domain.mmlu_categories,
-            }
-        )
-    return categories
-
-
-def extract_categories_from_decisions(decisions: list) -> list:
-    """
-    Auto-generate categories from decisions that reference domains.
-
-    Args:
-        decisions: List of Decision objects
-
-    Returns:
-        list: Auto-generated categories
-    """
-    categories = {}
-
-    for decision in decisions:
-        for condition in _iter_condition_nodes(decision.rules.conditions):
-            if condition.type == "domain":
-                if condition.name not in categories:
-                    categories[condition.name] = {
-                        "name": condition.name,
-                        "description": f"Auto-generated from decision: {decision.name}",
-                        "mmlu_categories": [condition.name],
-                    }
-
-    return list(categories.values())
-
-
-def translate_providers_to_router_format(providers) -> Dict[str, Any]:
-    """
-    Translate providers configuration to router format.
-
-    Args:
-        providers: Providers object
-
-    Returns:
-        dict: Router format with vllm_endpoints and model_config
-    """
-    # Extract endpoints from all models
-    vllm_endpoints = []
-    model_config = {}
-
-    for model in providers.models:
-        # Add model config
-        model_config[model.name] = {
-            "reasoning_family": model.reasoning_family,
-            "access_key": model.access_key,
-        }
-
-        # Add param_size if provided
-        if model.param_size:
-            model_config[model.name]["param_size"] = model.param_size
-
-        # Add api_format if provided
-        if model.api_format:
-            model_config[model.name]["api_format"] = model.api_format
-
-        # Add pricing if provided
-        if model.pricing:
-            model_config[model.name]["pricing"] = {
-                "currency": model.pricing.currency or "USD",
-                "prompt_per_1m": model.pricing.prompt_per_1m or 0.0,
-                "completion_per_1m": model.pricing.completion_per_1m or 0.0,
-            }
-
-        # Add endpoints for this model
-        for endpoint in model.endpoints:
-            # Parse endpoint: can be "host", "host:port", or "host/path" or "host:port/path"
-            endpoint_str = endpoint.endpoint
-            path = ""
-
-            # Extract path if present (e.g., "host/path" or "host:port/path")
-            if "/" in endpoint_str:
-                # Split by first "/" to separate host[:port] from path
-                parts = endpoint_str.split("/", 1)
-                endpoint_str = parts[0]  # host or host:port
-                path = "/" + parts[1]  # /path
-
-            # Parse host and port
-            if ":" in endpoint_str:
-                host, port = endpoint_str.split(":", 1)
-                port = int(port)
-            else:
-                host = endpoint_str
-                # Use default port based on protocol
-                port = 443 if endpoint.protocol == "https" else 80
-
-            endpoint_config = {
-                "name": f"{model.name}_{endpoint.name}",
-                "address": host,
-                "port": port,
-                "weight": endpoint.weight,
-                "protocol": endpoint.protocol,
-                "model": model.name,
-            }
-
-            # Add path if present
-            if path:
-                endpoint_config["path"] = path
-
-            vllm_endpoints.append(endpoint_config)
-
-    # Convert ReasoningFamily Pydantic models to dicts for YAML serialization
-    reasoning_families_dict = {}
-    if providers.reasoning_families:
-        for family_name, family_config in providers.reasoning_families.items():
-            # Convert Pydantic model to dict if needed
-            if hasattr(family_config, "model_dump"):
-                reasoning_families_dict[family_name] = family_config.model_dump()
-            elif hasattr(family_config, "dict"):
-                reasoning_families_dict[family_name] = family_config.dict()
-            elif isinstance(family_config, dict):
-                reasoning_families_dict[family_name] = family_config
-            else:
-                # Fallback: convert to dict manually
-                reasoning_families_dict[family_name] = {
-                    "type": family_config.type,
-                    "parameter": family_config.parameter,
-                }
-
-    # Translate external_models if present
-    external_models = []
-    if providers.external_models:
-        external_models = translate_external_models(providers.external_models)
-
-    return {
-        "vllm_endpoints": vllm_endpoints,
-        "model_config": model_config,
-        "default_model": providers.default_model,
-        "reasoning_families": reasoning_families_dict,
-        "default_reasoning_effort": providers.default_reasoning_effort,
-        "external_models": external_models,
-    }
-
-
-def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str, Any]:
+_SIGNAL_TRANSLATIONS = (
+    ("keywords", "keyword_rules", translate_keyword_signals, "keyword signals"),
+    ("embeddings", "embedding_rules", translate_embedding_signals, "embedding signals"),
+    (
+        "fact_check",
+        "fact_check_rules",
+        translate_fact_check_signals,
+        "fact check signals",
+    ),
+    (
+        "user_feedbacks",
+        "user_feedback_rules",
+        translate_user_feedback_signals,
+        "user feedback signals",
+    ),
+    (
+        "preferences",
+        "preference_rules",
+        translate_preference_signals,
+        "preference signals",
+    ),
+    ("language", "language_rules", translate_language_signals, "language signals"),
+    ("context", "context_rules", translate_context_signals, "context signals"),
+    (
+        "complexity",
+        "complexity_rules",
+        translate_complexity_signals,
+        "complexity signals",
+    ),
+    ("jailbreak", "jailbreak", translate_jailbreak_signals, "jailbreak signals"),
+    ("pii", "pii", translate_pii_signals, "PII signals"),
+)
+
+
+def merge_configs(user_config: UserConfig, defaults: dict[str, Any]) -> dict[str, Any]:
     """
     Merge user configuration with embedded defaults.
 
@@ -507,164 +73,142 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
     """
     log.info("Merging user configuration with defaults...")
 
-    # Start with defaults
     merged = copy.deepcopy(defaults)
+    _merge_listeners(merged, user_config)
+    _merge_signals(merged, user_config)
+    _merge_decisions(merged, user_config)
+    _merge_providers(merged, user_config)
+    _merge_optional_blocks(merged, user_config)
+    _merge_typed_compat_blocks(merged, user_config)
+    _merge_extra_fields(merged, getattr(user_config, "model_extra", None) or {})
 
-    # Translate signals
-    if user_config.signals:
-        if user_config.signals.keywords:
-            merged["keyword_rules"] = translate_keyword_signals(
-                user_config.signals.keywords
-            )
-            log.info(f"  Added {len(user_config.signals.keywords)} keyword signals")
+    log.info("Configuration merged successfully")
+    return merged
 
-        if user_config.signals.embeddings:
-            merged["embedding_rules"] = translate_embedding_signals(
-                user_config.signals.embeddings
-            )
-            log.info(f"  Added {len(user_config.signals.embeddings)} embedding signals")
 
-        if user_config.signals.fact_check and len(user_config.signals.fact_check) > 0:
-            merged["fact_check_rules"] = translate_fact_check_signals(
-                user_config.signals.fact_check
-            )
-            log.info(
-                f"  Added {len(user_config.signals.fact_check)} fact check signals"
-            )
+def _merge_listeners(merged: dict[str, Any], user_config: UserConfig) -> None:
+    if not user_config.listeners:
+        return
 
-        if (
-            user_config.signals.user_feedbacks
-            and len(user_config.signals.user_feedbacks) > 0
-        ):
-            merged["user_feedback_rules"] = translate_user_feedback_signals(
-                user_config.signals.user_feedbacks
-            )
-            log.info(
-                f"  Added {len(user_config.signals.user_feedbacks)} user feedback signals"
-            )
+    merged["listeners"] = translate_listeners(user_config.listeners)
+    log.info(f"  Added {len(user_config.listeners)} listeners")
 
-        if user_config.signals.preferences and len(user_config.signals.preferences) > 0:
-            merged["preference_rules"] = translate_preference_signals(
-                user_config.signals.preferences
-            )
-            log.info(
-                f"  Added {len(user_config.signals.preferences)} preference signals"
-            )
 
-        if user_config.signals.language and len(user_config.signals.language) > 0:
-            merged["language_rules"] = translate_language_signals(
-                user_config.signals.language
-            )
-            log.info(f"  Added {len(user_config.signals.language)} language signals")
-
-        if user_config.signals.context and len(user_config.signals.context) > 0:
-            merged["context_rules"] = translate_context_signals(
-                user_config.signals.context
-            )
-            log.info(f"  Added {len(user_config.signals.context)} context signals")
-
-        if user_config.signals.complexity and len(user_config.signals.complexity) > 0:
-            merged["complexity_rules"] = translate_complexity_signals(
-                user_config.signals.complexity
-            )
-            log.info(
-                f"  Added {len(user_config.signals.complexity)} complexity signals"
-            )
-
-        if user_config.signals.jailbreak and len(user_config.signals.jailbreak) > 0:
-            merged["jailbreak"] = translate_jailbreak_signals(
-                user_config.signals.jailbreak
-            )
-            log.info(f"  Added {len(user_config.signals.jailbreak)} jailbreak signals")
-
-        if user_config.signals.pii and len(user_config.signals.pii) > 0:
-            merged["pii"] = translate_pii_signals(user_config.signals.pii)
-            log.info(f"  Added {len(user_config.signals.pii)} PII signals")
-
-        # Translate domains to categories
-        if user_config.signals.domains:
-            merged["categories"] = translate_domains_to_categories(
-                user_config.signals.domains
-            )
-            log.info(f"  Added {len(user_config.signals.domains)} domains")
-        else:
-            # Auto-generate categories from decisions
-            merged["categories"] = extract_categories_from_decisions(
-                user_config.decisions
-            )
-            log.info(
-                f"  Auto-generated {len(merged['categories'])} categories from decisions"
-            )
-    else:
-        # No signals, auto-generate categories
+def _merge_signals(merged: dict[str, Any], user_config: UserConfig) -> None:
+    signals = user_config.signals
+    if not signals:
         merged["categories"] = extract_categories_from_decisions(user_config.decisions)
         log.info(
             f"  Auto-generated {len(merged['categories'])} categories from decisions"
         )
+        return
 
-    # Add decisions (convert to dict)
-    # Use mode='python' to ensure proper enum handling
-    decisions_list = []
-    for decision in user_config.decisions:
-        decision_dict = decision.model_dump(mode="python")
-        # Post-process plugins to ensure PluginType enums are converted to strings
-        if "plugins" in decision_dict and decision_dict["plugins"]:
-            for plugin in decision_dict["plugins"]:
-                if "type" in plugin:
-                    # Convert PluginType enum to string value
-                    if isinstance(plugin["type"], PluginType):
-                        plugin["type"] = plugin["type"].value
-                    elif hasattr(plugin["type"], "value"):
-                        plugin["type"] = plugin["type"].value
-        decisions_list.append(decision_dict)
-    merged["decisions"] = decisions_list
+    for attr, target_key, translator, label in _SIGNAL_TRANSLATIONS:
+        values = getattr(signals, attr)
+        if not values:
+            continue
+        merged[target_key] = translator(values)
+        log.info(f"  Added {len(values)} {label}")
+
+    if signals.domains:
+        merged["categories"] = [
+            {
+                "name": domain.name,
+                "description": domain.description,
+                "mmlu_categories": domain.mmlu_categories,
+            }
+            for domain in signals.domains
+        ]
+        log.info(f"  Added {len(signals.domains)} domains")
+        return
+
+    merged["categories"] = extract_categories_from_decisions(user_config.decisions)
+    log.info(f"  Auto-generated {len(merged['categories'])} categories from decisions")
+
+
+def _merge_decisions(merged: dict[str, Any], user_config: UserConfig) -> None:
+    merged["decisions"] = translate_decisions(user_config.decisions)
     log.info(f"  Added {len(user_config.decisions)} decisions")
 
-    # Translate providers
+
+def _merge_providers(merged: dict[str, Any], user_config: UserConfig) -> None:
     provider_config = translate_providers_to_router_format(user_config.providers)
     if not provider_config.get("external_models"):
         provider_config.pop("external_models", None)
+
     merged.update(provider_config)
     log.info(f"  Added {len(user_config.providers.models)} models")
     log.info(f"  Added {len(provider_config['vllm_endpoints'])} endpoints")
     if provider_config.get("external_models"):
         log.info(f"  Added {len(provider_config['external_models'])} external_models")
 
-    # Pass through memory configuration if provided
+
+def _merge_optional_blocks(merged: dict[str, Any], user_config: UserConfig) -> None:
     if user_config.memory:
-        memory_config = user_config.memory.model_dump(exclude_none=True)
-        merged["memory"] = memory_config
+        merged["memory"] = user_config.memory.model_dump(exclude_none=True)
         log.info(f"  Added memory configuration (enabled={user_config.memory.enabled})")
 
-    # Pass through embedding_models configuration if provided
-    # BERT is recommended for memory retrieval (forgiving semantic matching)
-    if user_config.embedding_models:
-        embedding_config = user_config.embedding_models.model_dump(exclude_none=True)
-        default_embedding_config = merged.get("embedding_models", {})
-        if isinstance(default_embedding_config, dict):
-            merged_embedding = copy.deepcopy(default_embedding_config)
-            for key, value in embedding_config.items():
-                if (
-                    key == "hnsw_config"
-                    and isinstance(value, dict)
-                    and isinstance(merged_embedding.get("hnsw_config"), dict)
-                ):
-                    merged_embedding["hnsw_config"].update(value)
-                else:
-                    merged_embedding[key] = value
-            merged["embedding_models"] = merged_embedding
-        else:
-            merged["embedding_models"] = embedding_config
-        log.info(f"  Added embedding_models configuration")
+    if not user_config.embedding_models:
+        return
 
-    # Pass through additional top-level config blocks that are not part of the
-    # typed UserConfig schema yet (for advanced/legacy compatibility).
-    # Examples: classifier, prompt_guard, feedback_detector.
-    extra_fields = getattr(user_config, "model_extra", None) or {}
+    embedding_config = user_config.embedding_models.model_dump(exclude_none=True)
+    default_embedding_config = merged.get("embedding_models", {})
+    if isinstance(default_embedding_config, dict):
+        merged["embedding_models"] = _merge_embedding_models(
+            default_embedding_config, embedding_config
+        )
+    else:
+        merged["embedding_models"] = embedding_config
+    log.info("  Added embedding_models configuration")
+
+
+def _merge_typed_compat_blocks(merged: dict[str, Any], user_config: UserConfig) -> None:
+    compat_blocks = get_typed_compat_blocks(user_config)
+
+    if compat_blocks.looper is not None:
+        merged["looper"] = compat_blocks.looper.model_dump(exclude_none=True)
+        log.info("  Added looper configuration")
+
+    if compat_blocks.observability is not None:
+        merged["observability"] = compat_blocks.observability.model_dump(
+            exclude_none=True
+        )
+        log.info("  Added observability configuration")
+
+    if compat_blocks.prompt_guard is not None:
+        merged["prompt_guard"] = compat_blocks.prompt_guard.model_dump(
+            exclude_none=True
+        )
+        log.info("  Added prompt_guard configuration")
+
+    if compat_blocks.tools is not None:
+        merged["tools"] = compat_blocks.tools.model_dump(exclude_none=True)
+        log.info("  Added tools configuration")
+
+
+def _merge_embedding_models(
+    default_embedding_config: dict[str, Any],
+    embedding_config: dict[str, Any],
+) -> dict[str, Any]:
+    merged_embedding = copy.deepcopy(default_embedding_config)
+    for key, value in embedding_config.items():
+        if (
+            key == "hnsw_config"
+            and isinstance(value, dict)
+            and isinstance(merged_embedding.get("hnsw_config"), dict)
+        ):
+            merged_embedding["hnsw_config"].update(value)
+            continue
+        merged_embedding[key] = value
+    return merged_embedding
+
+
+def _merge_extra_fields(merged: dict[str, Any], extra_fields: dict[str, Any]) -> None:
     for key, value in extra_fields.items():
+        if key not in LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS:
+            raise ValueError(
+                f"unsupported passthrough top-level config key: {key}. "
+                "Add explicit schema support before merging it."
+            )
         merged[key] = copy.deepcopy(value)
         log.info(f"  Added passthrough top-level config: {key}")
-
-    log.info("Configuration merged successfully")
-
-    return merged

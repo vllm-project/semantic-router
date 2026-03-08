@@ -1,11 +1,14 @@
 """Configuration parser for vLLM Semantic Router."""
 
-import yaml
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
+
+import yaml
 from pydantic import ValidationError
 
+from cli.compat_blocks import attach_typed_compat_blocks, extract_typed_compat_blocks
 from cli.models import UserConfig
+from cli.user_config_top_level import validate_user_config_top_level_keys
 from cli.utils import getLogger
 
 log = getLogger(__name__)
@@ -38,20 +41,26 @@ def parse_user_config(config_path: str) -> UserConfig:
 
     # Load YAML
     try:
-        with open(config_file, "r") as f:
+        with open(config_file) as f:
             data = yaml.safe_load(f)
     except yaml.YAMLError as e:
-        raise ConfigParseError(f"Invalid YAML syntax: {e}")
+        raise ConfigParseError(f"Invalid YAML syntax: {e}") from e
     except Exception as e:
-        raise ConfigParseError(f"Failed to read configuration file: {e}")
+        raise ConfigParseError(f"Failed to read configuration file: {e}") from e
 
     if not data:
         raise ConfigParseError("Configuration file is empty")
 
+    if not isinstance(data, dict):
+        raise ConfigParseError("Configuration file must contain a top-level mapping")
+
     # Validate with Pydantic
     try:
-        config = UserConfig(**data)
-        log.info(f"Configuration parsed successfully")
+        validate_user_config_top_level_keys(data)
+        sanitized_data, compat_blocks = extract_typed_compat_blocks(data)
+        config = UserConfig(**sanitized_data)
+        attach_typed_compat_blocks(config, compat_blocks)
+        log.info("Configuration parsed successfully")
         log.info(f"  Version: {config.version}")
         log.info(f"  Listeners: {len(config.listeners)}")
         log.info(f"  Decisions: {len(config.decisions)}")
@@ -66,12 +75,12 @@ def parse_user_config(config_path: str) -> UserConfig:
             errors.append(f"  • {loc}: {msg}")
 
         error_msg = "Configuration validation failed:\n" + "\n".join(errors)
-        raise ConfigParseError(error_msg)
+        raise ConfigParseError(error_msg) from e
     except Exception as e:
-        raise ConfigParseError(f"Unexpected error during validation: {e}")
+        raise ConfigParseError(f"Unexpected error during validation: {e}") from e
 
 
-def detect_config_format(data: Dict[str, Any]) -> str:
+def detect_config_format(data: dict[str, Any]) -> str:
     """
     Detect configuration format (new vs legacy).
 
@@ -91,7 +100,7 @@ def detect_config_format(data: Dict[str, Any]) -> str:
     return "legacy"
 
 
-def load_config_file(config_path: str) -> Dict[str, Any]:
+def load_config_file(config_path: str) -> dict[str, Any]:
     """
     Load configuration file as dictionary.
 
@@ -110,13 +119,13 @@ def load_config_file(config_path: str) -> Dict[str, Any]:
         raise ConfigParseError(f"Configuration file not found: {config_path}")
 
     try:
-        with open(config_file, "r") as f:
+        with open(config_file) as f:
             data = yaml.safe_load(f)
         return data or {}
     except yaml.YAMLError as e:
-        raise ConfigParseError(f"Invalid YAML syntax: {e}")
+        raise ConfigParseError(f"Invalid YAML syntax: {e}") from e
     except Exception as e:
-        raise ConfigParseError(f"Failed to read configuration file: {e}")
+        raise ConfigParseError(f"Failed to read configuration file: {e}") from e
 
 
 def validate_signal_uniqueness(config: UserConfig) -> list:

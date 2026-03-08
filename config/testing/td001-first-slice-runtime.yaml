@@ -1,0 +1,67 @@
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+    timeout: 300s
+keyword_rules:
+  - name: billing_keywords
+    operator: contains
+    keywords:
+      - invoice
+      - refund
+    case_sensitive: false
+vllm_endpoints:
+  - name: qwen3-4b_primary
+    address: router.internal
+    port: 8000
+    weight: 100
+    protocol: http
+    model: qwen3-4b
+  - name: qwen3-32b_secure
+    address: api.example.com
+    port: 443
+    weight: 50
+    protocol: https
+    model: qwen3-32b
+model_config:
+  qwen3-4b:
+    preferred_endpoints:
+      - qwen3-4b_primary
+    reasoning_family: qwen3
+    access_key: secret-a
+    param_size: 4b
+    api_format: openai
+    description: Small reasoning model
+    capabilities:
+      - reasoning
+      - support
+    quality_score: 0.62
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.15
+      completion_per_1m: 0.60
+  qwen3-32b:
+    preferred_endpoints:
+      - qwen3-32b_secure
+    reasoning_family: qwen3
+default_model: qwen3-4b
+reasoning_families:
+  qwen3:
+    type: effort
+    parameter: reasoning_effort
+default_reasoning_effort: medium
+decisions:
+  - name: billing-route
+    description: Route billing questions
+    priority: 90
+    rules:
+      operator: AND
+      conditions:
+        - type: keyword
+          name: billing_keywords
+    modelRefs:
+      - model: qwen3-4b
+        use_reasoning: false
+      - model: qwen3-32b
+        use_reasoning: true
+        reasoning_effort: high

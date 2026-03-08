@@ -117,6 +117,7 @@ docs:
   - docs/agent/governance.md
   - docs/agent/plans/README.md
   - docs/agent/plans/pl-0001-harness-roadmap.md
+  - docs/agent/plans/td001-config-contract-convergence.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
   - docs/agent/tech-debt/td-001-config-surface-fragmentation.md
@@ -132,6 +133,7 @@ docs:
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
   - docs/agent/adr/adr-0002-tech-debt-index-and-entry-directory.md
+  - docs/agent/adr/0003-td001-canonical-config-contract.md
   - docs/agent/change-surfaces.md
   - docs/agent/repo-map.md
   - docs/agent/environments.md
@@ -191,6 +193,9 @@ doc_governance:
     - path: docs/agent/plans/pl-0001-harness-roadmap.md
       steward: agent-contract
       freshness: update at the start and end of each harness refactor loop and after each completed loop task
+    - path: docs/agent/plans/td001-config-contract-convergence.md
+      steward: agent-contract
+      freshness: update at the start and end of each TD001 migration loop and after each completed loop task
     - path: docs/agent/tech-debt-register.md
       steward: agent-contract
       freshness: update when debt workflow or landing-page guidance changes
@@ -236,6 +241,9 @@ doc_governance:
     - path: docs/agent/adr/adr-0002-tech-debt-index-and-entry-directory.md
       steward: agent-contract
       freshness: update only if the tech debt documentation model changes materially
+    - path: docs/agent/adr/0003-td001-canonical-config-contract.md
+      steward: agent-contract
+      freshness: update only if the TD001 canonical config contract decision changes materially
     - path: docs/agent/change-surfaces.md
       steward: agent-contract
       freshness: update when surfaces or their mappings change
