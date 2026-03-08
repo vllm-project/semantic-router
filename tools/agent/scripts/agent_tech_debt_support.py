@@ -10,9 +10,8 @@ from agent_support import REPO_ROOT
 
 TECH_DEBT_DIR = REPO_ROOT / "docs" / "agent" / "tech-debt"
 TECH_DEBT_REGISTER_DOC = REPO_ROOT / "docs" / "agent" / "tech-debt-register.md"
-TECH_DEBT_ITEM_PATTERN = re.compile(r"^### (TD\d{3})\b", re.MULTILINE)
 TECH_DEBT_FILENAME_PATTERN = re.compile(r"^(TD\d{3})-[a-z0-9-]+\.md$")
-TECH_DEBT_HEADING_PATTERN = re.compile(r"^# (TD\d{3}): (.+)$", re.MULTILINE)
+TECH_DEBT_HEADING_PREFIX = "# TD"
 TECH_DEBT_ENTRY_REQUIRED_SECTIONS = [
     "## Status",
     "## Scope",
@@ -51,9 +50,7 @@ def collect_open_tech_debt_items() -> list[str]:
 
 def parse_tech_debt_entry(path: Path) -> dict[str, str | Path]:
     text = path.read_text(encoding="utf-8")
-    heading_match = TECH_DEBT_HEADING_PATTERN.search(text)
-    item_id = heading_match.group(1) if heading_match else ""
-    title = heading_match.group(2).strip() if heading_match else ""
+    item_id, title = parse_tech_debt_heading(text)
     return {
         "path": path,
         "text": text,
@@ -97,16 +94,14 @@ def validate_tech_debt_inventory_and_template(
         return
 
     register_text, debt_readme_text = texts
+    validate_tech_debt_register_landing_page(register_text, errors)
     entries = collect_tech_debt_entries()
     if not entries:
         errors.append("docs/agent/tech-debt must contain at least one TD entry")
         return
 
     manifest_docs = set(repo_manifest.get("docs", []))
-    entry_ids, entry_map = validate_tech_debt_entries(
-        entries, manifest_docs, debt_readme_text, register_text, errors
-    )
-    validate_tech_debt_register_index(register_text, entry_ids, entry_map, errors)
+    validate_tech_debt_entries(entries, manifest_docs, debt_readme_text, errors)
 
 
 def load_tech_debt_index_texts(errors: list[str]) -> tuple[str, str] | None:
@@ -132,19 +127,16 @@ def validate_tech_debt_entries(
     entries: list[dict[str, str | Path]],
     manifest_docs: set[str],
     debt_readme_text: str,
-    register_text: str,
     errors: list[str],
-) -> tuple[list[str], dict[str, dict[str, str | Path]]]:
+) -> None:
     entry_ids: list[str] = []
-    entry_map: dict[str, dict[str, str | Path]] = {}
     for entry in entries:
         item_id = validate_single_tech_debt_entry(
-            entry, manifest_docs, debt_readme_text, register_text, errors
+            entry, manifest_docs, debt_readme_text, errors
         )
         if not item_id:
             continue
         entry_ids.append(item_id)
-        entry_map[item_id] = entry
 
     duplicate_entry_ids = sorted(
         {item_id for item_id in entry_ids if entry_ids.count(item_id) > 1}
@@ -154,14 +146,12 @@ def validate_tech_debt_entries(
             "docs/agent/tech-debt has duplicate debt IDs: "
             + ", ".join(duplicate_entry_ids)
         )
-    return entry_ids, entry_map
 
 
 def validate_single_tech_debt_entry(
     entry: dict[str, str | Path],
     manifest_docs: set[str],
     debt_readme_text: str,
-    register_text: str,
     errors: list[str],
 ) -> str:
     path = entry.get("path")
@@ -170,7 +160,7 @@ def validate_single_tech_debt_entry(
 
     relative_path = path.relative_to(REPO_ROOT).as_posix()
     validate_tech_debt_entry_inventory(
-        path, relative_path, manifest_docs, debt_readme_text, register_text, errors
+        path, relative_path, manifest_docs, debt_readme_text, errors
     )
 
     text = str(entry.get("text", ""))
@@ -195,7 +185,6 @@ def validate_tech_debt_entry_inventory(
     relative_path: str,
     manifest_docs: set[str],
     debt_readme_text: str,
-    register_text: str,
     errors: list[str],
 ) -> None:
     if relative_path not in manifest_docs:
@@ -212,16 +201,12 @@ def validate_tech_debt_entry_inventory(
         errors.append(
             f"docs/agent/tech-debt/README.md must link to tech debt entry '{relative_path}'"
         )
-    if f"(tech-debt/{path.name})" not in register_text:
-        errors.append(
-            f"docs/agent/tech-debt-register.md must link to tech debt entry '{relative_path}'"
-        )
 
 
 def validate_tech_debt_entry_template(
     relative_path: str, text: str, errors: list[str]
 ) -> None:
-    if not text.startswith("# TD"):
+    if not text.startswith(TECH_DEBT_HEADING_PREFIX):
         errors.append(f"Tech debt entry '{relative_path}' must start with '# TD'")
     for section in TECH_DEBT_ENTRY_REQUIRED_SECTIONS:
         if section not in text:
@@ -230,96 +215,25 @@ def validate_tech_debt_entry_template(
             )
 
 
-def validate_tech_debt_register_index(
-    register_text: str,
-    entry_ids: list[str],
-    entry_map: dict[str, dict[str, str | Path]],
-    errors: list[str],
-) -> None:
-    register_ids = TECH_DEBT_ITEM_PATTERN.findall(register_text)
-    if not register_ids:
-        errors.append(
-            "docs/agent/tech-debt-register.md must contain at least one TD item"
-        )
-        return
-
-    duplicate_register_ids = sorted(
-        {item_id for item_id in register_ids if register_ids.count(item_id) > 1}
-    )
-    if duplicate_register_ids:
-        errors.append(
-            "docs/agent/tech-debt-register.md has duplicate debt IDs: "
-            + ", ".join(duplicate_register_ids)
-        )
-
-    summary_map = collect_register_summaries(register_text, errors)
-    report_tech_debt_index_mismatches(entry_ids, register_ids, errors)
-    for item_id, summary in summary_map.items():
-        entry = entry_map.get(item_id)
-        if entry is None:
-            continue
-        compare_register_and_entry(item_id, summary, entry, errors)
-
-
-def report_tech_debt_index_mismatches(
-    entry_ids: list[str], register_ids: list[str], errors: list[str]
-) -> None:
-    missing_from_register = sorted(set(entry_ids) - set(register_ids))
-    if missing_from_register:
-        errors.append(
-            "docs/agent/tech-debt-register.md is missing summaries for: "
-            + ", ".join(missing_from_register)
-        )
-
-    missing_entry_files = sorted(set(register_ids) - set(entry_ids))
-    if missing_entry_files:
-        errors.append(
-            "docs/agent/tech-debt is missing entry files for: "
-            + ", ".join(missing_entry_files)
-        )
-
-
-def collect_register_summaries(
+def validate_tech_debt_register_landing_page(
     register_text: str, errors: list[str]
-) -> dict[str, dict[str, str]]:
-    summary_map: dict[str, dict[str, str]] = {}
-    headings = re.findall(r"^### (TD\d{3}\b.*)$", register_text, flags=re.MULTILINE)
-    chunks = re.split(r"^### TD\d{3}\b.*$", register_text, flags=re.MULTILINE)[1:]
-    for heading, chunk in zip(headings, chunks, strict=False):
-        for marker in ("- Status:", "- Scope:", "- Summary:", "- Entry:"):
-            if marker not in chunk:
-                errors.append(
-                    f"docs/agent/tech-debt-register.md item '{heading}' is missing '{marker}'"
-                )
-        item_id = heading.split()[0]
-        summary_map[item_id] = {
-            "status": extract_register_marker_value(chunk, "Status"),
-            "scope": extract_register_marker_value(chunk, "Scope"),
-        }
-    return summary_map
-
-
-def compare_register_and_entry(
-    item_id: str,
-    summary: dict[str, str],
-    entry: dict[str, str | Path],
-    errors: list[str],
 ) -> None:
-    register_status = summary.get("status", "").strip().lower()
-    entry_status = str(entry.get("status", "")).strip().lower()
-    if register_status and entry_status and register_status != entry_status:
+    if "(tech-debt/README.md)" not in register_text:
         errors.append(
-            f"docs/agent/tech-debt-register.md item '{item_id}' status does not match its entry file"
+            "docs/agent/tech-debt-register.md must link to docs/agent/tech-debt/README.md"
         )
-
-    register_scope = summary.get("scope", "").strip().lower()
-    entry_scope = str(entry.get("scope", "")).strip().lower()
-    if register_scope and entry_scope and register_scope != entry_scope:
+    if "### TD" in register_text:
         errors.append(
-            f"docs/agent/tech-debt-register.md item '{item_id}' scope does not match its entry file"
+            "docs/agent/tech-debt-register.md must stay a landing page and must not duplicate per-item TD headings"
         )
 
 
-def extract_register_marker_value(chunk: str, marker: str) -> str:
-    match = re.search(rf"^- {marker}:\s*(.+)$", chunk, flags=re.MULTILINE)
-    return match.group(1).strip() if match else ""
+def parse_tech_debt_heading(text: str) -> tuple[str, str]:
+    first_line = text.splitlines()[0].strip() if text.splitlines() else ""
+    if not first_line.startswith(TECH_DEBT_HEADING_PREFIX):
+        return "", ""
+    if ": " not in first_line:
+        return "", ""
+    item_id = first_line.removeprefix("# ").split(":", 1)[0].strip()
+    title = first_line.split(": ", 1)[1].strip()
+    return item_id, title

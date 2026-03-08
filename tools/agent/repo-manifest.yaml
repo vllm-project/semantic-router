@@ -189,7 +189,7 @@ doc_governance:
       freshness: update at the start and end of each harness refactor loop and after each completed loop task
     - path: docs/agent/tech-debt-register.md
       steward: agent-contract
-      freshness: update when debt summary inventory, statuses, or links change
+      freshness: update when debt workflow or landing-page guidance changes
     - path: docs/agent/tech-debt/README.md
       steward: agent-contract
       freshness: update when debt entry template or inventory changes

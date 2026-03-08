@@ -1,12 +1,12 @@
 # Technical Debt Entries
 
-This directory stores the detailed debt records referenced by [../tech-debt-register.md](../tech-debt-register.md). The register is the top-level summary index. The files here hold the durable per-item details.
+This directory stores the detailed debt records referenced by [../tech-debt-register.md](../tech-debt-register.md). The register is the landing page. The files here are the durable per-item source of truth.
 
 ## When to Create or Update a Debt Entry
 
 - Create a new entry when the repo knows about a durable architecture or harness gap that will survive beyond the current change.
 - Update an existing entry when the scope, evidence, desired end state, or exit criteria materially changed.
-- Keep the summary in `docs/agent/tech-debt-register.md` and the detailed entry in this directory aligned in the same change.
+- Keep this inventory aligned with the detailed entry files in this directory.
 
 ## What Belongs in a Debt Entry
 
@@ -27,9 +27,9 @@ This directory stores the detailed debt records referenced by [../tech-debt-regi
 ## Debt Entry Versus Other Governance Files
 
 - `docs/agent/tech-debt-register.md`
-  - summary index of tracked debt items
+  - landing page and policy for technical debt workflow
 - `docs/agent/tech-debt/*.md`
-  - detailed per-item debt records
+  - detailed per-item debt records and the only source of truth for debt metadata
 - `docs/agent/adr/*.md`
   - durable harness decisions
 - `docs/agent/plans/*.md`

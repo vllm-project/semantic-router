@@ -40,4 +40,4 @@ description: Human-readable docs, executable manifests, and contributor interfac
 ## Acceptance
 
 - Canonical harness docs, manifests, and contributor surfaces stay aligned and discoverable
-- Durable architecture or harness gaps are promoted into the debt register and matching debt entry when they are not retired in the same change
+- Durable architecture or harness gaps are promoted into indexed debt entries when they are not retired in the same change

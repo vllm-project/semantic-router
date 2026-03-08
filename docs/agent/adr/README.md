@@ -38,7 +38,7 @@ Typical ADR-worthy changes:
 - `docs/agent/plans/*.md`
   - record active long-horizon execution loops and current execution state
 - `docs/agent/tech-debt-register.md` and `docs/agent/tech-debt/*.md`
-  - record the summary index and detailed entries for known durable gaps between the desired architecture and the current implementation
+  - record the landing page plus detailed entries for known durable gaps between the desired architecture and the current implementation
 - temporary execution plans
   - belong in working notes, issues, or PR descriptions until promoted into a durable canonical artifact
 

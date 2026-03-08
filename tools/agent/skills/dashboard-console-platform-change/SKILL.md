@@ -28,4 +28,4 @@ description: Use when changing dashboard backend, console persistence, auth, or 
 ## Acceptance
 
 - Console backend changes remain aligned with frontend callers and local smoke expectations
-- Any new auth, storage, or session behavior is documented in the canonical harness or tracked through the debt register plus matching debt entry
+- Any new auth, storage, or session behavior is documented in the canonical harness or tracked through the matching indexed debt entry

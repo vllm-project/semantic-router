@@ -39,7 +39,7 @@ Typical examples:
 - `docs/agent/adr/*.md`
   - record durable decisions
 - `docs/agent/tech-debt-register.md` and `docs/agent/tech-debt/*.md`
-  - record the summary index and detailed entries for durable unresolved gaps
+  - record the landing page plus detailed entries for durable unresolved gaps
 - `docs/agent/README.md`
   - indexes the canonical harness
 

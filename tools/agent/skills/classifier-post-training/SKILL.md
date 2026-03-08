@@ -26,4 +26,4 @@ description: Use when changing model-classifier fine-tuning, post-training data 
 ## Acceptance
 
 - Training workflow changes keep scripts, docs, and artifact expectations aligned
-- Runtime-facing artifact contract changes are either updated in code or recorded as tracked debt through the register and matching entry
+- Runtime-facing artifact contract changes are either updated in code or recorded as tracked debt through the matching indexed debt entry

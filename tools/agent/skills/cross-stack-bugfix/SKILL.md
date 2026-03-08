@@ -26,4 +26,4 @@ description: Use when fixing a multi-surface issue that does not map cleanly to 
 ## Acceptance
 
 - The final report explicitly names impacted surfaces and intentionally skipped conditional surfaces
-- Any real code or spec mismatch left behind is promoted into the debt register and matching debt entry
+- Any real code or spec mismatch left behind is promoted into the matching indexed debt entry

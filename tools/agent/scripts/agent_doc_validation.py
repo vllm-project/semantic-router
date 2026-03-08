@@ -37,8 +37,8 @@ REQUIRED_DOC_SECTIONS = {
     ],
     "docs/agent/tech-debt-register.md": [
         "## Why This Exists",
+        "## Canonical Files",
         "## Policy",
-        "## Open Debt Items",
         "## How to Retire Debt",
     ],
     "docs/agent/tech-debt/README.md": [

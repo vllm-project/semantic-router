@@ -28,5 +28,5 @@ description: Use when a config representation must stay aligned across router co
 ## Acceptance
 
 - The same config concept is represented consistently across the touched config surfaces
-- Any intentional remaining mismatch is recorded in the tech-debt register and matching debt entry in the same change
+- Any intentional remaining mismatch is recorded in the matching indexed debt entry in the same change
 - Platform-facing translation tests or validations are updated when behavior changes
