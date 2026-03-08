@@ -12,6 +12,7 @@ if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
 
 from cli.compat_blocks import dump_typed_compat_block, get_typed_compat_blocks
+from cli.compat_blocks_model_selection import ModelSelectionCompatConfig
 from cli.defaults import load_embedded_defaults
 from cli.merger import merge_configs
 from cli.parser import ConfigParseError, parse_user_config
@@ -118,20 +119,34 @@ class TestCLITopLevelCompatibility(unittest.TestCase):
         )
         self.assertEqual(typed_model_selection, merged["model_selection"])
 
-    def test_merge_rejects_unnormalized_legacy_provider_runtime_key(self):
+    def test_embedded_defaults_use_runtime_model_selection_shape(self):
         defaults = load_embedded_defaults()
+        model_selection = defaults["model_selection"]
+
+        self.assertNotIn("default_algorithm", model_selection)
+        self.assertNotIn("llm_candidates_path", model_selection)
+        self.assertNotIn("training_data_path", model_selection)
+        self.assertNotIn("custom_training", model_selection)
+        self.assertEqual("knn", model_selection["method"])
+        self.assertEqual(
+            "models/model_selection/knn_model.json",
+            model_selection["ml"]["knn"]["pretrained_path"],
+        )
+
+        typed_model_selection = ModelSelectionCompatConfig(**model_selection)
+        self.assertEqual(
+            model_selection,
+            dump_typed_compat_block(typed_model_selection),
+        )
+
+    def test_parse_rejects_invalid_legacy_provider_runtime_key(self):
         config_data = _base_user_config()
         config_data["model_config"] = "not-a-dict"
 
-        user_config = _parse_config_dict(config_data)
+        with self.assertRaises(ConfigParseError) as ctx:
+            _parse_config_dict(config_data)
 
-        with self.assertRaises(ValueError) as ctx:
-            merge_configs(user_config, defaults)
-
-        self.assertIn(
-            "unsupported passthrough top-level config key: model_config",
-            str(ctx.exception),
-        )
+        self.assertIn("model_config", str(ctx.exception))
 
     def test_parse_normalizes_legacy_signal_runtime_blocks(self):
         defaults = load_embedded_defaults()

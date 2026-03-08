@@ -1,19 +1,21 @@
 from pathlib import Path
 
 import yaml
-
 from cli.bootstrap import (
     build_bootstrap_config,
     ensure_bootstrap_workspace,
     is_setup_mode_config,
 )
 
+DEFAULT_PORT = 8899
+CUSTOM_PORT = 9999
+
 
 def test_build_bootstrap_config_contains_setup_marker():
     config = build_bootstrap_config()
 
     assert config["version"] == "v0.1"
-    assert config["listeners"][0]["port"] == 8899
+    assert config["listeners"][0]["port"] == DEFAULT_PORT
     assert config["setup"]["mode"] is True
     assert config["setup"]["state"] == "bootstrap"
 
@@ -31,11 +33,16 @@ def test_ensure_bootstrap_workspace_creates_expected_files(tmp_path: Path):
     assert (tmp_path / ".vllm-sr" / "router-defaults.yaml").exists()
     assert is_setup_mode_config(config_path) is True
 
-    with open(config_path, "r") as f:
+    with config_path.open() as f:
         data = yaml.safe_load(f)
 
-    assert data["listeners"][0]["port"] == 8899
+    with (tmp_path / ".vllm-sr" / "router-defaults.yaml").open() as f:
+        defaults = yaml.safe_load(f)
+
+    assert data["listeners"][0]["port"] == DEFAULT_PORT
     assert data["setup"]["mode"] is True
+    assert defaults["model_selection"]["method"] == "knn"
+    assert "default_algorithm" not in defaults["model_selection"]
 
 
 def test_ensure_bootstrap_workspace_preserves_existing_setup_config(tmp_path: Path):
@@ -45,7 +52,7 @@ def test_ensure_bootstrap_workspace_preserves_existing_setup_config(tmp_path: Pa
             {
                 "version": "v0.1",
                 "listeners": [
-                    {"name": "http-9999", "address": "0.0.0.0", "port": 9999}
+                    {"name": "http-9999", "address": "0.0.0.0", "port": CUSTOM_PORT}
                 ],
                 "setup": {"mode": True, "state": "bootstrap"},
             },
@@ -58,7 +65,7 @@ def test_ensure_bootstrap_workspace_preserves_existing_setup_config(tmp_path: Pa
     assert result.created_config is False
     assert result.setup_mode is True
 
-    with open(config_path, "r") as f:
+    with config_path.open() as f:
         data = yaml.safe_load(f)
 
-    assert data["listeners"][0]["port"] == 9999
+    assert data["listeners"][0]["port"] == CUSTOM_PORT

@@ -23,7 +23,6 @@ from cli.router_translation import (
     translate_role_binding_signals,
     translate_user_feedback_signals,
 )
-from cli.user_config_top_level import LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS
 from cli.utils import getLogger
 
 log = getLogger(__name__)
@@ -130,7 +129,6 @@ def merge_configs(user_config: UserConfig, defaults: dict[str, Any]) -> dict[str
     _merge_providers(merged, user_config)
     _merge_optional_blocks(merged, user_config)
     _merge_typed_compat_blocks(merged, user_config)
-    _merge_extra_fields(merged, getattr(user_config, "model_extra", None) or {})
 
     log.info("Configuration merged successfully")
     return merged
@@ -260,14 +258,3 @@ def _merge_embedding_models(
             continue
         merged_embedding[key] = value
     return merged_embedding
-
-
-def _merge_extra_fields(merged: dict[str, Any], extra_fields: dict[str, Any]) -> None:
-    for key, value in extra_fields.items():
-        if key not in LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS:
-            raise ValueError(
-                f"unsupported passthrough top-level config key: {key}. "
-                "Add explicit schema support before merging it."
-            )
-        merged[key] = copy.deepcopy(value)
-        log.info(f"  Added passthrough top-level config: {key}")

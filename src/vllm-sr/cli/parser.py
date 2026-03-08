@@ -13,6 +13,7 @@ from cli.user_config_top_level import validate_user_config_top_level_keys
 from cli.utils import getLogger
 
 log = getLogger(__name__)
+_USER_CONFIG_TOP_LEVEL_FIELDS = frozenset(UserConfig.model_fields)
 
 
 class ConfigParseError(Exception):
@@ -60,6 +61,7 @@ def parse_user_config(config_path: str) -> UserConfig:
         data = normalize_legacy_user_config(data)
         validate_user_config_top_level_keys(data)
         sanitized_data, compat_blocks = extract_typed_compat_blocks(data)
+        _reject_unhandled_top_level_keys(sanitized_data)
         config = UserConfig(**sanitized_data)
         attach_typed_compat_blocks(config, compat_blocks)
         log.info("Configuration parsed successfully")
@@ -80,6 +82,20 @@ def parse_user_config(config_path: str) -> UserConfig:
         raise ConfigParseError(error_msg) from e
     except Exception as e:
         raise ConfigParseError(f"Unexpected error during validation: {e}") from e
+
+
+def _reject_unhandled_top_level_keys(data: dict[str, Any]) -> None:
+    """Fail early if normalization/extraction leaves legacy top-level keys behind."""
+
+    unhandled_keys = sorted(set(data) - _USER_CONFIG_TOP_LEVEL_FIELDS)
+    if not unhandled_keys:
+        return
+
+    raise ValueError(
+        "unsupported top-level config keys after normalization: "
+        + ", ".join(unhandled_keys)
+        + ". Normalize them into the nested authoring shape or add an explicit typed compatibility block."
+    )
 
 
 def detect_config_format(data: dict[str, Any]) -> str:
