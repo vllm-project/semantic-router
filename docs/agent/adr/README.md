@@ -65,4 +65,4 @@ Keep the numeric index unique within `docs/agent/adr/`.
 
 - [adr-0001-harness-layering.md](adr-0001-harness-layering.md)
 - [adr-0002-tech-debt-index-and-entry-directory.md](adr-0002-tech-debt-index-and-entry-directory.md)
-- [0003-td001-canonical-config-contract.md](0003-td001-canonical-config-contract.md)
+- [adr-0003-td001-canonical-config-contract.md](adr-0003-td001-canonical-config-contract.md)

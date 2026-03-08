@@ -1,6 +1,6 @@
 # TD001 Config Contract Convergence Execution Plan
 
-This plan turns [TD001](../tech-debt/TD001-config-surface-fragmentation.md) into a resumable workstream. The target is to retire config-shape drift across router runtime, Python CLI, dashboard config editing, and Kubernetes/operator translation without relying on parallel handwritten schemas forever.
+This plan turns [TD001](../tech-debt/td-001-config-surface-fragmentation.md) into a resumable workstream. The target is to retire config-shape drift across router runtime, Python CLI, dashboard config editing, and Kubernetes/operator translation without relying on parallel handwritten schemas forever.
 
 ## Goal
 
@@ -251,5 +251,5 @@ This section freezes the first loop-level inventory for `L001`. It is intentiona
 
 ## Follow-up Debt / ADR Links
 
-- [../tech-debt/TD001-config-surface-fragmentation.md](../tech-debt/TD001-config-surface-fragmentation.md)
-- [../adr/0003-td001-canonical-config-contract.md](../adr/0003-td001-canonical-config-contract.md)
+- [../tech-debt/td-001-config-surface-fragmentation.md](../tech-debt/td-001-config-surface-fragmentation.md)
+- [../adr/adr-0003-td001-canonical-config-contract.md](../adr/adr-0003-td001-canonical-config-contract.md)
