@@ -32,8 +32,7 @@ import {
   DecisionConfig,
   DecisionFormState,
   formatThreshold,
-  ModelConfigEntry,
-  NormalizedModel,
+  ModelConfigEntry, NormalizedModel, normalizeEndpoint, normalizeEndpoints,
   ReasoningFamily,
   SignalType,
   TABLE_COLUMN_WIDTH,
@@ -430,7 +429,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         const model: NormalizedModel = {
           name: m.name,
           reasoning_family: m.reasoning_family,
-          endpoints: m.endpoints || [],
+          endpoints: normalizeEndpoints(m.endpoints),
           access_key: m.access_key,
           pricing: m.pricing,
         }
@@ -444,12 +443,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         reasoning_family: cfg.reasoning_family,
         endpoints: cfg.preferred_endpoints?.map((ep: string) => {
           const endpoint = config.vllm_endpoints?.find((e: VLLMEndpoint) => e.name === ep)
-          return endpoint ? {
+          return endpoint ? normalizeEndpoint({
             name: ep,
             weight: endpoint.weight || 1,
             endpoint: `${endpoint.address}:${endpoint.port}`,
             protocol: 'http',
-          } : null
+          }, 0) : null
         }).filter((e): e is NonNullable<typeof e> => e !== null) || [],
         access_key: undefined,
         pricing: cfg.pricing
@@ -2331,7 +2330,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                       fontWeight: 600,
                       textTransform: 'uppercase'
                     }}>
-                      {ep.protocol || 'http'}
+                      {ep.protocol}
                     </span>
                   </td>
                   <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
@@ -2526,7 +2525,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         ],
         async (data) => {
           // Endpoints are already validated by EndpointsEditor
-          const endpoints = data.endpoints || []
+          const endpoints = normalizeEndpoints(data.endpoints)
 
           const newConfig = { ...config }
 
@@ -2580,7 +2579,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           reasoning_family: model.reasoning_family || '',
           access_key: model.access_key || '',
           // Endpoints
-          endpoints: model.endpoints || [],
+          endpoints: normalizeEndpoints(model.endpoints),
           // Pricing
           currency: model.pricing?.currency || 'USD',
           prompt_per_1m: model.pricing?.prompt_per_1m || 0,
@@ -2636,7 +2635,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           const newConfig = { ...config }
 
           // Endpoints are already validated by EndpointsEditor
-          const endpoints = data.endpoints || []
+          const endpoints = normalizeEndpoints(data.endpoints)
 
           if (isPythonCLI && newConfig.providers?.models) {
             newConfig.providers = { ...newConfig.providers }
