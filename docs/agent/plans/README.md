@@ -79,4 +79,4 @@ Keep the numeric index unique within `docs/agent/plans/`.
 
 ## Completed Execution Plans
 
-- [td005-dashboard-enterprise-console-foundations.md](td005-dashboard-enterprise-console-foundations.md)
+- [pl-0003-td005-dashboard-enterprise-console-foundations.md](pl-0003-td005-dashboard-enterprise-console-foundations.md)

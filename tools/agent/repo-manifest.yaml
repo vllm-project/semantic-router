@@ -119,7 +119,7 @@ docs:
   - docs/agent/plans/README.md
   - docs/agent/plans/pl-0001-harness-roadmap.md
   - docs/agent/plans/pl-0002-e2e-rationalization-roadmap.md
-  - docs/agent/plans/td005-dashboard-enterprise-console-foundations.md
+  - docs/agent/plans/pl-0003-td005-dashboard-enterprise-console-foundations.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
   - docs/agent/tech-debt/td-001-config-surface-fragmentation.md
@@ -198,7 +198,7 @@ doc_governance:
     - path: docs/agent/plans/pl-0002-e2e-rationalization-roadmap.md
       steward: e2e
       freshness: update at the start and end of each E2E rationalization loop and after each completed loop task
-    - path: docs/agent/plans/td005-dashboard-enterprise-console-foundations.md
+    - path: docs/agent/plans/pl-0003-td005-dashboard-enterprise-console-foundations.md
       steward: agent-contract
       freshness: update at the start and end of each TD005 remediation loop and after each completed loop task
     - path: docs/agent/tech-debt-register.md
