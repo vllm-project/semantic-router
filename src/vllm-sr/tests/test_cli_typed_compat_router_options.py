@@ -11,9 +11,10 @@ CLI_ROOT = Path(__file__).resolve().parents[1]
 if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
 
+from cli.compat_blocks import dump_typed_compat_block, get_typed_compat_blocks
 from cli.defaults import load_embedded_defaults
 from cli.merger import merge_configs
-from cli.parser import ConfigParseError, parse_user_config
+from cli.parser import parse_user_config
 
 
 def _base_user_config() -> dict:
@@ -66,26 +67,49 @@ def _parse_config_dict(config_data: dict):
         Path(config_path).unlink(missing_ok=True)
 
 
-class TestCLITopLevelCompatibility(unittest.TestCase):
-    def test_parse_rejects_unknown_top_level_block(self):
-        config_data = _base_user_config()
-        config_data["totally_unknown_block"] = {"enabled": True}
-
-        with self.assertRaises(ConfigParseError) as ctx:
-            _parse_config_dict(config_data)
-
-        self.assertIn("unsupported top-level config keys", str(ctx.exception))
-        self.assertIn("totally_unknown_block", str(ctx.exception))
-
-    def test_merge_preserves_remaining_named_legacy_top_level_block(self):
+class TestCLITypedRouterOptionsCompat(unittest.TestCase):
+    def test_router_options_use_typed_compat_path(self):
         defaults = load_embedded_defaults()
         config_data = _base_user_config()
-        config_data["model_selection"] = defaults["model_selection"]
+        config_data.update(
+            {
+                "auto_model_name": "MoMRouter",
+                "clear_route_cache": defaults["clear_route_cache"],
+                "include_config_models_in_list": True,
+                "streamed_body_mode": True,
+                "max_streamed_body_bytes": 131072,
+                "streamed_body_timeout_sec": 15,
+            }
+        )
 
         user_config = _parse_config_dict(config_data)
-        merged = merge_configs(user_config, defaults)
+        compat_blocks = get_typed_compat_blocks(user_config)
 
-        self.assertEqual(defaults["model_selection"], merged["model_selection"])
+        self.assertIsNotNone(compat_blocks.router_options)
+        expected_router_options = {
+            "auto_model_name": "MoMRouter",
+            "clear_route_cache": defaults["clear_route_cache"],
+            "include_config_models_in_list": True,
+            "streamed_body_mode": True,
+            "max_streamed_body_bytes": 131072,
+            "streamed_body_timeout_sec": 15,
+        }
+        self.assertEqual(
+            expected_router_options,
+            dump_typed_compat_block(compat_blocks.router_options),
+        )
+
+        extra = getattr(user_config, "model_extra", {}) or {}
+        self.assertNotIn("auto_model_name", extra)
+        self.assertNotIn("clear_route_cache", extra)
+        self.assertNotIn("include_config_models_in_list", extra)
+        self.assertNotIn("streamed_body_mode", extra)
+        self.assertNotIn("max_streamed_body_bytes", extra)
+        self.assertNotIn("streamed_body_timeout_sec", extra)
+
+        merged = merge_configs(user_config, defaults)
+        for key, value in expected_router_options.items():
+            self.assertEqual(value, merged[key])
 
 
 if __name__ == "__main__":

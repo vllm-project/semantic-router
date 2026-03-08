@@ -101,6 +101,35 @@ def translate_language_signals(languages: list) -> list:
     ]
 
 
+def translate_modality_signals(modality_rules: list) -> list:
+    """Translate modality signals to router format."""
+    return [
+        _translate_named_signal(signal.name, signal.description)
+        for signal in modality_rules
+    ]
+
+
+def translate_role_binding_signals(role_bindings: list) -> list:
+    """Translate authz role binding signals to router format."""
+    rules = []
+    for signal in role_bindings:
+        rule = {
+            "name": signal.name,
+            "role": signal.role,
+            "subjects": [
+                {
+                    "kind": subject.kind,
+                    "name": subject.name,
+                }
+                for subject in signal.subjects
+            ],
+        }
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
 def translate_context_signals(context_rules: list) -> list:
     """Translate context signals to router format."""
     rules = []

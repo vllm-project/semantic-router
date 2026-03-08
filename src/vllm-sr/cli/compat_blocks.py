@@ -4,7 +4,46 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from cli.compat_blocks_backend_models import (
+    ImageGenBackendsCompatConfig,
+    ProviderProfilesCompatConfig,
+)
+from cli.compat_blocks_inline_models import (
+    BertModelCompatConfig,
+    ClassifierCompatConfig,
+    FeedbackDetectorCompatConfig,
+    HallucinationMitigationCompatConfig,
+    ModalityDetectorCompatConfig,
+)
+from cli.compat_blocks_semantic_cache import SemanticCacheCompatConfig
+
 _TYPED_COMPAT_BLOCKS_ATTR = "_td001_typed_compat_blocks"
+_NAMED_TYPED_COMPAT_KEYS = (
+    "authz",
+    "bert_model",
+    "classifier",
+    "feedback_detector",
+    "hallucination_mitigation",
+    "image_gen_backends",
+    "looper",
+    "modality_detector",
+    "observability",
+    "prompt_guard",
+    "provider_profiles",
+    "ratelimit",
+    "semantic_cache",
+    "response_api",
+    "router_replay",
+    "tools",
+)
+_ROUTER_OPTION_KEYS = (
+    "auto_model_name",
+    "include_config_models_in_list",
+    "clear_route_cache",
+    "streamed_body_mode",
+    "max_streamed_body_bytes",
+    "streamed_body_timeout_sec",
+)
 
 
 class PromptGuardCompatConfig(BaseModel):
@@ -324,19 +363,51 @@ class RateLimitCompatConfig(BaseModel):
     providers: list[RateLimitProviderCompatConfig] | None = None
 
 
+class RouterOptionsCompatConfig(BaseModel):
+    """Typed schema for stable runtime router option keys."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    auto_model_name: str | None = None
+    include_config_models_in_list: bool | None = None
+    clear_route_cache: bool | None = None
+    streamed_body_mode: bool | None = None
+    max_streamed_body_bytes: int | None = None
+    streamed_body_timeout_sec: int | None = None
+
+
 class TypedCompatBlocks(BaseModel):
     """Explicitly parsed compatibility blocks that no longer rely on model_extra."""
 
     model_config = ConfigDict(extra="forbid")
 
     authz: AuthzCompatConfig | None = None
+    bert_model: BertModelCompatConfig | None = None
+    classifier: ClassifierCompatConfig | None = None
+    feedback_detector: FeedbackDetectorCompatConfig | None = None
+    hallucination_mitigation: HallucinationMitigationCompatConfig | None = None
+    image_gen_backends: ImageGenBackendsCompatConfig | None = None
     looper: LooperCompatConfig | None = None
+    modality_detector: ModalityDetectorCompatConfig | None = None
     observability: ObservabilityCompatConfig | None = None
     prompt_guard: PromptGuardCompatConfig | None = None
+    provider_profiles: ProviderProfilesCompatConfig | None = None
     ratelimit: RateLimitCompatConfig | None = None
+    router_options: RouterOptionsCompatConfig | None = None
+    semantic_cache: SemanticCacheCompatConfig | None = None
     response_api: ResponseAPICompatConfig | None = None
     router_replay: RouterReplayCompatConfig | None = None
     tools: ToolsCompatConfig | None = None
+
+
+def _pop_present_keys(source: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    """Remove known keys from a config map and return the popped subset."""
+
+    popped = {}
+    for key in keys:
+        if key in source:
+            popped[key] = source.pop(key)
+    return popped
 
 
 def extract_typed_compat_blocks(
@@ -344,25 +415,11 @@ def extract_typed_compat_blocks(
 ) -> tuple[dict[str, Any], TypedCompatBlocks]:
     """Split typed compat blocks from raw CLI config data before UserConfig parsing."""
 
-    typed_input = {}
     sanitized_data = dict(data)
-
-    if "authz" in sanitized_data:
-        typed_input["authz"] = sanitized_data.pop("authz")
-    if "looper" in sanitized_data:
-        typed_input["looper"] = sanitized_data.pop("looper")
-    if "observability" in sanitized_data:
-        typed_input["observability"] = sanitized_data.pop("observability")
-    if "prompt_guard" in sanitized_data:
-        typed_input["prompt_guard"] = sanitized_data.pop("prompt_guard")
-    if "ratelimit" in sanitized_data:
-        typed_input["ratelimit"] = sanitized_data.pop("ratelimit")
-    if "response_api" in sanitized_data:
-        typed_input["response_api"] = sanitized_data.pop("response_api")
-    if "router_replay" in sanitized_data:
-        typed_input["router_replay"] = sanitized_data.pop("router_replay")
-    if "tools" in sanitized_data:
-        typed_input["tools"] = sanitized_data.pop("tools")
+    typed_input = _pop_present_keys(sanitized_data, _NAMED_TYPED_COMPAT_KEYS)
+    router_options_input = _pop_present_keys(sanitized_data, _ROUTER_OPTION_KEYS)
+    if router_options_input:
+        typed_input["router_options"] = router_options_input
 
     compat_blocks = TypedCompatBlocks(**typed_input)
     return sanitized_data, compat_blocks
@@ -383,3 +440,9 @@ def get_typed_compat_blocks(target: object) -> TypedCompatBlocks:
     if compat_blocks is None:
         return TypedCompatBlocks()
     return compat_blocks
+
+
+def dump_typed_compat_block(block: BaseModel) -> dict[str, Any]:
+    """Serialize typed compat blocks using legacy field aliases where required."""
+
+    return block.model_dump(exclude_none=True, by_alias=True)

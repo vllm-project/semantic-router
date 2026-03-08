@@ -3,7 +3,7 @@
 import copy
 from typing import Any
 
-from cli.compat_blocks import get_typed_compat_blocks
+from cli.compat_blocks import dump_typed_compat_block, get_typed_compat_blocks
 from cli.models import UserConfig
 from cli.router_translation import (
     extract_categories_from_decisions,
@@ -16,9 +16,11 @@ from cli.router_translation import (
     translate_keyword_signals,
     translate_language_signals,
     translate_listeners,
+    translate_modality_signals,
     translate_pii_signals,
     translate_preference_signals,
     translate_providers_to_router_format,
+    translate_role_binding_signals,
     translate_user_feedback_signals,
 )
 from cli.user_config_top_level import LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS
@@ -55,8 +57,53 @@ _SIGNAL_TRANSLATIONS = (
         translate_complexity_signals,
         "complexity signals",
     ),
+    ("modality", "modality_rules", translate_modality_signals, "modality signals"),
+    (
+        "role_bindings",
+        "role_bindings",
+        translate_role_binding_signals,
+        "role binding signals",
+    ),
     ("jailbreak", "jailbreak", translate_jailbreak_signals, "jailbreak signals"),
     ("pii", "pii", translate_pii_signals, "PII signals"),
+)
+_NAMED_TYPED_COMPAT_MERGES = (
+    ("authz", "authz", "  Added authz configuration"),
+    ("bert_model", "bert_model", "  Added bert_model configuration"),
+    ("classifier", "classifier", "  Added classifier configuration"),
+    (
+        "feedback_detector",
+        "feedback_detector",
+        "  Added feedback_detector configuration",
+    ),
+    (
+        "hallucination_mitigation",
+        "hallucination_mitigation",
+        "  Added hallucination_mitigation configuration",
+    ),
+    (
+        "image_gen_backends",
+        "image_gen_backends",
+        "  Added image_gen_backends configuration",
+    ),
+    ("looper", "looper", "  Added looper configuration"),
+    (
+        "modality_detector",
+        "modality_detector",
+        "  Added modality_detector configuration",
+    ),
+    ("observability", "observability", "  Added observability configuration"),
+    ("prompt_guard", "prompt_guard", "  Added prompt_guard configuration"),
+    (
+        "provider_profiles",
+        "provider_profiles",
+        "  Added provider_profiles configuration",
+    ),
+    ("ratelimit", "ratelimit", "  Added ratelimit configuration"),
+    ("semantic_cache", "semantic_cache", "  Added semantic_cache configuration"),
+    ("response_api", "response_api", "  Added response_api configuration"),
+    ("router_replay", "router_replay", "  Added router_replay configuration"),
+    ("tools", "tools", "  Added tools configuration"),
 )
 
 
@@ -165,45 +212,30 @@ def _merge_optional_blocks(merged: dict[str, Any], user_config: UserConfig) -> N
 def _merge_typed_compat_blocks(merged: dict[str, Any], user_config: UserConfig) -> None:
     compat_blocks = get_typed_compat_blocks(user_config)
 
-    if compat_blocks.authz is not None:
-        merged["authz"] = compat_blocks.authz.model_dump(exclude_none=True)
-        log.info("  Added authz configuration")
+    for attr_name, target_key, log_message in _NAMED_TYPED_COMPAT_MERGES:
+        if not _merge_named_typed_compat_block(
+            merged, compat_blocks, attr_name, target_key
+        ):
+            continue
+        log.info(log_message)
 
-    if compat_blocks.looper is not None:
-        merged["looper"] = compat_blocks.looper.model_dump(exclude_none=True)
-        log.info("  Added looper configuration")
+    if compat_blocks.router_options is not None:
+        merged.update(dump_typed_compat_block(compat_blocks.router_options))
+        log.info("  Added router option compatibility keys")
 
-    if compat_blocks.observability is not None:
-        merged["observability"] = compat_blocks.observability.model_dump(
-            exclude_none=True
-        )
-        log.info("  Added observability configuration")
 
-    if compat_blocks.prompt_guard is not None:
-        merged["prompt_guard"] = compat_blocks.prompt_guard.model_dump(
-            exclude_none=True
-        )
-        log.info("  Added prompt_guard configuration")
+def _merge_named_typed_compat_block(
+    merged: dict[str, Any],
+    compat_blocks: Any,
+    attr_name: str,
+    target_key: str,
+) -> bool:
+    compat_block = getattr(compat_blocks, attr_name)
+    if compat_block is None:
+        return False
 
-    if compat_blocks.ratelimit is not None:
-        merged["ratelimit"] = compat_blocks.ratelimit.model_dump(exclude_none=True)
-        log.info("  Added ratelimit configuration")
-
-    if compat_blocks.response_api is not None:
-        merged["response_api"] = compat_blocks.response_api.model_dump(
-            exclude_none=True
-        )
-        log.info("  Added response_api configuration")
-
-    if compat_blocks.router_replay is not None:
-        merged["router_replay"] = compat_blocks.router_replay.model_dump(
-            exclude_none=True
-        )
-        log.info("  Added router_replay configuration")
-
-    if compat_blocks.tools is not None:
-        merged["tools"] = compat_blocks.tools.model_dump(exclude_none=True)
-        log.info("  Added tools configuration")
+    merged[target_key] = dump_typed_compat_block(compat_block)
+    return True
 
 
 def _merge_embedding_models(
