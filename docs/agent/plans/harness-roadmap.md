@@ -1,6 +1,23 @@
-# Harness Roadmap
+# Harness Roadmap Execution Plan
 
-This document tracks the current maturity of the repository's harness engineering setup and the active refactor tasks for the current loop.
+This document is the first canonical execution plan for the repository's agent harness. It tracks the maturity snapshot, active refactor loop, and task-by-task progress for the harness workstream itself.
+
+## Goal
+
+- Bring the repository's harness engineering setup to a stable, agent-friendly baseline.
+- Keep the harness refactor loop recoverable across multiple long-horizon iterations.
+
+## Scope
+
+- Docs and governance for the agent harness
+- Executable rule layer, validation, and scorecard support
+- Task tracking for the harness refactor itself
+
+## Exit Criteria
+
+- The harness has one short entrypoint, one indexed docs layer, and one executable contract layer.
+- Canonical docs, local rules, ADRs, technical debt, and execution plans are all indexed and mechanically validated.
+- The execution-plan mechanism is itself part of the canonical harness.
 
 ## Current Maturity Snapshot
 
@@ -23,10 +40,10 @@ This document tracks the current maturity of the repository's harness engineerin
 - Canonical docs are indexed and mechanically validated instead of relying on memory.
 - Contributor-facing surfaces point to the same harness entrypoints and validation commands.
 
-## Active Tasks
+## Task List
 
 - [x] `H001` Create a durable harness roadmap with a maturity snapshot and an execution loop.
-  - Done when this file exists under `docs/agent/` and becomes the working plan for the current refactor loop.
+  - Done when this file exists under `docs/agent/plans/` and becomes the working plan for the current refactor loop.
 - [x] `H002` Add a dedicated testing-strategy doc and wire it into the harness index.
   - Done when testing expectations live in a stable doc instead of being implied only by scattered commands.
 - [x] `H003` Add a dedicated module-boundaries doc and wire it into the harness index.
@@ -58,7 +75,7 @@ This document tracks the current maturity of the repository's harness engineerin
 - The scorecard is summary-oriented; if governance needs trend analysis later, that should be added as a separate reporting layer.
 - The debt register is now durable and indexed, but future work could add ownership and age metrics per debt item instead of only open-item counting.
 
-## Next Loop Tasks
+## Current Loop
 
 - [x] `H007` Add a harness-specific primary skill and surfaces.
   - Done when harness-only changes resolve to a harness skill instead of startup/runtime skills.
@@ -73,10 +90,17 @@ This document tracks the current maturity of the repository's harness engineerin
 - [x] `H012` Validate CI change filters against the executable harness manifests.
   - Done when `ci-changes.yml` path filters are checked against `task-matrix.yaml` and `e2e-profile-map.yaml`.
 
-## Execution Notes
+## Decision Log
 
-- Finish one task at a time.
+- Start from the highest-priority open task in this file.
 - After each completed task, update this file before moving to the next one.
+- If a durable architectural gap remains after a loop step, also update `docs/agent/tech-debt-register.md`.
+- If the loop makes a durable governance decision, also update `docs/agent/adr/`.
+
+## Follow-up Debt / ADR Links
+
+- [../tech-debt-register.md](../tech-debt-register.md)
+- [../adr/README.md](../adr/README.md)
 
 ## Current Loop Tasks
 

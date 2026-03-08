@@ -106,7 +106,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 ## `harness_docs`
 
-- Shared agent entry, indexed harness docs, local `AGENTS.md` supplements, skill prose, ADRs, roadmap, glossary, and debt tracking for the harness itself.
+- Shared agent entry, indexed harness docs, local `AGENTS.md` supplements, skill prose, ADRs, execution plans, glossary, and debt tracking for the harness itself.
 - Typical paths: `AGENTS.md`, `docs/agent/**`, `tools/agent/skills/**`, indexed local `AGENTS.md` files under hotspot directories
 - Task rules: `agent_text`, `repo-docs`
 

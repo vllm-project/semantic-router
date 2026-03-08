@@ -30,7 +30,7 @@ description: Use when changing the repository's agent contract, docs index, mani
 
 - [docs/agent/README.md](../../../../docs/agent/README.md)
 - [docs/agent/governance.md](../../../../docs/agent/governance.md)
-- [docs/agent/harness-roadmap.md](../../../../docs/agent/harness-roadmap.md)
+- [docs/agent/plans/README.md](../../../../docs/agent/plans/README.md)
 - [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
 
 ## Standard Commands

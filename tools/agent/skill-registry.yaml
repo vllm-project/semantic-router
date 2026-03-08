@@ -151,7 +151,7 @@ surfaces:
       - repo-docs
       - training-stack
   harness_docs:
-    description: Shared agent entry, indexed harness docs, local AGENTS supplements, skill prose, ADRs, roadmap, glossary, and debt tracking for the harness itself.
+    description: Shared agent entry, indexed harness docs, local AGENTS supplements, skill prose, ADRs, execution plans, glossary, and debt tracking for the harness itself.
     paths:
       - AGENTS.md
       - docs/agent/**

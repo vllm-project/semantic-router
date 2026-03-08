@@ -25,6 +25,7 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 - Run the smallest relevant gate first: `make agent-validate`, `make agent-lint`, `make agent-ci-gate`, then `make agent-feature-gate`.
 - Treat docs-only and website-only edits as lightweight unless the task matrix says otherwise.
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes need E2E updates unless the change is a pure refactor.
+- If the work needs multiple resumable loops across sessions or contributors, use the indexed execution plans under [docs/agent/plans/README.md](docs/agent/plans/README.md) instead of ad hoc task notes.
 - If the desired architecture and the current implementation still diverge after your change, add or update the durable entry in [docs/agent/tech-debt-register.md](docs/agent/tech-debt-register.md) instead of leaving the gap only in chat or PR text.
 - Keep modules narrow: one main responsibility per file, small orchestrators plus helpers, interfaces only at seams.
 - Legacy hotspots are debt, not precedent. Touched hotspot files must not grow in responsibility; prefer extraction-first edits.

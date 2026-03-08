@@ -113,7 +113,8 @@ docs:
   - AGENTS.md
   - docs/agent/README.md
   - docs/agent/governance.md
-  - docs/agent/harness-roadmap.md
+  - docs/agent/plans/README.md
+  - docs/agent/plans/harness-roadmap.md
   - docs/agent/tech-debt-register.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
@@ -168,9 +169,12 @@ doc_governance:
     - path: docs/agent/governance.md
       steward: agent-contract
       freshness: update when source-of-truth policy or rule layering changes
-    - path: docs/agent/harness-roadmap.md
+    - path: docs/agent/plans/README.md
       steward: agent-contract
-      freshness: update at the start and end of each harness refactor loop
+      freshness: update when canonical execution plans are added, removed, or reorganized
+    - path: docs/agent/plans/harness-roadmap.md
+      steward: agent-contract
+      freshness: update at the start and end of each harness refactor loop and after each completed loop task
     - path: docs/agent/tech-debt-register.md
       steward: agent-contract
       freshness: update when durable architecture or harness debt is discovered, retired, or materially re-scoped

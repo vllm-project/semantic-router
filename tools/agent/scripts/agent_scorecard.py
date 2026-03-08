@@ -27,18 +27,24 @@ def build_harness_scorecard() -> HarnessScorecard:
         fragment_skill_count=len(skills.get("fragments", [])),
         support_skill_count=len(skills.get("support", [])),
         legacy_reference_skill_count=len(skills.get("legacy_reference", [])),
-        open_roadmap_tasks=collect_open_roadmap_tasks(),
+        open_execution_plan_tasks=collect_open_execution_plan_tasks(),
         validation_errors=validation_errors,
     )
 
 
-def collect_open_roadmap_tasks() -> list[str]:
-    roadmap_path = REPO_ROOT / "docs" / "agent" / "harness-roadmap.md"
+def collect_open_execution_plan_tasks() -> list[str]:
     tasks: list[str] = []
-    for line in roadmap_path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped.startswith("- [ ]"):
-            tasks.append(stripped[6:].strip())
+    plan_dir = REPO_ROOT / "docs" / "agent" / "plans"
+    if not plan_dir.exists():
+        return tasks
+
+    for plan_path in sorted(plan_dir.glob("*.md")):
+        if plan_path.name == "README.md":
+            continue
+        for line in plan_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- [ ]"):
+                tasks.append(f"{plan_path.name}: {stripped[6:].strip()}")
     return tasks
 
 

@@ -37,6 +37,14 @@ REQUIRED_DOC_SECTIONS = {
         "## Open Debt Items",
         "## How to Retire Debt",
     ],
+    "docs/agent/plans/README.md": [
+        "## When to Use an Execution Plan",
+        "## What Belongs in an Execution Plan",
+        "## What Does Not Belong in an Execution Plan",
+        "## Execution Plan Versus Other Governance Files",
+        "## Execution Plan Template",
+        "## Current Execution Plans",
+    ],
     "docs/agent/local-rules.md": [
         "## Indexed Local `AGENTS.md` Files",
         "## Policy",
@@ -48,6 +56,11 @@ REQUIRED_DOC_SECTIONS = {
         "## Source of Truth",
     ],
     "docs/agent/adr/README.md": [
+        "## When to Create or Update an ADR",
+        "## What Belongs in an ADR",
+        "## What Does Not Belong in an ADR",
+        "## ADR Versus Other Governance Files",
+        "## ADR Template",
         "## Current ADRs",
     ],
 }
@@ -56,7 +69,23 @@ LOCAL_AGENT_REQUIRED_SECTIONS = [
     "## Responsibilities",
     "## Change Rules",
 ]
+ADR_REQUIRED_SECTIONS = [
+    "## Status",
+    "## Context",
+    "## Decision",
+    "## Consequences",
+]
+PLAN_REQUIRED_SECTIONS = [
+    "## Goal",
+    "## Scope",
+    "## Exit Criteria",
+    "## Task List",
+    "## Current Loop",
+    "## Decision Log",
+    "## Follow-up Debt / ADR Links",
+]
 TECH_DEBT_ITEM_PATTERN = re.compile(r"^### (TD\d{3})\b", re.MULTILINE)
+ADR_FILENAME_PATTERN = re.compile(r"^\d{4}-[a-z0-9-]+\.md$")
 
 
 def validate_support_files(repo_manifest: dict, errors: list[str]) -> None:
@@ -101,6 +130,8 @@ def validate_agent_harness_layers(
     )
     validate_doc_governance(repo_manifest, errors)
     validate_required_doc_sections(errors)
+    validate_adr_inventory_and_template(repo_manifest, errors)
+    validate_plan_inventory_and_template(repo_manifest, errors)
     validate_tech_debt_register(errors)
 
 
@@ -200,6 +231,16 @@ def validate_doc_index_coverage(repo_manifest: dict, errors: list[str]) -> None:
     readme_text = AGENT_INDEX_DOC.read_text(encoding="utf-8")
     for doc_path in repo_manifest.get("docs", []):
         if not doc_path.startswith("docs/agent/") or doc_path == "docs/agent/README.md":
+            continue
+        if (
+            doc_path.startswith("docs/agent/adr/")
+            and doc_path != "docs/agent/adr/README.md"
+        ):
+            continue
+        if (
+            doc_path.startswith("docs/agent/plans/")
+            and doc_path != "docs/agent/plans/README.md"
+        ):
             continue
         relative_target = Path(doc_path).relative_to("docs/agent").as_posix()
         if f"({relative_target})" not in readme_text:
@@ -355,6 +396,87 @@ def validate_required_doc_sections(errors: list[str]) -> None:
         for section in sections:
             if section not in text:
                 errors.append(f"{doc_path} is missing required section '{section}'")
+
+
+def validate_adr_inventory_and_template(repo_manifest: dict, errors: list[str]) -> None:
+    adr_dir = REPO_ROOT / "docs" / "agent" / "adr"
+    if not adr_dir.exists():
+        errors.append("Missing docs/agent/adr directory")
+        return
+
+    adr_readme = adr_dir / "README.md"
+    if not adr_readme.exists():
+        errors.append("Missing docs/agent/adr/README.md")
+        return
+
+    adr_readme_text = adr_readme.read_text(encoding="utf-8")
+    manifest_docs = set(repo_manifest.get("docs", []))
+    adr_docs = sorted(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in adr_dir.glob("*.md")
+        if path.name != "README.md"
+    )
+
+    for adr_doc in adr_docs:
+        if adr_doc not in manifest_docs:
+            errors.append(f"repo-manifest docs is missing ADR '{adr_doc}'")
+
+        adr_name = Path(adr_doc).name
+        if not ADR_FILENAME_PATTERN.match(adr_name):
+            errors.append(
+                f"ADR '{adr_doc}' must use a zero-padded numeric slug like '0001-example.md'"
+            )
+
+        if f"({adr_name})" not in adr_readme_text:
+            errors.append(f"docs/agent/adr/README.md must link to ADR '{adr_doc}'")
+
+        adr_text = (REPO_ROOT / adr_doc).read_text(encoding="utf-8")
+        if not adr_text.startswith("# ADR "):
+            errors.append(f"ADR '{adr_doc}' must start with '# ADR '")
+        for section in ADR_REQUIRED_SECTIONS:
+            if section not in adr_text:
+                errors.append(
+                    f"ADR '{adr_doc}' is missing required section '{section}'"
+                )
+
+
+def validate_plan_inventory_and_template(
+    repo_manifest: dict, errors: list[str]
+) -> None:
+    plan_dir = REPO_ROOT / "docs" / "agent" / "plans"
+    if not plan_dir.exists():
+        errors.append("Missing docs/agent/plans directory")
+        return
+
+    plan_readme = plan_dir / "README.md"
+    if not plan_readme.exists():
+        errors.append("Missing docs/agent/plans/README.md")
+        return
+
+    plan_readme_text = plan_readme.read_text(encoding="utf-8")
+    manifest_docs = set(repo_manifest.get("docs", []))
+    plan_docs = sorted(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in plan_dir.glob("*.md")
+        if path.name != "README.md"
+    )
+
+    for plan_doc in plan_docs:
+        if plan_doc not in manifest_docs:
+            errors.append(f"repo-manifest docs is missing execution plan '{plan_doc}'")
+
+        plan_name = Path(plan_doc).name
+        if f"({plan_name})" not in plan_readme_text:
+            errors.append(
+                f"docs/agent/plans/README.md must link to execution plan '{plan_doc}'"
+            )
+
+        plan_text = (REPO_ROOT / plan_doc).read_text(encoding="utf-8")
+        for section in PLAN_REQUIRED_SECTIONS:
+            if section not in plan_text:
+                errors.append(
+                    f"Execution plan '{plan_doc}' is missing required section '{section}'"
+                )
 
 
 def validate_tech_debt_register(errors: list[str]) -> None:

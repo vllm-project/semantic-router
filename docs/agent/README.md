@@ -23,16 +23,14 @@ This directory is the human-readable system of record for the repository's agent
 
 - [governance.md](governance.md)
   - rule layering, source-of-truth policy, and working-note policy
-- [harness-roadmap.md](harness-roadmap.md)
-  - current harness maturity snapshot and active refactor loop
+- [plans/README.md](plans/README.md)
+  - when to use execution plans, how they differ from ADRs/debt, and the current plan inventory
 - [tech-debt-register.md](tech-debt-register.md)
   - durable architecture and implementation gaps that are not yet retired
 - [glossary.md](glossary.md)
   - shared terminology for skills, surfaces, and harness layers
 - [adr/README.md](adr/README.md)
-  - architecture decisions for the harness itself
-- [adr/0001-harness-layering.md](adr/0001-harness-layering.md)
-  - why the harness uses a short entrypoint, indexed docs, and executable rule layers
+  - when to use ADRs, how they differ from execution plans and debt, and the current ADR inventory
 - [architecture-guardrails.md](architecture-guardrails.md)
   - file shape, module boundaries, and refactor ratchets
 - [module-boundaries.md](module-boundaries.md)

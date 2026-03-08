@@ -191,7 +191,7 @@ class HarnessScorecard:
     fragment_skill_count: int
     support_skill_count: int
     legacy_reference_skill_count: int
-    open_roadmap_tasks: list[str] = field(default_factory=list)
+    open_execution_plan_tasks: list[str] = field(default_factory=list)
     validation_errors: list[str] = field(default_factory=list)
 
     def to_json(self) -> str:
@@ -212,12 +212,12 @@ class HarnessScorecard:
             f"  Fragment skills: {self.fragment_skill_count}",
             f"  Support skills: {self.support_skill_count}",
             f"  Legacy reference skills: {self.legacy_reference_skill_count}",
-            f"  Open roadmap tasks: {len(self.open_roadmap_tasks)}",
+            f"  Open execution plan tasks: {len(self.open_execution_plan_tasks)}",
         ]
         if self.open_technical_debt_items:
             lines.extend(f"  - {item}" for item in self.open_technical_debt_items)
-        if self.open_roadmap_tasks:
-            lines.extend(f"  - {task}" for task in self.open_roadmap_tasks)
+        if self.open_execution_plan_tasks:
+            lines.extend(f"  - {task}" for task in self.open_execution_plan_tasks)
         if self.validation_errors:
             lines.append("  Validation error details:")
             lines.extend(f"  - {error}" for error in self.validation_errors)
