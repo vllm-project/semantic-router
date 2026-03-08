@@ -26,7 +26,9 @@ This directory is the human-readable system of record for the repository's agent
 - [plans/README.md](plans/README.md)
   - when to use execution plans, how they differ from ADRs/debt, and the current plan inventory
 - [tech-debt-register.md](tech-debt-register.md)
-  - durable architecture and implementation gaps that are not yet retired
+  - summary index of durable architecture and implementation gaps that are not yet retired
+- [tech-debt/README.md](tech-debt/README.md)
+  - per-item debt entries, template, and current inventory
 - [glossary.md](glossary.md)
   - shared terminology for skills, surfaces, and harness layers
 - [adr/README.md](adr/README.md)

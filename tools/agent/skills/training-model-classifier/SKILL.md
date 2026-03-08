@@ -14,6 +14,7 @@ description: Model-classifier fine-tuning, training scripts, and runtime-facing 
 
 - [../../../../src/training/model_classifier/README.md](../../../../src/training/model_classifier/README.md)
 - [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
+- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 
 ## Standard Commands
 
