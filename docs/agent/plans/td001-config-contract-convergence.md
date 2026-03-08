@@ -220,6 +220,7 @@ This section freezes the first loop-level inventory for `L001`. It is intentiona
 - `2026-03-09`: `C004` advanced again by moving `looper` off raw CLI passthrough onto the typed compat seam, preserving the existing transitional `enabled` field while explicitly validating looper runtime knobs like `model_endpoints`, retries, and gRPC sizing.
 - `2026-03-09`: `C004` advanced again by moving `router_replay` off raw CLI passthrough onto the typed compat seam, including explicit validation for backend selection and backend-specific redis/postgres/milvus storage settings.
 - `2026-03-09`: `C004` advanced again by moving `response_api` off raw CLI passthrough onto the typed compat seam, including explicit validation for redis and milvus backend settings used by the response storage path.
+- `2026-03-09`: `C004` advanced again by moving `authz` and `ratelimit` off raw CLI passthrough onto the typed compat seam, so credential-resolution and rate-limit provider blocks now parse through explicit provider/rule schemas instead of `model_extra`.
 - Use dual-read, single-write migration wherever compatibility is needed.
 - Keep `RouterConfig` runtime-oriented until the canonical contract and compiler path are stable.
 - Prefer generated/shared bindings where practical; if generation is deferred, keep adapters in dedicated seam modules rather than scattering translation logic back into hotspots.

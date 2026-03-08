@@ -1,9 +1,11 @@
 """Top-level config key policy for the transitional CLI authoring path."""
 
 EXPLICIT_TYPED_TOP_LEVEL_KEYS = {
+    "authz",
     "looper",
     "observability",
     "prompt_guard",
+    "ratelimit",
     "response_api",
     "router_replay",
     "tools",
@@ -12,7 +14,6 @@ EXPLICIT_TYPED_TOP_LEVEL_KEYS = {
 
 LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS = {
     "api",
-    "authz",
     "auto_model_name",
     "bert_model",
     "categories",
@@ -41,7 +42,6 @@ LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS = {
     "pii",
     "preference_rules",
     "provider_profiles",
-    "ratelimit",
     "reasoning_families",
     "role_bindings",
     "semantic_cache",

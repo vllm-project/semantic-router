@@ -165,6 +165,10 @@ def _merge_optional_blocks(merged: dict[str, Any], user_config: UserConfig) -> N
 def _merge_typed_compat_blocks(merged: dict[str, Any], user_config: UserConfig) -> None:
     compat_blocks = get_typed_compat_blocks(user_config)
 
+    if compat_blocks.authz is not None:
+        merged["authz"] = compat_blocks.authz.model_dump(exclude_none=True)
+        log.info("  Added authz configuration")
+
     if compat_blocks.looper is not None:
         merged["looper"] = compat_blocks.looper.model_dump(exclude_none=True)
         log.info("  Added looper configuration")
@@ -180,6 +184,10 @@ def _merge_typed_compat_blocks(merged: dict[str, Any], user_config: UserConfig) 
             exclude_none=True
         )
         log.info("  Added prompt_guard configuration")
+
+    if compat_blocks.ratelimit is not None:
+        merged["ratelimit"] = compat_blocks.ratelimit.model_dump(exclude_none=True)
+        log.info("  Added ratelimit configuration")
 
     if compat_blocks.response_api is not None:
         merged["response_api"] = compat_blocks.response_api.model_dump(

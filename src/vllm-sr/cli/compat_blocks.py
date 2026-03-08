@@ -254,14 +254,86 @@ class ResponseAPICompatConfig(BaseModel):
     redis: ResponseAPIRedisCompatConfig | None = None
 
 
+class AuthzIdentityCompatConfig(BaseModel):
+    """Typed schema for authz.identity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id_header: str | None = None
+    user_groups_header: str | None = None
+
+
+class AuthzProviderCompatConfig(BaseModel):
+    """Typed schema for authz.providers entries."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    headers: dict[str, str] | None = None
+
+
+class AuthzCompatConfig(BaseModel):
+    """Explicit authz schema while the wider CLI contract still migrates."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fail_open: bool | None = None
+    identity: AuthzIdentityCompatConfig | None = None
+    providers: list[AuthzProviderCompatConfig] | None = None
+
+
+class RateLimitMatchCompatConfig(BaseModel):
+    """Typed schema for ratelimit provider rule matches."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user: str | None = None
+    group: str | None = None
+    model: str | None = None
+
+
+class RateLimitRuleCompatConfig(BaseModel):
+    """Typed schema for ratelimit.providers[].rules entries."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    match: RateLimitMatchCompatConfig
+    requests_per_unit: int | None = None
+    tokens_per_unit: int | None = None
+    unit: str
+
+
+class RateLimitProviderCompatConfig(BaseModel):
+    """Typed schema for ratelimit.providers entries."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    address: str | None = None
+    domain: str | None = None
+    rules: list[RateLimitRuleCompatConfig] | None = None
+
+
+class RateLimitCompatConfig(BaseModel):
+    """Explicit ratelimit schema while the wider CLI contract still migrates."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fail_open: bool | None = None
+    providers: list[RateLimitProviderCompatConfig] | None = None
+
+
 class TypedCompatBlocks(BaseModel):
     """Explicitly parsed compatibility blocks that no longer rely on model_extra."""
 
     model_config = ConfigDict(extra="forbid")
 
+    authz: AuthzCompatConfig | None = None
     looper: LooperCompatConfig | None = None
     observability: ObservabilityCompatConfig | None = None
     prompt_guard: PromptGuardCompatConfig | None = None
+    ratelimit: RateLimitCompatConfig | None = None
     response_api: ResponseAPICompatConfig | None = None
     router_replay: RouterReplayCompatConfig | None = None
     tools: ToolsCompatConfig | None = None
@@ -275,12 +347,16 @@ def extract_typed_compat_blocks(
     typed_input = {}
     sanitized_data = dict(data)
 
+    if "authz" in sanitized_data:
+        typed_input["authz"] = sanitized_data.pop("authz")
     if "looper" in sanitized_data:
         typed_input["looper"] = sanitized_data.pop("looper")
     if "observability" in sanitized_data:
         typed_input["observability"] = sanitized_data.pop("observability")
     if "prompt_guard" in sanitized_data:
         typed_input["prompt_guard"] = sanitized_data.pop("prompt_guard")
+    if "ratelimit" in sanitized_data:
+        typed_input["ratelimit"] = sanitized_data.pop("ratelimit")
     if "response_api" in sanitized_data:
         typed_input["response_api"] = sanitized_data.pop("response_api")
     if "router_replay" in sanitized_data:
