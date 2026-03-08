@@ -21,6 +21,26 @@ import (
 )
 
 const testModelsDir = "../../../../models"
+const testModelsDirEnv = "SEMANTIC_ROUTER_TEST_MODELS_DIR"
+
+func getTestModelsDir() string {
+	if override := os.Getenv(testModelsDirEnv); override != "" {
+		return override
+	}
+	return testModelsDir
+}
+
+func testModelsDirExists(t *testing.T, modelsDir string) {
+	if _, err := os.Stat(modelsDir); err != nil {
+		t.Skipf("Skipping: model directory not available at %s (%v)", modelsDir, err)
+	}
+}
+
+func testModelsDirExistsBench(b *testing.B, modelsDir string) {
+	if _, err := os.Stat(modelsDir); err != nil {
+		b.Skipf("Skipping: model directory not available at %s (%v)", modelsDir, err)
+	}
+}
 
 func TestClassifier(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -2127,7 +2147,8 @@ func createMockModelFile(t *testing.T, dir, filename string) {
 
 func TestAutoDiscoverModels_RealModels(t *testing.T) {
 	// Test with real models directory
-	modelsDir := testModelsDir
+	modelsDir := getTestModelsDir()
+	testModelsDirExists(t, modelsDir)
 
 	paths, err := AutoDiscoverModels(modelsDir)
 	if err != nil {
@@ -2180,11 +2201,13 @@ func TestAutoDiscoverModels_RealModels(t *testing.T) {
 // TestAutoInitializeUnifiedClassifier tests the full initialization process
 func TestAutoInitializeUnifiedClassifier(t *testing.T) {
 	// Test with real models directory
-	classifier, err := AutoInitializeUnifiedClassifier(testModelsDir)
+	modelsDir := getTestModelsDir()
+	testModelsDirExists(t, modelsDir)
+	classifier, err := AutoInitializeUnifiedClassifier(modelsDir)
 	if err != nil {
 		// In CI_MINIMAL_MODEL mode, we may not have all required models
 		// Skip the test instead of failing
-		t.Skipf("Skipping test: AutoInitializeUnifiedClassifier() failed: %v (models directory: %s)", err, testModelsDir)
+		t.Skipf("Skipping test: AutoInitializeUnifiedClassifier() failed: %v (models directory: %s)", err, modelsDir)
 	}
 
 	if classifier == nil {
@@ -2522,7 +2545,9 @@ var (
 // getTestClassifier returns a shared classifier instance for all integration tests
 func getTestClassifier(t *testing.T) *UnifiedClassifier {
 	globalTestClassifierOnce.Do(func() {
-		classifier, err := AutoInitializeUnifiedClassifier(testModelsDir)
+		modelsDir := getTestModelsDir()
+		testModelsDirExists(t, modelsDir)
+		classifier, err := AutoInitializeUnifiedClassifier(modelsDir)
 		if err != nil {
 			t.Logf("Failed to initialize classifier: %v", err)
 			return
@@ -2692,7 +2717,9 @@ func TestUnifiedClassifier_Integration(t *testing.T) {
 func getBenchmarkClassifier(b *testing.B) *UnifiedClassifier {
 	// Reuse the global test classifier for benchmarks
 	globalTestClassifierOnce.Do(func() {
-		classifier, err := AutoInitializeUnifiedClassifier(testModelsDir)
+		modelsDir := getTestModelsDir()
+		testModelsDirExistsBench(b, modelsDir)
+		classifier, err := AutoInitializeUnifiedClassifier(modelsDir)
 		if err != nil {
 			b.Logf("Failed to initialize classifier: %v", err)
 			return
