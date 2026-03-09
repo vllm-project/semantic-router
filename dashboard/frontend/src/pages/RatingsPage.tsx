@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import styles from './Ratings.module.css'
 import RatingsTable from '../components/RatingsTable'
 import type { RatingRow } from '../components/RatingsTable'
@@ -25,6 +25,16 @@ const RatingsPage: React.FC = () => {
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   const effectiveCategory = customCategory.trim() || category
+  const categoryLabel = effectiveCategory || 'global'
+  const topModel = ratings.reduce<RatingRow | null>(
+    (currentTop, row) => (!currentTop || row.rating > currentTop.rating ? row : currentTop),
+    null,
+  )
+  const totalGames = ratings.reduce((sum, row) => sum + row.wins + row.losses + row.ties, 0)
+  const averageRating = ratings.length
+    ? Math.round(ratings.reduce((sum, row) => sum + row.rating, 0) / ratings.length)
+    : 0
+  const availableCategoryCount = categories.length + 1
 
   const fetchRatings = useCallback(async () => {
     const eff = customCategory.trim() || category
@@ -69,16 +79,12 @@ const RatingsPage: React.FC = () => {
     }
   }, [fetchRatings, autoRefresh])
 
-  const categoryLabel = effectiveCategory || 'global'
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <h1 className={styles.title}>
-            <span className={styles.titleIcon}>📊</span>
-            Elo Leaderboard
-          </h1>
+          <span className={styles.eyebrow}>Feedback Loop</span>
+          <h1 className={styles.title}>Elo Leaderboard</h1>
           <p className={styles.subtitle}>
             Model rankings by category. Submit feedback in the Playground to update ratings.
           </p>
@@ -98,46 +104,95 @@ const RatingsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className={styles.controls}>
-        <label className={styles.categoryLabel} htmlFor="ratings-category">
-          Category
-        </label>
-        <select
-          id="ratings-category"
-          className={styles.categorySelect}
-          value={category}
-          onChange={(e) => { setCategory(e.target.value); setCustomCategory('') }}
-        >
-          <option value="">global</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <label className={styles.categoryLabel} htmlFor="ratings-custom-category">
-          Or custom
-        </label>
-        <input
-          id="ratings-custom-category"
-          type="text"
-          className={styles.categoryInput}
-          placeholder="e.g. coding"
-          value={customCategory}
-          onChange={(e) => setCustomCategory(e.target.value)}
-        />
+      <div className={styles.summaryGrid}>
+        <article className={styles.summaryCard}>
+          <span className={styles.summaryLabel}>Current category</span>
+          <strong className={styles.summaryValue}>{categoryLabel}</strong>
+          <span className={styles.summaryHint}>
+            {effectiveCategory ? 'Custom category filter is active.' : 'Global leaderboard across all feedback.'}
+          </span>
+        </article>
+        <article className={styles.summaryCard}>
+          <span className={styles.summaryLabel}>Ranked models</span>
+          <strong className={styles.summaryValue}>{ratings.length}</strong>
+          <span className={styles.summaryHint}>
+            {topModel ? `Top model: ${topModel.model}` : 'No ratings have been recorded yet.'}
+          </span>
+        </article>
+        <article className={styles.summaryCard}>
+          <span className={styles.summaryLabel}>Games recorded</span>
+          <strong className={styles.summaryValue}>{totalGames}</strong>
+          <span className={styles.summaryHint}>
+            {ratings.length ? `Average rating ${averageRating}` : 'Submit comparisons in Playground to populate Elo.'}
+          </span>
+        </article>
       </div>
+
+      <section className={styles.filtersPanel}>
+        <div className={styles.filtersHeader}>
+          <div>
+            <h2 className={styles.filtersTitle}>Filter leaderboard</h2>
+            <p className={styles.filtersSubtitle}>Choose a saved category or type a custom label.</p>
+          </div>
+          <span className={styles.filtersMeta}>
+            {availableCategoryCount} available {availableCategoryCount === 1 ? 'category' : 'categories'}
+          </span>
+        </div>
+
+        <div className={styles.controls}>
+          <div className={styles.controlField}>
+            <label className={styles.categoryLabel} htmlFor="ratings-category">
+              Saved category
+            </label>
+            <select
+              id="ratings-category"
+              className={styles.categorySelect}
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value)
+                setCustomCategory('')
+              }}
+            >
+              <option value="">global</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className={styles.controlField}>
+            <label className={styles.categoryLabel} htmlFor="ratings-custom-category">
+              Custom category
+            </label>
+            <input
+              id="ratings-custom-category"
+              type="text"
+              className={styles.categoryInput}
+              placeholder="e.g. coding"
+              value={customCategory}
+              onChange={(e) => setCustomCategory(e.target.value)}
+            />
+          </div>
+        </div>
+      </section>
 
       {error && (
         <div className={styles.error}>
-          <span className={styles.errorIcon}>⚠️</span>
-          {error}
+          <span className={styles.errorLabel}>Load error</span>
+          <span>{error}</span>
         </div>
       )}
 
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>Leaderboard — {categoryLabel}</h2>
+          <div>
+            <h2 className={styles.sectionTitle}>Leaderboard</h2>
+            <p className={styles.sectionSubtitle}>
+              Sorted by Elo rating for <strong>{categoryLabel}</strong>.
+            </p>
+          </div>
           {lastUpdated && (
             <span className={styles.lastUpdated}>
               Updated {lastUpdated.toLocaleTimeString()}
