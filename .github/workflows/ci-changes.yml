@@ -154,6 +154,7 @@ jobs:
               - 'tools/make/agent.mk'
               - '.github/workflows/ci-changes.yml'
               - '.github/workflows/integration-test-k8s.yml'
+              - '.github/workflows/integration-test-memory.yml'
               - '.github/workflows/integration-test-vllm-sr-cli.yml'
               - '.github/workflows/pre-commit.yml'
             # Per-profile e2e filters

@@ -3,6 +3,7 @@ package framework
 import (
 	"context"
 
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -10,9 +11,6 @@ import (
 type Profile interface {
 	// Name returns the profile name
 	Name() string
-
-	// Description returns a description of what this profile tests
-	Description() string
 
 	// Setup prepares the environment for testing (e.g., deploy Helm charts)
 	Setup(ctx context.Context, opts *SetupOptions) error
@@ -27,13 +25,8 @@ type Profile interface {
 	GetServiceConfig() ServiceConfig
 }
 
-// ServiceConfig contains configuration for accessing a service
-type ServiceConfig struct {
-	LabelSelector string // e.g., "gateway.envoyproxy.io/owning-gateway-namespace=default,..."
-	Namespace     string
-	Name          string // optional, if empty will use LabelSelector to find service
-	PortMapping   string // e.g., "8080:80"
-}
+// ServiceConfig is the canonical service-connection contract shared by profiles and testcases.
+type ServiceConfig = pkgtestcases.ServiceConfig
 
 // SetupOptions contains options for profile setup
 type SetupOptions struct {

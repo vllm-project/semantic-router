@@ -10,8 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 
 	// Import testcases package to register all test cases via their init() functions
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
@@ -103,24 +102,15 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 
 // GetTestCases returns the list of test cases for this profile
 func (p *Profile) GetTestCases() []string {
-	return []string{
-		// Basic functionality tests
-		"chat-completions-request",
-		"chat-completions-stress-request",
-
-		// Feature tests
-		"semantic-cache",
-
-		// Signal-Decision engine tests (CRD-specific)
-		// These tests validate the CRD-based routing approach:
-		"decision-priority-selection", // Priority-based routing between signals
-		"plugin-chain-execution",      // Plugin ordering and blocking
-		"rule-condition-logic",        // AND/OR operators in signal conditions
-		"embedding-signal-routing",    // EmbeddingSignal-based semantic similarity routing
-
-		// Load tests
-		"chat-completions-progressive-stress",
-	}
+	return testmatrix.Combine(
+		testmatrix.RouterSmoke,
+		[]string{
+			"decision-priority-selection",
+			"plugin-chain-execution",
+			"rule-condition-logic",
+			"embedding-signal-routing",
+		},
+	)
 }
 
 // GetServiceConfig returns the service configuration for accessing the deployed service
@@ -271,90 +261,45 @@ func (p *Profile) verifyCRDsExist(ctx context.Context, kubeconfig string) error 
 }
 
 func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOptions) error {
-	// Create Kubernetes client
-	config, err := clientcmd.BuildConfigFromFlags("", opts.KubeConfig)
+	client, err := helpers.NewKubeClient(opts.KubeConfig)
 	if err != nil {
-		return fmt.Errorf("failed to build kubeconfig: %w", err)
+		return err
 	}
-
-	client, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to create kube client: %w", err)
-	}
-
-	// Wait for Envoy Gateway service to be ready with retry
-	retryTimeout := 10 * time.Minute
-	retryInterval := 5 * time.Second
-	startTime := time.Now()
 
 	p.log("Waiting for Envoy Gateway service to be ready...")
-
-	// Label selector for the semantic-router gateway service
-	labelSelector := "gateway.envoyproxy.io/owning-gateway-namespace=default,gateway.envoyproxy.io/owning-gateway-name=semantic-router"
-
-	var envoyService string
-	for {
-		// Try to get Envoy service name
-		envoyService, err = helpers.GetEnvoyServiceName(ctx, client, labelSelector, p.verbose)
-		if err == nil {
-			// Verify that the service has exactly 1 pod running with all containers ready
-			podErr := helpers.VerifyServicePodsRunning(ctx, client, "envoy-gateway-system", envoyService, p.verbose)
-			if podErr == nil {
-				p.log("Envoy Gateway service is ready: %s", envoyService)
-				break
-			}
-			if p.verbose {
-				p.log("Envoy service found but pods not ready: %v", podErr)
-			}
-			err = fmt.Errorf("service pods not ready: %w", podErr)
-		}
-
-		if time.Since(startTime) >= retryTimeout {
-			return fmt.Errorf("failed to get Envoy service with running pods after %v: %w", retryTimeout, err)
-		}
-
-		if p.verbose {
-			p.log("Envoy service not ready, retrying in %v... (elapsed: %v)",
-				retryInterval, time.Since(startTime).Round(time.Second))
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(retryInterval):
-			// Continue retry
-		}
+	envoyService, err := helpers.WaitForServiceByLabelWithReadyPods(
+		ctx,
+		client,
+		"envoy-gateway-system",
+		"gateway.envoyproxy.io/owning-gateway-namespace=default,gateway.envoyproxy.io/owning-gateway-name=semantic-router",
+		10*time.Minute,
+		5*time.Second,
+		p.verbose,
+		p.log,
+	)
+	if err != nil {
+		return err
 	}
+	p.log("Envoy Gateway service is ready: %s", envoyService)
 
-	// Check all deployments are healthy
 	p.log("Verifying all deployments are healthy...")
-
-	// Wait for semantic-router deployment to become ready
-	semanticRouterReady := false
-	for i := 0; i < 12; i++ { // 12 * 10s = 120 seconds max wait
-		if err := helpers.CheckDeployment(ctx, client, "vllm-semantic-router-system", "semantic-router", p.verbose); err == nil {
-			break
-		}
-		if i < 11 { // Don't sleep on last iteration
-			time.Sleep(10 * time.Second)
-		}
+	if err := helpers.WaitForDeploymentReady(
+		ctx,
+		client,
+		"vllm-semantic-router-system",
+		"semantic-router",
+		120*time.Second,
+		10*time.Second,
+		p.verbose,
+	); err != nil {
+		return err
 	}
-
-	if !semanticRouterReady {
-		// Final check to get the actual error
-		if err := helpers.CheckDeployment(ctx, client, "vllm-semantic-router-system", "semantic-router", p.verbose); err != nil {
-			return fmt.Errorf("semantic-router deployment not healthy after 120s: %w", err)
-		}
-	}
-
-	// Check envoy-gateway deployment
-	if err := helpers.CheckDeployment(ctx, client, "envoy-gateway-system", "envoy-gateway", p.verbose); err != nil {
-		return fmt.Errorf("envoy-gateway deployment not healthy: %w", err)
-	}
-
-	// Check ai-gateway-controller deployment
-	if err := helpers.CheckDeployment(ctx, client, "envoy-ai-gateway-system", "ai-gateway-controller", p.verbose); err != nil {
-		return fmt.Errorf("ai-gateway-controller deployment not healthy: %w", err)
+	if err := helpers.VerifyDeployments(ctx, client, []helpers.DeploymentRef{
+		{Namespace: "vllm-semantic-router-system", Name: "semantic-router"},
+		{Namespace: "envoy-gateway-system", Name: "envoy-gateway"},
+		{Namespace: "envoy-ai-gateway-system", Name: "ai-gateway-controller"},
+	}, p.verbose); err != nil {
+		return fmt.Errorf("required deployment not healthy: %w", err)
 	}
 
 	p.log("All deployments are healthy")

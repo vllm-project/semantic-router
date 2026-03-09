@@ -1,4 +1,4 @@
-version: 1
+version: 2
 
 default_local_profiles:
   - ai-gateway
@@ -37,54 +37,106 @@ full_ci_triggers:
 
 profile_rules:
   ai-gateway:
+    owner: e2e
+    coverage_role: baseline-router-contract
+    selection_mode: default-local,full-ci
+    summary: Baseline router contract for general routing, safety, cache, and decision behavior.
     paths:
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
   aibrix:
+    owner: e2e
+    coverage_role: aibrix-control-plane-and-gateway
+    selection_mode: full-ci
+    summary: AIBrix-specific gateway and control-plane health plus a minimal router smoke path.
     paths:
       - e2e/profiles/aibrix/**
       - deploy/kubernetes/aibrix/**
   routing-strategies:
+    owner: e2e
+    coverage_role: routing-strategy-contracts
+    selection_mode: full-ci
+    summary: Keyword, entropy, and fallback routing strategy behavior.
     paths:
       - e2e/profiles/routing-strategies/**
       - deploy/kubernetes/routing-strategies/**
   dynamic-config:
+    owner: e2e
+    coverage_role: dynamic-crd-routing-contracts
+    selection_mode: full-ci
+    summary: CRD-driven routing semantics and embedding-signal behavior.
     paths:
       - e2e/profiles/dynamic-config/**
   llm-d:
+    owner: e2e
+    coverage_role: llm-d-inference-gateway-health
+    selection_mode: full-ci
+    summary: LLM-D inference-gateway health with a minimal router smoke path.
     paths:
       - e2e/profiles/llm-d/**
       - deploy/kubernetes/llmd-base/**
   istio:
+    owner: e2e
+    coverage_role: istio-service-mesh-contracts
+    selection_mode: full-ci
+    summary: Istio sidecar, traffic, mTLS, and tracing behavior through the router.
     paths:
       - e2e/profiles/istio/**
       - deploy/kubernetes/istio/**
   production-stack:
+    owner: e2e
+    coverage_role: production-ha-load-observability
+    selection_mode: full-ci
+    summary: HA, load-balancing, failover, and performance checks for the production stack.
     paths:
       - e2e/profiles/production-stack/**
   response-api:
+    owner: e2e
+    coverage_role: responses-api-memory-backend
+    selection_mode: full-ci
+    summary: Core Responses API functional, error, and edge-case behavior using the in-memory store.
     paths:
       - e2e/profiles/response-api/**
   response-api-redis:
+    owner: e2e
+    coverage_role: responses-api-redis-ttl
+    selection_mode: full-ci
+    summary: Responses API coverage for Redis-backed persistence and TTL expiry.
     paths:
       - e2e/profiles/response-api-redis/**
       - deploy/kubernetes/response-api/**
   response-api-redis-cluster:
+    owner: e2e
+    coverage_role: responses-api-redis-cluster-ttl
+    selection_mode: full-ci
+    summary: Responses API coverage for Redis Cluster-backed persistence and TTL expiry.
     paths:
       - e2e/profiles/response-api-redis-cluster/**
       - deploy/kubernetes/response-api/redis-cluster.yaml
   ml-model-selection:
+    owner: e2e
+    coverage_role: ml-model-selection-contracts
+    selection_mode: full-ci
+    summary: ML-based model-selection behavior across trained selector backends.
     paths:
       - e2e/profiles/ml-model-selection/**
       - src/semantic-router/pkg/modelselection/**
       - src/training/model_selection/ml_model_selection/**
       - ml-binding/**
   multi-endpoint:
+    owner: e2e
+    coverage_role: environment-policy-routing
+    selection_mode: full-ci
+    summary: Environment-specific routing and safety policy enforcement across multiple backends.
     paths:
       - e2e/profiles/multi-endpoint/**
       - config/testing/config.multi-endpoint.yaml
       - scripts/multi-endpoint/**
   authz-rbac:
+    owner: e2e
+    coverage_role: authz-and-rate-limit-contracts
+    selection_mode: full-ci
+    summary: Authz-driven routing and per-user rate-limiting behavior.
     paths:
       - e2e/profiles/authz-rbac/**
       - config/testing/config.authz-rbac.yaml
@@ -92,7 +144,60 @@ profile_rules:
       - src/semantic-router/pkg/classification/authz*.go
       - src/semantic-router/pkg/authz/**
   streaming:
+    owner: e2e
+    coverage_role: streaming-request-and-cache
+    selection_mode: full-ci
+    summary: Streamed request-body routing and streaming cache round-trip behavior.
     paths:
       - e2e/profiles/streaming/**
       - deploy/kubernetes/streaming/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
+
+manual_profile_rules:
+  dynamo:
+    owner: e2e
+    coverage_role: dynamo-gpu-and-batching
+    selection_mode: manual-only
+    summary: NVIDIA Dynamo deployment, batching, and GPU-health checks that require a manual execution path.
+    paths:
+      - e2e/profiles/dynamo/**
+  rag-hybrid-search:
+    owner: e2e
+    coverage_role: rag-hybrid-search
+    selection_mode: manual-only
+    summary: Llama Stack-backed RAG vector-store and hybrid-search behavior that runs outside the standard CI profile matrix.
+    paths:
+      - e2e/profiles/rag-hybrid-search/**
+
+workflow_suite_rules:
+  vllm-sr-cli-integration:
+    owner: vllm-sr-cli
+    kind: workflow-integration
+    summary: Real-container CLI integration coverage for serve, status, logs, stop, and image-pull behavior.
+    workflow: .github/workflows/integration-test-vllm-sr-cli.yml
+    local_command: make vllm-sr-test-integration
+    paths:
+      - src/vllm-sr/**
+      - src/vllm-sr/Dockerfile*
+      - tools/make/docker.mk
+      - e2e/testing/vllm-sr-cli/**
+      - .github/workflows/integration-test-vllm-sr-cli.yml
+  memory-integration:
+    owner: router-core
+    kind: workflow-integration
+    summary: Memory extraction, Milvus persistence, and injection behavior through the served router stack.
+    workflow: .github/workflows/integration-test-memory.yml
+    local_command: make memory-test-integration
+    paths:
+      - src/semantic-router/pkg/memory/**
+      - src/semantic-router/pkg/extproc/*memory*
+      - src/semantic-router/pkg/responseapi/**
+      - src/vllm-sr/**
+      - src/vllm-sr/Dockerfile*
+      - tools/make/docker.mk
+      - tools/make/milvus.mk
+      - e2e/testing/09-memory-features-test.py
+      - e2e/testing/run_memory_integration.sh
+      - e2e/testing/llm-katan/**
+      - config/testing/config.memory*.yaml
+      - .github/workflows/integration-test-memory.yml

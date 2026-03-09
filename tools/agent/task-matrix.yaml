@@ -37,6 +37,7 @@ rules:
       - tools/make/agent.mk
       - .github/workflows/ci-changes.yml
       - .github/workflows/integration-test-k8s.yml
+      - .github/workflows/integration-test-memory.yml
       - .github/workflows/integration-test-vllm-sr-cli.yml
       - .github/workflows/pre-commit.yml
     fast_tests:
@@ -49,11 +50,25 @@ rules:
       - src/vllm-sr/**
       - src/vllm-sr/Dockerfile*
       - tools/make/docker.mk
+      - e2e/testing/vllm-sr-cli/**
     fast_tests:
       - make vllm-sr-test
     feature_tests:
       - make vllm-sr-test-integration
     requires_local_smoke: true
+  - name: memory-integration
+    doc_only: false
+    paths:
+      - e2e/testing/09-memory-features-test.py
+      - e2e/testing/run_memory_integration.sh
+      - e2e/testing/llm-katan/**
+      - config/testing/config.memory*.yaml
+      - .github/workflows/integration-test-memory.yml
+      - tools/make/milvus.mk
+    fast_tests: []
+    feature_tests:
+      - make memory-test-integration
+    requires_local_smoke: false
   - name: router-core
     doc_only: false
     paths:

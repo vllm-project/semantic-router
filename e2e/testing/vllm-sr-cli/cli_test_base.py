@@ -272,6 +272,22 @@ class CLITestBase(unittest.TestCase):
         except Exception as e:
             return f"Failed to get logs: {e}"
 
+    def inspect_container(
+        self, format_string: str, timeout: int = 10
+    ) -> tuple[int, str, str]:
+        """Inspect the vllm-sr container with the active runtime."""
+        result = self._run_subprocess(
+            [
+                self.container_runtime,
+                "inspect",
+                "--format",
+                format_string,
+                self.CONTAINER_NAME,
+            ],
+            timeout=timeout,
+        )
+        return result.returncode, result.stdout, result.stderr
+
     def image_exists(self, image_name: str) -> bool:
         """Check if a container image exists locally."""
         try:

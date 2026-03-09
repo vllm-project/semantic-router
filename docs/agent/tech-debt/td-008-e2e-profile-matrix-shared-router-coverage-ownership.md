@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,7 +10,7 @@ test matrix efficiency and coverage design
 
 ## Summary
 
-Many heavy profiles rerun the same shared router assertions, but the repo does not yet make baseline coverage ownership explicit.
+Many heavy profiles previously reran the same shared router assertions without an explicit coverage ownership model. The E2E matrix now separates baseline router coverage, smoke subsets, and profile-specific contracts, so this gap is retired.
 
 ## Evidence
 
@@ -20,6 +20,10 @@ Many heavy profiles rerun the same shared router assertions, but the repo does n
 - [e2e/profiles/istio/profile.go](../../../e2e/profiles/istio/profile.go)
 - [e2e/profiles/llm-d/profile.go](../../../e2e/profiles/llm-d/profile.go)
 - [e2e/profiles/production-stack/profile.go](../../../e2e/profiles/production-stack/profile.go)
+- [e2e/pkg/testmatrix/testcases.go](../../../e2e/pkg/testmatrix/testcases.go)
+- [e2e/testcases/aibrix_control_plane_health.go](../../../e2e/testcases/aibrix_control_plane_health.go)
+- [e2e/testcases/llmd_inference_gateway_health.go](../../../e2e/testcases/llmd_inference_gateway_health.go)
+- [e2e/testing/vllm-sr-cli/cli_test_base.py](../../../e2e/testing/vllm-sr-cli/cli_test_base.py)
 - [e2e/testing/vllm-sr-cli/test_integration.py](../../../e2e/testing/vllm-sr-cli/test_integration.py)
 
 ## Why It Matters
@@ -36,6 +40,12 @@ Many heavy profiles rerun the same shared router assertions, but the repo does n
 
 ## Exit Criteria
 
-- Each profile's `GetTestCases()` list is explainable in terms of unique contract coverage rather than inherited habit.
-- Repeated shared testcases are reduced to a deliberate smoke subset or a single parameterized multi-profile matrix with clear purpose.
-- Environment-specific profiles add assertions for their own semantics instead of mostly replaying generic router cases.
+- Satisfied on 2026-03-08: each profile's `GetTestCases()` list is explainable in terms of unique contract coverage rather than inherited habit.
+- Satisfied on 2026-03-08: repeated shared testcases are reduced to deliberate smoke subsets and baseline contract groups with clear purpose.
+- Satisfied on 2026-03-08: environment-specific profiles now add assertions for their own semantics instead of mostly replaying generic router cases.
+
+## Resolution
+
+- `e2e/README.md` now publishes a coverage ownership matrix that distinguishes the baseline router contract from heavy-profile-specific assertions.
+- `e2e/pkg/testmatrix/testcases.go` defines `BaselineRouterContract` and `RouterSmoke`, and heavy profiles now compose their testcase lists from those shared groups instead of replaying the full baseline suite.
+- `aibrix` and `llm-d` now own profile-specific health checks, while the Python CLI integration suite reuses a shared serve lifecycle and validates multiple contracts per startup.

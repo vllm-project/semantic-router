@@ -7,12 +7,10 @@ import (
 	"os/exec"
 	"time"
 
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
+	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 
 	// Import testcases package to register all test cases via their init() functions
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
@@ -152,13 +150,13 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 
 	// Clean up in reverse order
 	p.log("Cleaning up Gateway API resources")
-	p.cleanupGatewayResources(ctx, opts)
+	_ = p.cleanupGatewayResources(ctx, opts)
 
 	p.log("Cleaning up AIBrix components")
-	p.cleanupAIBrix(ctx, opts)
+	_ = p.cleanupAIBrix(ctx, opts)
 
 	p.log("Uninstalling Semantic Router")
-	deployer.Uninstall(ctx, deploymentSemanticRouter, namespaceSemanticRouter)
+	_ = deployer.Uninstall(ctx, deploymentSemanticRouter, namespaceSemanticRouter)
 
 	p.log("AIBrix test environment teardown complete")
 	return nil
@@ -166,29 +164,12 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 
 // GetTestCases returns the list of test cases for this profile
 func (p *Profile) GetTestCases() []string {
-	return []string{
-		// Basic functionality tests
-		"chat-completions-request",
-		"chat-completions-stress-request",
-
-		// Classification and routing tests
-		"domain-classify",
-
-		// Feature tests
-		"semantic-cache",
-		"pii-detection",
-		"jailbreak-detection",
-
-		// Signal-Decision engine tests (new architecture)
-		"decision-priority-selection", // Priority-based routing
-		"plugin-chain-execution",      // Plugin ordering and blocking
-		"rule-condition-logic",        // AND/OR operators
-		"decision-fallback-behavior",  // Fallback to default
-		"plugin-config-variations",    // Plugin configuration testing
-
-		// Load tests
-		"chat-completions-progressive-stress",
-	}
+	return testmatrix.Combine(
+		testmatrix.RouterSmoke,
+		[]string{
+			"aibrix-control-plane-health",
+		},
+	)
 }
 
 // GetServiceConfig returns the service configuration for accessing the deployed service
@@ -309,96 +290,41 @@ func (p *Profile) deployGatewayResources(ctx context.Context, opts *framework.Se
 }
 
 func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOptions) error {
-	// Create Kubernetes client
-	config, err := clientcmd.BuildConfigFromFlags("", opts.KubeConfig)
+	client, err := helpers.NewKubeClient(opts.KubeConfig)
 	if err != nil {
-		return fmt.Errorf("failed to build kubeconfig: %w", err)
-	}
-
-	client, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to create kube client: %w", err)
+		return err
 	}
 
 	// Give deployments extra time to stabilize after initial readiness
 	p.log("Waiting for deployments to stabilize...")
 	time.Sleep(timeoutStabilization)
 
-	// Wait for Envoy Gateway service to be ready with retry
-	startTime := time.Now()
-
 	p.log("Waiting for Envoy Gateway service to be ready...")
-
-	var envoyService string
-	for {
-		// Try to get Envoy service name
-		envoyService, err = helpers.GetEnvoyServiceName(ctx, client, labelSelectorAIBrixGateway, p.verbose)
-		if err == nil {
-			// Verify that the service has exactly 1 pod running with all containers ready
-			podErr := helpers.VerifyServicePodsRunning(ctx, client, namespaceEnvoyGateway, envoyService, p.verbose)
-			if podErr == nil {
-				p.log("Envoy Gateway service is ready: %s", envoyService)
-				break
-			}
-			if p.verbose {
-				p.log("Envoy service found but pods not ready: %v", podErr)
-			}
-			err = fmt.Errorf("service pods not ready: %w", podErr)
-		}
-
-		if time.Since(startTime) >= timeoutEnvoyServiceReady {
-			return fmt.Errorf("failed to get Envoy service with running pods after %v: %w", timeoutEnvoyServiceReady, err)
-		}
-
-		if p.verbose {
-			p.log("Envoy service not ready, retrying in %v... (elapsed: %v)",
-				retryInterval, time.Since(startTime).Round(time.Second))
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(retryInterval):
-			// Continue retry
-		}
+	envoyService, err := helpers.WaitForServiceByLabelWithReadyPods(
+		ctx,
+		client,
+		namespaceEnvoyGateway,
+		labelSelectorAIBrixGateway,
+		timeoutEnvoyServiceReady,
+		retryInterval,
+		p.verbose,
+		p.log,
+	)
+	if err != nil {
+		return err
 	}
+	p.log("Envoy Gateway service is ready: %s", envoyService)
 
-	// Check all deployments are healthy
 	p.log("Verifying all deployments are healthy...")
-
-	// Check semantic-router deployment
-	p.log("Checking semantic-router deployment...")
-	if err := helpers.CheckDeployment(ctx, client, namespaceSemanticRouter, deploymentSemanticRouter, p.verbose); err != nil {
-		return fmt.Errorf("semantic-router deployment not healthy: %w", err)
-	}
-
-	// Check AIBrix deployments
-	aibrixDeployments := []struct {
-		namespace string
-		name      string
-	}{
-		{namespaceAIBrix, deploymentAIBrixGatewayPlugins},
-		{namespaceAIBrix, deploymentAIBrixMetadataService},
-		{namespaceAIBrix, deploymentAIBrixControllerManager},
-	}
-
-	for _, dep := range aibrixDeployments {
-		p.log("Checking %s deployment...", dep.name)
-		if err := helpers.CheckDeployment(ctx, client, dep.namespace, dep.name, p.verbose); err != nil {
-			return fmt.Errorf("%s deployment not healthy: %w", dep.name, err)
-		}
-	}
-
-	// Check envoy-gateway deployment
-	p.log("Checking envoy-gateway deployment...")
-	if err := helpers.CheckDeployment(ctx, client, namespaceEnvoyGateway, deploymentEnvoyGateway, p.verbose); err != nil {
-		return fmt.Errorf("envoy-gateway deployment not healthy: %w", err)
-	}
-
-	// Check demo LLM deployment
-	p.log("Checking demo LLM deployment...")
-	if err := helpers.CheckDeployment(ctx, client, "default", deploymentDemoLLM, p.verbose); err != nil {
-		return fmt.Errorf("demo LLM deployment not healthy: %w", err)
+	if err := helpers.VerifyDeployments(ctx, client, []helpers.DeploymentRef{
+		{Namespace: namespaceSemanticRouter, Name: deploymentSemanticRouter},
+		{Namespace: namespaceAIBrix, Name: deploymentAIBrixGatewayPlugins},
+		{Namespace: namespaceAIBrix, Name: deploymentAIBrixMetadataService},
+		{Namespace: namespaceAIBrix, Name: deploymentAIBrixControllerManager},
+		{Namespace: namespaceEnvoyGateway, Name: deploymentEnvoyGateway},
+		{Namespace: "default", Name: deploymentDemoLLM},
+	}, p.verbose); err != nil {
+		return fmt.Errorf("required deployment not healthy: %w", err)
 	}
 
 	p.log("All deployments are healthy")
@@ -408,8 +334,8 @@ func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOp
 
 func (p *Profile) cleanupGatewayResources(ctx context.Context, opts *framework.TeardownOptions) error {
 	// Delete in reverse order
-	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/aibrix/aigw-resources/gwapi-resources.yaml")
-	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/aibrix/aigw-resources/base-model.yaml")
+	_ = p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/aibrix/aigw-resources/gwapi-resources.yaml")
+	_ = p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/aibrix/aigw-resources/base-model.yaml")
 	return nil
 }
 
@@ -428,18 +354,18 @@ func (p *Profile) cleanupPartialDeployment(ctx context.Context, opts *framework.
 	// Clean up in reverse order
 	if gatewayResources {
 		p.log("Cleaning up Gateway API resources...")
-		p.cleanupGatewayResources(ctx, teardownOpts)
+		_ = p.cleanupGatewayResources(ctx, teardownOpts)
 	}
 
 	if aibrixCore || aibrixDeps {
 		p.log("Cleaning up AIBrix components...")
-		p.cleanupAIBrix(ctx, teardownOpts)
+		_ = p.cleanupAIBrix(ctx, teardownOpts)
 	}
 
 	if semanticRouter {
 		p.log("Uninstalling Semantic Router...")
 		deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
-		deployer.Uninstall(ctx, deploymentSemanticRouter, namespaceSemanticRouter)
+		_ = deployer.Uninstall(ctx, deploymentSemanticRouter, namespaceSemanticRouter)
 	}
 
 	p.log("Partial deployment cleanup complete")
@@ -452,8 +378,8 @@ func (p *Profile) cleanupAIBrix(ctx context.Context, opts *framework.TeardownOpt
 	dependencyURL := fmt.Sprintf("https://github.com/vllm-project/aibrix/releases/download/%s/aibrix-dependency-%s.yaml",
 		p.aibrixVersion, p.aibrixVersion)
 
-	p.kubectlDelete(ctx, opts.KubeConfig, coreURL)
-	p.kubectlDelete(ctx, opts.KubeConfig, dependencyURL)
+	_ = p.kubectlDelete(ctx, opts.KubeConfig, coreURL)
+	_ = p.kubectlDelete(ctx, opts.KubeConfig, dependencyURL)
 
 	return nil
 }

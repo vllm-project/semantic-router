@@ -17,6 +17,7 @@ class ResolvedContext:
     requires_local_smoke: bool = False
     local_e2e_profiles: list[str] = field(default_factory=list)
     ci_e2e_profiles: list[str] = field(default_factory=list)
+    workflow_integration_suites: list[str] = field(default_factory=list)
     ci_e2e_mode: str = "none"
     doc_only: bool = False
 
@@ -32,6 +33,9 @@ class ResolvedContext:
             "AGENT_REQUIRES_LOCAL_SMOKE": str(self.requires_local_smoke).lower(),
             "AGENT_LOCAL_E2E_PROFILES": ",".join(self.local_e2e_profiles),
             "AGENT_CI_E2E_PROFILES": ",".join(self.ci_e2e_profiles),
+            "AGENT_WORKFLOW_INTEGRATION_SUITES": ",".join(
+                self.workflow_integration_suites
+            ),
             "AGENT_CI_E2E_MODE": self.ci_e2e_mode,
             "AGENT_DOC_ONLY": str(self.doc_only).lower(),
         }
@@ -46,6 +50,8 @@ class ResolvedContext:
             f"  Feature tests: {', '.join(self.feature_tests) or 'none'}",
             f"  Local smoke: {'required' if self.requires_local_smoke else 'not required'}",
             f"  Local E2E profiles: {', '.join(self.local_e2e_profiles) or 'none'}",
+            "  Workflow integration suites: "
+            + (", ".join(self.workflow_integration_suites) or "none"),
             f"  CI E2E mode: {self.ci_e2e_mode}",
         ]
         if self.ci_e2e_profiles:

@@ -1,6 +1,6 @@
 package responseapiredis
 
-import "github.com/vllm-project/semantic-router/e2e/profiles/responseapi"
+import responseapishared "github.com/vllm-project/semantic-router/e2e/profiles/response-api-shared"
 
 const (
 	valuesFile    = "e2e/profiles/response-api-redis/values.yaml"
@@ -9,13 +9,13 @@ const (
 
 // Profile implements the Response API Redis test profile.
 type Profile struct {
-	*responseapi.RedisProfile
+	*responseapishared.RedisProfile
 }
 
 // NewProfile creates a new Response API Redis profile.
 func NewProfile() *Profile {
 	return &Profile{
-		RedisProfile: responseapi.NewRedisProfile(
+		RedisProfile: responseapishared.NewRedisProfile(
 			"response-api-redis",
 			"Tests Response API endpoints using Redis storage backend",
 			valuesFile,

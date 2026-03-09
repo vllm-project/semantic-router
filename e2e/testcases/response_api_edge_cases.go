@@ -3,11 +3,11 @@ package testcases
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
 )
@@ -42,19 +42,15 @@ func init() {
 }
 
 func testResponseAPIEdgeEmptyInput(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	if opts.Verbose {
-		fmt.Println("[Test] Testing Response API edge case: empty input")
-	}
-
-	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
+	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
 		return err
 	}
-	defer stopPortForward()
+	defer session.Close()
 
 	storeTrue := true
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	resp, raw, err := postResponseAPI(ctx, httpClient, localPort, ResponseAPIRequest{
+	apiClient := fixtures.NewResponseAPIClient(session, 30*time.Second)
+	resp, raw, err := apiClient.Create(ctx, fixtures.ResponseAPIRequest{
 		Model:    "openai/gpt-oss-20b",
 		Input:    "",
 		Store:    &storeTrue,
@@ -64,7 +60,7 @@ func testResponseAPIEdgeEmptyInput(ctx context.Context, client *kubernetes.Clien
 		return fmt.Errorf("empty input request failed: %w", err)
 	}
 
-	echo, err := parseMockEcho(resp, raw)
+	echo, err := parseMockEcho(resp, raw.Body)
 	if err != nil {
 		return fmt.Errorf("empty input echo parse failed: %w", err)
 	}
@@ -78,31 +74,22 @@ func testResponseAPIEdgeEmptyInput(ctx context.Context, client *kubernetes.Clien
 			"user_messages": len(echo.User),
 		})
 	}
-
-	if opts.Verbose {
-		fmt.Printf("[Test] ✅ Empty input handled successfully (id=%s)\n", resp.ID)
-	}
-
 	return nil
 }
 
 func testResponseAPIEdgeLargeInput(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	if opts.Verbose {
-		fmt.Println("[Test] Testing Response API edge case: large input")
-	}
-
-	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
+	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
 		return err
 	}
-	defer stopPortForward()
+	defer session.Close()
 
 	sentence := "The quick brown fox jumps over the lazy dog. "
 	largeInput := strings.Repeat(sentence, responseAPILargeInputSize/len(sentence)+1)
 	largeInput = largeInput[:responseAPILargeInputSize]
 	storeFalse := false
-	httpClient := &http.Client{Timeout: 60 * time.Second}
-	resp, raw, err := postResponseAPI(ctx, httpClient, localPort, ResponseAPIRequest{
+	apiClient := fixtures.NewResponseAPIClient(session, 60*time.Second)
+	resp, raw, err := apiClient.Create(ctx, fixtures.ResponseAPIRequest{
 		Model:    "openai/gpt-oss-20b",
 		Input:    largeInput,
 		Store:    &storeFalse,
@@ -112,7 +99,7 @@ func testResponseAPIEdgeLargeInput(ctx context.Context, client *kubernetes.Clien
 		return fmt.Errorf("large input request failed: %w", err)
 	}
 
-	echo, err := parseMockEcho(resp, raw)
+	echo, err := parseMockEcho(resp, raw.Body)
 	if err != nil {
 		return fmt.Errorf("large input echo parse failed: %w", err)
 	}
@@ -130,29 +117,20 @@ func testResponseAPIEdgeLargeInput(ctx context.Context, client *kubernetes.Clien
 			"input_len":   len(largeInput),
 		})
 	}
-
-	if opts.Verbose {
-		fmt.Printf("[Test] ✅ Large input handled successfully (len=%d, id=%s)\n", len(largeInput), resp.ID)
-	}
-
 	return nil
 }
 
 func testResponseAPIEdgeSpecialCharacters(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	if opts.Verbose {
-		fmt.Println("[Test] Testing Response API edge case: special characters in input")
-	}
-
-	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
+	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
 		return err
 	}
-	defer stopPortForward()
+	defer session.Close()
 
 	specialInput := "Line1\nLine2\tTabbed \"quote\" \\ backslash / slash <tag> [array] {json} | pipe ^ caret ~ tilde"
 	storeTrue := true
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	resp, raw, err := postResponseAPI(ctx, httpClient, localPort, ResponseAPIRequest{
+	apiClient := fixtures.NewResponseAPIClient(session, 30*time.Second)
+	resp, raw, err := apiClient.Create(ctx, fixtures.ResponseAPIRequest{
 		Model:    "openai/gpt-oss-20b",
 		Input:    specialInput,
 		Store:    &storeTrue,
@@ -162,7 +140,7 @@ func testResponseAPIEdgeSpecialCharacters(ctx context.Context, client *kubernete
 		return fmt.Errorf("special characters request failed: %w", err)
 	}
 
-	echo, err := parseMockEcho(resp, raw)
+	echo, err := parseMockEcho(resp, raw.Body)
 	if err != nil {
 		return fmt.Errorf("special characters echo parse failed: %w", err)
 	}
@@ -175,110 +153,139 @@ func testResponseAPIEdgeSpecialCharacters(ctx context.Context, client *kubernete
 			"response_id": resp.ID,
 		})
 	}
-
-	if opts.Verbose {
-		fmt.Printf("[Test] ✅ Special characters handled successfully (id=%s)\n", resp.ID)
-	}
-
 	return nil
 }
 
 func testResponseAPIEdgeConcurrentRequests(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	if opts.Verbose {
-		fmt.Println("[Test] Testing Response API edge case: concurrent requests")
-	}
-
-	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
+	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
 		return err
 	}
-	defer stopPortForward()
+	defer session.Close()
 
-	httpClient := &http.Client{Timeout: 30 * time.Second}
+	apiClient := fixtures.NewResponseAPIClient(session, 30*time.Second)
 	storeTrue := true
 
+	summary := newConcurrentResponseSummary(responseAPIConcurrentRequests)
+	work := newConcurrentRequestQueue()
+	var wg sync.WaitGroup
+	wg.Add(responseAPIConcurrentConcurrency)
+	for i := 0; i < responseAPIConcurrentConcurrency; i++ {
+		go runConcurrentResponseWorker(ctx, apiClient, &storeTrue, work, summary, &wg)
+	}
+	wg.Wait()
+
+	if err := summary.Validate(); err != nil {
+		return err
+	}
+
+	if opts.SetDetails != nil {
+		opts.SetDetails(map[string]interface{}{
+			"requests":    responseAPIConcurrentRequests,
+			"concurrency": responseAPIConcurrentConcurrency,
+			"responses":   summary.ResponseCount(),
+			"duplicates":  summary.duplicateCount,
+			"error_count": summary.errorCount,
+		})
+	}
+	return nil
+}
+
+type concurrentResponseSummary struct {
+	mu             sync.Mutex
+	errorCount     int
+	duplicateCount int
+	firstErr       string
+	expected       int
+	ids            map[string]struct{}
+}
+
+func newConcurrentRequestQueue() chan int {
 	work := make(chan int, responseAPIConcurrentRequests)
 	for i := 0; i < responseAPIConcurrentRequests; i++ {
 		work <- i + 1
 	}
 	close(work)
+	return work
+}
 
-	var (
-		wg             sync.WaitGroup
-		mu             sync.Mutex
-		errorCount     int
-		duplicateCount int
-		firstErr       string
-		ids            = make(map[string]struct{}, responseAPIConcurrentRequests)
-	)
-
-	wg.Add(responseAPIConcurrentConcurrency)
-	for i := 0; i < responseAPIConcurrentConcurrency; i++ {
-		go func() {
-			defer wg.Done()
-			for id := range work {
-				if ctx.Err() != nil {
-					return
-				}
-				input := fmt.Sprintf("concurrent-request-%d", id)
-				resp, _, err := postResponseAPI(ctx, httpClient, localPort, ResponseAPIRequest{
-					Model:    "openai/gpt-oss-20b",
-					Input:    input,
-					Store:    &storeTrue,
-					Metadata: map[string]string{"test": "response-api-edge-concurrent-requests"},
-				})
-
-				mu.Lock()
-				if err != nil {
-					errorCount++
-					if firstErr == "" {
-						firstErr = err.Error()
-					}
-					mu.Unlock()
-					continue
-				}
-
-				if resp.ID == "" || !strings.HasPrefix(resp.ID, "resp_") {
-					errorCount++
-					if firstErr == "" {
-						firstErr = fmt.Sprintf("invalid response id: %q", resp.ID)
-					}
-					mu.Unlock()
-					continue
-				}
-				if _, exists := ids[resp.ID]; exists {
-					duplicateCount++
-					if firstErr == "" {
-						firstErr = fmt.Sprintf("duplicate response id: %q", resp.ID)
-					}
-					mu.Unlock()
-					continue
-				}
-				ids[resp.ID] = struct{}{}
-				mu.Unlock()
-			}
-		}()
+func newConcurrentResponseSummary(expected int) *concurrentResponseSummary {
+	return &concurrentResponseSummary{
+		expected: expected,
+		ids:      make(map[string]struct{}, expected),
 	}
-	wg.Wait()
+}
 
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{
-			"total_requests":   responseAPIConcurrentRequests,
-			"concurrency":      responseAPIConcurrentConcurrency,
-			"success_count":    responseAPIConcurrentRequests - errorCount,
-			"errors":           errorCount,
-			"duplicate_ids":    duplicateCount,
-			"unique_responses": len(ids),
+func runConcurrentResponseWorker(
+	ctx context.Context,
+	apiClient *fixtures.ResponseAPIClient,
+	storeTrue *bool,
+	work <-chan int,
+	summary *concurrentResponseSummary,
+	wg *sync.WaitGroup,
+) {
+	defer wg.Done()
+	for id := range work {
+		if ctx.Err() != nil {
+			return
+		}
+		resp, _, err := apiClient.Create(ctx, fixtures.ResponseAPIRequest{
+			Model:    "openai/gpt-oss-20b",
+			Input:    fmt.Sprintf("concurrent-request-%d", id),
+			Store:    storeTrue,
+			Metadata: map[string]string{"test": "response-api-edge-concurrent-requests"},
 		})
+		summary.Record(resp, err)
 	}
+}
 
-	if errorCount > 0 || duplicateCount > 0 {
-		return fmt.Errorf("concurrent requests had %d errors and %d duplicate IDs (first error: %s)", errorCount, duplicateCount, firstErr)
+func (s *concurrentResponseSummary) Record(resp *fixtures.ResponseAPIResponse, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err != nil {
+		s.errorCount++
+		s.recordFirstError(err.Error())
+		return
 	}
-
-	if opts.Verbose {
-		fmt.Printf("[Test] ✅ Concurrent requests handled successfully (total=%d, unique_ids=%d)\n", responseAPIConcurrentRequests, len(ids))
+	if resp == nil || resp.ID == "" || !strings.HasPrefix(resp.ID, "resp_") {
+		s.errorCount++
+		if resp == nil {
+			s.recordFirstError("nil response")
+			return
+		}
+		s.recordFirstError(fmt.Sprintf("invalid response id: %q", resp.ID))
+		return
 	}
+	if _, exists := s.ids[resp.ID]; exists {
+		s.duplicateCount++
+		s.recordFirstError(fmt.Sprintf("duplicate response id: %q", resp.ID))
+		return
+	}
+	s.ids[resp.ID] = struct{}{}
+}
 
+func (s *concurrentResponseSummary) Validate() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.errorCount > 0 || s.duplicateCount > 0 {
+		return fmt.Errorf("concurrent requests failed: errors=%d duplicates=%d first=%s", s.errorCount, s.duplicateCount, s.firstErr)
+	}
+	if len(s.ids) != s.expected {
+		return fmt.Errorf("expected %d successful responses, got %d", s.expected, len(s.ids))
+	}
 	return nil
+}
+
+func (s *concurrentResponseSummary) ResponseCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.ids)
+}
+
+func (s *concurrentResponseSummary) recordFirstError(message string) {
+	if s.firstErr == "" {
+		s.firstErr = message
+	}
 }
