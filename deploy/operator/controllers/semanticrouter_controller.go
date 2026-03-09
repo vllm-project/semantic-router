@@ -650,59 +650,10 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 			config["model_config"] = modelConfigs
 		}
 
-		// Add providers section with models and default_model if vLLM endpoints exist
-		if len(modelConfigs) > 0 {
-			var defaultModel string
-			models := []map[string]interface{}{}
-
-			// Build models array from vllm_endpoints
-			if vllmEndpoints, ok := config["vllm_endpoints"].([]interface{}); ok {
-				for _, ep := range vllmEndpoints {
-					if epMap, ok := ep.(map[string]interface{}); ok {
-						endpointName := epMap["name"].(string)
-						models = append(models, map[string]interface{}{
-							"name": endpointName,
-							"endpoints": []map[string]interface{}{
-								{
-									"name":     endpointName,
-									"weight":   1,
-									"endpoint": "localhost:8000", // Placeholder - will be overridden by vllm_endpoints
-									"protocol": "http",
-								},
-							},
-						})
-						if defaultModel == "" {
-							defaultModel = endpointName
-						}
-					}
-				}
-			}
-
-			// If no vllm_endpoints, use model_config
-			if len(models) == 0 {
-				for modelName := range modelConfigs {
-					models = append(models, map[string]interface{}{
-						"name": modelName,
-						"endpoints": []map[string]interface{}{
-							{
-								"name":     modelName,
-								"weight":   1,
-								"endpoint": "localhost:8000",
-								"protocol": "http",
-							},
-						},
-					})
-					if defaultModel == "" {
-						defaultModel = modelName
-					}
-				}
-			}
-
-			config["providers"] = map[string]interface{}{
-				"default_model": defaultModel,
-				"models":        models,
-			}
-		}
+		// Do not synthesize a canonical providers block here. Operator-managed
+		// discovery currently owns runtime endpoint/model wiring, so inventing
+		// providers.models[].endpoints with placeholder localhost values creates a
+		// second, misleading authoring view rather than a real shared contract.
 	}
 
 	if sr.Spec.Config.BertModel != nil {

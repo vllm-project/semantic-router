@@ -6,6 +6,7 @@ This plan turns [TD001](../tech-debt/td-001-config-surface-fragmentation.md) int
 
 - Retire TD001 by converging the repository on one canonical, versioned router authoring contract.
 - Make new config features land once in the canonical contract and then fan out through thin adapters, not parallel schema rewrites.
+- Expose one user-facing config contract for the common path across local `vllm-sr`, dashboard editing, and Kubernetes/operator deployment instead of asking users to maintain separate CLI authoring YAML and router-runtime YAML by hand.
 
 ## Scope
 
@@ -26,8 +27,10 @@ Out of scope for this workstream:
 ## Exit Criteria
 
 - One canonical, versioned config contract exists for the common authoring path.
+- The common user path authors one config shape; `RouterConfig` and `.vllm-sr/router-config.yaml` are generated/runtime artifacts rather than a second user-maintained source of truth.
 - Router runtime loads that contract directly or through one explicit compiler path.
 - CLI, dashboard, DSL, and operator paths consume shared/generated contract types or thin adapters instead of owning independent handwritten schemas.
+- Kubernetes/operator deployment no longer requires users to switch to a separate router-config-shaped contract for the same routing behavior fields.
 - Adding a config feature no longer requires parallel structural edits across Go router config, Python CLI schema, dashboard config types, and CRD fields for the common path.
 - Cross-surface contract tests prove that one representative config can round-trip through CLI, router, dashboard save/load, and Kubernetes translation without silent field loss.
 - Legacy or hybrid config compatibility is isolated behind an explicit migration layer instead of remaining the normal editing path.
@@ -53,7 +56,7 @@ Out of scope for this workstream:
 - [ ] `C005` Replace dashboard dual-format config editing with canonical DTOs and backend validation.
   - Done when dashboard config save/load no longer depends on format detection or generic deep-merge semantics for the steady-state path.
 - [ ] `C006` Rework DSL and CRD/operator translation to compile from the canonical contract instead of shuffling partially overlapping maps.
-  - Done when CRD emission and operator reconciliation do not need to mirror independent handwritten config subsets for common router behavior fields.
+  - Done when CRD emission and operator reconciliation do not need to mirror independent handwritten config subsets for common router behavior fields, and Kubernetes users can stay on the same common authoring contract instead of hand-maintaining a separate router-runtime-shaped config.
 - [ ] `C007` Add cross-surface contract tests and goldens.
   - Done when representative features are tested across CLI parse/validate, router compile/load, dashboard save/load, and Kubernetes translation.
 - [ ] `C008` Ship migration tooling and versioned compatibility handling.
@@ -246,7 +249,9 @@ This section freezes the first loop-level inventory for `L001`. It is intentiona
 - `2026-03-09`: Dashboard handler tests now pin runtime propagation through an explicit test seam, so canonical config API coverage no longer depends on incidental local Docker container state during validation/save tests.
 - `2026-03-09`: `C005` advanced again by normalizing `ConfigPage` load state into one canonical editor DTO before any route-level editing logic runs. The frontend now strips legacy flat provider/signal keys from the steady-state save payload, uses nested `providers` / `signals` for models, decisions, and reasoning-family editing, and isolates legacy `categories` editing behind a separate compatibility seam instead of letting dual-format detection drive the main editor path.
 - `2026-03-09`: `C005` advanced again by moving canonical dashboard partial-update merge semantics behind the Python CLI bridge. Dashboard backend saves no longer deep-merge canonical payloads in Go; partial canonical and typed-compat updates are now merged, validated, and serialized through one explicit dashboard bridge seam before write.
+- `2026-03-09`: `C006` advanced with a first operator-side reduction: controller-generated runtime `config.yaml` no longer synthesizes a fake `providers` authoring block with placeholder `localhost:8000` endpoints from `vllmEndpoints`. Operator output now stays closer to the real runtime contract (`vllm_endpoints` + `model_config`) until the canonical Kubernetes authoring path lands, which removes one misleading second source of truth for users.
 - `2026-03-09`: `C007` advanced by extending dashboard backend coverage to use the shared TD001 first-slice fixture across HTTP `GET /api/router/config/all` and `POST /api/router/config/update`. The dashboard contract suite now proves that a legacy runtime fixture can be loaded into canonical dashboard JSON, written back through the dashboard API, and still persist as canonical YAML without reintroducing `model_config`, `vllm_endpoints`, or root-level provider defaults.
+- `2026-03-09`: User-facing success criteria were clarified further: DSL is not the core debt driver, but the repository still asks local/dashboard users to author nested CLI config while Kubernetes/operator users stay on router-config/CRD-shaped contracts. TD001 is not done until the common user path can stay on one authoring contract and treat router config as generated/runtime-only.
 - Use dual-read, single-write migration wherever compatibility is needed.
 - Keep `RouterConfig` runtime-oriented until the canonical contract and compiler path are stable.
 - Prefer generated/shared bindings where practical; if generation is deferred, keep adapters in dedicated seam modules rather than scattering translation logic back into hotspots.
