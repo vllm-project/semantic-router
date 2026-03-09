@@ -1,11 +1,12 @@
 .container {
   width: 100%;
+  max-width: 1440px;
   min-height: calc(100vh - 80px);
   margin: 0 auto;
-  padding: 1.5rem 2rem 2.5rem;
+  padding: 1.75rem 2rem 2.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.5rem;
 }
 
 .loading {
@@ -125,7 +126,7 @@
 
 .summaryGrid {
   display: grid;
-  grid-template-columns: minmax(300px, 1.05fr) minmax(360px, 1.2fr) minmax(240px, 0.8fr);
+  grid-template-columns: minmax(320px, 1.05fr) minmax(400px, 1.25fr) minmax(260px, 0.82fr);
   gap: 1rem;
 }
 
@@ -180,20 +181,59 @@
   line-height: 1.5;
 }
 
-.routerMain {
-  display: grid;
-  grid-template-columns: auto 1fr;
+.routerHero {
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
-  align-items: flex-start;
+  min-height: 176px;
+  padding: 1.15rem 1.2rem;
+  border: 1px solid rgba(118, 185, 0, 0.12);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(118, 185, 0, 0.08), rgba(118, 185, 0, 0));
 }
 
-.routerOrb {
-  width: 12px;
-  height: 12px;
-  margin-top: 0.5rem;
-  border-radius: 50%;
-  background: currentColor;
-  flex-shrink: 0;
+.routerHeroOk {
+  border-color: rgba(34, 197, 94, 0.16);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(118, 185, 0, 0.04));
+}
+
+.routerHeroWarn {
+  border-color: rgba(245, 158, 11, 0.18);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.03));
+}
+
+.routerHeroDown {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.03));
+}
+
+.routerHeroHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.routerHeroLabel,
+.routerHighlightLabel {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.routerHeroMetric {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .routerCopy {
@@ -201,15 +241,51 @@
 }
 
 .routerValue {
-  font-size: clamp(2rem, 3vw, 2.8rem);
+  font-size: clamp(2rem, 3vw, 2.65rem);
   font-weight: 700;
   line-height: 1.1;
 }
 
-.routerFoot {
-  margin-top: 0.9rem;
-  color: var(--color-text-muted);
-  font-size: 0.82rem;
+.routerNarrative {
+  margin: 0.65rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.routerHighlights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.routerHighlight {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.8rem 0.85rem;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.routerHighlightValue {
+  color: var(--color-text);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.toneOkText {
+  color: #86efac;
+}
+
+.toneWarnText {
+  color: #fbbf24;
+}
+
+.toneDownText {
+  color: #f87171;
 }
 
 .statusChip {
@@ -559,6 +635,10 @@
   .metaCard {
     grid-column: 1 / -1;
   }
+
+  .routerHighlights {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 900px) {
@@ -600,6 +680,10 @@
   .servicesGrid {
     grid-template-columns: 1fr;
     padding: 0.9rem;
+  }
+
+  .routerHero {
+    padding: 1rem;
   }
 
   .serviceCardTop {

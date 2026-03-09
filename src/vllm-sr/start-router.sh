@@ -1,11 +1,12 @@
 #!/bin/bash
 # Start script for router service
-# Generates router configuration and starts the router
+# Generates router configuration and starts the selected router backend.
 
-set -e
+set -euo pipefail
 
 CONFIG_FILE="${1:-/app/config.yaml}"
 OUTPUT_DIR="${2:-/app/.vllm-sr}"
+AI_BINDING="${AI_BINDING:-candle}"
 
 echo "Generating router configuration..."
 echo "  Config file: $CONFIG_FILE"
@@ -38,11 +39,31 @@ except Exception as e:
     sys.exit(1)
 EOF
 
-# Start router
-echo "Starting router..."
-exec /usr/local/bin/router \
+# Select router binary. ONNX is only built for the amd64 image variant today,
+# so fall back to candle if the requested binary is not present.
+case "$AI_BINDING" in
+    onnx)
+        ROUTER_BINARY="/usr/local/bin/router-onnx"
+        ;;
+    candle|"")
+        ROUTER_BINARY="/usr/local/bin/router-candle"
+        ;;
+    *)
+        echo "ERROR: Unknown AI_BINDING='$AI_BINDING'. Valid values: candle, onnx" >&2
+        exit 1
+        ;;
+esac
+
+if [[ ! -x "$ROUTER_BINARY" ]]; then
+    echo "Requested router binary not found: $ROUTER_BINARY (AI_BINDING=$AI_BINDING)" >&2
+    echo "Falling back to candle router..." >&2
+    ROUTER_BINARY="/usr/local/bin/router-candle"
+    AI_BINDING="candle"
+fi
+
+echo "Starting router with AI_BINDING=$AI_BINDING..."
+exec "$ROUTER_BINARY" \
     -config="$OUTPUT_DIR/router-config.yaml" \
     -port=50051 \
     -enable-api=true \
     -api-port=8080
-

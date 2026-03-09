@@ -11,6 +11,14 @@
   gap: 1rem;
 }
 
+.embedded {
+  padding: 0;
+  margin-bottom: 0.85rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
 .titleSection {
   display: flex;
   align-items: center;
@@ -113,6 +121,26 @@
 .secondaryButton:hover {
   border-color: rgba(0, 212, 255, 0.28);
   background: rgba(0, 212, 255, 0.08);
+}
+
+.embedded .title {
+  font-size: 1.3rem;
+  letter-spacing: -0.03em;
+}
+
+.embedded .badge {
+  border: 1px solid rgba(118, 185, 0, 0.18);
+  background: rgba(118, 185, 0, 0.1);
+}
+
+.embedded .searchInput {
+  width: min(320px, 32vw);
+  background: var(--color-bg-secondary);
+}
+
+.embedded .secondaryButton,
+.embedded .addButton {
+  min-height: 42px;
 }
 
 /* Responsive */

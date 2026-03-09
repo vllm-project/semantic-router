@@ -68,10 +68,22 @@ const StatusPage: React.FC = () => {
     return styles.modelStatusWarn
   }
 
-  const getOverallToneClass = (overall: string) => {
+  const getOverallChipClass = (overall: string) => {
     if (overall === 'healthy') return styles.modelStatusOk
     if (overall === 'degraded') return styles.modelStatusWarn
     return styles.modelStatusDown
+  }
+
+  const getOverallTextClass = (overall: string) => {
+    if (overall === 'healthy') return styles.toneOkText
+    if (overall === 'degraded') return styles.toneWarnText
+    return styles.toneDownText
+  }
+
+  const getOverallSurfaceClass = (overall: string) => {
+    if (overall === 'healthy') return styles.routerHeroOk
+    if (overall === 'degraded') return styles.routerHeroWarn
+    return styles.routerHeroDown
   }
 
   const getOverallLabel = (overall: string) => {
@@ -148,22 +160,44 @@ const StatusPage: React.FC = () => {
                   <h2 className={styles.cardTitle}>Router Status</h2>
                   <p className={styles.cardSubtitle}>Service health and deployment readiness.</p>
                 </div>
-                <span className={`${styles.statusChip} ${getOverallToneClass(status.overall)}`}>
+                <span className={`${styles.statusChip} ${getOverallChipClass(status.overall)}`}>
                   {getOverallLabel(status.overall)}
                 </span>
               </div>
               <div className={styles.cardBody}>
-                <div className={styles.routerMain}>
-                  <span className={`${styles.routerOrb} ${getOverallToneClass(status.overall)}`} />
+                <div className={`${styles.routerHero} ${getOverallSurfaceClass(status.overall)}`}>
+                  <div className={styles.routerHeroHeader}>
+                    <span className={styles.routerHeroLabel}>Current health</span>
+                    <span className={styles.routerHeroMetric}>
+                      {healthyServices}/{status.services.length} services
+                    </span>
+                  </div>
                   <div className={styles.routerCopy}>
-                    <div className={`${styles.routerValue} ${getOverallToneClass(status.overall)}`}>
+                    <div className={`${styles.routerValue} ${getOverallTextClass(status.overall)}`}>
                       {getOverallLabel(status.overall)}
                     </div>
-                    <p className={styles.cardDescription}>
+                    <p className={styles.routerNarrative}>
                       Service health and deployment readiness across the active router runtime.
                     </p>
-                    <div className={styles.routerFoot}>
-                      {healthyServices}/{status.services.length} services currently reporting healthy.
+                    <div className={styles.routerHighlights}>
+                      <div className={styles.routerHighlight}>
+                        <span className={styles.routerHighlightLabel}>Deployment</span>
+                        <span className={styles.routerHighlightValue}>
+                          {formatDeploymentType(status.deployment_type)}
+                        </span>
+                      </div>
+                      <div className={styles.routerHighlight}>
+                        <span className={styles.routerHighlightLabel}>Runtime</span>
+                        <span className={styles.routerHighlightValue}>
+                          {runtime ? runtime.phase.replace(/_/g, ' ') : modelStatus.value}
+                        </span>
+                      </div>
+                      <div className={styles.routerHighlight}>
+                        <span className={styles.routerHighlightLabel}>Coverage</span>
+                        <span className={styles.routerHighlightValue}>
+                          {healthyServices === status.services.length ? 'All services ready' : 'Attention required'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
