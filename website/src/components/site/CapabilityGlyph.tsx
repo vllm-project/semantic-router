@@ -4,7 +4,7 @@ export type CapabilityGlyphKind =
   | 'signal'
   | 'decision'
   | 'plugin'
-  | 'gateway'
+  | 'language'
   | 'selection'
   | 'docs'
 
@@ -69,17 +69,20 @@ function PluginGlyph(): JSX.Element {
   )
 }
 
-function GatewayGlyph(): JSX.Element {
+function LanguageGlyph(): JSX.Element {
   return (
     <>
-      <path d="M24 70V30l28-16 28 16v40" {...strokeProps} />
-      <path d="M52 14v56" {...strokeProps} opacity="0.7" />
-      <path d="M80 50h18" {...strokeProps} />
-      <path d="M98 50l10-10m-10 10l10 10" {...strokeProps} />
-      <rect x="104" y="24" width="20" height="18" rx="6" {...strokeProps} />
-      <rect x="104" y="58" width="20" height="18" rx="6" {...strokeProps} />
-      <path d="M92 32h12m-12 36h12" {...strokeProps} opacity="0.72" />
-      <circle cx="52" cy="50" r="4" fill="currentColor" opacity="0.18" />
+      <rect x="18" y="26" width="42" height="30" rx="8" {...strokeProps} />
+      <path d="M30 36h18m-18 10h13m-13 10h9" {...strokeProps} opacity="0.78" />
+      <path d="M60 41h18" {...strokeProps} />
+      <path d="M78 41l10-10m-10 10l10 10" {...strokeProps} />
+      <circle cx="98" cy="31" r="8" {...strokeProps} />
+      <circle cx="98" cy="61" r="8" {...strokeProps} />
+      <path d="M88 41v10m0 0h20" {...strokeProps} />
+      <path d="M98 39v-4m-3 3h6" {...strokeProps} opacity="0.7" />
+      <path d="M95 61h6" {...strokeProps} opacity="0.7" />
+      <circle cx="98" cy="31" r="2.6" fill="currentColor" opacity="0.18" />
+      <circle cx="98" cy="61" r="2.6" fill="currentColor" opacity="0.18" />
     </>
   )
 }
@@ -123,8 +126,8 @@ function renderGlyph(kind: CapabilityGlyphKind): JSX.Element {
       return <DecisionGlyph />
     case 'plugin':
       return <PluginGlyph />
-    case 'gateway':
-      return <GatewayGlyph />
+    case 'language':
+      return <LanguageGlyph />
     case 'selection':
       return <SelectionGlyph />
     case 'docs':

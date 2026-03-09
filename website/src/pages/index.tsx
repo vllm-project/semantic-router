@@ -70,11 +70,14 @@ const capabilityCards: CapabilityCard[] = [
     }),
   },
   {
-    kind: 'gateway',
-    title: translate({ id: 'homepage.capabilities.platform.title', message: 'Gateway-first deployment' }),
+    kind: 'language',
+    title: translate({
+      id: 'homepage.capabilities.language.title',
+      message: 'Neural-symbolic language driven',
+    }),
     text: translate({
-      id: 'homepage.capabilities.platform.text',
-      message: 'Slot into AI Gateway, Istio, llm-d, and Dynamo without losing architectural clarity.',
+      id: 'homepage.capabilities.language.text',
+      message: 'Natural language intent compiles into neural-symbolic policy before execution begins.',
     }),
   },
   {
