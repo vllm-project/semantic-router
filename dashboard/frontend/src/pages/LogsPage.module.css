@@ -288,7 +288,8 @@
 .logsSection {
   display: flex;
   flex-direction: column;
-  min-height: 600px;
+  min-height: 34rem;
+  max-height: min(74vh, 52rem);
   overflow: hidden;
 }
 
@@ -322,8 +323,10 @@
 
 .logsContainer {
   flex: 1;
+  min-height: 0;
   width: 100%;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
   padding: 1rem 1.1rem;
   background: #0d1117;
   color: #d7e0ea;
@@ -452,6 +455,7 @@
   }
 
   .logsSection {
-    min-height: 500px;
+    min-height: 26rem;
+    max-height: min(68vh, 40rem);
   }
 }
