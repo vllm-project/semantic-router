@@ -230,3 +230,109 @@ func TestUpdateConfigHandler_FullCanonicalWriteReplacesLegacyShape(t *testing.T)
 		t.Fatalf("Did not expect legacy runtime root keys after canonical write, got: %s", configYAML)
 	}
 }
+
+func TestTD001SharedFixture_DashboardHTTPRoundTripWritesCanonicalShape(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := copySharedFirstSliceRuntimeConfig(t, tempDir)
+	configureDashboardPythonCLITestEnv(t)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/router/config/all", nil)
+	getResp := httptest.NewRecorder()
+	ConfigHandler(configPath)(getResp, getReq)
+
+	if getResp.Code != http.StatusOK {
+		t.Fatalf("Expected GET status 200, got %d. Response: %s", getResp.Code, getResp.Body.String())
+	}
+
+	var canonicalPayload map[string]interface{}
+	if err := json.NewDecoder(getResp.Body).Decode(&canonicalPayload); err != nil {
+		t.Fatalf("Failed to decode canonical config response: %v", err)
+	}
+
+	if _, ok := canonicalPayload["providers"]; !ok {
+		t.Fatalf("Expected canonical providers block in payload, got: %#v", canonicalPayload)
+	}
+	if _, ok := canonicalPayload["model_config"]; ok {
+		t.Fatalf("Did not expect legacy model_config root key in payload: %#v", canonicalPayload)
+	}
+
+	expectedYAML, err := renderCanonicalDashboardConfigWithPython(canonicalPayload)
+	if err != nil {
+		t.Fatalf("Failed to render expected canonical YAML: %v", err)
+	}
+
+	postBody, _ := json.Marshal(canonicalPayload)
+	postReq := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(postBody))
+	postReq.Header.Set("Content-Type", "application/json")
+	postResp := httptest.NewRecorder()
+	UpdateConfigHandler(configPath, false, tempDir)(postResp, postReq)
+
+	if postResp.Code != http.StatusOK {
+		t.Fatalf("Expected POST status 200, got %d. Response: %s", postResp.Code, postResp.Body.String())
+	}
+
+	persistedYAML, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("Failed to read updated config: %v", err)
+	}
+
+	if canonicalizeYAMLForDiff(persistedYAML) != canonicalizeYAMLForDiff(expectedYAML) {
+		t.Fatalf(
+			"Expected persisted canonical YAML to match dashboard round-trip render.\nExpected:\n%s\nGot:\n%s",
+			string(expectedYAML),
+			string(persistedYAML),
+		)
+	}
+
+	persistedConfig := loadYAMLMapForTest(t, configPath)
+	if _, ok := persistedConfig["providers"]; !ok {
+		t.Fatalf("Expected canonical providers block after round-trip write, got: %#v", persistedConfig)
+	}
+	if _, ok := persistedConfig["model_config"]; ok {
+		t.Fatalf("Did not expect legacy model_config root key after round-trip write: %#v", persistedConfig)
+	}
+	if _, ok := persistedConfig["vllm_endpoints"]; ok {
+		t.Fatalf("Did not expect legacy vllm_endpoints root key after round-trip write: %#v", persistedConfig)
+	}
+}
+
+func TestTD001SharedFixture_PartialCanonicalUpdateKeepsLegacyKeysOutOfPersistedConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := copySharedFirstSliceRuntimeConfig(t, tempDir)
+	configureDashboardPythonCLITestEnv(t)
+
+	updateBody := map[string]interface{}{
+		"providers": map[string]interface{}{
+			"default_reasoning_effort": "high",
+		},
+	}
+
+	bodyBytes, _ := json.Marshal(updateBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	UpdateConfigHandler(configPath, false, tempDir)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d. Response: %s", w.Code, w.Body.String())
+	}
+
+	persistedConfig := loadYAMLMapForTest(t, configPath)
+	providers, ok := persistedConfig["providers"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected canonical providers block after partial update, got: %#v", persistedConfig)
+	}
+	if got := providers["default_reasoning_effort"]; got != "high" {
+		t.Fatalf("Expected providers.default_reasoning_effort to be updated, got %#v", got)
+	}
+	if _, ok := persistedConfig["default_reasoning_effort"]; ok {
+		t.Fatalf("Did not expect legacy default_reasoning_effort root key after partial canonical update: %#v", persistedConfig)
+	}
+	if _, ok := persistedConfig["model_config"]; ok {
+		t.Fatalf("Did not expect legacy model_config root key after partial canonical update: %#v", persistedConfig)
+	}
+	if _, ok := persistedConfig["vllm_endpoints"]; ok {
+		t.Fatalf("Did not expect legacy vllm_endpoints root key after partial canonical update: %#v", persistedConfig)
+	}
+}
