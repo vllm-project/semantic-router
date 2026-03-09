@@ -582,7 +582,7 @@ decisions:
         - type: "fact_check"
           name: "no_fact_check_needed"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "openai/gpt-oss-120b"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
@@ -609,7 +609,7 @@ decisions:
         - type: "complexity"
           name: "math_problem:hard"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "Qwen/Qwen3.5-122B-A10B"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
@@ -638,7 +638,7 @@ decisions:
         - type: "complexity"
           name: "math_problem:medium"
     modelRefs:
-      - model: "Qwen3.5-9B"
+      - model: "Qwen/Qwen3.5-9B"
         use_reasoning: true
         reasoning_effort: "low"
     plugins:
@@ -663,7 +663,7 @@ decisions:
         - type: "domain"
           name: "chemistry"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "Qwen/Qwen3.5-122B-A10B"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -688,7 +688,7 @@ decisions:
         - type: "domain"
           name: "biology"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "Qwen/Qwen3.5-122B-A10B"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -713,7 +713,7 @@ decisions:
         - type: "domain"
           name: "health"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "Qwen/Qwen3.5-122B-A10B"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -738,7 +738,7 @@ decisions:
         - type: "domain"
           name: "physics"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "Qwen/Qwen3.5-122B-A10B"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -763,7 +763,7 @@ decisions:
         - type: "domain"
           name: "engineering"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "DeepSeek-V3.2"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -788,7 +788,7 @@ decisions:
         - type: "domain"
           name: "law"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "openai/gpt-oss-120b"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -815,7 +815,7 @@ decisions:
         - type: "domain"
           name: "economics"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "openai/gpt-oss-120b"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -844,7 +844,7 @@ decisions:
         - type: "complexity"
           name: "computer_science:hard"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "DeepSeek-V3.2"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
@@ -869,7 +869,7 @@ decisions:
         - type: "domain"
           name: "psychology"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "openai/gpt-oss-120b"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -894,7 +894,7 @@ decisions:
         - type: "domain"
           name: "philosophy"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "Kimi-K2-Thinking"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
@@ -919,7 +919,7 @@ decisions:
         - type: "domain"
           name: "history"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "GLM-4.7"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -946,7 +946,7 @@ decisions:
         - type: "keyword"
           name: "thinking_zh"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "Kimi-K2-Thinking"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
@@ -972,7 +972,7 @@ decisions:
         - type: "complexity"
           name: "computer_science:medium"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "DeepSeek-V3.2"
         use_reasoning: true
         reasoning_effort: "low"
     plugins:
@@ -1001,7 +1001,7 @@ decisions:
         - type: "context"
           name: "short_context"
     modelRefs:
-      - model: "Qwen3.5-9B"
+      - model: "GLM-4.7"
         use_reasoning: false
     plugins:
       - type: "semantic-cache"
@@ -1030,7 +1030,7 @@ decisions:
         - type: "context"
           name: "short_context"
     modelRefs:
-      - model: "Qwen3.5-9B"
+      - model: "GLM-4.7"
         use_reasoning: false
     plugins:
       - type: "semantic-cache"
@@ -1059,7 +1059,7 @@ decisions:
         - type: "context"
           name: "long_context"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "Kimi-K2-Thinking"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
@@ -1090,9 +1090,7 @@ decisions:
         - type: "context"
           name: "short_context"
     modelRefs:
-      - model: "Qwen3.5-9B"
-        use_reasoning: false
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "Qwen/Qwen3.5-9B"
         use_reasoning: false
     plugins:
       - type: "semantic-cache"
@@ -1109,28 +1107,58 @@ decisions:
 
 # Providers - Backend model configuration
 providers:
-  # Route directly to two real vLLM containers on the shared Docker network.
+  # Route all served-model aliases to one real vLLM container on the shared
+  # Docker network.
   # reasoning_family is intentionally omitted so the router does not inject
-  # backend-specific reasoning params into these real backends.
+  # backend-specific reasoning params into this real backend.
   models:
-    - name: "Qwen3.5-122B-A10B-FP8"
-      param_size: "122b"
+    - name: "openai/gpt-oss-120b"
+      param_size: "120b"
       endpoints:
-        - name: "vllm_122b_fp8"
+        - name: "vllm_primary"
           weight: 1
-          endpoint: "vllm-qwen-122b-fp8:8000"
+          endpoint: "vllm:8000"
           protocol: "http"
 
-    - name: "Qwen3.5-9B"
+    - name: "Qwen/Qwen3.5-122B-A10B"
+      param_size: "122b"
+      endpoints:
+        - name: "vllm_primary"
+          weight: 1
+          endpoint: "vllm:8000"
+          protocol: "http"
+
+    - name: "Qwen/Qwen3.5-9B"
       param_size: "9b"
       endpoints:
-        - name: "vllm_9b"
+        - name: "vllm_primary"
           weight: 1
-          endpoint: "vllm-qwen-9b:8000"
+          endpoint: "vllm:8000"
+          protocol: "http"
+
+    - name: "Kimi-K2-Thinking"
+      endpoints:
+        - name: "vllm_primary"
+          weight: 1
+          endpoint: "vllm:8000"
+          protocol: "http"
+
+    - name: "GLM-4.7"
+      endpoints:
+        - name: "vllm_primary"
+          weight: 1
+          endpoint: "vllm:8000"
+          protocol: "http"
+
+    - name: "DeepSeek-V3.2"
+      endpoints:
+        - name: "vllm_primary"
+          weight: 1
+          endpoint: "vllm:8000"
           protocol: "http"
 
   # Default model for unmatched queries
-  default_model: "Qwen3.5-122B-A10B-FP8"
+  default_model: "openai/gpt-oss-120b"
 
   # Keep the routing metadata so decision intent stays visible even though
   # backend-specific reasoning parameters are not injected for these real models.
