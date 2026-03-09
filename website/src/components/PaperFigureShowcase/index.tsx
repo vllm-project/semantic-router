@@ -914,7 +914,7 @@ const PaperFigureShowcase: React.FC = () => {
 
   return (
     <section className={styles.paperFigureSection}>
-      <div className="container">
+      <div className="site-shell-container">
         <div className={styles.paperHeader}>
           <p className={styles.paperLabel}>
             <Translate id="homepage.paperFigures.label">Routing Blueprint</Translate>
