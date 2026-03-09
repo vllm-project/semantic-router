@@ -1,0 +1,124 @@
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--site-text);
+}
+
+.label::after {
+  content: "/";
+  color: var(--site-muted);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.8rem;
+  padding: 0.75rem 1.4rem;
+  border: 1px solid var(--site-border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--site-text);
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.pill:hover {
+  background: var(--site-text);
+  color: var(--site-bg);
+  border-color: var(--site-text);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.pillMuted {
+  border-color: var(--site-border);
+  color: var(--site-muted-bright);
+}
+
+.pillMuted:hover {
+  color: var(--site-bg);
+}
+
+.pageIntro {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.pageTitle {
+  max-width: 14ch;
+  margin: 0;
+  font-size: clamp(3rem, 9vw, 7rem);
+  line-height: 0.9;
+  font-weight: 400;
+  letter-spacing: -0.05em;
+}
+
+.pageDescription {
+  max-width: 44rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.pageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.statStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  width: 100%;
+}
+
+.statItem {
+  min-height: 100%;
+  padding: 1.25rem 1.1rem 1.1rem;
+  border: 1px solid var(--site-border);
+  background: var(--site-surface);
+}
+
+.statValue {
+  display: block;
+  margin-top: 0.85rem;
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--site-text);
+}
+
+.statDescription {
+  margin: 0.8rem 0 0;
+  color: var(--site-muted-bright);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 996px) {
+  .statStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .pageActions {
+    width: 100%;
+  }
+
+  .pageActions :global(a) {
+    flex: 1 1 14rem;
+  }
+}

@@ -2,7 +2,7 @@
 
 This directory contains the Docusaurus-based documentation website for the vLLM Semantic Router project.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -47,23 +47,23 @@ make docs-serve
 cd website && npm run serve
 ```
 
-## 🎨 Features
+## Features
 
-### ✨ Modern Tech-Inspired Design
+### Current Design System
 
-- **Dark theme by default** with neon blue/green accents
-- **Glassmorphism effects** with backdrop blur and transparency
-- **Gradient backgrounds** and animated hover effects
-- **Responsive design** optimized for all devices
+- **Dark-only shell** built around a monochrome editorial system
+- **Shared tokens and CSS layers** for homepage, docs, blog, and custom pages
+- **Fixed chrome and route-aware wrappers** so docs/blog/community pages read as one site
+- **Responsive layouts** tuned for mobile and desktop
 
-### 🔧 Enhanced Functionality
+### Website Features
 
-- **Mermaid diagram support** with dark theme optimization
-- **Advanced code highlighting** with multiple language support
-- **Interactive navigation** with smooth animations
-- **Search functionality** (ready for Algolia integration)
+- **Mermaid and code block styling** integrated into the docs theme
+- **Custom landing, publications, community, and white-paper routes**
+- **Theme overrides** for docs and blog shells
+- **Search-ready Docusaurus foundation**
 
-### 📱 User Experience
+### UX Goals
 
 - **Fast loading** with optimized builds
 - **Accessible design** following WCAG guidelines
@@ -80,25 +80,26 @@ website/
 │   ├── css/              # Global styles and theme
 │   └── pages/            # Custom pages (homepage, etc.)
 ├── static/               # Static assets (images, icons, etc.)
-├── docusaurus.config.js  # Main configuration
-├── sidebars.js          # Navigation structure
+├── docusaurus.config.ts  # Main configuration
+├── sidebars.ts          # Navigation structure
 └── package.json         # Dependencies and scripts
 ```
 
-## 🛠️ Customization
+## Customization
 
-### Themes and Colors
+### Styling
 
-Edit `src/css/custom.css` to modify:
+Use `src/css/custom.css` as the entrypoint. The real design layers live in:
 
-- Color scheme and gradients
-- Typography and spacing
-- Component styling
-- Animations and effects
+- `src/css/tokens.css` for site tokens
+- `src/css/base.css` for shared layout primitives
+- `src/css/shell.css` for chrome, navbar, and footer
+- `src/css/docs.css` for docs-specific styling
+- `src/css/blog.css` for blog-specific styling
 
 ### Navigation
 
-Update `sidebars.js` to modify:
+Update `sidebars.ts` to modify:
 
 - Documentation structure
 - Category organization
@@ -106,14 +107,14 @@ Update `sidebars.js` to modify:
 
 ### Site Configuration
 
-Modify `docusaurus.config.js` for:
+Modify `docusaurus.config.ts` for:
 
 - Site metadata
 - Plugin configuration
 - Theme settings
 - Build options
 
-## 📚 Available Commands
+## Available Commands
 
 | Command | Description |
 |---------|-------------|
@@ -122,7 +123,7 @@ Modify `docusaurus.config.js` for:
 | `make docs-serve` | Preview production build |
 | `make docs-clean` | Clear build cache |
 
-## 🔗 Links
+## Links
 
 - **Live Preview**: <http://localhost:3000> (when running)
 - **Docusaurus Docs**: <https://docusaurus.io/docs>
