@@ -72,7 +72,7 @@ const FIGURES: FigureMeta[] = [
   {
     key: 'figure9',
     paperLabel: 'fig:entropy_folding_layers',
-    index: '09',
+    index: '06',
     title: <Translate id="homepage.paperFigures.figure9.title">Layered Entropy Folding</Translate>,
     summary: (
       <Translate id="homepage.paperFigures.figure9.summary">
