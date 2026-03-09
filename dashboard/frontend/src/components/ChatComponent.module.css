@@ -62,14 +62,19 @@
   box-shadow: none;
 }
 
-.chatTopBarButton:hover {
+.chatTopBarButton:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.32);
   color: #ffffff;
 }
 
-.chatTopBarButton:active {
+.chatTopBarButton:active:not(:disabled) {
   transform: scale(0.97);
+}
+
+.chatTopBarButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .chatTopBarButton svg {

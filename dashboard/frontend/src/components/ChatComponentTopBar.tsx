@@ -3,6 +3,7 @@ import styles from './ChatComponent.module.css'
 interface ChatComponentTopBarProps {
   isSidebarOpen: boolean
   isTeamRoomView: boolean
+  createDisabled?: boolean
   onCreate: () => void
   onToggleSidebar: () => void
 }
@@ -10,6 +11,7 @@ interface ChatComponentTopBarProps {
 export default function ChatComponentTopBar({
   isSidebarOpen,
   isTeamRoomView,
+  createDisabled = false,
   onCreate,
   onToggleSidebar,
 }: ChatComponentTopBarProps) {
@@ -37,6 +39,7 @@ export default function ChatComponentTopBar({
           type="button"
           className={styles.chatTopBarButton}
           onClick={onCreate}
+          disabled={createDisabled}
           title={isTeamRoomView ? 'New room' : 'New conversation'}
           aria-label={isTeamRoomView ? 'New room' : 'New conversation'}
         >

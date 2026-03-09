@@ -629,7 +629,7 @@ func (h *OpenClawHandler) workerConfigPath(worker ContainerEntry) string {
 }
 
 func (h *OpenClawHandler) ensureWorkerChatEndpoint(worker ContainerEntry) (bool, error) {
-	if h.readOnly {
+	if !h.canRepairWorkerChatEndpoint() {
 		return false, nil
 	}
 
@@ -703,7 +703,7 @@ func (h *OpenClawHandler) queryWorkerChatEndpoint(
 	if err != nil {
 		return "", 0, "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	trimmedBody := strings.TrimSpace(string(body))
 
@@ -1093,8 +1093,8 @@ func (h *OpenClawHandler) RoomsHandler() http.HandlerFunc {
 				log.Printf("openclaw: rooms encode error: %v", err)
 			}
 		case http.MethodPost:
-			if h.readOnly {
-				http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+			if !h.canManageOpenClaw() {
+				h.writeReadOnlyError(w)
 				return
 			}
 			var req clawRoomPayload
@@ -1208,8 +1208,8 @@ func (h *OpenClawHandler) RoomByIDHandler() http.HandlerFunc {
 					log.Printf("openclaw: room encode error: %v", err)
 				}
 			case http.MethodDelete:
-				if h.readOnly {
-					http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+				if !h.canManageOpenClaw() {
+					h.writeReadOnlyError(w)
 					return
 				}
 
@@ -1314,8 +1314,8 @@ func (h *OpenClawHandler) handleRoomMessages(w http.ResponseWriter, r *http.Requ
 			log.Printf("openclaw: room messages encode error: %v", err)
 		}
 	case http.MethodPost:
-		if h.readOnly {
-			http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+		if !h.canSendRoomMessages() {
+			h.writeReadOnlyError(w)
 			return
 		}
 		var req clawRoomMessagePayload

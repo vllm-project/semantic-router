@@ -39,8 +39,8 @@ func (h *OpenClawHandler) TeamsHandler() http.HandlerFunc {
 				log.Printf("openclaw: teams encode error: %v", err)
 			}
 		case http.MethodPost:
-			if h.readOnly {
-				http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+			if !h.canManageOpenClaw() {
+				h.writeReadOnlyError(w)
 				return
 			}
 
@@ -186,8 +186,8 @@ func (h *OpenClawHandler) TeamByIDHandler() http.HandlerFunc {
 				log.Printf("openclaw: team encode error: %v", err)
 			}
 		case http.MethodPut, http.MethodPatch:
-			if h.readOnly {
-				http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+			if !h.canManageOpenClaw() {
+				h.writeReadOnlyError(w)
 				return
 			}
 
@@ -318,8 +318,8 @@ func (h *OpenClawHandler) TeamByIDHandler() http.HandlerFunc {
 				log.Printf("openclaw: update team encode error: %v", err)
 			}
 		case http.MethodDelete:
-			if h.readOnly {
-				http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+			if !h.canManageOpenClaw() {
+				h.writeReadOnlyError(w)
 				return
 			}
 

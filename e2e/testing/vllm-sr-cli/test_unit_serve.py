@@ -341,29 +341,35 @@ listeners:
 
         self.print_test_result(True, "Port mapping behavior validated")
 
-    def test_serve_readonly_dashboard_flag(self):
-        """Test that serve accepts --readonly-dashboard flag."""
+    def test_serve_readonly_flag(self):
+        """Test that serve accepts --readonly."""
         self.print_test_header(
             "Readonly Dashboard Flag",
-            "Validates that --readonly-dashboard flag is recognized",
+            "Validates that --readonly flag is recognized",
         )
 
         # Create config
         self._create_minimal_config()
 
-        # Run serve with --readonly-dashboard flag
+        # Run serve with --readonly flag
         _, stdout, stderr = self.run_cli(
-            ["serve", "--readonly-dashboard", "--image-pull-policy", "never"],
+            ["serve", "--readonly", "--image-pull-policy", "never"],
             timeout=30,
         )
 
         output = (stdout + stderr).lower()
 
         # The flag should be recognized (not "unknown flag" error)
-        unknown_flag = "unknown" in output and "readonly" in output
-        self.assertFalse(unknown_flag, "--readonly-dashboard flag should be recognized")
+        self.assertNotIn(
+            "no such option: --readonly", output, "--readonly flag should be recognized"
+        )
+        self.assertNotIn(
+            "did you mean --readonly",
+            output,
+            "--readonly should be the canonical serve flag",
+        )
 
-        self.print_test_result(True, "--readonly-dashboard flag is recognized")
+        self.print_test_result(True, "--readonly flag is recognized")
 
     def test_serve_mounts_config_file(self):
         """Test that config file is mounted into container."""
