@@ -24,6 +24,7 @@ const papers = [
   {
     id: 5,
     type: 'paper',
+    spotlight: true,
     categoryLabel: 'POSITION PAPER',
     title: 'vLLM Semantic Router: Signal Driven Decision Routing for Mixture-of-Modality Models',
     authors: 'vLLM Semantic Router Team',
@@ -137,10 +138,11 @@ const talks = [
 function AwardCard({ item, index }) {
   const isPaper = item.type === 'paper'
   const isFeatured = item.featured
+  const isSpotlight = item.spotlight === true
 
   return (
     <div
-      className={`${styles.awardCard} ${isPaper ? styles.paperAward : styles.talkAward} ${isFeatured ? styles.featuredAward : ''}`}
+      className={`${styles.awardCard} ${isPaper ? styles.paperAward : styles.talkAward} ${isFeatured ? styles.featuredAward : ''} ${isSpotlight ? styles.spotlightCard : ''}`}
       style={{ '--animation-delay': `${index * 0.1}s` }}
     >
       {/* Award Frame */}
@@ -160,6 +162,11 @@ function AwardCard({ item, index }) {
 
         {/* Award Content */}
         <div className={styles.awardContent}>
+          {item.categoryLabel && (
+            <div className={isSpotlight ? styles.spotlightBadge : styles.categoryBadge}>
+              {item.categoryLabel}
+            </div>
+          )}
           <h3 className={styles.awardTitle}>{item.title}</h3>
 
           <div className={styles.awardDetails}>
