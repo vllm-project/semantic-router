@@ -163,7 +163,6 @@
   display: grid;
   grid-template-columns: minmax(260px, 0.34fr) minmax(0, 0.66fr);
   gap: 1rem;
-  align-items: start;
   margin-bottom: 1rem;
 }
 
@@ -175,9 +174,10 @@
 }
 
 .encoderLeadStack {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
+  min-height: 100%;
 }
 
 .encoderLead {
@@ -292,7 +292,19 @@
 }
 
 .encoderSpotlightCard {
-  min-height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.5rem;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.07), transparent 42%),
+    var(--site-surface);
+}
+
+.encoderSpotlightCard .encoderCardCopy {
+  margin-top: auto;
 }
 
 .encoderCardCopy {
@@ -361,6 +373,10 @@
   .hero {
     min-height: auto;
     padding: 3rem 0 2rem;
+  }
+
+  .encoderLeadStack {
+    min-height: auto;
   }
 }
 
