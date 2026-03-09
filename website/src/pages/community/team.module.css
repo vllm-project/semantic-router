@@ -139,6 +139,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.42rem;
   min-height: 2.45rem;
   padding: 0.55rem 0.9rem;
   border: 1px solid var(--site-border);
@@ -151,6 +152,12 @@
     background 180ms ease,
     color 180ms ease,
     border-color 180ms ease;
+}
+
+.actionLink svg,
+.actionButton svg {
+  flex-shrink: 0;
+  font-size: 0.9rem;
 }
 
 .actionLink:hover,

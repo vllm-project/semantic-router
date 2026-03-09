@@ -73,7 +73,7 @@ const capabilityCards: CapabilityCard[] = [
     kind: 'language',
     title: translate({
       id: 'homepage.capabilities.language.title',
-      message: 'Neural-symbolic language driven',
+      message: 'Intent-to-policy compile',
     }),
     text: translate({
       id: 'homepage.capabilities.language.text',
@@ -229,8 +229,12 @@ function DitherHero(): JSX.Element {
             )}
             actions={(
               <>
-                <PillLink to="/docs/intro">
-                  <Translate id="homepage.hero.primaryCta">Read the docs</Translate>
+                <PillLink
+                  href="https://play.vllm-semantic-router.com/"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <Translate id="homepage.hero.publicBeta">Public Beta</Translate>
                 </PillLink>
                 <PillLink to="/white-paper" muted>
                   <Translate id="homepage.hero.secondaryCta">Open white paper</Translate>

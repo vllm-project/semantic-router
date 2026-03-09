@@ -53,12 +53,12 @@ const allTeamMembers: TeamMember[] = [
   },
   {
     name: 'Xunzhuo Liu',
-    role: <Translate id="team.members.XunzhuoLiu.role">AI Networking</Translate>,
-    company: 'Tencent',
+    role: <Translate id="team.members.XunzhuoLiu.role">Intelligent Routing</Translate>,
+    company: 'vLLM',
     avatar: '/img/team/xunzhuo.png',
     github: 'https://github.com/Xunzhuo',
     linkedin: 'https://www.linkedin.com/in/bitliu/',
-    bio: <Translate id="team.members.XunzhuoLiu.bio">AI Networking at Tencent, leading the development of vLLM Semantic Router and driving the project vision.</Translate>,
+    bio: <Translate id="team.members.XunzhuoLiu.bio">Focus on bringing collective intelligence to the LLM systems.</Translate>,
     memberType: 'maintainer',
   },
   {
