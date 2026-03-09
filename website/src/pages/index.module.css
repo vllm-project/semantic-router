@@ -144,8 +144,8 @@
   border: 1px solid var(--site-border);
   border-radius: 1.2rem;
   background:
-    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.07), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 38%),
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.035), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.016), transparent 34%),
     var(--site-surface);
   text-align: center;
   transition:
@@ -169,14 +169,14 @@
   align-items: center;
   justify-content: center;
   padding: 1rem 1.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 1rem;
   background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.06), transparent 62%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
-    rgba(255, 255, 255, 0.015);
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.028), transparent 58%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0.006)),
+    rgba(255, 255, 255, 0.008);
   color: rgba(255, 255, 255, 0.52);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .capabilityGlyph {
@@ -202,11 +202,14 @@
 .capabilityCard:hover {
   transform: translateY(-3px);
   border-color: var(--site-border-strong);
-  background: var(--site-surface-alt);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.04), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 34%),
+    var(--site-surface-alt);
 }
 
 .capabilityCard:hover .capabilityVisual {
-  color: rgba(255, 255, 255, 0.84);
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .capabilityCard:hover .capabilityGlyph {
