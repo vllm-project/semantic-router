@@ -163,6 +163,58 @@ func TestHandleClassifierInfoUsesResolvedRuntimeConfig(t *testing.T) {
 	}
 }
 
+func TestHandleClassifierInfoNormalizesYAMLStylePluginConfig(t *testing.T) {
+	liveCfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name: "health_decision",
+					Plugins: []config.DecisionPlugin{
+						{
+							Type: "system_prompt",
+							Configuration: map[interface{}]interface{}{
+								"enabled": true,
+								"nested": map[interface{}]interface{}{
+									"mode": "replace",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		runtimeConfig: newLiveRuntimeConfig(
+			liveCfg,
+			func() *config.RouterConfig { return liveCfg },
+			nil,
+		),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/classifier/info", nil)
+	rr := httptest.NewRecorder()
+	apiServer.handleClassifierInfo(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+
+	resp := decodeJSONObject(t, rr.Body.Bytes())
+	cfgPayload := requireJSONObject(t, resp, "config")
+	decisions := requireJSONArray(t, cfgPayload, "Decisions", 1)
+	decision := requireJSONObjectValue(t, decisions[0], "decision")
+	plugins := requireJSONArray(t, decision, "Plugins", 1)
+	plugin := requireJSONObjectValue(t, plugins[0], "plugin")
+	configuration := requireJSONObject(t, plugin, "configuration")
+	nested := requireJSONObject(t, configuration, "nested")
+	if nested["mode"] != "replace" {
+		t.Fatalf("expected nested plugin config to be normalized, got %#v", nested)
+	}
+}
+
 func TestBuildModelsInfoResponseUsesResolvedRuntimeConfig(t *testing.T) {
 	staleCfg := &config.RouterConfig{}
 	liveCfg := &config.RouterConfig{
@@ -345,4 +397,51 @@ func testSystemPromptConfig(category string, prompt string, enabled bool, mode s
 			},
 		},
 	}
+}
+
+func decodeJSONObject(t *testing.T, body []byte) map[string]interface{} {
+	t.Helper()
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	return payload
+}
+
+func requireJSONObject(t *testing.T, payload map[string]interface{}, key string) map[string]interface{} {
+	t.Helper()
+
+	value, ok := payload[key]
+	if !ok {
+		t.Fatalf("expected key %q in payload: %#v", key, payload)
+	}
+	return requireJSONObjectValue(t, value, key)
+}
+
+func requireJSONObjectValue(t *testing.T, value interface{}, label string) map[string]interface{} {
+	t.Helper()
+
+	object, ok := value.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected %s object, got %#v", label, value)
+	}
+	return object
+}
+
+func requireJSONArray(t *testing.T, payload map[string]interface{}, key string, expectedLen int) []interface{} {
+	t.Helper()
+
+	value, ok := payload[key]
+	if !ok {
+		t.Fatalf("expected key %q in payload: %#v", key, payload)
+	}
+	items, ok := value.([]interface{})
+	if !ok {
+		t.Fatalf("expected %s array, got %#v", key, value)
+	}
+	if len(items) != expectedLen {
+		t.Fatalf("expected %s length %d, got %#v", key, expectedLen, value)
+	}
+	return items
 }

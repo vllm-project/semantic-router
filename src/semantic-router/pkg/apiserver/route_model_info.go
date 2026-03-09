@@ -42,7 +42,7 @@ func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, _ 
 	// Return the config directly
 	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 		"status": "config_loaded",
-		"config": cfg,
+		"config": jsonCompatibleValue(cfg),
 	})
 }
 

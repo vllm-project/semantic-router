@@ -310,11 +310,38 @@ func (s *ClassificationAPIServer) parseJSONRequest(r *http.Request, v interface{
 }
 
 func (s *ClassificationAPIServer) writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
+	payload, err := json.Marshal(data)
+	if err != nil {
+		logging.Errorf("Failed to encode JSON response: %v", err)
+		s.writeJSONEncodingError(w)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
+	if _, err := w.Write(append(payload, '\n')); err != nil {
+		logging.Errorf("Failed to write JSON response: %v", err)
+	}
+}
 
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		logging.Errorf("Failed to encode JSON response: %v", err)
+func (s *ClassificationAPIServer) writeJSONEncodingError(w http.ResponseWriter) {
+	payload, err := json.Marshal(map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":      "JSON_ENCODE_ERROR",
+			"message":   "failed to encode response",
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+	if err != nil {
+		logging.Errorf("Failed to encode JSON error response: %v", err)
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	if _, err := w.Write(append(payload, '\n')); err != nil {
+		logging.Errorf("Failed to write JSON error response: %v", err)
 	}
 }
 
