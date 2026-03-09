@@ -608,27 +608,36 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 }
 
 func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) (string, error) {
-	config := map[string]interface{}{
-		// Add required fields for router config
-		"version": "v0.1",
-		"listeners": []map[string]interface{}{
-			{
-				"name":    "grpc-50051",
-				"address": "0.0.0.0",
-				"port":    50051,
-				"timeout": "300s",
-			},
-		},
-		// Add default signals/domains section for category classification
-		"signals": map[string]interface{}{
-			"domains": []map[string]interface{}{
+	var config map[string]interface{}
+	if sr.Spec.AuthoringConfig != nil {
+		compiled, err := compileAuthoringConfig(sr.Spec.AuthoringConfig)
+		if err != nil {
+			return "", fmt.Errorf("failed to compile authoringConfig: %w", err)
+		}
+		config = compiled
+	} else {
+		config = map[string]interface{}{
+			// Add required fields for router config
+			"version": "v0.1",
+			"listeners": []map[string]interface{}{
 				{
-					"name":            "general",
-					"description":     "General queries",
-					"mmlu_categories": []string{"other"},
+					"name":    "grpc-50051",
+					"address": "0.0.0.0",
+					"port":    50051,
+					"timeout": "300s",
 				},
 			},
-		},
+			// Add default signals/domains section for category classification
+			"signals": map[string]interface{}{
+				"domains": []map[string]interface{}{
+					{
+						"name":            "general",
+						"description":     "General queries",
+						"mmlu_categories": []string{"other"},
+					},
+				},
+			},
+		}
 	}
 
 	// Generate vLLM endpoints and model configs if specified
@@ -686,8 +695,11 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 	if sr.Spec.Config.EmbeddingModels != nil {
 		config["embedding_models"] = r.convertToConfigMap(sr.Spec.Config.EmbeddingModels)
 	}
-	// Add complexity_rules under signals section
-	if len(sr.Spec.Config.ComplexityRules) > 0 {
+	if len(sr.Spec.Config.ComplexityRules) > 0 && sr.Spec.AuthoringConfig != nil {
+		config["complexity_rules"] = r.convertToConfigMap(sr.Spec.Config.ComplexityRules)
+	}
+	// Add complexity_rules under signals section for the legacy operator path.
+	if len(sr.Spec.Config.ComplexityRules) > 0 && sr.Spec.AuthoringConfig == nil {
 		if signals, ok := config["signals"].(map[string]interface{}); ok {
 			signals["complexity"] = r.convertToConfigMap(sr.Spec.Config.ComplexityRules)
 		}

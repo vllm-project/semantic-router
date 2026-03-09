@@ -971,6 +971,14 @@ spec:
                 items:
                   type: string
                 type: array
+              authoringConfig:
+                description: |-
+                  AuthoringConfig carries the canonical router authoring config for the
+                  shared user path. When set, the operator compiles this nested config into
+                  runtime config.yaml instead of requiring users to hand-maintain only the
+                  runtime-shaped router contract.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               autoscaling:
                 description: Autoscaling configuration
                 properties:

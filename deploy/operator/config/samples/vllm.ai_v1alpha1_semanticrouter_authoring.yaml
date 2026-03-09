@@ -1,0 +1,68 @@
+---
+# SemanticRouter example using the canonical authoring contract for common routing config.
+# This keeps Kubernetes deployment knobs in the CRD while authoring router behavior once.
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-authoring
+  namespace: default
+spec:
+  replicas: 1
+
+  persistence:
+    enabled: true
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+  authoringConfig:
+    version: v0.1
+    listeners:
+      - name: grpc-50051
+        address: 0.0.0.0
+        port: 50051
+        timeout: 300s
+    signals:
+      keywords:
+        - name: billing_keywords
+          operator: contains
+          keywords:
+            - invoice
+            - refund
+          case_sensitive: false
+    providers:
+      models:
+        - name: qwen3-4b
+          reasoning_family: qwen3
+          endpoints:
+            - name: primary
+              weight: 100
+              endpoint: vllm-qwen.default.svc.cluster.local:8000
+      default_model: qwen3-4b
+      reasoning_families:
+        qwen3:
+          type: effort
+          parameter: reasoning_effort
+      default_reasoning_effort: medium
+    decisions:
+      - name: billing-route
+        priority: 90
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: billing_keywords
+        modelRefs:
+          - model: qwen3-4b
+            use_reasoning: false
+
+  config:
+    api:
+      batch_classification:
+        enabled: true

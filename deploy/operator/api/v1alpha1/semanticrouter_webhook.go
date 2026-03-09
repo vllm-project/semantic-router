@@ -17,12 +17,13 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config/authoring"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -33,26 +34,56 @@ var semanticrouterlog = logf.Log.WithName("semanticrouter-resource")
 func (r *SemanticRouter) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
+		WithValidator(&semanticRouterValidator{}).
 		Complete()
 }
 
 // +kubebuilder:webhook:path=/validate-vllm-ai-v1alpha1-semanticrouter,mutating=false,failurePolicy=fail,sideEffects=None,groups=vllm.ai,resources=semanticrouters,verbs=create;update,versions=v1alpha1,name=vsemanticrouter.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Validator = &SemanticRouter{}
+var _ admission.CustomValidator = &semanticRouterValidator{}
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
+type semanticRouterValidator struct{}
+
+func (*semanticRouterValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	sr, ok := obj.(*SemanticRouter)
+	if !ok {
+		return nil, fmt.Errorf("expected *SemanticRouter, got %T", obj)
+	}
+	semanticrouterlog.Info("validate create", "name", sr.Name)
+	return nil, sr.validateSemanticRouter()
+}
+
+func (*semanticRouterValidator) ValidateUpdate(_ context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
+	sr, ok := newObj.(*SemanticRouter)
+	if !ok {
+		return nil, fmt.Errorf("expected *SemanticRouter, got %T", newObj)
+	}
+	semanticrouterlog.Info("validate update", "name", sr.Name)
+	return nil, sr.validateSemanticRouter()
+}
+
+func (*semanticRouterValidator) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	sr, ok := obj.(*SemanticRouter)
+	if !ok {
+		return nil, fmt.Errorf("expected *SemanticRouter, got %T", obj)
+	}
+	semanticrouterlog.Info("validate delete", "name", sr.Name)
+	return nil, nil
+}
+
+// ValidateCreate keeps the existing direct-call validation seam used by local tests.
 func (r *SemanticRouter) ValidateCreate() (admission.Warnings, error) {
 	semanticrouterlog.Info("validate create", "name", r.Name)
 	return nil, r.validateSemanticRouter()
 }
 
-// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
+// ValidateUpdate keeps the existing direct-call validation seam used by local tests.
 func (r *SemanticRouter) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	semanticrouterlog.Info("validate update", "name", r.Name)
 	return nil, r.validateSemanticRouter()
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
+// ValidateDelete keeps the existing direct-call validation seam used by local tests.
 func (r *SemanticRouter) ValidateDelete() (admission.Warnings, error) {
 	semanticrouterlog.Info("validate delete", "name", r.Name)
 	// No validation needed on delete
@@ -85,6 +116,35 @@ func (r *SemanticRouter) validateSemanticRouter() error {
 		}
 	}
 
+	if err := r.validateConfigSources(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *SemanticRouter) validateConfigSources() error {
+	if r.Spec.AuthoringConfig == nil {
+		return nil
+	}
+	if len(r.Spec.AuthoringConfig.Raw) == 0 {
+		return fmt.Errorf("spec.authoringConfig must not be empty")
+	}
+	if len(r.Spec.VLLMEndpoints) > 0 {
+		return fmt.Errorf("spec.authoringConfig cannot be combined with spec.vllmEndpoints")
+	}
+	if len(r.Spec.Config.Decisions) > 0 {
+		return fmt.Errorf("spec.authoringConfig cannot be combined with spec.config.decisions")
+	}
+	if len(r.Spec.Config.ReasoningFamilies) > 0 {
+		return fmt.Errorf("spec.authoringConfig cannot be combined with spec.config.reasoning_families")
+	}
+	if r.Spec.Config.DefaultReasoningEffort != "" {
+		return fmt.Errorf("spec.authoringConfig cannot be combined with spec.config.default_reasoning_effort")
+	}
+	if _, err := authoring.Parse(r.Spec.AuthoringConfig.Raw); err != nil {
+		return fmt.Errorf("spec.authoringConfig: %w", err)
+	}
 	return nil
 }
 
@@ -119,28 +179,23 @@ func (r *SemanticRouter) validatePersistence() error {
 
 // validateProbes validates probe configurations
 func (r *SemanticRouter) validateProbes() error {
-	// Validate startup probe
-	if r.Spec.StartupProbe != nil && (r.Spec.StartupProbe.Enabled == nil || *r.Spec.StartupProbe.Enabled) {
-		if err := r.validateProbeSpec("startupProbe", r.Spec.StartupProbe); err != nil {
-			return err
-		}
+	if err := r.validateOptionalProbe("startupProbe", r.Spec.StartupProbe); err != nil {
+		return err
 	}
-
-	// Validate liveness probe
-	if r.Spec.LivenessProbe != nil && (r.Spec.LivenessProbe.Enabled == nil || *r.Spec.LivenessProbe.Enabled) {
-		if err := r.validateProbeSpec("livenessProbe", r.Spec.LivenessProbe); err != nil {
-			return err
-		}
+	if err := r.validateOptionalProbe("livenessProbe", r.Spec.LivenessProbe); err != nil {
+		return err
 	}
+	return r.validateOptionalProbe("readinessProbe", r.Spec.ReadinessProbe)
+}
 
-	// Validate readiness probe
-	if r.Spec.ReadinessProbe != nil && (r.Spec.ReadinessProbe.Enabled == nil || *r.Spec.ReadinessProbe.Enabled) {
-		if err := r.validateProbeSpec("readinessProbe", r.Spec.ReadinessProbe); err != nil {
-			return err
-		}
+func (r *SemanticRouter) validateOptionalProbe(name string, probe *ProbeSpec) error {
+	if probe == nil {
+		return nil
 	}
-
-	return nil
+	if probe.Enabled != nil && !*probe.Enabled {
+		return nil
+	}
+	return r.validateProbeSpec(name, probe)
 }
 
 // validateProbeSpec validates a single probe specification

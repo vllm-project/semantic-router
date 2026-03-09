@@ -65,6 +65,15 @@ type SemanticRouterSpec struct {
 	// +optional
 	Config ConfigSpec `json:"config,omitempty"`
 
+	// AuthoringConfig carries the canonical router authoring config for the
+	// shared user path. When set, the operator compiles this nested config into
+	// runtime config.yaml instead of requiring users to hand-maintain only the
+	// runtime-shaped router contract.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	AuthoringConfig *apiextensionsv1.JSON `json:"authoringConfig,omitempty"`
+
 	// Tools database configuration
 	// +optional
 	ToolsDb []ToolEntry `json:"toolsDb,omitempty"`
