@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config/authoring"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -58,7 +59,7 @@ func loadRouterConfig(configPath string) (*config.RouterConfig, error) {
 		return globalCfg, nil
 	}
 
-	cfg, err := config.Parse(configPath)
+	cfg, err := authoring.LoadRuntimeCompatibleConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}

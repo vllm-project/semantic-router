@@ -64,26 +64,31 @@ func Parse(configPath string) (*RouterConfig, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	// Log decisions found after YAML unmarshal
-	logging.Debugf("[config.Parse] After unmarshal: decisions=%d", len(cfg.Decisions))
-	for i, d := range cfg.Decisions {
-		logging.Debugf("[config.Parse]   decision[%d]: name=%q, modelRefs=%d, priority=%d", i, d.Name, len(d.ModelRefs), d.Priority)
-	}
-
-	// Apply default model registry if not specified in config
-	// If user specifies mom_registry in config.yaml, it completely replaces the defaults
-	if len(cfg.MoMRegistry) == 0 {
-		cfg.MoMRegistry = ToLegacyRegistry()
-	}
-
-	// Validation after parsing
-	if err := validateConfigStructure(cfg); err != nil {
+	if err := FinalizeParsedConfig(cfg); err != nil {
 		logging.Debugf("[config.Parse] ERROR validation failed: %v", err)
 		return nil, err
 	}
 
 	logging.Debugf("[config.Parse] Config loaded successfully: decisions=%d", len(cfg.Decisions))
 	return cfg, nil
+}
+
+// FinalizeParsedConfig applies parse-time defaults and validation shared by
+// both legacy runtime YAML parsing and authoring->runtime compilation.
+func FinalizeParsedConfig(cfg *RouterConfig) error {
+	// Log decisions found after YAML unmarshal/compile.
+	logging.Debugf("[config.FinalizeParsedConfig] decisions=%d", len(cfg.Decisions))
+	for i, d := range cfg.Decisions {
+		logging.Debugf("[config.FinalizeParsedConfig]   decision[%d]: name=%q, modelRefs=%d, priority=%d", i, d.Name, len(d.ModelRefs), d.Priority)
+	}
+
+	// Apply default model registry if not specified in config.
+	// If user specifies mom_registry in config.yaml, it completely replaces the defaults.
+	if len(cfg.MoMRegistry) == 0 {
+		cfg.MoMRegistry = ToLegacyRegistry()
+	}
+
+	return validateConfigStructure(cfg)
 }
 
 // Replace replaces the globally cached config. It is safe for concurrent readers.

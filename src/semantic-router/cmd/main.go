@@ -16,6 +16,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config/authoring"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
@@ -59,7 +60,7 @@ func main() {
 	}
 
 	// Load configuration to initialize tracing
-	cfg, err := config.Parse(*configPath)
+	cfg, err := authoring.LoadRuntimeCompatibleConfig(*configPath)
 	if err != nil {
 		logging.Fatalf("Failed to load config: %v", err)
 	}

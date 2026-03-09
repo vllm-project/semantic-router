@@ -15,7 +15,7 @@ import (
 	yamlv2 "gopkg.in/yaml.v2"
 	"gopkg.in/yaml.v3"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config/authoring"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -90,7 +90,7 @@ func (s *ClassificationAPIServer) handleConfigDeploy(w http.ResponseWriter, r *h
 	}
 	defer func() { _ = os.Remove(tempFile) }()
 
-	parsedCfg, err := config.Parse(tempFile)
+	parsedCfg, err := authoring.LoadRuntimeCompatibleConfig(tempFile)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, "CONFIG_VALIDATION_ERROR", fmt.Sprintf("Config validation failed: %v", err))
 		return
@@ -262,7 +262,7 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	}
 	defer func() { _ = os.Remove(tempFile) }()
 
-	if _, parseErr := config.Parse(tempFile); parseErr != nil {
+	if _, parseErr := authoring.LoadRuntimeCompatibleConfig(tempFile); parseErr != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, "BACKUP_INVALID", fmt.Sprintf("Backup config is invalid: %v", parseErr))
 		return
 	}
