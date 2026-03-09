@@ -310,11 +310,12 @@ function EncoderIntelligenceSection(): JSX.Element {
               </div>
 
               <div className={styles.encoderActions}>
-                <PillLink to="/docs/api/classification">
-                  <Translate id="homepage.aiTech.primaryCta">Classification API</Translate>
-                </PillLink>
-                <PillLink to="/docs/training/training-overview" muted>
-                  <Translate id="homepage.aiTech.secondaryCta">Training overview</Translate>
+                <PillLink
+                  href="https://huggingface.co/LLM-Semantic-Router"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <Translate id="homepage.aiTech.primaryCta">Hugging Face Models</Translate>
                 </PillLink>
               </div>
             </div>

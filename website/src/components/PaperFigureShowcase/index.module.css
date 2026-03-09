@@ -71,6 +71,8 @@
 }
 
 .paperWorkspace {
+  --paper-figure-nav-item-height: 4.3rem;
+  --paper-figure-rail-height: 29.55rem;
   position: relative;
   z-index: 1;
   display: grid;
@@ -80,12 +82,14 @@
   max-width: 1120px;
   margin: 0 auto;
   min-width: 0;
+  min-height: var(--paper-figure-rail-height);
 }
 
 .figureNav {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-height: var(--paper-figure-rail-height);
 }
 
 .figureNavItem {
@@ -96,6 +100,7 @@
   width: 100%;
   text-align: left;
   padding: 0.85rem 0.9rem;
+  min-height: var(--paper-figure-nav-item-height);
   border-radius: 12px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   background: rgba(255, 255, 255, 0.8);
@@ -157,10 +162,12 @@
   border: 1px solid rgba(0, 0, 0, 0.1);
   background: rgba(255, 255, 255, 0.9);
   padding: 1.5rem;
-  min-height: 420px;
+  min-height: var(--paper-figure-rail-height);
+  height: var(--paper-figure-rail-height);
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 [data-theme='dark'] .figureStage {
@@ -171,6 +178,11 @@
 .figureStageHeader {
   margin-bottom: 1.25rem;
   flex: 0 0 auto;
+}
+
+.figureStage > :last-child {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .figureMeta {
@@ -1699,6 +1711,11 @@
 }
 
 @media screen and (max-width: 996px) {
+  .paperWorkspace,
+  [data-theme='dark'] .paperWorkspace {
+    min-height: 0;
+  }
+
   .paperHeader,
   [data-theme='dark'] .paperHeader {
     margin-bottom: 1.6rem;
@@ -1708,6 +1725,18 @@
   [data-theme='dark'] .figureNav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.7rem;
+    min-height: 0;
+  }
+
+  .figureNavItem,
+  [data-theme='dark'] .figureNavItem {
+    min-height: 0;
+  }
+
+  .figureStage,
+  [data-theme='dark'] .figureStage {
+    min-height: 420px;
+    height: auto;
   }
 }
 
