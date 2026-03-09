@@ -156,14 +156,13 @@ const config: Config = {
         },
         {
           type: 'docsVersionDropdown',
-          className: 'nav-docs-only',
           position: 'right',
           dropdownActiveClassDisabled: true,
         },
         {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
-          className: 'nav-docs-only nav-primary',
+          className: 'nav-primary',
           position: 'left',
           label: 'Docs',
         },
