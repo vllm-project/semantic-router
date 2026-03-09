@@ -240,8 +240,7 @@ const ChatComponent = ({
   }, [conversations])
   const generateId = generateMessageId
 
-  const handleThinkingComplete = useCallback(() => {
-  }, [])
+  const handleThinkingComplete = useCallback(() => {}, [])
 
   const handleHeaderRevealComplete = useCallback(() => {
     setShowHeaderReveal(false)
@@ -1001,13 +1000,9 @@ const ChatComponent = ({
     })
   }, [])
 
-  const roomChatToggleControl = enableClawMode ? (
-    <ChatComponentRoomToggle
-      disabled={modeToggleDisabled}
-      isTeamRoomView={isTeamRoomView}
-      onToggle={handleToggleTeamView}
-    />
-  ) : null
+  const roomChatToggleControl = enableClawMode
+    ? <ChatComponentRoomToggle disabled={modeToggleDisabled} isTeamRoomView={isTeamRoomView} onToggle={handleToggleTeamView} />
+    : null
   const liveThinkingProcess = messages.reduceRight((thinking, message) =>
     thinking || (message.role === 'assistant' && message.isStreaming ? message.thinkingProcess || '' : ''), '')
 
@@ -1028,9 +1023,7 @@ const ChatComponent = ({
         />
       )}
 
-      <div
-        className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}
-      >
+      <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
         <div className={styles.mainLayout}>
           {!isTeamRoomView && isSidebarOpen && (
             <ChatConversationSidebar
