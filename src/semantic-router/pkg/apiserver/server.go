@@ -71,7 +71,7 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
-		classificationSvc:     classificationSvc,
+		classificationSvc:     newLiveClassificationService(classificationSvc, func() classificationService { return services.GetGlobalClassificationService() }),
 		config:                cfg,
 		configPath:            configPath,
 		memoryStore:           memoryStore,

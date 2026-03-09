@@ -5,12 +5,11 @@ package apiserver
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
-	classificationSvc     *services.ClassificationService
+	classificationSvc     classificationService
 	config                *config.RouterConfig
 	configPath            string // path to the router config file (for deploy/rollback)
 	memoryStore           memory.Store
