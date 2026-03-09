@@ -10,8 +10,23 @@ import ChatComponentMessages from './ChatComponentMessages'
 import ChatComponentRoomToggle from './ChatComponentRoomToggle'
 import ChatComponentTopBar from './ChatComponentTopBar'
 import {
+  buildChoicesArray,
+  getFirstChoice,
+  isEventStreamContentType,
+  mergeParsedChoices,
+  parseChatCompletionPayload,
+  type ChoiceAccumulator,
+  type ParsedChatCompletion,
+  type ParsedToolCallChunk,
+} from './chatResponseParsing'
+import {
+  buildChatMessages,
+  buildChatRequestBody,
+  collectResponseHeaders,
+  type OutboundChatMessage,
+} from './chatRequestSupport'
+import {
   CLAW_MODE_STORAGE_KEY,
-  CLAW_MODE_SYSTEM_PROMPT,
   CLAW_TOOL_NAME_PREFIX,
   type Choice,
   type ConversationPreview,
@@ -225,10 +240,7 @@ const ChatComponent = ({
   }, [conversations])
   const generateId = generateMessageId
 
-  const handleThinkingComplete = useCallback(() => {
-    // Thinking animation will be hidden when headers arrive
-    // This callback is kept for ThinkingAnimation component compatibility
-  }, [])
+  const handleThinkingComplete = useCallback(() => {}, [])
 
   const handleHeaderRevealComplete = useCallback(() => {
     setShowHeaderReveal(false)
@@ -299,7 +311,6 @@ const ChatComponent = ({
     setInputValue('')
     setIsLoading(true)
 
-    // Reset animation states and show initial thinking animation (no content)
     setPendingHeaders(null)
     setShowHeaderReveal(false)
     setShowThinking(true)  // Show immediately when user sends message
@@ -317,63 +328,16 @@ const ChatComponent = ({
     try {
       abortControllerRef.current = new AbortController()
 
-      // Build chat messages with proper tool call history
-      // This ensures the model knows which tool calls have been completed
-      type ChatMessage = {
-        role: string
-        content: string | null
-        tool_calls?: Array<{
-          id: string
-          type: 'function'
-          function: { name: string; arguments: string }
-        }>
-        tool_call_id?: string
-      }
-
-      const chatMessages: ChatMessage[] = []
-
-      // Process each message for context
-      // IMPORTANT: For history messages, we only include the final text content,
-      // NOT the tool calls and results. This prevents context pollution where
-      // the model might be confused by previous tool usage when answering new questions.
-      for (const m of messages) {
-        if (m.role === 'user') {
-          chatMessages.push({ role: 'user', content: m.content })
-        } else if (m.role === 'assistant') {
-          // For assistant messages, only include the final text content
-          // Don't include tool_calls or tool results in history
-          // This keeps the context clean for new questions
-          if (m.content) {
-            chatMessages.push({ role: 'assistant', content: m.content })
-          }
-        }
-      }
-
-      if (enableClawMode && !clawManagementDisabled) {
-        chatMessages.unshift({ role: 'system', content: CLAW_MODE_SYSTEM_PROMPT })
-      }
-
-      // Add the new user message
-      chatMessages.push({ role: 'user', content: trimmedInput })
-
-      // Build request body
-      const requestBody: Record<string, unknown> = {
-        model,
-        messages: chatMessages,
-        stream: true,
-      }
-
-      // Add tools to request:
-      // - Search tools: only when web search is enabled
-      // - Other tools: always available
       const activeTools = [
         ...activeOtherToolDefinitions,
         ...(enableWebSearch ? searchToolDefinitions : []),
       ]
-      if (activeTools.length > 0) {
-        requestBody.tools = activeTools
-        requestBody.tool_choice = 'auto'
-      }
+      const chatMessages = buildChatMessages(
+        messages,
+        trimmedInput,
+        enableClawMode && !clawManagementDisabled
+      )
+      const requestBody = buildChatRequestBody(model, chatMessages, activeTools)
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -389,42 +353,8 @@ const ChatComponent = ({
         throw new Error(`API error: ${response.status} - ${errorText}`)
       }
 
-      // Extract key headers from response
-      const responseHeaders: Record<string, string> = {}
-      const headerKeys = [
-        'x-vsr-selected-model',
-        'x-vsr-selected-decision',
-        'x-vsr-cache-hit',
-        'x-vsr-selected-reasoning',
-        'x-vsr-jailbreak-blocked',
-        'x-vsr-pii-violation',
-        'x-vsr-hallucination-detected',
-        'x-vsr-fact-check-needed',
-        'x-vsr-matched-keywords',
-        'x-vsr-matched-embeddings',
-        'x-vsr-matched-domains',
-        'x-vsr-matched-fact-check',
-        'x-vsr-matched-user-feedback',
-        'x-vsr-matched-preference',
-        'x-vsr-matched-language',
-        'x-vsr-matched-context',
-        'x-vsr-context-token-count',
-        'x-vsr-matched-complexity',
-        // Looper headers
-        'x-vsr-looper-model',
-        'x-vsr-looper-models-used',
-        'x-vsr-looper-iterations',
-        'x-vsr-looper-algorithm',
-      ]
+      const responseHeaders = collectResponseHeaders(response)
 
-      headerKeys.forEach(key => {
-        const value = response.headers.get(key)
-        if (value) {
-          responseHeaders[key] = value
-        }
-      })
-
-      // Store headers and hide thinking animation, show HeaderReveal
       if (Object.keys(responseHeaders).length > 0) {
         console.log('Headers received, showing HeaderReveal')
         setPendingHeaders(responseHeaders)
@@ -432,166 +362,203 @@ const ChatComponent = ({
         setShowHeaderReveal(true)  // Show HeaderReveal
       }
 
-      const reader = response.body?.getReader()
-      if (!reader) {
-        throw new Error('No response body')
-      }
-
-      const decoder = new TextDecoder()
-      // Track content and reasoning for each choice (for ratings mode)
-      const choiceContents: Map<number, { content: string; reasoningContent: string; model?: string }> = new Map()
-      // Check if this is ratings mode (multiple choices)
+      const choiceContents: Map<number, ChoiceAccumulator> = new Map()
       let isRatingsMode = false
-      // Track tool calls
       const toolCallsMap: Map<number, ToolCall> = new Map()
       let hasToolCalls = false
-      // Track ReMoM intermediate responses
       let reasoningMomResponses: ReMoMRoundResponse[] | undefined
-      // Buffer for incomplete lines
-      let buffer = ''
+      let latestThinkingProcess = ''
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+      const syncAssistantToolCalls = () => {
+        const currentToolCalls = Array.from(toolCallsMap.values())
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === assistantMessageId
+              ? { ...m, toolCalls: currentToolCalls }
+              : m
+          )
+        )
+      }
 
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
-        const lines = buffer.split('\n')
+      const mergeToolCallsIntoState = (
+        parsedToolCalls: ParsedToolCallChunk[],
+        idPrefix: string,
+        status: ToolCall['status']
+      ) => {
+        if (parsedToolCalls.length === 0) {
+          return false
+        }
 
-        // Keep the last incomplete line in the buffer
-        buffer = lines.pop() || ''
+        hasToolCalls = true
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim()
-            if (data === '[DONE]') continue
+        for (const parsedToolCall of parsedToolCalls) {
+          const toolCallIndex = parsedToolCall.index
+          if (!toolCallsMap.has(toolCallIndex)) {
+            toolCallsMap.set(toolCallIndex, {
+              id: parsedToolCall.id || `${idPrefix}-${toolCallIndex}`,
+              type: 'function',
+              function: {
+                name: parsedToolCall.functionName || '',
+                arguments: ''
+              },
+              status,
+            })
+          }
 
-            try {
-              const parsed = JSON.parse(data)
-              const choices = parsed.choices || []
+          const existingToolCall = toolCallsMap.get(toolCallIndex)!
+          existingToolCall.status = status
 
-              // Extract reasoning_mom_responses if present (ReMoM algorithm)
-              if (parsed.reasoning_mom_responses) {
-                reasoningMomResponses = parsed.reasoning_mom_responses
-                console.log('[ReMoM] Extracted reasoning_mom_responses:', reasoningMomResponses)
+          if (parsedToolCall.functionName) {
+            existingToolCall.function.name = parsedToolCall.functionName
+          }
+
+          if (parsedToolCall.functionArguments) {
+            existingToolCall.function.arguments += parsedToolCall.functionArguments
+          }
+
+          if (parsedToolCall.id) {
+            existingToolCall.id = parsedToolCall.id
+          }
+        }
+
+        return true
+      }
+
+      const syncAssistantChoices = (streaming: boolean) => {
+        if (hasToolCalls && !getFirstChoice(choiceContents)?.content) {
+          return
+        }
+
+        if (isRatingsMode) {
+          const choicesArray = buildChoicesArray(choiceContents)
+          const thinkingProcess = getFirstChoice(choiceContents)?.reasoningContent || latestThinkingProcess
+
+          if (thinkingProcess) {
+            latestThinkingProcess = thinkingProcess
+          }
+
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantMessageId
+                ? {
+                  ...m,
+                  content: choicesArray[0]?.content || '',
+                  choices: choicesArray,
+                  thinkingProcess: thinkingProcess || m.thinkingProcess,
+                  isStreaming: streaming,
+                }
+                : m
+            )
+          )
+          return
+        }
+
+        const firstChoice = getFirstChoice(choiceContents)
+        if (!firstChoice) {
+          return
+        }
+
+        if (firstChoice.reasoningContent) {
+          latestThinkingProcess = firstChoice.reasoningContent
+        }
+
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === assistantMessageId
+              ? {
+                ...m,
+                content: firstChoice.content,
+                thinkingProcess: firstChoice.reasoningContent || m.thinkingProcess,
+                isStreaming: streaming,
               }
+              : m
+          )
+        )
+      }
 
-              // Detect ratings mode (multiple choices)
-              if (choices.length > 1) {
-                isRatingsMode = true
-              }
+      const applyParsedCompletion = (parsedCompletion: ParsedChatCompletion, streaming: boolean) => {
+        if (parsedCompletion.reasoningMomResponses) {
+          reasoningMomResponses = parsedCompletion.reasoningMomResponses
+          console.log('[ReMoM] Extracted reasoning_mom_responses:', reasoningMomResponses)
+        }
 
-              // Process each choice
-              for (const choice of choices) {
-                const index = choice.index ?? 0
-                const content = choice.delta?.content || ''
-                const reasoningContent = choice.delta?.reasoning_content || ''
-                const model = choice.model
-                const deltaToolCalls = choice.delta?.tool_calls
+        if (parsedCompletion.choices.length > 1) {
+          isRatingsMode = true
+        }
 
-                // Handle tool calls
-                if (deltaToolCalls && Array.isArray(deltaToolCalls)) {
-                  hasToolCalls = true
-                  for (const tc of deltaToolCalls) {
-                    const tcIndex = tc.index ?? 0
-                    if (!toolCallsMap.has(tcIndex)) {
-                      toolCallsMap.set(tcIndex, {
-                        id: tc.id || `tool-${tcIndex}`,
-                        type: 'function',
-                        function: {
-                          name: tc.function?.name || '',
-                          arguments: ''
-                        },
-                        status: 'running'
-                      })
-                    }
-                    const existingTc = toolCallsMap.get(tcIndex)!
-                    if (tc.function?.name) {
-                      existingTc.function.name = tc.function.name
-                    }
-                    if (tc.function?.arguments) {
-                      existingTc.function.arguments += tc.function.arguments
-                    }
-                    if (tc.id) {
-                      existingTc.id = tc.id
-                    }
-                  }
+        mergeParsedChoices(choiceContents, parsedCompletion.choices)
 
-                  // Update message with tool calls
-                  const currentToolCalls = Array.from(toolCallsMap.values())
-                  setMessages(prev =>
-                    prev.map(m =>
-                      m.id === assistantMessageId
-                        ? { ...m, toolCalls: currentToolCalls }
-                        : m
-                    )
-                  )
-                }
+        let shouldSyncToolCalls = false
+        for (const parsedChoice of parsedCompletion.choices) {
+          if (mergeToolCallsIntoState(parsedChoice.toolCalls, 'tool', streaming ? 'running' : 'pending')) {
+            shouldSyncToolCalls = true
+          }
+        }
 
-                if (!choiceContents.has(index)) {
-                  choiceContents.set(index, { content: '', reasoningContent: '', model })
-                }
+        if (shouldSyncToolCalls) {
+          syncAssistantToolCalls()
+        }
 
-                const current = choiceContents.get(index)!
-                if (content) {
-                  current.content += content
-                }
-                if (reasoningContent) {
-                  current.reasoningContent += reasoningContent
-                }
-                if (model && !current.model) {
-                  current.model = model
-                }
-              }
+        syncAssistantChoices(streaming)
+      }
 
-              // Update message state (only if we have content, not just tool calls)
-              if (!hasToolCalls || choiceContents.get(0)?.content) {
-                if (isRatingsMode) {
-                  // Ratings mode: update choices array
-                  const choicesArray: Choice[] = []
+      if (!isEventStreamContentType(response.headers.get('content-type'))) {
+        const responseText = await response.text()
+        const parsedResponse = parseChatCompletionPayload(responseText)
 
-                  choiceContents.forEach((value, index) => {
-                    choicesArray[index] = { content: value.content, model: value.model }
-                  })
+        if (!parsedResponse) {
+          throw new Error('Invalid JSON response')
+        }
 
-                  // Get thinking process (reasoning_content) from first choice
-                  const firstChoice = choiceContents.get(0)
-                  const thinkingProcess = firstChoice?.reasoningContent || ''
+        if (parsedResponse.errorMessage) {
+          throw new Error(parsedResponse.errorMessage)
+        }
 
-                  setMessages(prev =>
-                    prev.map(m =>
-                      m.id === assistantMessageId
-                        ? {
-                          ...m,
-                          content: choicesArray[0]?.content || '',
-                          choices: choicesArray,
-                          thinkingProcess: thinkingProcess
-                        }
-                        : m
-                    )
-                  )
-                } else {
-                  // Single choice mode
-                  const firstChoice = choiceContents.get(0)
-                  if (firstChoice) {
-                    setMessages(prev =>
-                      prev.map(m =>
-                        m.id === assistantMessageId
-                          ? {
-                            ...m,
-                            content: firstChoice.content,
-                            thinkingProcess: firstChoice.reasoningContent,
-                            isStreaming: true
-                          }
-                          : m
-                      )
-                    )
-                  }
-                }
-              }
-            } catch {
-              // Skip malformed JSON chunks
+        if (parsedResponse.choices.length === 0) {
+          throw new Error('No choices in response')
+        }
+
+        applyParsedCompletion(parsedResponse, false)
+      } else {
+        const reader = response.body?.getReader()
+        if (!reader) {
+          throw new Error('No response body')
+        }
+
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value, { stream: true })
+          buffer += chunk
+          const lines = buffer.split('\n')
+
+          // Keep the last incomplete line in the buffer
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) {
+              continue
             }
+
+            const data = line.slice(6).trim()
+            if (data === '[DONE]') {
+              continue
+            }
+
+            const parsedChunk = parseChatCompletionPayload(data)
+            if (!parsedChunk) {
+              continue
+            }
+
+            if (parsedChunk.errorMessage) {
+              throw new Error(parsedChunk.errorMessage)
+            }
+
+            applyParsedCompletion(parsedChunk, true)
           }
         }
       }
@@ -609,9 +576,7 @@ const ChatComponent = ({
         // Track final content from tool loop
         let finalContent = ''
 
-        // Current conversation state for tool loop - use chatMessages as base (already built correctly)
-        type ChatMessage = { role: string; content: string | null; tool_calls?: unknown[]; tool_call_id?: string }
-        let currentMessages: ChatMessage[] = [...chatMessages]
+        let currentMessages: OutboundChatMessage[] = [...chatMessages]
 
         while (iteration < MAX_TOOL_ITERATIONS) {
           iteration++
@@ -736,84 +701,121 @@ const ChatComponent = ({
             break
           }
 
-          if (!followUpResponse.body) break
-
-          const followUpReader = followUpResponse.body.getReader()
-          const followUpDecoder = new TextDecoder()
           let followUpContent = ''
+          let followUpThinking = ''
           let hasMoreToolCalls = false
           let streamFinishReason = ''
 
           // Reset tool calls map for this iteration
           toolCallsMap.clear()
 
-          while (true) {
-            const { done, value } = await followUpReader.read()
-            if (done) break
+          const syncFollowUpMessage = (streaming: boolean) => {
+            if (followUpThinking) {
+              latestThinkingProcess = followUpThinking
+            }
 
-            const chunk = followUpDecoder.decode(value, { stream: true })
-            const lines = chunk.split('\n').filter(line => line.trim() !== '')
+            if (!followUpContent && !followUpThinking) {
+              return
+            }
 
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6)
-                if (data === '[DONE]') continue
-
-                try {
-                  const parsed = JSON.parse(data)
-                  const delta = parsed.choices?.[0]?.delta
-                  const deltaToolCalls = delta?.tool_calls
-                  const finishReason = parsed.choices?.[0]?.finish_reason
-
-                  // Capture finish reason when present
-                  if (finishReason) {
-                    streamFinishReason = finishReason
-                    console.log(`Iteration ${iteration} finish_reason: ${finishReason}, hasContent: ${followUpContent.length > 0}`)
+            setMessages(prev =>
+              prev.map(m =>
+                m.id === assistantMessageId
+                  ? {
+                    ...m,
+                    content: followUpContent || m.content,
+                    thinkingProcess: followUpThinking || m.thinkingProcess,
+                    isStreaming: streaming,
                   }
+                  : m
+              )
+            )
+          }
 
-                  // Check for new tool calls
-                  if (deltaToolCalls && Array.isArray(deltaToolCalls)) {
-                    hasMoreToolCalls = true
-                    for (const tc of deltaToolCalls) {
-                      const tcIndex = tc.index ?? 0
-                      if (!toolCallsMap.has(tcIndex)) {
-                        toolCallsMap.set(tcIndex, {
-                          id: tc.id || `tool-${iteration}-${tcIndex}`,
-                          type: 'function',
-                          function: {
-                            name: tc.function?.name || '',
-                            arguments: ''
-                          },
-                          status: 'pending'
-                        })
-                      }
-                      const existingTc = toolCallsMap.get(tcIndex)!
-                      if (tc.function?.name) {
-                        existingTc.function.name = tc.function.name
-                      }
-                      if (tc.function?.arguments) {
-                        existingTc.function.arguments += tc.function.arguments
-                      }
-                      if (tc.id) {
-                        existingTc.id = tc.id
-                      }
-                    }
-                  }
+          const applyFollowUpCompletion = (parsedCompletion: ParsedChatCompletion, streaming: boolean) => {
+            const firstChoice = parsedCompletion.choices[0]
+            const resolvedFinishReason = firstChoice?.finishReason
 
-                  // Accumulate content
-                  if (delta?.content) {
-                    followUpContent += delta.content
-                    setMessages(prev =>
-                      prev.map(m =>
-                        m.id === assistantMessageId
-                          ? { ...m, content: followUpContent }
-                          : m
-                      )
-                    )
-                  }
-                } catch {
-                  // Ignore parse errors
+            if (resolvedFinishReason) {
+              streamFinishReason = resolvedFinishReason
+              console.log(`Iteration ${iteration} finish_reason: ${resolvedFinishReason}, hasContent: ${followUpContent.length > 0}`)
+            }
+
+            let shouldSyncToolCalls = false
+            for (const parsedChoice of parsedCompletion.choices) {
+              if (parsedChoice.toolCalls.length > 0) {
+                hasMoreToolCalls = true
+                if (mergeToolCallsIntoState(parsedChoice.toolCalls, `tool-${iteration}`, 'pending')) {
+                  shouldSyncToolCalls = true
                 }
+              }
+
+              if (parsedChoice.content) {
+                followUpContent += parsedChoice.content
+              }
+
+              if (parsedChoice.reasoningContent) {
+                followUpThinking += parsedChoice.reasoningContent
+              }
+            }
+
+            if (!streamFinishReason) {
+              streamFinishReason = hasMoreToolCalls ? 'tool_calls' : 'stop'
+            }
+
+            if (shouldSyncToolCalls) {
+              syncAssistantToolCalls()
+            }
+
+            syncFollowUpMessage(streaming)
+          }
+
+          if (!isEventStreamContentType(followUpResponse.headers.get('content-type'))) {
+            const followUpText = await followUpResponse.text()
+            const parsedFollowUp = parseChatCompletionPayload(followUpText)
+
+            if (parsedFollowUp?.errorMessage) {
+              console.error('Follow-up API call returned an error:', parsedFollowUp.errorMessage)
+              break
+            }
+
+            if (parsedFollowUp && parsedFollowUp.choices.length > 0) {
+              applyFollowUpCompletion(parsedFollowUp, false)
+            }
+          } else {
+            if (!followUpResponse.body) break
+
+            const followUpReader = followUpResponse.body.getReader()
+            const followUpDecoder = new TextDecoder()
+
+            while (true) {
+              const { done, value } = await followUpReader.read()
+              if (done) break
+
+              const chunk = followUpDecoder.decode(value, { stream: true })
+              const lines = chunk.split('\n').filter(line => line.trim() !== '')
+
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) {
+                  continue
+                }
+
+                const data = line.slice(6).trim()
+                if (data === '[DONE]') {
+                  continue
+                }
+
+                const parsedFollowUpChunk = parseChatCompletionPayload(data)
+                if (!parsedFollowUpChunk) {
+                  continue
+                }
+
+                if (parsedFollowUpChunk.errorMessage) {
+                  console.error('Follow-up streaming chunk returned an error:', parsedFollowUpChunk.errorMessage)
+                  continue
+                }
+
+                applyFollowUpCompletion(parsedFollowUpChunk, true)
               }
             }
           }
@@ -900,18 +902,14 @@ const ChatComponent = ({
 
       // Finalize message
       const finalChoices: Choice[] | undefined = isRatingsMode
-        ? Array.from(choiceContents.entries())
-          .sort(([a], [b]) => a - b)
-          .map(([, v]) => ({ content: v.content, model: v.model }))
+        ? buildChoicesArray(choiceContents)
         : undefined
 
-      // Get final thinking process from reasoning_content
-      const finalThinkingProcess = choiceContents.get(0)?.reasoningContent || ''
-
-      // Streaming finished - no need to control ThinkingAnimation here
-      // It was already hidden when headers arrived
+      // Get final thinking process from supported reasoning fields
+      const finalThinkingProcess = latestThinkingProcess || getFirstChoice(choiceContents)?.reasoningContent || ''
 
       console.log('[ReMoM] Setting reasoning_mom_responses:', reasoningMomResponses)
+      setShowThinking(false)
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantMessageId
@@ -935,6 +933,7 @@ const ChatComponent = ({
       setMessages(prev => prev.filter(m => m.id !== assistantMessageId))
     } finally {
       setIsLoading(false)
+      setShowThinking(false)
       abortControllerRef.current = null
     }
   }
@@ -1004,13 +1003,15 @@ const ChatComponent = ({
   const roomChatToggleControl = enableClawMode
     ? <ChatComponentRoomToggle disabled={modeToggleDisabled} isTeamRoomView={isTeamRoomView} onToggle={handleToggleTeamView} />
     : null
+  const liveThinkingProcess = messages.reduceRight((thinking, message) =>
+    thinking || (message.role === 'assistant' && message.isStreaming ? message.thinkingProcess || '' : ''), '')
 
   return (
     <>
       {showThinking && (
         <ThinkingAnimation
           onComplete={handleThinkingComplete}
-          thinkingProcess=""
+          thinkingProcess={liveThinkingProcess}
         />
       )}
 
@@ -1022,9 +1023,7 @@ const ChatComponent = ({
         />
       )}
 
-      <div
-        className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}
-      >
+      <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
         <div className={styles.mainLayout}>
           {!isTeamRoomView && isSidebarOpen && (
             <ChatConversationSidebar

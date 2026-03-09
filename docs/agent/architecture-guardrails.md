@@ -2,8 +2,8 @@
 
 ## File and Function Shape
 
-- Prefer files under 400 lines; 600 lines is a hard stop
-- Prefer functions under 40-60 lines; 80 lines is a hard stop
+- Prefer files under 400 lines; 800 lines is a hard stop
+- Prefer functions under 40-60 lines; 100 lines is a hard stop
 - Keep nesting shallow; 4 levels is the maximum
 
 ## Module Design

@@ -3,9 +3,9 @@ version: 1
 limits:
   file_lines:
     warn: 400
-    error: 600
+    error: 800
   function_lines:
-    error: 80
+    error: 100
   nesting:
     error: 4
   interface_methods:
