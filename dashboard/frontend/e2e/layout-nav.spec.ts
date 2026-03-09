@@ -54,13 +54,13 @@ test.describe('Layout top navigation', () => {
     await expect(primaryGroup.getByRole('link', { name: 'ClawOS' })).toHaveCount(0);
 
     await expect(secondaryGroup.getByRole('link', { name: 'ClawOS' })).toBeVisible();
-    await expect(secondaryGroup.getByRole('button', { name: 'Analysis + Ops' })).toBeVisible();
+    await expect(secondaryGroup.getByRole('button', { name: 'Command' })).toBeVisible();
     await expect(globalNav.getByRole('button', { name: 'Analysis', exact: true })).toHaveCount(0);
     await expect(globalNav.getByRole('button', { name: 'Operations', exact: true })).toHaveCount(0);
 
-    await secondaryGroup.getByRole('button', { name: 'Analysis + Ops' }).click();
+    await secondaryGroup.getByRole('button', { name: 'Command' }).click();
 
-    const menu = page.getByRole('menu', { name: 'Analysis and operations' });
+    const menu = page.getByRole('menu', { name: 'Command' });
     await expect(menu.getByText('Analysis')).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Evaluation' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Replay' })).toBeVisible();

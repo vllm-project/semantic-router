@@ -221,7 +221,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                     toggleDropdown('analysisOps')
                   }}
                 >
-                  Analysis + Ops
+                  Command
                   <svg
                     width="12"
                     height="12"
@@ -238,7 +238,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                   ? renderDropdownMenu(
                       ANALYSIS_OPERATIONS_MENU_SECTIONS,
                       styles.dropdownMenuRight,
-                      'Analysis and operations'
+                      'Command'
                     )
                   : null}
               </div>
@@ -321,7 +321,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               </NavLink>
             ))}
             {renderMobileMenuSection('Manager', MANAGER_MENU_SECTIONS)}
-            {renderMobileMenuSection('Analysis + Operations', ANALYSIS_OPERATIONS_MENU_SECTIONS)}
+            {renderMobileMenuSection('Command', ANALYSIS_OPERATIONS_MENU_SECTIONS)}
           </div>
         ) : null}
       </header>
