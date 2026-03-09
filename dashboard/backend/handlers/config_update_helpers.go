@@ -54,13 +54,7 @@ func mergeAndValidateConfigUpdate(configPath string, existingMap, configData map
 		if isCanonicalDashboardFullConfig(configData) {
 			return renderCanonicalDashboardConfigWithPython(configData)
 		}
-
-		existingCanonicalConfig, err := loadCanonicalDashboardConfigWithPython(configPath)
-		if err != nil {
-			return nil, err
-		}
-		mergedCanonicalConfig := deepMerge(existingCanonicalConfig, configData)
-		return renderCanonicalDashboardConfigWithPython(mergedCanonicalConfig)
+		return mergeCanonicalDashboardConfigWithPython(configPath, configData)
 	}
 
 	originalKeyCount := len(existingMap)

@@ -336,3 +336,43 @@ func TestTD001SharedFixture_PartialCanonicalUpdateKeepsLegacyKeysOutOfPersistedC
 		t.Fatalf("Did not expect legacy vllm_endpoints root key after partial canonical update: %#v", persistedConfig)
 	}
 }
+
+func TestUpdateConfigHandler_PartialCompatBlockUsesCanonicalDashboardBridge(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidPythonCLIConfig(t, tempDir)
+	configureDashboardPythonCLITestEnv(t)
+
+	updateBody := map[string]interface{}{
+		"tools": map[string]interface{}{
+			"enabled":              true,
+			"top_k":                6,
+			"similarity_threshold": 0.75,
+		},
+	}
+
+	bodyBytes, _ := json.Marshal(updateBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	UpdateConfigHandler(configPath, false, tempDir)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d. Response: %s", w.Code, w.Body.String())
+	}
+
+	persistedConfig := loadYAMLMapForTest(t, configPath)
+	tools, ok := persistedConfig["tools"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected tools compat block to persist canonically, got: %#v", persistedConfig)
+	}
+	if got := tools["top_k"]; got != 6 {
+		t.Fatalf("Expected tools.top_k to be updated, got %#v", got)
+	}
+	if _, ok := persistedConfig["providers"]; !ok {
+		t.Fatalf("Expected canonical providers block to remain after compat patch, got: %#v", persistedConfig)
+	}
+	if _, ok := persistedConfig["model_config"]; ok {
+		t.Fatalf("Did not expect legacy model_config root key after compat patch: %#v", persistedConfig)
+	}
+}

@@ -18,7 +18,11 @@ from cli.authoring_runtime_compile import (
     build_first_slice_runtime_overlay,
     compile_first_slice_runtime,
 )
-from cli.dashboard_bridge import load_dashboard_config, render_dashboard_yaml
+from cli.dashboard_bridge import (
+    load_dashboard_config,
+    merge_dashboard_config_patch,
+    render_dashboard_yaml,
+)
 from cli.defaults import load_embedded_defaults
 from cli.merger import merge_configs
 from cli.parser import parse_user_config
@@ -186,6 +190,41 @@ class TestTD001ContractMatrix(unittest.TestCase):
         self.assertEqual(
             _load_yaml(AUTHORING_FIXTURE),
             build_first_slice_authoring_config(rendered_user_config),
+        )
+
+    def test_dashboard_bridge_merges_partial_canonical_patch_without_legacy_keys(self):
+        merged_dashboard_config = merge_dashboard_config_patch(
+            load_dashboard_config(str(RUNTIME_FIXTURE)),
+            {
+                "providers": {
+                    "default_reasoning_effort": "high",
+                }
+            },
+        )
+        merged_user_config = _parse_config_dict(merged_dashboard_config)
+
+        self.assertFalse(FIRST_SLICE_LEGACY_RUNTIME_KEYS & set(merged_dashboard_config))
+        self.assertEqual(
+            "high",
+            merged_dashboard_config["providers"]["default_reasoning_effort"],
+        )
+        self.assertEqual([], validate_user_config(merged_user_config))
+
+    def test_dashboard_bridge_merges_typed_compat_patch(self):
+        merged_dashboard_config = merge_dashboard_config_patch(
+            load_dashboard_config(str(AUTHORING_FIXTURE)),
+            {
+                "tools": {
+                    "enabled": True,
+                    "top_k": 7,
+                }
+            },
+        )
+
+        self.assertEqual(7, merged_dashboard_config["tools"]["top_k"])
+        self.assertFalse(FIRST_SLICE_LEGACY_RUNTIME_KEYS & set(merged_dashboard_config))
+        self.assertEqual(
+            [], validate_user_config(_parse_config_dict(merged_dashboard_config))
         )
 
     def test_cli_first_slice_runtime_overlay_preserves_extensions(self):

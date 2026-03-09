@@ -34,6 +34,44 @@ var _canonicalDashboardLegacyKeys = map[string]struct{}{
 	"vllm_endpoints":           {},
 }
 
+var _canonicalDashboardTopLevelKeys = map[string]struct{}{
+	"api":                           {},
+	"authz":                         {},
+	"auto_model_name":               {},
+	"bert_model":                    {},
+	"classifier":                    {},
+	"clear_route_cache":             {},
+	"config_source":                 {},
+	"decisions":                     {},
+	"embedding_models":              {},
+	"feedback_detector":             {},
+	"hallucination_mitigation":      {},
+	"image_gen_backends":            {},
+	"include_config_models_in_list": {},
+	"listeners":                     {},
+	"looper":                        {},
+	"memory":                        {},
+	"modality_detector":             {},
+	"model_selection":               {},
+	"mom_registry":                  {},
+	"observability":                 {},
+	"prompt_guard":                  {},
+	"provider_profiles":             {},
+	"providers":                     {},
+	"ratelimit":                     {},
+	"response_api":                  {},
+	"router_replay":                 {},
+	"semantic_cache":                {},
+	"signals":                       {},
+	"strategy":                      {},
+	"streamed_body_mode":            {},
+	"streamed_body_timeout_sec":     {},
+	"tools":                         {},
+	"vector_store":                  {},
+	"version":                       {},
+	"max_streamed_body_bytes":       {},
+}
+
 func loadDashboardConfig(configPath string) (interface{}, error) {
 	if config, err := loadCanonicalDashboardConfigWithPython(configPath); err == nil {
 		return config, nil
@@ -100,33 +138,47 @@ print(render_dashboard_yaml(config_data), end="")
 	return []byte(output), nil
 }
 
+func mergeCanonicalDashboardConfigWithPython(configPath string, configPatch map[string]interface{}) ([]byte, error) {
+	payload, err := json.Marshal(configPatch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode canonical dashboard config patch: %w", err)
+	}
+
+	output, err := runDashboardPythonBridge(configPath, fmt.Sprintf(`
+import json
+import logging
+import sys
+
+logging.disable(logging.CRITICAL)
+sys.path.insert(0, CLI_ROOT)
+
+from cli.dashboard_bridge import render_merged_dashboard_yaml
+
+config_patch = json.loads(%q)
+print(render_merged_dashboard_yaml(CONFIG_PATH, config_patch), end="")
+`, string(payload)))
+	if err != nil {
+		return nil, err
+	}
+	return []byte(output), nil
+}
+
 func shouldMergeDashboardConfigCanonically(configData map[string]interface{}) bool {
 	if len(configData) == 0 {
 		return false
 	}
 
-	if isCanonicalDashboardFullConfig(configData) {
-		return true
-	}
-
 	hasCanonicalKey := false
-	for _, key := range []string{"providers", "signals", "decisions", "listeners"} {
-		if _, ok := configData[key]; ok {
-			hasCanonicalKey = true
-			break
-		}
-	}
-	if !hasCanonicalKey {
-		return false
-	}
-
 	for key := range configData {
 		if _, isLegacy := _canonicalDashboardLegacyKeys[key]; isLegacy {
 			return false
 		}
+		if _, isCanonical := _canonicalDashboardTopLevelKeys[key]; isCanonical {
+			hasCanonicalKey = true
+		}
 	}
 
-	return true
+	return hasCanonicalKey
 }
 
 func isCanonicalDashboardFullConfig(configData map[string]interface{}) bool {
