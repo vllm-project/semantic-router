@@ -230,6 +230,24 @@ h1.title {
   gap: 1rem 1.5rem;
 }
 
+.spotlightCard {
+  overflow: hidden;
+  border-color: rgba(9, 105, 218, 0.28);
+  background:
+    radial-gradient(circle at top right, rgba(9, 105, 218, 0.16), transparent 34%),
+    linear-gradient(90deg, rgba(9, 105, 218, 0.1), var(--tech-card-bg) 28%);
+  box-shadow: 0 10px 28px rgba(9, 105, 218, 0.12);
+}
+
+.spotlightCard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(9, 105, 218, 0.18);
+  pointer-events: none;
+}
+
 .awardCard:hover {
   transform: translateX(4px);
   box-shadow: 0 4px 12px rgba(9, 105, 218, 0.15);
@@ -308,6 +326,32 @@ h1.title {
   min-width: 0;
 }
 
+.categoryBadge,
+.spotlightBadge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.categoryBadge {
+  padding: 0.25rem 0.55rem;
+  color: var(--tech-primary-blue);
+  background: rgba(9, 105, 218, 0.08);
+  border: 1px solid rgba(9, 105, 218, 0.14);
+}
+
+.spotlightBadge {
+  padding: 0.3rem 0.7rem;
+  color: white;
+  background: linear-gradient(135deg, var(--tech-primary-blue), var(--tech-accent-purple));
+  box-shadow: 0 8px 18px rgba(9, 105, 218, 0.18);
+}
+
 .awardTitle {
   font-size: 1.1rem;
   font-weight: 600;
@@ -315,6 +359,10 @@ h1.title {
   margin: 0;
   line-height: 1.4;
   text-align: left;
+}
+
+.spotlightCard .awardTitle {
+  color: var(--tech-primary-blue);
 }
 
 .awardDetails {
@@ -373,6 +421,14 @@ h1.title {
   display: none;
 }
 
+.spotlightCard .awardDescription {
+  display: block;
+  color: var(--tech-text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  max-width: 72ch;
+}
+
 /* Year and Actions Container - Separate Row */
 .yearAndActions {
   grid-column: 2 / 4;
@@ -398,6 +454,17 @@ h1.title {
   white-space: nowrap;
   height: 32px;
   min-width: 60px;
+}
+
+.spotlightCard .awardYear {
+  background: linear-gradient(135deg, var(--tech-primary-blue), var(--tech-accent-purple));
+  box-shadow: 0 8px 20px rgba(9, 105, 218, 0.18);
+}
+
+.spotlightCard .primaryLink {
+  background: linear-gradient(135deg, var(--tech-primary-blue), var(--tech-accent-purple));
+  border-color: transparent;
+  box-shadow: 0 8px 18px rgba(9, 105, 218, 0.18);
 }
 
 .awardLink::before {
@@ -440,6 +507,22 @@ h1.title {
 
 [data-theme='dark'] .secondaryLink:hover {
   background: rgba(88, 166, 255, 0.12);
+}
+
+[data-theme='dark'] .spotlightCard {
+  border-color: rgba(88, 166, 255, 0.36);
+  background:
+    radial-gradient(circle at top right, rgba(88, 166, 255, 0.18), transparent 38%),
+    linear-gradient(90deg, rgba(88, 166, 255, 0.12), var(--tech-card-bg) 32%);
+  box-shadow: 0 12px 28px rgba(88, 166, 255, 0.14);
+}
+
+[data-theme='dark'] .spotlightCard::before {
+  border-color: rgba(88, 166, 255, 0.24);
+}
+
+[data-theme='dark'] .spotlightBadge {
+  box-shadow: 0 10px 22px rgba(88, 166, 255, 0.22);
 }
 
 /* Award Footer */
@@ -550,6 +633,12 @@ h1.title {
     line-height: 1.3;
   }
 
+  .categoryBadge,
+  .spotlightBadge {
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+  }
+
   .awardDetails {
     flex-direction: column;
     align-items: flex-start;
@@ -577,6 +666,10 @@ h1.title {
     font-size: 0.8rem;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .spotlightCard .awardDescription {
+    font-size: 0.85rem;
   }
 
   /* Year and Actions on same row - mobile */
@@ -628,5 +721,4 @@ h1.title {
 }
 
 /* Dark theme uses default CSS variables */
-
 
