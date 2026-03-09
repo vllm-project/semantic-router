@@ -128,6 +128,16 @@ func loadYAMLFile(t *testing.T, path string) map[string]interface{} {
 	return raw
 }
 
+func loadYAMLDocument(t *testing.T, data []byte) map[string]interface{} {
+	t.Helper()
+
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("yaml.Unmarshal() error = %v", err)
+	}
+	return raw
+}
+
 func selectTopLevelKeys(raw map[string]interface{}, keys ...string) map[string]interface{} {
 	selected := make(map[string]interface{}, len(keys))
 	for _, key := range keys {
