@@ -247,7 +247,7 @@ func (c *WSClient) handleMessage(msg WSInboundMessage) {
 
 // handleSendMessage handles sending a new message to the room
 func (c *WSClient) handleSendMessage(msg WSInboundMessage) {
-	if c.handler.readOnly {
+	if !c.handler.canSendRoomMessages() {
 		c.sendError("read-only mode enabled")
 		return
 	}

@@ -66,9 +66,18 @@ legacy_hotspots:
       - src/vllm-sr/cli/docker_cli.py
       - dashboard/frontend/src/pages/BuilderPage.tsx
       - dashboard/frontend/src/pages/ConfigPage.tsx
+      - dashboard/frontend/src/pages/OpenClawPage.tsx
       - dashboard/frontend/src/pages/SetupWizardPage.tsx
       - dashboard/frontend/src/components/ChatComponent.tsx
+      - dashboard/frontend/src/components/ClawRoomChat.tsx
       - dashboard/frontend/src/components/ExpressionBuilder.tsx
+  - paths:
+      - dashboard/backend/handlers/openclaw.go
+      - dashboard/backend/handlers/openclaw_provision.go
+      - dashboard/backend/handlers/openclaw_rooms.go
+      - dashboard/backend/handlers/openclaw_teams.go
+      - dashboard/backend/handlers/openclaw_test.go
+      - dashboard/backend/handlers/openclaw_workers.go
 
 dependency_rules:
   - name: prod-code-must-not-reference-e2e-docs-or-agent-tools

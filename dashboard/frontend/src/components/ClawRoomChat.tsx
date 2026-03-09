@@ -11,6 +11,7 @@ import {
 } from 'react'
 import MarkdownRenderer from './MarkdownRenderer'
 import styles from './ClawRoomChat.module.css'
+import { useReadonly } from '../contexts/ReadonlyContext'
 
 interface TeamProfile {
   id: string
@@ -179,6 +180,7 @@ const ClawRoomChat = ({
   createRoomRequestToken = 0,
   inputModeControls,
 }: ClawRoomChatProps) => {
+  const { isReadonly, isLoading: readonlyLoading } = useReadonly()
   const [teams, setTeams] = useState<TeamProfile[]>([])
   const [workers, setWorkers] = useState<WorkerProfile[]>([])
   const [rooms, setRooms] = useState<RoomEntry[]>([])
@@ -209,15 +211,9 @@ const ClawRoomChat = ({
   // Expose for future UI rendering (suppress TS6133)
   void streamingMessages
 
-  const selectedTeam = useMemo(
-    () => teams.find(team => team.id === selectedTeamId) || null,
-    [teams, selectedTeamId]
-  )
-
-  const selectedRoom = useMemo(
-    () => rooms.find(room => room.id === selectedRoomId) || null,
-    [rooms, selectedRoomId]
-  )
+  const selectedTeam = useMemo(() => teams.find(team => team.id === selectedTeamId) || null, [teams, selectedTeamId])
+  const selectedRoom = useMemo(() => rooms.find(room => room.id === selectedRoomId) || null, [rooms, selectedRoomId])
+  const managementDisabled = readonlyLoading || isReadonly
 
   const teamWorkers = useMemo(() => {
     return workers
@@ -791,7 +787,7 @@ const ClawRoomChat = ({
 
   const handleCreateRoom = useCallback(async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault()
-    if (!selectedTeamId || creatingRoom) {
+    if (managementDisabled || !selectedTeamId || creatingRoom) {
       return
     }
 
@@ -828,7 +824,7 @@ const ClawRoomChat = ({
     } finally {
       setCreatingRoom(false)
     }
-  }, [creatingRoom, fetchRooms, newRoomName, selectedTeamId])
+  }, [creatingRoom, fetchRooms, managementDisabled, newRoomName, selectedTeamId])
 
   useEffect(() => {
     if (createRoomRequestToken <= lastCreateRoomRequestTokenRef.current) {
@@ -839,7 +835,7 @@ const ClawRoomChat = ({
   }, [createRoomRequestToken, handleCreateRoom])
 
   const handleDeleteRoom = useCallback(async (room: RoomEntry) => {
-    if (!room?.id || deletingRoomId) {
+    if (managementDisabled || !room?.id || deletingRoomId) {
       return
     }
     const ok = window.confirm(`Delete room "${room.name}"?`)
@@ -869,10 +865,10 @@ const ClawRoomChat = ({
     } finally {
       setDeletingRoomId(null)
     }
-  }, [deletingRoomId, fetchRooms, selectedRoomId, selectedTeamId])
+  }, [deletingRoomId, fetchRooms, managementDisabled, selectedRoomId, selectedTeamId])
 
   const handleSetLeader = useCallback(async (workerName: string) => {
-    if (!workerName) return
+    if (managementDisabled || !workerName) return
     setSettingLeaderId(workerName)
     try {
       const resp = await fetch(`/api/openclaw/workers/${encodeURIComponent(workerName)}`, {
@@ -892,7 +888,7 @@ const ClawRoomChat = ({
     } finally {
       setSettingLeaderId(null)
     }
-  }, [fetchTeamsAndWorkers])
+  }, [fetchTeamsAndWorkers, managementDisabled])
 
   const handleInsertMention = useCallback((token: string) => {
     if (!token) return
@@ -1104,12 +1100,12 @@ const ClawRoomChat = ({
                 value={newRoomName}
                 onChange={event => setNewRoomName(event.target.value)}
                 placeholder="New room name (optional)"
-                disabled={!selectedTeamId || creatingRoom}
+                disabled={managementDisabled || !selectedTeamId || creatingRoom}
               />
               <button
                 type="submit"
                 className={styles.createRoomButton}
-                disabled={!selectedTeamId || creatingRoom}
+                disabled={managementDisabled || !selectedTeamId || creatingRoom}
               >
                 {creatingRoom ? 'Creating...' : 'Create'}
               </button>
@@ -1146,7 +1142,7 @@ const ClawRoomChat = ({
                           event.stopPropagation()
                           void handleDeleteRoom(room)
                         }}
-                        disabled={deletingRoomId === room.id}
+                        disabled={managementDisabled || deletingRoomId === room.id}
                         title="Delete room"
                         aria-label="Delete room"
                       >
@@ -1239,7 +1235,7 @@ const ClawRoomChat = ({
                           type="button"
                           className={styles.memberPromoteButton}
                           onClick={() => void handleSetLeader(profile.id)}
-                          disabled={settingLeaderId === profile.id}
+                          disabled={managementDisabled || settingLeaderId === profile.id}
                         >
                           {settingLeaderId === profile.id ? 'Setting…' : 'Set as leader'}
                         </button>

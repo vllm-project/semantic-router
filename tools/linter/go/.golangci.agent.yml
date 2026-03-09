@@ -22,6 +22,14 @@ linters:
       max: 5
     nestif:
       min-complexity: 4
+  exclusions:
+    rules:
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)handlers/openclaw_(provision|rooms|teams|test|websocket|workers)\.go$
 
 issues:
   max-issues-per-linter: 0

@@ -7,6 +7,7 @@ import { ClawModeToggle } from './ChatComponentControls'
 import ChatConversationSidebar from './ChatConversationSidebar'
 import ChatComponentInputBar from './ChatComponentInputBar'
 import ChatComponentMessages from './ChatComponentMessages'
+import ChatComponentRoomToggle from './ChatComponentRoomToggle'
 import ChatComponentTopBar from './ChatComponentTopBar'
 import {
   CLAW_MODE_STORAGE_KEY,
@@ -23,6 +24,7 @@ import { useToolRegistry } from '../tools'
 import { useMCPToolSync } from '../tools/mcp'
 import { ensureOpenClawServerConnected } from '../tools/mcp/api'
 import { useConversationStorage } from '../hooks'
+import { useReadonly } from '../contexts/ReadonlyContext'
 import type { ToolCall, ToolResult } from '../tools'
 
 interface ChatComponentProps {
@@ -58,6 +60,7 @@ const ChatComponent = ({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [clawView, setClawView] = useState<ClawPlaygroundView>(() => 'control')
   const [teamRoomCreateToken, setTeamRoomCreateToken] = useState(0)
+  const { isReadonly, isLoading: readonlyLoading } = useReadonly()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -99,9 +102,14 @@ const ChatComponent = ({
     () => otherToolDefinitions.filter(def => def.function.name.startsWith(CLAW_TOOL_NAME_PREFIX)),
     [otherToolDefinitions]
   )
+  const clawManagementDisabled = readonlyLoading || isReadonly
   const activeOtherToolDefinitions = useMemo(
-    () => (enableClawMode ? [...baseOtherToolDefinitions, ...clawToolDefinitions] : baseOtherToolDefinitions),
-    [baseOtherToolDefinitions, clawToolDefinitions, enableClawMode]
+    () => (
+      enableClawMode && !clawManagementDisabled
+        ? [...baseOtherToolDefinitions, ...clawToolDefinitions]
+        : baseOtherToolDefinitions
+    ),
+    [baseOtherToolDefinitions, clawManagementDisabled, clawToolDefinitions, enableClawMode]
   )
 
   const scrollToBottom = useCallback(() => {
@@ -143,6 +151,10 @@ const ChatComponent = ({
       setClawView('control')
       return
     }
+    if (clawManagementDisabled) {
+      setIsTogglingClawMode(false)
+      return
+    }
 
     let isCurrent = true
     const bootstrapClawTools = async () => {
@@ -165,7 +177,7 @@ const ChatComponent = ({
     return () => {
       isCurrent = false
     }
-  }, [enableClawMode, refreshMCPTools])
+  }, [clawManagementDisabled, enableClawMode, refreshMCPTools])
 
   useEffect(() => {
     if (enableClawMode && clawView === 'room') {
@@ -337,7 +349,7 @@ const ChatComponent = ({
         }
       }
 
-      if (enableClawMode) {
+      if (enableClawMode && !clawManagementDisabled) {
         chatMessages.unshift({ role: 'system', content: CLAW_MODE_SYSTEM_PROMPT })
       }
 
@@ -954,32 +966,28 @@ const ChatComponent = ({
 
   const handleToggleClawMode = useCallback(() => {
     if (isLoading || isTogglingClawMode) return
-
     if (enableClawMode) {
       setEnableClawMode(false)
       setError(null)
       return
     }
-
     setEnableClawMode(true)
     setError(null)
   }, [enableClawMode, isLoading, isTogglingClawMode])
 
-  const isTeamRoomView = enableClawMode && clawView === 'room'
+  const isTeamRoomView = enableClawMode && clawView === 'room', roomCreateDisabled = isTeamRoomView && clawManagementDisabled
   const modeToggleDisabled = isLoading || isTogglingClawMode
 
-  const handleToggleTeamView = useCallback(() => {
-    if (!enableClawMode || modeToggleDisabled) return
-    setClawView(prev => (prev === 'room' ? 'control' : 'room'))
-  }, [enableClawMode, modeToggleDisabled])
+  const handleToggleTeamView = useCallback(() => { if (!enableClawMode || modeToggleDisabled) return; setClawView(prev => (prev === 'room' ? 'control' : 'room')) }, [enableClawMode, modeToggleDisabled])
 
   const handleTopBarCreate = useCallback(() => {
+    if (roomCreateDisabled) return
     if (isTeamRoomView) {
       setTeamRoomCreateToken(prev => prev + 1)
       return
     }
     handleNewConversation()
-  }, [handleNewConversation, isTeamRoomView])
+  }, [handleNewConversation, isTeamRoomView, roomCreateDisabled])
 
   const handleToggleToolCard = useCallback((toolCallId: string) => {
     setExpandedToolCards(prev => {
@@ -993,20 +1001,9 @@ const ChatComponent = ({
     })
   }, [])
 
-  const roomChatToggleControl = enableClawMode ? (
-    <button
-      type="button"
-      className={`${styles.teamToggleButton} ${isTeamRoomView ? styles.teamToggleButtonActive : ''}`}
-      onClick={handleToggleTeamView}
-      aria-pressed={isTeamRoomView}
-      aria-label={isTeamRoomView ? 'Exit ClawRoom view' : 'Open ClawRoom view'}
-      title={isTeamRoomView ? 'Switch to chat view' : 'Switch to room chat view'}
-      disabled={modeToggleDisabled}
-    >
-      <img src="/openclaw.svg" alt="" aria-hidden="true" className={styles.clawToggleIcon} />
-      <span className={styles.teamToggleLabel}>ClawRoom</span>
-    </button>
-  ) : null
+  const roomChatToggleControl = enableClawMode
+    ? <ChatComponentRoomToggle disabled={modeToggleDisabled} isTeamRoomView={isTeamRoomView} onToggle={handleToggleTeamView} />
+    : null
 
   return (
     <>
@@ -1042,6 +1039,7 @@ const ChatComponent = ({
             <ChatComponentTopBar
               isSidebarOpen={isSidebarOpen}
               isTeamRoomView={isTeamRoomView}
+              createDisabled={roomCreateDisabled}
               onCreate={handleTopBarCreate}
               onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
             />
