@@ -182,10 +182,34 @@ function DitherHero(): JSX.Element {
               </>
             )}
             description={(
-              <Translate id="homepage.hero.description">
-                Encoder-native system intelligence for mixture-of-model serving, built on
-                Shannon signals, entropy folding, and neural-symbolic routing.
-              </Translate>
+              <>
+                <strong>
+                  <Translate id="homepage.hero.description.encoderNative">
+                    Encoder-native
+                  </Translate>
+                </strong>
+                {' '}
+                <Translate id="homepage.hero.description.base">
+                  system intelligence for mixture-of-model serving, built on
+                </Translate>
+                {' '}
+                <strong>
+                  <Translate id="homepage.hero.description.shannon">Shannon signals</Translate>
+                </strong>
+                {', '}
+                <strong>
+                  <Translate id="homepage.hero.description.entropy">entropy folding</Translate>
+                </strong>
+                {', '}
+                <Translate id="homepage.hero.description.and">and</Translate>
+                {' '}
+                <strong>
+                  <Translate id="homepage.hero.description.symbolic">
+                    neural-symbolic routing
+                  </Translate>
+                </strong>
+                .
+              </>
             )}
             actions={(
               <>
