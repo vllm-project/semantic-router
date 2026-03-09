@@ -11,6 +11,7 @@ import (
 type ClassificationAPIServer struct {
 	classificationSvc     classificationService
 	config                *config.RouterConfig
+	runtimeConfig         *liveRuntimeConfig
 	configPath            string // path to the router config file (for deploy/rollback)
 	memoryStore           memory.Store
 	enableSystemPromptAPI bool

@@ -29,38 +29,24 @@ type SystemPromptUpdateRequest struct {
 	Mode     string `json:"mode,omitempty"`     // "replace" or "insert"
 }
 
+type systemPromptUpdateError struct {
+	statusCode int
+	message    string
+}
+
+func (e *systemPromptUpdateError) Error() string {
+	return e.message
+}
+
 // handleGetSystemPrompts handles GET /config/system-prompts
 func (s *ClassificationAPIServer) handleGetSystemPrompts(w http.ResponseWriter, _ *http.Request) {
-	cfg := s.config
+	cfg := s.currentConfig()
 	if cfg == nil {
 		http.Error(w, "Configuration not available", http.StatusInternalServerError)
 		return
 	}
 
-	var systemPrompts []SystemPromptInfo
-	for _, decision := range cfg.Decisions {
-		systemPromptConfig := decision.GetSystemPromptConfig()
-		prompt := ""
-		if systemPromptConfig != nil {
-			prompt = systemPromptConfig.SystemPrompt
-		}
-		systemPrompts = append(systemPrompts, SystemPromptInfo{
-			Category: decision.Name,
-			Prompt:   prompt,
-			Enabled:  decision.IsSystemPromptEnabled(),
-			Mode:     decision.GetSystemPromptMode(),
-		})
-	}
-
-	response := SystemPromptsResponse{
-		SystemPrompts: systemPrompts,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		return
-	}
+	s.writeSystemPromptsResponse(w, cfg)
 }
 
 // handleUpdateSystemPrompts handles PUT /config/system-prompts
@@ -82,96 +68,121 @@ func (s *ClassificationAPIServer) handleUpdateSystemPrompts(w http.ResponseWrite
 		return
 	}
 
-	cfg := s.config
+	cfg := s.currentConfig()
 	if cfg == nil {
 		http.Error(w, "Configuration not available", http.StatusInternalServerError)
 		return
 	}
 
-	// Create a copy of the config to modify
+	newCfg := cloneRouterConfigWithDecisions(cfg)
+	if err := applySystemPromptUpdates(newCfg, req); err != nil {
+		http.Error(w, err.message, err.statusCode)
+		return
+	}
+
+	s.updateRuntimeConfig(newCfg)
+	s.writeSystemPromptsResponse(w, newCfg)
+}
+
+func cloneRouterConfigWithDecisions(cfg *config.RouterConfig) *config.RouterConfig {
 	newCfg := *cfg
 	newDecisions := make([]config.Decision, len(cfg.Decisions))
 	copy(newDecisions, cfg.Decisions)
 	newCfg.Decisions = newDecisions
+	return &newCfg
+}
 
-	updated := false
+func applySystemPromptUpdates(cfg *config.RouterConfig, req SystemPromptUpdateRequest) *systemPromptUpdateError {
 	if req.Category == "" {
-		// Update all decisions
-		for i := range newCfg.Decisions {
-			systemPromptConfig := newCfg.Decisions[i].GetSystemPromptConfig()
-			if systemPromptConfig != nil && systemPromptConfig.SystemPrompt != "" {
-				// Update the plugin configuration
-				for j := range newCfg.Decisions[i].Plugins {
-					if newCfg.Decisions[i].Plugins[j].Type == "system_prompt" {
-						// Convert Configuration to map[string]interface{}
-						configMap, ok := newCfg.Decisions[i].Plugins[j].Configuration.(map[string]interface{})
-						if !ok {
-							// If not a map, create a new one
-							configMap = make(map[string]interface{})
-						}
-						if req.Enabled != nil {
-							configMap["enabled"] = *req.Enabled
-						}
-						if req.Mode != "" {
-							configMap["mode"] = req.Mode
-						}
-						newCfg.Decisions[i].Plugins[j].Configuration = configMap
-						updated = true
-						break
-					}
-				}
-			}
+		return applySystemPromptUpdatesToAll(cfg.Decisions, req)
+	}
+	return applySystemPromptUpdateToNamedDecision(cfg.Decisions, req)
+}
+
+func applySystemPromptUpdatesToAll(
+	decisions []config.Decision,
+	req SystemPromptUpdateRequest,
+) *systemPromptUpdateError {
+	updated := false
+	for i := range decisions {
+		if !hasConfiguredSystemPrompt(decisions[i]) {
+			continue
 		}
-	} else {
-		// Update specific decision
-		for i := range newCfg.Decisions {
-			if newCfg.Decisions[i].Name == req.Category {
-				systemPromptConfig := newCfg.Decisions[i].GetSystemPromptConfig()
-				if systemPromptConfig == nil || systemPromptConfig.SystemPrompt == "" {
-					http.Error(w, fmt.Sprintf("Decision '%s' has no system prompt configured", req.Category), http.StatusBadRequest)
-					return
-				}
-				// Update the plugin configuration
-				for j := range newCfg.Decisions[i].Plugins {
-					if newCfg.Decisions[i].Plugins[j].Type == "system_prompt" {
-						// Convert Configuration to map[string]interface{}
-						configMap, ok := newCfg.Decisions[i].Plugins[j].Configuration.(map[string]interface{})
-						if !ok {
-							// If not a map, create a new one
-							configMap = make(map[string]interface{})
-						}
-						if req.Enabled != nil {
-							configMap["enabled"] = *req.Enabled
-						}
-						if req.Mode != "" {
-							configMap["mode"] = req.Mode
-						}
-						newCfg.Decisions[i].Plugins[j].Configuration = configMap
-						updated = true
-						break
-					}
-				}
-				break
-			}
-		}
-		if !updated {
-			http.Error(w, fmt.Sprintf("Decision '%s' not found", req.Category), http.StatusNotFound)
-			return
+		if applySystemPromptUpdate(&decisions[i], req) {
+			updated = true
 		}
 	}
-
-	if !updated {
-		http.Error(w, "No decisions with system prompts found to update", http.StatusBadRequest)
-		return
+	if updated {
+		return nil
 	}
+	return &systemPromptUpdateError{
+		statusCode: http.StatusBadRequest,
+		message:    "No decisions with system prompts found to update",
+	}
+}
 
-	// Update the configuration
-	s.config = &newCfg
-	s.classificationSvc.UpdateConfig(&newCfg)
+func applySystemPromptUpdateToNamedDecision(
+	decisions []config.Decision,
+	req SystemPromptUpdateRequest,
+) *systemPromptUpdateError {
+	for i := range decisions {
+		if decisions[i].Name != req.Category {
+			continue
+		}
+		if !hasConfiguredSystemPrompt(decisions[i]) {
+			return &systemPromptUpdateError{
+				statusCode: http.StatusBadRequest,
+				message:    fmt.Sprintf("Decision '%s' has no system prompt configured", req.Category),
+			}
+		}
+		if applySystemPromptUpdate(&decisions[i], req) {
+			return nil
+		}
+		return &systemPromptUpdateError{
+			statusCode: http.StatusBadRequest,
+			message:    fmt.Sprintf("Decision '%s' has no system prompt plugin configured", req.Category),
+		}
+	}
+	return &systemPromptUpdateError{
+		statusCode: http.StatusNotFound,
+		message:    fmt.Sprintf("Decision '%s' not found", req.Category),
+	}
+}
 
-	// Return the updated system prompts from decisions
-	var systemPrompts []SystemPromptInfo
-	for _, decision := range newCfg.Decisions {
+func hasConfiguredSystemPrompt(decision config.Decision) bool {
+	systemPromptConfig := decision.GetSystemPromptConfig()
+	return systemPromptConfig != nil && systemPromptConfig.SystemPrompt != ""
+}
+
+func applySystemPromptUpdate(decision *config.Decision, req SystemPromptUpdateRequest) bool {
+	for i := range decision.Plugins {
+		if decision.Plugins[i].Type != "system_prompt" {
+			continue
+		}
+		configMap := systemPromptPluginConfigMap(decision.Plugins[i].Configuration)
+		if req.Enabled != nil {
+			configMap["enabled"] = *req.Enabled
+		}
+		if req.Mode != "" {
+			configMap["mode"] = req.Mode
+		}
+		decision.Plugins[i].Configuration = configMap
+		return true
+	}
+	return false
+}
+
+func systemPromptPluginConfigMap(rawConfig interface{}) map[string]interface{} {
+	configMap, ok := rawConfig.(map[string]interface{})
+	if ok {
+		return configMap
+	}
+	return make(map[string]interface{})
+}
+
+func buildSystemPromptsResponse(cfg *config.RouterConfig) SystemPromptsResponse {
+	systemPrompts := make([]SystemPromptInfo, 0, len(cfg.Decisions))
+	for _, decision := range cfg.Decisions {
 		systemPromptConfig := decision.GetSystemPromptConfig()
 		prompt := ""
 		if systemPromptConfig != nil {
@@ -184,14 +195,16 @@ func (s *ClassificationAPIServer) handleUpdateSystemPrompts(w http.ResponseWrite
 			Mode:     decision.GetSystemPromptMode(),
 		})
 	}
+	return SystemPromptsResponse{SystemPrompts: systemPrompts}
+}
 
-	response := SystemPromptsResponse{
-		SystemPrompts: systemPrompts,
-	}
-
+func (s *ClassificationAPIServer) writeSystemPromptsResponse(
+	w http.ResponseWriter,
+	cfg *config.RouterConfig,
+) {
+	response := buildSystemPromptsResponse(cfg)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		return
 	}
 }
