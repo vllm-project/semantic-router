@@ -22,6 +22,21 @@ const getLabelTranslation = (type, label) => {
 
 const papers = [
   {
+    id: 5,
+    type: 'paper',
+    spotlight: true,
+    categoryLabel: 'POSITION PAPER',
+    title: 'vLLM Semantic Router: Signal Driven Decision Routing for Mixture-of-Modality Models',
+    authors: 'vLLM Semantic Router Team',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We introduce vLLM Semantic Router, a signal-driven decision routing framework for Mixture-of-Modality deployments that composes heterogeneous signals into deployment-specific routing policies across cost, privacy, latency, and safety constraints.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.04444', label: '📄 Paper' },
+    ],
+    featured: true,
+  },
+  {
     id: 1,
     type: 'paper',
     title: 'When to Reason: Semantic Router for vLLM',
@@ -123,10 +138,11 @@ const talks = [
 function AwardCard({ item, index }) {
   const isPaper = item.type === 'paper'
   const isFeatured = item.featured
+  const isSpotlight = item.spotlight === true
 
   return (
     <div
-      className={`${styles.awardCard} ${isPaper ? styles.paperAward : styles.talkAward} ${isFeatured ? styles.featuredAward : ''}`}
+      className={`${styles.awardCard} ${isPaper ? styles.paperAward : styles.talkAward} ${isFeatured ? styles.featuredAward : ''} ${isSpotlight ? styles.spotlightCard : ''}`}
       style={{ '--animation-delay': `${index * 0.1}s` }}
     >
       {/* Award Frame */}
@@ -140,12 +156,17 @@ function AwardCard({ item, index }) {
             {isFeatured && <div className={styles.starBadge}>✨</div>}
           </div>
           <div className={styles.awardType}>
-            {isPaper ? 'RESEARCH PUBLICATION' : 'CONFERENCE PRESENTATION'}
+            {item.categoryLabel || (isPaper ? 'RESEARCH PUBLICATION' : 'CONFERENCE PRESENTATION')}
           </div>
         </div>
 
         {/* Award Content */}
         <div className={styles.awardContent}>
+          {item.categoryLabel && (
+            <div className={isSpotlight ? styles.spotlightBadge : styles.categoryBadge}>
+              {item.categoryLabel}
+            </div>
+          )}
           <h3 className={styles.awardTitle}>{item.title}</h3>
 
           <div className={styles.awardDetails}>

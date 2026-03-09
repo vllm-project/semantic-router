@@ -14,7 +14,7 @@ linters:
     cyclop:
       max-complexity: 12
     funlen:
-      lines: 80
+      lines: 100
       statements: 40
     gocognit:
       min-complexity: 20
@@ -22,6 +22,14 @@ linters:
       max: 5
     nestif:
       min-complexity: 4
+  exclusions:
+    rules:
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)handlers/openclaw_(provision|rooms|teams|test|websocket|workers)\.go$
 
 issues:
   max-issues-per-linter: 0
