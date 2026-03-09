@@ -30,7 +30,8 @@ func (s *ClassificationAPIServer) handleEmbeddingModelsInfo(w http.ResponseWrite
 }
 
 func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, _ *http.Request) {
-	if s.config == nil {
+	cfg := s.currentConfig()
+	if cfg == nil {
 		s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 			"status": "no_config",
 			"config": nil,
@@ -41,7 +42,7 @@ func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, _ 
 	// Return the config directly
 	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 		"status": "config_loaded",
-		"config": s.config,
+		"config": jsonCompatibleValue(cfg),
 	})
 }
 
@@ -74,16 +75,17 @@ func (s *ClassificationAPIServer) buildModelsInfoResponse() ModelsInfoResponse {
 // getLoadedModelsInfo returns information about actually loaded models
 func (s *ClassificationAPIServer) getLoadedModelsInfo() []ModelInfo {
 	var models []ModelInfo
+	cfg := s.currentConfig()
 
-	if s.config == nil {
+	if cfg == nil {
 		return models
 	}
 
 	// Category classifier model
-	if s.config.CategoryMappingPath != "" {
+	if cfg.CategoryMappingPath != "" {
 		categories := []string{}
 		// Extract category names from config.Categories
-		for _, cat := range s.config.Categories {
+		for _, cat := range cfg.Categories {
 			categories = append(categories, cat.Name)
 		}
 
@@ -91,38 +93,38 @@ func (s *ClassificationAPIServer) getLoadedModelsInfo() []ModelInfo {
 			Name:       "category_classifier",
 			Type:       "intent_classification",
 			Loaded:     true,
-			ModelPath:  s.config.CategoryModel.ModelID,
+			ModelPath:  cfg.CategoryModel.ModelID,
 			Categories: categories,
 			Metadata: map[string]string{
-				"mapping_path": s.config.CategoryMappingPath,
+				"mapping_path": cfg.CategoryMappingPath,
 				"model_type":   "modernbert",
-				"threshold":    fmt.Sprintf("%.2f", s.config.CategoryModel.Threshold),
+				"threshold":    fmt.Sprintf("%.2f", cfg.CategoryModel.Threshold),
 			},
 		})
 	}
 
 	// PII classifier model
-	if s.config.PIIMappingPath != "" {
+	if cfg.PIIMappingPath != "" {
 		models = append(models, ModelInfo{
 			Name:      "pii_classifier",
 			Type:      "pii_detection",
 			Loaded:    true,
-			ModelPath: s.config.PIIModel.ModelID,
+			ModelPath: cfg.PIIModel.ModelID,
 			Metadata: map[string]string{
-				"mapping_path": s.config.PIIMappingPath,
+				"mapping_path": cfg.PIIMappingPath,
 				"model_type":   "modernbert_token",
-				"threshold":    fmt.Sprintf("%.2f", s.config.PIIModel.Threshold),
+				"threshold":    fmt.Sprintf("%.2f", cfg.PIIModel.Threshold),
 			},
 		})
 	}
 
 	// Jailbreak classifier model
-	if s.config.PromptGuard.Enabled {
+	if cfg.PromptGuard.Enabled {
 		models = append(models, ModelInfo{
 			Name:      "jailbreak_classifier",
 			Type:      "security_detection",
 			Loaded:    true,
-			ModelPath: s.config.PromptGuard.JailbreakMappingPath,
+			ModelPath: cfg.PromptGuard.JailbreakMappingPath,
 			Metadata: map[string]string{
 				"enabled": "true",
 			},
@@ -130,16 +132,17 @@ func (s *ClassificationAPIServer) getLoadedModelsInfo() []ModelInfo {
 	}
 
 	// BERT similarity model
-	if s.config.BertModel.ModelID != "" {
+	bertModel := cfg.BertModel
+	if bertModel.ModelID != "" {
 		models = append(models, ModelInfo{
 			Name:      "bert_similarity_model",
 			Type:      "similarity",
 			Loaded:    true,
-			ModelPath: s.config.BertModel.ModelID,
+			ModelPath: bertModel.ModelID,
 			Metadata: map[string]string{
 				"model_type": "sentence_transformer",
-				"threshold":  fmt.Sprintf("%.2f", s.config.BertModel.Threshold),
-				"use_cpu":    fmt.Sprintf("%t", s.config.BertModel.UseCPU),
+				"threshold":  fmt.Sprintf("%.2f", bertModel.Threshold),
+				"use_cpu":    fmt.Sprintf("%t", bertModel.UseCPU),
 			},
 		})
 	}

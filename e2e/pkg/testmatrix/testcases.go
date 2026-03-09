@@ -8,6 +8,7 @@ var RouterSmoke = []string{
 // BaselineRouterContract is the canonical full router contract owned by ai-gateway.
 var BaselineRouterContract = []string{
 	"chat-completions-request",
+	"apiserver-runtime-config-endpoints",
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",

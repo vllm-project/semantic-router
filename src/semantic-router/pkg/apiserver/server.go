@@ -69,10 +69,16 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 		logging.Infof("Memory disabled in config, skipping memory store initialization")
 	}
 
+	liveClassificationSvc := newLiveClassificationService(
+		classificationSvc,
+		func() classificationService { return services.GetGlobalClassificationService() },
+	)
+
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
-		classificationSvc:     classificationSvc,
+		classificationSvc:     liveClassificationSvc,
 		config:                cfg,
+		runtimeConfig:         newLiveRuntimeConfig(cfg, config.Get, liveClassificationSvc.UpdateConfig),
 		configPath:            configPath,
 		memoryStore:           memoryStore,
 		enableSystemPromptAPI: enableSystemPromptAPI,
@@ -145,7 +151,18 @@ func shouldInitMemoryStore(cfg *config.RouterConfig) bool {
 // setupRoutes configures all API routes
 func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
+	s.registerCoreRoutes(mux)
+	s.registerClassificationRoutes(mux)
+	s.registerEmbeddingRoutes(mux)
+	s.registerInfoRoutes(mux)
+	s.registerConfigRoutes(mux)
+	s.registerMemoryRoutes(mux)
+	registerVectorStoreRoutes(mux, s)
+	registerFileRoutes(mux, s)
+	return mux
+}
 
+func (s *ClassificationAPIServer) registerCoreRoutes(mux *http.ServeMux) {
 	// Health check endpoint
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /ready", s.handleReady)
@@ -156,7 +173,9 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	// OpenAPI and documentation endpoints
 	mux.HandleFunc("GET /openapi.json", s.handleOpenAPISpec)
 	mux.HandleFunc("GET /docs", s.handleSwaggerUI)
+}
 
+func (s *ClassificationAPIServer) registerClassificationRoutes(mux *http.ServeMux) {
 	// Classification endpoints
 	mux.HandleFunc("POST /api/v1/classify/intent", s.handleIntentClassification)
 	mux.HandleFunc("POST /api/v1/classify/pii", s.handlePIIDetection)
@@ -168,12 +187,16 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 
 	// Evaluation endpoint - evaluates all configured signals regardless of decision usage
 	mux.HandleFunc("POST /api/v1/eval", s.handleEvalClassification)
+}
 
+func (s *ClassificationAPIServer) registerEmbeddingRoutes(mux *http.ServeMux) {
 	// Embedding endpoints
 	mux.HandleFunc("POST /api/v1/embeddings", s.handleEmbeddings)
 	mux.HandleFunc("POST /api/v1/similarity", s.handleSimilarity)
 	mux.HandleFunc("POST /api/v1/similarity/batch", s.handleBatchSimilarity)
+}
 
+func (s *ClassificationAPIServer) registerInfoRoutes(mux *http.ServeMux) {
 	// Information endpoints
 	mux.HandleFunc("GET /info/models", s.handleModelsInfo) // All models (classification + embedding)
 	mux.HandleFunc("GET /info/classifier", s.handleClassifierInfo)
@@ -189,7 +212,9 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/feedback", s.handleFeedback)
 	mux.HandleFunc("GET /api/v1/ratings", s.handleGetRatings)
 	mux.HandleFunc("GET /api/v1/rl-state", s.handleRLState)
+}
 
+func (s *ClassificationAPIServer) registerConfigRoutes(mux *http.ServeMux) {
 	// Configuration endpoints
 	mux.HandleFunc("GET /config/classification", s.handleGetConfig)
 	mux.HandleFunc("PUT /config/classification", s.handleUpdateConfig)
@@ -199,13 +224,18 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux.HandleFunc("POST /config/deploy", s.handleConfigDeploy)
 	mux.HandleFunc("POST /config/rollback", s.handleConfigRollback)
 	mux.HandleFunc("GET /config/versions", s.handleConfigVersions)
+	s.registerOptionalSystemPromptRoutes(mux)
+}
 
+func (s *ClassificationAPIServer) registerMemoryRoutes(mux *http.ServeMux) {
 	// Memory management endpoints
 	mux.HandleFunc("GET /v1/memory/{id}", s.handleGetMemory)
 	mux.HandleFunc("GET /v1/memory", s.handleListMemories)
 	mux.HandleFunc("DELETE /v1/memory/{id}", s.handleDeleteMemory)
 	mux.HandleFunc("DELETE /v1/memory", s.handleDeleteMemoriesByScope)
+}
 
+func (s *ClassificationAPIServer) registerOptionalSystemPromptRoutes(mux *http.ServeMux) {
 	// System prompt configuration endpoints (only if explicitly enabled)
 	if s.enableSystemPromptAPI {
 		logging.Infof("System prompt configuration endpoints enabled")
@@ -214,14 +244,6 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	} else {
 		logging.Infof("System prompt configuration endpoints disabled for security")
 	}
-
-	// Vector store management endpoints
-	registerVectorStoreRoutes(mux, s)
-
-	// File management endpoints
-	registerFileRoutes(mux, s)
-
-	return mux
 }
 
 // handleHealth handles health check requests
@@ -272,11 +294,13 @@ func (s *ClassificationAPIServer) handleReady(w http.ResponseWriter, _ *http.Req
 
 // Helper methods for JSON handling
 func (s *ClassificationAPIServer) parseJSONRequest(r *http.Request, v interface{}) error {
+	defer func() {
+		_ = r.Body.Close()
+	}()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read request body: %w", err)
 	}
-	defer r.Body.Close()
 
 	if err := json.Unmarshal(body, v); err != nil {
 		return fmt.Errorf("failed to parse JSON: %w", err)
@@ -286,11 +310,38 @@ func (s *ClassificationAPIServer) parseJSONRequest(r *http.Request, v interface{
 }
 
 func (s *ClassificationAPIServer) writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
+	payload, err := json.Marshal(data)
+	if err != nil {
+		logging.Errorf("Failed to encode JSON response: %v", err)
+		s.writeJSONEncodingError(w)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
+	if _, err := w.Write(append(payload, '\n')); err != nil {
+		logging.Errorf("Failed to write JSON response: %v", err)
+	}
+}
 
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		logging.Errorf("Failed to encode JSON response: %v", err)
+func (s *ClassificationAPIServer) writeJSONEncodingError(w http.ResponseWriter) {
+	payload, err := json.Marshal(map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":      "JSON_ENCODE_ERROR",
+			"message":   "failed to encode response",
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+	if err != nil {
+		logging.Errorf("Failed to encode JSON error response: %v", err)
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	if _, err := w.Write(append(payload, '\n')); err != nil {
+		logging.Errorf("Failed to write JSON error response: %v", err)
 	}
 }
 

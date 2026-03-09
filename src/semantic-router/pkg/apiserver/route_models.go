@@ -12,6 +12,7 @@ import (
 // Whether to include configured models is controlled by the config's IncludeConfigModelsInList setting (default: false)
 func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *http.Request) {
 	now := time.Now().Unix()
+	cfg := s.currentConfig()
 
 	// Start with the configured auto model name (or default "MoM")
 	// The model list uses the actual configured name, not "auto"
@@ -19,15 +20,14 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *h
 	models := []OpenAIModel{}
 
 	// Add the effective auto model name (configured or default "MoM")
-	if s.config != nil {
-		effectiveAutoModelName := s.config.GetEffectiveAutoModelName()
+	if cfg != nil {
+		effectiveAutoModelName := cfg.GetEffectiveAutoModelName()
 		models = append(models, OpenAIModel{
 			ID:          effectiveAutoModelName,
 			Object:      "model",
 			Created:     now,
 			OwnedBy:     "vllm-semantic-router",
 			Description: "Intelligent Router for Mixture-of-Models",
-			LogoURL:     "https://github.com/vllm-project/semantic-router/blob/main/website/static/img/vllm.png", // You can customize this URL
 		})
 	} else {
 		// Fallback if no config
@@ -37,15 +37,14 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *h
 			Created:     now,
 			OwnedBy:     "vllm-semantic-router",
 			Description: "Intelligent Router for Mixture-of-Models",
-			LogoURL:     "https://github.com/vllm-project/semantic-router/blob/main/website/static/img/vllm.png", // You can customize this URL
 		})
 	}
 
 	// Append underlying models from config (if available and configured to include them)
-	if s.config != nil && s.config.IncludeConfigModelsInList {
-		for _, m := range s.config.GetAllModels() {
+	if cfg != nil && cfg.IncludeConfigModelsInList {
+		for _, m := range cfg.GetAllModels() {
 			// Skip if already added as the configured auto model name (avoid duplicates)
-			if m == s.config.GetEffectiveAutoModelName() {
+			if m == cfg.GetEffectiveAutoModelName() {
 				continue
 			}
 			models = append(models, OpenAIModel{
