@@ -167,14 +167,16 @@ const encoderCards = [
 ]
 
 const terminalLines = [
-  '$ vsr classify --signals domain,embedding,complexity --request "route this prompt"',
-  'encoder.domain           finance        0.91',
-  'encoder.embedding        aligned        0.88',
-  'shannon.mapping          active         true',
-  'entropy.fold             resolved       0.17',
-  'selector.gmtrouter       model=qwen2.5  142ms',
-  'plugin.semantic_cache    lookup         hit',
-  'observability.trace      exported       yes',
+  '$ vsr route --observe encoder,entropy \\',
+  '  --intent "market brief"',
+  'encoder.intent           finance        0.94',
+  'encoder.affinity         research       0.89',
+  'brain.prior              active         true',
+  'shannon.channel          coherent       0.91',
+  'entropy.fold             complete       0.16',
+  'brain.dispatch           qwen2.5        142ms',
+  'memory.semantic          warm           hit',
+  'trace.causal_field       exported       yes',
 ]
 
 function DitherHero(): JSX.Element {
@@ -212,7 +214,7 @@ function DitherHero(): JSX.Element {
 
           <div className={styles.heroPanel}>
             <SectionLabel>
-              <Translate id="homepage.hero.panelLabel">System intelligence</Translate>
+              <Translate id="homepage.hero.panelLabel">Intelligence trace</Translate>
             </SectionLabel>
             <div className={styles.terminalWindow}>
               <div className={styles.terminalBar}>
