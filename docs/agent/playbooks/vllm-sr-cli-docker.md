@@ -9,7 +9,7 @@
 - AMD real-model deployment reference:
   - [deploy/amd/README.md](../../deploy/amd/README.md)
   - [deploy/amd/config.yaml](../../deploy/amd/config.yaml)
-- If the task is about deploying real AMD backends instead of smoke validation, prefer:
+- If the task is about deploying a real AMD backend with alias-based routing instead of smoke validation, prefer:
   - `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=deploy/amd/config.yaml`
   - plus the backend/network setup from `deploy/amd/README.md`
 - Feature-gate smoke defaults to the env-specific manifest config under `config/testing/config.agent-smoke.*.yaml`

@@ -13,7 +13,7 @@
 ## When To Use Which Config
 
 - Use [config.agent-smoke.amd.yaml](../../config/testing/config.agent-smoke.amd.yaml) for fast local smoke and feature-gate validation.
-- Use [deploy/amd/config.yaml](../../deploy/amd/config.yaml) when you need a real AMD multi-model routing profile with actual ROCm backends.
+- Use [deploy/amd/config.yaml](../../deploy/amd/config.yaml) when you need a single real AMD backend with a multi-alias routing profile.
 - Use [deploy/amd/README.md](../../deploy/amd/README.md) when you need the full backend deployment flow, Docker network setup, model container examples, and dashboard-first vs YAML-first setup guidance.
 
 ## Validation Checklist
