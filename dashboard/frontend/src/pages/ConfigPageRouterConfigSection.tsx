@@ -3,9 +3,10 @@ import ConfigPageLegacyCategoriesSection from './ConfigPageLegacyCategoriesSecti
 import ConfigPageSafetyCacheSection from './ConfigPageSafetyCacheSection'
 import ConfigPageToolsObservabilitySection from './ConfigPageToolsObservabilitySection'
 import type { RouterToolsSectionProps } from './configPageRouterSectionSupport'
+import type { LegacyCategoriesConfig } from './configPageCanonicalState'
 
 interface ConfigPageRouterConfigSectionProps extends RouterToolsSectionProps {
-  showLegacyCategories?: boolean
+  legacyCategoriesConfig?: LegacyCategoriesConfig | null
 }
 
 export default function ConfigPageRouterConfigSection({
@@ -17,7 +18,7 @@ export default function ConfigPageRouterConfigSection({
   isReadonly,
   openEditModal,
   saveConfig,
-  showLegacyCategories = false,
+  legacyCategoriesConfig = null,
 }: ConfigPageRouterConfigSectionProps) {
   const baseProps = {
     config,
@@ -37,9 +38,9 @@ export default function ConfigPageRouterConfigSection({
         toolsLoading={toolsLoading}
         toolsError={toolsError}
       />
-      {showLegacyCategories ? (
+      {legacyCategoriesConfig ? (
         <ConfigPageLegacyCategoriesSection
-          config={config}
+          legacyConfig={legacyCategoriesConfig}
           isReadonly={isReadonly}
           openEditModal={openEditModal}
           saveConfig={saveConfig}

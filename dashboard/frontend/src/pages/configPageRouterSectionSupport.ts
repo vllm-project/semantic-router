@@ -1,5 +1,6 @@
 import type { FieldConfig } from '../components/EditModal'
 import type { ConfigData, Tool } from './configPageSupport'
+import type { LegacyCategoriesConfig } from './configPageCanonicalState'
 
 export type OpenEditModal = (
   title: string,
@@ -31,7 +32,7 @@ export interface RouterToolsSectionProps extends RouterSectionBaseProps {
 }
 
 export interface LegacyCategoriesSectionProps {
-  config: ConfigData | null
+  legacyConfig: LegacyCategoriesConfig | null
   isReadonly: boolean
   openEditModal: OpenEditModal
   saveConfig: (config: ConfigData) => Promise<void>

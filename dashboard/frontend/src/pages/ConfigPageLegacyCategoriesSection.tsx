@@ -3,13 +3,13 @@ import { normalizeModelScores, type Category } from './configPageSupport'
 import { cloneConfig, type LegacyCategoriesSectionProps } from './configPageRouterSectionSupport'
 
 export default function ConfigPageLegacyCategoriesSection({
-  config,
+  legacyConfig,
   isReadonly,
   openEditModal,
   saveConfig,
 }: LegacyCategoriesSectionProps) {
-  const defaultModel = config?.default_model || ''
-  const categories = config?.categories || []
+  const defaultModel = legacyConfig?.default_model || ''
+  const categories = legacyConfig?.categories || []
 
   return (
     <div className={styles.section}>
@@ -25,8 +25,8 @@ export default function ConfigPageLegacyCategoriesSection({
           </div>
           <div className={styles.inlineConfigRow}>
             <span className={styles.inlineConfigLabel}>Default Reasoning Effort:</span>
-            <span className={`${styles.badge} ${styles[`badge${config?.default_reasoning_effort || 'medium'}`]}`}>
-              {config?.default_reasoning_effort || 'medium'}
+            <span className={`${styles.badge} ${styles[`badge${legacyConfig?.default_reasoning_effort || 'medium'}`]}`}>
+              {legacyConfig?.default_reasoning_effort || 'medium'}
             </span>
           </div>
         </div>
@@ -55,7 +55,10 @@ export default function ConfigPageLegacyCategoriesSection({
                               { system_prompt: category.system_prompt || '' },
                               [{ name: 'system_prompt', label: 'System Prompt', type: 'textarea', placeholder: 'Enter system prompt for this category...', description: 'Instructions for the model when handling this category' }],
                               async (data) => {
-                                const newConfig = cloneConfig(config)
+                                if (!legacyConfig) {
+                                  return
+                                }
+                                const newConfig = cloneConfig(legacyConfig)
                                 if (newConfig.categories) {
                                   newConfig.categories[index] = { ...category, ...data }
                                 }
@@ -83,7 +86,7 @@ export default function ConfigPageLegacyCategoriesSection({
                         <button
                           className={styles.addModelButton}
                           onClick={() => {
-                            const availableModels = config?.model_config ? Object.keys(config.model_config) : []
+                            const availableModels = legacyConfig?.model_config ? Object.keys(legacyConfig.model_config) : []
                             openEditModal(
                               `Add Model to ${category.name}`,
                               { model: availableModels[0] || '', score: 0.5, use_reasoning: false },
@@ -93,7 +96,10 @@ export default function ConfigPageLegacyCategoriesSection({
                                 { name: 'use_reasoning', label: 'Use Reasoning', type: 'boolean', description: 'Enable reasoning for this model in this category' },
                               ],
                               async (data) => {
-                                const newConfig = cloneConfig(config)
+                                if (!legacyConfig) {
+                                  return
+                                }
+                                const newConfig = cloneConfig(legacyConfig)
                                 if (newConfig.categories) {
                                   const updatedCategory = { ...category }
                                   const scores = normalizeModelScores(updatedCategory.model_scores)
@@ -126,7 +132,7 @@ export default function ConfigPageLegacyCategoriesSection({
                                 <button
                                   className={styles.editButton}
                                   onClick={() => {
-                                    const availableModels = config?.model_config ? Object.keys(config.model_config) : []
+                                    const availableModels = legacyConfig?.model_config ? Object.keys(legacyConfig.model_config) : []
                                     openEditModal(
                                       `Edit Model: ${modelScore.model}`,
                                       { ...modelScore },
@@ -136,7 +142,10 @@ export default function ConfigPageLegacyCategoriesSection({
                                         { name: 'use_reasoning', label: 'Use Reasoning', type: 'boolean', description: 'Enable reasoning for this model in this category' },
                                       ],
                                       async (data) => {
-                                        const newConfig = cloneConfig(config)
+                                        if (!legacyConfig) {
+                                          return
+                                        }
+                                        const newConfig = cloneConfig(legacyConfig)
                                         if (newConfig.categories) {
                                           const updatedCategory = { ...category }
                                           const scores = normalizeModelScores(updatedCategory.model_scores)
@@ -153,7 +162,10 @@ export default function ConfigPageLegacyCategoriesSection({
                                   className={styles.deleteButton}
                                   onClick={() => {
                                     if (confirm(`Remove model "${modelScore.model}" from this category?`)) {
-                                      const newConfig = cloneConfig(config)
+                                      if (!legacyConfig) {
+                                        return
+                                      }
+                                      const newConfig = cloneConfig(legacyConfig)
                                       if (newConfig.categories) {
                                         const updatedCategory = { ...category }
                                         const scores = normalizeModelScores(updatedCategory.model_scores)

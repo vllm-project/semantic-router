@@ -15,13 +15,7 @@ import {
   listSignalNames,
   type RoutingPresetId,
 } from '../presets/routingPresets'
-import {
-  ConfigFormat,
-  detectConfigFormat,
-  hasDecisions,
-  hasFlatSignals,
-  DecisionConditionType
-} from '../types/config'
+import { DecisionConditionType } from '../types/config'
 import { MCPConfigPanel } from '../components/MCPConfigPanel'
 import {
   AddSignalFormState,
@@ -32,14 +26,18 @@ import {
   DecisionConfig,
   DecisionFormState,
   formatThreshold,
-  ModelConfigEntry,
   NormalizedModel,
-  ReasoningFamily,
   SignalType,
   TABLE_COLUMN_WIDTH,
   Tool,
-  VLLMEndpoint,
 } from './configPageSupport'
+import {
+  getDashboardDefaultModel,
+  getDashboardModels,
+  getDashboardReasoningFamilies,
+  normalizeDashboardConfigForEditor,
+  type LegacyCategoriesConfig,
+} from './configPageCanonicalState'
 
 interface ConfigPageProps {
   activeSection?: ConfigSection
@@ -52,7 +50,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
+  const [legacyCategoriesConfig, setLegacyCategoriesConfig] = useState<LegacyCategoriesConfig | null>(null)
 
   // Router defaults state (from .vllm-sr/router-defaults.yaml)
   const [routerDefaults, setRouterDefaults] = useState<ConfigData | null>(null)
@@ -112,17 +110,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
-      const data = await response.json()
-      setConfig(data)
-      // Detect config format
-      const format = detectConfigFormat(data)
-      setConfigFormat(format)
-      if (format === 'legacy') {
-        console.warn('Legacy config format detected. Consider migrating to Python CLI format.')
+      const data = await response.json() as ConfigData
+      const normalizedState = normalizeDashboardConfigForEditor(data)
+      setConfig(normalizedState.editorConfig)
+      setLegacyCategoriesConfig(normalizedState.legacyCategoriesConfig)
+      if (normalizedState.normalizedLegacyKeys.length > 0) {
+        console.warn(
+          `Legacy dashboard config keys normalized into canonical editor state: ${normalizedState.normalizedLegacyKeys.join(', ')}`
+        )
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch config')
       setConfig(null)
+      setLegacyCategoriesConfig(null)
     } finally {
       setLoading(false)
     }
@@ -312,7 +312,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   }
 
   const handleApplyRoutingPreset = async () => {
-    if (!config || !isPythonCLI || !selectedRoutingPresetId || !config.providers?.default_model) {
+    if (!config || !selectedRoutingPresetId || !config.providers?.default_model) {
       return
     }
 
@@ -372,8 +372,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       return
     }
 
-    if (!config || !isPythonCLI) {
-      alert('Deleting decisions is only supported for Python CLI configs.')
+    if (!config) {
       return
     }
 
@@ -401,17 +400,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   // Mark as used to avoid linting error
   void getEffectiveConfig
 
-  // ============================================================================
-  // HELPER FUNCTIONS - Normalize data access across config formats
-  // ============================================================================
-
-  // Helper: Check if using Python CLI format
-  const isPythonCLI = configFormat === 'python-cli'
   const selectedPresetConflicts = getSelectedPresetConflicts()
 
-  // Effective router config - merges routerDefaults (system settings) with config (fallback)
-  // For Python CLI: system settings like bert_model, tools, prompt_guard come from routerDefaults
-  // For Legacy: these settings are in config.yaml directly
+  // Effective router config - merges routerDefaults (system settings) with editor config (fallback).
   const routerConfig = {
     bert_model: routerDefaults?.bert_model ?? config?.bert_model,
     semantic_cache: routerDefaults?.semantic_cache ?? config?.semantic_cache,
@@ -422,58 +413,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     api: routerDefaults?.api ?? config?.api,
   }
 
-  // Get models - from providers.models (Python CLI) or model_config (legacy)
-  const getModels = (): NormalizedModel[] => {
-    if (isPythonCLI && config?.providers?.models) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return config.providers.models.map((m: any): NormalizedModel => {
-        const model: NormalizedModel = {
-          name: m.name,
-          reasoning_family: m.reasoning_family,
-          endpoints: m.endpoints || [],
-          access_key: m.access_key,
-          pricing: m.pricing,
-        }
-        return model
-      })
-    }
-    // Legacy format - convert model_config to array
-    if (config?.model_config) {
-      return (Object.entries(config.model_config) as [string, ModelConfigEntry][]).map(([name, cfg]) => ({
-        name,
-        reasoning_family: cfg.reasoning_family,
-        endpoints: cfg.preferred_endpoints?.map((ep: string) => {
-          const endpoint = config.vllm_endpoints?.find((e: VLLMEndpoint) => e.name === ep)
-          return endpoint ? {
-            name: ep,
-            weight: endpoint.weight || 1,
-            endpoint: `${endpoint.address}:${endpoint.port}`,
-            protocol: 'http',
-          } : null
-        }).filter((e): e is NonNullable<typeof e> => e !== null) || [],
-        access_key: undefined,
-        pricing: cfg.pricing
-      }))
-    }
-    return []
-  }
-
-  // Get default model
-  const getDefaultModel = (): string => {
-    if (isPythonCLI) {
-      return config?.providers?.default_model || ''
-    }
-    return config?.default_model || ''
-  }
-
-  // Get reasoning families
-  const getReasoningFamilies = (): Record<string, ReasoningFamily> => {
-    if (isPythonCLI) {
-      return config?.providers?.reasoning_families || {}
-    }
-    return config?.reasoning_families || {}
-  }
-
 
   // ============================================================================
   // SECTION PANEL RENDERS - Aligned with Python CLI config structure
@@ -481,23 +420,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
   // Signals Section - Keywords, Embeddings, Domains, Preferences (config.yaml)
   const renderSignalsSection = () => {
-    // Support both nested (signals.*) and flat (keyword_rules, etc.) formats.
-    // After deploy, Router flattens signals.keywords → keyword_rules, etc.
-    const signals = config?.signals
-    const flatSignals = !signals && hasFlatSignals(config) ? {
-      keywords: config?.keyword_rules,
-      embeddings: config?.embedding_rules,
-      domains: config?.categories,
-      fact_check: config?.fact_check_rules,
-      user_feedbacks: config?.user_feedback_rules,
-      preferences: config?.preference_rules,
-      language: config?.language_rules,
-      context: config?.context_rules,
-      complexity: config?.complexity_rules,
-      jailbreak: config?.jailbreak,
-      pii: config?.pii,
-    } : null
-    const effectiveSignals = signals || flatSignals
+    const effectiveSignals = config?.signals
 
     interface UnifiedSignal {
       name: string
@@ -1238,10 +1161,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           throw new Error('Configuration not loaded yet.')
         }
 
-        if (!isPythonCLI) {
-          throw new Error('Editing signals is only supported for Python CLI configs.')
-        }
-
         const name = (formData.name || '').trim()
         if (!name) {
           throw new Error('Name is required.')
@@ -1514,8 +1433,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     // Handle delete signal
     const handleDeleteSignal = async (signal: UnifiedSignal) => {
       if (confirm(`Are you sure you want to delete signal "${signal.name}"?`)) {
-        if (!config || !isPythonCLI) {
-          alert('Deleting signals is only supported for Python CLI configs.')
+        if (!config) {
           return
         }
 
@@ -1540,7 +1458,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
             disabled={isReadonly}
           />
 
-          {(isPythonCLI || hasFlatSignals(config)) ? (
+          {config ? (
             <DataTable
               columns={signalsColumns}
               data={filteredSignals}
@@ -1553,8 +1471,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
             />
           ) : (
             <div className={styles.emptyState}>
-              Signals are only available in Python CLI config format.
-              Current config uses legacy format - use "Intelligent Routing" features instead.
+              Signals are unavailable until the canonical editor state is loaded.
             </div>
           )}
         </div>
@@ -2072,10 +1989,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           throw new Error('Configuration not loaded yet.')
         }
 
-        if (!isPythonCLI) {
-          throw new Error('Decisions are only supported for Python CLI configs.')
-        }
-
         const name = (formData.name || '').trim()
         if (!name) {
           throw new Error('Name is required.')
@@ -2178,7 +2091,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
             searchValue={decisionsSearch}
             onSearchChange={setDecisionsSearch}
             onSecondaryAction={
-              isPythonCLI && config?.providers?.default_model
+              config?.providers?.default_model
                 ? () => {
                     setPresetApplyError(null)
                     setPresetModalOpen(true)
@@ -2191,7 +2104,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
             disabled={isReadonly}
           />
 
-          {(isPythonCLI || hasDecisions(config)) ? (
+          {config ? (
             <DataTable
               columns={decisionsColumns}
               data={filteredDecisions}
@@ -2204,8 +2117,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
             />
           ) : (
             <div className={styles.emptyState}>
-              Decisions are only available in Python CLI config format.
-              Current config uses legacy format - see "Categories" in legacy mode.
+              Decisions are unavailable until the canonical editor state is loaded.
             </div>
           )}
         </div>
@@ -2215,8 +2127,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
   // Models Section - Provider models and endpoints (config.yaml)
   const renderModelsSection = () => {
-    const models = getModels()
-    const reasoningFamilies = getReasoningFamilies()
+    const models = getDashboardModels(config)
+    const defaultModel = getDashboardDefaultModel(config)
+    const reasoningFamilies = getDashboardReasoningFamilies(config)
 
     // Filter models based on search
     const filteredModels = models.filter(model =>
@@ -2234,7 +2147,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         render: (row) => (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span style={{ fontWeight: 600 }}>{row.name}</span>
-            {row.name === getDefaultModel() && (
+            {row.name === defaultModel && (
               <span className={styles.badge} style={{ background: 'rgba(118, 185, 0, 0.15)', color: 'var(--color-primary)' }}>
                 Default
               </span>
@@ -2353,7 +2266,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           fields: [
             { label: 'Model Name', value: model.name },
             { label: 'Reasoning Family', value: model.reasoning_family || 'N/A' },
-            { label: 'Is Default', value: model.name === getDefaultModel() ? 'Yes' : 'No' }
+            { label: 'Is Default', value: model.name === defaultModel ? 'Yes' : 'No' }
           ]
         }
       ]
@@ -2451,7 +2364,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
     // Handle add model
     const handleAddModel = () => {
-      const reasoningFamiliesObj = getReasoningFamilies()
+      const reasoningFamiliesObj = getDashboardReasoningFamilies(config)
       const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
 
       openEditModal(
@@ -2525,42 +2438,32 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           }
         ],
         async (data) => {
+          if (!config) {
+            throw new Error('Configuration not loaded yet.')
+          }
+
           // Endpoints are already validated by EndpointsEditor
           const endpoints = data.endpoints || []
 
-          const newConfig = { ...config }
-
-          if (isPythonCLI && newConfig.providers) {
-            newConfig.providers = { ...newConfig.providers }
-            if (!newConfig.providers.models) {
-              newConfig.providers.models = []
-            }
-            newConfig.providers.models.push({
-              name: data.model_name,
-              reasoning_family: data.reasoning_family,
-              access_key: data.access_key,
-              endpoints: endpoints,
-              pricing: {
-                currency: data.currency,
-                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
-                completion_per_1m: parseFloat(data.completion_per_1m) || 0
-              }
-            })
-          } else {
-            // Legacy format
-            if (!newConfig.model_config) {
-              newConfig.model_config = {}
-            }
-            newConfig.model_config[data.model_name] = {
-              reasoning_family: data.reasoning_family,
-              preferred_endpoints: endpoints.map((ep: { name: string }) => ep.name),
-              pricing: {
-                currency: data.currency,
-                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
-                completion_per_1m: parseFloat(data.completion_per_1m) || 0
-              }
-            }
+          const nextProviders = {
+            ...(config.providers || { models: [], default_model: '' }),
+            models: [...(config.providers?.models || [])],
           }
+          const newConfig: ConfigData = {
+            ...config,
+            providers: nextProviders,
+          }
+          nextProviders.models.push({
+            name: data.model_name,
+            reasoning_family: data.reasoning_family,
+            access_key: data.access_key,
+            endpoints: endpoints,
+            pricing: {
+              currency: data.currency,
+              prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
+              completion_per_1m: parseFloat(data.completion_per_1m) || 0
+            }
+          })
           await saveConfig(newConfig)
         },
         'add'
@@ -2571,7 +2474,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     const handleEditModel = (model: ModelRow) => {
       setViewModalOpen(false)
 
-      const reasoningFamiliesObj = getReasoningFamilies()
+      const reasoningFamiliesObj = getDashboardReasoningFamilies(config)
       const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
 
       openEditModal(
@@ -2633,40 +2536,36 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           }
         ],
         async (data) => {
-          const newConfig = { ...config }
+          if (!config) {
+            throw new Error('Configuration not loaded yet.')
+          }
+
+          const nextProviders = {
+            ...(config.providers || { models: [], default_model: '' }),
+            models: [...(config.providers?.models || [])],
+          }
+          const newConfig: ConfigData = {
+            ...config,
+            providers: nextProviders,
+          }
 
           // Endpoints are already validated by EndpointsEditor
           const endpoints = data.endpoints || []
 
-          if (isPythonCLI && newConfig.providers?.models) {
-            newConfig.providers = { ...newConfig.providers }
-            type ModelType = NonNullable<ConfigData['providers']>['models'][number]
-            newConfig.providers.models = newConfig.providers.models.map((m: ModelType) =>
-              m.name === model.name ? {
-                ...m,
-                reasoning_family: data.reasoning_family,
-                access_key: data.access_key,
-                endpoints: endpoints,
-                pricing: {
-                  currency: data.currency,
-                  prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
-                  completion_per_1m: parseFloat(data.completion_per_1m) || 0
-                }
-              } : m
-            )
-          } else if (newConfig.model_config) {
-            // Legacy format
-            newConfig.model_config[model.name] = {
-              ...newConfig.model_config[model.name],
+          type ModelType = NonNullable<ConfigData['providers']>['models'][number]
+          nextProviders.models = nextProviders.models.map((entry: ModelType) =>
+            entry.name === model.name ? {
+              ...entry,
               reasoning_family: data.reasoning_family,
-              preferred_endpoints: endpoints.map((ep: { name: string }) => ep.name),
+              access_key: data.access_key,
+              endpoints: endpoints,
               pricing: {
                 currency: data.currency,
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
                 completion_per_1m: parseFloat(data.completion_per_1m) || 0
               }
-            }
-          }
+            } : entry
+          )
           await saveConfig(newConfig)
         },
         'edit'
@@ -2681,17 +2580,22 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     }
 
     const handleDeleteModelAction = async (modelName: string) => {
-      const newConfig = { ...config }
-      if (isPythonCLI && newConfig.providers?.models) {
-        newConfig.providers = { ...newConfig.providers }
-        type ModelType = NonNullable<ConfigData['providers']>['models'][number]
-        newConfig.providers.models = newConfig.providers.models.filter((m: ModelType) => m.name !== modelName)
-        // Update default model if deleted
-        if (newConfig.providers.default_model === modelName) {
-          newConfig.providers.default_model = newConfig.providers.models[0]?.name || ''
-        }
-      } else if (newConfig.model_config) {
-        delete newConfig.model_config[modelName]
+      if (!config) {
+        return
+      }
+
+      const nextProviders = {
+        ...(config.providers || { models: [], default_model: '' }),
+        models: [...(config.providers?.models || [])],
+      }
+      const newConfig: ConfigData = {
+        ...config,
+        providers: nextProviders,
+      }
+      type ModelType = NonNullable<ConfigData['providers']>['models'][number]
+      nextProviders.models = nextProviders.models.filter((entry: ModelType) => entry.name !== modelName)
+      if (nextProviders.default_model === modelName) {
+        nextProviders.default_model = nextProviders.models[0]?.name || ''
       }
       await saveConfig(newConfig)
     }
@@ -2755,16 +2659,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           }
         ],
         async (data) => {
-          const newConfig = { ...config }
-          if (isPythonCLI && newConfig.providers) {
-            newConfig.providers = { ...newConfig.providers }
-            if (!newConfig.providers.reasoning_families) {
-              newConfig.providers.reasoning_families = {}
-            }
-            newConfig.providers.reasoning_families[familyName] = data
-          } else if (newConfig.reasoning_families) {
-            newConfig.reasoning_families[familyName] = data
+          if (!config) {
+            throw new Error('Configuration not loaded yet.')
           }
+
+          const nextProviders = {
+            ...(config.providers || { models: [], default_model: '' }),
+            reasoning_families: { ...(config.providers?.reasoning_families || {}) },
+          }
+          const newConfig: ConfigData = {
+            ...config,
+            providers: nextProviders,
+          }
+          nextProviders.reasoning_families[familyName] = data
           await saveConfig(newConfig)
         }
       )
@@ -2804,19 +2711,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           const familyName = data.name
           delete data.name
 
-          const newConfig = { ...config }
-          if (isPythonCLI && newConfig.providers) {
-            newConfig.providers = { ...newConfig.providers }
-            if (!newConfig.providers.reasoning_families) {
-              newConfig.providers.reasoning_families = {}
-            }
-            newConfig.providers.reasoning_families[familyName] = data
-          } else {
-            if (!newConfig.reasoning_families) {
-              newConfig.reasoning_families = {}
-            }
-            newConfig.reasoning_families[familyName] = data
+          if (!config) {
+            throw new Error('Configuration not loaded yet.')
           }
+
+          const nextProviders = {
+            ...(config.providers || { models: [], default_model: '' }),
+            reasoning_families: { ...(config.providers?.reasoning_families || {}) },
+          }
+          const newConfig: ConfigData = {
+            ...config,
+            providers: nextProviders,
+          }
+          nextProviders.reasoning_families[familyName] = data
           await saveConfig(newConfig)
         },
         'add'
@@ -2828,14 +2735,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         return
       }
 
-      const newConfig = { ...config }
-      if (isPythonCLI && newConfig.providers?.reasoning_families) {
-        newConfig.providers = { ...newConfig.providers }
-        newConfig.providers.reasoning_families = { ...newConfig.providers.reasoning_families }
-        delete newConfig.providers.reasoning_families[familyName]
-      } else if (newConfig.reasoning_families) {
-        delete newConfig.reasoning_families[familyName]
+      if (!config) {
+        return
       }
+
+      const nextProviders = {
+        ...(config.providers || { models: [], default_model: '' }),
+        reasoning_families: { ...(config.providers?.reasoning_families || {}) },
+      }
+      const newConfig: ConfigData = {
+        ...config,
+        providers: nextProviders,
+      }
+      delete nextProviders.reasoning_families[familyName]
       await saveConfig(newConfig)
     }
 
@@ -2945,7 +2857,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       isReadonly={isReadonly}
       openEditModal={openEditModal}
       saveConfig={saveConfig}
-      showLegacyCategories={!isPythonCLI}
+      legacyCategoriesConfig={legacyCategoriesConfig}
     />
   )
 
