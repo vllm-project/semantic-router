@@ -1,17 +1,68 @@
 import { test, expect } from '@playwright/test';
 
+function chatStreamChunk(delta: Record<string, unknown>): string {
+  return `data: ${JSON.stringify({ choices: [{ index: 0, delta }] })}\n\n`;
+}
+
 function chatStreamBody(content: string, reasoning = ''): string {
+  const initialLine = chatStreamChunk({ role: 'assistant', content: '' });
   const reasoningLines = reasoning
     ? reasoning.split('').map((char) =>
-        `data: ${JSON.stringify({ choices: [{ delta: { reasoning: char } }] })}\n\n`
+        chatStreamChunk({ reasoning: char })
       )
     : [];
 
   const contentLines = content.split('').map((char) =>
-    `data: ${JSON.stringify({ choices: [{ delta: { content: char } }] })}\n\n`
+    chatStreamChunk({ content: char })
   );
 
-  return [...reasoningLines, ...contentLines].join('') + 'data: [DONE]\n\n';
+  return initialLine + [...reasoningLines, ...contentLines].join('') + 'data: [DONE]\n\n';
+}
+
+async function mockStreamingChatFetch(
+  page: import('@playwright/test').Page,
+  chunks: string[],
+  delayMs = 250,
+): Promise<void> {
+  await page.evaluate(async ({ chunks: streamChunks, delayMs: streamDelayMs }) => {
+    const originalFetch = window.fetch.bind(window);
+    const encoder = new TextEncoder();
+
+    window.fetch = async (input, init) => {
+      const url = typeof input === 'string'
+        ? input
+        : input instanceof Request
+          ? input.url
+          : String(input);
+
+      if (!url.includes('/api/router/v1/chat/completions')) {
+        return originalFetch(input, init);
+      }
+
+      let chunkIndex = 0;
+      return new Response(new ReadableStream({
+        start(controller) {
+          const pushChunk = () => {
+            if (chunkIndex >= streamChunks.length) {
+              controller.close();
+              return;
+            }
+
+            controller.enqueue(encoder.encode(streamChunks[chunkIndex]));
+            chunkIndex += 1;
+            window.setTimeout(pushChunk, streamDelayMs);
+          };
+
+          pushChunk();
+        },
+      }), {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+      });
+    };
+  }, { chunks, delayMs });
 }
 
 async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): Promise<void> {
@@ -215,6 +266,23 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByText('Final streamed answer.')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Step 1: inspect the prompt.')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Completed Deep Thinking')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('shows streaming reasoning in thinking overlay before completion', async ({ page }) => {
+    await mockStreamingChatFetch(page, [
+      chatStreamChunk({ role: 'assistant', content: '' }),
+      chatStreamChunk({ reasoning: 'The' }),
+      chatStreamChunk({ reasoning: ' answer' }),
+      chatStreamChunk({ content: 'Done.' }),
+      'data: [DONE]\n\n',
+    ]);
+
+    await page.getByPlaceholder('Ask me anything...').fill('Stream reasoning');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(page.getByText('Thinking Process:')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('pre').filter({ hasText: 'The answer' })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Done.')).toBeVisible({ timeout: 10000 });
   });
 
   test('renders thinking block from non-stream reasoning field', async ({ page }) => {

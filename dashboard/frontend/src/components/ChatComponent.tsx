@@ -241,8 +241,6 @@ const ChatComponent = ({
   const generateId = generateMessageId
 
   const handleThinkingComplete = useCallback(() => {
-    // Thinking animation will be hidden when headers arrive
-    // This callback is kept for ThinkingAnimation component compatibility
   }, [])
 
   const handleHeaderRevealComplete = useCallback(() => {
@@ -314,7 +312,6 @@ const ChatComponent = ({
     setInputValue('')
     setIsLoading(true)
 
-    // Reset animation states and show initial thinking animation (no content)
     setPendingHeaders(null)
     setShowHeaderReveal(false)
     setShowThinking(true)  // Show immediately when user sends message
@@ -359,7 +356,6 @@ const ChatComponent = ({
 
       const responseHeaders = collectResponseHeaders(response)
 
-      // Store headers and hide thinking animation, show HeaderReveal
       if (Object.keys(responseHeaders).length > 0) {
         console.log('Headers received, showing HeaderReveal')
         setPendingHeaders(responseHeaders)
@@ -367,14 +363,10 @@ const ChatComponent = ({
         setShowHeaderReveal(true)  // Show HeaderReveal
       }
 
-      // Track content and reasoning for each choice (for ratings mode)
       const choiceContents: Map<number, ChoiceAccumulator> = new Map()
-      // Check if this is ratings mode (multiple choices)
       let isRatingsMode = false
-      // Track tool calls
       const toolCallsMap: Map<number, ToolCall> = new Map()
       let hasToolCalls = false
-      // Track ReMoM intermediate responses
       let reasoningMomResponses: ReMoMRoundResponse[] | undefined
       let latestThinkingProcess = ''
 
@@ -1016,13 +1008,15 @@ const ChatComponent = ({
       onToggle={handleToggleTeamView}
     />
   ) : null
+  const liveThinkingProcess = messages.reduceRight((thinking, message) =>
+    thinking || (message.role === 'assistant' && message.isStreaming ? message.thinkingProcess || '' : ''), '')
 
   return (
     <>
       {showThinking && (
         <ThinkingAnimation
           onComplete={handleThinkingComplete}
-          thinkingProcess=""
+          thinkingProcess={liveThinkingProcess}
         />
       )}
 
