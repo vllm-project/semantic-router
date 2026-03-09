@@ -2,7 +2,7 @@ import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 import { themes } from 'prism-react-renderer'
 
-const lightCodeTheme = themes.github
+const lightCodeTheme = themes.vsDark
 const darkCodeTheme = themes.vsDark
 
 const config: Config = {
@@ -151,37 +151,44 @@ const config: Config = {
       items: [
         {
           type: 'localeDropdown',
+          className: 'nav-locale',
           position: 'right',
         },
         {
           type: 'docsVersionDropdown',
+          className: 'nav-docs-only',
           position: 'right',
           dropdownActiveClassDisabled: true,
         },
         {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
+          className: 'nav-docs-only nav-primary',
           position: 'left',
           label: 'Docs',
         },
         {
           to: '/white-paper',
+          className: 'nav-primary',
           label: 'Paper',
           position: 'left',
         },
         {
           to: '/publications',
+          className: 'nav-primary',
           label: 'Research',
           position: 'left',
         },
         {
           to: '/blog',
+          className: 'nav-primary',
           label: 'Blog',
           position: 'left',
         },
 
         {
           type: 'dropdown',
+          className: 'nav-primary',
           label: 'Community',
           position: 'left',
           items: [
@@ -213,13 +220,15 @@ const config: Config = {
           ],
         },
         {
+          label: 'GitHub',
           href: 'https://github.com/vllm-project/semantic-router',
-          className: 'header-github-link',
+          className: 'nav-utility',
           position: 'right',
         },
         {
+          label: 'Models',
           href: 'https://huggingface.co/LLM-Semantic-Router',
-          className: 'header-hf-link',
+          className: 'nav-utility',
           position: 'right',
         },
       ],
@@ -296,9 +305,9 @@ const config: Config = {
       additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
     },
     colorMode: {
-      defaultMode: 'light',
-      disableSwitch: false,
-      respectPrefersColorScheme: true,
+      defaultMode: 'dark',
+      disableSwitch: true,
+      respectPrefersColorScheme: false,
     },
   } satisfies Preset.ThemeConfig,
   headTags: [

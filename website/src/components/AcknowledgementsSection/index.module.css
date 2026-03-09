@@ -1,250 +1,167 @@
-/* Acknowledgements Section Styles */
-.acknowledgementsSection {
-  padding: 4rem 0;
-  background: linear-gradient(135deg, #F6F8FA 0%, #FFFFFF 50%, #F0F3F6 100%);
+.section {
   position: relative;
   overflow: hidden;
-  transition: all 0.3s ease;
+  padding: 5rem 0;
+  border-bottom: 1px solid var(--site-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 42%),
+    #050505;
 }
 
-/* Dark theme acknowledgements section */
-[data-theme='dark'] .acknowledgementsSection {
-  background: linear-gradient(135deg, #161B22 0%, #21262D 50%, #161B22 100%);
-}
-
-.acknowledgementsSection::before {
+.section::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image:
-    radial-gradient(circle at 25% 25%, rgba(88, 166, 255, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 75% 75%, rgba(253, 181, 22, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 50% 50%, rgba(130, 80, 223, 0.03) 0%, transparent 50%);
+  inset: 0;
   pointer-events: none;
-  animation: acknowledgementsBackgroundFlow 15s ease-in-out infinite;
-  transition: all 0.3s ease;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.08), transparent 28%),
+    radial-gradient(circle at 82% 70%, rgba(255, 255, 255, 0.05), transparent 26%);
+  opacity: 0.45;
 }
 
-/* Dark theme acknowledgements background */
-[data-theme='dark'] .acknowledgementsSection::before {
-  background-image:
-    radial-gradient(circle at 25% 25%, rgba(88, 166, 255, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 75% 75%, rgba(253, 181, 22, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.06) 0%, transparent 50%);
-}
-
-.acknowledgementsContainer {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 2rem;
+.header {
   position: relative;
   z-index: 1;
-  text-align: center;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.34fr) minmax(0, 0.66fr);
+  gap: 2rem;
+  margin-bottom: 2rem;
 }
 
-.acknowledgementsTitle {
-  font-size: 2.75rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  margin: 0 0 1rem;
-  color: #0A0A0A;
-  transition: color 0.3s ease;
+.title {
+  margin: 0.8rem 0 0;
+  max-width: 12ch;
+  font-size: clamp(2.4rem, 5vw, 4.4rem);
+  line-height: 0.95;
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  color: var(--site-text);
 }
 
-/* Dark theme title */
-[data-theme='dark'] .acknowledgementsTitle {
-  color: #FFFFFF;
-}
-
-.acknowledgementsSubtitle {
-  font-size: 1.2rem;
-  line-height: 1.6;
-  color: #656D76;
-  margin-bottom: 3rem;
-  max-width: 800px;
-  margin-left: auto;
-  margin-right: auto;
-  transition: color 0.3s ease;
-}
-
-/* Dark theme subtitle */
-[data-theme='dark'] .acknowledgementsSubtitle {
-  color: #8B949E;
+.subtitle {
+  max-width: 34rem;
+  margin: 2.25rem 0 0;
+  color: var(--site-muted-bright);
+  font-size: 1rem;
+  line-height: 1.7;
 }
 
 .projectsGrid {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 2rem;
-  margin-top: 2rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
 }
 
 .projectCard {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 1.5rem;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(88, 166, 255, 0.2);
-  border-radius: 16px;
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 16px rgba(9, 105, 218, 0.08);
-  text-decoration: none;
+  display: grid;
+  align-content: space-between;
+  gap: 1.4rem;
+  min-height: 13rem;
+  padding: 1.15rem;
+  border: 1px solid var(--site-border);
+  background: var(--site-surface);
   color: inherit;
-}
-
-/* Dark theme project card */
-[data-theme='dark'] .projectCard {
-  background: rgba(33, 38, 45, 0.8);
-  border-color: rgba(88, 166, 255, 0.3);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  text-decoration: none;
+  transition:
+    border-color 180ms ease,
+    transform 180ms ease,
+    background 180ms ease;
 }
 
 .projectCard:hover {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(88, 166, 255, 0.4);
-  transform: translateY(-4px);
-  box-shadow: 0 8px 32px rgba(9, 105, 218, 0.15);
-  text-decoration: none;
+  border-color: var(--site-border-strong);
+  background: var(--site-surface-alt);
   color: inherit;
+  text-decoration: none;
+  transform: translateY(-2px);
 }
 
-/* Dark theme project card hover */
-[data-theme='dark'] .projectCard:hover {
-  background: rgba(33, 38, 45, 0.95);
-  border-color: rgba(88, 166, 255, 0.5);
-  box-shadow: 0 8px 32px rgba(88, 166, 255, 0.2);
+.projectCardTop,
+.projectCopy {
+  display: grid;
+  gap: 0.8rem;
 }
 
 .projectLogoWrapper {
-  width: 80px;
-  height: 80px;
+  width: 72px;
+  height: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 1rem;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 2px 8px rgba(9, 105, 218, 0.1);
-  transition: all 0.3s ease;
+  border: 1px solid var(--site-border);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .projectCard[data-project-id='amd'] .projectLogoWrapper {
   background: #111827;
-  box-shadow: 0 2px 10px rgba(17, 24, 39, 0.28);
 }
 
 .projectCard[data-project-id='pytorch'] .projectLogoWrapper {
-  background: #FFFFFF;
-}
-
-/* Dark theme logo wrapper */
-[data-theme='dark'] .projectLogoWrapper {
-  background: rgba(48, 54, 61, 0.9);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-[data-theme='dark'] .projectCard[data-project-id='amd'] .projectLogoWrapper {
-  background: #0B1220;
-}
-
-[data-theme='dark'] .projectCard[data-project-id='pytorch'] .projectLogoWrapper {
-  background: #F8FAFC;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.35);
+  background: #f8fafc;
 }
 
 .projectLogo {
-  max-width: 60px;
-  max-height: 60px;
+  max-width: 54px;
+  max-height: 54px;
   width: auto;
   height: auto;
   object-fit: contain;
-  transition: transform 0.3s ease;
 }
 
-.projectCard:hover .projectLogo {
-  transform: scale(1.1);
+.projectMeta,
+.projectLink {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--site-muted-bright);
 }
 
 .projectName {
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 600;
-  color: #1F2328;
-  text-align: center;
-  line-height: 1.4;
-  transition: color 0.3s ease;
+  color: var(--site-text);
+  line-height: 1.35;
 }
 
-/* Dark theme project name */
-[data-theme='dark'] .projectName {
-  color: #F0F6FC;
-}
-
-/* Animations */
-@keyframes acknowledgementsBackgroundFlow {
-  0%, 100% {
-    transform: translateX(0) translateY(0);
-  }
-  33% {
-    transform: translateX(5px) translateY(-3px);
-  }
-  66% {
-    transform: translateX(-3px) translateY(5px);
+@media (max-width: 1200px) {
+  .projectsGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
-/* Responsive Design */
-@media screen and (max-width: 996px) {
-  .acknowledgementsTitle {
-    font-size: 2.25rem;
-  }
-}
-
-@media screen and (max-width: 768px) {
-  .acknowledgementsSection {
-    padding: 3rem 0;
+@media (max-width: 996px) {
+  .header {
+    grid-template-columns: 1fr;
   }
 
-  .acknowledgementsContainer {
-    padding: 0 1rem;
-  }
-
-  .acknowledgementsTitle {
-    font-size: 1.75rem;
-    margin-bottom: 0.8rem;
-  }
-
-  .acknowledgementsSubtitle {
-    font-size: 1.1rem;
-    margin-bottom: 2rem;
+  .subtitle {
+    margin-top: 0;
   }
 
   .projectsGrid {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .section {
+    padding: 3.5rem 0;
+  }
+
+  .projectsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
   }
 
   .projectCard {
+    min-height: 11rem;
     padding: 1rem;
   }
 
   .projectLogoWrapper {
-    width: 60px;
-    height: 60px;
-    margin-bottom: 0.8rem;
-  }
-
-  .projectLogo {
-    max-width: 45px;
-    max-height: 45px;
-  }
-
-  .projectName {
-    font-size: 0.8rem;
+    width: 64px;
+    height: 64px;
   }
 }

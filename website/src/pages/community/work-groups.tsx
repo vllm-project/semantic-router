@@ -19,7 +19,7 @@ const workingGroups: WorkGroup[] = [
     name: 'RouterCore',
     description: 'Using embedded SLM, implement advanced routing algorithm like classify, security detection, auto reasoning etc.',
     label: 'area/core',
-    icon: '🧠',
+    icon: 'RC',
     skills: ['Machine learning', 'BERT models', 'Classification algorithms'],
     needs: ['Model optimization', 'Algorithm improvements', 'Reasoning logic'],
   },
@@ -27,7 +27,7 @@ const workingGroups: WorkGroup[] = [
     name: 'Research',
     description: 'Explore the frontier of SLM (Small Language Model) in vLLM Semantic Router, improving latency and context of SLM.',
     label: 'area/research',
-    icon: '🔬',
+    icon: 'RS',
     skills: ['Model Training', 'Model Fine-Tuning', 'Deep Learning'],
     needs: ['SLM research', 'Latency optimization', 'Context improvement'],
   },
@@ -35,7 +35,7 @@ const workingGroups: WorkGroup[] = [
     name: 'Networking',
     description: 'Envoy ExtProc, Traffic Management, Networks Optimization',
     label: 'area/networking',
-    icon: '🌐',
+    icon: 'NW',
     skills: ['Envoy proxy', 'Network protocols', 'Performance optimization'],
     needs: ['Load balancing', 'Traffic routing', 'Network security'],
   },
@@ -44,7 +44,7 @@ const workingGroups: WorkGroup[] = [
     name: 'Observability',
     description: 'Metrics collection, distributed tracing, monitoring dashboards, and structured logging for production visibility',
     label: 'area/observability',
-    icon: '📈',
+    icon: 'OB',
     skills: ['Prometheus/Grafana', 'OpenTelemetry', 'Log aggregation', 'Monitoring systems'],
     needs: ['Metrics implementation', 'Tracing integration', 'Dashboard creation', 'Log standardization'],
   },
@@ -52,7 +52,7 @@ const workingGroups: WorkGroup[] = [
     name: 'Bench',
     description: 'Reasoning Benchmark Framework, Performance Optimization',
     label: 'area/benchmark',
-    icon: '📊',
+    icon: 'BM',
     skills: ['Performance testing', 'Benchmarking tools', 'Data analysis'],
     needs: ['Benchmark frameworks', 'Performance metrics', 'Testing automation'],
   },
@@ -60,7 +60,7 @@ const workingGroups: WorkGroup[] = [
     name: 'Environment',
     description: 'Docker Compose, Kubernetes, Local support, Cloud Foundry Integration',
     label: 'area/environment',
-    icon: '🐳',
+    icon: 'EN',
     skills: ['Docker', 'Kubernetes', 'Cloud platforms', 'DevOps'],
     needs: ['Helm charts', 'Deployment automation', 'Cloud integrations'],
   },
@@ -69,7 +69,7 @@ const workingGroups: WorkGroup[] = [
     name: 'Test and Release',
     description: 'CI/CD, Build, test, release',
     label: 'area/tooling, area/ci',
-    icon: '🔧',
+    icon: 'TR',
     skills: ['CI/CD tools', 'Build automation', 'Release processes'],
     needs: ['Test automation', 'Release pipelines', 'Quality assurance'],
   },
@@ -77,7 +77,7 @@ const workingGroups: WorkGroup[] = [
     name: 'User Experience',
     description: 'User experience across vLLM Semantic Router, API, Configuration and CLI guidelines and support',
     label: 'area/user-experience',
-    icon: '👥',
+    icon: 'UX',
     skills: ['API design', 'UX/UI', 'Developer experience'],
     needs: ['API improvements', 'CLI enhancements', 'User feedback integration'],
   },
@@ -85,7 +85,7 @@ const workingGroups: WorkGroup[] = [
     name: 'Docs',
     description: 'User docs, information architecture, infrastructure',
     label: 'area/document',
-    icon: '📚',
+    icon: 'DX',
     skills: ['Technical writing', 'Documentation tools', 'User experience design'],
     needs: ['API documentation', 'Tutorials', 'Deployment guides'],
   },
@@ -144,13 +144,12 @@ const WorkGroups: React.FC = () => {
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1><Translate id="workGroups.title">vLLM Semantic Router Work Groups 👋</Translate></h1>
+          <h1><Translate id="workGroups.title">vLLM Semantic Router Work Groups</Translate></h1>
         </header>
 
         <main className={styles.main}>
           <section className={styles.intro}>
             <h2>
-              🌍
               <Translate id="workGroups.init.title">WG Initialization</Translate>
             </h2>
             <p>
@@ -176,7 +175,6 @@ const WorkGroups: React.FC = () => {
 
           <section className={styles.workingGroupsSection}>
             <h2>
-              ⛰️
               <Translate id="workGroups.community.title">vLLM Semantic Router Community WG</Translate>
             </h2>
             <p>
@@ -194,7 +192,6 @@ const WorkGroups: React.FC = () => {
 
           <section className={styles.promotion}>
             <h2>
-              🔝
               <Translate id="workGroups.promotion.title">Community Promotion</Translate>
             </h2>
             <p>

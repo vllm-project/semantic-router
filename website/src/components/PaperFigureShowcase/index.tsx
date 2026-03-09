@@ -72,7 +72,7 @@ const FIGURES: FigureMeta[] = [
   {
     key: 'figure9',
     paperLabel: 'fig:entropy_folding_layers',
-    index: '09',
+    index: '06',
     title: <Translate id="homepage.paperFigures.figure9.title">Layered Entropy Folding</Translate>,
     summary: (
       <Translate id="homepage.paperFigures.figure9.summary">
@@ -914,7 +914,7 @@ const PaperFigureShowcase: React.FC = () => {
 
   return (
     <section className={styles.paperFigureSection}>
-      <div className="container">
+      <div className="site-shell-container">
         <div className={styles.paperHeader}>
           <p className={styles.paperLabel}>
             <Translate id="homepage.paperFigures.label">Routing Blueprint</Translate>

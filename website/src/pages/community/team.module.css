@@ -1,408 +1,238 @@
 .container {
-  max-width: 1200px;
+  width: min(100% - 2.5rem, var(--site-grid-max));
   margin: 0 auto;
-  padding: 2rem;
+  padding: 2rem 0 4rem;
 }
 
 .header {
-  text-align: center;
-  margin-bottom: 3rem;
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-top: 0.5rem;
 }
 
 .header h1 {
-  font-size: 3rem;
-  color: var(--ifm-color-primary);
-  margin-bottom: 1rem;
-  background: linear-gradient(45deg, #0969da, #8250df);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  margin: 0;
+  font-size: clamp(2.8rem, 8vw, 5rem);
+  line-height: 0.92;
+  font-weight: 400;
+  letter-spacing: -0.05em;
 }
 
-.subtitle {
-  font-size: 1.25rem;
-  color: var(--ifm-color-content-secondary);
-  max-width: 600px;
-  margin: 0 auto;
-  line-height: 1.6;
+.subtitle,
+.sectionDescription {
+  max-width: 40rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+  line-height: 1.7;
 }
 
 .main {
-  display: flex;
-  flex-direction: column;
-  gap: 4rem;
+  display: grid;
+  gap: 2rem;
 }
 
 .section {
-  margin-bottom: 2rem;
+  display: grid;
+  gap: 1rem;
 }
 
 .section h2 {
-  color: var(--ifm-color-primary);
-  margin-bottom: 1rem;
-  font-size: 2rem;
-  text-align: center;
-}
-
-.sectionDescription {
-  text-align: center;
-  color: var(--ifm-color-content-secondary);
-  font-size: 1.125rem;
-  margin-bottom: 2rem;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.7rem);
+  line-height: 1;
 }
 
 .teamGrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.5rem;
-  margin-top: 2rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.memberCard,
+.recognitionCard,
+.involvementCard {
+  padding: 1.3rem;
+  border: 1px solid var(--site-border);
+  background: var(--site-surface);
 }
 
 .memberCard {
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-200);
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.memberCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+  display: grid;
+  gap: 1rem;
 }
 
 .memberHeader {
   display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.9rem;
 }
 
 .avatar {
-  width: 56px;
-  height: 56px;
+  width: 3.5rem;
+  height: 3.5rem;
   border-radius: 50%;
-  border: 2px solid var(--ifm-color-primary-light);
   object-fit: cover;
-  flex-shrink: 0;
+  border: 1px solid var(--site-border-strong);
 }
 
 .memberInfo {
-  flex: 1;
   min-width: 0;
 }
 
 .nameWithBadge {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.25rem;
   flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .memberName {
   margin: 0;
-  color: var(--ifm-color-primary);
   font-size: 1.1rem;
-  font-weight: 700;
-  line-height: 1.3;
 }
 
 .badge {
-  display: inline-block;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.6rem;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--site-border);
+  border-radius: 999px;
+  color: var(--site-muted-bright);
   font-size: 0.65rem;
-  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
+  letter-spacing: 0.08em;
 }
 
-.badge.maintainer,
-.badge.committer,
-.badge.contributor {
-  background: var(--ifm-color-primary);
-  color: white;
+.maintainer,
+.committer,
+.contributor {
+  border-color: var(--site-border-strong);
+}
+
+.memberRole,
+.memberBio {
+  color: var(--site-muted-bright);
+  line-height: 1.65;
 }
 
 .memberRole {
-  margin: 0;
-  color: var(--ifm-color-content-secondary);
-  font-size: 0.8rem;
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-.company {
-  color: var(--ifm-color-primary);
-  font-weight: 600;
-  white-space: nowrap;
+  margin: 0.35rem 0 0;
 }
 
 .memberBio {
-  color: var(--ifm-color-content-secondary);
-  line-height: 1.5;
-  margin-bottom: 1rem;
-  flex-grow: 1;
-  font-size: 0.875rem;
+  margin: 0;
+}
+
+.company {
+  color: var(--site-text);
 }
 
 .memberActions {
-  margin-top: auto;
   display: flex;
-  gap: 0.5rem;
   flex-wrap: wrap;
+  gap: 0.6rem;
 }
 
-.actionLink {
+.actionLink,
+.actionButton {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  background: var(--ifm-color-emphasis-100);
-  color: var(--ifm-color-primary);
-  padding: 0.4rem 0.8rem;
-  border-radius: 6px;
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 0.8rem;
-  transition: all 0.2s ease;
-  flex: 1;
   justify-content: center;
-  min-width: 80px;
+  min-height: 2.45rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--site-border);
+  border-radius: 999px;
+  color: var(--site-text);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease;
 }
 
-.actionLink:hover {
-  background: var(--ifm-color-primary);
-  color: white;
+.actionLink:hover,
+.actionButton:hover {
+  background: var(--site-text);
+  color: var(--site-bg);
+  border-color: var(--site-text);
   text-decoration: none;
-  transform: translateY(-1px);
 }
 
 .recognitionCard {
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-200);
-  border-radius: 16px;
-  padding: 2.5rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-}
-
-.recognitionCard h3 {
-  color: var(--ifm-color-primary);
-  margin-bottom: 1rem;
-  font-size: 1.5rem;
-}
-
-.recognitionCard h4 {
-  color: var(--ifm-color-primary);
-  margin: 2rem 0 1rem 0;
-  font-size: 1.25rem;
+  display: grid;
+  gap: 1rem;
 }
 
 .pathToMaintainer {
-  margin-top: 2rem;
+  display: grid;
+  gap: 1rem;
 }
 
 .steps {
   display: grid;
-  gap: 1.5rem;
-  margin-top: 1rem;
+  gap: 0.9rem;
 }
 
 .step {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 1.5rem;
-  background: var(--ifm-color-emphasis-100);
-  border-radius: 12px;
-  border-left: 4px solid var(--ifm-color-primary);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.9rem;
+  padding: 1rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.step:first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .stepNumber {
-  background: var(--ifm-color-primary);
-  color: white;
+  display: grid;
+  place-items: center;
   width: 2rem;
   height: 2rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  flex-shrink: 0;
-  margin-top: 0.25rem;
-}
-
-.step h5 {
-  margin: 0 0 0.5rem 0;
-  color: var(--ifm-color-primary);
-  font-size: 1rem;
-}
-
-.step p {
-  margin: 0;
-  color: var(--ifm-color-content-secondary);
-  line-height: 1.5;
+  border: 1px solid var(--site-border-strong);
+  border-radius: 999px;
+  color: var(--site-text);
+  font-size: 0.78rem;
 }
 
 .involvementGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
 }
 
 .involvementCard {
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-200);
-  border-radius: 16px;
-  padding: 2rem;
-  text-align: center;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-}
-
-.involvementCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-.involvementCard h3 {
-  color: var(--ifm-color-primary);
-  margin-bottom: 1rem;
-  font-size: 1.25rem;
-}
-
-.involvementCard p {
-  color: var(--ifm-color-content-secondary);
-  margin-bottom: 1.5rem;
-  line-height: 1.6;
-}
-
-.actionButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 2rem;
-  background: var(--ifm-color-primary);
-  color: white;
-  text-decoration: none;
-  border-radius: 12px;
-  font-weight: 700;
-  font-size: 1.1rem;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  border: 2px solid var(--ifm-color-primary);
-}
-
-.actionButton:hover {
-  background: var(--ifm-color-primary-dark);
-  color: white;
-  text-decoration: none;
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-  border-color: var(--ifm-color-primary-dark);
-}
-
-/* Dark mode enhancement */
-[data-theme='dark'] .actionButton {
-  background: var(--ifm-color-primary);
-  color: var(--ifm-color-gray-100);
-  border: 2px solid var(--ifm-color-primary-light);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-}
-
-[data-theme='dark'] .actionButton:hover {
-  background: var(--ifm-color-primary-light);
-  color: white;
-  border-color: var(--ifm-color-primary-lighter);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
-}
-
-/* Responsive design */
-@media (max-width: 1200px) {
-  .teamGrid {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  display: grid;
+  gap: 1rem;
+  align-content: start;
 }
 
 @media (max-width: 996px) {
-  .teamGrid {
-    grid-template-columns: repeat(2, 1fr);
+  .teamGrid,
+  .involvementGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 768px) {
   .container {
-    padding: 1rem;
+    width: min(100% - 1.4rem, var(--site-grid-max));
+    padding-top: 1.5rem;
   }
 
-  .header h1 {
-    font-size: 2rem;
-  }
-
-  .subtitle {
-    font-size: 1.125rem;
-  }
-
-  .teamGrid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
-  .memberHeader {
-    flex-direction: row;
-    align-items: flex-start;
-  }
-
-  .avatar {
-    width: 48px;
-    height: 48px;
-  }
-
-  .memberName {
-    font-size: 1rem;
-  }
-
-  .badge {
-    font-size: 0.6rem;
-    padding: 0.1rem 0.4rem;
-  }
-
-  .steps {
-    gap: 1rem;
-  }
-
-  .step {
-    flex-direction: column;
-    text-align: center;
-    padding: 1rem;
-  }
-
-  .stepNumber {
-    align-self: center;
-  }
-
+  .teamGrid,
   .involvementGrid {
     grid-template-columns: 1fr;
-    gap: 1.5rem;
   }
-}
 
-/* Dark mode adjustments */
-[data-theme='dark'] .memberCard,
-[data-theme='dark'] .recognitionCard,
-[data-theme='dark'] .involvementCard {
-  background: var(--ifm-background-surface-color);
-  border-color: var(--ifm-color-emphasis-300);
-}
-
-[data-theme='dark'] .step {
-  background: var(--ifm-color-emphasis-200);
+  .memberCard,
+  .recognitionCard,
+  .involvementCard {
+    padding: 1.1rem;
+  }
 }

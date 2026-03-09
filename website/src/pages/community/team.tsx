@@ -311,7 +311,7 @@ const Team: React.FC = () => {
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1><Translate id="team.title">Meet Our Team 👥</Translate></h1>
+          <h1><Translate id="team.title">Meet Our Team</Translate></h1>
           <p className={styles.subtitle}>
             <Translate id="team.subtitle">Innovation thrives when great minds come together</Translate>
           </p>
@@ -320,7 +320,6 @@ const Team: React.FC = () => {
         <main className={styles.main}>
           <section className={styles.section}>
             <h2>
-              👥
               <Translate id="team.coreTeam.title">Our Team</Translate>
             </h2>
             <p className={styles.sectionDescription}>
@@ -337,7 +336,6 @@ const Team: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              🏆
               <Translate id="team.recognition.title">Recognition</Translate>
             </h2>
             <div className={styles.recognitionCard}>
@@ -395,13 +393,11 @@ const Team: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              📞
               <Translate id="team.getInvolved.title">Get Involved</Translate>
             </h2>
             <div className={styles.involvementGrid}>
               <div className={styles.involvementCard}>
                 <h3>
-                  🚀
                   <Translate id="team.getInvolved.contribute.title">Start Contributing</Translate>
                 </h3>
                 <p><Translate id="team.getInvolved.contribute.desc">Ready to make your first contribution?</Translate></p>
@@ -412,7 +408,6 @@ const Team: React.FC = () => {
 
               <div className={styles.involvementCard}>
                 <h3>
-                  👥
                   <Translate id="team.getInvolved.workGroups.title">Join Working Groups</Translate>
                 </h3>
                 <p><Translate id="team.getInvolved.workGroups.desc">Find your area of expertise and connect with like-minded contributors.</Translate></p>
@@ -423,7 +418,6 @@ const Team: React.FC = () => {
 
               <div className={styles.involvementCard}>
                 <h3>
-                  💬
                   <Translate id="team.getInvolved.discussions.title">Join Discussions</Translate>
                 </h3>
                 <p><Translate id="team.getInvolved.discussions.desc">Participate in community discussions and share your ideas.</Translate></p>
