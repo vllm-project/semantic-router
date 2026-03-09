@@ -6,6 +6,7 @@ import AcknowledgementsSection from '@site/src/components/AcknowledgementsSectio
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
+import CapabilityGlyph, { type CapabilityGlyphKind } from '@site/src/components/site/CapabilityGlyph'
 import DitherField from '@site/src/components/site/DitherField'
 import { PageIntro, PillLink, SectionLabel, StatStrip } from '@site/src/components/site/Chrome'
 import styles from './index.module.css'
@@ -37,8 +38,15 @@ const heroStats = [
   },
 ]
 
-const capabilityCards = [
+interface CapabilityCard {
+  kind: CapabilityGlyphKind
+  text: string
+  title: string
+}
+
+const capabilityCards: CapabilityCard[] = [
   {
+    kind: 'signal',
     title: translate({ id: 'homepage.capabilities.signal.title', message: 'Signal extraction' }),
     text: translate({
       id: 'homepage.capabilities.signal.text',
@@ -46,6 +54,7 @@ const capabilityCards = [
     }),
   },
   {
+    kind: 'decision',
     title: translate({ id: 'homepage.capabilities.decision.title', message: 'Decision engine' }),
     text: translate({
       id: 'homepage.capabilities.decision.text',
@@ -53,6 +62,7 @@ const capabilityCards = [
     }),
   },
   {
+    kind: 'plugin',
     title: translate({ id: 'homepage.capabilities.plugins.title', message: 'Plugin chain' }),
     text: translate({
       id: 'homepage.capabilities.plugins.text',
@@ -60,6 +70,7 @@ const capabilityCards = [
     }),
   },
   {
+    kind: 'gateway',
     title: translate({ id: 'homepage.capabilities.platform.title', message: 'Gateway-first deployment' }),
     text: translate({
       id: 'homepage.capabilities.platform.text',
@@ -67,6 +78,7 @@ const capabilityCards = [
     }),
   },
   {
+    kind: 'selection',
     title: translate({ id: 'homepage.capabilities.research.title', message: 'Research-grade model selection' }),
     text: translate({
       id: 'homepage.capabilities.research.text',
@@ -74,6 +86,7 @@ const capabilityCards = [
     }),
   },
   {
+    kind: 'docs',
     title: translate({ id: 'homepage.capabilities.docs.title', message: 'System docs' }),
     text: translate({
       id: 'homepage.capabilities.docs.text',
@@ -254,7 +267,12 @@ function CapabilitySection(): JSX.Element {
         <div className={styles.capabilityGrid}>
           {capabilityCards.map(card => (
             <article key={card.title} className={styles.capabilityCard}>
-              <SectionLabel>{card.title}</SectionLabel>
+              <div className={styles.capabilityCardHead}>
+                <SectionLabel>{card.title}</SectionLabel>
+                <div className={styles.capabilityVisual}>
+                  <CapabilityGlyph kind={card.kind} className={styles.capabilityGlyph} />
+                </div>
+              </div>
               <p>{card.text}</p>
             </article>
           ))}

@@ -133,28 +133,71 @@
 }
 
 .capabilityCard {
+  position: relative;
+  overflow: hidden;
   min-height: 15rem;
-  display: grid;
-  align-content: space-between;
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.2rem;
   padding: 1.4rem;
   border: 1px solid var(--site-border);
-  background: var(--site-surface);
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.05), transparent 32%),
+    var(--site-surface);
   transition:
     border-color 180ms ease,
     transform 180ms ease,
     background 180ms ease;
 }
 
+.capabilityCardHead {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.capabilityVisual {
+  display: flex;
+  min-height: 5.6rem;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    rgba(255, 255, 255, 0.015);
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.capabilityGlyph {
+  width: min(100%, 10.75rem);
+  height: auto;
+  opacity: 0.94;
+  transition:
+    transform 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
 .capabilityCard p {
   margin: 0;
   font-size: 0.96rem;
+  line-height: 1.6;
+  max-width: 18rem;
 }
 
 .capabilityCard:hover {
   transform: translateY(-3px);
   border-color: var(--site-border-strong);
   background: var(--site-surface-alt);
+}
+
+.capabilityCard:hover .capabilityVisual {
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.capabilityCard:hover .capabilityGlyph {
+  transform: translateY(-2px) scale(1.01);
 }
 
 .encoderShowcase {
@@ -373,6 +416,14 @@
   .hero {
     min-height: auto;
     padding: 3rem 0 2rem;
+  }
+
+  .capabilityVisual {
+    min-height: 4.75rem;
+  }
+
+  .capabilityGlyph {
+    width: min(100%, 9.75rem);
   }
 
   .encoderLeadStack {
