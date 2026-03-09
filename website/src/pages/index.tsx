@@ -106,16 +106,16 @@ const encoderTracks = [
   },
 ]
 
+const encoderSpotlightCard = {
+  marker: 'MOD',
+  title: translate({ id: 'homepage.aiTech.cap.multiModality', message: 'Multi-Modality' }),
+  text: translate({
+    id: 'homepage.aiTech.cap.multiModality.desc',
+    message: 'Detect and route text, image and audio inputs to the right modality-capable model.',
+  }),
+}
+
 const encoderCards = [
-  {
-    marker: 'MOD',
-    wide: true,
-    title: translate({ id: 'homepage.aiTech.cap.multiModality', message: 'Multi-Modality' }),
-    text: translate({
-      id: 'homepage.aiTech.cap.multiModality.desc',
-      message: 'Detect and route text, image and audio inputs to the right modality-capable model.',
-    }),
-  },
   {
     marker: 'BIE',
     title: translate({ id: 'homepage.aiTech.cap.biEncoder', message: 'Bi-Encoder Embeddings' }),
@@ -262,36 +262,46 @@ function EncoderIntelligenceSection(): JSX.Element {
         </div>
 
         <div className={styles.encoderShowcase}>
-          <div className={styles.encoderLead}>
-            <div className={styles.encoderLeadCopy}>
-              <SectionLabel>
-                <Translate id="homepage.aiTech.leadLabel">Signal surfaces</Translate>
-              </SectionLabel>
-              <p>
-                <Translate id="homepage.aiTech.leadCopy">
-                  Sequence classification, token labeling, embeddings, and reranking collapse into
-                  one system-intelligence layer.
-                </Translate>
-              </p>
+          <div className={styles.encoderLeadStack}>
+            <div className={styles.encoderLead}>
+              <div className={styles.encoderLeadCopy}>
+                <SectionLabel>
+                  <Translate id="homepage.aiTech.leadLabel">Signal surfaces</Translate>
+                </SectionLabel>
+                <p>
+                  <Translate id="homepage.aiTech.leadCopy">
+                    Sequence classification, token labeling, embeddings, and reranking collapse into
+                    one system-intelligence layer.
+                  </Translate>
+                </p>
+              </div>
+
+              <div className={styles.encoderTrackList}>
+                {encoderTracks.map(track => (
+                  <div key={track.label} className={styles.encoderTrack}>
+                    <span className={styles.encoderTrackLabel}>{track.label}</span>
+                    <span>{track.text}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className={styles.encoderActions}>
+                <PillLink to="/docs/api/classification">
+                  <Translate id="homepage.aiTech.primaryCta">Classification API</Translate>
+                </PillLink>
+                <PillLink to="/docs/training/training-overview" muted>
+                  <Translate id="homepage.aiTech.secondaryCta">Training overview</Translate>
+                </PillLink>
+              </div>
             </div>
 
-            <div className={styles.encoderTrackList}>
-              {encoderTracks.map(track => (
-                <div key={track.label} className={styles.encoderTrack}>
-                  <span className={styles.encoderTrackLabel}>{track.label}</span>
-                  <span>{track.text}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className={styles.encoderActions}>
-              <PillLink to="/docs/api/classification">
-                <Translate id="homepage.aiTech.primaryCta">Classification API</Translate>
-              </PillLink>
-              <PillLink to="/docs/training/training-overview" muted>
-                <Translate id="homepage.aiTech.secondaryCta">Training overview</Translate>
-              </PillLink>
-            </div>
+            <article className={`${styles.encoderCard} ${styles.encoderSpotlightCard}`}>
+              <span className={styles.encoderCardMarker}>{encoderSpotlightCard.marker}</span>
+              <div className={styles.encoderCardCopy}>
+                <h3>{encoderSpotlightCard.title}</h3>
+                <p>{encoderSpotlightCard.text}</p>
+              </div>
+            </article>
           </div>
 
           <div className={styles.encoderPipelineFrame}>
@@ -301,10 +311,7 @@ function EncoderIntelligenceSection(): JSX.Element {
 
         <div className={styles.encoderCardGrid}>
           {encoderCards.map(card => (
-            <article
-              key={card.marker}
-              className={`${styles.encoderCard} ${card.wide ? styles.encoderCardWide : ''}`}
-            >
+            <article key={card.marker} className={styles.encoderCard}>
               <span className={styles.encoderCardMarker}>{card.marker}</span>
               <div className={styles.encoderCardCopy}>
                 <h3>{card.title}</h3>
