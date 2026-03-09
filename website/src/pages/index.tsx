@@ -166,19 +166,6 @@ const encoderCards = [
   },
 ]
 
-const terminalLines = [
-  '$ vsr route --observe encoder,entropy \\',
-  '  --intent "market brief"',
-  'encoder.intent           finance        0.94',
-  'encoder.affinity         research       0.89',
-  'brain.prior              active         true',
-  'shannon.channel          coherent       0.91',
-  'entropy.fold             complete       0.16',
-  'brain.dispatch           qwen2.5        142ms',
-  'memory.semantic          warm           hit',
-  'trace.causal_field       exported       yes',
-]
-
 function DitherHero(): JSX.Element {
   return (
     <header className={styles.hero}>
@@ -211,24 +198,6 @@ function DitherHero(): JSX.Element {
               </>
             )}
           />
-
-          <div className={styles.heroPanel}>
-            <SectionLabel>
-              <Translate id="homepage.hero.panelLabel">Intelligence trace</Translate>
-            </SectionLabel>
-            <div className={styles.terminalWindow}>
-              <div className={styles.terminalBar}>
-                <span />
-                <span />
-                <span />
-              </div>
-              <div className={styles.terminalBody}>
-                {terminalLines.map(line => (
-                  <div key={line}>{line}</div>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </header>

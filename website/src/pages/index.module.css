@@ -25,48 +25,9 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
-  gap: 3rem;
-  align-items: end;
-}
-
-.heroPanel {
-  display: grid;
-  gap: 1rem;
-  padding: 1.5rem;
-  border: 1px solid var(--site-border);
-  background: rgba(0, 0, 0, 0.34);
-  backdrop-filter: blur(10px);
-}
-
-.terminalWindow {
-  border: 1px solid var(--site-border);
-  background: rgba(7, 7, 7, 0.95);
-  box-shadow: var(--site-shadow);
-}
-
-.terminalBar {
-  display: flex;
-  gap: 0.45rem;
-  padding: 0.8rem 1rem;
-  border-bottom: 1px solid var(--site-border);
-}
-
-.terminalBar span {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.24);
-}
-
-.terminalBody {
-  display: grid;
-  gap: 0.65rem;
-  padding: 1rem 1rem 1.2rem;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.86rem;
-  line-height: 1.55;
-  color: var(--site-muted-bright);
+  width: min(100%, 72rem);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
 }
 
 .statsSection,
@@ -404,10 +365,6 @@
 }
 
 @media (max-width: 768px) {
-  .terminalBody {
-    font-size: 0.78rem;
-  }
-
   .manifestoCopy p {
     font-size: 1.45rem;
   }
@@ -430,8 +387,7 @@
   .encoderLead,
   .encoderPipelineFrame,
   .encoderCard,
-  .capabilityCard,
-  .heroPanel {
+  .capabilityCard {
     padding: 1.15rem;
   }
 }
