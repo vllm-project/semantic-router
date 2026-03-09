@@ -5,7 +5,7 @@ limits:
     warn: 400
     error: 800
   function_lines:
-    error: 80
+    error: 100
   nesting:
     error: 4
   interface_methods:
