@@ -2,7 +2,7 @@ apiVersion: v2
 name: semantic-router
 description: A Helm chart for deploying Semantic Router - an intelligent routing system for LLM applications
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "latest"
 keywords:
   - semantic-router

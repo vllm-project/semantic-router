@@ -19,7 +19,7 @@ image:
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Image tag (overrides the image tag whose default is the chart appVersion)
-  tag: "latest"
+  tag: ""
 
 # -- Image pull secrets for private registries
 imagePullSecrets: []
@@ -326,7 +326,7 @@ config:
         rate: 1.0
       resource:
         service_name: "vllm-semantic-router"
-        service_version: "v0.1.0"
+        service_version: ""
         deployment_environment: "development"
 
 # Tools database configuration

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vllm-sr"
-version = "0.1.0.beta.2"
+version = "0.2.0"
 description = "vLLM Semantic Router - Intelligent routing for Mixture-of-Models"
 authors = [{name = "vLLM-SR Team"}]
 readme = "README.md"
@@ -54,4 +54,3 @@ packages = ["cli", "cli.commands", "cli.templates"]
 [tool.pytest.ini_options]
 addopts = ["-v"]
 testpaths = ["tests"]
-

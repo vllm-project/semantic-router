@@ -1,6 +1,6 @@
 [package]
 name = "candle-semantic-router"
-version = "0.4.0"
+version = "0.2.0"
 edition = "2021"
 description = "Go bindings for Candle BERT semantic similarity model for LLM routing"
 license = "MIT OR Apache-2.0"

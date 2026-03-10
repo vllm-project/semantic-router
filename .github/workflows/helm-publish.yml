@@ -7,11 +7,15 @@ on:
       - main
     paths:
       - "deploy/helm/**"
+      - ".github/workflows/helm-publish.yml"
   push:
     branches:
       - main
+    tags:
+      - "v*"
     paths:
       - "deploy/helm/**"
+      - ".github/workflows/helm-publish.yml"
   workflow_dispatch:
 
 env:
@@ -29,6 +33,8 @@ jobs:
       contents: read
     outputs:
       chart-name: ${{ steps.package.outputs.name }}
+      chart-version: ${{ steps.versions.outputs.chart_version }}
+      chart-app-version: ${{ steps.versions.outputs.app_version }}
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
@@ -38,19 +44,54 @@ jobs:
       - name: Lint chart
         run: helm lint ${{ env.CHART_PATH }}
 
+      - name: Resolve chart versions
+        id: versions
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "chart_version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "app_version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            echo "chart_version=0.0.0-pr.${{ github.event.number }}" >> $GITHUB_OUTPUT
+            echo "app_version=pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
+          else
+            echo "chart_version=0.0.0-latest" >> $GITHUB_OUTPUT
+            echo "app_version=latest" >> $GITHUB_OUTPUT
+          fi
+
       - name: Package chart
         id: package
         run: |
-          helm package -u ${{ env.CHART_PATH }} --version v0.0.0-latest --destination .
+          helm package -u ${{ env.CHART_PATH }} \
+            --version "${{ steps.versions.outputs.chart_version }}" \
+            --app-version "${{ steps.versions.outputs.app_version }}" \
+            --destination .
           echo "name=$(ls *.tgz)" >> $GITHUB_OUTPUT
 
       - name: Upload packaged chart
-        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: helm-chart
           path: "*.tgz"
           retention-days: 1
+
+      - name: Create package summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## Helm Chart Package
+
+          - Chart: \`${{ env.CHART_NAME }}\`
+          - Version: \`${{ steps.versions.outputs.chart_version }}\`
+          - App Version: \`${{ steps.versions.outputs.app_version }}\`
+          - Package: \`${{ steps.package.outputs.name }}\`
+          - Event: \`${{ github.event_name }}\`
+          EOF
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << EOF
+
+          This PR run uploads the packaged chart as the \`helm-chart\` workflow artifact.
+          EOF
+          fi
 
   publish-chart:
     name: Publish to GHCR
@@ -83,18 +124,19 @@ jobs:
           ## 📦 Helm Chart Published
 
           **Chart:** \`${{ env.CHART_NAME }}\`
-          **Version:** \`v0.0.0-latest\`
+          **Version:** \`${{ needs.validate-and-package.outputs.chart-version }}\`
+          **App Version:** \`${{ needs.validate-and-package.outputs.chart-app-version }}\`
           **Registry:** \`${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts\`
 
           ### Installation
 
           \`\`\`bash
           # Pull the chart
-          helm pull oci://${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts/${{ env.CHART_NAME }} --version v0.0.0-latest
+          helm pull oci://${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts/${{ env.CHART_NAME }} --version ${{ needs.validate-and-package.outputs.chart-version }}
 
           # Install directly
           helm install semantic-router oci://${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts/${{ env.CHART_NAME }} \\
-            --version v0.0.0-latest \\
+            --version ${{ needs.validate-and-package.outputs.chart-version }} \\
             --namespace vllm-semantic-router-system \\
             --create-namespace
           \`\`\`
@@ -103,7 +145,7 @@ jobs:
 
           \`\`\`bash
           helm upgrade semantic-router oci://${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts/${{ env.CHART_NAME }} \\
-            --version v0.0.0-latest \\
+            --version ${{ needs.validate-and-package.outputs.chart-version }} \\
             --namespace vllm-semantic-router-system
           \`\`\`
           EOF

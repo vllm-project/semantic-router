@@ -61,7 +61,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [extproc, extproc-rocm, llm-katan, vllm-sr, vllm-sr-rocm]
+        image: [dashboard, extproc, extproc-rocm, llm-katan, vllm-sr, vllm-sr-rocm]
       fail-fast: false
 
     steps:
@@ -182,7 +182,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [extproc, llm-katan, vllm-sr]
+        image: [dashboard, extproc, llm-katan, vllm-sr]
         platform: [linux/amd64, linux/arm64]
       fail-fast: false
 
@@ -548,7 +548,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [extproc, llm-katan, vllm-sr]
+        image: [dashboard, extproc, llm-katan, vllm-sr]
       fail-fast: false
 
     steps:
