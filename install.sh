@@ -661,10 +661,14 @@ print_path_hint() {
   shell_path_placeholder="$(printf '%s' "\$PATH")"
   case ":$PATH:" in
     *":$BIN_DIR:"*)
+      return 1
       ;;
     *)
       warn "$BIN_DIR is not on PATH."
+      printf '%b\n' "${COLOR_WHITE}Current shell${COLOR_RESET}"
       printf '  export PATH="%s:%s"\n' "$BIN_DIR" "$shell_path_placeholder"
+      printf '\n'
+      return 0
       ;;
   esac
 }
@@ -680,14 +684,16 @@ print_next_steps() {
   fi
   printf '\n'
 
-  print_path_hint
+  if print_path_hint; then
+    info "After updating PATH, use the commands below."
+  fi
 
   printf '%b\n' "${COLOR_WHITE}Next steps${COLOR_RESET}"
-  printf '  %s --version\n' "$BIN_DIR/vllm-sr"
+  printf '  vllm-sr --version\n'
 
   if [ "$MODE" = "serve" ]; then
-    printf '  %s serve\n' "$BIN_DIR/vllm-sr"
-    printf '  %s serve --platform amd\n' "$BIN_DIR/vllm-sr"
+    printf '  vllm-sr serve\n'
+    printf '  vllm-sr serve --platform amd\n'
     if [ "$SELECTED_RUNTIME" = "podman" ]; then
       printf '\n'
       printf '%b\n' "${COLOR_WHITE}Runtime${COLOR_RESET}"
