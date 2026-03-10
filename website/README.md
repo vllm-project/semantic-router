@@ -56,6 +56,19 @@ cd website && npm run serve
 - **Fixed chrome and route-aware wrappers** so docs/blog/community pages read as one site
 - **Responsive layouts** tuned for mobile and desktop
 
+### UI Contract
+
+Treat the current website redesign as the default design contract for all public routes, not as a one-off homepage polish.
+
+- **Dark-only, monochrome editorial language:** keep the black/graphite surfaces, bright neutral typography, thin borders, and restrained highlights. Do not reintroduce colorful default Docusaurus styling or a light-mode fork.
+- **Shared system before page-local styling:** extend `src/css/tokens.css`, `src/css/base.css`, `src/css/shell.css`, and shared components under `src/components/site/` before adding bespoke per-page styles.
+- **Homepage and custom pages stay bold; docs and blog stay readable:** landing routes can use stronger composition, diagrams, and motion, but docs/blog routes must preserve reading comfort, sidebar/TOC clarity, and code/table legibility.
+- **Motion and effects stay restrained:** dither fields, hover lifts, and interactive figures should support the content hierarchy. Decorative effects must stay subtle and must not compete with the text.
+- **Diagram language should match the shell:** use monochrome SVGs, line-art panels, thin strokes, centered compositions where appropriate, and card surfaces that feel like part of the same system.
+- **Copy should stay high-signal and system-level:** prefer concise, technical language such as encoder, Shannon signals, entropy folding, neural-symbolic routing, and system intelligence. Avoid low-status product phrasing that breaks the tone.
+- **Responsive behavior is part of the contract:** desktop and mobile are both first-class. New UI must avoid horizontal overflow and keep fixed header, docs navigation, tables, code blocks, and visual panels usable on narrow screens.
+- **Route structure and docs affordances remain intact:** redesign work should preserve URLs, docs versions, locale routing, sidebar taxonomy, pagination, and article metadata unless a deliberate product change is being made.
+
 ### Website Features
 
 - **Mermaid and code block styling** integrated into the docs theme
