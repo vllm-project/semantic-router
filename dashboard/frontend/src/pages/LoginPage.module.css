@@ -1,52 +1,177 @@
-.page {
+.container {
+  position: relative;
   min-height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+.backgroundEffect {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.mainContent {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
-  background: radial-gradient(circle at top, rgba(118, 185, 0, 0.12), transparent 30%), var(--color-bg);
+  padding: 4.5rem 1.5rem 3rem;
 }
 
 .card {
-  width: 100%;
-  max-width: 420px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 1rem;
-  padding: 1.5rem;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
-  display: flex;
-  flex-direction: column;
+  width: min(460px, 100%);
+  text-align: center;
+  padding: clamp(1.75rem, 3vw, 2.25rem);
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(27, 28, 44, 0.64);
+  color: #ffffff;
+  box-shadow: 0 26px 50px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(8px);
+  display: grid;
   gap: 0.75rem;
+  animation: fadeInUp 0.8s ease-out;
+}
+
+.heroBadge {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.48rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(30, 32, 52, 0.82);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.badgeLogo {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
+}
+
+.title {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(2rem, 3.2vw, 2.7rem);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.subtitle {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.98rem;
+  line-height: 1.45;
 }
 
 .label {
+  text-align: left;
   font-size: 0.85rem;
-  color: var(--color-text-secondary);
+  color: rgba(255, 255, 255, 0.84);
   margin-top: 0.25rem;
+  margin-bottom: -0.2rem;
+  font-weight: 500;
 }
 
 .input {
-  border-radius: 0.5rem;
-  border: 1px solid var(--color-border);
-  padding: 0.65rem 0.75rem;
-  background: transparent;
-  color: var(--color-text);
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 0.72rem 0.78rem;
+  background: rgba(10, 12, 22, 0.55);
+  color: #ffffff;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  outline: none;
+  border-color: rgba(118, 185, 0, 0.95);
+  box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.12);
+}
+
+.button,
+.secondaryButton {
+  width: 100%;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 0.96rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .button {
-  margin-top: 0.5rem;
-  border: 0;
-  border-radius: 0.75rem;
-  padding: 0.75rem 1rem;
-  cursor: pointer;
-  font-weight: 700;
-  background: var(--color-primary);
-  color: #081000;
+  margin-top: 0.35rem;
+  color: #0c0c10;
+  background: #fff;
+  box-shadow: 0 14px 28px rgba(255, 255, 255, 0.2);
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 34px rgba(255, 255, 255, 0.28);
+}
+
+.secondaryButton {
+  margin-top: 0.2rem;
+  color: #f5f5f7;
+  background: rgba(16, 18, 31, 0.56);
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.secondaryButton:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 14px 26px rgba(5, 10, 24, 0.5);
 }
 
 .error {
-  color: #ff6666;
+  color: #ff7b7b;
   font-size: 0.85rem;
-  margin-top: 0.25rem;
+  text-align: left;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .mainContent {
+    padding-top: 4rem;
+  }
+
+  .card {
+    padding: 1.4rem 1.1rem 1.3rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .mainContent {
+    padding: 3.5rem 0.9rem 2.3rem;
+  }
 }
