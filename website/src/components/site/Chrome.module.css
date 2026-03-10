@@ -34,6 +34,12 @@
     transform 180ms ease;
 }
 
+.pillButton {
+  appearance: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
 .pill:hover {
   background: var(--site-text);
   color: var(--site-bg);

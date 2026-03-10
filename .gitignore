@@ -116,6 +116,7 @@ scripts/prd.txt
 
 website/build
 .docusaurus
+website/static/install.sh
 spec/
 results/
 reports/

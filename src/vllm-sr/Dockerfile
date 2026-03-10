@@ -1,7 +1,5 @@
 # Multi-stage Dockerfile for vLLM Semantic Router
 # Cross-compiles arm64 on BUILDPLATFORM (amd64) to avoid slow QEMU emulation.
-# The final image always includes candle-binding and also stages onnx-binding
-# artifacts when building amd64 so both bindings are present in the container.
 # NOTE: TARGETARCH and BUILDPLATFORM are automatic BuildKit variables.
 # Do NOT set defaults — they would override BuildKit's platform detection.
 ARG TARGETARCH
@@ -193,50 +191,6 @@ RUN mkdir -p /build/out && \
     echo "=== Built nlp-binding library ===" && \
     ls -la /build/out/
 
-# Stage 1r: Build Rust onnx-binding for amd64 and stage the shared libraries.
-# arm64 builds skip this stage because the bundled ONNX Runtime binaries used by
-# this binding are only staged in the amd64 image variant today.
-FROM --platform=$BUILDPLATFORM rustlang/rust:nightly AS onnx-builder
-ARG TARGETARCH
-ARG GIT_SSL_NO_VERIFY
-WORKDIR /build
-ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
-
-RUN mkdir -p /build/out && \
-    if [ "$TARGETARCH" != "arm64" ]; then \
-      apt-get update && apt-get install -y \
-        build-essential \
-        pkg-config \
-        libssl-dev && \
-      rm -rf /var/lib/apt/lists/*; \
-    fi
-
-COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
-
-RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
-    if [ "$TARGETARCH" = "arm64" ]; then \
-      echo "Skipping onnx-binding dependency build for arm64."; \
-    else \
-      mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
-      OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --no-default-features && \
-      rm -rf src; \
-    fi
-
-COPY onnx-binding/src/ ./src/
-
-RUN if [ "$TARGETARCH" = "arm64" ]; then \
-      echo "Skipping onnx-binding library build for arm64."; \
-    else \
-      find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
-      find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
-      OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --no-default-features && \
-      cp target/release/libonnx_semantic_router.so /build/out/ && \
-      (cp target/release/libonnx_semantic_router.a /build/out/ 2>/dev/null || true) && \
-      (find target -name "libonnxruntime*.so*" -exec cp {} /build/out/ \; 2>/dev/null || true) && \
-      echo "=== Built onnx-binding library ===" && \
-      ls -la /build/out/; \
-    fi
-
 # Stage 1c-wasm: Build DSL compiler to WebAssembly for the dashboard
 # The WASM target only uses pkg/dsl (pure Go), but go.mod has replace directives
 # pointing to ../../candle-binding etc. We create stub go.mod files so go mod
@@ -298,14 +252,13 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
       CGO_ENABLED=1 GOOS=linux go build -buildvcs=false -ldflags="-w -s" -o /app/dashboard-backend main.go; \
     fi
 
-# Stage 2: Build Go semantic router binaries
+# Stage 2: Build Go semantic router
 FROM --platform=$BUILDPLATFORM golang:1.24 AS go-builder
 ARG TARGETARCH
 WORKDIR /build
 
 # Copy Rust libraries from all builders
 COPY --from=rust-builder /build/out/ /usr/local/lib/
-COPY --from=onnx-builder /build/out/ /usr/local/lib/
 COPY --from=ml-builder /build/out/ /usr/local/lib/
 COPY --from=nlp-builder /build/out/ /usr/local/lib/
 
@@ -313,10 +266,6 @@ ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
 COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
-
-# Copy onnx-binding Go files (needed for go.onnx.mod replace directive)
-COPY onnx-binding/go.mod onnx-binding/semantic-router.go /build/../onnx-binding/
-COPY --from=onnx-builder /build/out/ /build/../onnx-binding/target/release/
 
 # Copy ml-binding Go files (needed for go.mod replace directive)
 # Also copy the built library to ml-binding/target/release/ for CGO linking
@@ -327,18 +276,13 @@ COPY --from=ml-builder /build/out/ /build/../ml-binding/target/release/
 COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/
 COPY --from=nlp-builder /build/out/ /build/../nlp-binding/target/release/
 
-# Copy Go module files into the same module root used by the later `go build`
-# steps so local `replace ../../...` directives resolve to the staged bindings.
-COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/go.onnx.mod src/semantic-router/go.onnx.sum ./
-RUN go mod download && go mod download -modfile=go.onnx.mod
-
-# Copy Go source after module download for better layer caching.
+# Copy Go source (go.mod has local replace directives, so go mod download
+# requires candle-binding and ml-binding to be present first)
 COPY src/semantic-router/ .
 
-# Build router-candle (all platforms). We also keep a router alias so existing
-# in-container paths continue to resolve to the candle binary by default.
-RUN mkdir -p /build/bin && \
-    if [ "$TARGETARCH" = "arm64" ]; then \
+# Build router (cross-compile for arm64 when TARGETARCH=arm64)
+# arm64: need libssl-dev:arm64 because libcandle_semantic_router.so dynamically links OpenSSL
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
       dpkg --add-architecture arm64 && \
       apt-get update && apt-get install -y \
         gcc-aarch64-linux-gnu \
@@ -348,20 +292,9 @@ RUN mkdir -p /build/bin && \
       CC=aarch64-linux-gnu-gcc \
       CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
       CGO_LDFLAGS="-L/usr/lib/aarch64-linux-gnu -lssl -lcrypto" \
-      go build -buildvcs=false -ldflags="-w -s" -o /build/bin/router-candle cmd/main.go; \
+      go build -buildvcs=false -ldflags="-w -s" -o router cmd/main.go; \
     else \
-      CGO_ENABLED=1 go build -buildvcs=false -ldflags="-w -s" -o /build/bin/router-candle cmd/main.go; \
-    fi && \
-    cp /build/bin/router-candle /build/bin/router
-
-# Build router-onnx when the image variant stages onnx-binding artifacts.
-RUN if [ "$TARGETARCH" = "arm64" ]; then \
-      echo "Skipping ONNX router build on arm64."; \
-    else \
-      CGO_ENABLED=1 \
-      CGO_CFLAGS="-I/build/../onnx-binding" \
-      CGO_LDFLAGS="-L/build/../onnx-binding/target/release -L/build/../ml-binding/target/release -L/build/../nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
-      go build -buildvcs=false -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o /build/bin/router-onnx cmd/main.go; \
+      CGO_ENABLED=1 go build -buildvcs=false -ldflags="-w -s" -o router cmd/main.go; \
     fi
 
 # Stage 3: Get Envoy binary
@@ -382,11 +315,9 @@ RUN set -eux; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
-# Copy binaries from builders. onnx-builder contributes amd64 ONNX shared
-# libraries; its output directory is intentionally empty in arm64 images.
-COPY --from=go-builder /build/bin/ /usr/local/bin/
+# Copy binaries from builders (rust artifacts from normalized /build/out/)
+COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
-COPY --from=onnx-builder /build/out/ /usr/local/lib/
 COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
 COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
 COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
