@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+} from 'react-router-dom'
 import Layout from './components/Layout'
 import LandingPage from './pages/LandingPage'
 import MonitoringPage from './pages/MonitoringPage'
@@ -20,8 +28,10 @@ import OpenClawPage from './pages/OpenClawPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { SetupProvider, useSetup } from './contexts/SetupContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import SetupWizardPage from './pages/SetupWizardPage'
 import OnboardingGuide from './components/OnboardingGuide'
+import LoginPage from './pages/LoginPage'
 
 const ConfigSectionRoute: React.FC<{
   configSection: ConfigSection
@@ -104,6 +114,43 @@ const SetupStatusPage: React.FC<{
   </div>
 )
 
+const AuthGate: React.FC = () => {
+  const { isAuthenticated, isLoading } = useAuth()
+  const location = useLocation()
+
+  if (isLoading) {
+    return (
+      <SetupStatusPage
+        title="Authenticating"
+        description="Checking session state..."
+        actionLabel="Retry"
+        onAction={() => {
+          window.location.reload()
+        }}
+      />
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />
+  }
+
+  return <Outlet />
+}
+
+const AuthenticatedShell: React.FC = () => {
+  const { setupState } = useSetup()
+  const location = useLocation()
+  const isSetupMode = setupState?.setupMode ?? false
+
+  return (
+    <>
+      <Outlet />
+      {!isSetupMode && location.pathname !== '/setup' && <OnboardingGuide />}
+    </>
+  )
+}
+
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
   const [configSection, setConfigSection] = useState<ConfigSection>('models')
@@ -140,13 +187,10 @@ const AppRouter: React.FC = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        {setupMode ? (
-          <>
-            <Route path="/setup" element={<SetupWizardPage />} />
-            <Route path="*" element={<Navigate to="/setup" replace />} />
-          </>
-        ) : (
-          <>
+        <Route path="/login" element={<LoginPage />} />
+
+        <Route element={<AuthGate />}>
+          <Route element={<AuthenticatedShell />}>
             <Route
               path="/dashboard"
               element={
@@ -311,11 +355,13 @@ const AppRouter: React.FC = () => {
               }
             />
             <Route path="/openclaw" element={<Navigate to="/clawos" replace />} />
-            <Route path="/setup" element={<Navigate to="/dashboard" replace />} />
-          </>
-        )}
+          </Route>
+
+          <Route path="/setup" element={setupMode ? <SetupWizardPage /> : <Navigate to="/dashboard" replace />} />
+
+          {setupMode ? <Route path="*" element={<Navigate to="/setup" replace />} /> : null}
+        </Route>
       </Routes>
-      {!setupMode && <OnboardingGuide />}
     </BrowserRouter>
   )
 }
@@ -382,9 +428,11 @@ const App: React.FC = () => {
 
   return (
     <ReadonlyProvider>
-      <SetupProvider>
-        <AppRouter />
-      </SetupProvider>
+      <AuthProvider>
+        <SetupProvider>
+          <AppRouter />
+        </SetupProvider>
+      </AuthProvider>
     </ReadonlyProvider>
   )
 }
