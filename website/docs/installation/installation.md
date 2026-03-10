@@ -19,7 +19,37 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 
 ## Quick Start
 
-### 1. Install vLLM Semantic Router
+### 1. Use the one-line installer (macOS/Linux)
+
+```bash
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+```
+
+The installer:
+
+- Detects Python 3.10 or newer
+- Installs `vllm-sr` into `~/.local/share/vllm-sr`
+- Writes a launcher to `~/.local/bin/vllm-sr`
+- Prepares Docker or Podman for `vllm-sr serve` unless you opt out
+
+Useful variants:
+
+```bash
+# Install only the CLI
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli
+
+# Pin local serve mode to Podman
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime podman
+
+# Skip runtime bootstrap and keep only userland install steps
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
+```
+
+If `~/.local/bin` is not already on your `PATH`, the installer prints the export line to add it.
+
+Windows users should use the manual PyPI flow below.
+
+### 2. Manual PyPI install
 
 ```bash
 # Create a virtual environment (recommended)
@@ -36,7 +66,7 @@ Verify installation:
 vllm-sr --version
 ```
 
-### 2. Start `vllm-sr`
+### 3. Start `vllm-sr`
 
 ```bash
 vllm-sr serve
@@ -52,7 +82,7 @@ The router will:
 - Start the semantic router service after activation
 - Enable metrics on port 9190
 
-### 3. Open the Dashboard
+### 4. Open the Dashboard
 
 Open [http://localhost:8700](http://localhost:8700) in your browser.
 
@@ -64,7 +94,7 @@ For first-run setup:
 
 After activation, `config.yaml` is written to the current directory and the router exits setup mode.
 
-### 4. Test the Router
+### 5. Test the Router
 
 ```bash
 curl http://localhost:8888/v1/chat/completions \
@@ -75,7 +105,7 @@ curl http://localhost:8888/v1/chat/completions \
   }'
 ```
 
-## 5. Optional: open the dashboard from the CLI
+### 6. Optional: open the dashboard from the CLI
 
 ```bash
 vllm-sr dashboard

@@ -18,6 +18,14 @@ interface PillLinkProps {
   to?: string
 }
 
+interface PillButtonProps {
+  children: React.ReactNode
+  className?: string
+  muted?: boolean
+  onClick?: React.MouseEventHandler<HTMLButtonElement>
+  type?: 'button' | 'reset' | 'submit'
+}
+
 interface PageIntroProps {
   actions?: React.ReactNode
   className?: string
@@ -60,6 +68,24 @@ export function PillLink({
     >
       {children}
     </Link>
+  )
+}
+
+export function PillButton({
+  children,
+  className,
+  muted = false,
+  onClick,
+  type = 'button',
+}: PillButtonProps): JSX.Element {
+  return (
+    <button
+      className={clsx(styles.pill, styles.pillButton, muted && styles.pillMuted, className)}
+      onClick={onClick}
+      type={type}
+    >
+      {children}
+    </button>
   )
 }
 
