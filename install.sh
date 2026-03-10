@@ -44,15 +44,9 @@ print_logo() {
 
   init_colors
   printf '\n'
-  printf '%b\n' "${COLOR_ORANGE}##${COLOR_WHITE}          ${COLOR_BLUE}##  ${COLOR_WHITE}##        ##        ##      ##    ######    ########${COLOR_RESET}"
-  printf '%b\n' "${COLOR_ORANGE} ##${COLOR_WHITE}        ${COLOR_BLUE}##   ${COLOR_WHITE}##        ##        ###    ###   ##    ##   ##    ##${COLOR_RESET}"
-  printf '%b\n' "${COLOR_ORANGE}  ##${COLOR_WHITE}      ${COLOR_BLUE}##    ${COLOR_WHITE}##        ##        ####  ####   ##         ##    ##${COLOR_RESET}"
-  printf '%b\n' "${COLOR_ORANGE}   ##${COLOR_WHITE}    ${COLOR_BLUE}##     ${COLOR_WHITE}##        ##        ## #### ##    ####     ########${COLOR_RESET}"
-  printf '%b\n' "${COLOR_ORANGE}    ##${COLOR_WHITE}  ${COLOR_BLUE}##      ${COLOR_WHITE}##        ##        ##  ##  ##       ##    ##  ##${COLOR_RESET}"
-  printf '%b\n' "${COLOR_ORANGE}     ##${COLOR_BLUE}##       ${COLOR_WHITE}##        ##        ##      ##   ##    ##   ##   ##${COLOR_RESET}"
-  printf '%b\n' "${COLOR_ORANGE}      ${COLOR_BLUE}##        ${COLOR_WHITE}########  ########  ##      ##    ######    ##    ##${COLOR_RESET}"
-  printf '%b\n' "${COLOR_MUTED}vLLM Semantic Router local installer${COLOR_RESET}"
-  printf '%b\n' "${COLOR_MUTED}One command for the CLI, runtime, and first local bring-up.${COLOR_RESET}"
+  printf '%b\n' "${COLOR_ORANGE}v${COLOR_BLUE}LLM${COLOR_WHITE} Semantic Router${COLOR_RESET} ${COLOR_MUTED}installer${COLOR_RESET}"
+  printf '%b\n' "${COLOR_MUTED}CLI + runtime bootstrap + first local dashboard session${COLOR_RESET}"
+  printf '%b\n' "${COLOR_MUTED}------------------------------------------------------------------------${COLOR_RESET}"
   printf '\n'
 }
 
