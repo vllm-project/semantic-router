@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"strconv"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,6 +11,12 @@ import (
 // Config holds all application configuration
 type Config struct {
 	Port          string
+	AuthDBPath string
+	JWTSecret   string
+	JWTExpiryHours int
+	BootstrapAdminEmail string
+	BootstrapAdminPassword string
+	BootstrapAdminName string
 	StaticDir     string
 	ConfigFile    string
 	AbsConfigPath string
@@ -103,6 +110,15 @@ func LoadConfig() (*Config, error) {
 	mlTrainingDir := flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/model_selection/ml_model_selection")
 	mlServiceURL := flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
 
+
+	// Authentication configuration
+	authDBPath := flag.String("auth-db", env("DASHBOARD_AUTH_DB_PATH", "./data/auth.db"), "auth database path")
+	jwtSecret := flag.String("auth-jwt-secret", env("DASHBOARD_JWT_SECRET", ""), "JWT signing secret")
+	jwtTTL := flag.String("auth-jwt-expiry-hours", env("DASHBOARD_JWT_EXPIRY_HOURS", "12"), "JWT expiry in hours")
+	bootstrapEmail := flag.String("bootstrap-admin-email", env("DASHBOARD_ADMIN_EMAIL", ""), "bootstrap admin email")
+	bootstrapPassword := flag.String("bootstrap-admin-password", env("DASHBOARD_ADMIN_PASSWORD", ""), "bootstrap admin password")
+	bootstrapName := flag.String("bootstrap-admin-name", env("DASHBOARD_ADMIN_NAME", ""), "bootstrap admin name")
+
 	// OpenClaw configuration
 	openclawEnabled := flag.Bool("openclaw", env("OPENCLAW_ENABLED", "true") == "true", "enable OpenClaw agent provisioning")
 	openclawURL := flag.String("openclaw-url", env("OPENCLAW_URL", "http://localhost:18788"), "OpenClaw gateway URL")
@@ -121,6 +137,11 @@ func LoadConfig() (*Config, error) {
 	cfg.JaegerURL = *jaegerURL
 	cfg.EnvoyURL = *envoyURL
 	cfg.ReadonlyMode = *readonlyMode
+	cfg.AuthDBPath = *authDBPath
+	cfg.JWTSecret = *jwtSecret
+	cfg.BootstrapAdminEmail = *bootstrapEmail
+	cfg.BootstrapAdminPassword = *bootstrapPassword
+	cfg.BootstrapAdminName = *bootstrapName
 	cfg.SetupMode = *setupMode
 	cfg.Platform = *platform
 	cfg.EvaluationEnabled = *evaluationEnabled
@@ -132,6 +153,13 @@ func LoadConfig() (*Config, error) {
 	cfg.MLPipelineDataDir = *mlPipelineDataDir
 	cfg.MLTrainingDir = *mlTrainingDir
 	cfg.MLServiceURL = *mlServiceURL
+	{
+		ttl, err := strconv.Atoi(*jwtTTL)
+		if err != nil {
+			return nil, err
+		}
+		cfg.JWTExpiryHours = ttl
+	}
 	cfg.OpenClawEnabled = *openclawEnabled
 	cfg.OpenClawURL = *openclawURL
 	cfg.OpenClawDataDir = *openclawDataDir

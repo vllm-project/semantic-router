@@ -5,6 +5,8 @@ go 1.24.1
 require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/golang-jwt/jwt/v5 v5.2.2
+	golang.org/x/crypto v0.30.0
 	github.com/mark3labs/mcp-go v0.43.2
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/vllm-project/semantic-router/src/semantic-router v0.0.0

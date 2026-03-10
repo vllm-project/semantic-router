@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
+	auth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
@@ -177,6 +179,18 @@ func serviceNotConfiguredHTML(serviceName, envVar, exampleValue string) string {
 // Setup configures all routes and returns the configured mux
 func Setup(cfg *config.Config) *http.ServeMux {
 	mux := http.NewServeMux()
+	var authSvc *auth.Service
+	if store, err := auth.NewStore(cfg.AuthDBPath); err != nil {
+		log.Printf("failed to init auth store: %v", err)
+	} else {
+		authSvc = auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
+		if err := authSvc.EnsureBootstrapAdmin(context.Background(), cfg.BootstrapAdminEmail, cfg.BootstrapAdminPassword, cfg.BootstrapAdminName); err != nil {
+			log.Printf("failed to ensure bootstrap admin: %v", err)
+		}
+		authRoutes := auth.AuthRoutes(authSvc)
+		mux.Handle("/api/auth/", authRoutes)
+		auth.RegisterAdminRoutes(mux, authSvc)
+	}
 
 	// Health check endpoint
 	mux.HandleFunc("/healthz", handlers.HealthCheck)
@@ -727,5 +741,11 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	// Static frontend - MUST be registered last
 	mux.Handle("/", handlers.StaticFileServer(cfg.StaticDir))
 
-	return mux
+	wrappedMux := http.NewServeMux()
+	if authSvc != nil {
+		wrappedMux.Handle("/", auth.AuthenticateRequest(authSvc)(mux))
+		return wrappedMux
+	}
+	wrappedMux.Handle("/", mux)
+	return wrappedMux
 }
