@@ -233,7 +233,7 @@ observability:
       rate: 1.0  # Sampling rate for probabilistic (0.0-1.0)
     resource:
       service_name: "vllm-sr"
-      service_version: "v0.1.0"
+      service_version: "v0.2.0"
       deployment_environment: "development"
 
 # Looper Configuration

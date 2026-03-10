@@ -1,10 +1,30 @@
+import re
+import sys
 from pathlib import Path
 
 import yaml
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from cli.bootstrap import BootstrapResult
 from cli.commands import runtime as runtime_commands
 from cli.main import main
 from click.testing import CliRunner
+
+_PYPROJECT_VERSION_PATTERN = re.compile(
+    r'^version = "(?P<version>[^"]+)"$', re.MULTILINE
+)
+
+
+def _project_version() -> str:
+    pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    match = _PYPROJECT_VERSION_PATTERN.search(
+        pyproject_path.read_text(encoding="utf-8")
+    )
+    assert match is not None
+    return match.group("version")
 
 
 def test_cli_help_lists_registered_commands():
@@ -24,6 +44,16 @@ def test_cli_help_lists_registered_commands():
         "dashboard",
     ):
         assert command_name in result.output
+
+
+def test_cli_version_matches_project_metadata():
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["--version"])
+    expected_version = _project_version()
+
+    assert result.exit_code == 0
+    assert result.output.strip() == f"vllm-sr version: {expected_version}"
 
 
 def test_inject_algorithm_into_config_updates_all_decisions(tmp_path: Path):
