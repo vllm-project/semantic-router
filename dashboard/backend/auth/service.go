@@ -115,7 +115,7 @@ func (s *Service) EnsureBootstrapAdmin(ctx context.Context, email, password, nam
 	if strings.TrimSpace(email) == "" || strings.TrimSpace(password) == "" {
 		return nil
 	}
-	n, _, _, _, _, _, _, _, err := s.store.GetUserByEmail(ctx, email)
+	n, _, _, _, _, _, _, _, _, err := s.store.GetUserByEmail(ctx, email)
 	if err == nil && n != "" {
 		return nil
 	}
