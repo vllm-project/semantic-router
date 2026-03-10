@@ -46,10 +46,12 @@ print_logo() {
   init_colors
 
   printf '\n'
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}       █     █     █▄   ▄█   ▄▄▄▄    █▄▄▄${COLOR_RESET}"
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE} ▄▄ ▄█ █     █     █ ▀▄▀ █  █        █  █${COLOR_RESET}"
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}  █▄█▀ █     █     █     █   ▀▀▄     █▄▄▀${COLOR_RESET}"
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀  ▄▄▄▄▀    █  ▀${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}       █     █     █▄   ▄█${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE} ▄▄ ▄█ █     █     █ ▀▄▀ █${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}  █▄█▀ █     █     █     █${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}  Semantic Router${COLOR_RESET}"
+  printf '%b\n' "  ${COLOR_MUTED}  local installer${COLOR_RESET}"
   printf '\n'
 }
 
