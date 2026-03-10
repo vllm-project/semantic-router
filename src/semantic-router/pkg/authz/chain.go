@@ -85,14 +85,12 @@ func (r *CredentialResolver) KeyForProvider(provider LLMProvider, model string, 
 		return "", nil
 	}
 
-	err := fmt.Errorf("no credential found for provider %s (model=%s) after trying [%s] — all providers exhausted. "+
-		"Check: (1) your auth backend (Authorino, Envoy Gateway, etc.) is running and injecting the expected headers, "+
+	logging.Errorf("No credential found for provider %s (model=%s) after trying [%s] — all providers exhausted. "+
+		"Check: (1) your auth backend is running and injecting the expected headers, "+
 		"(2) header names in authz.providers[].headers match what your auth backend injects, "+
-		"(3) model_config has access_key set if using static-config fallback. "+
-		"Set authz.fail_open=true only if this backend does not require auth",
+		"(3) model_config has access_key set if using static-config fallback",
 		provider, model, triedStr)
-	logging.Errorf("%v", err)
-	return "", err
+	return "", fmt.Errorf("authentication failed")
 }
 
 // HeadersToStrip returns the union of all headers that providers want stripped
