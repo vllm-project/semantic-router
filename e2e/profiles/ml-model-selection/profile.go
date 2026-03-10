@@ -16,8 +16,8 @@ limitations under the License.
 
 // Package mlmodelselection provides the e2e test profile for ML-based model selection.
 // This profile demonstrates ML-based model selection using pretrained models downloaded
-// from HuggingFace. Supports KNN, KMeans, and SVM algorithms aligned with FusionFactory
-// and Avengers-Pro papers.
+// from HuggingFace. Supports KNN, KMeans, SVM, and MLP algorithms aligned with FusionFactory
+// and Avengers-Pro papers. MLP uses Candle for GPU-accelerated inference (CUDA/Metal).
 package mlmodelselection
 
 import (
@@ -63,6 +63,7 @@ This profile demonstrates end-to-end ML-based model selection using:
 - KNN (K-Nearest Neighbors) - Quality-weighted voting among similar queries
 - KMeans - Cluster-based routing with efficiency optimization (Avengers-Pro)
 - SVM (Support Vector Machine) - RBF kernel decision boundaries
+- MLP (Multi-Layer Perceptron) - GPU-accelerated neural network (CUDA/Metal)
 
 Reference Papers:
 - FusionFactory (arXiv:2507.10540) - Query-level fusion via LLM routers
@@ -148,9 +149,10 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 	p.log("✅ ML Model Selection environment setup complete!")
 	p.log("")
 	p.log("Deployed components:")
-	p.log("  • ML Models (KNN, KMeans, SVM) downloaded from HuggingFace and mounted")
+	p.log("  • ML Models (KNN, KMeans, SVM, MLP) downloaded from HuggingFace and mounted")
 	p.log("  • Mock LLM service (receives routed requests)")
 	p.log("  • Semantic Router with ML-based model selectors")
+	p.log("  • MLP uses Candle for GPU acceleration (CUDA/Metal)")
 	p.log("")
 
 	return nil
@@ -321,7 +323,7 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 	// Source directory where trained models should exist (also used as mount source)
 	// Using .cache/ml-models to keep models outside of source tree
 	sourceDir := ".cache/ml-models"
-	trainingDir := "src/training/ml_model_selection"
+	trainingDir := "src/training/model_selection/ml_model_selection"
 
 	// Get absolute path for the source directory (needed for Kind mount)
 	absSourceDir, err := filepath.Abs(sourceDir)
@@ -330,7 +332,7 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 	}
 	p.log("ML models directory: %s", absSourceDir)
 
-	modelFiles := []string{"knn_model.json", "kmeans_model.json", "svm_model.json"}
+	modelFiles := []string{"knn_model.json", "kmeans_model.json", "svm_model.json", "mlp_model.json"}
 
 	// Check if models exist in source
 	modelsExist := true
@@ -364,7 +366,7 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 		os.MkdirAll(sourceDir, 0755)
 
 		downloadCmd := exec.CommandContext(ctx, "python3", "download_model.py",
-			"--output-dir", "../../../.cache/ml-models",
+			"--output-dir", "../../../../.cache/ml-models",
 			"--repo-id", "abdallah1008/semantic-router-ml-models",
 		)
 		downloadCmd.Dir = trainingDir
@@ -374,7 +376,7 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 		if err := downloadCmd.Run(); err != nil {
 			// Try with python if python3 fails
 			downloadCmd = exec.CommandContext(ctx, "python", "download_model.py",
-				"--output-dir", "../../../.cache/ml-models",
+				"--output-dir", "../../../../.cache/ml-models",
 				"--repo-id", "abdallah1008/semantic-router-ml-models",
 			)
 			downloadCmd.Dir = trainingDir

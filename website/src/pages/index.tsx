@@ -1,154 +1,398 @@
 import React from 'react'
-import clsx from 'clsx'
-import Link from '@docusaurus/Link'
-import Translate from '@docusaurus/Translate'
-import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import Layout from '@theme/Layout'
-import HomepageFeatures from '@site/src/components/HomepageFeatures'
-import ChainOfThoughtTerminal from '@site/src/components/ChainOfThoughtTerminal'
-import NeuralNetworkBackground from '@site/src/components/NeuralNetworkBackground'
-import AIChipAnimation from '@site/src/components/AIChipAnimation'
+import Translate, { translate } from '@docusaurus/Translate'
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
+import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
+import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import TeamCarousel from '@site/src/components/TeamCarousel'
-
+import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
+import CapabilityGlyph, { type CapabilityGlyphKind } from '@site/src/components/site/CapabilityGlyph'
+import DitherField from '@site/src/components/site/DitherField'
+import { PageIntro, PillLink, SectionLabel, StatStrip } from '@site/src/components/site/Chrome'
 import styles from './index.module.css'
 
-const HomepageHeader: React.FC = () => {
+const heroStats = [
+  {
+    label: translate({ id: 'homepage.stats.signals.label', message: 'Signals' }),
+    value: '13',
+    description: translate({
+      id: 'homepage.stats.signals.description',
+      message: '13 signal families spanning intent, safety, modality, context, and preference.',
+    }),
+  },
+  {
+    label: translate({ id: 'homepage.stats.algorithms.label', message: 'Selection' }),
+    value: '12',
+    description: translate({
+      id: 'homepage.stats.algorithms.description',
+      message: '12 selectors across symbolic policy, latency heuristics, reinforcement learning, and ML routing.',
+    }),
+  },
+  {
+    label: translate({ id: 'homepage.stats.modes.label', message: 'Surfaces' }),
+    value: '03',
+    description: translate({
+      id: 'homepage.stats.modes.description',
+      message: 'One architecture across cpu-local, amd-local, and ci-k8s.',
+    }),
+  },
+]
+
+interface CapabilityCard {
+  kind: CapabilityGlyphKind
+  text: string
+  title: string
+}
+
+const capabilityCards: CapabilityCard[] = [
+  {
+    kind: 'signal',
+    title: translate({ id: 'homepage.capabilities.signal.title', message: 'Signal extraction' }),
+    text: translate({
+      id: 'homepage.capabilities.signal.text',
+      message: 'Encoder signals turn raw requests into legible semantic state.',
+    }),
+  },
+  {
+    kind: 'decision',
+    title: translate({ id: 'homepage.capabilities.decision.title', message: 'Decision engine' }),
+    text: translate({
+      id: 'homepage.capabilities.decision.text',
+      message: 'Neural signals meet symbolic rules in auditable routing logic.',
+    }),
+  },
+  {
+    kind: 'plugin',
+    title: translate({ id: 'homepage.capabilities.plugins.title', message: 'Plugin chain' }),
+    text: translate({
+      id: 'homepage.capabilities.plugins.text',
+      message: 'Cache, safety, rewrite, and tracing attach as composable behaviors.',
+    }),
+  },
+  {
+    kind: 'language',
+    title: translate({
+      id: 'homepage.capabilities.language.title',
+      message: 'Intent-to-policy compile',
+    }),
+    text: translate({
+      id: 'homepage.capabilities.language.text',
+      message: 'Natural language intent compiles into neural-symbolic policy before execution begins.',
+    }),
+  },
+  {
+    kind: 'selection',
+    title: translate({ id: 'homepage.capabilities.research.title', message: 'Research-grade model selection' }),
+    text: translate({
+      id: 'homepage.capabilities.research.text',
+      message: 'Selection stays measurable enough for papers, benchmarks, and production tuning.',
+    }),
+  },
+  {
+    kind: 'docs',
+    title: translate({ id: 'homepage.capabilities.docs.title', message: 'System docs' }),
+    text: translate({
+      id: 'homepage.capabilities.docs.text',
+      message: 'Docs, papers, and product routes read as one system, not scattered collateral.',
+    }),
+  },
+]
+
+const encoderTracks = [
+  {
+    label: 'SEQ_CLS',
+    text: translate({
+      id: 'homepage.aiTech.track.sequence',
+      message: 'Sequence classification for domain, jailbreak, fact-check, and feedback routing.',
+    }),
+  },
+  {
+    label: 'TOKEN',
+    text: translate({
+      id: 'homepage.aiTech.track.token',
+      message: 'Token labeling for PII and safety-sensitive spans that need localized intervention.',
+    }),
+  },
+  {
+    label: 'EMBED',
+    text: translate({
+      id: 'homepage.aiTech.track.embedding',
+      message: 'Embedding and rerank paths for semantic cache, similarity search, and candidate scoring.',
+    }),
+  },
+]
+
+const encoderSpotlightCard = {
+  marker: 'MOD',
+  title: translate({ id: 'homepage.aiTech.cap.multiModality', message: 'Multi-Modality' }),
+  text: translate({
+    id: 'homepage.aiTech.cap.multiModality.desc',
+    message: 'Detect and route text, image and audio inputs to the right modality-capable model.',
+  }),
+}
+
+const encoderCards = [
+  {
+    marker: 'BIE',
+    title: translate({ id: 'homepage.aiTech.cap.biEncoder', message: 'Bi-Encoder Embeddings' }),
+    text: translate({
+      id: 'homepage.aiTech.cap.biEncoder.desc',
+      message: 'Independently encode queries and candidates into dense vectors for similarity search and semantic caching.',
+    }),
+  },
+  {
+    marker: 'XCE',
+    title: translate({ id: 'homepage.aiTech.cap.crossEncoder', message: 'Cross-Encoder Learning' }),
+    text: translate({
+      id: 'homepage.aiTech.cap.crossEncoder.desc',
+      message: 'Joint cross-attention scoring of query-candidate pairs for high-precision reranking.',
+    }),
+  },
+  {
+    marker: 'CLS',
+    title: translate({ id: 'homepage.aiTech.cap.classification', message: 'Classification' }),
+    text: translate({
+      id: 'homepage.aiTech.cap.classification.desc',
+      message: 'Domain, jailbreak, PII and fact-check classification across 14 MMLU categories via ModernBERT with LoRA.',
+    }),
+  },
+  {
+    marker: 'ATT',
+    title: translate({ id: 'homepage.aiTech.cap.attention', message: 'Full Attention' }),
+    text: translate({
+      id: 'homepage.aiTech.cap.attention.desc',
+      message: 'Bidirectional attention across tokens and sentences, with full context instead of causal masking.',
+    }),
+  },
+  {
+    marker: '2DM',
+    title: translate({ id: 'homepage.aiTech.cap.2dmse', message: '2DMSE' }),
+    text: translate({
+      id: 'homepage.aiTech.cap.2dmse.desc',
+      message: 'Adjust embedding layers and dimensions at inference time to trade compute for accuracy on the fly.',
+    }),
+  },
+  {
+    marker: 'MRL',
+    title: translate({ id: 'homepage.aiTech.cap.mrl', message: 'MRL' }),
+    text: translate({
+      id: 'homepage.aiTech.cap.mrl.desc',
+      message: 'Truncate embedding vectors to any dimension without retraining to balance accuracy and speed per request.',
+    }),
+  },
+]
+
+function DitherHero(): JSX.Element {
   return (
-    <header className={clsx('hero hero--primary', styles.heroBanner)}>
-      <NeuralNetworkBackground />
-      <div className="container">
-        <div className={styles.heroContent}>
-          <div className={styles.heroLeft}>
-            <div className={styles.heroTitle}>
-              <img
-                src="/img/vllm.png"
-                alt="vLLM Logo"
-                className={styles.vllmLogo}
-              />
-              <h1 className="hero__title">
-                <span className={styles.aiGlow}>
-                  <Translate id="homepage.hero.aiPowered">AI-Powered</Translate>
-                </span>
-                {' '}
-                vLLM Semantic Router
-              </h1>
-            </div>
-            <p className="hero__subtitle">
-              <strong>
-                <Translate id="homepage.hero.systemLevel">System Level</Translate>
-              </strong>
-              {' '}
-              <Translate id="homepage.hero.intelligentRouter">Intelligent Router for</Translate>
-              {' '}
-              <strong>
-                <Translate id="homepage.hero.mixtureOfModels">Mixture-of-Models</Translate>
-              </strong>
-              {' '}
-              🧠
-              <span className={styles.techBadges}>
-                <span className={styles.techBadge}>
-                  🧬
-                  <Translate id="homepage.hero.badge.neural"> Neural Networks</Translate>
-                </span>
-                <span className={styles.techBadge}>
-                  ⚡
-                  <Translate id="homepage.hero.badge.llm"> LLM Routing</Translate>
-                </span>
-                <span className={styles.techBadge}>
-                  ♻️
-                  <Translate id="homepage.hero.badge.economics"> Per-token Unit Economics</Translate>
-                </span>
-              </span>
+    <header className={styles.hero}>
+      <DitherField className={styles.heroNoise} />
+      <div className="site-shell-container">
+        <div className={styles.heroGrid}>
+          <div className={styles.heroStack}>
+            <PageIntro
+              label={<Translate id="homepage.hero.label">System-level intelligence</Translate>}
+              title={(
+                <>
+                  <Translate id="homepage.hero.line1">Signal</Translate>
+                  <br />
+                  <Translate id="homepage.hero.line2">before scale</Translate>
+                </>
+              )}
+              description={(
+                <Translate id="homepage.hero.description.foundation">
+                  Built on Shannon signals, entropy folding, and neural-symbolic routing.
+                </Translate>
+              )}
+              actions={(
+                <>
+                  <PillLink
+                    href="https://play.vllm-semantic-router.com/"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <Translate id="homepage.hero.publicBeta">Public Beta</Translate>
+                  </PillLink>
+                  <PillLink to="/white-paper" muted>
+                    <Translate id="homepage.hero.secondaryCta">Open white paper</Translate>
+                  </PillLink>
+                </>
+              )}
+            />
+
+            <p className={styles.heroManifesto}>
+              <Translate id="homepage.hero.manifesto">
+                A router should feel like a system brain: encoder-guided, entropy-aware, and
+                ruthlessly clear.
+              </Translate>
             </p>
           </div>
-          <div className={styles.heroRight}>
-            <ChainOfThoughtTerminal />
-          </div>
-        </div>
-        <div className={styles.buttons}>
-          <Link
-            className="button button--secondary button--lg"
-            to="/docs/installation/"
-          >
-            <Translate id="homepage.hero.getStarted">Get Started ⏱️</Translate>
-          </Link>
-          <a
-            className="button button--outline button--lg"
-            href="https://play.vllm-semantic-router.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Translate id="homepage.hero.publicBeta">Public Beta ☁️</Translate>
-          </a>
         </div>
       </div>
     </header>
   )
 }
 
-const AITechShowcase: React.FC = () => {
+function CapabilitySection(): JSX.Element {
   return (
-    <section className={styles.aiTechSection}>
-      <div className="container">
-        <div className={styles.aiTechContainer}>
-          <div className={styles.aiTechLeft}>
-            <h2 className={styles.aiTechTitle}>
-              🧠
-              {' '}
-              <Translate id="homepage.aiTech.title">Neural Processing Architecture</Translate>
+    <section className={styles.capabilitySection}>
+      <div className="site-shell-container">
+        <div className={styles.sectionHeading}>
+          <SectionLabel>
+            <Translate id="homepage.capabilities.label">Core logic</Translate>
+          </SectionLabel>
+          <div>
+            <h2>
+              <Translate id="homepage.capabilities.heading">
+                Neural-symbolic routing, kept legible.
+              </Translate>
             </h2>
-            <p className={styles.aiTechDescription}>
-              <Translate id="homepage.aiTech.description">
-                Powered by cutting-edge AI technologies including Encoder Only Models, SLMs and LLMs,
-                and advanced semantic understanding for intelligent
-                model routing and selection.
+            <p>
+              <Translate id="homepage.capabilities.copy">
+                Encoder priors, Shannon mapping, entropy folding, and model selection stay visible
+                from research prototypes to production paths.
               </Translate>
             </p>
-            <div className={styles.aiFeatures}>
-              <div className={styles.aiFeature}>
-                <span className={styles.aiFeatureIcon}>🤖</span>
-                <span><Translate id="homepage.aiTech.feature.slm">Small Language Models</Translate></span>
+          </div>
+        </div>
+
+        <div className={styles.capabilityGrid}>
+          {capabilityCards.map(card => (
+            <article key={card.title} className={styles.capabilityCard}>
+              <div className={styles.capabilityCardHead}>
+                <SectionLabel>{card.title}</SectionLabel>
+                <div className={styles.capabilityVisual}>
+                  <CapabilityGlyph kind={card.kind} className={styles.capabilityGlyph} />
+                </div>
               </div>
-              <div className={styles.aiFeature}>
-                <span className={styles.aiFeatureIcon}>🧬</span>
-                <span><Translate id="homepage.aiTech.feature.neural">Neural Network Processing</Translate></span>
+              <p>{card.text}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function EncoderIntelligenceSection(): JSX.Element {
+  return (
+    <section className={styles.encoderSection}>
+      <div className="site-shell-container">
+        <div className={styles.sectionHeading}>
+          <SectionLabel>
+            <Translate id="homepage.aiTech.label">Built on Encoder Models</Translate>
+          </SectionLabel>
+          <div>
+            <h2>
+              <Translate id="homepage.aiTech.title">Encoder-Based Intelligence</Translate>
+            </h2>
+            <p>
+              <Translate id="homepage.aiTech.description">
+                Purpose-built encoders read intent, rank relevance, and classify modality before
+                generation begins.
+              </Translate>
+            </p>
+          </div>
+        </div>
+
+        <div className={styles.encoderShowcase}>
+          <div className={styles.encoderLeadStack}>
+            <div className={styles.encoderLead}>
+              <div className={styles.encoderLeadCopy}>
+                <SectionLabel>
+                  <Translate id="homepage.aiTech.leadLabel">Signal surfaces</Translate>
+                </SectionLabel>
+                <p>
+                  <Translate id="homepage.aiTech.leadCopy">
+                    Sequence classification, token labeling, embeddings, and reranking collapse into
+                    one system-intelligence layer.
+                  </Translate>
+                </p>
               </div>
-              <div className={styles.aiFeature}>
-                <span className={styles.aiFeatureIcon}>⚡</span>
-                <span><Translate id="homepage.aiTech.feature.inference">Real-time Inference</Translate></span>
+
+              <div className={styles.encoderTrackList}>
+                {encoderTracks.map(track => (
+                  <div key={track.label} className={styles.encoderTrack}>
+                    <span className={styles.encoderTrackLabel}>{track.label}</span>
+                    <span>{track.text}</span>
+                  </div>
+                ))}
               </div>
-              <div className={styles.aiFeature}>
-                <span className={styles.aiFeatureIcon}>🎯</span>
-                <span><Translate id="homepage.aiTech.feature.semantic">Semantic Understanding</Translate></span>
+
+              <div className={styles.encoderActions}>
+                <PillLink
+                  href="https://huggingface.co/LLM-Semantic-Router"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <Translate id="homepage.aiTech.primaryCta">Hugging Face Models</Translate>
+                </PillLink>
               </div>
             </div>
+
+            <article className={`${styles.encoderCard} ${styles.encoderSpotlightCard}`}>
+              <span className={styles.encoderCardMarker}>{encoderSpotlightCard.marker}</span>
+              <div className={styles.encoderCardCopy}>
+                <h3>{encoderSpotlightCard.title}</h3>
+                <p>{encoderSpotlightCard.text}</p>
+              </div>
+            </article>
           </div>
-          <div className={styles.aiTechRight}>
-            <AIChipAnimation />
+
+          <div className={styles.encoderPipelineFrame}>
+            <TransformerPipelineAnimation />
           </div>
+        </div>
+
+        <div className={styles.encoderCardGrid}>
+          {encoderCards.map(card => (
+            <article key={card.marker} className={styles.encoderCard}>
+              <span className={styles.encoderCardMarker}>{card.marker}</span>
+              <div className={styles.encoderCardCopy}>
+                <h3>{card.title}</h3>
+                <p>{card.text}</p>
+              </div>
+            </article>
+          ))}
         </div>
       </div>
     </section>
   )
 }
 
-const FlowDiagram: React.FC = () => {
+function ClosingBands(): JSX.Element {
   return (
-    <section className={styles.flowSection}>
-      <div className="container">
-        <div className={styles.architectureContainer}>
-          <h2 className={styles.architectureTitle}>
-            🏗️
-            {' '}
-            <Translate id="homepage.architecture.title">Architecture</Translate>
-          </h2>
-          <div className={styles.architectureImageWrapper}>
-            <img
-              src="/img/architecture.png"
-              alt="Architecture"
-              className={styles.architectureImage}
-            />
+    <section className={styles.closingBands}>
+      <div className="site-shell-container">
+        <div className={styles.bandGrid}>
+          <div className={styles.band}>
+            <SectionLabel>
+              <Translate id="homepage.band.docs.label">Documentation</Translate>
+            </SectionLabel>
+            <h3>
+              <Translate id="homepage.band.docs.title">Architecture, written to be used.</Translate>
+            </h3>
+            <p>
+              <Translate id="homepage.band.docs.text">
+                Install, configure, train, and operate from one dense documentation graph.
+              </Translate>
+            </p>
+            <PillLink to="/docs/intro">Docs index</PillLink>
+          </div>
+
+          <div className={styles.band}>
+            <SectionLabel>
+              <Translate id="homepage.band.community.label">Community</Translate>
+            </SectionLabel>
+            <h3>
+              <Translate id="homepage.band.community.title">Research and builders in one loop.</Translate>
+            </h3>
+            <p>
+              <Translate id="homepage.band.community.text">
+                Papers, working groups, and contributors evolve the same system in public.
+              </Translate>
+            </p>
+            <PillLink to="/community/team" muted>Community routes</PillLink>
           </div>
         </div>
       </div>
@@ -156,79 +400,31 @@ const FlowDiagram: React.FC = () => {
   )
 }
 
-const WhereItLives: React.FC = () => {
-  return (
-    <section className={styles.whereItLivesSection}>
-      <div className="container">
-        <h2 className={styles.whereItLivesTitle}>
-          📍
-          {' '}
-          <Translate id="homepage.whereItLives.title">Where it lives</Translate>
-        </h2>
-        <p className={styles.whereItLivesSubtitle}>
-          <Translate id="homepage.whereItLives.subtitle">It lives between the real world and models</Translate>
-        </p>
-        <div className={styles.whereItLivesImageWrapper}>
-          <img
-            src="/img/level.png"
-            alt="Where vLLM Semantic Router Lives"
-            className={styles.whereItLivesImage}
-          />
-        </div>
-      </div>
-    </section>
-  )
-}
-
-const Home: React.FC = () => {
+export default function Home(): JSX.Element {
   const { siteConfig } = useDocusaurusContext()
+
   return (
     <Layout
-      title={`${siteConfig.title}`}
-      description="AI-Powered Intelligent Mixture-of-Models Router with Neural Network Processing"
+      title={siteConfig.title}
+      description="Signal-driven decision routing for mixture-of-model serving."
     >
-      <HomepageHeader />
-      <main>
-        <AITechShowcase />
-        <div className={styles.connectionSection}>
-          <div className={styles.connectionLines}>
-            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine3}`}></div>
+      <main className={styles.page}>
+        <DitherHero />
+
+        <section className={styles.statsSection}>
+          <div className="site-shell-container">
+            <StatStrip items={heroStats} />
           </div>
-        </div>
-        <FlowDiagram />
-        <div className={styles.connectionSection}>
-          <div className={styles.connectionLines}>
-            <div className={`${styles.connectionLine} ${styles.connectionLine4}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine5}`}></div>
-          </div>
-        </div>
-        <HomepageFeatures />
-        <div className={styles.connectionSection}>
-          <div className={styles.connectionLines}>
-            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
-          </div>
-        </div>
-        <WhereItLives />
-        <div className={styles.connectionSection}>
-          <div className={styles.connectionLines}>
-            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
-          </div>
-        </div>
+        </section>
+
+        <InstallQuickStartSection />
+        <CapabilitySection />
+        <PaperFigureShowcase />
+        <EncoderIntelligenceSection />
         <TeamCarousel />
-        <div className={styles.connectionSection}>
-          <div className={styles.connectionLines}>
-            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
-          </div>
-        </div>
         <AcknowledgementsSection />
+        <ClosingBands />
       </main>
     </Layout>
   )
 }
-
-export default Home

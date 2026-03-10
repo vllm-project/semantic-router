@@ -1,0 +1,158 @@
+# Multi-Cloud Provider Routing Configuration
+#
+# Demonstrates routing the same model to different cloud providers
+# using provider_profiles. API keys come from Authorino via header injection.
+#
+# Architecture:
+#   Client → Envoy → ext_authz (Authorino) → ext_proc (Semantic Router) → Cloud LLM
+#
+# Provider endpoints:
+#   "openai"        → api.openai.com        (Authorization: Bearer {key})
+#   "azure-east"    → *.openai.azure.com    (api-key: {key})
+#   "anthropic"     → api.anthropic.com     (x-api-key: {key})
+#   "local-vllm"    → 127.0.0.1:8000       (no auth — local backend)
+#
+# Failover: gpt-4o prefers OpenAI, falls back to Azure.
+# Each provider's auth format is driven by the profile type.
+# The actual key comes from Authorino (x-user-openai-key, x-user-azure-openai-key, etc.)
+
+# ─── Provider Profiles ──────────────────────────────────────────
+# Defines HOW to talk to each provider (URL, auth header format, path).
+# Keys are NOT here — they come from the authz CredentialResolver.
+provider_profiles:
+  openai-prod:
+    type: "openai"
+    base_url: "https://api.openai.com/v1"
+
+  azure-east:
+    type: "azure-openai"
+    base_url: "https://my-resource.openai.azure.com/openai/deployments/gpt-4o"
+    api_version: "2024-10-21"
+
+  anthropic-prod:
+    type: "anthropic"
+    base_url: "https://api.anthropic.com"
+    extra_headers:
+      anthropic-version: "2023-06-01"
+
+# ─── Endpoints ───────────────────────────────────────────────────
+# Each cloud endpoint references a provider_profile.
+# Local vLLM uses address:port (no profile needed).
+vllm_endpoints:
+  - name: "openai"
+    provider_profile: "openai-prod"
+    type: "openai"
+
+  - name: "azure-east"
+    provider_profile: "azure-east"
+    type: "azure-openai"
+
+  - name: "anthropic"
+    provider_profile: "anthropic-prod"
+    type: "anthropic"
+
+  - name: "local-vllm"
+    address: "127.0.0.1"
+    port: 8000
+    type: "vllm"
+
+# ─── Authz ───────────────────────────────────────────────────────
+# Keys come from Authorino header injection.
+# Each provider type has its own header (injected from K8s Secret annotations).
+# Static-config is the fallback for local dev without Authorino.
+authz:
+  fail_open: false
+  providers:
+    - type: header-injection
+      headers:
+        openai: "x-user-openai-key"
+        anthropic: "x-user-anthropic-key"
+        azure-openai: "x-user-azure-openai-key"
+    - type: static-config
+
+# ─── Model Config ────────────────────────────────────────────────
+# preferred_endpoints controls provider preference and failover order.
+model_config:
+  "gpt-4o":
+    preferred_endpoints: ["openai", "azure-east"]
+    description: "GPT-4o — prefers OpenAI, fails over to Azure"
+
+  "gpt-4o-mini":
+    preferred_endpoints: ["openai"]
+    description: "GPT-4o Mini — OpenAI only"
+
+  "claude-sonnet-4-20250514":
+    preferred_endpoints: ["anthropic"]
+    description: "Claude Sonnet 4 — Anthropic"
+
+  "Qwen/Qwen2.5-14B-Instruct":
+    preferred_endpoints: ["local-vllm"]
+    description: "Qwen2.5 14B — local vLLM (no auth needed)"
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+default_model: "gpt-4o"
+
+# ─── Routing ─────────────────────────────────────────────────────
+strategy: "priority"
+
+categories:
+  - name: code
+    description: "Programming and software engineering"
+  - name: general
+    description: "General knowledge and conversation"
+
+keyword_rules:
+  - name: "code_keywords"
+    operator: "OR"
+    keywords: ["code", "function", "implement", "debug", "algorithm", "python", "golang"]
+  - name: "general_keywords"
+    operator: "OR"
+    keywords: ["hello", "explain", "what is", "tell me", "how does"]
+
+decisions:
+  - name: "code_to_local"
+    description: "Code queries → local vLLM (fast, free)"
+    priority: 200
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "code_keywords"
+    modelRefs:
+      - model: "Qwen/Qwen2.5-14B-Instruct"
+        use_reasoning: false
+
+  - name: "general_to_cloud"
+    description: "General queries → GPT-4o (cloud, with failover)"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "general_keywords"
+    modelRefs:
+      - model: "gpt-4o"
+        use_reasoning: false
+
+# ─── Other ───────────────────────────────────────────────────────
+semantic_cache:
+  enabled: false
+
+clear_route_cache: true
+
+# ═══════════════════════════════════════════════════════════════════
+# Provider Routing Summary
+# ═══════════════════════════════════════════════════════════════════
+#
+#   Model                     Endpoints (failover order)    Provider Type     Auth Format
+#   ──────────────────────── ──────────────────────────── ────────────────── ─────────────────────
+#   gpt-4o                   openai → azure-east          openai, azure     Bearer / api-key
+#   gpt-4o-mini              openai                       openai            Authorization: Bearer
+#   claude-sonnet-4          anthropic                    anthropic         x-api-key
+#   Qwen/Qwen2.5-14B        local-vllm                   (none)            (no auth)
+#
+# Key resolution:
+#   1. Authorino injects x-user-{provider}-key headers from K8s Secrets
+#   2. Router's CredentialResolver reads the header matching the endpoint's provider type
+#   3. Router formats the auth header per the provider_profile type defaults

@@ -23,6 +23,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
 func main() {
@@ -66,8 +68,22 @@ func main() {
 	// This is important for Kubernetes mode where the controller will update it
 	config.Replace(cfg)
 
+	startupWriter := startupstatus.NewWriter(*configPath)
+	if writeErr := startupWriter.Write(startupstatus.State{
+		Phase:   "starting",
+		Ready:   false,
+		Message: "Router process booting...",
+	}); writeErr != nil {
+		logging.Warnf("Failed to write initial startup status: %v", writeErr)
+	}
+
 	// Ensure required models are downloaded
-	if modelErr := ensureModelsDownloaded(cfg); modelErr != nil {
+	if modelErr := ensureModelsDownloaded(cfg, startupWriter); modelErr != nil {
+		_ = startupWriter.Write(startupstatus.State{
+			Phase:   "error",
+			Ready:   false,
+			Message: fmt.Sprintf("Failed to ensure models are downloaded: %v", modelErr),
+		})
 		logging.Fatalf("Failed to ensure models are downloaded: %v", modelErr)
 	}
 
@@ -116,6 +132,10 @@ func main() {
 		}
 	}
 
+	// Shutdown hooks for components initialized later (e.g. vector store pipeline).
+	// The signal handler calls these before exiting since os.Exit skips defers.
+	var shutdownHooks []func()
+
 	// Set up signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -123,6 +143,12 @@ func main() {
 	go func() {
 		<-sigChan
 		logging.Infof("Received shutdown signal, cleaning up...")
+
+		// Run shutdown hooks (vector store pipeline, backend, etc.)
+		for _, hook := range shutdownHooks {
+			hook()
+		}
+
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if shutdownErr := tracing.ShutdownTracing(shutdownCtx); shutdownErr != nil {
@@ -152,81 +178,119 @@ func main() {
 		logging.Infof("Metrics server disabled")
 	}
 
-	// Initialize embedding models BEFORE creating server, this ensures Qwen3/Gemma/mmBERT models are ready when semantic cache is initialized
+	if writeErr := startupWriter.Write(startupstatus.State{
+		Phase:   "initializing_models",
+		Ready:   false,
+		Message: "Initializing embedding models and router dependencies...",
+	}); writeErr != nil {
+		logging.Warnf("Failed to write initialization startup status: %v", writeErr)
+	}
+
+	// Initialize embedding models BEFORE creating server, this ensures Qwen3/Gemma/mmBERT/MultiModal/BERT models are ready
+	// when semantic cache/classifier components are initialized.
 	// Use the already loaded config instead of calling config.Load() again
 	var embeddingModelsInitialized bool
-	if cfg.Qwen3ModelPath != "" || cfg.GemmaModelPath != "" || cfg.EmbeddingModels.MmBertModelPath != "" {
-		var initErr error
 
-		// Resolve model paths using registry (supports aliases like "qwen3", "gemma", "mmbert")
-		qwen3Path := config.ResolveModelPath(cfg.Qwen3ModelPath)
-		gemmaPath := config.ResolveModelPath(cfg.GemmaModelPath)
-		mmBertPath := config.ResolveModelPath(cfg.EmbeddingModels.MmBertModelPath)
+	// Resolve model paths using registry (supports aliases like "qwen3", "gemma", "mmbert", "multimodal", "bert")
+	qwen3Path := config.ResolveModelPath(cfg.Qwen3ModelPath)
+	gemmaPath := config.ResolveModelPath(cfg.GemmaModelPath)
+	mmBertPath := config.ResolveModelPath(cfg.EmbeddingModels.MmBertModelPath)
+	multiModalPath := config.ResolveModelPath(cfg.EmbeddingModels.MultiModalModelPath)
+	bertPath := config.ResolveModelPath(cfg.EmbeddingModels.BertModelPath)
 
-		logging.Infof("Initializing embedding models: qwen3=%q, gemma=%q, mmbert=%q, useCPU=%t",
-			qwen3Path, gemmaPath, mmBertPath, cfg.EmbeddingModels.UseCPU)
+	// Check if any unified models (qwen3/gemma/mmbert) are configured
+	hasUnifiedModels := qwen3Path != "" || gemmaPath != "" || mmBertPath != ""
+	hasMultiModalModel := multiModalPath != ""
+	hasBertModel := bertPath != ""
 
-		// Check if semantic cache uses qwen3 and needs batched initialization
-		// The cache uses GetEmbeddingBatched() which requires InitEmbeddingModelsBatched()
-		semanticCacheNeedsBatched := cfg.SemanticCache.Enabled &&
-			strings.ToLower(strings.TrimSpace(cfg.SemanticCache.EmbeddingModel)) == "qwen3" &&
-			qwen3Path != ""
+	if hasUnifiedModels || hasMultiModalModel || hasBertModel {
+		logging.Infof("Initializing embedding models: qwen3=%q, gemma=%q, mmbert=%q, multimodal=%q, bert=%q, useCPU=%t",
+			qwen3Path, gemmaPath, mmBertPath, multiModalPath, bertPath, cfg.EmbeddingModels.UseCPU)
 
-		// ML model selection (KNN, KMeans, SVM) also needs batched embeddings for query embedding
-		mlSelectionNeedsBatched := cfg.ModelSelection.Enabled &&
-			cfg.ModelSelection.ML.ModelsPath != "" &&
-			cfg.Qwen3ModelPath != ""
+		// Initialize unified models (qwen3/gemma/mmbert) if any are configured
+		if hasUnifiedModels {
+			var initErr error
 
-		useBatchedInit := semanticCacheNeedsBatched || mlSelectionNeedsBatched
+			// Check if semantic cache uses qwen3 and needs batched initialization
+			// The cache uses GetEmbeddingBatched() which requires InitEmbeddingModelsBatched()
+			semanticCacheNeedsBatched := cfg.SemanticCache.Enabled &&
+				strings.ToLower(strings.TrimSpace(cfg.SemanticCache.EmbeddingModel)) == "qwen3" &&
+				qwen3Path != ""
 
-		// If semantic cache or ML model selection uses qwen3, use batched initialization for better performance
-		if useBatchedInit {
-			if semanticCacheNeedsBatched {
-				logging.Infof("Semantic cache uses qwen3, initializing with batched embedding model...")
-			}
-			if mlSelectionNeedsBatched {
-				logging.Infof("ML model selection enabled, initializing with batched embedding model...")
-			}
-			maxBatchSize := 64      // Batch up to 64 requests together
-			maxWaitMs := uint64(10) // Wait max 10ms for batch to fill
-			initErr = candle_binding.InitEmbeddingModelsBatched(
-				qwen3Path,
-				maxBatchSize,
-				maxWaitMs,
-				cfg.EmbeddingModels.UseCPU,
-			)
-			if initErr == nil {
-				logging.Infof("Batched embedding model initialized successfully")
-			}
+			// ML model selection (KNN, KMeans, SVM) also needs batched embeddings for query embedding
+			mlSelectionNeedsBatched := cfg.ModelSelection.Enabled &&
+				cfg.ModelSelection.ML.ModelsPath != "" &&
+				cfg.Qwen3ModelPath != ""
 
-			// Also initialize standard ModelFactory for classification and other features
-			// Both need to be initialized when cache uses qwen3
-			if initErr == nil {
+			useBatchedInit := semanticCacheNeedsBatched || mlSelectionNeedsBatched
+
+			if useBatchedInit {
+				if semanticCacheNeedsBatched {
+					logging.Infof("Semantic cache uses qwen3, initializing with batched embedding model...")
+				}
+				if mlSelectionNeedsBatched {
+					logging.Infof("ML model selection enabled, initializing with batched embedding model...")
+				}
+				maxBatchSize := 64      // Batch up to 64 requests together
+				maxWaitMs := uint64(10) // Wait max 10ms for batch to fill
+				initErr = candle_binding.InitEmbeddingModelsBatched(
+					qwen3Path,
+					maxBatchSize,
+					maxWaitMs,
+					cfg.EmbeddingModels.UseCPU,
+				)
+				if initErr == nil {
+					logging.Infof("Batched embedding model initialized successfully")
+					// Also initialize standard ModelFactory
+					initErr = candle_binding.InitEmbeddingModels(
+						qwen3Path,
+						gemmaPath,
+						mmBertPath,
+						cfg.EmbeddingModels.UseCPU,
+					)
+				}
+			} else {
 				initErr = candle_binding.InitEmbeddingModels(
-					qwen3Path,  // Initialize qwen3 in standard factory too (for classification)
-					gemmaPath,  // Also initialize gemma if configured
-					mmBertPath, // Also initialize mmbert if configured
+					qwen3Path,
+					gemmaPath,
+					mmBertPath,
 					cfg.EmbeddingModels.UseCPU,
 				)
 			}
-		} else {
-			// Use standard initialization for other use cases (qwen3, gemma, and mmbert)
-			initErr = candle_binding.InitEmbeddingModels(
-				qwen3Path,
-				gemmaPath,
-				mmBertPath,
-				cfg.EmbeddingModels.UseCPU,
-			)
+
+			if initErr != nil {
+				logging.Errorf("Failed to initialize unified embedding models: %v", initErr)
+				logging.Warnf("Embedding API endpoints will return placeholder embeddings")
+				logging.Warnf("Tools database will NOT be loaded (requires embedding models)")
+			} else {
+				logging.Infof("Unified embedding models initialized successfully")
+				embeddingModelsInitialized = true
+			}
 		}
 
-		if initErr != nil {
-			logging.Errorf("Failed to initialize embedding models: %v", initErr)
-			logging.Warnf("Embedding API endpoints will return placeholder embeddings")
-			logging.Warnf("Tools database will NOT be loaded (requires embedding models)")
-			embeddingModelsInitialized = false
-		} else {
-			logging.Infof("Embedding models initialized successfully")
-			embeddingModelsInitialized = true
+		// Initialize BERT model separately (for memory with 384-dim embeddings)
+		// This uses a different initialization path (InitModel vs InitEmbeddingModels)
+		if hasBertModel {
+			logging.Infof("Initializing BERT model for memory: %s", bertPath)
+			if bertErr := candle_binding.InitModel(bertPath, cfg.EmbeddingModels.UseCPU); bertErr != nil {
+				logging.Warnf("Failed to initialize BERT model: %v", bertErr)
+				logging.Warnf("Memory retrieval with 'bert' embedding type will not work")
+			} else {
+				logging.Infof("BERT model initialized successfully (384-dim for memory)")
+				embeddingModelsInitialized = true
+			}
+		}
+
+		// Initialize MultiModal model separately (text/image/audio embeddings)
+		if hasMultiModalModel {
+			logging.Infof("Initializing MultiModal embedding model: %s", multiModalPath)
+			if mmErr := candle_binding.InitMultiModalEmbeddingModel(multiModalPath, cfg.EmbeddingModels.UseCPU); mmErr != nil {
+				logging.Warnf("Failed to initialize MultiModal embedding model: %v", mmErr)
+				logging.Warnf("Embedding paths using 'multimodal' will not work")
+			} else {
+				logging.Infof("MultiModal embedding model initialized successfully (384-dim default)")
+				embeddingModelsInitialized = true
+			}
 		}
 	} else {
 		logging.Infof("No embedding models configured, skipping initialization")
@@ -235,6 +299,8 @@ func main() {
 		logging.Infof("    qwen3_model_path: 'models/mom-embedding-pro'")
 		logging.Infof("    gemma_model_path: 'models/mom-embedding-flash'")
 		logging.Infof("    mmbert_model_path: 'models/mom-embedding-ultra'")
+		logging.Infof("    multimodal_model_path: 'models/mom-embedding-multimodal'")
+		logging.Infof("    bert_model_path: 'models/all-MiniLM-L12-v2'  # For memory (384-dim)")
 		logging.Infof("    use_cpu: true")
 		embeddingModelsInitialized = false
 	}
@@ -248,6 +314,8 @@ func main() {
 		if embeddingModel == "" {
 			if cfg.EmbeddingModels.MmBertModelPath != "" {
 				embeddingModel = "mmbert"
+			} else if cfg.EmbeddingModels.MultiModalModelPath != "" {
+				embeddingModel = "multimodal"
 			} else if cfg.Qwen3ModelPath != "" {
 				embeddingModel = "qwen3"
 			} else if cfg.GemmaModelPath != "" {
@@ -272,9 +340,119 @@ func main() {
 		}
 	}
 
+	// Initialize vector store if configured
+	if cfg.VectorStore != nil && cfg.VectorStore.Enabled {
+		logging.Infof("Initializing vector store feature...")
+
+		if validateErr := cfg.VectorStore.Validate(); validateErr != nil {
+			logging.Fatalf("Invalid vector store configuration: %v", validateErr)
+		}
+		cfg.VectorStore.ApplyDefaults()
+
+		// Ensure BERT is initialized if vector store uses it and semantic cache didn't already
+		if cfg.VectorStore.EmbeddingModel == "bert" && !cfg.SemanticCache.Enabled {
+			bertModelID := cfg.BertModel.ModelID
+			if bertModelID == "" {
+				bertModelID = "sentence-transformers/all-MiniLM-L6-v2"
+			}
+			bertModelID = config.ResolveModelPath(bertModelID)
+			logging.Infof("Vector store uses BERT embeddings, initializing BERT model: %s", bertModelID)
+			if initErr := candle_binding.InitModel(bertModelID, cfg.BertModel.UseCPU); initErr != nil {
+				logging.Fatalf("Failed to initialize BERT model for vector store: %v", initErr)
+			}
+		}
+
+		// Create file store
+		vsFileStore, vsErr := vectorstore.NewFileStore(cfg.VectorStore.FileStorageDir)
+		if vsErr != nil {
+			logging.Fatalf("Failed to create vector store file store: %v", vsErr)
+		}
+		apiserver.SetFileStore(vsFileStore)
+
+		// Create backend
+		var backendCfgs vectorstore.BackendConfigs
+		switch cfg.VectorStore.BackendType {
+		case "memory":
+			maxEntries := 100000
+			if cfg.VectorStore.Memory != nil && cfg.VectorStore.Memory.MaxEntriesPerStore > 0 {
+				maxEntries = cfg.VectorStore.Memory.MaxEntriesPerStore
+			}
+			backendCfgs.Memory = vectorstore.MemoryBackendConfig{MaxEntriesPerStore: maxEntries}
+		case "milvus":
+			backendCfgs.Milvus = vectorstore.MilvusBackendConfig{
+				Address: fmt.Sprintf("%s:%d", cfg.VectorStore.Milvus.Connection.Host, cfg.VectorStore.Milvus.Connection.Port),
+			}
+		case "llama_stack":
+			lsCfg := cfg.VectorStore.LlamaStack
+			backendCfgs.LlamaStack = vectorstore.LlamaStackBackendConfig{
+				Endpoint:              lsCfg.Endpoint,
+				AuthToken:             lsCfg.AuthToken,
+				EmbeddingModel:        lsCfg.EmbeddingModel,
+				EmbeddingDimension:    cfg.VectorStore.EmbeddingDimension,
+				RequestTimeoutSeconds: lsCfg.RequestTimeoutSeconds,
+				SearchType:            lsCfg.SearchType,
+			}
+		}
+		vsBackend, vsErr := vectorstore.NewBackend(cfg.VectorStore.BackendType, backendCfgs)
+		if vsErr != nil {
+			logging.Fatalf("Failed to create vector store backend: %v", vsErr)
+		}
+
+		// Create manager
+		vsMgr := vectorstore.NewManager(vsBackend, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType)
+		apiserver.SetVectorStoreManager(vsMgr)
+
+		// Create embedder
+		vsEmbedder := vectorstore.NewCandleEmbedder(cfg.VectorStore.EmbeddingModel, cfg.VectorStore.EmbeddingDimension)
+		apiserver.SetEmbedder(vsEmbedder)
+
+		// Create and start ingestion pipeline
+		vsPipeline := vectorstore.NewIngestionPipeline(vsBackend, vsFileStore, vsMgr, vsEmbedder, vectorstore.PipelineConfig{
+			Workers:   cfg.VectorStore.IngestionWorkers,
+			QueueSize: 100,
+		})
+		vsPipeline.Start()
+		apiserver.SetIngestionPipeline(vsPipeline)
+
+		// Register shutdown hooks so signal handler can clean up
+		// (defer won't run when os.Exit is called from signal handler)
+		shutdownHooks = append(shutdownHooks, func() {
+			logging.Infof("Shutting down vector store pipeline...")
+			vsPipeline.Stop()
+			vsBackend.Close()
+		})
+
+		logging.Infof("Vector store initialized: backend=%s, model=%s, dim=%d, workers=%d",
+			cfg.VectorStore.BackendType, cfg.VectorStore.EmbeddingModel,
+			cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.IngestionWorkers)
+	}
+
+	// Initialize modality classifier if modality_detector is enabled
+	if md := &cfg.ModalityDetector; md.Enabled {
+		method := md.GetMethod()
+		if (method == config.ModalityDetectionClassifier || method == config.ModalityDetectionHybrid) &&
+			md.Classifier != nil && md.Classifier.ModelPath != "" {
+			modelPath := config.ResolveModelPath(md.Classifier.ModelPath)
+			logging.Infof("Initializing modality classifier (method=%s) from model: %s", method, modelPath)
+			if initErr := extproc.InitModalityClassifier(modelPath, md.Classifier.UseCPU); initErr != nil {
+				if method == config.ModalityDetectionClassifier {
+					logging.Fatalf("Failed to initialize modality classifier (required for method=%q): %v", method, initErr)
+				}
+				logging.Warnf("Failed to initialize modality classifier (hybrid will fall back to keywords): %v", initErr)
+			} else {
+				logging.Infof("Modality classifier initialized successfully")
+			}
+		}
+	}
+
 	// Create and start the ExtProc server
 	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)
 	if err != nil {
+		_ = startupWriter.Write(startupstatus.State{
+			Phase:   "error",
+			Ready:   false,
+			Message: fmt.Sprintf("Failed to create ExtProc server: %v", err),
+		})
 		logging.Fatalf("Failed to create ExtProc server: %v", err)
 	}
 
@@ -306,6 +484,14 @@ func main() {
 		}()
 	}
 
+	if writeErr := startupWriter.Write(startupstatus.State{
+		Phase:   "ready",
+		Ready:   true,
+		Message: "Router models are ready. Starting router services...",
+	}); writeErr != nil {
+		logging.Warnf("Failed to write ready startup status: %v", writeErr)
+	}
+
 	// Start Kubernetes controller if ConfigSource is kubernetes
 	if cfg.ConfigSource == config.ConfigSourceKubernetes {
 		logging.Infof("ConfigSource is kubernetes, starting Kubernetes controller")
@@ -315,12 +501,17 @@ func main() {
 	}
 
 	if err := server.Start(); err != nil {
+		_ = startupWriter.Write(startupstatus.State{
+			Phase:   "error",
+			Ready:   false,
+			Message: fmt.Sprintf("ExtProc server error: %v", err),
+		})
 		logging.Fatalf("ExtProc server error: %v", err)
 	}
 }
 
 // ensureModelsDownloaded checks and downloads required models
-func ensureModelsDownloaded(cfg *config.RouterConfig) error {
+func ensureModelsDownloaded(cfg *config.RouterConfig, startupWriter *startupstatus.Writer) error {
 	logging.Infof("Installing required models...")
 
 	// Build model specs from config
@@ -331,6 +522,11 @@ func ensureModelsDownloaded(cfg *config.RouterConfig) error {
 
 	// Skip download if no local models are configured (API-only mode)
 	if len(specs) == 0 {
+		_ = startupWriter.Write(startupstatus.State{
+			Phase:   "initializing_models",
+			Ready:   false,
+			Message: "No local models configured. Skipping model download.",
+		})
 		logging.Infof("No local models configured, skipping model download (API-only mode)")
 		return nil
 	}
@@ -362,8 +558,34 @@ func ensureModelsDownloaded(cfg *config.RouterConfig) error {
 		maskedToken = "<not set>"
 	}
 	logging.Infof("HF_ENDPOINT: %s; HF_TOKEN: %s; HF_HOME: %s", downloadConfig.HFEndpoint, maskedToken, downloadConfig.HFHome)
+
+	reporter := func(progress modeldownload.ProgressState) {
+		state := startupstatus.State{
+			Ready:            false,
+			DownloadingModel: progress.DownloadingModel,
+			PendingModels:    progress.PendingModels,
+			ReadyModels:      progress.ReadyModels,
+			TotalModels:      progress.TotalModels,
+			Message:          progress.Message,
+		}
+
+		switch progress.Phase {
+		case "downloading":
+			state.Phase = "downloading_models"
+		case "completed":
+			state.Phase = "initializing_models"
+			state.Message = "Required router models downloaded. Continuing startup..."
+		default:
+			state.Phase = "checking_models"
+		}
+
+		if err := startupWriter.Write(state); err != nil {
+			logging.Warnf("Failed to persist model download progress: %v", err)
+		}
+	}
+
 	// Ensure all models are downloaded
-	if err := modeldownload.EnsureModels(specs, downloadConfig); err != nil {
+	if err := modeldownload.EnsureModelsWithProgress(specs, downloadConfig, reporter); err != nil {
 		return fmt.Errorf("failed to download models: %w", err)
 	}
 

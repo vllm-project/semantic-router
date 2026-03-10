@@ -53,12 +53,12 @@ const allTeamMembers: TeamMember[] = [
   },
   {
     name: 'Xunzhuo Liu',
-    role: <Translate id="team.members.XunzhuoLiu.role">AI Networking</Translate>,
-    company: 'Tencent',
+    role: <Translate id="team.members.XunzhuoLiu.role">Intelligent Routing</Translate>,
+    company: 'vLLM',
     avatar: '/img/team/xunzhuo.png',
     github: 'https://github.com/Xunzhuo',
     linkedin: 'https://www.linkedin.com/in/bitliu/',
-    bio: <Translate id="team.members.XunzhuoLiu.bio">AI Networking at Tencent, leading the development of vLLM Semantic Router and driving the project vision.</Translate>,
+    bio: <Translate id="team.members.XunzhuoLiu.bio">Focus on bringing collective intelligence to the LLM systems.</Translate>,
     memberType: 'maintainer',
   },
   {
@@ -221,6 +221,23 @@ const allTeamMembers: TeamMember[] = [
     bio: <Translate id="team.members.aeft.bio">Open source contributor to vLLM Semantic Router.</Translate>,
     memberType: 'committer',
   },
+  {
+    name: 'Hao Wu',
+    role: <Translate id="team.members.HaoWu.role">Individual Contributor</Translate>,
+    avatar: 'https://github.com/haowu1234.png',
+    github: 'https://github.com/haowu1234',
+    bio: <Translate id="team.members.HaoWu.bio">Open source contributor to vLLM Semantic Router.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'Qiping Pan',
+    role: <Translate id="team.members.QipingPan.role">Individual Contributor</Translate>,
+    avatar: 'https://github.com/ppppqp.png',
+    github: 'https://github.com/ppppqp',
+    linkedin: 'https://www.linkedin.com/in/qiping-pan-8662ab215/',
+    bio: <Translate id="team.members.QipingPan.bio">Open source contributor to vLLM Semantic Router.</Translate>,
+    memberType: 'committer',
+  },
 ]
 
 const TeamMemberCard: React.FC<TeamMemberProps> = ({ member }) => {
@@ -294,7 +311,7 @@ const Team: React.FC = () => {
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1><Translate id="team.title">Meet Our Team 👥</Translate></h1>
+          <h1><Translate id="team.title">Meet Our Team</Translate></h1>
           <p className={styles.subtitle}>
             <Translate id="team.subtitle">Innovation thrives when great minds come together</Translate>
           </p>
@@ -303,7 +320,6 @@ const Team: React.FC = () => {
         <main className={styles.main}>
           <section className={styles.section}>
             <h2>
-              👥
               <Translate id="team.coreTeam.title">Our Team</Translate>
             </h2>
             <p className={styles.sectionDescription}>
@@ -320,7 +336,6 @@ const Team: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              🏆
               <Translate id="team.recognition.title">Recognition</Translate>
             </h2>
             <div className={styles.recognitionCard}>
@@ -378,13 +393,11 @@ const Team: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              📞
               <Translate id="team.getInvolved.title">Get Involved</Translate>
             </h2>
             <div className={styles.involvementGrid}>
               <div className={styles.involvementCard}>
                 <h3>
-                  🚀
                   <Translate id="team.getInvolved.contribute.title">Start Contributing</Translate>
                 </h3>
                 <p><Translate id="team.getInvolved.contribute.desc">Ready to make your first contribution?</Translate></p>
@@ -395,7 +408,6 @@ const Team: React.FC = () => {
 
               <div className={styles.involvementCard}>
                 <h3>
-                  👥
                   <Translate id="team.getInvolved.workGroups.title">Join Working Groups</Translate>
                 </h3>
                 <p><Translate id="team.getInvolved.workGroups.desc">Find your area of expertise and connect with like-minded contributors.</Translate></p>
@@ -406,7 +418,6 @@ const Team: React.FC = () => {
 
               <div className={styles.involvementCard}>
                 <h3>
-                  💬
                   <Translate id="team.getInvolved.discussions.title">Join Discussions</Translate>
                 </h3>
                 <p><Translate id="team.getInvolved.discussions.desc">Participate in community discussions and share your ideas.</Translate></p>

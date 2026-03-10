@@ -21,7 +21,6 @@ interface Signal {
   user_feedback?: string[]
   preference?: string[]
   language?: string[]
-  latency?: string[]
   context?: string[]
   complexity?: string[]
 }
@@ -139,7 +138,6 @@ const ReplayCharts: React.FC<ReplayChartsProps> = ({ records }) => {
       if (signals.user_feedback?.length) counts['user_feedback'] = (counts['user_feedback'] || 0) + signals.user_feedback.length
       if (signals.preference?.length) counts['preference'] = (counts['preference'] || 0) + signals.preference.length
       if (signals.language?.length) counts['language'] = (counts['language'] || 0) + signals.language.length
-      if (signals.latency?.length) counts['latency'] = (counts['latency'] || 0) + signals.latency.length
       if (signals.context?.length) counts['context'] = (counts['context'] || 0) + signals.context.length
       if (signals.complexity?.length) counts['complexity'] = (counts['complexity'] || 0) + signals.complexity.length
     })
@@ -281,4 +279,3 @@ const ReplayCharts: React.FC<ReplayChartsProps> = ({ records }) => {
 }
 
 export default ReplayCharts
-

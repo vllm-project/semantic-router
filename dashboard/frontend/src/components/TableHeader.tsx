@@ -8,9 +8,12 @@ interface TableHeaderProps {
   searchPlaceholder?: string
   searchValue?: string
   onSearchChange?: (value: string) => void
+  onSecondaryAction?: () => void
+  secondaryActionText?: string
   onAdd?: () => void
   addButtonText?: string
   disabled?: boolean
+  variant?: 'default' | 'embedded'
 }
 
 const TableHeader: React.FC<TableHeaderProps> = ({
@@ -20,12 +23,17 @@ const TableHeader: React.FC<TableHeaderProps> = ({
   searchPlaceholder = 'Search...',
   searchValue = '',
   onSearchChange,
+  onSecondaryAction,
+  secondaryActionText = 'More',
   onAdd,
   addButtonText = 'Add New',
-  disabled = false
+  disabled = false,
+  variant = 'default',
 }) => {
+  const showSearch = Boolean(onSearchChange && searchPlaceholder.trim().length > 0)
+
   return (
-    <div className={styles.header}>
+    <div className={`${styles.header} ${variant === 'embedded' ? styles.embedded : ''}`}>
       <div className={styles.titleSection}>
         {icon && <span className={styles.icon}>{icon}</span>}
         <h3 className={styles.title}>{title}</h3>
@@ -34,14 +42,19 @@ const TableHeader: React.FC<TableHeaderProps> = ({
         )}
       </div>
       <div className={styles.actions}>
-        {onSearchChange && (
+        {showSearch && (
           <input
             type="search"
             className={styles.searchInput}
             placeholder={searchPlaceholder}
             value={searchValue}
-            onChange={(e) => onSearchChange(e.target.value)}
+            onChange={(e) => onSearchChange?.(e.target.value)}
           />
+        )}
+        {onSecondaryAction && !disabled && (
+          <button className={styles.secondaryButton} onClick={onSecondaryAction}>
+            {secondaryActionText}
+          </button>
         )}
         {onAdd && !disabled && (
           <button className={styles.addButton} onClick={onAdd}>
@@ -54,4 +67,3 @@ const TableHeader: React.FC<TableHeaderProps> = ({
 }
 
 export default TableHeader
-

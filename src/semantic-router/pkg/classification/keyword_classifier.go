@@ -6,11 +6,12 @@ import (
 	"strings"
 	"unicode"
 
+	nlp_binding "github.com/vllm-project/semantic-router/nlp-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// preppedKeywordRule stores preprocessed keywords for efficient matching.
+// preppedKeywordRule stores preprocessed keywords for efficient regex matching.
 type preppedKeywordRule struct {
 	Name              string // Name is also used as category
 	Operator          string
@@ -26,98 +27,204 @@ type preppedKeywordRule struct {
 }
 
 // KeywordClassifier implements keyword-based classification logic.
+// It supports three matching methods per rule: regex (default), bm25, and ngram.
+// BM25 and N-gram rules are dispatched to Rust-backed classifiers via nlp-binding.
 type KeywordClassifier struct {
-	rules []preppedKeywordRule // Store preprocessed rules
+	regexRules []preppedKeywordRule // Regex-based rules (original behavior)
+
+	// Rust-backed classifiers via nlp-binding FFI
+	bm25Classifier  *nlp_binding.BM25Classifier
+	ngramClassifier *nlp_binding.NgramClassifier
+
+	// Track which rules use which method for ordered evaluation
+	ruleOrder []ruleRef
+}
+
+// ruleRef tracks the method and index for ordered rule evaluation.
+type ruleRef struct {
+	method string // "regex", "bm25", "ngram"
+	name   string // rule name for logging
 }
 
 // NewKeywordClassifier creates a new KeywordClassifier.
+// Rules with method "bm25" or "ngram" are dispatched to Rust-backed classifiers;
+// all others (including default/empty method) use the original regex engine.
 func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, error) {
-	preppedRules := make([]preppedKeywordRule, len(cfgRules))
-	for i, rule := range cfgRules {
+	kc := &KeywordClassifier{}
+
+	var hasBM25, hasNgram bool
+
+	for _, rule := range cfgRules {
 		// Validate operator
 		switch rule.Operator {
 		case "AND", "OR", "NOR":
-			// Valid operator
+			// Valid
 		default:
 			return nil, fmt.Errorf("unsupported keyword rule operator: %q for rule %q", rule.Operator, rule.Name)
 		}
 
-		preppedRule := preppedKeywordRule{
-			Name:             rule.Name,
-			Operator:         rule.Operator,
-			CaseSensitive:    rule.CaseSensitive,
-			OriginalKeywords: rule.Keywords,
-			FuzzyMatch:       rule.FuzzyMatch,
-			FuzzyThreshold:   rule.FuzzyThreshold,
+		method := strings.ToLower(rule.Method)
+		if method == "" {
+			method = "regex"
 		}
 
-		// Set default fuzzy threshold if enabled but not specified
-		if preppedRule.FuzzyMatch && preppedRule.FuzzyThreshold == 0 {
-			preppedRule.FuzzyThreshold = 2 // Default: allow 2 character edits
+		switch method {
+		case "bm25":
+			hasBM25 = true
+		case "ngram":
+			hasNgram = true
+		case "regex":
+			// default
+		default:
+			return nil, fmt.Errorf("unsupported keyword rule method: %q for rule %q (valid: regex, bm25, ngram)", rule.Method, rule.Name)
 		}
-
-		// Pre-compute lowercase keywords for fuzzy matching
-		if rule.FuzzyMatch {
-			preppedRule.LowercaseKeywords = make([]string, len(rule.Keywords))
-			for j, keyword := range rule.Keywords {
-				preppedRule.LowercaseKeywords[j] = strings.ToLower(keyword)
-			}
-		}
-
-		// Compile regexps for both case-sensitive and case-insensitive
-		preppedRule.CompiledRegexpsCS = make([]*regexp.Regexp, len(rule.Keywords))
-		preppedRule.CompiledRegexpsCI = make([]*regexp.Regexp, len(rule.Keywords))
-
-		for j, keyword := range rule.Keywords {
-			quotedKeyword := regexp.QuoteMeta(keyword)
-			// Conditionally add word boundaries. If the keyword contains at least one word character,
-			// apply word boundaries. However, skip word boundaries for Chinese characters since \b
-			// doesn't work with non-ASCII characters.
-			hasWordChar := false
-			hasChinese := false
-			for _, r := range keyword {
-				if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
-					hasWordChar = true
-				}
-				// Check if the character is Chinese (CJK Unified Ideographs)
-				if unicode.Is(unicode.Han, r) {
-					hasChinese = true
-				}
-				if hasWordChar && hasChinese {
-					break
-				}
-			}
-
-			patternCS := quotedKeyword
-			patternCI := "(?i)" + quotedKeyword
-
-			// Only add word boundaries for non-Chinese keywords
-			if hasWordChar && !hasChinese {
-				patternCS = "\\b" + patternCS + "\\b"
-				patternCI = "(?i)\\b" + quotedKeyword + "\\b"
-			}
-
-			var err error
-			preppedRule.CompiledRegexpsCS[j], err = regexp.Compile(patternCS)
-			if err != nil {
-				logging.Errorf("Failed to compile case-sensitive regex for keyword %q: %v", keyword, err)
-				return nil, err
-			}
-
-			preppedRule.CompiledRegexpsCI[j], err = regexp.Compile(patternCI)
-			if err != nil {
-				logging.Errorf("Failed to compile case-insensitive regex for keyword %q: %v", keyword, err)
-				return nil, err
-			}
-		}
-		preppedRules[i] = preppedRule
 	}
-	return &KeywordClassifier{rules: preppedRules}, nil
+
+	// Initialize Rust-backed classifiers only if needed
+	if hasBM25 {
+		kc.bm25Classifier = nlp_binding.NewBM25Classifier()
+	}
+	if hasNgram {
+		kc.ngramClassifier = nlp_binding.NewNgramClassifier()
+	}
+
+	// Process each rule according to its method
+	for _, rule := range cfgRules {
+		method := strings.ToLower(rule.Method)
+		if method == "" {
+			method = "regex"
+		}
+
+		switch method {
+		case "bm25":
+			threshold := rule.BM25Threshold
+			if threshold == 0 {
+				threshold = 0.1 // default BM25 threshold
+			}
+			err := kc.bm25Classifier.AddRule(
+				rule.Name, rule.Operator, rule.Keywords, threshold, rule.CaseSensitive,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to add BM25 rule %q: %w", rule.Name, err)
+			}
+			kc.ruleOrder = append(kc.ruleOrder, ruleRef{method: "bm25", name: rule.Name})
+			logging.Infof("Keyword rule %q using BM25 method (threshold=%.2f, keywords=%d)",
+				rule.Name, threshold, len(rule.Keywords))
+
+		case "ngram":
+			threshold := rule.NgramThreshold
+			if threshold == 0 {
+				threshold = 0.4 // default n-gram similarity threshold
+			}
+			arity := rule.NgramArity
+			if arity == 0 {
+				arity = 3 // default trigram
+			}
+			err := kc.ngramClassifier.AddRule(
+				rule.Name, rule.Operator, rule.Keywords, threshold, rule.CaseSensitive, arity,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to add N-gram rule %q: %w", rule.Name, err)
+			}
+			kc.ruleOrder = append(kc.ruleOrder, ruleRef{method: "ngram", name: rule.Name})
+			logging.Infof("Keyword rule %q using N-gram method (threshold=%.2f, arity=%d, keywords=%d)",
+				rule.Name, threshold, arity, len(rule.Keywords))
+
+		case "regex":
+			preppedRule, err := prepRegexRule(rule)
+			if err != nil {
+				return nil, err
+			}
+			kc.regexRules = append(kc.regexRules, preppedRule)
+			kc.ruleOrder = append(kc.ruleOrder, ruleRef{method: "regex", name: rule.Name})
+			logging.Infof("Keyword rule %q using regex method (keywords=%d, fuzzy=%v)",
+				rule.Name, len(rule.Keywords), rule.FuzzyMatch)
+		}
+	}
+
+	return kc, nil
+}
+
+// Free releases Rust-side resources. Call when the classifier is no longer needed.
+func (c *KeywordClassifier) Free() {
+	if c.bm25Classifier != nil {
+		c.bm25Classifier.Free()
+	}
+	if c.ngramClassifier != nil {
+		c.ngramClassifier.Free()
+	}
+}
+
+// prepRegexRule creates a preppedKeywordRule from a config rule (original regex logic).
+func prepRegexRule(rule config.KeywordRule) (preppedKeywordRule, error) {
+	preppedRule := preppedKeywordRule{
+		Name:             rule.Name,
+		Operator:         rule.Operator,
+		CaseSensitive:    rule.CaseSensitive,
+		OriginalKeywords: rule.Keywords,
+		FuzzyMatch:       rule.FuzzyMatch,
+		FuzzyThreshold:   rule.FuzzyThreshold,
+	}
+
+	if preppedRule.FuzzyMatch && preppedRule.FuzzyThreshold == 0 {
+		preppedRule.FuzzyThreshold = 2
+	}
+
+	if rule.FuzzyMatch {
+		preppedRule.LowercaseKeywords = make([]string, len(rule.Keywords))
+		for j, keyword := range rule.Keywords {
+			preppedRule.LowercaseKeywords[j] = strings.ToLower(keyword)
+		}
+	}
+
+	preppedRule.CompiledRegexpsCS = make([]*regexp.Regexp, len(rule.Keywords))
+	preppedRule.CompiledRegexpsCI = make([]*regexp.Regexp, len(rule.Keywords))
+
+	for j, keyword := range rule.Keywords {
+		quotedKeyword := regexp.QuoteMeta(keyword)
+		hasWordChar := false
+		hasChinese := false
+		for _, r := range keyword {
+			if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
+				hasWordChar = true
+			}
+			if unicode.Is(unicode.Han, r) {
+				hasChinese = true
+			}
+			if hasWordChar && hasChinese {
+				break
+			}
+		}
+
+		patternCS := quotedKeyword
+		patternCI := "(?i)" + quotedKeyword
+
+		if hasWordChar && !hasChinese {
+			patternCS = "\\b" + patternCS + "\\b"
+			patternCI = "(?i)\\b" + quotedKeyword + "\\b"
+		}
+
+		var err error
+		preppedRule.CompiledRegexpsCS[j], err = regexp.Compile(patternCS)
+		if err != nil {
+			logging.Errorf("Failed to compile case-sensitive regex for keyword %q: %v", keyword, err)
+			return preppedKeywordRule{}, err
+		}
+
+		preppedRule.CompiledRegexpsCI[j], err = regexp.Compile(patternCI)
+		if err != nil {
+			logging.Errorf("Failed to compile case-insensitive regex for keyword %q: %v", keyword, err)
+			return preppedKeywordRule{}, err
+		}
+	}
+
+	return preppedRule, nil
 }
 
 // Classify performs keyword-based classification on the given text.
 // Returns category, confidence (0.0-1.0), and error.
-// Confidence is calculated as: 0.5 + (matchCount / totalKeywords * 0.5)
+// For regex: confidence = 0.5 + (matchCount / totalKeywords * 0.5)
+// For BM25/N-gram: confidence derived from match scores
 func (c *KeywordClassifier) Classify(text string) (string, float64, error) {
 	category, _, matchCount, totalKeywords, err := c.ClassifyWithKeywordsAndCount(text)
 	if err != nil || category == "" {
@@ -125,7 +232,7 @@ func (c *KeywordClassifier) Classify(text string) (string, float64, error) {
 	}
 
 	if totalKeywords == 0 {
-		return category, 1.0, nil // Edge case: no keywords defined
+		return category, 1.0, nil
 	}
 
 	ratio := float64(matchCount) / float64(totalKeywords)
@@ -146,21 +253,57 @@ func (c *KeywordClassifier) ClassifyWithKeywords(text string) (string, []string,
 // - matchCount: number of keywords that matched
 // - totalKeywords: total number of keywords in the matched rule
 // - error: any error that occurred
+//
+// Rules are evaluated in the order they were defined in the config (first-match semantics),
+// regardless of method. Each rule is dispatched to its respective engine.
 func (c *KeywordClassifier) ClassifyWithKeywordsAndCount(text string) (string, []string, int, int, error) {
-	for _, rule := range c.rules {
-		matched, keywords, matchCount, err := c.matchesWithCount(text, rule)
-		if err != nil {
-			return "", nil, 0, 0, err
-		}
-		if matched {
-			totalKeywords := len(rule.OriginalKeywords)
-			if len(keywords) > 0 {
-				logging.Infof("Keyword-based classification matched rule %q with keywords: %v (%d/%d matched)",
-					rule.Name, keywords, matchCount, totalKeywords)
-			} else {
-				logging.Infof("Keyword-based classification matched rule %q with a NOR rule.", rule.Name)
+	regexIdx := 0
+
+	for _, ref := range c.ruleOrder {
+		switch ref.method {
+		case "bm25":
+			result := c.bm25Classifier.Classify(text)
+			if result.Matched && result.RuleName == ref.name {
+				if len(result.MatchedKeywords) > 0 {
+					logging.Infof("BM25 keyword classification matched rule %q with keywords: %v (%d/%d matched)",
+						ref.name, result.MatchedKeywords, result.MatchCount, result.TotalKeywords)
+				} else {
+					logging.Infof("BM25 keyword classification matched rule %q with a NOR rule.", ref.name)
+				}
+				return result.RuleName, result.MatchedKeywords, result.MatchCount, result.TotalKeywords, nil
 			}
-			return rule.Name, keywords, matchCount, totalKeywords, nil
+
+		case "ngram":
+			result := c.ngramClassifier.Classify(text)
+			if result.Matched && result.RuleName == ref.name {
+				if len(result.MatchedKeywords) > 0 {
+					logging.Infof("N-gram keyword classification matched rule %q with keywords: %v (%d/%d matched)",
+						ref.name, result.MatchedKeywords, result.MatchCount, result.TotalKeywords)
+				} else {
+					logging.Infof("N-gram keyword classification matched rule %q with a NOR rule.", ref.name)
+				}
+				return result.RuleName, result.MatchedKeywords, result.MatchCount, result.TotalKeywords, nil
+			}
+
+		case "regex":
+			if regexIdx < len(c.regexRules) {
+				rule := c.regexRules[regexIdx]
+				regexIdx++
+				matched, keywords, matchCount, err := c.matchesWithCount(text, rule)
+				if err != nil {
+					return "", nil, 0, 0, err
+				}
+				if matched {
+					totalKeywords := len(rule.OriginalKeywords)
+					if len(keywords) > 0 {
+						logging.Infof("Keyword-based classification matched rule %q with keywords: %v (%d/%d matched)",
+							rule.Name, keywords, matchCount, totalKeywords)
+					} else {
+						logging.Infof("Keyword-based classification matched rule %q with a NOR rule.", rule.Name)
+					}
+					return rule.Name, keywords, matchCount, totalKeywords, nil
+				}
+			}
 		}
 	}
 	return "", nil, 0, 0, nil

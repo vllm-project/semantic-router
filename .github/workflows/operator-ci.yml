@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - develop
+    tags:
+      - 'v*'
     paths:
       - 'deploy/operator/**'
       - '.github/workflows/operator-ci.yml'
@@ -154,7 +156,11 @@ jobs:
         id: operator-remote-tags
         if: github.event_name != 'pull_request'
         run: |
-          TAG="${{ github.sha }}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="${{ github.sha }}"
+          fi
           TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:latest"
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 
@@ -162,7 +168,11 @@ jobs:
         id: bundle-remote-tags
         if: github.event_name != 'pull_request'
         run: |
-          TAG="${{ github.sha }}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="${{ github.sha }}"
+          fi
           TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:latest"
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 
@@ -176,7 +186,7 @@ jobs:
           load: true
           tags: ${{ steps.local-tags.outputs.operator }}
           cache-from: type=gha,scope=operator
-          cache-to: type=gha,mode=max,scope=operator
+          cache-to: type=gha,mode=max,scope=operator,ignore-error=true
 
       - name: Build and push operator image (multi-arch to registry)
         if: github.event_name != 'pull_request'
@@ -199,7 +209,7 @@ jobs:
           load: true
           tags: ${{ steps.local-tags.outputs.bundle }}
           cache-from: type=gha,scope=operator-bundle
-          cache-to: type=gha,mode=max,scope=operator-bundle
+          cache-to: type=gha,mode=max,scope=operator-bundle,ignore-error=true
 
       - name: Build and push bundle image (multi-arch to registry)
         if: github.event_name != 'pull_request'
@@ -222,7 +232,7 @@ jobs:
           load: true
           tags: ${{ steps.local-tags.outputs.extproc }}
           cache-from: type=gha,scope=extproc
-          cache-to: type=gha,mode=max,scope=extproc
+          cache-to: type=gha,mode=max,scope=extproc,ignore-error=true
 
       - name: Save operator image for integration tests
         run: docker save -o /tmp/operator-image.tar ${{ steps.local-tags.outputs.operator }}

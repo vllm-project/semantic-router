@@ -1,0 +1,100 @@
+name: Integration Test [Memory]
+description: Integration tests for memory features with Milvus storage backend
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/semantic-router/pkg/memory/**'
+      - 'src/semantic-router/pkg/extproc/*memory*'
+      - 'src/semantic-router/pkg/responseapi/**'
+      - 'src/vllm-sr/**'
+      - 'src/vllm-sr/Dockerfile*'
+      - 'tools/make/docker.mk'
+      - 'tools/make/milvus.mk'
+      - 'e2e/testing/09-memory-features-test.py'
+      - 'e2e/testing/run_memory_integration.sh'
+      - 'e2e/testing/llm-katan/**'
+      - 'config/testing/config.memory*.yaml'
+      - '.github/workflows/integration-test-memory.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  memory-integration-test:
+    name: Memory Integration Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      # NOTE: Model storage setup skipped - using echo backend for memory tests
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Free up disk space for large Docker build (CUDA + PyTorch dependencies)
+      - name: Free disk space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+          
+          # Remove unnecessary tools and libraries
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          
+          # Clean apt cache
+          sudo apt-get clean
+          
+          # Clean Docker (unused images, containers, volumes)
+          docker system prune -af --volumes || true
+          
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
+      - name: Run memory integration tests
+        run: |
+          make memory-test-integration DOCKER_TAG=ci VLLM_SR_IMAGE=vllm-sr:ci
+
+      - name: Collect logs
+        if: always()
+        run: |
+          mkdir -p logs
+          
+          # Router logs (full)
+          docker exec vllm-sr-container cat /var/log/supervisor/router.log 2>&1 > logs/router.log || true
+          docker exec vllm-sr-container cat /var/log/supervisor/router-error.log 2>&1 > logs/router-error.log || true
+          
+          # llm-katan logs
+          docker logs llm-katan 2>&1 > logs/llm-katan.log || true
+          
+          # Milvus logs
+          docker logs milvus-semantic-cache 2>&1 > logs/milvus.log || true
+          
+          # Container status
+          docker ps -a > logs/docker-status.txt || true
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-test-logs
+          path: logs/
+          retention-days: 7
+
+      - name: Clean up
+        if: always()
+        run: |
+          vllm-sr stop || true
+          docker stop llm-katan vllm-sr-container 2>/dev/null || true
+          docker rm llm-katan vllm-sr-container 2>/dev/null || true
+          make stop-milvus || true

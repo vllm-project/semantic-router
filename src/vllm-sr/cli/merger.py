@@ -1,13 +1,48 @@
 """Configuration merger for vLLM Semantic Router."""
 
 import copy
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
+from urllib.parse import urlparse
 
-from cli.models import UserConfig, PluginType
+from cli.models import (
+    UserConfig,
+    PluginType,
+    AlgorithmConfig,
+    LatencyAwareAlgorithmConfig,
+)
 from cli.defaults import load_embedded_defaults
 from cli.utils import getLogger
 
 log = getLogger(__name__)
+
+
+def _condition_to_dict(condition) -> Dict[str, Any]:
+    """Serialize recursive condition node to router rule dict."""
+    node: Dict[str, Any] = {}
+    ctype = getattr(condition, "type", None)
+    cname = getattr(condition, "name", None)
+    cop = getattr(condition, "operator", None)
+    cchildren = getattr(condition, "conditions", None)
+
+    if ctype is not None:
+        node["type"] = ctype
+    if cname is not None:
+        node["name"] = cname
+    if cop is not None:
+        node["operator"] = cop
+    if cchildren:
+        node["conditions"] = [_condition_to_dict(c) for c in cchildren]
+    return node
+
+
+def _iter_condition_nodes(conditions):
+    """Depth-first traversal over recursive condition trees."""
+    if not conditions:
+        return
+    for condition in conditions:
+        yield condition
+        if getattr(condition, "conditions", None):
+            yield from _iter_condition_nodes(condition.conditions)
 
 
 def translate_keyword_signals(keywords: list) -> list:
@@ -115,6 +150,10 @@ def translate_preference_signals(preferences: list) -> list:
         }
         if signal.description:
             rule["description"] = signal.description
+        if signal.threshold is not None:
+            rule["threshold"] = signal.threshold
+        if signal.examples:
+            rule["examples"] = signal.examples
         rules.append(rule)
     return rules
 
@@ -134,40 +173,6 @@ def translate_language_signals(languages: list) -> list:
         rule = {
             "name": signal.name,
         }
-        if signal.description:
-            rule["description"] = signal.description
-        rules.append(rule)
-    return rules
-
-
-def translate_latency_signals(latencies: list) -> list:
-    """
-    Translate latency signals to router format.
-
-    Args:
-        latencies: List of Latency objects
-
-    Returns:
-        list: Router latency rules
-    """
-    rules = []
-    for signal in latencies:
-        rule = {
-            "name": signal.name,
-        }
-        # At least one of tpot_percentile or ttft_percentile should be set
-        if signal.tpot_percentile is not None and signal.tpot_percentile > 0:
-            rule["tpot_percentile"] = signal.tpot_percentile
-        if signal.ttft_percentile is not None and signal.ttft_percentile > 0:
-            rule["ttft_percentile"] = signal.ttft_percentile
-
-        # Validate that at least one is set
-        if "tpot_percentile" not in rule and "ttft_percentile" not in rule:
-            log.warn(
-                f"Latency signal '{signal.name}' has neither tpot_percentile nor ttft_percentile set, skipping"
-            )
-            continue
-
         if signal.description:
             rule["description"] = signal.description
         rules.append(rule)
@@ -218,14 +223,87 @@ def translate_complexity_signals(complexity_rules: list) -> list:
         if signal.description:
             rule["description"] = signal.description
         if signal.composer:
-            rule["composer"] = {
-                "operator": signal.composer.operator,
-                "conditions": [
-                    {"type": c.type, "name": c.name} for c in signal.composer.conditions
-                ],
-            }
+            rule["composer"] = _condition_to_dict(signal.composer)
         rules.append(rule)
     return rules
+
+
+def translate_jailbreak_signals(jailbreak_rules: list) -> list:
+    """
+    Translate jailbreak signals to router format.
+
+    Args:
+        jailbreak_rules: List of JailbreakRule objects
+
+    Returns:
+        list: Router jailbreak rules
+    """
+    rules = []
+    for signal in jailbreak_rules:
+        rule = {
+            "name": signal.name,
+            "threshold": signal.threshold,
+        }
+        if signal.method:
+            rule["method"] = signal.method
+        if signal.include_history:
+            rule["include_history"] = signal.include_history
+        if signal.jailbreak_patterns:
+            rule["jailbreak_patterns"] = signal.jailbreak_patterns
+        if signal.benign_patterns:
+            rule["benign_patterns"] = signal.benign_patterns
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
+def translate_pii_signals(pii_rules: list) -> list:
+    """
+    Translate PII signals to router format.
+
+    Args:
+        pii_rules: List of PIIRule objects
+
+    Returns:
+        list: Router PII rules
+    """
+    rules = []
+    for signal in pii_rules:
+        rule = {
+            "name": signal.name,
+            "threshold": signal.threshold,
+        }
+        if signal.pii_types_allowed:
+            rule["pii_types_allowed"] = signal.pii_types_allowed
+        if signal.include_history:
+            rule["include_history"] = signal.include_history
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
+def _parse_endpoint(endpoint_str: str) -> Tuple[str, int, str]:
+    """Parse an endpoint string into (address, port, protocol).
+
+    Supports formats: "host:port", "http://host:port", "https://host:port",
+    and bare "host" (defaults to port 8000, protocol http).
+    """
+    if "://" in endpoint_str:
+        parsed = urlparse(endpoint_str)
+        address = parsed.hostname or ""
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        protocol = parsed.scheme
+    elif ":" in endpoint_str:
+        address, port_str = endpoint_str.rsplit(":", 1)
+        port = int(port_str)
+        protocol = "https" if port == 443 else "http"
+    else:
+        address = endpoint_str
+        port = 8000
+        protocol = "http"
+    return address, port, protocol
 
 
 def translate_external_models(external_models: list) -> list:
@@ -240,10 +318,7 @@ def translate_external_models(external_models: list) -> list:
     """
     models = []
     for model in external_models:
-        # Parse endpoint
-        parts = model.endpoint.split(":")
-        address = parts[0]
-        port = int(parts[1]) if len(parts) > 1 else 8000
+        address, port, protocol = _parse_endpoint(model.endpoint)
 
         config = {
             "llm_provider": model.provider,
@@ -251,13 +326,13 @@ def translate_external_models(external_models: list) -> list:
             "llm_endpoint": {
                 "address": address,
                 "port": port,
+                "protocol": protocol,
             },
             "llm_model_name": model.model_name,
             "llm_timeout_seconds": model.timeout_seconds,
             "parser_type": model.parser_type,
         }
 
-        # Add access_key if provided
         if model.access_key:
             config["access_key"] = model.access_key
 
@@ -300,7 +375,7 @@ def extract_categories_from_decisions(decisions: list) -> list:
     categories = {}
 
     for decision in decisions:
-        for condition in decision.rules.conditions:
+        for condition in _iter_condition_nodes(decision.rules.conditions):
             if condition.type == "domain":
                 if condition.name not in categories:
                     categories[condition.name] = {
@@ -332,6 +407,10 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
             "reasoning_family": model.reasoning_family,
             "access_key": model.access_key,
         }
+
+        # Add param_size if provided
+        if model.param_size:
+            model_config[model.name]["param_size"] = model.param_size
 
         # Add api_format if provided
         if model.api_format:
@@ -400,12 +479,18 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
                     "parameter": family_config.parameter,
                 }
 
+    # Translate external_models if present
+    external_models = []
+    if providers.external_models:
+        external_models = translate_external_models(providers.external_models)
+
     return {
         "vllm_endpoints": vllm_endpoints,
         "model_config": model_config,
         "default_model": providers.default_model,
         "reasoning_families": reasoning_families_dict,
         "default_reasoning_effort": providers.default_reasoning_effort,
+        "external_models": external_models,
     }
 
 
@@ -472,12 +557,6 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             )
             log.info(f"  Added {len(user_config.signals.language)} language signals")
 
-        if user_config.signals.latency and len(user_config.signals.latency) > 0:
-            merged["latency_rules"] = translate_latency_signals(
-                user_config.signals.latency
-            )
-            log.info(f"  Added {len(user_config.signals.latency)} latency signals")
-
         if user_config.signals.context and len(user_config.signals.context) > 0:
             merged["context_rules"] = translate_context_signals(
                 user_config.signals.context
@@ -491,6 +570,16 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             log.info(
                 f"  Added {len(user_config.signals.complexity)} complexity signals"
             )
+
+        if user_config.signals.jailbreak and len(user_config.signals.jailbreak) > 0:
+            merged["jailbreak"] = translate_jailbreak_signals(
+                user_config.signals.jailbreak
+            )
+            log.info(f"  Added {len(user_config.signals.jailbreak)} jailbreak signals")
+
+        if user_config.signals.pii and len(user_config.signals.pii) > 0:
+            merged["pii"] = translate_pii_signals(user_config.signals.pii)
+            log.info(f"  Added {len(user_config.signals.pii)} PII signals")
 
         # Translate domains to categories
         if user_config.signals.domains:
@@ -533,10 +622,49 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
 
     # Translate providers
     provider_config = translate_providers_to_router_format(user_config.providers)
+    if not provider_config.get("external_models"):
+        provider_config.pop("external_models", None)
     merged.update(provider_config)
     log.info(f"  Added {len(user_config.providers.models)} models")
     log.info(f"  Added {len(provider_config['vllm_endpoints'])} endpoints")
+    if provider_config.get("external_models"):
+        log.info(f"  Added {len(provider_config['external_models'])} external_models")
 
-    log.info("✓ Configuration merged successfully")
+    # Pass through memory configuration if provided
+    if user_config.memory:
+        memory_config = user_config.memory.model_dump(exclude_none=True)
+        merged["memory"] = memory_config
+        log.info(f"  Added memory configuration (enabled={user_config.memory.enabled})")
+
+    # Pass through embedding_models configuration if provided
+    # BERT is recommended for memory retrieval (forgiving semantic matching)
+    if user_config.embedding_models:
+        embedding_config = user_config.embedding_models.model_dump(exclude_none=True)
+        default_embedding_config = merged.get("embedding_models", {})
+        if isinstance(default_embedding_config, dict):
+            merged_embedding = copy.deepcopy(default_embedding_config)
+            for key, value in embedding_config.items():
+                if (
+                    key == "hnsw_config"
+                    and isinstance(value, dict)
+                    and isinstance(merged_embedding.get("hnsw_config"), dict)
+                ):
+                    merged_embedding["hnsw_config"].update(value)
+                else:
+                    merged_embedding[key] = value
+            merged["embedding_models"] = merged_embedding
+        else:
+            merged["embedding_models"] = embedding_config
+        log.info(f"  Added embedding_models configuration")
+
+    # Pass through additional top-level config blocks that are not part of the
+    # typed UserConfig schema yet (for advanced/legacy compatibility).
+    # Examples: classifier, prompt_guard, feedback_detector.
+    extra_fields = getattr(user_config, "model_extra", None) or {}
+    for key, value in extra_fields.items():
+        merged[key] = copy.deepcopy(value)
+        log.info(f"  Added passthrough top-level config: {key}")
+
+    log.info("Configuration merged successfully")
 
     return merged

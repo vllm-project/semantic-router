@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓");
 
     let sequential_accuracy = (sequential_correct as f64 / test_data.len() as f64) * 100.0;
-    println!("✅ Sequential Results:");
+    println!("Sequential Results:");
     println!(
         "   Accuracy: {:.1}% ({}/{})\n",
         sequential_accuracy,
@@ -136,7 +136,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓");
 
     let batch_accuracy = (batch_correct as f64 / test_data.len() as f64) * 100.0;
-    println!("✅ Continuous Batch Results:");
+    println!("Continuous Batch Results:");
     println!(
         "   Accuracy: {:.1}% ({}/{})\n",
         batch_accuracy,
@@ -229,7 +229,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Verdict
     if mismatches == 0 {
-        println!("✅ ✅ ✅  VERIFICATION PASSED  ✅ ✅ ✅");
+        println!(" VERIFICATION PASSED  ✅");
         println!("\n🎉 Continuous batch scheduler produces IDENTICAL predictions!");
         println!(
             "   All {} predictions match sequential processing.",

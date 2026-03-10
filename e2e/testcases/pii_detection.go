@@ -188,9 +188,21 @@ func testSinglePIIDetection(ctx context.Context, testCase PIITestCase, localPort
 		return result
 	}
 
-	// Check for PII violation header
-	piiViolationHeader := resp.Header.Get("x-vsr-pii-violation")
-	result.ActuallyBlocked = (piiViolationHeader == "true")
+	// Check for PII detection using new signal-driven headers
+	// New architecture: when PII is detected and blocked, the fast_response plugin
+	// returns an ImmediateResponse with x-vsr-fast-response: true and
+	// x-vsr-selected-decision: <decision-name>.
+	// Note: x-vsr-matched-pii is only set in the response header phase (non-blocking path),
+	// it is NOT present in fast_response ImmediateResponse.
+	fastResponse := resp.Header.Get("x-vsr-fast-response")
+	selectedDecision := resp.Header.Get("x-vsr-selected-decision")
+	matchedPII := resp.Header.Get("x-vsr-matched-pii")
+	legacyPIIViolation := resp.Header.Get("x-vsr-pii-violation") // backward compat
+	// PII is blocked when: fast_response was triggered (ImmediateResponse),
+	// or legacy PII violation header is set, or matched-pii is present (non-blocking detection)
+	result.ActuallyBlocked = fastResponse == "true" || legacyPIIViolation == "true"
+	_ = selectedDecision // available for future decision-name based filtering
+	_ = matchedPII       // only present in non-blocking (pass-through) responses
 
 	// Verify response body contains expected message
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -200,10 +212,17 @@ func testSinglePIIDetection(ctx context.Context, testCase PIITestCase, localPort
 	}
 
 	if result.ActuallyBlocked {
-		// Verify the response contains PII violation message
+		// In the new signal-driven architecture, the fast_response plugin returns
+		// a configurable message. We check for common PII block messages.
 		bodyStr := string(bodyBytes)
-		if !strings.Contains(bodyStr, "personally identifiable information") {
-			result.Error = "PII blocked but response message doesn't contain expected text"
+		hasPIIMessage := strings.Contains(bodyStr, "personally identifiable information") ||
+			strings.Contains(bodyStr, "PII") ||
+			strings.Contains(bodyStr, "pii")
+		if !hasPIIMessage {
+			// Not necessarily an error in signal-driven mode, just log it
+			if verbose {
+				fmt.Printf("[Test] Note: PII blocked but response message may use custom fast_response text\n")
+			}
 		}
 	}
 

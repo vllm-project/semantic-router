@@ -311,7 +311,7 @@ impl ContinuousBatchScheduler {
 
                 if config.verbose {
                     println!(
-                        "✅ Batch processed: {} requests in {:.2}ms",
+                        "Batch processed: {} requests in {:.2}ms",
                         batch_size,
                         batch_duration.as_secs_f64() * 1000.0
                     );
@@ -372,7 +372,7 @@ impl ContinuousBatchScheduler {
 
             if config.verbose {
                 println!(
-                    "✅ Batched forward pass completed: {} requests in {:.2}ms ({:.2}ms per request)",
+                    "Batched forward pass completed: {} requests in {:.2}ms ({:.2}ms per request)",
                     batch_size,
                     batch_duration,
                     batch_duration / batch_size as f64

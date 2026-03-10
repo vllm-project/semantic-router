@@ -2,17 +2,17 @@
 title: 常见错误
 sidebar_label: 常见错误
 translation:
-  source_commit: "1d1439a"
+  source_commit: "9ed8acf"
   source_file: "docs/troubleshooting/common-errors.md"
   outdated: false
 ---
 
 # 常见错误及解决方法
 
-本指南提供了运行 vLLM Semantic Router 时可能遇到的常见 log 消息和错误的快速参考。每个部分都将错误模式映射到其根本原因和配置修复方法。
+本文整理了运行 vLLM Semantic Router 时常见的系统日志报错、原因分析及配置修复方案。
 
 :::tip
-使用本页末尾的[快速诊断命令](#快速诊断命令)可以快速识别问题。
+可先尝试本页末尾的[快速诊断命令](#快速诊断命令)。
 :::
 
 ## 配置加载错误
@@ -118,32 +118,43 @@ semantic_cache:
 
 ## PII 和安全错误
 
-### PII 策略违规
+### 请求被 PII 过滤器阻断
 
-**Log 模式：**
+当请求因包含敏感信息（个人身份信息 PII）而被阻断时，您将看到类似以下的 403 Forbidden 响应：
 
+```json
+{
+  "object": "error",
+  "message": "PII signal fired: rule=<name>, detected_types=[<types>], threshold=<score>",
+  "type": "pii_violation",
+  "param": null,
+  "code": 403
+}
 ```
-PII policy violation for decision <name>: denied PII types [<types>]
-```
+
+**原因**：路由器的 PII 模型在这个决策阶段检测到敏感信息（邮件、电话或身份证），且当前策略未将其加入白名单。
 
 **修复方法：**
 
-1. **允许该 PII 类型**（如果应该被允许）：
+1. **允许该 PII 类型**（如果应该被允许）— 将其添加到信号规则的 `pii_types_allowed` 中：
 
 ```yaml
-plugins:
-  - type: "pii"
-    configuration:
+signals:
+  pii:
+    - name: "pii_allow_location"
+      threshold: 0.5
       pii_types_allowed:
-        - "LOCATION" # 在此添加被拒绝的类型
+        - "GPE"          # 在此添加被拒绝的类型
+        - "ORGANIZATION"
 ```
 
-1. **提高阈值**（如果是误报）：
+2. **提高阈值**（如果是误报）：
 
 ```yaml
-classifier:
-  pii_model:
-    threshold: 0.95 # 从默认的 0.9 提高
+signals:
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.95   # 从默认的 0.5 提高
 ```
 
 ---
@@ -158,19 +169,29 @@ Jailbreak detected: type=<type>, confidence=<score>
 
 **修复方法：**
 
-1. **提高阈值** 以减少误报：
+1. **提高分数阈值**（降低误报） — 更新信号规则：
 
 ```yaml
-prompt_guard:
-  threshold: 0.8 # 从默认的 0.7 提高
+signals:
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.85   # 从默认的 0.65 提高
 ```
 
-1. **为特定 decision 禁用**：
+2. **为特定决策旁路检查**（例如内部工具通道） — 在该决策的条件中不引用验证特征：
 
 ```yaml
 decisions:
+  # 该决策不引用任何 jailbreak 信号 → 无 jailbreak 检查
   - name: "internal_decision"
-    jailbreak_enabled: false
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "internal_keywords"
+    modelRefs:
+      - model: "internal-model"
 ```
 
 > 参见代码：[pii/policy.go](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/utils/pii/policy.go) 和 [req_filter_jailbreak.go](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/extproc/req_filter_jailbreak.go)。
@@ -283,7 +304,7 @@ bert_model:
 
 ### Cache 命中率低
 
-**症状：** Cache 很少返回 hit，后端延迟高
+**症状：** Cache hit 极低，请求直接穿透到后端产生高延迟
 
 **修复方法：** 降低 similarity threshold：
 

@@ -91,7 +91,7 @@ def install_dependencies():
     ]
     for pkg in packages:
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", pkg], check=True)
-    print("✅ Dependencies installed")
+    print("Dependencies installed")
 
 def train_model(name, script_path, extra_args=None):
     """Train a single model."""
@@ -111,7 +111,7 @@ def train_model(name, script_path, extra_args=None):
     
     elapsed = time.time() - start_time
     if result.returncode == 0:
-        print(f"✅ {name} completed in {elapsed/60:.1f} minutes")
+        print(f"{name} completed in {elapsed/60:.1f} minutes")
     else:
         print(f"❌ {name} failed (exit code: {result.returncode})")
     
@@ -153,7 +153,7 @@ def main():
     print(f"\n📊 Feedback Detector: rank={feedback_lora_rank}, alpha={feedback_lora_alpha}, epochs={feedback_epochs}")
     results['feedback'] = train_model(
         "Feedback Detector",
-        "src/training/modernbert_dissat_pipeline/train_feedback_detector.py",
+        "src/training/model_classifier/user_feedback_classifier/train_feedback_detector.py",
         [
             "--model_name", "llm-semantic-router/mmbert-32k-yarn",
             "--output_dir", f"{models_dir}/feedback-detector",
@@ -170,7 +170,7 @@ def main():
     # 2. Intent Classifier
     results['intent'] = train_model(
         "Intent Classifier",
-        "src/training/training_lora/classifier_model_fine_tuning_lora/ft_linear_lora.py",
+        "src/training/model_classifier/classifier_model_fine_tuning_lora/ft_linear_lora.py",
         [
             "--mode", "train",
             "--model", "mmbert-32k",
@@ -186,7 +186,7 @@ def main():
     # 3. PII Detector
     results['pii'] = train_model(
         "PII Detector",
-        "src/training/training_lora/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py",
+        "src/training/model_classifier/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py",
         [
             "--mode", "train",
             "--model", "mmbert-32k",
@@ -201,7 +201,7 @@ def main():
     # 4. Jailbreak Detector
     results['jailbreak'] = train_model(
         "Jailbreak Detector",
-        "src/training/training_lora/prompt_guard_fine_tuning_lora/jailbreak_bert_finetuning_lora.py",
+        "src/training/model_classifier/prompt_guard_fine_tuning_lora/jailbreak_bert_finetuning_lora.py",
         [
             "--mode", "train",
             "--model", "mmbert-32k",
@@ -216,7 +216,7 @@ def main():
     # 5. Fact Check Classifier
     results['factcheck'] = train_model(
         "Fact Check Classifier",
-        "src/training/training_lora/fact_check_fine_tuning_lora/fact_check_bert_finetuning_lora.py",
+        "src/training/model_classifier/fact_check_fine_tuning_lora/fact_check_bert_finetuning_lora.py",
         [
             "--mode", "train",
             "--model", "mmbert-32k",

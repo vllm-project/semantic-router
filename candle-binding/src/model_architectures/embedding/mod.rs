@@ -48,6 +48,9 @@ pub mod gemma3_model;
 // mmBERT Embedding model (32K context, 2D Matryoshka)
 pub mod mmbert_embedding;
 
+// Multi-modal embedding model (text + image + audio, 384-dim)
+pub mod multimodal_embedding;
+
 // Re-exports for convenience
 pub use dense_layers::{BottleneckDenseNet, DenseActivation, DenseLayer};
 pub use gemma3_model::{
@@ -74,6 +77,11 @@ pub use mmbert_embedding::MatryoshkaConfig;
 pub use mmbert_embedding::MmBertEmbeddingConfig;
 pub use mmbert_embedding::MmBertEmbeddingModel;
 
+// Multi-modal Embedding re-exports
+pub use multimodal_embedding::MultiModalEmbeddingConfig;
+pub use multimodal_embedding::MultiModalEmbeddingModel;
+pub use multimodal_embedding::MultiModalMatryoshkaConfig;
+
 // Pooling tests
 #[cfg(test)]
 mod pooling_test;
@@ -93,3 +101,5 @@ mod dense_layers_test;
 // Gemma3 model tests
 #[cfg(test)]
 mod gemma3_model_test;
+
+// Multi-modal embedding tests are inside multimodal_embedding.rs

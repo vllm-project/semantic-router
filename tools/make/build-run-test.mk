@@ -9,24 +9,31 @@ build: ## Build the Rust library and Golang binding
 build: $(if $(CI),rust-ci,rust) build-router
 
 # Build router (conditionally use rust-ci in CI environments)
+# Development build: Use DEV=true to enable untrusted metadata["user_id"] fallback for testing
+# Example: make build-router DEV=true
+# Production builds (default) only accept user_id from auth headers (x-authz-user-id)
 build-router: ## Build the router binary
 build-router: $(if $(CI),rust-ci,rust)
 	@$(LOG_TARGET)
 	@mkdir -p bin
-	@cd src/semantic-router && go build --tags=milvus -o ../../bin/router cmd/main.go
+ifdef DEV
+	@cd src/semantic-router && go build -tags=dev,milvus -o ../../bin/router cmd/main.go
+else
+	@cd src/semantic-router && go build -tags=milvus -o ../../bin/router cmd/main.go
+endif
 
 # Run the router
 run-router: ## Run the router with the specified config
 run-router: build-router
 	@echo "Running router with config: ${CONFIG_FILE}"
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router -config=${CONFIG_FILE} --enable-system-prompt-api=true
 
 # Run the router with e2e config for testing
 run-router-e2e: ## Run the router with e2e config for testing
 run-router-e2e: build-router download-models
 	@echo "Running router with e2e config: config/testing/config.e2e.yaml"
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router -config=config/testing/config.e2e.yaml
 
 # Build the ONNX binding Rust library
@@ -57,19 +64,20 @@ build-router-onnx: build-onnx-binding build-ml-binding
 run-router-onnx: ## Run the router with ONNX binding (mmBERT embedding model)
 run-router-onnx: build-router-onnx
 	@echo "Running router with ONNX binding..."
-	@echo "Config: $${ONNX_CONFIG_FILE:-config/config.onnx-binding-test.yaml}"
+	@echo "Config: $${ONNX_CONFIG_FILE:-config/onnx-binding/config.onnx-binding-test.yaml}"
 	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/ml-binding/target/release && \
-		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-config/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
+		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-config/onnx-binding/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
 
 # Unit test semantic-router
-# By default, Milvus and Redis tests are skipped. To enable them, set SKIP_MILVUS_TESTS=false and/or SKIP_REDIS_TESTS=false
-# Example: make test-semantic-router SKIP_MILVUS_TESTS=false
+# By default, Milvus, Redis, and Llama Stack tests are skipped. To enable them, set the relevant env var to false.
+# Example: make test-semantic-router SKIP_MILVUS_TESTS=false SKIP_LLAMA_STACK_TESTS=false
 test-semantic-router: ## Run unit tests for semantic-router (set SKIP_MILVUS_TESTS=false to enable Milvus tests)
 test-semantic-router: build-router
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 	export SKIP_MILVUS_TESTS=$${SKIP_MILVUS_TESTS:-true} && \
 	export SKIP_REDIS_TESTS=$${SKIP_REDIS_TESTS:-true} && \
+	export SKIP_LLAMA_STACK_TESTS=$${SKIP_LLAMA_STACK_TESTS:-true} && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v $$(go list ./...)
 
@@ -209,7 +217,7 @@ bench-hallucination-full:
 run-router-hallucination: ## Run the router with hallucination detection enabled
 run-router-hallucination: build-router download-models
 	@echo "Running router with hallucination detection config..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router -config=config/testing/config.hallucination.yaml
 
 # Test hallucination detection models by verifying router startup and model loading
@@ -222,16 +230,16 @@ test-hallucination-detection: build-router download-models
 	@echo "1. Starting mock vLLM server on port 8002..."
 	@nohup python3 e2e/testing/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
 	@sleep 2
-	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   ✓ Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; cat /tmp/mock_vllm.log; exit 1)
+	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; cat /tmp/mock_vllm.log; exit 1)
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		nohup ./bin/router -config=config/testing/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
 	@echo "   Waiting for router to initialize models (15s)..."
 	@sleep 15
 	@echo ""
 	@echo "3. Checking router logs for model initialization..."
-	@grep -E "(Fact-check classifier initialized|Hallucination.*initialized)" /tmp/router_hal.log 2>/dev/null | head -4 && echo "   ✓ Models initialized" || echo "   ⚠ Check /tmp/router_hal.log for details"
+	@grep -E "(Fact-check classifier initialized|Hallucination.*initialized)" /tmp/router_hal.log 2>/dev/null | head -4 && echo "   Models initialized" || echo "   ⚠ Check /tmp/router_hal.log for details"
 	@echo ""
 	@echo "4. Starting Envoy proxy..."
 	@if ! command -v func-e >/dev/null 2>&1; then \
@@ -240,7 +248,7 @@ test-hallucination-detection: build-router download-models
 	fi
 	@nohup func-e run --config-path config/envoy.yaml > /tmp/envoy_hal.log 2>&1 & echo $$! > /tmp/envoy_hal_pid.txt
 	@sleep 3
-	@curl -sf http://localhost:19000/ready > /dev/null && echo "   ✓ Envoy is ready" || echo "   ⚠ Envoy may not be ready"
+	@curl -sf http://localhost:19000/ready > /dev/null && echo "   Envoy is ready" || echo "   ⚠ Envoy may not be ready"
 	@echo ""
 	@echo "5. Testing OpenAI Chat API through Envoy (with tool context for hallucination detection)..."
 	@echo '   Sending request WITH tool results to trigger hallucination detection...'
@@ -277,7 +285,7 @@ test-hallucination-detection: build-router download-models
 	@-kill $$(cat /tmp/mock_vllm_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/mock_vllm_pid.txt
 	@echo ""
 	@echo "=============================================="
-	@echo "✓ Hallucination Detection E2E Test Complete"
+	@echo "Hallucination Detection E2E Test Complete"
 	@echo "=============================================="
 	@echo ""
 	@echo "Pipeline tested:"
@@ -304,19 +312,19 @@ test-hallucination-detection-manual: build-router download-models
 	@-lsof -ti:8801 | xargs kill -9 2>/dev/null || true
 	@rm -f /tmp/mock_vllm.log /tmp/router_hal.log /tmp/envoy_hal.log
 	@sleep 2
-	@echo "   ✓ Cleanup complete"
+	@echo "   Cleanup complete"
 	@echo ""
 	@echo "1. Starting mock vLLM server on port 8002..."
 	@nohup python3 e2e/testing/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
 	@sleep 2
-	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   ✓ Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; exit 1)
+	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; exit 1)
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		nohup ./bin/router -config=config/testing/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
 	@echo "   Waiting for router to initialize models (15s)..."
 	@sleep 15
-	@grep "Fact-check classifier initialized" /tmp/router_hal.log && echo "   ✓ Models initialized" || echo "   ⚠ Check /tmp/router_hal.log"
+	@grep "Fact-check classifier initialized" /tmp/router_hal.log && echo "   Models initialized" || echo "   ⚠ Check /tmp/router_hal.log"
 	@echo ""
 	@echo "3. Starting Envoy proxy..."
 	@if ! command -v func-e >/dev/null 2>&1; then \
@@ -325,10 +333,10 @@ test-hallucination-detection-manual: build-router download-models
 	fi
 	@nohup func-e run --config-path config/envoy.yaml > /tmp/envoy_hal.log 2>&1 & echo $$! > /tmp/envoy_hal_pid.txt
 	@sleep 3
-	@curl -sf http://localhost:8801/health > /dev/null 2>&1 && echo "   ✓ Envoy is ready" || echo "   ✓ Envoy started (no /health endpoint)"
+	@curl -sf http://localhost:8801/health > /dev/null 2>&1 && echo "   Envoy is ready" || echo "   Envoy started (no /health endpoint)"
 	@echo ""
 	@echo "=============================================="
-	@echo "✓ Services Ready for Manual Testing"
+	@echo "Services Ready for Manual Testing"
 	@echo "=============================================="
 	@echo ""
 	@echo "Endpoints:"
@@ -356,7 +364,7 @@ test-hallucination-detection-manual: build-router download-models
 	@-pkill -f "mock-vllm-hallucination" 2>/dev/null || true
 	@-pkill -f "router.*config.hallucination" 2>/dev/null || true
 	@-pkill -f "func-e.*envoy" 2>/dev/null || true
-	@echo "✓ All services stopped"
+	@echo "All services stopped"
 
 # Stop hallucination detection services manually
 stop-hallucination-services: ## Stop hallucination detection services
@@ -371,7 +379,7 @@ stop-hallucination-services:
 	@-lsof -ti:8002 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti:50051 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti:8801 | xargs kill -9 2>/dev/null || true
-	@echo "✓ All services stopped"
+	@echo "All services stopped"
 
 # Hallucination Detection Demo with Tool Calling
 demo-hallucination: ## Run interactive hallucination detection demo (CLI)
@@ -388,3 +396,109 @@ demo-hallucination-auto: ## Run hallucination demo with predefined questions (no
 demo-hallucination-auto: build-router download-models
 	@echo "Starting Hallucination Detection Demo (auto mode)..."
 	@./e2e/testing/hallucination-demo/run_demo.sh --demo
+
+# ============== Image Generation Tests ==============
+
+# Test image generation with vLLM-Omni
+test-image-gen: ## Test image generation via vLLM-Omni (requires vLLM-Omni on localhost:8001)
+test-image-gen:
+	@echo "Testing image generation with vLLM-Omni..."
+	@./scripts/test-image-gen.sh
+
+# Run image generation integration tests (Go)
+test-image-gen-integration: ## Run Go integration tests for image generation
+test-image-gen-integration:
+	@echo "Running image generation integration tests..."
+	@cd src/semantic-router && go test -tags=integration -v ./pkg/imagegen/integration_test.go -timeout 300s
+
+# Run router with image generation config
+run-router-image-gen: ## Run router with image generation config
+run-router-image-gen: build-router
+	@echo "Running router with image generation config..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+		./bin/router -config=config/testing/config.image-gen.yaml
+
+# ============== Modality Routing Tests ==============
+
+# Run router with modality routing config
+run-router-modality: ## Run router with modality routing config (AR + Diffusion + Both)
+run-router-modality: build-router
+	@echo "Running router with modality routing config..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+		./bin/router -config=config/testing/config.modality-routing.yaml --enable-system-prompt-api=true
+
+# Test modality routing — sends prompts for AR, DIFFUSION, and BOTH through Envoy
+# Requires: router running with modality-routing config, Envoy proxy, AR vLLM (port 8000), Diffusion vLLM (port 8001)
+test-modality-routing: ## Test modality routing (AR / DIFFUSION / BOTH) through Envoy
+test-modality-routing:
+	@echo "=============================================="
+	@echo " Modality Routing Tests (via Envoy on :8801)"
+	@echo "=============================================="
+	@echo ""
+	@# --- TEST 1: AR (pure text) ---
+	@echo "--- TEST 1: AR (pure text) ---"
+	@echo "Prompt: What is the capital of France?"
+	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
+		-H "Content-Type: application/json" \
+		-d '{"model":"auto","messages":[{"role":"user","content":"What is the capital of France?"}],"max_tokens":100}' \
+		| jq -r '.choices[0].message.content'
+	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
+	@echo ""
+	@# --- TEST 2: AR (code question) ---
+	@echo "--- TEST 2: AR (code question) ---"
+	@echo "Prompt: Write a Python function to reverse a linked list"
+	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
+		-H "Content-Type: application/json" \
+		-d '{"model":"auto","messages":[{"role":"user","content":"Write a Python function to reverse a linked list"}],"max_tokens":200}' \
+		| jq -r '.choices[0].message.content'
+	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
+	@echo ""
+	@# --- TEST 3: DIFFUSION (image generation) ---
+	@echo "--- TEST 3: DIFFUSION (image generation) ---"
+	@echo "Prompt: Generate an image of a sunset over mountains"
+	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
+		-H "Content-Type: application/json" \
+		-d '{"model":"auto","messages":[{"role":"user","content":"Generate an image of a sunset over mountains"}],"max_tokens":100}' \
+		| jq -r '.choices[0].message.content[] | select(.type=="image_url") | .image_url.url' \
+		| sed 's|^data:image/png;base64,||' | base64 -d > /tmp/mr_img3.png && chafa --size=60x20 /tmp/mr_img3.png
+	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
+	@echo ""
+	@# --- TEST 4: DIFFUSION (draw/paint) ---
+	@echo "--- TEST 4: DIFFUSION (draw/paint) ---"
+	@echo "Prompt: Draw a cute cat wearing a top hat"
+	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
+		-H "Content-Type: application/json" \
+		-d '{"model":"auto","messages":[{"role":"user","content":"Draw a cute cat wearing a top hat"}],"max_tokens":100}' \
+		| jq -r '.choices[0].message.content[] | select(.type=="image_url") | .image_url.url' \
+		| sed 's|^data:image/png;base64,||' | base64 -d > /tmp/mr_img4.png && chafa --size=60x20 /tmp/mr_img4.png
+	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
+	@echo ""
+	@# --- TEST 5: BOTH (text + image) ---
+	@echo "--- TEST 5: BOTH (text + image) ---"
+	@echo "Prompt: Explain how photosynthesis works and generate an image of the process"
+	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
+		-H "Content-Type: application/json" \
+		-d '{"model":"auto","messages":[{"role":"user","content":"Explain how photosynthesis works and generate an image of the process"}],"max_tokens":500}' \
+		-o /tmp/mr_both5.json
+	@echo "[Text Response]"
+	@jq -r '.choices[0].message.content[] | select(.type=="text") | .text' /tmp/mr_both5.json
+	@jq -r '.choices[0].message.content[] | select(.type=="image_url") | .image_url.url' /tmp/mr_both5.json \
+		| sed 's|^data:image/png;base64,||' | base64 -d > /tmp/mr_img5.png && echo "[Image]" && chafa --size=60x20 /tmp/mr_img5.png
+	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
+	@echo ""
+	@# --- TEST 6: BOTH (describe + illustrate) ---
+	@echo "--- TEST 6: BOTH (describe + illustrate) ---"
+	@echo "Prompt: Describe the water cycle and illustrate it with a diagram"
+	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
+		-H "Content-Type: application/json" \
+		-d '{"model":"auto","messages":[{"role":"user","content":"Describe the water cycle and illustrate it with a diagram"}],"max_tokens":500}' \
+		-o /tmp/mr_both6.json
+	@echo "[Text Response]"
+	@jq -r '.choices[0].message.content[] | select(.type=="text") | .text' /tmp/mr_both6.json
+	@jq -r '.choices[0].message.content[] | select(.type=="image_url") | .image_url.url' /tmp/mr_both6.json \
+		| sed 's|^data:image/png;base64,||' | base64 -d > /tmp/mr_img6.png && echo "[Image]" && chafa --size=60x20 /tmp/mr_img6.png
+	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
+	@echo ""
+	@echo "=============================================="
+	@echo " Modality Routing Tests Complete"
+	@echo "=============================================="

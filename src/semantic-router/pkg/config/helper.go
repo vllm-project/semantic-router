@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"slices"
+	"strings"
 )
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
@@ -116,31 +118,65 @@ func (c *RouterConfig) GetModelAccessKey(modelName string) string {
 	return ""
 }
 
-// GetDecisionPIIPolicy returns the PII policy for a given decision
-// If the decision doesn't have a PII plugin or policy config, returns a default policy that allows all PII
-func (d *Decision) GetDecisionPIIPolicy() PIIPolicy {
-	piiConfig := d.GetPIIConfig()
-	if piiConfig == nil {
-		// Default policy allows all PII (no PII plugin configured)
+// GetDecisionPIIPolicy returns the PII policy for a given decision by looking at
+// the PIIRule signals referenced in the decision's rules tree.
+// If the decision doesn't reference any PII signals, returns a default policy that allows all PII.
+func (d *Decision) GetDecisionPIIPolicy(piiRules []PIIRule) PIIPolicy {
+	// Collect PII signal names referenced in the decision's rules
+	piiSignalNames := collectSignalNames(&d.Rules, "pii")
+	if len(piiSignalNames) == 0 {
+		// No PII signals → allow all PII
 		return PIIPolicy{
 			AllowByDefault: true,
 			PIITypes:       []string{},
 		}
 	}
 
-	// When PII plugin is enabled, default behavior is to block all PII (AllowByDefault: false)
-	// unless specific types are listed in PIITypesAllowed
-	allowByDefault := !piiConfig.Enabled
+	// Build a lookup for PIIRules by name
+	rulesByName := make(map[string]*PIIRule, len(piiRules))
+	for i := range piiRules {
+		rulesByName[piiRules[i].Name] = &piiRules[i]
+	}
+
+	// Aggregate PIITypesAllowed from all referenced PIIRules
+	var allAllowed []string
+	for _, name := range piiSignalNames {
+		if rule, ok := rulesByName[name]; ok {
+			allAllowed = append(allAllowed, rule.PIITypesAllowed...)
+		}
+	}
 
 	return PIIPolicy{
-		AllowByDefault: allowByDefault,
-		PIITypes:       piiConfig.PIITypesAllowed,
+		AllowByDefault: false,
+		PIITypes:       allAllowed,
 	}
 }
 
+// HasSignalType returns true if the decision's rules tree references at least
+// one signal of the given type (e.g., "jailbreak", "pii").
+func (d *Decision) HasSignalType(signalType string) bool {
+	return len(collectSignalNames(&d.Rules, signalType)) > 0
+}
+
+// collectSignalNames traverses a RuleNode tree and returns all leaf signal names
+// of the given signal type.
+func collectSignalNames(node *RuleNode, signalType string) []string {
+	if node == nil {
+		return nil
+	}
+	if node.Type == signalType && node.Name != "" {
+		return []string{node.Name}
+	}
+	var names []string
+	for i := range node.Conditions {
+		names = append(names, collectSignalNames(&node.Conditions[i], signalType)...)
+	}
+	return names
+}
+
 // IsDecisionAllowedForPIIType checks if a decision is allowed to process a specific PII type
-func (d *Decision) IsDecisionAllowedForPIIType(piiType string) bool {
-	policy := d.GetDecisionPIIPolicy()
+func (d *Decision) IsDecisionAllowedForPIIType(piiType string, piiRules []PIIRule) bool {
+	policy := d.GetDecisionPIIPolicy(piiRules)
 
 	// If allow_by_default is true, all PII types are allowed unless explicitly denied
 	if policy.AllowByDefault {
@@ -152,9 +188,9 @@ func (d *Decision) IsDecisionAllowedForPIIType(piiType string) bool {
 }
 
 // IsDecisionAllowedForPIITypes checks if a decision is allowed to process any of the given PII types
-func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string) bool {
+func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PIIRule) bool {
 	for _, piiType := range piiTypes {
-		if !d.IsDecisionAllowedForPIIType(piiType) {
+		if !d.IsDecisionAllowedForPIIType(piiType, piiRules) {
 			return false
 		}
 	}
@@ -263,20 +299,16 @@ func (c *RouterConfig) SelectBestEndpointForModel(modelName string) (string, boo
 	return bestEndpoint.Name, true
 }
 
-// SelectBestEndpointAddressForModel selects the best endpoint for a model and returns the address:port
-// Returns the endpoint address:port string and whether selection was successful
-func (c *RouterConfig) SelectBestEndpointAddressForModel(modelName string) (string, bool) {
+// SelectBestEndpointAddressForModel selects the best endpoint for a model and returns the address:port.
+// When the endpoint has a provider_profile with a base_url, the host:port is extracted from it.
+// Returns ("", false, nil) when no endpoints match the model.
+// Returns ("", false, err) when the selected endpoint has a broken provider_profile/base_url.
+func (c *RouterConfig) SelectBestEndpointAddressForModel(modelName string) (string, bool, error) {
 	endpoints := c.GetEndpointsForModel(modelName)
 	if len(endpoints) == 0 {
-		return "", false
+		return "", false, nil
 	}
 
-	// If only one endpoint, return it
-	if len(endpoints) == 1 {
-		return fmt.Sprintf("%s:%d", endpoints[0].Address, endpoints[0].Port), true
-	}
-
-	// Select endpoint with highest weight
 	bestEndpoint := endpoints[0]
 	for _, endpoint := range endpoints[1:] {
 		if endpoint.Weight > bestEndpoint.Weight {
@@ -284,7 +316,11 @@ func (c *RouterConfig) SelectBestEndpointAddressForModel(modelName string) (stri
 		}
 	}
 
-	return fmt.Sprintf("%s:%d", bestEndpoint.Address, bestEndpoint.Port), true
+	addr, err := bestEndpoint.ResolveAddress(c.ProviderProfiles)
+	if err != nil {
+		return "", false, fmt.Errorf("endpoint %q for model %q: %w", bestEndpoint.Name, modelName, err)
+	}
+	return addr, true, nil
 }
 
 // GetModelReasoningForDecision returns whether a specific model supports reasoning in a given decision
@@ -358,7 +394,7 @@ func (d *Decision) IsSystemPromptEnabled() bool {
 func (d *Decision) GetSystemPromptMode() string {
 	config := d.GetSystemPromptConfig()
 	if config == nil || config.Mode == "" {
-		return "replace" // Default mode
+		return "insert" // Default mode
 	}
 	return config.Mode
 }
@@ -425,92 +461,6 @@ func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
 	}
 	// Return -1 to indicate "use global default"
 	return -1
-}
-
-// IsJailbreakEnabledForDecision returns whether jailbreak detection is enabled for a specific decision
-// Returns true only if the decision has an explicit jailbreak plugin configured with enabled: true
-// This ensures per-decision scoping - decisions without jailbreak plugin won't execute jailbreak detection
-func (c *RouterConfig) IsJailbreakEnabledForDecision(decisionName string) bool {
-	decision := c.GetDecisionByName(decisionName)
-	if decision != nil {
-		config := decision.GetJailbreakConfig()
-		if config != nil {
-			return config.Enabled
-		}
-	}
-	// No explicit jailbreak plugin configured for this decision
-	// Return false to respect per-decision plugin scoping
-	return false
-}
-
-// GetJailbreakThresholdForDecision returns the effective jailbreak detection threshold for a decision
-func (c *RouterConfig) GetJailbreakThresholdForDecision(decisionName string) float32 {
-	decision := c.GetDecisionByName(decisionName)
-	if decision != nil {
-		config := decision.GetJailbreakConfig()
-		if config != nil && config.Threshold != nil {
-			return *config.Threshold
-		}
-	}
-	// Fall back to global threshold
-	return c.PromptGuard.Threshold
-}
-
-// GetJailbreakIncludeHistoryForDecision returns whether to include conversation history in jailbreak detection
-// Returns false by default (only check current user message)
-func (c *RouterConfig) GetJailbreakIncludeHistoryForDecision(decisionName string) bool {
-	decision := c.GetDecisionByName(decisionName)
-	if decision != nil {
-		config := decision.GetJailbreakConfig()
-		if config != nil {
-			return config.IncludeHistory
-		}
-	}
-	// Default to false (only check current user message)
-	return false
-}
-
-// IsPIIEnabledForDecision returns whether PII detection is enabled for a specific decision
-// Returns true only if the decision has an explicit PII plugin configured with enabled: true
-// This ensures per-decision scoping - decisions without PII plugin won't execute PII detection
-func (c *RouterConfig) IsPIIEnabledForDecision(decisionName string) bool {
-	decision := c.GetDecisionByName(decisionName)
-	if decision != nil {
-		config := decision.GetPIIConfig()
-		if config != nil {
-			return config.Enabled
-		}
-	}
-	// No explicit PII plugin configured for this decision
-	// Return false to respect per-decision plugin scoping
-	return false
-}
-
-// GetPIIThresholdForDecision returns the effective PII detection threshold for a decision
-func (c *RouterConfig) GetPIIThresholdForDecision(decisionName string) float32 {
-	decision := c.GetDecisionByName(decisionName)
-	if decision != nil {
-		config := decision.GetPIIConfig()
-		if config != nil && config.Threshold != nil {
-			return *config.Threshold
-		}
-	}
-	// Fall back to global threshold
-	return c.PIIModel.Threshold
-}
-
-// GetPIIIncludeHistoryForDecision returns whether to include conversation history in PII detection
-// Returns false by default (only check current user message)
-func (c *RouterConfig) GetPIIIncludeHistoryForDecision(decisionName string) bool {
-	decision := c.GetDecisionByName(decisionName)
-	if decision != nil {
-		config := decision.GetPIIConfig()
-		if config != nil {
-			return config.IncludeHistory
-		}
-	}
-	// Default to false (only check current user message)
-	return false
 }
 
 // GetCacheSimilarityThreshold returns the effective threshold for the semantic cache
@@ -603,8 +553,268 @@ func (c *RouterConfig) GetHallucinationAction() string {
 	return "warn"
 }
 
+// ResolveExternalModelID resolves the external model ID for a given model name and endpoint.
+// When a model alias (e.g., "qwen14b-rack1") is configured with external_model_ids,
+// this returns the real model name that the backend expects (e.g., "Qwen/Qwen2.5-14B-Instruct").
+// The endpoint type (e.g., "vllm", "ollama") is looked up from the selected endpoint.
+// Returns the original modelName if no mapping is found.
+func (c *RouterConfig) ResolveExternalModelID(modelName string, endpointName string) string {
+	if c == nil || c.ModelConfig == nil {
+		return modelName
+	}
+
+	modelConfig, ok := c.ModelConfig[modelName]
+	if !ok || len(modelConfig.ExternalModelIDs) == 0 {
+		return modelName
+	}
+
+	// Get the endpoint type from the endpoint name
+	endpointType := ""
+	if endpoint, found := c.GetEndpointByName(endpointName); found && endpoint.Type != "" {
+		endpointType = endpoint.Type
+	} else {
+		// Default endpoint type is "vllm"
+		endpointType = "vllm"
+	}
+
+	// Look up the external model ID for this endpoint type
+	if externalID, ok := modelConfig.ExternalModelIDs[endpointType]; ok && externalID != "" {
+		return externalID
+	}
+
+	return modelName
+}
+
+// SelectBestEndpointWithDetailsForModel selects the best endpoint for a model and returns
+// both the address:port and the endpoint name (needed for external_model_ids resolution).
+// Returns (address, endpointName, found).
+func (c *RouterConfig) SelectBestEndpointWithDetailsForModel(modelName string) (string, string, bool, error) {
+	endpoints := c.GetEndpointsForModel(modelName)
+	if len(endpoints) == 0 {
+		return "", "", false, nil
+	}
+
+	bestEndpoint := endpoints[0]
+	for _, endpoint := range endpoints[1:] {
+		if endpoint.Weight > bestEndpoint.Weight {
+			bestEndpoint = endpoint
+		}
+	}
+
+	addr, err := bestEndpoint.ResolveAddress(c.ProviderProfiles)
+	if err != nil {
+		return "", "", false, fmt.Errorf("endpoint %q for model %q: %w", bestEndpoint.Name, modelName, err)
+	}
+	return addr, bestEndpoint.Name, true, nil
+}
+
 // IsFeedbackDetectorEnabled checks if feedback detection is enabled
 func (c *RouterConfig) IsFeedbackDetectorEnabled() bool {
 	return c.InlineModels.FeedbackDetector.Enabled &&
 		c.InlineModels.FeedbackDetector.ModelID != ""
+}
+
+// ---------------------------------------------------------------------------
+// Provider profile helpers
+// ---------------------------------------------------------------------------
+
+// providerTypeInfo holds the per-type defaults for a cloud provider.
+// Every supported type MUST have an entry — no default/fallback branch.
+type providerTypeInfo struct {
+	AuthHeader string // HTTP header name for the API key
+	AuthPrefix string // value prefix ("Bearer", "" etc.)
+	ChatPath   string // path suffix appended after base_url path
+}
+
+// providerTypeRegistry is the single source of truth for type defaults.
+// To add a new provider, add one entry here and a matching LLMProvider
+// constant in pkg/authz/provider.go — nothing else needs a switch/default.
+var providerTypeRegistry = map[string]providerTypeInfo{
+	"openai":       {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
+	"anthropic":    {AuthHeader: "x-api-key", AuthPrefix: "", ChatPath: "/v1/messages"},
+	"azure-openai": {AuthHeader: "api-key", AuthPrefix: "", ChatPath: "/chat/completions"},
+	"bedrock":      {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
+	"gemini":       {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
+	"vertex-ai":    {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
+}
+
+// ValidProviderTypes returns the set of recognised type strings (for error messages).
+func ValidProviderTypes() []string {
+	types := make([]string, 0, len(providerTypeRegistry))
+	for t := range providerTypeRegistry {
+		types = append(types, t)
+	}
+	return types
+}
+
+// GetProviderProfileForEndpoint resolves the ProviderProfile for a named endpoint.
+//
+// Returns (nil, nil) when the endpoint exists but has no provider_profile set
+// (legacy address:port endpoint — this is not an error).
+//
+// Returns a non-nil error when:
+//   - endpointName does not match any VLLMEndpoint
+//   - the endpoint references a provider_profile name that does not exist in the map
+func (c *RouterConfig) GetProviderProfileForEndpoint(endpointName string) (*ProviderProfile, error) {
+	if endpointName == "" {
+		return nil, nil // no endpoint selected (e.g., model has no preferred_endpoints)
+	}
+	ep, found := c.GetEndpointByName(endpointName)
+	if !found {
+		return nil, fmt.Errorf("endpoint %q not found in vllm_endpoints", endpointName)
+	}
+	if ep.ProviderProfileName == "" {
+		return nil, nil // legacy endpoint, no profile — not an error
+	}
+	if c.ProviderProfiles == nil {
+		return nil, fmt.Errorf("endpoint %q references provider_profile %q but no provider_profiles map is defined",
+			endpointName, ep.ProviderProfileName)
+	}
+	profile, ok := c.ProviderProfiles[ep.ProviderProfileName]
+	if !ok {
+		return nil, fmt.Errorf("endpoint %q references provider_profile %q which does not exist in provider_profiles (have: %v)",
+			endpointName, ep.ProviderProfileName, mapKeys(c.ProviderProfiles))
+	}
+	return &profile, nil
+}
+
+// mapKeys returns the keys of a map for diagnostic messages.
+func mapKeys(m map[string]ProviderProfile) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// ResolveAddress returns the host:port string for this endpoint.
+//
+// Two distinct modes — no silent fallback between them:
+//   - provider_profile set → host:port is extracted from the profile's base_url.
+//     Returns error if profile is missing, has no base_url, or base_url is unparsable.
+//   - provider_profile NOT set → uses address:port fields directly.
+func (ep *VLLMEndpoint) ResolveAddress(profiles map[string]ProviderProfile) (string, error) {
+	if ep.ProviderProfileName == "" {
+		// Legacy endpoint: address:port is the intended mode.
+		return fmt.Sprintf("%s:%d", ep.Address, ep.Port), nil
+	}
+
+	// Profile-based endpoint: MUST resolve from base_url.
+	if profiles == nil {
+		return "", fmt.Errorf("endpoint %q has provider_profile %q but no provider_profiles map is defined",
+			ep.Name, ep.ProviderProfileName)
+	}
+	profile, ok := profiles[ep.ProviderProfileName]
+	if !ok {
+		return "", fmt.Errorf("endpoint %q references provider_profile %q which does not exist",
+			ep.Name, ep.ProviderProfileName)
+	}
+	if profile.BaseURL == "" {
+		return "", fmt.Errorf("endpoint %q: provider_profile %q has no base_url",
+			ep.Name, ep.ProviderProfileName)
+	}
+
+	u, err := url.Parse(profile.BaseURL)
+	if err != nil {
+		return "", fmt.Errorf("endpoint %q: cannot parse base_url %q: %w",
+			ep.Name, profile.BaseURL, err)
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("endpoint %q: base_url %q has no host",
+			ep.Name, profile.BaseURL)
+	}
+
+	host := u.Host
+	if !strings.Contains(host, ":") {
+		switch u.Scheme {
+		case "https":
+			host += ":443"
+		case "http":
+			host += ":80"
+		default:
+			return "", fmt.Errorf("endpoint %q: base_url %q has unsupported scheme %q (expected http or https)",
+				ep.Name, profile.BaseURL, u.Scheme)
+		}
+	}
+	return host, nil
+}
+
+// ProviderType returns the provider type string, which matches authz.LLMProvider values.
+// Returns an error if the type is empty or not in providerTypeRegistry.
+func (p *ProviderProfile) ProviderType() (string, error) {
+	if p == nil {
+		return "", fmt.Errorf("provider profile is nil")
+	}
+	if p.Type == "" {
+		return "", fmt.Errorf("provider profile has empty type")
+	}
+	if _, ok := providerTypeRegistry[p.Type]; !ok {
+		return "", fmt.Errorf("unknown provider profile type %q (valid types: %v)", p.Type, ValidProviderTypes())
+	}
+	return p.Type, nil
+}
+
+// ResolveAuthHeader returns the (headerName, prefix) for the upstream auth header.
+// Explicit AuthHeader/AuthPrefix fields override the type defaults.
+// Returns error if the profile's type is not recognised.
+func (p *ProviderProfile) ResolveAuthHeader() (string, string, error) {
+	info, ok := providerTypeRegistry[p.Type]
+	if !ok {
+		return "", "", fmt.Errorf("unknown provider type %q — cannot determine auth header", p.Type)
+	}
+	headerName := info.AuthHeader
+	prefix := info.AuthPrefix
+	if p.AuthHeader != "" {
+		headerName = p.AuthHeader
+	}
+	if p.AuthPrefix != "" {
+		prefix = p.AuthPrefix
+	}
+	return headerName, prefix, nil
+}
+
+// ResolveChatPath returns the HTTP path for upstream requests.
+//
+// Resolution order (no silent fallback):
+//  1. Explicit ChatPath field on the profile (used as-is, plus ?api-version for azure-openai).
+//  2. base_url path + type-default suffix from providerTypeRegistry.
+//  3. Type-default suffix alone if base_url has no path component.
+//
+// Returns error if the type is not recognised or base_url is unparsable.
+func (p *ProviderProfile) ResolveChatPath() (string, error) {
+	if p == nil {
+		return "", fmt.Errorf("provider profile is nil")
+	}
+
+	info, ok := providerTypeRegistry[p.Type]
+	if !ok {
+		return "", fmt.Errorf("unknown provider type %q — cannot determine chat path", p.Type)
+	}
+
+	// Explicit override
+	if p.ChatPath != "" {
+		path := p.ChatPath
+		if p.Type == "azure-openai" && p.APIVersion != "" {
+			path += "?api-version=" + p.APIVersion
+		}
+		return path, nil
+	}
+
+	suffix := info.ChatPath
+	if p.Type == "azure-openai" && p.APIVersion != "" {
+		suffix += "?api-version=" + p.APIVersion
+	}
+
+	// Prepend base_url path component if present
+	if p.BaseURL != "" {
+		u, err := url.Parse(p.BaseURL)
+		if err != nil {
+			return "", fmt.Errorf("cannot parse base_url %q: %w", p.BaseURL, err)
+		}
+		if u.Path != "" && u.Path != "/" {
+			return strings.TrimRight(u.Path, "/") + suffix, nil
+		}
+	}
+
+	return suffix, nil
 }

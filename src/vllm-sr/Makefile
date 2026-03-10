@@ -55,7 +55,7 @@ help:
 # Quick development setup
 dev-setup: docker-build install
 	@echo ""
-	@echo "✓ Development setup complete!"
+	@echo "Development setup complete!"
 	@echo ""
 	@echo "Next steps:"
 	@echo "  1. Edit $(CONFIG_FILE) with your configuration"
@@ -69,7 +69,7 @@ dev-serve:
 		echo "Docker image not found. Building..."; \
 		$(MAKE) docker-build; \
 	else \
-		echo "✓ Docker image exists: $(FULL_IMAGE)"; \
+		echo "Docker image exists: $(FULL_IMAGE)"; \
 	fi
 	@echo ""
 	@echo "Starting vLLM Semantic Router service..."
@@ -83,7 +83,7 @@ dev-test: install
 	@echo "Testing configuration generation..."
 	python -m cli.main generate $(CONFIG_FILE) --output-dir $(OUTPUT_DIR) --force
 	@echo ""
-	@echo "✓ Configuration generated successfully!"
+	@echo "Configuration generated successfully!"
 	@echo "  Output directory: $(OUTPUT_DIR)"
 	@ls -la $(OUTPUT_DIR)/
 	@echo ""
@@ -97,7 +97,7 @@ docker-build:
 	@echo ""
 	cd ../.. && docker build -t $(FULL_IMAGE) -f src/vllm-sr/Dockerfile .
 	@echo ""
-	@echo "✓ Docker image built: $(FULL_IMAGE)"
+	@echo "Docker image built: $(FULL_IMAGE)"
 	@echo ""
 
 # Setup buildx builder
@@ -108,7 +108,7 @@ docker-buildx-setup:
 		docker buildx create --name $(BUILDX_BUILDER) --use; \
 		docker buildx inspect --bootstrap; \
 	else \
-		echo "✓ Buildx builder exists: $(BUILDX_BUILDER)"; \
+		echo "Buildx builder exists: $(BUILDX_BUILDER)"; \
 		docker buildx use $(BUILDX_BUILDER); \
 	fi
 	@echo ""
@@ -127,7 +127,7 @@ docker-buildx: docker-buildx-setup
 		--load \
 		.
 	@echo ""
-	@echo "✓ Multi-platform image built: $(FULL_IMAGE)"
+	@echo "Multi-platform image built: $(FULL_IMAGE)"
 	@echo ""
 
 # Build and push multi-platform image
@@ -144,13 +144,13 @@ docker-buildx-push: docker-buildx-setup
 		--push \
 		.
 	@echo ""
-	@echo "✓ Multi-platform image built and pushed: $(FULL_IMAGE)"
+	@echo "Multi-platform image built and pushed: $(FULL_IMAGE)"
 	@echo ""
 
 install:
 	@echo "Installing vLLM Semantic Router CLI in development mode..."
 	pip install -e .
-	@echo "✓ CLI installed. Try: vllm-sr --version"
+	@echo "CLI installed. Try: vllm-sr --version"
 
 # Configuration commands
 generate: install
@@ -194,12 +194,12 @@ clean:
 	rm -rf $(OUTPUT_DIR)
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
-	@echo "✓ Cleaned"
+	@echo "Cleaned"
 
 # Check if Docker image exists
 check-image:
 	@if docker images -q $(FULL_IMAGE) 2>/dev/null | grep -q .; then \
-		echo "✓ Docker image exists: $(FULL_IMAGE)"; \
+		echo "Docker image exists: $(FULL_IMAGE)"; \
 	else \
 		echo "✗ Docker image not found: $(FULL_IMAGE)"; \
 		echo "  Run: make docker-build"; \
@@ -219,9 +219,9 @@ rebuild-and-test: install
 	@echo "  4. Verify multi-listener support"
 	@echo ""
 	@echo "Dependencies included in the image:"
-	@echo "  ✓ pydantic>=2.0.0"
-	@echo "  ✓ huggingface_hub[cli]>=0.20.0"
-	@echo "  ✓ Multi-listener support"
+	@echo "  pydantic>=2.0.0"
+	@echo "  huggingface_hub[cli]>=0.20.0"
+	@echo "  Multi-listener support"
 	@echo ""
 	@read -p "Press Enter to continue or Ctrl+C to cancel..." dummy
 	@echo ""
@@ -237,11 +237,11 @@ rebuild-and-test: install
 	@echo "3. Verifying dependencies in image..."
 	@docker run --rm $(FULL_IMAGE) /bin/sh -c " \
 		echo '  Checking pydantic...'; \
-		python -c 'import pydantic; print(f\"    ✓ pydantic {pydantic.__version__}\")'; \
+		python -c 'import pydantic; print(f\"    pydantic {pydantic.__version__}\")'; \
 		echo '  Checking huggingface_hub...'; \
-		python -c 'import huggingface_hub; print(f\"    ✓ huggingface_hub {huggingface_hub.__version__}\")'; \
+		python -c 'import huggingface_hub; print(f\"    huggingface_hub {huggingface_hub.__version__}\")'; \
 		echo '  Checking huggingface-cli...'; \
-		huggingface-cli --version | sed 's/^/    ✓ /'; \
+		huggingface-cli --version | sed 's/^/    /'; \
 	"
 	@echo ""
 	@echo "4. Checking config.yaml listeners..."

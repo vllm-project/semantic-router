@@ -1,0 +1,363 @@
+.pipelineWrapper {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.pipeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  padding: 0.8rem 0 0;
+  position: relative;
+}
+
+.tabRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0.55rem;
+  margin-bottom: 1.1rem;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--site-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--site-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition:
+    border-color 180ms ease,
+    color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.tab:hover {
+  border-color: var(--site-border-strong);
+  color: var(--site-text);
+  transform: translateY(-1px);
+}
+
+.tabCode {
+  display: inline-flex;
+  padding: 0.12rem 0.32rem;
+  border: 1px solid var(--site-border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--site-muted-bright);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tabActive {
+  border-color: var(--site-border-strong);
+  background: var(--site-surface-alt);
+  color: var(--site-text);
+}
+
+.tabActive .tabCode {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--site-text);
+}
+
+.downArrow {
+  display: flex;
+  justify-content: center;
+  padding: 0.55rem 0;
+}
+
+.downArrowLine {
+  width: 1px;
+  height: 30px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.75));
+  position: relative;
+}
+
+.downArrowLine::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: -3px;
+  border: solid rgba(255, 255, 255, 0.74);
+  border-width: 0 1px 1px 0;
+  padding: 3px;
+  transform: rotate(45deg);
+}
+
+.stage {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.stageLabel {
+  margin-bottom: 0.5rem;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--site-muted-bright);
+}
+
+.inputBox,
+.encoderBlock,
+.branch,
+.transformCard {
+  border: 1px solid var(--site-border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.inputBox {
+  width: min(100%, 420px);
+  padding: 0.85rem 1rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--site-text);
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.tokenRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.28rem;
+}
+
+.token {
+  padding: 0.28rem 0.42rem;
+  border: 1px solid var(--site-border);
+  font-size: 0.62rem;
+  font-weight: 600;
+  white-space: nowrap;
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.tokenSpecial {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--site-text);
+}
+
+.tokenNormal {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--site-muted);
+}
+
+.embeddingStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+.embeddingBar {
+  width: 220px;
+  height: 6px;
+  border-radius: 999px;
+}
+
+.embBarToken {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.8));
+}
+
+.embBarSeg {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.65));
+}
+
+.embBarPos {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.5));
+}
+
+.embBarSum {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.3));
+}
+
+.embLabel {
+  font-size: 0.56rem;
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.encoderBlock {
+  width: min(100%, 300px);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  position: relative;
+}
+
+.encoderRepeat {
+  position: absolute;
+  top: -10px;
+  right: 10px;
+  display: inline-flex;
+  padding: 0.14rem 0.42rem;
+  border: 1px solid var(--site-border);
+  background: #090909;
+  color: var(--site-muted-bright);
+  font-size: 0.56rem;
+  font-family: var(--ifm-font-family-monospace);
+  letter-spacing: 0.08em;
+}
+
+.encoderSub {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid var(--site-border);
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--site-text);
+}
+
+.encoderSubIcon,
+.branchIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.8rem;
+  padding: 0.2rem 0.34rem;
+  border: 1px solid var(--site-border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--site-muted-bright);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.subAttention,
+.subNorm,
+.subFFN {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.branchesArea {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.95rem;
+}
+
+.branchGrid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.branch {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 0.65rem;
+  padding: 0.78rem;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+
+.branch:hover {
+  border-color: var(--site-border-strong);
+}
+
+.branchCLS,
+.branchToken,
+.branchPool,
+.branchCross {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.branchContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.branchTitle {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--site-text);
+}
+
+.branchDetail {
+  font-size: 0.58rem;
+  line-height: 1.45;
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.branchSignals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.24rem;
+  margin-top: 0.2rem;
+}
+
+.signalTag {
+  padding: 0.12rem 0.38rem;
+  border: 1px solid var(--site-border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--site-muted-bright);
+  font-size: 0.5rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.signalTagCLS,
+.signalTagToken,
+.signalTagPool,
+.signalTagCross {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--site-muted-bright);
+}
+
+@media (max-width: 768px) {
+  .tabRow {
+    gap: 0.45rem;
+  }
+
+  .tab {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.72rem;
+  }
+
+  .pipeline {
+    padding-top: 0.4rem;
+  }
+
+  .branchGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .inputBox {
+    width: min(100%, 340px);
+    font-size: 0.7rem;
+  }
+
+  .embeddingBar {
+    width: 180px;
+  }
+
+  .encoderBlock {
+    width: min(100%, 260px);
+  }
+}

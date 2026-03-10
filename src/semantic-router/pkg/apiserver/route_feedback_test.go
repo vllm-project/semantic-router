@@ -63,7 +63,7 @@ func TestHandleFeedback_Success(t *testing.T) {
 		t.Errorf("Expected success=true, got false: %s", resp.Message)
 	}
 
-	t.Logf("✅ Feedback API works! Response: %+v", resp)
+	t.Logf("Feedback API works! Response: %+v", resp)
 }
 
 func TestHandleFeedback_MissingWinner(t *testing.T) {
@@ -85,7 +85,7 @@ func TestHandleFeedback_MissingWinner(t *testing.T) {
 		t.Errorf("Expected status 400 for missing winner, got %d", w.Code)
 	}
 
-	t.Logf("✅ Missing winner validation works!")
+	t.Logf("Missing winner validation works!")
 }
 
 func TestHandleGetRatings_Success(t *testing.T) {
@@ -119,5 +119,5 @@ func TestHandleGetRatings_Success(t *testing.T) {
 		t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	t.Logf("✅ Get Ratings API works! Response: %s", w.Body.String())
+	t.Logf("Get Ratings API works! Response: %s", w.Body.String())
 }

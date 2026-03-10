@@ -101,7 +101,7 @@ func AnalyzeConfig(cfg *config.RouterConfig) *ConfigAnalysisResult {
 				uniqueModels[m] = true
 			}
 
-			logging.Infof("✅ Category '%s': %d models → Model selection needed", decision.Name, len(modelNames))
+			logging.Infof("Category '%s': %d models → Model selection needed", decision.Name, len(modelNames))
 		} else if len(modelNames) == 1 {
 			// Single model - no selection needed
 			result.SingleModelCategories = append(result.SingleModelCategories, decision.Name)

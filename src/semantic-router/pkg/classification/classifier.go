@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -306,12 +307,12 @@ func createMmBERT32KPIIInitializer() PIIInitializer {
 }
 
 type PIIInference interface {
-	ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error)
+	ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error)
 }
 
 type PIIInferenceImpl struct{}
 
-func (c *PIIInferenceImpl) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
+func (c *PIIInferenceImpl) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
 	// Auto-detecting inference - uses whichever classifier was initialized (LoRA or Traditional)
 	return candle_binding.ClassifyCandleBertTokens(text)
 }
@@ -321,11 +322,12 @@ func createPIIInference() PIIInference {
 	return &PIIInferenceImpl{}
 }
 
-// MmBERT32KPIIInferenceImpl uses mmBERT-32K for PII token classification
+// MmBERT32KPIIInferenceImpl uses mmBERT-32K for PII token classification.
+// Entity types are returned as "LABEL_{class_id}" by Rust and translated Go-side via PIIMapping.
 type MmBERT32KPIIInferenceImpl struct{}
 
-func (c *MmBERT32KPIIInferenceImpl) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
-	entities, err := candle_binding.ClassifyMmBert32KPII(text, configPath)
+func (c *MmBERT32KPIIInferenceImpl) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
+	entities, err := candle_binding.ClassifyMmBert32KPII(text)
 	if err != nil {
 		return candle_binding.TokenClassificationResult{}, err
 	}
@@ -391,14 +393,23 @@ type Classifier struct {
 	// Language classifier
 	languageClassifier *LanguageClassifier
 
-	// Latency classifier
-	latencyClassifier *LatencyClassifier
-
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
 
 	// Complexity classifier for complexity-based routing using embedding similarity
 	complexityClassifier *ComplexityClassifier
+
+	// Contrastive jailbreak classifiers keyed by rule name.
+	// Only populated for JailbreakRules with Method == "contrastive".
+	contrastiveJailbreakClassifiers map[string]*ContrastiveJailbreakClassifier
+
+	// Authz classifier for user-level authorization signal classification
+	authzClassifier *AuthzClassifier
+
+	// Identity header names resolved from authz.identity config (or defaults).
+	// Used by EvaluateAllSignalsWithHeaders to read user identity from requests.
+	authzUserIDHeader     string
+	authzUserGroupsHeader string
 
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
@@ -460,6 +471,18 @@ func withContextClassifier(contextClassifier *ContextClassifier) option {
 func withComplexityClassifier(complexityClassifier *ComplexityClassifier) option {
 	return func(c *Classifier) {
 		c.complexityClassifier = complexityClassifier
+	}
+}
+
+func withContrastiveJailbreakClassifiers(classifiers map[string]*ContrastiveJailbreakClassifier) option {
+	return func(c *Classifier) {
+		c.contrastiveJailbreakClassifiers = classifiers
+	}
+}
+
+func withAuthzClassifier(authzClassifier *AuthzClassifier) option {
+	return func(c *Classifier) {
+		c.authzClassifier = authzClassifier
 	}
 }
 
@@ -536,14 +559,6 @@ func initModels(classifier *Classifier) (*Classifier, error) {
 		}
 	}
 
-	// Initialize latency classifier
-	if len(classifier.Config.LatencyRules) > 0 {
-		if err := classifier.initializeLatencyClassifier(); err != nil {
-			logging.Warnf("Failed to initialize latency classifier: %v", err)
-			// Non-fatal - continue without latency classification
-		}
-	}
-
 	return classifier, nil
 }
 
@@ -554,6 +569,10 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	}
 
 	classifier := &Classifier{Config: cfg}
+
+	// Resolve identity header names from authz.identity config (or defaults).
+	classifier.authzUserIDHeader = cfg.Authz.Identity.GetUserIDHeader()
+	classifier.authzUserGroupsHeader = cfg.Authz.Identity.GetUserGroupsHeader()
 
 	for _, option := range options {
 		option(classifier)
@@ -604,6 +623,23 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 		withPII(piiMapping, piiInitializer, piiInference),
 	}
 
+	multiModalInitialized := false
+	initMultiModalIfNeeded := func(reason string) error {
+		if multiModalInitialized {
+			return nil
+		}
+		mmPath := config.ResolveModelPath(cfg.EmbeddingModels.MultiModalModelPath)
+		if mmPath == "" {
+			return fmt.Errorf("%s requires embedding_models.multimodal_model_path to be set", reason)
+		}
+		if err := initMultiModalModel(mmPath, cfg.EmbeddingModels.UseCPU); err != nil {
+			return fmt.Errorf("failed to initialize multimodal model for %s: %w", reason, err)
+		}
+		logging.Infof("Initialized multimodal embedding model for %s: %s", reason, mmPath)
+		multiModalInitialized = true
+		return nil
+	}
+
 	// Add keyword classifier if configured
 	if len(cfg.KeywordRules) > 0 {
 		keywordClassifier, err := NewKeywordClassifier(cfg.KeywordRules)
@@ -618,6 +654,11 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	if len(cfg.EmbeddingRules) > 0 {
 		// Get optimization config from embedding models configuration
 		optConfig := cfg.EmbeddingModels.HNSWConfig
+		if strings.EqualFold(strings.TrimSpace(optConfig.ModelType), "multimodal") {
+			if err := initMultiModalIfNeeded("embedding_rules with model_type=multimodal"); err != nil {
+				return nil, err
+			}
+		}
 		keywordEmbeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules, optConfig)
 		if err != nil {
 			logging.Errorf("Failed to create keyword embedding classifier: %v", err)
@@ -641,12 +682,63 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 		if modelType == "" {
 			modelType = "qwen3" // Default to qwen3
 		}
+
+		// Initialize multimodal model if any complexity rule uses image candidates
+		if config.HasImageCandidatesInRules(cfg.ComplexityRules) {
+			if err := initMultiModalIfNeeded("complexity image_candidates"); err != nil {
+				return nil, err
+			}
+		}
+
+		if strings.EqualFold(strings.TrimSpace(modelType), "multimodal") {
+			if err := initMultiModalIfNeeded("complexity model_type=multimodal"); err != nil {
+				return nil, err
+			}
+		}
+
 		complexityClassifier, err := NewComplexityClassifier(cfg.ComplexityRules, modelType)
 		if err != nil {
 			logging.Errorf("Failed to create complexity classifier: %v", err)
 			return nil, err
 		}
 		options = append(options, withComplexityClassifier(complexityClassifier))
+	}
+
+	// Add contrastive jailbreak classifiers for rules with method == "contrastive"
+	{
+		contrastiveClassifiers := make(map[string]*ContrastiveJailbreakClassifier)
+		defaultModelType := cfg.EmbeddingModels.HNSWConfig.ModelType
+		for _, rule := range cfg.JailbreakRules {
+			if rule.Method != "contrastive" {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(defaultModelType), "multimodal") {
+				if err := initMultiModalIfNeeded("contrastive jailbreak with model_type=multimodal"); err != nil {
+					return nil, err
+				}
+			}
+			cjc, err := NewContrastiveJailbreakClassifier(rule, defaultModelType)
+			if err != nil {
+				logging.Errorf("Failed to create contrastive jailbreak classifier for rule %q: %v", rule.Name, err)
+				return nil, err
+			}
+			contrastiveClassifiers[rule.Name] = cjc
+		}
+		if len(contrastiveClassifiers) > 0 {
+			options = append(options, withContrastiveJailbreakClassifiers(contrastiveClassifiers))
+			logging.Infof("Initialized %d contrastive jailbreak classifiers", len(contrastiveClassifiers))
+		}
+	}
+
+	// Add authz classifier if authz rules are configured
+	roleBindings := cfg.GetRoleBindings()
+	if len(roleBindings) > 0 {
+		authzClassifier, err := NewAuthzClassifier(roleBindings)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create authz classifier: %w", err)
+		}
+		options = append(options, withAuthzClassifier(authzClassifier))
+		logging.Infof("Authz classifier initialized with %d role bindings", len(roleBindings))
 	}
 
 	// Add in-tree classifier if configured
@@ -733,7 +825,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 	// Skip initialization if using vLLM (no Candle model to initialize)
 	if c.Config.PromptGuard.UseVLLM {
 		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
-		logging.Infof("🛡️  Initializing Jailbreak Detector (vLLM mode):")
+		logging.Infof("Initializing Jailbreak Detector (vLLM mode):")
 		if externalCfg != nil {
 			logging.Infof("External Model: %s", externalCfg.ModelName)
 			logging.Infof("Endpoint: %s", externalCfg.ModelEndpoint.Address)
@@ -753,7 +845,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		return fmt.Errorf("not enough jailbreak types for classification, need at least 2, got %d", numClasses)
 	}
 
-	logging.Infof("🛡️  Initializing Jailbreak Detector:")
+	logging.Infof("Initializing Jailbreak Detector:")
 	logging.Infof("Model: %s", c.Config.PromptGuard.ModelID)
 	logging.Infof("Mapping: %s", c.Config.PromptGuard.JailbreakMappingPath)
 	logging.Infof("Classes: %d", numClasses)
@@ -866,7 +958,7 @@ func (c *Classifier) initializePIIClassifier() error {
 		return fmt.Errorf("not enough PII types for classification, need at least 2, got %d", numPIIClasses)
 	}
 
-	logging.Infof("🔒 Initializing PII Detector:")
+	logging.Infof("Initializing PII Detector:")
 	logging.Infof("Model: %s", c.Config.PIIModel.ModelID)
 	logging.Infof("Mapping: %s", c.Config.PIIMappingPath)
 	logging.Infof("Classes: %d", numPIIClasses)
@@ -937,12 +1029,6 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 		allSignals[key] = true
 	}
 
-	// Add all configured latency rules
-	for _, rule := range c.Config.LatencyRules {
-		key := strings.ToLower(config.SignalTypeLatency + ":" + rule.Name)
-		allSignals[key] = true
-	}
-
 	// Add all configured context rules
 	for _, rule := range c.Config.ContextRules {
 		key := strings.ToLower(config.SignalTypeContext + ":" + rule.Name)
@@ -952,6 +1038,30 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	// Add all configured complexity rules
 	for _, rule := range c.Config.ComplexityRules {
 		key := strings.ToLower(config.SignalTypeComplexity + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured modality rules
+	for _, rule := range c.Config.ModalityRules {
+		key := strings.ToLower(config.SignalTypeModality + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured role bindings (authz signal uses the Role name, not binding name)
+	for _, rb := range c.Config.GetRoleBindings() {
+		key := strings.ToLower(config.SignalTypeAuthz + ":" + rb.Role)
+		allSignals[key] = true
+	}
+
+	// Add all configured jailbreak rules
+	for _, rule := range c.Config.JailbreakRules {
+		key := strings.ToLower(config.SignalTypeJailbreak + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured PII rules
+	for _, rule := range c.Config.PIIRules {
+		key := strings.ToLower(config.SignalTypePII + ":" + rule.Name)
 		allSignals[key] = true
 	}
 
@@ -974,10 +1084,24 @@ type SignalResults struct {
 	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
 	MatchedPreferenceRules   []string // Route preference names matched via external LLM
 	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
-	MatchedLatencyRules      []string // Latency rule names that matched based on model TPOT
 	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
 	TokenCount               int      // Total token count
 	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
+	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
+	MatchedJailbreakRules    []string // Matched jailbreak rule names (confidence >= threshold)
+	MatchedPIIRules          []string // Matched PII rule names (denied PII types detected)
+
+	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
+	JailbreakDetected   bool    // Whether any jailbreak was detected (across all rules)
+	JailbreakType       string  // Type of the detected jailbreak (from highest-confidence detection)
+	JailbreakConfidence float32 // Confidence of the detected jailbreak
+
+	// PII detection metadata (populated when PII signal is evaluated)
+	PIIDetected bool     // Whether any PII was detected
+	PIIEntities []string // Detected PII entity types (e.g., "EMAIL_ADDRESS", "PERSON")
+
+	SignalConfidences map[string]float64 // Real confidence scores per signal, e.g. "embedding:ai" → 0.88
 
 	// Signal metrics (only populated in eval mode)
 	Metrics *SignalMetricsCollection
@@ -992,19 +1116,24 @@ type SignalMetricsCollection struct {
 	UserFeedback SignalMetrics `json:"user_feedback"`
 	Preference   SignalMetrics `json:"preference"`
 	Language     SignalMetrics `json:"language"`
-	Latency      SignalMetrics `json:"latency"`
 	Context      SignalMetrics `json:"context"`
 	Complexity   SignalMetrics `json:"complexity"`
+	Modality     SignalMetrics `json:"modality"`
+	Authz        SignalMetrics `json:"authz"`
+	Jailbreak    SignalMetrics `json:"jailbreak"`
+	PII          SignalMetrics `json:"pii"`
 }
 
-// analyzeRuleCombination recursively analyzes rule combinations to find used signals
-func (c *Classifier) analyzeRuleCombination(rules config.RuleCombination, usedSignals map[string]bool) {
-	for _, condition := range rules.Conditions {
-		// Normalize condition type and name (trim whitespace, lowercase) for consistent matching
-		t := strings.ToLower(strings.TrimSpace(condition.Type))
-		n := strings.ToLower(strings.TrimSpace(condition.Name))
-		signalKey := t + ":" + n
-		usedSignals[signalKey] = true
+// analyzeRuleCombination recursively traverses a rule tree to collect all referenced signals.
+func (c *Classifier) analyzeRuleCombination(node config.RuleNode, usedSignals map[string]bool) {
+	if node.IsLeaf() {
+		t := strings.ToLower(strings.TrimSpace(node.Type))
+		n := strings.ToLower(strings.TrimSpace(node.Name))
+		usedSignals[t+":"+n] = true
+		return
+	}
+	for _, child := range node.Conditions {
+		c.analyzeRuleCombination(child, usedSignals)
 	}
 }
 
@@ -1026,21 +1155,94 @@ func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
 // EvaluateAllSignals evaluates all signal types and returns SignalResults
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
-	// For backward compatibility, use the same text for both evaluation and context counting
-	return c.EvaluateAllSignalsWithContext(text, text, false)
+	return c.EvaluateAllSignalsWithContext(text, text, nil, false, "", nil)
+}
+
+// EvaluateAllSignalsWithHeaders evaluates all signal types including the authz signal.
+// The authz signal reads user identity and groups from request headers (x-authz-user-id,
+// x-authz-user-groups) and evaluates role_bindings. Other signals are evaluated via
+// EvaluateAllSignalsWithContext as before.
+//
+// Returns an error if authz evaluation fails (e.g., missing user identity header when
+// role_bindings are configured). Errors are NOT swallowed — the caller must handle them.
+// This prevents silent bypass of authz policies.
+//
+// headers: request headers from ext_proc (includes Authorino-injected authz headers)
+//
+// Optional trailing arguments (positional after imageURL):
+//   - uncompressedText (string): original text before prompt compression
+//   - skipCompressionSignals (map[string]bool): signal types that must use uncompressedText
+func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, nonUserMessages []string, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
+	var uncompressedText string
+	var skipCompressionSignals map[string]bool
+	if len(extra) >= 2 {
+		if s, ok := extra[0].(string); ok {
+			uncompressedText = s
+		}
+		if m, ok := extra[1].(map[string]bool); ok {
+			skipCompressionSignals = m
+		}
+	}
+	results := c.EvaluateAllSignalsWithContext(text, contextText, nonUserMessages, forceEvaluateAll, uncompressedText, skipCompressionSignals, imageURL)
+
+	// Evaluate authz signal if role bindings are configured and the signal type is used
+	usedSignals := c.getUsedSignals()
+	if forceEvaluateAll {
+		usedSignals = c.getAllSignalTypes()
+	}
+
+	if isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) && c.authzClassifier != nil {
+		start := time.Now()
+		userID := headers[c.authzUserIDHeader]
+		userGroups := ParseUserGroups(headers[c.authzUserGroupsHeader])
+
+		authzResult, err := c.authzClassifier.Classify(userID, userGroups)
+		elapsed := time.Since(start)
+		latencySeconds := elapsed.Seconds()
+
+		// Record metrics
+		results.Metrics.Authz.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+		results.Metrics.Authz.Confidence = 1.0 // Rule-based, always 1.0
+
+		if err != nil {
+			// Do NOT swallow authz errors — propagate to caller.
+			// A missing user identity header when role_bindings are configured is a hard failure,
+			// not a signal that "didn't fire." Silent bypass is not allowed.
+			logging.Errorf("[Authz Signal] classification failed: %v", err)
+			metrics.RecordSignalExtraction(config.SignalTypeAuthz, "error", latencySeconds)
+			return nil, fmt.Errorf("authz signal evaluation failed: %w", err)
+		}
+
+		for _, ruleName := range authzResult.MatchedRules {
+			metrics.RecordSignalExtraction(config.SignalTypeAuthz, ruleName, latencySeconds)
+			metrics.RecordSignalMatch(config.SignalTypeAuthz, ruleName)
+		}
+		results.MatchedAuthzRules = authzResult.MatchedRules
+
+		logging.Infof("[Signal Computation] Authz signal evaluation completed in %v", elapsed)
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) {
+		logging.Infof("[Signal Computation] Authz signal not used in any decision, skipping evaluation")
+	}
+
+	return results, nil
 }
 
 // EvaluateAllSignalsWithForceOption evaluates signals with option to force evaluate all
 // forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
 func (c *Classifier) EvaluateAllSignalsWithForceOption(text string, forceEvaluateAll bool) *SignalResults {
-	return c.EvaluateAllSignalsWithContext(text, text, forceEvaluateAll)
+	return c.EvaluateAllSignalsWithContext(text, text, nil, forceEvaluateAll, "", nil)
 }
 
-// EvaluateAllSignalsWithContext evaluates all signal types with separate text for context counting
-// text: text to use for signal evaluation (usually latest user message)
-// contextText: text to use for context token counting (usually all messages combined)
-// forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage (for eval scenarios)
-func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, forceEvaluateAll bool) *SignalResults {
+// EvaluateAllSignalsWithContext evaluates all signal types with separate text for context counting.
+//
+// text: (possibly compressed) text for signal evaluation
+// contextText: text for context token counting (usually all messages combined)
+// nonUserMessages: conversation history for jailbreak/PII with include_history
+// forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
+// uncompressedText: original text before prompt compression (empty = no compression happened)
+// skipCompressionSignals: signal types that must use uncompressedText instead of text
+// imageURL: optional image URL for multimodal signals
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, nonUserMessages []string, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, imageURL ...string) *SignalResults {
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
 	if forceEvaluateAll {
@@ -1050,6 +1252,16 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	} else {
 		// Normal mode: only evaluate signals used in decisions
 		usedSignals = c.getUsedSignals()
+	}
+
+	// textForSignal returns the original uncompressed text for signals that
+	// must not receive compressed input (e.g. jailbreak, pii), and the
+	// (possibly compressed) text for everything else.
+	textForSignal := func(signalType string) string {
+		if uncompressedText != "" && skipCompressionSignals[signalType] {
+			return uncompressedText
+		}
+		return text
 	}
 
 	results := &SignalResults{
@@ -1065,7 +1277,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			category, keywords, err := c.keywordClassifier.ClassifyWithKeywords(text)
+			category, keywords, err := c.keywordClassifier.ClassifyWithKeywords(textForSignal(config.SignalTypeKeyword))
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1094,33 +1306,53 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	}
 
 	// Evaluate embedding rules in parallel (only if used in decisions)
+	// Uses ClassifyAll() to return ALL matched rules (not just the single best),
+	// enabling AND conditions in the Decision Engine (e.g., embedding:"ai" AND embedding:"programming").
+	// Also stores real similarity scores in SignalConfidences for quality-based routing.
 	if isSignalTypeUsed(usedSignals, config.SignalTypeEmbedding) && c.keywordEmbeddingClassifier != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			category, confidence, err := c.keywordEmbeddingClassifier.Classify(text)
+			matchedRules, err := c.keywordEmbeddingClassifier.ClassifyAll(textForSignal(config.SignalTypeEmbedding))
 			elapsed := time.Since(start)
-			latencySeconds := elapsed.Seconds()
 
-			// Record signal extraction metrics
-			metrics.RecordSignalExtraction(config.SignalTypeEmbedding, category, latencySeconds)
-
-			// Record metrics (use microseconds for better precision)
+			// Record metrics
 			results.Metrics.Embedding.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-			if category != "" && err == nil && confidence > 0 {
-				results.Metrics.Embedding.Confidence = confidence
-			}
 
 			logging.Infof("[Signal Computation] Embedding signal evaluation completed in %v", elapsed)
 			if err != nil {
 				logging.Errorf("embedding rule evaluation failed: %v", err)
-			} else if category != "" {
-				// Record signal match
-				metrics.RecordSignalMatch(config.SignalTypeEmbedding, category)
+			} else if len(matchedRules) > 0 {
+				// Record the highest confidence for metrics display
+				var bestConfidence float64
+				for _, mr := range matchedRules {
+					if mr.Score > bestConfidence {
+						bestConfidence = mr.Score
+					}
+				}
+				results.Metrics.Embedding.Confidence = bestConfidence
 
 				mu.Lock()
-				results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, category)
+				// Add ALL matched rules (not just the best one)
+				for _, mr := range matchedRules {
+					// Record signal extraction and match metrics for each matched rule
+					metrics.RecordSignalExtraction(config.SignalTypeEmbedding, mr.RuleName, elapsed.Seconds())
+					metrics.RecordSignalMatch(config.SignalTypeEmbedding, mr.RuleName)
+
+					// Append rule name to the matched list
+					results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, mr.RuleName)
+
+					// Store real similarity score for this rule
+					// The Decision Engine will use this instead of hardcoded 1.0
+					if results.SignalConfidences == nil {
+						results.SignalConfidences = make(map[string]float64)
+					}
+					results.SignalConfidences["embedding:"+mr.RuleName] = mr.Score
+
+					logging.Infof("[Signal Computation] Embedding match: rule=%q, score=%.4f, method=%s",
+						mr.RuleName, mr.Score, mr.Method)
+				}
 				mu.Unlock()
 			}
 		}()
@@ -1134,7 +1366,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			result, err := c.categoryInference.Classify(text)
+			result, err := c.categoryInference.Classify(textForSignal(config.SignalTypeDomain))
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1183,7 +1415,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			factCheckResult, err := c.ClassifyFactCheck(text)
+			factCheckResult, err := c.ClassifyFactCheck(textForSignal(config.SignalTypeFactCheck))
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1231,7 +1463,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			feedbackResult, err := c.ClassifyFeedback(text)
+			feedbackResult, err := c.ClassifyFeedback(textForSignal(config.SignalTypeUserFeedback))
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1279,8 +1511,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			// Build conversation JSON from text (simple single-turn format)
-			conversationJSON := fmt.Sprintf(`[{"role":"user","content":"%s"}]`, text)
+			contentBytes, _ := json.Marshal(textForSignal(config.SignalTypePreference))
+			conversationJSON := fmt.Sprintf(`[{"role":"user","content":%s}]`, contentBytes)
 
 			preferenceResult, err := c.preferenceClassifier.Classify(conversationJSON)
 			elapsed := time.Since(start)
@@ -1331,7 +1563,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			languageResult, err := c.languageClassifier.Classify(text)
+			languageResult, err := c.languageClassifier.Classify(textForSignal(config.SignalTypeLanguage))
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1372,61 +1604,6 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		logging.Infof("[Signal Computation] Language signal not used in any decision, skipping evaluation")
 	}
 
-	// Evaluate latency rules in parallel (only if used in decisions)
-	// Latency evaluation is model-aware, so we need to collect models from decisions that use latency signals
-	if isSignalTypeUsed(usedSignals, config.SignalTypeLatency) && len(c.Config.LatencyRules) > 0 && c.IsLatencyEnabled() {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			start := time.Now()
-
-			// Collect all models from decisions that use latency signals
-			availableModels := c.collectModelsForLatencySignals(usedSignals)
-
-			if len(availableModels) > 0 {
-				latencyResult, err := c.latencyClassifier.Classify(availableModels)
-				elapsed := time.Since(start)
-				latencySeconds := elapsed.Seconds()
-
-				// Record signal extraction metrics for each matched latency rule
-				if err == nil && latencyResult != nil {
-					for _, ruleName := range latencyResult.MatchedRules {
-						metrics.RecordSignalExtraction(config.SignalTypeLatency, ruleName, latencySeconds)
-						metrics.RecordSignalMatch(config.SignalTypeLatency, ruleName)
-					}
-				} else {
-					// Record extraction even if no match
-					metrics.RecordSignalExtraction(config.SignalTypeLatency, "", latencySeconds)
-				}
-
-				// Record metrics (use microseconds for better precision)
-				results.Metrics.Latency.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-				results.Metrics.Latency.Confidence = 1.0 // Rule-based, always 1.0
-
-				logging.Infof("[Signal Computation] Latency signal evaluation completed in %v", elapsed)
-				if err != nil {
-					logging.Errorf("latency rule evaluation failed: %v", err)
-				} else if latencyResult != nil {
-					mu.Lock()
-					results.MatchedLatencyRules = latencyResult.MatchedRules
-					mu.Unlock()
-				}
-			} else if isSignalTypeUsed(usedSignals, config.SignalTypeLatency) {
-				// Diagnostic: latency signals are used but no models found
-				// This can happen if decisions reference latency signals but have no ModelRefs
-				latencySignals := []string{}
-				for key := range usedSignals {
-					if strings.HasPrefix(strings.ToLower(key), config.SignalTypeLatency+":") {
-						latencySignals = append(latencySignals, key)
-					}
-				}
-				logging.Warnf("[Signal Computation] Latency signals are used (%v) but no models found in decisions. Latency routing will be skipped.", latencySignals)
-			}
-		}()
-	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeLatency) {
-		logging.Infof("[Signal Computation] Latency signal not used in any decision, skipping evaluation")
-	}
-
 	// Evaluate context rules in parallel (only if used in decisions)
 	// Use contextText for token counting to include all messages in multi-turn conversations
 	if isSignalTypeUsed(usedSignals, config.SignalTypeContext) && c.contextClassifier != nil {
@@ -1458,10 +1635,14 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	// Evaluate complexity rules in parallel (only if used in decisions)
 	if isSignalTypeUsed(usedSignals, config.SignalTypeComplexity) && c.complexityClassifier != nil {
 		wg.Add(1)
+		imgArg := ""
+		if len(imageURL) > 0 {
+			imgArg = imageURL[0]
+		}
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			matchedRules, err := c.complexityClassifier.Classify(text)
+			matchedRules, err := c.complexityClassifier.ClassifyWithImage(textForSignal(config.SignalTypeComplexity), imgArg)
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1488,6 +1669,341 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		logging.Infof("[Signal Computation] Complexity signal not used in any decision, skipping evaluation")
 	}
 
+	// Evaluate modality rules in parallel (only if used in decisions)
+	// Uses modality_detector config for classifier/keyword/hybrid detection
+	if isSignalTypeUsed(usedSignals, config.SignalTypeModality) && len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			modalityResult := c.classifyModality(textForSignal(config.SignalTypeModality), &c.Config.ModalityDetector.ModalityDetectionConfig)
+			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+
+			signalName := modalityResult.Modality
+
+			// Record signal extraction metrics
+			metrics.RecordSignalExtraction(config.SignalTypeModality, signalName, latencySeconds)
+
+			// Record metrics
+			results.Metrics.Modality.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			results.Metrics.Modality.Confidence = float64(modalityResult.Confidence)
+
+			logging.Infof("[Signal Computation] Modality signal evaluation completed in %v: %s (confidence=%.3f, method=%s)",
+				elapsed, signalName, modalityResult.Confidence, modalityResult.Method)
+
+			// Check if this signal name is defined in modality_rules
+			for _, rule := range c.Config.ModalityRules {
+				if strings.EqualFold(rule.Name, signalName) {
+					metrics.RecordSignalMatch(config.SignalTypeModality, rule.Name)
+					mu.Lock()
+					results.MatchedModalityRules = append(results.MatchedModalityRules, rule.Name)
+					mu.Unlock()
+					break
+				}
+			}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeModality) {
+		logging.Infof("[Signal Computation] Modality signal not used in any decision, skipping evaluation")
+	}
+
+	// Evaluate jailbreak rules in parallel (only if used in decisions and jailbreak inference is enabled)
+	if isSignalTypeUsed(usedSignals, config.SignalTypeJailbreak) && len(c.Config.JailbreakRules) > 0 && c.IsJailbreakEnabled() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			jailbreakText := textForSignal(config.SignalTypeJailbreak)
+			start := time.Now()
+
+			// Step 1: Collect the union of unique content pieces needed by classifier rules.
+			// Contrastive rules use a separate embedding model and are skipped here.
+			type cachedJailbreakResult struct {
+				result candle_binding.ClassResult
+				err    error
+			}
+			classifierContentSeen := make(map[string]struct{})
+			var classifierContents []string
+			for _, rule := range c.Config.JailbreakRules {
+				if rule.Method == "contrastive" {
+					continue
+				}
+				if jailbreakText != "" {
+					if _, ok := classifierContentSeen[jailbreakText]; !ok {
+						classifierContentSeen[jailbreakText] = struct{}{}
+						classifierContents = append(classifierContents, jailbreakText)
+					}
+				}
+				if rule.IncludeHistory {
+					for _, msg := range nonUserMessages {
+						if msg != "" {
+							if _, ok := classifierContentSeen[msg]; !ok {
+								classifierContentSeen[msg] = struct{}{}
+								classifierContents = append(classifierContents, msg)
+							}
+						}
+					}
+				}
+			}
+
+			// Step 2: Run classifier inference exactly once per unique content piece.
+			jailbreakCache := make(map[string]cachedJailbreakResult, len(classifierContents))
+			for _, content := range classifierContents {
+				result, err := c.jailbreakInference.Classify(content)
+				jailbreakCache[content] = cachedJailbreakResult{result, err}
+			}
+
+			// Step 3: Evaluate all rules concurrently.
+			// Classifier rules read from the pre-computed cache (no inference).
+			// Contrastive rules run their own embedding inference independently
+			// (KB embeddings are already preloaded at initialisation time).
+			var ruleWg sync.WaitGroup
+			for _, rule := range c.Config.JailbreakRules {
+				ruleWg.Add(1)
+				go func() {
+					defer ruleWg.Done()
+
+					contentToAnalyze := []string{}
+					if jailbreakText != "" {
+						contentToAnalyze = append(contentToAnalyze, jailbreakText)
+					}
+					if rule.IncludeHistory && len(nonUserMessages) > 0 {
+						contentToAnalyze = append(contentToAnalyze, nonUserMessages...)
+					}
+					if len(contentToAnalyze) == 0 {
+						return
+					}
+
+					switch rule.Method {
+					case "contrastive":
+						cjc, ok := c.contrastiveJailbreakClassifiers[rule.Name]
+						if !ok {
+							logging.Errorf("[Signal Computation] Contrastive jailbreak classifier not found for rule %q", rule.Name)
+							return
+						}
+						analysisResult := cjc.AnalyzeMessages(contentToAnalyze)
+						threshold := rule.Threshold
+						if threshold <= 0 {
+							threshold = 0.10
+						}
+						if analysisResult.MaxScore >= threshold {
+							metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+							metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
+
+							confidence := analysisResult.MaxScore
+							mu.Lock()
+							results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
+							if confidence > results.JailbreakConfidence {
+								results.JailbreakDetected = true
+								results.JailbreakType = "contrastive"
+								results.JailbreakConfidence = confidence
+							}
+							if results.SignalConfidences == nil {
+								results.SignalConfidences = make(map[string]float64)
+							}
+							results.SignalConfidences["jailbreak:"+rule.Name] = float64(confidence)
+							mu.Unlock()
+
+							logging.Infof("[Signal Computation] Contrastive jailbreak rule %q matched: score=%.4f threshold=%.4f worst_msg_idx=%d time=%v",
+								rule.Name, analysisResult.MaxScore, threshold, analysisResult.WorstMsgIndex, analysisResult.ProcessingTime)
+						}
+
+					default:
+						// BERT classifier: apply threshold to cached inference results.
+						var bestType string
+						var bestConf float32
+						hasJailbreak := false
+						for _, content := range contentToAnalyze {
+							if content == "" {
+								continue
+							}
+							cached, ok := jailbreakCache[content]
+							if !ok {
+								continue
+							}
+							if cached.err != nil {
+								logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
+								continue
+							}
+							jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(cached.result.Class)
+							if !ok {
+								logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, cached.result.Class)
+								continue
+							}
+							if cached.result.Confidence >= rule.Threshold && jailbreakType == "jailbreak" {
+								hasJailbreak = true
+								if cached.result.Confidence > bestConf {
+									bestConf = cached.result.Confidence
+									bestType = jailbreakType
+								}
+							}
+						}
+
+						if hasJailbreak {
+							metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+							metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
+
+							mu.Lock()
+							results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
+							if bestConf > results.JailbreakConfidence {
+								results.JailbreakDetected = true
+								results.JailbreakType = bestType
+								results.JailbreakConfidence = bestConf
+							}
+							if results.SignalConfidences == nil {
+								results.SignalConfidences = make(map[string]float64)
+							}
+							results.SignalConfidences["jailbreak:"+rule.Name] = float64(bestConf)
+							mu.Unlock()
+						}
+					}
+				}()
+			}
+			ruleWg.Wait()
+
+			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+			results.Metrics.Jailbreak.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			if results.JailbreakConfidence > 0 {
+				results.Metrics.Jailbreak.Confidence = float64(results.JailbreakConfidence)
+			}
+
+			metrics.RecordSignalExtraction(config.SignalTypeJailbreak, "jailbreak_evaluated", latencySeconds)
+			logging.Infof("[Signal Computation] Jailbreak signal evaluation completed in %v", elapsed)
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeJailbreak) {
+		logging.Infof("[Signal Computation] Jailbreak signal not used in any decision, skipping evaluation")
+	}
+
+	// Evaluate PII rules in parallel (only if used in decisions and PII inference is enabled)
+	if isSignalTypeUsed(usedSignals, config.SignalTypePII) && len(c.Config.PIIRules) > 0 && c.IsPIIEnabled() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			piiText := textForSignal(config.SignalTypePII)
+			start := time.Now()
+
+			// Step 1: Collect the union of unique content pieces across all PII rules.
+			type cachedPIIResult struct {
+				result candle_binding.TokenClassificationResult
+				err    error
+			}
+			contentSeen := make(map[string]struct{})
+			var uniqueContents []string
+			if piiText != "" {
+				contentSeen[piiText] = struct{}{}
+				uniqueContents = append(uniqueContents, piiText)
+			}
+			for _, rule := range c.Config.PIIRules {
+				if rule.IncludeHistory {
+					for _, msg := range nonUserMessages {
+						if msg != "" {
+							if _, ok := contentSeen[msg]; !ok {
+								contentSeen[msg] = struct{}{}
+								uniqueContents = append(uniqueContents, msg)
+							}
+						}
+					}
+				}
+			}
+
+			// Step 2: Run PII token classification exactly once per unique content piece.
+			// Entity types are returned as "LABEL_{class_id}" and translated by PIIMapping.
+			piiCache := make(map[string]cachedPIIResult, len(uniqueContents))
+			for _, content := range uniqueContents {
+				tokenResult, err := c.piiInference.ClassifyTokens(content)
+				piiCache[content] = cachedPIIResult{tokenResult, err}
+			}
+
+			// Step 3: Evaluate each rule concurrently using the cached token results.
+			// Each goroutine applies its own threshold and allow-list without re-running the model.
+			var ruleWg sync.WaitGroup
+			for _, rule := range c.Config.PIIRules {
+				ruleWg.Add(1)
+				go func() {
+					defer ruleWg.Done()
+
+					ruleContents := []string{}
+					if piiText != "" {
+						ruleContents = append(ruleContents, piiText)
+					}
+					if rule.IncludeHistory {
+						for _, msg := range nonUserMessages {
+							if msg != "" {
+								ruleContents = append(ruleContents, msg)
+							}
+						}
+					}
+					if len(ruleContents) == 0 {
+						return
+					}
+
+					// Build allow-list set for fast lookup.
+					allowSet := make(map[string]bool, len(rule.PIITypesAllowed))
+					for _, allowed := range rule.PIITypesAllowed {
+						allowSet[strings.ToUpper(allowed)] = true
+					}
+
+					// Apply this rule's threshold to cached token results and collect entity types.
+					entityTypes := make(map[string]bool)
+					for _, content := range ruleContents {
+						cached, ok := piiCache[content]
+						if !ok {
+							continue
+						}
+						if cached.err != nil {
+							logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", rule.Name, cached.err)
+							continue
+						}
+						for _, entity := range cached.result.Entities {
+							if entity.Confidence >= rule.Threshold {
+								translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
+								entityTypes[translatedType] = true
+							}
+						}
+					}
+
+					// Check for entity types not covered by the allow-list.
+					var deniedEntities []string
+					for entityType := range entityTypes {
+						if !allowSet[strings.ToUpper(entityType)] {
+							deniedEntities = append(deniedEntities, entityType)
+						}
+					}
+
+					if len(deniedEntities) > 0 {
+						metrics.RecordSignalExtraction(config.SignalTypePII, rule.Name, time.Since(start).Seconds())
+						metrics.RecordSignalMatch(config.SignalTypePII, rule.Name)
+
+						logging.Infof("[Signal Computation] PII rule %q matched: denied_entities=%v", rule.Name, deniedEntities)
+
+						mu.Lock()
+						results.MatchedPIIRules = append(results.MatchedPIIRules, rule.Name)
+						results.PIIDetected = true
+						for _, e := range deniedEntities {
+							if !slices.Contains(results.PIIEntities, e) {
+								results.PIIEntities = append(results.PIIEntities, e)
+							}
+						}
+						mu.Unlock()
+					}
+				}()
+			}
+			ruleWg.Wait()
+
+			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+			results.Metrics.PII.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			if results.PIIDetected {
+				results.Metrics.PII.Confidence = 1.0 // Binary: PII found or not
+			}
+
+			metrics.RecordSignalExtraction(config.SignalTypePII, "pii_evaluated", latencySeconds)
+			logging.Infof("[Signal Computation] PII signal evaluation completed in %v", elapsed)
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypePII) {
+		logging.Infof("[Signal Computation] PII signal not used in any decision, skipping evaluation")
+	}
+
 	// Wait for all signal evaluations to complete
 	wg.Wait()
 
@@ -1506,11 +2022,12 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, context=%v, complexity=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedContextRules,
-		signals.MatchedComplexityRules)
+		signals.MatchedLanguageRules, signals.MatchedContextRules,
+		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedAuthzRules,
+		signals.MatchedJailbreakRules, signals.MatchedPIIRules)
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -1529,9 +2046,13 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		UserFeedbackRules: signals.MatchedUserFeedbackRules,
 		PreferenceRules:   signals.MatchedPreferenceRules,
 		LanguageRules:     signals.MatchedLanguageRules,
-		LatencyRules:      signals.MatchedLatencyRules,
 		ContextRules:      signals.MatchedContextRules,
 		ComplexityRules:   signals.MatchedComplexityRules,
+		ModalityRules:     signals.MatchedModalityRules,
+		SignalConfidences: signals.SignalConfidences,
+		AuthzRules:        signals.MatchedAuthzRules,
+		JailbreakRules:    signals.MatchedJailbreakRules,
+		PIIRules:          signals.MatchedPIIRules,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
@@ -1547,6 +2068,147 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		result.Decision.Name, result.Confidence, result.MatchedRules, result.MatchedKeywords)
 
 	return result, nil
+}
+
+// ModalityClassificationResult holds the result of modality signal classification
+type ModalityClassificationResult struct {
+	Modality   string  // "AR", "DIFFUSION", or "BOTH"
+	Confidence float32 // Confidence score (0.0-1.0)
+	Method     string  // Detection method used: "classifier", "keyword", or "hybrid"
+}
+
+// classifyModality determines the response modality for a text prompt.
+// It supports three configurable methods via ModalityDetectionConfig:
+//   - "classifier": ML-based (mmBERT-32K) — errors if model not loaded
+//   - "keyword":    Configurable keyword matching — requires keywords in config
+//   - "hybrid":     Classifier when available + keyword confirmation/fallback (default)
+func (c *Classifier) classifyModality(text string, detectionConfig *config.ModalityDetectionConfig) ModalityClassificationResult {
+	if text == "" {
+		return ModalityClassificationResult{Modality: "AR", Confidence: 1.0, Method: "default"}
+	}
+
+	method := detectionConfig.GetMethod()
+
+	switch method {
+	case config.ModalityDetectionClassifier:
+		return c.classifyModalityByClassifier(text, detectionConfig)
+	case config.ModalityDetectionKeyword:
+		return c.classifyModalityByKeyword(text, detectionConfig)
+	case config.ModalityDetectionHybrid:
+		return c.classifyModalityHybrid(text, detectionConfig)
+	default:
+		logging.Errorf("[ModalitySignal] BUG: unknown detection method %q — defaulting to AR", method)
+		return ModalityClassificationResult{Modality: "AR", Confidence: 0.0, Method: "error/unknown-method"}
+	}
+}
+
+// classifyModalityByClassifier uses the mmBERT-32K ML classifier exclusively.
+func (c *Classifier) classifyModalityByClassifier(text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
+	result, err := candle_binding.ClassifyMmBert32KModality(text)
+	if err == nil {
+		logging.Infof("[ModalitySignal] Classifier: %s (confidence=%.3f) for prompt: %.80s",
+			result.Modality, result.Confidence, text)
+		return ModalityClassificationResult{
+			Modality:   result.Modality,
+			Confidence: result.Confidence,
+			Method:     "classifier",
+		}
+	}
+
+	logging.Errorf("[ModalitySignal] Classifier unavailable: %v — defaulting to AR", err)
+	return ModalityClassificationResult{Modality: "AR", Confidence: 0.0, Method: "classifier/error"}
+}
+
+// classifyModalityByKeyword uses keyword patterns from config to detect modality.
+func (c *Classifier) classifyModalityByKeyword(text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
+	if cfg == nil || len(cfg.Keywords) == 0 {
+		logging.Warnf("[ModalitySignal] Keyword detection requested but no keywords configured — defaulting to AR")
+		return ModalityClassificationResult{Modality: "AR", Confidence: 0.5, Method: "keyword/no-config"}
+	}
+
+	lowerContent := strings.ToLower(text)
+
+	// Check if any configured image keyword matches
+	hasImageIntent := false
+	for _, kw := range cfg.Keywords {
+		if strings.Contains(lowerContent, strings.ToLower(kw)) {
+			hasImageIntent = true
+			break
+		}
+	}
+
+	if !hasImageIntent {
+		return ModalityClassificationResult{Modality: "AR", Confidence: 0.8, Method: "keyword"}
+	}
+
+	// Image intent detected — check if it's BOTH using both_keywords from config
+	if len(cfg.BothKeywords) > 0 {
+		for _, kw := range cfg.BothKeywords {
+			if strings.Contains(lowerContent, strings.ToLower(kw)) {
+				logging.Infof("[ModalitySignal] Keyword: BOTH detected (image + both_keyword %q) for: %.80s", kw, text)
+				return ModalityClassificationResult{Modality: "BOTH", Confidence: 0.75, Method: "keyword"}
+			}
+		}
+	}
+
+	logging.Infof("[ModalitySignal] Keyword: DIFFUSION detected for: %.80s", text)
+	return ModalityClassificationResult{Modality: "DIFFUSION", Confidence: 0.8, Method: "keyword"}
+}
+
+// classifyModalityHybrid uses the ML classifier as primary, with keyword matching as
+// fallback (when classifier is unavailable) or confirmation (when classifier confidence is low).
+func (c *Classifier) classifyModalityHybrid(text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
+	confThreshold := cfg.GetConfidenceThreshold()
+
+	// Try classifier first
+	classifierResult, err := candle_binding.ClassifyMmBert32KModality(text)
+	if err == nil && classifierResult.Confidence >= confThreshold {
+		logging.Infof("[ModalitySignal] Hybrid(classifier): %s (confidence=%.3f, threshold=%.2f) for: %.80s",
+			classifierResult.Modality, classifierResult.Confidence, confThreshold, text)
+		return ModalityClassificationResult{
+			Modality:   classifierResult.Modality,
+			Confidence: classifierResult.Confidence,
+			Method:     "hybrid/classifier",
+		}
+	}
+
+	if err == nil {
+		// Classifier available but low confidence - use keyword to confirm/override
+		keywordResult := c.classifyModalityByKeyword(text, cfg)
+
+		if classifierResult.Modality == keywordResult.Modality {
+			logging.Infof("[ModalitySignal] Hybrid(agree): %s (classifier=%.3f, keyword=%.3f) for: %.80s",
+				classifierResult.Modality, classifierResult.Confidence, keywordResult.Confidence, text)
+			return ModalityClassificationResult{
+				Modality:   classifierResult.Modality,
+				Confidence: (classifierResult.Confidence + keywordResult.Confidence) / 2,
+				Method:     "hybrid/agree",
+			}
+		}
+
+		lowerThreshold := confThreshold * cfg.GetLowerThresholdRatio()
+		if classifierResult.Confidence >= lowerThreshold {
+			logging.Infof("[ModalitySignal] Hybrid(classifier-preferred): %s (classifier=%.3f vs keyword=%s) for: %.80s",
+				classifierResult.Modality, classifierResult.Confidence, keywordResult.Modality, text)
+			return ModalityClassificationResult{
+				Modality:   classifierResult.Modality,
+				Confidence: classifierResult.Confidence,
+				Method:     "hybrid/classifier-preferred",
+			}
+		}
+
+		logging.Infof("[ModalitySignal] Hybrid(keyword-override): %s (classifier=%s@%.3f too low) for: %.80s",
+			keywordResult.Modality, classifierResult.Modality, classifierResult.Confidence, text)
+		return ModalityClassificationResult{
+			Modality:   keywordResult.Modality,
+			Confidence: keywordResult.Confidence,
+			Method:     "hybrid/keyword-override",
+		}
+	}
+
+	// Classifier unavailable - fall back to keyword detection
+	logging.Debugf("[ModalitySignal] Hybrid: classifier unavailable (%v), using keyword detection", err)
+	return c.classifyModalityByKeyword(text, cfg)
 }
 
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
@@ -1787,8 +2449,7 @@ func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([
 	}
 
 	// Use ModernBERT PII token classifier for entity detection
-	configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
-	tokenResult, err := c.piiInference.ClassifyTokens(text, configPath)
+	tokenResult, err := c.piiInference.ClassifyTokens(text)
 	if err != nil {
 		return nil, fmt.Errorf("PII token classification error: %w", err)
 	}
@@ -1839,8 +2500,7 @@ func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold f
 	}
 
 	// Use PII token classifier for entity detection
-	configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
-	tokenResult, err := c.piiInference.ClassifyTokens(text, configPath)
+	tokenResult, err := c.piiInference.ClassifyTokens(text)
 	if err != nil {
 		return nil, fmt.Errorf("PII token classification error: %w", err)
 	}
@@ -1937,8 +2597,7 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 		result.ContentIndex = i
 
 		// Use ModernBERT PII token classifier for detailed analysis
-		configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
-		tokenResult, err := c.piiInference.ClassifyTokens(content, configPath)
+		tokenResult, err := c.piiInference.ClassifyTokens(content)
 		if err != nil {
 			logging.Errorf("Error analyzing content %d: %v", i, err)
 			continue
@@ -2139,71 +2798,6 @@ func (c *Classifier) GetModelsForCategory(categoryName string) []string {
 	return models
 }
 
-// collectModelsForLatencySignals collects all models from decisions that use latency signals
-func (c *Classifier) collectModelsForLatencySignals(usedSignals map[string]bool) []string {
-	modelSet := make(map[string]bool)
-
-	for i := range c.Config.Decisions {
-		decision := &c.Config.Decisions[i]
-		// Check if this decision uses latency signals
-		usesLatency := false
-		// usedSignals keys are already normalized to lowercase by analyzeRuleCombination
-		latencyPrefix := config.SignalTypeLatency + ":"
-		for key := range usedSignals {
-			if strings.HasPrefix(key, latencyPrefix) {
-				// Check if this decision's rules reference this latency signal
-				// decisionUsesLatencySignal normalizes condition.Type/Name from config
-				if c.decisionUsesLatencySignal(decision, key) {
-					usesLatency = true
-					break
-				}
-			}
-		}
-
-		if usesLatency {
-			// Collect models from this decision
-			for _, modelRef := range decision.ModelRefs {
-				modelName := ""
-				if modelRef.LoRAName != "" {
-					modelName = modelRef.LoRAName
-				} else {
-					modelName = modelRef.Model
-				}
-				// Skip empty model names
-				if modelName != "" {
-					modelSet[modelName] = true
-				}
-			}
-		}
-	}
-
-	// Convert set to slice and sort deterministically
-	var models []string
-	for model := range modelSet {
-		models = append(models, model)
-	}
-	// Sort deterministically to ensure consistent ordering
-	slices.Sort(models)
-
-	return models
-}
-
-// decisionUsesLatencySignal checks if a decision uses a latency signal key
-// condition.Type and condition.Name come from config, so we normalize them for comparison
-func (c *Classifier) decisionUsesLatencySignal(decision *config.Decision, normalizedSignalKey string) bool {
-	for _, condition := range decision.Rules.Conditions {
-		// Normalize condition from config for comparison (all signals are normalized to lowercase)
-		normalizedType := strings.ToLower(strings.TrimSpace(condition.Type))
-		if normalizedType == config.SignalTypeLatency {
-			currentKey := normalizedType + ":" + strings.ToLower(strings.TrimSpace(condition.Name))
-			if currentKey == normalizedSignalKey {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // updateBestModel updates the best model, score if the new score is better.
 func (c *Classifier) updateBestModel(score float64, model string, bestScore *float64, bestModel *string) {
 	if score > *bestScore {
@@ -2305,12 +2899,12 @@ func (c *Classifier) IsLanguageEnabled() bool {
 
 // IsPreferenceClassifierEnabled checks if preference classification is enabled and properly configured
 func (c *Classifier) IsPreferenceClassifierEnabled() bool {
-	// Need preference rules configured and either a local Candle model or an external model
+	// Need preference rules configured and either contrastive mode or an external model
 	if len(c.Config.PreferenceRules) == 0 {
 		return false
 	}
 
-	if c.Config.Classifier.PreferenceModel.ModelID != "" {
+	if c.Config.Classifier.PreferenceModel.UseContrastive {
 		return true
 	}
 
@@ -2351,27 +2945,6 @@ func (c *Classifier) initializeLanguageClassifier() error {
 	c.languageClassifier = classifier
 	logging.Infof("Language classifier initialized")
 	return nil
-}
-
-// initializeLatencyClassifier initializes the latency classifier
-func (c *Classifier) initializeLatencyClassifier() error {
-	if len(c.Config.LatencyRules) == 0 {
-		return nil
-	}
-
-	classifier, err := NewLatencyClassifier(c.Config.LatencyRules)
-	if err != nil {
-		return fmt.Errorf("failed to create latency classifier: %w", err)
-	}
-
-	c.latencyClassifier = classifier
-	logging.Infof("Latency classifier initialized")
-	return nil
-}
-
-// IsLatencyEnabled checks if latency classification is enabled
-func (c *Classifier) IsLatencyEnabled() bool {
-	return len(c.Config.LatencyRules) > 0 && c.latencyClassifier != nil
 }
 
 // ClassifyFactCheck performs fact-check classification on the given text
@@ -2573,32 +3146,46 @@ func (c *Classifier) filterComplexityByComposer(
 	return filtered
 }
 
-// evaluateComposer evaluates a composer's conditions against signal results
+// evaluateComposer evaluates a composer rule tree against signal results.
+// Returns true when the tree matches (allowing the complexity rule through the filter).
+// A nil composer always returns true (no filter applied).
 func (c *Classifier) evaluateComposer(
-	composer *config.RuleCombination,
+	composer *config.RuleNode,
 	signals *SignalResults,
 ) bool {
 	if composer == nil {
 		return true
 	}
+	return c.evalComposerNode(*composer, signals)
+}
 
-	// Evaluate each condition
-	conditionResults := make([]bool, len(composer.Conditions))
-	for i, condition := range composer.Conditions {
-		conditionResults[i] = c.evaluateComposerCondition(&condition, signals)
+// evalComposerNode recursively evaluates a RuleNode against signal results.
+func (c *Classifier) evalComposerNode(
+	node config.RuleNode,
+	signals *SignalResults,
+) bool {
+	if node.IsLeaf() {
+		return c.evalComposerLeaf(node.Type, node.Name, signals)
 	}
 
-	// Apply operator (AND/OR)
-	if composer.Operator == "OR" {
-		for _, result := range conditionResults {
-			if result {
+	switch strings.ToUpper(node.Operator) {
+	case "OR":
+		for _, child := range node.Conditions {
+			if c.evalComposerNode(child, signals) {
 				return true
 			}
 		}
 		return false
-	} else { // Default to AND
-		for _, result := range conditionResults {
-			if !result {
+	case "NOT":
+		// Strictly unary: negate the single child's result.
+		if len(node.Conditions) != 1 {
+			logging.Warnf("Composer NOT operator requires exactly 1 child, got %d — treating as false", len(node.Conditions))
+			return false
+		}
+		return !c.evalComposerNode(node.Conditions[0], signals)
+	default: // AND
+		for _, child := range node.Conditions {
+			if !c.evalComposerNode(child, signals) {
 				return false
 			}
 		}
@@ -2606,32 +3193,32 @@ func (c *Classifier) evaluateComposer(
 	}
 }
 
-// evaluateComposerCondition evaluates a single condition against signal results
-func (c *Classifier) evaluateComposerCondition(
-	condition *config.RuleCondition,
+// evalComposerLeaf evaluates a single signal reference against signal results.
+func (c *Classifier) evalComposerLeaf(
+	typ, name string,
 	signals *SignalResults,
 ) bool {
-	switch condition.Type {
+	switch typ {
 	case "keyword":
-		return slices.Contains(signals.MatchedKeywordRules, condition.Name)
+		return slices.Contains(signals.MatchedKeywordRules, name)
 	case "embedding":
-		return slices.Contains(signals.MatchedEmbeddingRules, condition.Name)
+		return slices.Contains(signals.MatchedEmbeddingRules, name)
 	case "domain":
-		return slices.Contains(signals.MatchedDomainRules, condition.Name)
+		return slices.Contains(signals.MatchedDomainRules, name)
 	case "fact_check":
-		return slices.Contains(signals.MatchedFactCheckRules, condition.Name)
+		return slices.Contains(signals.MatchedFactCheckRules, name)
 	case "user_feedback":
-		return slices.Contains(signals.MatchedUserFeedbackRules, condition.Name)
+		return slices.Contains(signals.MatchedUserFeedbackRules, name)
 	case "preference":
-		return slices.Contains(signals.MatchedPreferenceRules, condition.Name)
+		return slices.Contains(signals.MatchedPreferenceRules, name)
 	case "language":
-		return slices.Contains(signals.MatchedLanguageRules, condition.Name)
-	case "latency":
-		return slices.Contains(signals.MatchedLatencyRules, condition.Name)
+		return slices.Contains(signals.MatchedLanguageRules, name)
 	case "context":
-		return slices.Contains(signals.MatchedContextRules, condition.Name)
+		return slices.Contains(signals.MatchedContextRules, name)
+	case "modality":
+		return slices.Contains(signals.MatchedModalityRules, name)
 	default:
-		logging.Warnf("Unknown composer condition type: %s", condition.Type)
+		logging.Warnf("Unknown composer condition type: %s", typ)
 		return false
 	}
 }

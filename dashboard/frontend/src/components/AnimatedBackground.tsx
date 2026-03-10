@@ -16,9 +16,13 @@ interface Blob {
 
 interface AnimatedBackgroundProps {
   speed?: 'slow' | 'normal'
+  theme?: 'default' | 'claw'
 }
 
-const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ speed = 'normal' }) => {
+const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
+  speed = 'normal',
+  theme = 'default',
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationRef = useRef<number>()
 
@@ -38,13 +42,30 @@ const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ speed = 'normal
     window.addEventListener('resize', resizeCanvas)
 
     const blobs: Blob[] = []
-    const colors = [
-      { h: 84, s: 70, l: 50 },   // NVIDIA green
-      { h: 90, s: 65, l: 55 },   // Yellow-green
-      { h: 78, s: 75, l: 45 },   // Deep green
-      { h: 160, s: 60, l: 50 },  // Cyan accent
-      { h: 200, s: 55, l: 55 },  // Blue accent
-    ]
+    const palette = theme === 'claw'
+      ? {
+        backgroundInner: '#14090a',
+        backgroundOuter: '#040202',
+        colors: [
+          { h: 6, s: 78, l: 46 },
+          { h: 358, s: 74, l: 42 },
+          { h: 14, s: 72, l: 44 },
+          { h: 348, s: 64, l: 40 },
+          { h: 22, s: 62, l: 42 },
+        ],
+      }
+      : {
+        backgroundInner: '#0a0a0a',
+        backgroundOuter: '#000000',
+        colors: [
+          { h: 84, s: 70, l: 50 },   // NVIDIA green
+          { h: 90, s: 65, l: 55 },   // Yellow-green
+          { h: 78, s: 75, l: 45 },   // Deep green
+          { h: 160, s: 60, l: 50 },  // Cyan accent
+          { h: 200, s: 55, l: 55 },  // Blue accent
+        ],
+      }
+    const colors = palette.colors
 
     const speedMultiplier = speed === 'slow' ? 0.3 : 1
 
@@ -75,8 +96,8 @@ const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ speed = 'normal
         canvas.width / 2, canvas.height / 2, 0,
         canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 2
       )
-      bgGradient.addColorStop(0, '#0a0a0a')
-      bgGradient.addColorStop(1, '#000000')
+      bgGradient.addColorStop(0, palette.backgroundInner)
+      bgGradient.addColorStop(1, palette.backgroundOuter)
       ctx.fillStyle = bgGradient
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
@@ -121,10 +142,9 @@ const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ speed = 'normal
         cancelAnimationFrame(animationRef.current)
       }
     }
-  }, [speed])
+  }, [speed, theme])
 
   return <canvas ref={canvasRef} className={styles.canvas} />
 }
 
 export default AnimatedBackground
-

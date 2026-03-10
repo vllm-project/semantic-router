@@ -236,7 +236,10 @@ function extractSignals(config: ConfigData): SignalConfig[] {
       name: rule.name,
       description: rule.description,
       latency: SIGNAL_LATENCY.preference,
-      config: {},
+      config: {
+        examples: rule.examples,
+        threshold: rule.threshold,
+      },
     })
   })
   // From signals.preferences (Python CLI format)
@@ -246,7 +249,10 @@ function extractSignals(config: ConfigData): SignalConfig[] {
       name: rule.name,
       description: rule.description,
       latency: SIGNAL_LATENCY.preference,
-      config: {},
+      config: {
+        examples: rule.examples,
+        threshold: rule.threshold,
+      },
     })
   })
 
@@ -271,35 +277,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 8. Latency Rules
-  // From latency_rules (Go/Router format)
-  config.latency_rules?.forEach(rule => {
-    addSignal({
-      type: 'latency',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.latency,
-      config: {
-        tpot_percentile: rule.tpot_percentile,
-        ttft_percentile: rule.ttft_percentile,
-      },
-    })
-  })
-  // From signals.latency (Python CLI format)
-  config.signals?.latency?.forEach(rule => {
-    addSignal({
-      type: 'latency',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.latency,
-      config: {
-        tpot_percentile: rule.tpot_percentile,
-        ttft_percentile: rule.ttft_percentile,
-      },
-    })
-  })
-
-  // 9. Context Rules
+  // 8. Context Rules
   // From context_rules (Go/Router format)
   config.context_rules?.forEach(rule => {
     addSignal({
@@ -325,7 +303,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 10. Complexity Rules
+  // 9. Complexity Rules
   // From complexity_rules (Go/Router format)
   config.complexity_rules?.forEach(rule => {
     addSignal({
@@ -355,6 +333,112 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
+  // 10. Modality Rules
+  // From modality_rules (Go/Router format)
+  config.modality_rules?.forEach(rule => {
+    addSignal({
+      type: 'modality',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.modality,
+      config: {},
+    })
+  })
+  // From signals.modality (Python CLI format)
+  config.signals?.modality?.forEach(rule => {
+    addSignal({
+      type: 'modality',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.modality,
+      config: {},
+    })
+  })
+
+  // 11. Authz / RBAC Role Bindings
+  // From role_bindings (Go/Router format)
+  config.role_bindings?.forEach(rule => {
+    addSignal({
+      type: 'authz',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.authz,
+      config: {
+        role: rule.role,
+      },
+    })
+  })
+  // From signals.role_bindings (Python CLI format)
+  config.signals?.role_bindings?.forEach(rule => {
+    addSignal({
+      type: 'authz',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.authz,
+      config: {
+        role: rule.role,
+      },
+    })
+  })
+
+  // 12. Jailbreak Rules
+  // From jailbreak (Go/Router format - top-level due to yaml:",inline")
+  config.jailbreak?.forEach(rule => {
+    addSignal({
+      type: 'jailbreak',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.jailbreak,
+      config: {
+        threshold: rule.threshold,
+        include_history: rule.include_history,
+      },
+    })
+  })
+  // From signals.jailbreak (Python CLI format)
+  config.signals?.jailbreak?.forEach(rule => {
+    addSignal({
+      type: 'jailbreak',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.jailbreak,
+      config: {
+        threshold: rule.threshold,
+        include_history: rule.include_history,
+      },
+    })
+  })
+
+  // 13. PII Rules
+  // From pii (Go/Router format - top-level due to yaml:",inline")
+  config.pii?.forEach(rule => {
+    addSignal({
+      type: 'pii',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.pii,
+      config: {
+        threshold: rule.threshold,
+        pii_types_allowed: rule.pii_types_allowed,
+        include_history: rule.include_history,
+      },
+    })
+  })
+  // From signals.pii (Python CLI format)
+  config.signals?.pii?.forEach(rule => {
+    addSignal({
+      type: 'pii',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.pii,
+      config: {
+        threshold: rule.threshold,
+        pii_types_allowed: rule.pii_types_allowed,
+        include_history: rule.include_history,
+      },
+    })
+  })
+
   return signals
 }
 
@@ -368,7 +452,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
   if (config.decisions && config.decisions.length > 0) {
     config.decisions.forEach(decision => {
       const rules: RuleCombination = {
-        operator: (decision.rules?.operator as 'AND' | 'OR') || 'AND',
+        operator: (decision.rules?.operator as 'AND' | 'OR' | 'NOT') || 'AND',
         conditions: (decision.rules?.conditions || []).map(cond => ({
           type: cond.type as SignalType,
           name: cond.name,
@@ -377,10 +461,11 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
 
       const algorithm: AlgorithmConfig | undefined = decision.algorithm
         ? {
-            type: decision.algorithm.type as AlgorithmConfig['type'],
-            confidence: decision.algorithm.confidence,
-            concurrent: decision.algorithm.concurrent,
-          }
+          type: decision.algorithm.type as AlgorithmConfig['type'],
+          confidence: decision.algorithm.confidence,
+          concurrent: decision.algorithm.concurrent,
+          latency_aware: decision.algorithm.latency_aware,
+        }
         : undefined
 
       const plugins: PluginConfig[] = (decision.plugins || []).map(p => ({
@@ -513,9 +598,12 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     user_feedback: [],
     preference: [],
     language: [],
-    latency: [],
     context: [],
     complexity: [],
+    modality: [],
+    authz: [],
+    jailbreak: [],
+    pii: [],
   }
 
   signals.forEach(signal => {

@@ -9,33 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/banner"
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
-	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
-	aibrix "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
-	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
-	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
-	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
-	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
-	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
-	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
-	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
-	responseapiredis "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
-	responseapirediscluster "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
-	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
-
-	// Import profiles to register test cases
-	_ "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
-	_ "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
-	_ "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
-	_ "github.com/vllm-project/semantic-router/e2e/profiles/istio"
-	_ "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
-	_ "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
-	_ "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
-	_ "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
-	_ "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
-	_ "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
-
-	// ML-based model selection profile
-	_ "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/all"
 )
 
 const version = "v1.0.0"
@@ -43,7 +17,7 @@ const version = "v1.0.0"
 func main() {
 	// Parse command line flags
 	var (
-		profile            = flag.String("profile", "ai-gateway", "Test profile to run (ai-gateway, dynamo, istio, etc.)")
+		profile            = flag.String("profile", "ai-gateway", fmt.Sprintf("Test profile to run (%s)", strings.Join(framework.RegisteredProfileNames(), ", ")))
 		clusterName        = flag.String("cluster", "semantic-router-e2e", "Kind cluster name")
 		imageTag           = flag.String("image-tag", "e2e-test", "Docker image tag")
 		keepCluster        = flag.Bool("keep-cluster", false, "Keep cluster after tests complete")
@@ -99,7 +73,7 @@ func main() {
 	}
 
 	// Get the profile implementation
-	profileImpl, err := getProfile(*profile)
+	profileImpl, err := framework.NewProfileByName(*profile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -112,37 +86,6 @@ func main() {
 	if err := runner.Run(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
-	}
-}
-
-func getProfile(name string) (framework.Profile, error) {
-	switch name {
-	case "ai-gateway":
-		return aigateway.NewProfile(), nil
-	case "dynamic-config":
-		return dynamicconfig.NewProfile(), nil
-	case "dynamo":
-		return dynamo.NewProfile(), nil
-	case "aibrix":
-		return aibrix.NewProfile(), nil
-	case "istio":
-		return istio.NewProfile(), nil
-	case "llm-d":
-		return llmd.NewProfile(), nil
-	case "production-stack":
-		return productionstack.NewProfile(), nil
-	case "response-api":
-		return responseapi.NewProfile(), nil
-	case "response-api-redis":
-		return responseapiredis.NewProfile(), nil
-	case "response-api-redis-cluster":
-		return responseapirediscluster.NewProfile(), nil
-	case "routing-strategies":
-		return routingstrategies.NewProfile(), nil
-	case "ml-model-selection":
-		return mlmodelselection.NewProfile(), nil
-	default:
-		return nil, fmt.Errorf("unknown profile: %s", name)
 	}
 }
 

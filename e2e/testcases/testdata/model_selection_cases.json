@@ -1,144 +1,142 @@
 [
   {
-    "query": "Calculate the derivative of sin(x) * cos(x)",
+    "query": "Solve for x: 3x + 7 = 22",
     "decision": "math_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Calculus derivative query - KNN selects best model by quality",
-    "algorithm": "knn"
+    "description": "Algebra equation - MLP/math",
+    "algorithm": "mlp"
   },
   {
-    "query": "Solve the quadratic equation: x^2 + 5x + 6 = 0",
+    "query": "What is the integral of sin(x)?",
     "decision": "math_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Algebra equation query",
-    "algorithm": "knn"
+    "description": "Calculus integral - MLP/math",
+    "algorithm": "mlp"
   },
   {
-    "query": "What is the integral of e^x from 0 to infinity?",
-    "decision": "math_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Advanced calculus integral query",
-    "algorithm": "knn"
-  },
-  {
-    "query": "Write a Python function to implement quicksort algorithm",
+    "query": "Write a Python function to sort a list using bubble sort",
     "decision": "code_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Python algorithm implementation - SVM classifies model preference",
-    "algorithm": "svm"
+    "description": "Python sorting - MLP/code",
+    "algorithm": "mlp"
   },
   {
-    "query": "Debug this JavaScript code: const x = undefined; console.log(x.length)",
+    "query": "How do I create a for loop in JavaScript?",
     "decision": "code_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "JavaScript debugging query",
-    "algorithm": "svm"
+    "description": "JavaScript loop - MLP/code",
+    "algorithm": "mlp"
   },
   {
-    "query": "How do I create a REST API in Go with proper error handling?",
-    "decision": "code_decision",
+    "query": "What is Newton's second law of motion?",
+    "decision": "physics_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Go programming query",
-    "algorithm": "svm"
-  },
-  {
-    "query": "Explain the laws of thermodynamics with examples",
-    "decision": "science_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Physics query - KMeans balances quality vs efficiency",
+    "description": "Classical mechanics - KMeans/physics",
     "algorithm": "kmeans"
   },
   {
-    "query": "What is the relationship between mass and energy?",
-    "decision": "science_decision",
+    "query": "Calculate the kinetic energy of a 5kg object moving at 10m/s",
+    "decision": "physics_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Physics relativity query - Avengers-Pro style routing",
-    "algorithm": "kmeans",
-    "expect_efficient": false
-  },
-  {
-    "query": "What is the capital of France?",
-    "decision": "general_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Simple factual query - efficiency optimized",
-    "algorithm": "knn",
-    "expect_efficient": true
-  },
-  {
-    "query": "Who wrote Romeo and Juliet?",
-    "decision": "general_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Literature factual query",
-    "algorithm": "knn"
-  },
-  {
-    "query": "Explain how neural networks learn through backpropagation",
-    "decision": "code_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "ML/CS theory query",
-    "algorithm": "svm"
-  },
-  {
-    "query": "Prove that the square root of 2 is irrational",
-    "decision": "math_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Mathematical proof query",
-    "algorithm": "knn"
-  },
-  {
-    "query": "Implement a binary search tree in Python with insert and delete operations",
-    "decision": "code_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Data structures implementation - SVM classification",
-    "algorithm": "svm"
-  },
-  {
-    "query": "What is the Pythagorean theorem and how is it used?",
-    "decision": "math_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Basic geometry theorem query",
-    "algorithm": "knn"
-  },
-  {
-    "query": "Explain the difference between DNA and RNA",
-    "decision": "science_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Biology query - KMeans clustering",
+    "description": "Energy calculation - KMeans/physics",
     "algorithm": "kmeans"
   },
   {
-    "query": "Write a SQL query to find the top 5 customers by total purchases",
-    "decision": "code_decision",
+    "query": "What is the difference between AC and DC electrical current?",
+    "decision": "physics_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Database SQL query",
-    "algorithm": "svm"
-  },
-  {
-    "query": "What causes earthquakes and how are they measured?",
-    "decision": "science_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Geology/seismology query",
+    "description": "Electrical physics - KMeans/physics",
     "algorithm": "kmeans"
   },
   {
-    "query": "Calculate the probability of rolling two sixes with two dice",
-    "decision": "math_decision",
+    "query": "How does a transistor amplify electrical signals?",
+    "decision": "physics_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Probability calculation",
-    "algorithm": "knn"
+    "description": "Electronics physics - KMeans/physics",
+    "algorithm": "kmeans"
   },
   {
-    "query": "How do you implement a thread-safe singleton pattern in Java?",
-    "decision": "code_decision",
+    "query": "What is the law of supply and demand in economics?",
+    "decision": "business_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Design patterns and concurrency",
+    "description": "Economics law - SVM/business",
     "algorithm": "svm"
   },
   {
-    "query": "When did World War II end and what were the main causes?",
-    "decision": "general_decision",
+    "query": "How does inflation affect interest rates?",
+    "decision": "business_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Historical knowledge query",
+    "description": "Monetary economics - SVM/business",
+    "algorithm": "svm"
+  },
+  {
+    "query": "What is the process of photosynthesis in plants?",
+    "decision": "science_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Biology photosynthesis - KNN/science",
     "algorithm": "knn"
+  },
+  {
+    "query": "Explain the structure of DNA and its double helix",
+    "decision": "science_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Biology DNA - KNN/science",
+    "algorithm": "knn"
+  },
+  {
+    "query": "What is the difference between civil law and criminal law?",
+    "decision": "law_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Legal concepts - KNN/law",
+    "algorithm": "knn"
+  },
+  {
+    "query": "What are the elements of a valid contract?",
+    "decision": "law_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Contract law - KNN/law",
+    "algorithm": "knn"
+  },
+  {
+    "query": "What were the main causes of World War I?",
+    "decision": "humanities_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "History WWI - KNN/humanities",
+    "algorithm": "knn"
+  },
+  {
+    "query": "Explain the philosophical concept of existentialism",
+    "decision": "humanities_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Philosophy existentialism - KNN/humanities",
+    "algorithm": "knn"
+  },
+  {
+    "query": "What are the symptoms of diabetes mellitus?",
+    "decision": "health_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Medical symptoms - KMeans/health",
+    "algorithm": "kmeans"
+  },
+  {
+    "query": "What is the treatment for hypertension?",
+    "decision": "health_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Medical treatment - KMeans/health",
+    "algorithm": "kmeans"
+  },
+  {
+    "query": "What is the Pythagorean theorem?",
+    "decision": "math_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Geometry theorem - MLP/math",
+    "algorithm": "mlp"
+  },
+  {
+    "query": "How do I implement a binary search tree in Java?",
+    "decision": "code_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Java data structures - MLP/code",
+    "algorithm": "mlp"
   }
 ]

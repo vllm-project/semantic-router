@@ -6,12 +6,22 @@
 package candle_binding
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
 	"log"
+	"math"
+	"net/http"
 	"regexp"
 	"runtime"
+	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -58,6 +68,7 @@ extern bool init_mmbert_32k_factcheck_classifier(const char* model_id, bool use_
 extern bool init_mmbert_32k_jailbreak_classifier(const char* model_id, bool use_cpu);
 extern bool init_mmbert_32k_feedback_classifier(const char* model_id, bool use_cpu);
 extern bool init_mmbert_32k_pii_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_32k_modality_classifier(const char* model_id, bool use_cpu);
 extern bool is_mmbert_32k_model(const char* config_path);
 
 // Token classification structures
@@ -230,6 +241,7 @@ extern int get_embedding_batched(const char* text, const char* model_type, int t
 extern bool init_embedding_models(const char* qwen3_model_path, const char* gemma_model_path, bool use_cpu);
 extern bool init_embedding_models_with_mmbert(const char* qwen3_model_path, const char* gemma_model_path, const char* mmbert_model_path, bool use_cpu);
 extern bool init_mmbert_embedding_model(const char* model_path, bool use_cpu);
+extern bool init_multimodal_embedding_model(const char* model_path, bool use_cpu);
 extern bool init_embedding_models_batched(const char* qwen3_model_path, int max_batch_size, unsigned long long max_wait_ms, bool use_cpu);
 extern int calculate_embedding_similarity(const char* text1, const char* text2, const char* model_type, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, const char* model_type, int target_dim, BatchSimilarityResult* result);
@@ -239,6 +251,20 @@ extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern TokenizationResult tokenize_text(const char* text, int max_length);
 extern void free_cstring(char* s);
 extern void free_embedding(float* data, int length);
+
+// Multi-modal embedding structures and functions
+typedef struct {
+    float* data;
+    int length;
+    bool error;
+    int modality;              // 0=text, 1=image, 2=audio
+    float processing_time_ms;
+} MultiModalEmbeddingResult;
+
+extern int multimodal_encode_text(const char* text, int target_dim, MultiModalEmbeddingResult* result);
+extern int multimodal_encode_image(const float* pixel_data, int height, int width, int target_dim, MultiModalEmbeddingResult* result);
+extern int multimodal_encode_audio(const float* mel_data, int n_mels, int time_frames, int target_dim, MultiModalEmbeddingResult* result);
+extern void free_multimodal_embedding(float* data, int length);
 extern void free_tokenization_result(TokenizationResult result);
 extern ClassificationResult classify_text(const char* text);
 extern ClassificationResultWithProbs classify_text_with_probabilities(const char* text);
@@ -262,7 +288,8 @@ extern ModernBertClassificationResult classify_mmbert_32k_intent(const char* tex
 extern ModernBertClassificationResult classify_mmbert_32k_factcheck(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_jailbreak(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_feedback(const char* text);
-extern ModernBertTokenClassificationResult classify_mmbert_32k_pii_tokens(const char* text, const char* model_config_path);
+extern ModernBertTokenClassificationResult classify_mmbert_32k_pii_tokens(const char* text);
+extern ModernBertClassificationResult classify_mmbert_32k_modality(const char* text);
 
 // New official Candle BERT functions
 extern bool init_candle_bert_classifier(const char* model_path, int num_classes, bool use_cpu);
@@ -412,6 +439,22 @@ typedef struct {
 extern bool init_lora_unified_classifier(const char* intent_model_path, const char* pii_model_path, const char* security_model_path, const char* architecture, bool use_cpu);
 extern LoRABatchResult classify_batch_with_lora(const char** texts, int num_texts);
 extern void free_lora_batch_result(LoRABatchResult result);
+
+// =============================================================================
+// MLP Selector for Model Selection (GPU-accelerated)
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
+// =============================================================================
+extern void* candle_mlp_new();
+extern void* candle_mlp_new_with_device(int device_type);
+extern void* candle_mlp_new_with_device_and_dtype(int device_type, int dtype);
+extern void candle_mlp_free(void* handle);
+extern char* candle_mlp_select(void* handle, double* query, size_t query_len);
+extern int candle_mlp_is_trained(void* handle);
+extern char* candle_mlp_to_json(void* handle);
+extern void* candle_mlp_from_json(char* json);
+extern void* candle_mlp_from_json_with_device(char* json, int device_type);
+extern void* candle_mlp_from_json_with_device_and_dtype(char* json, int device_type, int dtype);
+extern void candle_mlp_free_string(char* ptr);
 */
 import "C"
 
@@ -917,6 +960,350 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 	return nil
 }
 
+// MultiModalEmbeddingOutput represents the result of a multi-modal embedding.
+type MultiModalEmbeddingOutput struct {
+	Embedding        []float32 // The embedding vector (384-dim by default)
+	Modality         string    // "text", "image", or "audio"
+	ProcessingTimeMs float32   // Processing time in milliseconds
+}
+
+// InitMultiModalEmbeddingModel initializes the multi-modal embedding model.
+//
+// Model: llm-semantic-router/multi-modal-embed-small (~120M params)
+//   - Text: MiniLM-L6-v2 (22M params, 384-dim)
+//   - Image: SigLIP-base-patch16-512 (86M params, 768→384 projection)
+//   - Audio: Whisper-tiny encoder (8M params, 384-dim)
+//
+// After initialization, use MultiModalEncodeText, MultiModalEncodeImage,
+// or MultiModalEncodeAudio to generate embeddings.
+//
+// Parameters:
+//   - modelPath: Path to the multi-modal model directory
+//   - useCPU: If true, use CPU for inference; if false, use GPU if available
+//
+// Example:
+//
+//	err := InitMultiModalEmbeddingModel("/path/to/multi-modal-embed-small", false)
+//	if err != nil { log.Fatal(err) }
+//	output, err := MultiModalEncodeText("A photo of a cat", 0)
+func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
+	if modelPath == "" {
+		return fmt.Errorf("modelPath cannot be empty")
+	}
+
+	cModelPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelPath))
+
+	success := C.init_multimodal_embedding_model(cModelPath, C.bool(useCPU))
+
+	if !bool(success) {
+		return fmt.Errorf("failed to initialize multi-modal embedding model")
+	}
+
+	log.Printf("INFO: Multi-modal embedding model initialized (text+image+audio, 384-dim)")
+	return nil
+}
+
+// MultiModalEncodeText encodes text into a 384-dimensional embedding using the multi-modal model.
+//
+// Parameters:
+//   - text: Input text to encode
+//   - targetDim: Target embedding dimension (0 for default 384, or 32/64/128/256)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if encoding fails
+func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if text == "" {
+		return nil, fmt.Errorf("text cannot be empty")
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_text(cText, C.int(targetDim), &result)
+
+	if int(status) != 0 || bool(result.error) {
+		return nil, fmt.Errorf("multi-modal text encoding failed")
+	}
+
+	length := int(result.length)
+	if length <= 0 || result.data == nil {
+		return nil, fmt.Errorf("empty embedding returned")
+	}
+
+	embedding := make([]float32, length)
+	cSlice := unsafe.Slice((*float32)(unsafe.Pointer(result.data)), length)
+	copy(embedding, cSlice)
+	C.free_multimodal_embedding(result.data, result.length)
+
+	return &MultiModalEmbeddingOutput{
+		Embedding:        embedding,
+		Modality:         "text",
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// MultiModalEncodeImage encodes image pixel data into a 384-dimensional embedding.
+//
+// Parameters:
+//   - pixelData: Raw pixel data as float32 slice (RGB, normalized 0-1), flattened [3*H*W]
+//   - height: Image height (512 for SigLIP-base-patch16-512)
+//   - width: Image width (512)
+//   - targetDim: Target dimension (0 for default 384)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if encoding fails
+func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if len(pixelData) == 0 {
+		return nil, fmt.Errorf("pixelData cannot be empty")
+	}
+	expected := 3 * height * width
+	if len(pixelData) != expected {
+		return nil, fmt.Errorf("pixelData length %d != expected %d (3*%d*%d)", len(pixelData), expected, height, width)
+	}
+
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_image(
+		(*C.float)(unsafe.Pointer(&pixelData[0])),
+		C.int(height),
+		C.int(width),
+		C.int(targetDim),
+		&result,
+	)
+
+	if int(status) != 0 || bool(result.error) {
+		return nil, fmt.Errorf("multi-modal image encoding failed")
+	}
+
+	length := int(result.length)
+	if length <= 0 || result.data == nil {
+		return nil, fmt.Errorf("empty embedding returned")
+	}
+
+	embedding := make([]float32, length)
+	cSlice := unsafe.Slice((*float32)(unsafe.Pointer(result.data)), length)
+	copy(embedding, cSlice)
+	C.free_multimodal_embedding(result.data, result.length)
+
+	return &MultiModalEmbeddingOutput{
+		Embedding:        embedding,
+		Modality:         "image",
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// MultiModalEncodeAudio encodes a Mel spectrogram into a 384-dimensional embedding.
+//
+// Parameters:
+//   - melData: Mel spectrogram as float32 slice, flattened [nMels * timeFrames]
+//   - nMels: Number of Mel bins (typically 80)
+//   - timeFrames: Number of time frames
+//   - targetDim: Target dimension (0 for default 384)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if encoding fails
+func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if len(melData) == 0 {
+		return nil, fmt.Errorf("melData cannot be empty")
+	}
+	expected := nMels * timeFrames
+	if len(melData) != expected {
+		return nil, fmt.Errorf("melData length %d != expected %d (%d*%d)", len(melData), expected, nMels, timeFrames)
+	}
+
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_audio(
+		(*C.float)(unsafe.Pointer(&melData[0])),
+		C.int(nMels),
+		C.int(timeFrames),
+		C.int(targetDim),
+		&result,
+	)
+
+	if int(status) != 0 || bool(result.error) {
+		return nil, fmt.Errorf("multi-modal audio encoding failed")
+	}
+
+	length := int(result.length)
+	if length <= 0 || result.data == nil {
+		return nil, fmt.Errorf("empty embedding returned")
+	}
+
+	embedding := make([]float32, length)
+	cSlice := unsafe.Slice((*float32)(unsafe.Pointer(result.data)), length)
+	copy(embedding, cSlice)
+	C.free_multimodal_embedding(result.data, result.length)
+
+	return &MultiModalEmbeddingOutput{
+		Embedding:        embedding,
+		Modality:         "audio",
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// MultiModalEncodeImageFromBytes decodes JPEG/PNG image bytes, resizes to 512x512,
+// and encodes into an embedding using the multi-modal model.
+//
+// Parameters:
+//   - imageBytes: Raw JPEG or PNG image data
+//   - targetDim: Target embedding dimension (0 for default 384)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if decoding or encoding fails
+func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if len(imageBytes) == 0 {
+		return nil, fmt.Errorf("imageBytes cannot be empty")
+	}
+
+	pixelData, err := decodeAndResizeImage(imageBytes, 512, 512)
+	if err != nil {
+		return nil, fmt.Errorf("image decode/resize failed: %w", err)
+	}
+
+	return MultiModalEncodeImage(pixelData, 512, 512, targetDim)
+}
+
+// MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes it
+// into an embedding. Handles both raw base64 and data-URI prefixed strings
+// (e.g. "data:image/jpeg;base64,...") as used by the OpenAI API.
+//
+// Parameters:
+//   - base64Str: Base64-encoded image (with or without data URI prefix)
+//   - targetDim: Target embedding dimension (0 for default 384)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if decoding or encoding fails
+func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if base64Str == "" {
+		return nil, fmt.Errorf("base64Str cannot be empty")
+	}
+
+	payload := base64Str
+	if idx := strings.Index(base64Str, ";base64,"); idx >= 0 {
+		payload = base64Str[idx+len(";base64,"):]
+	}
+
+	imageBytes, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, fmt.Errorf("base64 decode failed: %w", err)
+	}
+
+	return MultiModalEncodeImageFromBytes(imageBytes, targetDim)
+}
+
+// MultiModalEncodeImageFromURL downloads an image from a URL and encodes it
+// into an embedding using the multi-modal model.
+//
+// SECURITY: This function performs an outbound HTTP GET to the provided URL.
+// It must NOT be called with untrusted/user-supplied URLs (SSRF risk).
+// The router-side code restricts image inputs to inline data URIs via
+// isSafeImageDataURL; this helper is intended only for trusted, operator-
+// configured URLs (e.g. preloading image_candidates from config).
+//
+// Parameters:
+//   - url: HTTP(S) URL pointing to a JPEG or PNG image (trusted source only)
+//   - targetDim: Target embedding dimension (0 for default 384)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if download, decoding, or encoding fails
+func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if url == "" {
+		return nil, fmt.Errorf("url cannot be empty")
+	}
+
+	const (
+		maxImageSize = 20 * 1024 * 1024 // 20 MB
+		httpTimeout  = 30               // seconds
+	)
+
+	client := &http.Client{Timeout: time.Duration(httpTimeout) * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP GET failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
+	}
+
+	imageBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxImageSize+1))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	if len(imageBytes) > maxImageSize {
+		return nil, fmt.Errorf("image from %s exceeds maximum size of %d bytes", url, maxImageSize)
+	}
+
+	return MultiModalEncodeImageFromBytes(imageBytes, targetDim)
+}
+
+// decodeAndResizeImage decodes a JPEG/PNG image, resizes it to targetW x targetH
+// using bilinear interpolation, and returns CHW float32 pixel data in [0, 1].
+func decodeAndResizeImage(data []byte, targetW, targetH int) ([]float32, error) {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("image decode: %w", err)
+	}
+
+	bounds := img.Bounds()
+	srcW := bounds.Dx()
+	srcH := bounds.Dy()
+
+	pixels := make([]float32, 3*targetH*targetW)
+	xRatio := float64(srcW) / float64(targetW)
+	yRatio := float64(srcH) / float64(targetH)
+
+	for y := 0; y < targetH; y++ {
+		srcY := float64(y)*yRatio + float64(bounds.Min.Y)
+		y0 := int(math.Floor(srcY))
+		y1 := y0 + 1
+		fy := srcY - float64(y0)
+		if y1 >= bounds.Max.Y {
+			y1 = bounds.Max.Y - 1
+		}
+
+		for x := 0; x < targetW; x++ {
+			srcX := float64(x)*xRatio + float64(bounds.Min.X)
+			x0 := int(math.Floor(srcX))
+			x1 := x0 + 1
+			fx := srcX - float64(x0)
+			if x1 >= bounds.Max.X {
+				x1 = bounds.Max.X - 1
+			}
+
+			r00, g00, b00, _ := img.At(x0, y0).RGBA()
+			r10, g10, b10, _ := img.At(x1, y0).RGBA()
+			r01, g01, b01, _ := img.At(x0, y1).RGBA()
+			r11, g11, b11, _ := img.At(x1, y1).RGBA()
+
+			bilerp := func(v00, v10, v01, v11 uint32) float32 {
+				f00 := float64(v00) / 65535.0
+				f10 := float64(v10) / 65535.0
+				f01 := float64(v01) / 65535.0
+				f11 := float64(v11) / 65535.0
+				top := f00*(1-fx) + f10*fx
+				bot := f01*(1-fx) + f11*fx
+				return float32(top*(1-fy) + bot*fy)
+			}
+
+			idx := y*targetW + x
+			pixels[idx] = bilerp(r00, r10, r01, r11)
+			pixels[targetH*targetW+idx] = bilerp(g00, g10, g01, g11)
+			pixels[2*targetH*targetW+idx] = bilerp(b00, b10, b01, b11)
+		}
+	}
+
+	return pixels, nil
+}
+
 // InitEmbeddingModelsWithMmBert initializes all embedding models including mmBERT.
 //
 // This is a convenience function to initialize qwen3, gemma, and mmbert models together.
@@ -1131,9 +1518,9 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 //	}
 //	fmt.Printf("Used model: %s\n", output.ModelType)
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	// Validate model type (accept "qwen3", "gemma", or "mmbert")
-	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', or 'mmbert')", modelType)
+	// Validate model type
+	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
 	}
 
 	// For mmbert, delegate to 2D Matryoshka function with default layer (full model)
@@ -1163,8 +1550,8 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 //	output, err := GetEmbedding2DMatryoshka("Hello world", "mmbert", 3, 256)
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
 	// Validate model type
-	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', or 'mmbert')", modelType)
+	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
 	}
 
 	cText := C.CString(text)
@@ -1200,7 +1587,7 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 
 	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
-	// Convert model_type to string (0=qwen3, 1=gemma, 2=mmbert)
+	// Convert model_type to string (0=qwen3, 1=gemma, 2=mmbert, 3=multimodal)
 	var actualModelType string
 	switch int(result.model_type) {
 	case 0:
@@ -1209,6 +1596,8 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 		actualModelType = "gemma"
 	case 2:
 		actualModelType = "mmbert"
+	case 3:
+		actualModelType = "multimodal"
 	default:
 		actualModelType = "unknown"
 	}
@@ -1918,7 +2307,7 @@ func InitMmBertClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT classifier model")
 		} else {
-			log.Printf("   ✓ mmBERT classifier initialized successfully")
+			log.Printf("   mmBERT classifier initialized successfully")
 		}
 	})
 	return err
@@ -1943,7 +2332,7 @@ func InitMmBertClassifierAuto(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize classifier model with auto-detection")
 		} else {
-			log.Printf("   ✓ Classifier initialized successfully (variant auto-detected)")
+			log.Printf("   Classifier initialized successfully (variant auto-detected)")
 		}
 	})
 	return err
@@ -1966,7 +2355,7 @@ func InitMmBertTokenClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT token classifier model")
 		} else {
-			log.Printf("   ✓ mmBERT token classifier initialized successfully")
+			log.Printf("   mmBERT token classifier initialized successfully")
 		}
 	})
 	return err
@@ -1992,6 +2381,7 @@ var (
 	mmBert32KJailbreakClassifierInitOnce sync.Once
 	mmBert32KFeedbackClassifierInitOnce  sync.Once
 	mmBert32KPIIClassifierInitOnce       sync.Once
+	mmBert32KModalityClassifierInitOnce  sync.Once
 )
 
 // IsMmBert32KModel checks if a model is mmBERT-32K (YaRN scaled) based on its config.json
@@ -2022,7 +2412,7 @@ func InitMmBert32KIntentClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT-32K intent classifier")
 		} else {
-			log.Printf("   ✓ mmBERT-32K intent classifier initialized (32K context)")
+			log.Printf("   mmBERT-32K intent classifier initialized (32K context)")
 		}
 	})
 	return err
@@ -2057,7 +2447,7 @@ func InitMmBert32KFactcheckClassifier(modelPath string, useCPU bool) error {
 			modelPath = "./models/mmbert32k-factcheck-classifier-lora"
 		}
 
-		log.Printf("✓ Initializing mmBERT-32K fact-check classifier: %s", modelPath)
+		log.Printf("Initializing mmBERT-32K fact-check classifier: %s", modelPath)
 
 		cModelID := C.CString(modelPath)
 		defer C.free(unsafe.Pointer(cModelID))
@@ -2066,7 +2456,7 @@ func InitMmBert32KFactcheckClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT-32K fact-check classifier")
 		} else {
-			log.Printf("   ✓ mmBERT-32K fact-check classifier initialized")
+			log.Printf("   mmBERT-32K fact-check classifier initialized")
 		}
 	})
 	return err
@@ -2101,7 +2491,7 @@ func InitMmBert32KJailbreakClassifier(modelPath string, useCPU bool) error {
 			modelPath = "./models/mmbert32k-jailbreak-detector-lora"
 		}
 
-		log.Printf("🛡️  Initializing mmBERT-32K jailbreak detector: %s", modelPath)
+		log.Printf("Initializing mmBERT-32K jailbreak detector: %s", modelPath)
 
 		cModelID := C.CString(modelPath)
 		defer C.free(unsafe.Pointer(cModelID))
@@ -2110,7 +2500,7 @@ func InitMmBert32KJailbreakClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT-32K jailbreak detector")
 		} else {
-			log.Printf("   ✓ mmBERT-32K jailbreak detector initialized")
+			log.Printf("   mmBERT-32K jailbreak detector initialized")
 		}
 	})
 	return err
@@ -2154,7 +2544,7 @@ func InitMmBert32KFeedbackClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT-32K feedback detector")
 		} else {
-			log.Printf("   ✓ mmBERT-32K feedback detector initialized")
+			log.Printf("   mmBERT-32K feedback detector initialized")
 		}
 	})
 	return err
@@ -2188,7 +2578,7 @@ func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 			modelPath = "./models/mmbert32k-pii-detector-lora"
 		}
 
-		log.Printf("🔒 Initializing mmBERT-32K PII detector: %s", modelPath)
+		log.Printf("Initializing mmBERT-32K PII detector: %s", modelPath)
 
 		cModelID := C.CString(modelPath)
 		defer C.free(unsafe.Pointer(cModelID))
@@ -2197,25 +2587,20 @@ func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT-32K PII detector")
 		} else {
-			log.Printf("   ✓ mmBERT-32K PII detector initialized")
+			log.Printf("   mmBERT-32K PII detector initialized")
 		}
 	})
 	return err
 }
 
 // ClassifyMmBert32KPII detects PII entities in text using mmBERT-32K
-// Returns a list of detected PII entities with their types and positions
-func ClassifyMmBert32KPII(text string, modelConfigPath string) ([]TokenEntity, error) {
+// Returns a list of detected PII entities with their types and positions.
+// Entity types are returned as "LABEL_{class_id}" and translated by the Go-side PIIMapping.
+func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
-	var cConfigPath *C.char
-	if modelConfigPath != "" {
-		cConfigPath = C.CString(modelConfigPath)
-		defer C.free(unsafe.Pointer(cConfigPath))
-	}
-
-	result := C.classify_mmbert_32k_pii_tokens(cText, cConfigPath)
+	result := C.classify_mmbert_32k_pii_tokens(cText)
 	defer C.free_modernbert_token_result(C.ModernBertTokenClassificationResult{
 		entities:     (*C.ModernBertTokenEntity)(unsafe.Pointer(result.entities)),
 		num_entities: result.num_entities,
@@ -2239,6 +2624,72 @@ func ClassifyMmBert32KPII(text string, modelConfigPath string) ([]TokenEntity, e
 	}
 
 	return entities, nil
+}
+
+// ModalityResult represents the output of modality routing classification
+type ModalityResult struct {
+	Modality   string  // "AR", "DIFFUSION", or "BOTH"
+	ClassID    int     // 0=AR, 1=DIFFUSION, 2=BOTH
+	Confidence float32 // Confidence score (0.0-1.0)
+}
+
+// InitMmBert32KModalityClassifier initializes the mmBERT-32K modality routing classifier
+// This model classifies user prompt intent into response modality:
+// - AR (0): Text-only response via autoregressive LLM
+// - DIFFUSION (1): Image generation via diffusion model
+// - BOTH (2): Hybrid response requiring both text and image
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-modality-router-merged
+func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
+	if modelPath == "" {
+		return fmt.Errorf("modality classifier model_path is required (set classifier.model_path in modality_detection config)")
+	}
+	var err error
+	mmBert32KModalityClassifierInitOnce.Do(func() {
+		log.Printf("🎯 Initializing mmBERT-32K modality routing classifier: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_modality_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K modality routing classifier")
+		} else {
+			log.Printf("   mmBERT-32K modality router initialized (AR/DIFFUSION/BOTH)")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KModality classifies user prompt intent into response modality
+// Returns ModalityResult with modality label ("AR", "DIFFUSION", "BOTH") and confidence
+func ClassifyMmBert32KModality(text string) (ModalityResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_modality(cText)
+
+	if result.class < 0 {
+		return ModalityResult{}, fmt.Errorf("failed to classify modality with mmBERT-32K")
+	}
+
+	// Map class ID to modality label
+	modalityLabels := map[int]string{
+		0: "AR",
+		1: "DIFFUSION",
+		2: "BOTH",
+	}
+
+	classID := int(result.class)
+	modality, ok := modalityLabels[classID]
+	if !ok {
+		return ModalityResult{}, fmt.Errorf("mmBERT-32K modality classifier returned unknown class_id %d (expected 0=AR, 1=DIFFUSION, 2=BOTH)", classID)
+	}
+
+	return ModalityResult{
+		Modality:   modality,
+		ClassID:    classID,
+		Confidence: float32(result.confidence),
+	}, nil
 }
 
 // InitFactCheckClassifier initializes the halugate-sentinel fact-check classifier
@@ -3205,7 +3656,7 @@ func InitQwen3MultiLoRAClassifier(baseModelPath string) error {
 		return fmt.Errorf("failed to initialize Qwen3 Multi-LoRA classifier (error code: %d)", result)
 	}
 
-	log.Printf("✅ Qwen3 Multi-LoRA classifier initialized from: %s", baseModelPath)
+	log.Printf("Qwen3 Multi-LoRA classifier initialized from: %s", baseModelPath)
 	return nil
 }
 
@@ -3222,7 +3673,7 @@ func LoadQwen3LoRAAdapter(adapterName, adapterPath string) error {
 		return fmt.Errorf("failed to load adapter '%s' (error code: %d)", adapterName, result)
 	}
 
-	log.Printf("✅ Loaded adapter '%s' from: %s", adapterName, adapterPath)
+	log.Printf("Loaded adapter '%s' from: %s", adapterName, adapterPath)
 	return nil
 }
 
@@ -3395,7 +3846,7 @@ func InitQwen3Guard(modelPath string) error {
 		return fmt.Errorf("failed to initialize Qwen3Guard (error code: %d)", result)
 	}
 
-	log.Printf("✅ Qwen3Guard initialized from: %s", modelPath)
+	log.Printf("Qwen3Guard initialized from: %s", modelPath)
 	return nil
 }
 
@@ -3595,4 +4046,174 @@ func extractLabelAndCategories(content string) (string, []string) {
 
 // ================================================================================================
 // END OF LORA UNIFIED CLASSIFIER GO BINDINGS
+// ================================================================================================
+
+// ================================================================================================
+// MLP SELECTOR FOR MODEL SELECTION (GPU-ACCELERATED)
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
+// ================================================================================================
+
+// MLPDeviceType defines the device type for MLP inference
+type MLPDeviceType int
+
+const (
+	// MLPDeviceCPU uses CPU for inference
+	MLPDeviceCPU MLPDeviceType = 0
+	// MLPDeviceCUDA uses NVIDIA GPU for inference
+	MLPDeviceCUDA MLPDeviceType = 1
+	// MLPDeviceMetal uses Apple Silicon GPU for inference
+	MLPDeviceMetal MLPDeviceType = 2
+)
+
+// MLPDType defines the data type for mixed precision inference
+type MLPDType int
+
+const (
+	// MLPF32 uses full precision (32-bit float) - default, best accuracy
+	MLPF32 MLPDType = 0
+	// MLPF16 uses half precision (16-bit float) - faster on GPUs with tensor cores
+	MLPF16 MLPDType = 1
+	// MLPBF16 uses BFloat16 - good balance of dynamic range and speed
+	MLPBF16 MLPDType = 2
+)
+
+// MLPSelector wraps the Candle MLP implementation for GPU-accelerated inference
+type MLPSelector struct {
+	handle unsafe.Pointer
+	mu     sync.RWMutex
+}
+
+// NewMLPSelector creates a new MLP selector (CPU)
+func NewMLPSelector() *MLPSelector {
+	handle := C.candle_mlp_new()
+	if handle == nil {
+		return nil
+	}
+	return &MLPSelector{handle: handle}
+}
+
+// NewMLPSelectorWithDevice creates a new MLP selector with specified device
+func NewMLPSelectorWithDevice(deviceType MLPDeviceType) *MLPSelector {
+	handle := C.candle_mlp_new_with_device(C.int(deviceType))
+	if handle == nil {
+		return nil
+	}
+	return &MLPSelector{handle: handle}
+}
+
+// NewMLPSelectorWithDeviceAndDType creates a new MLP selector with device and dtype for mixed precision
+func NewMLPSelectorWithDeviceAndDType(deviceType MLPDeviceType, dtype MLPDType) *MLPSelector {
+	handle := C.candle_mlp_new_with_device_and_dtype(C.int(deviceType), C.int(dtype))
+	if handle == nil {
+		return nil
+	}
+	return &MLPSelector{handle: handle}
+}
+
+// Close releases the MLP selector resources
+func (s *MLPSelector) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.handle != nil {
+		C.candle_mlp_free(s.handle)
+		s.handle = nil
+	}
+}
+
+// Select selects the best model for a query embedding
+func (s *MLPSelector) Select(query []float64) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == nil {
+		return "", fmt.Errorf("MLP selector not initialized")
+	}
+
+	if len(query) == 0 {
+		return "", fmt.Errorf("empty query embedding")
+	}
+
+	cQuery := make([]C.double, len(query))
+	for i, v := range query {
+		cQuery[i] = C.double(v)
+	}
+
+	result := C.candle_mlp_select(s.handle, &cQuery[0], C.size_t(len(query)))
+	if result == nil {
+		return "", fmt.Errorf("MLP selection failed")
+	}
+	defer C.candle_mlp_free_string(result)
+
+	return C.GoString(result), nil
+}
+
+// IsTrained returns whether the model has been loaded
+func (s *MLPSelector) IsTrained() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.handle == nil {
+		return false
+	}
+	return C.candle_mlp_is_trained(s.handle) != 0
+}
+
+// ToJSON serializes the model to JSON
+func (s *MLPSelector) ToJSON() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == nil {
+		return "", fmt.Errorf("MLP selector not initialized")
+	}
+
+	result := C.candle_mlp_to_json(s.handle)
+	if result == nil {
+		return "", fmt.Errorf("JSON serialization failed")
+	}
+	defer C.candle_mlp_free_string(result)
+
+	return C.GoString(result), nil
+}
+
+// MLPFromJSON loads an MLP selector from JSON (the primary way to load trained models)
+func MLPFromJSON(jsonStr string) (*MLPSelector, error) {
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	handle := C.candle_mlp_from_json(cJSON)
+	if handle == nil {
+		return nil, fmt.Errorf("failed to load MLP from JSON")
+	}
+
+	return &MLPSelector{handle: handle}, nil
+}
+
+// MLPFromJSONWithDevice loads an MLP selector from JSON with specific device
+func MLPFromJSONWithDevice(jsonStr string, deviceType MLPDeviceType) (*MLPSelector, error) {
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	handle := C.candle_mlp_from_json_with_device(cJSON, C.int(deviceType))
+	if handle == nil {
+		return nil, fmt.Errorf("failed to load MLP from JSON with device")
+	}
+
+	return &MLPSelector{handle: handle}, nil
+}
+
+// MLPFromJSONWithDeviceAndDType loads an MLP selector from JSON with device and dtype for mixed precision
+func MLPFromJSONWithDeviceAndDType(jsonStr string, deviceType MLPDeviceType, dtype MLPDType) (*MLPSelector, error) {
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	handle := C.candle_mlp_from_json_with_device_and_dtype(cJSON, C.int(deviceType), C.int(dtype))
+	if handle == nil {
+		return nil, fmt.Errorf("failed to load MLP from JSON with device and dtype")
+	}
+
+	return &MLPSelector{handle: handle}, nil
+}
+
+// ================================================================================================
+// END OF MLP SELECTOR GO BINDINGS
 // ================================================================================================

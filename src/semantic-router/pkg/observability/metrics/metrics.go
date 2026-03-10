@@ -526,6 +526,24 @@ var (
 		[]string{"backend"},
 	)
 
+	// Image Generation metrics
+	ImageGenRequests = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "image_gen_requests_total",
+			Help: "Total number of image generation requests",
+		},
+		[]string{"backend", "status"}, // status: success, error
+	)
+
+	ImageGenLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "image_gen_latency_seconds",
+			Help:    "Image generation latency in seconds",
+			Buckets: []float64{1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 60.0, 120.0},
+		},
+		[]string{"backend"},
+	)
+
 	// ContextTokenCount tracks the distribution of input token counts for context-based routing
 	ContextTokenCount = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{

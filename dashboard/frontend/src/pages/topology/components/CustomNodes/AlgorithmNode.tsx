@@ -25,6 +25,16 @@ export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
     if (algorithm.type === 'concurrent' && algorithm.concurrent) {
       return `timeout: ${algorithm.concurrent.timeout_seconds}s`
     }
+    if (algorithm.type === 'latency_aware' && algorithm.latency_aware) {
+      const parts: string[] = []
+      if (algorithm.latency_aware.tpot_percentile) {
+        parts.push(`TPOT P${algorithm.latency_aware.tpot_percentile}`)
+      }
+      if (algorithm.latency_aware.ttft_percentile) {
+        parts.push(`TTFT P${algorithm.latency_aware.ttft_percentile}`)
+      }
+      return parts.length > 0 ? parts.join(', ') : null
+    }
     return null
   }
 
@@ -38,7 +48,7 @@ export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
         border: `2px solid ${colors.border}`,
       }}
     >
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Left} />
 
       <div className={styles.algorithmHeader}>
         <span className={styles.algorithmIcon}>{icon}</span>
@@ -51,7 +61,7 @@ export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
         </div>
       )}
 
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 })

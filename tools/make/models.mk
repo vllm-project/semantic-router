@@ -19,6 +19,8 @@ MMBERT_MODELS := \
 	mmbert-jailbreak-detector-merged
 
 # mmBERT embedding model with 2D Matryoshka support
+# Downloaded automatically by the router's built-in downloader (make download-models)
+# Registry maps this to local path models/mom-embedding-ultra (see config/registry.go)
 MMBERT_EMBEDDING_MODEL := mmbert-embed-32k-2d-matryoshka
 
 # mmBERT base 32K YaRN model (extended context MLM model)
@@ -64,10 +66,10 @@ download-models: ## Download models using router's built-in download logic
 	@echo ""
 	@echo "Running router with --download-only flag..."
 	@echo "This may take a few minutes depending on your network speed..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router -config=config/config.yaml --download-only
 	@echo ""
-	@echo "✅ Models downloaded successfully"
+	@echo "Models downloaded successfully"
 
 download-models-lora: ## Download LoRA models (same as download-models now)
 	@$(MAKE) download-models
@@ -84,7 +86,7 @@ download-mmbert: ## Download all mmBERT merged models for Rust inference
 		huggingface-cli download $(HF_ORG)/$$model --local-dir $(MODELS_DIR)/$$model --local-dir-use-symlinks False; \
 	done
 	@echo ""
-	@echo "✅ mmBERT models downloaded to $(MODELS_DIR)/"
+	@echo "mmBERT models downloaded to $(MODELS_DIR)/"
 	@ls -la $(MODELS_DIR)/
 
 download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
@@ -99,10 +101,10 @@ download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 		huggingface-cli download $(HF_ORG)/$$adapter --local-dir $(MODELS_DIR)/$$adapter --local-dir-use-symlinks False; \
 	done
 	@echo ""
-	@echo "✅ mmBERT LoRA adapters downloaded to $(MODELS_DIR)/"
+	@echo "mmBERT LoRA adapters downloaded to $(MODELS_DIR)/"
 	@ls -la $(MODELS_DIR)/
 
-download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-32k-lora download-mmbert-32k-merged download-mmbert-embedding download-mmbert-32k download-mmbert-32k-onnx ## Download all mmBERT models, LoRA adapters, embedding, ONNX, and 32K base model
+download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-32k-lora download-mmbert-32k-merged download-mmbert-32k download-mmbert-32k-onnx ## Download all mmBERT models, LoRA adapters, ONNX, and 32K base model
 
 download-mmbert-32k-lora: ## Download mmBERT-32K LoRA adapters (32K context models)
 	@echo "📦 Downloading mmBERT-32K LoRA adapters from Hugging Face..."
@@ -116,7 +118,7 @@ download-mmbert-32k-lora: ## Download mmBERT-32K LoRA adapters (32K context mode
 		huggingface-cli download $(HF_ORG)/$$adapter --local-dir $(MODELS_DIR)/$$adapter --local-dir-use-symlinks False; \
 	done
 	@echo ""
-	@echo "✅ mmBERT-32K LoRA adapters downloaded to $(MODELS_DIR)/"
+	@echo "mmBERT-32K LoRA adapters downloaded to $(MODELS_DIR)/"
 	@echo ""
 	@echo "Available 32K LoRA models:"
 	@echo "  - mmbert32k-feedback-detector-lora   (4-class satisfaction)"
@@ -138,7 +140,7 @@ download-mmbert-32k-merged: ## Download mmBERT-32K merged models (for Rust/Go in
 		huggingface-cli download $(HF_ORG)/$$model --local-dir $(MODELS_DIR)/$$model --local-dir-use-symlinks False; \
 	done
 	@echo ""
-	@echo "✅ mmBERT-32K merged models downloaded to $(MODELS_DIR)/"
+	@echo "mmBERT-32K merged models downloaded to $(MODELS_DIR)/"
 	@echo ""
 	@echo "Available 32K merged models (for Rust inference):"
 	@echo "  - mmbert32k-feedback-detector-merged   (4-class satisfaction)"
@@ -146,25 +148,6 @@ download-mmbert-32k-merged: ## Download mmBERT-32K merged models (for Rust/Go in
 	@echo "  - mmbert32k-pii-detector-merged        (35-class PII NER)"
 	@echo "  - mmbert32k-jailbreak-detector-merged  (binary jailbreak)"
 	@echo "  - mmbert32k-factcheck-classifier-merged (binary fact-check)"
-
-download-mmbert-embedding: ## Download mmBERT 2D Matryoshka embedding model
-	@echo "📦 Downloading mmBERT 2D Matryoshka embedding model..."
-	@mkdir -p $(MODELS_DIR)
-	@echo ""
-	@echo "⬇️  Downloading $(MMBERT_EMBEDDING_MODEL)..."
-	@echo "   This model supports:"
-	@echo "   - 32K context length (YaRN-scaled RoPE)"
-	@echo "   - Multilingual (1800+ languages)"
-	@echo "   - 2D Matryoshka: layer early exit (3/6/11/22) + dimension reduction (64-768)"
-	@if [ -d "$(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)" ]; then \
-		echo "   Already exists, updating..."; \
-	fi
-	@huggingface-cli download $(HF_ORG)/$(MMBERT_EMBEDDING_MODEL) --local-dir $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL) --local-dir-use-symlinks False
-	@echo ""
-	@echo "✅ mmBERT embedding model downloaded to $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)"
-	@echo ""
-	@echo "Usage example:"
-	@echo "  make run-router CONFIG_FILE=config/intelligent-routing/in-tree/embedding-mmbert.yaml"
 
 download-mmbert-32k: ## Download mmBERT 32K YaRN base model (extended context MLM)
 	@echo "📦 Downloading mmBERT 32K YaRN base model..."
@@ -181,7 +164,7 @@ download-mmbert-32k: ## Download mmBERT 32K YaRN base model (extended context ML
 	fi
 	@huggingface-cli download $(HF_ORG)/$(MMBERT_32K_BASE_MODEL) --local-dir $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL) --local-dir-use-symlinks False
 	@echo ""
-	@echo "✅ mmBERT 32K YaRN model downloaded to $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)"
+	@echo "mmBERT 32K YaRN model downloaded to $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)"
 	@echo ""
 	@echo "Model details:"
 	@echo "  - Max context: 32,768 tokens"
@@ -223,7 +206,7 @@ download-mmbert-32k-onnx: ## Download mmBERT-32K ONNX models (from onnx/ subdir 
 		huggingface-cli download $(HF_ORG)/$$model fact_check_mapping.json --local-dir "$$onnx_dir" --local-dir-use-symlinks False 2>/dev/null || true; \
 	done
 	@echo ""
-	@echo "✅ mmBERT-32K ONNX models downloaded to $(MODELS_DIR)/"
+	@echo "mmBERT-32K ONNX models downloaded to $(MODELS_DIR)/"
 	@echo ""
 	@echo "Available ONNX models (~1.2GB each):"
 	@echo "  - mmbert32k-intent-classifier-merged-onnx     (14-class MMLU-Pro)"
@@ -245,7 +228,7 @@ export-onnx-factcheck-feedback: ## Export factcheck and feedback merged models t
 	@echo "📤 Exporting factcheck and feedback to ONNX..."
 	@python3 scripts/export_classifiers_to_onnx.py --model factcheck --output-dir $(MODELS_DIR)
 	@python3 scripts/export_classifiers_to_onnx.py --model feedback --output-dir $(MODELS_DIR)
-	@echo "✅ ONNX export done: $(MODELS_DIR)/mmbert32k-factcheck-classifier-merged-onnx, $(MODELS_DIR)/mmbert32k-feedback-detector-merged-onnx"
+	@echo "ONNX export done: $(MODELS_DIR)/mmbert32k-factcheck-classifier-merged-onnx, $(MODELS_DIR)/mmbert32k-feedback-detector-merged-onnx"
 
 upload-onnx-factcheck-feedback: export-onnx-factcheck-feedback ## Export and upload factcheck/feedback ONNX to Hugging Face (requires login)
 	@echo "⬆️  Uploading ONNX to Hugging Face..."
@@ -260,7 +243,7 @@ test-mmbert-32k: ## Test mmBERT 32K context with AVX512 optimization
 		RUSTFLAGS="-C target-cpu=native" \
 		cargo test --release --no-default-features --lib test_32k_context_length -- --ignored --nocapture
 	@echo ""
-	@echo "✅ mmBERT 32K context test completed"
+	@echo "mmBERT 32K context test completed"
 
 test-mmbert-32k-all: ## Run all 32K-related tests with optimization
 	@echo "🧪 Running all 32K tests with AVX512 optimization..."
@@ -269,7 +252,7 @@ test-mmbert-32k-all: ## Run all 32K-related tests with optimization
 		RUSTFLAGS="-C target-cpu=native" \
 		cargo test --release --no-default-features --lib "32k" -- --nocapture
 	@echo ""
-	@echo "✅ All 32K tests completed"
+	@echo "All 32K tests completed"
 
 clean-minimal-models: ## No-op target for backward compatibility
 	@echo "ℹ️  This target is no longer needed"
@@ -284,7 +267,7 @@ clean-mmbert: ## Remove downloaded mmBERT models
 	done
 	@rm -rf $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)
 	@rm -rf $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)
-	@echo "✅ mmBERT models removed"
+	@echo "mmBERT models removed"
 
 # ======== mmBERT-32K Training ========
 # Training targets for mmBERT-32K-YaRN fine-tuned models
@@ -330,7 +313,7 @@ PII_LORA_ALPHA ?= 96
 
 # Training script paths
 TRAINING_DIR := src/training
-LORA_DIR := $(TRAINING_DIR)/training_lora
+LORA_DIR := $(TRAINING_DIR)/model_classifier
 
 # Output directories for 32K models
 MMBERT32K_MODELS_DIR := models/mmbert32k
@@ -346,7 +329,7 @@ train-mmbert32k-all: ## Train all mmBERT-32K models (LoRA + Merged)
 	@$(MAKE) train-mmbert32k-jailbreak
 	@$(MAKE) train-mmbert32k-factcheck
 	@echo ""
-	@echo "✅ All mmBERT-32K models trained successfully!"
+	@echo "All mmBERT-32K models trained successfully!"
 	@echo ""
 	@$(MAKE) list-mmbert32k-models
 
@@ -356,7 +339,7 @@ train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
 	@echo "   Epochs: $(FEEDBACK_EPOCHS), LR: $(FEEDBACK_LR)"
 	@echo "   (Higher rank needed for 4-class classification)"
 	@mkdir -p models
-	python $(TRAINING_DIR)/modernbert_dissat_pipeline/train_feedback_detector.py \
+	python $(TRAINING_DIR)/model_classifier/user_feedback_classifier/train_feedback_detector.py \
 		--model_name llm-semantic-router/mmbert-32k-yarn \
 		--output_dir models/mmbert32k-feedback-detector \
 		--epochs $(FEEDBACK_EPOCHS) \
@@ -366,7 +349,7 @@ train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
 		--lora_rank $(FEEDBACK_LORA_RANK) \
 		--lora_alpha $(FEEDBACK_LORA_ALPHA) \
 		--merge_lora
-	@echo "✅ Feedback Detector training complete (98.8% accuracy expected)"
+	@echo "Feedback Detector training complete (98.8% accuracy expected)"
 	@echo "   LoRA: models/mmbert32k-feedback-detector-lora"
 	@echo "   Merged: models/mmbert32k-feedback-detector-merged"
 
@@ -384,7 +367,7 @@ train-mmbert32k-intent: ## Train Intent Classifier (MMLU-Pro categories + supple
 		--batch-size $(TRAIN_BATCH_SIZE) \
 		--learning-rate $(TRAIN_LR) \
 		--max-samples $(MAX_SAMPLES)
-	@echo "✅ Intent Classifier training complete"
+	@echo "Intent Classifier training complete"
 	@# Move to organized directory (handle both _model and non-_model suffixes)
 	@if [ -d "lora_intent_classifier_mmbert-32k_r$(LORA_RANK)" ]; then \
 		mv lora_intent_classifier_mmbert-32k_r$(LORA_RANK) $(MMBERT32K_MODELS_DIR)/intent-classifier-lora; \
@@ -393,7 +376,7 @@ train-mmbert32k-intent: ## Train Intent Classifier (MMLU-Pro categories + supple
 	fi
 
 train-mmbert32k-pii: ## Train PII Detector (AI4Privacy + Presidio combined dataset)
-	@echo "🔒 Training PII Detector with mmBERT-32K (AI4Privacy + Presidio combined)..."
+	@echo "Training PII Detector with mmBERT-32K (AI4Privacy + Presidio combined)..."
 	@echo "   Dataset: AI4Privacy (70%) + Presidio (30%) for maximum coverage"
 	@echo "   Epochs: $(PII_EPOCHS), Samples: $(PII_MAX_SAMPLES), LoRA rank: $(PII_LORA_RANK)"
 	@mkdir -p $(MMBERT32K_MODELS_DIR)
@@ -407,7 +390,7 @@ train-mmbert32k-pii: ## Train PII Detector (AI4Privacy + Presidio combined datas
 		--learning-rate $(PII_LR) \
 		--max-samples $(PII_MAX_SAMPLES) \
 		--use-ai4privacy
-	@echo "✅ PII Detector training complete (97.2% accuracy expected)"
+	@echo "PII Detector training complete (97.2% accuracy expected)"
 	@# Move to organized directory (handle both naming patterns)
 	@if [ -d "lora_pii_detector_mmbert-32k_r$(PII_LORA_RANK)_token_model" ]; then \
 		mv lora_pii_detector_mmbert-32k_r$(PII_LORA_RANK)_token_model $(MMBERT32K_MODELS_DIR)/pii-detector-lora; \
@@ -416,7 +399,7 @@ train-mmbert32k-pii: ## Train PII Detector (AI4Privacy + Presidio combined datas
 	fi
 
 train-mmbert32k-pii-quick: ## Quick PII training (3 epochs, 3000 samples)
-	@echo "🔒 Quick PII Detector training (AI4Privacy + Presidio)..."
+	@echo "Quick PII Detector training (AI4Privacy + Presidio)..."
 	python $(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py \
 		--mode train \
 		--model mmbert-32k \
@@ -427,10 +410,10 @@ train-mmbert32k-pii-quick: ## Quick PII training (3 epochs, 3000 samples)
 		--learning-rate 1e-4 \
 		--max-samples 3000 \
 		--use-ai4privacy
-	@echo "✅ Quick PII training complete"
+	@echo "Quick PII training complete"
 
 train-mmbert32k-pii-presidio-only: ## Train PII Detector with Presidio only (legacy)
-	@echo "🔒 Training PII Detector with Presidio only (legacy mode)..."
+	@echo "Training PII Detector with Presidio only (legacy mode)..."
 	python $(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py \
 		--mode train \
 		--model mmbert-32k \
@@ -441,10 +424,10 @@ train-mmbert32k-pii-presidio-only: ## Train PII Detector with Presidio only (leg
 		--learning-rate $(TRAIN_LR) \
 		--max-samples $(MAX_SAMPLES) \
 		--no-ai4privacy
-	@echo "✅ Presidio-only PII training complete"
+	@echo "Presidio-only PII training complete"
 
 train-mmbert32k-jailbreak: ## Train Jailbreak Detector (toxic-chat + salad-data)
-	@echo "🛡️  Training Jailbreak Detector with mmBERT-32K..."
+	@echo "Training Jailbreak Detector with mmBERT-32K..."
 	@mkdir -p $(MMBERT32K_MODELS_DIR)
 	python $(LORA_DIR)/prompt_guard_fine_tuning_lora/jailbreak_bert_finetuning_lora.py \
 		--mode train \
@@ -455,14 +438,14 @@ train-mmbert32k-jailbreak: ## Train Jailbreak Detector (toxic-chat + salad-data)
 		--batch-size $(TRAIN_BATCH_SIZE) \
 		--learning-rate $(TRAIN_LR) \
 		--max-samples $(MAX_SAMPLES)
-	@echo "✅ Jailbreak Detector training complete (97.7% accuracy expected)"
+	@echo "Jailbreak Detector training complete (97.7% accuracy expected)"
 	@# Move to organized directory
 	@if [ -d "lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
 		mv lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora; \
 	fi
 
 train-mmbert32k-factcheck: ## Train Fact Check Classifier
-	@echo "✓ Training Fact Check Classifier with mmBERT-32K..."
+	@echo "Training Fact Check Classifier with mmBERT-32K..."
 	@mkdir -p $(MMBERT32K_MODELS_DIR)
 	python $(LORA_DIR)/fact_check_fine_tuning_lora/fact_check_bert_finetuning_lora.py \
 		--mode train \
@@ -473,7 +456,7 @@ train-mmbert32k-factcheck: ## Train Fact Check Classifier
 		--batch-size $(TRAIN_BATCH_SIZE) \
 		--learning-rate $(TRAIN_LR) \
 		--max-samples $(MAX_SAMPLES)
-	@echo "✅ Fact Check Classifier training complete"
+	@echo "Fact Check Classifier training complete"
 	@# Move to organized directory
 	@if [ -d "lora_fact_check_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
 		mv lora_fact_check_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/fact-check-lora; \
@@ -487,13 +470,13 @@ merge-mmbert32k-all: ## Merge all LoRA adapters into full models for Rust infere
 	@$(MAKE) merge-mmbert32k-jailbreak
 	@$(MAKE) merge-mmbert32k-factcheck
 	@echo ""
-	@echo "✅ All LoRA adapters merged!"
+	@echo "All LoRA adapters merged!"
 	@$(MAKE) list-mmbert32k-models
 
 merge-mmbert32k-intent: ## Merge Intent Classifier LoRA adapter
 	@echo "🔗 Merging Intent Classifier..."
 	@if [ -d "$(MMBERT32K_MODELS_DIR)/intent-classifier-lora" ]; then \
-		python -c "from src.training.training_lora.classifier_model_fine_tuning_lora.ft_linear_lora import merge_lora_adapter_to_full_model; \
+		python -c "from src.training.model_classifier.classifier_model_fine_tuning_lora.ft_linear_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/intent-classifier-lora', \
 				'$(MMBERT32K_MODELS_DIR)/intent-classifier-merged', \
 				'llm-semantic-router/mmbert-32k-yarn')"; \
@@ -504,7 +487,7 @@ merge-mmbert32k-intent: ## Merge Intent Classifier LoRA adapter
 merge-mmbert32k-pii: ## Merge PII Detector LoRA adapter
 	@echo "🔗 Merging PII Detector..."
 	@if [ -d "$(MMBERT32K_MODELS_DIR)/pii-detector-lora" ]; then \
-		python -c "from src.training.training_lora.pii_model_fine_tuning_lora.pii_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
+		python -c "from src.training.model_classifier.pii_model_fine_tuning_lora.pii_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/pii-detector-lora', \
 				'$(MMBERT32K_MODELS_DIR)/pii-detector-merged', \
 				'llm-semantic-router/mmbert-32k-yarn')"; \
@@ -515,7 +498,7 @@ merge-mmbert32k-pii: ## Merge PII Detector LoRA adapter
 merge-mmbert32k-jailbreak: ## Merge Jailbreak Detector LoRA adapter
 	@echo "🔗 Merging Jailbreak Detector..."
 	@if [ -d "$(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora" ]; then \
-		python -c "from src.training.training_lora.prompt_guard_fine_tuning_lora.jailbreak_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
+		python -c "from src.training.model_classifier.prompt_guard_fine_tuning_lora.jailbreak_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora', \
 				'$(MMBERT32K_MODELS_DIR)/jailbreak-detector-merged', \
 				'llm-semantic-router/mmbert-32k-yarn')"; \
@@ -526,7 +509,7 @@ merge-mmbert32k-jailbreak: ## Merge Jailbreak Detector LoRA adapter
 merge-mmbert32k-factcheck: ## Merge Fact Check Classifier LoRA adapter
 	@echo "🔗 Merging Fact Check Classifier..."
 	@if [ -d "$(MMBERT32K_MODELS_DIR)/fact-check-lora" ]; then \
-		python -c "from src.training.training_lora.fact_check_fine_tuning_lora.fact_check_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
+		python -c "from src.training.model_classifier.fact_check_fine_tuning_lora.fact_check_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/fact-check-lora', \
 				'$(MMBERT32K_MODELS_DIR)/fact-check-merged', \
 				'llm-semantic-router/mmbert-32k-yarn')"; \
@@ -549,7 +532,7 @@ clean-mmbert32k: ## Remove all trained mmBERT-32K models
 	@echo "🗑️  Removing trained mmBERT-32K models..."
 	@rm -rf $(MMBERT32K_MODELS_DIR)
 	@rm -rf lora_*_mmbert-32k_*
-	@echo "✅ mmBERT-32K models removed"
+	@echo "mmBERT-32K models removed"
 
 ##@ mmBERT-32K GPU Training (ROCm)
 

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // Config holds all application configuration
@@ -24,6 +25,7 @@ type Config struct {
 
 	// Read-only mode for public beta deployments
 	ReadonlyMode bool
+	SetupMode    bool
 
 	// Platform branding (e.g., "amd" for AMD GPU deployments)
 	Platform string
@@ -36,6 +38,18 @@ type Config struct {
 
 	// MCP configuration
 	MCPEnabled bool
+
+	// ML Pipeline configuration
+	MLPipelineEnabled bool
+	MLPipelineDataDir string
+	MLTrainingDir     string // path to src/training/model_selection/ml_model_selection
+	MLServiceURL      string // URL of the Python ML service sidecar (empty = subprocess mode)
+
+	// OpenClaw configuration
+	OpenClawEnabled bool
+	OpenClawURL     string // URL of OpenClaw gateway (default: http://localhost:18788)
+	OpenClawDataDir string // workspace generation directory
+	OpenClawToken   string // auth token for OpenClaw gateway
 }
 
 // env returns the env var or default
@@ -65,6 +79,7 @@ func LoadConfig() (*Config, error) {
 
 	// Read-only mode for public beta deployments
 	readonlyMode := flag.Bool("readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)")
+	setupMode := flag.Bool("setup-mode", env("DASHBOARD_SETUP_MODE", "false") == "true", "enable dashboard setup mode")
 
 	// Platform branding
 	platform := flag.String("platform", env("DASHBOARD_PLATFORM", ""), "platform branding (e.g., 'amd' for AMD GPU deployments)")
@@ -73,10 +88,26 @@ func LoadConfig() (*Config, error) {
 	evaluationEnabled := flag.Bool("evaluation", env("EVALUATION_ENABLED", "true") == "true", "enable evaluation feature")
 	evaluationDBPath := flag.String("evaluation-db", env("EVALUATION_DB_PATH", "./data/evaluations.db"), "evaluation database path")
 	evaluationResultsDir := flag.String("evaluation-results", env("EVALUATION_RESULTS_DIR", "./data/results"), "evaluation results directory")
-	pythonPath := flag.String("python", env("PYTHON_PATH", "python3"), "path to Python interpreter")
+	defaultPython := "python3"
+	if runtime.GOOS == "windows" {
+		defaultPython = "python"
+	}
+	pythonPath := flag.String("python", env("PYTHON_PATH", defaultPython), "path to Python interpreter")
 
 	// MCP configuration
 	mcpEnabled := flag.Bool("mcp", env("MCP_ENABLED", "true") == "true", "enable MCP (Model Context Protocol) feature")
+
+	// ML Onboarding configuration
+	mlPipelineEnabled := flag.Bool("ml-pipeline", env("ML_PIPELINE_ENABLED", "true") == "true", "enable ML pipeline (benchmark, train, config)")
+	mlPipelineDataDir := flag.String("ml-pipeline-data", env("ML_PIPELINE_DATA_DIR", "./data/ml-pipeline"), "ML pipeline data directory")
+	mlTrainingDir := flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/model_selection/ml_model_selection")
+	mlServiceURL := flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
+
+	// OpenClaw configuration
+	openclawEnabled := flag.Bool("openclaw", env("OPENCLAW_ENABLED", "true") == "true", "enable OpenClaw agent provisioning")
+	openclawURL := flag.String("openclaw-url", env("OPENCLAW_URL", "http://localhost:18788"), "OpenClaw gateway URL")
+	openclawDataDir := flag.String("openclaw-data", env("OPENCLAW_DATA_DIR", "./data/openclaw"), "OpenClaw workspace directory")
+	openclawToken := flag.String("openclaw-token", env("OPENCLAW_TOKEN", ""), "OpenClaw gateway auth token")
 
 	flag.Parse()
 
@@ -90,12 +121,21 @@ func LoadConfig() (*Config, error) {
 	cfg.JaegerURL = *jaegerURL
 	cfg.EnvoyURL = *envoyURL
 	cfg.ReadonlyMode = *readonlyMode
+	cfg.SetupMode = *setupMode
 	cfg.Platform = *platform
 	cfg.EvaluationEnabled = *evaluationEnabled
 	cfg.EvaluationDBPath = *evaluationDBPath
 	cfg.EvaluationResultsDir = *evaluationResultsDir
 	cfg.PythonPath = *pythonPath
 	cfg.MCPEnabled = *mcpEnabled
+	cfg.MLPipelineEnabled = *mlPipelineEnabled
+	cfg.MLPipelineDataDir = *mlPipelineDataDir
+	cfg.MLTrainingDir = *mlTrainingDir
+	cfg.MLServiceURL = *mlServiceURL
+	cfg.OpenClawEnabled = *openclawEnabled
+	cfg.OpenClawURL = *openclawURL
+	cfg.OpenClawDataDir = *openclawDataDir
+	cfg.OpenClawToken = *openclawToken
 
 	// Resolve config file path to absolute path
 	absConfigPath, err := filepath.Abs(cfg.ConfigFile)

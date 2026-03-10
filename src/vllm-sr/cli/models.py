@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Any, Optional, Literal
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Listener(BaseModel):
@@ -59,21 +59,14 @@ class Preference(BaseModel):
 
     name: str
     description: str
+    threshold: Optional[float] = None
+    examples: Optional[List[str]] = None
 
 
 class Language(BaseModel):
     """Language detection signal configuration."""
 
     name: str
-    description: str
-
-
-class Latency(BaseModel):
-    """Latency signal configuration."""
-
-    name: str
-    tpot_percentile: Optional[int] = None
-    ttft_percentile: Optional[int] = None
     description: str
 
 
@@ -108,6 +101,67 @@ class ComplexityRule(BaseModel):
     composer: Optional["Rules"] = None  # Forward reference, defined below
 
 
+class JailbreakRule(BaseModel):
+    """Jailbreak detection signal configuration.
+
+    Supports two methods:
+    - "classifier" (default): BERT/LoRA-based jailbreak classifier
+    - "contrastive": Embedding-based contrastive scoring against jailbreak/benign KBs
+    """
+
+    name: str
+    threshold: float
+    method: Optional[str] = None  # "classifier" (default) or "contrastive"
+    include_history: bool = False
+    jailbreak_patterns: Optional[list[str]] = (
+        None  # Known jailbreak prompts (contrastive KB)
+    )
+    benign_patterns: Optional[list[str]] = None  # Known benign prompts (contrastive KB)
+    description: Optional[str] = None
+
+
+class PIIRule(BaseModel):
+    """PII detection signal configuration."""
+
+    name: str
+    threshold: float
+    pii_types_allowed: Optional[List[str]] = None
+    include_history: bool = False
+    description: Optional[str] = None
+
+
+class ModalityRule(BaseModel):
+    """Modality detection signal configuration.
+
+    Classifies whether a prompt requires text (AR), image (DIFFUSION), or both (BOTH).
+    Detection configuration is read from modality_detector (InlineModels).
+    """
+
+    name: str
+    description: Optional[str] = None
+
+
+class Subject(BaseModel):
+    """RBAC subject (user or group) for role binding."""
+
+    kind: str  # "User" or "Group"
+    name: str
+
+
+class RoleBindingRule(BaseModel):
+    """RBAC role binding signal configuration.
+
+    Maps subjects (users/groups) to a named role following the Kubernetes RBAC pattern.
+    The role name is emitted as a signal of type "authz" in the decision engine.
+    User identity is read from x-authz-user-id and x-authz-user-groups headers.
+    """
+
+    name: str
+    role: str
+    subjects: List[Subject]
+    description: Optional[str] = None
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -118,23 +172,77 @@ class Signals(BaseModel):
     user_feedbacks: Optional[List[UserFeedback]] = []
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
-    latency: Optional[List[Latency]] = []
     context: Optional[List[ContextRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
+    modality: Optional[List[ModalityRule]] = []
+    role_bindings: Optional[List[RoleBindingRule]] = []
+    jailbreak: Optional[List[JailbreakRule]] = []
+    pii: Optional[List[PIIRule]] = []
 
 
 class Condition(BaseModel):
-    """Routing condition."""
+    """Routing condition node (leaf or composite boolean expression)."""
 
-    type: str
-    name: str
+    type: Optional[str] = None
+    name: Optional[str] = None
+    operator: Optional[str] = None
+    conditions: Optional[List["Condition"]] = None
+
+    @model_validator(mode="after")
+    def validate_node_shape(self):
+        has_leaf_fields = self.type is not None or self.name is not None
+        has_operator = self.operator is not None
+
+        if has_leaf_fields and has_operator:
+            raise ValueError(
+                "condition node must be either leaf (type/name) or composite (operator/conditions), not both"
+            )
+
+        if has_operator:
+            if not self.conditions:
+                raise ValueError(
+                    "composite condition node requires non-empty conditions"
+                )
+            op = self.operator.strip().upper()
+            if op not in {"AND", "OR", "NOT"}:
+                raise ValueError("operator must be one of: AND, OR, NOT")
+            if op == "NOT" and len(self.conditions) != 1:
+                raise ValueError("NOT operator must have exactly one child condition")
+            return self
+
+        # Leaf node validation
+        if self.type is None or self.name is None:
+            raise ValueError("leaf condition node requires both type and name")
+        if self.conditions:
+            raise ValueError("leaf condition node cannot define child conditions")
+        return self
 
 
 class Rules(BaseModel):
-    """Routing rules."""
+    """Routing rules.
 
-    operator: str
-    conditions: List[Condition]
+    Accepts three formats:
+    1. Composite: {operator: "AND", conditions: [...]}
+    2. Match-all: {operator: "AND"} or {} (no WHEN clause)
+    3. Leaf node: {type: "keyword", name: "x"} (single signal ref)
+
+    Formats 2 and 3 are auto-normalised to composite form.
+    """
+
+    operator: str = "AND"
+    conditions: List[Condition] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalise_leaf_or_empty(cls, data):
+        """Wrap a bare leaf node into AND([leaf]) and fill missing fields."""
+        if not isinstance(data, dict):
+            return data
+        # Leaf node: has type/name but no operator → wrap in AND
+        if "type" in data and "operator" not in data:
+            leaf = {"type": data["type"], "name": data.get("name", "")}
+            return {"operator": "AND", "conditions": [leaf]}
+        return data
 
 
 class ModelRef(BaseModel):
@@ -200,7 +308,8 @@ class ReMoMAlgorithmConfig(BaseModel):
     Inspired by PaCoRe (arXiv:2601.05593) but extended to support mixture of models.
     """
 
-    # Breadth schedule: array of parallel calls per round (e.g., [32, 4] means 32 calls in round 1, 4 in round 2, then 1 final)
+    # Breadth schedule: array of parallel calls per round
+    # e.g., [32, 4] means 32 calls in round 1, 4 in round 2, then 1 final
     breadth_schedule: list[int]
 
     # Model distribution strategy: "weighted", "equal", or "first_only"
@@ -230,38 +339,277 @@ class ReMoMAlgorithmConfig(BaseModel):
     # Random seed for shuffling responses (for reproducibility)
     shuffle_seed: Optional[int] = 42
 
-    # Whether to include intermediate responses in the response body for visualization
+    # Whether to include intermediate responses in the response body
     include_intermediate_responses: Optional[bool] = True
 
     # Maximum number of responses to keep per round (for memory efficiency)
     max_responses_per_round: Optional[int] = None
 
 
+class LatencyAwareAlgorithmConfig(BaseModel):
+    """Configuration for latency_aware algorithm."""
+
+    tpot_percentile: Optional[int] = None
+    ttft_percentile: Optional[int] = None
+    description: Optional[str] = None
+
+
+# =============================================================================
+# Model Selection Algorithm Configs
+# Reference papers:
+#   - Elo: RouteLLM (arXiv:2406.18665) - Bradley-Terry model
+#   - RouterDC: Query-Based Router by Dual Contrastive Learning (arXiv:2409.19886)
+#   - AutoMix: Automatically Mixing Language Models (arXiv:2310.12963)
+#   - Hybrid: Cost-Efficient Quality-Aware Query Routing (arXiv:2404.14618)
+# =============================================================================
+
+
+class EloSelectionConfig(BaseModel):
+    """Configuration for Elo rating-based model selection.
+
+    Uses Bradley-Terry model for pairwise comparisons, learning from user feedback.
+    """
+
+    # Starting Elo rating for new models (default: 1500)
+    initial_rating: Optional[float] = Field(default=1500.0, ge=0)
+
+    # Controls rating volatility - higher = faster adaptation (default: 32)
+    k_factor: Optional[float] = Field(default=32.0, ge=1, le=100)
+
+    # Enable per-category Elo ratings (default: true)
+    category_weighted: Optional[bool] = True
+
+    # Time decay for old comparisons (0-1, 0 = no decay)
+    decay_factor: Optional[float] = Field(default=0.0, ge=0, le=1)
+
+    # Minimum comparisons before rating is stable
+    min_comparisons: Optional[int] = Field(default=5, ge=0)
+
+    # Cost consideration factor (0 = ignore cost)
+    cost_scaling_factor: Optional[float] = Field(default=0.0, ge=0)
+
+    # File path for persisting Elo ratings (optional)
+    storage_path: Optional[str] = None
+
+    # Auto-save interval (e.g., "5m", "30s")
+    auto_save_interval: Optional[str] = "1m"
+
+
+class RouterDCSelectionConfig(BaseModel):
+    """Configuration for RouterDC (Dual-Contrastive) model selection.
+
+    Matches queries to models using embedding similarity based on model descriptions.
+    """
+
+    # Temperature for softmax scaling (default: 0.07)
+    temperature: Optional[float] = Field(default=0.07, gt=0)
+
+    # Embedding dimension size (default: 768)
+    dimension_size: Optional[int] = Field(default=768, gt=0)
+
+    # Minimum similarity threshold for valid matches
+    min_similarity: Optional[float] = Field(default=0.3, ge=0, le=1)
+
+    # Enable query-side contrastive learning
+    use_query_contrastive: Optional[bool] = False
+
+    # Enable model-side contrastive learning
+    use_model_contrastive: Optional[bool] = False
+
+    # Require all models to have descriptions
+    require_descriptions: Optional[bool] = False
+
+    # Include capability tags in embeddings
+    use_capabilities: Optional[bool] = False
+
+
+class AutoMixSelectionConfig(BaseModel):
+    """Configuration for AutoMix (POMDP-based) model selection.
+
+    Optimizes cost-quality tradeoff using Partially Observable MDP.
+    """
+
+    # Self-verification confidence threshold (default: 0.7)
+    verification_threshold: Optional[float] = Field(default=0.7, ge=0, le=1)
+
+    # Maximum escalation attempts (default: 2)
+    max_escalations: Optional[int] = Field(default=2, ge=0)
+
+    # Enable cost-quality tradeoff optimization
+    cost_aware_routing: Optional[bool] = True
+
+    # Balance between cost (1.0) and quality (0.0) (default: 0.3)
+    cost_quality_tradeoff: Optional[float] = Field(default=0.3, ge=0, le=1)
+
+    # POMDP discount factor (default: 0.95)
+    discount_factor: Optional[float] = Field(default=0.95, ge=0, le=1)
+
+    # Use logprobs for confidence verification
+    use_logprob_verification: Optional[bool] = True
+
+
+class HybridSelectionConfig(BaseModel):
+    """Configuration for Hybrid model selection.
+
+    Combines multiple selection methods with configurable weights.
+    """
+
+    # Weight for Elo rating contribution (0-1)
+    elo_weight: Optional[float] = Field(default=0.3, ge=0, le=1)
+
+    # Weight for RouterDC embedding similarity (0-1)
+    router_dc_weight: Optional[float] = Field(default=0.3, ge=0, le=1)
+
+    # Weight for AutoMix POMDP value (0-1)
+    automix_weight: Optional[float] = Field(default=0.2, ge=0, le=1)
+
+    # Weight for cost consideration (0-1)
+    cost_weight: Optional[float] = Field(default=0.2, ge=0, le=1)
+
+    # Quality gap threshold for escalation
+    quality_gap_threshold: Optional[float] = Field(default=0.1, ge=0, le=1)
+
+    # Normalize scores before combination
+    normalize_scores: Optional[bool] = True
+
+
+# =============================================================================
+# RL-Driven Model Selection Algorithm Configs (from PR #1196 / Issue #994)
+# Reference papers:
+#   - Thompson Sampling: Exploration/exploitation via posterior sampling
+#   - GMTRouter: Heterogeneous GNN for personalized routing (arXiv:2511.08590)
+#   - Router-R1: LLM-as-router with think/route actions (arXiv:2506.09033)
+# =============================================================================
+
+
+class ThompsonSamplingConfig(BaseModel):
+    """Configuration for Thompson Sampling model selection.
+
+    Uses Bayesian posterior sampling for exploration/exploitation balance.
+    """
+
+    # Prior alpha for Beta distribution (default: 1.0)
+    prior_alpha: Optional[float] = Field(default=1.0, gt=0)
+
+    # Prior beta for Beta distribution (default: 1.0)
+    prior_beta: Optional[float] = Field(default=1.0, gt=0)
+
+    # Enable per-user personalization
+    per_user: Optional[bool] = False
+
+    # Decay factor for old observations (0 = no decay)
+    decay_factor: Optional[float] = Field(default=0.0, ge=0, le=1)
+
+    # Minimum samples before exploitation (default: 10)
+    min_samples: Optional[int] = Field(default=10, ge=0)
+
+
+class GMTRouterConfig(BaseModel):
+    """Configuration for GMTRouter (Graph-based) model selection.
+
+    Uses heterogeneous GNN for personalized routing decisions.
+    """
+
+    # Number of GNN layers (default: 2)
+    num_layers: Optional[int] = Field(default=2, ge=1, le=5)
+
+    # Hidden dimension size (default: 64)
+    hidden_dim: Optional[int] = Field(default=64, gt=0)
+
+    # Attention heads (default: 4)
+    num_heads: Optional[int] = Field(default=4, ge=1)
+
+    # Enable user preference learning
+    learn_preferences: Optional[bool] = True
+
+    # Path to pre-trained model weights (optional)
+    model_path: Optional[str] = None
+
+
+class RouterR1Config(BaseModel):
+    """Configuration for Router-R1 (LLM-as-router) model selection.
+
+    Uses LLM with think/route actions for routing decisions.
+    """
+
+    # Router LLM endpoint (required for full functionality)
+    router_endpoint: Optional[str] = None
+
+    # Maximum think iterations (default: 3)
+    max_iterations: Optional[int] = Field(default=3, ge=1, le=10)
+
+    # Temperature for router LLM (default: 0.7)
+    temperature: Optional[float] = Field(default=0.7, ge=0, le=2)
+
+    # Enable chain-of-thought reasoning
+    use_cot: Optional[bool] = True
+
+    # Fallback to static if router unavailable
+    fallback_to_static: Optional[bool] = True
+
+
 class AlgorithmConfig(BaseModel):
     """Algorithm configuration for multi-model decisions.
 
     Specifies how multiple models in a decision should be orchestrated.
+
+    Supports three categories of algorithms:
+
+    1. Looper algorithms (multi-model execution):
+       - "confidence": Try smaller models first, escalate if confidence is low
+       - "concurrent": Execute all models concurrently (arena mode)
+       - "remom": Multi-round parallel reasoning with intelligent synthesis
+
+    2. Selection algorithms (single model selection from candidates):
+       - "static": Use first model (default)
+       - "elo": Use Elo rating system with Bradley-Terry model
+       - "router_dc": Use embedding similarity for query-model matching
+       - "automix": Use POMDP-based cost-quality optimization
+       - "hybrid": Combine multiple selection methods
+
+    3. RL-driven selection algorithms (from issue #994):
+       - "thompson": Thompson Sampling with exploration/exploitation
+       - "gmtrouter": Graph neural network for personalized routing
+       - "router_r1": LLM-as-router with think/route actions
     """
 
-    # Algorithm type: "sequential", "confidence", "concurrent", "remom"
+    # Algorithm type: looper ("confidence", "concurrent", "remom", "latency_aware") or
+    # selection ("static", "elo", "router_dc", "automix", "hybrid",
+    #            "thompson", "gmtrouter", "router_r1")
     type: str
 
-    # Algorithm-specific configurations (only one should be set based on type)
+    # Looper algorithm configurations
     confidence: Optional[ConfidenceAlgorithmConfig] = None
     concurrent: Optional[ConcurrentAlgorithmConfig] = None
     remom: Optional[ReMoMAlgorithmConfig] = None
+    latency_aware: Optional[LatencyAwareAlgorithmConfig] = None
+
+    # Selection algorithm configurations (from PR #1089, #1104)
+    elo: Optional[EloSelectionConfig] = None
+    router_dc: Optional[RouterDCSelectionConfig] = None
+    automix: Optional[AutoMixSelectionConfig] = None
+    hybrid: Optional[HybridSelectionConfig] = None
+
+    # RL-driven selection algorithms (from PR #1196, issue #994)
+    thompson: Optional[ThompsonSamplingConfig] = None
+    gmtrouter: Optional[GMTRouterConfig] = None
+    router_r1: Optional[RouterR1Config] = None
+
+    # Behavior on algorithm failure: "skip" or "fail"
+    on_error: Optional[str] = "skip"
 
 
 class PluginType(str, Enum):
     """Supported plugin types."""
 
     SEMANTIC_CACHE = "semantic-cache"
-    JAILBREAK = "jailbreak"
-    PII = "pii"
     SYSTEM_PROMPT = "system_prompt"
     HEADER_MUTATION = "header_mutation"
     HALLUCINATION = "hallucination"
     ROUTER_REPLAY = "router_replay"
+    MEMORY = "memory"
+    RAG = "rag"
+    FAST_RESPONSE = "fast_response"
 
 
 class SemanticCachePluginConfig(BaseModel):
@@ -279,23 +627,10 @@ class SemanticCachePluginConfig(BaseModel):
     )
 
 
-class JailbreakPluginConfig(BaseModel):
-    """Configuration for jailbreak plugin."""
+class FastResponsePluginConfig(BaseModel):
+    """Configuration for fast_response plugin."""
 
-    enabled: bool
-    threshold: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0, description="Threshold (0.0-1.0, default: None)"
-    )
-
-
-class PIIPluginConfig(BaseModel):
-    """Configuration for pii plugin."""
-
-    enabled: bool
-    threshold: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0, description="Threshold (0.0-1.0, default: None)"
-    )
-    pii_types_allowed: Optional[List[str]] = None
+    message: str
 
 
 class SystemPromptPluginConfig(BaseModel):
@@ -351,6 +686,119 @@ class RouterReplayPluginConfig(BaseModel):
         default=4096,
         gt=0,
         description="Max bytes to capture per body (must be > 0, default: 4096)",
+    )
+
+
+class MemoryPluginConfig(BaseModel):
+    """Configuration for memory plugin (per-decision memory settings)."""
+
+    enabled: bool = True
+    retrieval_limit: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="Max memories to retrieve (default: use global config)",
+    )
+    similarity_threshold: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Min similarity score (0.0-1.0, default: use global config)",
+    )
+    auto_store: Optional[bool] = Field(
+        default=None,
+        description="Auto-extract memories from conversation (default: use request config)",
+    )
+
+
+class RAGPluginConfig(BaseModel):
+    """Configuration for RAG (Retrieval-Augmented Generation) plugin.
+
+    The RAG plugin retrieves relevant context from external knowledge bases
+    and injects it into the LLM request.
+
+    Supported backends:
+    - milvus: Milvus vector database (reuses semantic cache connection)
+    - external_api: External REST API (OpenAI, Pinecone, Weaviate, Elasticsearch)
+    - mcp: MCP tool-based retrieval
+    - openai: OpenAI file_search with vector stores
+    - hybrid: Multi-backend with fallback strategy
+    """
+
+    # Required: Enable RAG retrieval
+    enabled: bool = Field(..., description="Enable RAG retrieval for this decision")
+
+    # Required: Backend type (milvus, external_api, mcp, openai, hybrid)
+    backend: str = Field(
+        ...,
+        description="Retrieval backend: milvus, external_api, mcp, openai, hybrid",
+    )
+
+    # Optional: Similarity threshold (0.0-1.0)
+    # Only documents with similarity >= threshold will be retrieved
+    similarity_threshold: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Similarity threshold for retrieval (0.0-1.0)",
+    )
+
+    # Optional: Number of top-k documents to retrieve
+    top_k: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Number of top-k documents to retrieve",
+    )
+
+    # Optional: Maximum context length (in characters)
+    max_context_length: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Maximum context length to inject (characters)",
+    )
+
+    # Optional: Context injection mode
+    # - "tool_role": Inject as tool role messages (compatible with hallucination detection)
+    # - "system_prompt": Prepend to system prompt
+    injection_mode: Optional[str] = Field(
+        default=None,
+        description="Injection mode: tool_role (default) or system_prompt",
+    )
+
+    # Optional: Backend-specific configuration
+    # Structure depends on backend type (see Go: rag_plugin.go lines 64-174)
+    backend_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Backend-specific configuration",
+    )
+
+    # Optional: Fallback behavior on retrieval failure
+    # - "skip": Continue without context (default)
+    # - "block": Return error response
+    # - "warn": Continue with warning header
+    on_failure: Optional[str] = Field(
+        default=None,
+        description="On failure: skip (default), block, or warn",
+    )
+
+    # Optional: Cache retrieved results
+    cache_results: Optional[bool] = Field(
+        default=None,
+        description="Cache retrieved results",
+    )
+
+    # Optional: Cache TTL (seconds)
+    cache_ttl_seconds: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Cache TTL in seconds",
+    )
+
+    # Optional: Minimum confidence for triggering retrieval
+    min_confidence_threshold: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence for triggering retrieval",
     )
 
 
@@ -425,6 +873,14 @@ class Model(BaseModel):
     # When set to "anthropic", the router translates requests to Anthropic Messages API
     api_format: Optional[str] = None
 
+    # Model selection fields (for RouterDC and quality-based selection)
+    # Description of model capabilities for RouterDC embedding matching
+    description: Optional[str] = None
+    # Structured capability tags (e.g., ["coding", "math", "reasoning"])
+    capabilities: Optional[List[str]] = None
+    # Quality score for AutoMix selection (0.0-1.0, default: 0.8)
+    quality_score: Optional[float] = Field(default=None, ge=0, le=1)
+
 
 class ReasoningFamily(BaseModel):
     """Reasoning family configuration."""
@@ -455,6 +911,68 @@ class Providers(BaseModel):
     external_models: Optional[List[ExternalModel]] = []
 
 
+class MemoryMilvusConfig(BaseModel):
+    """Milvus configuration for memory storage."""
+
+    address: str
+    collection: str = "agentic_memory"
+    dimension: int = 384
+
+
+class MemoryConfig(BaseModel):
+    """Agentic Memory configuration for cross-session memory.
+
+    Query rewriting and fact extraction are enabled by adding external_models
+    with role="memory_rewrite" or role="memory_extraction".
+    See external_models configuration in providers section for details.
+
+    The embedding_model is auto-detected from embedding_models if not specified.
+    Priority: bert > mmbert > multimodal > qwen3 > gemma
+    """
+
+    enabled: bool = True
+    auto_store: bool = False  # Auto-store extracted facts after each response
+    milvus: Optional[MemoryMilvusConfig] = None
+    # Embedding model to use for memory vectors
+    # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
+    # If not set, auto-detected from embedding_models section (bert preferred)
+    embedding_model: Optional[str] = None
+    default_retrieval_limit: int = 5
+    default_similarity_threshold: float = 0.70
+    extraction_batch_size: int = 10  # Extract every N turns
+
+
+class EmbeddingModelsConfig(BaseModel):
+    """Embedding models configuration for memory and semantic features."""
+
+    qwen3_model_path: Optional[str] = Field(
+        None, description="Path to Qwen3-Embedding model"
+    )
+    gemma_model_path: Optional[str] = Field(
+        None, description="Path to EmbeddingGemma model"
+    )
+    mmbert_model_path: Optional[str] = Field(
+        None, description="Path to mmBERT 2D Matryoshka model"
+    )
+    multimodal_model_path: Optional[str] = Field(
+        None,
+        description="Path to multi-modal embedding model (text/image/audio)",
+    )
+    bert_model_path: Optional[str] = Field(
+        None,
+        description="Path to BERT/MiniLM model (recommended for memory retrieval)",
+    )
+    hnsw_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Embedding classifier tuning (model_type/target_dimension/etc.)",
+    )
+    use_cpu: bool = Field(True, description="Use CPU for inference")
+
+    class Config:
+        # Preserve advanced nested fields when users pass through custom config blocks.
+        extra = "allow"
+
+
 class UserConfig(BaseModel):
     """Complete user configuration."""
 
@@ -463,6 +981,17 @@ class UserConfig(BaseModel):
     signals: Optional[Signals] = None
     decisions: List[Decision]
     providers: Providers
+    memory: Optional[MemoryConfig] = None  # Agentic Memory config
+    embedding_models: Optional[EmbeddingModelsConfig] = (
+        None  # Embedding models for memory
+    )
 
     class Config:
         populate_by_name = True
+        # Allow advanced top-level blocks not yet modeled in the typed CLI schema
+        # (e.g., classifier/prompt_guard overrides) so merger can pass them through.
+        extra = "allow"
+
+
+# Resolve forward references for recursive condition trees.
+Condition.model_rebuild()

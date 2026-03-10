@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/promptcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
@@ -18,7 +19,7 @@ import (
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
 // Decision evaluation is ALWAYS performed when decisions are configured (for plugin features like
 // hallucination detection), but model selection only happens for auto models.
-func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string) {
+func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
 	var decisionName string
 	var evaluationConfidence float64
 	var reasoningDecision entropy.ReasoningDecision
@@ -26,16 +27,16 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 
 	// Check if there's content to evaluate
 	if len(nonUserMessages) == 0 && userContent == "" {
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	// Check if decisions are configured
 	if len(r.Config.Decisions) == 0 {
 		if r.Config.IsAutoModelName(originalModel) {
 			logging.Warnf("No decisions configured, using default model")
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	// Determine text to use for evaluation
@@ -45,7 +46,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	}
 
 	if evaluationText == "" {
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	// For context token counting, we need to include ALL messages (user + non-user)
@@ -63,14 +64,44 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		allMessagesText = strings.Join(nonUserMessages, " ")
 	}
 
+	// Prompt compression: reduce long prompts before signal extraction to cut
+	// inference latency (attention is O(n²) for SDPA, O(n) for FA — but still
+	// linear in sequence length). Compression preserves classification fidelity
+	// by using TextRank + position weighting + TF-IDF scoring.
+	//
+	// Signals listed in skip_signals (default: jailbreak, pii) always receive
+	// the original uncompressed text because they need every token.
+	compressedText := evaluationText
+	var skipCompressionSignals map[string]bool
+	if r.Config.PromptCompression.Enabled && r.Config.PromptCompression.MaxTokens > 0 {
+		cfg := buildCompressionConfig(r.Config.PromptCompression)
+		origTokens := promptcompression.CountTokensApprox(evaluationText)
+		if r.Config.PromptCompression.MinLength > 0 && len(evaluationText) <= r.Config.PromptCompression.MinLength {
+			logging.Infof("[PromptCompression] Skipped: %d chars <= min_length threshold %d", len(evaluationText), r.Config.PromptCompression.MinLength)
+		} else if origTokens > cfg.MaxTokens {
+			result := promptcompression.Compress(evaluationText, cfg)
+			logging.Infof("[PromptCompression] Compressed evaluationText: %d -> %d tokens (ratio=%.2f, kept %d sentences)",
+				result.OriginalTokens, result.CompressedTokens, result.Ratio, len(result.KeptIndices))
+			compressedText = result.Compressed
+			skipCompressionSignals = r.Config.PromptCompression.SkipSignalsSet()
+		}
+	}
+
 	// Start signal evaluation span (Layer 1)
 	signalStart := time.Now()
 	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
 
-	// Evaluate all signals first to get detailed signal information
-	// Use evaluationText for most signals, but pass allMessagesText for context counting
-	// In extproc, we always use normal mode (only evaluate signals used in decisions)
-	signals := r.Classifier.EvaluateAllSignalsWithContext(evaluationText, allMessagesText, false)
+	// Evaluate all signals first to get detailed signal information.
+	// Pass both compressed and original text: signals in skipCompressionSignals
+	// (e.g. jailbreak, pii) use the original; others use the compressed text.
+	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(compressedText, allMessagesText, nonUserMessages, ctx.Headers, false, ctx.RequestImageURL, evaluationText, skipCompressionSignals)
+	if authzErr != nil {
+		signalSpan.End()
+		// Authz failure is a hard error — do not silently bypass.
+		// Propagate the error to the caller, which returns 403 to the client.
+		logging.Errorf("[Signal Evaluation] Authz evaluation failed: %v", authzErr)
+		return "", 0, entropy.ReasoningDecision{}, "", authzErr
+	}
 
 	signalLatency := time.Since(signalStart).Milliseconds()
 
@@ -82,19 +113,37 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
-	ctx.VSRMatchedLatency = signals.MatchedLatencyRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
 	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
+	ctx.VSRMatchedModality = signals.MatchedModalityRules
+	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
+	ctx.VSRMatchedJailbreak = signals.MatchedJailbreakRules
+	ctx.VSRMatchedPII = signals.MatchedPIIRules
+
+	// Store jailbreak/PII detection metadata from signal results
+	if signals.JailbreakDetected {
+		ctx.JailbreakDetected = signals.JailbreakDetected
+		ctx.JailbreakType = signals.JailbreakType
+		ctx.JailbreakConfidence = signals.JailbreakConfidence
+	}
+	if signals.PIIDetected {
+		ctx.PIIDetected = signals.PIIDetected
+		ctx.PIIEntities = signals.PIIEntities
+	}
 
 	// Set fact-check context fields from signal results
 	// This replaces the old performFactCheckClassification call to avoid duplicate computation
 	r.setFactCheckFromSignals(ctx, signals.MatchedFactCheckRules)
 
+	// Set modality classification on context from signal results for response headers
+	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
+
 	// Log signal evaluation results
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, modality=%v, jailbreak=%v, pii=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
-		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules, signals.MatchedLanguageRules, signals.MatchedLatencyRules)
+		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
+		signals.MatchedLanguageRules, signals.MatchedModalityRules, signals.MatchedJailbreakRules, signals.MatchedPIIRules)
 
 	// Set signal span attributes
 	allMatchedRules := []string{}
@@ -105,7 +154,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	allMatchedRules = append(allMatchedRules, signals.MatchedUserFeedbackRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedLatencyRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedJailbreakRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
 
 	// End signal evaluation span
 	tracing.EndSignalSpan(signalSpan, allMatchedRules, 1.0, signalLatency)
@@ -135,9 +186,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 		ctx.TraceContext = decisionCtx
 		if r.Config.IsAutoModelName(originalModel) {
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	if result == nil || result.Decision == nil {
@@ -145,9 +196,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 		ctx.TraceContext = decisionCtx
 		if r.Config.IsAutoModelName(originalModel) {
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	// Record decision match with confidence
@@ -194,7 +245,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	if !r.Config.IsAutoModelName(originalModel) {
 		logging.Infof("Model %s explicitly specified, keeping original model (decision %s plugins will be applied)",
 			originalModel, decisionName)
-		return decisionName, evaluationConfidence, reasoningDecision, ""
+		return decisionName, evaluationConfidence, reasoningDecision, "", nil
 	}
 
 	// Select best model from the decision's ModelRefs using configured selection algorithm
@@ -247,7 +298,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		logging.Infof("No model refs in decision %s, using default model: %s", decisionName, selectedModel)
 	}
 
-	return decisionName, evaluationConfidence, reasoningDecision, selectedModel
+	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, nil
 }
 
 // selectModelFromCandidates uses the configured selection algorithm to choose the best model
@@ -282,14 +333,17 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 
 	// Build selection context with cost/quality weights
 	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
+	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
 
 	selCtx := &selection.SelectionContext{
-		Query:           query,
-		DecisionName:    decisionName,
-		CategoryName:    categoryName,
-		CandidateModels: modelRefs,
-		CostWeight:      costWeight,
-		QualityWeight:   qualityWeight,
+		Query:                      query,
+		DecisionName:               decisionName,
+		CategoryName:               categoryName,
+		CandidateModels:            modelRefs,
+		CostWeight:                 costWeight,
+		QualityWeight:              qualityWeight,
+		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
+		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
 	}
 
 	// Perform selection
@@ -331,6 +385,12 @@ func (r *OpenAIRouter) getSelectionMethod(algorithm *config.AlgorithmConfig) sel
 			return selection.MethodAutoMix
 		case "hybrid":
 			return selection.MethodHybrid
+		case "rl_driven":
+			return selection.MethodRLDriven
+		case "gmtrouter":
+			return selection.MethodGMTRouter
+		case "latency_aware":
+			return selection.MethodLatencyAware
 		case "static":
 			return selection.MethodStatic
 		case "knn":
@@ -366,6 +426,15 @@ func (r *OpenAIRouter) getSelectionWeights(algorithm *config.AlgorithmConfig) (f
 
 	// Default: equal weighting (0.5 cost, 0.5 quality)
 	return 0.5, 0.5
+}
+
+// getLatencyAwarePercentiles extracts TPOT/TTFT percentile settings for latency_aware selection.
+// Returns (0, 0) when latency_aware is not configured for the decision.
+func (r *OpenAIRouter) getLatencyAwarePercentiles(algorithm *config.AlgorithmConfig) (int, int) {
+	if algorithm == nil || algorithm.LatencyAware == nil {
+		return 0, 0
+	}
+	return algorithm.LatencyAware.TPOTPercentile, algorithm.LatencyAware.TTFTPercentile
 }
 
 // processUserFeedbackForElo automatically updates Elo ratings based on detected user feedback signals.
@@ -440,4 +509,23 @@ func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, m
 			logging.Warnf("[AutoFeedback] Failed to update Elo: %v", err)
 		}
 	}
+}
+
+// buildCompressionConfig translates the YAML config into the promptcompression
+// package's Config struct, applying defaults for omitted fields.
+func buildCompressionConfig(pc config.PromptCompressionConfig) promptcompression.Config {
+	cfg := promptcompression.DefaultConfig(pc.MaxTokens)
+	if pc.TextRankWeight > 0 {
+		cfg.TextRankWeight = pc.TextRankWeight
+	}
+	if pc.PositionWeight > 0 {
+		cfg.PositionWeight = pc.PositionWeight
+	}
+	if pc.TFIDFWeight > 0 {
+		cfg.TFIDFWeight = pc.TFIDFWeight
+	}
+	if pc.PositionDepth > 0 {
+		cfg.PositionDepth = pc.PositionDepth
+	}
+	return cfg
 }

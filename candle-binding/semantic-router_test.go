@@ -2,8 +2,11 @@ package candle_binding
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -617,7 +620,7 @@ func TestModernBERTPIITokenClassification(t *testing.T) {
 			}
 			t.Skipf("ModernBERT PII token classifier not available: %v", err)
 		}
-		t.Log("✓ PII token classifier initialized successfully")
+		t.Log("PII token classifier initialized successfully")
 	})
 
 	// Test each case
@@ -710,7 +713,7 @@ func TestModernBERTPIITokenClassification(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for empty text")
 		} else {
-			t.Logf("✓ Empty text error handled: %v", err)
+			t.Logf("Empty text error handled: %v", err)
 		}
 
 		// Test with empty config path
@@ -718,7 +721,7 @@ func TestModernBERTPIITokenClassification(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for empty config path")
 		} else {
-			t.Logf("✓ Empty config path error handled: %v", err)
+			t.Logf("Empty config path error handled: %v", err)
 		}
 
 		// Test with invalid config path
@@ -726,7 +729,7 @@ func TestModernBERTPIITokenClassification(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for invalid config path")
 		} else {
-			t.Logf("✓ Invalid config path error handled: %v", err)
+			t.Logf("Invalid config path error handled: %v", err)
 		}
 	})
 
@@ -831,7 +834,7 @@ func TestModernBERTPIITokenClassification(t *testing.T) {
 		}
 
 		if len(entityCounts) > 0 && errorCount == 0 {
-			t.Logf("✓ Concurrent access successful: processed %d requests", len(entityCounts))
+			t.Logf("Concurrent access successful: processed %d requests", len(entityCounts))
 
 			// Check if results are consistent (they should be for same input)
 			firstCount := entityCounts[0]
@@ -1134,7 +1137,7 @@ func TestBertTokenClassification(t *testing.T) {
 			}
 			t.Skipf("BERT token classifier not available: %v", err)
 		}
-		t.Log("✓ BERT token classifier initialized successfully")
+		t.Log("BERT token classifier initialized successfully")
 	})
 
 	// Test each case
@@ -1659,7 +1662,7 @@ func TestInitEmbeddingModels(t *testing.T) {
 			// Verify that embeddings can still be generated (ModelFactory is functional)
 			_, testErr := GetEmbeddingSmart("test", 0.5, 0.5)
 			if testErr == nil {
-				t.Log("✓ ModelFactory is functional (already initialized)")
+				t.Log("ModelFactory is functional (already initialized)")
 			} else {
 				if isModelInitializationError(testErr) {
 					t.Skipf("Skipping test due to model unavailability: %v", testErr)
@@ -1668,7 +1671,7 @@ func TestInitEmbeddingModels(t *testing.T) {
 				}
 			}
 		} else {
-			t.Log("✓ Both embedding models initialized successfully")
+			t.Log("Both embedding models initialized successfully")
 		}
 	})
 
@@ -1681,14 +1684,14 @@ func TestInitEmbeddingModels(t *testing.T) {
 			// Verify functionality
 			_, testErr := GetEmbeddingSmart("test", 0.5, 0.5)
 			if testErr == nil {
-				t.Log("✓ ModelFactory is functional (already initialized)")
+				t.Log("ModelFactory is functional (already initialized)")
 			} else {
 				if isModelInitializationError(testErr) {
 					t.Skipf("Skipping test due to model unavailability: %v", testErr)
 				}
 			}
 		} else {
-			t.Log("✓ Qwen3 model initialized successfully")
+			t.Log("Qwen3 model initialized successfully")
 		}
 	})
 
@@ -1700,14 +1703,14 @@ func TestInitEmbeddingModels(t *testing.T) {
 			// Verify functionality
 			_, testErr := GetEmbeddingSmart("test", 0.5, 0.5)
 			if testErr == nil {
-				t.Log("✓ ModelFactory is functional (already initialized)")
+				t.Log("ModelFactory is functional (already initialized)")
 			} else {
 				if isModelInitializationError(testErr) {
 					t.Skipf("Skipping test due to model unavailability: %v", testErr)
 				}
 			}
 		} else {
-			t.Log("✓ Gemma model initialized successfully")
+			t.Log("Gemma model initialized successfully")
 		}
 	})
 
@@ -1716,7 +1719,7 @@ func TestInitEmbeddingModels(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for invalid model paths")
 		} else {
-			t.Logf("✓ Invalid paths correctly returned error: %v", err)
+			t.Logf("Invalid paths correctly returned error: %v", err)
 		}
 	})
 }
@@ -1746,7 +1749,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 			}
 		}
 
-		t.Logf("✓ Generated 768-dim embedding successfully")
+		t.Logf("Generated 768-dim embedding successfully")
 	})
 
 	t.Run("Matryoshka512", func(t *testing.T) {
@@ -1759,7 +1762,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 			t.Errorf("Expected 512-dim embedding, got %d", len(embedding))
 		}
 
-		t.Logf("✓ Generated 512-dim Matryoshka embedding successfully")
+		t.Logf("Generated 512-dim Matryoshka embedding successfully")
 	})
 
 	t.Run("Matryoshka256", func(t *testing.T) {
@@ -1772,7 +1775,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 			t.Errorf("Expected 256-dim embedding, got %d", len(embedding))
 		}
 
-		t.Logf("✓ Generated 256-dim Matryoshka embedding successfully")
+		t.Logf("Generated 256-dim Matryoshka embedding successfully")
 	})
 
 	t.Run("Matryoshka128", func(t *testing.T) {
@@ -1785,7 +1788,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 			t.Errorf("Expected 128-dim embedding, got %d", len(embedding))
 		}
 
-		t.Logf("✓ Generated 128-dim Matryoshka embedding successfully")
+		t.Logf("Generated 128-dim Matryoshka embedding successfully")
 	})
 
 	t.Run("OversizedDimension", func(t *testing.T) {
@@ -1801,7 +1804,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 		if len(embedding) != 1024 && len(embedding) != 768 {
 			t.Errorf("Expected full dimension (1024 or 768), got %d", len(embedding))
 		} else {
-			t.Logf("✓ Oversized dimension gracefully degraded to full dimension: %d", len(embedding))
+			t.Logf("Oversized dimension gracefully degraded to full dimension: %d", len(embedding))
 		}
 	})
 
@@ -1817,7 +1820,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 			t.Errorf("Expected 768-dim embedding for long text, got %d", len(embedding))
 		}
 
-		t.Logf("✓ Generated embedding for long context text (%d chars)", len(longText))
+		t.Logf("Generated embedding for long context text (%d chars)", len(longText))
 	})
 }
 
@@ -1855,7 +1858,7 @@ func TestEmbeddingConsistency(t *testing.T) {
 		if maxDiff > TestEpsilon {
 			t.Errorf("Embeddings differ by more than epsilon: max diff = %e", maxDiff)
 		} else {
-			t.Logf("✓ Embeddings are consistent (max diff: %e)", maxDiff)
+			t.Logf("Embeddings are consistent (max diff: %e)", maxDiff)
 		}
 	})
 
@@ -1883,7 +1886,7 @@ func TestEmbeddingConsistency(t *testing.T) {
 		if maxDiff > TestEpsilon {
 			t.Errorf("Matryoshka prefix differs from full embedding: max diff = %e", maxDiff)
 		} else {
-			t.Logf("✓ Matryoshka 256 is a valid prefix of full 768 (max diff: %e)", maxDiff)
+			t.Logf("Matryoshka 256 is a valid prefix of full 768 (max diff: %e)", maxDiff)
 		}
 	})
 }
@@ -1940,7 +1943,7 @@ func TestEmbeddingPriorityRouting(t *testing.T) {
 				t.Errorf("Expected %d-dim embedding, got %d", tc.expectedDim, len(embedding))
 			}
 
-			t.Logf("✓ %s: Generated %d-dim embedding (%s)", tc.name, len(embedding), tc.description)
+			t.Logf("%s: Generated %d-dim embedding (%s)", tc.name, len(embedding), tc.description)
 		})
 	}
 }
@@ -2019,7 +2022,7 @@ func TestEmbeddingConcurrency(t *testing.T) {
 		t.Errorf("Expected %d results, got %d", expected, resultCount)
 	}
 
-	t.Logf("✓ Concurrent test passed: %d goroutines × %d iterations = %d successful embeddings",
+	t.Logf("Concurrent test passed: %d goroutines × %d iterations = %d successful embeddings",
 		numGoroutines, numIterations, resultCount)
 }
 
@@ -2071,7 +2074,7 @@ func TestQwen3MultiLoRAClassifier(t *testing.T) {
 			}
 			t.Fatalf("Failed to initialize Qwen3 Multi-LoRA classifier: %v", err)
 		}
-		t.Log("✓ Qwen3 Multi-LoRA classifier initialized successfully")
+		t.Log("Qwen3 Multi-LoRA classifier initialized successfully")
 	})
 
 	t.Run("LoadCategoryAdapter", func(t *testing.T) {
@@ -2082,7 +2085,7 @@ func TestQwen3MultiLoRAClassifier(t *testing.T) {
 			}
 			t.Fatalf("Failed to load category adapter: %v", err)
 		}
-		t.Log("✓ Category adapter loaded successfully")
+		t.Log("Category adapter loaded successfully")
 	})
 
 	t.Run("ListLoadedAdapters", func(t *testing.T) {
@@ -2098,7 +2101,7 @@ func TestQwen3MultiLoRAClassifier(t *testing.T) {
 			t.Error("Expected at least one loaded adapter")
 		}
 
-		t.Logf("✓ Loaded adapters: %v", adapters)
+		t.Logf("Loaded adapters: %v", adapters)
 
 		// Check that "category" adapter is in the list
 		found := false
@@ -2196,7 +2199,7 @@ func TestQwen3MultiLoRAClassifier(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error when using non-existent adapter")
 		} else {
-			t.Logf("✓ Correctly returned error for non-existent adapter: %v", err)
+			t.Logf("Correctly returned error for non-existent adapter: %v", err)
 		}
 	})
 }
@@ -2313,7 +2316,7 @@ func TestQwen3ZeroShotClassification(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for empty categories list")
 		} else {
-			t.Logf("✓ Correctly returned error for empty categories: %v", err)
+			t.Logf("Correctly returned error for empty categories: %v", err)
 		}
 	})
 
@@ -2334,7 +2337,7 @@ func TestQwen3ZeroShotClassification(t *testing.T) {
 			t.Logf("Note: With single category, confidence is %.4f (softmax of one element)", result.Confidence)
 		}
 
-		t.Logf("✓ Single category classification works: %s", result.CategoryName)
+		t.Logf("Single category classification works: %s", result.CategoryName)
 	})
 
 	t.Run("ManyCategories", func(t *testing.T) {
@@ -2435,7 +2438,7 @@ func TestQwen3MultiLoRAConcurrency(t *testing.T) {
 		t.Errorf("Expected %d results, got %d", expected, len(categoryResults))
 	}
 
-	t.Logf("✓ Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
+	t.Logf("Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
 		numGoroutines, numIterations, len(categoryResults))
 }
 
@@ -2446,7 +2449,7 @@ func TestQwen3MultiLoRAEdgeCases(t *testing.T) {
 		result, err := ClassifyWithQwen3Adapter("", "category")
 		if err != nil {
 			// If model rejects empty text, that's also acceptable
-			t.Logf("✓ Empty text rejected with error: %v", err)
+			t.Logf("Empty text rejected with error: %v", err)
 		} else {
 			// If model accepts empty text (using special tokens), verify result is valid
 			if result.CategoryName == "" {
@@ -2455,7 +2458,7 @@ func TestQwen3MultiLoRAEdgeCases(t *testing.T) {
 			if result.Confidence < 0.0 || result.Confidence > 1.0 {
 				t.Errorf("Invalid confidence for empty text: %f", result.Confidence)
 			}
-			t.Logf("✓ Empty text classified as: %s (%.4f confidence)",
+			t.Logf("Empty text classified as: %s (%.4f confidence)",
 				result.CategoryName, result.Confidence)
 		}
 	})
@@ -2470,7 +2473,7 @@ func TestQwen3MultiLoRAEdgeCases(t *testing.T) {
 			}
 			t.Logf("Long text handling: %v", err)
 		} else {
-			t.Logf("✓ Handled long text successfully: category=%s, confidence=%.4f",
+			t.Logf("Handled long text successfully: category=%s, confidence=%.4f",
 				result.CategoryName, result.Confidence)
 		}
 	})
@@ -2484,7 +2487,7 @@ func TestQwen3MultiLoRAEdgeCases(t *testing.T) {
 			}
 			t.Fatalf("Failed to handle special characters: %v", err)
 		}
-		t.Logf("✓ Handled special characters: category=%s", result.CategoryName)
+		t.Logf("Handled special characters: category=%s", result.CategoryName)
 	})
 }
 
@@ -2532,7 +2535,7 @@ func TestQwen3Guard(t *testing.T) {
 			}
 			t.Fatalf("Failed to initialize Qwen3Guard: %v", err)
 		}
-		t.Log("✓ Qwen3Guard initialized successfully")
+		t.Log("Qwen3Guard initialized successfully")
 
 		// Verify initialization status
 		if !IsQwen3GuardInitialized() {
@@ -2570,7 +2573,7 @@ func TestQwen3Guard(t *testing.T) {
 					t.Logf("Safe content has categories: %v (raw: %s)", result.Categories, result.RawOutput)
 				}
 
-				t.Logf("✓ Correctly classified as Safe: %s", tc.text)
+				t.Logf("Correctly classified as Safe: %s", tc.text)
 			})
 		}
 	})
@@ -2614,9 +2617,9 @@ func TestQwen3Guard(t *testing.T) {
 				if result.SafetyLabel == "Safe" {
 					t.Logf("ℹ️  Simple PII classified as Safe: %s", tc.text)
 				} else if result.SafetyLabel == "Controversial" && hasPII {
-					t.Logf("✓ PII detected as Controversial: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+					t.Logf("PII detected as Controversial: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 				} else if result.SafetyLabel == "Unsafe" && hasPII {
-					t.Logf("✓ PII detected as Unsafe: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+					t.Logf("PII detected as Unsafe: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 				} else {
 					t.Logf("⚠️  Unexpected classification: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 				}
@@ -2664,7 +2667,7 @@ func TestQwen3Guard(t *testing.T) {
 					t.Logf("Raw output: %s", result.RawOutput)
 				}
 
-				t.Logf("✓ Violent content detected: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+				t.Logf("Violent content detected: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 			})
 		}
 	})
@@ -2707,10 +2710,10 @@ func TestQwen3Guard(t *testing.T) {
 				}
 
 				if hasJailbreak {
-					t.Logf("✓ Jailbreak detected: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+					t.Logf("Jailbreak detected: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 				} else {
 					// Model may categorize by intended harm rather than "Jailbreak" category
-					t.Logf("✓ Flagged as %s (categorized by intent): Categories=%v", result.SafetyLabel, result.Categories)
+					t.Logf("Flagged as %s (categorized by intent): Categories=%v", result.SafetyLabel, result.Categories)
 				}
 			})
 		}
@@ -2744,7 +2747,7 @@ func TestQwen3Guard(t *testing.T) {
 					t.Logf("Raw output: %s", result.RawOutput)
 				}
 
-				t.Logf("✓ Multilingual classification: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+				t.Logf("Multilingual classification: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 			})
 		}
 	})
@@ -2770,7 +2773,7 @@ func TestQwen3Guard(t *testing.T) {
 					t.Fatalf("Failed to classify response safety: %v", err)
 				}
 
-				t.Logf("✓ Response classified: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+				t.Logf("Response classified: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 			})
 		}
 	})
@@ -2794,7 +2797,7 @@ func TestQwen3Guard(t *testing.T) {
 			t.Errorf("Raw output missing 'Safety:' pattern: %s", rawOutput)
 		}
 
-		t.Logf("✓ Raw output retrieved: %s", rawOutput)
+		t.Logf("Raw output retrieved: %s", rawOutput)
 	})
 
 	t.Run("EdgeCases", func(t *testing.T) {
@@ -2816,7 +2819,7 @@ func TestQwen3Guard(t *testing.T) {
 				}
 				t.Logf("Long text handling: %v", err)
 			} else {
-				t.Logf("✓ Long text classified: %s", result.SafetyLabel)
+				t.Logf("Long text classified: %s", result.SafetyLabel)
 			}
 		})
 
@@ -2829,7 +2832,7 @@ func TestQwen3Guard(t *testing.T) {
 				}
 				t.Fatalf("Failed with special characters: %v", err)
 			}
-			t.Logf("✓ Special characters handled: %s", result.SafetyLabel)
+			t.Logf("Special characters handled: %s", result.SafetyLabel)
 		})
 	})
 }
@@ -2901,7 +2904,7 @@ func TestQwen3GuardConcurrency(t *testing.T) {
 		t.Errorf("Expected %d results, got %d", expected, len(safetyLabels))
 	}
 
-	t.Logf("✓ Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
+	t.Logf("Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
 		numGoroutines, numIterations, len(safetyLabels))
 }
 
@@ -2937,7 +2940,7 @@ func TestQwen3GuardParsing(t *testing.T) {
 			t.Errorf("Invalid safety label: %s", result.SafetyLabel)
 		}
 
-		t.Logf("✓ Parsing verified: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+		t.Logf("Parsing verified: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 		t.Logf("  Raw output: %s", result.RawOutput)
 	})
 
@@ -3015,7 +3018,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 		}
 		t.Fatalf("Failed to initialize DeBERTa v3 jailbreak classifier: %v", err)
 	}
-	t.Log("✓ DeBERTa v3 jailbreak classifier initialized successfully")
+	t.Log("DeBERTa v3 jailbreak classifier initialized successfully")
 
 	t.Run("ClassifySafeText", func(t *testing.T) {
 		testCases := []struct {
@@ -3048,7 +3051,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 					t.Errorf("Confidence out of range: %f", result.Confidence)
 				}
 
-				t.Logf("✓ Correctly classified as SAFE: %s (confidence: %.4f)", tc.text, result.Confidence)
+				t.Logf("Correctly classified as SAFE: %s (confidence: %.4f)", tc.text, result.Confidence)
 			})
 		}
 	})
@@ -3085,7 +3088,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 					t.Errorf("Confidence out of range: %f", result.Confidence)
 				}
 
-				t.Logf("✓ Correctly detected INJECTION: %s (confidence: %.4f)", tc.text, result.Confidence)
+				t.Logf("Correctly detected INJECTION: %s (confidence: %.4f)", tc.text, result.Confidence)
 			})
 		}
 	})
@@ -3124,7 +3127,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 					t.Logf("Confidence: %.4f", result.Confidence)
 				}
 
-				t.Logf("✓ Correct classification for: %s (class: %d, confidence: %.4f)",
+				t.Logf("Correct classification for: %s (class: %d, confidence: %.4f)",
 					tc.text, result.Class, result.Confidence)
 			})
 		}
@@ -3161,7 +3164,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 						result.Confidence, tc.minConfidence, tc.text)
 				}
 
-				t.Logf("✓ High confidence detection: %s (class: %d, confidence: %.4f)",
+				t.Logf("High confidence detection: %s (class: %d, confidence: %.4f)",
 					tc.text, result.Class, result.Confidence)
 			})
 		}
@@ -3186,7 +3189,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 				}
 				t.Logf("Long text handling: %v", err)
 			} else {
-				t.Logf("✓ Long text classified: class=%d, confidence=%.4f", result.Class, result.Confidence)
+				t.Logf("Long text classified: class=%d, confidence=%.4f", result.Class, result.Confidence)
 			}
 		})
 
@@ -3199,7 +3202,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 				}
 				t.Fatalf("Failed with special characters: %v", err)
 			}
-			t.Logf("✓ Special characters handled: class=%d, confidence=%.4f", result.Class, result.Confidence)
+			t.Logf("Special characters handled: class=%d, confidence=%.4f", result.Class, result.Confidence)
 		})
 
 		t.Run("MultilingualText", func(t *testing.T) {
@@ -3220,7 +3223,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 					}
 					t.Logf("%s text handling: %v", ml.name, err)
 				} else {
-					t.Logf("✓ %s text classified: class=%d, confidence=%.4f", ml.name, result.Class, result.Confidence)
+					t.Logf("%s text classified: class=%d, confidence=%.4f", ml.name, result.Class, result.Confidence)
 				}
 			}
 		})
@@ -3294,7 +3297,7 @@ func TestDebertaConcurrency(t *testing.T) {
 		t.Errorf("Expected %d results, got %d", expected, len(classifications))
 	}
 
-	t.Logf("✓ Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
+	t.Logf("Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
 		numGoroutines, numIterations, len(classifications))
 }
 
@@ -3351,7 +3354,7 @@ func TestDebertaComparison(t *testing.T) {
 				if debertaResult.Class != modernbertResult.Class {
 					t.Logf("  ⚠️  Models disagree on classification")
 				} else {
-					t.Logf("  ✓ Models agree on classification")
+					t.Logf("  Models agree on classification")
 				}
 			}
 		})
@@ -3895,7 +3898,7 @@ func TestMmBert32KPIIClassifier(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			entities, err := ClassifyMmBert32KPII(tc.text, modelPath+"/config.json")
+			entities, err := ClassifyMmBert32KPII(tc.text)
 			if err != nil {
 				t.Errorf("Classification failed: %v", err)
 				return
@@ -3929,4 +3932,543 @@ func TestMmBert32KModelConstants(t *testing.T) {
 
 // ================================================================================================
 // END OF MMBERT-32K TESTS
+// ================================================================================================
+
+// ================================================================================================
+// MULTI-MODAL EMBEDDING TESTS (text + image + audio, 384-dim)
+// ================================================================================================
+
+// Copyright-free Wikimedia Commons images:
+//   - Tuxedo_kitten.jpg    : Public Domain (author: TimVickers)
+//   - 1Cute-doggy.jpg      : CC0 1.0 Universal (author: X posid)
+//   - 1908_Ford_Model_T.jpg: Public Domain (published 1908, pre-1930)
+const (
+	wikiCatURL = "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Tuxedo_kitten.jpg/512px-Tuxedo_kitten.jpg"
+	wikiDogURL = "https://upload.wikimedia.org/wikipedia/commons/a/a7/1Cute-doggy.jpg"
+	wikiCarURL = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/1908_Ford_Model_T.jpg/960px-1908_Ford_Model_T.jpg"
+)
+
+func getMultiModalModelPath() string {
+	return os.Getenv("MULTIMODAL_MODEL_PATH")
+}
+
+func downloadImageBytes(t *testing.T, url string) []byte {
+	t.Helper()
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("Failed to download %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("HTTP %d from %s", resp.StatusCode, url)
+	}
+	const maxSize = 20 * 1024 * 1024
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxSize))
+	if err != nil {
+		t.Fatalf("Failed to read body from %s: %v", url, err)
+	}
+	t.Logf("Downloaded %d bytes from %s", len(data), url)
+	return data
+}
+
+func embeddingNorm(emb []float32) float64 {
+	var sum float64
+	for _, v := range emb {
+		sum += float64(v) * float64(v)
+	}
+	return math.Sqrt(sum)
+}
+
+func embeddingCosineSim(a, b []float32) float64 {
+	if len(a) != len(b) || len(a) == 0 {
+		return 0
+	}
+	var dot, na, nb float64
+	for i := range a {
+		dot += float64(a[i]) * float64(b[i])
+		na += float64(a[i]) * float64(a[i])
+		nb += float64(b[i]) * float64(b[i])
+	}
+	na = math.Sqrt(na)
+	nb = math.Sqrt(nb)
+	if na == 0 || nb == 0 {
+		return 0
+	}
+	return dot / (na * nb)
+}
+
+// TestMultiModalEmbeddingInit tests multi-modal model initialization
+func TestMultiModalEmbeddingInit(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH environment variable not set")
+	}
+
+	err := InitMultiModalEmbeddingModel(modelPath, true)
+	if err != nil {
+		t.Logf("InitMultiModalEmbeddingModel returned error (may already be initialized): %v", err)
+		_, testErr := MultiModalEncodeText("test", 0)
+		if testErr != nil {
+			t.Fatalf("Multi-modal model not functional: %v", err)
+		}
+		t.Log("Multi-modal model verified functional via MultiModalEncodeText")
+	}
+}
+
+// TestMultiModalEncodeText tests text encoding via the multi-modal model
+func TestMultiModalEncodeText(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH not set")
+	}
+	_ = InitMultiModalEmbeddingModel(modelPath, true)
+
+	t.Run("BasicText", func(t *testing.T) {
+		output, err := MultiModalEncodeText("A photo of a cat", 0)
+		if err != nil {
+			t.Fatalf("MultiModalEncodeText failed: %v", err)
+		}
+		if output.Modality != "text" {
+			t.Errorf("Expected modality 'text', got %q", output.Modality)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384 dimensions, got %d", len(output.Embedding))
+		}
+		norm := embeddingNorm(output.Embedding)
+		if math.Abs(norm-1.0) > 0.02 {
+			t.Errorf("Expected unit norm, got %.4f", norm)
+		}
+		t.Logf("Text embedding: dim=%d, norm=%.4f, time=%.1fms", len(output.Embedding), norm, output.ProcessingTimeMs)
+	})
+
+	t.Run("MRL_Dimensions", func(t *testing.T) {
+		dims := []int{32, 64, 128, 256, 384}
+		for _, dim := range dims {
+			output, err := MultiModalEncodeText("Hello world", dim)
+			if err != nil {
+				t.Fatalf("MRL dim=%d failed: %v", dim, err)
+			}
+			if len(output.Embedding) != dim {
+				t.Errorf("Expected %d dimensions, got %d", dim, len(output.Embedding))
+			}
+			norm := embeddingNorm(output.Embedding)
+			if math.Abs(norm-1.0) > 0.02 {
+				t.Errorf("dim=%d: expected unit norm, got %.4f", dim, norm)
+			}
+			t.Logf("MRL dim=%d: actual=%d, norm=%.4f", dim, len(output.Embedding), norm)
+		}
+	})
+
+	t.Run("SemanticSimilarity", func(t *testing.T) {
+		catOut, _ := MultiModalEncodeText("A fluffy orange cat", 0)
+		dogOut, _ := MultiModalEncodeText("A golden retriever dog", 0)
+		carOut, _ := MultiModalEncodeText("A red sports car", 0)
+
+		catDog := embeddingCosineSim(catOut.Embedding, dogOut.Embedding)
+		catCar := embeddingCosineSim(catOut.Embedding, carOut.Embedding)
+		t.Logf("cat-dog=%.4f, cat-car=%.4f", catDog, catCar)
+
+		if catDog <= catCar {
+			t.Logf("Note: expected cat-dog > cat-car, got %.4f <= %.4f", catDog, catCar)
+		}
+	})
+
+	t.Run("Consistency", func(t *testing.T) {
+		out1, _ := MultiModalEncodeText("Hello world", 0)
+		out2, _ := MultiModalEncodeText("Hello world", 0)
+		sim := embeddingCosineSim(out1.Embedding, out2.Embedding)
+		if math.Abs(sim-1.0) > 1e-5 {
+			t.Errorf("Same text should produce identical embeddings, got sim=%.6f", sim)
+		}
+	})
+}
+
+// TestMultiModalEncodeImageFromBytes tests image encoding from raw bytes
+func TestMultiModalEncodeImageFromBytes(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH not set")
+	}
+	_ = InitMultiModalEmbeddingModel(modelPath, true)
+
+	t.Run("CatImage", func(t *testing.T) {
+		catBytes := downloadImageBytes(t, wikiCatURL)
+		output, err := MultiModalEncodeImageFromBytes(catBytes, 0)
+		if err != nil {
+			t.Fatalf("MultiModalEncodeImageFromBytes failed: %v", err)
+		}
+		if output.Modality != "image" {
+			t.Errorf("Expected modality 'image', got %q", output.Modality)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384 dimensions, got %d", len(output.Embedding))
+		}
+		norm := embeddingNorm(output.Embedding)
+		if math.Abs(norm-1.0) > 0.02 {
+			t.Errorf("Expected unit norm, got %.4f", norm)
+		}
+		t.Logf("Cat image: dim=%d, norm=%.4f, time=%.1fms", len(output.Embedding), norm, output.ProcessingTimeMs)
+	})
+
+	t.Run("DogImage", func(t *testing.T) {
+		dogBytes := downloadImageBytes(t, wikiDogURL)
+		output, err := MultiModalEncodeImageFromBytes(dogBytes, 0)
+		if err != nil {
+			t.Fatalf("Failed: %v", err)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384, got %d", len(output.Embedding))
+		}
+		t.Logf("Dog image: dim=%d, norm=%.4f", len(output.Embedding), embeddingNorm(output.Embedding))
+	})
+
+	t.Run("CarImage", func(t *testing.T) {
+		carBytes := downloadImageBytes(t, wikiCarURL)
+		output, err := MultiModalEncodeImageFromBytes(carBytes, 0)
+		if err != nil {
+			t.Fatalf("Failed: %v", err)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384, got %d", len(output.Embedding))
+		}
+		t.Logf("Car image: dim=%d, norm=%.4f", len(output.Embedding), embeddingNorm(output.Embedding))
+	})
+
+	t.Run("MRL_Dimensions", func(t *testing.T) {
+		catBytes := downloadImageBytes(t, wikiCatURL)
+		for _, dim := range []int{32, 64, 128, 256, 384} {
+			output, err := MultiModalEncodeImageFromBytes(catBytes, dim)
+			if err != nil {
+				t.Fatalf("MRL dim=%d failed: %v", dim, err)
+			}
+			if len(output.Embedding) != dim {
+				t.Errorf("Expected %d dimensions, got %d", dim, len(output.Embedding))
+			}
+			t.Logf("Image MRL dim=%d: actual=%d, norm=%.4f", dim, len(output.Embedding), embeddingNorm(output.Embedding))
+		}
+	})
+
+	t.Run("DifferentImages_Differ", func(t *testing.T) {
+		catBytes := downloadImageBytes(t, wikiCatURL)
+		dogBytes := downloadImageBytes(t, wikiDogURL)
+		carBytes := downloadImageBytes(t, wikiCarURL)
+
+		catOut, _ := MultiModalEncodeImageFromBytes(catBytes, 0)
+		dogOut, _ := MultiModalEncodeImageFromBytes(dogBytes, 0)
+		carOut, _ := MultiModalEncodeImageFromBytes(carBytes, 0)
+
+		catDog := embeddingCosineSim(catOut.Embedding, dogOut.Embedding)
+		catCar := embeddingCosineSim(catOut.Embedding, carOut.Embedding)
+		dogCar := embeddingCosineSim(dogOut.Embedding, carOut.Embedding)
+
+		t.Logf("cat-dog=%.4f, cat-car=%.4f, dog-car=%.4f", catDog, catCar, dogCar)
+
+		if catDog > 0.999 {
+			t.Error("Cat and dog embeddings should differ")
+		}
+		if catCar > 0.999 {
+			t.Error("Cat and car embeddings should differ")
+		}
+	})
+}
+
+// TestMultiModalEncodeImageFromBase64 tests base64 image encoding (OpenAI API style)
+func TestMultiModalEncodeImageFromBase64(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH not set")
+	}
+	_ = InitMultiModalEmbeddingModel(modelPath, true)
+
+	catBytes := downloadImageBytes(t, wikiCatURL)
+
+	t.Run("RawBase64", func(t *testing.T) {
+		b64 := base64.StdEncoding.EncodeToString(catBytes)
+		output, err := MultiModalEncodeImageFromBase64(b64, 0)
+		if err != nil {
+			t.Fatalf("MultiModalEncodeImageFromBase64 failed: %v", err)
+		}
+		if output.Modality != "image" {
+			t.Errorf("Expected modality 'image', got %q", output.Modality)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384 dimensions, got %d", len(output.Embedding))
+		}
+		t.Logf("Base64 cat: dim=%d, norm=%.4f", len(output.Embedding), embeddingNorm(output.Embedding))
+	})
+
+	t.Run("DataURIPrefix", func(t *testing.T) {
+		b64 := base64.StdEncoding.EncodeToString(catBytes)
+		dataURI := "data:image/jpeg;base64," + b64
+		output, err := MultiModalEncodeImageFromBase64(dataURI, 0)
+		if err != nil {
+			t.Fatalf("data-URI failed: %v", err)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384, got %d", len(output.Embedding))
+		}
+		t.Logf("data-URI cat: dim=%d, norm=%.4f", len(output.Embedding), embeddingNorm(output.Embedding))
+	})
+
+	t.Run("Base64_vs_Raw_Identical", func(t *testing.T) {
+		rawOut, err := MultiModalEncodeImageFromBytes(catBytes, 0)
+		if err != nil {
+			t.Fatalf("raw encode failed: %v", err)
+		}
+
+		b64 := base64.StdEncoding.EncodeToString(catBytes)
+		b64Out, err := MultiModalEncodeImageFromBase64(b64, 0)
+		if err != nil {
+			t.Fatalf("base64 encode failed: %v", err)
+		}
+
+		sim := embeddingCosineSim(rawOut.Embedding, b64Out.Embedding)
+		if math.Abs(sim-1.0) > 1e-5 {
+			t.Errorf("Base64 roundtrip should produce identical embedding, got sim=%.6f", sim)
+		}
+		t.Logf("raw vs base64 sim=%.6f", sim)
+	})
+
+	t.Run("DataURI_vs_Raw_Identical", func(t *testing.T) {
+		rawOut, _ := MultiModalEncodeImageFromBytes(catBytes, 0)
+
+		b64 := base64.StdEncoding.EncodeToString(catBytes)
+		dataURI := "data:image/png;base64," + b64
+		uriOut, err := MultiModalEncodeImageFromBase64(dataURI, 0)
+		if err != nil {
+			t.Fatalf("data-URI encode failed: %v", err)
+		}
+
+		sim := embeddingCosineSim(rawOut.Embedding, uriOut.Embedding)
+		if math.Abs(sim-1.0) > 1e-5 {
+			t.Errorf("data-URI flow should match raw, got sim=%.6f", sim)
+		}
+		t.Logf("raw vs data-URI sim=%.6f", sim)
+	})
+
+	t.Run("AllImages_Base64_Consistency", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			url  string
+		}{
+			{"cat", wikiCatURL},
+			{"dog", wikiDogURL},
+			{"car", wikiCarURL},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				imgBytes := downloadImageBytes(t, tc.url)
+				rawOut, _ := MultiModalEncodeImageFromBytes(imgBytes, 0)
+				b64Out, _ := MultiModalEncodeImageFromBase64(base64.StdEncoding.EncodeToString(imgBytes), 0)
+
+				sim := embeddingCosineSim(rawOut.Embedding, b64Out.Embedding)
+				if math.Abs(sim-1.0) > 1e-5 {
+					t.Errorf("%s: base64 roundtrip mismatch, sim=%.6f", tc.name, sim)
+				}
+				t.Logf("%s: raw vs base64 sim=%.6f", tc.name, sim)
+			})
+		}
+	})
+}
+
+// TestMultiModalEncodeImageFromURL tests URL-based image encoding
+func TestMultiModalEncodeImageFromURL(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH not set")
+	}
+	_ = InitMultiModalEmbeddingModel(modelPath, true)
+
+	t.Run("CatFromURL", func(t *testing.T) {
+		output, err := MultiModalEncodeImageFromURL(wikiCatURL, 0)
+		if err != nil {
+			t.Fatalf("MultiModalEncodeImageFromURL failed: %v", err)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384, got %d", len(output.Embedding))
+		}
+		t.Logf("URL cat: dim=%d, norm=%.4f, time=%.1fms", len(output.Embedding), embeddingNorm(output.Embedding), output.ProcessingTimeMs)
+	})
+
+	t.Run("DogFromURL", func(t *testing.T) {
+		output, err := MultiModalEncodeImageFromURL(wikiDogURL, 0)
+		if err != nil {
+			t.Fatalf("Failed: %v", err)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384, got %d", len(output.Embedding))
+		}
+		t.Logf("URL dog: dim=%d, norm=%.4f", len(output.Embedding), embeddingNorm(output.Embedding))
+	})
+
+	t.Run("URL_vs_Bytes_Identical", func(t *testing.T) {
+		catBytes := downloadImageBytes(t, wikiCatURL)
+		bytesOut, _ := MultiModalEncodeImageFromBytes(catBytes, 0)
+		urlOut, err := MultiModalEncodeImageFromURL(wikiCatURL, 0)
+		if err != nil {
+			t.Fatalf("URL encode failed: %v", err)
+		}
+		sim := embeddingCosineSim(bytesOut.Embedding, urlOut.Embedding)
+		if math.Abs(sim-1.0) > 1e-5 {
+			t.Errorf("URL vs bytes should match, got sim=%.6f", sim)
+		}
+		t.Logf("bytes vs URL sim=%.6f", sim)
+	})
+}
+
+// TestMultiModalCrossModalRetrieval tests text-image cross-modal retrieval
+func TestMultiModalCrossModalRetrieval(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH not set")
+	}
+	_ = InitMultiModalEmbeddingModel(modelPath, true)
+
+	catBytes := downloadImageBytes(t, wikiCatURL)
+	dogBytes := downloadImageBytes(t, wikiDogURL)
+	carBytes := downloadImageBytes(t, wikiCarURL)
+
+	catImg, _ := MultiModalEncodeImageFromBytes(catBytes, 0)
+	dogImg, _ := MultiModalEncodeImageFromBytes(dogBytes, 0)
+	carImg, _ := MultiModalEncodeImageFromBytes(carBytes, 0)
+
+	images := []struct {
+		name string
+		emb  []float32
+	}{
+		{"cat", catImg.Embedding},
+		{"dog", dogImg.Embedding},
+		{"car", carImg.Embedding},
+	}
+
+	t.Run("TextImageSameSpace", func(t *testing.T) {
+		textOut, _ := MultiModalEncodeText("a photo of a cat", 0)
+		if len(textOut.Embedding) != len(catImg.Embedding) {
+			t.Errorf("Text dim=%d != image dim=%d", len(textOut.Embedding), len(catImg.Embedding))
+		}
+		sim := embeddingCosineSim(textOut.Embedding, catImg.Embedding)
+		t.Logf("text('a photo of a cat') vs cat_image: sim=%.4f", sim)
+		if math.IsNaN(sim) || math.IsInf(sim, 0) {
+			t.Error("Similarity should be finite")
+		}
+	})
+
+	t.Run("RetrievalRanking", func(t *testing.T) {
+		queries := []struct {
+			text         string
+			expectedBest string
+		}{
+			{"a photo of a cat", "cat"},
+			{"a photo of a dog", "dog"},
+			{"a photo of a car", "car"},
+			{"a cute kitten sitting", "cat"},
+			{"a fluffy puppy", "dog"},
+			{"a vintage automobile", "car"},
+		}
+
+		for _, q := range queries {
+			textOut, _ := MultiModalEncodeText(q.text, 0)
+			var bestName string
+			var bestSim float64
+			var allSims []string
+			for _, img := range images {
+				sim := embeddingCosineSim(textOut.Embedding, img.emb)
+				allSims = append(allSims, fmt.Sprintf("%s=%.4f", img.name, sim))
+				if sim > bestSim {
+					bestSim = sim
+					bestName = img.name
+				}
+			}
+			marker := "OK"
+			if bestName != q.expectedBest {
+				marker = "MISS"
+			}
+			t.Logf("[%s] %q: best=%s (%.4f) | %s", marker, q.text, bestName, bestSim, strings.Join(allSims, ", "))
+		}
+	})
+
+	t.Run("CrossModal_Base64", func(t *testing.T) {
+		textOut, _ := MultiModalEncodeText("a photo of a kitten", 0)
+		b64Out, err := MultiModalEncodeImageFromBase64(base64.StdEncoding.EncodeToString(catBytes), 0)
+		if err != nil {
+			t.Fatalf("base64 encode failed: %v", err)
+		}
+		if len(textOut.Embedding) != len(b64Out.Embedding) {
+			t.Errorf("Dimension mismatch: text=%d, image=%d", len(textOut.Embedding), len(b64Out.Embedding))
+		}
+		sim := embeddingCosineSim(textOut.Embedding, b64Out.Embedding)
+		t.Logf("text('kitten') vs base64(cat): sim=%.4f", sim)
+	})
+
+	t.Run("CrossModal_MRL", func(t *testing.T) {
+		for _, dim := range []int{64, 128, 256, 384} {
+			textOut, _ := MultiModalEncodeText("a cute kitten", dim)
+			imgOut, _ := MultiModalEncodeImageFromBytes(catBytes, dim)
+			if len(textOut.Embedding) != dim || len(imgOut.Embedding) != dim {
+				t.Errorf("dim=%d: text=%d, image=%d", dim, len(textOut.Embedding), len(imgOut.Embedding))
+			}
+			sim := embeddingCosineSim(textOut.Embedding, imgOut.Embedding)
+			t.Logf("Cross-modal MRL dim=%d: sim=%.4f", dim, sim)
+		}
+	})
+}
+
+// TestMultiModalInputValidation tests error handling for invalid inputs
+func TestMultiModalInputValidation(t *testing.T) {
+	t.Run("EmptyText", func(t *testing.T) {
+		_, err := MultiModalEncodeText("", 0)
+		if err == nil {
+			t.Error("Expected error for empty text")
+		}
+	})
+
+	t.Run("EmptyBytes", func(t *testing.T) {
+		_, err := MultiModalEncodeImageFromBytes(nil, 0)
+		if err == nil {
+			t.Error("Expected error for nil bytes")
+		}
+		_, err = MultiModalEncodeImageFromBytes([]byte{}, 0)
+		if err == nil {
+			t.Error("Expected error for empty bytes")
+		}
+	})
+
+	t.Run("EmptyBase64", func(t *testing.T) {
+		_, err := MultiModalEncodeImageFromBase64("", 0)
+		if err == nil {
+			t.Error("Expected error for empty base64")
+		}
+	})
+
+	t.Run("InvalidBase64", func(t *testing.T) {
+		_, err := MultiModalEncodeImageFromBase64("not-valid-base64!!!", 0)
+		if err == nil {
+			t.Error("Expected error for invalid base64")
+		}
+	})
+
+	t.Run("EmptyURL", func(t *testing.T) {
+		_, err := MultiModalEncodeImageFromURL("", 0)
+		if err == nil {
+			t.Error("Expected error for empty URL")
+		}
+	})
+
+	t.Run("EmptyPixelData", func(t *testing.T) {
+		_, err := MultiModalEncodeImage(nil, 512, 512, 0)
+		if err == nil {
+			t.Error("Expected error for nil pixel data")
+		}
+	})
+
+	t.Run("WrongPixelDataSize", func(t *testing.T) {
+		_, err := MultiModalEncodeImage(make([]float32, 100), 512, 512, 0)
+		if err == nil {
+			t.Error("Expected error for wrong pixel data size")
+		}
+	})
+}
+
+// ================================================================================================
+// END OF MULTI-MODAL EMBEDDING TESTS
 // ================================================================================================

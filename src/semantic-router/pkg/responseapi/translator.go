@@ -322,14 +322,30 @@ func (t *Translator) outputItemToMessage(item OutputItem) (ChatMessage, error) {
 	return ChatMessage{}, fmt.Errorf("unknown item type: %s", item.Type)
 }
 
+// convertTools converts Response API tools to Chat Completions tools.
+// Only "function" type tools are passed through to the Chat Completions backend.
+// Built-in tools like "image_generation", "code_interpreter", and "web_search" are
+// handled by the router itself (via modality routing for image_generation) and are
+// intentionally stripped from the translated request.
 func (t *Translator) convertTools(tools []Tool) []ChatTool {
 	result := make([]ChatTool, 0, len(tools))
 	for _, tool := range tools {
-		if tool.Type == "function" && tool.Function != nil {
-			result = append(result, ChatTool{
-				Type:     "function",
-				Function: tool.Function,
-			})
+		switch tool.Type {
+		case ToolTypeFunction:
+			if tool.Function != nil {
+				result = append(result, ChatTool{
+					Type:     "function",
+					Function: tool.Function,
+				})
+			}
+		case ToolTypeImageGeneration:
+			// Handled by the router's modality routing — not passed to backend.
+			// Detection and parameter extraction happen in ResponseAPIFilter.TranslateRequest().
+			continue
+		default:
+			// Other tool types (code_interpreter, mcp, web_search, etc.)
+			// are not yet supported in Chat Completions translation — skip.
+			continue
 		}
 	}
 	return result

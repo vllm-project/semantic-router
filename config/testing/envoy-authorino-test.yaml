@@ -1,0 +1,217 @@
+# Test Envoy config for Authorino integration
+# Authorino gRPC is port-forwarded from kind cluster to localhost:50055
+# Semantic Router ext_proc is on localhost:50051
+static_resources:
+  listeners:
+  - name: listener_0
+    address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 8801
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: ingress_http
+          access_log:
+          - name: envoy.access_loggers.stdout
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+              log_format:
+                json_format:
+                  time: "%START_TIME%"
+                  protocol: "%PROTOCOL%"
+                  request_method: "%REQ(:METHOD)%"
+                  request_path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                  response_code: "%RESPONSE_CODE%"
+                  response_flags: "%RESPONSE_FLAGS%"
+                  bytes_received: "%BYTES_RECEIVED%"
+                  bytes_sent: "%BYTES_SENT%"
+                  duration: "%DURATION%"
+                  upstream_host: "%UPSTREAM_HOST%"
+                  upstream_cluster: "%UPSTREAM_CLUSTER%"
+                  request_id: "%REQ(X-REQUEST-ID)%"
+                  selected_model: "%REQ(X-SELECTED-MODEL)%"
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: local_service
+              domains: ["*"]
+              routes:
+              # Anthropic API route (matches all claude-* models)
+              - match:
+                  prefix: "/"
+                  headers:
+                  - name: x-selected-model
+                    string_match:
+                      prefix: "claude-"
+                route:
+                  cluster: anthropic_api_cluster
+                  timeout: 300s
+                  host_rewrite_literal: "api.anthropic.com"
+              # OpenAI API route
+              - match:
+                  prefix: "/"
+                  headers:
+                  - name: x-selected-model
+                    string_match:
+                      safe_regex:
+                        regex: "^(gpt-|o1-|o3-|chatgpt-).*"
+                route:
+                  cluster: openai_api_cluster
+                  timeout: 300s
+                  host_rewrite_literal: "api.openai.com"
+              # Default route using original destination cluster
+              - match:
+                  prefix: "/"
+                route:
+                  cluster: vllm_dynamic_cluster
+                  timeout: 300s
+          http_filters:
+          # ext_authz filter — Authorino (gRPC) on port-forwarded localhost:50055
+          - name: envoy.filters.http.ext_authz
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+              grpc_service:
+                envoy_grpc:
+                  cluster_name: authorino_service
+              transport_api_version: V3
+              failure_mode_allow: false
+          - name: envoy.filters.http.ext_proc
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+              grpc_service:
+                envoy_grpc:
+                  cluster_name: extproc_service
+              allow_mode_override: true
+              processing_mode:
+                request_header_mode: "SEND"
+                response_header_mode: "SEND"
+                request_body_mode: "BUFFERED"
+                response_body_mode: "BUFFERED"
+                request_trailer_mode: "SKIP"
+                response_trailer_mode: "SKIP"
+              failure_mode_allow: true
+              message_timeout: 300s
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+              suppress_envoy_headers: true
+          http2_protocol_options:
+            max_concurrent_streams: 100
+            initial_stream_window_size: 65536
+            initial_connection_window_size: 1048576
+          stream_idle_timeout: "300s"
+          request_timeout: "300s"
+          common_http_protocol_options:
+            idle_timeout: "300s"
+
+  clusters:
+  - name: extproc_service
+    connect_timeout: 300s
+    per_connection_buffer_limit_bytes: 52428800
+    type: STATIC
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options:
+            connection_keepalive:
+              interval: 300s
+              timeout: 300s
+    load_assignment:
+      cluster_name: extproc_service
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 50051
+
+  # Dynamic vLLM cluster using original destination
+  - name: vllm_dynamic_cluster
+    connect_timeout: 300s
+    per_connection_buffer_limit_bytes: 52428800
+    type: ORIGINAL_DST
+    lb_policy: CLUSTER_PROVIDED
+    original_dst_lb_config:
+      use_http_header: true
+      http_header_name: "x-vsr-destination-endpoint"
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http_protocol_options: {}
+
+  # Authorino authorization service (gRPC) — port-forwarded from kind
+  - name: authorino_service
+    connect_timeout: 5s
+    type: STATIC
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: authorino_service
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 50055
+
+  # OpenAI API cluster
+  - name: openai_api_cluster
+    type: LOGICAL_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 60s
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: openai_api_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: api.openai.com
+                port_value: 443
+            hostname: "api.openai.com"
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni: api.openai.com
+
+  # Anthropic API cluster
+  - name: anthropic_api_cluster
+    type: LOGICAL_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 60s
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: anthropic_api_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: api.anthropic.com
+                port_value: 443
+            hostname: "api.anthropic.com"
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni: api.anthropic.com
+
+admin:
+  address:
+    socket_address:
+      address: "127.0.0.1"
+      port_value: 19000

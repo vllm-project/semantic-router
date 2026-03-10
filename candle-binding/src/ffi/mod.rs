@@ -8,6 +8,7 @@ pub mod embedding; //  embedding functions
 pub mod generative_classifier; // Qwen3 LoRA generative classifier
 pub mod init; //  initialization functions
 pub mod memory; //  memory management functions
+pub mod mlp; // MLP selector for model selection (GPU-accelerated)
 pub mod similarity; //  similarity functions
 pub mod tokenization; //  tokenization function
 pub mod types; //  C structure definitions
@@ -22,6 +23,7 @@ pub use embedding::*; // Intelligent embedding functions
 pub use generative_classifier::*; // Qwen3 LoRA generative classifier functions
 pub use init::*;
 pub use memory::*;
+pub use mlp::*; // MLP selector FFI functions
 
 pub use similarity::*;
 pub use tokenization::*;

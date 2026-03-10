@@ -61,7 +61,9 @@ export function DataTable<T>({
     if (!sortColumn) return data
 
     return [...data].sort((a, b) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const aValue = (a as any)[sortColumn]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const bValue = (b as any)[sortColumn]
 
       if (aValue === bValue) return 0
@@ -136,6 +138,7 @@ export function DataTable<T>({
                         className={styles.td}
                         style={{ textAlign: column.align || 'left' }}
                       >
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {column.render ? column.render(row) : (row as any)[column.key]}
                       </td>
                     ))}

@@ -1,307 +1,374 @@
 ---
 translation:
-  source_commit: "bac2743"
+  source_commit: "9ed8acf"
   source_file: "docs/tutorials/content-safety/pii-detection.md"
   outdated: false
 ---
 
-# PII 检测 (PII Detection)
+# PII 检测
 
-Semantic Router 提供了内置的个人身份信息 (PII) 检测功能，以保护用户查询中的敏感数据。系统使用经过微调的 BERT 模型，根据可配置的策略识别并处理各种类型的 PII。
+Semantic Router 默认支持个人身份信息（PII）检测。通过微调的 BERT 模型识别敏感数据，并基于可配置的策略拦截请求。
 
-## 概览
+## 概述
 
 PII 检测系统：
 
-- **识别** 用户查询中的常见 PII 类型
-- **执行** 特定于模型的 PII 策略
-- **拦截或掩码** 根据配置处理敏感信息
-- **过滤** 基于 PII 合规性的候选模型
-- **记录** 策略违规以供监控
+- **识别**用户查询中的常见 PII 类型
+- **执行**每个决策的可配置 PII 策略
+- **拦截**包含敏感信息的请求（基于信号规则）
+- **集成**信号驱动决策，实现精细化控制
+- **记录**策略违规，用于监控
 
 ## 支持的 PII 类型
 
-系统可以检测以下 PII 类型：
+系统可检测以下 PII 类型：
 
-| PII 类型 | 描述 | 示例 |
-|----------|-------------|----------|
-| `PERSON` | 人名 | "John Smith", "Mary Johnson" |
+| PII 类型 | 说明 | 示例 |
+|----------|------|------|
+| `PERSON` | 人名 | "张三"、"John Smith" |
 | `EMAIL_ADDRESS` | 电子邮件地址 | "user@example.com" |
-| `PHONE_NUMBER` | 电话号码 | "+1-555-123-4567", "(555) 123-4567" |
+| `PHONE_NUMBER` | 电话号码 | "+1-555-123-4567" |
 | `US_SSN` | 美国社会安全号码 | "123-45-6789" |
-| `STREET_ADDRESS` | 物理地址 | "123 Main St, New York, NY" |
+| `STREET_ADDRESS` | 实际地址 | "123 Main St, New York, NY" |
 | `GPE` | 地缘政治实体 | 国家、州、城市 |
-| `ORGANIZATION` | 组织名称 | "Microsoft", "OpenAI" |
-| `CREDIT_CARD` | 信用卡号 | "4111-1111-1111-1111" |
-| `US_DRIVER_LICENSE` | 美国驾驶执照 | "D123456789" |
+| `ORGANIZATION` | 组织名称 | "Microsoft"、"OpenAI" |
+| `CREDIT_CARD` | 信用卡号码 | "4111-1111-1111-1111" |
+| `US_DRIVER_LICENSE` | 美国驾照 | "D123456789" |
 | `IBAN_CODE` | 国际银行账号 | "GB82 WEST 1234 5698 7654 32" |
-| `IP_ADDRESS` | IP 地址 | "192.168.1.1", "2001:db8::1" |
-| `DOMAIN_NAME` | 域名/网站名称 | "example.com", "google.com" |
-| `DATE_TIME` | 日期/时间信息 | "2024-01-15", "January 15th" |
-| `AGE` | 年龄信息 | "25 years old", "born in 1990" |
-| `NRP` | 国籍/宗教/政治团体 | "American", "Christian", "Democrat" |
-| `ZIP_CODE` | 邮政编码 | "10001", "SW1A 1AA" |
+| `IP_ADDRESS` | IP 地址 | "192.168.1.1"、"2001:db8::1" |
+| `DOMAIN_NAME` | 域名/网站名称 | "example.com"、"google.com" |
+| `DATE_TIME` | 日期/时间信息 | "2024-01-15"、"1月15日" |
+| `AGE` | 年龄信息 | "25岁"、"1990年出生" |
+| `NRP` | 国籍/宗教/政治团体 | "美国人"、"基督徒" |
+| `ZIP_CODE` | 邮政编码 | "10001"、"SW1A 1AA" |
 
 ## 配置
 
+PII 检测现在是信号层中的**一等公民信号**。在 `signals.pii` 下定义命名的 pii 规则，然后在 `decisions` 中通过 `type: "pii"` 引用它们。
+
 ### 基础 PII 检测
 
-在您的配置中启用 PII 检测：
-
 ```yaml
-# router-defaults.yaml
+# router-config.yaml
+
+# ── PII 分类器模型 ────────────────────────────────────────────────────────
 classifier:
   pii_model:
     model_id: "models/mom-pii-classifier"
     use_modernbert: false
-    threshold: 0.9                 # 全局检测阈值 (0.0-1.0)
-    use_cpu: true
-  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
-```
-
-### 类别级 PII 检测
-
-**v0.x 新功能**：在类别级别配置 PII 检测阈值，以便根据类别的具体要求和后果进行精细控制。
-
-```yaml
-# 全局 PII 配置 - 默认应用于所有类别
-classifier:
-  pii_model:
-    model_id: "models/mom-pii-classifier"
-    use_modernbert: false
-    threshold: 0.9  # 全局默认阈值
+    threshold: 0.9
     use_cpu: true
   pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
 
-# 类别特定的 PII 设置
-categories:
-  # 医疗保健类别：针对关键 PII 的高阈值
-  - name: healthcare
-    description: "医疗保健和医学查询"
-    pii_enabled: true       # 启用 PII 检测（默认：继承自全局）
-    pii_threshold: 0.9      # 更高阈值，检测更严格
-    model_scores:
-      - model: secure-llm
-        score: 0.9
-        use_reasoning: false
+# ── 信号 ──────────────────────────────────────────────────────────────────
+signals:
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.9
+      description: "拦截所有 PII 类型"
 
-  # 金融类别：针对金融 PII 的极高阈值
-  - name: finance
-    description: "金融查询"
-    pii_enabled: true
-    pii_threshold: 0.95     # 对 SSN、信用卡等非常严格
-    model_scores:
-      - model: secure-llm
-        score: 0.9
-        use_reasoning: false
-
-  # 代码生成：较低阈值以减少误报
-  - name: code_generation
-    description: "代码和技术内容"
-    pii_enabled: true
-    pii_threshold: 0.5      # 较低阈值，避免将代码工件标记为 PII
-    model_scores:
-      - model: general-llm
-        score: 0.9
-        use_reasoning: true
-
-  # 测试：禁用 PII 检测
-  - name: testing
-    description: "测试场景"
-    pii_enabled: false      # 测试时禁用
-    model_scores:
-      - model: general-llm
-        score: 0.6
-        use_reasoning: false
-
-  # 通用：使用全局设置
-  - name: general
-    description: "通用查询"
-    # 未指定 pii_enabled 和 pii_threshold - 继承全局设置
-    model_scores:
-      - model: general-llm
-        score: 0.5
-        use_reasoning: false
+# ── 决策 ──────────────────────────────────────────────────────────────────
+decisions:
+  - name: "block_pii"
+    priority: 999
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "pii"
+          name: "pii_deny_all"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "请求被拦截：检测到个人信息，请删除敏感数据后重试。"
 ```
 
-**配置继承：**
+### 允许列表：允许特定 PII 类型
 
-- `pii_enabled`：如果未指定，继承自全局 PII 模型配置（如果配置了 `pii_model` 则启用）
-- `pii_threshold`：如果未指定，继承自 `classifier.pii_model.threshold`
-
-**各类别阈值指南：**
-
-- **关键类别**（医疗、金融、法律）：0.9-0.95 - 严格检测，误报较少
-- **面向客户**（支持、销售）：0.75-0.85 - 平衡检测
-- **内部工具**（代码、测试）：0.5-0.65 - 宽松，以减少误报
-- **公共内容**（文档、营销）：0.6-0.75 - 发布前进行更广泛的检测
-
-### 模型特定的 PII 策略
-
-为不同模型配置不同的 PII 策略：
+使用 `pii_types_allowed` 允许某些 PII 类型，同时拦截其他所有类型：
 
 ```yaml
-# vLLM 端点配置
-vllm_endpoints:
-  - name: secure-model
-    address: "127.0.0.1"
-    port: 8080
-  - name: general-model
-    address: "127.0.0.1"
-    port: 8081
+signals:
+  pii:
+    # 拦截所有 PII
+    - name: "pii_deny_all"
+      threshold: 0.5
+      description: "拦截所有 PII"
 
-# 模型特定的配置
-model_config:
-  secure-llm:
-    pii_policy:
-      allow_by_default: false      # 默认拦截所有 PII
-      pii_types:                   # 仅允许这些特定类型
+    # 允许邮件和电话（例如用于预约）
+    - name: "pii_allow_email_phone"
+      threshold: 0.5
+      pii_types_allowed:
         - "EMAIL_ADDRESS"
+        - "PHONE_NUMBER"
+      description: "允许邮件和电话，拦截身份证号/信用卡等"
+
+    # 允许组织/地点名称（例如用于代码/技术内容）
+    - name: "pii_allow_org_location"
+      threshold: 0.6
+      pii_types_allowed:
         - "GPE"
         - "ORGANIZATION"
-
-  general-llm:
-    pii_policy:
-      allow_by_default: true       # 默认允许所有 PII
-      pii_types: []                # 当 allow_by_default 为 true 时不使用
+        - "DATE_TIME"
+      description: "允许地理位置、组织、日期 — 常见于代码和配置文件"
 ```
 
-## PII 检测如何工作
+### 领域感知的 PII 策略
 
-PII 检测系统的工作流程如下：
+结合 PII 和领域信号，为不同领域配置差异化的白名单：
 
-1. **检测**：PII 分类器模型分析输入文本以识别 PII 类型
-2. **策略检查**：系统检查目标模型是否允许检测到的 PII 类型
-3. **路由决策**：过滤掉不允许检测到的 PII 类型的模型
-4. **日志记录**：记录所有 PII 检测和策略决策以进行监控
+```yaml
+signals:
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.5
+      description: "拦截所有 PII"
+    - name: "pii_allow_email_phone"
+      threshold: 0.5
+      pii_types_allowed:
+        - "EMAIL_ADDRESS"
+        - "PHONE_NUMBER"
+      description: "允许邮件和电话用于预约"
+
+  domains:
+    - name: "economics"
+      description: "金融和经济"
+      mmlu_categories: ["economics"]
+    - name: "health"
+      description: "健康和医疗"
+      mmlu_categories: ["health"]
+
+decisions:
+  # 金融：拦截所有 PII
+  - name: "block_pii_finance"
+    priority: 999
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "pii"
+          name: "pii_deny_all"
+        - type: "domain"
+          name: "economics"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "为保护您的安全，请勿在金融查询中分享个人信息。"
+
+  # 医疗：允许邮件/电话用于预约，拦截其他 PII
+  - name: "block_pii_health"
+    priority: 998
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "pii"
+          name: "pii_allow_email_phone"
+        - type: "domain"
+          name: "health"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "请仅分享您的邮箱或电话号码，请勿包含其他个人信息。"
+```
+
+### 基于环境的 PII 策略（开发 vs 生产）
+
+为不同环境应用不同的 PII 阈值和允许列表：
+
+```yaml
+signals:
+  pii:
+    # 开发环境：宽松 — 代码上下文中常有组织/地点引用
+    - name: "pii_dev"
+      threshold: 0.6
+      pii_types_allowed:
+        - "GPE"
+        - "ORGANIZATION"
+        - "DATE_TIME"
+      description: "开发环境宽松 PII 策略"
+
+    # 生产环境：严格 — 数据最小化，拦截所有 PII
+    - name: "pii_prod"
+      threshold: 0.9
+      description: "生产环境严格 PII 策略"
+
+decisions:
+  - name: "block_pii_prod"
+    priority: 999
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "pii"
+          name: "pii_prod"
+    modelRefs:
+      - model: "qwen14b-prod"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "请求被拦截：检测到个人信息。"
+```
+
+## 信号配置参考
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | ✅ | 信号名称，在决策条件中通过 `type: "pii"` 引用 |
+| `threshold` | float (0.0–1.0) | ✅ | PII 实体检测的最低置信度分数 |
+| `pii_types_allowed` | string[] | ❌ | **允许**（不拦截）的 PII 类型。为空时，所有检测到的 PII 类型都会触发信号 |
+| `include_history` | bool | ❌ | 为 `true` 时分析所有对话消息（默认：`false`） |
+| `description` | string | ❌ | 该规则的人类可读描述 |
+
+**按使用场景的阈值指南**：
+
+- **关键场景（医疗、金融、法律）**：`0.9–0.95` — 严格检测，误报更少
+- **面向客户（支持、销售）**：`0.75–0.85` — 均衡检测
+- **内部工具（代码、测试）**：`0.5–0.65` — 宽松，减少技术内容的误报
+- **公开内容（文档、营销）**：`0.6–0.75` — 发布前的广泛检测
+
+## PII 分类器模型配置
+
+`classifier.pii_model` 部分配置所有 PII 信号使用的底层 ML 模型：
+
+```yaml
+classifier:
+  pii_model:
+    model_id: "models/mom-pii-classifier"
+    use_modernbert: false
+    threshold: 0.9   # 全局回退阈值（被各信号规则覆盖）
+    use_cpu: true
+  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
+```
+
+## 执行链路
+
+1. **信号评估**：所有 `pii` 信号规则与其他信号（关键词、领域、jailbreak 等）**并行运行** — 对路由管道零额外延迟
+2. **实体检测**：PII 分类器识别请求文本中的 PII 实体
+3. **允许列表检查**：每个规则检查检测到的 PII 类型是否在其 `pii_types_allowed` 列表中
+4. **信号触发**：如果超过阈值的被拒绝 PII 类型被检测到，信号触发
+5. **决策匹配**：决策通过 `type: "pii"` 条件引用已触发的信号
+6. **执行动作**：匹配的决策执行其插件（例如 `fast_response` 拦截请求）
+7. **日志记录**：所有 PII 检测和策略决策均被记录，用于监控
 
 ## API 集成
 
-PII 检测已自动集成到路由过程中。当向路由发送请求时，系统会：
+PII 检测自动集成到路由流程中。当请求到达路由器时，系统：
 
-1. 使用配置的分类器分析输入文本是否存在 PII
-2. 检查候选模型的 PII 策略
-3. 过滤掉不允许检测到的 PII 类型的模型
-4. 路由到可以处理该 PII 的合适模型
-
-**注意**：当前的实现在自动路由期间使用全局 PII 阈值。要使用类别特定的阈值，您可以：
-
-- 在配置中为每个类别适当配置阈值
-- 在代码中使用 `config.GetPIIThresholdForCategory(categoryName)` 获取类别特定的阈值
-- 在具有类别上下文时，使用类别特定的阈值调用 `classifier.ClassifyPIIWithThreshold(text, threshold)`
+1. 使用配置的分类器分析输入文本中的 PII
+2. 并行评估所有 `pii` 信号规则
+3. 对超过阈值的被拒绝 PII 类型触发信号
+4. 路由到匹配已触发信号的决策
 
 ### 分类端点
 
-您还可以直接使用分类 API 检查 PII 检测：
+您也可以直接通过分类 API 检查 PII 检测：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/classify \
   -H "Content-Type: application/json" \
   -d '{
-    "text": "我的电子邮件是 john.doe@example.com，我住在纽约"
+    "text": "我的邮箱是 john.doe@example.com，我住在纽约"
   }'
 ```
 
-响应包含 PII 信息以及类别分类结果。
+响应中包含 PII 信息和分类结果。
 
 ## 监控与指标
 
-系统公开了与 PII 相关的指标：
+系统暴露 PII 相关指标：
 
 ```
 # Prometheus 指标
 pii_detections_total{type="EMAIL_ADDRESS"} 45
 pii_detections_total{type="PERSON"} 23
-pii_policy_violations_total{model="secure-model"} 12
+pii_policy_violations_total 12
 pii_requests_blocked_total 8
-pii_requests_masked_total 15
 ```
 
 ## 最佳实践
 
-### 1. 阈值调整
+### 1. 使用优先级排序安全决策
 
-- 从 `threshold: 0.7` 开始，以实现平衡的准确性
-- 对于高安全性环境，增加到 `0.8-0.9`
-- 降低到 `0.5-0.6` 以进行更广泛的检测
-- **使用类别级阈值**，根据 PII 类型后果进行精细控制
+将 PII 拦截决策设置为高优先级（例如 `999`），确保在路由决策之前评估：
 
-#### 类别特定的阈值指南
+```yaml
+decisions:
+  - name: "block_pii"
+    priority: 999   # 在路由决策（优先级 < 999）之前评估
+    rules:
+      ...
+```
 
-不同类别具有不同的 PII 灵敏度要求：
+### 2. 与 Jailbreak 检测结合使用
 
-**关键类别（医疗、金融、法律）：**
+同时使用 `pii` 和 `jailbreak` 信号，实现全面的安全防护：
 
-- 阈值：`0.9-0.95`
-- 理由：需要高精度；医学/金融术语的误报代价高昂
-- 示例 PII：SSN、信用卡、病历
-- 阈值过低的风险：过多的误报会中断工作流
+```yaml
+signals:
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.65
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.5
 
-**面向客户的类别（支持、销售）：**
+decisions:
+  - name: "block_jailbreak"
+    priority: 1000
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "jailbreak"
+          name: "jailbreak_standard"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "请求被拦截：违反政策。"
 
-- 阈值：`0.75-0.85`
-- 理由：在捕获 PII 和避免误报之间取得平衡
-- 示例 PII：电子邮件、电话、姓名、地址
-- 阈值过低的风险：中等的误报率
+  - name: "block_pii"
+    priority: 999
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "pii"
+          name: "pii_deny_all"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "请求被拦截：检测到个人信息。"
+```
 
-**内部工具（代码生成、开发）：**
+### 3. 按领域精细控制
 
-- 阈值：`0.5-0.65`
-- 理由：代码/技术内容经常触发误报；需要较低的阈值
-- 示例 PII：变量名、看起来像 PII 的测试数据
-- 阈值过高的风险：仍可能标记无害的代码工件
+不同领域的隐私容忍度不同。请结合 `pii` + `domain` 分别设定阈值与允许类型，取代粗放的全局一刀切策略。
 
-**公共内容（文档、营销）：**
+### 4. 为对话应用启用历史记录
 
-- 阈值：`0.6-0.75`
-- 理由：发布前进行更广泛的检测；可以接受审查更多误报
-- 示例 PII：作者姓名、示例邮件、占位数据
-- 阈值过高的风险：可能漏掉可能被发布的 PII
+在会话场景中启用 `include_history: true`，防止攻击者跨消息拆分 PII 进行绕过：
 
-### 2. 策略设计
+```yaml
+signals:
+  pii:
+    - name: "pii_full_history"
+      threshold: 0.9
+      include_history: true
+      description: "检测完整对话历史中的 PII"
+```
 
-- 为敏感模型使用 `allow_by_default: false`
-- 明确列出允许的 PII 类型，以确保清晰
-- 为不同的用例考虑不同的策略
-- **将类别级阈值与模型级策略结合使用**，实现纵深防御
+## 故障排查
 
-### 3. 操作选择
+### 误报率高
 
-- 在高安全性场景中使用 `block` (拦截)
-- 当仍需处理时使用 `mask` (掩码)
-- 为满足审计要求，使用带有日志记录的 `allow` (允许)
+- 提高信号 `threshold`（例如从 `0.5` 提高到 `0.8`）
+- 将常见误报类型添加到 `pii_types_allowed`
+- 对于代码/技术内容，允许 `GPE`、`ORGANIZATION`、`DATE_TIME`
 
-### 4. 模型过滤
+### 漏检 PII
 
-- 配置 PII 策略以自动过滤候选模型
-- 确保至少有一个模型可以处理每种 PII 场景
-- 彻底测试策略组合
-
-## 故障排除
-
-### 常见问题
-
-**误报过高**
-
-- 降低检测阈值
-- 针对边缘情况审查训练数据
-- 考虑自定义模型微调
-
-**漏掉 PII 检测**
-
-- 增加检测灵敏度
-- 检查 PII 类型是否受支持
-- 验证模型是否已正确加载
-
-**策略冲突**
-
-- 确保至少有一个模型允许检测到的 PII 类型
-- 检查 `allow_by_default` 设置
-- 审查 `pii_types_allowed` 列表
+- 降低信号 `threshold`
+- 检查 PII 类型是否在[支持的类型表](#支持的-pii-类型)中
+- 验证 PII 模型是否正确加载
 
 ### 调试模式
 
-启用详细的 PII 日志记录：
+启用详细的 PII 日志：
 
 ```yaml
 logging:
@@ -309,4 +376,4 @@ logging:
   pii_detection: true
 ```
 
-这将记录所有 PII 检测决策和策略评估。
+这将记录所有 PII 检测决策和信号评估过程。

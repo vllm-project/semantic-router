@@ -2048,7 +2048,7 @@ pub extern "C" fn detect_hallucinations_with_nli(
 
 use crate::ffi::init::{
     MMBERT_32K_FACTCHECK_CLASSIFIER, MMBERT_32K_FEEDBACK_CLASSIFIER, MMBERT_32K_INTENT_CLASSIFIER,
-    MMBERT_32K_JAILBREAK_CLASSIFIER, MMBERT_32K_PII_CLASSIFIER,
+    MMBERT_32K_JAILBREAK_CLASSIFIER, MMBERT_32K_MODALITY_CLASSIFIER, MMBERT_32K_PII_CLASSIFIER,
 };
 
 /// Classify text using mmBERT-32K intent classifier
@@ -2252,7 +2252,6 @@ pub extern "C" fn classify_mmbert_32k_feedback(
 #[no_mangle]
 pub extern "C" fn classify_mmbert_32k_pii_tokens(
     text: *const c_char,
-    model_config_path: *const c_char,
 ) -> ModernBertTokenClassificationResult {
     let default_result = ModernBertTokenClassificationResult {
         entities: std::ptr::null_mut(),
@@ -2265,17 +2264,6 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
             Err(_) => {
                 eprintln!("Failed to convert text from C string");
                 return default_result;
-            }
-        }
-    };
-
-    let config_path = if model_config_path.is_null() {
-        None
-    } else {
-        unsafe {
-            match CStr::from_ptr(model_config_path).to_str() {
-                Ok(s) => Some(s),
-                Err(_) => None,
             }
         }
     };
@@ -2294,26 +2282,11 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
                         .unwrap();
                 let ptr = unsafe { std::alloc::alloc(layout) as *mut ModernBertTokenEntity };
 
-                // Load label mapping if config path provided
-                let label_map: Option<std::collections::HashMap<usize, String>> = config_path
-                    .and_then(|path| {
-                        let label_path = std::path::Path::new(path)
-                            .parent()
-                            .map(|p| p.join("label_mapping.json"))
-                            .unwrap_or_else(|| std::path::PathBuf::from("label_mapping.json"));
-                        std::fs::read_to_string(&label_path)
-                            .ok()
-                            .and_then(|s| serde_json::from_str(&s).ok())
-                    });
-
+                // Always use LABEL_{class_id} format — Go side translates via PIIMapping (pii_type_mapping.json)
                 for (i, (_label, class_id, confidence, start, end)) in
                     entities.into_iter().enumerate()
                 {
-                    let entity_type = label_map
-                        .as_ref()
-                        .and_then(|m| m.get(&class_id))
-                        .cloned()
-                        .unwrap_or_else(|| format!("LABEL_{}", class_id));
+                    let entity_type = format!("LABEL_{}", class_id);
 
                     let entity_text = if start < text.len() && end <= text.len() {
                         &text[start..end]
@@ -2347,6 +2320,56 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
         }
     } else {
         eprintln!("mmBERT-32K PII classifier not initialized");
+        default_result
+    }
+}
+
+/// Classify text using mmBERT-32K modality routing classifier
+///
+/// Determines the appropriate response modality for a user prompt:
+/// - AR (0): Text-only response via autoregressive LLM
+/// - DIFFUSION (1): Image generation via diffusion model
+/// - BOTH (2): Hybrid response requiring both text and image
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResult` with:
+/// - `predicted_class`: 0=AR, 1=DIFFUSION, 2=BOTH, -1=error
+/// - `confidence`: confidence score (0.0-1.0)
+#[no_mangle]
+pub extern "C" fn classify_mmbert_32k_modality(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
+    let default_result = ModernBertClassificationResult {
+        predicted_class: -1,
+        confidence: 0.0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = MMBERT_32K_MODALITY_CLASSIFIER.get() {
+        match classifier.classify_text(text) {
+            Ok((class_id, confidence)) => ModernBertClassificationResult {
+                predicted_class: class_id as i32,
+                confidence,
+            },
+            Err(e) => {
+                eprintln!("mmBERT-32K modality classification failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("mmBERT-32K modality classifier not initialized");
         default_result
     }
 }

@@ -1,0 +1,71 @@
+# Jailbreak-Only Guard Configuration
+#
+# Demonstrates pure jailbreak detection as a signal with fast_response rejection.
+# No upstream LLM is contacted when a jailbreak attempt is detected.
+#
+# Usage:
+#   vllm-sr start --config config/prompt-guard/jailbreak.yaml
+
+version: v0.1
+
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+    timeout: "300s"
+
+# ── Signals ──────────────────────────────────────────────────────────────
+signals:
+  # Two sensitivity tiers: standard and strict
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.65
+      include_history: false
+      description: "Standard sensitivity — catches obvious jailbreak attempts"
+
+    - name: "jailbreak_strict"
+      threshold: 0.40
+      include_history: true
+      description: "High sensitivity — inspects full conversation history for multi-turn attacks"
+
+  keywords:
+    - name: "code_keywords"
+      operator: "OR"
+      keywords: ["function", "class", "code"]
+      case_sensitive: false
+
+  domains:
+    - name: "general"
+      description: "General queries"
+      mmlu_categories: ["other"]
+
+# ── Decisions ────────────────────────────────────────────────────────────
+decisions:
+  # Priority 1000: Block jailbreak attempts immediately
+  - name: "block_jailbreak"
+    description: "Reject detected jailbreak attempts with a safe response"
+    priority: 1000
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "jailbreak"
+          name: "jailbreak_standard"
+        - type: "jailbreak"
+          name: "jailbreak_strict"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
+
+  # Normal routing (lower priority, only reached if jailbreak check passes)
+  - name: "general_route"
+    description: "Default route for safe queries"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "general"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false

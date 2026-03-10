@@ -38,10 +38,6 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Language',
     description: 'Detected language match',
   },
-  'x-vsr-matched-latency': {
-    label: 'Latency',
-    description: 'Matched latency rule based on model TPOT',
-  },
   'x-vsr-matched-context': {
     label: 'Context',
     description: 'Token count-based context classification',
@@ -49,6 +45,14 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
   'x-vsr-matched-complexity': {
     label: 'Complexity',
     description: 'Query complexity classification (hard/easy/medium)',
+  },
+  'x-vsr-matched-jailbreak': {
+    label: 'Jailbreak',
+    description: 'Jailbreak detection signal matched',
+  },
+  'x-vsr-matched-pii': {
+    label: 'PII',
+    description: 'PII detection signal matched',
   },
   // Decision headers
   'x-vsr-selected-decision': {
@@ -73,13 +77,9 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Context Count',
     description: 'Estimated token count for the request',
   },
-  'x-vsr-jailbreak-blocked': {
-    label: 'Security: Jailbreak',
-    description: 'Jailbreak attempt detected and blocked',
-  },
-  'x-vsr-pii-violation': {
-    label: 'Security: PII',
-    description: 'Personal information detected',
+  'x-vsr-fast-response': {
+    label: 'Fast Response',
+    description: 'Request short-circuited by fast_response plugin',
   },
   'x-vsr-hallucination-detected': {
     label: 'Quality: Hallucination',
@@ -196,4 +196,3 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
 }
 
 export default HeaderReveal
-

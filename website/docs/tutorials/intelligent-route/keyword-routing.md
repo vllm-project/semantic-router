@@ -101,6 +101,44 @@ decisions:
           system_prompt: "This query appears to be spam. Please provide a polite response."
 ```
 
+## Methods
+
+Each keyword rule can use a different matching method via the `method` field:
+
+| Method | Best For | Typo Tolerant | Config Fields |
+|--------|----------|:---:|---------------|
+| `regex` (default) | Exact patterns, word boundaries | No | — |
+| `bm25` | Topic detection with large keyword lists | No | `bm25_threshold` |
+| `ngram` | Fuzzy matching, typo tolerance | **Yes** | `ngram_threshold`, `ngram_arity` |
+
+```yaml
+keyword_rules:
+  # BM25: scores keywords using TF-IDF relevance ranking
+  - name: "code_keywords"
+    operator: "OR"
+    method: "bm25"
+    keywords: ["code", "function", "debug", "algorithm", "refactor"]
+    bm25_threshold: 0.1
+    case_sensitive: false
+
+  # N-gram: fuzzy matching — catches typos like "urgnt" → "urgent"
+  - name: "urgent_keywords"
+    operator: "OR"
+    method: "ngram"
+    keywords: ["urgent", "immediate", "asap", "emergency"]
+    ngram_threshold: 0.4
+    ngram_arity: 3
+    case_sensitive: false
+
+  # Regex (default): exact substring / pattern matching
+  - name: "sensitive_data_keywords"
+    operator: "OR"
+    keywords: ["SSN", "credit card"]
+    case_sensitive: false
+```
+
+BM25 and N-gram classification is backed by Rust crates (`bm25`, `ngrammatic`) via the `nlp-binding` FFI, so performance remains sub-millisecond.
+
 ## Operators
 
 - **OR**: Matches if any keyword is found
@@ -168,4 +206,5 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 
 ## Reference
 
-See [keyword.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword.yaml) for complete configuration.
+- [keyword.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword.yaml) — regex-only configuration
+- [keyword-nlp.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword-nlp.yaml) — BM25 + N-gram + regex configuration

@@ -17,6 +17,14 @@ const (
 	TransportStreamableHTTP TransportType = "streamable-http"
 )
 
+const (
+	// BuiltinOpenClawServerID is the fixed MCP server ID for dashboard built-in OpenClaw tools.
+	// Keep UUID-like format to stay compatible with frontend MCP tool-name parsing.
+	BuiltinOpenClawServerID = "0f9f4c36-7d5b-4f13-9fe8-63f34ad37d9a"
+	// BuiltinOpenClawServerName is the display name for built-in OpenClaw MCP server.
+	BuiltinOpenClawServerName = "OpenClaw Team & Worker MCP"
+)
+
 // ServerStatus represents the server connection status
 type ServerStatus string
 

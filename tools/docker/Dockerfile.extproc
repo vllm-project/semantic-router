@@ -1,116 +1,428 @@
-# Build the Rust library using Makefile
-FROM rust:1.90 AS rust-builder
+# Cross-compilation optimized Dockerfile for multi-arch builds (amd64 + arm64)
+# Runs on BUILDPLATFORM (amd64) and cross-compiles for TARGETARCH to avoid slow QEMU emulation.
+# Builds candle-binding for all platforms and onnx-binding only for amd64.
+# At runtime, set AI_BINDING=onnx or AI_BINDING=candle (default) to choose the inference backend.
 
-# Install make and other build dependencies including cross-compilation tools
-RUN apt-get update && apt-get install -y \
+# ============================================================================
+# Stage 1: Build candle-binding Rust library (cross-compiled)
+# ============================================================================
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM rust:1.90 AS rust-cross-builder
+
+# Install cross-compilation dependencies
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && apt-get install -y \
     make \
     build-essential \
     pkg-config \
     lld \
     clang \
+    binutils \
     gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    libc6-dev-arm64-cross \
+    binutils-aarch64-linux-gnu \
+    libssl-dev:arm64 \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up Rust for cross-compilation
+# Install cross-compilation Rust target
 RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
 
-# Configure Cargo for optimized builds
+# Configure cross-compilation environment
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+ENV STRIP_aarch64_unknown_linux_gnu=aarch64-linux-gnu-strip
+ENV OBJCOPY_aarch64_unknown_linux_gnu=aarch64-linux-gnu-objcopy
+
+# Configure OpenSSL for cross-compilation
+ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
+ENV OPENSSL_DIR=/usr
+ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
+
+# Optimize Rust compilation
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 ENV CARGO_INCREMENTAL=1
 ENV CARGO_PROFILE_RELEASE_LTO=thin
 ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
-ENV RUSTFLAGS="-C link-arg=-fuse-ld=lld"
+
+ARG TARGETARCH
 
 WORKDIR /app
 
 # Copy dependency files first for better layer caching
 COPY candle-binding/Cargo.toml ./candle-binding/
-# Copy Cargo.lock if it exists in the build context
 COPY candle-binding/Cargo.loc[k] ./candle-binding/
-# Copy ml-binding Rust files
-COPY ml-binding/Cargo.toml ./ml-binding/
-COPY ml-binding/Cargo.loc[k] ./ml-binding/
 COPY tools/make/ tools/make/
 COPY Makefile ./
 
 # Pre-build dependencies to cache them (CPU-only, no CUDA)
+# Uses a dummy lib.rs so only dependency crates are compiled and cached
 RUN cd candle-binding && \
     mkdir -p src && \
-    echo "fn main() {}" > src/lib.rs && \
-    cargo build --release --no-default-features && \
-    rm -rf src
-
-# Pre-build ml-binding dependencies
-RUN cd ml-binding && \
-    mkdir -p src && \
-    echo "pub fn dummy() {}" > src/lib.rs && \
-    cargo build --release && \
+    echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+    else \
+        OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
+    fi && \
     rm -rf src
 
 # Copy source code and build
 COPY candle-binding/src/ ./candle-binding/src/
+
+# Build with cross-compilation (reuses dependency cache from previous layer)
+# IMPORTANT: Delete stale .so/.a from the dummy pre-build so cargo relinks with real FFI symbols
+RUN echo "Building Rust library (CPU-only, no CUDA) for TARGETARCH=$TARGETARCH..." && \
+    cd candle-binding && \
+    find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libcandle_semantic_router.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+    else \
+        OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
+    fi && \
+    echo "=== Verifying library ===" && \
+    find target -name "libcandle_semantic_router.so" -type f -exec ls -la {} \; && \
+    find target -name "libcandle_semantic_router.so" -type f -exec sh -c 'nm -D "$1" | grep -c "T "' _ {} \;
+
+# ============================================================================
+# Stage 2: Build onnx-binding Rust library (amd64 only; skipped on arm64)
+# ONNX Runtime with download-binaries is enabled on amd64.
+# ============================================================================
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM rust:1.90 AS onnx-cross-builder
+
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && apt-get install -y \
+    make \
+    build-essential \
+    pkg-config \
+    lld \
+    clang \
+    binutils \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    libc6-dev-arm64-cross \
+    binutils-aarch64-linux-gnu \
+    libssl-dev:arm64 \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+ENV STRIP_aarch64_unknown_linux_gnu=aarch64-linux-gnu-strip
+ENV OBJCOPY_aarch64_unknown_linux_gnu=aarch64-linux-gnu-objcopy
+ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
+ENV OPENSSL_DIR=/usr
+ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+ENV CARGO_INCREMENTAL=1
+ENV CARGO_PROFILE_RELEASE_LTO=thin
+ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+
+ARG TARGETARCH
+
+WORKDIR /app
+
+COPY onnx-binding/Cargo.toml ./onnx-binding/
+COPY onnx-binding/Cargo.loc[k] ./onnx-binding/
+
+# Pre-build onnx dependencies (CPU-only, download-binaries fetches ONNX Runtime)
+RUN cd onnx-binding && \
+    mkdir -p src && \
+    echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Skipping ONNX dependency pre-build for arm64."; \
+        mkdir -p target/aarch64-unknown-linux-gnu/release; \
+    else \
+        OPENSSL_LIB_DIR="$(pkg-config --variable=libdir openssl 2>/dev/null || echo /usr/lib/x86_64-linux-gnu)" \
+        OPENSSL_INCLUDE_DIR="$(pkg-config --variable=includedir openssl 2>/dev/null || echo /usr/include)" \
+        cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
+    fi && \
+    rm -rf src
+
+COPY onnx-binding/src/ ./onnx-binding/src/
+
+RUN echo "Preparing ONNX binding for TARGETARCH=$TARGETARCH..." && \
+    cd onnx-binding && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Skipping ONNX binding build for arm64."; \
+        mkdir -p target/aarch64-unknown-linux-gnu/release; \
+    else \
+        find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
+        find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
+        OPENSSL_LIB_DIR="$(pkg-config --variable=libdir openssl 2>/dev/null || echo /usr/lib/x86_64-linux-gnu)" \
+        OPENSSL_INCLUDE_DIR="$(pkg-config --variable=includedir openssl 2>/dev/null || echo /usr/include)" \
+        cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
+        echo "=== Verifying ONNX library ==="; \
+        find target -name "libonnx_semantic_router.so" -type f -exec ls -la {} \;; \
+        echo "=== Checking for ONNX Runtime shared lib ==="; \
+        find target -name "libonnxruntime*" -type f -exec ls -la {} \;; \
+    fi
+
+# ============================================================================
+# Stage 3: Build ml-binding Rust library (Linfa ML algorithms, cross-compiled)
+# ============================================================================
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM rust:1.90 AS ml-cross-builder
+
+ARG TARGETARCH
+
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    libc6-dev-arm64-cross \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+WORKDIR /app
+
+COPY ml-binding/Cargo.toml ./ml-binding/
+COPY ml-binding/Cargo.loc[k] ./ml-binding/
+
+RUN cd ml-binding && \
+    mkdir -p src && \
+    echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+        cargo build --release --target x86_64-unknown-linux-gnu; \
+    fi && \
+    rm -rf src
+
 COPY ml-binding/src/ ./ml-binding/src/
 
-# Use Makefile to build the Rust library (rebuild with actual source code, CPU-only, no CUDA)
-RUN echo "Building Rust library with actual source code (CPU-only, no CUDA)..." && \
-    echo "Checking source files:" && \
-    ls -la candle-binding/src/ && \
-    echo "Forcing clean rebuild..." && \
-    cd candle-binding && \
-    cargo clean && \
-    cargo build --release --no-default-features && \
-    echo "Checking built library:" && \
-    find target -name "*.so" -type f && \
-    ls -la target/release/
+RUN cd ml-binding && \
+    find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libml_semantic_router.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+        cargo build --release --target x86_64-unknown-linux-gnu; \
+    fi && \
+    find target -name "libml_semantic_router.so" -type f -exec ls -la {} \;
 
-# Build ml-binding Rust library
-RUN echo "Building ml-binding Rust library..." && \
-    ls -la ml-binding/src/ && \
-    cd ml-binding && \
-    cargo clean && \
-    cargo build --release && \
-    echo "Checking built ml-binding library:" && \
-    find target -name "*.so" -type f && \
-    ls -la target/release/
+# ============================================================================
+# Stage 4: Build nlp-binding Rust library (BM25 + N-gram keyword classification, cross-compiled)
+# ============================================================================
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM rust:1.90 AS nlp-cross-builder
 
-# Build the Go application
-FROM golang:1.24 AS go-builder
+ARG TARGETARCH
+
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    libc6-dev-arm64-cross \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+WORKDIR /app
+
+COPY nlp-binding/Cargo.toml ./nlp-binding/
+COPY nlp-binding/Cargo.loc[k] ./nlp-binding/
+
+RUN cd nlp-binding && \
+    mkdir -p src && \
+    echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+        cargo build --release --target x86_64-unknown-linux-gnu; \
+    fi && \
+    rm -rf src
+
+COPY nlp-binding/src/ ./nlp-binding/src/
+
+RUN cd nlp-binding && \
+    find target -name "libnlp_binding.so" -delete 2>/dev/null; \
+    find target -name "libnlp_binding.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+        cargo build --release --target x86_64-unknown-linux-gnu; \
+    fi && \
+    find target -name "libnlp_binding.so" -type f -exec ls -la {} \;
+
+# ============================================================================
+# Stage 5: Build Go application (candle on all platforms, onnx on amd64 only)
+# ============================================================================
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM golang:1.24 AS go-builder
+
+# Install cross-compilation tools for Go
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && apt-get install -y \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    libssl-dev:arm64 \
+    libssl-dev \
+    file \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Copy Go module files first for better layer caching
 RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
+COPY src/semantic-router/go.onnx.mod src/semantic-router/go.onnx.sum src/semantic-router/
 COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
+COPY onnx-binding/go.mod onnx-binding/semantic-router.go onnx-binding/
 COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
+COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go nlp-binding/
 
-# Pre-download modules to fail fast if mirrors are unreachable
+# Download Go dependencies (cached layer)
 RUN cd src/semantic-router && go mod download && \
-    cd /app/candle-binding && go mod download && \
-    cd /app/ml-binding && go mod download
+    cd /app/candle-binding && go mod download
 
 # Copy semantic-router source code
 COPY src/semantic-router/ src/semantic-router/
 
-# Copy the built Rust libraries from rust-builder
-COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/candle-binding/target/release/
-COPY --from=rust-builder /app/ml-binding/target/release/libml_semantic_router.so /app/ml-binding/target/release/
+# Copy the built candle Rust library from rust-cross-builder
+ARG TARGETARCH
+
+COPY --from=rust-cross-builder /app/candle-binding/target/ /tmp/rust-target/
+RUN mkdir -p /app/candle-binding/target/release && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cp /tmp/rust-target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.so /app/candle-binding/target/release/ && \
+        (cp /tmp/rust-target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.a /app/candle-binding/target/release/ 2>/dev/null || true); \
+    else \
+        cp /tmp/rust-target/x86_64-unknown-linux-gnu/release/libcandle_semantic_router.so /app/candle-binding/target/release/ && \
+        (cp /tmp/rust-target/x86_64-unknown-linux-gnu/release/libcandle_semantic_router.a /app/candle-binding/target/release/ 2>/dev/null || true); \
+    fi && \
+    rm -rf /tmp/rust-target
+
+# Copy the built onnx Rust library from onnx-cross-builder
+COPY --from=onnx-cross-builder /app/onnx-binding/target/ /tmp/onnx-target/
+RUN mkdir -p /app/onnx-binding/target/release && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Skipping ONNX library copy for arm64."; \
+    else \
+        cp /tmp/onnx-target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.so /app/onnx-binding/target/release/ && \
+        (cp /tmp/onnx-target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.a /app/onnx-binding/target/release/ 2>/dev/null || true) && \
+        (find /tmp/onnx-target/x86_64-unknown-linux-gnu/release -name "libonnxruntime*.so*" -exec cp {} /app/onnx-binding/target/release/ \; 2>/dev/null || true); \
+    fi && \
+    rm -rf /tmp/onnx-target
+
+# Copy ml-binding library (extract correct platform)
+COPY --from=ml-cross-builder /app/ml-binding/target/ /tmp/ml-target/
+RUN mkdir -p /app/ml-binding/target/release && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cp /tmp/ml-target/aarch64-unknown-linux-gnu/release/libml_semantic_router.so /app/ml-binding/target/release/ && \
+        (cp /tmp/ml-target/aarch64-unknown-linux-gnu/release/libml_semantic_router.a /app/ml-binding/target/release/ 2>/dev/null || true); \
+    else \
+        cp /tmp/ml-target/x86_64-unknown-linux-gnu/release/libml_semantic_router.so /app/ml-binding/target/release/ && \
+        (cp /tmp/ml-target/x86_64-unknown-linux-gnu/release/libml_semantic_router.a /app/ml-binding/target/release/ 2>/dev/null || true); \
+    fi && \
+    rm -rf /tmp/ml-target
+
+# Copy nlp-binding library (extract correct platform)
+COPY --from=nlp-cross-builder /app/nlp-binding/target/ /tmp/nlp-target/
+RUN mkdir -p /app/nlp-binding/target/release && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cp /tmp/nlp-target/aarch64-unknown-linux-gnu/release/libnlp_binding.so /app/nlp-binding/target/release/ && \
+        (cp /tmp/nlp-target/aarch64-unknown-linux-gnu/release/libnlp_binding.a /app/nlp-binding/target/release/ 2>/dev/null || true); \
+    else \
+        cp /tmp/nlp-target/x86_64-unknown-linux-gnu/release/libnlp_binding.so /app/nlp-binding/target/release/ && \
+        (cp /tmp/nlp-target/x86_64-unknown-linux-gnu/release/libnlp_binding.a /app/nlp-binding/target/release/ 2>/dev/null || true); \
+    fi && \
+    rm -rf /tmp/nlp-target
 
 # Set environment variables for CGO to find the libraries
 ENV CGO_ENABLED=1
-ENV LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/ml-binding/target/release
+ENV LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/onnx-binding/target/release:/app/ml-binding/target/release:/app/nlp-binding/target/release
 ENV GOOS=linux
 
-# Build the router binary with optimizations
-RUN mkdir -p bin && cd src/semantic-router && \
-    go build -ldflags="-w -s" -o ../../bin/router cmd/main.go
+# Verify the libraries exist before Go build
+RUN echo "Verifying Rust libraries for TARGETARCH=$TARGETARCH..." && \
+    ls -la /app/candle-binding/target/release/libcandle_semantic_router.* && \
+    ls -la /app/nlp-binding/target/release/libnlp_binding.* && \
+    file /app/candle-binding/target/release/libcandle_semantic_router.so && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "ONNX binding is skipped on arm64."; \
+    else \
+        ls -la /app/onnx-binding/target/release/libonnx_semantic_router.* && \
+        file /app/onnx-binding/target/release/libonnx_semantic_router.so; \
+    fi
 
-# Final stage: copy the binary and the shared library
+# Build the candle router binary (default)
+RUN mkdir -p bin && cd src/semantic-router && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Building candle binary for ARM64 with cross-compilation..." && \
+        CC=aarch64-linux-gnu-gcc \
+        CXX=aarch64-linux-gnu-g++ \
+        PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
+        CGO_CFLAGS="-I/app/candle-binding" \
+        CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -L/usr/lib/aarch64-linux-gnu -lcandle_semantic_router -lml_semantic_router -lnlp_binding -lssl -lcrypto" \
+        GOOS=linux GOARCH=arm64 \
+        go build -ldflags="-w -s" -o ../../bin/router-candle cmd/main.go; \
+    else \
+        echo "Building candle binary for AMD64..." && \
+        CGO_CFLAGS="-I/app/candle-binding" \
+        CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lcandle_semantic_router -lml_semantic_router -lnlp_binding" \
+        go build -ldflags="-w -s" -o ../../bin/router-candle cmd/main.go; \
+    fi
+
+# Collect all shared libraries into a single staging directory for the final image
+RUN mkdir -p /app/lib && \
+    cp /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/ && \
+    cp /app/ml-binding/target/release/libml_semantic_router.so /app/lib/ && \
+    cp /app/nlp-binding/target/release/libnlp_binding.so /app/lib/ && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Skipping ONNX runtime library staging on arm64."; \
+    else \
+        cp /app/onnx-binding/target/release/libonnx_semantic_router.so /app/lib/ && \
+        (cp /app/onnx-binding/target/release/libonnxruntime*.so* /app/lib/ 2>/dev/null || true); \
+    fi && \
+    echo "=== Libraries staged ===" && ls -la /app/lib/
+
+# Build the onnx router binary (uses go.onnx.mod which replaces candle-binding => onnx-binding)
+RUN cd src/semantic-router && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Skipping onnx router build on arm64."; \
+    else \
+        echo "Building onnx binary for AMD64..." && \
+        CGO_CFLAGS="-I/app/onnx-binding" \
+        CGO_LDFLAGS="-L/app/onnx-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
+        go build -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o ../../bin/router-onnx cmd/main.go; \
+    fi
+
+# ============================================================================
+# Final stage: runtime image (candle on all platforms, onnx binary on amd64 only)
+# ============================================================================
 FROM quay.io/centos/centos:stream10
 
-# Install runtime dependencies including Python and HuggingFace CLI
-RUN dnf -y update && \
-    dnf -y install \
+# Install runtime dependencies including OpenSSL, Python and HuggingFace CLI
+RUN dnf update -y && \
+    dnf install -y \
+    openssl-libs \
     python3 \
     python3-pip \
     ca-certificates && \
@@ -119,16 +431,21 @@ RUN dnf -y update && \
 
 WORKDIR /app
 
-COPY --from=go-builder /app/bin/router /app/extproc-server
-COPY --from=go-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/
-COPY --from=go-builder /app/ml-binding/target/release/libml_semantic_router.so /app/lib/
+# Copy generated router binaries (arm64 has router-candle only)
+COPY --from=go-builder /app/bin/ /app/
+
+# Copy all shared libraries (candle, onnx, onnxruntime, ml, nlp) from staged directory
+COPY --from=go-builder /app/lib/ /app/lib/
+
 COPY config/config.yaml /app/config/
 
 ENV LD_LIBRARY_PATH=/app/lib
+# Default to candle binding; set AI_BINDING=onnx for ONNX Runtime backend
+ENV AI_BINDING=candle
 
 EXPOSE 50051
 
-# Copy entrypoint to allow switching config via env var CONFIG_FILE
+# Copy entrypoint which selects binary via AI_BINDING env var
 COPY scripts/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 

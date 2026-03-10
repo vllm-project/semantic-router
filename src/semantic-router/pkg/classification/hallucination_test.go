@@ -82,17 +82,13 @@ func getFactCheckModelPathForTest() string {
 // skipIfNoHallucinationModel skips the test if the hallucination model is not available
 func skipIfNoHallucinationModel() {
 	modelPath := getHallucinationModelPathForTest()
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		Skip("Skipping: Hallucination model not found at " + modelPath)
-	}
+	skipSpecIfModelArtifactsMissing("Hallucination model", modelPath)
 }
 
 // skipIfNoFactCheckModelGinkgo skips the Ginkgo test if the fact-check model is not available
 func skipIfNoFactCheckModelGinkgo() {
 	modelPath := getFactCheckModelPathForTest()
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		Skip("Skipping: Fact-check model not found at " + modelPath)
-	}
+	skipSpecIfModelArtifactsMissing("Fact-check model", modelPath)
 }
 
 var _ = Describe("FactCheckMapping", func() {

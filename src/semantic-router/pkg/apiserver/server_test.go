@@ -817,3 +817,77 @@ func TestAPIOverviewIncludesNewEndpoints(t *testing.T) {
 		t.Error("Expected 'swagger_ui' link to '/docs'")
 	}
 }
+
+func TestShouldInitMemoryStore(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *config.RouterConfig
+		want bool
+	}{
+		{
+			name: "nil config",
+			cfg:  nil,
+			want: false,
+		},
+		{
+			name: "global memory enabled",
+			cfg: &config.RouterConfig{
+				Memory: config.MemoryConfig{Enabled: true},
+			},
+			want: true,
+		},
+		{
+			name: "memory plugin present",
+			cfg: &config.RouterConfig{
+				Memory: config.MemoryConfig{Enabled: false},
+				IntelligentRouting: config.IntelligentRouting{
+					Decisions: []config.Decision{
+						{
+							Name: "with-memory-plugin",
+							Plugins: []config.DecisionPlugin{
+								{
+									Type: "memory",
+									Configuration: map[string]interface{}{
+										"enabled": true,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "memory disabled and no plugin",
+			cfg: &config.RouterConfig{
+				Memory: config.MemoryConfig{Enabled: false},
+				IntelligentRouting: config.IntelligentRouting{
+					Decisions: []config.Decision{
+						{
+							Name: "no-memory-plugin",
+							Plugins: []config.DecisionPlugin{
+								{
+									Type: "pii",
+									Configuration: map[string]interface{}{
+										"enabled": true,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldInitMemoryStore(tt.cfg)
+			if got != tt.want {
+				t.Fatalf("shouldInitMemoryStore() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

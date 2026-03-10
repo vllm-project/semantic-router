@@ -926,7 +926,7 @@ echo "| Classifier | Accuracy/Detection | Status |"
 echo "|------------|-------------------|--------|"
 
 if [[ $intent_pct -ge 90 ]]; then
-    intent_status="✅ Excellent"
+    intent_status="Excellent"
 elif [[ $intent_pct -ge 70 ]]; then
     intent_status="⚠️ Good"
 else
@@ -934,7 +934,7 @@ else
 fi
 
 if [[ $jb_pct -ge 90 ]]; then
-    jb_status="✅ Excellent"
+    jb_status="Excellent"
 elif [[ $jb_pct -ge 70 ]]; then
     jb_status="⚠️ Good"
 else
@@ -942,7 +942,7 @@ else
 fi
 
 if [[ $pii_detected -ge 5 ]]; then
-    pii_status="✅ Working"
+    pii_status="Working"
 elif [[ $pii_detected -ge 2 ]]; then
     pii_status="⚠️ Partial"
 else
@@ -951,7 +951,7 @@ fi
 
 # Fact Check status
 if [[ $fc_pct -ge 70 ]]; then
-    fc_status="✅ Good"
+    fc_status="Good"
 elif [[ $fc_pct -ge 50 ]]; then
     fc_status="⚠️ Partial"
 else
@@ -960,7 +960,7 @@ fi
 
 # User Feedback status
 if [[ $uf_pct -ge 70 ]]; then
-    uf_status="✅ Good"
+    uf_status="Good"
 elif [[ $uf_pct -ge 50 ]]; then
     uf_status="⚠️ Partial"
 else
@@ -975,7 +975,7 @@ echo "| User Feedback (Direct API) | $uf_correct/$uf_total ($uf_pct%) | $uf_stat
 
 # Multilingual status
 if [[ $ml_intent_pct -ge 70 ]]; then
-    ml_intent_status="✅ Good"
+    ml_intent_status="Good"
 elif [[ $ml_intent_pct -ge 50 ]]; then
     ml_intent_status="⚠️ Partial"
 else
@@ -983,7 +983,7 @@ else
 fi
 
 if [[ $ml_jb_pct -ge 70 ]]; then
-    ml_jb_status="✅ Good"
+    ml_jb_status="Good"
 elif [[ $ml_jb_pct -ge 50 ]]; then
     ml_jb_status="⚠️ Partial"
 else
@@ -991,7 +991,7 @@ else
 fi
 
 if [[ $ml_pii_detected -ge 10 ]]; then
-    ml_pii_status="✅ Good"
+    ml_pii_status="Good"
 elif [[ $ml_pii_detected -ge 5 ]]; then
     ml_pii_status="⚠️ Partial"
 else
@@ -999,7 +999,7 @@ else
 fi
 
 if [[ $ml_fact_check_pct -ge 70 ]]; then
-    ml_fact_check_status="✅ Good"
+    ml_fact_check_status="Good"
 elif [[ $ml_fact_check_pct -ge 50 ]]; then
     ml_fact_check_status="⚠️ Partial"
 else
@@ -1007,7 +1007,7 @@ else
 fi
 
 if [[ $ml_feedback_pct -ge 70 ]]; then
-    ml_feedback_status="✅ Good"
+    ml_feedback_status="Good"
 elif [[ $ml_feedback_pct -ge 50 ]]; then
     ml_feedback_status="⚠️ Partial"
 else

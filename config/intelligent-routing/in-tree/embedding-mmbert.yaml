@@ -3,7 +3,7 @@
 # - Layer early exit: 3/6/11/22 layers (speedup: 7x/3.6x/2x/1x)
 # - Dimension reduction: 64/128/256/512/768
 #
-# Download model: make download-mmbert-embedding
+# Model downloads automatically on router startup, or run: make download-models
 # Run: make run-router CONFIG_FILE=config/intelligent-routing/in-tree/embedding-mmbert.yaml
 
 semantic_cache:

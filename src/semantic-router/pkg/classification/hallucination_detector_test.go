@@ -88,9 +88,7 @@ func getHallucinationModelPath() string {
 // skipIfNoModel skips the test if the hallucination detection model is not available
 func skipIfNoModel(t *testing.T) {
 	modelPath := getHallucinationModelPath()
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		t.Skipf("Skipping test: Hallucination model not found at %s. Set HALLUCINATION_MODEL_PATH env var.", modelPath)
-	}
+	skipTestIfModelArtifactsMissing(t, "Hallucination model", modelPath)
 }
 
 // TestHallucinationDetector_RequiresConfig tests that config is required
@@ -531,9 +529,7 @@ func getNLIModelPath() string {
 // skipIfNoNLIModel skips the test if the NLI model is not available
 func skipIfNoNLIModel(t *testing.T) {
 	modelPath := getNLIModelPath()
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		t.Skipf("Skipping NLI test: Model not found at %s. Set NLI_MODEL_PATH env var.", modelPath)
-	}
+	skipTestIfModelArtifactsMissing(t, "NLI model", modelPath)
 }
 
 // TestNLILabel_String tests NLI label string representation

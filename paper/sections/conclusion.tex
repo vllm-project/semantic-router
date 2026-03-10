@@ -1,0 +1,63 @@
+% sections/conclusion.tex
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented \sysname{}, a signal-driven decision routing system for Mixture-of-Modality model deployments.
+The central contribution is \textbf{composable signal orchestration}: the three-layer architecture---signal extraction, Boolean decision evaluation, per-decision plugin chains---enables diverse deployment scenarios to be expressed as different configurations over the same framework, without code changes.
+
+Privacy-regulated deployments activate authz and PII signals with strict filtering plugins; cost-optimized deployments enable cascading selection with aggressive semantic caching; multi-cloud enterprises configure weighted multi-endpoint routing with provider-specific auth injection.
+All use the same signal-decision-plugin machinery, composed differently.
+
+Within this framework, \textbf{semantic model selection} analyzes each request's content through thirteen algorithms---spanning rating-based, contrastive, cascading, classical ML, reinforcement learning, and latency-aware families---to find the most cost-effective model while respecting per-decision privacy and safety constraints.
+The integration of full \textbf{OpenAI Responses API support} enables stateful multi-turn routing with conversation-consistent model assignment; \textbf{multi-endpoint and multi-provider routing} abstracts over heterogeneous backends (vLLM, OpenAI, Anthropic, Azure, Bedrock, Gemini, Vertex AI) with transparent protocol translation; and the \textbf{pluggable authorization factory} supports diverse auth mechanisms across providers without coupling auth logic to routing decisions.
+
+Additional technical contributions include:
+(1)~the LoRA-based multi-task classification architecture that serves $n$ classifiers from a single base model, reducing aggregate model memory by $\sim$$n\times$;
+(2)~HaluGate's gated three-stage hallucination detection pipeline that reduces average detection cost by $\sim$50\% through sentinel-based filtering; and
+(3)~Rust-native ML inference bindings (Candle, Linfa, ONNX Runtime) that achieve sub-10\,ms signal extraction latency.
+
+The system has been validated in production with over 600 merged contributions from 50+ engineers and is deployed as an Envoy ExtProc with Kubernetes operator support.
+
+\subsection{Future Directions}
+
+Several research directions emerge from this work:
+
+\noindent\textbf{Learned decision policies.}
+Replacing hand-crafted Boolean rules with learned routing policies (e.g., neural routing networks trained on production traffic) could improve routing quality while maintaining interpretability through attention-based explanation.
+
+\noindent\textbf{Differentiable entropy-folding policies.}
+A natural extension of the layered entropy-folding view is to relax symbolic priority gates into trainable soft gates while preserving explicit policy constraints, enabling gradient-based optimization of control depth with auditable safety boundaries.
+
+\noindent\textbf{Adaptive cost optimization.}
+Online learning approaches that continuously adapt model and provider selection based on real-time cost signals, latency measurements, and user feedback---extending the current offline-trained ML selectors to fully adaptive cost-quality optimization.
+
+\noindent\textbf{Contrastive preference routing.}
+The contrastive embedding method used for complexity classification generalizes to user preference learning: a contrastive preference classifier scores queries against exemplar sets representing different user preference profiles, enabling personalized model selection without per-user fine-tuning.
+
+\noindent\textbf{Cross-provider consistency.}
+Techniques for ensuring consistent behavior when routing the same conversation across different providers, addressing differences in instruction following, safety behavior, and output formatting.
+
+\noindent\textbf{Multi-turn safety.}
+Extending safety enforcement from single-turn to multi-turn conversations, detecting adversarial patterns that span multiple interaction rounds.
+Preliminary work applies the contrastive embedding approach---already used for complexity classification---to multi-turn jailbreak detection: each user turn is scored against known-benign and known-adversarial exemplar sets, and accumulated turn-level signals are fused to detect gradual prompt escalation that evades single-turn classifiers.
+
+\noindent\textbf{Federated signal orchestration.}
+Extending composable signal orchestration to federated deployments where signals from multiple routing instances are aggregated for global optimization.
+
+\noindent\textbf{Agent-based policy synthesis.}
+The DSL configuration that specifies routing policies can be viewed as a program in a domain-specific language with a formally complete instruction set (\Cref{sec:disc_agent}).
+This reframes router configuration as a \emph{program synthesis} problem: coding agents (LLMs fine-tuned for code generation) can translate natural-language routing specifications into valid DSL configurations, with routing quality feedback enabling RL-based optimization of the synthesis policy.
+Preliminary experiments suggest that this meta-learning approach---learning to \emph{write} routing policies rather than to \emph{make} individual routing decisions---can significantly reduce configuration effort while maintaining the interpretability and verifiability of symbolic decision rules.
+
+\noindent\textbf{Multi-protocol adapter abstraction.}
+The current system is tightly coupled to Envoy's External Processor protocol. A multi-protocol adapter architecture would abstract the routing engine from protocol-specific code, enabling support for HTTP REST, native gRPC, Nginx/OpenResty, and custom protocols through thin translation layers.
+This would also enable abstraction of backend proxying (currently Envoy-specific), external authorization mechanisms, and traffic management policies, making the routing engine truly protocol-agnostic and deployable in serverless, edge, and non-Envoy environments.
+
+\subsection*{Acknowledgments}
+
+We gratefully acknowledge the contributors who contributed to the project.
+We thank the Hugging Face Candle team for collaboration on the Candle inference runtime, and the Envoy community for the ExtProc filter.
+AMD has sponsored the project with resources and infrastructure as well as the vLLM project for the development of the project.
+AI-assisted tools were used during the writing and proofreading of this paper.
+The project is open-source at \url{https://github.com/vllm-project/semantic-router}.

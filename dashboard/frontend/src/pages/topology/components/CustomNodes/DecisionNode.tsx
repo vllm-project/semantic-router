@@ -10,9 +10,12 @@ interface DecisionNodeData {
   decision: DecisionConfig
   rulesCollapsed?: boolean
   isHighlighted?: boolean
+  isFocusTarget?: boolean
+  focusModeEnabled?: boolean
   isUnreachable?: boolean
   unreachableReason?: string
   onToggleRulesCollapse?: () => void
+  onFocusDecision?: (decisionName: string) => void
 }
 
 export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
@@ -20,9 +23,12 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
     decision, 
     rulesCollapsed = false, 
     isHighlighted, 
+    isFocusTarget = false,
+    focusModeEnabled = false,
     isUnreachable = false,
     unreachableReason,
-    onToggleRulesCollapse 
+    onToggleRulesCollapse,
+    onFocusDecision,
   } = data
   const { name, priority, rules, modelRefs, algorithm, plugins } = decision
 
@@ -39,14 +45,20 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
 
   return (
     <div
-      className={`${styles.decisionNode} ${isHighlighted ? styles.highlighted : ''} ${isUnreachable ? styles.unreachable : ''}`}
+      className={`${styles.decisionNode} ${isHighlighted ? styles.highlighted : ''} ${isUnreachable ? styles.unreachable : ''} ${isFocusTarget ? styles.focusTarget : ''}`}
       style={{
         background: colors.background,
         border: `2px solid ${colors.border}`,
+        cursor: focusModeEnabled ? 'pointer' : undefined,
       }}
       title={isUnreachable ? `⚠️ Unreachable: ${unreachableReason}` : undefined}
+      onClick={() => {
+        if (focusModeEnabled) {
+          onFocusDecision?.(name)
+        }
+      }}
     >
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Left} />
 
       <div className={styles.decisionHeader}>
         <span className={styles.decisionIcon}>{isUnreachable ? '⚠️' : '🔀'}</span>
@@ -121,7 +133,7 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
         )}
       </div>
 
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 })

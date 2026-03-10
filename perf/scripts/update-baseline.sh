@@ -96,7 +96,7 @@ parse_benchmark "^BenchmarkCache" "$BASELINE_DIR/cache.json"
 # Extproc baseline (BenchmarkProcess*, BenchmarkHeader*, BenchmarkFull*, BenchmarkDifferent*, BenchmarkConcurrent*)
 parse_benchmark "^BenchmarkProcess|^BenchmarkHeader|^BenchmarkFull|^BenchmarkDifferent|^BenchmarkConcurrent" "$BASELINE_DIR/extproc.json"
 
-echo "✓ Baseline files updated successfully"
+echo "Baseline files updated successfully"
 echo "  Git commit: $GIT_COMMIT"
 echo "  Git branch: $GIT_BRANCH"
 echo "  Timestamp: $TIMESTAMP"

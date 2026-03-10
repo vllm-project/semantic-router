@@ -42,7 +42,7 @@ config:
       transport_type: "stdio"  # Options: "stdio" or "http"
       # For stdio transport:
       command: "python3"
-      args: ["deploy/examples/mcp-classifier-server/server_keyword.py"]
+      args: ["deploy/mcp-classifier-server/server_keyword.py"]
       # For HTTP transport (alternative):
       # transport_type: "http"
       # url: "http://localhost:8090/mcp"
@@ -115,10 +115,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a mathematics expert. Provide step-by-step solutions with clear explanations. Show your work and verify calculations."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "science_decision"
       description: "Science and natural sciences"
@@ -135,10 +132,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a science expert. Explain scientific concepts clearly and accurately. Use examples and analogies when helpful."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "technology_decision"
       description: "Technology and computer science"
@@ -155,10 +149,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a technology and programming expert. Provide practical solutions with code examples when appropriate."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "history_decision"
       description: "History and cultural topics"
@@ -175,10 +166,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a history expert. Provide accurate historical information with context and relevant details."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "general_decision"
       description: "General knowledge and miscellaneous topics"
@@ -199,30 +187,7 @@ config:
           configuration:
             enabled: true
             similarity_threshold: 0.75
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
 
-  # Router Configuration
-  router:
-    high_confidence_threshold: 0.99
-    low_latency_threshold_ms: 2000
-    lora_baseline_score: 0.8
-    traditional_baseline_score: 0.7
-    embedding_baseline_score: 0.75
-    success_confidence_threshold: 0.8
-    large_batch_threshold: 4
-    lora_default_execution_time_ms: 1345
-    traditional_default_execution_time_ms: 4567
-    default_confidence_threshold: 0.95
-    default_max_latency_ms: 5000
-    default_batch_size: 4
-    default_avg_execution_time_ms: 3000
-    lora_default_confidence: 0.99
-    traditional_default_confidence: 0.95
-    lora_default_success_rate: 0.98
-    traditional_default_success_rate: 0.95
 
   default_model: openai/gpt-oss-20b
 

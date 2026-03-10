@@ -161,6 +161,8 @@ func (r *OpenAIRouter) retrieveContext(traceCtx context.Context, ctx *RequestCon
 		retrievedContext, err = r.retrieveFromOpenAI(traceCtx, ctx, ragConfig)
 	case "hybrid":
 		retrievedContext, err = r.retrieveFromHybrid(traceCtx, ctx, ragConfig)
+	case "vectorstore":
+		retrievedContext, err = r.retrieveFromVectorStore(traceCtx, ctx, ragConfig)
 	default:
 		return "", fmt.Errorf("unknown RAG backend: %s", ragConfig.Backend)
 	}

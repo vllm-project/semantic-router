@@ -39,7 +39,7 @@ func TestIntentClassificationLoRAAutoDetection(t *testing.T) {
 			return
 		}
 
-		t.Log("✓ CategoryInitializer successfully auto-detected and initialized LoRA model")
+		t.Log("CategoryInitializer successfully auto-detected and initialized LoRA model")
 
 		// Verify inference works
 		inference := createCategoryInference()
@@ -54,7 +54,7 @@ func TestIntentClassificationLoRAAutoDetection(t *testing.T) {
 			return
 		}
 
-		t.Logf("✓ Classification works: category=%d, confidence=%.3f", result.Class, result.Confidence)
+		t.Logf("Classification works: category=%d, confidence=%.3f", result.Class, result.Confidence)
 	})
 
 	t.Run("Proof: Auto-Detection Already Works in Rust Layer", func(t *testing.T) {
@@ -68,7 +68,7 @@ func TestIntentClassificationLoRAAutoDetection(t *testing.T) {
 			return
 		}
 
-		t.Log("✓ Proof: Rust layer successfully auto-detected LoRA model")
+		t.Log("Proof: Rust layer successfully auto-detected LoRA model")
 
 		// Try classification to prove it works
 		result, err := candle_binding.ClassifyCandleBertText("What is the best business strategy?")
@@ -82,7 +82,7 @@ func TestIntentClassificationLoRAAutoDetection(t *testing.T) {
 			return
 		}
 
-		t.Logf("✓ Classification works: category=%d, confidence=%.3f", result.Class, result.Confidence)
+		t.Logf("Classification works: category=%d, confidence=%.3f", result.Class, result.Confidence)
 		t.Logf("   Solution: Update CategoryInitializer to use InitCandleBertClassifier")
 	})
 }
@@ -96,6 +96,6 @@ func TestPIIAlreadyHasAutoDetection(t *testing.T) {
 		t.Skip("LoRA PII model not available, skipping test")
 	}
 
-	t.Log("✓ PII detection already has auto-detection (implemented in PR #709)")
+	t.Log("PII detection already has auto-detection (implemented in PR #709)")
 	t.Log("  Goal: Make Intent & Jailbreak detection work the same way")
 }

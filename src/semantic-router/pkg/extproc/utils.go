@@ -11,11 +11,25 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// sendResponse sends a response with proper error handling and logging
+// sendResponse sends a response with proper error handling and logging.
+// If response is nil, a CONTINUE BodyResponse is sent as a safe fallback
+// to prevent nil pointer dereferences in Envoy or test assertions.
 func sendResponse(stream ext_proc.ExternalProcessor_ProcessServer, response *ext_proc.ProcessingResponse, msgType string) error {
+	if response == nil {
+		logging.Warnf("Nil response for %s stage — sending CONTINUE fallback to avoid nil dereference", msgType)
+		response = &ext_proc.ProcessingResponse{
+			Response: &ext_proc.ProcessingResponse_RequestBody{
+				RequestBody: &ext_proc.BodyResponse{
+					Response: &ext_proc.CommonResponse{
+						Status: ext_proc.CommonResponse_CONTINUE,
+					},
+				},
+			},
+		}
+	}
+
 	logging.Debugf("Processing at stage [%s]: %+v", msgType, response)
 
-	// Debug: dump response structure if needed
 	if err := stream.Send(response); err != nil {
 		logging.Errorf("Error sending %s response: %v", msgType, err)
 		return err
@@ -32,49 +46,23 @@ func parseOpenAIRequest(data []byte) (*openai.ChatCompletionNewParams, error) {
 	return &req, nil
 }
 
-// extractStreamParam extracts the stream parameter from the original request body
+// extractStreamParam extracts the stream parameter from the original request body.
+// Uses gjson for O(scan) extraction without allocating a map.
 func extractStreamParam(originalBody []byte) bool {
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(originalBody, &requestMap); err != nil {
-		return false
-	}
-
-	if streamValue, exists := requestMap["stream"]; exists {
-		if stream, ok := streamValue.(bool); ok {
-			return stream
-		}
-	}
-	return false
+	return extractStreamParamFast(originalBody)
 }
 
-// serializeOpenAIRequestWithStream converts request back to JSON, preserving the stream parameter from original request
+// serializeOpenAIRequestWithStream converts request back to JSON, preserving
+// the stream parameter from the original request. Uses sjson for in-place
+// field insertion instead of unmarshal → modify → marshal.
 func serializeOpenAIRequestWithStream(req *openai.ChatCompletionNewParams, hasStreamParam bool) ([]byte, error) {
-	// First serialize the SDK object
 	sdkBytes, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
-
-	// If original request had stream parameter, add it back along with stream_options
 	if hasStreamParam {
-		var sdkMap map[string]interface{}
-		if err := json.Unmarshal(sdkBytes, &sdkMap); err == nil {
-			sdkMap["stream"] = true
-
-			// Automatically add stream_options to enable usage tracking in streaming responses
-			// This ensures vLLM returns token usage information in the final chunk
-			sdkMap["stream_options"] = map[string]interface{}{
-				"include_usage": true,
-			}
-
-			logging.Infof("Added stream_options.include_usage=true for streaming request")
-
-			if modifiedBytes, err := json.Marshal(sdkMap); err == nil {
-				return modifiedBytes, nil
-			}
-		}
+		sdkBytes = addStreamFieldsFast(sdkBytes)
 	}
-
 	return sdkBytes, nil
 }
 
@@ -160,15 +148,35 @@ func statusCodeToEnum(statusCode int) typev3.StatusCode {
 	}
 }
 
-// rewriteRequestModel rewrites the model field in the request body JSON
-// Used by looper internal requests to route to specific models
-func rewriteRequestModel(originalBody []byte, newModel string) ([]byte, error) {
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(originalBody, &requestMap); err != nil {
-		return nil, err
+// isSafeImageDataURL returns true only for inline base64-encoded image data URIs
+// with an allowlisted MIME type (e.g. "data:image/png;base64,...").
+// HTTP(S) URLs, non-image data URIs, and file paths are rejected to prevent
+// SSRF, local file access, and decode errors on non-image payloads.
+func isSafeImageDataURL(url string) bool {
+	if url == "" {
+		return false
 	}
+	lower := strings.ToLower(url)
+	if !strings.HasPrefix(lower, "data:image/") {
+		return false
+	}
+	const base64Sep = ";base64,"
+	sepIdx := strings.Index(lower, base64Sep)
+	if sepIdx == -1 {
+		return false
+	}
+	mime := lower[len("data:"):sepIdx]
+	switch mime {
+	case "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp":
+	default:
+		return false
+	}
+	payload := strings.TrimSpace(url[sepIdx+len(base64Sep):])
+	return payload != ""
+}
 
-	requestMap["model"] = newModel
-
-	return json.Marshal(requestMap)
+// rewriteRequestModel rewrites the model field in the request body JSON.
+// Uses sjson for in-place field replacement.
+func rewriteRequestModel(originalBody []byte, newModel string) ([]byte, error) {
+	return rewriteModelInBodyFast(originalBody, newModel)
 }
