@@ -31,7 +31,6 @@ The installer:
 - Installs `vllm-sr` into `~/.local/share/vllm-sr`
 - Writes a launcher to `~/.local/bin/vllm-sr`
 - Prepares Docker or Podman for `vllm-sr serve` unless you opt out
-- Bootstraps a first-run workspace in `~/.local/share/vllm-sr/workspace`
 - Starts `vllm-sr serve` automatically and opens the dashboard when possible
 - Prints dashboard access and remote-server hints if a browser cannot be opened
 
@@ -78,13 +77,12 @@ vllm-sr --version
 ### 3. Restart `vllm-sr` later
 
 ```bash
-cd ~/.local/share/vllm-sr/workspace
 vllm-sr serve
 ```
 
-The installer uses this workspace for the first-run setup flow. If you skipped `--no-launch`, it already ran one `vllm-sr serve` for you.
+If you skipped `--no-launch`, the installer already ran one `vllm-sr serve` for you.
 
-If `config.yaml` does not exist yet, `vllm-sr serve` bootstraps a minimal workspace and starts the dashboard in setup mode.
+If `config.yaml` does not exist yet in the current directory, `vllm-sr serve` bootstraps a minimal setup config and starts the dashboard in setup mode.
 
 The router will:
 

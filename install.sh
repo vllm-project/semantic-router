@@ -8,13 +8,13 @@ BIN_DIR="${VLLM_SR_BIN_DIR:-$HOME/.local/bin}"
 PIP_SPEC="${VLLM_SR_PIP_SPEC:-vllm-sr}"
 PYTHON_BIN="${VLLM_SR_PYTHON:-}"
 REQUESTED_PLATFORM="${VLLM_SR_INSTALL_PLATFORM:-${VLLM_SR_PLATFORM:-auto}}"
-WORKSPACE_DIR="${VLLM_SR_WORKSPACE_DIR:-}"
 AUTO_LAUNCH="${VLLM_SR_INSTALL_AUTO_LAUNCH:-1}"
 
 OS_NAME=""
 SELECTED_RUNTIME=""
 LAUNCH_PLATFORM=""
 AUTO_LAUNCH_RAN="0"
+STYLE_BOLD=""
 COLOR_RESET=""
 COLOR_ORANGE=""
 COLOR_BLUE=""
@@ -29,6 +29,7 @@ init_colors() {
     return
   fi
 
+  STYLE_BOLD=$'\033[1m'
   COLOR_RESET=$'\033[0m'
   COLOR_ORANGE=$'\033[38;2;254;181;22m'
   COLOR_BLUE=$'\033[38;2;48;162;255m'
@@ -44,9 +45,8 @@ print_logo() {
 
   init_colors
   printf '\n'
-  printf '%b\n' "${COLOR_ORANGE}v${COLOR_BLUE}LLM${COLOR_WHITE} Semantic Router${COLOR_RESET} ${COLOR_MUTED}installer${COLOR_RESET}"
-  printf '%b\n' "${COLOR_MUTED}CLI + runtime bootstrap + first local dashboard session${COLOR_RESET}"
-  printf '%b\n' "${COLOR_MUTED}------------------------------------------------------------------------${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_ORANGE}v${COLOR_WHITE}LLM${COLOR_BLUE} SR${COLOR_RESET}      ${COLOR_MUTED}semantic router / local installer${COLOR_RESET}"
+  printf '%b\n' "               ${COLOR_MUTED}CLI bootstrap / runtime wiring / first dashboard launch${COLOR_RESET}"
   printf '\n'
 }
 
@@ -147,7 +147,6 @@ print_install_plan() {
   printf '  system deps  %s\n' "$(describe_python_dependency_plan "$python_cmd")"
   printf '  runtime deps %s\n' "$(describe_runtime_dependency_plan "$runtime_cmd")"
   printf '  install root %s\n' "$INSTALL_ROOT"
-  printf '  workspace    %s\n' "$WORKSPACE_DIR"
   printf '  launcher     %s/vllm-sr\n' "$BIN_DIR"
   printf '\n'
 }
@@ -156,8 +155,7 @@ usage() {
   cat <<'EOF'
 Usage: install.sh [--mode cli|serve] [--runtime auto|docker|podman|skip]
                   [--install-root PATH] [--bin-dir PATH] [--pip-spec SPEC]
-                  [--python PATH] [--platform PLATFORM]
-                  [--workspace PATH] [--no-launch]
+                  [--python PATH] [--platform PLATFORM] [--no-launch]
 
 Installs the vLLM Semantic Router CLI into an isolated virtual environment and
 links a launcher into ~/.local/bin by default.
@@ -176,8 +174,6 @@ Options:
   --python PATH            Explicit Python interpreter to use
   --platform PLATFORM      Platform hint for first-run serve. Use 'amd' for ROCm.
                            Default: auto
-  --workspace PATH         Workspace for the installer's first-run serve flow.
-                           Default: <install-root>/workspace
   --no-launch              Skip the installer's automatic first `vllm-sr serve`
                            and dashboard open step
   -h, --help               Show this help message
@@ -190,7 +186,6 @@ Environment overrides:
   VLLM_SR_PIP_SPEC
   VLLM_SR_PYTHON
   VLLM_SR_INSTALL_PLATFORM
-  VLLM_SR_WORKSPACE_DIR
   VLLM_SR_INSTALL_AUTO_LAUNCH
 EOF
 }
@@ -263,12 +258,6 @@ detect_os_label() {
       printf '%s\n' "$OS_NAME"
       ;;
   esac
-}
-
-ensure_workspace_dir() {
-  if [ -z "$WORKSPACE_DIR" ]; then
-    WORKSPACE_DIR="$INSTALL_ROOT/workspace"
-  fi
 }
 
 resolve_launch_platform() {
@@ -373,11 +362,23 @@ print_dashboard_access() {
   fi
 }
 
+resolve_launch_dir() {
+  local current_dir fallback_dir
+  current_dir="$(pwd)"
+  if [ -w "$current_dir" ]; then
+    printf '%s\n' "$current_dir"
+    return
+  fi
+
+  fallback_dir="${HOME:-$INSTALL_ROOT}"
+  warn "Current directory is not writable. Falling back to $fallback_dir for the first run."
+  printf '%s\n' "$fallback_dir"
+}
+
 print_restart_command() {
   if [ -z "$LAUNCH_PLATFORM" ]; then
     LAUNCH_PLATFORM="$(resolve_launch_platform)"
   fi
-  printf '  cd %s\n' "$WORKSPACE_DIR"
   if [ -n "$LAUNCH_PLATFORM" ]; then
     printf '  vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
   else
@@ -824,16 +825,16 @@ ensure_runtime() {
 }
 
 launch_first_session() {
+  local launch_dir
   if ! should_auto_launch; then
     return
   fi
 
   LAUNCH_PLATFORM="$(resolve_launch_platform)"
-  mkdir -p "$WORKSPACE_DIR"
+  launch_dir="$(resolve_launch_dir)"
 
   printf '\n'
   printf '%b\n' "${COLOR_WHITE}First run${COLOR_RESET}"
-  printf '  workspace    %s\n' "$WORKSPACE_DIR"
   if [ -n "$LAUNCH_PLATFORM" ]; then
     printf '  serve        vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
   else
@@ -845,7 +846,7 @@ launch_first_session() {
 
   step "Running first-time serve flow"
   if (
-    cd "$WORKSPACE_DIR"
+    cd "$launch_dir"
     if [ -n "$LAUNCH_PLATFORM" ]; then
       "$BIN_DIR/vllm-sr" serve --platform "$LAUNCH_PLATFORM"
     else
@@ -902,7 +903,6 @@ print_next_steps() {
   printf '%b\n' "${COLOR_WHITE}What you have${COLOR_RESET}"
   printf '  cli          %s/vllm-sr\n' "$BIN_DIR"
   printf '  install root  %s\n' "$INSTALL_ROOT"
-  printf '  workspace     %s\n' "$WORKSPACE_DIR"
   if [ "$MODE" = "serve" ]; then
     printf '  runtime       %s\n' "${SELECTED_RUNTIME:-not configured}"
   fi
@@ -977,11 +977,6 @@ parse_args() {
         REQUESTED_PLATFORM="$2"
         shift 2
         ;;
-      --workspace)
-        [ "$#" -ge 2 ] || die "Missing value for --workspace"
-        WORKSPACE_DIR="$2"
-        shift 2
-        ;;
       --no-launch)
         AUTO_LAUNCH="0"
         shift
@@ -1023,7 +1018,6 @@ main() {
   parse_args "$@"
   validate_args
   detect_os
-  ensure_workspace_dir
   print_logo
   print_install_plan
   install_cli
