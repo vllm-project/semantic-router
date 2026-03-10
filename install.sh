@@ -54,10 +54,10 @@ print_logo() {
   fi
 
   printf '\n'
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}       █     █     █▄   ▄█   ▄▄▄▄▄   █▄▄▄${COLOR_RESET}"
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE} ▄▄ ▄█ █     █     █ ▀▄▀ █  █▄▄▄▄   █   █${COLOR_RESET}  ${COLOR_MUTED}(${env_label})${COLOR_RESET}"
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}  █▄█▀ █     █     █     █   ▀▀▀▀█  █▄▄▄▀${COLOR_RESET}"
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀  ▀▄▄▄▄▀  █  ▀█${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}       █     █     █▄   ▄█   ▄▄▄▄    █▄▄▄${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE} ▄▄ ▄█ █     █     █ ▀▄▀ █  █        █  █${COLOR_RESET}  ${COLOR_MUTED}(${env_label})${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}  █▄█▀ █     █     █     █   ▀▀▄     █▄▄▀${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀  ▄▄▄▄▀    █  ▀${COLOR_RESET}"
   printf '\n'
 }
 
