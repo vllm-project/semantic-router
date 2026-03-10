@@ -44,13 +44,14 @@ print_logo() {
   fi
 
   init_colors
-  printf '\n'
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_ORANGE}__      __${COLOR_RESET}  ${STYLE_BOLD}${COLOR_WHITE}_       _${COLOR_RESET}      ${STYLE_BOLD}${COLOR_BLUE}__  __${COLOR_RESET}    ${COLOR_MUTED}semantic router${COLOR_RESET}"
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_ORANGE}\\ \\    / /${COLOR_RESET}  ${STYLE_BOLD}${COLOR_WHITE}| |     | |${COLOR_RESET}     ${STYLE_BOLD}${COLOR_BLUE}|  \\/  |${COLOR_RESET}   ${COLOR_MUTED}local installer${COLOR_RESET}"
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_ORANGE} \\ \\  / /${COLOR_RESET}   ${STYLE_BOLD}${COLOR_WHITE}| |     | |${COLOR_RESET}     ${STYLE_BOLD}${COLOR_BLUE}| |\\/| |${COLOR_RESET}   ${COLOR_MUTED}CLI bootstrap${COLOR_RESET}"
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_ORANGE}  \\ \\/ /${COLOR_RESET}    ${STYLE_BOLD}${COLOR_WHITE}| |___  | |___${COLOR_RESET}  ${STYLE_BOLD}${COLOR_BLUE}| |  | |${COLOR_RESET}   ${COLOR_MUTED}runtime wiring${COLOR_RESET}"
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_ORANGE}   \\__/${COLOR_RESET}     ${STYLE_BOLD}${COLOR_WHITE}|_____| |_____|${COLOR_RESET} ${STYLE_BOLD}${COLOR_BLUE}|_|  |_|${COLOR_RESET}   ${COLOR_MUTED}first dashboard launch${COLOR_RESET}"
-  printf '\n'
+  cat <<'EOF'
+
+       █     █     █▄   ▄█
+ ▄▄ ▄█ █     █     █ ▀▄▀ █  semantic router
+  █▄█▀ █     █     █     █  local installer
+   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+
+EOF
 }
 
 step() {
