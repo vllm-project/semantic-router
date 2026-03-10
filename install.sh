@@ -902,45 +902,55 @@ print_path_hint() {
 }
 
 print_next_steps() {
+  local primary_ip host_label
+
   printf '\n'
-  printf '%b\n' "${COLOR_SUCCESS}vLLM Semantic Router is installed.${COLOR_RESET}"
-  printf '%b\n' "${COLOR_WHITE}What you have${COLOR_RESET}"
-  printf '  cli          %s/vllm-sr\n' "$BIN_DIR"
-  printf '  install root  %s\n' "$INSTALL_ROOT"
-  if [ "$MODE" = "serve" ]; then
-    printf '  runtime       %s\n' "${SELECTED_RUNTIME:-not configured}"
+  done_step "vLLM Semantic Router is ready"
+
+  if [ -z "$LAUNCH_PLATFORM" ]; then
+    LAUNCH_PLATFORM="$(resolve_launch_platform)"
   fi
-  printf '\n'
 
   if print_path_hint; then
-    info "After updating PATH, use the commands below."
+    info "Add the PATH export above before running vllm-sr."
+  fi
+
+  printf '%b\n' "${COLOR_WHITE}Ready${COLOR_RESET}"
+  if [ "$MODE" = "serve" ]; then
+    printf '  runtime      %s\n' "${SELECTED_RUNTIME:-not configured}"
   fi
 
   if [ "$AUTO_LAUNCH_RAN" = "1" ]; then
-    printf '%b\n' "${COLOR_WHITE}Now running${COLOR_RESET}"
-    print_dashboard_access
-
-    printf '%b\n' "${COLOR_WHITE}Commands${COLOR_RESET}"
-    printf '  vllm-sr status\n'
-    printf '  vllm-sr logs dashboard -f\n'
-    printf '  vllm-sr stop\n'
-    printf '\n'
-
-    printf '%b\n' "${COLOR_WHITE}Restart later${COLOR_RESET}"
-    print_restart_command
+    primary_ip="$(detect_primary_ip || true)"
+    printf '  dashboard    %s\n' "$DASHBOARD_URL"
+    if [ -n "$primary_ip" ]; then
+      printf '  network      http://%s:8700\n' "$primary_ip"
+    fi
+    printf '  stop         vllm-sr stop\n'
+    if [ -n "$LAUNCH_PLATFORM" ]; then
+      printf '  restart      vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
+    else
+      printf '  restart      vllm-sr serve\n'
+    fi
+    if is_remote_session; then
+      host_label="$(detect_host_label)"
+      printf '  tunnel       ssh -L 8700:localhost:8700 %s@%s\n' "${USER:-user}" "$host_label"
+    fi
   else
-    printf '%b\n' "${COLOR_WHITE}Next steps${COLOR_RESET}"
-    printf '  vllm-sr --version\n'
-
+    printf '  verify       vllm-sr --version\n'
     if [ "$MODE" = "serve" ]; then
-      print_restart_command
+      if [ -n "$LAUNCH_PLATFORM" ]; then
+        printf '  start        vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
+      else
+        printf '  start        vllm-sr serve\n'
+      fi
+      printf '  open         vllm-sr dashboard\n'
       if [ "$SELECTED_RUNTIME" = "podman" ]; then
-        printf '\n'
-        printf '%b\n' "${COLOR_WHITE}Runtime${COLOR_RESET}"
-        printf '  This installation is pinned to Podman via %s/runtime.env\n' "$INSTALL_ROOT"
+        printf '  runtime env  %s/runtime.env\n' "$INSTALL_ROOT"
       fi
     fi
   fi
+  printf '\n'
 }
 
 parse_args() {
