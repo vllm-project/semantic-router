@@ -835,15 +835,12 @@ launch_first_session() {
   LAUNCH_PLATFORM="$(resolve_launch_platform)"
   launch_dir="$(resolve_launch_dir)"
 
-  printf '\n'
-  printf '%b\n' "${COLOR_WHITE}First run${COLOR_RESET}"
   if [ -n "$LAUNCH_PLATFORM" ]; then
-    printf '  serve        vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
+    info "First-run serve command: vllm-sr serve --platform $LAUNCH_PLATFORM"
   else
-    printf '  serve        vllm-sr serve\n'
+    info "First-run serve command: vllm-sr serve"
   fi
-  printf '  dashboard    vllm-sr dashboard\n'
-  printf '\n'
+  info "First-run dashboard command: vllm-sr dashboard"
   info "Starting the first local session. This can take a few minutes on the first image pull."
 
   step "Running first-time serve flow"
