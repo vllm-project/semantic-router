@@ -1,0 +1,125 @@
+.section {
+  padding: 5rem 0;
+  border-bottom: 1px solid var(--site-border);
+}
+
+.heading {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.32fr) minmax(0, 0.68fr);
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.meta,
+.copy {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+}
+
+.meta p,
+.copy p,
+.note {
+  margin: 0;
+  color: var(--site-muted-bright);
+  line-height: 1.7;
+}
+
+.meta p {
+  max-width: 18rem;
+  font-size: 0.95rem;
+}
+
+.copy h2 {
+  max-width: 12ch;
+  margin: 0;
+  font-size: clamp(2.4rem, 5vw, 4.2rem);
+  line-height: 0.94;
+  letter-spacing: -0.04em;
+}
+
+.copy p {
+  max-width: 42rem;
+}
+
+.frame {
+  display: grid;
+  gap: 1.3rem;
+  padding: 1.5rem;
+  border: 1px solid var(--site-border);
+  border-radius: 1.2rem;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 38%),
+    var(--site-surface);
+}
+
+.frameHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.platform {
+  color: var(--site-muted-bright);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.84rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.commandBlock {
+  padding: 1.2rem 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    rgba(255, 255, 255, 0.025);
+  background-size: 28px 28px, auto;
+}
+
+.command {
+  display: block;
+  color: var(--site-text);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: clamp(1rem, 1.85vw, 1.42rem);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.frameFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.note {
+  max-width: 38rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+@media (max-width: 996px) {
+  .heading {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .section {
+    padding: 3.5rem 0;
+  }
+
+  .frame {
+    padding: 1.15rem;
+  }
+}

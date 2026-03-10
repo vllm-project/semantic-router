@@ -30,8 +30,22 @@
   align-items: start;
 }
 
+.heroStack {
+  display: grid;
+  gap: 1.4rem;
+}
+
+.heroManifesto {
+  max-width: 38rem;
+  margin: 0;
+  color: var(--site-text);
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
 .statsSection,
-.manifestoSection,
 .capabilitySection,
 .encoderSection,
 .closingBands {
@@ -40,47 +54,6 @@
 
 .statsSection {
   padding: 1.4rem 0 3rem;
-}
-
-.manifestoSection {
-  padding: 5rem 0;
-}
-
-.manifestoGrid {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.36fr) minmax(0, 0.64fr);
-  gap: 2rem;
-}
-
-.manifestoMeta {
-  display: grid;
-  align-content: start;
-  gap: 1rem;
-}
-
-.manifestoMeta p {
-  max-width: 18rem;
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.manifestoCopy {
-  display: grid;
-  gap: 1.5rem;
-}
-
-.manifestoCopy p {
-  margin: 0;
-  font-size: clamp(1.65rem, 3.1vw, 2.65rem);
-  line-height: 1.16;
-  letter-spacing: -0.03em;
-  color: var(--site-text);
-}
-
-.manifestoActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
 }
 
 .capabilitySection {
@@ -417,7 +390,6 @@
 
 @media (max-width: 996px) {
   .heroGrid,
-  .manifestoGrid,
   .sectionHeading,
   .encoderShowcase,
   .bandGrid,
@@ -448,8 +420,8 @@
 }
 
 @media (max-width: 768px) {
-  .manifestoCopy p {
-    font-size: 1.45rem;
+  .heroManifesto {
+    font-size: 1.05rem;
   }
 
   .encoderSection {

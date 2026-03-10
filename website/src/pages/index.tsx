@@ -3,6 +3,7 @@ import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
+import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
@@ -188,60 +189,44 @@ function DitherHero(): JSX.Element {
       <DitherField className={styles.heroNoise} />
       <div className="site-shell-container">
         <div className={styles.heroGrid}>
-          <PageIntro
-            label={<Translate id="homepage.hero.label">System-level intelligence</Translate>}
-            title={(
-              <>
-                <Translate id="homepage.hero.line1">Signal</Translate>
-                <br />
-                <Translate id="homepage.hero.line2">before scale</Translate>
-              </>
-            )}
-            description={(
-              <>
-                <strong>
-                  <Translate id="homepage.hero.description.encoderNative">
-                    Encoder-native
-                  </Translate>
-                </strong>
-                {' '}
-                <Translate id="homepage.hero.description.base">
-                  system intelligence for mixture-of-model serving, built on
+          <div className={styles.heroStack}>
+            <PageIntro
+              label={<Translate id="homepage.hero.label">System-level intelligence</Translate>}
+              title={(
+                <>
+                  <Translate id="homepage.hero.line1">Signal</Translate>
+                  <br />
+                  <Translate id="homepage.hero.line2">before scale</Translate>
+                </>
+              )}
+              description={(
+                <Translate id="homepage.hero.description.foundation">
+                  Built on Shannon signals, entropy folding, and neural-symbolic routing.
                 </Translate>
-                {' '}
-                <strong>
-                  <Translate id="homepage.hero.description.shannon">Shannon signals</Translate>
-                </strong>
-                {', '}
-                <strong>
-                  <Translate id="homepage.hero.description.entropy">entropy folding</Translate>
-                </strong>
-                {', '}
-                <Translate id="homepage.hero.description.and">and</Translate>
-                {' '}
-                <strong>
-                  <Translate id="homepage.hero.description.symbolic">
-                    neural-symbolic routing
-                  </Translate>
-                </strong>
-                .
-              </>
-            )}
-            actions={(
-              <>
-                <PillLink
-                  href="https://play.vllm-semantic-router.com/"
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <Translate id="homepage.hero.publicBeta">Public Beta</Translate>
-                </PillLink>
-                <PillLink to="/white-paper" muted>
-                  <Translate id="homepage.hero.secondaryCta">Open white paper</Translate>
-                </PillLink>
-              </>
-            )}
-          />
+              )}
+              actions={(
+                <>
+                  <PillLink
+                    href="https://play.vllm-semantic-router.com/"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <Translate id="homepage.hero.publicBeta">Public Beta</Translate>
+                  </PillLink>
+                  <PillLink to="/white-paper" muted>
+                    <Translate id="homepage.hero.secondaryCta">Open white paper</Translate>
+                  </PillLink>
+                </>
+              )}
+            />
+
+            <p className={styles.heroManifesto}>
+              <Translate id="homepage.hero.manifesto">
+                A router should feel like a system brain: encoder-guided, entropy-aware, and
+                ruthlessly clear.
+              </Translate>
+            </p>
+          </div>
         </div>
       </div>
     </header>
@@ -432,36 +417,7 @@ export default function Home(): JSX.Element {
           </div>
         </section>
 
-        <section className={styles.manifestoSection}>
-          <div className="site-shell-container">
-            <div className={styles.manifestoGrid}>
-              <div className={styles.manifestoMeta}>
-                <SectionLabel>
-                  <Translate id="homepage.manifesto.label">System thesis</Translate>
-                </SectionLabel>
-                <p>
-                  <Translate id="homepage.manifesto.meta">
-                    Encoder priors. Shannon structure. Entropy folded into action.
-                  </Translate>
-                </p>
-              </div>
-
-              <div className={styles.manifestoCopy}>
-                <p>
-                  <Translate id="homepage.manifesto.copy">
-                    A router should feel like a system brain: encoder-guided, entropy-aware, and
-                    ruthlessly clear.
-                  </Translate>
-                </p>
-                <div className={styles.manifestoActions}>
-                  <PillLink to="/docs/installation">Install locally</PillLink>
-                  <PillLink to="/docs/installation/configuration" muted>See configuration</PillLink>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
+        <InstallQuickStartSection />
         <CapabilitySection />
         <PaperFigureShowcase />
         <EncoderIntelligenceSection />

@@ -19,7 +19,45 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 
 ## Quick Start
 
-### 1. Install vLLM Semantic Router
+### 1. Use the one-line installer (macOS/Linux)
+
+```bash
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+```
+
+The installer:
+
+- Detects Python 3.10 or newer
+- Installs `vllm-sr` into `~/.local/share/vllm-sr`
+- Writes a launcher to `~/.local/bin/vllm-sr`
+- Prepares Docker or Podman for `vllm-sr serve` unless you opt out
+- Starts `vllm-sr serve` automatically and opens the dashboard when possible
+- Prints dashboard access and remote-server hints if a browser cannot be opened
+
+Useful variants:
+
+```bash
+# Install only the CLI
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli
+
+# Pin local serve mode to Podman
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime podman
+
+# Force the first launch onto the AMD/ROCm path
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --platform amd
+
+# Install without auto-starting serve + dashboard
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --no-launch
+
+# Skip runtime bootstrap and keep only userland install steps
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
+```
+
+If `~/.local/bin` is not already on your `PATH`, the installer prints the export line to add it.
+
+Windows users should use the manual PyPI flow below.
+
+### 2. Manual PyPI install
 
 ```bash
 # Create a virtual environment (recommended)
@@ -36,13 +74,15 @@ Verify installation:
 vllm-sr --version
 ```
 
-### 2. Start `vllm-sr`
+### 3. Restart `vllm-sr` later
 
 ```bash
 vllm-sr serve
 ```
 
-If `config.yaml` does not exist yet, `vllm-sr serve` bootstraps a minimal workspace and starts the dashboard in setup mode.
+If you skipped `--no-launch`, the installer already ran one `vllm-sr serve` for you.
+
+If `config.yaml` does not exist yet in the current directory, `vllm-sr serve` bootstraps a minimal setup config and starts the dashboard in setup mode.
 
 The router will:
 
@@ -52,9 +92,11 @@ The router will:
 - Start the semantic router service after activation
 - Enable metrics on port 9190
 
-### 3. Open the Dashboard
+### 4. Open the Dashboard
 
 Open [http://localhost:8700](http://localhost:8700) in your browser.
+
+If you ran the installer on a remote server and the browser did not open automatically, use the URL and SSH tunnel hint printed by the installer.
 
 For first-run setup:
 
@@ -64,7 +106,7 @@ For first-run setup:
 
 After activation, `config.yaml` is written to the current directory and the router exits setup mode.
 
-### 4. Test the Router
+### 5. Test the Router
 
 ```bash
 curl http://localhost:8888/v1/chat/completions \
@@ -75,7 +117,7 @@ curl http://localhost:8888/v1/chat/completions \
   }'
 ```
 
-## 5. Optional: open the dashboard from the CLI
+### 6. Optional: open the dashboard from the CLI
 
 ```bash
 vllm-sr dashboard
