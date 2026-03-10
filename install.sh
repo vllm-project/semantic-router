@@ -71,7 +71,7 @@ die() {
 }
 
 print_install_plan() {
-  local requested_runtime
+  local requested_runtime python_cmd python_version runtime_cmd package_manager
   requested_runtime="$REQUESTED_RUNTIME"
   if [ "$REQUESTED_RUNTIME" = "auto" ]; then
     case "$OS_NAME" in
@@ -84,9 +84,33 @@ print_install_plan() {
     esac
   fi
 
+  python_cmd="$(detect_python_candidate || true)"
+  runtime_cmd="$(detect_existing_runtime || true)"
+  package_manager="$(detect_package_manager_label)"
+
+  printf '%b\n' "${COLOR_WHITE}Detected environment${COLOR_RESET}"
+  printf '  platform     %s (%s)\n' "$(detect_os_label)" "$(uname -m)"
+  printf '  package mgr  %s\n' "$package_manager"
+  if [ -n "$python_cmd" ]; then
+    python_version="$(python_version_of "$python_cmd")"
+    printf '  python       %s (%s)\n' "$python_cmd" "$python_version"
+  else
+    printf '  python       not found (needs Python 3.10+)\n'
+  fi
+  if [ -n "$runtime_cmd" ]; then
+    printf '  runtime      %s (ready)\n' "$runtime_cmd"
+  else
+    printf '  runtime      none detected\n'
+  fi
+  printf '\n'
+
   printf '%b\n' "${COLOR_WHITE}Install plan${COLOR_RESET}"
   printf '  mode         %s\n' "$MODE"
   printf '  runtime      %s\n' "$requested_runtime"
+  printf '  python deps  pip, setuptools, wheel\n'
+  printf '  package      %s\n' "$PIP_SPEC"
+  printf '  system deps  %s\n' "$(describe_python_dependency_plan "$python_cmd")"
+  printf '  runtime deps %s\n' "$(describe_runtime_dependency_plan "$runtime_cmd")"
   printf '  install root %s\n' "$INSTALL_ROOT"
   printf '  launcher     %s/vllm-sr\n' "$BIN_DIR"
   printf '\n'
@@ -181,9 +205,27 @@ detect_os() {
   esac
 }
 
+detect_os_label() {
+  case "$OS_NAME" in
+    darwin)
+      printf 'macOS\n'
+      ;;
+    linux)
+      printf 'Linux\n'
+      ;;
+    *)
+      printf '%s\n' "$OS_NAME"
+      ;;
+  esac
+}
+
 python_supports_vllm_sr() {
   "$1" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' \
     >/dev/null 2>&1
+}
+
+python_version_of() {
+  "$1" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null || printf 'unknown\n'
 }
 
 find_python() {
@@ -208,6 +250,10 @@ find_python() {
   return 1
 }
 
+detect_python_candidate() {
+  find_python
+}
+
 detect_linux_pkg_manager() {
   for candidate in apt-get dnf yum; do
     if has_cmd "$candidate"; then
@@ -217,6 +263,135 @@ detect_linux_pkg_manager() {
   done
 
   return 1
+}
+
+detect_package_manager_label() {
+  local pkg_manager
+  case "$OS_NAME" in
+    darwin)
+      if has_cmd brew; then
+        printf 'homebrew\n'
+      else
+        printf 'homebrew (not found)\n'
+      fi
+      ;;
+    linux)
+      pkg_manager="$(detect_linux_pkg_manager || true)"
+      if [ -n "$pkg_manager" ]; then
+        printf '%s\n' "$pkg_manager"
+      else
+        printf 'not detected\n'
+      fi
+      ;;
+  esac
+}
+
+detect_existing_runtime() {
+  if docker_ready; then
+    printf 'docker\n'
+    return
+  fi
+
+  if podman_ready; then
+    printf 'podman\n'
+    return
+  fi
+
+  return 1
+}
+
+describe_python_dependency_plan() {
+  local python_cmd pkg_manager
+  python_cmd="$1"
+  if [ -n "$python_cmd" ]; then
+    printf 'none (using %s)\n' "$python_cmd"
+    return
+  fi
+
+  case "$OS_NAME" in
+    darwin)
+      printf 'python via Homebrew\n'
+      ;;
+    linux)
+      pkg_manager="$(detect_linux_pkg_manager || true)"
+      case "$pkg_manager" in
+        apt-get)
+          printf 'python3, python3-venv, python3-pip via apt-get\n'
+          ;;
+        dnf)
+          printf 'python3, python3-pip via dnf\n'
+          ;;
+        yum)
+          printf 'python3, python3-pip via yum\n'
+          ;;
+        *)
+          printf 'python 3.10+ required (install manually)\n'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+describe_runtime_dependency_plan() {
+  local runtime_cmd preferred_runtime pkg_manager
+  runtime_cmd="$1"
+
+  if [ "$MODE" = "cli" ] || [ "$REQUESTED_RUNTIME" = "skip" ]; then
+    printf 'none\n'
+    return
+  fi
+
+  if [ -n "$runtime_cmd" ]; then
+    printf 'none (using existing %s)\n' "$runtime_cmd"
+    return
+  fi
+
+  preferred_runtime="$(choose_runtime_preference)"
+  case "$OS_NAME:$preferred_runtime" in
+    darwin:docker)
+      printf 'docker, colima via Homebrew\n'
+      ;;
+    darwin:podman)
+      printf 'podman via Homebrew\n'
+      ;;
+    linux:docker)
+      pkg_manager="$(detect_linux_pkg_manager || true)"
+      case "$pkg_manager" in
+        apt-get)
+          printf 'docker.io via apt-get\n'
+          ;;
+        dnf)
+          printf 'docker via dnf\n'
+          ;;
+        yum)
+          printf 'docker via yum\n'
+          ;;
+        *)
+          printf 'docker required (install manually)\n'
+          ;;
+      esac
+      ;;
+    linux:podman)
+      pkg_manager="$(detect_linux_pkg_manager || true)"
+      case "$pkg_manager" in
+        apt-get)
+          printf 'podman, uidmap, slirp4netns via apt-get\n'
+          ;;
+        dnf)
+          printf 'podman via dnf\n'
+          ;;
+        yum)
+          printf 'podman via yum\n'
+          ;;
+        *)
+          printf 'podman required (install manually)\n'
+          ;;
+      esac
+      ;;
+    *)
+      printf 'none\n'
+      ;;
+  esac
 }
 
 ensure_homebrew() {
