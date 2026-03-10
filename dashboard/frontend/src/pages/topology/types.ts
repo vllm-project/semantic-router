@@ -13,13 +13,17 @@ export type SignalType =
   | 'language'
   | 'context'
   | 'complexity'
+  | 'modality'
+  | 'authz'
+  | 'jailbreak'
+  | 'pii'
 
 export interface SignalConfig {
   type: SignalType
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | ComplexitySignalConfig | GenericSignalConfig
+  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -47,6 +51,24 @@ export interface ComplexitySignalConfig {
   threshold?: number
   hard_candidates?: string[]
   easy_candidates?: string[]
+}
+
+export interface JailbreakSignalConfig {
+  threshold?: number
+  include_history?: boolean
+}
+
+// Modality is detected by the modality_detector inline model; no extra params needed.
+export type ModalitySignalConfig = Record<string, never>
+
+export interface AuthzSignalConfig {
+  role?: string
+}
+
+export interface PIISignalConfig {
+  threshold?: number
+  pii_types_allowed?: string[]
+  include_history?: boolean
 }
 
 export interface GenericSignalConfig {
@@ -123,12 +145,11 @@ export interface AutoMixConfig {
 // ============== Plugin Types ==============
 export type PluginType =
   | 'semantic-cache'
-  | 'jailbreak'
-  | 'pii'
   | 'system_prompt'
   | 'header_mutation'
   | 'hallucination'
   | 'router_replay'
+  | 'fast_response'
 
 export interface PluginConfig {
   type: PluginType
@@ -322,6 +343,8 @@ export interface ConfigData {
   preference_rules?: Array<{
     name: string
     description?: string
+    examples?: string[]
+    threshold?: number
   }>
   language_rules?: Array<{
     name: string
@@ -341,6 +364,35 @@ export interface ConfigData {
     easy?: {
       candidates?: string[]
     }
+    description?: string
+  }>
+  // Modality signal rules
+  modality_rules?: Array<{
+    name: string
+    description?: string
+  }>
+  // Authz / RBAC role bindings
+  role_bindings?: Array<{
+    name: string
+    role: string
+    subjects: Array<{
+      kind: 'User' | 'Group'
+      name: string
+    }>
+    description?: string
+  }>
+  // Jailbreak/PII signal rules (top-level due to yaml:",inline")
+  jailbreak?: Array<{
+    name: string
+    threshold?: number
+    include_history?: boolean
+    description?: string
+  }>
+  pii?: Array<{
+    name: string
+    threshold?: number
+    pii_types_allowed?: string[]
+    include_history?: boolean
     description?: string
   }>
   // Legacy format
@@ -390,6 +442,8 @@ export interface ConfigData {
     preferences?: Array<{
       name: string
       description?: string
+      examples?: string[]
+      threshold?: number
     }>
     language?: Array<{
       name: string
@@ -409,6 +463,32 @@ export interface ConfigData {
       easy?: {
         candidates?: string[]
       }
+      description?: string
+    }>
+    modality?: Array<{
+      name: string
+      description?: string
+    }>
+    role_bindings?: Array<{
+      name: string
+      role: string
+      subjects: Array<{
+        kind: 'User' | 'Group'
+        name: string
+      }>
+      description?: string
+    }>
+    jailbreak?: Array<{
+      name: string
+      threshold?: number
+      include_history?: boolean
+      description?: string
+    }>
+    pii?: Array<{
+      name: string
+      threshold?: number
+      pii_types_allowed?: string[]
+      include_history?: boolean
       description?: string
     }>
   }

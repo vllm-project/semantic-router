@@ -31,17 +31,24 @@ Before you begin, ensure you have the following installed:
    cd semantic-router
    ```
 
-2. **Start the development environment:**
+2. **Use the canonical local image workflow:**
 
    ```bash
-   make vllm-sr-start
+   make vllm-sr-dev
+   vllm-sr serve --image-pull-policy never
    ```
 
-   This single command handles everything:
-   - Cleans up old containers
-   - Builds the Docker image with all dependencies (Rust, Go, models)
+   For AMD ROCm development:
+
+   ```bash
+   make vllm-sr-dev VLLM_SR_PLATFORM=amd
+   vllm-sr serve --image-pull-policy never --platform amd
+   ```
+
+   This workflow:
+   - Rebuilds the local image
    - Installs the `vllm-sr` CLI tool
-   - Starts all services (semantic router, envoy, dashboard)
+   - Uses the local image only, without pulling a remote fallback
 
 3. **Install Python dependencies (Optional):**
 
@@ -54,6 +61,29 @@ Before you begin, ensure you have the following installed:
    ```
 
 ## Running Tests
+
+### Agent Gates
+
+The repository-specific agent harness is indexed in [docs/agent/README.md](docs/agent/README.md). Treat [AGENTS.md](AGENTS.md) as the short entrypoint and `docs/agent/*` plus `tools/agent/*` as the durable source of truth.
+If a real architecture or code/spec gap remains after your change, add or update the durable debt entry indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md).
+
+Read these first:
+
+- [docs/agent/testing-strategy.md](docs/agent/testing-strategy.md)
+- [docs/agent/module-boundaries.md](docs/agent/module-boundaries.md)
+
+Use the agent-specific gates for changed files:
+
+```bash
+make agent-bootstrap
+make agent-validate
+make agent-scorecard
+make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+make agent-ci-gate CHANGED_FILES="path/one,path/two"
+make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
+```
+
+`ENV=amd` is required when platform-specific behavior changed.
 
 ### Unit Tests
 
@@ -138,24 +168,26 @@ The test suite includes:
 3. **Build and test:**
 
    ```bash
-   make vllm-sr-start  # Start all services
-   make test           # Run unit tests
+   make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+   make agent-ci-gate CHANGED_FILES="path/one,path/two"
+   make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
    ```
 
 4. **Run end-to-end tests:**
 
    ```bash
-   # Services are already running from vllm-sr-start
-   python e2e/testing/run_all_tests.py
+   make agent-e2e-affected CHANGED_FILES="path/one,path/two"
+   # Or run a specific profile directly
+   make e2e-test E2E_PROFILE=ai-gateway
    ```
 
 5. **Commit your changes:**
 
-   Commit your changes with a clear message, making sure to **sign off** on your work using the `-s` flag. This is required by the project's **Developer Certificate of Origin (DCO)**.
+   Commit your changes with a clear message, making sure to **sign off** on your work using the `-s` flag. This is required by the project's **Developer Certificate of Origin (DCO)**. The repository does not require commit messages to use the PR title classification prefixes.
 
    ```bash
    git add .
-   git commit -s -m "feat: add your feature description"
+   git commit -s -m "clarify PR title guidance"
    ```
 
 ### Debugging
@@ -232,6 +264,7 @@ make precommit-local
    - Unit tests for all components
 
 2. **Create a pull request** with:
+   - A classified PR title using the repository prefixes from [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md), such as `[Doc] Clarify PR title guidance` or `[Router][CI/Build] Tighten affected test selection`
    - Clear description of changes
    - Reference to any related issues
    - Test results and validation steps

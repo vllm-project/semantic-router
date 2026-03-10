@@ -17,6 +17,7 @@
 
 *Latest News* 🔥
 
+- [2026/02/27] White Paper Released: [Signal Driven Decision Routing for Mixture-of-Modality Models](https://vllm-semantic-router.com/white-paper/)
 - [2026/02/02] New SOTA on [RouterArena](https://routeworks.github.io) (ICLR 2026): best overall score, Rank #1
 - [2026/01/05] Iris v0.1 is Released: [vLLM Semantic Router v0.1 Iris: The First Major Release](https://blog.vllm.ai/2026/01/05/vllm-sr-iris.html)
 - [2025/12/16] Collaboration: [AMD × vLLM Semantic Router: Building the System Intelligence Together](https://blog.vllm.ai/2025/12/16/vllm-sr-amd.html)
@@ -136,6 +137,20 @@ The documentation includes:
 - **[System Architecture](https://vllm-semantic-router.com/docs/intro/#architecture-overview)** - Technical deep dive
 - **[Model Training](https://vllm-semantic-router.com/docs/training/training-overview/)** - How classification models work
 - **[API Reference](https://vllm-semantic-router.com/docs/api/router/)** - Complete API documentation
+
+## Contributor Harness
+
+For repository-specific development and agent workflow rules, start with [AGENTS.md](AGENTS.md) and the indexed harness docs in [docs/agent/README.md](docs/agent/README.md).
+If the desired architecture and the current implementation still diverge after your change, record the durable gap in the debt entry set indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md).
+
+Use the shared entrypoints:
+
+```bash
+make agent-scorecard
+make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+make agent-ci-gate CHANGED_FILES="path/one,path/two"
+make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
+```
 
 ## Community 👋
 

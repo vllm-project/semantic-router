@@ -1,0 +1,104 @@
+# PII-Only Guard Configuration
+#
+# Demonstrates PII detection as a signal with configurable allow-lists.
+# Different decisions can apply different PII policies — e.g., a medical
+# endpoint may allow PERSON names while a public chatbot blocks everything.
+#
+# Usage:
+#   vllm-sr start --config config/prompt-guard/pii.yaml
+
+version: v0.1
+
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+    timeout: "300s"
+
+# ── Signals ──────────────────────────────────────────────────────────────
+signals:
+  # Two PII policies as separate signal rules
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.5
+      include_history: false
+      description: "Block ALL PII types"
+
+    - name: "pii_allow_email"
+      threshold: 0.5
+      pii_types_allowed:
+        - "EMAIL_ADDRESS"
+      include_history: false
+      description: "Allow email addresses, block everything else"
+
+  domains:
+    - name: "general"
+      description: "General queries"
+      mmlu_categories: ["other"]
+    - name: "health"
+      description: "Medical / health queries"
+      mmlu_categories: ["health"]
+
+# ── Decisions ────────────────────────────────────────────────────────────
+decisions:
+  # Strict PII policy for public-facing routes
+  - name: "block_pii_public"
+    description: "Block any PII in general queries"
+    priority: 900
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "pii"
+          name: "pii_deny_all"
+        - type: "domain"
+          name: "general"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "I'm sorry, but I cannot process this request because it contains personally identifiable information that our policy does not allow."
+
+  # Relaxed PII policy for medical queries — allow email for appointment booking
+  - name: "block_pii_medical"
+    description: "Block PII except email in health queries"
+    priority: 900
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "pii"
+          name: "pii_allow_email"
+        - type: "domain"
+          name: "health"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "Your request contains sensitive personal information beyond what is needed. Please share only your email address for appointment scheduling."
+
+  # Normal routing
+  - name: "health_route"
+    description: "Route medical queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a medical information assistant. Always recommend consulting a healthcare professional."
+
+  - name: "general_route"
+    description: "Default route"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "general"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+

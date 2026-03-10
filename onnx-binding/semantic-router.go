@@ -88,6 +88,7 @@ typedef struct {
     int num_entities;
     float processing_time_ms;
     bool error;
+    char* error_message;
 } PIIResultFFI;
 
 // ============================================================================
@@ -119,13 +120,40 @@ extern int classify_batch(const char* classifier_name, const char** texts, int n
 extern int detect_pii(const char* classifier_name, const char* text, PIIResultFFI* result);
 extern void free_classification_result(ClassificationResultFFI* result);
 extern void free_pii_result(PIIResultFFI* result);
+
+// ============================================================================
+// Multi-Modal Embedding Types & Functions
+// ============================================================================
+
+typedef struct {
+    float* data;
+    int length;
+    bool error;
+    int modality;
+    float processing_time_ms;
+} MultiModalEmbeddingResult;
+
+extern bool init_multimodal_embedding_model(const char* model_path, bool use_cpu);
+extern int multimodal_encode_text(const char* text, int target_dim, MultiModalEmbeddingResult* result);
+extern int multimodal_encode_image(const float* pixel_data, int height, int width, int target_dim, MultiModalEmbeddingResult* result);
+extern int multimodal_encode_audio(const float* mel_data, int n_mels, int time_frames, int target_dim, MultiModalEmbeddingResult* result);
+extern void free_multimodal_embedding(float* data, int length);
 */
 import "C"
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
+	"net/http"
+	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -384,6 +412,8 @@ func modelTypeToString(modelType int) string {
 	switch modelType {
 	case 0:
 		return "mmbert"
+	case 3:
+		return "multimodal"
 	default:
 		return "unknown"
 	}
@@ -417,8 +447,22 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 
 // GetEmbeddingWithModelType generates embedding with specific model type
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	// ORT binding only supports mmbert, ignore modelType
-	return GetEmbeddingWithMetadata(text, 0, 0, targetDim)
+	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	case "multimodal":
+		output, err := MultiModalEncodeText(text, targetDim)
+		if err != nil {
+			return nil, err
+		}
+		return &EmbeddingOutput{
+			Embedding:        output.Embedding,
+			ModelType:        "multimodal",
+			SequenceLength:   0,
+			ProcessingTimeMs: output.ProcessingTimeMs,
+		}, nil
+	default:
+		// ONNX binding uses mmBERT path for all non-multimodal requests.
+		return GetEmbeddingWithMetadata(text, 0, 0, targetDim)
+	}
 }
 
 // ============================================================================
@@ -532,7 +576,7 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 }
 
 // ClassifyMmBert32KPII detects PII entities in text
-func ClassifyMmBert32KPII(text string, modelConfigPath string) ([]TokenEntity, error) {
+func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 	cName := C.CString("pii")
 	defer C.free(unsafe.Pointer(cName))
 	cText := C.CString(text)
@@ -540,12 +584,19 @@ func ClassifyMmBert32KPII(text string, modelConfigPath string) ([]TokenEntity, e
 
 	var result C.PIIResultFFI
 	status := C.detect_pii(cName, cText, &result)
+	defer C.free_pii_result(&result)
 
 	if status != 0 || result.error {
-		return nil, errors.New("PII detection failed")
+		if result.error_message != nil {
+			return nil, fmt.Errorf(
+				"PII detection failed (status=%d, ffi_error=%t): %s",
+				int(status),
+				bool(result.error),
+				C.GoString(result.error_message),
+			)
+		}
+		return nil, fmt.Errorf("PII detection failed (status=%d, ffi_error=%t)", int(status), bool(result.error))
 	}
-
-	defer C.free_pii_result(&result)
 
 	// Copy entities
 	entities := make([]TokenEntity, int(result.num_entities))
@@ -709,7 +760,7 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 
 // ClassifyCandleBertTokens classifies tokens
 func ClassifyCandleBertTokens(text string) (TokenClassificationResult, error) {
-	entities, err := ClassifyMmBert32KPII(text, "")
+	entities, err := ClassifyMmBert32KPII(text)
 	if err != nil {
 		return TokenClassificationResult{}, err
 	}
@@ -873,4 +924,296 @@ func InitQwen3PreferenceClassifier(modelPath string, useCPU bool) error {
 // Returns an error so callers can disable or fall back when using ONNX config.
 func ClassifyQwen3Preference(text string, labels []string) (ClassResult, error) {
 	return ClassResult{}, errors.New("Qwen3 preference classifier is not supported in ONNX binding; use Candle binding or disable preference routing")
+}
+
+// ============================================================================
+// Modality Classification (stub — Candle-only)
+// ============================================================================
+
+// ModalityResult represents the output of modality routing classification.
+type ModalityResult struct {
+	Modality   string
+	ClassID    int
+	Confidence float32
+}
+
+// InitMmBert32KModalityClassifier is not supported in ONNX binding (Candle-only).
+func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
+	return errors.New("modality classifier is not supported in ONNX binding; use Candle binding or disable modality routing")
+}
+
+// ClassifyMmBert32KModality is not supported in ONNX binding (Candle-only).
+func ClassifyMmBert32KModality(text string) (ModalityResult, error) {
+	return ModalityResult{}, errors.New("modality classification is not supported in ONNX binding; use Candle binding or disable modality routing")
+}
+
+// ============================================================================
+// MLP Selector for Model Selection (stub — Candle-only, GPU-accelerated)
+// ============================================================================
+
+// MLPDeviceType defines the device type for MLP inference.
+type MLPDeviceType int
+
+const (
+	MLPDeviceCPU   MLPDeviceType = 0
+	MLPDeviceCUDA  MLPDeviceType = 1
+	MLPDeviceMetal MLPDeviceType = 2
+)
+
+// MLPDType defines the data type for mixed precision inference.
+type MLPDType int
+
+const (
+	MLPF32  MLPDType = 0
+	MLPF16  MLPDType = 1
+	MLPBF16 MLPDType = 2
+)
+
+// MLPSelector is a stub for the Candle MLP implementation.
+type MLPSelector struct{}
+
+// NewMLPSelector is not supported in ONNX binding (Candle-only).
+func NewMLPSelector() *MLPSelector { return &MLPSelector{} }
+
+// NewMLPSelectorWithDevice is not supported in ONNX binding (Candle-only).
+func NewMLPSelectorWithDevice(deviceType MLPDeviceType) *MLPSelector { return &MLPSelector{} }
+
+// NewMLPSelectorWithDeviceAndDType is not supported in ONNX binding (Candle-only).
+func NewMLPSelectorWithDeviceAndDType(deviceType MLPDeviceType, dtype MLPDType) *MLPSelector {
+	return &MLPSelector{}
+}
+
+func (s *MLPSelector) Close()          {}
+func (s *MLPSelector) IsTrained() bool { return false }
+func (s *MLPSelector) ToJSON() (string, error) {
+	return "", errors.New("MLP not supported in ONNX binding")
+}
+func (s *MLPSelector) Select(query []float64) (string, error) {
+	return "", errors.New("MLP selector is not supported in ONNX binding; use Candle binding")
+}
+
+// MLPFromJSON is not supported in ONNX binding (Candle-only).
+func MLPFromJSON(jsonStr string) (*MLPSelector, error) {
+	return nil, errors.New("MLP selector is not supported in ONNX binding; use Candle binding")
+}
+
+// MLPFromJSONWithDevice is not supported in ONNX binding (Candle-only).
+func MLPFromJSONWithDevice(jsonStr string, deviceType MLPDeviceType) (*MLPSelector, error) {
+	return nil, errors.New("MLP selector is not supported in ONNX binding; use Candle binding")
+}
+
+// MLPFromJSONWithDeviceAndDType is not supported in ONNX binding (Candle-only).
+func MLPFromJSONWithDeviceAndDType(jsonStr string, deviceType MLPDeviceType, dtype MLPDType) (*MLPSelector, error) {
+	return nil, errors.New("MLP selector is not supported in ONNX binding; use Candle binding")
+}
+
+// ============================================================================
+// Multi-Modal Embedding (ONNX Runtime — text, image, audio)
+// ============================================================================
+
+// MultiModalEmbeddingOutput represents the result of a multi-modal embedding.
+type MultiModalEmbeddingOutput struct {
+	Embedding        []float32
+	Modality         string
+	ProcessingTimeMs float32
+}
+
+func modalityToString(m int) string {
+	switch m {
+	case 0:
+		return "text"
+	case 1:
+		return "image"
+	case 2:
+		return "audio"
+	default:
+		return "unknown"
+	}
+}
+
+// InitMultiModalEmbeddingModel loads the multi-modal ONNX model.
+// modelPath can contain encoders/tokenizer either at root or under modelPath/onnx.
+func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
+	cPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cPath))
+	if !C.init_multimodal_embedding_model(cPath, C.bool(useCPU)) {
+		return fmt.Errorf("failed to initialize multi-modal embedding model from %s", modelPath)
+	}
+	return nil
+}
+
+// MultiModalEncodeText encodes text into a shared multi-modal embedding space.
+func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_text(cText, C.int(targetDim), &result)
+	if status != 0 || result.error {
+		return nil, errors.New("multi-modal text encoding failed")
+	}
+	if result.data == nil || result.length <= 0 {
+		return nil, errors.New("multi-modal text encoding returned empty result")
+	}
+	defer C.free_multimodal_embedding(result.data, result.length)
+
+	emb := make([]float32, int(result.length))
+	cData := (*[1 << 30]float32)(unsafe.Pointer(result.data))[:result.length:result.length]
+	copy(emb, cData)
+
+	return &MultiModalEmbeddingOutput{
+		Embedding:        emb,
+		Modality:         modalityToString(int(result.modality)),
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// MultiModalEncodeImage encodes pre-processed pixel data (CHW, float32 [0,1]).
+func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if len(pixelData) == 0 {
+		return nil, errors.New("pixelData cannot be empty")
+	}
+	expected := 3 * height * width
+	if len(pixelData) != expected {
+		return nil, fmt.Errorf("expected %d floats (3×%d×%d), got %d", expected, height, width, len(pixelData))
+	}
+
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_image(
+		(*C.float)(unsafe.Pointer(&pixelData[0])),
+		C.int(height), C.int(width), C.int(targetDim), &result,
+	)
+	if status != 0 || result.error {
+		return nil, errors.New("multi-modal image encoding failed")
+	}
+	if result.data == nil || result.length <= 0 {
+		return nil, errors.New("multi-modal image encoding returned empty result")
+	}
+	defer C.free_multimodal_embedding(result.data, result.length)
+
+	emb := make([]float32, int(result.length))
+	cData := (*[1 << 30]float32)(unsafe.Pointer(result.data))[:result.length:result.length]
+	copy(emb, cData)
+
+	return &MultiModalEmbeddingOutput{
+		Embedding:        emb,
+		Modality:         modalityToString(int(result.modality)),
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// MultiModalEncodeAudio encodes a mel spectrogram [nMels × timeFrames].
+func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if len(melData) == 0 {
+		return nil, errors.New("melData cannot be empty")
+	}
+
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_audio(
+		(*C.float)(unsafe.Pointer(&melData[0])),
+		C.int(nMels), C.int(timeFrames), C.int(targetDim), &result,
+	)
+	if status != 0 || result.error {
+		return nil, errors.New("multi-modal audio encoding failed")
+	}
+	if result.data == nil || result.length <= 0 {
+		return nil, errors.New("multi-modal audio encoding returned empty result")
+	}
+	defer C.free_multimodal_embedding(result.data, result.length)
+
+	emb := make([]float32, int(result.length))
+	cData := (*[1 << 30]float32)(unsafe.Pointer(result.data))[:result.length:result.length]
+	copy(emb, cData)
+
+	return &MultiModalEmbeddingOutput{
+		Embedding:        emb,
+		Modality:         modalityToString(int(result.modality)),
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// MultiModalEncodeImageFromBytes decodes raw JPEG/PNG bytes, resizes to 512×512,
+// and encodes to a multi-modal embedding.
+func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if len(imageBytes) == 0 {
+		return nil, errors.New("imageBytes cannot be empty")
+	}
+	pixelData, err := decodeAndResizeImageOnnx(imageBytes, 512, 512)
+	if err != nil {
+		return nil, fmt.Errorf("image decode error: %w", err)
+	}
+	return MultiModalEncodeImage(pixelData, 512, 512, targetDim)
+}
+
+// MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes it.
+func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if base64Str == "" {
+		return nil, errors.New("base64Str cannot be empty")
+	}
+	payload := base64Str
+	if idx := strings.Index(base64Str, ";base64,"); idx >= 0 {
+		payload = base64Str[idx+len(";base64,"):]
+	}
+	data, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, fmt.Errorf("base64 decode error: %w", err)
+	}
+	return MultiModalEncodeImageFromBytes(data, targetDim)
+}
+
+// MultiModalEncodeImageFromURL downloads an image from a URL and encodes it.
+// This helper is intended for trusted, operator-supplied URLs only. It enforces
+// https-only and disables redirects, but does not perform full SSRF mitigation
+// (e.g., private IP blocking). Do not use with untrusted user input.
+func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if url == "" {
+		return nil, errors.New("url cannot be empty")
+	}
+	if !strings.HasPrefix(url, "https://") {
+		return nil, errors.New("only https URLs are allowed")
+	}
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP GET error: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP GET returned status %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 50*1024*1024))
+	if err != nil {
+		return nil, fmt.Errorf("read body error: %w", err)
+	}
+	return MultiModalEncodeImageFromBytes(data, targetDim)
+}
+
+// decodeAndResizeImageOnnx decodes JPEG/PNG and returns CHW float32 [0,1] pixels.
+func decodeAndResizeImageOnnx(data []byte, targetW, targetH int) ([]float32, error) {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	bounds := img.Bounds()
+	srcW := bounds.Dx()
+	srcH := bounds.Dy()
+
+	pixels := make([]float32, 3*targetH*targetW)
+	for y := 0; y < targetH; y++ {
+		srcY := y * srcH / targetH
+		for x := 0; x < targetW; x++ {
+			srcX := x * srcW / targetW
+			r, g, b, _ := img.At(bounds.Min.X+srcX, bounds.Min.Y+srcY).RGBA()
+			pixels[0*targetH*targetW+y*targetW+x] = float32(r) / 65535.0
+			pixels[1*targetH*targetW+y*targetW+x] = float32(g) / 65535.0
+			pixels[2*targetH*targetW+y*targetW+x] = float32(b) / 65535.0
+		}
+	}
+	return pixels, nil
 }

@@ -423,7 +423,7 @@ func TestGMTRouterSelector_ResponseEmbedding(t *testing.T) {
 		t.Fatalf("Expected at least one interaction, got %v", userState["interactions"])
 	}
 
-	t.Logf("✅ Response embedding test passed: embedding_calls=%d, interaction_count=%d",
+	t.Logf("Response embedding test passed: embedding_calls=%d, interaction_count=%d",
 		embeddingCalled, interactionCount)
 }
 
@@ -485,5 +485,5 @@ func TestGMTRouterSelector_ResponseCoherence(t *testing.T) {
 		t.Error("Expected model-b to have positive preference")
 	}
 
-	t.Log("✅ Response coherence test passed")
+	t.Log("Response coherence test passed")
 }

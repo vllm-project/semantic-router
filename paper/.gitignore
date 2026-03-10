@@ -14,6 +14,7 @@
 
 ## BibTeX
 *.bst
+!iclr2026_conference.bst
 
 ## Build artifacts
 *.dvi

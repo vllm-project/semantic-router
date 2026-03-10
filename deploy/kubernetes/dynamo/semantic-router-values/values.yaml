@@ -57,10 +57,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -79,10 +76,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -101,10 +95,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -127,10 +118,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -149,10 +137,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -171,10 +156,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -193,10 +175,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -219,10 +198,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -241,10 +217,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -263,10 +236,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -285,10 +255,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -307,10 +274,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -329,10 +293,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -351,10 +312,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -373,10 +331,7 @@ config:
         - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -437,11 +392,6 @@ config:
     threshold: 0.7
     use_cpu: true
     jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-
-  # Router configuration
-  router:
-    high_confidence_threshold: 0.99
-    low_latency_threshold_ms: 2000
 
   # Embedding models
   # NOTE: mom-embedding-flash (google/embeddinggemma-300m) is gated and requires HF token

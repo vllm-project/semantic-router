@@ -47,7 +47,7 @@ decisions:
         configuration:
           enabled: true
           retrieval_limit: 5
-          similarity_threshold: 0.60
+          similarity_threshold: 0.45
           auto_store: true
 
 # Providers - LLM backend
@@ -60,13 +60,12 @@ providers:
           endpoint: "172.17.0.1:8000"
           protocol: "http"
   default_model: "qwen3"
-  # External models for memory features (query rewriting and extraction)
+  # External models for memory features
+  # NOTE: memory_rewrite is intentionally omitted — the echo backend used in CI
+  # returns the full rewrite prompt as the "rewritten query", which corrupts the
+  # embedding and causes vector search misses. Without it, the router falls back
+  # to the original user query, which embeds cleanly.
   external_models:
-    - provider: "vllm"
-      role: "memory_rewrite"
-      endpoint: "172.17.0.1:8000"
-      model_name: "qwen3"
-      timeout_seconds: 30
     - provider: "vllm"
       role: "memory_extraction"
       endpoint: "172.17.0.1:8000"
@@ -83,5 +82,5 @@ memory:
     dimension: 384  # Must match embedding_models target_dimension
   embedding_model: "bert"  # Use BERT for forgiving semantic matching
   default_retrieval_limit: 5
-  default_similarity_threshold: 0.60  # POC recommends 0.6 as starting threshold
+  default_similarity_threshold: 0.45  # Tuned for all-MiniLM-L12-v2 question-to-statement pairs
   extraction_batch_size: 1  # Extract after every turn (1%1=0 triggers extraction)

@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "bac2743"
+  source_commit: "dbd9c48"
   source_file: "docs/tutorials/intelligent-route/keyword-routing.md"
   outdated: false
 ---

@@ -13,6 +13,10 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   language: '🌐',
   context: '📏',
   complexity: '🧠',
+  modality: '🖼️',
+  authz: '🔐',
+  jailbreak: '🛡️',
+  pii: '🔒',
 }
 
 // ============== Signal Colors (Gray Nodes, Green Paths) ==============
@@ -26,6 +30,10 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
   context: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
   complexity: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  modality: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
+  authz: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
+  jailbreak: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
+  pii: { background: '#4a5568', border: '#2d3748' },          // Dark Gray
 }
 
 // ============== Signal Latency ==============
@@ -39,28 +47,30 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   language: '<1ms',
   context: '<1ms',
   complexity: '50-100ms',
+  modality: '50-100ms',
+  authz: '<1ms',
+  jailbreak: '10-50ms',
+  pii: '10-50ms',
 }
 
 // ============== Plugin Icons ==============
 export const PLUGIN_ICONS: Record<PluginType, string> = {
   'semantic-cache': '⚡',
-  'jailbreak': '🛡️',
-  'pii': '🔒',
   'system_prompt': '📝',
   'header_mutation': '🔧',
   'hallucination': '🔍',
   'router_replay': '🔄',
+  'fast_response': '⚡',
 }
 
 // ============== Plugin Colors (NVIDIA Dark Theme) ==============
 export const PLUGIN_COLORS: Record<PluginType, { background: string; border: string }> = {
   'semantic-cache': { background: '#76b900', border: '#5a8f00' },  // NVIDIA Green
-  'jailbreak': { background: '#718096', border: '#4a5568' },       // Medium Gray
-  'pii': { background: '#5a6c7d', border: '#3d4a59' },             // Blue Gray
   'system_prompt': { background: '#8fd400', border: '#76b900' },   // Light Green
   'header_mutation': { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
   'hallucination': { background: '#556b7d', border: '#3d4a59' },   // Cool Gray
   'router_replay': { background: '#6ba300', border: '#5a8f00' },   // Green (consistent with other plugins)
+  'fast_response': { background: '#4a5568', border: '#2d3748' },   // Dark Gray
 }
 
 // ============== Algorithm Icons ==============
@@ -156,6 +166,48 @@ export const LAYOUT_CONFIG = {
   pluginItemHeight: 20,        // Per plugin item
 }
 
+// ============== Three-Layer LR Layout (Brain Page) ==============
+// Keep these values configurable so dense topologies can be compacted
+// without changing layout code.
+export const TOPOLOGY_LAYER_LAYOUT = {
+  x: {
+    client: 0,
+    signals: 340,
+    decisions: 900,
+    algorithms: 1380,
+    pluginChains: 1700,
+    models: 2080,
+  },
+  verticalSpacing: {
+    client: { base: 0, min: 0, compactThreshold: 1, compactStep: 0 },
+    signals: { base: 34, min: 14, compactThreshold: 8, compactStep: 2.5 },
+    decisions: { base: 42, min: 16, compactThreshold: 9, compactStep: 3 },
+    algorithms: { base: 48, min: 20, compactThreshold: 4, compactStep: 4 },
+    pluginChains: { base: 52, min: 20, compactThreshold: 5, compactStep: 4 },
+    models: { base: 60, min: 24, compactThreshold: 9, compactStep: 3 },
+  },
+  lanes: {
+    decisions: {
+      enableAt: 7,
+      maxPerLane: 6,
+      maxLanes: 6,
+      laneGap: 250,
+    },
+    algorithms: {
+      laneGap: 220,
+    },
+    pluginChains: {
+      laneGap: 220,
+    },
+    models: {
+      enableAt: 10,
+      maxPerLane: 8,
+      maxLanes: 2,
+      laneGap: 210,
+    },
+  },
+} as const
+
 // ============== Signal Types Array ==============
 export const SIGNAL_TYPES: SignalType[] = [
   'keyword',
@@ -167,15 +219,18 @@ export const SIGNAL_TYPES: SignalType[] = [
   'language',
   'context',
   'complexity',
+  'modality',
+  'authz',
+  'jailbreak',
+  'pii',
 ]
 
 // ============== Plugin Types Array ==============
 export const PLUGIN_TYPES: PluginType[] = [
   'semantic-cache',
-  'jailbreak',
-  'pii',
   'system_prompt',
   'header_mutation',
   'hallucination',
   'router_replay',
+  'fast_response',
 ]

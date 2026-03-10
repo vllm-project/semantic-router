@@ -23,18 +23,7 @@ const (
 	MemoryTypeEpisodic MemoryType = "episodic"
 )
 
-// ExtractedFact represents a fact extracted by the LLM from conversation.
-// This is the output of ExtractFacts().
-type ExtractedFact struct {
-	// Type is the category (semantic, procedural, episodic)
-	Type MemoryType `json:"type"`
-
-	// Content is the extracted fact with context.
-	// Should be self-contained: "budget for Hawaii is $10K" not just "$10K"
-	Content string `json:"content"`
-}
-
-// Message represents a conversation message used for fact extraction.
+// Message represents a conversation message.
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -78,6 +67,17 @@ type Memory struct {
 
 	// Importance is a score for prioritizing memories (0.0 to 1.0)
 	Importance float32 `json:"importance"`
+
+	// --- Provenance fields ---
+
+	// CreatedByUserID is the user whose conversation produced this memory.
+	CreatedByUserID string `json:"created_by_user_id,omitempty"`
+
+	// ConversationID is the session that produced this memory.
+	ConversationID string `json:"conversation_id,omitempty"`
+
+	// CreatedVia records the creation method: "llm_extraction", "api", "import".
+	CreatedVia string `json:"created_via,omitempty"`
 }
 
 // RetrieveResult represents a memory retrieved from search with its relevance score
@@ -87,21 +87,6 @@ type RetrieveResult struct {
 
 	// Score is the similarity score (0.0 to 1.0, higher = more relevant)
 	Score float32 `json:"score"`
-}
-
-// MemoryHit represents a single memory retrieval result in flat structure
-//
-// ID is the unique identifier of the memory entry
-// Content is the content of the memory entry
-// Type is the type of memory
-// Similarity is the similarity score (0.0 to 1.0)
-// Metadata contains additional metadata
-type MemoryHit struct {
-	ID         string
-	Content    string
-	Type       MemoryType
-	Similarity float32
-	Metadata   map[string]interface{}
 }
 
 // RetrieveOptions configures memory retrieval
@@ -123,6 +108,18 @@ type RetrieveOptions struct {
 
 	// Threshold is the minimum similarity score (range 0.0 to 1.0, default: 0.70)
 	Threshold float32
+
+	// HybridSearch enables BM25 + n-gram re-ranking on top of vector search
+	HybridSearch bool
+
+	// HybridMode selects the score fusion method: "weighted" (default) or "rrf"
+	HybridMode string
+
+	// AdaptiveThreshold enables cluster-based adaptive thresholding.
+	// When true, the retriever detects the largest score gap among candidates
+	// and only returns those above the gap, subject to the base Threshold
+	// as a floor. This avoids injecting weakly-relevant memories.
+	AdaptiveThreshold bool
 }
 
 // DefaultMemoryConfig returns a default memory configuration.
@@ -160,6 +157,21 @@ type ListResult struct {
 	// Limit is the limit that was applied
 	Limit int `json:"limit"`
 }
+
+// MemoryFilter is the interface for post-retrieval, pre-injection memory
+// validation. Implementations score, trim, and filter retrieved memories
+// before they are injected into the LLM request context.
+//
+// Returning nil or an empty slice signals that no memories should be injected.
+// Implementations must be safe for concurrent use.
+type MemoryFilter interface {
+	Filter(memories []*RetrieveResult) []*RetrieveResult
+}
+
+// MemoryFilterFactory constructs a MemoryFilter from global and optional
+// per-decision configuration. Returning nil means filtering is disabled
+// (equivalent to NoopFilter).
+type MemoryFilterFactory func(global config.MemoryReflectionConfig, perDecision *config.MemoryReflectionConfig) MemoryFilter
 
 // MemoryScope defines the scope for bulk operations (e.g., ForgetByScope)
 type MemoryScope struct {

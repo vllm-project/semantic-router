@@ -3,7 +3,7 @@
 //! GPU-accelerated neural network for model selection.
 //! Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
 //!
-//! Training is done in Python (src/training/ml_model_selection/).
+//! Training is done in Python (src/training/model_selection/ml_model_selection/).
 //! Models are loaded from JSON files trained by the Python scripts.
 
 use crate::classifiers::mlp_selector::{MLPDType, MLPSelector};

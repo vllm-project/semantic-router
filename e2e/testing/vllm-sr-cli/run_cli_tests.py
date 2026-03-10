@@ -21,96 +21,171 @@ import os
 import shutil
 import subprocess
 import sys
-import time
 import unittest
 from pathlib import Path
 
+DEFAULT_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
+SECTION_DIVIDER = "=" * 60
 
-def check_prerequisites() -> bool:
-    """Check that all prerequisites are met for running CLI tests."""
-    print("=" * 60)
-    print("Pre-flight Checks")
-    print("=" * 60)
 
-    all_ok = True
+def print_section_header(title: str) -> None:
+    print(SECTION_DIVIDER)
+    print(title)
+    print(SECTION_DIVIDER)
 
-    # Check Docker or Podman
-    container_runtime = None
+
+def detect_container_runtime() -> str | None:
+    """Return the available container runtime, printing the detection result."""
     if shutil.which("docker"):
-        container_runtime = "docker"
         print("✅ Docker is installed")
-    elif shutil.which("podman"):
-        container_runtime = "podman"
+        return "docker"
+    if shutil.which("podman"):
         print("✅ Podman is installed")
-    else:
-        print("❌ Neither Docker nor Podman found")
-        all_ok = False
+        return "podman"
+    print("❌ Neither Docker nor Podman found")
+    return None
 
-    # Check container runtime is accessible
-    if container_runtime:
-        try:
-            result = subprocess.run(
-                [container_runtime, "info"],
-                capture_output=True,
-                timeout=10,
-            )
-            if result.returncode == 0:
-                print(f"✅ {container_runtime.capitalize()} daemon is running")
-            else:
-                print(f"❌ {container_runtime.capitalize()} daemon is not accessible")
-                all_ok = False
-        except Exception as e:
-            print(f"❌ Failed to check {container_runtime}: {e}")
-            all_ok = False
 
-    # Check vllm-sr CLI is installed
-    if shutil.which("vllm-sr"):
-        print("✅ vllm-sr CLI is installed")
+def check_container_runtime_access(
+    container_runtime: str, *, require_runtime_access: bool
+) -> bool:
+    """Check whether the detected runtime daemon is reachable."""
+    try:
+        result = subprocess.run(
+            [container_runtime, "info"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception as exc:
+        if require_runtime_access:
+            print(f"❌ Failed to check {container_runtime}: {exc}")
+            return False
+        print(f"⚠️  Failed to check {container_runtime}: {exc}")
+        print("   Continuing because integration tests are disabled for this run.")
+        return True
 
-        # Get version
-        try:
-            result = subprocess.run(
-                ["vllm-sr", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            version = result.stdout.strip() or result.stderr.strip()
-            print(f"   Version: {version}")
-        except Exception:
-            pass
-    else:
+    if result.returncode == 0:
+        print(f"✅ {container_runtime.capitalize()} daemon is running")
+        return True
+    if require_runtime_access:
+        print(f"❌ {container_runtime.capitalize()} daemon is not accessible")
+        return False
+    print(f"⚠️  {container_runtime.capitalize()} daemon is not accessible")
+    print(
+        "   Continuing because fast/unit tests only require the CLI binary and "
+        "container runtime client."
+    )
+    return True
+
+
+def check_cli_installation() -> bool:
+    """Verify that the CLI is installed and print its version when available."""
+    if not shutil.which("vllm-sr"):
         print("❌ vllm-sr CLI is not installed")
         print("   Install with: pip install -e src/vllm-sr")
-        all_ok = False
+        return False
 
-    # Check for vllm-sr image (optional)
+    print("✅ vllm-sr CLI is installed")
+    try:
+        result = subprocess.run(
+            ["vllm-sr", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception:
+        return True
+
+    version = result.stdout.strip() or result.stderr.strip()
+    if version:
+        print(f"   Version: {version}")
+    return True
+
+
+def report_local_image_status(container_runtime: str) -> None:
+    """Print whether the default local image is already present."""
+    try:
+        result = subprocess.run(
+            [container_runtime, "images", "-q", DEFAULT_IMAGE],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception:
+        return
+
+    if result.stdout.strip():
+        print("✅ vllm-sr Docker image is available locally")
+        return
+    print("⚠️  vllm-sr Docker image not found locally")
+    print("   Some tests may need to pull the image")
+
+
+def configure_integration_mode(integration: bool) -> None:
+    """Set the integration-test environment toggle for the test suite."""
+    if integration:
+        os.environ["RUN_INTEGRATION_TESTS"] = "true"
+        print("\n🔧 Integration tests ENABLED")
+        return
+    os.environ["RUN_INTEGRATION_TESTS"] = "false"
+    print("\n🔧 Integration tests DISABLED (use --integration to enable)")
+
+
+def print_test_summary(result: unittest.TestResult) -> bool:
+    """Print the final unit test summary and return success state."""
+    print(f"\n{SECTION_DIVIDER}")
+    print("Test Summary")
+    print(SECTION_DIVIDER)
+
+    executed = result.testsRun - len(result.skipped)
+    print(f"Tests executed: {executed}")
+    print(f"Tests skipped: {len(result.skipped)}")
+    print(f"Total tests: {result.testsRun}")
+    print(f"Failures: {len(result.failures)}")
+    print(f"Errors: {len(result.errors)}")
+
+    if result.wasSuccessful():
+        print("\n✅ All tests passed!")
+        return True
+
+    print("\n❌ Some tests failed")
+    if result.failures:
+        print("\nFailures:")
+        for test, traceback in result.failures:
+            print(f"  - {test}: {traceback.split(chr(10))[0]}")
+    if result.errors:
+        print("\nErrors:")
+        for test, traceback in result.errors:
+            print(f"  - {test}: {traceback.split(chr(10))[0]}")
+    return False
+
+
+def check_prerequisites(*, require_runtime_access: bool) -> bool:
+    """Check that all prerequisites are met for running CLI tests."""
+    print_section_header("Pre-flight Checks")
+    container_runtime = detect_container_runtime()
+    all_ok = container_runtime is not None
+
     if container_runtime:
-        try:
-            result = subprocess.run(
-                [
-                    container_runtime,
-                    "images",
-                    "-q",
-                    "ghcr.io/vllm-project/semantic-router/vllm-sr:latest",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
+        all_ok = (
+            check_container_runtime_access(
+                container_runtime,
+                require_runtime_access=require_runtime_access,
             )
-            if result.stdout.strip():
-                print("✅ vllm-sr Docker image is available locally")
-            else:
-                print("⚠️  vllm-sr Docker image not found locally")
-                print("   Some tests may need to pull the image")
-        except Exception:
-            pass
+            and all_ok
+        )
+        report_local_image_status(container_runtime)
 
-    print("=" * 60)
+    all_ok = check_cli_installation() and all_ok
+    print(SECTION_DIVIDER)
     return all_ok
 
 
-def discover_tests(pattern: str = None) -> unittest.TestSuite:
+def discover_tests(pattern: str | None = None) -> unittest.TestSuite:
     """Discover and load CLI tests."""
     # Get the directory containing this script
     test_dir = Path(__file__).parent
@@ -138,7 +213,7 @@ def discover_tests(pattern: str = None) -> unittest.TestSuite:
 
 
 def run_tests(
-    pattern: str = None,
+    pattern: str | None = None,
     verbose: bool = False,
     integration: bool = False,
 ) -> bool:
@@ -153,13 +228,7 @@ def run_tests(
     Returns:
         True if all tests passed, False otherwise
     """
-    # Set environment for integration tests
-    if integration:
-        os.environ["RUN_INTEGRATION_TESTS"] = "true"
-        print("\n🔧 Integration tests ENABLED")
-    else:
-        os.environ["RUN_INTEGRATION_TESTS"] = "false"
-        print("\n🔧 Integration tests DISABLED (use --integration to enable)")
+    configure_integration_mode(integration)
 
     # Change to test directory
     test_dir = Path(__file__).parent
@@ -170,52 +239,20 @@ def run_tests(
         # Discover tests
         suite = discover_tests(pattern)
 
-        # Count tests
         test_count = suite.countTestCases()
         print(f"\n📋 Found {test_count} test(s) to run")
-
         if test_count == 0:
             print("No tests found!")
             return False
 
-        # Run tests
-        print("\n" + "=" * 60)
+        print(f"\n{SECTION_DIVIDER}")
         print("Running Tests")
-        print("=" * 60 + "\n")
+        print(f"{SECTION_DIVIDER}\n")
 
         verbosity = 2 if verbose else 1
         runner = unittest.TextTestRunner(verbosity=verbosity)
         result = runner.run(suite)
-
-        # Print summary
-        print("\n" + "=" * 60)
-        print("Test Summary")
-        print("=" * 60)
-
-        executed = result.testsRun - len(result.skipped)
-        print(f"Tests executed: {executed}")
-        print(f"Tests skipped: {len(result.skipped)}")
-        print(f"Total tests: {result.testsRun}")
-        print(f"Failures: {len(result.failures)}")
-        print(f"Errors: {len(result.errors)}")
-
-        if result.wasSuccessful():
-            print("\n✅ All tests passed!")
-            return True
-        else:
-            print("\n❌ Some tests failed")
-
-            if result.failures:
-                print("\nFailures:")
-                for test, traceback in result.failures:
-                    print(f"  - {test}: {traceback.split(chr(10))[0]}")
-
-            if result.errors:
-                print("\nErrors:")
-                for test, traceback in result.errors:
-                    print(f"  - {test}: {traceback.split(chr(10))[0]}")
-
-            return False
+        return print_test_summary(result)
 
     finally:
         os.chdir(original_dir)
@@ -271,10 +308,11 @@ Integration Tests:
     args = parser.parse_args()
 
     # Run pre-flight checks
-    if not args.skip_checks:
-        if not check_prerequisites():
-            print("\n❌ Pre-flight checks failed. Fix issues above and retry.")
-            return 1
+    if not args.skip_checks and not check_prerequisites(
+        require_runtime_access=args.integration
+    ):
+        print("\n❌ Pre-flight checks failed. Fix issues above and retry.")
+        return 1
 
     # Run tests
     success = run_tests(

@@ -100,7 +100,7 @@ func (r *Report) SaveMarkdown(path string) error {
 	if r.HasRegressions {
 		md.WriteString("⚠️ **WARNING: Performance regressions detected!**\n\n")
 	} else {
-		md.WriteString("✅ **No regressions detected**\n\n")
+		md.WriteString("**No regressions detected**\n\n")
 	}
 
 	// Detailed results
@@ -109,7 +109,7 @@ func (r *Report) SaveMarkdown(path string) error {
 	md.WriteString("|-----------|--------|----------|---------|--------|--------|\n")
 
 	for _, comp := range r.Comparisons {
-		status := "✅ OK"
+		status := "OK"
 		if comp.RegressionDetected {
 			status = "⚠️ REGRESSION"
 		} else if comp.NsPerOpChange < -5 {

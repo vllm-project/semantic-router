@@ -103,46 +103,60 @@ func (pm *PIIMapping) GetPIITypeFromIndex(classIndex int) (string, bool) {
 	return piiType, ok
 }
 
+// stripBIOPrefix removes the BIO sequence labeling prefix from a PII type string.
+// For example: "B-PERSON" → "PERSON", "I-DATE_TIME" → "DATE_TIME", "PERSON" → "PERSON".
+func stripBIOPrefix(s string) string {
+	if len(s) > 2 && s[1] == '-' {
+		switch s[0] {
+		case 'B', 'I', 'E':
+			return s[2:]
+		}
+	}
+	return s
+}
+
 // TranslatePIIType translates a PII type from Rust binding format to named type.
 // Handles formats like "class_6" → "DATE_TIME" and passes through already-named types.
-// Also strips BIO prefixes (B-PERSON → PERSON).
+// Also strips BIO prefixes (B-PERSON → PERSON, I-DATE_TIME → DATE_TIME).
+// This includes BIO prefixes that may be embedded in the mapping file's label values.
 func (pm *PIIMapping) TranslatePIIType(rawType string) string {
+	// Strip BIO prefix unconditionally — must happen BEFORE the nil guard so
+	// that "B-PERSON" → "PERSON" even when no mapping file is loaded.
+	normalized := stripBIOPrefix(rawType)
+
 	if pm == nil {
-		return rawType
+		return normalized
 	}
 
-	// Check if it's already a known label (exact match or in IdxToLabel values)
+	// Check if it's already a known label (exact match in IdxToLabel values,
+	// comparing after stripping BIO from both sides).
 	for _, label := range pm.IdxToLabel {
-		if rawType == label {
-			return rawType // Already a proper label name
+		if normalized == stripBIOPrefix(label) {
+			return normalized
 		}
 	}
 
 	// Check if it's in class_X format
-	if len(rawType) > 6 && rawType[:6] == "class_" {
-		indexStr := rawType[6:]
+	if len(normalized) > 6 && normalized[:6] == "class_" {
+		indexStr := normalized[6:]
 		if label, ok := pm.IdxToLabel[indexStr]; ok {
-			return label
+			// Strip BIO prefix from the mapped label: mapping files may store
+			// BIO-tagged values like "I-PERSON" rather than bare "PERSON".
+			return stripBIOPrefix(label)
 		}
 	}
 
 	// Check if it's in LABEL_X format (from Rust binding)
-	if len(rawType) > 6 && rawType[:6] == "LABEL_" {
-		indexStr := rawType[6:]
+	if len(normalized) > 6 && normalized[:6] == "LABEL_" {
+		indexStr := normalized[6:]
 		if label, ok := pm.IdxToLabel[indexStr]; ok {
-			return label
+			// Strip BIO prefix from the mapped label: mapping files may store
+			// BIO-tagged values like "I-PERSON" rather than bare "PERSON".
+			return stripBIOPrefix(label)
 		}
 	}
 
-	// Strip BIO prefix if present (B-PERSON → PERSON, I-DATE_TIME → DATE_TIME)
-	if len(rawType) > 2 && rawType[1] == '-' {
-		prefix := rawType[0]
-		if prefix == 'B' || prefix == 'I' || prefix == 'O' || prefix == 'E' {
-			return rawType[2:]
-		}
-	}
-
-	return rawType
+	return normalized
 }
 
 // GetJailbreakTypeFromIndex converts a class index to jailbreak type name using the mapping

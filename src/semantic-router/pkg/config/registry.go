@@ -227,6 +227,19 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"embedding", "matryoshka", "2d-matryoshka", "multilingual", "modernbert", "long-context", "early-exit", "flash-attention-2"},
 	},
 
+	// Embedding Models - Multi-Modal (Text/Image/Audio)
+	{
+		LocalPath:        "models/mom-embedding-multimodal",
+		RepoID:           "llm-semantic-router/multi-modal-embed-small",
+		Aliases:          []string{"multi-modal-embed-small", "multimodal-embedding", "embedding-multimodal", "multimodal", "mom-embedding-multimodal"},
+		Purpose:          PurposeEmbedding,
+		Description:      "Multi-modal embedding model for text/image/audio retrieval and cross-modal matching",
+		ParameterSize:    "~120M",
+		EmbeddingDim:     384,
+		MaxContextLength: 512,
+		Tags:             []string{"embedding", "multimodal", "text", "image", "audio", "cross-modal"},
+	},
+
 	// ============================================================================
 	// mmBERT-32K LoRA Models (32K context, YaRN RoPE scaling, multilingual)
 	// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn

@@ -39,7 +39,7 @@ export default function TranslationBanner(): JSX.Element | null {
   if (translation?.outdated) {
     return (
       <div className={styles.banner + ' ' + styles.outdated}>
-        <span className={styles.icon}>⚠️</span>
+        <span className={styles.icon}>Review</span>
         <span>
           <Translate
             id="translationBanner.outdated"
@@ -66,7 +66,7 @@ export default function TranslationBanner(): JSX.Element | null {
 
   return (
     <div className={styles.banner + ' ' + styles.translated}>
-      <span className={styles.icon}>🤖</span>
+      <span className={styles.icon}>AI</span>
       <span>
         <Translate
           id="translationBanner.aiTranslated"

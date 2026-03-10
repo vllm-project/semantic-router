@@ -173,11 +173,18 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 		fields["jailbreak_enabled"] = r.JailbreakEnabled
 		fields["pii_enabled"] = r.PIIEnabled
 
-		// Jailbreak detection results
+		// Jailbreak detection results (request-level)
 		if r.JailbreakDetected {
 			fields["jailbreak_detected"] = r.JailbreakDetected
 			fields["jailbreak_type"] = r.JailbreakType
 			fields["jailbreak_confidence"] = r.JailbreakConfidence
+		}
+
+		// Response jailbreak detection results
+		if r.ResponseJailbreakDetected {
+			fields["response_jailbreak_detected"] = r.ResponseJailbreakDetected
+			fields["response_jailbreak_type"] = r.ResponseJailbreakType
+			fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
 		}
 
 		// PII detection results

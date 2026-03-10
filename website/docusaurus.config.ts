@@ -2,7 +2,7 @@ import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 import { themes } from 'prism-react-renderer'
 
-const lightCodeTheme = themes.github
+const lightCodeTheme = themes.vsDark
 const darkCodeTheme = themes.vsDark
 
 const config: Config = {
@@ -47,15 +47,16 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
+          lastVersion: 'current',
           versions: {
             'current': {
-              label: '🚧 Next',
-              path: 'next',
+              label: 'Latest',
+              path: '',
               badge: true,
             },
             'v0.1': {
               label: 'v0.1',
-              path: '',
+              path: 'v0.1',
               badge: true,
             },
           },
@@ -141,7 +142,7 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
-      title: 'vLLM Semantic Router',
+      title: 'vLLM-SR',
       logo: {
         alt: 'vLLM Semantic Router Logo',
         src: 'img/vllm.png',
@@ -150,6 +151,7 @@ const config: Config = {
       items: [
         {
           type: 'localeDropdown',
+          className: 'nav-locale',
           position: 'right',
         },
         {
@@ -160,36 +162,42 @@ const config: Config = {
         {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
+          className: 'nav-primary',
           position: 'left',
-          label: 'Documentation',
+          label: 'Docs',
+        },
+        {
+          to: '/white-paper',
+          className: 'nav-primary',
+          label: 'Paper',
+          position: 'left',
         },
         {
           to: '/publications',
-          label: 'Publications',
+          className: 'nav-primary',
+          label: 'Research',
           position: 'left',
         },
         {
           to: '/blog',
+          className: 'nav-primary',
           label: 'Blog',
           position: 'left',
         },
 
         {
           type: 'dropdown',
+          className: 'nav-primary',
           label: 'Community',
           position: 'left',
           items: [
             {
-              label: 'vLLM-SR Team',
+              label: 'Governance',
               to: '/community/team',
             },
             {
-              label: 'Work Groups',
+              label: 'Working Group',
               to: '/community/work-groups',
-            },
-            {
-              label: 'Membership Promotion',
-              to: '/community/promotion',
             },
             {
               label: 'Contributing Guide',
@@ -211,13 +219,15 @@ const config: Config = {
           ],
         },
         {
+          label: 'GitHub',
           href: 'https://github.com/vllm-project/semantic-router',
-          className: 'header-github-link',
+          className: 'nav-utility',
           position: 'right',
         },
         {
+          label: 'Models',
           href: 'https://huggingface.co/LLM-Semantic-Router',
-          className: 'header-hf-link',
+          className: 'nav-utility',
           position: 'right',
         },
       ],
@@ -237,20 +247,12 @@ const config: Config = {
               to: '/docs/installation',
             },
             {
-              label: 'Tutorials',
-              to: '/docs/tutorials/intelligent-route/embedding-routing',
+              label: 'Governance',
+              to: '/community/team',
             },
             {
-              label: 'API Reference',
-              to: '/docs/api/router',
-            },
-            {
-              label: 'CRD Reference',
-              to: '/docs/api/crd-reference',
-            },
-            {
-              label: 'Troubleshooting',
-              to: '/docs/troubleshooting/common-errors',
+              label: 'Contributing',
+              to: '/community/contributing',
             },
           ],
         },
@@ -269,14 +271,6 @@ const config: Config = {
               label: 'GitHub Discussions',
               href: 'https://github.com/vllm-project/semantic-router/discussions',
             },
-            {
-              label: 'Team',
-              to: '/community/team',
-            },
-            {
-              label: 'Contributing',
-              to: '/community/contributing',
-            },
           ],
         },
         {
@@ -289,6 +283,10 @@ const config: Config = {
             {
               label: 'Publications',
               to: '/publications',
+            },
+            {
+              label: 'White Paper',
+              to: '/white-paper',
             },
 
             {
@@ -306,9 +304,9 @@ const config: Config = {
       additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
     },
     colorMode: {
-      defaultMode: 'light',
-      disableSwitch: false,
-      respectPrefersColorScheme: true,
+      defaultMode: 'dark',
+      disableSwitch: true,
+      respectPrefersColorScheme: false,
     },
   } satisfies Preset.ThemeConfig,
   headTags: [

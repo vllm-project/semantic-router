@@ -4,7 +4,7 @@
 //! Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
 //!
 //! ## Architecture
-//! - Training: Done in Python using PyTorch (src/training/ml_model_selection/)
+//! - Training: Done in Python using PyTorch (src/training/model_selection/ml_model_selection/)
 //! - Inference: Done in Rust using Candle for GPU acceleration
 //!
 //! ## Model Format

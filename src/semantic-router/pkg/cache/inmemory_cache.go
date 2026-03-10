@@ -60,7 +60,7 @@ type InMemoryCache struct {
 	useHNSW          bool
 	hnswNeedsRebuild bool   // true while the HNSW graph is stale relative to entries
 	hnswEfSearch     int    // Search-time ef parameter
-	embeddingModel   string // "bert", "qwen3", or "gemma"
+	embeddingModel   string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
 
 	// Background cleanup
 	cleanupTicker *time.Ticker
@@ -79,7 +79,7 @@ type InMemoryCacheOptions struct {
 	HNSWM               int    // Number of bi-directional links (default: 16)
 	HNSWEfConstruction  int    // Size of dynamic candidate list during construction (default: 200)
 	HNSWEfSearch        int    // Size of dynamic candidate list during search (default: 50)
-	EmbeddingModel      string // "bert", "qwen3", or "gemma"
+	EmbeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
 }
 
 // NewInMemoryCache initializes a new in-memory semantic cache instance
@@ -202,11 +202,18 @@ func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
 			return nil, err
 		}
 		return output.Embedding, nil
+	case "multimodal":
+		// Use multimodal text encoder branch (384-dim default)
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 384)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
 	case "bert", "":
 		// Use traditional GetEmbedding for BERT (default)
 		return candle_binding.GetEmbedding(text, 0)
 	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', or 'mmbert')", c.embeddingModel)
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", c.embeddingModel)
 	}
 }
 

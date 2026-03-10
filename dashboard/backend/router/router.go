@@ -1,12 +1,14 @@
 package router
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
@@ -14,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // serviceNotConfiguredHTML generates a user-friendly HTML page for unconfigured services
@@ -180,20 +183,36 @@ func Setup(cfg *config.Config) *http.ServeMux {
 
 	// Settings endpoint for frontend (readonly mode, etc.)
 	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg))
+	mux.HandleFunc("/api/setup/state", handlers.SetupStateHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/setup/validate", handlers.SetupValidateHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/setup/activate", handlers.SetupActivateHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
 
 	// Config endpoints - MUST be registered BEFORE proxy to take precedence
 	// In Go's ServeMux, exact path matches registered first take precedence over prefix handlers
 	mux.HandleFunc("/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath, cfg.ReadonlyMode))
-	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/update")
+	mux.HandleFunc("/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/deploy/preview", handlers.DeployPreviewHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/router/config/deploy", handlers.DeployHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/rollback", handlers.RollbackHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/versions", handlers.ConfigVersionsHandler(cfg.AbsConfigPath))
+	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions")
 
 	// Router defaults endpoints (for .vllm-sr/router-defaults.yaml)
 	mux.HandleFunc("/api/router/config/defaults", handlers.RouterDefaultsHandler(cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/defaults/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir, cfg.ReadonlyMode))
 	log.Printf("Router defaults API endpoints registered: /api/router/config/defaults, /api/router/config/defaults/update")
 
+	toolsDBPath := filepath.Join(cfg.ConfigDir, "config", "tools_db.json")
+	parsedCfg, err := routerconfig.Parse(cfg.AbsConfigPath)
+	if err != nil {
+		log.Printf("Warning: failed to parse config for tools_db_path, use the default path %s: %v", toolsDBPath, err)
+	} else if parsedCfg.ToolSelection.Tools.ToolsDBPath != "" {
+		toolsDBPath = parsedCfg.ToolSelection.Tools.ToolsDBPath
+	}
+
 	// Tools DB endpoint
-	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(cfg.ConfigDir))
+	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(toolsDBPath))
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
 	// Web Search endpoint for Playground tool execution
@@ -204,8 +223,12 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/tools/open-web", handlers.OpenWebHandler())
 	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
 
+	// Fetch Raw endpoint for importing YAML/JSON from remote URLs (no HTML cleaning)
+	mux.HandleFunc("/api/tools/fetch-raw", handlers.FetchRawHandler())
+	log.Printf("Fetch Raw API endpoint registered: /api/tools/fetch-raw")
+
 	// Status endpoint - shows service health status (aligns with vllm-sr status)
-	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL))
+	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL, cfg.ConfigDir))
 	log.Printf("Status API endpoint registered: /api/status")
 
 	// Logs endpoint - shows service logs (aligns with vllm-sr logs)
@@ -292,8 +315,14 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		log.Printf("Evaluation feature disabled")
 	}
 
+	var openClawHandler *handlers.OpenClawHandler
+	if cfg.OpenClawEnabled {
+		openClawHandler = handlers.NewOpenClawHandler(cfg.OpenClawDataDir, cfg.ReadonlyMode)
+		openClawHandler.SetRouterConfigPath(cfg.AbsConfigPath)
+	}
+
 	// MCP endpoints (if enabled)
-	SetupMCP(mux, cfg)
+	SetupMCP(mux, cfg, openClawHandler)
 
 	// ML Pipeline endpoints (if enabled)
 	if cfg.MLPipelineEnabled {
@@ -339,6 +368,97 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		}
 	} else {
 		log.Printf("ML Pipeline feature disabled")
+	}
+
+	// OpenClaw endpoints and proxy (if enabled)
+	if cfg.OpenClawEnabled && openClawHandler != nil {
+		ocHandler := openClawHandler
+		mux.HandleFunc("/api/openclaw/status", ocHandler.StatusHandler())
+		mux.HandleFunc("/api/openclaw/skills", ocHandler.SkillsHandler())
+		mux.HandleFunc("/api/openclaw/teams", ocHandler.TeamsHandler())
+		mux.HandleFunc("/api/openclaw/teams/", ocHandler.TeamByIDHandler())
+		mux.HandleFunc("/api/openclaw/workers", ocHandler.WorkersHandler())
+		mux.HandleFunc("/api/openclaw/workers/", ocHandler.WorkerByIDHandler())
+		mux.HandleFunc("/api/openclaw/rooms", ocHandler.RoomsHandler())
+		mux.HandleFunc("/api/openclaw/rooms/", ocHandler.RoomByIDHandler())
+		mux.HandleFunc("/api/openclaw/provision", ocHandler.ProvisionHandler())
+		mux.HandleFunc("/api/openclaw/start", ocHandler.StartHandler())
+		mux.HandleFunc("/api/openclaw/stop", ocHandler.StopHandler())
+		mux.HandleFunc("/api/openclaw/token", ocHandler.TokenHandler())
+		mux.HandleFunc("/api/openclaw/next-port", ocHandler.NextPortHandler())
+		mux.HandleFunc("/api/openclaw/containers/", ocHandler.DeleteHandler())
+		log.Printf("OpenClaw API endpoints registered: /api/openclaw/*")
+
+		// Dynamic reverse proxy: /embedded/openclaw/{containerName}/...
+		// Lazily creates and caches a WebSocket-aware proxy per container.
+		var proxyCache sync.Map // map[string]http.Handler
+		mux.HandleFunc("/embedded/openclaw/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			// Extract container name from path: /embedded/openclaw/{name}/...
+			rest := strings.TrimPrefix(r.URL.Path, "/embedded/openclaw/")
+			parts := strings.SplitN(rest, "/", 2)
+			name := parts[0]
+			if name == "" {
+				http.Error(w, "container name required in path", http.StatusBadRequest)
+				return
+			}
+			targetBase, ok := ocHandler.TargetBaseForContainer(name)
+			if !ok {
+				http.Error(w, "container not found in registry", http.StatusNotFound)
+				return
+			}
+			token := strings.TrimSpace(ocHandler.GatewayTokenForContainer(name))
+			staticHeaders := map[string]string{}
+			if token != "" {
+				staticHeaders["Authorization"] = "Bearer " + token
+				staticHeaders["X-OpenClaw-Token"] = token
+			}
+			// Look up or create cached proxy for this container
+			stripPrefix := "/embedded/openclaw/" + name
+			cacheKey := fmt.Sprintf("%s:%s:%s", name, targetBase, token)
+			handler, loaded := proxyCache.Load(cacheKey)
+			if !loaded {
+				h, err := proxy.NewWebSocketAwareHandlerWithHeaders(targetBase, stripPrefix, staticHeaders)
+				if err != nil {
+					log.Printf("Failed to create proxy for %s: %v", name, err)
+					http.Error(w, "proxy error", http.StatusBadGateway)
+					return
+				}
+				handler, _ = proxyCache.LoadOrStore(cacheKey, h)
+			}
+			handler.(http.Handler).ServeHTTP(w, r)
+		})
+		log.Printf("OpenClaw dynamic proxy configured: /embedded/openclaw/{name}/ (WebSocket enabled)")
+	} else {
+		// Return disabled status even when feature is off
+		mux.HandleFunc("/api/openclaw/status", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/api/openclaw/teams", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/api/openclaw/workers", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/api/openclaw/rooms", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/api/openclaw/rooms/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"OpenClaw feature disabled"}`, http.StatusServiceUnavailable)
+		})
+		mux.HandleFunc("/embedded/openclaw/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(serviceNotConfiguredHTML("OpenClaw", "OPENCLAW_ENABLED", "true")))
+		})
+		log.Printf("OpenClaw feature disabled")
 	}
 
 	// Envoy proxy for chat completions (if configured)

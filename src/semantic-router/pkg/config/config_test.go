@@ -571,10 +571,9 @@ default_model: "fallback-model"
 			})
 
 			It("should return the default model", func() {
-				// This should fail validation since decisions must have at least one model
+				// Empty modelRefs is now allowed - decisions without models are valid
 				_, err := Load(configFile)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("has no modelRefs defined"))
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})
@@ -2239,260 +2238,6 @@ default_model: "test-model"
 		})
 	})
 
-	Describe("IsJailbreakEnabledForDecision", func() {
-		Context("per-decision plugin scoping", func() {
-			It("should return false for decision without explicit jailbreak plugin (even if global is enabled)", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					// No jailbreak plugin configured
-				}
-
-				cfg := &RouterConfig{
-					InlineModels: InlineModels{
-						PromptGuard: PromptGuardConfig{
-							Enabled: true, // Global enabled, but should not affect decisions without plugin
-						},
-					},
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				// Per-decision scoping: no plugin = no jailbreak detection
-				Expect(cfg.IsJailbreakEnabledForDecision("test")).To(BeFalse())
-			})
-
-			It("should return false when decision explicitly disables jailbreak", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "jailbreak",
-							Configuration: map[string]interface{}{
-								"enabled": false,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					InlineModels: InlineModels{
-						PromptGuard: PromptGuardConfig{
-							Enabled: true,
-						},
-					},
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.IsJailbreakEnabledForDecision("test")).To(BeFalse())
-			})
-
-			It("should return true when decision explicitly enables jailbreak", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "jailbreak",
-							Configuration: map[string]interface{}{
-								"enabled": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					InlineModels: InlineModels{
-						PromptGuard: PromptGuardConfig{
-							Enabled: true,
-						},
-					},
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.IsJailbreakEnabledForDecision("test")).To(BeTrue())
-			})
-
-			It("should return false for non-existent decision", func() {
-				cfg := &RouterConfig{
-					InlineModels: InlineModels{
-						PromptGuard: PromptGuardConfig{
-							Enabled: true,
-						},
-					},
-				}
-
-				Expect(cfg.IsJailbreakEnabledForDecision("non_existent")).To(BeFalse())
-			})
-
-			It("should return false for include_history by default", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "jailbreak",
-							Configuration: map[string]interface{}{
-								"enabled": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.GetJailbreakIncludeHistoryForDecision("test")).To(BeFalse())
-			})
-
-			It("should return true when include_history is explicitly enabled", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "jailbreak",
-							Configuration: map[string]interface{}{
-								"enabled":         true,
-								"include_history": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.GetJailbreakIncludeHistoryForDecision("test")).To(BeTrue())
-			})
-		})
-	})
-
-	Describe("IsPIIEnabledForDecision", func() {
-		Context("per-decision plugin scoping", func() {
-			It("should return false for decision without explicit PII plugin", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					// No PII plugin configured
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.IsPIIEnabledForDecision("test")).To(BeFalse())
-			})
-
-			It("should return true when decision explicitly enables PII", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "pii",
-							Configuration: map[string]interface{}{
-								"enabled": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.IsPIIEnabledForDecision("test")).To(BeTrue())
-			})
-
-			It("should return false when decision explicitly disables PII", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "pii",
-							Configuration: map[string]interface{}{
-								"enabled": false,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.IsPIIEnabledForDecision("test")).To(BeFalse())
-			})
-
-			It("should return false for include_history by default", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "pii",
-							Configuration: map[string]interface{}{
-								"enabled": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.GetPIIIncludeHistoryForDecision("test")).To(BeFalse())
-			})
-
-			It("should return true when include_history is explicitly enabled", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "pii",
-							Configuration: map[string]interface{}{
-								"enabled":         true,
-								"include_history": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.GetPIIIncludeHistoryForDecision("test")).To(BeTrue())
-			})
-		})
-	})
-
 	Describe("IsCacheEnabledForDecision", func() {
 		Context("per-decision plugin scoping", func() {
 			It("should return false for decision without explicit semantic-cache plugin (even if global is enabled)", func() {
@@ -3856,6 +3601,89 @@ model_config:
 				Expect(found).To(BeTrue())
 				Expect(name).To(Equal("openai"))
 				Expect(addr).To(Equal("api.openai.com:443"))
+			})
+		})
+	})
+
+	// -----------------------------------------------------------------------
+	// PromptCompressionConfig
+	// -----------------------------------------------------------------------
+	Describe("PromptCompressionConfig", func() {
+		Context("SkipSignalsSet", func() {
+			It("should default to jailbreak and pii when SkipSignals is empty", func() {
+				pc := PromptCompressionConfig{Enabled: true, MaxTokens: 512}
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).To(HaveKey("pii"))
+				Expect(s).To(HaveLen(2))
+			})
+
+			It("should use configured SkipSignals when provided", func() {
+				pc := PromptCompressionConfig{
+					Enabled:     true,
+					MaxTokens:   512,
+					SkipSignals: []string{"jailbreak"},
+				}
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).NotTo(HaveKey("pii"))
+				Expect(s).To(HaveLen(1))
+			})
+
+			It("should support adding custom signal types to skip list", func() {
+				pc := PromptCompressionConfig{
+					Enabled:     true,
+					MaxTokens:   512,
+					SkipSignals: []string{"jailbreak", "pii", "fact_check"},
+				}
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).To(HaveKey("pii"))
+				Expect(s).To(HaveKey("fact_check"))
+				Expect(s).To(HaveLen(3))
+			})
+		})
+
+		Context("MinLength", func() {
+			It("should be zero by default", func() {
+				pc := PromptCompressionConfig{Enabled: true, MaxTokens: 512}
+				Expect(pc.MinLength).To(Equal(0))
+			})
+
+			It("should parse from YAML", func() {
+				yamlStr := `
+enabled: true
+max_tokens: 512
+min_length: 2000
+skip_signals:
+  - jailbreak
+  - pii
+`
+				var pc PromptCompressionConfig
+				err := yaml.Unmarshal([]byte(yamlStr), &pc)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pc.Enabled).To(BeTrue())
+				Expect(pc.MaxTokens).To(Equal(512))
+				Expect(pc.MinLength).To(Equal(2000))
+				Expect(pc.SkipSignals).To(Equal([]string{"jailbreak", "pii"}))
+			})
+
+			It("should parse custom skip signals from YAML", func() {
+				yamlStr := `
+enabled: true
+max_tokens: 256
+min_length: 1000
+skip_signals:
+  - jailbreak
+`
+				var pc PromptCompressionConfig
+				err := yaml.Unmarshal([]byte(yamlStr), &pc)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pc.MinLength).To(Equal(1000))
+				Expect(pc.SkipSignals).To(Equal([]string{"jailbreak"}))
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).NotTo(HaveKey("pii"))
 			})
 		})
 	})

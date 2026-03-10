@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Any, Optional, Literal
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Listener(BaseModel):
@@ -59,6 +59,8 @@ class Preference(BaseModel):
 
     name: str
     description: str
+    threshold: Optional[float] = None
+    examples: Optional[List[str]] = None
 
 
 class Language(BaseModel):
@@ -99,6 +101,67 @@ class ComplexityRule(BaseModel):
     composer: Optional["Rules"] = None  # Forward reference, defined below
 
 
+class JailbreakRule(BaseModel):
+    """Jailbreak detection signal configuration.
+
+    Supports two methods:
+    - "classifier" (default): BERT/LoRA-based jailbreak classifier
+    - "contrastive": Embedding-based contrastive scoring against jailbreak/benign KBs
+    """
+
+    name: str
+    threshold: float
+    method: Optional[str] = None  # "classifier" (default) or "contrastive"
+    include_history: bool = False
+    jailbreak_patterns: Optional[list[str]] = (
+        None  # Known jailbreak prompts (contrastive KB)
+    )
+    benign_patterns: Optional[list[str]] = None  # Known benign prompts (contrastive KB)
+    description: Optional[str] = None
+
+
+class PIIRule(BaseModel):
+    """PII detection signal configuration."""
+
+    name: str
+    threshold: float
+    pii_types_allowed: Optional[List[str]] = None
+    include_history: bool = False
+    description: Optional[str] = None
+
+
+class ModalityRule(BaseModel):
+    """Modality detection signal configuration.
+
+    Classifies whether a prompt requires text (AR), image (DIFFUSION), or both (BOTH).
+    Detection configuration is read from modality_detector (InlineModels).
+    """
+
+    name: str
+    description: Optional[str] = None
+
+
+class Subject(BaseModel):
+    """RBAC subject (user or group) for role binding."""
+
+    kind: str  # "User" or "Group"
+    name: str
+
+
+class RoleBindingRule(BaseModel):
+    """RBAC role binding signal configuration.
+
+    Maps subjects (users/groups) to a named role following the Kubernetes RBAC pattern.
+    The role name is emitted as a signal of type "authz" in the decision engine.
+    User identity is read from x-authz-user-id and x-authz-user-groups headers.
+    """
+
+    name: str
+    role: str
+    subjects: List[Subject]
+    description: Optional[str] = None
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -111,20 +174,75 @@ class Signals(BaseModel):
     language: Optional[List[Language]] = []
     context: Optional[List[ContextRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
+    modality: Optional[List[ModalityRule]] = []
+    role_bindings: Optional[List[RoleBindingRule]] = []
+    jailbreak: Optional[List[JailbreakRule]] = []
+    pii: Optional[List[PIIRule]] = []
 
 
 class Condition(BaseModel):
-    """Routing condition."""
+    """Routing condition node (leaf or composite boolean expression)."""
 
-    type: str
-    name: str
+    type: Optional[str] = None
+    name: Optional[str] = None
+    operator: Optional[str] = None
+    conditions: Optional[List["Condition"]] = None
+
+    @model_validator(mode="after")
+    def validate_node_shape(self):
+        has_leaf_fields = self.type is not None or self.name is not None
+        has_operator = self.operator is not None
+
+        if has_leaf_fields and has_operator:
+            raise ValueError(
+                "condition node must be either leaf (type/name) or composite (operator/conditions), not both"
+            )
+
+        if has_operator:
+            if not self.conditions:
+                raise ValueError(
+                    "composite condition node requires non-empty conditions"
+                )
+            op = self.operator.strip().upper()
+            if op not in {"AND", "OR", "NOT"}:
+                raise ValueError("operator must be one of: AND, OR, NOT")
+            if op == "NOT" and len(self.conditions) != 1:
+                raise ValueError("NOT operator must have exactly one child condition")
+            return self
+
+        # Leaf node validation
+        if self.type is None or self.name is None:
+            raise ValueError("leaf condition node requires both type and name")
+        if self.conditions:
+            raise ValueError("leaf condition node cannot define child conditions")
+        return self
 
 
 class Rules(BaseModel):
-    """Routing rules."""
+    """Routing rules.
 
-    operator: str
-    conditions: List[Condition]
+    Accepts three formats:
+    1. Composite: {operator: "AND", conditions: [...]}
+    2. Match-all: {operator: "AND"} or {} (no WHEN clause)
+    3. Leaf node: {type: "keyword", name: "x"} (single signal ref)
+
+    Formats 2 and 3 are auto-normalised to composite form.
+    """
+
+    operator: str = "AND"
+    conditions: List[Condition] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalise_leaf_or_empty(cls, data):
+        """Wrap a bare leaf node into AND([leaf]) and fill missing fields."""
+        if not isinstance(data, dict):
+            return data
+        # Leaf node: has type/name but no operator → wrap in AND
+        if "type" in data and "operator" not in data:
+            leaf = {"type": data["type"], "name": data.get("name", "")}
+            return {"operator": "AND", "conditions": [leaf]}
+        return data
 
 
 class ModelRef(BaseModel):
@@ -485,14 +603,13 @@ class PluginType(str, Enum):
     """Supported plugin types."""
 
     SEMANTIC_CACHE = "semantic-cache"
-    JAILBREAK = "jailbreak"
-    PII = "pii"
     SYSTEM_PROMPT = "system_prompt"
     HEADER_MUTATION = "header_mutation"
     HALLUCINATION = "hallucination"
     ROUTER_REPLAY = "router_replay"
     MEMORY = "memory"
     RAG = "rag"
+    FAST_RESPONSE = "fast_response"
 
 
 class SemanticCachePluginConfig(BaseModel):
@@ -510,23 +627,10 @@ class SemanticCachePluginConfig(BaseModel):
     )
 
 
-class JailbreakPluginConfig(BaseModel):
-    """Configuration for jailbreak plugin."""
+class FastResponsePluginConfig(BaseModel):
+    """Configuration for fast_response plugin."""
 
-    enabled: bool
-    threshold: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0, description="Threshold (0.0-1.0, default: None)"
-    )
-
-
-class PIIPluginConfig(BaseModel):
-    """Configuration for pii plugin."""
-
-    enabled: bool
-    threshold: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0, description="Threshold (0.0-1.0, default: None)"
-    )
-    pii_types_allowed: Optional[List[str]] = None
+    message: str
 
 
 class SystemPromptPluginConfig(BaseModel):
@@ -823,14 +927,14 @@ class MemoryConfig(BaseModel):
     See external_models configuration in providers section for details.
 
     The embedding_model is auto-detected from embedding_models if not specified.
-    Priority: bert > mmbert > qwen3 > gemma
+    Priority: bert > mmbert > multimodal > qwen3 > gemma
     """
 
     enabled: bool = True
     auto_store: bool = False  # Auto-store extracted facts after each response
     milvus: Optional[MemoryMilvusConfig] = None
     # Embedding model to use for memory vectors
-    # Options: "bert", "mmbert", "qwen3", "gemma"
+    # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
     # If not set, auto-detected from embedding_models section (bert preferred)
     embedding_model: Optional[str] = None
     default_retrieval_limit: int = 5
@@ -850,11 +954,23 @@ class EmbeddingModelsConfig(BaseModel):
     mmbert_model_path: Optional[str] = Field(
         None, description="Path to mmBERT 2D Matryoshka model"
     )
+    multimodal_model_path: Optional[str] = Field(
+        None,
+        description="Path to multi-modal embedding model (text/image/audio)",
+    )
     bert_model_path: Optional[str] = Field(
         None,
         description="Path to BERT/MiniLM model (recommended for memory retrieval)",
     )
+    hnsw_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Embedding classifier tuning (model_type/target_dimension/etc.)",
+    )
     use_cpu: bool = Field(True, description="Use CPU for inference")
+
+    class Config:
+        # Preserve advanced nested fields when users pass through custom config blocks.
+        extra = "allow"
 
 
 class UserConfig(BaseModel):
@@ -872,3 +988,10 @@ class UserConfig(BaseModel):
 
     class Config:
         populate_by_name = True
+        # Allow advanced top-level blocks not yet modeled in the typed CLI schema
+        # (e.g., classifier/prompt_guard overrides) so merger can pass them through.
+        extra = "allow"
+
+
+# Resolve forward references for recursive condition trees.
+Condition.model_rebuild()

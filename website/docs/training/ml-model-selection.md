@@ -318,7 +318,7 @@ This separation allows for flexible training with Python's rich ML ecosystem whi
 ### Prerequisites
 
 ```bash
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 pip install -r requirements.txt
 ```
 
@@ -631,7 +631,7 @@ health, history, law, math, other, philosophy, physics, psychology
 Run the Go validation script to verify ML routing benefit:
 
 ```bash
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 
 # Set library paths (WSL/Linux)
 export LD_LIBRARY_PATH=$PWD/../../../candle-binding/target/release:$PWD/../../../ml-binding/target/release:$LD_LIBRARY_PATH
@@ -697,7 +697,7 @@ Error: pretrained model not found
 Download models from HuggingFace:
 
 ```bash
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 python download_model.py --output-dir ../../../.cache/ml-models
 ```
 

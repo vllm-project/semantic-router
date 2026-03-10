@@ -1,10 +1,14 @@
 """Constants for vLLM Semantic Router CLI."""
 
+from cli import __version__
+
 # Docker image configuration
 VLLM_SR_DOCKER_IMAGE_DEFAULT = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
+VLLM_SR_DOCKER_IMAGE_ROCM = "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest"
 VLLM_SR_DOCKER_IMAGE_DEV = "vllm-sr:dev"
-VLLM_SR_DOCKER_IMAGE_RELEASE = "vllm-sr:0.1.0"
+VLLM_SR_DOCKER_IMAGE_RELEASE = f"vllm-sr:{__version__}"
 VLLM_SR_DOCKER_NAME = "vllm-sr-container"
+PLATFORM_AMD = "amd"
 
 # Image pull policies
 IMAGE_PULL_POLICY_ALWAYS = "always"
@@ -20,6 +24,7 @@ SERVICE_NAME_ENVOY = "envoy"
 DEFAULT_ENVOY_PORT = 9901
 DEFAULT_ROUTER_PORT = 50051
 DEFAULT_API_PORT = 8080
+DEFAULT_LISTENER_PORT = 8899
 
 # Health check
 HEALTH_CHECK_TIMEOUT = 1800  # 5 minutes (increased for model loading)

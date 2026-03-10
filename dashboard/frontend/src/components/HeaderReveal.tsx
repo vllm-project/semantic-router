@@ -46,6 +46,14 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Complexity',
     description: 'Query complexity classification (hard/easy/medium)',
   },
+  'x-vsr-matched-jailbreak': {
+    label: 'Jailbreak',
+    description: 'Jailbreak detection signal matched',
+  },
+  'x-vsr-matched-pii': {
+    label: 'PII',
+    description: 'PII detection signal matched',
+  },
   // Decision headers
   'x-vsr-selected-decision': {
     label: 'Routing Decision',
@@ -69,13 +77,9 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Context Count',
     description: 'Estimated token count for the request',
   },
-  'x-vsr-jailbreak-blocked': {
-    label: 'Security: Jailbreak',
-    description: 'Jailbreak attempt detected and blocked',
-  },
-  'x-vsr-pii-violation': {
-    label: 'Security: PII',
-    description: 'Personal information detected',
+  'x-vsr-fast-response': {
+    label: 'Fast Response',
+    description: 'Request short-circuited by fast_response plugin',
   },
   'x-vsr-hallucination-detected': {
     label: 'Quality: Hallucination',

@@ -92,6 +92,7 @@ type APIOverviewResponse struct {
 // endpointRegistry is a centralized registry of all API endpoints with their metadata
 var endpointRegistry = []EndpointMetadata{
 	{Path: "/health", Method: "GET", Description: "Health check endpoint"},
+	{Path: "/ready", Method: "GET", Description: "Readiness endpoint that turns green only after startup completes"},
 	{Path: "/api/v1", Method: "GET", Description: "API discovery and documentation"},
 	{Path: "/openapi.json", Method: "GET", Description: "OpenAPI 3.0 specification"},
 	{Path: "/docs", Method: "GET", Description: "Interactive Swagger UI documentation"},
@@ -110,6 +111,10 @@ var endpointRegistry = []EndpointMetadata{
 	{Path: "/config/classification", Method: "PUT", Description: "Update classification configuration"},
 	{Path: "/config/system-prompts", Method: "GET", Description: "Get system prompt configuration (requires explicit enablement)"},
 	{Path: "/config/system-prompts", Method: "PUT", Description: "Update system prompt configuration (requires explicit enablement)"},
+	{Path: "/config/router", Method: "GET", Description: "Get the current router config as JSON"},
+	{Path: "/config/deploy", Method: "POST", Description: "Deploy a new router config (validates, backs up, writes, triggers hot-reload)"},
+	{Path: "/config/rollback", Method: "POST", Description: "Rollback to a previous config version"},
+	{Path: "/config/versions", Method: "GET", Description: "List available config backup versions"},
 }
 
 // taskTypeRegistry is a centralized registry of all supported task types
@@ -144,6 +149,7 @@ func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, _ *ht
 			"swagger_ui":    "/docs",
 			"models_info":   "/info/models",
 			"health":        "/health",
+			"ready":         "/ready",
 		},
 	}
 

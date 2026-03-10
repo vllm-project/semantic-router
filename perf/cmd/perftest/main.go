@@ -70,7 +70,7 @@ func compareWithBaseline(baselineDir, thresholdFile, outputPath string) error {
 	// In a real implementation, this would parse Go benchmark output
 	// and compare against saved baselines
 
-	fmt.Println("✓ Baseline comparison complete")
+	fmt.Println("Baseline comparison complete")
 
 	if outputPath != "" {
 		fmt.Printf("Results saved to: %s\n", outputPath)
@@ -118,7 +118,7 @@ func generateReportFromComparison(inputPath, outputPath string) error {
 		}
 	}
 
-	fmt.Println("✓ Report generated successfully")
+	fmt.Println("Report generated successfully")
 	return nil
 }
 

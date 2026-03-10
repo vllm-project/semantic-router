@@ -143,16 +143,6 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Cookbook',
-      items: [
-        'cookbook/classifier-tuning',
-        'cookbook/pii-policy',
-        'cookbook/vllm-endpoints',
-        'cookbook/anthropic-models',
-      ],
-    },
-    {
-      type: 'category',
       label: 'API Reference',
       items: [
         'api/router',

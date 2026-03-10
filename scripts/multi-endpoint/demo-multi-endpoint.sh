@@ -201,7 +201,7 @@ echo -e "  ${BOLD}${MAGENTA}PII POLICY COMPARISON${RESET}"
 echo ""
 echo -e "  Same PII data (email, org name) → different outcomes per environment:"
 echo ""
-echo -e "    ${GREEN}Dev${RESET}   │ PII threshold 0.6, allows GPE/ORG  │  ${BOLD}${GREEN}✓ ALLOWED${RESET} — code context"
+echo -e "    ${GREEN}Dev${RESET}   │ PII threshold 0.6, allows GPE/ORG  │  ${BOLD}${GREEN}ALLOWED${RESET} — code context"
 echo -e "    ${RED}Prod${RESET}  │ PII threshold 0.9, blocks ALL PII  │  ${BOLD}${RED}✗ BLOCKED${RESET} — privacy enforced"
 echo ""
 pause
@@ -234,7 +234,7 @@ echo ""
 echo -e "  ${BOLD}${MAGENTA}JAILBREAK POLICY RESULT${RESET}"
 echo ""
 echo -e "    ${RED}Prod${RESET}  │ Jailbreak attempt (DAN prompt)  │  ${BOLD}${RED}✗ BLOCKED${RESET} — adversarial"
-echo -e "    ${RED}Prod${RESET}  │ Clean query                     │  ${BOLD}${GREEN}✓ ALLOWED${RESET} — legitimate"
+echo -e "    ${RED}Prod${RESET}  │ Clean query                     │  ${BOLD}${GREEN}ALLOWED${RESET} — legitimate"
 echo ""
 pause
 

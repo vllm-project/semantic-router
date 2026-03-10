@@ -11,7 +11,7 @@
 >
 > ```bash
 > pip install huggingface-hub
-> cd src/training/ml_model_selection
+> cd src/training/model_selection/ml_model_selection
 > python download_model.py --output-dir ../../../.cache/ml-models
 > ```
 >
@@ -46,7 +46,7 @@ This module implements machine learning-based model selection algorithms that in
 │                    OFFLINE TRAINING (Python)                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  Training is done in Python: src/training/ml_model_selection/       │
+│  Training is done in Python: src/training/model_selection/ml_model_selection/       │
 │                                                                     │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
 │  │ Benchmark    │───▶│  Python      │───▶│ Trained Model Files  │  │
@@ -177,7 +177,7 @@ src/semantic-router/pkg/modelselection/
 ├── persistence.go               # JSON serialization/deserialization
 └── selector_test.go             # Unit tests
 
-src/training/ml_model_selection/         # Training and validation scripts
+src/training/model_selection/ml_model_selection/         # Training and validation scripts
 ├── train.py                     # Main training script (Python)
 ├── validate.go                  # Production validation (Go/Rust)
 ├── go.mod                       # Go module for validation
@@ -623,8 +623,8 @@ Your training data file should be a JSONL file with one JSON object per line. Th
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `query` | string | ✅ Yes | The input query/prompt text |
-| `category` | string | ✅ Yes | Query category (see categories below) |
+| `query` | string | Yes | The input query/prompt text |
+| `category` | string | Yes | Query category (see categories below) |
 | `ground_truth` | string | ⚡ Recommended | Expected correct answer (for quality scoring) |
 | `task_name` | string | Optional | Task identifier (e.g., "mmlu", "gsm8k") |
 
@@ -686,7 +686,7 @@ health, history, law, math, other, philosophy, physics, psychology
 If your data doesn't have categories, use the provided script:
 
 ```bash
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 python add_category_to_training_data.py \
   --input your_training_data.jsonl \
   --output training_data_with_category.jsonl
@@ -977,13 +977,13 @@ decisions:
 ## Training Commands (Python)
 
 > **Training is now done in Python** using scikit-learn for consistency with other training scripts.
-> See `src/training/ml_model_selection/` for the full training pipeline.
+> See `src/training/model_selection/ml_model_selection/` for the full training pipeline.
 
 ### Option 1: Download Pretrained Models from HuggingFace (Recommended)
 
 ```bash
 pip install huggingface-hub
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 
 # Download pretrained models
 python download_model.py \
@@ -997,7 +997,7 @@ python download_model.py \
 > The output directory is local and NOT committed to the repository.
 
 ```bash
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 pip install -r requirements.txt
 
 # Train from your own benchmark data
@@ -1155,7 +1155,7 @@ All 3 algorithms successfully:
   [math] 'Find the derivative of sin(x) * e^x' -> llama-3.2-1b
   [physics] 'Explain Maxwell's equations for electromagnetism' -> mistral-7b
   Overall model distribution: map[codellama-7b:1 llama-3.2-1b:11 llama-3.2-3b:8 mistral-7b:10]
-  ✓ knn selected 4 different models across categories
+  knn selected 4 different models across categories
 ```
 
 ---
@@ -1271,9 +1271,9 @@ This ensures we're testing the model's ability to generalize to unseen queries.
 
 | Algorithm | Implementation | Linfa Crate | Models Selected | Model Distribution | Success |
 |-----------|----------------|-------------|-----------------|-------------------|---------|
-| **KNN** | Rust | `linfa-nn` | **4** | codellama:4, llama-1b:13, llama-3b:4, mistral:9 | 30/30 ✅ |
-| **KMeans** | Rust | `linfa-clustering` | **1** | mistral:30 (cluster-based) | 30/30 ✅ |
-| **SVM** | Rust | `linfa-svm` | **4** | codellama:4, llama-1b:13, llama-3b:3, mistral:10 | 30/30 ✅ |
+| **KNN** | Rust | `linfa-nn` | **4** | codellama:4, llama-1b:13, llama-3b:4, mistral:9 | 30/30 |
+| **KMeans** | Rust | `linfa-clustering` | **1** | mistral:30 (cluster-based) | 30/30 |
+| **SVM** | Rust | `linfa-svm` | **4** | codellama:4, llama-1b:13, llama-3b:3, mistral:10 | 30/30 |
 
 #### Model Selection Diversity Chart
 

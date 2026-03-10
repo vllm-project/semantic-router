@@ -1182,3 +1182,289 @@
   font-size: 13px;
   font-style: italic;
 }
+
+/* ========== NVIDIA Theme Overrides ========== */
+.panel,
+.dialog,
+.toolDetailDialog {
+  --bg-primary: #101311;
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-hover: rgba(118, 185, 0, 0.08);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-secondary);
+  --accent-color: var(--color-primary);
+  --mcp-accent: var(--color-primary);
+  --mcp-accent-bright: var(--color-primary-light);
+  --mcp-accent-soft: rgba(118, 185, 0, 0.14);
+  --mcp-accent-soft-strong: rgba(118, 185, 0, 0.28);
+  --mcp-accent-cyan: rgba(0, 212, 255, 0.9);
+  --mcp-warning: #fbbf24;
+  --mcp-danger: #f87171;
+  --mcp-success: #86efac;
+}
+
+.panel {
+  background: linear-gradient(180deg, rgba(31, 31, 31, 0.98), rgba(20, 20, 20, 0.98));
+  border-color: var(--mcp-accent-soft);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.3);
+}
+
+.header,
+.dialogHeader,
+.footer,
+.sectionHeader,
+.toolsGridFooter,
+.logsHeader {
+  background: linear-gradient(180deg, rgba(118, 185, 0, 0.07), rgba(118, 185, 0, 0.02));
+  border-color: rgba(118, 185, 0, 0.12);
+}
+
+.header h2,
+.sectionTitle,
+.serverName,
+.dialogHeader h3,
+.formGroup label,
+.toolDetailTitle h3,
+.toolDetailDescription p,
+.detailValue {
+  color: var(--color-text);
+}
+
+.loading,
+.empty,
+.summary,
+.toolDescription,
+.paramsLabel,
+.paramDesc,
+.sourceNameBadge,
+.serverDescription,
+.connectionHint,
+.detailLabel,
+.paramType,
+.fieldHint,
+.noToolsAvailable,
+.noServersFiltered,
+.toolCountInfo {
+  color: var(--color-text-secondary);
+}
+
+.error,
+.serverError,
+.testError {
+  color: var(--mcp-danger);
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.24);
+}
+
+.testSuccess {
+  color: var(--mcp-success);
+  background: rgba(118, 185, 0, 0.08);
+  border-color: rgba(118, 185, 0, 0.24);
+}
+
+.availableToolsSection,
+.mcpServersSection,
+.serverCard,
+.toolCard,
+.toolGridCard,
+.dialog,
+.toolDetailDialog,
+.serverFilterWrapper,
+.toolSearchInput,
+.formGroup input[type="text"],
+.formGroup input[type="number"],
+.formGroup textarea,
+.radioLabel {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+}
+
+.availableToolsSection,
+.mcpServersSection {
+  border-color: var(--mcp-accent-soft);
+}
+
+.availableToolsSection:hover,
+.mcpServersSection:hover,
+.serverCard:hover,
+.toolCard:hover,
+.toolGridCard:hover,
+.radioLabel:hover,
+.pageBtn:hover:not(:disabled) {
+  border-color: var(--mcp-accent-soft-strong);
+}
+
+.serverCard.builtInSection {
+  border-color: rgba(0, 212, 255, 0.2);
+}
+
+.serverCard.builtInSection:hover {
+  border-color: rgba(0, 212, 255, 0.36);
+}
+
+.serverCard.toolsDbSection {
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.serverCard.toolsDbSection:hover {
+  border-color: rgba(245, 158, 11, 0.34);
+}
+
+.serverHeader:hover,
+.sectionHeader:hover,
+.refreshBtn:hover,
+.closeBtn:hover,
+.actionBtn:hover:not(:disabled),
+.cancelBtn:hover,
+.clearSearchBtn:hover,
+.filterBtn:hover {
+  background: rgba(118, 185, 0, 0.08);
+  color: var(--color-text);
+}
+
+.toolName,
+.toolGridName,
+.toolDetailTitle h3,
+.paramName,
+.paramDetailName {
+  color: var(--mcp-accent-bright);
+}
+
+.transportBadge,
+.tagBadge,
+.categoryBadge,
+.sourceNameBadge,
+.toolCountBadge,
+.serverCountBadge {
+  border-radius: 999px;
+}
+
+.transportBadge,
+.tagBadge,
+.sourceNameBadge {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-secondary);
+}
+
+.categoryBadge {
+  background: rgba(118, 185, 0, 0.16);
+  color: var(--mcp-accent-bright);
+}
+
+.statusDot[data-status="connected"] {
+  color: var(--mcp-success);
+}
+
+.statusDot[data-status="connecting"] {
+  color: var(--mcp-warning);
+}
+
+.statusDot[data-status="error"] {
+  color: var(--mcp-danger);
+}
+
+.statusBadge.connected,
+.serverCountBadge,
+.sourceTypeBadge.mcp {
+  background: rgba(118, 185, 0, 0.14);
+  color: var(--mcp-accent-bright);
+}
+
+.statusBadge.connecting {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--mcp-warning);
+}
+
+.statusBadge.error {
+  background: rgba(239, 68, 68, 0.14);
+  color: var(--mcp-danger);
+}
+
+.statusBadge.disconnected {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-secondary);
+}
+
+.sourceTypeBadge.frontend {
+  background: rgba(0, 212, 255, 0.14);
+  color: var(--mcp-accent-cyan);
+}
+
+.sourceTypeBadge.backend {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--mcp-warning);
+}
+
+.toolGridCard.source_mcp {
+  border-left-color: var(--mcp-accent);
+}
+
+.toolGridCard.source_frontend {
+  border-left-color: var(--mcp-accent-cyan);
+}
+
+.toolGridCard.source_backend {
+  border-left-color: var(--mcp-warning);
+}
+
+.toolCountBadge {
+  background: rgba(118, 185, 0, 0.14);
+  color: var(--mcp-accent-bright);
+}
+
+.serverCountBadge {
+  background: rgba(118, 185, 0, 0.14);
+}
+
+.filterBtn.filterActive,
+.addBtn,
+.saveBtn {
+  background: var(--mcp-accent);
+  color: #0f1304;
+}
+
+.addBtn:hover,
+.saveBtn:hover:not(:disabled) {
+  background: var(--mcp-accent-bright);
+}
+
+.testBtn {
+  border-color: rgba(118, 185, 0, 0.28);
+  color: var(--mcp-accent-bright);
+}
+
+.testBtn:hover:not(:disabled) {
+  background: rgba(118, 185, 0, 0.1);
+}
+
+.cancelBtn {
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.toolSearchInput:focus,
+.formGroup input:focus,
+.formGroup textarea:focus,
+.radioLabel:hover {
+  border-color: var(--mcp-accent-soft-strong);
+}
+
+.toolsGridWrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--mcp-accent);
+}
+
+.scrollHint {
+  color: var(--mcp-accent-bright);
+}
+
+.toolDetailIcon,
+.toolGridIcon,
+.toolIcon {
+  color: var(--mcp-accent-bright);
+}
+
+.noToolsAvailable p {
+  color: var(--color-text);
+}

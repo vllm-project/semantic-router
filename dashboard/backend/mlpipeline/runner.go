@@ -105,7 +105,7 @@ type Runner struct {
 	mu           sync.Mutex
 	jobs         map[string]*Job
 	dataDir      string // directory for uploads and outputs
-	trainingDir  string // path to src/training/ml_model_selection
+	trainingDir  string // path to src/training/model_selection/ml_model_selection
 	pythonPath   string
 	mlServiceURL string // URL of the Python ML service (sidecar); empty = use subprocess
 	progressChan chan ProgressUpdate

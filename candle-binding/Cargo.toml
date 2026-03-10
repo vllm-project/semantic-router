@@ -1,6 +1,6 @@
 [package]
 name = "candle-semantic-router"
-version = "0.4.0"
+version = "0.2.0"
 edition = "2021"
 description = "Go bindings for Candle BERT semantic similarity model for LLM routing"
 license = "MIT OR Apache-2.0"
@@ -28,13 +28,13 @@ accelerate = ["candle-core/accelerate", "candle-nn/accelerate", "candle-transfor
 
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
-candle-core = { git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1" }
-candle-nn = { git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1" }
-candle-transformers = { git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1" }
+candle-core = { version = "0.9.2-alpha.1", git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1" }
+candle-nn = { version = "0.9.2-alpha.1", git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1" }
+candle-transformers = { version = "0.9.2-alpha.1", git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1" }
 # Flash Attention 2 (optional, requires CUDA)
 # Reference: https://github.com/huggingface/candle/tree/main/candle-flash-attn
 # Using git dependency to automatically fetch CUTLASS submodule
-candle-flash-attn = { git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1", optional = true }
+candle-flash-attn = { version = "0.9.2-alpha.1", git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1", optional = true }
 tokenizers = { version = "0.21.0", default-features = false, features = ["http", "onig"] }
 hf-hub = { version = "0.4.1", default-features = false, features = ["rustls-tls"] }
 safetensors = "0.4.1"
@@ -55,21 +55,9 @@ tempfile = "3.8"
 serial_test = "3.0"
 criterion = "0.5"
 async-std = { version = "1.12", features = ["attributes"] }
-
-# Example demonstrating Qwen3 Multi-LoRA classification
-[[example]]
-name = "qwen3_example"
-path = "../deploy/examples/candle-binding/qwen3_example.rs"
-
-# Example demonstrating DeBERTa v2 Prompt Injection Detection
-[[example]]
-name = "deberta_prompt_injection_example"
-path = "../deploy/examples/candle-binding/deberta_prompt_injection_example.rs"
-
-# Example showing raw softmax confidence values
-[[example]]
-name = "test_raw_confidence"
-path = "../deploy/examples/candle-binding/test_raw_confidence.rs"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+ureq = "2.9"
+base64 = "0.22"
 
 # Example testing LoRA adapter compatibility with ModernBERT-base-32k
 [[example]]
@@ -140,6 +128,11 @@ path = "examples/test_mmbert_real.rs"
 [[example]]
 name = "test_mmbert_variant"
 path = "examples/test_mmbert_variant.rs"
+
+# Example testing multi-modal embedding model (text + image + audio)
+[[example]]
+name = "test_multimodal_embed"
+path = "examples/test_multimodal_embed.rs"
 
 # Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
 # They are not included in the library build to keep it self-contained.

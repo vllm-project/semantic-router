@@ -22,10 +22,11 @@ ARG TARGETARCH
 ARG TARGETOS=linux
 
 # Copy src/semantic-router first (required by dashboard/backend/go.mod replace directive)
-# Only copy the packages we actually need (config, observability) - NOT pkg/cli which has extra deps
+# Only copy the packages we actually need (config, observability, startupstatus) - NOT pkg/cli which has extra deps
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
+COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
 
 # Copy go.mod and go.sum first for better caching
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
@@ -42,6 +43,7 @@ RUN apk --no-cache add ca-certificates wget su-exec
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
+COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
 # Copy entrypoint script
 COPY dashboard/backend/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

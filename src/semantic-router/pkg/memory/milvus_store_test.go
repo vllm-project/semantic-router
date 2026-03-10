@@ -601,6 +601,71 @@ func TestMilvusStore_Retrieve_ThresholdVeryHigh(t *testing.T) {
 	}
 }
 
+func TestAdaptiveThresholdElbow(t *testing.T) {
+	mkCandidates := func(scores ...float32) []*RetrieveResult {
+		out := make([]*RetrieveResult, len(scores))
+		for i, s := range scores {
+			out[i] = &RetrieveResult{Score: s}
+		}
+		return out
+	}
+
+	t.Run("single candidate returns floor", func(t *testing.T) {
+		result := adaptiveThresholdElbow(mkCandidates(0.8), 0.3)
+		assert.Equal(t, float32(0.3), result)
+	})
+
+	t.Run("empty candidates returns floor", func(t *testing.T) {
+		result := adaptiveThresholdElbow([]*RetrieveResult{}, 0.3)
+		assert.Equal(t, float32(0.3), result)
+	})
+
+	t.Run("clear elbow raises threshold", func(t *testing.T) {
+		// Scores: 0.85, 0.80, 0.75, 0.40, 0.35
+		// Largest gap: 0.75 - 0.40 = 0.35 (between idx 2 and 3)
+		// Adaptive = 0.75 - 0.35/2 = 0.575
+		result := adaptiveThresholdElbow(mkCandidates(0.85, 0.80, 0.75, 0.40, 0.35), 0.3)
+		assert.InDelta(t, 0.575, float64(result), 0.01)
+	})
+
+	t.Run("no significant gap returns floor", func(t *testing.T) {
+		// All scores within 0.04 of each other — no gap > 0.05
+		result := adaptiveThresholdElbow(mkCandidates(0.50, 0.48, 0.46, 0.44), 0.3)
+		assert.Equal(t, float32(0.3), result)
+	})
+
+	t.Run("adaptive never goes below floor", func(t *testing.T) {
+		// Gap at low scores: 0.30, 0.28, 0.10, 0.05
+		// Largest gap: 0.28 - 0.10 = 0.18 (between idx 1 and 2)
+		// Adaptive = 0.28 - 0.18/2 = 0.19 — below floor of 0.3
+		result := adaptiveThresholdElbow(mkCandidates(0.30, 0.28, 0.10, 0.05), 0.3)
+		assert.Equal(t, float32(0.3), result)
+	})
+
+	t.Run("gap at the beginning", func(t *testing.T) {
+		// Scores: 0.90, 0.50, 0.48, 0.46
+		// Largest gap: 0.90 - 0.50 = 0.40 (between idx 0 and 1)
+		// Adaptive = 0.90 - 0.40/2 = 0.70
+		result := adaptiveThresholdElbow(mkCandidates(0.90, 0.50, 0.48, 0.46), 0.3)
+		assert.InDelta(t, 0.70, float64(result), 0.01)
+	})
+
+	t.Run("two candidates with gap", func(t *testing.T) {
+		// Scores: 0.80, 0.30
+		// Gap: 0.50 → adaptive = 0.80 - 0.50/2 = 0.55
+		result := adaptiveThresholdElbow(mkCandidates(0.80, 0.30), 0.3)
+		assert.InDelta(t, 0.55, float64(result), 0.01)
+	})
+
+	t.Run("multiple gaps picks largest", func(t *testing.T) {
+		// Scores: 0.90, 0.60, 0.55, 0.50
+		// Gaps: 0.30, 0.05, 0.05 — clear winner at idx 1
+		// Adaptive = 0.90 - 0.30/2 = 0.75
+		result := adaptiveThresholdElbow(mkCandidates(0.90, 0.60, 0.55, 0.50), 0.3)
+		assert.InDelta(t, 0.75, float64(result), 0.01)
+	})
+}
+
 func TestMilvusStore_Retrieve_EmptyResults(t *testing.T) {
 	store, mockClient := setupTestStore()
 	ctx := context.Background()
@@ -951,4 +1016,87 @@ func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 
 	require.NotNil(t, userIDField, "user_id field should exist in schema")
 	assert.True(t, userIDField.IsPartitionKey, "user_id field should have IsPartitionKey=true for efficient per-user queries")
+}
+
+// ============================================================================
+// Hybrid Search Tests
+// ============================================================================
+
+func TestMilvusStore_Retrieve_HybridRerank(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	// Candidate A: high vector score but content doesn't contain query terms.
+	// Candidate B: slightly lower vector score but content contains exact query terms.
+	// With hybrid search, B should be boosted above A.
+	mockResults := []client.SearchResult{
+		{
+			ResultCount: 2,
+			Scores:      []float32{0.90, 0.85},
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"id_generic", "id_keyword"}),
+				entity.NewColumnVarChar("content", []string{
+					"The project timeline was discussed in the last meeting and deadlines were set",
+					"Portland charity race is scheduled for March 15th with a $5000 budget",
+				}),
+				entity.NewColumnVarChar("memory_type", []string{"episodic", "episodic"}),
+				entity.NewColumnVarChar("metadata", []string{"{}", "{}"}),
+			},
+		},
+	}
+
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return mockResults, nil
+	}
+
+	// Vector-only retrieval: id_generic should rank first (0.90 > 0.85).
+	vectorResults, err := store.Retrieve(ctx, RetrieveOptions{
+		Query:        "Portland charity race",
+		UserID:       "u1",
+		Limit:        10,
+		Threshold:    0.5,
+		HybridSearch: false,
+	})
+	require.NoError(t, err)
+	require.Len(t, vectorResults, 2)
+	assert.Equal(t, "id_generic", vectorResults[0].Memory.ID,
+		"Without hybrid, higher vector score should rank first")
+
+	// Hybrid retrieval: id_keyword should rank first because BM25 + n-gram
+	// boost exact "Portland", "charity", "race" terms.
+	hybridResults, err := store.Retrieve(ctx, RetrieveOptions{
+		Query:        "Portland charity race",
+		UserID:       "u1",
+		Limit:        10,
+		Threshold:    0.1,
+		HybridSearch: true,
+		HybridMode:   "weighted",
+	})
+	require.NoError(t, err)
+	require.Len(t, hybridResults, 2)
+	assert.Equal(t, "id_keyword", hybridResults[0].Memory.ID,
+		"With hybrid, exact keyword match should rank first")
+}
+
+func TestMilvusStore_Retrieve_HybridExpandsTopK(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	var capturedTopK int
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		capturedTopK = topK
+		return []client.SearchResult{{ResultCount: 0}}, nil
+	}
+
+	// With hybrid off: limit=5 -> topK = max(5*4, 20) = 20
+	_, _ = store.Retrieve(ctx, RetrieveOptions{
+		Query: "test", UserID: "u1", Limit: 5, HybridSearch: false,
+	})
+	assert.Equal(t, 20, capturedTopK, "Non-hybrid should use 4x multiplier (min 20)")
+
+	// With hybrid on: limit=5 -> topK = max(5*8, 20) = 40
+	_, _ = store.Retrieve(ctx, RetrieveOptions{
+		Query: "test", UserID: "u1", Limit: 5, HybridSearch: true,
+	})
+	assert.Equal(t, 40, capturedTopK, "Hybrid should use 8x multiplier for broader candidate pool")
 }

@@ -60,7 +60,7 @@ var _ = BeforeSuite(func() {
 			GinkgoWriter.Printf("Warning: Failed to initialize embedding models: %v\n", err)
 			GinkgoWriter.Printf("Tools tests requiring ModelFactory will be skipped\n")
 		} else {
-			GinkgoWriter.Printf("✓ ModelFactory initialized successfully\n")
+			GinkgoWriter.Printf("ModelFactory initialized successfully\n")
 		}
 	} else {
 		GinkgoWriter.Printf("Warning: No embedding models found at %s or %s\n", qwen3Path, gemmaPath)

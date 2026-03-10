@@ -191,6 +191,31 @@ RUN mkdir -p /build/out && \
     echo "=== Built nlp-binding library ===" && \
     ls -la /build/out/
 
+# Stage 1c-wasm: Build DSL compiler to WebAssembly for the dashboard
+# The WASM target only uses pkg/dsl (pure Go), but go.mod has replace directives
+# pointing to ../../candle-binding etc. We create stub go.mod files so go mod
+# download succeeds without copying the full binding source trees.
+FROM --platform=$BUILDPLATFORM golang:1.24 AS wasm-builder
+WORKDIR /build
+COPY src/semantic-router/ ./
+# Create stub modules for local replace directives (not needed by WASM build)
+RUN mkdir -p /candle-binding /ml-binding /nlp-binding && \
+    echo 'module github.com/vllm-project/semantic-router/candle-binding' > /candle-binding/go.mod && \
+    echo 'module github.com/vllm-project/semantic-router/ml-binding'    > /ml-binding/go.mod && \
+    echo 'module github.com/vllm-project/semantic-router/nlp-binding'   > /nlp-binding/go.mod
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
+      -buildvcs=false \
+      -ldflags="-s -w" \
+      -o /build/signal-compiler.wasm \
+      ./cmd/wasm/ && \
+    # Go 1.24+ moved wasm_exec.js from misc/wasm/ to lib/wasm/
+    if [ -f "$(go env GOROOT)/lib/wasm/wasm_exec.js" ]; then \
+      cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /build/wasm_exec.js; \
+    else \
+      cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" /build/wasm_exec.js; \
+    fi
+
 # Stage 1c: Build dashboard frontend with Node.js
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
@@ -199,6 +224,8 @@ COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json ./
 RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --include=dev
 COPY dashboard/frontend/ ./
+# Copy WASM artifacts into public/ before building
+COPY --from=wasm-builder /build/signal-compiler.wasm /build/wasm_exec.js ./public/
 RUN npm run build
 
 # Stage 1c: Build dashboard backend with Go
@@ -211,6 +238,7 @@ ENV GOPROXY=https://proxy.golang.org,direct
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
+COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
 
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
 WORKDIR /app/dashboard/backend
@@ -219,9 +247,9 @@ RUN go mod download
 COPY dashboard/backend/ /app/dashboard/backend/
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
       apt-get update && apt-get install -y gcc-aarch64-linux-gnu && rm -rf /var/lib/apt/lists/* && \
-      CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags="-w -s" -o /app/dashboard-backend main.go; \
+      CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -buildvcs=false -ldflags="-w -s" -o /app/dashboard-backend main.go; \
     else \
-      CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o /app/dashboard-backend main.go; \
+      CGO_ENABLED=1 GOOS=linux go build -buildvcs=false -ldflags="-w -s" -o /app/dashboard-backend main.go; \
     fi
 
 # Stage 2: Build Go semantic router
@@ -264,9 +292,9 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
       CC=aarch64-linux-gnu-gcc \
       CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
       CGO_LDFLAGS="-L/usr/lib/aarch64-linux-gnu -lssl -lcrypto" \
-      go build -ldflags="-w -s" -o router cmd/main.go; \
+      go build -buildvcs=false -ldflags="-w -s" -o router cmd/main.go; \
     else \
-      CGO_ENABLED=1 go build -ldflags="-w -s" -o router cmd/main.go; \
+      CGO_ENABLED=1 go build -buildvcs=false -ldflags="-w -s" -o router cmd/main.go; \
     fi
 
 # Stage 3: Get Envoy binary
@@ -282,7 +310,8 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
         supervisor \
         curl \
-        ca-certificates; \
+        ca-certificates \
+        docker.io; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
@@ -308,6 +337,8 @@ COPY src/vllm-sr/requirements.txt /app/requirements.txt
 
 # Copy tools database to config directory
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
+# Copy OpenClaw skill catalog consumed by dashboard /api/openclaw/skills
+COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
 
 # Copy bench directory for evaluation benchmarks
 COPY bench/ /app/bench/

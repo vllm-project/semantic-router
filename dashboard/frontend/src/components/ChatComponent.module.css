@@ -7,13 +7,15 @@
   background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(40px) saturate(150%);
   -webkit-backdrop-filter: blur(40px) saturate(150%);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .mainLayout {
   display: flex;
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 
 .chatArea {
@@ -21,40 +23,160 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: 95vh;
+  min-width: 0;
+  width: 100%;
+  max-height: none;
 }
 
 .chatTopBar {
   display: flex;
   align-items: center;
-  padding: 0.75rem 1rem 0.25rem 1rem;
+  padding: 0.46rem 0.74rem 0.18rem 0.74rem;
+  --claw-topbar-control-height: 36px;
+  --claw-topbar-control-radius: 16px;
+  --claw-topbar-icon-width: 40px;
 }
 
-.sidebarToggleButton {
+.chatTopBarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.34rem;
+}
+
+.chatTopBarActionsClawActive {
+  gap: 0.36rem;
+}
+
+.chatTopBarButton {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.65rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-text);
+  justify-content: center;
+  width: var(--claw-topbar-icon-width);
+  height: var(--claw-topbar-control-height);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: transparent;
+  color: #e5e7eb;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  box-shadow: none;
+}
+
+.chatTopBarButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.32);
+  color: #ffffff;
+}
+
+.chatTopBarButton:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.chatTopBarButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.chatTopBarButton svg {
+  width: 16px;
+  height: 16px;
+  filter: none;
+}
+
+.chatTopBarButtonClawActive {
+  color: #e5e7eb;
+  border-color: rgba(255, 255, 255, 0.22);
+  background: transparent;
+}
+
+.chatTopBarButtonClawActive:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.clawViewToggle {
+  display: inline-flex;
+  height: var(--claw-topbar-control-height);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--claw-topbar-control-radius);
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(45, 51, 58, 0.7), rgba(24, 29, 34, 0.66));
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 8px 16px rgba(0, 0, 0, 0.26);
+  position: relative;
+}
+
+.clawViewButton {
+  border: none;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-items: center;
+  height: 100%;
+  background: transparent;
+  color: #e6ebf0;
+  font-size: 0.73rem;
+  font-weight: 650;
+  min-width: 56px;
+  padding: 0 0.52rem;
   cursor: pointer;
   transition: all var(--transition-fast);
-  font-size: var(--text-sm);
+  line-height: normal;
+  letter-spacing: 0.02em;
+  position: relative;
+  z-index: 1;
+  text-align: center;
 }
 
-.sidebarToggleButton:hover {
-  background: rgba(255, 255, 255, 0.12);
+.clawViewButton + .clawViewButton {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.sidebarToggleButton svg {
-  width: 14px;
-  height: 14px;
-}
-
-.sidebarToggleLabel {
+.clawViewButtonLabel {
+  display: inline-block;
   line-height: 1;
+  transform: translateY(0.5px);
+}
+
+.clawViewButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.clawViewButtonActive {
+  background: rgba(255, 255, 255, 0.13);
+  color: #ffffff;
+}
+
+.clawViewToggleClawActive {
+  border-color: rgba(251, 191, 191, 0.42);
+  box-shadow:
+    0 0 0 1px rgba(248, 113, 113, 0.14),
+    0 8px 16px rgba(116, 44, 44, 0.24),
+    inset 0 1px 0 rgba(254, 226, 226, 0.14);
+}
+
+.clawViewToggleClawActive .clawViewButton {
+  background: transparent;
+  color: #ffe4e5;
+}
+
+.clawViewToggleClawActive .clawViewButton + .clawViewButton {
+  border-left-color: rgba(255, 226, 226, 0.16);
+}
+
+.clawViewToggleClawActive .clawViewButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.clawViewToggleClawActive .clawViewButtonActive {
+  background: rgba(248, 113, 113, 0.24);
+  color: #ffffff;
 }
 
 .sidebar {
@@ -83,29 +205,6 @@
 .sidebarSubtitle {
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
-}
-
-.sidebarActions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.sidebarButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--color-text);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.sidebarButton:hover {
-  background: rgba(255, 255, 255, 0.12);
 }
 
 .sidebarList {
@@ -380,22 +479,38 @@ body.playground-fullscreen .container {
 }
 
 .messagesContainer {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: visible;
   padding: 1rem;
+  min-height: auto;
+}
+
+.messagesContainerEmpty {
+  flex: 1 1 auto;
   min-height: 0;
 }
 
 .emptyState {
-  flex: 1;
+  min-height: 40vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   padding: 2rem;
+}
+
+.messagesContainerEmpty .emptyState {
+  min-height: 0;
+  width: 100%;
+  flex: 1;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .emptyState h3 {
@@ -439,15 +554,16 @@ body.playground-fullscreen .container {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  overflow-y: auto;
-  /* hide scrollbar but allow scrolling */
-  scrollbar-width: none;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .message {
   display: flex;
   gap: 0.75rem;
   max-width: 85%;
+  min-width: 0;
   animation: fadeIn 0.2s ease;
 }
 
@@ -566,6 +682,7 @@ body.playground-fullscreen .container {
 
 .message.user .messageRole {
   text-align: right;
+  min-width: 2.2rem;
 }
 
 .messageText {
@@ -625,30 +742,51 @@ body.playground-fullscreen .container {
 .inputContainer {
   display: flex;
   flex-direction: column;
-  padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
+  align-items: center;
+  padding: 0.68rem 0.95rem 0.9rem;
+  background: transparent;
   flex-shrink: 0;
   margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  isolation: isolate;
 }
 
 .inputWrapper {
   display: flex;
   flex-direction: column;
-  background-color: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  background: rgba(22, 25, 28, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-2xl);
   overflow: hidden;
   transition: all var(--transition-base);
+  position: relative;
+  z-index: 1;
+  backdrop-filter: blur(14px) saturate(118%);
+  -webkit-backdrop-filter: blur(14px) saturate(118%);
+  box-shadow:
+    0 16px 32px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .inputWrapper:focus-within {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 0.5px var(--color-primary);
+  box-shadow:
+    0 0 0 1px rgba(118, 185, 1, 0.46),
+    0 16px 34px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .inputWrapper.hasContent {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 0.5px var(--color-primary);
+  box-shadow:
+    0 0 0 1px rgba(118, 185, 1, 0.46),
+    0 16px 34px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .input {
@@ -690,7 +828,73 @@ body.playground-fullscreen .container {
 .inputActions {
   display: flex;
   align-items: center;
-  gap: 0.125rem;
+  gap: 0.4rem;
+}
+
+.inputModeControls {
+  width: 100%;
+  max-width: 920px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.teamToggleButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  height: 32px;
+  min-width: 84px;
+  padding: 0 0.62rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.teamToggleLabel {
+  line-height: 1;
+  font-size: 11px;
+  letter-spacing: 0.015em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.teamToggleButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.34);
+  color: var(--color-text);
+}
+
+.teamToggleButtonActive {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.72);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.teamToggleButtonActive:hover:not(:disabled) {
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.84);
+  background: rgba(239, 68, 68, 0.16);
+}
+
+.teamToggleButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.teamModeControlsContainer {
+  display: flex;
+  justify-content: center;
+  padding: 0 0.95rem 0.82rem;
 }
 
 .inputActionButton {
@@ -750,6 +954,70 @@ body.playground-fullscreen .container {
 .searchToggleActive:hover {
   color: #4ade80;
   background-color: rgba(34, 197, 94, 0.25);
+}
+
+.clawModeToggleButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  height: 32px;
+  min-width: 84px;
+  padding: 0 0.62rem;
+  margin-right: 0;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+  box-shadow: none;
+}
+
+.clawModeToggleButton:hover {
+  color: var(--color-text);
+  border-color: rgba(255, 255, 255, 0.36);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.clawModeToggleButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.clawModeToggleButton:disabled:hover {
+  color: var(--color-text-secondary);
+  border-color: rgba(255, 255, 255, 0.24);
+  background: transparent;
+}
+
+.clawModeToggleButton.clawToggleActive {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.72);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.clawModeToggleButton.clawToggleActive:hover {
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.84);
+  background: rgba(239, 68, 68, 0.16);
+}
+
+.clawToggleIcon {
+  width: 12px;
+  height: 12px;
+  object-fit: contain;
+  display: inline-block;
+  filter: none;
+}
+
+.clawToggleLabel {
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.015em;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .sendButton {
@@ -852,6 +1120,11 @@ body.playground-fullscreen .container {
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+  .chatTopBar {
+    --claw-topbar-control-height: 32px;
+    --claw-topbar-icon-width: 34px;
+  }
+
   .header {
     padding: 0.75rem 1rem;
   }
@@ -867,6 +1140,25 @@ body.playground-fullscreen .container {
 
   .title {
     font-size: 0.875rem;
+  }
+
+  .chatTopBarButton {
+    width: var(--claw-topbar-icon-width);
+    height: var(--claw-topbar-control-height);
+  }
+
+  .inputModeControls {
+    margin-top: 0.4rem;
+    gap: 0.4rem;
+  }
+
+  .clawModeToggleButton,
+  .teamToggleButton {
+    height: 32px;
+  }
+
+  .teamModeControlsContainer {
+    padding: 0 0.75rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
   }
 
   .modelBadge {
@@ -899,6 +1191,11 @@ body.playground-fullscreen .container {
 
   .messagesContainer {
     padding: 0.75rem;
+  }
+
+  .messagesContainerEmpty {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .message {
@@ -968,7 +1265,10 @@ body.playground-fullscreen .container {
   }
 
   .inputActions {
-    display: none;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-left: 0.2rem;
   }
 
   .sendButton {
@@ -1051,6 +1351,10 @@ body.playground-fullscreen .container {
     width: 34px;
     height: 34px;
   }
+
+  .teamModeControlsContainer {
+    padding: 0 0.5rem calc(0.625rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* ========================================
@@ -1061,11 +1365,16 @@ body.playground-fullscreen .container {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background-color: var(--color-bg-secondary);
-  border-top: 1px solid var(--color-border);
+  align-items: center;
+  padding: 0.68rem 0.95rem 0.9rem;
+  background-color: transparent;
+  border-top: none;
   flex-shrink: 0;
   margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  isolation: isolate;
 }
 
 .inputToolbar {
@@ -1133,6 +1442,9 @@ body.playground-fullscreen .container {
   flex-direction: column;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Web Search Card */
@@ -1141,13 +1453,22 @@ body.playground-fullscreen .container {
   border: 1px solid var(--color-border);
   border-left: 3px solid #3b82f6;
   border-radius: var(--radius-md);
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
+  max-width: 100%;
+}
+
+.mcpToolCard {
+  border-left-color: #ef4444;
 }
 
 .webSearchHeader {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
   padding: 0.75rem 1rem;
   cursor: pointer;
   transition: background-color var(--transition-fast);
@@ -1169,9 +1490,20 @@ body.playground-fullscreen .container {
   flex-shrink: 0;
 }
 
+.mcpToolIcon {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
 .webSearchIcon svg {
   width: 16px;
   height: 16px;
+}
+
+.webSearchIcon img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
 }
 
 .searchSpinner {
@@ -1200,9 +1532,13 @@ body.playground-fullscreen .container {
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--color-text);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .webSearchQuery {
+  display: block;
+  max-width: 100%;
   font-size: 0.75rem;
   color: var(--color-text-muted);
   white-space: nowrap;
@@ -1214,6 +1550,7 @@ body.playground-fullscreen .container {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
   flex-shrink: 0;
 }
 
@@ -1268,6 +1605,79 @@ body.playground-fullscreen .container {
   border-top: 1px solid var(--color-border);
   padding: 0.75rem 1rem;
   animation: fadeIn 0.2s ease;
+}
+
+.clawToolHighlights {
+  border-top: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 0.7rem 1rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.clawToolHighlightSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid rgba(239, 68, 68, 0.16);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.06) 0%, rgba(239, 68, 68, 0.02) 100%);
+}
+
+.clawToolHighlightHeading {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(248, 113, 113, 0.95);
+  font-weight: 700;
+}
+
+.clawToolHighlightRows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.45rem 0.6rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.clawToolHighlightRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.08rem 0.45rem;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.3rem 0.45rem;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(248, 113, 113, 0.16);
+}
+
+.clawToolHighlightKey {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  line-height: 1.35;
+}
+
+.clawToolHighlightValue {
+  font-size: 0.75rem;
+  color: #ef4444;
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.clawToolHighlightError {
+  color: #fca5a5;
 }
 
 /* Source Pills */
@@ -1396,12 +1806,33 @@ body.playground-fullscreen .container {
     height: 14px;
   }
 
+  .webSearchIcon img {
+    width: 14px;
+    height: 14px;
+  }
+
   .webSearchTitle {
     font-size: 0.75rem;
   }
 
   .webSearchQuery {
     font-size: 0.6875rem;
+  }
+
+  .clawToolHighlights {
+    padding: 0.6rem 0.875rem 0.72rem;
+  }
+
+  .clawToolHighlightRows {
+    grid-template-columns: 1fr;
+  }
+
+  .clawToolHighlightSection {
+    padding: 0.5rem 0.55rem;
+  }
+
+  .clawToolHighlightRow {
+    min-width: 0;
   }
 
   .sourcePill {

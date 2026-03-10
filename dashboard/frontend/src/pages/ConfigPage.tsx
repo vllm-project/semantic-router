@@ -6,291 +6,48 @@ import ViewModal, { ViewSection } from '../components/ViewModal'
 import { DataTable, Column } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 import EndpointsEditor, { Endpoint } from '../components/EndpointsEditor'
+import RoutingPresetModal from '../components/RoutingPresetModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
+import ConfigPageManagerLayout from './ConfigPageManagerLayout'
+import {
+  getRoutingPreset,
+  listDecisionNames,
+  listSignalNames,
+  type RoutingPresetId,
+} from '../presets/routingPresets'
 import {
   ConfigFormat,
   detectConfigFormat,
+  hasDecisions,
+  hasFlatSignals,
   DecisionConditionType
 } from '../types/config'
 import { MCPConfigPanel } from '../components/MCPConfigPanel'
-
-interface VLLMEndpoint {
-  name: string
-  address: string
-  port: number
-  weight: number
-  health_check_path: string
-}
-
-interface ModelConfig {
-  model_id: string
-  use_modernbert?: boolean
-  threshold: number
-  use_cpu: boolean
-  use_qwen3?: boolean
-  category_mapping_path?: string
-  pii_mapping_path?: string
-  jailbreak_mapping_path?: string
-}
-
-interface MCPCategoryModel {
-  enabled: boolean
-  transport_type: string
-  command?: string
-  args?: string[]
-  env?: Record<string, string>
-  url?: string
-  tool_name?: string
-  threshold: number
-  timeout_seconds?: number
-}
-
-interface ModelScore {
-  model: string
-  score: number
-  use_reasoning: boolean
-  reasoning_description?: string
-  reasoning_effort?: string
-}
-
-interface Category {
-  name: string
-  system_prompt?: string
-  description?: string
-  // model_scores can be array (Python CLI) or object (Legacy: {"gpt-4": 0.9})
-  model_scores?: ModelScore[] | Record<string, number>
-}
-
-interface ToolFunction {
-  name: string
-  description: string
-  parameters: {
-    type: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    properties: Record<string, any>
-    required?: string[]
-  }
-}
-
-interface Tool {
-  tool: {
-    type: string
-    function: ToolFunction
-  }
-  description: string  // Used for similarity matching (from ToolEntry)
-  category?: string
-  tags?: string[]
-}
-
-interface ReasoningFamily {
-  type: string
-  parameter: string
-}
-
-interface ModelPricing {
-  currency?: string
-  prompt_per_1m?: number
-  completion_per_1m?: number
-}
-
-interface ModelConfigEntry {
-  reasoning_family?: string
-  preferred_endpoints?: string[]
-  pricing?: ModelPricing
-}
-
-interface TracingConfig {
-  enabled: boolean
-  provider: string
-  exporter: {
-    type: string
-    endpoint?: string
-    insecure?: boolean
-  }
-  sampling: {
-    type: string
-    rate?: number
-  }
-  resource: {
-    service_name: string
-    service_version: string
-    deployment_environment: string
-  }
-}
-
-interface APIConfig {
-  batch_classification?: {
-    max_batch_size: number
-    concurrency_threshold: number
-    max_concurrency: number
-    metrics?: {
-      enabled: boolean
-      detailed_goroutine_tracking?: boolean
-      high_resolution_timing?: boolean
-      sample_rate?: number
-      duration_buckets?: number[]
-      size_buckets?: number[]
-    }
-  }
-}
-
-interface ConfigData {
-  // === Python CLI Format (new) ===
-  version?: string
-  listeners?: Array<{
-    name: string
-    address: string
-    port: number
-    timeout?: string
-  }>
-  signals?: {
-    keywords?: Array<{
-      name: string
-      operator: 'AND' | 'OR'
-      keywords: string[]
-      case_sensitive: boolean
-    }>
-    embeddings?: Array<{
-      name: string
-      threshold: number
-      candidates: string[]
-      aggregation_method: string
-    }>
-    domains?: Array<{
-      name: string
-      description: string
-      mmlu_categories?: string[]
-    }>
-    fact_check?: Array<{ name: string; description: string }>
-    user_feedbacks?: Array<{ name: string; description: string }>
-    preferences?: Array<{ name: string; description: string }>
-    language?: Array<{ name: string }>
-    context?: Array<{ name: string; min_tokens: string; max_tokens: string; description?: string }>
-    complexity?: Array<{
-      name: string
-      threshold: number
-      hard: { candidates: string[] }
-      easy: { candidates: string[] }
-      description?: string
-      composer?: {
-        operator: 'AND' | 'OR' | 'NOT'
-        conditions: Array<{ type: string; name: string }>
-      }
-    }>
-  }
-  decisions?: Array<{
-    name: string
-    description: string
-    priority: number
-    rules: {
-      operator: 'AND' | 'OR' | 'NOT'
-      conditions: Array<{ type: string; name: string }>
-    }
-    modelRefs: Array<{ model: string; use_reasoning: boolean }>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    plugins?: Array<{ type: string; configuration: Record<string, any> }>
-  }>
-  providers?: {
-    models: Array<{
-      name: string
-      reasoning_family?: string
-      endpoints: Array<{
-        name: string
-        weight: number
-        endpoint: string
-        protocol: 'http' | 'https'
-      }>
-      access_key?: string
-    }>
-    default_model: string
-    reasoning_families?: Record<string, ReasoningFamily>
-    default_reasoning_effort?: string
-  }
-
-  // === Legacy Format (Go router) ===
-  bert_model?: ModelConfig
-  semantic_cache?: {
-    enabled: boolean
-    backend_type?: string
-    similarity_threshold: number
-    max_entries: number
-    ttl_seconds: number
-    eviction_policy?: string
-    embedding_model?: string
-  }
-  tools?: {
-    enabled: boolean
-    top_k: number
-    similarity_threshold: number
-    tools_db_path: string
-    fallback_to_empty: boolean
-  }
-  prompt_guard?: ModelConfig & { enabled: boolean }
-  vllm_endpoints?: VLLMEndpoint[]
-  classifier?: {
-    category_model?: ModelConfig
-    mcp_category_model?: MCPCategoryModel
-    pii_model?: ModelConfig
-    preference_model?: ModelConfig
-  }
-  categories?: Category[]
-  default_reasoning_effort?: string
-  default_model?: string
-  model_config?: Record<string, ModelConfigEntry>
-  reasoning_families?: Record<string, ReasoningFamily>
-  api?: APIConfig
-  observability?: {
-    tracing?: TracingConfig
-    metrics?: { enabled: boolean }
-  }
-  [key: string]: unknown
-}
+import {
+  AddSignalFormState,
+  clonePresetDecisions,
+  clonePresetSignals,
+  collectConfiguredSignalNames,
+  ConfigData,
+  DecisionConfig,
+  DecisionFormState,
+  formatThreshold,
+  ModelConfigEntry, NormalizedModel, normalizeEndpoint, normalizeEndpoints,
+  ReasoningFamily,
+  SignalType,
+  TABLE_COLUMN_WIDTH,
+  Tool,
+  VLLMEndpoint,
+} from './configPageSupport'
 
 interface ConfigPageProps {
   activeSection?: ConfigSection
 }
 
-type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Context' | 'Complexity'
-type DecisionConfig = NonNullable<ConfigData['decisions']>[number]
-
-interface DecisionFormState {
-  name: string
-  description: string
-  priority: number
-  operator: 'AND' | 'OR' | 'NOT'
-  conditions: { type: string; name: string }[]
-  modelRefs: { model: string; use_reasoning: boolean }[]
-  plugins: { type: string; configuration: string | Record<string, unknown> }[]
-}
-
-interface AddSignalFormState {
-  type: SignalType
-  name: string
-  description: string
-  operator: 'AND' | 'OR'
-  keywords: string
-  case_sensitive: boolean
-  threshold: number
-  candidates: string
-  aggregation_method: string
-  mmlu_categories: string
-  min_tokens?: string
-  max_tokens?: string
-  complexity_threshold?: number
-  hard_candidates?: string
-  easy_candidates?: string
-  composer_operator?: 'AND' | 'OR' | 'NOT'
-  composer_conditions?: string
-}
-
-// Helper function to format threshold as percentage
-const formatThreshold = (value: number): string => {
-  return `${Math.round(value * 100)}%`
-}
-
 // Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
-const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) => {
+const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => {
   const { isReadonly } = useReadonly()
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -321,13 +78,16 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const [viewModalOpen, setViewModalOpen] = useState(false)
   const [viewModalTitle, setViewModalTitle] = useState('')
   const [viewModalSections, setViewModalSections] = useState<ViewSection[]>([])
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [viewModalEditCallback, setViewModalEditCallback] = useState<(() => void) | null>(null)
 
   // Search state
   const [decisionsSearch, setDecisionsSearch] = useState('')
   const [signalsSearch, setSignalsSearch] = useState('')
   const [modelsSearch, setModelsSearch] = useState('')
+  const [presetModalOpen, setPresetModalOpen] = useState(false)
+  const [selectedRoutingPresetId, setSelectedRoutingPresetId] = useState<RoutingPresetId | null>('starter-routing')
+  const [presetApplyState, setPresetApplyState] = useState<'idle' | 'applying'>('idle')
+  const [presetApplyError, setPresetApplyError] = useState<string | null>(null)
 
   // Expandable rows state for models
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set())
@@ -506,6 +266,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       case 'Complexity':
         cfg.signals.complexity = (cfg.signals.complexity || []).filter(s => s.name !== targetName)
         break
+      case 'Jailbreak':
+        cfg.signals.jailbreak = (cfg.signals.jailbreak || []).filter(s => s.name !== targetName)
+        break
+      case 'PII':
+        cfg.signals.pii = (cfg.signals.pii || []).filter(s => s.name !== targetName)
+        break
       default:
         break
     }
@@ -513,6 +279,91 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   const removeDecisionByName = (cfg: ConfigData, targetName: string) => {
     cfg.decisions = (cfg.decisions || []).filter(d => d.name !== targetName)
+  }
+
+  const getSelectedPresetConflicts = () => {
+    if (!config?.providers?.default_model || !selectedRoutingPresetId) {
+      return []
+    }
+
+    const preset = getRoutingPreset(selectedRoutingPresetId)
+    if (!preset) {
+      return []
+    }
+
+    const fragment = preset.build(config.providers.default_model)
+    const existingSignalNames = collectConfiguredSignalNames(config.signals)
+    const existingDecisionNames = new Set((config.decisions || []).map((decision) => decision.name))
+    const conflicts: string[] = []
+
+    for (const signalName of listSignalNames(fragment.signals)) {
+      if (existingSignalNames.has(signalName)) {
+        conflicts.push(`Signal "${signalName}" already exists`)
+      }
+    }
+
+    for (const decisionName of listDecisionNames(fragment.decisions)) {
+      if (existingDecisionNames.has(decisionName)) {
+        conflicts.push(`Decision "${decisionName}" already exists`)
+      }
+    }
+
+    return conflicts
+  }
+
+  const handleApplyRoutingPreset = async () => {
+    if (!config || !isPythonCLI || !selectedRoutingPresetId || !config.providers?.default_model) {
+      return
+    }
+
+    const conflicts = getSelectedPresetConflicts()
+    if (conflicts.length > 0) {
+      return
+    }
+
+    const preset = getRoutingPreset(selectedRoutingPresetId)
+    if (!preset) {
+      return
+    }
+
+    const fragment = preset.build(config.providers.default_model)
+    const mergedSignals = clonePresetSignals(fragment.signals as Record<string, unknown> | undefined)
+    const mergedDecisions = clonePresetDecisions(fragment.decisions)
+    const nextSignals = { ...(config.signals || {}) } as Record<string, Array<Record<string, unknown>>>
+
+    const nextConfig: ConfigData = {
+      ...config,
+      signals: nextSignals as ConfigData['signals'],
+      decisions: [...(config.decisions || [])],
+    }
+
+    if (mergedSignals) {
+      for (const [key, value] of Object.entries(mergedSignals)) {
+        if (!Array.isArray(value) || value.length === 0) {
+          continue
+        }
+
+        const existingValues = nextSignals[key] || []
+        nextSignals[key] = [
+          ...existingValues,
+          ...(value as Array<Record<string, unknown>>),
+        ]
+      }
+    }
+
+    nextConfig.decisions = [...(nextConfig.decisions || []), ...mergedDecisions]
+
+    setPresetApplyState('applying')
+    setPresetApplyError(null)
+
+    try {
+      await saveConfig(nextConfig)
+      setPresetModalOpen(false)
+    } catch (err) {
+      setPresetApplyError(err instanceof Error ? err.message : 'Failed to apply preset')
+    } finally {
+      setPresetApplyState('idle')
+    }
   }
 
 
@@ -556,6 +407,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   // Helper: Check if using Python CLI format
   const isPythonCLI = configFormat === 'python-cli'
+  const selectedPresetConflicts = getSelectedPresetConflicts()
 
   // Effective router config - merges routerDefaults (system settings) with config (fallback)
   // For Python CLI: system settings like bert_model, tools, prompt_guard come from routerDefaults
@@ -571,18 +423,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   }
 
   // Get models - from providers.models (Python CLI) or model_config (legacy)
-  interface NormalizedModel {
-    name: string
-    reasoning_family?: string
-    endpoints: Array<{ name: string; weight: number; endpoint: string; protocol: string }>
-    access_key?: string
-    pricing?: {
-      currency?: string
-      prompt_per_1m?: number
-      completion_per_1m?: number
-    }
-  }
-
   const getModels = (): NormalizedModel[] => {
     if (isPythonCLI && config?.providers?.models) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -590,7 +430,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         const model: NormalizedModel = {
           name: m.name,
           reasoning_family: m.reasoning_family,
-          endpoints: m.endpoints || [],
+          endpoints: normalizeEndpoints(m.endpoints),
           access_key: m.access_key,
           pricing: m.pricing,
         }
@@ -604,38 +444,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         reasoning_family: cfg.reasoning_family,
         endpoints: cfg.preferred_endpoints?.map((ep: string) => {
           const endpoint = config.vllm_endpoints?.find((e: VLLMEndpoint) => e.name === ep)
-          return endpoint ? {
+          return endpoint ? normalizeEndpoint({
             name: ep,
             weight: endpoint.weight || 1,
             endpoint: `${endpoint.address}:${endpoint.port}`,
             protocol: 'http',
-          } : null
+          }, 0) : null
         }).filter((e): e is NonNullable<typeof e> => e !== null) || [],
         access_key: undefined,
         pricing: cfg.pricing
       }))
     }
-    return []
-  }
-
-  // Get domains/categories - from signals.domains (Python CLI) or categories (legacy)
-  const getDomains = (): Array<{ name: string; description: string; mmlu_categories?: string[] }> => {
-    if (isPythonCLI && config?.signals?.domains) {
-      return config.signals.domains
-    }
-    return config?.categories?.map((c: Category) => ({
-      name: c.name,
-      description: c.system_prompt || '',
-      mmlu_categories: [] as string[],
-    })) || []
-  }
-
-  // Get decisions/routes - from decisions (Python CLI) or categories with model_scores (legacy)
-  const getDecisions = () => {
-    if (isPythonCLI && config?.decisions) {
-      return config.decisions
-    }
-    // Legacy format doesn't have decisions in the same way
     return []
   }
 
@@ -655,1590 +474,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     return config?.reasoning_families || {}
   }
 
-  // Helper: Normalize model_scores from object to array (Legacy format uses object)
-  // Legacy: { "gpt-4": 0.9, "llama": 0.7 } → [{ model: "gpt-4", score: 0.9 }, ...]
-  const normalizeModelScores = (modelScores: ModelScore[] | Record<string, number> | undefined): ModelScore[] => {
-    if (!modelScores) return []
-    // Already an array
-    if (Array.isArray(modelScores)) return modelScores
-    // Object format (Legacy) - convert to array
-    return Object.entries(modelScores).map(([model, score]) => ({
-      model,
-      score: typeof score === 'number' ? score : 0,
-      use_reasoning: false,
-    }))
-  }
-
-
-  // ============================================================================
-  // 2. PROMPT GUARD SECTION
-  // ============================================================================
-
-  const renderPIIModernBERT = () => (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <h3 className={styles.sectionTitle}>PII Detection (ModernBERT)</h3>
-        {routerConfig.classifier?.pii_model && !isReadonly && (
-          <button
-            className={styles.sectionEditButton}
-            onClick={() => {
-              openEditModal(
-                'Edit PII Detection Configuration',
-                routerConfig.classifier?.pii_model || {},
-                [
-                  {
-                    name: 'model_id',
-                    label: 'Model ID',
-                    type: 'text',
-                    required: true,
-                    placeholder: 'e.g., answerdotai/ModernBERT-base',
-                    description: 'HuggingFace model ID for PII detection'
-                  },
-                  {
-                    name: 'threshold',
-                    label: 'Detection Threshold',
-                    type: 'percentage',
-                    required: true,
-                    placeholder: '50',
-                    description: 'Confidence threshold for PII detection (0-100%)',
-                    step: 1
-                  },
-                  {
-                    name: 'use_cpu',
-                    label: 'Use CPU',
-                    type: 'boolean',
-                    description: 'Use CPU instead of GPU for inference'
-                  },
-                  {
-                    name: 'use_modernbert',
-                    label: 'Use ModernBERT',
-                    type: 'boolean',
-                    description: 'Enable ModernBERT-based PII detection'
-                  },
-                  {
-                    name: 'pii_mapping_path',
-                    label: 'PII Mapping Path',
-                    type: 'text',
-                    placeholder: 'config/pii_mapping.json',
-                    description: 'Path to PII entity mapping configuration'
-                  }
-                ],
-                async (data) => {
-                  const newConfig = { ...config }
-                  if (!newConfig.classifier) newConfig.classifier = {}
-                  newConfig.classifier.pii_model = data
-                  await saveConfig(newConfig)
-                }
-              )
-            }}
-          >
-            Edit
-          </button>
-        )}
-      </div>
-      <div className={styles.sectionContent}>
-        {routerConfig.classifier?.pii_model ? (
-          <div className={styles.modelCard}>
-            <div className={styles.modelCardHeader}>
-              <span className={styles.modelCardTitle}>PII Classifier Model</span>
-              <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                {routerConfig.classifier.pii_model.use_cpu ? 'CPU' : 'GPU'}
-              </span>
-            </div>
-            <div className={styles.modelCardBody}>
-              <div className={styles.configRow}>
-                <span className={styles.configLabel}>Model ID</span>
-                <span className={styles.configValue}>{routerConfig.classifier.pii_model.model_id}</span>
-              </div>
-              <div className={styles.configRow}>
-                <span className={styles.configLabel}>Threshold</span>
-                <span className={styles.configValue}>{formatThreshold(routerConfig.classifier.pii_model.threshold)}</span>
-              </div>
-              <div className={styles.configRow}>
-                <span className={styles.configLabel}>ModernBERT</span>
-                <span className={`${styles.statusBadge} ${routerConfig.classifier.pii_model.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
-                  {routerConfig.classifier.pii_model.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
-                </span>
-              </div>
-              {routerConfig.classifier.pii_model.pii_mapping_path && (
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Mapping Path</span>
-                  <span className={styles.configValue}>{routerConfig.classifier.pii_model.pii_mapping_path}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className={styles.emptyState}>PII detection not configured</div>
-        )}
-      </div>
-    </div>
-  )
-
-  const renderJailbreakModernBERT = () => (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <h3 className={styles.sectionTitle}>Jailbreak Detection (ModernBERT)</h3>
-        {routerConfig.prompt_guard && !isReadonly && (
-          <button
-            className={styles.sectionEditButton}
-            onClick={() => {
-              openEditModal(
-                'Edit Jailbreak Detection Configuration',
-                routerConfig.prompt_guard || {},
-                [
-                  {
-                    name: 'enabled',
-                    label: 'Enable Jailbreak Detection',
-                    type: 'boolean',
-                    description: 'Enable or disable jailbreak detection'
-                  },
-                  {
-                    name: 'model_id',
-                    label: 'Model ID',
-                    type: 'text',
-                    required: true,
-                    placeholder: 'e.g., answerdotai/ModernBERT-base',
-                    description: 'HuggingFace model ID for jailbreak detection'
-                  },
-                  {
-                    name: 'threshold',
-                    label: 'Detection Threshold',
-                    type: 'percentage',
-                    required: true,
-                    placeholder: '50',
-                    description: 'Confidence threshold for jailbreak detection (0-100%)',
-                    step: 1
-                  },
-                  {
-                    name: 'use_cpu',
-                    label: 'Use CPU',
-                    type: 'boolean',
-                    description: 'Use CPU instead of GPU for inference'
-                  },
-                  {
-                    name: 'use_modernbert',
-                    label: 'Use ModernBERT',
-                    type: 'boolean',
-                    description: 'Enable ModernBERT-based jailbreak detection'
-                  },
-                  {
-                    name: 'jailbreak_mapping_path',
-                    label: 'Jailbreak Mapping Path',
-                    type: 'text',
-                    placeholder: 'config/jailbreak_mapping.json',
-                    description: 'Path to jailbreak pattern mapping configuration'
-                  }
-                ],
-                async (data) => {
-                  const newConfig = { ...config }
-                  newConfig.prompt_guard = data
-                  await saveConfig(newConfig)
-                }
-              )
-            }}
-          >
-            Edit
-          </button>
-        )}
-      </div>
-      <div className={styles.sectionContent}>
-        {routerConfig.prompt_guard ? (
-          <div className={styles.modelCard}>
-            <div className={styles.modelCardHeader}>
-              <span className={styles.modelCardTitle}>Jailbreak Protection</span>
-              <span className={`${styles.statusBadge} ${routerConfig.prompt_guard.enabled ? styles.statusActive : styles.statusInactive}`}>
-                {routerConfig.prompt_guard.enabled ? '✓ Enabled' : '✗ Disabled'}
-              </span>
-            </div>
-            {routerConfig.prompt_guard.enabled && (
-              <div className={styles.modelCardBody}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Model ID</span>
-                  <span className={styles.configValue}>{routerConfig.prompt_guard.model_id}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(routerConfig.prompt_guard.threshold)}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Use CPU</span>
-                  <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                    {routerConfig.prompt_guard.use_cpu ? 'CPU' : 'GPU'}
-                  </span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>ModernBERT</span>
-                  <span className={`${styles.statusBadge} ${routerConfig.prompt_guard.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
-                    {routerConfig.prompt_guard.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
-                  </span>
-                </div>
-                {routerConfig.prompt_guard.jailbreak_mapping_path && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Mapping Path</span>
-                    <span className={styles.configValue}>{routerConfig.prompt_guard.jailbreak_mapping_path}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className={styles.emptyState}>Jailbreak detection not configured</div>
-        )}
-      </div>
-    </div>
-  )
-
-  // ============================================================================
-  // 3. SIMILARITY CACHE SECTION
-  // ============================================================================
-
-  const renderSimilarityBERT = () => {
-    return (
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>Similarity BERT Configuration</h3>
-          {routerConfig.bert_model && !isReadonly && (
-            <button
-              className={styles.sectionEditButton}
-              onClick={() => {
-                openEditModal(
-                  'Edit Similarity BERT Configuration',
-                  routerConfig.bert_model || {},
-                  [
-                    {
-                      name: 'model_id',
-                      label: 'Model ID',
-                      type: 'text',
-                      required: true,
-                      placeholder: 'e.g., sentence-transformers/all-MiniLM-L6-v2',
-                      description: 'HuggingFace model ID for semantic similarity'
-                    },
-                    {
-                      name: 'threshold',
-                      label: 'Similarity Threshold',
-                      type: 'percentage',
-                      required: true,
-                      placeholder: '80',
-                      description: 'Minimum similarity score for cache hits (0-100%)',
-                      step: 1
-                    },
-                    {
-                      name: 'use_cpu',
-                      label: 'Use CPU',
-                      type: 'boolean',
-                      description: 'Use CPU instead of GPU for inference'
-                    }
-                  ],
-                  async (data) => {
-                    const newConfig = { ...config }
-                    newConfig.bert_model = data
-                    await saveConfig(newConfig)
-                  }
-                )
-              }}
-            >
-              Edit
-            </button>
-          )}
-        </div>
-        <div className={styles.sectionContent}>
-          {routerConfig.bert_model ? (
-            <div className={styles.modelCard}>
-              <div className={styles.modelCardHeader}>
-                <span className={styles.modelCardTitle}>BERT Model (Semantic Similarity)</span>
-                <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                  {routerConfig.bert_model.use_cpu ? 'CPU' : 'GPU'}
-                </span>
-              </div>
-              <div className={styles.modelCardBody}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Model ID</span>
-                  <span className={styles.configValue}>{routerConfig.bert_model.model_id}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(routerConfig.bert_model.threshold)}</span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className={styles.emptyState}>BERT model not configured</div>
-          )}
-
-          {routerConfig.semantic_cache && (
-            <div className={styles.featureCard}>
-              <div className={styles.featureHeader}>
-                <span className={styles.featureTitle}>Semantic Cache</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span className={`${styles.statusBadge} ${routerConfig.semantic_cache?.enabled ? styles.statusActive : styles.statusInactive}`}>
-                    {routerConfig.semantic_cache?.enabled ? '✓ Enabled' : '✗ Disabled'}
-                  </span>
-                  {!isReadonly && (
-                    <button
-                      className={styles.sectionEditButton}
-                      onClick={() => {
-                        openEditModal(
-                          'Edit Semantic Cache Configuration',
-                          config?.semantic_cache || {},
-                          [
-                            {
-                              name: 'enabled',
-                              label: 'Enable Semantic Cache',
-                              type: 'boolean',
-                              description: 'Enable or disable semantic caching'
-                            },
-                            {
-                              name: 'backend_type',
-                              label: 'Backend Type',
-                              type: 'select',
-                              options: ['memory', 'redis', 'memcached'],
-                              description: 'Cache backend storage type'
-                            },
-                            {
-                              name: 'similarity_threshold',
-                              label: 'Similarity Threshold',
-                              type: 'percentage',
-                              required: true,
-                              placeholder: '90',
-                              description: 'Minimum similarity score for cache hits (0-100%)',
-                              step: 1
-                            },
-                            {
-                              name: 'max_entries',
-                              label: 'Max Entries',
-                              type: 'number',
-                              placeholder: '10000',
-                              description: 'Maximum number of cached entries'
-                            },
-                            {
-                              name: 'ttl_seconds',
-                              label: 'TTL (seconds)',
-                              type: 'number',
-                              placeholder: '3600',
-                              description: 'Time-to-live for cached entries'
-                            },
-                            {
-                              name: 'eviction_policy',
-                              label: 'Eviction Policy',
-                              type: 'select',
-                              options: ['lru', 'lfu', 'fifo'],
-                              description: 'Cache eviction policy when max entries reached'
-                            }
-                          ],
-                          async (data) => {
-                            const newConfig = { ...config }
-                            newConfig.semantic_cache = data
-                            await saveConfig(newConfig)
-                          }
-                        )
-                      }}
-                    >
-                      Edit
-                    </button>
-                  )}
-                </div>
-              </div>
-              {routerConfig.semantic_cache?.enabled && (
-                <div className={styles.featureBody}>
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Backend Type</span>
-                    <span className={styles.configValue}>{routerConfig.semantic_cache?.backend_type || 'memory'}</span>
-                  </div>
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Similarity Threshold</span>
-                    <span className={styles.configValue}>{formatThreshold(routerConfig.semantic_cache?.similarity_threshold)}</span>
-                  </div>
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Max Entries</span>
-                    <span className={styles.configValue}>{routerConfig.semantic_cache?.max_entries}</span>
-                  </div>
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>TTL</span>
-                    <span className={styles.configValue}>{routerConfig.semantic_cache?.ttl_seconds}s</span>
-                  </div>
-                  {routerConfig.semantic_cache?.eviction_policy && (
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>Eviction Policy</span>
-                      <span className={styles.configValue}>{routerConfig.semantic_cache.eviction_policy}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  // ============================================================================
-  // 4. INTELLIGENT ROUTING SECTION
-  // ============================================================================
-
-  const renderClassifyBERT = () => {
-    const hasInTree = routerConfig.classifier?.category_model
-    const hasOutTree = routerConfig.classifier?.mcp_category_model?.enabled
-
-    return (
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>Classify BERT Model</h3>
-        </div>
-        <div className={styles.sectionContent}>
-          {/* In-tree Classifier */}
-          {hasInTree && routerConfig.classifier?.category_model && (
-            <div className={styles.modelCard}>
-              <div className={styles.modelCardHeader}>
-                <span className={styles.modelCardTitle}>In-tree Category Classifier</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                    {routerConfig.classifier.category_model.use_cpu ? 'CPU' : 'GPU'}
-                  </span>
-                  {!isReadonly && (
-                    <button
-                      className={styles.editButton}
-                      onClick={() => {
-                        openEditModal(
-                          'Edit In-tree Category Classifier',
-                          routerConfig.classifier?.category_model || {},
-                          [
-                            {
-                              name: 'model_id',
-                              label: 'Model ID',
-                              type: 'text',
-                              required: true,
-                              placeholder: 'e.g., answerdotai/ModernBERT-base',
-                              description: 'HuggingFace model ID for category classification'
-                            },
-                            {
-                              name: 'threshold',
-                              label: 'Classification Threshold',
-                              type: 'percentage',
-                              required: true,
-                              placeholder: '70',
-                              description: 'Confidence threshold for category classification (0-100%)',
-                              step: 1
-                            },
-                            {
-                              name: 'use_cpu',
-                              label: 'Use CPU',
-                              type: 'boolean',
-                              description: 'Use CPU instead of GPU for inference'
-                            },
-                            {
-                              name: 'use_modernbert',
-                              label: 'Use ModernBERT',
-                              type: 'boolean',
-                              description: 'Enable ModernBERT-based classification'
-                            },
-                            {
-                              name: 'category_mapping_path',
-                              label: 'Category Mapping Path',
-                              type: 'text',
-                              placeholder: 'config/category_mapping.json',
-                              description: 'Path to category mapping configuration'
-                            }
-                          ],
-                          async (data) => {
-                            const newConfig = { ...config }
-                            if (!newConfig.classifier) newConfig.classifier = {}
-                            newConfig.classifier.category_model = data
-                            await saveConfig(newConfig)
-                          }
-                        )
-                      }}
-                    >
-
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className={styles.modelCardBody}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Type</span>
-                  <span className={`${styles.badge} ${styles.badgeInfo}`}>Built-in ModernBERT</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Model ID</span>
-                  <span className={styles.configValue}>{routerConfig.classifier?.category_model?.model_id}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(routerConfig.classifier?.category_model?.threshold)}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>ModernBERT</span>
-                  <span className={`${styles.statusBadge} ${routerConfig.classifier?.category_model?.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
-                    {routerConfig.classifier?.category_model?.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
-                  </span>
-                </div>
-                {routerConfig.classifier?.category_model?.category_mapping_path && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Mapping Path</span>
-                    <span className={styles.configValue}>{routerConfig.classifier.category_model.category_mapping_path}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Out-tree Classifier (MCP) */}
-          {hasOutTree && routerConfig.classifier?.mcp_category_model && (
-            <div className={styles.modelCard}>
-              <div className={styles.modelCardHeader}>
-                <span className={styles.modelCardTitle}>Out-tree Category Classifier (MCP)</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span className={`${styles.statusBadge} ${styles.statusActive}`}>✓ Enabled</span>
-                  {!isReadonly && (
-                    <button
-                      className={styles.editButton}
-                      onClick={() => {
-                        openEditModal(
-                          'Edit Out-tree MCP Category Classifier',
-                          routerConfig.classifier?.mcp_category_model || {},
-                          [
-                            {
-                              name: 'enabled',
-                              label: 'Enable MCP Classifier',
-                              type: 'boolean',
-                              description: 'Enable or disable MCP-based classification'
-                            },
-                            {
-                              name: 'transport_type',
-                              label: 'Transport Type',
-                              type: 'select',
-                              options: ['stdio', 'http'],
-                              required: true,
-                              description: 'MCP transport protocol type'
-                            },
-                            {
-                              name: 'command',
-                              label: 'Command',
-                              type: 'text',
-                              placeholder: 'e.g., python mcp_server.py',
-                              description: 'Command to start MCP server (for stdio transport)'
-                            },
-                            {
-                              name: 'args',
-                              label: 'Arguments (JSON)',
-                              type: 'json',
-                              placeholder: '["--port", "8080"]',
-                              description: 'Command line arguments as JSON array'
-                            },
-                            {
-                              name: 'env',
-                              label: 'Environment Variables (JSON)',
-                              type: 'json',
-                              placeholder: '{"API_KEY": "xxx"}',
-                              description: 'Environment variables as JSON object'
-                            },
-                            {
-                              name: 'url',
-                              label: 'URL',
-                              type: 'text',
-                              placeholder: 'http://localhost:8080',
-                              description: 'MCP server URL (for http transport)'
-                            },
-                            {
-                              name: 'tool_name',
-                              label: 'Tool Name',
-                              type: 'text',
-                              placeholder: 'classify_category',
-                              description: 'Name of the MCP tool to call'
-                            },
-                            {
-                              name: 'threshold',
-                              label: 'Classification Threshold',
-                              type: 'percentage',
-                              required: true,
-                              placeholder: '70',
-                              description: 'Confidence threshold for classification (0-100%)',
-                              step: 1
-                            },
-                            {
-                              name: 'timeout_seconds',
-                              label: 'Timeout (seconds)',
-                              type: 'number',
-                              placeholder: '30',
-                              description: 'Request timeout in seconds'
-                            }
-                          ],
-                          async (data) => {
-                            const newConfig = { ...config }
-                            if (!newConfig.classifier) newConfig.classifier = {}
-                            newConfig.classifier.mcp_category_model = data
-                            await saveConfig(newConfig)
-                          }
-                        )
-                      }}
-                    >
-
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className={styles.modelCardBody}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Type</span>
-                  <span className={`${styles.badge} ${styles.badgeInfo}`}>MCP Protocol</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Transport Type</span>
-                  <span className={styles.configValue}>{routerConfig.classifier?.mcp_category_model?.transport_type}</span>
-                </div>
-                {routerConfig.classifier?.mcp_category_model?.command && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Command</span>
-                    <span className={styles.configValue}>{routerConfig.classifier.mcp_category_model.command}</span>
-                  </div>
-                )}
-                {routerConfig.classifier?.mcp_category_model?.url && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>URL</span>
-                    <span className={styles.configValue}>{routerConfig.classifier?.mcp_category_model?.url}</span>
-                  </div>
-                )}
-                {routerConfig.classifier?.mcp_category_model?.tool_name && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Tool Name</span>
-                    <span className={styles.configValue}>{routerConfig.classifier.mcp_category_model.tool_name}</span>
-                  </div>
-                )}
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(routerConfig.classifier?.mcp_category_model?.threshold)}</span>
-                </div>
-                {routerConfig.classifier?.mcp_category_model?.timeout_seconds && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Timeout</span>
-                    <span className={styles.configValue}>{routerConfig.classifier.mcp_category_model.timeout_seconds}s</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {!hasInTree && !hasOutTree && (
-            <div className={styles.emptyState}>No category classifier configured</div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  // ============================================================================
-  // 4b. PREFERENCE MODEL SECTION (LOCAL CANDLE)
-  // ============================================================================
-
-  const renderPreferenceModel = () => {
-    const preferenceModel = routerConfig.classifier?.preference_model
-
-    return (
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>Preference Model (Work In Progress)</h3>
-          <button
-            className={styles.sectionEditButton}
-            onClick={() => {
-              openEditModal(
-                preferenceModel ? 'Edit Preference Model' : 'Add Preference Model',
-                preferenceModel || {
-                  model_id: '',
-                  threshold: 0,
-                  use_cpu: false,
-                  use_qwen3: true,
-                },
-                [
-                  {
-                    name: 'model_id',
-                    label: 'Model ID or Path',
-                    type: 'text',
-                    required: true,
-                    placeholder: '',
-                    description: 'Local Candle model path or HuggingFace ID for preference routing',
-                  },
-                  {
-                    name: 'threshold',
-                    label: 'Confidence Threshold',
-                    type: 'percentage',
-                    placeholder: '0',
-                    description: 'Minimum confidence to accept a preference (0-100%, optional)',
-                    step: 1,
-                  },
-                  {
-                    name: 'use_cpu',
-                    label: 'Use CPU',
-                    type: 'boolean',
-                    description: 'Force CPU inference instead of GPU/Metal when available',
-                  },
-                  {
-                    name: 'use_qwen3',
-                    label: 'Use Qwen3 Model',
-                    type: 'boolean',
-                    description: 'Enable Qwen3 zero-shot/fine-tuned preference classifier',
-                  },
-                ],
-                async (data) => {
-                  const newConfig = { ...config }
-                  if (!newConfig.classifier) newConfig.classifier = {}
-                  newConfig.classifier.preference_model = data
-                  await saveConfig(newConfig)
-                },
-                preferenceModel ? 'edit' : 'add'
-              )
-            }}
-          >
-            {preferenceModel ? 'Edit' : 'Add'}
-          </button>
-        </div>
-        <div className={styles.sectionContent}>
-          {preferenceModel ? (
-            <div className={styles.modelCard}>
-              <div className={styles.modelCardHeader}>
-                <span className={styles.modelCardTitle}>Local Preference Classifier</span>
-                <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                  {preferenceModel.use_cpu ? 'CPU' : 'GPU'}
-                </span>
-              </div>
-              <div className={styles.modelCardBody}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Model ID</span>
-                  <span className={styles.configValue}>{preferenceModel.model_id}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(preferenceModel.threshold || 0)}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Qwen3</span>
-                  <span className={`${styles.statusBadge} ${preferenceModel.use_qwen3 ? styles.statusActive : styles.statusInactive}`}>
-                    {preferenceModel.use_qwen3 ? '✓ Enabled' : '✗ Disabled'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className={styles.emptyState}>Preference model not configured</div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  const renderCategories = () => {
-    // Get domains/categories from both formats
-    const domains = getDomains()
-    const decisions = getDecisions()
-    const defaultModel = getDefaultModel()
-
-    return (
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>{isPythonCLI ? 'Domains & Decisions' : 'Categories Configuration'}</h3>
-          <span className={styles.badge}>{domains.length} {isPythonCLI ? 'domains' : 'categories'}</span>
-        </div>
-        <div className={styles.sectionContent}>
-          {/* Core Settings at the top */}
-          <div className={styles.coreSettingsInline}>
-            <div className={styles.inlineConfigRow}>
-              <span className={styles.inlineConfigLabel}>Default Model:</span>
-              <span className={styles.inlineConfigValue}>{defaultModel || 'N/A'}</span>
-            </div>
-            {!isPythonCLI && (
-              <div className={styles.inlineConfigRow}>
-                <span className={styles.inlineConfigLabel}>Default Reasoning Effort:</span>
-                <span className={`${styles.badge} ${styles[`badge${config?.default_reasoning_effort || 'medium'}`]}`}>
-                  {config?.default_reasoning_effort || 'medium'}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Python CLI format - show domains and decisions separately */}
-          {isPythonCLI ? (
-            <>
-              {/* Domains Section */}
-              <h4 className={styles.subsectionTitle}>Domains</h4>
-              {domains.length > 0 ? (
-                <div className={styles.categoryGridTwoColumn}>
-                  {domains.map((domain, index) => (
-                    <div key={index} className={styles.categoryCard}>
-                      <div className={styles.categoryHeader}>
-                        <span className={styles.categoryName}>{domain.name}</span>
-                        {!isReadonly && (
-                          <button
-                            className={styles.editButton}
-                            onClick={() => {
-                              openEditModal(
-                                `Edit Domain: ${domain.name}`,
-                                { description: domain.description || '' },
-                                [
-                                  {
-                                    name: 'description',
-                                    label: 'Description',
-                                    type: 'textarea',
-                                    placeholder: 'Describe this domain...',
-                                    description: 'What types of queries belong to this domain'
-                                  }
-                                ],
-                                async (data) => {
-                                  const newConfig = { ...config }
-                                  if (newConfig.signals?.domains) {
-                                    newConfig.signals.domains[index] = {
-                                      ...domain,
-                                      description: data.description,
-                                    }
-                                  }
-                                  await saveConfig(newConfig)
-                                }
-                              )
-                            }}
-                          >
-
-                          </button>
-                        )}
-                      </div>
-                      {domain.description && (
-                        <p className={styles.categoryDescription}>{domain.description}</p>
-                      )}
-                      {domain.mmlu_categories && domain.mmlu_categories.length > 0 && (
-                        <div className={styles.tagsContainer}>
-                          {domain.mmlu_categories.map((cat: string, idx: number) => (
-                            <span key={idx} className={styles.tag}>{cat}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className={styles.emptyState}>No domains configured</div>
-              )}
-
-              {/* Decisions Section */}
-              <h4 className={styles.subsectionTitle}>Decisions (Routing Rules)</h4>
-              {decisions.length > 0 ? (
-                <div className={styles.categoryGridTwoColumn}>
-                  {decisions.map((decision, index) => (
-                    <div key={index} className={styles.categoryCard}>
-                      <div className={styles.categoryHeader}>
-                        <span className={styles.categoryName}>{decision.name}</span>
-                        <span className={`${styles.badge} ${styles.badgeInfo}`}>Priority: {decision.priority}</span>
-                      </div>
-                      {decision.description && (
-                        <p className={styles.categoryDescription}>{decision.description}</p>
-                      )}
-                      {decision.rules && (
-                        <div className={styles.configRow}>
-                          <span className={styles.configLabel}>Rules</span>
-                          <span className={styles.configValue}>
-                            {decision.rules.conditions?.length || 0} conditions ({decision.rules.operator})
-                          </span>
-                        </div>
-                      )}
-                      {decision.modelRefs && decision.modelRefs.length > 0 && (
-                        <div className={styles.configRow}>
-                          <span className={styles.configLabel}>Models</span>
-                          <div className={styles.endpointTags}>
-                            {decision.modelRefs.map((ref: { model: string; use_reasoning?: boolean }, idx: number) => (
-                              <span key={idx} className={styles.endpointTag}>
-                                {ref.model} {ref.use_reasoning && ''}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className={styles.emptyState}>No decisions configured</div>
-              )}
-            </>
-          ) : (
-            /* Legacy format - categories with model scores */
-            config?.categories && config.categories.length > 0 ? (
-              <div className={styles.categoryGridTwoColumn}>
-                {config.categories.map((category, index) => {
-                  // Normalize model_scores (handles both object and array formats)
-                  const normalizedScores = normalizeModelScores(category.model_scores)
-                  // Get reasoning info from best model (first model score)
-                  const bestModel = normalizedScores[0]
-                  const useReasoning = bestModel?.use_reasoning || false
-                  const reasoningEffort = bestModel?.reasoning_effort || 'medium'
-                  const reasoningDescription = bestModel?.reasoning_description || ''
-
-                  return (
-                    <div key={index} className={styles.categoryCard}>
-                      <div className={styles.categoryHeader}>
-                        <span className={styles.categoryName}>{category.name}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          {useReasoning && (
-                            <span className={`${styles.reasoningBadge} ${styles[`reasoning${reasoningEffort}`]}`}>
-                              {reasoningEffort}
-                            </span>
-                          )}
-                          {!isReadonly && (
-                            <button
-                              className={styles.editButton}
-                              onClick={() => {
-                                openEditModal(
-                                  `Edit Category: ${category.name}`,
-                                  {
-                                    system_prompt: category.system_prompt || ''
-                                  },
-                                  [
-                                    {
-                                      name: 'system_prompt',
-                                      label: 'System Prompt',
-                                      type: 'textarea',
-                                      placeholder: 'Enter system prompt for this category...',
-                                      description: 'Instructions for the model when handling this category'
-                                    }
-                                  ],
-                                  async (data) => {
-                                    const newConfig = { ...config }
-                                    if (newConfig.categories) {
-                                      newConfig.categories[index] = {
-                                        ...category,
-                                        ...data
-                                      }
-                                    }
-                                    await saveConfig(newConfig)
-                                  }
-                                )
-                              }}
-                            >
-
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* System Prompt */}
-                      {category.system_prompt && (
-                        <div className={styles.systemPromptSection}>
-                          <div className={styles.systemPromptLabel}>System Prompt</div>
-                          <div className={styles.systemPromptText}>{category.system_prompt}</div>
-                        </div>
-                      )}
-
-                      {reasoningDescription && (
-                        <p className={styles.categoryDescription}>{reasoningDescription}</p>
-                      )}
-
-                      <div className={styles.categoryModels}>
-                        <div className={styles.categoryModelsHeader}>
-                          <span>Model Scores</span>
-                          {!isReadonly && (
-                            <button
-                              className={styles.addModelButton}
-                              onClick={() => {
-                                // Get available models from model_config
-                                const availableModels = config?.model_config
-                                  ? Object.keys(config.model_config)
-                                  : []
-
-                                openEditModal(
-                                  `Add Model to ${category.name}`,
-                                  {
-                                    model: availableModels[0] || '',
-                                    score: 0.5,
-                                    use_reasoning: false
-                                  },
-                                  [
-                                    {
-                                      name: 'model',
-                                      label: 'Model',
-                                      type: 'select',
-                                      options: availableModels,
-                                      required: true,
-                                      description: 'Select from configured models'
-                                    },
-                                    {
-                                      name: 'score',
-                                      label: 'Score',
-                                      type: 'number',
-                                      required: true,
-                                      placeholder: '0.5',
-                                      description: 'Model score (0-1)'
-                                    },
-                                    {
-                                      name: 'use_reasoning',
-                                      label: 'Use Reasoning',
-                                      type: 'boolean',
-                                      description: 'Enable reasoning for this model in this category'
-                                    }
-                                  ],
-                                  async (data) => {
-                                    const newConfig = { ...config }
-                                    if (newConfig.categories) {
-                                      const updatedCategory = { ...category }
-                                      // Convert to array format if needed (Legacy uses object)
-                                      const scores = normalizeModelScores(updatedCategory.model_scores)
-                                      scores.push(data)
-                                      updatedCategory.model_scores = scores
-                                      newConfig.categories[index] = updatedCategory
-                                    }
-                                    await saveConfig(newConfig)
-                                  },
-                                  'add'
-                                )
-                              }}
-                            >
-
-                            </button>
-                          )}
-                        </div>
-                        {normalizedScores.length > 0 ? (
-                          normalizedScores.map((modelScore, modelIdx) => (
-                            <div key={modelIdx} className={styles.modelScoreRow}>
-                              <span className={styles.modelScoreName}>
-                                {modelScore.model}
-                                {modelScore.use_reasoning && <span className={styles.reasoningIcon}></span>}
-                              </span>
-                              <div className={styles.scoreBar}>
-                                <div
-                                  className={styles.scoreBarFill}
-                                  style={{ width: `${(modelScore.score ?? 0) * 100}%` }}
-                                ></div>
-                                <span className={styles.scoreText}>{((modelScore.score ?? 0) * 100).toFixed(0)}%</span>
-                              </div>
-                              <div className={styles.modelScoreActions}>
-                                {!isReadonly && (
-                                  <>
-                                    <button
-                                      className={styles.editButton}
-                                      onClick={() => {
-                                        // Get available models from model_config
-                                        const availableModels = config?.model_config
-                                          ? Object.keys(config.model_config)
-                                          : []
-
-                                        openEditModal(
-                                          `Edit Model: ${modelScore.model}`,
-                                          { ...modelScore },
-                                          [
-                                            {
-                                              name: 'model',
-                                              label: 'Model',
-                                              type: 'select',
-                                              options: availableModels,
-                                              required: true,
-                                              description: 'Select from configured models'
-                                            },
-                                            {
-                                              name: 'score',
-                                              label: 'Score',
-                                              type: 'number',
-                                              required: true,
-                                              placeholder: '0.5',
-                                              description: 'Model score (0-1)'
-                                            },
-                                            {
-                                              name: 'use_reasoning',
-                                              label: 'Use Reasoning',
-                                              type: 'boolean',
-                                              description: 'Enable reasoning for this model in this category'
-                                            }
-                                          ],
-                                          async (data) => {
-                                            // For legacy object format, we need to convert back
-                                            const newConfig = { ...config }
-                                            if (newConfig.categories) {
-                                              const updatedCategory = { ...category }
-                                              // Convert to array format for consistency
-                                              const scores = normalizeModelScores(updatedCategory.model_scores)
-                                              scores[modelIdx] = data
-                                              updatedCategory.model_scores = scores
-                                              newConfig.categories[index] = updatedCategory
-                                            }
-                                            await saveConfig(newConfig)
-                                          }
-                                        )
-                                      }}
-                                    >
-
-                                    </button>
-                                    <button
-                                      className={styles.deleteButton}
-                                      onClick={() => {
-                                        if (confirm(`Remove model "${modelScore.model}" from this category?`)) {
-                                          const newConfig = { ...config }
-                                          if (newConfig.categories) {
-                                            const updatedCategory = { ...category }
-                                            // Convert to array format for consistency
-                                            const scores = normalizeModelScores(updatedCategory.model_scores)
-                                            scores.splice(modelIdx, 1)
-                                            updatedCategory.model_scores = scores
-                                            newConfig.categories[index] = updatedCategory
-                                          }
-                                          saveConfig(newConfig)
-                                        }
-                                      }}
-                                    >
-
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className={styles.emptyModelScores}>No models configured for this category</div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className={styles.emptyState}>No categories configured</div>
-            )
-          )}
-        </div>
-      </div>
-    )
-  }
-
-
-
-  // ============================================================================
-  // 5. TOOLS SELECTION SECTION
-  // ============================================================================
-
-  const renderToolsConfiguration = () => (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <h3 className={styles.sectionTitle}>Tools Configuration</h3>
-        {routerConfig.tools && !isReadonly && (
-          <button
-            className={styles.sectionEditButton}
-            onClick={() => {
-              openEditModal(
-                'Edit Tools Configuration',
-                routerConfig.tools || {},
-                [
-                  {
-                    name: 'enabled',
-                    label: 'Enable Tool Auto-Selection',
-                    type: 'boolean',
-                    description: 'Enable automatic tool selection based on similarity'
-                  },
-                  {
-                    name: 'top_k',
-                    label: 'Top K',
-                    type: 'number',
-                    placeholder: '3',
-                    description: 'Number of top similar tools to select'
-                  },
-                  {
-                    name: 'similarity_threshold',
-                    label: 'Similarity Threshold',
-                    type: 'percentage',
-                    placeholder: '70',
-                    description: 'Minimum similarity score for tool selection (0-100%)',
-                    step: 1
-                  },
-                  {
-                    name: 'fallback_to_empty',
-                    label: 'Fallback to Empty',
-                    type: 'boolean',
-                    description: 'Return empty list if no tools meet threshold'
-                  },
-                  {
-                    name: 'tools_db_path',
-                    label: 'Tools Database Path',
-                    type: 'text',
-                    placeholder: 'config/tools_db.json',
-                    description: 'Path to tools database JSON file'
-                  }
-                ],
-                async (data) => {
-                  const newConfig = { ...config }
-                  newConfig.tools = data
-                  await saveConfig(newConfig)
-                }
-              )
-            }}
-          >
-            Edit
-          </button>
-        )}
-      </div>
-      <div className={styles.sectionContent}>
-        {routerConfig.tools ? (
-          <div className={styles.featureCard}>
-            <div className={styles.featureHeader}>
-              <span className={styles.featureTitle}>Tool Auto-Selection</span>
-              <span className={`${styles.statusBadge} ${routerConfig.tools.enabled ? styles.statusActive : styles.statusInactive}`}>
-                {routerConfig.tools.enabled ? '✓ Enabled' : '✗ Disabled'}
-              </span>
-            </div>
-            {routerConfig.tools.enabled && (
-              <div className={styles.featureBody}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Top K</span>
-                  <span className={styles.configValue}>{routerConfig.tools.top_k}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Similarity Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(routerConfig.tools.similarity_threshold)}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Fallback to Empty</span>
-                  <span className={styles.configValue}>{routerConfig.tools.fallback_to_empty ? 'Yes' : 'No'}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className={styles.emptyState}>Tools configuration not available</div>
-        )}
-      </div>
-    </div>
-  )
-
-  const renderToolsDB = () => (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <h3 className={styles.sectionTitle}>Tools Database</h3>
-        {toolsData.length > 0 && <span className={styles.badge}>{toolsData.length} tools</span>}
-      </div>
-      <div className={styles.sectionContent}>
-        {config?.tools?.tools_db_path ? (
-          <>
-            <div className={styles.featureCard}>
-              <div className={styles.featureHeader}>
-                <span className={styles.featureTitle}>Database Path</span>
-              </div>
-              <div className={styles.featureBody}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Path</span>
-                  <span className={styles.configValue}>{config.tools.tools_db_path}</span>
-                </div>
-              </div>
-            </div>
-
-            {toolsLoading && <div className={styles.loadingState}>Loading tools...</div>}
-            {toolsError && <div className={styles.errorState}>Error loading tools: {toolsError}</div>}
-
-            {!toolsLoading && !toolsError && toolsData.length > 0 && (
-              <div className={styles.toolsGrid}>
-                {toolsData.map((tool, index) => (
-                  <div key={index} className={styles.toolCard}>
-                    <div className={styles.toolHeader}>
-                      <span className={styles.toolName}>{tool.tool.function.name}</span>
-                      {tool.category && (
-                        <span className={`${styles.badge} ${styles.badgeInfo}`}>{tool.category}</span>
-                      )}
-                    </div>
-
-                    {/* Function Description */}
-                    <div className={styles.toolFunctionDescription}>
-                      <strong>Function:</strong> {tool.tool.function.description}
-                    </div>
-
-                    {/* Similarity Description (used for matching) */}
-                    {tool.description && tool.description !== tool.tool.function.description && (
-                      <div className={styles.toolSimilarityDescription}>
-                        <div className={styles.similarityDescriptionLabel}>Similarity Keywords</div>
-                        <div className={styles.similarityDescriptionText}>{tool.description}</div>
-                      </div>
-                    )}
-
-                    {/* Parameters */}
-                    {tool.tool.function.parameters.properties && (
-                      <div className={styles.toolParameters}>
-                        <div className={styles.toolParametersHeader}>Parameters:</div>
-                        {Object.entries(tool.tool.function.parameters.properties).map(([paramName, paramInfo]: [string, any]) => (
-                          <div key={paramName} className={styles.toolParameter}>
-                            <div>
-                              <span className={styles.parameterName}>
-                                {paramName}
-                                {tool.tool.function.parameters.required?.includes(paramName) && (
-                                  <span className={styles.requiredBadge}>*</span>
-                                )}
-                              </span>
-                              <span className={styles.parameterType}>{paramInfo.type}</span>
-                            </div>
-                            {paramInfo.description && (
-                              <div className={styles.parameterDescription}>{paramInfo.description}</div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Tags */}
-                    {tool.tags && tool.tags.length > 0 && (
-                      <div className={styles.toolTags}>
-                        {tool.tags.map((tag, idx) => (
-                          <span key={idx} className={styles.toolTag}>{tag}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className={styles.emptyState}>Tools database path not configured</div>
-        )}
-      </div>
-    </div>
-  )
-
-  // ============================================================================
-  // 6. OBSERVABILITY SECTION
-  // ============================================================================
-
-  const renderObservabilityTracing = () => (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <h3 className={styles.sectionTitle}>Distributed Tracing</h3>
-        {routerConfig.observability?.tracing && !isReadonly && (
-          <button
-            className={styles.sectionEditButton}
-            onClick={() => {
-              openEditModal(
-                'Edit Distributed Tracing Configuration',
-                routerConfig.observability?.tracing || {},
-                [
-                  {
-                    name: 'enabled',
-                    label: 'Enable Tracing',
-                    type: 'boolean',
-                    description: 'Enable distributed tracing'
-                  },
-                  {
-                    name: 'provider',
-                    label: 'Provider',
-                    type: 'select',
-                    options: ['jaeger', 'zipkin', 'otlp'],
-                    description: 'Tracing provider'
-                  },
-                  {
-                    name: 'exporter',
-                    label: 'Exporter Configuration (JSON)',
-                    type: 'json',
-                    placeholder: '{"type": "otlp", "endpoint": "http://localhost:4318"}',
-                    description: 'Exporter configuration as JSON object'
-                  },
-                  {
-                    name: 'sampling',
-                    label: 'Sampling Configuration (JSON)',
-                    type: 'json',
-                    placeholder: '{"type": "probabilistic", "rate": 0.1}',
-                    description: 'Sampling configuration as JSON object'
-                  },
-                  {
-                    name: 'resource',
-                    label: 'Resource Configuration (JSON)',
-                    type: 'json',
-                    placeholder: '{"service_name": "semantic-router", "service_version": "1.0.0", "deployment_environment": "production"}',
-                    description: 'Resource attributes as JSON object'
-                  }
-                ],
-                async (data) => {
-                  const newConfig = { ...config }
-                  if (!newConfig.observability) newConfig.observability = {}
-                  newConfig.observability.tracing = data
-                  await saveConfig(newConfig)
-                }
-              )
-            }}
-          >
-            Edit
-          </button>
-        )}
-      </div>
-      <div className={styles.sectionContent}>
-        {routerConfig.observability?.tracing ? (
-          <div className={styles.featureCard}>
-            <div className={styles.featureHeader}>
-              <span className={styles.featureTitle}>Tracing Status</span>
-              <span className={`${styles.statusBadge} ${routerConfig.observability.tracing.enabled ? styles.statusActive : styles.statusInactive}`}>
-                {routerConfig.observability.tracing.enabled ? '✓ Enabled' : '✗ Disabled'}
-              </span>
-            </div>
-            {routerConfig.observability.tracing.enabled && (
-              <div className={styles.featureBody}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Provider</span>
-                  <span className={styles.configValue}>{routerConfig.observability.tracing.provider}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Exporter Type</span>
-                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.exporter?.type}</span>
-                </div>
-                {routerConfig.observability?.tracing?.exporter?.endpoint && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Endpoint</span>
-                    <span className={styles.configValue}>{routerConfig.observability.tracing.exporter.endpoint}</span>
-                  </div>
-                )}
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Sampling Type</span>
-                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.sampling?.type}</span>
-                </div>
-                {routerConfig.observability?.tracing?.sampling?.rate !== undefined && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Sampling Rate</span>
-                    <span className={styles.configValue}>{((routerConfig.observability?.tracing?.sampling?.rate ?? 0) * 100).toFixed(0)}%</span>
-                  </div>
-                )}
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Service Name</span>
-                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.resource?.service_name}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Service Version</span>
-                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.resource?.service_version}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Environment</span>
-                  <span className={`${styles.badge} ${styles[`badge${routerConfig.observability?.tracing?.resource?.deployment_environment ?? ''}`]}`}>
-                    {routerConfig.observability?.tracing?.resource?.deployment_environment}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className={styles.emptyState}>Tracing not configured</div>
-        )}
-      </div>
-    </div>
-  )
-
-  // ============================================================================
-  // 7. CLASSIFICATION API SECTION
-  // ============================================================================
-
-  const renderClassificationAPI = () => (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <h3 className={styles.sectionTitle}>Batch Classification API</h3>
-        {routerConfig.api?.batch_classification && !isReadonly && (
-          <button
-            className={styles.sectionEditButton}
-            onClick={() => {
-              openEditModal(
-                'Edit Batch Classification API Configuration',
-                routerConfig.api?.batch_classification || {},
-                [
-                  {
-                    name: 'max_batch_size',
-                    label: 'Max Batch Size',
-                    type: 'number',
-                    required: true,
-                    placeholder: '100',
-                    description: 'Maximum number of items in a single batch'
-                  },
-                  {
-                    name: 'concurrency_threshold',
-                    label: 'Concurrency Threshold',
-                    type: 'number',
-                    placeholder: '10',
-                    description: 'Threshold to trigger concurrent processing'
-                  },
-                  {
-                    name: 'max_concurrency',
-                    label: 'Max Concurrency',
-                    type: 'number',
-                    placeholder: '5',
-                    description: 'Maximum number of concurrent batch processes'
-                  },
-                  {
-                    name: 'metrics',
-                    label: 'Metrics Configuration (JSON)',
-                    type: 'json',
-                    placeholder: '{"enabled": true, "sample_rate": 0.1, "detailed_goroutine_tracking": false, "high_resolution_timing": true}',
-                    description: 'Metrics collection configuration as JSON object'
-                  }
-                ],
-                async (data) => {
-                  const newConfig = { ...config }
-                  if (!newConfig.api) newConfig.api = {}
-                  newConfig.api.batch_classification = data
-                  await saveConfig(newConfig)
-                }
-              )
-            }}
-          >
-            Edit
-          </button>
-        )}
-      </div>
-      <div className={styles.sectionContent}>
-        {routerConfig.api?.batch_classification ? (
-          <>
-            <div className={styles.featureCard}>
-              <div className={styles.featureHeader}>
-                <span className={styles.featureTitle}>Batch Configuration</span>
-              </div>
-              <div className={styles.featureBody}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Max Batch Size</span>
-                  <span className={styles.configValue}>{routerConfig.api.batch_classification.max_batch_size}</span>
-                </div>
-                {routerConfig.api.batch_classification.concurrency_threshold !== undefined && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Concurrency Threshold</span>
-                    <span className={styles.configValue}>{routerConfig.api.batch_classification.concurrency_threshold}</span>
-                  </div>
-                )}
-                {routerConfig.api.batch_classification.max_concurrency !== undefined && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Max Concurrency</span>
-                    <span className={styles.configValue}>{routerConfig.api.batch_classification.max_concurrency}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {routerConfig.api?.batch_classification?.metrics && (
-              <div className={styles.featureCard}>
-                <div className={styles.featureHeader}>
-                  <span className={styles.featureTitle}>Metrics Collection</span>
-                  <span className={`${styles.statusBadge} ${routerConfig.api.batch_classification.metrics.enabled ? styles.statusActive : styles.statusInactive}`}>
-                    {routerConfig.api.batch_classification.metrics.enabled ? '✓ Enabled' : '✗ Disabled'}
-                  </span>
-                </div>
-                {routerConfig.api.batch_classification.metrics.enabled && (
-                  <div className={styles.featureBody}>
-                    {routerConfig.api.batch_classification.metrics.sample_rate !== undefined && (
-                      <div className={styles.configRow}>
-                        <span className={styles.configLabel}>Sample Rate</span>
-                        <span className={styles.configValue}>{((routerConfig.api.batch_classification.metrics.sample_rate ?? 0) * 100).toFixed(0)}%</span>
-                      </div>
-                    )}
-                    {routerConfig.api.batch_classification.metrics.detailed_goroutine_tracking !== undefined && (
-                      <div className={styles.configRow}>
-                        <span className={styles.configLabel}>Goroutine Tracking</span>
-                        <span className={styles.configValue}>{routerConfig.api.batch_classification.metrics.detailed_goroutine_tracking ? 'Yes' : 'No'}</span>
-                      </div>
-                    )}
-                    {routerConfig.api.batch_classification.metrics.high_resolution_timing !== undefined && (
-                      <div className={styles.configRow}>
-                        <span className={styles.configLabel}>High Resolution Timing</span>
-                        <span className={styles.configValue}>{routerConfig.api.batch_classification.metrics.high_resolution_timing ? 'Yes' : 'No'}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className={styles.emptyState}>Batch classification API not configured</div>
-        )}
-      </div>
-    </div>
-  )
 
   // ============================================================================
   // SECTION PANEL RENDERS - Aligned with Python CLI config structure
@@ -2246,7 +481,23 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   // Signals Section - Keywords, Embeddings, Domains, Preferences (config.yaml)
   const renderSignalsSection = () => {
+    // Support both nested (signals.*) and flat (keyword_rules, etc.) formats.
+    // After deploy, Router flattens signals.keywords → keyword_rules, etc.
     const signals = config?.signals
+    const flatSignals = !signals && hasFlatSignals(config) ? {
+      keywords: config?.keyword_rules,
+      embeddings: config?.embedding_rules,
+      domains: config?.categories,
+      fact_check: config?.fact_check_rules,
+      user_feedbacks: config?.user_feedback_rules,
+      preferences: config?.preference_rules,
+      language: config?.language_rules,
+      context: config?.context_rules,
+      complexity: config?.complexity_rules,
+      jailbreak: config?.jailbreak,
+      pii: config?.pii,
+    } : null
+    const effectiveSignals = signals || flatSignals
 
     interface UnifiedSignal {
       name: string
@@ -2260,7 +511,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     const allSignals: UnifiedSignal[] = []
 
     // Keywords
-    signals?.keywords?.forEach(kw => {
+    effectiveSignals?.keywords?.forEach(kw => {
       allSignals.push({
         name: kw.name,
         type: 'Keywords',
@@ -2270,7 +521,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Embeddings
-    signals?.embeddings?.forEach(emb => {
+    effectiveSignals?.embeddings?.forEach(emb => {
       allSignals.push({
         name: emb.name,
         type: 'Embeddings',
@@ -2280,7 +531,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Domains
-    signals?.domains?.forEach(domain => {
+    effectiveSignals?.domains?.forEach(domain => {
       const categoryCount = domain.mmlu_categories?.length || 0
       allSignals.push({
         name: domain.name,
@@ -2291,17 +542,20 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Preferences
-    signals?.preferences?.forEach(pref => {
+    effectiveSignals?.preferences?.forEach(pref => {
+      const examplesCount = pref.examples?.length || 0
+      const thresholdText = pref.threshold !== undefined ? ` • threshold ${formatThreshold(pref.threshold)}` : ''
+      const examplesText = examplesCount > 0 ? ` • ${examplesCount} ${examplesCount === 1 ? 'example' : 'examples'}` : ''
       allSignals.push({
         name: pref.name,
         type: 'Preference',
-        summary: pref.description || 'No description',
+        summary: `${pref.description || 'No description'}${examplesText}${thresholdText}`,
         rawData: pref
       })
     })
 
     // Fact Check
-    signals?.fact_check?.forEach(fc => {
+    effectiveSignals?.fact_check?.forEach(fc => {
       allSignals.push({
         name: fc.name,
         type: 'Fact Check',
@@ -2311,7 +565,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // User Feedbacks
-    signals?.user_feedbacks?.forEach(uf => {
+    effectiveSignals?.user_feedbacks?.forEach(uf => {
       allSignals.push({
         name: uf.name,
         type: 'User Feedback',
@@ -2321,7 +575,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Language
-    signals?.language?.forEach(lang => {
+    effectiveSignals?.language?.forEach(lang => {
       allSignals.push({
         name: lang.name,
         type: 'Language',
@@ -2331,7 +585,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Context
-    signals?.context?.forEach(ctx => {
+    effectiveSignals?.context?.forEach(ctx => {
       allSignals.push({
         name: ctx.name,
         type: 'Context',
@@ -2341,7 +595,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Complexity
-    signals?.complexity?.forEach(comp => {
+    effectiveSignals?.complexity?.forEach(comp => {
       const hardCount = comp.hard?.candidates?.length || 0
       const easyCount = comp.easy?.candidates?.length || 0
       allSignals.push({
@@ -2349,6 +603,28 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         type: 'Complexity',
         summary: `Threshold: ${comp.threshold}, ${hardCount} hard / ${easyCount} easy candidates`,
         rawData: comp
+      })
+    })
+
+    // Jailbreak
+    effectiveSignals?.jailbreak?.forEach(jb => {
+      const method = jb.method || 'classifier'
+      allSignals.push({
+        name: jb.name,
+        type: 'Jailbreak',
+        summary: `Method: ${method}, Threshold: ${jb.threshold}${jb.include_history ? ', includes history' : ''}`,
+        rawData: jb
+      })
+    })
+
+    // PII
+    effectiveSignals?.pii?.forEach(p => {
+      const allowed = p.pii_types_allowed?.length || 0
+      allSignals.push({
+        name: p.name,
+        type: 'PII',
+        summary: `Threshold: ${p.threshold}${allowed > 0 ? `, ${allowed} types allowed` : ', deny all'}`,
+        rawData: p
       })
     })
 
@@ -2370,7 +646,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'type',
         header: 'Type',
-        width: '140px',
+        width: TABLE_COLUMN_WIDTH.medium,
         sortable: true,
         render: (row) => {
           const typeColors: Record<SignalType, string> = {
@@ -2382,7 +658,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             'User Feedback': 'rgba(236, 72, 153, 0.15)',
             'Language': 'rgba(59, 130, 246, 0.15)',
             'Context': 'rgba(251, 146, 60, 0.15)',
-            'Complexity': 'rgba(66, 153, 225, 0.15)'
+            'Complexity': 'rgba(66, 153, 225, 0.15)',
+            'Jailbreak': 'rgba(239, 68, 68, 0.15)',
+            'PII': 'rgba(245, 158, 11, 0.15)'
           }
           return (
             <span className={styles.badge} style={{ background: typeColors[row.type] }}>
@@ -2502,6 +780,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             }
           ]
         })
+      } else if (signal.type === 'Preference') {
+        sections.push({
+          title: 'Preference Configuration',
+          fields: [
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+            { label: 'Threshold', value: signal.rawData.threshold !== undefined ? formatThreshold(signal.rawData.threshold) : 'Not set' },
+            {
+              label: 'Examples',
+              value: signal.rawData.examples?.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>
+                  {signal.rawData.examples.map((ex: string, i: number) => (
+                    <div key={i} style={{ padding: '0.35rem 0.5rem', background: 'rgba(234, 179, 8, 0.1)', borderRadius: 6 }}>
+                      {ex}
+                    </div>
+                  ))}
+                </div>
+              ) : 'No examples provided',
+              fullWidth: true
+            }
+          ]
+        })
       } else if (signal.type === 'Language') {
         sections.push({
           title: 'Language Signal',
@@ -2581,6 +880,30 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           title: 'Complexity Signal',
           fields
         })
+      } else if (signal.type === 'Jailbreak') {
+        const fields = [
+          { label: 'Method', value: signal.rawData.method || 'classifier', fullWidth: true },
+          { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true },
+          { label: 'Include History', value: signal.rawData.include_history ? 'Yes' : 'No', fullWidth: true },
+        ]
+        if (signal.rawData.method === 'contrastive') {
+          fields.push(
+            { label: 'Jailbreak Patterns', value: (signal.rawData.jailbreak_patterns || []).length + ' patterns', fullWidth: true },
+            { label: 'Benign Patterns', value: (signal.rawData.benign_patterns || []).length + ' patterns', fullWidth: true },
+          )
+        }
+        fields.push({ label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true })
+        sections.push({ title: 'Jailbreak Signal', fields })
+      } else if (signal.type === 'PII') {
+        sections.push({
+          title: 'PII Signal',
+          fields: [
+            { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true },
+            { label: 'Allowed PII Types', value: signal.rawData.pii_types_allowed?.join(', ') || 'None (deny all)', fullWidth: true },
+            { label: 'Include History', value: signal.rawData.include_history ? 'Yes' : 'No', fullWidth: true },
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+          ]
+        })
       } else {
         // Preference, Fact Check, User Feedback
         sections.push({
@@ -2610,13 +933,23 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: '',
         aggregation_method: 'mean',
         mmlu_categories: '',
+        preference_examples: '',
+        preference_threshold: undefined,
         min_tokens: '0',
         max_tokens: '8K',
         complexity_threshold: 0.1,
         hard_candidates: '',
         easy_candidates: '',
         composer_operator: 'AND',
-        composer_conditions: ''
+        composer_conditions: '',
+        jailbreak_threshold: 0.65,
+        jailbreak_method: 'classifier',
+        include_history: false,
+        jailbreak_patterns: '',
+        benign_patterns: '',
+        pii_threshold: 0.5,
+        pii_types_allowed: '',
+        pii_include_history: false
       }
 
       const initialData: AddSignalFormState = mode === 'edit' && signal ? {
@@ -2630,13 +963,23 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: (signal.rawData.candidates || []).join('\n'),
         aggregation_method: signal.rawData.aggregation_method || 'mean',
         mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
+        preference_examples: (signal.rawData.examples || []).join('\n'),
+        preference_threshold: signal.rawData.threshold,
         min_tokens: signal.rawData.min_tokens || '0',
         max_tokens: signal.rawData.max_tokens || '8K',
         complexity_threshold: signal.rawData.threshold ?? 0.1,
         hard_candidates: (signal.rawData.hard?.candidates || []).join('\n'),
         easy_candidates: (signal.rawData.easy?.candidates || []).join('\n'),
         composer_operator: signal.rawData.composer?.operator || 'AND',
-        composer_conditions: signal.rawData.composer?.conditions?.map((c: { type: string; name: string }) => `${c.type}:${c.name}`).join('\n') || ''
+        composer_conditions: signal.rawData.composer?.conditions?.map((c: { type: string; name: string }) => `${c.type}:${c.name}`).join('\n') || '',
+        jailbreak_threshold: signal.rawData.threshold ?? 0.65,
+        jailbreak_method: signal.rawData.method || 'classifier',
+        include_history: !!signal.rawData.include_history,
+        jailbreak_patterns: (signal.rawData.jailbreak_patterns || []).join('\n'),
+        benign_patterns: (signal.rawData.benign_patterns || []).join('\n'),
+        pii_threshold: signal.rawData.threshold ?? 0.5,
+        pii_types_allowed: (signal.rawData.pii_types_allowed || []).join('\n'),
+        pii_include_history: !!signal.rawData.include_history
       } : defaultForm
 
 
@@ -2705,6 +1048,28 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         }
       ]
 
+      const preferenceFields: FieldConfig[] = [
+        {
+          name: 'preference_examples',
+          label: 'Examples (preference only)',
+          type: 'textarea',
+          placeholder: 'One example per line to represent this preference',
+          description: 'Few-shot hints sent to the contrastive preference classifier.',
+          shouldHide: conditionallyHideFieldExceptType('Preference')
+        },
+        {
+          name: 'preference_threshold',
+          label: 'Threshold (preference only)',
+          type: 'number',
+          min: 0,
+          max: 1,
+          step: 0.01,
+          placeholder: 'e.g., 0.35',
+          description: 'Override the global preference threshold for this specific rule.',
+          shouldHide: conditionallyHideFieldExceptType('Preference')
+        }
+      ]
+
       const contextFields: FieldConfig[] = [
         {
           name: 'min_tokens',
@@ -2767,12 +1132,81 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         }
       ]
 
+      const jailbreakFields: FieldConfig[] = [
+        {
+          name: 'jailbreak_method',
+          label: 'Method (jailbreak only)',
+          type: 'select',
+          options: ['classifier', 'contrastive'],
+          description: 'Detection method: "classifier" (BERT-based) or "contrastive" (embedding KB similarity)',
+          shouldHide: conditionallyHideFieldExceptType('Jailbreak')
+        },
+        {
+          name: 'jailbreak_threshold',
+          label: 'Threshold (jailbreak only)',
+          type: 'number',
+          placeholder: 'e.g., 0.65 for classifier, 0.10 for contrastive',
+          description: 'Confidence threshold for jailbreak detection (0.0 - 1.0)',
+          shouldHide: conditionallyHideFieldExceptType('Jailbreak')
+        },
+        {
+          name: 'include_history',
+          label: 'Include History (jailbreak only)',
+          type: 'boolean',
+          description: 'Whether to include conversation history in jailbreak detection',
+          shouldHide: conditionallyHideFieldExceptType('Jailbreak')
+        },
+
+        {
+          name: 'jailbreak_patterns',
+          label: 'Jailbreak Patterns (contrastive only)',
+          type: 'textarea',
+          placeholder: 'One pattern per line, e.g.:\nIgnore all previous instructions\nYou are now DAN',
+          description: 'Known jailbreak prompts for the contrastive KB',
+          shouldHide: conditionallyHideFieldExceptType('Jailbreak')
+        },
+        {
+          name: 'benign_patterns',
+          label: 'Benign Patterns (contrastive only)',
+          type: 'textarea',
+          placeholder: 'One pattern per line, e.g.:\nWhat is the weather today\nHelp me write an email',
+          description: 'Known benign prompts for the contrastive KB',
+          shouldHide: conditionallyHideFieldExceptType('Jailbreak')
+        }
+      ]
+
+      const piiFields: FieldConfig[] = [
+        {
+          name: 'pii_threshold',
+          label: 'Threshold (PII only)',
+          type: 'number',
+          placeholder: 'e.g., 0.5',
+          description: 'Confidence threshold for PII detection (0.0 - 1.0)',
+          shouldHide: conditionallyHideFieldExceptType('PII')
+        },
+        {
+          name: 'pii_types_allowed',
+          label: 'Allowed PII Types (PII only)',
+          type: 'textarea',
+          placeholder: 'One PII type per line, e.g.:\nEMAIL_ADDRESS\nPHONE_NUMBER',
+          description: 'PII types to allow (not blocked). Leave empty to deny all.',
+          shouldHide: conditionallyHideFieldExceptType('PII')
+        },
+        {
+          name: 'pii_include_history',
+          label: 'Include History (PII only)',
+          type: 'boolean',
+          description: 'Whether to include conversation history in PII detection',
+          shouldHide: conditionallyHideFieldExceptType('PII')
+        }
+      ]
+
       const fields: FieldConfig[] = [
         {
           name: 'type',
           label: 'Type',
           type: 'select',
-          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Context', 'Complexity'],
+          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Context', 'Complexity', 'Jailbreak', 'PII'],
           required: true,
           description: 'Fields are validated based on the selected type.'
         },
@@ -2789,11 +1223,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           type: 'textarea',
           placeholder: 'Optional description for this signal'
         },
+        ...preferenceFields,
         ...keywordFields,
         ...embeddingFields,
         ...domainFields,
         ...contextFields,
         ...complexityFields,
+        ...jailbreakFields,
+        ...piiFields,
       ]
 
       const saveSignal = async (formData: AddSignalFormState) => {
@@ -2872,12 +1309,26 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             break
           }
           case 'Preference': {
+            const examples = listInputToArray(formData.preference_examples || '')
+            const hasThreshold = Number.isFinite(formData.preference_threshold)
+            const threshold = hasThreshold ? Math.max(0, Math.min(1, Number(formData.preference_threshold))) : undefined
+
+            const preferenceRule: { name: string; description: string; examples?: string[]; threshold?: number } = {
+              name,
+              description: formData.description || ''
+            }
+
+            if (examples.length > 0) {
+              preferenceRule.examples = examples
+            }
+
+            if (threshold !== undefined && threshold > 0) {
+              preferenceRule.threshold = threshold
+            }
+
             newConfig.signals.preferences = [
               ...(newConfig.signals.preferences || []),
-              {
-                name,
-                description: formData.description
-              }
+              preferenceRule
             ]
             break
           }
@@ -2987,6 +1438,59 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             ]
             break
           }
+          case 'Jailbreak': {
+            const jailbreak_threshold = formData.jailbreak_threshold ?? 0.65
+            if (jailbreak_threshold < 0 || jailbreak_threshold > 1) {
+              throw new Error('Jailbreak threshold must be between 0.0 and 1.0.')
+            }
+            const method = formData.jailbreak_method || 'classifier'
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const jailbreakEntry: any = {
+              name,
+              threshold: jailbreak_threshold,
+              include_history: formData.include_history || false,
+              description: formData.description || undefined
+            }
+            if (method !== 'classifier') {
+              jailbreakEntry.method = method
+            }
+            if (method === 'contrastive') {
+              const jailbreakPatterns = (formData.jailbreak_patterns || '').trim()
+              const benignPatternsStr = (formData.benign_patterns || '').trim()
+              if (jailbreakPatterns) {
+                jailbreakEntry.jailbreak_patterns = jailbreakPatterns.split('\n').map((p: string) => p.trim()).filter((p: string) => p.length > 0)
+              }
+              if (benignPatternsStr) {
+                jailbreakEntry.benign_patterns = benignPatternsStr.split('\n').map((p: string) => p.trim()).filter((p: string) => p.length > 0)
+              }
+            }
+            newConfig.signals.jailbreak = [
+              ...(newConfig.signals.jailbreak || []),
+              jailbreakEntry
+            ]
+            break
+          }
+          case 'PII': {
+            const pii_threshold = formData.pii_threshold ?? 0.5
+            if (pii_threshold < 0 || pii_threshold > 1) {
+              throw new Error('PII threshold must be between 0.0 and 1.0.')
+            }
+            const pii_types_allowed = (formData.pii_types_allowed || '').trim()
+            const allowedList = pii_types_allowed
+              ? pii_types_allowed.split('\n').map(t => t.trim()).filter(t => t.length > 0)
+              : undefined
+            newConfig.signals.pii = [
+              ...(newConfig.signals.pii || []),
+              {
+                name,
+                threshold: pii_threshold,
+                pii_types_allowed: allowedList,
+                include_history: formData.pii_include_history || false,
+                description: formData.description || undefined
+              }
+            ]
+            break
+          }
           default:
             throw new Error('Unsupported signal type.')
         }
@@ -3023,43 +1527,37 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     }
 
     return (
-      <div className={styles.sectionPanel}>
-        <TableHeader
-          title="Signals"
-          count={allSignals.length}
-          searchPlaceholder="Search signals..."
-          searchValue={signalsSearch}
-          onSearchChange={setSignalsSearch}
-          onAdd={() => openSignalEditor('add')}
-          addButtonText="Add Signal"
-          disabled={isReadonly}
-        />
-
-        {isPythonCLI ? (
-          <DataTable
-            columns={signalsColumns}
-            data={filteredSignals}
-            keyExtractor={(row) => `${row.type}-${row.name}`}
-            onView={handleViewSignal}
-            onEdit={handleEditSignal}
-            onDelete={handleDeleteSignal}
-            emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
-            readonly={isReadonly}
-          />
-        ) : (
-          <div className={styles.emptyState}>
-            Signals are only available in Python CLI config format.
-            Current config uses legacy format - use "Intelligent Routing" features instead.
+      <ConfigPageManagerLayout title="Signals" description="Review the signal catalog that drives semantic routing, guardrails, and context-aware behavior.">
+        <div className={styles.sectionPanel}>
+          <div className={styles.sectionTableBlock}>
+            <TableHeader title="Signals" count={allSignals.length} searchPlaceholder="Search signals..." searchValue={signalsSearch} onSearchChange={setSignalsSearch} onAdd={() => openSignalEditor('add')} addButtonText="Add Signal" disabled={isReadonly} variant="embedded" />
+            {(isPythonCLI || hasFlatSignals(config)) ? (
+              <DataTable
+                columns={signalsColumns}
+                data={filteredSignals}
+                keyExtractor={(row) => `${row.type}-${row.name}`}
+                onView={handleViewSignal}
+                onEdit={handleEditSignal}
+                onDelete={handleDeleteSignal}
+                emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
+                className={styles.managerTable}
+                readonly={isReadonly}
+              />
+            ) : (
+              <div className={styles.emptyState}>
+                Signals are only available in Python CLI config format.
+                Current config uses legacy format - use "Intelligent Routing" features instead.
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      </ConfigPageManagerLayout>
     )
   }
 
   // Decisions Section - Routing rules with priorities (config.yaml)
   const renderDecisionsSection = () => {
     const decisions = config?.decisions || []
-    const defaultModel = getDefaultModel()
 
     // Filter decisions based on search
     const filteredDecisions = decisions.filter(decision =>
@@ -3079,7 +1577,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'priority',
         header: 'Priority',
-        width: '100px',
+        width: TABLE_COLUMN_WIDTH.compact,
         align: 'center',
         sortable: true,
         render: (row) => (
@@ -3091,7 +1589,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'conditions',
         header: 'Conditions',
-        width: '150px',
+        width: TABLE_COLUMN_WIDTH.medium,
         render: (row) => {
           const count = row.rules?.conditions?.length || 0
           return <span>{count} {count === 1 ? 'condition' : 'conditions'}</span>
@@ -3100,7 +1598,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'models',
         header: 'Models',
-        width: '150px',
+        width: TABLE_COLUMN_WIDTH.medium,
         render: (row) => {
           const count = row.modelRefs?.length || 0
           return <span>{count} {count === 1 ? 'model' : 'models'}</span>
@@ -3664,51 +2162,48 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     }
 
     return (
-      <div className={styles.sectionPanel}>
-        {/* Default Model Info */}
-        <div className={styles.coreSettingsInline}>
-          <div className={styles.inlineConfigRow}>
-            <span className={styles.inlineConfigLabel}>Default Model:</span>
-            <span className={styles.inlineConfigValue}>{defaultModel || 'N/A'}</span>
-          </div>
-          <div className={styles.inlineConfigRow}>
-            <span className={styles.inlineConfigLabel}>Default Reasoning:</span>
-            <span className={`${styles.badge} ${styles[`badge${config?.providers?.default_reasoning_effort || 'medium'}`]}`}>
-              {config?.providers?.default_reasoning_effort || 'medium'}
-            </span>
+      <ConfigPageManagerLayout title="Decisions" description="Shape routing outcomes with ordered rules, plugins, and presets that map signals to concrete model behavior.">
+        <div className={styles.sectionPanel}>
+          <div className={styles.sectionTableBlock}>
+            <TableHeader
+              title="Routing Decisions"
+              count={decisions.length}
+              searchPlaceholder="Search decisions..."
+              searchValue={decisionsSearch}
+              onSearchChange={setDecisionsSearch}
+              onSecondaryAction={
+                isPythonCLI && config?.providers?.default_model
+                  ? () => {
+                      setPresetApplyError(null)
+                      setPresetModalOpen(true)
+                    }
+                  : undefined
+              }
+              secondaryActionText="Apply preset"
+              onAdd={() => openDecisionEditor('add')}
+              addButtonText="Add Decision" disabled={isReadonly} variant="embedded"
+            />
+            {(isPythonCLI || hasDecisions(config)) ? (
+              <DataTable
+                columns={decisionsColumns}
+                data={filteredDecisions}
+                keyExtractor={(row) => row.name}
+                onView={handleViewDecision}
+                onEdit={handleEditDecision}
+                onDelete={handleDeleteDecision}
+                emptyMessage={decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'}
+                className={styles.managerTable}
+                readonly={isReadonly}
+              />
+            ) : (
+              <div className={styles.emptyState}>
+                Decisions are only available in Python CLI config format.
+                Current config uses legacy format - see "Categories" in legacy mode.
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Decisions Table */}
-        <TableHeader
-          title="Routing Decisions"
-          count={decisions.length}
-          searchPlaceholder="Search decisions..."
-          searchValue={decisionsSearch}
-          onSearchChange={setDecisionsSearch}
-          onAdd={() => openDecisionEditor('add')}
-          addButtonText="Add Decision"
-          disabled={isReadonly}
-        />
-
-        {isPythonCLI ? (
-          <DataTable
-            columns={decisionsColumns}
-            data={filteredDecisions}
-            keyExtractor={(row) => row.name}
-            onView={handleViewDecision}
-            onEdit={handleEditDecision}
-            onDelete={handleDeleteDecision}
-            emptyMessage={decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'}
-            readonly={isReadonly}
-          />
-        ) : (
-          <div className={styles.emptyState}>
-            Decisions are only available in Python CLI config format.
-            Current config uses legacy format - see "Categories" in legacy mode.
-          </div>
-        )}
-      </div>
+      </ConfigPageManagerLayout>
     )
   }
 
@@ -3744,7 +2239,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'reasoning_family',
         header: 'Reasoning Family',
-        width: '180px',
+        width: TABLE_COLUMN_WIDTH.medium,
         sortable: true,
         render: (row) => row.reasoning_family ? (
           <span className={styles.badge} style={{ background: 'rgba(0, 212, 255, 0.15)', color: 'var(--color-accent-cyan)' }}>
@@ -3755,7 +2250,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'endpoints',
         header: 'Endpoints',
-        width: '120px',
+        width: TABLE_COLUMN_WIDTH.compact,
         align: 'center',
         render: (row) => {
           const count = row.endpoints?.length || 0
@@ -3769,7 +2264,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'pricing',
         header: 'Pricing',
-        width: '150px',
+        width: TABLE_COLUMN_WIDTH.medium,
         render: (row) => {
           if (!row.pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
           const currency = row.pricing.currency || 'USD'
@@ -3830,7 +2325,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                       fontWeight: 600,
                       textTransform: 'uppercase'
                     }}>
-                      {ep.protocol || 'http'}
+                      {ep.protocol}
                     </span>
                   </td>
                   <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
@@ -3949,7 +2444,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     }
 
     // Handle add model
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const handleAddModel = () => {
       const reasoningFamiliesObj = getReasoningFamilies()
       const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
@@ -4026,7 +2520,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         ],
         async (data) => {
           // Endpoints are already validated by EndpointsEditor
-          const endpoints = data.endpoints || []
+          const endpoints = normalizeEndpoints(data.endpoints)
 
           const newConfig = { ...config }
 
@@ -4035,7 +2529,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             if (!newConfig.providers.models) {
               newConfig.providers.models = []
             }
-            const newModel: any = {
+            newConfig.providers.models.push({
               name: data.model_name,
               reasoning_family: data.reasoning_family,
               access_key: data.access_key,
@@ -4045,8 +2539,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
                 completion_per_1m: parseFloat(data.completion_per_1m) || 0
               }
-            }
-            newConfig.providers.models.push(newModel)
+            })
           } else {
             // Legacy format
             if (!newConfig.model_config) {
@@ -4054,7 +2547,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             }
             newConfig.model_config[data.model_name] = {
               reasoning_family: data.reasoning_family,
-              preferred_endpoints: endpoints.map((ep: any) => ep.name),
+              preferred_endpoints: endpoints.map((ep: { name: string }) => ep.name),
               pricing: {
                 currency: data.currency,
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
@@ -4081,7 +2574,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           reasoning_family: model.reasoning_family || '',
           access_key: model.access_key || '',
           // Endpoints
-          endpoints: model.endpoints || [],
+          endpoints: normalizeEndpoints(model.endpoints),
           // Pricing
           currency: model.pricing?.currency || 'USD',
           prompt_per_1m: model.pricing?.prompt_per_1m || 0,
@@ -4137,7 +2630,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           const newConfig = { ...config }
 
           // Endpoints are already validated by EndpointsEditor
-          const endpoints = data.endpoints || []
+          const endpoints = normalizeEndpoints(data.endpoints)
 
           if (isPythonCLI && newConfig.providers?.models) {
             newConfig.providers = { ...newConfig.providers }
@@ -4160,7 +2653,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             newConfig.model_config[model.name] = {
               ...newConfig.model_config[model.name],
               reasoning_family: data.reasoning_family,
-              preferred_endpoints: endpoints.map((ep: any) => ep.name),
+              preferred_endpoints: endpoints.map((ep: { name: string }) => ep.name),
               pricing: {
                 currency: data.currency,
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
@@ -4175,7 +2668,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     }
 
     // Handle delete model
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const handleDeleteModel = (model: ModelRow) => {
       if (confirm(`Are you sure you want to delete model "${model.name}"?`)) {
         handleDeleteModelAction(model.name)
@@ -4380,91 +2872,58 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     ]
 
     return (
-      <div className={styles.sectionPanel}>
-        {/* Reasoning Families Table */}
-        <TableHeader
-          title="Reasoning Families"
-          count={reasoningFamilyData.length}
-          searchPlaceholder=""
-          searchValue=""
-          onSearchChange={() => { }}
-          onAdd={handleAddReasoningFamily}
-          addButtonText="Add Family"
-          disabled={isReadonly}
-        />
-
-        <DataTable
-          columns={reasoningFamilyColumns}
-          data={reasoningFamilyData}
-          keyExtractor={(row) => row.name}
-          onView={(row) => handleViewReasoningFamily(row.name)}
-          onEdit={(row) => handleEditReasoningFamily(row.name)}
-          onDelete={(row) => handleDeleteReasoningFamily(row.name)}
-          emptyMessage="No reasoning families configured"
-          readonly={isReadonly}
-        />
-
-        {/* Models Table */}
-        <div style={{ marginTop: '2rem' }}>
-          <TableHeader
-            title="Models"
-            count={models.length}
-            searchPlaceholder="Search models..."
-            searchValue={modelsSearch}
-            onSearchChange={setModelsSearch}
-            onAdd={handleAddModel}
-            addButtonText="Add Model"
-            disabled={isReadonly}
-          />
-
-          <DataTable
-            columns={modelColumns}
-            data={filteredModels}
-            keyExtractor={(row) => row.name}
-            onView={handleViewModel}
-            onEdit={handleEditModel}
-            onDelete={handleDeleteModel}
-            expandable={true}
-            renderExpandedRow={renderModelEndpoints}
-            isRowExpanded={(row) => expandedModels.has(row.name)}
-            onToggleExpand={handleToggleExpand}
-            emptyMessage={modelsSearch ? 'No models match your search' : 'No models configured'}
-            readonly={isReadonly}
-          />
+      <ConfigPageManagerLayout title="Models" description="Manage provider models, reasoning families, and the endpoint inventory available to routing decisions.">
+        <div className={styles.sectionPanel}>
+          <div className={styles.sectionTableBlock}>
+            <TableHeader title="Reasoning Families" count={reasoningFamilyData.length} onAdd={handleAddReasoningFamily} addButtonText="Add Family" disabled={isReadonly} variant="embedded" />
+            <DataTable
+              columns={reasoningFamilyColumns}
+              data={reasoningFamilyData}
+              keyExtractor={(row) => row.name}
+              onView={(row) => handleViewReasoningFamily(row.name)}
+              onEdit={(row) => handleEditReasoningFamily(row.name)}
+              onDelete={(row) => handleDeleteReasoningFamily(row.name)}
+              emptyMessage="No reasoning families configured"
+              className={styles.managerTable}
+              readonly={isReadonly}
+            />
+          </div>
+          <div className={styles.sectionTableBlock}>
+            <TableHeader title="Models" count={models.length} searchPlaceholder="Search models..." searchValue={modelsSearch} onSearchChange={setModelsSearch} onAdd={handleAddModel} addButtonText="Add Model" disabled={isReadonly} variant="embedded" />
+            <DataTable
+              columns={modelColumns}
+              data={filteredModels}
+              keyExtractor={(row) => row.name}
+              onView={handleViewModel}
+              onEdit={handleEditModel}
+              onDelete={handleDeleteModel}
+              expandable={true}
+              renderExpandedRow={renderModelEndpoints}
+              isRowExpanded={(row) => expandedModels.has(row.name)}
+              onToggleExpand={handleToggleExpand}
+              emptyMessage={modelsSearch ? 'No models match your search' : 'No models configured'}
+              className={styles.managerTable}
+              readonly={isReadonly}
+            />
+          </div>
         </div>
-      </div>
+      </ConfigPageManagerLayout>
     )
   }
 
   // Router Configuration Section - System defaults from router-defaults.yaml
   const renderRouterConfigSection = () => (
-    <div className={styles.sectionPanel}>
-      {/* Semantic Cache */}
-      {renderSimilarityBERT()}
-
-      {/* Prompt Guard */}
-      {renderPIIModernBERT()}
-      {renderJailbreakModernBERT()}
-
-      {/* Classifier */}
-      {renderClassifyBERT()}
-
-      {/* Preference Model */}
-      {renderPreferenceModel()}
-
-      {/* Tools */}
-      {renderToolsConfiguration()}
-      {renderToolsDB()}
-
-      {/* Observability */}
-      {renderObservabilityTracing()}
-
-      {/* Classification API */}
-      {renderClassificationAPI()}
-
-      {/* Legacy Categories (for backward compatibility) */}
-      {!isPythonCLI && renderCategories()}
-    </div>
+    <ConfigPageRouterConfigSection
+      config={config}
+      routerConfig={routerConfig}
+      toolsData={toolsData}
+      toolsLoading={toolsLoading}
+      toolsError={toolsError}
+      isReadonly={isReadonly}
+      openEditModal={openEditModal}
+      saveConfig={saveConfig}
+      showLegacyCategories={!isPythonCLI}
+    />
   )
 
   const renderActiveSection = () => {
@@ -4529,6 +2988,24 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         onEdit={isReadonly ? undefined : (viewModalEditCallback || undefined)}
         title={viewModalTitle}
         sections={viewModalSections}
+      />
+
+      <RoutingPresetModal
+        isOpen={presetModalOpen}
+        defaultModel={config?.providers?.default_model || ''}
+        selectedPresetId={selectedRoutingPresetId}
+        conflicts={selectedPresetConflicts}
+        error={presetApplyError}
+        isApplying={presetApplyState === 'applying'}
+        onClose={() => {
+          setPresetModalOpen(false)
+          setPresetApplyError(null)
+        }}
+        onSelectPreset={(presetId) => {
+          setSelectedRoutingPresetId(presetId)
+          setPresetApplyError(null)
+        }}
+        onApply={() => void handleApplyRoutingPreset()}
       />
     </div>
   )

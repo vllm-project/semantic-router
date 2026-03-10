@@ -119,7 +119,7 @@ def export_sequence_classifier(model_path: str, output_path: str, opset: int = 1
     print(f"  Max logit difference: {diff:.6f}")
 
     if diff < 1e-4:
-        print("  ✓ ONNX model verified successfully!")
+        print("  ONNX model verified successfully!")
     else:
         print(f"  ⚠ Warning: Logit difference {diff} is larger than expected")
 
@@ -201,7 +201,7 @@ def export_token_classifier(model_path: str, output_path: str, opset: int = 14):
     print(f"  Max logit difference: {diff:.6f}")
 
     if diff < 1e-4:
-        print("  ✓ ONNX model verified successfully!")
+        print("  ONNX model verified successfully!")
     else:
         print(f"  ⚠ Warning: Logit difference {diff} is larger than expected")
 

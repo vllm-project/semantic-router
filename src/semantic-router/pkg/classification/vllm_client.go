@@ -23,7 +23,11 @@ type VLLMClient struct {
 
 // NewVLLMClient creates a new vLLM REST API client for classifiers
 func NewVLLMClient(endpoint *config.ClassifierVLLMEndpoint) *VLLMClient {
-	baseURL := fmt.Sprintf("http://%s:%d", endpoint.Address, endpoint.Port)
+	scheme := endpoint.Protocol
+	if scheme == "" {
+		scheme = "http"
+	}
+	baseURL := fmt.Sprintf("%s://%s:%d", scheme, endpoint.Address, endpoint.Port)
 
 	return &VLLMClient{
 		httpClient: &http.Client{

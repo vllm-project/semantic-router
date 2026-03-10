@@ -35,7 +35,7 @@ type VectorStoreConfig struct {
 	MaxFileSizeMB int `json:"max_file_size_mb,omitempty" yaml:"max_file_size_mb,omitempty"`
 
 	// EmbeddingModel specifies the model for document embeddings.
-	// Options: "bert" (default), "qwen3", "gemma", "mmbert"
+	// Options: "bert" (default), "qwen3", "gemma", "mmbert", "multimodal"
 	EmbeddingModel string `json:"embedding_model,omitempty" yaml:"embedding_model,omitempty"`
 
 	// EmbeddingDimension is the dimensionality of the embedding vectors.
@@ -86,6 +86,11 @@ type LlamaStackVectorStoreConfig struct {
 
 	// RequestTimeoutSeconds is the HTTP request timeout in seconds. Default: 30.
 	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty" yaml:"request_timeout_seconds,omitempty"`
+
+	// SearchType controls the search strategy used by Llama Stack.
+	// Options: "vector" (default, semantic only) or "hybrid" (vector + keyword
+	// with Reciprocal Rank Fusion). Hybrid requires the Milvus vector_io provider.
+	SearchType string `json:"search_type,omitempty" yaml:"search_type,omitempty"`
 }
 
 // Validate checks the vector store configuration for errors.
@@ -114,6 +119,9 @@ func (c *VectorStoreConfig) Validate() error {
 		if c.LlamaStack.Endpoint == "" {
 			return fmt.Errorf("vector_store.llama_stack.endpoint is required")
 		}
+		if st := c.LlamaStack.SearchType; st != "" && st != "vector" && st != "hybrid" {
+			return fmt.Errorf("vector_store.llama_stack.search_type must be 'vector' or 'hybrid', got '%s'", st)
+		}
 	}
 
 	return nil
@@ -131,8 +139,10 @@ func (c *VectorStoreConfig) ApplyDefaults() {
 		c.EmbeddingModel = "bert"
 	}
 	if c.EmbeddingDimension <= 0 {
-		// Default dimension depends on model: BERT (all-MiniLM) = 384, others = 768
-		if c.EmbeddingModel == "bert" {
+		// Default dimension depends on model:
+		// - bert/multimodal = 384
+		// - qwen3/gemma/mmbert = 768
+		if c.EmbeddingModel == "bert" || c.EmbeddingModel == "multimodal" {
 			c.EmbeddingDimension = 384
 		} else {
 			c.EmbeddingDimension = 768

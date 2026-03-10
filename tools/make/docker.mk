@@ -8,13 +8,9 @@
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
 
-# Default docker compose environment
-# Point Compose to the relocated main stack by default; override by exporting COMPOSE_FILE
-export COMPOSE_FILE ?= deploy/docker-compose/docker-compose.yml
-# Keep a stable project name so network/volume names are predictable across runs
-export COMPOSE_PROJECT_NAME ?= semantic-router
-
 # Build all Docker images
+# Note: extproc-rocm is excluded because it requires x86_64 + ROCm hardware.
+# Build it explicitly with: make docker-build-extproc-rocm
 docker-build-all: ## Build all Docker images
 docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-dashboard docker-build-precommit
 
@@ -24,6 +20,13 @@ docker-build-extproc:
 	@$(LOG_TARGET)
 	@echo "Building extproc Docker image..."
 	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG) .
+
+# Build extproc-rocm Docker image (AMD GPU / ROCm, x86_64 only)
+docker-build-extproc-rocm: ## Build extproc-rocm Docker image (AMD GPU)
+docker-build-extproc-rocm:
+	@$(LOG_TARGET)
+	@echo "Building extproc-rocm Docker image (x86_64 only, ROCm 7.0)..."
+	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc-rocm -t $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG) .
 
 # Build llm-katan Docker image
 docker-build-llm-katan: ## Build llm-katan Docker image
@@ -52,7 +55,7 @@ docker-test-llm-katan:
 	@$(LOG_TARGET)
 	@echo "Testing llm-katan Docker image..."
 	@curl -f http://localhost:8000/v1/models || (echo "Models endpoint failed" && exit 1)
-	@echo "\n✅ llm-katan Docker image test passed"
+	@echo "\nllm-katan Docker image test passed"
 
 # Run llm-katan Docker image locally
 docker-run-llm-katan: ## Run llm-katan Docker image locally
@@ -86,7 +89,8 @@ docker-clean:
 	@echo "Docker cleanup completed"
 
 # Push Docker images (for CI/CD)
-docker-push-all: ## Build all Docker images
+# Note: extproc-rocm is excluded; push it explicitly with: make docker-push-extproc-rocm
+docker-push-all: ## Push all Docker images
 docker-push-all: docker-push-extproc docker-push-llm-katan
 	@$(LOG_TARGET)
 	@echo "All Docker images pushed successfully"
@@ -97,155 +101,18 @@ docker-push-extproc:
 	@echo "Pushing extproc Docker image..."
 	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG)
 
+docker-push-extproc-rocm: ## Push extproc-rocm Docker image
+docker-push-extproc-rocm:
+	@$(LOG_TARGET)
+	@echo "Pushing extproc-rocm Docker image..."
+	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG)
+
 docker-push-llm-katan: ## Push llm-katan Docker image
 docker-push-llm-katan:
 	@$(LOG_TARGET)
 	@echo "Pushing llm-katan Docker image..."
 	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
 
-# Docker compose build flag logic
-# Usage: make docker-compose-up REBUILD=1  (forces image rebuild)
-REBUILD ?=
-BUILD_FLAG=$(if $(REBUILD),--build,)
-
-# Compose command: use podman compose (plugin) for podman, docker compose (plugin) for docker
-# Both use COMPOSE_FILE and COMPOSE_PROJECT_NAME environment variables automatically
-ifeq ($(CONTAINER_RUNTIME),podman)
-COMPOSE_CMD = podman compose
-else
-COMPOSE_CMD = $(CONTAINER_RUNTIME) compose
-endif
-
-# Docker compose shortcuts (no rebuild by default)
-docker-compose-up: ## Start services (default includes llm-katan; REBUILD=1 to rebuild)
-docker-compose-up:
-	@$(LOG_TARGET)
-	@echo "Starting services with $(COMPOSE_CMD) (default includes llm-katan) (REBUILD=$(REBUILD))..."
-	@$(COMPOSE_CMD) --profile llm-katan up -d $(BUILD_FLAG)
-
-docker-compose-up-testing: ## Start with testing profile (REBUILD=1 optional)
-docker-compose-up-testing:
-	@$(LOG_TARGET)
-	@echo "Starting services with $(COMPOSE_CMD) (testing profile) (REBUILD=$(REBUILD))..."
-	@$(COMPOSE_CMD) --profile testing up -d $(BUILD_FLAG)
-
-docker-compose-up-llm-katan: ## Start with llm-katan profile (REBUILD=1 optional)
-docker-compose-up-llm-katan:
-	@$(LOG_TARGET)
-	@echo "Starting services with $(COMPOSE_CMD) (llm-katan profile) (REBUILD=$(REBUILD))..."
-	@$(COMPOSE_CMD) --profile llm-katan up -d $(BUILD_FLAG)
-
-# Start core services only (closer to production; excludes llm-katan)
-docker-compose-up-core: ## Start core services only (no llm-katan)
-docker-compose-up-core:
-	@$(LOG_TARGET)
-	@echo "Starting core services with $(COMPOSE_CMD) (no llm-katan) (REBUILD=$(REBUILD))..."
-	@$(COMPOSE_CMD) up -d $(BUILD_FLAG)
-
-# Explicit rebuild targets for convenience
-docker-compose-rebuild: ## Force rebuild then start
-docker-compose-rebuild: REBUILD=1
-docker-compose-rebuild: docker-compose-up
-
-docker-compose-rebuild-testing: ## Force rebuild (testing profile)
-docker-compose-rebuild-testing: REBUILD=1
-docker-compose-rebuild-testing: docker-compose-up-testing
-
-docker-compose-rebuild-llm-katan: ## Force rebuild (llm-katan profile)
-docker-compose-rebuild-llm-katan: REBUILD=1
-docker-compose-rebuild-llm-katan: docker-compose-up-llm-katan
-
-docker-compose-down:
-docker-compose-down: ## Stop services (default includes llm-katan)
-	@$(LOG_TARGET)
-	@echo "Stopping services with $(COMPOSE_CMD) (default includes llm-katan)..."
-	@$(COMPOSE_CMD) --profile llm-katan down
-
-docker-compose-down-core: ## Stop core services only (no llm-katan)
-docker-compose-down-core:
-	@$(LOG_TARGET)
-	@echo "Stopping core services with $(COMPOSE_CMD) (no llm-katan)..."
-	@$(COMPOSE_CMD) down
-
-docker-compose-down-testing: ## Stop services with testing profile
-docker-compose-down-testing:
-	@$(LOG_TARGET)
-	@echo "Stopping services with $(COMPOSE_CMD) (testing profile)..."
-	@$(COMPOSE_CMD) --profile testing down
-
-docker-compose-down-llm-katan: ## Stop services with llm-katan profile
-docker-compose-down-llm-katan:
-	@$(LOG_TARGET)
-	@echo "Stopping services with $(COMPOSE_CMD) (llm-katan profile)..."
-	@$(COMPOSE_CMD) --profile llm-katan down
-
-##@ CI Docker Compose (minimal services for CI testing)
-
-# CI compose file path
-CI_COMPOSE_FILE ?= deploy/docker-compose/docker-compose.ci.yml
-
-docker-compose-up-ci: ## Start minimal CI services (semantic-router, envoy, llm-katan) with local build
-docker-compose-up-ci:
-	@$(LOG_TARGET)
-	@echo "Building and starting CI services with $(COMPOSE_CMD) (minimal for CI)..."
-	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) up -d --build
-
-docker-compose-down-ci: ## Stop CI services
-docker-compose-down-ci:
-	@$(LOG_TARGET)
-	@echo "Stopping CI services with $(COMPOSE_CMD)..."
-	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) down
-
-docker-compose-logs-ci: ## Show logs for CI services
-docker-compose-logs-ci:
-	@$(LOG_TARGET)
-	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) logs
-
-docker-compose-ps-ci: ## Show status of CI services
-docker-compose-ps-ci:
-	@$(LOG_TARGET)
-	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) ps
-
-##@ Response API Docker Compose (for Response API testing)
-
-# Response API compose file path
-RESPONSE_API_COMPOSE_FILE ?= deploy/docker-compose/docker-compose.response-api.yml
-
-response-api-test-up: ## Start Response API test services (semantic-router, envoy, mock-vllm)
-response-api-test-up:
-	@$(LOG_TARGET)
-	@echo "Building and starting Response API test services..."
-	@$(COMPOSE_CMD) -f $(RESPONSE_API_COMPOSE_FILE) up -d --build
-
-response-api-test-down: ## Stop Response API test services
-response-api-test-down:
-	@$(LOG_TARGET)
-	@echo "Stopping Response API test services..."
-	@$(COMPOSE_CMD) -f $(RESPONSE_API_COMPOSE_FILE) down
-
-response-api-test-logs: ## Show logs for Response API test services
-response-api-test-logs:
-	@$(LOG_TARGET)
-	@$(COMPOSE_CMD) -f $(RESPONSE_API_COMPOSE_FILE) logs -f
-
-response-api-test-ps: ## Show status of Response API test services
-response-api-test-ps:
-	@$(LOG_TARGET)
-	@$(COMPOSE_CMD) -f $(RESPONSE_API_COMPOSE_FILE) ps
-
-response-api-test-run: ## Run Response API error handling tests
-response-api-test-run:
-	@$(LOG_TARGET)
-	@echo "Running Response API error handling tests..."
-	@./scripts/test-response-api-errors.sh
-
-response-api-test: ## Start services and run Response API error handling tests
-response-api-test: response-api-test-up
-	@$(LOG_TARGET)
-	@echo "Waiting for services to be healthy..."
-	@sleep 10
-	@$(MAKE) response-api-test-run
-	@$(MAKE) response-api-test-down
 # Help target for Docker commands
 docker-help:
 docker-help: ## Show help for Docker-related make targets and environment variables
@@ -254,15 +121,52 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  DOCKER_REGISTRY   - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
 	@echo "  SERVED_NAME       - Served model name for custom runs"
+	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd to use ROCm defaults)"
+	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
+	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm)"
+	@echo "  VLLM_SR_DOCKERFILE_AMD - Dockerfile used when VLLM_SR_PLATFORM=amd"
 
 ##@ vLLM-SR (Semantic Router CLI)
 
 # vLLM-SR specific variables
 VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:latest
+VLLM_SR_IMAGE_ROCM ?= ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest
 VLLM_SR_CONTAINER ?= vllm-sr-container
+VLLM_SR_PLATFORM ?=
+VLLM_SR_PLATFORM_NORMALIZED := $(shell echo "$(VLLM_SR_PLATFORM)" | tr '[:upper:]' '[:lower:]')
+VLLM_SR_DOCKERFILE ?= src/vllm-sr/Dockerfile
+VLLM_SR_DOCKERFILE_AMD ?= src/vllm-sr/Dockerfile.rocm
+VLLM_SR_HOST_ARCH_RAW := $(shell uname -m)
+ifeq ($(VLLM_SR_HOST_ARCH_RAW),arm64)
+VLLM_SR_TARGETARCH ?= arm64
+VLLM_SR_BUILDPLATFORM ?= linux/arm64
+else ifeq ($(VLLM_SR_HOST_ARCH_RAW),aarch64)
+VLLM_SR_TARGETARCH ?= arm64
+VLLM_SR_BUILDPLATFORM ?= linux/arm64
+else
+VLLM_SR_TARGETARCH ?= amd64
+VLLM_SR_BUILDPLATFORM ?= linux/amd64
+endif
+
+# AMD platform defaults (can still be overridden via env/CLI variables)
+ifeq ($(VLLM_SR_PLATFORM_NORMALIZED),amd)
+ifeq ($(origin VLLM_SR_IMAGE),file)
+VLLM_SR_IMAGE := $(VLLM_SR_IMAGE_ROCM)
+endif
+ifeq ($(origin VLLM_SR_DOCKERFILE),file)
+VLLM_SR_DOCKERFILE := $(VLLM_SR_DOCKERFILE_AMD)
+endif
+ifeq ($(origin VLLM_SR_TARGETARCH),file)
+VLLM_SR_TARGETARCH := amd64
+endif
+ifeq ($(origin VLLM_SR_BUILDPLATFORM),file)
+VLLM_SR_BUILDPLATFORM := linux/amd64
+endif
+endif
+
 # Default 1 so vllm-sr build works behind corporate proxies; set GIT_SSL_NO_VERIFY=0 for strict SSL verification.
 GIT_SSL_NO_VERIFY ?= 1
-VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=amd64 --build-arg BUILDPLATFORM=linux/amd64
+VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM)
 ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif
@@ -284,18 +188,22 @@ vllm-sr-dev:
 	@echo ""
 	@echo "2. Rebuilding Docker image..."
 	@echo "  Building from: $(PWD)"
+	@echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"
+	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
+	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
+	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
 	@echo "  Image: $(VLLM_SR_IMAGE)"
 	@echo ""
-	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f src/vllm-sr/Dockerfile .
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
 	@echo ""
-	@echo "✓ Image built: $(VLLM_SR_IMAGE)"
+	@echo "Image built: $(VLLM_SR_IMAGE)"
 	@echo ""
 	@echo "3. Installing vLLM-SR CLI in development mode..."
 	@pip install -e src/vllm-sr
-	@echo "✓ vLLM-SR CLI installed"
+	@echo "vLLM-SR CLI installed"
 	@echo ""
 	@echo "=========================================="
-	@echo "✓ Development Setup Complete"
+	@echo "Development Setup Complete"
 	@echo "=========================================="
 	@echo ""
 	@echo "Next steps:"
@@ -307,8 +215,12 @@ vllm-sr-build: ## Build vLLM Semantic Router Docker image
 vllm-sr-build:
 	@$(LOG_TARGET)
 	@echo "Building vLLM Semantic Router Docker image..."
-	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f src/vllm-sr/Dockerfile .
-	@echo "✓ Image built: $(VLLM_SR_IMAGE)"
+	@echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"
+	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
+	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
+	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
+	@echo "Image built: $(VLLM_SR_IMAGE)"
 
 vllm-sr-start: ## Start vLLM Semantic Router service
 vllm-sr-start: vllm-sr-dev
@@ -320,12 +232,25 @@ vllm-sr-start: vllm-sr-dev
 ##@ vLLM-SR Tests (e2e tests for vllm-sr CLI)
 # Tests are located in e2e/testing/vllm-sr-cli/
 
+vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test execution
+vllm-sr-install-cli:
+	@python3 -m pip install -e src/vllm-sr
+
 vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
-vllm-sr-test:
+vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && python run_cli_tests.py --verbose
 
 vllm-sr-test-integration: ## Run CLI unit + integration tests (requires Docker image)
-vllm-sr-test-integration: vllm-sr-build
+vllm-sr-test-integration: vllm-sr-build vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration
+
+memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
+memory-test-integration: vllm-sr-build vllm-sr-install-cli docker-build-llm-katan
+	@$(LOG_TARGET)
+	@CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) \
+	DOCKER_REGISTRY=$(DOCKER_REGISTRY) \
+	DOCKER_TAG=$(DOCKER_TAG) \
+	VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) \
+	bash e2e/testing/run_memory_integration.sh

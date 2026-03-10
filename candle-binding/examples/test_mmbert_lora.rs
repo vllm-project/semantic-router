@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match classifier.classify_intent(text) {
                         Ok(result) => {
                             println!(
-                                "   ✓ \"{}\" -> {} ({:.1}%)",
+                                "   \"{}\" -> {} ({:.1}%)",
                                 &text[..text.len().min(40)],
                                 result.intent,
                                 result.confidence * 100.0
@@ -110,11 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             } else {
                                 "✗"
                             };
-                            let label = if detected {
-                                "🚨 JAILBREAK"
-                            } else {
-                                "✅ BENIGN"
-                            };
+                            let label = if detected { "🚨 JAILBREAK" } else { "BENIGN" };
                             println!(
                                 "   {} \"{}\" -> {} ({:.1}%)",
                                 status,
@@ -156,7 +152,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // mmBERT has vocab_size >= 200000 and position_embedding_type == "sans_pos"
         if vocab_size >= 200000 && position_type == "sans_pos" {
-            println!("   ✓ Verified as mmBERT (Multilingual ModernBERT)");
+            println!("   Verified as mmBERT (Multilingual ModernBERT)");
         } else {
             println!("   ⚠ Config does not match expected mmBERT values");
         }

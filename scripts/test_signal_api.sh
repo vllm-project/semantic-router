@@ -471,27 +471,27 @@ echo ""
 echo "| Classifier | Accuracy/Detection | Status |"
 echo "|------------|-------------------|--------|"
 
-if [[ $intent_pct -ge 90 ]]; then intent_status="✅ Excellent"
+if [[ $intent_pct -ge 90 ]]; then intent_status="Excellent"
 elif [[ $intent_pct -ge 70 ]]; then intent_status="⚠️ Good"
 else intent_status="❌ Needs work"; fi
 
-if [[ $jb_pct -ge 90 ]]; then jb_status="✅ Excellent"
+if [[ $jb_pct -ge 90 ]]; then jb_status="Excellent"
 elif [[ $jb_pct -ge 70 ]]; then jb_status="⚠️ Good"
 else jb_status="❌ Needs work"; fi
 
-if [[ $pii_detected -ge 5 ]]; then pii_status="✅ Working"
+if [[ $pii_detected -ge 5 ]]; then pii_status="Working"
 elif [[ $pii_detected -ge 2 ]]; then pii_status="⚠️ Partial"
 else pii_status="❌ Limited"; fi
 
-if [[ $ml_intent_pct -ge 70 ]]; then ml_intent_status="✅ Good"
+if [[ $ml_intent_pct -ge 70 ]]; then ml_intent_status="Good"
 elif [[ $ml_intent_pct -ge 50 ]]; then ml_intent_status="⚠️ Partial"
 else ml_intent_status="❌ Limited"; fi
 
-if [[ $ml_jb_pct -ge 70 ]]; then ml_jb_status="✅ Good"
+if [[ $ml_jb_pct -ge 70 ]]; then ml_jb_status="Good"
 elif [[ $ml_jb_pct -ge 50 ]]; then ml_jb_status="⚠️ Partial"
 else ml_jb_status="❌ Limited"; fi
 
-if [[ $ml_pii_detected -ge 10 ]]; then ml_pii_status="✅ Good"
+if [[ $ml_pii_detected -ge 10 ]]; then ml_pii_status="Good"
 elif [[ $ml_pii_detected -ge 5 ]]; then ml_pii_status="⚠️ Partial"
 else ml_pii_status="❌ Limited"; fi
 

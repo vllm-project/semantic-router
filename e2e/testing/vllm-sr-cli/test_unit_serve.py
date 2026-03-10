@@ -14,9 +14,6 @@ Signed-off-by: vLLM-SR Team
 """
 
 import os
-import subprocess
-import sys
-import time
 import unittest
 
 from cli_test_base import CLITestBase
@@ -36,7 +33,7 @@ class TestVllmSRServe(CLITestBase):
         super().tearDown()
 
     def _create_minimal_config(self, port: int = 8888) -> str:
-        """Create a minimal config.yaml for testing."""
+        """Create a lean active config.yaml for testing."""
         config_content = f"""version: v0.1
 
 listeners:
@@ -45,23 +42,13 @@ listeners:
     port: {port}
     timeout: "60s"
 
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords:
-        - "test"
-      case_sensitive: false
-
 decisions:
   - name: "default_route"
     description: "Default test route"
     priority: 100
     rules:
       operator: "AND"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
+      conditions: []
     modelRefs:
       - model: "test-model"
         use_reasoning: false
@@ -81,27 +68,54 @@ providers:
             f.write(config_content)
         return config_path
 
-    def test_serve_requires_config_file(self):
-        """Test that serve fails without config.yaml."""
+    def test_serve_bootstraps_missing_config_file(self):
+        """Test that serve bootstraps setup mode when config.yaml is missing."""
         self.print_test_header(
-            "Serve Requires Config File",
-            "Validates that serve fails gracefully when config.yaml is missing",
+            "Serve Bootstraps Missing Config File",
+            "Validates that serve creates bootstrap setup files instead of requiring init",
         )
 
-        # Run serve without creating config.yaml
-        return_code, stdout, stderr = self.run_cli(["serve"])
+        # Run serve without creating config.yaml. Use a fake image and never-pull so the
+        # command fails after bootstrap instead of waiting on a real container image.
+        return_code, stdout, stderr = self.run_cli(
+            [
+                "serve",
+                "--image",
+                "nonexistent-image:bootstrap",
+                "--image-pull-policy",
+                "never",
+            ],
+            timeout=30,
+        )
 
-        # Should fail
-        self.assertNotEqual(return_code, 0, "serve should fail without config.yaml")
-
-        # Output should mention config file
+        # The command may still fail because the image does not exist, but it should no
+        # longer fail because config.yaml is missing.
         output = (stdout + stderr).lower()
         self.assertTrue(
-            "config" in output or "not found" in output,
-            f"Error message should mention config. Got: {output[:200]}",
+            os.path.exists(os.path.join(self.test_dir, "config.yaml")),
+            "serve should create a bootstrap config.yaml",
+        )
+        self.assertTrue(
+            os.path.isdir(os.path.join(self.test_dir, ".vllm-sr")),
+            "serve should create a bootstrap .vllm-sr directory",
+        )
+        self.assertNotIn(
+            "run 'vllm-sr init' to create a config file",
+            output,
+            "serve should no longer require init before startup",
+        )
+        self.assertIn(
+            "bootstrap",
+            output,
+            f"Expected bootstrap messaging. Got: {output[:300]}",
+        )
+        self.assertNotEqual(
+            return_code, 0, "fake image should still cause a startup failure"
         )
 
-        self.print_test_result(True, "serve correctly requires config.yaml")
+        self.print_test_result(
+            True, "serve bootstraps setup mode when config is missing"
+        )
 
     def test_serve_with_custom_config_path(self):
         """Test that serve accepts --config flag for custom config path."""
@@ -127,7 +141,7 @@ listeners:
 
         # Run serve with --config pointing to custom path
         # Use --image-pull-policy=never to avoid pulling and fail fast if image missing
-        return_code, stdout, stderr = self.run_cli(
+        _return_code, stdout, stderr = self.run_cli(
             ["serve", "--config", config_path, "--image-pull-policy", "never"],
             timeout=30,
         )
@@ -169,12 +183,21 @@ listeners:
         # Should fail
         self.assertNotEqual(return_code, 0, "Should fail with non-existent image")
 
-        # Output should mention image not found
+        # When the daemon is reachable, serve should fail on the missing image itself.
+        # When the daemon is down, the command may fail earlier while preparing runtime
+        # resources, but it should still surface a container-runtime issue rather than a
+        # config/flag parsing error.
         output = (stdout + stderr).lower()
-        self.assertTrue(
-            "not found" in output or "never" in output or "image" in output,
-            f"Should mention image issue. Got: {output[:300]}",
-        )
+        if self.container_runtime_accessible():
+            self.assertTrue(
+                "not found" in output or "never" in output or "image" in output,
+                f"Should mention image issue. Got: {output[:300]}",
+            )
+        else:
+            self.assertTrue(
+                "daemon" in output or "docker" in output or "podman" in output,
+                f"Should mention container runtime issue. Got: {output[:300]}",
+            )
 
         self.print_test_result(True, "never policy correctly fails for missing image")
 
@@ -199,12 +222,10 @@ listeners:
 
         # Run with ifnotpresent - should not fail immediately for image reasons
         # (though may fail later for other reasons like model loading)
-        return_code, stdout, stderr = self.run_cli(
+        _, _, _ = self.run_cli(
             ["serve", "--image-pull-policy", "ifnotpresent"],
             timeout=60,
         )
-
-        output = (stdout + stderr).lower()
 
         # Document behavior
         if image_exists:
@@ -229,7 +250,7 @@ listeners:
         # Note: We can't fully test the pull behavior without network access
         # but we can verify the flag is accepted and behavior is documented
 
-        return_code, stdout, stderr = self.run_cli(
+        _, stdout, stderr = self.run_cli(
             ["serve", "--image-pull-policy", "always"],
             timeout=30,
         )
@@ -262,7 +283,7 @@ listeners:
         test_token = "hf_test_token_12345"
 
         # Run serve with HF_TOKEN - use verbose/debug to see docker command
-        return_code, stdout, stderr = self.run_cli(
+        _, stdout, stderr = self.run_cli(
             ["serve", "--image-pull-policy", "never"],
             env={"HF_TOKEN": test_token},
             timeout=30,
@@ -307,7 +328,7 @@ listeners:
         self._create_minimal_config(port=test_port)
 
         # Run serve (will likely fail due to missing image, but we can check the command built)
-        return_code, stdout, stderr = self.run_cli(
+        _, stdout, stderr = self.run_cli(
             ["serve", "--image-pull-policy", "never"],
             timeout=30,
         )
@@ -320,29 +341,35 @@ listeners:
 
         self.print_test_result(True, "Port mapping behavior validated")
 
-    def test_serve_readonly_dashboard_flag(self):
-        """Test that serve accepts --readonly-dashboard flag."""
+    def test_serve_readonly_flag(self):
+        """Test that serve accepts --readonly."""
         self.print_test_header(
             "Readonly Dashboard Flag",
-            "Validates that --readonly-dashboard flag is recognized",
+            "Validates that --readonly flag is recognized",
         )
 
         # Create config
         self._create_minimal_config()
 
-        # Run serve with --readonly-dashboard flag
-        return_code, stdout, stderr = self.run_cli(
-            ["serve", "--readonly-dashboard", "--image-pull-policy", "never"],
+        # Run serve with --readonly flag
+        _, stdout, stderr = self.run_cli(
+            ["serve", "--readonly", "--image-pull-policy", "never"],
             timeout=30,
         )
 
         output = (stdout + stderr).lower()
 
         # The flag should be recognized (not "unknown flag" error)
-        unknown_flag = "unknown" in output and "readonly" in output
-        self.assertFalse(unknown_flag, "--readonly-dashboard flag should be recognized")
+        self.assertNotIn(
+            "no such option: --readonly", output, "--readonly flag should be recognized"
+        )
+        self.assertNotIn(
+            "did you mean --readonly",
+            output,
+            "--readonly should be the canonical serve flag",
+        )
 
-        self.print_test_result(True, "--readonly-dashboard flag is recognized")
+        self.print_test_result(True, "--readonly flag is recognized")
 
     def test_serve_mounts_config_file(self):
         """Test that config file is mounted into container."""
@@ -352,7 +379,7 @@ listeners:
         )
 
         # Create config with identifiable content
-        config_path = self._create_minimal_config()
+        self._create_minimal_config()
 
         # The actual mount verification would require the container to start
         # This test documents expected behavior
@@ -380,7 +407,7 @@ listeners:
         )
 
         # Run serve (even if it fails, it should create the directory)
-        return_code, stdout, stderr = self.run_cli(
+        _, _, _ = self.run_cli(
             ["serve", "--image-pull-policy", "never"],
             timeout=30,
         )
