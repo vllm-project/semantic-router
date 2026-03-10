@@ -825,7 +825,7 @@ ensure_runtime() {
 }
 
 launch_first_session() {
-  local launch_dir
+  local launch_dir serve_log_file
   if ! should_auto_launch; then
     return
   fi
@@ -845,6 +845,7 @@ launch_first_session() {
   info "Starting the first local session. This can take a few minutes on the first image pull."
 
   step "Running first-time serve flow"
+  serve_log_file="$(make_temp_log)"
   if (
     cd "$launch_dir"
     if [ -n "$LAUNCH_PLATFORM" ]; then
@@ -852,10 +853,14 @@ launch_first_session() {
     else
       "$BIN_DIR/vllm-sr" serve
     fi
-  ); then
+  ) >"$serve_log_file" 2>&1; then
+    rm -f "$serve_log_file"
     AUTO_LAUNCH_RAN="1"
     done_step "First-time serve flow completed"
   else
+    warn "Automatic first run did not complete. Command output follows:"
+    cat "$serve_log_file" >&2
+    rm -f "$serve_log_file"
     warn "Automatic first run did not complete. Retry with:"
     print_restart_command
     die "Installation finished, but the first vllm-sr serve run failed"
