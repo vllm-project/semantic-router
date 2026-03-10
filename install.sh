@@ -39,23 +39,15 @@ init_colors() {
 }
 
 print_logo() {
-  local os_label platform_label env_label
   if [ "${VLLM_SR_NO_LOGO:-0}" = "1" ]; then
     return
   fi
 
   init_colors
-  os_label="$(detect_os_label)"
-  platform_label="$(resolve_launch_platform)"
-  if [ -n "$platform_label" ]; then
-    env_label="$(printf '%s/%s' "$(printf '%s' "$platform_label" | tr '[:lower:]' '[:upper:]')" "$os_label")"
-  else
-    env_label="$os_label"
-  fi
 
   printf '\n'
   printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}       █     █     █▄   ▄█   ▄▄▄▄    █▄▄▄${COLOR_RESET}"
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE} ▄▄ ▄█ █     █     █ ▀▄▀ █  █        █  █${COLOR_RESET}  ${COLOR_MUTED}(${env_label})${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE} ▄▄ ▄█ █     █     █ ▀▄▀ █  █        █  █${COLOR_RESET}"
   printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}  █▄█▀ █     █     █     █   ▀▀▄     █▄▄▀${COLOR_RESET}"
   printf '%b\n' "  ${STYLE_BOLD}${COLOR_WHITE}   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀  ▄▄▄▄▀    █  ▀${COLOR_RESET}"
   printf '\n'
