@@ -39,19 +39,26 @@ init_colors() {
 }
 
 print_logo() {
+  local os_label platform_label env_label
   if [ "${VLLM_SR_NO_LOGO:-0}" = "1" ]; then
     return
   fi
 
   init_colors
-  cat <<'EOF'
+  os_label="$(detect_os_label)"
+  platform_label="$(resolve_launch_platform)"
+  if [ -n "$platform_label" ]; then
+    env_label="$(printf '%s / %s' "$(printf '%s' "$platform_label" | tr '[:lower:]' '[:upper:]')" "$os_label")"
+  else
+    env_label="$os_label"
+  fi
 
-       █     █     █▄   ▄█
- ▄▄ ▄█ █     █     █ ▀▄▀ █  semantic router
-  █▄█▀ █     █     █     █  local installer
-   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
-
-EOF
+  printf '\n'
+  printf '%b\n' "       █     █     █▄   ▄█  ${STYLE_BOLD}${COLOR_WHITE}vLLM SR${COLOR_RESET}"
+  printf '%b\n' " ▄▄ ▄█ █     █     █ ▀▄▀ █  ${COLOR_MUTED}(${env_label})${COLOR_RESET}"
+  printf '%b\n' "  █▄█▀ █     █     █     █"
+  printf '%b\n' "   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀"
+  printf '\n'
 }
 
 step() {
