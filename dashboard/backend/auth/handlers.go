@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type LoginRequest struct {
@@ -71,7 +72,13 @@ func AuthRoutes(svc *Service) *http.ServeMux {
 func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
 	mux.HandleFunc("/api/admin/users", func(w http.ResponseWriter, r *http.Request) {
 		ac, ok := AuthFromContext(r)
-		if !ok || !ac.Perms[PermUsersManage] {
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		canList := ac.Perms[PermUsersManage] || ac.Perms[PermUsersView]
+		if !canList {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -86,6 +93,10 @@ func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
 			}
 			respondJSON(w, ListUsersResponse{Users: users})
 		case http.MethodPost:
+			if !ac.Perms[PermUsersManage] {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
 			var req struct {
 				Email    string `json:"email"`
 				Name     string `json:"name"`
@@ -110,6 +121,7 @@ func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			writeAudit(r, svc, "user.create", "/api/admin/users", ac.UserID)
 			respondJSON(w, u)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -118,7 +130,12 @@ func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
 
 	mux.HandleFunc("/api/admin/users/", func(w http.ResponseWriter, r *http.Request) {
 		ac, ok := AuthFromContext(r)
-		if !ok || !ac.Perms[PermUsersManage] {
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		canView := ac.Perms[PermUsersManage] || ac.Perms[PermUsersView]
+		if !canView {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -138,6 +155,10 @@ func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
 			}
 			respondJSON(w, u)
 		case http.MethodPatch:
+			if !ac.Perms[PermUsersManage] {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
 			var req UpdateUserRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, "invalid body", http.StatusBadRequest)
@@ -148,12 +169,18 @@ func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			writeAudit(r, svc, "user.update", "/api/admin/users/", ac.UserID)
 			respondJSON(w, u)
 		case http.MethodDelete:
+			if !ac.Perms[PermUsersManage] {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
 			if err := svc.store.DeleteUser(r.Context(), id); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			writeAudit(r, svc, "user.delete", "/api/admin/users/", ac.UserID)
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -233,7 +260,22 @@ func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		writeAudit(r, svc, "user.password", "/api/admin/users/password", ac.UserID)
 		respondJSON(w, map[string]bool{"ok": true})
+	})
+}
+
+func writeAudit(r *http.Request, svc *Service, action, resource, actorID string) {
+	_ = svc.store.AddAuditLog(r.Context(), AuditLog{
+		UserID:     actorID,
+		Action:     action,
+		Resource:   resource,
+		Method:     r.Method,
+		Path:       r.URL.Path,
+		IP:         r.RemoteAddr,
+		UserAgent:  r.UserAgent(),
+		StatusCode: http.StatusOK,
+		CreatedAt:  time.Now().Unix(),
 	})
 }
 
