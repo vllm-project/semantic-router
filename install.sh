@@ -45,8 +45,10 @@ print_logo() {
 
   init_colors
   printf '\n'
-  printf '%b\n' "  ${STYLE_BOLD}${COLOR_ORANGE}v${COLOR_WHITE}LLM${COLOR_BLUE} SR${COLOR_RESET}      ${COLOR_MUTED}semantic router / local installer${COLOR_RESET}"
-  printf '%b\n' "               ${COLOR_MUTED}CLI bootstrap / runtime wiring / first dashboard launch${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_ORANGE}v${COLOR_WHITE}LLM${COLOR_RESET}"
+  printf '%b\n' "  ${STYLE_BOLD}${COLOR_BLUE}SR${COLOR_RESET}"
+  printf '%b\n' "  ${COLOR_MUTED}semantic router / local installer${COLOR_RESET}"
+  printf '%b\n' "  ${COLOR_MUTED}CLI bootstrap / runtime wiring / first dashboard launch${COLOR_RESET}"
   printf '\n'
 }
 
