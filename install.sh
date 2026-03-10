@@ -13,6 +13,9 @@ SELECTED_RUNTIME=""
 COLOR_RESET=""
 COLOR_ORANGE=""
 COLOR_BLUE=""
+COLOR_WHITE=""
+COLOR_MUTED=""
+COLOR_SUCCESS=""
 
 init_colors() {
   if [ ! -t 1 ] || [ -n "${NO_COLOR:-}" ]; then
@@ -22,6 +25,9 @@ init_colors() {
   COLOR_RESET=$'\033[0m'
   COLOR_ORANGE=$'\033[38;2;254;181;22m'
   COLOR_BLUE=$'\033[38;2;48;162;255m'
+  COLOR_WHITE=$'\033[97m'
+  COLOR_MUTED=$'\033[38;2;145;158;171m'
+  COLOR_SUCCESS=$'\033[38;2;111;224;161m'
 }
 
 print_logo() {
@@ -30,28 +36,60 @@ print_logo() {
   fi
 
   init_colors
-  printf '%b\n' "${COLOR_ORANGE}######################${COLOR_RESET}            ${COLOR_BLUE}########################${COLOR_RESET}"
-  printf '%b\n' " ${COLOR_ORANGE}####################${COLOR_RESET}          ${COLOR_BLUE}########################${COLOR_RESET}"
-  printf '%b\n' "  ${COLOR_ORANGE}##################${COLOR_RESET}        ${COLOR_BLUE}########################${COLOR_RESET}"
-  printf '%b\n' "   ${COLOR_ORANGE}################${COLOR_RESET}      ${COLOR_BLUE}########################${COLOR_RESET}"
-  printf '%b\n' "    ${COLOR_ORANGE}##############${COLOR_RESET}    ${COLOR_BLUE}########################${COLOR_RESET}"
-  printf '%b\n' "     ${COLOR_ORANGE}############${COLOR_BLUE}############################${COLOR_RESET}"
-  printf '%b\n' "      ${COLOR_ORANGE}########${COLOR_BLUE}############################${COLOR_RESET}"
-  printf '%b\n' "       ${COLOR_ORANGE}####${COLOR_BLUE}############################${COLOR_RESET}"
+  printf '\n'
+  printf '%b\n' "${COLOR_ORANGE}##${COLOR_WHITE}          ${COLOR_BLUE}##  ${COLOR_WHITE}##        ##        ##      ##    ######    ########${COLOR_RESET}"
+  printf '%b\n' "${COLOR_ORANGE} ##${COLOR_WHITE}        ${COLOR_BLUE}##   ${COLOR_WHITE}##        ##        ###    ###   ##    ##   ##    ##${COLOR_RESET}"
+  printf '%b\n' "${COLOR_ORANGE}  ##${COLOR_WHITE}      ${COLOR_BLUE}##    ${COLOR_WHITE}##        ##        ####  ####   ##         ##    ##${COLOR_RESET}"
+  printf '%b\n' "${COLOR_ORANGE}   ##${COLOR_WHITE}    ${COLOR_BLUE}##     ${COLOR_WHITE}##        ##        ## #### ##    ####     ########${COLOR_RESET}"
+  printf '%b\n' "${COLOR_ORANGE}    ##${COLOR_WHITE}  ${COLOR_BLUE}##      ${COLOR_WHITE}##        ##        ##  ##  ##       ##    ##  ##${COLOR_RESET}"
+  printf '%b\n' "${COLOR_ORANGE}     ##${COLOR_BLUE}##       ${COLOR_WHITE}##        ##        ##      ##   ##    ##   ##   ##${COLOR_RESET}"
+  printf '%b\n' "${COLOR_ORANGE}      ${COLOR_BLUE}##        ${COLOR_WHITE}########  ########  ##      ##    ######    ##    ##${COLOR_RESET}"
+  printf '%b\n' "${COLOR_MUTED}vLLM Semantic Router local installer${COLOR_RESET}"
+  printf '%b\n' "${COLOR_MUTED}One command for the CLI, runtime, and first local bring-up.${COLOR_RESET}"
   printf '\n'
 }
 
-log() {
-  printf '[vllm-sr] %s\n' "$*"
+step() {
+  printf '%b\n' "${COLOR_BLUE}[step]${COLOR_RESET} $*"
+}
+
+done_step() {
+  printf '%b\n' "${COLOR_SUCCESS}[done]${COLOR_RESET} $*"
+}
+
+info() {
+  printf '%b\n' "${COLOR_MUTED}[info]${COLOR_RESET} $*"
 }
 
 warn() {
-  printf '[vllm-sr] warning: %s\n' "$*" >&2
+  printf '%b\n' "${COLOR_ORANGE}[warn]${COLOR_RESET} $*" >&2
 }
 
 die() {
-  printf '[vllm-sr] error: %s\n' "$*" >&2
+  printf '%b\n' "${COLOR_ORANGE}[error]${COLOR_RESET} $*" >&2
   exit 1
+}
+
+print_install_plan() {
+  local requested_runtime
+  requested_runtime="$REQUESTED_RUNTIME"
+  if [ "$REQUESTED_RUNTIME" = "auto" ]; then
+    case "$OS_NAME" in
+      darwin)
+        requested_runtime="auto -> docker/colima"
+        ;;
+      linux)
+        requested_runtime="auto -> podman"
+        ;;
+    esac
+  fi
+
+  printf '%b\n' "${COLOR_WHITE}Install plan${COLOR_RESET}"
+  printf '  mode         %s\n' "$MODE"
+  printf '  runtime      %s\n' "$requested_runtime"
+  printf '  install root %s\n' "$INSTALL_ROOT"
+  printf '  launcher     %s/vllm-sr\n' "$BIN_DIR"
+  printf '\n'
 }
 
 usage() {
@@ -89,6 +127,30 @@ EOF
 
 has_cmd() {
   command -v "$1" >/dev/null 2>&1
+}
+
+make_temp_log() {
+  mktemp "${TMPDIR:-/tmp}/vllm-sr-install.XXXXXX"
+}
+
+run_quiet_step() {
+  local label log_file
+  label="$1"
+  shift
+
+  step "$label"
+  log_file="$(make_temp_log)"
+
+  if "$@" >"$log_file" 2>&1; then
+    rm -f "$log_file"
+    done_step "$label"
+    return
+  fi
+
+  warn "$label failed. Command output follows:"
+  cat "$log_file" >&2
+  rm -f "$log_file"
+  exit 1
 }
 
 run_as_root() {
@@ -164,7 +226,7 @@ ensure_homebrew() {
 }
 
 install_python() {
-  log "Installing Python 3.10+"
+  step "Installing Python 3.10+"
 
   case "$OS_NAME" in
     darwin)
@@ -189,6 +251,8 @@ install_python() {
       esac
       ;;
   esac
+
+  done_step "Python 3.10+ is ready"
 }
 
 create_launcher() {
@@ -215,23 +279,32 @@ EOF
 install_cli() {
   local python_cmd
   python_cmd="$(find_python)" || {
+    info "Python 3.10+ was not found. The installer will add it now."
     install_python
     python_cmd="$(find_python)" || die "Unable to locate a Python 3.10+ interpreter after installation."
   }
 
-  log "Using Python interpreter: $python_cmd"
+  done_step "Using Python interpreter: $python_cmd"
   mkdir -p "$INSTALL_ROOT"
+  step "Creating isolated environment at $INSTALL_ROOT/venv"
   "$python_cmd" -m venv "$INSTALL_ROOT/venv"
-  "$INSTALL_ROOT/venv/bin/python" -m pip install --upgrade pip setuptools wheel
-  "$INSTALL_ROOT/venv/bin/python" -m pip install --upgrade "$PIP_SPEC"
+  done_step "Created isolated environment"
+  run_quiet_step \
+    "Bootstrapping installer Python tooling" \
+    "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet pip setuptools wheel
+  run_quiet_step \
+    "Installing vLLM Semantic Router from $PIP_SPEC" \
+    "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet "$PIP_SPEC"
+  step "Writing launcher to $BIN_DIR/vllm-sr"
   create_launcher
+  done_step "Launcher is ready"
 
   local version_output
   version_output="$("$BIN_DIR/vllm-sr" --version 2>/dev/null || true)"
   if [ -n "$version_output" ]; then
-    log "Installed $version_output"
+    done_step "Installed $version_output"
   else
-    log "Installed vllm-sr"
+    done_step "Installed vllm-sr"
   fi
 }
 
@@ -261,21 +334,24 @@ choose_runtime_preference() {
 
 install_macos_docker_runtime() {
   ensure_homebrew
-  log "Installing Docker CLI and Colima via Homebrew"
+  step "Installing Docker CLI and Colima via Homebrew"
   brew install docker colima
-  log "Starting Colima"
+  step "Starting Colima"
   colima start
+  done_step "Docker + Colima runtime is ready"
 }
 
 install_macos_podman_runtime() {
   ensure_homebrew
-  log "Installing Podman via Homebrew"
+  step "Installing Podman via Homebrew"
   brew install podman
   if ! podman machine inspect >/dev/null 2>&1; then
+    step "Initializing Podman machine"
     podman machine init
   fi
-  log "Starting Podman machine"
+  step "Starting Podman machine"
   podman machine start
+  done_step "Podman runtime is ready"
 }
 
 install_linux_podman_runtime() {
@@ -283,7 +359,7 @@ install_linux_podman_runtime() {
   pkg_manager="$(detect_linux_pkg_manager)" || die \
     "No supported Linux package manager found. Install Podman manually and re-run the installer."
 
-  log "Installing Podman"
+  step "Installing Podman"
   case "$pkg_manager" in
     apt-get)
       run_as_root apt-get update
@@ -296,6 +372,8 @@ install_linux_podman_runtime() {
       run_as_root yum install -y podman
       ;;
   esac
+
+  done_step "Podman runtime is ready"
 }
 
 install_linux_docker_runtime() {
@@ -303,7 +381,7 @@ install_linux_docker_runtime() {
   pkg_manager="$(detect_linux_pkg_manager)" || die \
     "No supported Linux package manager found. Install Docker manually and re-run the installer."
 
-  log "Installing Docker"
+  step "Installing Docker"
   case "$pkg_manager" in
     apt-get)
       run_as_root apt-get update
@@ -324,6 +402,8 @@ install_linux_docker_runtime() {
   if [ "$(id -u)" -ne 0 ]; then
     run_as_root usermod -aG docker "$USER" || true
   fi
+
+  done_step "Docker runtime is ready"
 }
 
 write_runtime_env() {
@@ -344,18 +424,21 @@ ensure_runtime() {
   if [ "$MODE" = "cli" ] || [ "$REQUESTED_RUNTIME" = "skip" ]; then
     SELECTED_RUNTIME=""
     write_runtime_env
+    info "Runtime bootstrap skipped."
     return
   fi
 
   if docker_ready; then
     SELECTED_RUNTIME="docker"
     write_runtime_env
+    done_step "Using existing Docker runtime"
     return
   fi
 
   if podman_ready; then
     SELECTED_RUNTIME="podman"
     write_runtime_env
+    done_step "Using existing Podman runtime"
     return
   fi
 
@@ -406,17 +489,25 @@ print_path_hint() {
       ;;
     *)
       warn "$BIN_DIR is not on PATH."
-      printf 'export PATH="%s:%s"\n' "$BIN_DIR" "$shell_path_placeholder"
+      printf '  export PATH="%s:%s"\n' "$BIN_DIR" "$shell_path_placeholder"
       ;;
   esac
 }
 
 print_next_steps() {
-  log "Installation complete."
+  printf '\n'
+  printf '%b\n' "${COLOR_SUCCESS}vLLM Semantic Router is installed.${COLOR_RESET}"
+  printf '%b\n' "${COLOR_WHITE}What you have${COLOR_RESET}"
+  printf '  cli          %s/vllm-sr\n' "$BIN_DIR"
+  printf '  workspace     %s\n' "$INSTALL_ROOT"
+  if [ "$MODE" = "serve" ]; then
+    printf '  runtime       %s\n' "${SELECTED_RUNTIME:-not configured}"
+  fi
+  printf '\n'
+
   print_path_hint
 
-  printf '\n'
-  printf 'Next steps:\n'
+  printf '%b\n' "${COLOR_WHITE}Next steps${COLOR_RESET}"
   printf '  %s --version\n' "$BIN_DIR/vllm-sr"
 
   if [ "$MODE" = "serve" ]; then
@@ -424,7 +515,7 @@ print_next_steps() {
     printf '  %s serve --platform amd\n' "$BIN_DIR/vllm-sr"
     if [ "$SELECTED_RUNTIME" = "podman" ]; then
       printf '\n'
-      printf 'Runtime:\n'
+      printf '%b\n' "${COLOR_WHITE}Runtime${COLOR_RESET}"
       printf '  This installation is pinned to Podman via %s/runtime.env\n' "$INSTALL_ROOT"
     fi
   fi
@@ -493,10 +584,11 @@ validate_args() {
 }
 
 main() {
-  print_logo
   parse_args "$@"
   validate_args
   detect_os
+  print_logo
+  print_install_plan
   install_cli
   ensure_runtime
   print_next_steps
