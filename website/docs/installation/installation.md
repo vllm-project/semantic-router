@@ -31,6 +31,9 @@ The installer:
 - Installs `vllm-sr` into `~/.local/share/vllm-sr`
 - Writes a launcher to `~/.local/bin/vllm-sr`
 - Prepares Docker or Podman for `vllm-sr serve` unless you opt out
+- Bootstraps a first-run workspace in `~/.local/share/vllm-sr/workspace`
+- Starts `vllm-sr serve` automatically and opens the dashboard when possible
+- Prints dashboard access and remote-server hints if a browser cannot be opened
 
 Useful variants:
 
@@ -40,6 +43,12 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli
 
 # Pin local serve mode to Podman
 curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime podman
+
+# Force the first launch onto the AMD/ROCm path
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --platform amd
+
+# Install without auto-starting serve + dashboard
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --no-launch
 
 # Skip runtime bootstrap and keep only userland install steps
 curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
@@ -66,11 +75,14 @@ Verify installation:
 vllm-sr --version
 ```
 
-### 3. Start `vllm-sr`
+### 3. Restart `vllm-sr` later
 
 ```bash
+cd ~/.local/share/vllm-sr/workspace
 vllm-sr serve
 ```
+
+The installer uses this workspace for the first-run setup flow. If you skipped `--no-launch`, it already ran one `vllm-sr serve` for you.
 
 If `config.yaml` does not exist yet, `vllm-sr serve` bootstraps a minimal workspace and starts the dashboard in setup mode.
 
@@ -85,6 +97,8 @@ The router will:
 ### 4. Open the Dashboard
 
 Open [http://localhost:8700](http://localhost:8700) in your browser.
+
+If you ran the installer on a remote server and the browser did not open automatically, use the URL and SSH tunnel hint printed by the installer.
 
 For first-run setup:
 

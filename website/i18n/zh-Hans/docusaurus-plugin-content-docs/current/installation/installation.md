@@ -36,6 +36,9 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 - 将 `vllm-sr` 安装到 `~/.local/share/vllm-sr`
 - 将 launcher 写入 `~/.local/bin/vllm-sr`
 - 默认为 `vllm-sr serve` 准备 Docker 或 Podman，除非您显式跳过
+- 在 `~/.local/share/vllm-sr/workspace` 中初始化首次运行 workspace
+- 默认自动执行一次 `vllm-sr serve`，并在可能时打开 dashboard
+- 如果无法自动打开浏览器，会打印 dashboard 地址和远程服务器访问提示
 
 常用变体：
 
@@ -45,6 +48,12 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli
 
 # 将本地 serve 固定为 Podman
 curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime podman
+
+# 强制首次启动走 AMD / ROCm 路径
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --platform amd
+
+# 安装但不自动启动 serve + dashboard
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --no-launch
 
 # 跳过 runtime bootstrap，只执行用户态安装
 curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
@@ -71,11 +80,14 @@ pip install vllm-sr
 vllm-sr --version
 ```
 
-### 3. 启动 `vllm-sr`
+### 3. 之后再次启动 `vllm-sr`
 
 ```bash
+cd ~/.local/share/vllm-sr/workspace
 vllm-sr serve
 ```
+
+安装器会把首次 setup flow 放在这个 workspace 里。如果您没有使用 `--no-launch`，它已经自动帮您跑过一次 `vllm-sr serve`。
 
 如果当前目录还没有 `config.yaml`，`vllm-sr serve` 会自动 bootstrap 一个最小工作区，并以 setup mode 启动 dashboard。
 
@@ -90,6 +102,8 @@ Router 将：
 ### 4. 打开 Dashboard
 
 在浏览器中打开 [http://localhost:8700](http://localhost:8700)。
+
+如果您是在远程服务器上运行安装器，且浏览器没有自动打开，请使用安装器打印出的 URL 和 SSH tunnel 提示访问 dashboard。
 
 首次使用时：
 

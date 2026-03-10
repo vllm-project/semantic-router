@@ -7,15 +7,22 @@ INSTALL_ROOT="${VLLM_SR_INSTALL_ROOT:-$HOME/.local/share/vllm-sr}"
 BIN_DIR="${VLLM_SR_BIN_DIR:-$HOME/.local/bin}"
 PIP_SPEC="${VLLM_SR_PIP_SPEC:-vllm-sr}"
 PYTHON_BIN="${VLLM_SR_PYTHON:-}"
+REQUESTED_PLATFORM="${VLLM_SR_INSTALL_PLATFORM:-${VLLM_SR_PLATFORM:-auto}}"
+WORKSPACE_DIR="${VLLM_SR_WORKSPACE_DIR:-}"
+AUTO_LAUNCH="${VLLM_SR_INSTALL_AUTO_LAUNCH:-1}"
 
 OS_NAME=""
 SELECTED_RUNTIME=""
+LAUNCH_PLATFORM=""
+AUTO_LAUNCH_RAN="0"
 COLOR_RESET=""
 COLOR_ORANGE=""
 COLOR_BLUE=""
 COLOR_WHITE=""
 COLOR_MUTED=""
 COLOR_SUCCESS=""
+
+DASHBOARD_URL="http://localhost:8700"
 
 init_colors() {
   if [ ! -t 1 ] || [ -n "${NO_COLOR:-}" ]; then
@@ -70,6 +77,38 @@ die() {
   exit 1
 }
 
+is_truthy() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+is_falsey() {
+  case "${1:-}" in
+    0|false|FALSE|no|NO|off|OFF)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+auto_launch_enabled() {
+  is_truthy "$AUTO_LAUNCH"
+}
+
+should_auto_launch() {
+  auto_launch_enabled || return 1
+  [ "$MODE" = "serve" ] || return 1
+  [ "$REQUESTED_RUNTIME" != "skip" ] || return 1
+}
+
 print_install_plan() {
   local requested_runtime python_cmd python_version runtime_cmd package_manager
   requested_runtime="$REQUESTED_RUNTIME"
@@ -107,11 +146,14 @@ print_install_plan() {
   printf '%b\n' "${COLOR_WHITE}Install plan${COLOR_RESET}"
   printf '  mode         %s\n' "$MODE"
   printf '  runtime      %s\n' "$requested_runtime"
+  printf '  launch       %s\n' "$(if should_auto_launch; then printf 'auto first-run'; else printf 'manual'; fi)"
+  printf '  platform     %s\n' "$(display_platform_plan)"
   printf '  python deps  pip, setuptools, wheel\n'
   printf '  package      %s\n' "$PIP_SPEC"
   printf '  system deps  %s\n' "$(describe_python_dependency_plan "$python_cmd")"
   printf '  runtime deps %s\n' "$(describe_runtime_dependency_plan "$runtime_cmd")"
   printf '  install root %s\n' "$INSTALL_ROOT"
+  printf '  workspace    %s\n' "$WORKSPACE_DIR"
   printf '  launcher     %s/vllm-sr\n' "$BIN_DIR"
   printf '\n'
 }
@@ -120,7 +162,8 @@ usage() {
   cat <<'EOF'
 Usage: install.sh [--mode cli|serve] [--runtime auto|docker|podman|skip]
                   [--install-root PATH] [--bin-dir PATH] [--pip-spec SPEC]
-                  [--python PATH]
+                  [--python PATH] [--platform PLATFORM]
+                  [--workspace PATH] [--no-launch]
 
 Installs the vLLM Semantic Router CLI into an isolated virtual environment and
 links a launcher into ~/.local/bin by default.
@@ -137,6 +180,12 @@ Options:
   --bin-dir PATH           Launcher directory. Default: ~/.local/bin
   --pip-spec SPEC          Python package spec to install. Default: vllm-sr
   --python PATH            Explicit Python interpreter to use
+  --platform PLATFORM      Platform hint for first-run serve. Use 'amd' for ROCm.
+                           Default: auto
+  --workspace PATH         Workspace for the installer's first-run serve flow.
+                           Default: <install-root>/workspace
+  --no-launch              Skip the installer's automatic first `vllm-sr serve`
+                           and dashboard open step
   -h, --help               Show this help message
 
 Environment overrides:
@@ -146,6 +195,9 @@ Environment overrides:
   VLLM_SR_BIN_DIR
   VLLM_SR_PIP_SPEC
   VLLM_SR_PYTHON
+  VLLM_SR_INSTALL_PLATFORM
+  VLLM_SR_WORKSPACE_DIR
+  VLLM_SR_INSTALL_AUTO_LAUNCH
 EOF
 }
 
@@ -217,6 +269,127 @@ detect_os_label() {
       printf '%s\n' "$OS_NAME"
       ;;
   esac
+}
+
+ensure_workspace_dir() {
+  if [ -z "$WORKSPACE_DIR" ]; then
+    WORKSPACE_DIR="$INSTALL_ROOT/workspace"
+  fi
+}
+
+resolve_launch_platform() {
+  if [ "$REQUESTED_PLATFORM" != "auto" ]; then
+    printf '%s\n' "$REQUESTED_PLATFORM"
+    return
+  fi
+
+  if [ -n "${VLLM_SR_PLATFORM:-}" ]; then
+    printf '%s\n' "$VLLM_SR_PLATFORM"
+    return
+  fi
+
+  if has_cmd rocm-smi || has_cmd rocminfo || [ -e /dev/kfd ] || [ -d /opt/rocm ]; then
+    printf 'amd\n'
+    return
+  fi
+
+  printf '\n'
+}
+
+display_platform_plan() {
+  local platform
+  platform="$(resolve_launch_platform)"
+  if [ -n "$platform" ]; then
+    if [ "$REQUESTED_PLATFORM" = "auto" ]; then
+      printf '%s (auto-detected)\n' "$platform"
+    else
+      printf '%s\n' "$platform"
+    fi
+    return
+  fi
+
+  printf 'default\n'
+}
+
+detect_primary_ip() {
+  local python_cmd
+  python_cmd="$(detect_python_candidate || true)"
+  if [ -z "$python_cmd" ]; then
+    return 1
+  fi
+
+  "$python_cmd" -c '
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+try:
+    s.connect(("8.8.8.8", 80))
+    print(s.getsockname()[0])
+finally:
+    s.close()
+' 2>/dev/null
+}
+
+detect_host_label() {
+  hostname -f 2>/dev/null || hostname 2>/dev/null || printf 'your-server\n'
+}
+
+is_remote_session() {
+  [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_TTY:-}" ]
+}
+
+open_dashboard_url() {
+  case "$OS_NAME" in
+    darwin)
+      open "$DASHBOARD_URL" >/dev/null 2>&1
+      ;;
+    linux)
+      if has_cmd xdg-open; then
+        xdg-open "$DASHBOARD_URL" >/dev/null 2>&1
+        return
+      fi
+      if has_cmd gio; then
+        gio open "$DASHBOARD_URL" >/dev/null 2>&1
+        return
+      fi
+      return 1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+print_dashboard_access() {
+  local primary_ip host_label
+  primary_ip="$(detect_primary_ip || true)"
+  host_label="$(detect_host_label)"
+
+  printf '%b\n' "${COLOR_WHITE}Dashboard access${COLOR_RESET}"
+  printf '  local        %s\n' "$DASHBOARD_URL"
+  if [ -n "$primary_ip" ]; then
+    printf '  network      http://%s:8700\n' "$primary_ip"
+  fi
+  printf '\n'
+
+  if is_remote_session; then
+    printf '%b\n' "${COLOR_WHITE}Remote access${COLOR_RESET}"
+    printf '  ssh tunnel   ssh -L 8700:localhost:8700 %s@%s\n' "${USER:-user}" "$host_label"
+    printf '  then open    %s\n' "$DASHBOARD_URL"
+    printf '\n'
+  fi
+}
+
+print_restart_command() {
+  if [ -z "$LAUNCH_PLATFORM" ]; then
+    LAUNCH_PLATFORM="$(resolve_launch_platform)"
+  fi
+  printf '  cd %s\n' "$WORKSPACE_DIR"
+  if [ -n "$LAUNCH_PLATFORM" ]; then
+    printf '  vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
+  else
+    printf '  vllm-sr serve\n'
+  fi
+  printf '  vllm-sr dashboard\n'
 }
 
 python_supports_vllm_sr() {
@@ -656,6 +829,62 @@ ensure_runtime() {
   write_runtime_env
 }
 
+launch_first_session() {
+  if ! should_auto_launch; then
+    return
+  fi
+
+  LAUNCH_PLATFORM="$(resolve_launch_platform)"
+  mkdir -p "$WORKSPACE_DIR"
+
+  printf '\n'
+  printf '%b\n' "${COLOR_WHITE}First run${COLOR_RESET}"
+  printf '  workspace    %s\n' "$WORKSPACE_DIR"
+  if [ -n "$LAUNCH_PLATFORM" ]; then
+    printf '  serve        vllm-sr serve --platform %s\n' "$LAUNCH_PLATFORM"
+  else
+    printf '  serve        vllm-sr serve\n'
+  fi
+  printf '  dashboard    vllm-sr dashboard\n'
+  printf '\n'
+  info "Starting the first local session. This can take a few minutes on the first image pull."
+
+  step "Running first-time serve flow"
+  if (
+    cd "$WORKSPACE_DIR"
+    if [ -n "$LAUNCH_PLATFORM" ]; then
+      "$BIN_DIR/vllm-sr" serve --platform "$LAUNCH_PLATFORM"
+    else
+      "$BIN_DIR/vllm-sr" serve
+    fi
+  ); then
+    AUTO_LAUNCH_RAN="1"
+    done_step "First-time serve flow completed"
+  else
+    warn "Automatic first run did not complete. Retry with:"
+    print_restart_command
+    die "Installation finished, but the first vllm-sr serve run failed"
+  fi
+
+  step "Checking dashboard availability"
+  if "$BIN_DIR/vllm-sr" dashboard --no-open >/dev/null 2>&1; then
+    done_step "Dashboard is available"
+  else
+    warn "The dashboard command could not confirm a running session."
+    print_dashboard_access
+    die "Installation finished, but the dashboard did not come up cleanly"
+  fi
+
+  step "Opening dashboard"
+  if open_dashboard_url; then
+    done_step "Dashboard opened in your browser"
+  else
+    warn "Could not open a browser automatically."
+    done_step "Dashboard is running"
+    print_dashboard_access
+  fi
+}
+
 print_path_hint() {
   local shell_path_placeholder
   shell_path_placeholder="$(printf '%s' "\$PATH")"
@@ -678,7 +907,8 @@ print_next_steps() {
   printf '%b\n' "${COLOR_SUCCESS}vLLM Semantic Router is installed.${COLOR_RESET}"
   printf '%b\n' "${COLOR_WHITE}What you have${COLOR_RESET}"
   printf '  cli          %s/vllm-sr\n' "$BIN_DIR"
-  printf '  workspace     %s\n' "$INSTALL_ROOT"
+  printf '  install root  %s\n' "$INSTALL_ROOT"
+  printf '  workspace     %s\n' "$WORKSPACE_DIR"
   if [ "$MODE" = "serve" ]; then
     printf '  runtime       %s\n' "${SELECTED_RUNTIME:-not configured}"
   fi
@@ -688,16 +918,29 @@ print_next_steps() {
     info "After updating PATH, use the commands below."
   fi
 
-  printf '%b\n' "${COLOR_WHITE}Next steps${COLOR_RESET}"
-  printf '  vllm-sr --version\n'
+  if [ "$AUTO_LAUNCH_RAN" = "1" ]; then
+    printf '%b\n' "${COLOR_WHITE}Now running${COLOR_RESET}"
+    print_dashboard_access
 
-  if [ "$MODE" = "serve" ]; then
-    printf '  vllm-sr serve\n'
-    printf '  vllm-sr serve --platform amd\n'
-    if [ "$SELECTED_RUNTIME" = "podman" ]; then
-      printf '\n'
-      printf '%b\n' "${COLOR_WHITE}Runtime${COLOR_RESET}"
-      printf '  This installation is pinned to Podman via %s/runtime.env\n' "$INSTALL_ROOT"
+    printf '%b\n' "${COLOR_WHITE}Commands${COLOR_RESET}"
+    printf '  vllm-sr status\n'
+    printf '  vllm-sr logs dashboard -f\n'
+    printf '  vllm-sr stop\n'
+    printf '\n'
+
+    printf '%b\n' "${COLOR_WHITE}Restart later${COLOR_RESET}"
+    print_restart_command
+  else
+    printf '%b\n' "${COLOR_WHITE}Next steps${COLOR_RESET}"
+    printf '  vllm-sr --version\n'
+
+    if [ "$MODE" = "serve" ]; then
+      print_restart_command
+      if [ "$SELECTED_RUNTIME" = "podman" ]; then
+        printf '\n'
+        printf '%b\n' "${COLOR_WHITE}Runtime${COLOR_RESET}"
+        printf '  This installation is pinned to Podman via %s/runtime.env\n' "$INSTALL_ROOT"
+      fi
     fi
   fi
 }
@@ -735,6 +978,20 @@ parse_args() {
         PYTHON_BIN="$2"
         shift 2
         ;;
+      --platform)
+        [ "$#" -ge 2 ] || die "Missing value for --platform"
+        REQUESTED_PLATFORM="$2"
+        shift 2
+        ;;
+      --workspace)
+        [ "$#" -ge 2 ] || die "Missing value for --workspace"
+        WORKSPACE_DIR="$2"
+        shift 2
+        ;;
+      --no-launch)
+        AUTO_LAUNCH="0"
+        shift
+        ;;
       -h|--help)
         usage
         exit 0
@@ -762,16 +1019,22 @@ validate_args() {
       die "--runtime must be one of: auto, docker, podman, skip"
       ;;
   esac
+
+  if ! is_truthy "$AUTO_LAUNCH" && ! is_falsey "$AUTO_LAUNCH"; then
+    die "VLLM_SR_INSTALL_AUTO_LAUNCH must be a boolean-like value (1/0, true/false, yes/no)"
+  fi
 }
 
 main() {
   parse_args "$@"
   validate_args
   detect_os
+  ensure_workspace_dir
   print_logo
   print_install_plan
   install_cli
   ensure_runtime
+  launch_first_session
   print_next_steps
 }
 
