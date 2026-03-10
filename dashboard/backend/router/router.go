@@ -11,8 +11,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	auth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
@@ -182,6 +182,20 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	var authSvc *auth.Service
 	if store, err := auth.NewStore(cfg.AuthDBPath); err != nil {
 		log.Printf("failed to init auth store: %v", err)
+		mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
+		mux.HandleFunc("/api/auth/me", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
 	} else {
 		authSvc = auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
 		if err := authSvc.EnsureBootstrapAdmin(context.Background(), cfg.BootstrapAdminEmail, cfg.BootstrapAdminPassword, cfg.BootstrapAdminName); err != nil {

@@ -4,16 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/google/uuid"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
 	defaultUserStatusActive = "active"
-	defaultPageSize        = 100
+	defaultPageSize         = 100
 )
 
 type Store struct {
@@ -35,6 +37,12 @@ type AuditLog struct {
 }
 
 func NewStore(path string) (*Store, error) {
+	dir := filepath.Dir(path)
+	if dir != "." && dir != "" && dir != "/" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("create auth db directory: %w", err)
+		}
+	}
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, fmt.Errorf("open auth db: %w", err)
@@ -327,4 +335,3 @@ func nilOrString(v string) interface{} {
 	}
 	return v
 }
-
