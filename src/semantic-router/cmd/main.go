@@ -23,6 +23,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
@@ -67,8 +68,22 @@ func main() {
 	// This is important for Kubernetes mode where the controller will update it
 	config.Replace(cfg)
 
+	startupWriter := startupstatus.NewWriter(*configPath)
+	if writeErr := startupWriter.Write(startupstatus.State{
+		Phase:   "starting",
+		Ready:   false,
+		Message: "Router process booting...",
+	}); writeErr != nil {
+		logging.Warnf("Failed to write initial startup status: %v", writeErr)
+	}
+
 	// Ensure required models are downloaded
-	if modelErr := ensureModelsDownloaded(cfg); modelErr != nil {
+	if modelErr := ensureModelsDownloaded(cfg, startupWriter); modelErr != nil {
+		_ = startupWriter.Write(startupstatus.State{
+			Phase:   "error",
+			Ready:   false,
+			Message: fmt.Sprintf("Failed to ensure models are downloaded: %v", modelErr),
+		})
 		logging.Fatalf("Failed to ensure models are downloaded: %v", modelErr)
 	}
 
@@ -161,6 +176,14 @@ func main() {
 		}()
 	} else {
 		logging.Infof("Metrics server disabled")
+	}
+
+	if writeErr := startupWriter.Write(startupstatus.State{
+		Phase:   "initializing_models",
+		Ready:   false,
+		Message: "Initializing embedding models and router dependencies...",
+	}); writeErr != nil {
+		logging.Warnf("Failed to write initialization startup status: %v", writeErr)
 	}
 
 	// Initialize embedding models BEFORE creating server, this ensures Qwen3/Gemma/mmBERT/MultiModal/BERT models are ready
@@ -425,6 +448,11 @@ func main() {
 	// Create and start the ExtProc server
 	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)
 	if err != nil {
+		_ = startupWriter.Write(startupstatus.State{
+			Phase:   "error",
+			Ready:   false,
+			Message: fmt.Sprintf("Failed to create ExtProc server: %v", err),
+		})
 		logging.Fatalf("Failed to create ExtProc server: %v", err)
 	}
 
@@ -456,6 +484,14 @@ func main() {
 		}()
 	}
 
+	if writeErr := startupWriter.Write(startupstatus.State{
+		Phase:   "ready",
+		Ready:   true,
+		Message: "Router models are ready. Starting router services...",
+	}); writeErr != nil {
+		logging.Warnf("Failed to write ready startup status: %v", writeErr)
+	}
+
 	// Start Kubernetes controller if ConfigSource is kubernetes
 	if cfg.ConfigSource == config.ConfigSourceKubernetes {
 		logging.Infof("ConfigSource is kubernetes, starting Kubernetes controller")
@@ -465,12 +501,17 @@ func main() {
 	}
 
 	if err := server.Start(); err != nil {
+		_ = startupWriter.Write(startupstatus.State{
+			Phase:   "error",
+			Ready:   false,
+			Message: fmt.Sprintf("ExtProc server error: %v", err),
+		})
 		logging.Fatalf("ExtProc server error: %v", err)
 	}
 }
 
 // ensureModelsDownloaded checks and downloads required models
-func ensureModelsDownloaded(cfg *config.RouterConfig) error {
+func ensureModelsDownloaded(cfg *config.RouterConfig, startupWriter *startupstatus.Writer) error {
 	logging.Infof("Installing required models...")
 
 	// Build model specs from config
@@ -481,6 +522,11 @@ func ensureModelsDownloaded(cfg *config.RouterConfig) error {
 
 	// Skip download if no local models are configured (API-only mode)
 	if len(specs) == 0 {
+		_ = startupWriter.Write(startupstatus.State{
+			Phase:   "initializing_models",
+			Ready:   false,
+			Message: "No local models configured. Skipping model download.",
+		})
 		logging.Infof("No local models configured, skipping model download (API-only mode)")
 		return nil
 	}
@@ -512,8 +558,34 @@ func ensureModelsDownloaded(cfg *config.RouterConfig) error {
 		maskedToken = "<not set>"
 	}
 	logging.Infof("HF_ENDPOINT: %s; HF_TOKEN: %s; HF_HOME: %s", downloadConfig.HFEndpoint, maskedToken, downloadConfig.HFHome)
+
+	reporter := func(progress modeldownload.ProgressState) {
+		state := startupstatus.State{
+			Ready:            false,
+			DownloadingModel: progress.DownloadingModel,
+			PendingModels:    progress.PendingModels,
+			ReadyModels:      progress.ReadyModels,
+			TotalModels:      progress.TotalModels,
+			Message:          progress.Message,
+		}
+
+		switch progress.Phase {
+		case "downloading":
+			state.Phase = "downloading_models"
+		case "completed":
+			state.Phase = "initializing_models"
+			state.Message = "Required router models downloaded. Continuing startup..."
+		default:
+			state.Phase = "checking_models"
+		}
+
+		if err := startupWriter.Write(state); err != nil {
+			logging.Warnf("Failed to persist model download progress: %v", err)
+		}
+	}
+
 	// Ensure all models are downloaded
-	if err := modeldownload.EnsureModels(specs, downloadConfig); err != nil {
+	if err := modeldownload.EnsureModelsWithProgress(specs, downloadConfig, reporter); err != nil {
 		return fmt.Errorf("failed to download models: %w", err)
 	}
 

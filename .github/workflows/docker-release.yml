@@ -52,6 +52,48 @@ jobs:
           ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/extproc:${{ steps.extract_tag.outputs.tag }}
           ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/extproc:latest
 
+  build_and_push_vllm_sr:
+    if: github.repository == 'vllm-project/semantic-router'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Check out the repo
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Extract tag name
+      id: extract_tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Set lowercase repository owner
+      run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push vllm-sr Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./src/vllm-sr/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/vllm-sr:${{ steps.extract_tag.outputs.tag }}
+          ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/vllm-sr:latest
+
   build_and_push_extproc_rocm:
     if: github.repository == 'vllm-project/semantic-router'
     runs-on: ubuntu-latest

@@ -1,283 +1,176 @@
 .container {
-  max-width: 1200px;
+  width: min(100% - 2.5rem, var(--site-grid-max));
   margin: 0 auto;
-  padding: 2rem;
+  padding: 2rem 0 4rem;
 }
 
 .header {
-  text-align: center;
-  margin-bottom: 3rem;
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-top: 0.5rem;
 }
 
 .header h1 {
-  font-size: 3rem;
-  color: var(--tech-primary-blue, #0969da);
-  margin-bottom: 1rem;
-  background: linear-gradient(45deg, var(--tech-primary-blue, #0969da), var(--tech-accent-purple, #8250df));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  margin: 0;
+  font-size: clamp(2.8rem, 8vw, 5rem);
+  line-height: 0.92;
+  font-weight: 400;
+  letter-spacing: -0.05em;
 }
 
 .main {
-  display: flex;
-  flex-direction: column;
-  gap: 3rem;
+  display: grid;
+  gap: 2rem;
 }
 
-.intro {
-  background: var(--tech-card-bg, rgba(255, 255, 255, 0.8));
-  border: 1px solid var(--tech-border, #d0d7de);
-  border-radius: 16px;
-  padding: 2rem;
-  backdrop-filter: blur(10px);
-  box-shadow: var(--tech-shadow, 0 4px 16px rgba(9, 105, 218, 0.1));
+.intro,
+.promotion,
+.getInvolved,
+.contact {
+  display: grid;
+  gap: 1rem;
+  padding: 1.35rem;
+  border: 1px solid var(--site-border);
+  background: var(--site-surface);
 }
 
-.intro h2 {
-  color: var(--tech-primary-blue, #0969da);
-  margin-bottom: 1rem;
-}
-
-.workingGroupsSection h2 {
-  color: var(--tech-primary-blue, #0969da);
-  margin-bottom: 1rem;
-  text-align: center;
+.workingGroupsSection {
+  display: grid;
+  gap: 1rem;
 }
 
 .workGroupsGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2rem;
-  margin-top: 2rem;
-  align-items: start;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
 }
 
 .workGroupCard {
-  background: var(--tech-card-bg, rgba(255, 255, 255, 0.8));
-  border: 1px solid var(--tech-border, #d0d7de);
-  border-radius: 16px;
-  padding: 2rem;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-  box-shadow: var(--tech-shadow, 0 4px 16px rgba(9, 105, 218, 0.1));
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  gap: 1rem;
+  padding: 1.3rem;
+  border: 1px solid var(--site-border);
+  background: var(--site-surface);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
 }
 
 .workGroupCard:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 16px 48px rgba(9, 105, 218, 0.15);
-  border-color: var(--tech-border-accent, #0969da);
+  transform: translateY(-2px);
+  border-color: var(--site-border-strong);
+  background: var(--site-surface-alt);
 }
 
 .cardHeader {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
   flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
 }
 
 .icon {
-  font-size: 2rem;
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid var(--site-border);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .groupName {
-  color: var(--tech-primary-blue, #0969da);
-  font-weight: 700;
   margin: 0;
-  flex: 1;
-  min-width: 120px;
+  font-size: 1.15rem;
 }
 
 .label {
-  background: var(--tech-accent-purple, #8250df);
-  color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.9rem;
+  padding: 0.18rem 0.6rem;
+  border: 1px solid var(--site-border);
+  border-radius: 999px;
+  color: var(--site-muted-bright);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .description {
-  color: var(--tech-text-primary, #24292f);
-  line-height: 1.6;
-  margin-bottom: 1.5rem;
-  flex-grow: 1;
+  margin: 0;
+  color: var(--site-muted-bright);
+  line-height: 1.65;
 }
 
 .skillsSection,
 .needsSection {
-  margin-bottom: 1rem;
+  display: grid;
+  gap: 0.5rem;
 }
 
 .skillsSection h4,
 .needsSection h4 {
-  color: var(--tech-primary-blue, #0969da);
-  margin: 0 0 0.5rem 0;
-  font-size: 1rem;
+  margin: 0;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--site-text);
 }
 
 .skillsList,
-.needsList {
+.needsList,
+.stepsList {
   margin: 0;
-  padding-left: 1.25rem;
-  color: var(--tech-text-secondary, #656d76);
+  padding-left: 1.2rem;
+  color: var(--site-muted-bright);
 }
 
+.stepsList li,
+.contact li,
 .skillsList li,
 .needsList li {
-  margin-bottom: 0.25rem;
-  line-height: 1.4;
+  line-height: 1.65;
 }
 
-.promotion {
-  background: linear-gradient(135deg, #f6f8fa 0%, #ffffff 50%, #f0f3f6 100%);
-  border: 1px solid var(--tech-border, #d0d7de);
-  border-radius: 16px;
-  padding: 2rem;
-  text-align: center;
-}
-
-.promotion h2 {
-  color: var(--tech-primary-blue, #0969da);
-  margin-bottom: 1rem;
-}
-
-.getInvolved {
-  background: var(--tech-card-bg, rgba(255, 255, 255, 0.8));
-  border: 1px solid var(--tech-border, #d0d7de);
-  border-radius: 16px;
-  padding: 2rem;
-  backdrop-filter: blur(10px);
-  box-shadow: var(--tech-shadow, 0 4px 16px rgba(9, 105, 218, 0.1));
-}
-
-.getInvolved h2 {
-  color: var(--tech-primary-blue, #0969da);
-  margin-bottom: 1rem;
-}
-
-.stepsList {
-  padding-left: 1.5rem;
-  color: var(--tech-text-primary, #24292f);
-}
-
-.stepsList li {
-  margin-bottom: 1rem;
-  line-height: 1.6;
-}
-
-.stepsList code {
-  background: var(--tech-code-bg, #f6f8fa);
-  padding: 0.125rem 0.25rem;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  color: var(--tech-code-text, #d73a49);
-}
-
-.contact {
-  background: var(--tech-card-bg, rgba(255, 255, 255, 0.8));
-  border: 1px solid var(--tech-border, #d0d7de);
-  border-radius: 16px;
-  padding: 2rem;
-  backdrop-filter: blur(10px);
-  box-shadow: var(--tech-shadow, 0 4px 16px rgba(9, 105, 218, 0.1));
-}
-
-.contact h2 {
-  color: var(--tech-primary-blue, #0969da);
-  margin-bottom: 1rem;
-}
-
-.contact ul {
-  padding-left: 1.5rem;
-  color: var(--tech-text-primary, #24292f);
-}
-
-.contact li {
-  margin-bottom: 0.5rem;
-  line-height: 1.6;
+.getInvolved code {
+  padding: 0.12rem 0.32rem;
+  border-radius: 0.35rem;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .link {
-  color: var(--tech-primary-blue, #0969da);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.link:hover {
+  color: var(--site-text);
   text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 
-/* Responsive design */
-@media (max-width: 1024px) {
+@media (max-width: 996px) {
   .workGroupsGrid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1.5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 768px) {
   .container {
-    padding: 1rem;
-  }
-
-  .header h1 {
-    font-size: 2rem;
+    width: min(100% - 1.4rem, var(--site-grid-max));
+    padding-top: 1.5rem;
   }
 
   .workGroupsGrid {
     grid-template-columns: 1fr;
-    gap: 1.5rem;
   }
 
-  .cardHeader {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
+  .intro,
+  .promotion,
+  .getInvolved,
+  .contact,
+  .workGroupCard {
+    padding: 1.1rem;
   }
-
-  .groupName {
-    min-width: auto;
-  }
-}
-
-/* Dark mode support */
-[data-theme='dark'] .workGroupCard,
-[data-theme='dark'] .intro,
-[data-theme='dark'] .getInvolved,
-[data-theme='dark'] .contact {
-  background: rgba(22, 27, 34, 0.8);
-  border-color: #30363d;
-}
-
-[data-theme='dark'] .promotion {
-  background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #21262d 100%);
-  border-color: #30363d;
-}
-
-[data-theme='dark'] .header h1 {
-  background: linear-gradient(45deg, #58a6ff, #bc8cff);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-[data-theme='dark'] .groupName,
-[data-theme='dark'] .intro h2,
-[data-theme='dark'] .workingGroupsSection h2,
-[data-theme='dark'] .promotion h2,
-[data-theme='dark'] .getInvolved h2,
-[data-theme='dark'] .contact h2,
-[data-theme='dark'] .skillsSection h4,
-[data-theme='dark'] .needsSection h4 {
-  color: #58a6ff;
-}
-
-[data-theme='dark'] .link {
-  color: #58a6ff;
 }

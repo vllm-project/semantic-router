@@ -1,0 +1,140 @@
+version: 1
+
+defaults:
+  start_here:
+    - path: AGENTS.md
+      reason: Short harness entrypoint and canonical command index.
+    - path: docs/agent/README.md
+      reason: Canonical docs index and task-first navigation entry.
+    - path: docs/agent/context-management.md
+      reason: Progressive disclosure model and context-pack policy for this repository.
+  resume_refs:
+    - path: docs/agent/plans/README.md
+      reason: Use when the work needs a resumable execution loop across sessions or contributors.
+    - path: docs/agent/tech-debt-register.md
+      reason: Record durable code or spec gaps that remain after the change.
+
+rules:
+  repo-docs:
+    - path: docs/agent/testing-strategy.md
+      reason: Validation ladder for docs, examples, and contributor-facing text changes.
+  agent_text:
+    - path: docs/agent/governance.md
+      reason: Harness doc layering and source-of-truth policy for shared contract changes.
+  agent_exec:
+    - path: docs/agent/testing-strategy.md
+      reason: Validation ladder for executable harness changes.
+
+surfaces:
+  router_config_contract:
+    - path: docs/agent/playbooks/go-router.md
+      reason: Router playbook for config and runtime contract changes.
+    - path: docs/agent/module-boundaries.md
+      reason: Router boundary and hotspot guidance.
+  signal_runtime:
+    - path: docs/agent/playbooks/go-router.md
+      reason: Router playbook for signal-layer changes.
+  decision_logic:
+    - path: docs/agent/playbooks/go-router.md
+      reason: Router playbook for decision-layer changes.
+  algorithm_selection:
+    - path: docs/agent/playbooks/go-router.md
+      reason: Router playbook for model-selection changes.
+  plugin_runtime:
+    - path: docs/agent/playbooks/go-router.md
+      reason: Router playbook for plugin runtime changes.
+  native_binding:
+    - path: docs/agent/playbooks/rust-bindings.md
+      reason: Native binding workflow and validation expectations.
+  response_headers:
+    - path: docs/agent/playbooks/go-router.md
+      reason: Header contracts flow through router runtime behavior and testing.
+  python_cli_schema:
+    - path: docs/agent/playbooks/vllm-sr-cli-docker.md
+      reason: CLI schema, translation, and validation workflow.
+  python_cli_runtime:
+    - path: docs/agent/playbooks/vllm-sr-cli-docker.md
+      reason: CLI runtime and canonical local image workflow.
+  dashboard_config_ui:
+    - path: docs/agent/repo-map.md
+      reason: Dashboard subsystem entrypoints and hotspots.
+    - path: docs/agent/module-boundaries.md
+      reason: Dashboard page and component boundary rules.
+  dashboard_console_backend:
+    - path: docs/agent/repo-map.md
+      reason: Dashboard backend subsystem entrypoints and ownership.
+  topology_visualization:
+    - path: docs/agent/repo-map.md
+      reason: Topology feature entrypoints and related backend seam.
+  playground_reveal:
+    - path: docs/agent/repo-map.md
+      reason: Playground and reveal entrypoints for user-visible routing metadata.
+  dsl_crd:
+    - path: docs/agent/module-boundaries.md
+      reason: DSL and Kubernetes translation boundary guidance.
+  k8s_operator:
+    - path: docs/agent/module-boundaries.md
+      reason: Operator control-plane seams and affected subsystem boundaries.
+  training_post_training:
+    - path: docs/agent/repo-map.md
+      reason: Training subsystem entrypoints and ownership.
+  docs_examples:
+    - path: docs/agent/change-surfaces.md
+      reason: Surface ownership and rule mapping for docs or example changes.
+  harness_docs:
+    - path: docs/agent/skill-catalog.md
+      reason: Human-readable skill taxonomy behind task routing.
+    - path: docs/agent/local-rules.md
+      reason: Index of hotspot supplements that can narrow active context.
+  harness_exec:
+    - path: tools/agent/repo-manifest.yaml
+      reason: Canonical executable inventory and doc governance metadata.
+    - path: tools/agent/task-matrix.yaml
+      reason: Task classification and fast-test mapping.
+    - path: tools/agent/skill-registry.yaml
+      reason: Surface ownership and skill routing.
+    - path: tools/agent/e2e-profile-map.yaml
+      reason: E2E profile and CI fanout mapping for harness changes.
+    - path: tools/agent/scripts/agent_validation.py
+      reason: Validation orchestrator for the shared harness contract.
+    - path: tools/agent/scripts/agent_doc_validation.py
+      reason: Canonical doc and governance validation rules.
+  contributor_interface:
+    - path: README.md
+      reason: Top-level contributor entrypoint that should stay aligned with the harness.
+    - path: CONTRIBUTING.md
+      reason: Contributor-facing wrapper around the harness workflow.
+    - path: .github/PULL_REQUEST_TEMPLATE.md
+      reason: Canonical PR title, body, checklist, and signoff expectations for contributor-facing changes.
+  local_smoke:
+    - path: docs/agent/environments.md
+      reason: Local build, serve, and smoke behavior by environment.
+  local_e2e:
+    - path: docs/agent/playbooks/e2e-selection.md
+      reason: Affected local E2E profile selection and execution policy.
+  ci_e2e:
+    - path: docs/agent/playbooks/e2e-selection.md
+      reason: CI E2E profile fanout and targeted-versus-full selection rules.
+
+envs:
+  cpu-local:
+    - path: docs/agent/environments.md
+      reason: Canonical CPU-local workflow and local smoke path.
+  amd-local:
+    - path: docs/agent/environments.md
+      reason: Canonical local environment inventory and AMD entrypoint.
+    - path: docs/agent/amd-local.md
+      reason: AMD-specific workflow details and real-model deployment references.
+  ci-k8s:
+    - path: docs/agent/playbooks/e2e-selection.md
+      reason: Canonical Kubernetes E2E execution path.
+
+skills:
+  harness-contract-change:
+    resume_refs:
+      - path: docs/agent/plans/pl-0001-harness-roadmap.md
+        reason: Canonical execution plan for multi-loop harness refactors.
+  cross-stack-bugfix:
+    resume_refs:
+      - path: docs/agent/tech-debt-register.md
+        reason: Record remaining cross-surface architecture gaps if they stay open.

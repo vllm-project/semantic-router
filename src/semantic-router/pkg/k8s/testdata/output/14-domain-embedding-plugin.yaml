@@ -23,6 +23,9 @@ classifier:
     use_cpu: true
     use_mmbert_32k: false
     pii_mapping_path: models/mom-pii-classifier/pii_type_mapping.json
+prompt_compression:
+  enabled: false
+  max_tokens: 0
 prompt_guard:
   enabled: true
   model_id: models/mom-jailbreak-classifier

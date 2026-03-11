@@ -13,11 +13,11 @@ This lowers the barrier to experimentation with routing configurations.
 
 \noindent\textbf{Kubernetes: Standalone mode.}
 Envoy runs as a sidecar container alongside the router in the same pod.
-The ExtProc filter connects via localhost gRPC.
+The ExtProc filter connects via localhost gRPC. In this mode, the Envoy instance is private to the semantic router and separate from cluster level Envoy gateways. Routes are internally configured and injected by the semantic router into Envoy.
 Deployed via Helm charts with configurable replicas, resource limits, cache backends, and autoscaling.
 
 \noindent\textbf{Kubernetes: Gateway mode.}
-The router runs as an independent service behind an existing Istio or Envoy Gateway deployment, referenced via the gateway's ExtProc configuration.
+The router runs as an independent service behind an existing Istio or Envoy Gateway deployment, referenced via the gateway's ExtProc configuration. In this mode, there is no private Envoy within the semantic router pod. The cluster's Envoy based gateway is used, via Istio or other controller. Routes are explicitly configured at the cluster gateway level via APIs such as Kubernetes Gateway API.
 This mode shares the gateway infrastructure across multiple services.
 
 \subsection{Kubernetes Operator}

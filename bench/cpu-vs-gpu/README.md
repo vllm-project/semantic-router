@@ -1,4 +1,4 @@
-# CPU vs GPU / SDPA vs FA Benchmarks
+# CPU vs GPU / SDPA vs FA / BUFFERED vs STREAMED Benchmarks
 
 Measures signal extraction latency (jailbreak, PII, domain) for ONNX Runtime on AMD ROCm GPUs via Envoy ext_proc, using Prometheus histograms.
 
@@ -40,17 +40,55 @@ Each model dir needs `model_sdpa_fp16.onnx` (for SDPA/CPU) and `model_fa_fp16.on
 
 ## Benchmarks
 
-**CPU vs GPU** — compares ONNX CPU vs ROCm GPU across 500/2K/8K/16K token prompts:
+### CPU vs GPU
+
+Compares ONNX CPU vs ROCm GPU across 500/2K/8K/16K token prompts:
 
 ```bash
 BENCH_IMAGE=semantic-router:rocm REQUESTS_PER_SIZE=10 ./bench-long-context.sh
 ```
 
-**SDPA vs Flash Attention** — compares standard attention vs CK Flash Attention on GPU:
+### SDPA vs Flash Attention
+
+Compares standard attention vs CK Flash Attention on GPU:
 
 ```bash
 BENCH_IMAGE=semantic-router:rocm NUM_REQUESTS=20 ./bench-sdpa-vs-fa.sh
 ```
+
+### BUFFERED vs STREAMED (E2E body mode comparison)
+
+Compares the original Envoy `BUFFERED` body mode (full `json.Unmarshal`/`Marshal`) against the new `STREAMED` mode with gjson/sjson fast-path JSON processing, semi-streaming chunked body delivery, and prompt compression.
+
+The STREAMED variant builds the patched binary from source directly inside the base container (volume-mounting the repo), so no separate Docker image is needed.
+
+```bash
+# GPU + Flash Attention (recommended — makes JSON/streaming overhead visible)
+BASE_IMAGE=semantic-router:rocm-fa USE_GPU=true \
+    REQUESTS_PER_SIZE=10 WARMUP_REQUESTS=3 ./bench-buffered-vs-streamed.sh
+
+# CPU-only (signal extraction dominates, streaming gains are proportionally smaller)
+BASE_IMAGE=semantic-router:rocm USE_GPU=false \
+    REQUESTS_PER_SIZE=10 ./bench-buffered-vs-streamed.sh
+```
+
+The script:
+
+1. Runs the **BUFFERED** variant using the stock base image with `request_body_mode: BUFFERED` and `streamed_body_mode: false`
+2. Runs the **STREAMED** variant by building the patched binary inside the container, using `request_body_mode: STREAMED` and `streamed_body_mode: true`
+3. Collects E2E latency (curl timing) and signal extraction latency (Prometheus histograms) at 500/2K/8K/16K token sizes
+4. Generates a markdown comparison report in `results/`
+
+#### Sample results (rocm-fa, MI300X GPU)
+
+| Tokens | BUFFERED (ms) | STREAMED (ms) | Reduction |
+|--------|--------------|---------------|-----------|
+| ~500   | 17           | 17            | 0%        |
+| ~2000  | 25           | 21            | 16%       |
+| ~8000  | 63           | 45            | 29%       |
+| ~16000 | 143          | 103           | 28%       |
+
+Jailbreak signal extraction at 16K tokens drops from 127ms to 10ms (prompt compression: 16K → 512 tokens).
 
 Reports are written to `results/`.
 
@@ -60,5 +98,7 @@ Reports are written to `results/`.
 |------|-------------|
 | `bench-long-context.sh` | CPU vs GPU, multi token-size, Prometheus metrics |
 | `bench-sdpa-vs-fa.sh` | SDPA vs FA on GPU, Prometheus metrics |
+| `bench-buffered-vs-streamed.sh` | BUFFERED vs STREAMED body mode, builds patched binary inside container |
 | `config-bench.yaml` | Router config template (`USE_CPU_PLACEHOLDER` sed-replaced) |
-| `envoy-bench.yaml` | Envoy ext_proc proxy config |
+| `envoy-bench.yaml` | Envoy ext_proc proxy config (STREAMED mode) |
+| `envoy-bench-fa.yaml` | Envoy ext_proc proxy config for FA benchmarks |

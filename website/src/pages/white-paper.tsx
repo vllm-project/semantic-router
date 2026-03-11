@@ -3,6 +3,7 @@ import Layout from '@theme/Layout'
 import Head from '@docusaurus/Head'
 import BrowserOnly from '@docusaurus/BrowserOnly'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import { PageIntro, PillLink } from '@site/src/components/site/Chrome'
 import styles from './white-paper.module.css'
 
 const PDF_URL = '/white-paper.pdf'
@@ -38,18 +39,6 @@ function WhitePaperContent(): JSX.Element {
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<boolean>(false)
 
-  // Hide the built-in Docusaurus navbar and footer for a full-screen viewer
-  useEffect(() => {
-    const navbar = document.querySelector('.navbar') as HTMLElement | null
-    const footer = document.querySelector('footer') as HTMLElement | null
-    if (navbar) navbar.style.display = 'none'
-    if (footer) footer.style.display = 'none'
-    return () => {
-      if (navbar) navbar.style.display = ''
-      if (footer) footer.style.display = ''
-    }
-  }, [])
-
   // Dynamically calculate page dimensions based on viewport
   useEffect(() => {
     const updateSize = () => {
@@ -62,7 +51,7 @@ function WhitePaperContent(): JSX.Element {
         // Mobile: width-driven rendering — full screen width, page-internal scroll.
         // Text stays readable; no height squishing.
         setIsSpread(false)
-        setPageWidth(vw)
+        setPageWidth(Math.max(320, vw - 2))
         return
       }
 
@@ -131,7 +120,7 @@ function WhitePaperContent(): JSX.Element {
     : styles.document
 
   return (
-    <div className={styles.page}>
+    <div className={styles.viewerShell}>
       {/* PDF viewer area */}
       <div className={styles.viewerArea}>
         {error
@@ -263,10 +252,34 @@ export default function WhitePaper(): JSX.Element {
         <meta name="twitter:description" content="Signal Driven Decision Routing for Mixture-of-Modality Models" />
         <meta name="twitter:image" content={ogImage} />
       </Head>
-      {/* BrowserOnly prevents SSG from executing browser-only APIs (e.g. DOMMatrix) */}
-      <BrowserOnly fallback={<div className={styles.loadingText}>Loading PDF…</div>}>
-        {() => <WhitePaperContent />}
-      </BrowserOnly>
+      <main className={styles.page}>
+        <div className="site-shell-container">
+          <div className={styles.hero}>
+            <PageIntro
+              label="Research document"
+              title="White Paper"
+              description="Signal-driven decision routing for mixture-of-modality models, presented as a full PDF reader inside the same website shell."
+              actions={(
+                <>
+                  <PillLink href={PDF_URL} target="_blank" rel="noreferrer">
+                    Download PDF
+                  </PillLink>
+                  <PillLink to="/publications" muted>
+                    Research routes
+                  </PillLink>
+                </>
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="site-shell-container">
+          {/* BrowserOnly prevents SSG from executing browser-only APIs (e.g. DOMMatrix) */}
+          <BrowserOnly fallback={<div className={styles.loadingText}>Loading PDF...</div>}>
+            {() => <WhitePaperContent />}
+          </BrowserOnly>
+        </div>
+      </main>
     </Layout>
   )
 }

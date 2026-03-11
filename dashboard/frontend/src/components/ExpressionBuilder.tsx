@@ -10,7 +10,7 @@
  *   - Full backward compatibility with v3 props interface
  */
 
-import React, { useState, useCallback, useMemo, useRef, useEffect, memo } from 'react'
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import ReactFlow, {
   ReactFlowProvider,
@@ -21,749 +21,37 @@ import ReactFlow, {
   BackgroundVariant,
   Controls,
   MiniMap,
-  Handle,
-  Position,
   ConnectionLineType,
-  MarkerType,
   type Node,
-  type Edge,
-  type NodeProps,
-  type NodeTypes,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import Dagre from '@dagrejs/dagre'
 import styles from './ExpressionBuilder.module.css'
-
-// ─── Data Model ──────────────────────────────────────────────
-
-export type RuleNode =
-  | { operator: 'AND' | 'OR'; conditions: RuleNode[] }
-  | { operator: 'NOT'; conditions: [RuleNode] }
-  | { signalType: string; signalName: string }
-
-function isLeaf(n: RuleNode): n is { signalType: string; signalName: string } {
-  return 'signalType' in n
-}
-
-function isOperator(n: RuleNode): n is Exclude<RuleNode, { signalType: string }> {
-  return 'operator' in n
-}
-
-// ─── Serialization: RuleNode → DSL text ──────────────────────
-
-function serializeNode(n: RuleNode): string {
-  if (isLeaf(n)) return `${n.signalType}("${n.signalName}")`
-  if (n.operator === 'NOT') {
-    const child = n.conditions[0]
-    if (!child) return 'NOT (?)'
-    const s = serializeNode(child)
-    return isOperator(child) && child.operator !== 'NOT' ? `NOT (${s})` : `NOT ${s}`
-  }
-  if (n.conditions.length === 0) return `(? ${n.operator} ?)`
-  if (n.conditions.length === 1) return serializeNode(n.conditions[0])
-  const parts = n.conditions.map((c) => {
-    const s = serializeNode(c)
-    if (isOperator(c) && (c.operator === 'AND' || c.operator === 'OR') && c.operator !== n.operator) {
-      return `(${s})`
-    }
-    return s
-  })
-  return parts.join(` ${n.operator} `)
-}
-
-// ─── Parsing: DSL text → RuleNode (best-effort) ─────────────
-
-function parseExprText(text: string): RuleNode | null {
-  const trimmed = text.trim()
-  if (!trimmed) return null
-  try {
-    return parseOr(trimmed, { pos: 0 })
-  } catch {
-    return null
-  }
-}
-
-interface ParseCtx { pos: number }
-
-function skipWs(src: string, ctx: ParseCtx) {
-  while (ctx.pos < src.length && src[ctx.pos] === ' ') ctx.pos++
-}
-
-function parseOr(src: string, ctx: ParseCtx): RuleNode {
-  let left = parseAnd(src, ctx)
-  while (true) {
-    skipWs(src, ctx)
-    if (src.slice(ctx.pos, ctx.pos + 2).toUpperCase() === 'OR' && /\s/.test(src[ctx.pos + 2] ?? '')) {
-      ctx.pos += 2; skipWs(src, ctx)
-      const right = parseAnd(src, ctx)
-      if (isOperator(left) && left.operator === 'OR') {
-        left = { operator: 'OR', conditions: [...left.conditions, right] }
-      } else {
-        left = { operator: 'OR', conditions: [left, right] }
-      }
-    } else break
-  }
-  return left
-}
-
-function parseAnd(src: string, ctx: ParseCtx): RuleNode {
-  let left = parseNot(src, ctx)
-  while (true) {
-    skipWs(src, ctx)
-    if (src.slice(ctx.pos, ctx.pos + 3).toUpperCase() === 'AND' && /[\s(]/.test(src[ctx.pos + 3] ?? '')) {
-      ctx.pos += 3; skipWs(src, ctx)
-      const right = parseNot(src, ctx)
-      if (isOperator(left) && left.operator === 'AND') {
-        left = { operator: 'AND', conditions: [...left.conditions, right] }
-      } else {
-        left = { operator: 'AND', conditions: [left, right] }
-      }
-    } else break
-  }
-  return left
-}
-
-function parseNot(src: string, ctx: ParseCtx): RuleNode {
-  skipWs(src, ctx)
-  if (src.slice(ctx.pos, ctx.pos + 3).toUpperCase() === 'NOT' && /[\s(]/.test(src[ctx.pos + 3] ?? '')) {
-    ctx.pos += 3; skipWs(src, ctx)
-    const child = parseNot(src, ctx)
-    return { operator: 'NOT', conditions: [child] }
-  }
-  return parseAtom(src, ctx)
-}
-
-function parseAtom(src: string, ctx: ParseCtx): RuleNode {
-  skipWs(src, ctx)
-  if (src[ctx.pos] === '(') {
-    ctx.pos++; skipWs(src, ctx)
-    const inner = parseOr(src, ctx)
-    skipWs(src, ctx)
-    if (src[ctx.pos] === ')') ctx.pos++
-    return inner
-  }
-  const m = src.slice(ctx.pos).match(/^(\w+)\("([^"]*)"\)/)
-  if (m) { ctx.pos += m[0].length; return { signalType: m[1], signalName: m[2] } }
-  const w = src.slice(ctx.pos).match(/^\w+/)
-  if (w) { ctx.pos += w[0].length; return { signalType: w[0], signalName: '' } }
-  throw new Error('Unexpected token')
-}
-
-// ─── BoolExprNode (AST) → RuleNode conversion ───────────────
-
-export function boolExprToRuleNode(expr: Record<string, unknown> | null): RuleNode | null {
-  if (!expr) return null
-  const type = expr.type as string
-  switch (type) {
-    case 'signal_ref':
-      return { signalType: expr.signalType as string, signalName: expr.signalName as string }
-    case 'and': {
-      const left = boolExprToRuleNode(expr.left as Record<string, unknown>)
-      const right = boolExprToRuleNode(expr.right as Record<string, unknown>)
-      if (!left || !right) return left || right
-      return { operator: 'AND', conditions: [left, right] }
-    }
-    case 'or': {
-      const left = boolExprToRuleNode(expr.left as Record<string, unknown>)
-      const right = boolExprToRuleNode(expr.right as Record<string, unknown>)
-      if (!left || !right) return left || right
-      return { operator: 'OR', conditions: [left, right] }
-    }
-    case 'not': {
-      const child = boolExprToRuleNode(expr.expr as Record<string, unknown>)
-      if (!child) return null
-      return { operator: 'NOT', conditions: [child] }
-    }
-    default: return null
-  }
-}
-
-// ─── Immutable tree helpers ──────────────────────────────────
-
-type NodePath = number[]
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function pathEq(a: NodePath, b: NodePath): boolean {
-  return a.length === b.length && a.every((v, i) => v === b[i])
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function pathStartsWith(path: NodePath, prefix: NodePath): boolean {
-  if (prefix.length > path.length) return false
-  return prefix.every((v, i) => v === path[i])
-}
-
-function getNodeAtPath(root: RuleNode, path: NodePath): RuleNode | null {
-  if (path.length === 0) return root
-  if (!isOperator(root)) return null
-  const [head, ...tail] = path
-  if (head < 0 || head >= root.conditions.length) return null
-  return getNodeAtPath(root.conditions[head], tail)
-}
-
-function replaceAtPath(root: RuleNode, path: NodePath, replacement: RuleNode): RuleNode {
-  if (path.length === 0) return replacement
-  if (!isOperator(root)) return root
-  const [head, ...tail] = path
-  const newChild = replaceAtPath(root.conditions[head], tail, replacement)
-  const newConditions = root.conditions.map((c, i) => (i === head ? newChild : c))
-  return { ...root, conditions: newConditions } as RuleNode
-}
-
-function removeAtPath(root: RuleNode, path: NodePath): RuleNode | null {
-  if (path.length === 0) return null
-  if (!isOperator(root)) return root
-  const [head, ...tail] = path
-  if (tail.length === 0) {
-    const newConditions = root.conditions.filter((_, i) => i !== head)
-    if (newConditions.length === 0) return null
-    if (root.operator !== 'NOT' && newConditions.length === 1) return newConditions[0]
-    return { ...root, conditions: newConditions } as RuleNode
-  }
-  const newChild = removeAtPath(root.conditions[head], tail)
-  if (!newChild) {
-    const newConditions = root.conditions.filter((_, i) => i !== head)
-    if (newConditions.length === 0) return null
-    if (root.operator !== 'NOT' && newConditions.length === 1) return newConditions[0]
-    return { ...root, conditions: newConditions } as RuleNode
-  }
-  const newConditions = root.conditions.map((c, i) => (i === head ? newChild : c))
-  return { ...root, conditions: newConditions } as RuleNode
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function insertAtPath(root: RuleNode, path: NodePath, insertIdx: number, node: RuleNode): RuleNode {
-  if (path.length === 0) {
-    if (isOperator(root)) {
-      const conds = [...root.conditions]
-      conds.splice(insertIdx, 0, node)
-      return { ...root, conditions: conds } as RuleNode
-    }
-    return { operator: 'AND', conditions: [root, node] }
-  }
-  if (!isOperator(root)) return root
-  const [head, ...tail] = path
-  const newChild = insertAtPath(root.conditions[head], tail, insertIdx, node)
-  const newConditions = root.conditions.map((c, i) => (i === head ? newChild : c))
-  return { ...root, conditions: newConditions } as RuleNode
-}
-
-function addChildAtPath(root: RuleNode, path: NodePath, child: RuleNode): RuleNode {
-  const target = getNodeAtPath(root, path)
-  if (!target) return root
-  if (isOperator(target)) {
-    const newTarget = { ...target, conditions: [...target.conditions, child] } as RuleNode
-    return replaceAtPath(root, path, newTarget)
-  }
-  const wrapped: RuleNode = { operator: 'AND', conditions: [target, child] }
-  return replaceAtPath(root, path, wrapped)
-}
-
-// ─── Drag data ──────────────────────────────────────────────
-
-interface DragDataSignal { kind: 'signal'; signalType: string; signalName: string }
-interface DragDataOperator { kind: 'operator'; operator: 'AND' | 'OR' | 'NOT' }
-interface DragDataTreeNode { kind: 'tree-node'; path: NodePath }
-type DragData = DragDataSignal | DragDataOperator | DragDataTreeNode
-
-const DRAG_MIME = 'application/x-expr-builder'
-function encodeDrag(data: DragData): string { return JSON.stringify(data) }
-function decodeDrag(raw: string): DragData | null {
-  try { return JSON.parse(raw) as DragData } catch { return null }
-}
-
-function makeDragNode(data: DragData): RuleNode | null {
-  if (data.kind === 'signal') return { signalType: data.signalType, signalName: data.signalName }
-  if (data.kind === 'operator') {
-    return data.operator === 'NOT'
-      ? { operator: 'NOT', conditions: [] as unknown as [RuleNode] }
-      : { operator: data.operator, conditions: [] }
-  }
-  return null
-}
-
-// ─── Validation ─────────────────────────────────────────────
-
-function validateTree(node: RuleNode | null, signals: { signalType: string; name: string }[]): string[] {
-  const w: string[] = []
-  if (!node) return w
-  if (isLeaf(node)) {
-    if (!signals.some(s => s.signalType === node.signalType && s.name === node.signalName))
-      w.push(`Signal ${node.signalType}("${node.signalName}") is not defined`)
-  } else {
-    if (node.operator === 'NOT' && node.conditions.length !== 1)
-      w.push('NOT must have exactly one child')
-    if ((node.operator === 'AND' || node.operator === 'OR') && node.conditions.length < 2)
-      w.push(`${node.operator} needs at least 2 children`)
-    for (const c of node.conditions) w.push(...validateTree(c, signals))
-  }
-  return w
-}
-
-// ═══════════════════════════════════════════════════════════════
-// ReactFlow: RuleNode ↔ Nodes/Edges conversion + Dagre layout
-// ═══════════════════════════════════════════════════════════════
-
-const OPERATOR_W = 88
-const OPERATOR_H = 78
-const SIGNAL_W = 200
-const SIGNAL_H = 40
-
-interface FlowNodeData {
-  ruleNode: RuleNode
-  path: NodePath
-  label: string
-  isOperator: boolean
-  depth?: number
-  onDoubleClick?: (path: NodePath) => void
-  onDropOnNode?: (targetPath: NodePath, data: DragData) => void
-  onAddChild?: (targetPath: NodePath) => void
-}
-
-let _idCounter = 0
-function nextId(): string { return `n${++_idCounter}` }
-
-function treeToFlowElements(
-  root: RuleNode,
-  onDoubleClick?: (path: NodePath) => void,
-  onDropOnNode?: (targetPath: NodePath, data: DragData) => void,
-  onAddChild?: (targetPath: NodePath) => void,
-): { nodes: Node<FlowNodeData>[]; edges: Edge[] } {
-  _idCounter = 0
-  const nodes: Node<FlowNodeData>[] = []
-  const edges: Edge[] = []
-
-  function walk(node: RuleNode, path: NodePath, parentId?: string, depth = 0) {
-    const id = nextId()
-    const isOp = isOperator(node)
-    const label = isOp ? node.operator : `${node.signalType}("${node.signalName}")`
-
-    nodes.push({
-      id,
-      type: isOp ? 'operatorNode' : 'signalNode',
-      position: { x: 0, y: 0 },
-      data: { ruleNode: node, path, label, isOperator: isOp, onDoubleClick, onDropOnNode, onAddChild, depth },
-    })
-
-    if (parentId) {
-      edges.push({
-        id: `e-${parentId}-${id}`,
-        source: parentId,
-        target: id,
-        type: 'default',
-        style: { stroke: 'rgba(118, 185, 0, 0.5)', strokeWidth: 2 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: 'rgba(118, 185, 0, 0.55)', width: 12, height: 12 },
-      })
-    }
-
-    if (isOp) {
-      const opNode = node as Exclude<RuleNode, { signalType: string }>
-      opNode.conditions.forEach((child, idx) => {
-        walk(child, [...path, idx], id, depth + 1)
-      })
-    }
-  }
-
-  walk(root, [])
-  return { nodes, edges }
-}
-
-// Estimate signal node width based on text content
-function estimateSignalWidth(node: RuleNode): number {
-  if (!isLeaf(node)) return OPERATOR_W
-  const text = `${node.signalType}  ${node.signalName}`
-  // ~7px per character for 12px monospace font + 24px padding
-  const estimated = Math.max(SIGNAL_W, text.length * 7 + 32)
-  return Math.min(estimated, 320) // cap max width
-}
-
-function applyDagreLayout(nodes: Node<FlowNodeData>[], edges: Edge[]): Node<FlowNodeData>[] {
-  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
-  g.setGraph({
-    rankdir: 'TB',
-    nodesep: 52,
-    ranksep: 68,
-    marginx: 24,
-    marginy: 24,
-  })
-
-  for (const node of nodes) {
-    const w = node.data.isOperator ? OPERATOR_W : estimateSignalWidth(node.data.ruleNode)
-    const h = node.data.isOperator ? OPERATOR_H : SIGNAL_H
-    g.setNode(node.id, { width: w, height: h })
-  }
-  for (const edge of edges) {
-    g.setEdge(edge.source, edge.target)
-  }
-
-  Dagre.layout(g)
-
-  return nodes.map(node => {
-    const { x, y } = g.node(node.id)
-    const w = node.data.isOperator ? OPERATOR_W : estimateSignalWidth(node.data.ruleNode)
-    const h = node.data.isOperator ? OPERATOR_H : SIGNAL_H
-    return {
-      ...node,
-      position: { x: x - w / 2, y: y - h / 2 },
-    }
-  })
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Logic Gate SVG shapes — AND, OR, NOT (IEEE/ANSI style)
-// ═══════════════════════════════════════════════════════════════
-
-// Gate dimensions: 72w x 52h viewBox, drawn top-down (input top, output bottom)
-// Rotated 90° from traditional left-to-right gates so they flow top→bottom
-
-const GateAND: React.FC<{ color: string; opacity?: number }> = ({ color, opacity = 1 }) => (
-  <svg viewBox="0 0 84 64" width="84" height="64" className={styles.gateSvg} style={{ opacity }}>
-    {/* Body: flat top + rounded bottom (D-shape rotated) */}
-    <path
-      d="M 6 4 L 78 4 L 78 30 Q 78 60 42 60 Q 6 60 6 30 Z"
-      fill={color.replace(/[\d.]+\)$/, '0.08)')}
-      stroke={color}
-      strokeWidth="2.5"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
-
-const GateOR: React.FC<{ color: string; opacity?: number }> = ({ color, opacity = 1 }) => (
-  <svg viewBox="0 0 84 64" width="84" height="64" className={styles.gateSvg} style={{ opacity }}>
-    {/* Body: curved top + pointed bottom */}
-    <path
-      d="M 6 4 Q 42 18 78 4 Q 74 44 42 62 Q 10 44 6 4 Z"
-      fill={color.replace(/[\d.]+\)$/, '0.08)')}
-      stroke={color}
-      strokeWidth="2.5"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
-
-const GateNOT: React.FC<{ color: string; opacity?: number }> = ({ color, opacity = 1 }) => (
-  <svg viewBox="0 0 84 70" width="84" height="70" className={styles.gateSvg} style={{ opacity }}>
-    {/* Triangle body */}
-    <path
-      d="M 10 4 L 74 4 L 42 52 Z"
-      fill={color.replace(/[\d.]+\)$/, '0.08)')}
-      stroke={color}
-      strokeWidth="2.5"
-      strokeLinejoin="round"
-    />
-    {/* Inversion bubble */}
-    <circle
-      cx="42" cy="60" r="6"
-      fill={color.replace(/[\d.]+\)$/, '0.08)')}
-      stroke={color}
-      strokeWidth="2.5"
-    />
-  </svg>
-)
-
-// ═══════════════════════════════════════════════════════════════
-// Custom ReactFlow Nodes
-// ═══════════════════════════════════════════════════════════════
-
-const OperatorNodeComponent = memo<NodeProps<FlowNodeData>>(({ data, selected }) => {
-  const [dragOver, setDragOver] = useState(false)
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    e.dataTransfer.dropEffect = 'copy'
-    setDragOver(true)
-  }, [])
-  const handleDragLeave = useCallback(() => setDragOver(false), [])
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragOver(false)
-    const raw = e.dataTransfer.getData(DRAG_MIME)
-    if (!raw) return
-    const dragData = decodeDrag(raw)
-    if (dragData && data.onDropOnNode) data.onDropOnNode(data.path, dragData)
-  }, [data])
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (data.onDoubleClick) data.onDoubleClick(data.path)
-  }, [data])
-  const handleAddClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (data.onAddChild) data.onAddChild(data.path)
-  }, [data])
-  const opNode = data.ruleNode as Exclude<RuleNode, { signalType: string }>
-  const childCount = (opNode.conditions as RuleNode[]).length
-  const showAddBtn = opNode.operator !== 'NOT' || childCount === 0
-
-  // Operator-based colors matching Toolbox buttons
-  const gateColorMap: Record<string, string> = {
-    AND: 'rgba(129, 140, 248, 0.85)',   // indigo
-    OR:  'rgba(52, 211, 153, 0.85)',    // emerald
-    NOT: 'rgba(248, 113, 113, 0.85)',   // rose
-  }
-  const gateColor = gateColorMap[opNode.operator] ?? 'rgba(129, 140, 248, 0.85)'
-
-  const GateShape = opNode.operator === 'AND' ? GateAND
-    : opNode.operator === 'OR' ? GateOR
-    : GateNOT
-
-  return (
-    <div className={styles.rfOperatorWrapper}>
-      <div
-        className={`${styles.rfGateNode} ${selected ? styles.rfGateSelected : ''} ${dragOver ? styles.rfGateDragOver : ''}`}
-        onDoubleClick={handleDoubleClick}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        title={`${data.label} (${childCount} children)\nRight-click for options`}
-      >
-        <Handle type="target" position={Position.Top} className={styles.rfHandle} />
-        <GateShape color={gateColor} />
-        <span className={`${styles.rfGateLabel} ${opNode.operator === 'NOT' ? styles.rfGateLabelNot : ''}`} style={{ color: gateColor }}>
-          {data.label}
-          {childCount > 0 && <span className={styles.rfGateBadge}>{childCount}</span>}
-        </span>
-        <Handle type="source" position={Position.Bottom} className={styles.rfHandle} />
-      </div>
-      {showAddBtn && (
-        <div
-          className={`${styles.rfAddBtn} ${dragOver ? styles.rfAddBtnActive : ''}`}
-          onClick={handleAddClick}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          title="Click to add child, or drag items here"
-        >
-          +
-        </div>
-      )}
-    </div>
-  )
-})
-OperatorNodeComponent.displayName = 'OperatorNode'
-
-const SignalNodeComponent = memo<NodeProps<FlowNodeData>>(({ data, selected }) => {
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (data.onDoubleClick) data.onDoubleClick(data.path)
-  }, [data])
-  const node = data.ruleNode as { signalType: string; signalName: string }
-  return (
-    <div
-      className={`${styles.rfSignalNode} ${selected ? styles.rfNodeSelected : ''}`}
-      onDoubleClick={handleDoubleClick}
-      title={`${node.signalType}("${node.signalName}")\nDouble-click to edit`}
-    >
-      <Handle type="target" position={Position.Top} className={styles.rfHandle} />
-      <span className={styles.rfSignalType}>{node.signalType}</span>
-      <span className={styles.rfSignalName}>{node.signalName}</span>
-    </div>
-  )
-})
-SignalNodeComponent.displayName = 'SignalNode'
-
-const nodeTypes: NodeTypes = {
-  operatorNode: OperatorNodeComponent,
-  signalNode: SignalNodeComponent,
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Edit Signal Dialog
-// ═══════════════════════════════════════════════════════════════
-
-interface EditSignalDialogProps {
-  signalType: string
-  signalName: string
-  availableSignals: { signalType: string; name: string }[]
-  onSave: (signalType: string, signalName: string) => void
-  onCancel: () => void
-}
-
-const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(({
-  signalType: initType, signalName: initName, availableSignals, onSave, onCancel,
-}) => {
-  const [signalType, setSignalType] = useState(initType)
-  const [signalName, setSignalName] = useState(initName)
-  const [search, setSearch] = useState('')
-
-  const types = useMemo(() => Array.from(new Set(availableSignals.map(s => s.signalType))).sort(), [availableSignals])
-  const filteredSignals = useMemo(() => {
-    let list = availableSignals.filter(s => s.signalType === signalType)
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(s => s.name.toLowerCase().includes(q))
-    }
-    return list
-  }, [availableSignals, signalType, search])
-
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault()
-    if (signalType.trim() && signalName.trim()) onSave(signalType, signalName)
-  }, [signalType, signalName, onSave])
-
-  // ESC to cancel
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [onCancel])
-
-  return (
-    <div className={styles.editOverlay} onClick={onCancel}>
-      <div className={styles.editDialog} onClick={e => e.stopPropagation()}>
-        <div className={styles.editDialogHeader}>
-          <span>Edit Signal</span>
-          <button className={styles.editDialogClose} onClick={onCancel}>×</button>
-        </div>
-        <form onSubmit={handleSubmit} className={styles.editDialogBody}>
-          <label className={styles.editLabel}>
-            Signal Type
-            <select
-              className={styles.editSelect}
-              value={signalType}
-              onChange={e => { setSignalType(e.target.value); setSignalName('') }}
-            >
-              {types.map(t => <option key={t} value={t}>{t}</option>)}
-              {!types.includes(signalType) && <option value={signalType}>{signalType}</option>}
-            </select>
-          </label>
-          <label className={styles.editLabel}>
-            Signal Name
-            <input
-              className={styles.editInput}
-              value={signalName}
-              onChange={e => setSignalName(e.target.value)}
-              placeholder="Enter signal name"
-              autoFocus
-            />
-          </label>
-          {filteredSignals.length > 0 && (
-            <div className={styles.editSignalList}>
-              <input
-                className={styles.editSearchInput}
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Filter signals..."
-              />
-              <div className={styles.editSignalOptions}>
-                {filteredSignals.map(s => (
-                  <div
-                    key={s.name}
-                    className={`${styles.editSignalOption} ${s.name === signalName ? styles.editSignalOptionActive : ''}`}
-                    onClick={() => setSignalName(s.name)}
-                  >
-                    {s.name}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className={styles.editDialogActions}>
-            <button type="button" className={styles.editBtnCancel} onClick={onCancel}>Cancel</button>
-            <button type="submit" className={styles.editBtnSave} disabled={!signalType.trim() || !signalName.trim()}>Save</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-})
-EditSignalDialog.displayName = 'EditSignalDialog'
-
-// ═══════════════════════════════════════════════════════════════
-// Add Child Picker — quick inline picker to add a child node
-// ═══════════════════════════════════════════════════════════════
-
-interface AddChildPickerProps {
-  availableSignals: { signalType: string; name: string }[]
-  onPick: (node: RuleNode) => void
-  onCancel: () => void
-}
-
-const AddChildPicker: React.FC<AddChildPickerProps> = memo(({ availableSignals, onPick, onCancel }) => {
-  const [search, setSearch] = useState('')
-
-  const groups = useMemo(() => {
-    const g: Record<string, { signalType: string; name: string }[]> = {}
-    for (const s of availableSignals) {
-      const key = s.signalType.toUpperCase()
-      if (!g[key]) g[key] = []
-      g[key].push(s)
-    }
-    return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [availableSignals])
-
-  const filteredGroups = useMemo(() => {
-    if (!search.trim()) return groups
-    const q = search.toLowerCase()
-    return groups
-      .map(([type, signals]) => [type, signals.filter(s => s.name.toLowerCase().includes(q) || s.signalType.toLowerCase().includes(q))] as [string, typeof signals])
-      .filter(([, signals]) => signals.length > 0)
-  }, [groups, search])
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [onCancel])
-
-  return (
-    <div className={styles.editOverlay} onClick={onCancel}>
-      <div className={styles.addPickerDialog} onClick={e => e.stopPropagation()}>
-        <div className={styles.editDialogHeader}>
-          <span>Add Child Node</span>
-          <button className={styles.editDialogClose} onClick={onCancel}>×</button>
-        </div>
-        <div className={styles.addPickerBody}>
-          {/* Operator buttons */}
-          <div className={styles.addPickerSection}>
-            <div className={styles.addPickerSectionTitle}>Operators</div>
-            <div className={styles.addPickerOps}>
-              {(['AND', 'OR', 'NOT'] as const).map(op => (
-                <button key={op} className={styles.addPickerOpBtn} onClick={() => {
-                  onPick(op === 'NOT'
-                    ? { operator: 'NOT', conditions: [] as unknown as [RuleNode] }
-                    : { operator: op, conditions: [] })
-                }}>{op}</button>
-              ))}
-            </div>
-          </div>
-          {/* Signal search + list */}
-          <div className={styles.addPickerSection}>
-            <div className={styles.addPickerSectionTitle}>Signals</div>
-            <input
-              className={styles.editInput}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search signals..."
-              autoFocus
-            />
-            <div className={styles.addPickerSignalList}>
-              {filteredGroups.map(([type, signals]) => (
-                <div key={type}>
-                  <div className={styles.addPickerGroupTitle}>{type}</div>
-                  <div className={styles.addPickerGroupItems}>
-                    {signals.map(s => (
-                      <div
-                        key={s.name}
-                        className={styles.addPickerSignalItem}
-                        onClick={() => onPick({ signalType: s.signalType, signalName: s.name })}
-                      >
-                        {s.name}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {filteredGroups.length === 0 && <div className={styles.addPickerEmpty}>No matching signals</div>}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-})
-AddChildPicker.displayName = 'AddChildPicker'
+import {
+  DRAG_MIME,
+  addChildAtPath,
+  boolExprToRuleNode,
+  decodeDrag,
+  getNodeAtPath,
+  insertAtPath,
+  isLeaf,
+  isOperator,
+  makeDragNode,
+  parseExprText,
+  removeAtPath,
+  replaceAtPath,
+  serializeNode,
+  validateTree,
+  type DragData,
+  type NodePath,
+  type RuleNode,
+  type SignalDescriptor,
+} from './ExpressionBuilderSupport'
+import { applyDagreLayout, treeToFlowElements, type FlowNodeData } from './ExpressionBuilderFlow'
+import ExpressionBuilderCanvasEmptyState from './ExpressionBuilderCanvasEmptyState'
+import ExpressionBuilderContextMenu from './ExpressionBuilderContextMenu'
+import { AddChildPicker, EditSignalDialog } from './ExpressionBuilderDialogs'
+import { type BuilderTemplate, nodeTypes } from './ExpressionBuilderNodes'
+import ExpressionBuilderToolbox from './ExpressionBuilderToolbox'
 
 // ═══════════════════════════════════════════════════════════════
 // Inner component (needs ReactFlowProvider context)
@@ -778,7 +66,7 @@ interface InnerProps {
   setIsRawMode: React.Dispatch<React.SetStateAction<boolean>>
   maximized: boolean
   setMaximized: React.Dispatch<React.SetStateAction<boolean>>
-  availableSignals: { signalType: string; name: string }[]
+  availableSignals: SignalDescriptor[]
   onChange: (expr: string) => void
   pushHistory: (prev: RuleNode | null) => void
   canUndo: boolean
@@ -865,7 +153,7 @@ const ExpressionBuilderInner: React.FC<InnerProps> = ({
 
   // Signal grouping
   const signalGroups = useMemo(() => {
-    const groups: Record<string, { signalType: string; name: string }[]> = {}
+    const groups: Record<string, SignalDescriptor[]> = {}
     for (const s of availableSignals) {
       const key = s.signalType.toUpperCase()
       if (!groups[key]) groups[key] = []
@@ -878,7 +166,7 @@ const ExpressionBuilderInner: React.FC<InnerProps> = ({
     if (!signalSearch.trim()) return signalGroups
     const q = signalSearch.toLowerCase()
     return signalGroups
-      .map(([type, signals]) => [type, signals.filter(s => s.name.toLowerCase().includes(q) || s.signalType.toLowerCase().includes(q))] as [string, typeof signals])
+      .map(([type, signals]) => [type, signals.filter(s => s.name.toLowerCase().includes(q) || s.signalType.toLowerCase().includes(q))] as [string, SignalDescriptor[]])
       .filter(([, signals]) => signals.length > 0)
   }, [signalGroups, signalSearch])
 
@@ -1092,17 +380,10 @@ const ExpressionBuilderInner: React.FC<InnerProps> = ({
 
   const validationIssues = useMemo(() => validateTree(tree, availableSignals), [tree, availableSignals])
 
-  // Templates
-  const TEMPLATES = useMemo(() => [
-    { name: 'AND Gate', op: 'AND' as const, desc: 'A AND B', build: () => ({ operator: 'AND' as const, conditions: [] }) },
-    { name: 'OR Gate', op: 'OR' as const, desc: 'A OR B', build: () => ({ operator: 'OR' as const, conditions: [] }) },
-    { name: 'NOT Gate', op: 'NOT' as const, desc: 'NOT A', build: () => ({ operator: 'NOT' as const, conditions: [] as unknown as [RuleNode] }) },
-  ], [])
-
-  const applyTemplate = useCallback((tpl: typeof TEMPLATES[0]) => {
+  const applyTemplate = useCallback((tpl: BuilderTemplate) => {
     pushHistory(tree)
     setTree(tpl.build())
-  }, [tree, pushHistory, setTree, TEMPLATES])
+  }, [tree, pushHistory, setTree])
 
   // ── Render ──
   return (
@@ -1181,111 +462,22 @@ const ExpressionBuilderInner: React.FC<InnerProps> = ({
                 />
               </ReactFlow>
             ) : (
-              <div className={styles.canvasEmpty}>
-                <div className={styles.canvasEmptyIcon}>⊕</div>
-                <div>Drag signals or operators here</div>
-                <div className={styles.canvasEmptyHint}>or start with a template</div>
-                <div className={styles.canvasTemplates}>
-                  {TEMPLATES.map(tpl => {
-                    const TplGate = tpl.op === 'AND' ? GateAND : tpl.op === 'OR' ? GateOR : GateNOT
-                    return (
-                      <div key={tpl.name} className={styles.canvasTemplateCard}
-                        onClick={(e) => { e.stopPropagation(); applyTemplate(tpl) }}>
-                        <span className={styles.canvasTemplateGate}><TplGate color="rgba(99, 102, 241, 0.6)" /></span>
-                        <span className={styles.canvasTemplateName}>{tpl.name}</span>
-                        <span className={styles.canvasTemplateDesc}>{tpl.desc}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+              <ExpressionBuilderCanvasEmptyState onApplyTemplate={applyTemplate} />
             )}
           </div>
         </div>
 
-        {/* Toolbox */}
-        <div className={`${styles.toolbox} ${toolboxCollapsed ? styles.toolboxCollapsed : ''}`}>
-          <div className={styles.toolboxHeader} onClick={() => setToolboxCollapsed(!toolboxCollapsed)}>
-            <span className={styles.toolboxHeaderTitle}>{toolboxCollapsed ? '▶' : '▼'} Toolbox</span>
-            <span className={styles.toolboxHeaderCount}>{availableSignals.length} signals</span>
-          </div>
-
-          {!toolboxCollapsed && (
-            <div className={styles.toolboxContent}>
-              <div className={styles.toolboxOperators}>
-                {(['AND', 'OR', 'NOT'] as const).map(op => {
-                  const opColor = op === 'AND' ? '#818cf8' : op === 'OR' ? '#34d399' : '#f87171'
-                  const opIcon = op === 'AND' ? '∧' : op === 'OR' ? '∨' : '¬'
-                  return (
-                    <div
-                      key={op}
-                      className={`${styles.toolboxOp} ${styles[`toolboxOp${op}`]}`}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData(DRAG_MIME, encodeDrag({ kind: 'operator', operator: op }))
-                        e.dataTransfer.effectAllowed = 'copyMove'
-                      }}
-                      onClick={(e) => { e.stopPropagation() }}
-                      title={`Drag ${op} gate to canvas`}
-                    >
-                      <span className={styles.toolboxOpIcon} style={{ color: opColor }}>{opIcon}</span>
-                      {op}
-                    </div>
-                  )
-                })}
-                <button className={styles.clearBtn} onClick={(e) => { e.stopPropagation(); handleClear() }}>Clear</button>
-              </div>
-
-              <div className={styles.toolboxSearch}>
-                <input
-                  className={styles.toolboxSearchInput}
-                  value={signalSearch}
-                  onChange={(e) => setSignalSearch(e.target.value)}
-                  placeholder="Search signals..."
-                  onClick={(e) => e.stopPropagation()}
-                />
-                {signalSearch && <button className={styles.toolboxSearchClear} onClick={() => setSignalSearch('')}>×</button>}
-              </div>
-
-              <div className={styles.toolboxSignals}>
-                {filteredGroups.map(([type, signals]) => {
-                  const collapsed = collapsedGroups.has(type)
-                  return (
-                    <div key={type} className={styles.signalGroup}>
-                      <div className={styles.signalGroupHeader} onClick={(e) => { e.stopPropagation(); toggleGroup(type) }}>
-                        <span className={styles.signalGroupToggle}>{collapsed ? '▶' : '▼'}</span>
-                        <span className={styles.signalGroupName}>{type}</span>
-                        <span className={styles.signalGroupCount}>{signals.length}</span>
-                      </div>
-                      {!collapsed && (
-                        <div className={styles.signalGroupItems}>
-                          {signals.map(s => (
-                            <div
-                              key={`${s.signalType}-${s.name}`}
-                              className={styles.toolboxChip}
-                              draggable
-                              onDragStart={(e) => {
-                                e.dataTransfer.setData(DRAG_MIME, encodeDrag({ kind: 'signal', signalType: s.signalType, signalName: s.name }))
-                                e.dataTransfer.effectAllowed = 'copyMove'
-                              }}
-                              onClick={(e) => { e.stopPropagation() }}
-                              title={`Drag to canvas to add ${s.signalType}("${s.name}")`}
-                            >
-                              {s.name}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-                {filteredGroups.length === 0 && (
-                  <span className={styles.toolboxEmpty}>{signalSearch ? 'No matching signals' : 'No signals defined'}</span>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <ExpressionBuilderToolbox
+          collapsedGroups={collapsedGroups}
+          filteredGroups={filteredGroups}
+          signalCount={availableSignals.length}
+          signalSearch={signalSearch}
+          toolboxCollapsed={toolboxCollapsed}
+          onClear={handleClear}
+          onSignalSearchChange={setSignalSearch}
+          onToggleCollapsed={() => setToolboxCollapsed(!toolboxCollapsed)}
+          onToggleGroup={toggleGroup}
+        />
       </div>
 
       {/* Result */}
@@ -1311,65 +503,31 @@ const ExpressionBuilderInner: React.FC<InnerProps> = ({
       {validationIssues.length > 0 && <div>{validationIssues.map((w, i) => <div key={i} className={styles.validationWarn}>⚠ {w}</div>)}</div>}
       {tree && validationIssues.length === 0 && <div className={styles.validationOk}>✓ All referenced signals exist</div>}
 
-      {/* Context menu */}
-      {contextMenu && tree && (() => {
-        const node = getNodeAtPath(tree, contextMenu.path)
-        if (!node) return null
-        return (
-          <div className={styles.ctxMenu} style={{ left: contextMenu.x, top: contextMenu.y }}
-            onClick={e => e.stopPropagation()}>
-            {isLeaf(node) && (
-              <div className={styles.ctxMenuItem} onClick={() => {
-                setEditingNode({ path: contextMenu.path, signalType: (node as { signalType: string; signalName: string }).signalType, signalName: (node as { signalType: string; signalName: string }).signalName })
-                setContextMenu(null)
-              }}>Edit Signal</div>
-            )}
-            {isOperator(node) && node.operator !== 'NOT' && (
-              <div className={styles.ctxMenuItem} onClick={() => {
-                handleChangeOp(contextMenu.path, node.operator === 'AND' ? 'OR' : 'AND')
-              }}>Toggle to {node.operator === 'AND' ? 'OR' : 'AND'}</div>
-            )}
-            {isOperator(node) && (node.operator !== 'NOT' || (node.conditions as RuleNode[]).length === 0) && (
-              <div className={styles.ctxMenuItem} onClick={() => {
-                setAddingToPath(contextMenu.path)
-                setContextMenu(null)
-              }}>Add child...</div>
-            )}
-            <div className={styles.ctxMenuItem} onClick={() => handleWrap(contextMenu.path, 'AND')}>Wrap with AND</div>
-            <div className={styles.ctxMenuItem} onClick={() => handleWrap(contextMenu.path, 'OR')}>Wrap with OR</div>
-            <div className={styles.ctxMenuItem} onClick={() => handleWrap(contextMenu.path, 'NOT')}>Wrap with NOT</div>
-            {contextMenu.path.length > 0 && (
-              <>
-                <div className={styles.ctxMenuDivider} />
-                <div className={styles.ctxMenuItem} onClick={() => {
-                  const parentPath = contextMenu.path.slice(0, -1)
-                  const idx = contextMenu.path[contextMenu.path.length - 1]
-                  setInsertSiblingTarget({ parentPath, index: idx })
-                  setContextMenu(null)
-                }}>Insert before...</div>
-                <div className={styles.ctxMenuItem} onClick={() => {
-                  const parentPath = contextMenu.path.slice(0, -1)
-                  const idx = contextMenu.path[contextMenu.path.length - 1]
-                  setInsertSiblingTarget({ parentPath, index: idx + 1 })
-                  setContextMenu(null)
-                }}>Insert after...</div>
-              </>
-            )}
-            {isOperator(node) && node.conditions.length > 0 && (
-              <div className={styles.ctxMenuItem} onClick={() => handleUnwrap(contextMenu.path)}>Unwrap (replace with first child)</div>
-            )}
-            {isOperator(node) && node.operator !== 'NOT' && (
-              <>
-                {node.operator !== 'AND' && <div className={styles.ctxMenuItem} onClick={() => handleChangeOp(contextMenu.path, 'AND')}>Change to AND</div>}
-                {node.operator !== 'OR' && <div className={styles.ctxMenuItem} onClick={() => handleChangeOp(contextMenu.path, 'OR')}>Change to OR</div>}
-              </>
-            )}
-            <div className={styles.ctxMenuDivider} />
-            <div className={`${styles.ctxMenuItem} ${styles.ctxMenuDanger}`}
-              onClick={() => { handleDeleteNode(contextMenu.path); setContextMenu(null) }}>Delete</div>
-          </div>
-        )
-      })()}
+      {contextMenu && tree ? (
+        <ExpressionBuilderContextMenu
+          contextMenu={contextMenu}
+          tree={tree}
+          onAddChild={(path) => {
+            setAddingToPath(path)
+            setContextMenu(null)
+          }}
+          onChangeOp={handleChangeOp}
+          onDeleteNode={(path) => {
+            handleDeleteNode(path)
+            setContextMenu(null)
+          }}
+          onEditSignal={(path, signalType, signalName) => {
+            setEditingNode({ path, signalType, signalName })
+            setContextMenu(null)
+          }}
+          onInsertSibling={(target) => {
+            setInsertSiblingTarget(target)
+            setContextMenu(null)
+          }}
+          onUnwrap={handleUnwrap}
+          onWrap={handleWrap}
+        />
+      ) : null}
 
       {/* Inline edit dialog for signal nodes */}
       {editingNode && (
@@ -1414,7 +572,7 @@ interface ExpressionBuilderProps {
   value: string
   onChange: (expr: string) => void
   initialAstExpr?: Record<string, unknown> | null
-  availableSignals: { signalType: string; name: string }[]
+  availableSignals: SignalDescriptor[]
 }
 
 const ExpressionBuilder: React.FC<ExpressionBuilderProps> = ({

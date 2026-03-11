@@ -7,14 +7,15 @@ type BranchMode = 'cls' | 'token' | 'pool' | 'cross'
 const TOKENS = ['[CLS]', 'Is', 'machine', 'learning', 'related', 'to', 'AI', '?', '[SEP]']
 
 const ENCODER_SUBS = [
-  { label: 'Multi-Head Attention', cls: styles.subAttention, icon: '🔗' },
-  { label: 'Add & Norm', cls: styles.subNorm, icon: '➕' },
-  { label: 'Feed-Forward', cls: styles.subFFN, icon: '⚙️' },
-  { label: 'Add & Norm', cls: styles.subNorm, icon: '➕' },
+  { label: 'Multi-Head Attention', cls: styles.subAttention, icon: 'ATTN' },
+  { label: 'Add & Norm', cls: styles.subNorm, icon: 'NORM' },
+  { label: 'Feed-Forward', cls: styles.subFFN, icon: 'FFN' },
+  { label: 'Add & Norm', cls: styles.subNorm, icon: 'NORM' },
 ]
 
 const BRANCH_DATA: Record<BranchMode, {
   icon: string
+  tabLabel: string
   title: string
   detail: string
   signals: string[]
@@ -23,7 +24,8 @@ const BRANCH_DATA: Record<BranchMode, {
   taskType: string
 }> = {
   cls: {
-    icon: '🎯',
+    icon: 'CLS',
+    tabLabel: 'Sequence',
     title: 'Sentence-Level (CLS Token)',
     detail: '[CLS] → Linear Head → "computer_science"',
     signals: ['Domain', 'Jailbreak', 'Fact-check', 'Feedback', 'Modality'],
@@ -32,7 +34,8 @@ const BRANCH_DATA: Record<BranchMode, {
     taskType: 'SEQ_CLS',
   },
   token: {
-    icon: '🏷️',
+    icon: 'BIO',
+    tabLabel: 'Token',
     title: 'Token-Level (Per Token)',
     detail: 'Each token → BIO Label → O O B-LOC I-LOC O',
     signals: ['PII Detection'],
@@ -41,7 +44,8 @@ const BRANCH_DATA: Record<BranchMode, {
     taskType: 'TOKEN_CLS',
   },
   pool: {
-    icon: '🌊',
+    icon: 'EMB',
+    tabLabel: 'Embedding',
     title: 'Bi-Encoder',
     detail: 'mean-pooling(h₁..hₙ) → [0.23, -0.41, 0.87, ...]',
     signals: ['Semantic Cache', 'Similarity', 'Complexity-CL', 'Jailbreak-CL'],
@@ -50,7 +54,8 @@ const BRANCH_DATA: Record<BranchMode, {
     taskType: 'EMBEDDING',
   },
   cross: {
-    icon: '🔀',
+    icon: 'RER',
+    tabLabel: 'Rerank',
     title: 'Cross-Encoder',
     detail: '[CLS] query [SEP] candidate [SEP] → score',
     signals: ['Rerank', 'Multi-Modal'],
@@ -98,10 +103,10 @@ const TransformerPipelineAnimation: React.FC = () => {
             key={m}
             className={`${styles.tab} ${mode === m ? styles.tabActive : ''}`}
             onClick={() => setMode(m)}
+            type="button"
           >
-            {BRANCH_DATA[m].icon}
-            {' '}
-            {BRANCH_DATA[m].title.split('(')[0].trim()}
+            <span className={styles.tabCode}>{BRANCH_DATA[m].icon}</span>
+            <span>{BRANCH_DATA[m].tabLabel}</span>
           </button>
         ))}
       </div>
@@ -173,7 +178,7 @@ const TransformerPipelineAnimation: React.FC = () => {
                 animate={inView ? { opacity: 1, y: 0 } : {}}
                 transition={{ delay: 1.0 + i * 0.12, duration: 0.35 }}
               >
-                <span>{sub.icon}</span>
+                <span className={styles.encoderSubIcon}>{sub.icon}</span>
                 <span>{sub.label}</span>
               </motion.div>
             ))}

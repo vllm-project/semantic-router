@@ -337,6 +337,20 @@ def rewrite(model_path, output_path, hdim=64, local_attention=128):
     # Create 1-D padding bias nodes
     pad_bias_nodes, pad_bias_tensor = create_1d_padding_bias_nodes(graph)
 
+    # Build value_info type map for precision detection
+    vi_type_map = {}
+    for vi in graph.value_info:
+        if vi.type.HasField("tensor_type"):
+            vi_type_map[vi.name] = vi.type.tensor_type.elem_type
+
+    # Detect model precision from Q tensor of first block
+    first_q = blocks[0]["q_tensor"]
+    model_is_fp16 = vi_type_map.get(first_q) == TensorProto.FLOAT16
+    if model_is_fp16:
+        print("  Model precision: FP16 (skipping input/output Cast nodes)")
+    else:
+        print("  Model precision: FP32 (adding fp32↔fp16 Cast nodes)")
+
     # Collect nodes to remove (attention subgraph)
     nodes_to_remove = set()
     new_nodes = []
@@ -371,22 +385,80 @@ def rewrite(model_path, output_path, hdim=64, local_attention=128):
         else:
             fa_name = f"CKFlashAttention_{i}"
 
-        fa_node = helper.make_node(
-            "CKFlashAttention",
-            inputs=[
-                blk["q_tensor"],
-                blk["k_tensor"],
-                blk["v_tensor"],
-                pad_bias_tensor,
-            ],
-            outputs=[blk["output_tensor"]],
-            name=fa_name,
-            domain="com.ck",
-            scale=scale,
-            window_size_left=fa_wl,
-            window_size_right=fa_wr,
-        )
-        new_nodes.append(fa_node)
+        if model_is_fp16:
+            # Model is already fp16: wire Q/K/V directly, output directly
+            fa_node = helper.make_node(
+                "CKFlashAttention",
+                inputs=[
+                    blk["q_tensor"],
+                    blk["k_tensor"],
+                    blk["v_tensor"],
+                    pad_bias_tensor,
+                ],
+                outputs=[blk["output_tensor"]],
+                name=fa_name,
+                domain="com.ck",
+                scale=scale,
+                window_size_left=fa_wl,
+                window_size_right=fa_wr,
+            )
+            new_nodes.append(fa_node)
+        else:
+            # Model is fp32: add Cast(fp32→fp16) for inputs, Cast(fp16→fp32) for output
+            q_fp16 = f"{fa_name}/q_cast_fp16"
+            k_fp16 = f"{fa_name}/k_cast_fp16"
+            v_fp16 = f"{fa_name}/v_cast_fp16"
+            out_fp16 = f"{fa_name}/out_fp16"
+
+            new_nodes.append(
+                helper.make_node(
+                    "Cast",
+                    inputs=[blk["q_tensor"]],
+                    outputs=[q_fp16],
+                    name=f"{fa_name}/Cast_Q_fp16",
+                    to=TensorProto.FLOAT16,
+                )
+            )
+            new_nodes.append(
+                helper.make_node(
+                    "Cast",
+                    inputs=[blk["k_tensor"]],
+                    outputs=[k_fp16],
+                    name=f"{fa_name}/Cast_K_fp16",
+                    to=TensorProto.FLOAT16,
+                )
+            )
+            new_nodes.append(
+                helper.make_node(
+                    "Cast",
+                    inputs=[blk["v_tensor"]],
+                    outputs=[v_fp16],
+                    name=f"{fa_name}/Cast_V_fp16",
+                    to=TensorProto.FLOAT16,
+                )
+            )
+
+            fa_node = helper.make_node(
+                "CKFlashAttention",
+                inputs=[q_fp16, k_fp16, v_fp16, pad_bias_tensor],
+                outputs=[out_fp16],
+                name=fa_name,
+                domain="com.ck",
+                scale=scale,
+                window_size_left=fa_wl,
+                window_size_right=fa_wr,
+            )
+            new_nodes.append(fa_node)
+
+            new_nodes.append(
+                helper.make_node(
+                    "Cast",
+                    inputs=[out_fp16],
+                    outputs=[blk["output_tensor"]],
+                    name=f"{fa_name}/Cast_out_fp32",
+                    to=TensorProto.FLOAT,
+                )
+            )
 
     # Remove dead scale-computation nodes
     remaining_node_names = {n.name for n in graph.node} - nodes_to_remove
@@ -473,6 +545,45 @@ def rewrite(model_path, output_path, hdim=64, local_attention=128):
 
     del graph.node[:]
     graph.node.extend(kept)
+
+    # For fp16 models, cast graph outputs from fp16 to fp32 so that older
+    # ONNX Runtime host code (which only tries extract_tensor::<f32>) works.
+    if model_is_fp16:
+        output_cast_nodes = []
+        for graph_out in graph.output:
+            if (
+                graph_out.type.HasField("tensor_type")
+                and graph_out.type.tensor_type.elem_type == TensorProto.FLOAT16
+            ):
+                old_name = graph_out.name
+                intermediate = f"{old_name}__fp16_raw"
+                # Rename the last node's output from old_name -> intermediate
+                for n in reversed(graph.node):
+                    for idx, out in enumerate(n.output):
+                        if out == old_name:
+                            n.output[idx] = intermediate
+                            break
+                    else:
+                        continue
+                    break
+                # Also rename in value_info
+                for vi in graph.value_info:
+                    if vi.name == old_name:
+                        vi.name = intermediate
+                # Add Cast(fp16→fp32) as final output
+                output_cast_nodes.append(
+                    helper.make_node(
+                        "Cast",
+                        inputs=[intermediate],
+                        outputs=[old_name],
+                        name=f"/model/_output_cast/{old_name}",
+                        to=TensorProto.FLOAT,
+                    )
+                )
+                # Update graph output type to fp32
+                graph_out.type.tensor_type.elem_type = TensorProto.FLOAT
+                print(f"  Added output Cast(fp16→fp32) for {old_name}")
+        graph.node.extend(output_cast_nodes)
 
     # Add com.ck opset import
     has_ck = any(op.domain == "com.ck" for op in model.opset_import)

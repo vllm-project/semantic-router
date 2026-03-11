@@ -13,9 +13,29 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
 )
+
+// DeploymentRef identifies a deployment that must be healthy.
+type DeploymentRef struct {
+	Namespace string
+	Name      string
+}
+
+// NewKubeClient builds a clientset from a kubeconfig path.
+func NewKubeClient(kubeConfig string) (*kubernetes.Clientset, error) {
+	config, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build kubeconfig: %w", err)
+	}
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kube client: %w", err)
+	}
+	return client, nil
+}
 
 // CheckDeployment checks if a deployment is healthy (ready replicas > 0)
 func CheckDeployment(ctx context.Context, client *kubernetes.Clientset, namespace, name string, verbose bool) error {
@@ -33,6 +53,38 @@ func CheckDeployment(ctx context.Context, client *kubernetes.Clientset, namespac
 			namespace, name, deployment.Status.ReadyReplicas, deployment.Status.Replicas)
 	}
 
+	return nil
+}
+
+// WaitForDeploymentReady polls until a deployment becomes healthy.
+func WaitForDeploymentReady(ctx context.Context, client *kubernetes.Clientset, namespace, name string, timeout, retryInterval time.Duration, verbose bool) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		lastErr = CheckDeployment(ctx, client, namespace, name, verbose)
+		if lastErr == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryInterval):
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("timed out waiting for deployment")
+	}
+	return fmt.Errorf("deployment %s/%s not healthy after %v: %w", namespace, name, timeout, lastErr)
+}
+
+// VerifyDeployments checks a set of deployments for readiness.
+func VerifyDeployments(ctx context.Context, client *kubernetes.Clientset, deployments []DeploymentRef, verbose bool) error {
+	for _, deployment := range deployments {
+		if err := CheckDeployment(ctx, client, deployment.Namespace, deployment.Name, verbose); err != nil {
+			return fmt.Errorf("%s/%s: %w", deployment.Namespace, deployment.Name, err)
+		}
+	}
 	return nil
 }
 
@@ -63,6 +115,58 @@ func GetServiceByLabelInNamespace(ctx context.Context, client *kubernetes.Client
 	}
 
 	return serviceName, nil
+}
+
+// WaitForServiceByLabelWithReadyPods resolves a service by label selector and waits until its backing pods are ready.
+func WaitForServiceByLabelWithReadyPods(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	namespace string,
+	labelSelector string,
+	timeout time.Duration,
+	retryInterval time.Duration,
+	verbose bool,
+	logf func(format string, args ...interface{}),
+) (string, error) {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		serviceName, err := GetServiceByLabelInNamespace(ctx, client, namespace, labelSelector, verbose)
+		if err == nil {
+			if podErr := VerifyServicePodsRunning(ctx, client, namespace, serviceName, verbose); podErr == nil {
+				return serviceName, nil
+			} else {
+				lastErr = fmt.Errorf("service pods not ready: %w", podErr)
+			}
+		} else {
+			lastErr = err
+		}
+
+		if verbose && logf != nil {
+			logf(
+				"Service with selector %s in %s not ready, retrying in %v... (elapsed: %v)",
+				labelSelector,
+				namespace,
+				retryInterval,
+				timeout-time.Until(deadline).Round(time.Second),
+			)
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(retryInterval):
+		}
+	}
+
+	return "", fmt.Errorf(
+		"failed to get service with selector %s in %s after %v: %w",
+		labelSelector,
+		namespace,
+		timeout,
+		lastErr,
+	)
 }
 
 // VerifyServicePodsRunning verifies that exactly 1 pod exists for a service and it's running with all containers ready
@@ -130,111 +234,33 @@ func VerifyServicePodsRunning(ctx context.Context, client *kubernetes.Clientset,
 // This function mimics kubectl's behavior by finding a pod behind the service.
 // Returns a stop function that should be called to clean up the port forwarding.
 func StartPortForward(ctx context.Context, client *kubernetes.Clientset, restConfig *rest.Config, namespace, service, ports string, verbose bool) (func(), error) {
-	// Parse ports (e.g., "8080:80" -> local=8080, service=80)
-	portParts := strings.Split(ports, ":")
-	if len(portParts) != 2 {
-		return nil, fmt.Errorf("invalid port format: %s (expected format: localPort:servicePort)", ports)
+	localPort, servicePort, err := ParsePortMapping(ports)
+	if err != nil {
+		return nil, err
 	}
-	localPort := portParts[0]
-	servicePort := portParts[1]
-
 	if verbose {
 		fmt.Printf("[Helper] Starting port-forward to service %s/%s (%s:%s)\n", namespace, service, localPort, servicePort)
 	}
 
-	// Get the service to find its selector
-	svc, err := client.CoreV1().Services(namespace).Get(ctx, service, metav1.GetOptions{})
+	svc, targetPod, err := resolvePortForwardTarget(ctx, client, namespace, service, verbose)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get service: %w", err)
+		return nil, err
 	}
 
-	// Build label selector from service selector
-	var selectorParts []string
-	for key, value := range svc.Spec.Selector {
-		selectorParts = append(selectorParts, fmt.Sprintf("%s=%s", key, value))
-	}
-	labelSelector := strings.Join(selectorParts, ",")
-
-	// Find pods matching the service selector
-	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: labelSelector,
-	})
+	containerPort := resolveContainerPort(svc, servicePort)
+	forwarder, stopChan, readyChan, err := newPortForwarder(
+		client,
+		restConfig,
+		namespace,
+		targetPod.Name,
+		localPort,
+		containerPort,
+		verbose,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list pods for service: %w", err)
+		return nil, err
 	}
 
-	if len(pods.Items) == 0 {
-		return nil, fmt.Errorf("no pods found for service %s/%s", namespace, service)
-	}
-
-	// Use the first running pod
-	var targetPod *corev1.Pod
-	for i := range pods.Items {
-		pod := &pods.Items[i]
-		if pod.Status.Phase == corev1.PodRunning {
-			targetPod = pod
-			break
-		}
-	}
-
-	if targetPod == nil {
-		return nil, fmt.Errorf("no running pods found for service %s/%s", namespace, service)
-	}
-
-	if verbose {
-		fmt.Printf("[Helper] Found running pod: %s\n", targetPod.Name)
-	}
-
-	// Map service port to container port
-	var containerPort string
-	for _, port := range svc.Spec.Ports {
-		if fmt.Sprintf("%d", port.Port) == servicePort {
-			containerPort = fmt.Sprintf("%d", port.TargetPort.IntVal)
-			if port.TargetPort.IntVal == 0 {
-				// TargetPort is a named port, use the port number directly
-				containerPort = servicePort
-			}
-			break
-		}
-	}
-	if containerPort == "" {
-		containerPort = servicePort // fallback to service port
-	}
-
-	// Create SPDY transport
-	transport, upgrader, err := spdy.RoundTripperFor(restConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create SPDY transport: %w", err)
-	}
-
-	// Build the URL for port forwarding to pod
-	url := client.CoreV1().RESTClient().Post().
-		Resource("pods").
-		Namespace(namespace).
-		Name(targetPod.Name).
-		SubResource("portforward").
-		URL()
-
-	// Create dialer
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", url)
-
-	// Setup channels
-	stopChan := make(chan struct{}, 1)
-	readyChan := make(chan struct{})
-	out := io.Discard
-	errOut := io.Discard
-	if verbose {
-		out = os.Stdout
-		errOut = os.Stderr
-	}
-
-	// Create port forwarder (forward localPort to containerPort on the pod)
-	forwarder, err := portforward.New(dialer, []string{fmt.Sprintf("%s:%s", localPort, containerPort)}, stopChan, readyChan, out, errOut)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create port forwarder: %w", err)
-	}
-
-	// Start port forwarding in background
 	go func() {
 		if err := forwarder.ForwardPorts(); err != nil {
 			if verbose {
@@ -243,20 +269,147 @@ func StartPortForward(ctx context.Context, client *kubernetes.Clientset, restCon
 		}
 	}()
 
-	// Wait for ready or timeout
+	return waitForPortForwardReady(ctx, namespace, service, stopChan, readyChan, verbose)
+}
+
+// ParsePortMapping parses a legacy local:service port-forward mapping.
+func ParsePortMapping(ports string) (string, string, error) {
+	portParts := strings.Split(ports, ":")
+	if len(portParts) != 2 {
+		return "", "", fmt.Errorf("invalid port format: %s (expected format: localPort:servicePort)", ports)
+	}
+	return portParts[0], portParts[1], nil
+}
+
+func resolvePortForwardTarget(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	namespace string,
+	service string,
+	verbose bool,
+) (*corev1.Service, *corev1.Pod, error) {
+	svc, err := client.CoreV1().Services(namespace).Get(ctx, service, metav1.GetOptions{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get service: %w", err)
+	}
+
+	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: serviceSelector(svc),
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list pods for service: %w", err)
+	}
+	if len(pods.Items) == 0 {
+		return nil, nil, fmt.Errorf("no pods found for service %s/%s", namespace, service)
+	}
+
+	targetPod, err := firstRunningPod(pods.Items, namespace, service)
+	if err != nil {
+		return nil, nil, err
+	}
+	if verbose {
+		fmt.Printf("[Helper] Found running pod: %s\n", targetPod.Name)
+	}
+	return svc, targetPod, nil
+}
+
+func serviceSelector(svc *corev1.Service) string {
+	var selectorParts []string
+	for key, value := range svc.Spec.Selector {
+		selectorParts = append(selectorParts, fmt.Sprintf("%s=%s", key, value))
+	}
+	return strings.Join(selectorParts, ",")
+}
+
+func firstRunningPod(pods []corev1.Pod, namespace, service string) (*corev1.Pod, error) {
+	for i := range pods {
+		pod := &pods[i]
+		if pod.Status.Phase == corev1.PodRunning {
+			return pod, nil
+		}
+	}
+	return nil, fmt.Errorf("no running pods found for service %s/%s", namespace, service)
+}
+
+func resolveContainerPort(svc *corev1.Service, servicePort string) string {
+	for _, port := range svc.Spec.Ports {
+		if fmt.Sprintf("%d", port.Port) != servicePort {
+			continue
+		}
+		if port.TargetPort.IntVal == 0 {
+			return servicePort
+		}
+		return fmt.Sprintf("%d", port.TargetPort.IntVal)
+	}
+	return servicePort
+}
+
+func newPortForwarder(
+	client *kubernetes.Clientset,
+	restConfig *rest.Config,
+	namespace string,
+	podName string,
+	localPort string,
+	containerPort string,
+	verbose bool,
+) (*portforward.PortForwarder, chan struct{}, chan struct{}, error) {
+	transport, upgrader, err := spdy.RoundTripperFor(restConfig)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create SPDY transport: %w", err)
+	}
+
+	url := client.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Namespace(namespace).
+		Name(podName).
+		SubResource("portforward").
+		URL()
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", url)
+
+	stopChan := make(chan struct{}, 1)
+	readyChan := make(chan struct{})
+	out, errOut := portForwardStreams(verbose)
+
+	forwarder, err := portforward.New(
+		dialer,
+		[]string{fmt.Sprintf("%s:%s", localPort, containerPort)},
+		stopChan,
+		readyChan,
+		out,
+		errOut,
+	)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create port forwarder: %w", err)
+	}
+	return forwarder, stopChan, readyChan, nil
+}
+
+func portForwardStreams(verbose bool) (io.Writer, io.Writer) {
+	if verbose {
+		return os.Stdout, os.Stderr
+	}
+	return io.Discard, io.Discard
+}
+
+func waitForPortForwardReady(
+	ctx context.Context,
+	namespace string,
+	service string,
+	stopChan chan struct{},
+	readyChan chan struct{},
+	verbose bool,
+) (func(), error) {
 	select {
 	case <-readyChan:
 		if verbose {
 			fmt.Printf("[Helper] Port forwarding is ready\n")
 		}
-		// Return stop function
-		stopFunc := func() {
+		return func() {
 			if verbose {
 				fmt.Printf("[Helper] Stopping port forwarding to %s/%s\n", namespace, service)
 			}
 			close(stopChan)
-		}
-		return stopFunc, nil
+		}, nil
 	case <-time.After(30 * time.Second):
 		close(stopChan)
 		return nil, fmt.Errorf("timeout waiting for port forward to be ready")

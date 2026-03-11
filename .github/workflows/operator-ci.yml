@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - develop
+    tags:
+      - 'v*'
     paths:
       - 'deploy/operator/**'
       - '.github/workflows/operator-ci.yml'
@@ -154,7 +156,11 @@ jobs:
         id: operator-remote-tags
         if: github.event_name != 'pull_request'
         run: |
-          TAG="${{ github.sha }}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="${{ github.sha }}"
+          fi
           TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:latest"
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 
@@ -162,7 +168,11 @@ jobs:
         id: bundle-remote-tags
         if: github.event_name != 'pull_request'
         run: |
-          TAG="${{ github.sha }}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="${{ github.sha }}"
+          fi
           TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:latest"
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 

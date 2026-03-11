@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 from jinja2 import Environment, FileSystemLoader
 from cli.utils import getLogger
 from cli.models import UserConfig
-from cli.consts import EXTERNAL_API_MODEL_FORMATS
+from cli.consts import DEFAULT_LISTENER_PORT, EXTERNAL_API_MODEL_FORMATS
 
 log = getLogger(__name__)
 
@@ -79,7 +79,7 @@ def generate_envoy_config_from_user_config(
             {
                 "name": "listener_0",
                 "address": "0.0.0.0",
-                "port": 8000,
+                "port": DEFAULT_LISTENER_PORT,
                 "timeout": "300s",
             }
         )
@@ -279,7 +279,7 @@ def generate_envoy_config_from_router_config(
                 {
                     "name": listener.get("name", "listener_0"),
                     "address": listener.get("address", "0.0.0.0"),
-                    "port": listener.get("port", 8000),
+                    "port": listener.get("port", DEFAULT_LISTENER_PORT),
                     "timeout": listener.get("timeout", "300s"),
                 }
             )
@@ -289,7 +289,7 @@ def generate_envoy_config_from_router_config(
             {
                 "name": "listener_0",
                 "address": "0.0.0.0",
-                "port": 8000,
+                "port": DEFAULT_LISTENER_PORT,
                 "timeout": "300s",
             }
         )

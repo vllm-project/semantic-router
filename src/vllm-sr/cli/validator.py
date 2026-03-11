@@ -49,6 +49,18 @@ def _iter_condition_nodes(conditions):
             yield from _iter_condition_nodes(condition.conditions)
 
 
+def _iter_merged_condition_nodes(conditions):
+    """Depth-first traversal over merged router condition dicts."""
+    if not conditions:
+        return
+    for condition in conditions:
+        if not isinstance(condition, dict):
+            continue
+        yield condition
+        if condition.get("conditions"):
+            yield from _iter_merged_condition_nodes(condition["conditions"])
+
+
 def _is_latency_aware_algorithm(decision) -> bool:
     if not decision.algorithm:
         return False
@@ -422,9 +434,41 @@ def validate_merged_config(merged_config: Dict[str, Any]) -> List[ValidationErro
     if "categories" in merged_config:
         categories = merged_config["categories"]
         if not categories:
+            has_domain_conditions = any(
+                condition.get("type") == "domain"
+                for decision in merged_config.get("decisions", [])
+                for condition in _iter_merged_condition_nodes(
+                    decision.get("rules", {}).get("conditions", [])
+                )
+            )
+            if has_domain_conditions:
+                errors.append(
+                    ValidationError(
+                        "No categories configured or auto-generated",
+                        field="categories",
+                    )
+                )
+
+    # Validate contrastive preference classifier prerequisites
+    classifier_cfg = merged_config.get("classifier", {})
+    preference_cfg = (
+        classifier_cfg.get("preference_model", {}) if classifier_cfg else {}
+    )
+    if preference_cfg.get("embedding_model"):
+        embedding_cfg = merged_config.get("embedding_models", {}) or {}
+        has_unified_models = any(
+            embedding_cfg.get(key)
+            for key in (
+                "qwen3_model_path",
+                "gemma_model_path",
+                "mmbert_model_path",
+            )
+        )
+        if not has_unified_models:
             errors.append(
                 ValidationError(
-                    "No categories configured or auto-generated", field="categories"
+                    "preference_model.use_contrastive=true requires an embedding model path (qwen3_model_path, gemma_model_path, or mmbert_model_path)",
+                    field="embedding_models",
                 )
             )
 

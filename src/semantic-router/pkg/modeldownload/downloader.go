@@ -16,6 +16,19 @@ var hfCommand string
 // ErrGatedModelSkipped is a sentinel error indicating a gated model was gracefully skipped
 var ErrGatedModelSkipped = fmt.Errorf("gated model skipped")
 
+// ProgressState captures downloader progress for external readiness reporting.
+type ProgressState struct {
+	Phase            string
+	DownloadingModel string
+	PendingModels    []string
+	ReadyModels      int
+	TotalModels      int
+	Message          string
+}
+
+// ProgressReporter receives model download progress updates.
+type ProgressReporter func(ProgressState)
+
 // DownloadModel downloads a model using huggingface-cli
 func DownloadModel(spec ModelSpec, config DownloadConfig) error {
 	return DownloadModelWithProgress(spec, config)
@@ -110,6 +123,11 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 
 // EnsureModels ensures all required models are downloaded
 func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
+	return EnsureModelsWithProgress(specs, config, nil)
+}
+
+// EnsureModelsWithProgress ensures all required models are downloaded and reports progress.
+func EnsureModelsWithProgress(specs []ModelSpec, config DownloadConfig, reporter ProgressReporter) error {
 	// Check which models are missing
 	missing, err := GetMissingModels(specs)
 	if err != nil {
@@ -131,8 +149,27 @@ func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
 		}
 	}
 
+	pendingModels := make([]string, 0, len(missing))
+	for _, spec := range missing {
+		pendingModels = append(pendingModels, spec.LocalPath)
+	}
+	readyCount := len(specs) - len(missing)
+	reportProgress(reporter, ProgressState{
+		Phase:         "checking",
+		PendingModels: cloneStrings(pendingModels),
+		ReadyModels:   readyCount,
+		TotalModels:   len(specs),
+		Message:       "Checking required router models...",
+	})
+
 	if len(missing) == 0 {
 		logging.Infof("All %d models are ready", len(specs))
+		reportProgress(reporter, ProgressState{
+			Phase:       "completed",
+			ReadyModels: len(specs),
+			TotalModels: len(specs),
+			Message:     "All required router models are ready.",
+		})
 		return nil
 	}
 
@@ -140,17 +177,43 @@ func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
 	successCount := 0
 	skippedCount := 0
 	for _, spec := range missing {
+		reportProgress(reporter, ProgressState{
+			Phase:            "downloading",
+			DownloadingModel: spec.LocalPath,
+			PendingModels:    cloneStrings(pendingModels),
+			ReadyModels:      readyCount,
+			TotalModels:      len(specs),
+			Message:          fmt.Sprintf("Downloading model %s", spec.LocalPath),
+		})
 		if err := DownloadModelWithProgress(spec, config); err != nil {
 			// Check if this was a gated model that was gracefully skipped
 			if errors.Is(err, ErrGatedModelSkipped) || strings.Contains(err.Error(), ErrGatedModelSkipped.Error()) {
 				skippedCount++
 				logging.Infof("%s (skipped - gated model, HF_TOKEN not available)", spec.LocalPath)
+				readyCount++
+				pendingModels = removeString(pendingModels, spec.LocalPath)
+				reportProgress(reporter, ProgressState{
+					Phase:         "checking",
+					PendingModels: cloneStrings(pendingModels),
+					ReadyModels:   readyCount,
+					TotalModels:   len(specs),
+					Message:       fmt.Sprintf("Skipped gated model %s", spec.LocalPath),
+				})
 				continue
 			}
 			logging.Warnf("Failed to download model %s: %v", spec.RepoID, err)
 			continue
 		}
 		successCount++
+		readyCount++
+		pendingModels = removeString(pendingModels, spec.LocalPath)
+		reportProgress(reporter, ProgressState{
+			Phase:         "checking",
+			PendingModels: cloneStrings(pendingModels),
+			ReadyModels:   readyCount,
+			TotalModels:   len(specs),
+			Message:       fmt.Sprintf("Model %s is ready", spec.LocalPath),
+		})
 	}
 
 	// Only return error if we failed to download non-gated models
@@ -165,7 +228,45 @@ func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
 		logging.Infof("Successfully downloaded all %d models", successCount)
 	}
 
+	reportProgress(reporter, ProgressState{
+		Phase:       "completed",
+		ReadyModels: readyCount,
+		TotalModels: len(specs),
+		Message:     "All required router models are ready.",
+	})
+
 	return nil
+}
+
+func reportProgress(reporter ProgressReporter, state ProgressState) {
+	if reporter != nil {
+		reporter(state)
+	}
+}
+
+func cloneStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make([]string, len(values))
+	copy(cloned, values)
+	return cloned
+}
+
+func removeString(values []string, target string) []string {
+	if len(values) == 0 {
+		return values
+	}
+	next := make([]string, 0, len(values))
+	removed := false
+	for _, value := range values {
+		if !removed && value == target {
+			removed = true
+			continue
+		}
+		next = append(next, value)
+	}
+	return next
 }
 
 // CheckHuggingFaceCLI checks if huggingface-cli is available and sets hfCommand

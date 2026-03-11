@@ -4,6 +4,7 @@
 {{- $observability := (get $config "observability") | default (dict) -}}
 {{- $tracing := (get $observability "tracing") | default (dict) -}}
 {{- $tracingExporter := (get $tracing "exporter") | default (dict) -}}
+{{- $tracingResource := (get $tracing "resource") | default (dict) -}}
 {{- $semanticBackend := (get $semanticCache "backend_type") | default "" -}}
 {{- $responseBackend := (get $responseAPI "store_backend") | default "" -}}
 {{- $responseEnabled := (get $responseAPI "enabled") | default false -}}
@@ -28,8 +29,15 @@
 {{- if and $tracingEnabled .Values.dependencies.observability.jaeger.enabled -}}
 {{- $_ := set $tracingExporter "endpoint" (include "semantic-router.jaeger.otlpEndpoint" .) -}}
 {{- $_ := set $tracing "exporter" $tracingExporter -}}
-{{- $_ := set $observability "tracing" $tracing -}}
 {{- end -}}
+
+{{- if and (gt (len $tracingResource) 0) .Chart.AppVersion (eq ((get $tracingResource "service_version") | default "") "") -}}
+{{- $_ := set $tracingResource "service_version" .Chart.AppVersion -}}
+{{- end -}}
+{{- if gt (len $tracingResource) 0 -}}
+{{- $_ := set $tracing "resource" $tracingResource -}}
+{{- end -}}
+{{- $_ := set $observability "tracing" $tracing -}}
 
 {{- $_ := set $config "semantic_cache" $semanticCache -}}
 {{- $_ := set $config "response_api" $responseAPI -}}

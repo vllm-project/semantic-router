@@ -1,37 +1,52 @@
 .wrapper {
-  background: var(--color-surface);
+  width: 100%;
+  overflow-x: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  background: linear-gradient(180deg, rgba(118, 185, 0, 0.05), rgba(118, 185, 0, 0)) top / 100% 100%,
+    var(--color-bg-secondary);
 }
 
-.loading {
-  padding: 2rem;
+.loading,
+.emptyCell {
+  padding: 2.5rem 1.5rem;
   text-align: center;
   color: var(--color-text-secondary);
 }
 
 .table {
   width: 100%;
+  min-width: 920px;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  table-layout: fixed;
+  font-size: 0.92rem;
 }
 
 .table th,
 .table td {
-  padding: 0.75rem 1rem;
+  padding: 0.95rem 1.1rem;
   text-align: left;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .table th {
-  background: var(--color-bg);
-  color: var(--color-text-secondary);
-  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(15, 15, 15, 0.96);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.table tbody tr {
+  transition: background 0.2s ease;
 }
 
 .table tbody tr:hover {
-  background: var(--color-bg);
+  background: rgba(118, 185, 0, 0.06);
 }
 
 .table tbody tr:last-child td {
@@ -39,31 +54,34 @@
 }
 
 .rankCol {
-  width: 3rem;
+  width: 4.5rem;
   text-align: center;
   color: var(--color-text-secondary);
 }
 
 .modelCol {
-  font-weight: 500;
+  width: 42%;
+  font-weight: 600;
   color: var(--color-text);
+  word-break: break-word;
 }
 
 .ratingCol {
-  font-weight: 600;
-  color: var(--color-primary);
+  width: 10rem;
+  font-weight: 700;
+  color: var(--color-primary-light);
 }
 
 .gamesCol,
 .winsCol,
 .lossesCol,
 .tiesCol {
+  width: 8rem;
   text-align: right;
   color: var(--color-text-secondary);
 }
 
 .emptyCell {
-  text-align: center;
-  padding: 2rem;
   color: var(--color-text-secondary);
+  line-height: 1.6;
 }

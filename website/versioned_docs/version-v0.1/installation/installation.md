@@ -36,91 +36,41 @@ Verify installation:
 vllm-sr --version
 ```
 
-### 2. Initialize Configuration
-
-```bash
-# Create config.yaml in current directory
-vllm-sr init
-```
-
-This creates a `config.yaml` file with default settings.
-
-### 3. Configure Your Backend
-
-Edit the generated `config.yaml` to configure your model and backend endpoint:
-
-```yaml
-providers:
-  # Model configuration
-  models:
-    - name: "qwen/qwen3-1.8b"           # Model name
-      endpoints:
-        - name: "my_vllm"
-          weight: 1
-          endpoint: "localhost:8000"    # Domain or IP:port
-          protocol: "http"              # http or https
-      access_key: "your-token-here"     # Optional: for authentication
-
-  # Default model for fallback
-  default_model: "qwen/qwen3-1.8b"
-```
-
-**Configuration Options:**
-
-- **endpoint**: Domain name or IP address with port (e.g., `localhost:8000`, `api.openai.com`)
-- **protocol**: `http` or `https`
-- **access_key**: Optional authentication token (Bearer token)
-- **weight**: Load balancing weight (default: 1)
-
-**Example: Local vLLM**
-
-```yaml
-providers:
-  models:
-    - name: "qwen/qwen3-1.8b"
-      endpoints:
-        - name: "local_vllm"
-          weight: 1
-          endpoint: "localhost:8000"
-          protocol: "http"
-  default_model: "qwen/qwen3-1.8b"
-```
-
-**Example: External API with HTTPS**
-
-```yaml
-providers:
-  models:
-    - name: "openai/gpt-4"
-      endpoints:
-        - name: "openai_api"
-          weight: 1
-          endpoint: "api.openai.com"
-          protocol: "https"
-      access_key: "sk-xxxxxx"
-  default_model: "openai/gpt-4"
-```
-
-### 4. Start the Router
+### 2. Start `vllm-sr`
 
 ```bash
 vllm-sr serve
 ```
 
+If `config.yaml` does not exist yet, `vllm-sr serve` bootstraps a minimal workspace and starts the dashboard in setup mode.
+
 The router will:
 
 - Automatically download required ML models (~1.5GB, one-time)
-- Start Envoy proxy on port 8888
-- Start the semantic router service
+- Start the dashboard on port 8700
+- Start Envoy proxy on port 8888 after activation
+- Start the semantic router service after activation
 - Enable metrics on port 9190
 
-### 5. Launch Dashboard
+### 3. Open the Dashboard
+
+Open [http://localhost:8700](http://localhost:8700) in your browser.
+
+For first-run setup:
+
+1. Configure one or more models.
+2. Choose a routing preset or keep the single-model baseline.
+3. Activate the generated config.
+
+After activation, `config.yaml` is written to the current directory and the router exits setup mode.
+
+### 4. Optional: open the dashboard from the CLI
 
 ```bash
 vllm-sr dashboard
 ```
 
-### 6. Test the Router
+### 5. Test the Router
 
 ```bash
 curl http://localhost:8888/v1/chat/completions \
@@ -147,6 +97,20 @@ vllm-sr stop
 ```
 
 ## Advanced Configuration
+
+### YAML-first workflow
+
+If you prefer to edit YAML directly instead of using the dashboard setup flow:
+
+```bash
+# Generate a lean advanced sample in the current directory
+vllm-sr init
+
+# Validate it before serving
+vllm-sr validate config.yaml
+```
+
+`vllm-sr init` is optional. It generates an advanced sample and `.vllm-sr/router-defaults.yaml` for YAML-first users. `router-defaults.yaml` contains advanced runtime defaults and is not required for first-run dashboard setup.
 
 ### HuggingFace Settings
 

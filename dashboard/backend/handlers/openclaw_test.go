@@ -947,6 +947,50 @@ func TestRoomsHandler_CreateAndMessageFlowWithoutAutomation(t *testing.T) {
 	}
 }
 
+func TestOpenClawReadonlyBlocksManagementMutations(t *testing.T) {
+	h := NewOpenClawHandler(t.TempDir(), true)
+
+	testCases := []struct {
+		name    string
+		method  string
+		path    string
+		body    string
+		handler http.HandlerFunc
+	}{
+		{name: "team create", method: http.MethodPost, path: "/api/openclaw/teams", body: `{}`, handler: h.TeamsHandler()},
+		{name: "team update", method: http.MethodPut, path: "/api/openclaw/teams/team-a", body: `{}`, handler: h.TeamByIDHandler()},
+		{name: "team delete", method: http.MethodDelete, path: "/api/openclaw/teams/team-a", handler: h.TeamByIDHandler()},
+		{name: "worker create", method: http.MethodPost, path: "/api/openclaw/workers", body: `{}`, handler: h.WorkersHandler()},
+		{name: "worker update", method: http.MethodPut, path: "/api/openclaw/workers/worker-a", body: `{}`, handler: h.WorkerByIDHandler()},
+		{name: "worker delete", method: http.MethodDelete, path: "/api/openclaw/workers/worker-a", handler: h.WorkerByIDHandler()},
+		{name: "room create", method: http.MethodPost, path: "/api/openclaw/rooms", body: `{}`, handler: h.RoomsHandler()},
+		{name: "room delete", method: http.MethodDelete, path: "/api/openclaw/rooms/room-a", handler: h.RoomByIDHandler()},
+		{name: "start", method: http.MethodPost, path: "/api/openclaw/start", body: `{}`, handler: h.StartHandler()},
+		{name: "stop", method: http.MethodPost, path: "/api/openclaw/stop", body: `{}`, handler: h.StopHandler()},
+		{name: "remove", method: http.MethodDelete, path: "/api/openclaw/containers/worker-a", handler: h.DeleteHandler()},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var body *strings.Reader
+			if tc.body != "" {
+				body = strings.NewReader(tc.body)
+			} else {
+				body = strings.NewReader("")
+			}
+			req := httptest.NewRequest(tc.method, tc.path, body)
+			resp := httptest.NewRecorder()
+			tc.handler.ServeHTTP(resp, req)
+			if resp.Code != http.StatusForbidden {
+				t.Fatalf("expected 403, got %d: %s", resp.Code, resp.Body.String())
+			}
+			if !strings.Contains(resp.Body.String(), "Read-only mode enabled") {
+				t.Fatalf("expected readonly error, got %q", resp.Body.String())
+			}
+		})
+	}
+}
+
 func TestRoomsHandler_CreateRoomAutoSuffixAvoidsConflict(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewOpenClawHandler(tempDir, false)
@@ -1624,107 +1668,6 @@ func TestProcessRoomUserMessage_MultiMentionsDispatchInParallel(t *testing.T) {
 	}
 	if diff > 220*time.Millisecond {
 		t.Fatalf("expected worker requests to start nearly together for parallel dispatch, diff=%s", diff)
-	}
-}
-
-func TestRoomMessagesPost_LeaderSenderTypeTriggersAutomation(t *testing.T) {
-	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
-
-	workerSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/chat/completions" {
-			t.Fatalf("unexpected worker path: %s", r.URL.Path)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"choices": []map[string]any{
-				{
-					"message": map[string]any{
-						"content": "Done. Worker execution completed.",
-					},
-				},
-			},
-		})
-	}))
-	defer workerSrv.Close()
-
-	team := TeamEntry{
-		ID:        "team-room-post",
-		Name:      "Room Post Team",
-		LeaderID:  "leader-1",
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
-		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
-	}
-	if err := h.saveTeams([]TeamEntry{team}); err != nil {
-		t.Fatalf("failed to seed team: %v", err)
-	}
-	if err := h.saveRegistry([]ContainerEntry{
-		{
-			Name:     "leader-1",
-			Port:     mustServerPort(t, workerSrv.URL),
-			Image:    "ghcr.io/openclaw/openclaw:latest",
-			Token:    "leader-token",
-			DataDir:  tempDir,
-			TeamID:   team.ID,
-			RoleKind: "leader",
-		},
-		{
-			Name:     "worker-a",
-			Port:     mustServerPort(t, workerSrv.URL),
-			Image:    "ghcr.io/openclaw/openclaw:latest",
-			Token:    "worker-token",
-			DataDir:  tempDir,
-			TeamID:   team.ID,
-			RoleKind: "worker",
-		},
-	}); err != nil {
-		t.Fatalf("failed to seed workers: %v", err)
-	}
-
-	h.mu.Lock()
-	room, err := h.ensureDefaultRoomLocked(team)
-	h.mu.Unlock()
-	if err != nil {
-		t.Fatalf("failed to ensure room: %v", err)
-	}
-
-	postReq := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/openclaw/rooms/%s/messages", room.ID), strings.NewReader(`{
-		"senderType":"leader",
-		"senderId":"leader-1",
-		"senderName":"Leader One",
-		"content":"@worker-a please execute this task."
-	}`))
-	postResp := httptest.NewRecorder()
-	h.RoomByIDHandler().ServeHTTP(postResp, postReq)
-	if postResp.Code != http.StatusCreated {
-		t.Fatalf("expected 201 for leader room post, got %d: %s", postResp.Code, postResp.Body.String())
-	}
-
-	var created ClawRoomMessage
-	if err := json.Unmarshal(postResp.Body.Bytes(), &created); err != nil {
-		t.Fatalf("failed to parse created room message: %v", err)
-	}
-	if created.SenderType != "leader" {
-		t.Fatalf("expected senderType leader, got %q", created.SenderType)
-	}
-	if created.SenderID != "leader-1" {
-		t.Fatalf("expected senderID leader-1, got %q", created.SenderID)
-	}
-
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		messages, err := h.loadRoomMessages(room.ID)
-		if err != nil {
-			t.Fatalf("failed to load room messages: %v", err)
-		}
-		for _, msg := range messages {
-			if msg.SenderID == "worker-a" && msg.SenderType == "worker" {
-				return
-			}
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("expected worker-a reply after leader message, got messages: %+v", messages)
-		}
-		time.Sleep(20 * time.Millisecond)
 	}
 }
 

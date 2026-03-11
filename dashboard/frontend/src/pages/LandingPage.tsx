@@ -5,7 +5,6 @@ import styles from './LandingPage.module.css'
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate()
-
   return (
     <div className={styles.container}>
       <div className={styles.backgroundEffect}>
@@ -50,9 +49,9 @@ const LandingPage: React.FC = () => {
           <div className={styles.ctaGroup}>
             <button
               className={styles.primaryButton}
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/login')}
             >
-              Get Started
+Get Started
             </button>
             <button
               className={styles.secondaryButton}

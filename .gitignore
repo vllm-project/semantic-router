@@ -116,15 +116,14 @@ scripts/prd.txt
 
 website/build
 .docusaurus
+website/static/install.sh
 spec/
 results/
 reports/
-
-.github/copilot*.md
+test-results/
 
 # AI tooling regulation docs
 # Ignore Copilot/Claude/Cursor rule docs anywhere in the repo
-**/[Cc]opilot*.md
 **/[Cc]laude*.md
 **/[Cc]ursor*.md
 .github/[Cc]laude*.md

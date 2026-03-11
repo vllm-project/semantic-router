@@ -122,6 +122,8 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
 	@echo "  SERVED_NAME       - Served model name for custom runs"
 	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd to use ROCm defaults)"
+	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
+	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm)"
 	@echo "  VLLM_SR_DOCKERFILE_AMD - Dockerfile used when VLLM_SR_PLATFORM=amd"
 
 ##@ vLLM-SR (Semantic Router CLI)
@@ -134,8 +136,17 @@ VLLM_SR_PLATFORM ?=
 VLLM_SR_PLATFORM_NORMALIZED := $(shell echo "$(VLLM_SR_PLATFORM)" | tr '[:upper:]' '[:lower:]')
 VLLM_SR_DOCKERFILE ?= src/vllm-sr/Dockerfile
 VLLM_SR_DOCKERFILE_AMD ?= src/vllm-sr/Dockerfile.rocm
+VLLM_SR_HOST_ARCH_RAW := $(shell uname -m)
+ifeq ($(VLLM_SR_HOST_ARCH_RAW),arm64)
+VLLM_SR_TARGETARCH ?= arm64
+VLLM_SR_BUILDPLATFORM ?= linux/arm64
+else ifeq ($(VLLM_SR_HOST_ARCH_RAW),aarch64)
+VLLM_SR_TARGETARCH ?= arm64
+VLLM_SR_BUILDPLATFORM ?= linux/arm64
+else
 VLLM_SR_TARGETARCH ?= amd64
 VLLM_SR_BUILDPLATFORM ?= linux/amd64
+endif
 
 # AMD platform defaults (can still be overridden via env/CLI variables)
 ifeq ($(VLLM_SR_PLATFORM_NORMALIZED),amd)
@@ -144,6 +155,12 @@ VLLM_SR_IMAGE := $(VLLM_SR_IMAGE_ROCM)
 endif
 ifeq ($(origin VLLM_SR_DOCKERFILE),file)
 VLLM_SR_DOCKERFILE := $(VLLM_SR_DOCKERFILE_AMD)
+endif
+ifeq ($(origin VLLM_SR_TARGETARCH),file)
+VLLM_SR_TARGETARCH := amd64
+endif
+ifeq ($(origin VLLM_SR_BUILDPLATFORM),file)
+VLLM_SR_BUILDPLATFORM := linux/amd64
 endif
 endif
 
@@ -172,6 +189,8 @@ vllm-sr-dev:
 	@echo "2. Rebuilding Docker image..."
 	@echo "  Building from: $(PWD)"
 	@echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"
+	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
+	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
 	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
 	@echo "  Image: $(VLLM_SR_IMAGE)"
 	@echo ""
@@ -197,6 +216,8 @@ vllm-sr-build:
 	@$(LOG_TARGET)
 	@echo "Building vLLM Semantic Router Docker image..."
 	@echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"
+	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
+	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
 	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
 	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
 	@echo "Image built: $(VLLM_SR_IMAGE)"
@@ -211,12 +232,25 @@ vllm-sr-start: vllm-sr-dev
 ##@ vLLM-SR Tests (e2e tests for vllm-sr CLI)
 # Tests are located in e2e/testing/vllm-sr-cli/
 
+vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test execution
+vllm-sr-install-cli:
+	@python3 -m pip install -e src/vllm-sr
+
 vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
-vllm-sr-test:
+vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && python run_cli_tests.py --verbose
 
 vllm-sr-test-integration: ## Run CLI unit + integration tests (requires Docker image)
-vllm-sr-test-integration: vllm-sr-build
+vllm-sr-test-integration: vllm-sr-build vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration
+
+memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
+memory-test-integration: vllm-sr-build vllm-sr-install-cli docker-build-llm-katan
+	@$(LOG_TARGET)
+	@CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) \
+	DOCKER_REGISTRY=$(DOCKER_REGISTRY) \
+	DOCKER_TAG=$(DOCKER_TAG) \
+	VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) \
+	bash e2e/testing/run_memory_integration.sh
