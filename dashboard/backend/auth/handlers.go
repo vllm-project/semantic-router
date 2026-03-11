@@ -14,6 +14,12 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type BootstrapRegistrationRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+}
+
 type LoginResponse struct {
 	Token string `json:"token"`
 	User  *User  `json:"user"`
@@ -23,6 +29,10 @@ type ListUsersResponse struct {
 	Users []*User `json:"users"`
 }
 
+type BootstrapStatusResponse struct {
+	CanRegister bool `json:"canRegister"`
+}
+
 type UpdateUserRequest struct {
 	Role   string `json:"role"`
 	Status string `json:"status"`
@@ -30,6 +40,60 @@ type UpdateUserRequest struct {
 
 func AuthRoutes(svc *Service) *http.ServeMux {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/auth/bootstrap/can-register", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		canRegister, err := svc.CanBootstrap(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		respondJSON(w, BootstrapStatusResponse{CanRegister: canRegister})
+	})
+
+	mux.HandleFunc("/api/auth/bootstrap/register", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req BootstrapRegistrationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid body", http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(req.Email) == "" || strings.TrimSpace(req.Password) == "" {
+			http.Error(w, "email and password are required", http.StatusBadRequest)
+			return
+		}
+		if allowed, err := svc.CanBootstrap(r.Context()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else if !allowed {
+			http.Error(w, "bootstrap is disabled", http.StatusConflict)
+			return
+		}
+
+		hash, err := svc.HashPassword(req.Password)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		u, err := svc.store.CreateUser(r.Context(), req.Email, req.Name, hash, "super_admin", "active")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		token, err := svc.issueToken(u)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeAudit(r, svc, "user.bootstrap", "/api/auth/bootstrap/register", "")
+		respondJSON(w, LoginResponse{Token: token, User: u})
+	})
+
 	mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -48,7 +112,43 @@ func AuthRoutes(svc *Service) *http.ServeMux {
 		respondJSON(w, LoginResponse{Token: token, User: user})
 	})
 
+	mux.HandleFunc("/api/auth/login/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req LoginRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid body", http.StatusBadRequest)
+			return
+		}
+		token, user, err := svc.Login(r.Context(), strings.TrimSpace(req.Email), req.Password)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		respondJSON(w, LoginResponse{Token: token, User: user})
+	})
+
 	mux.HandleFunc("/api/auth/me", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		ac, ok := AuthFromContext(r)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		u, err := svc.GetByID(r.Context(), ac.UserID)
+		if err != nil || u == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		respondJSON(w, map[string]any{"user": u})
+	})
+
+	mux.HandleFunc("/api/auth/me/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return

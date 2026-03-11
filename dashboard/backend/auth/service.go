@@ -75,9 +75,6 @@ func (s *Service) Login(ctx context.Context, email, password string) (string, *U
 	u := &User{ID: id, Email: e, Name: n, Role: role, Status: status}
 	token, err := s.issueToken(u)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", nil, errors.New("invalid credentials")
-		}
 		return "", nil, err
 	}
 	return token, u, nil
@@ -126,6 +123,9 @@ func (s *Service) EnsureBootstrapAdmin(ctx context.Context, email, password, nam
 	if err == nil && n != "" {
 		return nil
 	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
 	if err == nil {
 		return nil
 	}
@@ -137,6 +137,14 @@ func (s *Service) EnsureBootstrapAdmin(ctx context.Context, email, password, nam
 		return err
 	}
 	return nil
+}
+
+func (s *Service) CanBootstrap(ctx context.Context) (bool, error) {
+	count, err := s.store.CountUsers(ctx)
+	if err != nil {
+		return false, err
+	}
+	return count == 0, nil
 }
 
 func defaultAdminName(name string) string {

@@ -1,4 +1,4 @@
-import React, { FormEvent, useMemo, useState } from 'react'
+import React, { FormEvent, useEffect, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useSetup } from '../contexts/SetupContext'
@@ -18,22 +18,67 @@ const LoginPage: React.FC = () => {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
+
   const [error, setError] = useState('')
+  const [canBootstrap, setCanBootstrap] = useState(false)
+  const [registerMode, setRegisterMode] = useState(false)
+  const [pending, setPending] = useState(false)
 
   const isFirstServe = Boolean(setupState?.setupMode)
-  const targetAfterLogin = useMemo(() => {
-    if (from) return from
-    return isFirstServe ? '/setup' : '/dashboard'
-  }, [from, isFirstServe])
+  const targetAfterLogin = from ?? (isFirstServe ? '/setup' : '/dashboard')
 
-  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const response = await fetch('/api/auth/bootstrap/can-register', { method: 'GET' })
+        if (response.ok) {
+          const payload = (await response.json()) as { canRegister: boolean }
+          setCanBootstrap(Boolean(payload?.canRegister))
+        }
+      } catch {
+        // keep default false
+      }
+    }
+    void load()
+  }, [])
+
+  const onSubmitLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError('')
+    setPending(true)
     try {
       await login(email.trim(), password)
       navigate(targetAfterLogin, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed. Please check credentials.')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  const onSubmitRegister = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError('')
+    setPending(true)
+    try {
+      const response = await fetch('/api/auth/bootstrap/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password, name }),
+      })
+      if (!response.ok) {
+        const message = await response.text()
+        throw new Error(message || `Request failed: ${response.status}`)
+      }
+      const payload = (await response.json()) as { token: string; user?: { id: string; email: string; name: string; role?: string } }
+      localStorage.setItem('vsr_auth_token', payload.token)
+      // force full reload to let AuthContext initialize state with new token
+      window.location.href = targetAfterLogin
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Register failed.')
+    } finally {
+      setPending(false)
     }
   }
 
@@ -60,14 +105,18 @@ const LoginPage: React.FC = () => {
       </div>
 
       <main className={styles.mainContent}>
-        <form className={styles.card} onSubmit={onSubmit}>
+        <form className={styles.card} onSubmit={registerMode ? onSubmitRegister : onSubmitLogin}>
           <div className={styles.heroBadge}>
             <img src="/vllm.png" alt="vLLM Logo" className={styles.badgeLogo} />
             <span>Welcome to vLLM Semantic Router</span>
           </div>
 
-          <h1 className={styles.title}>Sign in</h1>
-          <p className={styles.subtitle}>Use your dashboard account to continue.</p>
+          <h1 className={styles.title}>{registerMode ? 'Create first admin' : 'Sign in'}</h1>
+          <p className={styles.subtitle}>
+            {registerMode
+              ? 'No account exists yet. Register your first admin account.'
+              : 'Use your dashboard account to continue.'}
+          </p>
 
           <label className={styles.label}>Email</label>
           <input
@@ -89,17 +138,43 @@ const LoginPage: React.FC = () => {
             required
           />
 
+          {registerMode ? (
+            <>
+              <label className={styles.label}>Name</label>
+              <input
+                className={styles.input}
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Admin User"
+                required
+              />
+            </>
+          ) : null}
+
           {error ? <div className={styles.error}>{error}</div> : null}
 
-          <button className={styles.button} type="submit" disabled={isLoading || setupLoading}>
-            {isLoading || setupLoading ? 'Signing in...' : 'Continue'}
+          <button className={styles.button} type="submit" disabled={pending || setupLoading || isLoading}>
+            {registerMode ? (pending ? 'Registering...' : 'Create admin') : (isLoading ? 'Signing in...' : 'Continue')}
           </button>
 
-          <button
-            className={styles.secondaryButton}
-            type="button"
-            onClick={() => navigate('/')}
-          >
+          {canBootstrap && !registerMode ? (
+            <button className={styles.secondaryButton} type="button" onClick={() => setRegisterMode(true)}>
+              First-time: register admin account
+            </button>
+          ) : null}
+
+          {registerMode ? (
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={() => setRegisterMode(false)}
+            >
+              Back to sign in
+            </button>
+          ) : null}
+
+          <button className={styles.secondaryButton} type="button" onClick={() => navigate('/')}>
             Back to landing page
           </button>
         </form>
