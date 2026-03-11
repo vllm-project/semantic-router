@@ -121,13 +121,8 @@ func validateConfigStructure(cfg *RouterConfig) error {
 			}
 		}
 
-		// Validate modelRefs count to prevent cost amplification.
-		// Looper algorithms (confidence, ratings) execute up to len(modelRefs) backend calls.
-		const maxModelRefs = 10
-		if len(decision.ModelRefs) > maxModelRefs {
-			logging.Warnf("Decision '%s' has %d modelRefs (max recommended: %d). "+
-				"Each looper request may trigger up to %d backend calls.",
-				decision.Name, len(decision.ModelRefs), maxModelRefs, len(decision.ModelRefs))
+		if n := len(decision.ModelRefs); n > 10 {
+			logging.Warnf("Decision '%s' has %d modelRefs (max recommended: 10); each looper request may trigger up to %d backend calls", decision.Name, n, n)
 		}
 
 		// Validate algorithm one-of semantics and type-specific configuration.
@@ -365,24 +360,28 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 		}
 	}
 
-	// Validate ReMoM breadth_schedule bounds to prevent cost explosion.
-	// breadth_schedule: [32, 8] = 32 + 8 + 1 (final) = 41 backend calls per request.
-	if normalizedType == "remom" && algorithm.ReMoM != nil {
-		totalCalls := 1 // final synthesis round
-		for _, breadth := range algorithm.ReMoM.BreadthSchedule {
-			if breadth <= 0 {
-				return fmt.Errorf("decision '%s': remom.breadth_schedule values must be positive, got %d", decisionName, breadth)
-			}
-			totalCalls += breadth
-		}
-		const maxTotalCalls = 64
-		if totalCalls > maxTotalCalls {
-			return fmt.Errorf("decision '%s': remom.breadth_schedule would trigger %d backend calls per request (max %d). "+
-				"Reduce breadth_schedule values to limit cost",
-				decisionName, totalCalls, maxTotalCalls)
-		}
-	}
+	return validateReMoMBreadthSchedule(decisionName, normalizedType, algorithm.ReMoM)
+}
 
+// validateReMoMBreadthSchedule validates that ReMoM breadth_schedule values are positive
+// and that the total backend calls per request stay within safe bounds.
+func validateReMoMBreadthSchedule(decisionName, normalizedType string, cfg *ReMoMAlgorithmConfig) error {
+	if normalizedType != "remom" || cfg == nil {
+		return nil
+	}
+	totalCalls := 1 // final synthesis round
+	for _, breadth := range cfg.BreadthSchedule {
+		if breadth <= 0 {
+			return fmt.Errorf("decision '%s': remom.breadth_schedule values must be positive, got %d", decisionName, breadth)
+		}
+		totalCalls += breadth
+	}
+	const maxTotalCalls = 64
+	if totalCalls > maxTotalCalls {
+		return fmt.Errorf("decision '%s': remom.breadth_schedule would trigger %d backend calls per request (max %d). "+
+			"Reduce breadth_schedule values to limit cost",
+			decisionName, totalCalls, maxTotalCalls)
+	}
 	return nil
 }
 
