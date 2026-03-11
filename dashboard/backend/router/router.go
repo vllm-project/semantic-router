@@ -256,7 +256,13 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		mux.HandleFunc("/api/auth/bootstrap/can-register", func(w http.ResponseWriter, r *http.Request) {
 			forwardAuthRoute("/api/auth/bootstrap/can-register", http.MethodGet, w, r)
 		})
+		mux.HandleFunc("/api/auth/bootstrap/can-register/", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/bootstrap/can-register", http.MethodGet, w, r)
+		})
 		mux.HandleFunc("/api/auth/bootstrap/register", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/bootstrap/register", http.MethodPost, w, r)
+		})
+		mux.HandleFunc("/api/auth/bootstrap/register/", func(w http.ResponseWriter, r *http.Request) {
 			forwardAuthRoute("/api/auth/bootstrap/register", http.MethodPost, w, r)
 		})
 		auth.RegisterAdminRoutes(mux, authSvc)

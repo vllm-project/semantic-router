@@ -166,15 +166,9 @@ func isPublicPath(path string) bool {
 	switch {
 	case strings.HasPrefix(path, "/api/auth/login"):
 		return true
-	case path == "/api/auth/login/":
+	case strings.HasPrefix(path, "/api/auth/bootstrap/"):
 		return true
-	case path == "/api/auth/bootstrap/can-register":
-		return true
-	case path == "/api/auth/bootstrap/register":
-		return true
-	case path == "/api/auth/me":
-		return false
-	case path == "/api/auth/me/":
+	case strings.HasPrefix(path, "/api/auth/me"):
 		return false
 	case strings.HasPrefix(path, "/api/setup/state"):
 		return true
