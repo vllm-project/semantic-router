@@ -43,8 +43,11 @@ For detailed setup options, platform notes, and troubleshooting, see the **[Docs
 
 > [!IMPORTANT]
 > Online [playground](https://play.vllm-semantic-router.com) default credentials:
+>
+> <!-- markdownlint-disable MD004 MD032 -->
 > + username: `love@vllm-sr.ai`
 > + password: `vllm-sr`
+> <!-- markdownlint-enable MD004 MD032 -->
 
 ## Goals
 
