@@ -27,6 +27,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 ) *ext_proc.ProcessingResponse {
 	usage := parseResponseUsage(responseBody, ctx.RequestModel)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
+	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 	r.updateResponseCache(ctx, responseBody)
 
 	finalBody := r.translateResponseBodyForClient(ctx, responseBody)
@@ -106,6 +107,29 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 		false,
 	)
 	r.recordResponseCost(ctx, completionLatency, usage)
+}
+
+// calibrateTokenEstimator feeds actual prompt token usage back to the
+// CalibratedTokenCounter so it can learn per-category bytes-per-token
+// ratios. The category is derived from the matched context rules or
+// decision name; the byte length comes from the original request body.
+func (r *OpenAIRouter) calibrateTokenEstimator(ctx *RequestContext, actualPromptTokens int) {
+	if r.Classifier == nil || actualPromptTokens <= 0 || len(ctx.OriginalRequestBody) == 0 {
+		return
+	}
+
+	byteLen := len(ctx.OriginalRequestBody)
+
+	// Use the most specific category available: matched context rules,
+	// then decision name, then a catch-all default.
+	category := "_default"
+	if len(ctx.VSRMatchedContext) > 0 {
+		category = ctx.VSRMatchedContext[0]
+	} else if ctx.VSRSelectedDecisionName != "" {
+		category = ctx.VSRSelectedDecisionName
+	}
+
+	r.Classifier.ObserveTokenUsage(category, byteLen, actualPromptTokens)
 }
 
 func (r *OpenAIRouter) recordResponseCost(

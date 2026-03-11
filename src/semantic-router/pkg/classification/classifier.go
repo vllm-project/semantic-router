@@ -396,6 +396,11 @@ type Classifier struct {
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
 
+	// TokenCalibrator is the calibrated token counter that learns
+	// bytes-per-token ratios from actual LLM usage.prompt_tokens.
+	// Exposed so the response pipeline can call ObserveTokenUsage.
+	TokenCalibrator *CalibratedTokenCounter
+
 	// Complexity classifier for complexity-based routing using embedding similarity
 	complexityClassifier *ComplexityClassifier
 
@@ -465,6 +470,24 @@ func withKeywordEmbeddingClassifier(keywordEmbeddingInitializer EmbeddingClassif
 func withContextClassifier(contextClassifier *ContextClassifier) option {
 	return func(c *Classifier) {
 		c.contextClassifier = contextClassifier
+	}
+}
+
+func withTokenCalibrator(calibrator *CalibratedTokenCounter) option {
+	return func(c *Classifier) {
+		c.TokenCalibrator = calibrator
+	}
+}
+
+// ObserveTokenUsage feeds actual token usage from the LLM response back
+// into the calibrated token counter so it can learn the true
+// bytes-per-token ratio for each content category.
+// category is the matched context rule or decision name (e.g. "code", "rag").
+// byteLen is the original request body byte length.
+// actualTokens is usage.prompt_tokens from the LLM response.
+func (c *Classifier) ObserveTokenUsage(category string, byteLen int, actualTokens int) {
+	if c.TokenCalibrator != nil {
+		c.TokenCalibrator.Observe(category, byteLen, actualTokens)
 	}
 }
 
@@ -669,10 +692,9 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 	// Add context classifier if configured
 	if len(cfg.ContextRules) > 0 {
-		// Create token counter (uses character-based heuristic for performance)
-		tokenCounter := &CharacterBasedTokenCounter{}
+		tokenCounter := NewCalibratedTokenCounter(WithConservativeEstimate())
 		contextClassifier := NewContextClassifier(tokenCounter, cfg.ContextRules)
-		options = append(options, withContextClassifier(contextClassifier))
+		options = append(options, withContextClassifier(contextClassifier), withTokenCalibrator(tokenCounter))
 	}
 
 	// Add complexity classifier if configured
