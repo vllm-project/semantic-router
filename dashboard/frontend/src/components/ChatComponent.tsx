@@ -975,7 +975,7 @@ const ChatComponent = ({
   }, [enableClawMode, isLoading, isTogglingClawMode])
 
   const isTeamRoomView = enableClawMode && clawView === 'room', roomCreateDisabled = isTeamRoomView && clawManagementDisabled
-  const modeToggleDisabled = isLoading || isTogglingClawMode
+  const modeToggleDisabled = isLoading || isTogglingClawMode || readonlyLoading
 
   const handleToggleTeamView = useCallback(() => { if (!enableClawMode || modeToggleDisabled) return; setClawView(prev => (prev === 'room' ? 'control' : 'room')) }, [enableClawMode, modeToggleDisabled])
 

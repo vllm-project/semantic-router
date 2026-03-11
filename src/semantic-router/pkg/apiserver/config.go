@@ -5,6 +5,7 @@ package apiserver
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
 )
 
 // ClassificationAPIServer holds the server state and dependencies
@@ -17,32 +18,13 @@ type ClassificationAPIServer struct {
 	enableSystemPromptAPI bool
 }
 
-// ModelsInfoResponse represents the response for models info endpoint
-type ModelsInfoResponse struct {
-	Models []ModelInfo `json:"models"`
-	System SystemInfo  `json:"system"`
-}
-
-// ModelInfo represents information about a loaded model
-type ModelInfo struct {
-	Name        string            `json:"name"`
-	Type        string            `json:"type"`
-	Loaded      bool              `json:"loaded"`
-	ModelPath   string            `json:"model_path,omitempty"`
-	Categories  []string          `json:"categories,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
-	LoadTime    string            `json:"load_time,omitempty"`
-	MemoryUsage string            `json:"memory_usage,omitempty"`
-}
-
-// SystemInfo represents system information
-type SystemInfo struct {
-	GoVersion    string `json:"go_version"`
-	Architecture string `json:"architecture"`
-	OS           string `json:"os"`
-	MemoryUsage  string `json:"memory_usage"`
-	GPUAvailable bool   `json:"gpu_available"`
-}
+type (
+	ModelsInfoResponse = modelinventory.ModelsInfoResponse
+	ModelsInfoSummary  = modelinventory.ModelsInfoSummary
+	ModelInfo          = modelinventory.ModelInfo
+	ModelRegistryInfo  = config.ModelRegistryInfo
+	SystemInfo         = modelinventory.SystemInfo
+)
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response
 type OpenAIModel struct {

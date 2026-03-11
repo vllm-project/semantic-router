@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // Sample config for testing - uses raw config fallback since full parsing requires more dependencies
@@ -96,11 +97,58 @@ func setupTestConfig(t *testing.T) string {
 	return configPath
 }
 
+func setupMockRouterAPI(t *testing.T, response RouterIntentResponse) string {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/classify/intent" {
+			http.NotFound(w, r)
+			return
+		}
+
+		time.Sleep(5 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("encode mock router response: %v", err)
+		}
+	}))
+
+	t.Cleanup(server.Close)
+	return server.URL
+}
+
 func TestTopologyTestQueryHandler_BasicDryRun(t *testing.T) {
 	configPath := setupTestConfig(t)
 	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
-	handler := TopologyTestQueryHandler(configPath, "")
+	routerAPIURL := setupMockRouterAPI(t, RouterIntentResponse{
+		Classification: struct {
+			Category         string  `json:"category"`
+			Confidence       float64 `json:"confidence"`
+			ProcessingTimeMs int64   `json:"processing_time_ms"`
+		}{
+			Category:         "reasoning",
+			Confidence:       0.93,
+			ProcessingTimeMs: 7,
+		},
+		RecommendedModel: "gpt-4",
+		RoutingDecision:  "reasoning_decision",
+		MatchedSignals: &struct {
+			Keywords     []string `json:"keywords,omitempty"`
+			Embeddings   []string `json:"embeddings,omitempty"`
+			Domains      []string `json:"domains,omitempty"`
+			FactCheck    []string `json:"fact_check,omitempty"`
+			UserFeedback []string `json:"user_feedback,omitempty"`
+			Preferences  []string `json:"preferences,omitempty"`
+			Language     []string `json:"language,omitempty"`
+			Context      []string `json:"context,omitempty"`
+			Complexity   []string `json:"complexity,omitempty"`
+		}{
+			Keywords: []string{"thinking"},
+		},
+	})
+
+	handler := TopologyTestQueryHandler(configPath, routerAPIURL)
 
 	// Test request
 	reqBody := TestQueryRequest{
@@ -148,7 +196,35 @@ func TestTopologyTestQueryHandler_CodingQuery(t *testing.T) {
 	configPath := setupTestConfig(t)
 	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
-	handler := TopologyTestQueryHandler(configPath, "")
+	routerAPIURL := setupMockRouterAPI(t, RouterIntentResponse{
+		Classification: struct {
+			Category         string  `json:"category"`
+			Confidence       float64 `json:"confidence"`
+			ProcessingTimeMs int64   `json:"processing_time_ms"`
+		}{
+			Category:         "coding",
+			Confidence:       0.91,
+			ProcessingTimeMs: 9,
+		},
+		RecommendedModel: "gpt-4",
+		RoutingDecision:  "coding_decision",
+		MatchedSignals: &struct {
+			Keywords     []string `json:"keywords,omitempty"`
+			Embeddings   []string `json:"embeddings,omitempty"`
+			Domains      []string `json:"domains,omitempty"`
+			FactCheck    []string `json:"fact_check,omitempty"`
+			UserFeedback []string `json:"user_feedback,omitempty"`
+			Preferences  []string `json:"preferences,omitempty"`
+			Language     []string `json:"language,omitempty"`
+			Context      []string `json:"context,omitempty"`
+			Complexity   []string `json:"complexity,omitempty"`
+		}{
+			Keywords: []string{"coding"},
+			Domains:  []string{"code"},
+		},
+	})
+
+	handler := TopologyTestQueryHandler(configPath, routerAPIURL)
 
 	reqBody := TestQueryRequest{
 		Query: "Please help me debug this function",

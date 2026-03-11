@@ -17,8 +17,8 @@
 
 *Latest News* 🔥
 
+- [2026/03/10] v0.2 Released: [vLLM Semantic Router v0.2 Athena Release](https://vllm.ai/blog/v0.2-vllm-sr-athena-release)
 - [2026/02/27] White Paper Released: [Signal Driven Decision Routing for Mixture-of-Modality Models](https://vllm-semantic-router.com/white-paper/)
-- [2026/02/02] New SOTA on [RouterArena](https://routeworks.github.io) (ICLR 2026): best overall score, Rank #1
 - [2026/01/05] Iris v0.1 is Released: [vLLM Semantic Router v0.1 Iris: The First Major Release](https://blog.vllm.ai/2026/01/05/vllm-sr-iris.html)
 - [2025/12/16] Collaboration: [AMD × vLLM Semantic Router: Building the System Intelligence Together](https://blog.vllm.ai/2025/12/16/vllm-sr-amd.html)
 - [2025/12/15] New Blog: [Token-Level Truth: Real-Time Hallucination Detection for Production LLMs](https://blog.vllm.ai/2025/12/14/halugate.html)
@@ -30,6 +30,21 @@
 - [2025/09/01] Released the project: [vLLM Semantic Router: Next Phase in LLM inference](https://blog.vllm.ai/2025/09/11/semantic-router.html).
 
 ---
+
+## Quick Start
+
+### Installation
+
+```bash
+$ curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+```
+
+For detailed setup options, platform notes, and troubleshooting, see the **[Docs](https://vllm-semantic-router.com/docs/installation/)**.
+
+> [!IMPORTANT]
+> Online [playground](https://play.vllm-semantic-router.com) default credentials:
+> + username: `love@vllm-sr.ai`
+> + password: `vllm-sr`
 
 ## Goals
 
@@ -49,82 +64,6 @@ It lives between the real world and models:
 
 ![level](./website/static/img/level.png)
 
-### Architecture
-
-A quick overview of the current architecture:
-
-![architecture](./website/static/img/architecture.png)
-
-## Quick Start
-
-### Installation
-
-> [!TIP]
-> We recommend that you setup a Python virtual environment to manage dependencies.
-
-```bash
-$ python -m venv vsr
-$ source vsr/bin/activate
-$ pip install vllm-sr
-```
-
-Installed successfully if you see the following help message:
-
-```bash
-$ vllm-sr
-
-       _ _     __  __       ____  ____
-__   _| | |_ _|  \/  |     / ___||  _ \
-\ \ / / | | | | |\/| |_____\___ \| |_) |
- \ V /| | | |_| | |  |_____|___) |  _ <
-  \_/ |_|_|\__,_|_|  |     |____/|_| \_\
-
-vLLM Semantic Router - Intelligent routing for vLLM
-
-Usage: vllm-sr [OPTIONS] COMMAND [ARGS]...
-
-  vLLM Semantic Router CLI - Intelligent routing and caching for vLLM
-  endpoints.
-
-Options:
-  --version  Show version and exit.
-  --help     Show this message and exit.
-
-Commands:
-  config  Print generated configuration.
-  init    Initialize vLLM Semantic Router configuration.
-  dashboard  Launch the vLLM Semantic Router dashboard.
-  logs    Show logs from vLLM Semantic Router service.
-  serve   Start vLLM Semantic Router.
-  status  Show status of vLLM Semantic Router services.
-  stop    Stop vLLM Semantic Router.
-```
-
-> [!TIP]
-> You can specify the HF_ENDPOINT, HF_TOKEN, and HF_HOME environment variables to configure the Hugging Face credentials.
-
-```bash
-# Set environment variables (optional)
-export HF_ENDPOINT=https://huggingface.co  # Or use mirror: https://hf-mirror.com
-export HF_TOKEN=your_token_here  # Only for gated models
-export HF_HOME=/path/to/cache  # Optional: custom cache directory
-
-# Start the service - models download automatically
-# Environment variables are automatically passed to the container
-vllm-sr serve
-```
-
-### Configuration
-
-**File Descriptor Limits**: The CLI automatically sets file descriptor limits to 65,536 for Envoy proxy. For custom limits:
-
-```bash
-export VLLM_SR_NOFILE_LIMIT=100000  # Optional: custom limit (min: 8192)
-vllm-sr serve
-```
-
-See the [vllm-sr README](src/vllm-sr/README.md#configuration) for detailed configuration options and troubleshooting.
-
 ## Documentation 📖
 
 For comprehensive documentation including detailed setup instructions, architecture guides, and API references, visit:
@@ -137,20 +76,6 @@ The documentation includes:
 - **[System Architecture](https://vllm-semantic-router.com/docs/intro/#architecture-overview)** - Technical deep dive
 - **[Model Training](https://vllm-semantic-router.com/docs/training/training-overview/)** - How classification models work
 - **[API Reference](https://vllm-semantic-router.com/docs/api/router/)** - Complete API documentation
-
-## Contributor Harness
-
-For repository-specific development and agent workflow rules, start with [AGENTS.md](AGENTS.md) and the indexed harness docs in [docs/agent/README.md](docs/agent/README.md).
-If the desired architecture and the current implementation still diverge after your change, record the durable gap in the debt entry set indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md).
-
-Use the shared entrypoints:
-
-```bash
-make agent-scorecard
-make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
-make agent-ci-gate CHANGED_FILES="path/one,path/two"
-make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
-```
 
 ## Community 👋
 

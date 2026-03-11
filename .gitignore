@@ -120,6 +120,7 @@ website/static/install.sh
 spec/
 results/
 reports/
+test-results/
 
 # AI tooling regulation docs
 # Ignore Copilot/Claude/Cursor rule docs anywhere in the repo

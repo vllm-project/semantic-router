@@ -1,20 +1,36 @@
 .page {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
-  background: #050705;
+  background: #000;
+  display: flex;
+  flex-direction: column;
 }
 
 .page::before {
-  content: '';
+  content: "";
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at top left, rgba(118, 185, 0, 0.18), transparent 30%),
-    radial-gradient(circle at top right, rgba(143, 212, 0, 0.12), transparent 24%),
-    linear-gradient(180deg, rgba(4, 6, 4, 0.68) 0%, rgba(7, 9, 7, 0.8) 34%, rgba(10, 12, 10, 0.92) 100%);
+    radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.08),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(0, 180, 216, 0.08),
+      transparent 24%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(4, 7, 15, 0.44) 0%,
+      rgba(6, 10, 20, 0.56) 34%,
+      rgba(9, 12, 24, 0.74) 100%
+    );
 }
 
 .backgroundEffect {
@@ -22,17 +38,67 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.54;
-  filter: saturate(0.96) brightness(0.88);
+  opacity: 0.85;
+}
+
+.hero,
+.panel,
+.modelCard,
+.reviewCard,
+.previewCard,
+.presetCard,
+.reviewStat {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(16, 22, 44, 0.58),
+      rgba(9, 12, 24, 0.38) 58%,
+      rgba(4, 8, 18, 0.62)
+    ),
+    rgba(8, 12, 24, 0.24);
+  box-shadow:
+    0 28px 60px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+.hero::before,
+.panel::before,
+.modelCard::before,
+.reviewCard::before,
+.previewCard::before,
+.presetCard::before,
+.reviewStat::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.08),
+      transparent 30%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.045),
+      rgba(255, 255, 255, 0.015) 32%,
+      transparent 72%
+    );
+  pointer-events: none;
 }
 
 .content {
   position: relative;
   z-index: 1;
-  max-width: 1080px;
-  margin: 0 auto;
-  min-height: 100vh;
-  padding: 1rem;
+  width: min(1080px, 100%);
+  margin: auto;
+  padding: clamp(1rem, 3vh, 2rem) 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.72rem;
@@ -40,13 +106,8 @@
 
 .hero {
   padding: 0.95rem 1.1rem 0.9rem;
-  border: 1px solid rgba(118, 185, 0, 0.18);
   border-radius: 1rem;
-  background:
-    linear-gradient(135deg, rgba(118, 185, 0, 0.16), rgba(32, 48, 18, 0.36) 38%, rgba(8, 8, 8, 0.56)),
-    rgba(8, 8, 8, 0.62);
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(12px);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .heroHeader {
@@ -59,10 +120,10 @@
   display: inline-flex;
   align-items: center;
   padding: 0.26rem 0.58rem;
-  border: 1px solid rgba(118, 185, 0, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.12);
-  color: var(--color-primary-light);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f7ff;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -83,10 +144,14 @@
   height: 3.15rem;
   flex-shrink: 0;
   border-radius: 1rem;
-  border: 1px solid rgba(118, 185, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   background:
-    radial-gradient(circle at top left, rgba(143, 212, 0, 0.18), transparent 46%),
-    linear-gradient(180deg, rgba(118, 185, 0, 0.12), rgba(255, 255, 255, 0.02));
+    radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.14),
+      transparent 44%
+    ),
+    linear-gradient(180deg, rgba(0, 180, 216, 0.14), rgba(255, 255, 255, 0.02));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
@@ -94,7 +159,7 @@
   width: 1.8rem;
   height: 1.8rem;
   object-fit: contain;
-  filter: drop-shadow(0 0 14px rgba(118, 185, 0, 0.28));
+  filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.16));
 }
 
 .heroTitle {
@@ -122,29 +187,42 @@
   align-items: center;
   gap: 0.65rem;
   padding: 0.74rem 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.85rem;
-  background: rgba(16, 16, 16, 0.82);
+  background: rgba(12, 18, 36, 0.44);
   color: var(--color-text-secondary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
-  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 12px 30px rgba(0, 0, 0, 0.18);
+  transition:
+    transform var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .stepButton:hover {
-  border-color: rgba(118, 185, 0, 0.24);
+  border-color: rgba(255, 255, 255, 0.22);
   transform: translateY(-1px);
 }
 
 .stepButtonActive {
-  border-color: rgba(118, 185, 0, 0.4);
-  background: linear-gradient(135deg, rgba(118, 185, 0, 0.17), rgba(19, 27, 12, 0.88));
+  border-color: rgba(118, 185, 0, 0.36);
+  background: linear-gradient(
+    135deg,
+    rgba(118, 185, 0, 0.16),
+    rgba(9, 12, 24, 0.52) 68%
+  );
   color: var(--color-text);
-  box-shadow: inset 0 1px 0 rgba(143, 212, 0, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(143, 212, 0, 0.12),
+    0 14px 34px rgba(0, 0, 0, 0.2);
 }
 
 .stepButtonDone {
-  border-color: rgba(118, 185, 0, 0.2);
-  background: rgba(118, 185, 0, 0.08);
+  border-color: rgba(0, 180, 216, 0.18);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--color-text);
 }
 
@@ -173,11 +251,7 @@
 
 .panel {
   padding: 0.95rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 1rem;
-  background: linear-gradient(180deg, rgba(15, 15, 15, 0.88), rgba(10, 10, 10, 0.96));
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(16px);
 }
 
 .stepBody {
@@ -225,9 +299,9 @@
   max-width: 100%;
   margin-top: 0.48rem;
   padding: 0.38rem 0.7rem;
-  border: 1px solid rgba(118, 185, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.09);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .routeSummaryLabel {
@@ -253,11 +327,8 @@
 .modelCard,
 .reviewCard,
 .previewCard {
-  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0.95rem;
-  background: linear-gradient(180deg, rgba(24, 24, 24, 0.95), rgba(14, 14, 14, 0.96));
   padding: 0.82rem;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .modelCardHeader,
@@ -394,9 +465,9 @@
 
 .presetHintCard {
   padding: 0.75rem 0.85rem;
-  border: 1px dashed rgba(118, 185, 0, 0.18);
+  border: 1px dashed rgba(255, 255, 255, 0.16);
   border-radius: 0.95rem;
-  background: rgba(118, 185, 0, 0.05);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--color-text-secondary);
   font-size: 0.8rem;
 }
@@ -407,27 +478,77 @@
   gap: 0.75rem;
 }
 
+.remoteImportPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.72rem;
+  padding: 0.82rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(9, 12, 24, 0.46)
+  );
+}
+
+.remoteImportActions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.remoteImportSummary {
+  padding: 0.75rem 0.82rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(118, 185, 0, 0.22);
+  background: linear-gradient(
+    135deg,
+    rgba(118, 185, 0, 0.12),
+    rgba(9, 12, 24, 0.46)
+  );
+}
+
+.remoteImportSummaryHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.remoteImportSource {
+  margin-top: 0.55rem;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
 .presetCard {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
   padding: 0.82rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0.9rem;
-  background: rgba(20, 20, 20, 0.9);
   color: inherit;
   text-align: left;
-  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .presetCard:hover {
   transform: translateY(-1px);
-  border-color: rgba(118, 185, 0, 0.24);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .presetCardActive {
-  border-color: rgba(118, 185, 0, 0.38);
-  background: linear-gradient(180deg, rgba(118, 185, 0, 0.11), rgba(18, 18, 18, 0.96));
+  border-color: rgba(118, 185, 0, 0.36);
+  background: linear-gradient(
+    135deg,
+    rgba(118, 185, 0, 0.16),
+    rgba(9, 12, 24, 0.52) 68%
+  );
 }
 
 .presetCardHeader {
@@ -476,9 +597,7 @@
 
 .reviewStat {
   padding: 0.68rem 0.74rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 0.85rem;
-  background: rgba(255, 255, 255, 0.02);
 }
 
 .reviewStatLabel {
@@ -560,7 +679,10 @@
   padding: 0 0.85rem;
   border-radius: 0.82rem;
   font-weight: 600;
-  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .primaryButton {
@@ -614,6 +736,7 @@
   .modelCardHeader,
   .presetSectionHeader,
   .presetCardHeader,
+  .remoteImportSummaryHeader,
   .reviewCardHeader,
   .previewHeader {
     flex-direction: column;

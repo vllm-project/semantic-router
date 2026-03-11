@@ -37,6 +37,26 @@ type classifierInfoResponse struct {
 	} `json:"config"`
 }
 
+type modelsInfoResponse struct {
+	Models []struct {
+		Name      string `json:"name"`
+		Type      string `json:"type"`
+		Loaded    bool   `json:"loaded"`
+		State     string `json:"state"`
+		ModelPath string `json:"model_path"`
+		Registry  struct {
+			LocalPath string `json:"local_path"`
+			RepoID    string `json:"repo_id"`
+		} `json:"registry"`
+	} `json:"models"`
+	Summary struct {
+		Ready        bool   `json:"ready"`
+		Phase        string `json:"phase"`
+		LoadedModels int    `json:"loaded_models"`
+		TotalModels  int    `json:"total_models"`
+	} `json:"summary"`
+}
+
 func testAPIServerRuntimeConfigEndpoints(
 	ctx context.Context,
 	client *kubernetes.Clientset,
@@ -57,12 +77,19 @@ func testAPIServerRuntimeConfigEndpoints(
 	if err != nil {
 		return err
 	}
+	modelNames, loadedModels, totalModels, err := fetchModelsInfo(ctx, httpClient, session.URL("/info/models"))
+	if err != nil {
+		return err
+	}
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"model_ids":       modelIDs,
 			"decision_count":  len(decisionNames),
 			"decision_sample": decisionNames,
+			"router_models":   modelNames,
+			"loaded_models":   loadedModels,
+			"total_models":    totalModels,
 		})
 	}
 
@@ -125,6 +152,41 @@ func fetchClassifierDecisions(
 		return nil, fmt.Errorf("expected classifier config to include health_decision, got %v", decisionNames)
 	}
 	return decisionNames, nil
+}
+
+func fetchModelsInfo(
+	ctx context.Context,
+	httpClient *http.Client,
+	url string,
+) ([]string, int, int, error) {
+	modelsResp, err := getJSON(ctx, httpClient, url)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	if modelsResp.StatusCode != http.StatusOK {
+		return nil, 0, 0, fmt.Errorf("expected /info/models status 200, got %d: %s", modelsResp.StatusCode, string(modelsResp.Body))
+	}
+
+	var modelsInfo modelsInfoResponse
+	if err := json.Unmarshal(modelsResp.Body, &modelsInfo); err != nil {
+		return nil, 0, 0, fmt.Errorf("decode /info/models response: %w", err)
+	}
+	if len(modelsInfo.Models) == 0 {
+		return nil, 0, 0, fmt.Errorf("expected /info/models to include at least one router model")
+	}
+	if modelsInfo.Summary.TotalModels < len(modelsInfo.Models) {
+		return nil, 0, 0, fmt.Errorf("expected summary total_models >= model entries, got %+v", modelsInfo.Summary)
+	}
+
+	modelNames := make([]string, 0, len(modelsInfo.Models))
+	for _, model := range modelsInfo.Models {
+		if model.Name == "" || model.Type == "" || model.State == "" {
+			return nil, 0, 0, fmt.Errorf("expected router model entries to include name/type/state, got %+v", model)
+		}
+		modelNames = append(modelNames, model.Name)
+	}
+
+	return modelNames, modelsInfo.Summary.LoadedModels, modelsInfo.Summary.TotalModels, nil
 }
 
 type httpResponse struct {

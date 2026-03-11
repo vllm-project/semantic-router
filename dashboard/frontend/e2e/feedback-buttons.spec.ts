@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthenticatedAppShell } from './support/auth';
 
 /**
  * FeedbackButtons E2E tests.
@@ -23,6 +24,8 @@ function chatStreamBody(content: string, model: string): string {
 
 test.describe('FeedbackButtons', () => {
   test.beforeEach(async ({ page }) => {
+    await mockAuthenticatedAppShell(page);
+
     await page.route('**/api/router/v1/chat/completions', async (route) => {
       await route.fulfill({
         status: 200,

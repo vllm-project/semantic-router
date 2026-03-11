@@ -43,6 +43,8 @@ vllm-sr stop
 
 If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspace and opens the dashboard in setup mode. Configure your first model there, then activate routing.
 
+Local dashboard state is persisted under `.vllm-sr/dashboard-data/` and bind-mounted into the container at `/app/data`. User accounts, evaluation history, and ML pipeline artifacts survive `vllm-sr stop` followed by a new `vllm-sr serve` as long as that workspace directory is kept.
+
 ### Advanced YAML-first setup
 
 ```bash

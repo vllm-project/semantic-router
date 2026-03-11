@@ -1,27 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import RouterModelInventory from '../components/RouterModelInventory'
 import {
   describeRouterRuntime,
   getActiveRouterRuntime,
+  getLoadedModelCount,
   getModelStatusSummary,
-  type RouterRuntimeStatus,
+  getTotalKnownModelCount,
+  type SystemStatus,
 } from '../utils/routerRuntime'
 import styles from './StatusPage.module.css'
-
-interface ServiceStatus {
-  name: string
-  status: string
-  healthy: boolean
-  message?: string
-  component?: string
-}
-
-interface SystemStatus {
-  overall: string
-  deployment_type: string
-  services: ServiceStatus[]
-  version?: string
-  router_runtime?: RouterRuntimeStatus
-}
 
 const StatusPage: React.FC = () => {
   const [status, setStatus] = useState<SystemStatus | null>(null)
@@ -29,6 +16,7 @@ const StatusPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const scrolledHashRef = useRef<string | null>(null)
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -103,6 +91,28 @@ const StatusPage: React.FC = () => {
     () => status?.services.filter((service) => service.healthy).length ?? 0,
     [status],
   )
+  const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
+  const knownModels = useMemo(() => getTotalKnownModelCount(status?.models), [status])
+
+  useEffect(() => {
+    if (!status?.models?.models.length) {
+      return
+    }
+
+    const currentHash = window.location.hash
+    if (!currentHash || scrolledHashRef.current === currentHash) {
+      return
+    }
+
+    const targetId = decodeURIComponent(currentHash.slice(1))
+    const target = document.getElementById(targetId)
+    if (!target) {
+      return
+    }
+
+    scrolledHashRef.current = currentHash
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [status?.models?.models.length])
 
   if (loading && !status) {
     return (
@@ -286,6 +296,35 @@ const StatusPage: React.FC = () => {
               </div>
             </section>
           </div>
+
+          <section className={styles.servicesSection}>
+            <div className={styles.servicesSectionHeader}>
+              <div>
+                <span className={styles.servicesSectionTitle}>Model Inventory</span>
+                <p className={styles.servicesSectionDescription}>
+                  The router-reported model list, load state, and metadata exposed by <code>/info/models</code>.
+                </p>
+              </div>
+              <div className={styles.servicesHeaderMeta}>
+                <span className={styles.servicesCountChip}>
+                  {loadedModels}/{knownModels || 0} ready
+                </span>
+                {status.models?.summary?.phase && (
+                  <span className={styles.servicesCountChip}>
+                    {status.models.summary.phase.replace(/_/g, ' ')}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className={styles.cardBody}>
+              <RouterModelInventory
+                mode="full"
+                modelsInfo={status.models}
+                emptyMessage="The router has not exposed any model metadata yet."
+              />
+            </div>
+          </section>
 
           <section className={styles.servicesSection}>
             <div className={styles.servicesSectionHeader}>

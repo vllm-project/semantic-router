@@ -5,6 +5,14 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Ratings Page - Full Verification', () => {
+  test.beforeEach(async ({ page }) => {
+    test.skip(!process.env.DASHBOARD_TEST_TOKEN, 'requires DASHBOARD_TEST_TOKEN for authenticated live runs');
+
+    await page.addInitScript(({ storedToken }) => {
+      window.localStorage.setItem('vsr_auth_token', storedToken)
+    }, { storedToken: process.env.DASHBOARD_TEST_TOKEN! });
+  });
+
   test('1-2. Navigate to /ratings and verify structure', async ({ page }) => {
     await page.goto('/ratings');
     await page.waitForLoadState('networkidle');

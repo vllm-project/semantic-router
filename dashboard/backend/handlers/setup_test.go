@@ -163,8 +163,80 @@ func TestSetupValidateHandler(t *testing.T) {
 	if !resp.CanActivate {
 		t.Fatalf("expected canActivate=true")
 	}
+	if resp.Signals != 2 {
+		t.Fatalf("expected signals=2, got %d", resp.Signals)
+	}
 	if _, hasSetup := resp.Config["setup"]; hasSetup {
 		t.Fatalf("validated config should not contain setup marker")
+	}
+}
+
+func TestSetupImportRemoteHandler(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+
+	remoteConfigServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-yaml")
+		_, _ = w.Write([]byte(`
+signals:
+  domains:
+    - name: remote-domain
+      description: Remote domain signal
+decisions:
+  - name: remote-route
+    description: Remote route
+    priority: 100
+    rules:
+      operator: AND
+      conditions:
+        - type: domain
+          name: remote-domain
+    modelRefs:
+      - model: remote-model
+        use_reasoning: false
+providers:
+  models:
+    - name: remote-model
+      endpoints:
+        - name: remote-primary
+          weight: 100
+          endpoint: remote.example.com
+          protocol: https
+  default_model: remote-model
+`))
+	}))
+	defer remoteConfigServer.Close()
+
+	body, err := json.Marshal(SetupImportRemoteRequest{URL: remoteConfigServer.URL})
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	SetupImportRemoteHandler(configPath)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp SetupImportRemoteResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.SourceURL != remoteConfigServer.URL {
+		t.Fatalf("expected sourceUrl=%q, got %q", remoteConfigServer.URL, resp.SourceURL)
+	}
+	if resp.Models != 1 || resp.Decisions != 1 || resp.Signals != 1 {
+		t.Fatalf("expected counts 1/1/1, got models=%d decisions=%d signals=%d", resp.Models, resp.Decisions, resp.Signals)
+	}
+	if !resp.CanActivate {
+		t.Fatalf("expected canActivate=true")
+	}
+	if providers, ok := resp.Config["providers"].(map[string]interface{}); !ok || providers["default_model"] != "remote-model" {
+		t.Fatalf("expected imported config providers.default_model=remote-model, got %#v", resp.Config["providers"])
 	}
 }
 

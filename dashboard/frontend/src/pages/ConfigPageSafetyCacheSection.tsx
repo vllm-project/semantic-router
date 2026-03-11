@@ -253,7 +253,7 @@ export default function ConfigPageSafetyCacheSection({
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Similarity Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(routerConfig.semantic_cache.similarity_threshold)}</span>
+                  <span className={styles.configValue}>{formatThreshold(routerConfig.semantic_cache.similarity_threshold ?? 0)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Max Entries</span>

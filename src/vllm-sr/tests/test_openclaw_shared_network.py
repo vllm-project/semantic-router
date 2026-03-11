@@ -45,6 +45,39 @@ def test_docker_start_vllm_sr_sets_openclaw_shared_network_env(tmp_path, monkeyp
     assert "OPENCLAW_DEFAULT_NETWORK_MODE=vllm-sr-network" in captured["cmd"]
 
 
+def test_docker_start_vllm_sr_mounts_dashboard_data_dir(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+
+    captured = {}
+
+    def fake_run(cmd, capture_output, text, check):
+        captured["cmd"] = cmd
+        return SimpleNamespace(stdout="container-id\n", stderr="")
+
+    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(docker_start, "get_docker_image", lambda **kwargs: "test-image")
+    monkeypatch.setattr(docker_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(docker_start.shutil, "which", lambda name: None)
+
+    rc, _, _ = docker_cli.docker_start_vllm_sr(
+        str(config_path),
+        {},
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        network_name=None,
+        openclaw_network_name="vllm-sr-network",
+        minimal=True,
+    )
+
+    dashboard_data_dir = tmp_path / ".vllm-sr" / "dashboard-data"
+
+    assert rc == 0
+    assert dashboard_data_dir.is_dir()
+    assert f"{dashboard_data_dir}:/app/data:z" in captured["cmd"]
+
+
 def test_start_vllm_sr_creates_and_connects_shared_network_without_observability(
     monkeypatch,
 ):

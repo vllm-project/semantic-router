@@ -20,6 +20,7 @@ import { BuilderOutputPanel } from "./builderPageOutputPanel";
 import { useResizableWidth } from "./builderPageResizeHooks";
 import { BuilderStatusBar } from "./builderPageStatusBar";
 import { BuilderToolbar } from "./builderPageToolbar";
+import { useReadonly } from "@/contexts/ReadonlyContext";
 import type { EntityKind, SectionState, Selection } from "./builderPageTypes";
 
 // ---------- Component ----------
@@ -72,6 +73,7 @@ const BuilderPage: React.FC = () => {
     deployPreviewLoading,
     deployPreviewError,
   } = useDSLStore();
+  const { isReadonly, isLoading: readonlyLoading } = useReadonly();
 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [sections, setSections] = useState<SectionState>({
@@ -139,6 +141,7 @@ const BuilderPage: React.FC = () => {
     },
     [setMode, wasmReady, dslSource, parseAST],
   );
+  const deployDisabled = readonlyLoading || isReadonly;
 
   // --- Entity CRUD handlers ---
 
@@ -338,6 +341,13 @@ const BuilderPage: React.FC = () => {
     }
   }, [loadFromRouter, compile]);
 
+  const handleRequestDeploy = useCallback(() => {
+    if (deployDisabled) {
+      return;
+    }
+    requestDeploy();
+  }, [deployDisabled, requestDeploy]);
+
   // On first entry, load current router config and compile it by default.
   useEffect(() => {
     if (!wasmReady || autoLoadedDefaultConfigRef.current) return;
@@ -407,12 +417,20 @@ const BuilderPage: React.FC = () => {
         dslSource={dslSource}
         loading={loading}
         deploying={deploying}
+        deployDisabled={deployDisabled}
+        deployDisabledReason={
+          isReadonly
+            ? "Deploy is unavailable in read-only mode"
+            : readonlyLoading
+              ? "Checking deploy permissions..."
+              : undefined
+        }
         guideOpen={guideOpen}
         outputPanelOpen={outputPanelOpen}
         onModeSwitch={handleModeSwitch}
         onImport={handleOpenImport}
         onCompile={compile}
-        onRequestDeploy={requestDeploy}
+        onRequestDeploy={handleRequestDeploy}
         onFormat={format}
         onValidate={validate}
         onToggleGuide={() => setGuideOpen(!guideOpen)}

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthenticatedAppShell } from './support/auth';
 
 function chatStreamChunk(delta: Record<string, unknown>): string {
   return `data: ${JSON.stringify({ choices: [{ index: 0, delta }] })}\n\n`;
@@ -66,49 +67,7 @@ async function mockStreamingChatFetch(
 }
 
 async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): Promise<void> {
-  await page.route('**/api/setup/state', async (route) => {
-    await route.fulfill({
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        setupMode: false,
-        listenerPort: 8700,
-        models: 1,
-        decisions: 1,
-        hasModels: true,
-        hasDecisions: true,
-        canActivate: true,
-      }),
-    });
-  });
-
-  await page.route('**/api/settings', async (route) => {
-    await route.fulfill({
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        readonlyMode: false,
-        platform: '',
-        envoyUrl: '',
-      }),
-    });
-  });
-
-  await page.route('**/api/mcp/servers', async (route) => {
-    await route.fulfill({
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ servers: [] }),
-    });
-  });
-
-  await page.route('**/api/mcp/tools', async (route) => {
-    await route.fulfill({
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tools: [] }),
-    });
-  });
+  await mockAuthenticatedAppShell(page);
 }
 
 test.describe('Playground Chat Component', () => {

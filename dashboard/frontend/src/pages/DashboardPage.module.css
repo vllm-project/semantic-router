@@ -253,7 +253,11 @@
   display: grid;
   grid-template-columns: 1fr 1.4fr;
   gap: var(--spacing-lg);
-  align-items: start;
+  align-items: stretch;
+}
+
+.bottomGrid > .card {
+  height: 100%;
 }
 
 /* ------------------------------------------------------------------ */
