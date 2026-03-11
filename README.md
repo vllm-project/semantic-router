@@ -41,7 +41,10 @@ $ curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 
 For detailed setup options, platform notes, and troubleshooting, see the **[Docs](https://vllm-semantic-router.com/docs/installation/)**.
 
-Online playground default credentials: user `love@vllm-sr.ai`, password `vllm-sr`.
+> [!IMPORTANT]
+> Online [playground](https://play.vllm-semantic-router.com) default credentials:
+> + username: `love@vllm-sr.ai`
+> + password: `vllm-sr`
 
 ## Goals
 
