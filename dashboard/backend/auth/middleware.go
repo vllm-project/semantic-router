@@ -2,7 +2,7 @@ package auth
 
 import (
 	"context"
-		"log"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -164,8 +164,10 @@ func extractBearer(raw string) string {
 
 func isPublicPath(path string) bool {
 	switch {
-	case strings.HasPrefix(path, "/api/auth/"):
-		return path == "/api/auth/login"
+	case strings.HasPrefix(path, "/api/auth/login"):
+		return true
+	case path == "/api/auth/login/":
+		return true
 	case strings.HasPrefix(path, "/api/setup/state"):
 		return true
 	case path == "/healthz":

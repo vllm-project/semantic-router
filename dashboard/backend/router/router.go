@@ -189,7 +189,21 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			}
 			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
 		})
+		mux.HandleFunc("/api/auth/login/", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
 		mux.HandleFunc("/api/auth/me", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
+		mux.HandleFunc("/api/auth/me/", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
@@ -202,7 +216,29 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			log.Printf("failed to ensure bootstrap admin: %v", err)
 		}
 		authRoutes := auth.AuthRoutes(authSvc)
-		mux.Handle("/api/auth/", authRoutes)
+		forwardAuthRoute := func(path string, method string, w http.ResponseWriter, r *http.Request) {
+			if r.Method != method {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			cloneReq := *r
+			cloneURL := *r.URL
+			cloneURL.Path = path
+			cloneReq.URL = &cloneURL
+			authRoutes.ServeHTTP(w, &cloneReq)
+		}
+		mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/login", http.MethodPost, w, r)
+		})
+		mux.HandleFunc("/api/auth/login/", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/login", http.MethodPost, w, r)
+		})
+		mux.HandleFunc("/api/auth/me", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/me", http.MethodGet, w, r)
+		})
+		mux.HandleFunc("/api/auth/me/", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/me", http.MethodGet, w, r)
+		})
 		auth.RegisterAdminRoutes(mux, authSvc)
 	}
 
