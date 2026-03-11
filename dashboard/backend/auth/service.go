@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -57,6 +58,9 @@ func (s *Service) VerifyPassword(hash, password string) bool {
 func (s *Service) Login(ctx context.Context, email, password string) (string, *User, error) {
 	id, e, n, role, status, _, _, _, hash, err := s.store.GetUserByEmail(ctx, email)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil, errors.New("invalid credentials")
+		}
 		return "", nil, err
 	}
 	if status != "active" {
@@ -71,6 +75,9 @@ func (s *Service) Login(ctx context.Context, email, password string) (string, *U
 	u := &User{ID: id, Email: e, Name: n, Role: role, Status: status}
 	token, err := s.issueToken(u)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil, errors.New("invalid credentials")
+		}
 		return "", nil, err
 	}
 	return token, u, nil
