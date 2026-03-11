@@ -210,6 +210,20 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			}
 			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
 		})
+		mux.HandleFunc("/api/auth/bootstrap/can-register", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
+		mux.HandleFunc("/api/auth/bootstrap/register", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
 	} else {
 		authSvc = auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
 		if err := authSvc.EnsureBootstrapAdmin(context.Background(), cfg.BootstrapAdminEmail, cfg.BootstrapAdminPassword, cfg.BootstrapAdminName); err != nil {
@@ -238,6 +252,12 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		})
 		mux.HandleFunc("/api/auth/me/", func(w http.ResponseWriter, r *http.Request) {
 			forwardAuthRoute("/api/auth/me", http.MethodGet, w, r)
+		})
+		mux.HandleFunc("/api/auth/bootstrap/can-register", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/bootstrap/can-register", http.MethodGet, w, r)
+		})
+		mux.HandleFunc("/api/auth/bootstrap/register", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/bootstrap/register", http.MethodPost, w, r)
 		})
 		auth.RegisterAdminRoutes(mux, authSvc)
 	}
