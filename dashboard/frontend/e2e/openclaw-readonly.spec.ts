@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mockAuthenticatedSession } from './support/auth';
 
 const setupState = {
   setupMode: false,
@@ -75,6 +76,10 @@ const openClawStatus = [
 ];
 
 async function mockReadonlyCommon(page: Page) {
+  await mockAuthenticatedSession(page, {
+    settings: settingsResponse,
+  });
+
   await page.route('**/api/setup/state', async route => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(setupState) });
   });
@@ -143,7 +148,7 @@ test.describe('Readonly OpenClaw', () => {
     const messages = Array.isArray(capturedBody?.messages)
       ? (capturedBody?.messages as Array<{ content?: string }>)
       : [];
-    expect(messages.some(message => (message.content || '').includes('witty, humorous Claw Manager'))).toBeFalsy();
+    expect(messages.some(message => (message.content || '').includes('imaginative, sharply observant Claw Manager'))).toBeFalsy();
 
     const tools = Array.isArray(capturedBody?.tools)
       ? (capturedBody?.tools as Array<{ function?: { name?: string } }>)

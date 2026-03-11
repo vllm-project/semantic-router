@@ -444,6 +444,10 @@ button.navLink {
     padding: 0 1rem;
   }
 
+  .headerRight {
+    gap: 0.5rem;
+  }
+
   .nav {
     display: none;
   }

@@ -1,0 +1,382 @@
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 32px;
+  min-width: 0;
+  padding: 0 0.6rem 0 0.25rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.trigger:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.trigger:focus-visible {
+  outline: 1px solid rgba(118, 185, 0, 0.5);
+  outline-offset: 2px;
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.triggerActive {
+  color: var(--color-text);
+  background: rgba(118, 185, 0, 0.1);
+}
+
+.triggerAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(118, 185, 0, 0.16);
+  color: var(--color-text);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.triggerName {
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.triggerChevron {
+  flex-shrink: 0;
+  opacity: 0.62;
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.triggerActive .triggerChevron,
+.trigger:hover .triggerChevron,
+.trigger:focus-visible .triggerChevron {
+  opacity: 1;
+}
+
+.triggerChevronOpen {
+  transform: rotate(180deg);
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(6px);
+  z-index: 1200;
+}
+
+.dialog {
+  width: min(38rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(118, 185, 0, 0.08), rgba(118, 185, 0, 0.02) 18%, rgba(10, 10, 10, 0.96) 18%),
+    var(--color-bg-secondary);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+  animation: dialogEnter 160ms ease-out;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.35rem 1.5rem 1.1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.headerCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.eyebrow {
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.4rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.closeButton {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.closeButton:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.closeButton:focus-visible,
+.secondaryButton:focus-visible,
+.logoutButton:focus-visible {
+  outline: 1px solid rgba(118, 185, 0, 0.5);
+  outline-offset: 2px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.35rem 1.5rem 1.5rem;
+  overflow-y: auto;
+}
+
+.identitySection {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.identityAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: rgba(118, 185, 0, 0.18);
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.identityGrid {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+}
+
+.identityRow {
+  display: grid;
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.identityRow dt {
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.identityRow dd {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.permissionsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.permissionCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: rgba(118, 185, 0, 0.12);
+  color: var(--color-text);
+  font-size: 0.74rem;
+  letter-spacing: normal;
+}
+
+.permissionList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.permissionPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(118, 185, 0, 0.22);
+  background: rgba(118, 185, 0, 0.08);
+  color: var(--color-text);
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.emptyState {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.35rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.secondaryButton,
+.logoutButton {
+  min-width: 8rem;
+  height: 40px;
+  padding: 0 1rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.secondaryButton {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.secondaryButton:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.logoutButton {
+  border: 1px solid rgba(118, 185, 0, 0.28);
+  background: rgba(118, 185, 0, 0.12);
+  color: var(--color-text);
+}
+
+.logoutButton:hover {
+  background: rgba(118, 185, 0, 0.2);
+}
+
+@keyframes dialogEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 1024px) {
+  .triggerName {
+    max-width: 6rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .trigger {
+    padding: 0 0.25rem;
+  }
+
+  .triggerName {
+    display: none;
+  }
+
+  .overlay {
+    padding: 1rem 0.75rem;
+  }
+
+  .dialog {
+    width: calc(100vw - 1.5rem);
+    max-height: calc(100vh - 2rem);
+  }
+
+  .header,
+  .body,
+  .footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .identitySection {
+    grid-template-columns: 1fr;
+  }
+
+  .identityGrid,
+  .permissionList {
+    gap: 0.65rem;
+  }
+
+  .footer {
+    flex-direction: column-reverse;
+  }
+
+  .secondaryButton,
+  .logoutButton {
+    width: 100%;
+  }
+}

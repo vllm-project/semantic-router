@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	auth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
@@ -177,6 +179,94 @@ func serviceNotConfiguredHTML(serviceName, envVar, exampleValue string) string {
 // Setup configures all routes and returns the configured mux
 func Setup(cfg *config.Config) *http.ServeMux {
 	mux := http.NewServeMux()
+	var authSvc *auth.Service
+	if store, err := auth.NewStore(cfg.AuthDBPath); err != nil {
+		log.Printf("failed to init auth store: %v", err)
+		mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
+		mux.HandleFunc("/api/auth/login/", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
+		mux.HandleFunc("/api/auth/me", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
+		mux.HandleFunc("/api/auth/me/", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
+		mux.HandleFunc("/api/auth/bootstrap/can-register", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
+		mux.HandleFunc("/api/auth/bootstrap/register", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.Error(w, `{"error":"Service not available","message":"Authentication service is not configured"}`, http.StatusServiceUnavailable)
+		})
+	} else {
+		authSvc = auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
+		if err := authSvc.EnsureBootstrapAdmin(context.Background(), cfg.BootstrapAdminEmail, cfg.BootstrapAdminPassword, cfg.BootstrapAdminName); err != nil {
+			log.Printf("failed to ensure bootstrap admin: %v", err)
+		}
+		authRoutes := auth.AuthRoutes(authSvc)
+		forwardAuthRoute := func(path string, method string, w http.ResponseWriter, r *http.Request) {
+			if r.Method != method {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			cloneReq := *r
+			cloneURL := *r.URL
+			cloneURL.Path = path
+			cloneReq.URL = &cloneURL
+			authRoutes.ServeHTTP(w, &cloneReq)
+		}
+		mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/login", http.MethodPost, w, r)
+		})
+		mux.HandleFunc("/api/auth/login/", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/login", http.MethodPost, w, r)
+		})
+		mux.HandleFunc("/api/auth/me", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/me", http.MethodGet, w, r)
+		})
+		mux.HandleFunc("/api/auth/me/", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/me", http.MethodGet, w, r)
+		})
+		mux.HandleFunc("/api/auth/bootstrap/can-register", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/bootstrap/can-register", http.MethodGet, w, r)
+		})
+		mux.HandleFunc("/api/auth/bootstrap/can-register/", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/bootstrap/can-register", http.MethodGet, w, r)
+		})
+		mux.HandleFunc("/api/auth/bootstrap/register", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/bootstrap/register", http.MethodPost, w, r)
+		})
+		mux.HandleFunc("/api/auth/bootstrap/register/", func(w http.ResponseWriter, r *http.Request) {
+			forwardAuthRoute("/api/auth/bootstrap/register", http.MethodPost, w, r)
+		})
+		auth.RegisterAdminRoutes(mux, authSvc)
+	}
 
 	// Health check endpoint
 	mux.HandleFunc("/healthz", handlers.HealthCheck)
@@ -184,6 +274,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	// Settings endpoint for frontend (readonly mode, etc.)
 	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg))
 	mux.HandleFunc("/api/setup/state", handlers.SetupStateHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/setup/import-remote", handlers.SetupImportRemoteHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/setup/validate", handlers.SetupValidateHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/setup/activate", handlers.SetupActivateHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
 
@@ -727,5 +818,11 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	// Static frontend - MUST be registered last
 	mux.Handle("/", handlers.StaticFileServer(cfg.StaticDir))
 
-	return mux
+	wrappedMux := http.NewServeMux()
+	if authSvc != nil {
+		wrappedMux.Handle("/", auth.AuthenticateRequest(authSvc)(mux))
+		return wrappedMux
+	}
+	wrappedMux.Handle("/", mux)
+	return wrappedMux
 }

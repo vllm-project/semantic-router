@@ -17,4 +17,3 @@ fi
 # Switch to nonroot user and execute the dashboard backend
 # Using exec to replace shell process with dashboard-backend
 exec su-exec nonroot:nonroot "$@"
-

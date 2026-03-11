@@ -8,6 +8,7 @@ import { useMCPServers } from '../tools/mcp'
 import type { MCPServerConfig, MCPServerState, MCPTransportType, MCPToolDefinition } from '../tools/mcp'
 import { toolRegistry } from '../tools'
 import type { RegisteredTool } from '../tools'
+import { useReadonly } from '../contexts/ReadonlyContext'
 import styles from './MCPConfigPanel.module.css'
 
 // Built-in tool type definitions
@@ -60,6 +61,7 @@ interface MCPConfigPanelProps {
 }
 
 export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose }) => {
+  const { isReadonly } = useReadonly()
   const {
     servers,
     tools,
@@ -239,6 +241,9 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose }) => {
 
   // Handle connect/disconnect
   const handleToggleConnection = useCallback(async (server: MCPServerState) => {
+    if (isReadonly) {
+      return
+    }
     setActionLoading(server.config.id)
     try {
       if (server.status === 'connected') {
@@ -253,10 +258,13 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose }) => {
     } finally {
       setActionLoading(null)
     }
-  }, [connect, disconnect])
+  }, [connect, disconnect, isReadonly])
 
   // Handle delete
   const handleDelete = useCallback(async (id: string) => {
+    if (isReadonly) {
+      return
+    }
     if (!window.confirm('Are you sure you want to delete this MCP server?')) {
       return
     }
@@ -268,7 +276,7 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose }) => {
     } finally {
       setActionLoading(null)
     }
-  }, [deleteServer])
+  }, [deleteServer, isReadonly])
 
   // Get status icon
   const getStatusIcon = (status: MCPServerState['status']) => {
@@ -628,7 +636,7 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose }) => {
                         <button
                           className={styles.actionBtn}
                           onClick={() => handleToggleConnection(server)}
-                          disabled={actionLoading === server.config.id}
+                          disabled={isReadonly || actionLoading === server.config.id}
                           title={server.status === 'connected' ? 'Disconnect' : 'Connect'}
                         >
                           {actionLoading === server.config.id ? '...' : 
@@ -636,7 +644,13 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose }) => {
                         </button>
                         <button
                           className={styles.actionBtn}
-                          onClick={() => setEditingServer(server.config)}
+                          onClick={() => {
+                            if (isReadonly) {
+                              return
+                            }
+                            setEditingServer(server.config)
+                          }}
+                          disabled={isReadonly}
                           title="Edit"
                         >
                           ⚙
@@ -644,7 +658,7 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose }) => {
                         <button
                           className={styles.actionBtn}
                           onClick={() => handleDelete(server.config.id)}
-                          disabled={actionLoading === server.config.id}
+                          disabled={isReadonly || actionLoading === server.config.id}
                           title="Delete"
                         >
                           🗑
@@ -817,7 +831,13 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose }) => {
       <div className={styles.footer}>
         <button 
           className={styles.addBtn}
-          onClick={() => setShowAddDialog(true)}
+          onClick={() => {
+            if (isReadonly) {
+              return
+            }
+            setShowAddDialog(true)
+          }}
+          disabled={isReadonly}
         >
           + Add MCP Server
         </button>

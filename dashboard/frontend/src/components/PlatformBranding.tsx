@@ -13,7 +13,7 @@ const PlatformBranding = ({ variant = 'default', className = '' }: PlatformBrand
   const [isImageLoaded, setIsImageLoaded] = useState(false)
 
   const isAmd = platform?.toLowerCase() === 'amd'
-  const imageSrc = '/amd.png'
+  const imageSrc = '/amd-logo.png'
 
   // Preload image when platform is AMD
   useEffect(() => {
@@ -44,4 +44,3 @@ const PlatformBranding = ({ variant = 'default', className = '' }: PlatformBrand
 }
 
 export default PlatformBranding
-
