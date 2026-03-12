@@ -955,6 +955,51 @@ type RedisConfig struct {
 	} `json:"logging" yaml:"logging"`
 }
 
+// ValkeyConfig defines the complete configuration structure for Valkey cache backend.
+// Valkey is a Redis fork with enhanced features and compatibility.
+type ValkeyConfig struct {
+	Connection struct {
+		Host     string `json:"host" yaml:"host"`
+		Port     int    `json:"port" yaml:"port"`
+		Database int    `json:"database" yaml:"database"`
+		Password string `json:"password" yaml:"password"`
+		Timeout  int    `json:"timeout" yaml:"timeout"`
+		TLS      struct {
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			CertFile string `json:"cert_file" yaml:"cert_file"`
+			KeyFile  string `json:"key_file" yaml:"key_file"`
+			CAFile   string `json:"ca_file" yaml:"ca_file"`
+		} `json:"tls" yaml:"tls"`
+	} `json:"connection" yaml:"connection"`
+	Index struct {
+		Name        string `json:"name" yaml:"name"`
+		Prefix      string `json:"prefix" yaml:"prefix"`
+		VectorField struct {
+			Name       string `json:"name" yaml:"name"`
+			Dimension  int    `json:"dimension" yaml:"dimension"`
+			MetricType string `json:"metric_type" yaml:"metric_type"` // L2, IP, COSINE
+		} `json:"vector_field" yaml:"vector_field"`
+		IndexType string `json:"index_type" yaml:"index_type"` // HNSW or FLAT
+		Params    struct {
+			M              int `json:"M" yaml:"M"`
+			EfConstruction int `json:"efConstruction" yaml:"efConstruction"`
+		} `json:"params" yaml:"params"`
+	} `json:"index" yaml:"index"`
+	Search struct {
+		TopK int `json:"topk" yaml:"topk"`
+	} `json:"search" yaml:"search"`
+	Development struct {
+		DropIndexOnStartup bool `json:"drop_index_on_startup" yaml:"drop_index_on_startup"`
+		AutoCreateIndex    bool `json:"auto_create_index" yaml:"auto_create_index"`
+		VerboseErrors      bool `json:"verbose_errors" yaml:"verbose_errors"`
+	} `json:"development" yaml:"development"`
+	Logging struct {
+		Level          string `json:"level" yaml:"level"`
+		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
+		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
+	} `json:"logging" yaml:"logging"`
+}
+
 // MilvusConfig defines the complete configuration structure for Milvus cache backend.
 // Fields use both json/yaml tags because sigs.k8s.io/yaml converts YAML→JSON before decoding,
 // so json tags ensure snake_case keys map correctly without switching parsers.
