@@ -1282,9 +1282,10 @@ pub extern "C" fn init_candle_bert_classifier(
                 num_classes as usize,
                 use_cpu,
             ) {
-                Ok(_classifier) => {
-                    // Store in global static (would need to add this to the lazy_static block)
-                    true
+                Ok(classifier) => {
+                    crate::model_architectures::traditional::bert::TRADITIONAL_BERT_CLASSIFIER
+                        .set(Arc::new(classifier))
+                        .is_ok()
                 }
                 Err(e) => {
                     eprintln!("Failed to initialize Candle BERT classifier: {}", e);
