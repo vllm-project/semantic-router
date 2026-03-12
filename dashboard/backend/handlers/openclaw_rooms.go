@@ -441,22 +441,6 @@ func resolveMentionTargetsWithFallback(
 	return out
 }
 
-func buildRoomTranscript(messages []ClawRoomMessage, limit int) string {
-	if limit <= 0 {
-		limit = 16
-	}
-	start := 0
-	if len(messages) > limit {
-		start = len(messages) - limit
-	}
-	lines := make([]string, 0, len(messages)-start)
-	for i := start; i < len(messages); i++ {
-		line := fmt.Sprintf("[%s] %s", strings.TrimSpace(messages[i].SenderName), strings.TrimSpace(messages[i].Content))
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, "\n")
-}
-
 func stripLeadingMentions(content string) string {
 	rawRunes := []rune(strings.TrimSpace(content))
 	if len(rawRunes) == 0 {
@@ -732,21 +716,28 @@ func (h *OpenClawHandler) queryWorkerChatEndpoint(
 }
 
 func (h *OpenClawHandler) queryWorkerChat(worker ContainerEntry, systemPrompt, userPrompt string) (string, error) {
+	return h.queryWorkerChatWithMessages(
+		worker,
+		"team-room:"+sanitizeContainerName(worker.Name),
+		[]openAIChatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userPrompt},
+		},
+	)
+}
+
+func (h *OpenClawHandler) queryWorkerChatWithMessages(
+	worker ContainerEntry,
+	sessionUser string,
+	messages []openAIChatMessage,
+) (string, error) {
 	targetBase, ok := h.TargetBaseForContainer(worker.Name)
 	if !ok {
 		return "", fmt.Errorf("worker %q is not registered", worker.Name)
 	}
 	token := strings.TrimSpace(h.GatewayTokenForContainer(worker.Name))
 
-	payload := openAIChatRequest{
-		Model:  openClawPrimaryAgentModel,
-		Stream: false,
-		User:   "team-room:" + sanitizeContainerName(worker.Name),
-		Messages: []openAIChatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userPrompt},
-		},
-	}
+	payload := buildWorkerChatRequest(messages, sessionUser, false)
 
 	attempt := func() (string, bool, error) {
 		allEndpointMissing := true
@@ -926,7 +917,7 @@ func (h *OpenClawHandler) processRoomUserMessage(roomID string, triggerMessageID
 		}
 
 		workers := teamWorkers(entries, team.ID)
-		targets := resolveMentionTargetsWithFallback(trigger.Mentions, *team, workers, senderType == "user")
+		targets := resolveMentionTargetsWithFallback(trigger.Mentions, *team, workers, false)
 		if senderType != "user" {
 			leader := resolveTeamLeader(*team, workers)
 			filteredTargets := make([]ContainerEntry, 0, len(targets))
