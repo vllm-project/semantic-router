@@ -38,10 +38,14 @@
   flex: 0 0 auto;
   min-height: 0;
   height: 100%;
-  background: rgba(18, 18, 21, 0.86);
+  background:
+    linear-gradient(180deg, rgba(40, 44, 52, 0.38) 0%, rgba(19, 21, 27, 0.62) 100%);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(14px) saturate(120%);
-  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  box-shadow:
+    inset -1px 0 0 rgba(255, 255, 255, 0.03),
+    18px 0 40px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px) saturate(132%);
+  -webkit-backdrop-filter: blur(18px) saturate(132%);
 }
 
 .playgroundSidebarRail {
@@ -61,10 +65,11 @@
   height: 40px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: transparent;
+  background: rgba(255, 255, 255, 0.025);
   color: rgba(255, 255, 255, 0.86);
   cursor: pointer;
   transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .playgroundSidebarRailButton:hover:not(:disabled) {
@@ -108,7 +113,14 @@
   overflow: hidden;
   pointer-events: none;
   transition: width 180ms ease, opacity 140ms ease;
-  background: rgba(24, 24, 27, 0.88);
+  background:
+    linear-gradient(180deg, rgba(46, 50, 58, 0.5) 0%, rgba(21, 23, 29, 0.76) 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 1px 0 0 rgba(255, 255, 255, 0.03),
+    20px 0 44px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
 }
 
 .playgroundSidebarPanelVisible {

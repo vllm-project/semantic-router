@@ -52,22 +52,26 @@
 }
 
 .sidebar {
-  width: 292px;
+  width: 252px;
   flex-shrink: 0;
   border-radius: 0;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   border-top: none;
   border-bottom: none;
   border-left: none;
-  background: rgba(24, 24, 27, 0.88);
+  background:
+    linear-gradient(180deg, rgba(46, 50, 58, 0.5) 0%, rgba(21, 23, 29, 0.76) 100%);
   display: flex;
   flex-direction: column;
   min-height: 0;
   padding: 0.8rem 0.75rem 0.85rem;
   gap: 0.75rem;
   overflow-y: auto;
-  backdrop-filter: blur(14px) saturate(118%);
-  -webkit-backdrop-filter: blur(14px) saturate(118%);
+  box-shadow:
+    inset 1px 0 0 rgba(255, 255, 255, 0.03),
+    20px 0 44px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
 }
 
 .sidebarSection {
@@ -96,12 +100,13 @@
 
 .select {
   border-radius: 10px;
-  border: 1px solid var(--nv-border-soft);
-  background: var(--nv-bg-subtle);
-  color: #ffffff;
-  -webkit-text-fill-color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.92);
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.92);
   padding: 0.52rem 0.65rem;
   font-size: 0.88rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .select option {
@@ -111,8 +116,10 @@
 
 .select:focus {
   outline: none;
-  border-color: var(--nv-border-strong);
-  box-shadow: 0 0 0 2px rgba(var(--nv-green-rgb), 0.2);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
 .roomsHeader {
@@ -161,12 +168,13 @@
   flex: 1;
   min-width: 0;
   border-radius: 10px;
-  border: 1px solid var(--nv-border-soft);
-  background: rgba(var(--nv-green-rgb), 0.06);
-  color: #ffffff;
-  -webkit-text-fill-color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.92);
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.92);
   font-size: 0.83rem;
   padding: 0.45rem 0.55rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .createRoomInput::placeholder {
@@ -176,19 +184,27 @@
 
 .createRoomInput:focus {
   outline: none;
-  border-color: var(--nv-border-strong);
-  box-shadow: 0 0 0 2px rgba(var(--nv-green-rgb), 0.2);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
 .createRoomButton {
   border-radius: 10px;
-  border: 1px solid var(--nv-border-medium);
-  background: rgba(var(--nv-green-rgb), 0.18);
-  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 0.78rem;
   font-weight: 600;
   padding: 0 0.72rem;
   cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.createRoomButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .createRoomButton:disabled {
@@ -208,10 +224,10 @@
 }
 
 .sidebarEmpty {
-  border-radius: 12px;
-  border: 1px dashed var(--nv-border-soft);
-  color: #ffffff;
-  font-size: 0.84rem;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.82rem;
   text-align: center;
   padding: 0.75rem;
 }
@@ -225,19 +241,20 @@
   border: 1px solid transparent;
   background: transparent;
   color: #ffffff;
-  padding: 0.56rem 0.58rem;
+  padding: 0.62rem 0.7rem;
   cursor: pointer;
   text-align: left;
+  transition: all var(--transition-fast);
 }
 
 .roomItem:hover {
-  border-color: rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .roomItemActive {
-  border-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .roomItemBody {
@@ -266,22 +283,29 @@
 }
 
 .roomDeleteButton {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: 10px;
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.4);
   cursor: pointer;
+  transition: all var(--transition-fast);
+  opacity: 0;
+}
+
+.roomItem:hover .roomDeleteButton,
+.roomItemActive .roomDeleteButton {
+  opacity: 1;
 }
 
 .roomDeleteButton:hover {
-  color: var(--nv-green-300);
-  background: rgba(var(--nv-green-rgb), 0.16);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .roomDeleteButton:disabled {
@@ -431,11 +455,11 @@
 }
 
 .memberQueueEmpty {
-  font-size: 0.8rem;
-  color: #ffffff;
-  border: 1px dashed rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
-  padding: 0.46rem 0.62rem;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.58);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 0.75rem;
 }
 
 .memberQueueList {
@@ -530,14 +554,15 @@
 }
 
 .metaCard {
-  border-radius: 12px;
-  border: 1px solid #ffffff;
-  background: rgba(var(--nv-green-rgb), 0.05);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.035);
   color: #ffffff;
   padding: 0.62rem 0.7rem;
   display: flex;
   flex-direction: column;
   gap: 0.44rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .metaLabel {
@@ -578,9 +603,9 @@
   font-size: 0.72rem;
   padding: 0.08rem 0.24rem;
   border-radius: 6px;
-  border: 1px solid var(--nv-border-soft);
-  background: rgba(var(--nv-green-rgb), 0.12);
-  color: var(--nv-green-300);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .metaCard .metaSubtle code {
@@ -598,9 +623,9 @@
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  border: 1px solid var(--nv-border-medium);
-  background: rgba(var(--nv-green-rgb), 0.14);
-  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.88);
   padding: 0.1rem 0.36rem;
   font-size: 0.68rem;
   line-height: 1.2;
@@ -696,18 +721,19 @@
 }
 
 .memberResumeItem {
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
   padding: 0.4rem 0.44rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .memberResumeItemLeader {
-  border-color: rgba(255, 107, 104, 0.45);
-  background: rgba(127, 29, 29, 0.16);
+  border-color: rgba(255, 141, 141, 0.2);
+  background: linear-gradient(180deg, rgba(127, 29, 29, 0.18), rgba(255, 255, 255, 0.03));
 }
 
 .memberResumeHead {
@@ -798,7 +824,7 @@
 
 .memberPromoteButton {
   align-self: flex-start;
-  border: 1px solid rgba(255, 255, 255, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.05);
   color: #ffffff;
   border-radius: 999px;
@@ -808,7 +834,8 @@
 }
 
 .memberPromoteButton:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .memberPromoteButton:disabled {
