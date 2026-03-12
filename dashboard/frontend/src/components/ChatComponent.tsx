@@ -1079,24 +1079,22 @@ const ChatComponent = ({
                   expandedToolCards={expandedToolCards}
                   messages={messages}
                   onToggleToolCard={handleToggleToolCard}
-                  footer={(
-                    <ChatComponentInputBar
-                      enableClawMode={enableClawMode}
-                      enableWebSearch={enableWebSearch}
-                      inputRef={inputRef}
-                      inputValue={inputValue}
-                      isLoading={isLoading}
-                      isTogglingClawMode={isTogglingClawMode}
-                      modeToggleDisabled={modeToggleDisabled}
-                      onChangeInput={setInputValue}
-                      onKeyDown={handleKeyDown}
-                      onSend={handleSend}
-                      onStop={handleStop}
-                      onToggleClawMode={handleToggleClawMode}
-                      onToggleWebSearch={() => setEnableWebSearch(prev => !prev)}
-                      roomChatToggleControl={roomChatToggleControl}
-                    />
-                  )}
+                />
+                <ChatComponentInputBar
+                  enableClawMode={enableClawMode}
+                  enableWebSearch={enableWebSearch}
+                  inputRef={inputRef}
+                  inputValue={inputValue}
+                  isLoading={isLoading}
+                  isTogglingClawMode={isTogglingClawMode}
+                  modeToggleDisabled={modeToggleDisabled}
+                  onChangeInput={setInputValue}
+                  onKeyDown={handleKeyDown}
+                  onSend={handleSend}
+                  onStop={handleStop}
+                  onToggleClawMode={handleToggleClawMode}
+                  onToggleWebSearch={() => setEnableWebSearch(prev => !prev)}
+                  roomChatToggleControl={roomChatToggleControl}
                 />
               </>
             )}

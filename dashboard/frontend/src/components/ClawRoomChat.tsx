@@ -97,7 +97,6 @@ interface MentionAutocompleteState {
 interface SenderVisual {
   displayName: string
   roleLabel: string
-  avatar: string
 }
 
 interface ClawRoomChatProps {
@@ -107,8 +106,6 @@ interface ClawRoomChatProps {
 }
 
 const OPENCLAW_LOGO_SRC = '/openclaw.svg'
-const VLLM_AVATAR_SRC = '/vllm.png'
-
 const parseJSON = async <T,>(resp: Response): Promise<T> => {
   const text = await resp.text()
   if (!text.trim()) {
@@ -991,7 +988,6 @@ const ClawRoomChat = ({
       return {
         displayName: message.senderName || 'You',
         roleLabel: 'USER',
-        avatar: VLLM_AVATAR_SRC,
       }
     }
 
@@ -999,7 +995,6 @@ const ClawRoomChat = ({
       return {
         displayName: message.senderName || 'ClawOS',
         roleLabel: 'SYSTEM',
-        avatar: '⚙️',
       }
     }
 
@@ -1012,7 +1007,6 @@ const ClawRoomChat = ({
     return {
       displayName,
       roleLabel: message.senderType === 'leader' ? 'LEADER' : 'WORKER',
-      avatar: OPENCLAW_LOGO_SRC,
     }
   }, [workerLookup])
 
@@ -1251,7 +1245,7 @@ const ClawRoomChat = ({
             </div>
           </header>
 
-          <div className={styles.messages}>
+          <div className={styles.messages} data-testid="claw-room-transcript">
             {!selectedRoomId ? (
               <div className={styles.stateHint}>Select a room from the left panel.</div>
             ) : messages.length === 0 ? (
@@ -1267,18 +1261,9 @@ const ClawRoomChat = ({
                   <div
                     key={message.id}
                     className={`${styles.messageRow} ${isUser ? styles.messageRowUser : styles.messageRowAgent}`}
+                    data-room-message-id={message.id}
+                    data-room-message-role={message.senderType}
                   >
-                    <div className={styles.messageAvatar}>
-                      {senderVisual.avatar === OPENCLAW_LOGO_SRC || senderVisual.avatar === VLLM_AVATAR_SRC ? (
-                        <img
-                          src={senderVisual.avatar}
-                          alt={`${senderVisual.roleLabel.toLowerCase()} avatar`}
-                          className={`${styles.avatarLogo} ${styles.messageAvatarLogo}`}
-                        />
-                      ) : (
-                        senderVisual.avatar
-                      )}
-                    </div>
                     <div className={styles.messageMain}>
                       <div className={styles.messageMeta}>
                         <span className={`${styles.senderName} ${isLeader ? styles.senderNameLeader : ''}`}>
@@ -1293,6 +1278,7 @@ const ClawRoomChat = ({
                       </div>
                       <div
                         className={`${styles.messageBubble} ${isUser ? styles.messageBubbleUser : styles.messageBubbleAgent} ${isSystem ? styles.messageBubbleSystem : ''}`}
+                        data-room-message-content
                       >
                         <div className={styles.messageMarkdown}>
                           <MarkdownRenderer content={message.content} />

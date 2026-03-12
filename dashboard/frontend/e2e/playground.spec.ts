@@ -337,6 +337,60 @@ test.describe('Playground Chat Component', () => {
     expect(Math.abs(boxAfterCompletion.width - boxWhileStreaming.width)).toBeLessThan(48);
   });
 
+  test('keeps the composer pinned to the bottom on the second turn', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+
+    let requestCount = 0;
+    await page.route('**/api/router/v1/chat/completions', async route => {
+      requestCount += 1;
+      const body = requestCount === 1
+        ? chatStreamBody('First answer closes out the opening turn.')
+        : chatStreamBody(
+            Array.from(
+              { length: 12 },
+              (_, index) => `Second-turn paragraph ${index + 1} keeps the response growing.`
+            ).join('\n\n')
+          );
+
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body,
+      });
+    });
+
+    const input = page.getByPlaceholder('Ask me anything...');
+    const composer = page.getByTestId('chat-composer');
+
+    await input.fill('Start the first turn');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(page.getByText('First answer closes out the opening turn.')).toBeVisible({ timeout: 10000 });
+
+    await input.fill('Start the second turn');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(page.getByText('Second-turn paragraph 6 keeps the response growing.')).toBeVisible({ timeout: 10000 });
+
+    const composerBox = await composer.boundingBox();
+    expect(composerBox).not.toBeNull();
+    expect(composerBox!.y + composerBox!.height).toBeGreaterThan(820);
+
+    const transcript = page.locator('[data-testid="chat-transcript"]');
+    await expect.poll(async () => {
+      return transcript.evaluate(node => {
+        const container = node as HTMLDivElement;
+        const userMessages = container.querySelectorAll<HTMLElement>('[data-message-role="user"]');
+        const currentQuestion = userMessages[userMessages.length - 1];
+        if (!currentQuestion) {
+          return Number.POSITIVE_INFINITY;
+        }
+        return currentQuestion.getBoundingClientRect().top - container.getBoundingClientRect().top;
+      });
+    }, { timeout: 5000 }).toBeLessThan(160);
+  });
+
   test('renders thinking block from streaming reasoning field', async ({ page }) => {
     await page.route('**/api/router/v1/chat/completions', async (route) => {
       await route.fulfill({

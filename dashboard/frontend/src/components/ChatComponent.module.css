@@ -778,9 +778,8 @@ body.playground-fullscreen .container {
   padding: 1.35rem 1rem 1rem;
   background: linear-gradient(180deg, rgba(7, 8, 10, 0) 0%, rgba(7, 8, 10, 0.72) 38%, rgba(7, 8, 10, 0.94) 100%);
   flex-shrink: 0;
-  margin-top: auto;
-  position: sticky;
-  bottom: 0;
+  margin-top: 0;
+  position: relative;
   z-index: 5;
   isolation: isolate;
 }

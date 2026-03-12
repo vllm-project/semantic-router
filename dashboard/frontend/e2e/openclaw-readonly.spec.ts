@@ -56,6 +56,39 @@ const openClawRoom = {
   name: 'Planning',
 };
 
+const openClawMessages = [
+  {
+    id: 'room-msg-user-1',
+    roomId: 'room-alpha',
+    teamId: 'team-alpha',
+    senderType: 'user',
+    senderId: 'playground-user',
+    senderName: 'You',
+    content: '@leader Can you summarize the latest blocker?',
+    createdAt: '2026-03-09T00:01:00Z',
+  },
+  {
+    id: 'room-msg-leader-1',
+    roomId: 'room-alpha',
+    teamId: 'team-alpha',
+    senderType: 'leader',
+    senderId: 'leader-1',
+    senderName: 'leader-1',
+    content: 'The blocker is the staging rollout. I am assigning Worker A to verify the queue metrics now.',
+    createdAt: '2026-03-09T00:01:12Z',
+  },
+  {
+    id: 'room-msg-worker-1',
+    roomId: 'room-alpha',
+    teamId: 'team-alpha',
+    senderType: 'worker',
+    senderId: 'worker-a',
+    senderName: 'worker-a',
+    content: 'Queue pressure is normal. The issue is isolated to the deploy hook.',
+    createdAt: '2026-03-09T00:01:25Z',
+  },
+];
+
 const openClawStatus = [
   {
     running: true,
@@ -113,7 +146,7 @@ async function mockReadonlyOpenClaw(page: Page) {
   });
 
   await page.route('**/api/openclaw/rooms/room-alpha/messages?*', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(openClawMessages) });
   });
 
   await page.route('**/api/openclaw/rooms/room-alpha/stream', async route => {
@@ -173,6 +206,36 @@ test.describe('Readonly OpenClaw', () => {
     await expect(roomInput).toBeEnabled();
     await roomInput.fill('hello team');
     await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled();
+  });
+
+  test('room view keeps a centered transcript rail with claws left and the user right', async ({ page }) => {
+    await mockReadonlyOpenClaw(page);
+
+    await page.goto('/playground');
+    await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
+
+    const transcript = page.getByTestId('claw-room-transcript');
+    await expect(transcript).toBeVisible();
+    await expect(page.getByText('The blocker is the staging rollout. I am assigning Worker A to verify the queue metrics now.')).toBeVisible();
+
+    const userMessage = transcript.locator('[data-room-message-role="user"] [data-room-message-content]').first();
+    const leaderMessage = transcript.locator('[data-room-message-role="leader"] [data-room-message-content]').first();
+
+    await expect(userMessage).toBeVisible();
+    await expect(leaderMessage).toBeVisible();
+    await expect(transcript.locator('img[alt*="avatar"]')).toHaveCount(0);
+
+    const transcriptBox = await transcript.boundingBox();
+    const userBox = await userMessage.boundingBox();
+    const leaderBox = await leaderMessage.boundingBox();
+
+    expect(transcriptBox).not.toBeNull();
+    expect(userBox).not.toBeNull();
+    expect(leaderBox).not.toBeNull();
+
+    expect(leaderBox!.x - transcriptBox!.x).toBeLessThan(transcriptBox!.width * 0.3);
+    expect(userBox!.x).toBeGreaterThan(leaderBox!.x + 80);
+    expect(userBox!.width).toBeLessThan(transcriptBox!.width * 0.8);
   });
 
   test('openclaw page stays browsable but disables management and embedded dashboard entry', async ({ page }) => {

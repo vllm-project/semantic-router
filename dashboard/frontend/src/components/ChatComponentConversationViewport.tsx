@@ -1,5 +1,3 @@
-import type { ReactNode } from 'react'
-
 import styles from './ChatComponent.module.css'
 import ChatComponentMessages from './ChatComponentMessages'
 import type { Message } from './ChatComponentTypes'
@@ -7,14 +5,12 @@ import { useChatTranscriptAutoScroll } from './useChatTranscriptAutoScroll'
 
 interface ChatComponentConversationViewportProps {
   expandedToolCards: Set<string>
-  footer: ReactNode
   messages: Message[]
   onToggleToolCard: (toolCallId: string) => void
 }
 
 export default function ChatComponentConversationViewport({
   expandedToolCards,
-  footer,
   messages,
   onToggleToolCard,
 }: ChatComponentConversationViewportProps) {
@@ -28,7 +24,6 @@ export default function ChatComponentConversationViewport({
           messages={messages}
           onToggleToolCard={onToggleToolCard}
         />
-        {footer}
       </div>
     </div>
   )
