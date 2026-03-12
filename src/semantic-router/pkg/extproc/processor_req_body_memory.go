@@ -41,11 +41,12 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	if !shouldSearch {
 		return requestBody, nil
 	}
-	memories, err := store.Retrieve(
-		ctx.TraceContext,
-		r.buildMemoryRetrieveOptions(memoryPluginConfig, searchQuery, userID),
-	)
+	retrieveOpts := r.buildMemoryRetrieveOptions(memoryPluginConfig, searchQuery, userID)
+	memories, err := store.Retrieve(ctx.TraceContext, retrieveOpts)
 	if err != nil {
+		metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "retrieval_error", 0)
+		logging.Errorf("Memory: retrieval failed for user=%s decision=%s query=%q: %v",
+			userID, ctx.VSRSelectedDecisionName, truncateForLog(searchQuery, 60), err)
 		return requestBody, fmt.Errorf("memory retrieval failed: %w", err)
 	}
 	memories = r.filterRetrievedMemories(memoryPluginConfig, memories, userID)
@@ -198,10 +199,14 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 	injectedBody, err := injectMemoryMessages(requestBody, ctx.MemoryContext)
 	if err != nil {
 		logging.Warnf("Memory: Failed to inject memory context: %v", err)
+		metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "injection_error", 0)
+		ctx.MemoryContext = ""
 		return requestBody
 	}
 
-	logging.Infof("Memory: Injected %d memories into request", len(memories))
+	metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "injected", 0)
+	logging.Infof("Memory: Injected %d memories into request (decision=%s, context_len=%d)",
+		len(memories), ctx.VSRSelectedDecisionName, len(ctx.MemoryContext))
 	return injectedBody
 }
 
