@@ -15,6 +15,8 @@ import (
 
 // handleCaching handles cache lookup and storage with category-specific settings
 func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
+	userID := extractUserID(ctx)
+
 	// Skip cache read for looper internal requests
 	// Looper requests should not return cached responses, but should still write to cache
 	if ctx.LooperRequest {
@@ -35,7 +37,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		}
 		if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
 			ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-			err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
+			err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds, userID)
 			if err != nil {
 				logging.Errorf("Error adding pending request to cache: %v", err)
 			}
@@ -78,7 +80,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 
 		startTime := time.Now()
 		// Try to find a similar cached response using category-specific threshold
-		cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, requestQuery, threshold)
+		cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, requestQuery, threshold, userID)
 		lookupTime := time.Since(startTime).Milliseconds()
 
 		logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
@@ -138,7 +140,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	// Cache miss, store the request for later
 	// Get decision-specific TTL
 	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
+	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds, userID)
 	if err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 		// Continue without caching

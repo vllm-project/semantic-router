@@ -9,6 +9,7 @@ import (
 // CacheEntry represents a complete cached request-response pair with associated metadata
 type CacheEntry struct {
 	RequestID    string
+	UserID       string
 	RequestBody  []byte
 	ResponseBody []byte
 	Model        string
@@ -32,22 +33,22 @@ type CacheBackend interface {
 	CheckConnection() error
 
 	// AddPendingRequest stores a request awaiting its response
-	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
+	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int, userID ...string) error
 
 	// UpdateWithResponse completes a pending request with the received response
 	UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error
 
 	// AddEntry stores a complete request-response pair in the cache
-	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
+	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int, userID ...string) error
 
 	// FindSimilar searches for semantically similar cached requests
 	// Returns the cached response, match status, and any error
-	FindSimilar(model string, query string) ([]byte, bool, error)
+	FindSimilar(model string, query string, userID ...string) ([]byte, bool, error)
 
 	// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
 	// This allows category-specific similarity thresholds
 	// Returns the cached response, match status, and any error
-	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
+	FindSimilarWithThreshold(model string, query string, threshold float32, userID ...string) ([]byte, bool, error)
 
 	// Close releases all resources held by the cache backend
 	Close() error

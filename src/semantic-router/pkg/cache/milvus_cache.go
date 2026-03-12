@@ -419,8 +419,9 @@ func (c *MilvusCache) CheckConnection() error {
 }
 
 // AddPendingRequest stores a request that is awaiting its response
-func (c *MilvusCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
+func (c *MilvusCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int, userID ...string) error {
 	start := time.Now()
+	resolvedUserID := normalizeOptionalUserID(userID...)
 
 	if !c.enabled {
 		return nil
@@ -433,7 +434,7 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 	}
 
 	// Store incomplete entry for later completion with response
-	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
+	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds, resolvedUserID)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_pending", "error", time.Since(start).Seconds())
@@ -462,10 +463,11 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 
 	logging.Debugf("MilvusCache.UpdateWithResponse: searching for pending entry with expr: %s", queryExpr)
 
-	// Note: We don't explicitly request "id" since Milvus auto-includes the primary key
-	// We request model, query, request_body and will detect which column is which
+	// Note: We don't explicitly request "id" since Milvus auto-includes the primary key.
+	// We request model, query, request_body, and the existing embedding so the cached
+	// entry keeps the same user-scoped vector when the response arrives.
 	results, err := c.client.Query(ctx, c.collectionName, []string{}, queryExpr,
-		[]string{"model", "query", "request_body"})
+		[]string{"model", "query", "request_body", c.config.Collection.VectorField.Name})
 	if err != nil {
 		logging.Debugf("MilvusCache.UpdateWithResponse: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
@@ -478,16 +480,16 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 		return fmt.Errorf("no pending entry found")
 	}
 
-	// Milvus automatically includes the primary key in results but order is non-deterministic
-	// We requested ["model", "query", "request_body"], expect 3-4 columns (primary key may be auto-included)
-	// Strategy: Find the ID column (32-char hex string), then map remaining columns
-	if len(results) < 3 {
+	// Milvus automatically includes the primary key in results but order is non-deterministic.
+	// We requested three VarChar fields plus the embedding field, and may also receive the primary key.
+	if len(results) < 4 {
 		logging.Debugf("MilvusCache.UpdateWithResponse: unexpected result count: %d", len(results))
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
-		return fmt.Errorf("incomplete query result: expected 3+ columns, got %d", len(results))
+		return fmt.Errorf("incomplete query result: expected 4+ columns, got %d", len(results))
 	}
 
 	var id, model, query, requestBody string
+	var embedding []float32
 	idColIndex := -1
 
 	// First pass: find the ID column (32-char hex string = MD5 hash)
@@ -508,7 +510,11 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 		if i == idColIndex {
 			continue // Skip the primary key column
 		}
-		if col, ok := results[i].(*entity.ColumnVarChar); ok && col.Len() > 0 {
+		switch col := results[i].(type) {
+		case *entity.ColumnVarChar:
+			if col.Len() == 0 {
+				continue
+			}
 			val := col.Data()[0]
 			switch dataFieldIndex {
 			case 0:
@@ -519,10 +525,14 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 				requestBody = val
 			}
 			dataFieldIndex++
+		case *entity.ColumnFloatVector:
+			if col.Len() > 0 {
+				embedding = col.Data()[0]
+			}
 		}
 	}
 
-	if id == "" || model == "" || query == "" {
+	if id == "" || model == "" || query == "" || len(embedding) == 0 {
 		logging.Debugf("MilvusCache.UpdateWithResponse: failed to extract all required fields (id: %s, model: %s, query_len: %d)",
 			id, model, len(query))
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
@@ -532,7 +542,7 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	logging.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
 
 	// Create the complete entry with response data and TTL
-	err = c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody, ttlSeconds)
+	err = c.upsertEntryWithEmbedding(id, requestID, model, query, []byte(requestBody), responseBody, ttlSeconds, embedding)
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to add complete entry: %w", err)
@@ -545,8 +555,9 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 }
 
 // AddEntry stores a complete request-response pair in the cache
-func (c *MilvusCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *MilvusCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int, userID ...string) error {
 	start := time.Now()
+	resolvedUserID := normalizeOptionalUserID(userID...)
 
 	if !c.enabled {
 		return nil
@@ -558,7 +569,7 @@ func (c *MilvusCache) AddEntry(requestID string, model string, query string, req
 		return nil
 	}
 
-	err := c.addEntry("", requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := c.addEntry("", requestID, model, query, requestBody, responseBody, ttlSeconds, resolvedUserID)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_entry", "error", time.Since(start).Seconds())
@@ -600,6 +611,7 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding for entry %d: %w", i, err)
 		}
+		embedding = scopeEmbeddingToUser(embedding, entry.UserID)
 
 		// Generate unique ID
 		id := fmt.Sprintf("%x", md5.Sum(fmt.Appendf(nil, "%s_%s_%d", entry.Model, entry.Query, time.Now().UnixNano())))
@@ -666,7 +678,7 @@ func (c *MilvusCache) Flush() error {
 }
 
 // addEntry handles the internal logic for storing entries in Milvus
-func (c *MilvusCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *MilvusCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int, userID string) error {
 	// Determine effective TTL: use provided value or fall back to cache default
 	effectiveTTL := ttlSeconds
 	if ttlSeconds == -1 {
@@ -677,6 +689,18 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	embedding, err := c.getEmbedding(query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
+	}
+	embedding = scopeEmbeddingToUser(embedding, userID)
+
+	return c.upsertEntryWithEmbedding(id, requestID, model, query, requestBody, responseBody, effectiveTTL, embedding)
+}
+
+func (c *MilvusCache) upsertEntryWithEmbedding(id string, requestID string, model string, query string, requestBody, responseBody []byte, effectiveTTL int, embedding []float32) error {
+	if len(embedding) == 0 {
+		return fmt.Errorf("embedding is required for cache entry upsert")
+	}
+	if effectiveTTL == -1 {
+		effectiveTTL = c.ttlSeconds
 	}
 
 	// Generate unique ID if not provided
@@ -746,13 +770,14 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 }
 
 // FindSimilar searches for semantically similar cached requests
-func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
+func (c *MilvusCache) FindSimilar(model string, query string, userID ...string) ([]byte, bool, error) {
+	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold, userID...)
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, threshold float32, userID ...string) ([]byte, bool, error) {
 	start := time.Now()
+	resolvedUserID := normalizeOptionalUserID(userID...)
 
 	if !c.enabled {
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache disabled")
@@ -771,6 +796,7 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
 	}
+	queryEmbedding = scopeEmbeddingToUser(queryEmbedding, resolvedUserID)
 
 	ctx := context.Background()
 

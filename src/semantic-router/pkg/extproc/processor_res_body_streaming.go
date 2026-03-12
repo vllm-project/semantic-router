@@ -316,6 +316,7 @@ func (r *OpenAIRouter) addStreamingCacheEntry(
 	reconstructedJSON []byte,
 	ttlSeconds int,
 ) error {
+	userID := extractUserID(ctx)
 	return r.Cache.AddEntry(
 		ctx.RequestID,
 		ctx.RequestModel,
@@ -323,6 +324,7 @@ func (r *OpenAIRouter) addStreamingCacheEntry(
 		streamingCacheRequestBody(ctx),
 		reconstructedJSON,
 		ttlSeconds,
+		userID,
 	)
 }
 

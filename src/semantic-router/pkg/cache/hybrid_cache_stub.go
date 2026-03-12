@@ -39,17 +39,17 @@ func (h *HybridCache) IsEnabled() bool {
 }
 
 // AddPendingRequest stores a request awaiting its response
-func (h *HybridCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (h *HybridCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int, userID ...string) error {
 	return nil
 }
 
 // UpdateWithResponse completes a pending request with its response
-func (h *HybridCache) UpdateWithResponse(requestID string, responseBody []byte) error {
+func (h *HybridCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	return nil
 }
 
 // AddEntry stores a complete request-response pair
-func (h *HybridCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (h *HybridCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int, userID ...string) error {
 	return nil
 }
 
@@ -59,12 +59,12 @@ func (h *HybridCache) AddEntriesBatch(entries []CacheEntry) error {
 }
 
 // FindSimilar searches for semantically similar cached requests
-func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, error) {
+func (h *HybridCache) FindSimilar(model string, query string, userID ...string) ([]byte, bool, error) {
 	return nil, false, nil
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests with custom threshold
-func (h *HybridCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+func (h *HybridCache) FindSimilarWithThreshold(model string, query string, threshold float32, userID ...string) ([]byte, bool, error) {
 	return nil, false, nil
 }
 

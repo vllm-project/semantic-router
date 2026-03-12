@@ -1,8 +1,16 @@
 package cache
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"math"
+	"strings"
+)
+
+const (
+	cacheQueryEmbeddingWeight float32 = 0.75
+	cacheUserNamespaceWeight  float32 = 0.66
 )
 
 // ChatMessage represents a message in the OpenAI chat format with role and content.
@@ -74,4 +82,70 @@ func ExtractQueryFromOpenAIRequest(requestBody []byte) (string, string, error) {
 	}
 
 	return req.Model, query, nil
+}
+
+func normalizeOptionalUserID(userID ...string) string {
+	if len(userID) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(userID[0])
+}
+
+func scopeEmbeddingToUser(embedding []float32, userID string) []float32 {
+	normalizedUserID := strings.TrimSpace(userID)
+	if normalizedUserID == "" || len(embedding) == 0 {
+		return embedding
+	}
+
+	normalizedEmbedding := normalizeEmbedding(embedding)
+	namespaceVector := buildUserNamespaceVector(normalizedUserID, len(embedding))
+	scoped := make([]float32, len(embedding))
+	for i := range normalizedEmbedding {
+		scoped[i] = normalizedEmbedding[i]*cacheQueryEmbeddingWeight +
+			namespaceVector[i]*cacheUserNamespaceWeight
+	}
+
+	return normalizeEmbedding(scoped)
+}
+
+func normalizeEmbedding(embedding []float32) []float32 {
+	normalized := make([]float32, len(embedding))
+	copy(normalized, embedding)
+
+	var magnitude float64
+	for _, value := range normalized {
+		magnitude += float64(value * value)
+	}
+	if magnitude == 0 {
+		return normalized
+	}
+
+	scale := float32(1 / math.Sqrt(magnitude))
+	for i := range normalized {
+		normalized[i] *= scale
+	}
+	return normalized
+}
+
+func buildUserNamespaceVector(userID string, dimension int) []float32 {
+	namespace := make([]float32, dimension)
+	if dimension == 0 {
+		return namespace
+	}
+
+	filled := 0
+	blockIndex := 0
+	for filled < dimension {
+		digest := sha256.Sum256([]byte(fmt.Sprintf("%s:%d", userID, blockIndex)))
+		for _, raw := range digest {
+			if filled >= dimension {
+				break
+			}
+			namespace[filled] = (float32(int(raw)) - 127.5) / 127.5
+			filled++
+		}
+		blockIndex++
+	}
+
+	return normalizeEmbedding(namespace)
 }

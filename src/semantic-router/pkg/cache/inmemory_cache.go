@@ -224,8 +224,10 @@ func (c *InMemoryCache) AddPendingRequest(
 	query string,
 	requestBody []byte,
 	ttlSeconds int,
+	userID ...string,
 ) error {
 	start := time.Now()
+	resolvedUserID := normalizeOptionalUserID(userID...)
 
 	if !c.enabled {
 		return nil
@@ -249,6 +251,7 @@ func (c *InMemoryCache) AddPendingRequest(
 		metrics.RecordCacheOperation("memory", "add_pending", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
+	embedding = scopeEmbeddingToUser(embedding, resolvedUserID)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -265,6 +268,7 @@ func (c *InMemoryCache) AddPendingRequest(
 	now := time.Now()
 	entry := CacheEntry{
 		RequestID:    requestID,
+		UserID:       resolvedUserID,
 		RequestBody:  requestBody,
 		Model:        model,
 		Query:        query,
@@ -373,8 +377,10 @@ func (c *InMemoryCache) AddEntry(
 	requestBody []byte,
 	responseBody []byte,
 	ttlSeconds int,
+	userID ...string,
 ) error {
 	start := time.Now()
+	resolvedUserID := normalizeOptionalUserID(userID...)
 
 	if !c.enabled {
 		return nil
@@ -396,6 +402,7 @@ func (c *InMemoryCache) AddEntry(
 		metrics.RecordCacheOperation("memory", "add_entry", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
+	embedding = scopeEmbeddingToUser(embedding, resolvedUserID)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -411,6 +418,7 @@ func (c *InMemoryCache) AddEntry(
 	now := time.Now()
 	entry := CacheEntry{
 		RequestID:    requestID,
+		UserID:       resolvedUserID,
 		RequestBody:  requestBody,
 		ResponseBody: responseBody,
 		Model:        model,
@@ -459,13 +467,14 @@ func (c *InMemoryCache) AddEntry(
 }
 
 // FindSimilar searches for semantically similar cached requests using the default threshold
-func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
+func (c *InMemoryCache) FindSimilar(model string, query string, userID ...string) ([]byte, bool, error) {
+	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold, userID...)
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32, userID ...string) ([]byte, bool, error) {
 	start := time.Now()
+	resolvedUserID := normalizeOptionalUserID(userID...)
 
 	if !c.enabled {
 		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: cache disabled")
@@ -484,6 +493,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		metrics.RecordCacheOperation("memory", "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
 	}
+	queryEmbedding = scopeEmbeddingToUser(queryEmbedding, resolvedUserID)
 
 	c.mu.RLock()
 	var (
@@ -527,6 +537,10 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 				continue
 			}
 
+			if resolvedUserID != "" && entry.UserID != resolvedUserID {
+				continue
+			}
+
 			// Skip entries that have expired before considering them
 			if c.isExpired(entry, now) {
 				expiredCount++
@@ -552,6 +566,10 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		for entryIndex, entry := range c.entries {
 			// Skip incomplete entries
 			if entry.ResponseBody == nil {
+				continue
+			}
+
+			if resolvedUserID != "" && entry.UserID != resolvedUserID {
 				continue
 			}
 
