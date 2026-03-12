@@ -194,6 +194,7 @@ function MessageCard({
     <div
       className={`${styles.message} ${styles[message.role]}`}
       translate={getTranslateAttr(message.isStreaming ?? false)}
+      data-message-role={message.role}
     >
       <div className={styles.messageAvatar}>
         {message.role === 'user' ? (
@@ -208,7 +209,7 @@ function MessageCard({
           <img src="/vllm.png" alt="vLLM SR" className={styles.avatarImage} />
         )}
       </div>
-      <div className={styles.messageContent}>
+      <div className={styles.messageContent} data-message-content>
         <div className={styles.messageRole}>{message.role === 'user' ? 'You' : 'vLLM SR'}</div>
         {message.role !== 'assistant' ? (
           <UserOrSystemMessage message={message} />

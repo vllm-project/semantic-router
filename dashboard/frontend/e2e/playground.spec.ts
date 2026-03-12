@@ -207,6 +207,77 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({ timeout: 1000 });
   });
 
+  test('keeps the transcript pinned while a long reply streams', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 640 });
+
+    const chunks = [
+      chatStreamChunk({ role: 'assistant', content: '' }),
+      ...Array.from({ length: 80 }, (_, index) =>
+        chatStreamChunk({ content: `Line ${index + 1}: streaming output keeps growing.\n` })
+      ),
+      'data: [DONE]\n\n',
+    ];
+
+    await mockStreamingChatFetch(page, chunks, 25);
+
+    await page.getByPlaceholder('Ask me anything...').fill('Show a long streamed answer');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(page.locator('[data-message-role="assistant"]')).toHaveCount(1, { timeout: 5000 });
+    await page.waitForTimeout(900);
+
+    const transcriptMidStream = await page.locator('[data-testid="chat-transcript"]').evaluate((node) => {
+      const container = node as HTMLDivElement;
+      return {
+        clientHeight: container.clientHeight,
+        distanceFromBottom: container.scrollHeight - container.scrollTop - container.clientHeight,
+        scrollHeight: container.scrollHeight,
+      };
+    });
+
+    expect(transcriptMidStream.scrollHeight).toBeGreaterThan(transcriptMidStream.clientHeight);
+    expect(transcriptMidStream.distanceFromBottom).toBeLessThan(48);
+
+    await expect(page.getByText('Line 80: streaming output keeps growing.')).toBeVisible({ timeout: 10000 });
+
+    const transcriptAfterCompletion = await page.locator('[data-testid="chat-transcript"]').evaluate((node) => {
+      const container = node as HTMLDivElement;
+      return container.scrollHeight - container.scrollTop - container.clientHeight;
+    });
+
+    expect(transcriptAfterCompletion).toBeLessThan(48);
+  });
+
+  test('keeps the assistant rail wide during streaming and after completion', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+
+    await mockStreamingChatFetch(page, [
+      chatStreamChunk({ role: 'assistant', content: '' }),
+      chatStreamChunk({ content: 'This starts the streamed response. ' }),
+      chatStreamChunk({ content: 'More text arrives while the layout stays stable. ' }),
+      chatStreamChunk({ content: 'The final chunk lands without the message suddenly widening.' }),
+      'data: [DONE]\n\n',
+    ], 220);
+
+    await page.getByPlaceholder('Ask me anything...').fill('Check the assistant layout rail');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    const assistantContent = page.locator('[data-message-role="assistant"] [data-message-content]').last();
+
+    await expect(assistantContent).toBeVisible({ timeout: 5000 });
+
+    const widthWhileStreaming = await assistantContent.evaluate(node => node.getBoundingClientRect().width);
+    expect(widthWhileStreaming).toBeGreaterThan(700);
+
+    await expect(page.getByText('The final chunk lands without the message suddenly widening.')).toBeVisible({
+      timeout: 10000,
+    });
+
+    const widthAfterCompletion = await assistantContent.evaluate(node => node.getBoundingClientRect().width);
+    expect(widthAfterCompletion).toBeGreaterThan(700);
+    expect(Math.abs(widthAfterCompletion - widthWhileStreaming)).toBeLessThan(48);
+  });
+
   test('renders thinking block from streaming reasoning field', async ({ page }) => {
     await page.route('**/api/router/v1/chat/completions', async (route) => {
       await route.fulfill({
