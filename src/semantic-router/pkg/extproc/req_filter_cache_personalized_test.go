@@ -45,9 +45,9 @@ func TestHasPersonalizedContext(t *testing.T) {
 		{
 			name: "multiple personalized signals",
 			ctx: &RequestContext{
-				RAGRetrievedContext:    "docs",
-				MemoryContext:          "memories",
-				PIIDetected:            true,
+				RAGRetrievedContext:     "docs",
+				MemoryContext:           "memories",
+				PIIDetected:             true,
 				VSRInjectedSystemPrompt: true,
 			},
 			want: true,
