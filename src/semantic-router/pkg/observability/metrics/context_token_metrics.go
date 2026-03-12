@@ -7,16 +7,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 )
 
-var (
-	// ContextTokenCount tracks the distribution of input token counts for context-based routing
-	ContextTokenCount = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "llm_context_token_count",
-			Help:    "Distribution of input token counts for context-based routing",
-			Buckets: []float64{100, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000},
-		},
-		[]string{"model", "context_level"},
-	)
+// ContextTokenCount tracks the distribution of input token counts for context-based routing
+var ContextTokenCount = promauto.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "llm_context_token_count",
+		Help:    "Distribution of input token counts for context-based routing",
+		Buckets: []float64{100, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000},
+	},
+	[]string{"model", "context_level"},
 )
 
 // RecordContextTokenCount records the input token count with context level
