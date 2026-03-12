@@ -134,11 +134,17 @@ const SetupWizardPage: React.FC = () => {
   const validationSignature = draftConfig ? JSON.stringify(draftConfig) : "";
 
   useEffect(() => {
-    if (currentStep !== 2 || !draftConfig) {
+    if (currentStep !== 2 || !validationSignature) {
       return;
     }
 
     let cancelled = false;
+    // Scratch configs are rebuilt on every render, so key auto-validation off a
+    // stable serialized payload instead of object identity.
+    const validationPayload = JSON.parse(validationSignature) as Record<
+      string,
+      unknown
+    >;
 
     const runValidation = async () => {
       setValidationState("validating");
@@ -146,12 +152,12 @@ const SetupWizardPage: React.FC = () => {
       setActivationError(null);
 
       try {
-        const result = await validateSetupConfig(draftConfig);
+        const result = await validateSetupConfig(validationPayload);
         if (cancelled) {
           return;
         }
 
-        setValidatedConfig(result.config ?? draftConfig);
+        setValidatedConfig(result.config ?? validationPayload);
         setValidatedCounts({
           models: result.models,
           decisions: result.decisions,
@@ -178,7 +184,7 @@ const SetupWizardPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentStep, draftConfig, validationSignature]);
+  }, [currentStep, validationSignature]);
 
   const addModel = () => {
     setModels((prev) => [...prev, createModelDraft(prev.length + 1)]);
