@@ -560,7 +560,7 @@ impl MmBertEmbeddingModel {
 
         let safetensors_path = format!("{}/model.safetensors", model_path);
         let vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(&[safetensors_path.clone()], DType::F32, device)
+            VarBuilder::from_mmaped_safetensors(std::slice::from_ref(&safetensors_path), DType::F32, device)
                 .map_err(|e| {
                     from_candle_error(
                         e,
@@ -756,7 +756,7 @@ impl MmBertEmbeddingModel {
             for i in 0..seq_len {
                 if i < ids.len() {
                     input_ids_vec.push(ids[i]);
-                    attention_mask_vec.push(mask[i] as u32);
+                    attention_mask_vec.push(mask[i]);
                 } else {
                     input_ids_vec.push(0);
                     attention_mask_vec.push(0);
@@ -1068,11 +1068,7 @@ mod integration_tests {
         let text = "Hello world";
         let encoding = tokenizer.encode(text, true).unwrap();
         let input_ids: Vec<u32> = encoding.get_ids().to_vec();
-        let attention_mask: Vec<u32> = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|&x| x as u32)
-            .collect();
+        let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
         let seq_len = input_ids.len();
 
         let input_ids = Tensor::from_vec(input_ids, (1, seq_len), &device).unwrap();
@@ -1087,7 +1083,7 @@ mod integration_tests {
                     Some(target_layer),
                     None,
                 )
-                .expect(&format!("Failed at layer {}", target_layer));
+                .unwrap_or_else(|_| panic!("Failed at layer {}", target_layer));
 
             let shape = embeddings.dims();
             assert_eq!(shape[0], 1);
@@ -1125,11 +1121,7 @@ mod integration_tests {
         let text = "Test 2D Matryoshka";
         let encoding = tokenizer.encode(text, true).unwrap();
         let input_ids: Vec<u32> = encoding.get_ids().to_vec();
-        let attention_mask: Vec<u32> = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|&x| x as u32)
-            .collect();
+        let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
         let seq_len = input_ids.len();
 
         let input_ids = Tensor::from_vec(input_ids, (1, seq_len), &device).unwrap();
@@ -1145,7 +1137,7 @@ mod integration_tests {
                         Some(target_layer),
                         Some(target_dim),
                     )
-                    .expect(&format!("Failed at L{}/{}d", target_layer, target_dim));
+                    .unwrap_or_else(|_| panic!("Failed at L{}/{}d", target_layer, target_dim));
 
                 let shape = embeddings.dims();
                 assert_eq!(shape[0], 1);
@@ -1235,7 +1227,7 @@ mod integration_tests {
             let start = std::time::Instant::now();
             let embeddings = model
                 .embedding_forward(&input_ids, Some(&attention_mask))
-                .expect(&format!("Failed at seq_len={}", seq_len));
+                .unwrap_or_else(|_| panic!("Failed at seq_len={}", seq_len));
             let elapsed = start.elapsed();
 
             let shape = embeddings.dims();

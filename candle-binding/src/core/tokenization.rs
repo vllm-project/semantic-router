@@ -222,9 +222,9 @@ impl UnifiedTokenizer {
         tokenizer
             .with_truncation(Some(TruncationParams {
                 max_length: self.config.max_length,
-                strategy: self.config.truncation_strategy.clone(),
+                strategy: self.config.truncation_strategy,
                 stride: 0,
-                direction: self.config.truncation_direction.clone(),
+                direction: self.config.truncation_direction,
             }))
             .map_err(E::msg)?;
 

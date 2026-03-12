@@ -131,7 +131,7 @@ fn main() -> Result<()> {
     // Step 4: Load Extended32K base model
     println!("\nLoading Extended32K base model...");
     let base_vb = unsafe {
-        VarBuilder::from_mmaped_safetensors(&[base_weights_path.clone()], DType::F32, &device)
+        VarBuilder::from_mmaped_safetensors(std::slice::from_ref(&base_weights_path), DType::F32, &device)
             .map_err(|e| anyhow!("Failed to load base model weights: {}", e))?
     };
 

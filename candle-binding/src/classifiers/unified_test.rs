@@ -38,7 +38,7 @@ fn test_unified_unified_classifier_model_path_validation(
     }
 
     // Test unified path validation logic
-    let model_paths = vec![&traditional_model_path, &lora_model_path];
+    let model_paths = [&traditional_model_path, &lora_model_path];
     for (i, path) in model_paths.iter().enumerate() {
         assert!(!path.is_empty(), "Model path {} should not be empty", i);
 

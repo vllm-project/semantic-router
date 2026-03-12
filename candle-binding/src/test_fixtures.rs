@@ -66,6 +66,12 @@ pub mod fixtures {
         pub traditional_security_classifier: Option<Arc<TraditionalModernBertClassifier>>,
     }
 
+    impl Default for ModelCache {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl ModelCache {
         pub fn new() -> Self {
             Self {
@@ -843,7 +849,7 @@ pub mod test_utils {
         expected_min_confidence: f32,
         max_classes: usize,
     ) -> Result<(), String> {
-        if confidence < 0.0 || confidence > 1.0 {
+        if !(0.0..=1.0).contains(&confidence) {
             return Err(format!("Invalid confidence: {}", confidence));
         }
 

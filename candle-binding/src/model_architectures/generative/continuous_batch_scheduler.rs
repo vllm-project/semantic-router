@@ -340,7 +340,7 @@ impl ContinuousBatchScheduler {
         for req in requests.drain(..) {
             adapter_groups
                 .entry(req.adapter_name.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(req);
         }
 

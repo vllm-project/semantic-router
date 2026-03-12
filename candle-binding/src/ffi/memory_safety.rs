@@ -68,6 +68,12 @@ pub struct LoRAMemoryPool {
     peak_usage: usize,
 }
 
+impl Default for LoRAMemoryPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LoRAMemoryPool {
     pub fn new() -> Self {
         Self {
@@ -175,6 +181,12 @@ pub struct PathSwitchState {
     pub switching_in_progress: bool,
     pub pending_deallocations: Vec<usize>, // Store addresses instead of pointers
     pub switch_count: usize,
+}
+
+impl Default for PathSwitchState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PathSwitchState {
@@ -431,8 +443,11 @@ pub fn cleanup_memory_tracking() {
 }
 
 /// FFI-safe memory allocation for traditional path
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn safe_alloc_traditional(size: usize) -> *mut u8 {
+pub unsafe extern "C" fn safe_alloc_traditional(size: usize) -> *mut u8 {
     let buffer = vec![0u8; size];
     let ptr = buffer.as_ptr() as *mut u8;
     std::mem::forget(buffer); // Prevent automatic deallocation
@@ -447,8 +462,11 @@ pub extern "C" fn safe_alloc_traditional(size: usize) -> *mut u8 {
 }
 
 /// FFI-safe memory allocation for LoRA path
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn safe_alloc_lora(size: usize) -> *mut u8 {
+pub unsafe extern "C" fn safe_alloc_lora(size: usize) -> *mut u8 {
     let buffer = vec![0u8; size];
     let ptr = buffer.as_ptr() as *mut u8;
     std::mem::forget(buffer);
@@ -458,27 +476,39 @@ pub extern "C" fn safe_alloc_lora(size: usize) -> *mut u8 {
 }
 
 /// FFI-safe memory deallocation
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn safe_free(ptr: *mut u8) -> bool {
+pub unsafe extern "C" fn safe_free(ptr: *mut u8) -> bool {
     safe_deallocation(ptr)
 }
 
 /// FFI function to get memory safety status
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn get_memory_safety_status() -> bool {
+pub unsafe extern "C" fn get_memory_safety_status() -> bool {
     let result = perform_memory_safety_check();
     result.is_safe
 }
 
 /// FFI function to get LoRA memory usage
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn get_lora_memory_usage() -> usize {
+pub unsafe extern "C" fn get_lora_memory_usage() -> usize {
     let stats = get_lora_memory_stats();
     stats.total_allocated
 }
 
 /// FFI function to cleanup memory tracking
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn cleanup_dual_path_memory() {
+pub unsafe extern "C" fn cleanup_dual_path_memory() {
     cleanup_memory_tracking();
 }

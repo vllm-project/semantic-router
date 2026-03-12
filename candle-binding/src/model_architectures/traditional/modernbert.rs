@@ -27,6 +27,9 @@ use crate::model_architectures::unified_interface::{
     ConfigurableModel, CoreModel, PathSpecialization,
 };
 
+/// Token classification result: (token_text, class_id, confidence, start_offset, end_offset)
+pub type TokenClassificationResult = (String, usize, f32, usize, usize);
+
 /// ModernBERT model variant
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModernBertVariant {
@@ -692,7 +695,7 @@ impl TraditionalModernBertClassifier {
         }
 
         let vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(&[weights_path.clone()], DType::F32, &device)
+            VarBuilder::from_mmaped_safetensors(std::slice::from_ref(&weights_path), DType::F32, &device)
                 .map_err(|e| {
                     let unified_err = model_error!(
                         ModelErrorType::ModernBERT,
@@ -894,7 +897,7 @@ impl TraditionalModernBertClassifier {
         }
 
         let base_vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(&[base_weights_path.clone()], DType::F32, &device)
+            VarBuilder::from_mmaped_safetensors(std::slice::from_ref(&base_weights_path), DType::F32, &device)
                 .map_err(|e| {
                 let unified_err = model_error!(
                     ModelErrorType::ModernBERT,
@@ -933,7 +936,7 @@ impl TraditionalModernBertClassifier {
 
         let classifier_vb = unsafe {
             VarBuilder::from_mmaped_safetensors(
-                &[classifier_weights_path.clone()],
+                std::slice::from_ref(&classifier_weights_path),
                 DType::F32,
                 &device,
             )
@@ -1152,8 +1155,8 @@ impl TraditionalModernBertClassifier {
 
         // 5. Apply head layer if present
         let classifier_input = if let Some(ref head) = self.head {
-            let head_output = head.forward(&pooled_output)?;
-            head_output
+            
+            head.forward(&pooled_output)?
         } else {
             pooled_output
         };
@@ -1335,7 +1338,7 @@ impl TraditionalModernBertTokenClassifier {
     }
 
     /// Classify tokens in text
-    pub fn classify_tokens(&self, text: &str) -> Result<Vec<(String, usize, f32, usize, usize)>> {
+    pub fn classify_tokens(&self, text: &str) -> Result<Vec<TokenClassificationResult>> {
         // Tokenize the text
         let tokenization_result = self.tokenizer.tokenize(text)?;
 
@@ -1470,7 +1473,7 @@ impl TraditionalModernBertTokenClassifier {
                     entities.push(entity);
                 }
 
-                let entity_type = label[2..].to_string(); // Remove 'B-' prefix
+                let entity_type = label.strip_prefix("B-").unwrap_or(&label).to_string();
                 current_entity = Some(TokenEntity {
                     entity_type,
                     start: offset.0,

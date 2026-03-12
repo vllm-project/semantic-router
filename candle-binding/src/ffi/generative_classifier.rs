@@ -76,7 +76,7 @@ impl Default for GenerativeClassificationResult {
 /// - Must only be called once per result
 /// - Result must have been allocated by classify_with_qwen3_adapter
 #[no_mangle]
-pub extern "C" fn free_generative_classification_result(
+pub unsafe extern "C" fn free_generative_classification_result(
     result: *mut GenerativeClassificationResult,
 ) {
     if result.is_null() {
@@ -108,7 +108,7 @@ pub extern "C" fn free_generative_classification_result(
 /// - Must only be called once per array
 /// - Array must have been allocated by get_qwen3_loaded_adapters
 #[no_mangle]
-pub extern "C" fn free_categories(categories: *mut *mut c_char, num_categories: i32) {
+pub unsafe extern "C" fn free_categories(categories: *mut *mut c_char, num_categories: i32) {
     if categories.is_null() || num_categories <= 0 {
         return;
     }
@@ -144,7 +144,7 @@ fn create_error_message(msg: &str) -> *mut c_char {
 /// # Safety
 /// - `base_model_path` must be a valid null-terminated C string
 #[no_mangle]
-pub extern "C" fn init_qwen3_multi_lora_classifier(base_model_path: *const c_char) -> i32 {
+pub unsafe extern "C" fn init_qwen3_multi_lora_classifier(base_model_path: *const c_char) -> i32 {
     if base_model_path.is_null() {
         eprintln!("Error: base_model_path is null");
         return -1;
@@ -206,7 +206,7 @@ pub extern "C" fn init_qwen3_multi_lora_classifier(base_model_path: *const c_cha
 /// # Safety
 /// - Both arguments must be valid null-terminated C strings
 #[no_mangle]
-pub extern "C" fn load_qwen3_lora_adapter(
+pub unsafe extern "C" fn load_qwen3_lora_adapter(
     adapter_name: *const c_char,
     adapter_path: *const c_char,
 ) -> i32 {
@@ -284,7 +284,7 @@ pub extern "C" fn load_qwen3_lora_adapter(
 /// - All arguments must be valid pointers
 /// - Caller must free: result.category_name, result.probabilities, result.error_message
 #[no_mangle]
-pub extern "C" fn classify_with_qwen3_adapter(
+pub unsafe extern "C" fn classify_with_qwen3_adapter(
     text: *const c_char,
     adapter_name: *const c_char,
     result: *mut GenerativeClassificationResult,
@@ -418,7 +418,7 @@ pub extern "C" fn classify_with_qwen3_adapter(
 /// # Safety
 /// - Caller must free each string in the adapters array and the array itself
 #[no_mangle]
-pub extern "C" fn get_qwen3_loaded_adapters(
+pub unsafe extern "C" fn get_qwen3_loaded_adapters(
     adapters_out: *mut *mut *mut c_char,
     num_adapters: *mut i32,
 ) -> i32 {
@@ -490,7 +490,7 @@ pub extern "C" fn get_qwen3_loaded_adapters(
 /// - All arguments must be valid pointers
 /// - Caller must free: result.category_name, result.probabilities, result.error_message
 #[no_mangle]
-pub extern "C" fn classify_zero_shot_qwen3(
+pub unsafe extern "C" fn classify_zero_shot_qwen3(
     text: *const c_char,
     categories: *const *const c_char,
     num_categories: i32,
@@ -656,7 +656,7 @@ impl Default for GuardResult {
 /// - Must only be called once per result
 /// - Result must have been allocated by classify_with_qwen3_guard
 #[no_mangle]
-pub extern "C" fn free_guard_result(result: *mut GuardResult) {
+pub unsafe extern "C" fn free_guard_result(result: *mut GuardResult) {
     if result.is_null() {
         return;
     }
@@ -686,7 +686,7 @@ pub extern "C" fn free_guard_result(result: *mut GuardResult) {
 /// # Safety
 /// - `model_path` must be a valid null-terminated C string
 #[no_mangle]
-pub extern "C" fn init_qwen3_guard(model_path: *const c_char) -> i32 {
+pub unsafe extern "C" fn init_qwen3_guard(model_path: *const c_char) -> i32 {
     if model_path.is_null() {
         eprintln!("Error: model_path is null");
         return -1;
@@ -745,7 +745,7 @@ pub extern "C" fn init_qwen3_guard(model_path: *const c_char) -> i32 {
 /// - All arguments must be valid pointers
 /// - Caller must free: result.raw_output, result.error_message
 #[no_mangle]
-pub extern "C" fn classify_with_qwen3_guard(
+pub unsafe extern "C" fn classify_with_qwen3_guard(
     text: *const c_char,
     mode: *const c_char,
     result: *mut GuardResult,
@@ -847,8 +847,11 @@ pub extern "C" fn classify_with_qwen3_guard(
 /// # Returns
 /// - 1 if initialized
 /// - 0 if not initialized
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn is_qwen3_guard_initialized() -> i32 {
+pub unsafe extern "C" fn is_qwen3_guard_initialized() -> i32 {
     if GLOBAL_QWEN3_GUARD.get().is_some() {
         1
     } else {
@@ -861,8 +864,11 @@ pub extern "C" fn is_qwen3_guard_initialized() -> i32 {
 /// # Returns
 /// - 1 if initialized
 /// - 0 if not initialized
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn is_qwen3_multi_lora_initialized() -> i32 {
+pub unsafe extern "C" fn is_qwen3_multi_lora_initialized() -> i32 {
     if GLOBAL_QWEN3_MULTI_CLASSIFIER.get().is_some() {
         1
     } else {
@@ -887,7 +893,7 @@ fn select_device(use_cpu: bool) -> Device {
 /// # Safety
 /// - `model_path` must be a valid null-terminated C string
 #[no_mangle]
-pub extern "C" fn init_qwen3_preference_classifier(
+pub unsafe extern "C" fn init_qwen3_preference_classifier(
     model_path: *const c_char,
     use_cpu: bool,
 ) -> bool {
@@ -937,7 +943,7 @@ pub extern "C" fn init_qwen3_preference_classifier(
 /// # Safety
 /// - `text` and `labels_json` must be valid null-terminated C strings
 #[no_mangle]
-pub extern "C" fn classify_qwen3_preference(
+pub unsafe extern "C" fn classify_qwen3_preference(
     text: *const c_char,
     labels_json: *const c_char,
 ) -> ClassificationResult {

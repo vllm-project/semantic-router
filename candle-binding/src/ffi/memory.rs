@@ -11,7 +11,7 @@ use std::ffi::{c_char, CString};
 /// # Safety
 /// - `result` must be a valid TokenizationResult structure
 #[no_mangle]
-pub extern "C" fn free_tokenization_result(result: TokenizationResult) {
+pub unsafe extern "C" fn free_tokenization_result(result: TokenizationResult) {
     // Free the token_ids array
     unsafe {
         if !result.token_ids.is_null() && result.token_count > 0 {
@@ -45,7 +45,7 @@ pub extern "C" fn free_tokenization_result(result: TokenizationResult) {
 /// # Safety
 /// - `s` must be a valid pointer allocated by this library
 #[no_mangle]
-pub extern "C" fn free_cstring(s: *mut c_char) {
+pub unsafe extern "C" fn free_cstring(s: *mut c_char) {
     // Migrated from lib.rs:746-752
     unsafe {
         if !s.is_null() {
@@ -60,7 +60,7 @@ pub extern "C" fn free_cstring(s: *mut c_char) {
 /// - `data` must be a valid pointer allocated by this library
 /// - `length` must match the original allocation size
 #[no_mangle]
-pub extern "C" fn free_embedding(data: *mut f32, length: i32) {
+pub unsafe extern "C" fn free_embedding(data: *mut f32, length: i32) {
     // Migrated from lib.rs:756-763
     if !data.is_null() && length > 0 {
         unsafe {
@@ -77,14 +77,11 @@ pub extern "C" fn free_embedding(data: *mut f32, length: i32) {
 /// - `probabilities` must be a valid pointer allocated by this library
 /// - `num_classes` must match the original allocation size
 #[no_mangle]
-pub extern "C" fn free_probabilities(probabilities: *mut f32, num_classes: i32) {
+pub unsafe extern "C" fn free_probabilities(probabilities: *mut f32, num_classes: i32) {
     // Migrated from lib.rs:966-978
     if !probabilities.is_null() && num_classes > 0 {
         unsafe {
-            let _: Box<[f32]> = Box::from_raw(std::slice::from_raw_parts_mut(
-                probabilities,
-                num_classes as usize,
-            ));
+            let _: Box<[f32]> = Box::from_raw(std::ptr::slice_from_raw_parts_mut(probabilities, num_classes as usize));
         }
     }
 }
@@ -94,7 +91,7 @@ pub extern "C" fn free_probabilities(probabilities: *mut f32, num_classes: i32) 
 /// # Safety
 /// - `result` must be a valid UnifiedBatchResult structure
 #[no_mangle]
-pub extern "C" fn free_unified_batch_result(result: UnifiedBatchResult) {
+pub unsafe extern "C" fn free_unified_batch_result(result: UnifiedBatchResult) {
     // Adapted from lib.rs:1309-1360 (simplified for current structure)
     if result.batch_size <= 0 {
         return;
@@ -160,7 +157,7 @@ pub extern "C" fn free_unified_batch_result(result: UnifiedBatchResult) {
 /// # Safety
 /// - `result` must be a valid BertTokenClassificationResult structure
 #[no_mangle]
-pub extern "C" fn free_bert_token_classification_result(result: BertTokenClassificationResult) {
+pub unsafe extern "C" fn free_bert_token_classification_result(result: BertTokenClassificationResult) {
     if result.num_entities > 0 && !result.entities.is_null() {
         unsafe {
             // Free BertTokenEntity array
@@ -191,7 +188,7 @@ pub extern "C" fn free_bert_token_classification_result(result: BertTokenClassif
 /// # Safety
 /// - `result` must be a valid LoRABatchResult structure
 #[no_mangle]
-pub extern "C" fn free_lora_batch_result(result: LoRABatchResult) {
+pub unsafe extern "C" fn free_lora_batch_result(result: LoRABatchResult) {
     // Migrated from lib.rs:2072-2170
     if result.batch_size <= 0 {
         return;
@@ -281,14 +278,11 @@ pub extern "C" fn free_lora_batch_result(result: LoRABatchResult) {
 /// - `probabilities` must be a valid pointer allocated by this library
 /// - `num_classes` must match the original allocation size
 #[no_mangle]
-pub extern "C" fn free_modernbert_probabilities(probabilities: *mut f32, num_classes: i32) {
+pub unsafe extern "C" fn free_modernbert_probabilities(probabilities: *mut f32, num_classes: i32) {
     // Migrated from modernbert.rs:1006-1015
     if !probabilities.is_null() && num_classes > 0 {
         unsafe {
-            let _: Box<[f32]> = Box::from_raw(std::slice::from_raw_parts_mut(
-                probabilities,
-                num_classes as usize,
-            ));
+            let _: Box<[f32]> = Box::from_raw(std::ptr::slice_from_raw_parts_mut(probabilities, num_classes as usize));
         }
     }
 }
@@ -298,7 +292,7 @@ pub extern "C" fn free_modernbert_probabilities(probabilities: *mut f32, num_cla
 /// # Safety
 /// - `result` must be a valid ModernBertTokenClassificationResult structure
 #[no_mangle]
-pub extern "C" fn free_modernbert_token_result(result: ModernBertTokenClassificationResult) {
+pub unsafe extern "C" fn free_modernbert_token_result(result: ModernBertTokenClassificationResult) {
     // Free the entities array
     if result.num_entities > 0 {
         unsafe {
@@ -402,7 +396,7 @@ pub unsafe fn allocate_c_float_array(values: &[f32]) -> *mut f32 {
 /// - `array` must be allocated by allocate_c_string_array
 /// - `length` must match the original array size
 #[no_mangle]
-pub extern "C" fn free_c_string_array(array: *mut *mut c_char, length: i32) {
+pub unsafe extern "C" fn free_c_string_array(array: *mut *mut c_char, length: i32) {
     if !array.is_null() && length > 0 {
         unsafe {
             let strings_slice = std::slice::from_raw_parts_mut(array, length as usize);
@@ -422,7 +416,7 @@ pub extern "C" fn free_c_string_array(array: *mut *mut c_char, length: i32) {
 /// - `array` must be allocated by allocate_c_int_array
 /// - `length` must match the original array size
 #[no_mangle]
-pub extern "C" fn free_c_int_array(array: *mut i32, length: i32) {
+pub unsafe extern "C" fn free_c_int_array(array: *mut i32, length: i32) {
     if !array.is_null() && length > 0 {
         unsafe {
             let _ = Vec::from_raw_parts(array, length as usize, length as usize);
@@ -436,7 +430,7 @@ pub extern "C" fn free_c_int_array(array: *mut i32, length: i32) {
 /// - `array` must be allocated by allocate_c_float_array
 /// - `length` must match the original array size
 #[no_mangle]
-pub extern "C" fn free_c_float_array(array: *mut f32, length: i32) {
+pub unsafe extern "C" fn free_c_float_array(array: *mut f32, length: i32) {
     if !array.is_null() && length > 0 {
         unsafe {
             let _ = Vec::from_raw_parts(array, length as usize, length as usize);
@@ -449,7 +443,7 @@ pub extern "C" fn free_c_float_array(array: *mut f32, length: i32) {
 /// # Safety
 /// - `result` must be obtained from detect_hallucinations
 #[no_mangle]
-pub extern "C" fn free_hallucination_detection_result(result: HallucinationDetectionResult) {
+pub unsafe extern "C" fn free_hallucination_detection_result(result: HallucinationDetectionResult) {
     unsafe {
         // Free error message if present
         if !result.error_message.is_null() {
@@ -484,7 +478,7 @@ pub extern "C" fn free_hallucination_detection_result(result: HallucinationDetec
 /// # Safety
 /// - `result` must be obtained from classify_nli
 #[no_mangle]
-pub extern "C" fn free_nli_result(result: NLIResult) {
+pub unsafe extern "C" fn free_nli_result(result: NLIResult) {
     unsafe {
         // Free error message if present
         if !result.error_message.is_null() {
@@ -498,7 +492,7 @@ pub extern "C" fn free_nli_result(result: NLIResult) {
 /// # Safety
 /// - `result` must be obtained from detect_hallucinations_with_nli
 #[no_mangle]
-pub extern "C" fn free_enhanced_hallucination_detection_result(
+pub unsafe extern "C" fn free_enhanced_hallucination_detection_result(
     result: EnhancedHallucinationDetectionResult,
 ) {
     unsafe {
@@ -539,7 +533,7 @@ pub unsafe fn convert_intent_to_lora_intent(
     intent: &crate::classifiers::lora::intent_lora::IntentResult,
 ) -> crate::ffi::types::LoRAIntentResult {
     // Create probabilities array
-    let _probabilities = vec![intent.confidence, 1.0 - intent.confidence];
+    let _probabilities = [intent.confidence, 1.0 - intent.confidence];
 
     crate::ffi::types::LoRAIntentResult {
         category: allocate_c_string(&intent.intent),

@@ -44,11 +44,9 @@ fn test_parallel_classify_basic(
 
     println!("\n🧪 Testing parallel classification with rayon optimization");
 
-    let test_texts = vec![
-        "I want to book a flight to New York",
+    let test_texts = ["I want to book a flight to New York",
         "My SSN is 123-45-6789 and my email is test@example.com",
-        "DROP TABLE users; -- malicious SQL injection",
-    ];
+        "DROP TABLE users; -- malicious SQL injection"];
 
     // Note: This test validates the API structure
     // Actual performance testing requires model files

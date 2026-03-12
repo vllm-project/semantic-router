@@ -325,7 +325,6 @@ pub struct GlobalStateStats {
 static GLOBAL_STATE_MANAGER: LazyLock<GlobalStateManager> = LazyLock::new(GlobalStateManager::new);
 
 /// Convenience functions for backward compatibility
-
 /// Get the global state manager instance
 pub fn get_global_state_manager() -> &'static GlobalStateManager {
     GlobalStateManager::instance()

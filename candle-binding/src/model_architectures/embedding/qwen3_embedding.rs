@@ -240,26 +240,16 @@ pub struct Qwen3TokenizerConfig {
     pub max_length: usize,
 }
 
-impl Qwen3TokenizerConfig {
-    /// Create default tokenizer configuration
-    ///
-    /// Returns a configuration with:
-    /// - `padding_side`: `PaddingSide::Left` (required for Qwen3)
-    /// - `max_length`: 32768 (matches model's max_position_embeddings)
-    ///
-    /// # Example
-    /// ```ignore
-    /// let config = Qwen3TokenizerConfig::default();
-    /// assert_eq!(config.padding_side, PaddingSide::Left);
-    /// assert_eq!(config.max_length, 32768);
-    /// ```
-    pub fn default() -> Self {
+impl Default for Qwen3TokenizerConfig {
+    fn default() -> Self {
         Self {
             padding_side: PaddingSide::Left,
             max_length: 32768,
         }
     }
+}
 
+impl Qwen3TokenizerConfig {
     /// Validate tokenizer configuration
     ///
     /// This method ensures that the tokenizer is configured correctly for Qwen3-Embedding.
@@ -924,7 +914,7 @@ impl Qwen3Attention {
         let head_dim = config.head_dim();
 
         // Validate GQA configuration
-        if num_heads % num_key_value_heads != 0 {
+        if !num_heads.is_multiple_of(num_key_value_heads) {
             return Err(UnifiedError::Validation {
                 field: "num_attention_heads / num_key_value_heads".to_string(),
                 expected: format!(
@@ -966,13 +956,13 @@ impl Qwen3Attention {
             .pp("q_norm")
             .get((head_dim,), "weight")
             .map_err(|e| from_candle_error(e, "Qwen3Attention: load q_norm weight", None))?;
-        let q_norm = RmsNorm::new(q_norm_weight, config.rms_norm_eps as f64);
+        let q_norm = RmsNorm::new(q_norm_weight, config.rms_norm_eps);
 
         let k_norm_weight = vb
             .pp("k_norm")
             .get((head_dim,), "weight")
             .map_err(|e| from_candle_error(e, "Qwen3Attention: load k_norm weight", None))?;
-        let k_norm = RmsNorm::new(k_norm_weight, config.rms_norm_eps as f64);
+        let k_norm = RmsNorm::new(k_norm_weight, config.rms_norm_eps);
 
         Ok(Self {
             q_proj,
@@ -1246,7 +1236,7 @@ impl Qwen3Attention {
 
         // Step 1.3: Apply scaling in f64
         let attn_scores_f64 = attn_scores_f64
-            .affine(self.scaling as f64, 0.0)
+            .affine(self.scaling, 0.0)
             .map_err(|e| from_candle_error(e, "Qwen3Attention: scale scores", None))?;
 
         // Step 2: Apply attention mask (if provided, convert mask to f64)
@@ -1902,7 +1892,7 @@ impl Qwen3EmbeddingModel {
         let safetensors_path = format!("{}/model.safetensors", model_path);
         let vb = unsafe {
             VarBuilder::from_mmaped_safetensors(
-                &[safetensors_path.clone()],
+                std::slice::from_ref(&safetensors_path),
                 candle_core::DType::F32,
                 device,
             )

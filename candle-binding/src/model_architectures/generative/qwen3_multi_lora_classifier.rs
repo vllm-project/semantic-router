@@ -324,7 +324,7 @@ impl Qwen3MultiLoRAClassifier {
             for proj in &["q_proj", "k_proj", "v_proj", "o_proj"] {
                 let key = format!("layers.{}.self_attn.{}", layer_idx, proj);
                 if let Ok(adapter) = self.try_load_projection_adapter(
-                    &layer_vb.pp(&format!("self_attn.{}", proj)),
+                    &layer_vb.pp(format!("self_attn.{}", proj)),
                     &lora_config,
                     proj,
                 ) {
@@ -336,7 +336,7 @@ impl Qwen3MultiLoRAClassifier {
             for proj in &["gate_proj", "up_proj", "down_proj"] {
                 let key = format!("layers.{}.mlp.{}", layer_idx, proj);
                 if let Ok(adapter) = self.try_load_mlp_adapter(
-                    &layer_vb.pp(&format!("mlp.{}", proj)),
+                    &layer_vb.pp(format!("mlp.{}", proj)),
                     &lora_config,
                     proj,
                 ) {
@@ -587,9 +587,7 @@ impl Qwen3MultiLoRAClassifier {
         for tokens in &tokenized_prompts {
             padded_tokens.extend_from_slice(tokens);
             // Pad with 0s (or use proper pad_token_id if available)
-            for _ in tokens.len()..max_len {
-                padded_tokens.push(0);
-            }
+            padded_tokens.extend(std::iter::repeat_n(0, max_len - tokens.len()));
         }
 
         // Create batched tensor [batch_size, seq_len]

@@ -318,7 +318,7 @@ impl LoRAAdapterFactory {
         // Create adapters for attention layers
         for module in &["query", "key", "value", "output"] {
             if config.target_modules.contains(&module.to_string()) {
-                let adapter_vb = vb.pp(&format!("attention.{}", module));
+                let adapter_vb = vb.pp(format!("attention.{}", module));
                 let adapter =
                     LoRAAdapter::new(hidden_size, hidden_size, config, adapter_vb, device)?;
                 adapters.insert(module.to_string(), adapter);

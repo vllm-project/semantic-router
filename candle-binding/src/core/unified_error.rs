@@ -304,7 +304,6 @@ impl From<serde_json::Error> for UnifiedError {
 }
 
 /// Convenience macros for common error patterns
-
 /// Create a configuration error
 #[macro_export]
 macro_rules! config_error {
@@ -405,7 +404,6 @@ macro_rules! validation_error {
 }
 
 /// Utility functions for common error conversions
-
 /// Convert candle_core::Error to UnifiedError with context
 pub fn from_candle_error(
     err: candle_core::Error,
@@ -451,7 +449,6 @@ pub fn concurrency_error(operation: &str, reason: &str) -> UnifiedError {
 }
 
 /// Predefined error builders for common scenarios
-
 /// Configuration file loading errors
 pub mod config_errors {
     use super::*;

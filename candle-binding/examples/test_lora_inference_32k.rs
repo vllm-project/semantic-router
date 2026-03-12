@@ -61,7 +61,7 @@ fn main() -> Result<()> {
     // Step 2: Load base model
     println!("\nLoading ModernBERT-base-32k base model...");
     let base_vb = unsafe {
-        VarBuilder::from_mmaped_safetensors(&[base_weights_path.clone()], DType::F32, &device)
+        VarBuilder::from_mmaped_safetensors(std::slice::from_ref(&base_weights_path), DType::F32, &device)
             .map_err(|e| anyhow!("Failed to load base model weights: {}", e))?
     };
     // ModernBERT weights are directly under the root, not under "model" prefix
@@ -124,7 +124,7 @@ fn main() -> Result<()> {
             // Load LoRA weights
             let lora_vb = unsafe {
                 VarBuilder::from_mmaped_safetensors(
-                    &[lora_weights_path.clone()],
+                    std::slice::from_ref(&lora_weights_path),
                     DType::F32,
                     &device,
                 )

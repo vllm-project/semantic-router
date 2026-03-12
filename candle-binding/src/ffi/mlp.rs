@@ -39,15 +39,21 @@ fn string_to_c_str(s: String) -> *mut c_char {
 pub struct MLPHandle(MLPSelector);
 
 /// Create a new MLP selector (untrained)
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn candle_mlp_new() -> *mut MLPHandle {
+pub unsafe extern "C" fn candle_mlp_new() -> *mut MLPHandle {
     Box::into_raw(Box::new(MLPHandle(MLPSelector::new())))
 }
 
 /// Create a new MLP selector with device
 /// device_type: 0 = CPU, 1 = CUDA (GPU), 2 = Metal (Apple Silicon)
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn candle_mlp_new_with_device(device_type: c_int) -> *mut MLPHandle {
+pub unsafe extern "C" fn candle_mlp_new_with_device(device_type: c_int) -> *mut MLPHandle {
     let device = match device_type {
         1 => {
             // Try CUDA
@@ -80,8 +86,11 @@ pub extern "C" fn candle_mlp_new_with_device(device_type: c_int) -> *mut MLPHand
 /// Create a new MLP selector with device and dtype for mixed precision
 /// device_type: 0 = CPU, 1 = CUDA (GPU), 2 = Metal (Apple Silicon)
 /// dtype: 0 = F32, 1 = F16, 2 = BF16
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn candle_mlp_new_with_device_and_dtype(
+pub unsafe extern "C" fn candle_mlp_new_with_device_and_dtype(
     device_type: c_int,
     dtype: c_int,
 ) -> *mut MLPHandle {
@@ -121,16 +130,22 @@ pub extern "C" fn candle_mlp_new_with_device_and_dtype(
 }
 
 /// Free MLP selector
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn candle_mlp_free(handle: *mut MLPHandle) {
+pub unsafe extern "C" fn candle_mlp_free(handle: *mut MLPHandle) {
     if !handle.is_null() {
         unsafe { drop(Box::from_raw(handle)) };
     }
 }
 
 /// Select model using MLP
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn candle_mlp_select(
+pub unsafe extern "C" fn candle_mlp_select(
     handle: *const MLPHandle,
     query: *const c_double,
     query_len: size_t,
@@ -149,8 +164,11 @@ pub extern "C" fn candle_mlp_select(
 }
 
 /// Check if MLP is trained (has loaded model)
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn candle_mlp_is_trained(handle: *const MLPHandle) -> c_int {
+pub unsafe extern "C" fn candle_mlp_is_trained(handle: *const MLPHandle) -> c_int {
     if handle.is_null() {
         return 0;
     }
@@ -159,8 +177,11 @@ pub extern "C" fn candle_mlp_is_trained(handle: *const MLPHandle) -> c_int {
 }
 
 /// Save MLP to JSON
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn candle_mlp_to_json(handle: *const MLPHandle) -> *mut c_char {
+pub unsafe extern "C" fn candle_mlp_to_json(handle: *const MLPHandle) -> *mut c_char {
     if handle.is_null() {
         return ptr::null_mut();
     }
@@ -172,8 +193,11 @@ pub extern "C" fn candle_mlp_to_json(handle: *const MLPHandle) -> *mut c_char {
 }
 
 /// Load MLP from JSON (primary way to load trained models)
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn candle_mlp_from_json(json: *const c_char) -> *mut MLPHandle {
+pub unsafe extern "C" fn candle_mlp_from_json(json: *const c_char) -> *mut MLPHandle {
     let json_str = match unsafe { c_str_to_string(json) } {
         Some(s) => s,
         None => return ptr::null_mut(),
@@ -187,8 +211,11 @@ pub extern "C" fn candle_mlp_from_json(json: *const c_char) -> *mut MLPHandle {
 
 /// Load MLP from JSON with specific device
 /// device_type: 0 = CPU, 1 = CUDA (GPU), 2 = Metal (Apple Silicon)
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn candle_mlp_from_json_with_device(
+pub unsafe extern "C" fn candle_mlp_from_json_with_device(
     json: *const c_char,
     device_type: c_int,
 ) -> *mut MLPHandle {
@@ -230,8 +257,11 @@ pub extern "C" fn candle_mlp_from_json_with_device(
 /// Load MLP from JSON with specific device and dtype for mixed precision
 /// device_type: 0 = CPU, 1 = CUDA (GPU), 2 = Metal (Apple Silicon)
 /// dtype: 0 = F32, 1 = F16, 2 = BF16
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn candle_mlp_from_json_with_device_and_dtype(
+pub unsafe extern "C" fn candle_mlp_from_json_with_device_and_dtype(
     json: *const c_char,
     device_type: c_int,
     dtype: c_int,
@@ -278,8 +308,11 @@ pub extern "C" fn candle_mlp_from_json_with_device_and_dtype(
 }
 
 /// Free a C string allocated by this library
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid, non-null, and point to valid C strings where applicable.
 #[no_mangle]
-pub extern "C" fn candle_mlp_free_string(ptr: *mut c_char) {
+pub unsafe extern "C" fn candle_mlp_free_string(ptr: *mut c_char) {
     if !ptr.is_null() {
         unsafe { drop(CString::from_raw(ptr)) };
     }
@@ -291,15 +324,15 @@ mod tests {
 
     #[test]
     fn test_mlp_handle_new() {
-        let handle = candle_mlp_new();
+        let handle = unsafe { candle_mlp_new() };
         assert!(!handle.is_null());
-        candle_mlp_free(handle);
+        unsafe { candle_mlp_free(handle) };
     }
 
     #[test]
     fn test_mlp_is_trained_empty() {
-        let handle = candle_mlp_new();
-        assert_eq!(candle_mlp_is_trained(handle), 0);
-        candle_mlp_free(handle);
+        let handle = unsafe { candle_mlp_new() };
+        assert_eq!(unsafe { candle_mlp_is_trained(handle) }, 0);
+        unsafe { candle_mlp_free(handle) };
     }
 }

@@ -96,7 +96,7 @@ impl LoRABertClassifier {
         } else {
             unsafe {
                 VarBuilder::from_mmaped_safetensors(
-                    &[weights_filename.clone()],
+                    std::slice::from_ref(&weights_filename),
                     DType::F32,
                     &device,
                 )?
@@ -149,7 +149,7 @@ impl LoRABertClassifier {
                 config.hidden_size,
                 config.hidden_size,
                 &lora_config,
-                lora_vb.pp(&format!("lora_{}", task_name)),
+                lora_vb.pp(format!("lora_{}", task_name)),
                 &device,
             )?;
 
@@ -557,13 +557,10 @@ impl HighPerformanceBertClassifier {
         let encoding = self.tokenizer.encode(text, true).map_err(E::msg)?;
         let token_ids = encoding.get_ids();
         let attention_mask: Vec<u32> = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|&x| x as u32)
-            .collect();
+            .get_attention_mask().to_vec();
 
         // Create tensors following old architecture pattern
-        let token_ids = Tensor::new(&token_ids[..], &self.device)?.unsqueeze(0)?;
+        let token_ids = Tensor::new(token_ids, &self.device)?.unsqueeze(0)?;
         let token_type_ids = token_ids.zeros_like()?;
         let attention_mask = Tensor::new(&attention_mask[..], &self.device)?.unsqueeze(0)?;
 
@@ -655,11 +652,11 @@ impl HighPerformanceBertClassifier {
             let attention_mask = encoding.get_attention_mask();
 
             all_token_ids.extend_from_slice(token_ids);
-            all_attention_masks.extend(attention_mask.iter().map(|&x| x as u32));
+            all_attention_masks.extend(attention_mask.iter().copied());
 
             let padding_needed = max_len - token_ids.len();
-            all_token_ids.extend(std::iter::repeat(0).take(padding_needed));
-            all_attention_masks.extend(std::iter::repeat(0).take(padding_needed));
+            all_token_ids.extend(std::iter::repeat_n(0, padding_needed));
+            all_attention_masks.extend(std::iter::repeat_n(0, padding_needed));
         }
 
         let token_ids =
@@ -780,8 +777,7 @@ impl HighPerformanceBertTokenClassifier {
 
         // Extract results (old architecture pattern)
         let mut batch_results = Vec::with_capacity(texts.len());
-        for i in 0..texts.len() {
-            let encoding = &encodings[i];
+        for (i, encoding) in encodings.iter().enumerate() {
             let tokens = encoding.get_tokens();
             let offsets = encoding.get_offsets();
 
@@ -814,11 +810,11 @@ impl HighPerformanceBertTokenClassifier {
             let attention_mask = encoding.get_attention_mask();
 
             all_token_ids.extend_from_slice(token_ids);
-            all_attention_masks.extend(attention_mask.iter().map(|&x| x as u32));
+            all_attention_masks.extend(attention_mask.iter().copied());
 
             let padding_needed = max_len - token_ids.len();
-            all_token_ids.extend(std::iter::repeat(0).take(padding_needed));
-            all_attention_masks.extend(std::iter::repeat(0).take(padding_needed));
+            all_token_ids.extend(std::iter::repeat_n(0, padding_needed));
+            all_attention_masks.extend(std::iter::repeat_n(0, padding_needed));
         }
 
         let token_ids =

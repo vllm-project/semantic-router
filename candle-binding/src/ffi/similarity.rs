@@ -9,7 +9,7 @@ use std::ffi::{c_char, CStr};
 /// # Safety
 /// - `text` must be a valid null-terminated C string
 #[no_mangle]
-pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> EmbeddingResult {
+pub unsafe extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> EmbeddingResult {
     // Migrated from lib.rs:555-629
     let text = unsafe {
         match CStr::from_ptr(text).to_str() {
@@ -105,7 +105,7 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
 /// # Safety
 /// - `text1` and `text2` must be valid null-terminated C strings
 #[no_mangle]
-pub extern "C" fn calculate_similarity(
+pub unsafe extern "C" fn calculate_similarity(
     text1: *const c_char,
     text2: *const c_char,
     max_length: i32,
@@ -154,7 +154,7 @@ pub extern "C" fn calculate_similarity(
 /// - `texts` must be a valid array of null-terminated C strings
 /// - `texts_count` must match the actual array size
 #[no_mangle]
-pub extern "C" fn find_most_similar(
+pub unsafe extern "C" fn find_most_similar(
     query: *const c_char,
     candidates_ptr: *const *const c_char,
     num_candidates: i32,
@@ -216,7 +216,7 @@ pub extern "C" fn find_most_similar(
         Ok((idx, score)) => {
             // Allocate C string for the most similar text
             let most_similar_text = if idx < candidates.len() {
-                unsafe { crate::ffi::memory::allocate_c_string(&candidates[idx]) }
+                unsafe { crate::ffi::memory::allocate_c_string(candidates[idx]) }
             } else {
                 std::ptr::null_mut()
             };

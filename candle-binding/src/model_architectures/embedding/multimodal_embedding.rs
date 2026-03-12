@@ -854,7 +854,7 @@ impl MultiModalEmbeddingModel {
 
         let safetensors_path = format!("{}/model.safetensors", model_path);
         let vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(&[safetensors_path.clone()], DType::F32, device)
+            VarBuilder::from_mmaped_safetensors(std::slice::from_ref(&safetensors_path), DType::F32, device)
                 .map_err(|e| {
                     from_candle_error(
                         e,
@@ -1127,7 +1127,7 @@ impl MultiModalEmbeddingModel {
             for i in 0..seq_len {
                 if i < ids.len() {
                     input_ids_vec.push(ids[i]);
-                    attention_mask_vec.push(mask[i] as u32);
+                    attention_mask_vec.push(mask[i]);
                 } else {
                     input_ids_vec.push(0);
                     attention_mask_vec.push(0);
@@ -1335,11 +1335,7 @@ mod integration_tests {
     ) -> Tensor {
         let encoding = tokenizer.encode(text, true).unwrap();
         let ids: Vec<u32> = encoding.get_ids().to_vec();
-        let mask: Vec<u32> = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|&x| x as u32)
-            .collect();
+        let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
         let seq_len = ids.len();
         let device = model.device();
         let input_ids = Tensor::from_vec(ids, (1, seq_len), device).unwrap();
@@ -1434,11 +1430,7 @@ mod integration_tests {
         let (model, tokenizer) = load_model_and_tokenizer();
         let encoding = tokenizer.encode("Hello world", true).unwrap();
         let ids: Vec<u32> = encoding.get_ids().to_vec();
-        let mask: Vec<u32> = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|&x| x as u32)
-            .collect();
+        let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
         let seq_len = ids.len();
         let device = model.device();
         let input_ids = Tensor::from_vec(ids, (1, seq_len), device).unwrap();
@@ -1459,11 +1451,7 @@ mod integration_tests {
         let (model, tokenizer) = load_model_and_tokenizer();
         let encoding = tokenizer.encode("Test layer exit", true).unwrap();
         let ids: Vec<u32> = encoding.get_ids().to_vec();
-        let mask: Vec<u32> = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|&x| x as u32)
-            .collect();
+        let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
         let seq_len = ids.len();
         let device = model.device();
         let input_ids = Tensor::from_vec(ids, (1, seq_len), device).unwrap();
@@ -1926,7 +1914,7 @@ mod integration_tests {
 
         let sim = cosine_sim(&text_emb, &img_emb);
         assert!(
-            sim.is_finite() && sim >= -1.0 && sim <= 1.0,
+            sim.is_finite() && (-1.0..=1.0).contains(&sim),
             "similarity should be finite in [-1,1], got {}",
             sim
         );
@@ -2005,11 +1993,7 @@ mod integration_tests {
 
         let encoding = tokenizer.encode("a cute kitten", true).unwrap();
         let ids: Vec<u32> = encoding.get_ids().to_vec();
-        let mask: Vec<u32> = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|&x| x as u32)
-            .collect();
+        let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
         let seq_len = ids.len();
         let input_ids = Tensor::from_vec(ids, (1, seq_len), device).unwrap();
         let attention_mask = Tensor::from_vec(mask, (1, seq_len), device).unwrap();
@@ -2193,11 +2177,7 @@ mod integration_tests {
         let (model, tokenizer) = load_model_and_tokenizer();
         let encoding = tokenizer.encode("Hi", true).unwrap();
         let ids: Vec<u32> = encoding.get_ids().to_vec();
-        let mask: Vec<u32> = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|&x| x as u32)
-            .collect();
+        let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
         let seq_len = ids.len();
         let device = model.device();
         let input_ids = Tensor::from_vec(ids, (1, seq_len), device).unwrap();
@@ -2226,11 +2206,7 @@ mod integration_tests {
         let (model, tokenizer) = load_model_and_tokenizer();
         let encoding = tokenizer.encode("Hi", true).unwrap();
         let ids: Vec<u32> = encoding.get_ids().to_vec();
-        let mask: Vec<u32> = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|&x| x as u32)
-            .collect();
+        let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
         let seq_len = ids.len();
         let device = model.device();
         let input_ids = Tensor::from_vec(ids, (1, seq_len), device).unwrap();

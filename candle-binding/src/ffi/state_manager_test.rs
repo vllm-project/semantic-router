@@ -80,7 +80,7 @@ fn test_is_any_initialized() {
     let any_init = manager.is_any_initialized();
 
     // Just verify it returns a boolean
-    assert!(any_init || !any_init, "Should return boolean");
+    let _: bool = any_init;
 }
 
 #[rstest]
@@ -89,7 +89,7 @@ fn test_is_ready() {
 
     // Just verify the method works
     let ready = manager.is_ready();
-    assert!(ready || !ready, "Should return boolean");
+    let _: bool = ready;
 }
 
 // ============================================================================
@@ -103,7 +103,7 @@ fn test_is_unified_classifier_initialized() {
     let is_init = manager.is_unified_classifier_initialized();
 
     // Should return a boolean
-    assert!(is_init || !is_init, "Should return boolean");
+    let _: bool = is_init;
 
     // If initialized, should be able to get it
     if is_init {
@@ -239,22 +239,10 @@ fn test_get_stats() {
 
     // Verify structure (based on actual implementation)
     // Note: You may need to adjust these assertions based on actual struct fields
-    assert!(
-        stats.unified_classifier_initialized || !stats.unified_classifier_initialized,
-        "Should have unified_classifier_initialized field"
-    );
-    assert!(
-        stats.parallel_lora_engine_initialized || !stats.parallel_lora_engine_initialized,
-        "Should have parallel_lora_engine_initialized field"
-    );
-    assert!(
-        stats.lora_token_classifier_initialized || !stats.lora_token_classifier_initialized,
-        "Should have lora_token_classifier_initialized field"
-    );
-    assert!(
-        stats.bert_similarity_initialized || !stats.bert_similarity_initialized,
-        "Should have bert_similarity_initialized field"
-    );
+    let _: bool = stats.unified_classifier_initialized;
+    let _: bool = stats.parallel_lora_engine_initialized;
+    let _: bool = stats.lora_token_classifier_initialized;
+    let _: bool = stats.bert_similarity_initialized;
 }
 
 // ============================================================================

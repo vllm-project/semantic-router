@@ -17,6 +17,12 @@ use crate::model_architectures::routing::{DualPathRouter, ProcessingRequirements
 use crate::model_architectures::traits::*;
 use crate::model_architectures::unified_interface::CoreModel;
 
+/// Type alias for the core model map used in TraditionalModelManager and LoRAModelManager
+type CoreModelMap = HashMap<
+    String,
+    Box<dyn CoreModel<Output = (usize, f32), Config = String, Error = candle_core::Error>>,
+>;
+
 // Default classification constants for fallback scenarios
 /// Default predicted class when task result is not available
 const DEFAULT_PREDICTED_CLASS: usize = 0;
@@ -96,10 +102,7 @@ pub struct EmbeddingRequirements {
 #[derive(Debug)]
 pub struct TraditionalModelManager {
     /// Available traditional models
-    pub models: HashMap<
-        String,
-        Box<dyn CoreModel<Output = (usize, f32), Config = String, Error = candle_core::Error>>,
-    >,
+    pub models: CoreModelMap,
     /// Device for computation
     pub device: Device,
 }
@@ -147,10 +150,7 @@ impl TraditionalModelManager {
 #[derive(Debug)]
 pub struct LoRAModelManager {
     /// Available LoRA models
-    pub models: HashMap<
-        String,
-        Box<dyn CoreModel<Output = (usize, f32), Config = String, Error = candle_core::Error>>,
-    >,
+    pub models: CoreModelMap,
     /// Device for computation
     pub device: Device,
 }
@@ -613,9 +613,7 @@ impl DualPathUnifiedClassifier {
 
         // Convert LoRA output to unified result with enhanced metrics
         let avg_confidence = lora_output
-            .task_results
-            .iter()
-            .map(|(_, r)| r.confidence)
+            .task_results.values().map(|r| r.confidence)
             .sum::<f32>()
             / lora_output.task_results.len() as f32;
 
@@ -707,8 +705,7 @@ impl DualPathUnifiedClassifier {
                 let sequential_estimate = processing_time * task_count as f32;
                 let parallel_actual = processing_time;
                 ((sequential_estimate - parallel_actual) / sequential_estimate)
-                    .max(0.0)
-                    .min(1.0)
+                    .clamp(0.0, 1.0)
             } else {
                 0.0
             },

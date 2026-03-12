@@ -231,7 +231,7 @@ impl RotaryEmbeddingCache {
         rope_local_base_freq: f32,
         device: &Device,
     ) -> UnifiedResult<Self> {
-        if head_dim % 2 != 0 {
+        if !head_dim.is_multiple_of(2) {
             return Err(UnifiedError::Validation {
                 field: "head_dim".to_string(),
                 expected: "even number".to_string(),
@@ -698,7 +698,7 @@ impl Gemma3Attention {
             head_dim,
             config.max_position_embeddings,
             config.rope_theta,
-            &vb.device(),
+            vb.device(),
         )?;
 
         // Local RoPE: base=rope_local_base_freq (10000.0) for sliding_attention layers
@@ -706,7 +706,7 @@ impl Gemma3Attention {
             head_dim,
             config.max_position_embeddings,
             config.rope_local_base_freq,
-            &vb.device(),
+            vb.device(),
         )?;
 
         Ok(Self {
@@ -1243,7 +1243,7 @@ impl Gemma3Model {
         let mut layers = Vec::with_capacity(config.num_hidden_layers);
         for layer_idx in 0..config.num_hidden_layers {
             let layer =
-                Gemma3Layer::load(vb.pp(&format!("layers.{}", layer_idx)), config, layer_idx)?;
+                Gemma3Layer::load(vb.pp(format!("layers.{}", layer_idx)), config, layer_idx)?;
             layers.push(layer);
         }
 

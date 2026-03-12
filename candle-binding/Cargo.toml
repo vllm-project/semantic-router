@@ -25,6 +25,9 @@ mkl = ["candle-core/mkl", "candle-nn/mkl", "candle-transformers/mkl"]
 # macOS Accelerate framework support for faster CPU inference
 # Enable with: cargo build --no-default-features --features accelerate
 accelerate = ["candle-core/accelerate", "candle-nn/accelerate", "candle-transformers/accelerate"]
+# Apple Metal support for GPU acceleration on macOS (Apple Silicon)
+# Enable with: cargo build --no-default-features --features metal
+metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
 
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }

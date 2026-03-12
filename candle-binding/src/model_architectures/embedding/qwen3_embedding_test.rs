@@ -1107,10 +1107,8 @@ fn test_layer_shape_preservation(
     // After norm2 + MLP + residual: [batch, seq_len, hidden_size]
     // Output: [batch, seq_len, hidden_size]
 
-    // The architecture guarantees shape preservation
-    assert_eq!(batch_size, batch_size); // Shape in = shape out
-    assert_eq!(seq_len, seq_len);
-    assert_eq!(hidden_size, hidden_size);
+    // The architecture guarantees shape preservation (shape in = shape out)
+    let _ = (batch_size, seq_len, hidden_size);
 }
 
 /// Test 1: Model loading from safetensors

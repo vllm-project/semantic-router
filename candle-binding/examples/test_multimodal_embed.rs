@@ -63,8 +63,8 @@ fn image_bytes_to_tensor(bytes: &[u8], device: &Device) -> Tensor {
     for y in 0..512usize {
         for x in 0..512usize {
             let idx = (y * 512 + x) * 3;
-            chw[0 * 512 * 512 + y * 512 + x] = raw[idx] as f32 / 255.0;
-            chw[1 * 512 * 512 + y * 512 + x] = raw[idx + 1] as f32 / 255.0;
+            chw[(y * 512) + x] = raw[idx] as f32 / 255.0;
+            chw[512 * 512 + y * 512 + x] = raw[idx + 1] as f32 / 255.0;
             chw[2 * 512 * 512 + y * 512 + x] = raw[idx + 2] as f32 / 255.0;
         }
     }
@@ -94,11 +94,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 fn encode_text(model: &MultiModalEmbeddingModel, tokenizer: &Tokenizer, text: &str) -> Vec<f32> {
     let encoding = tokenizer.encode(text, true).unwrap();
     let ids: Vec<u32> = encoding.get_ids().to_vec();
-    let mask: Vec<u32> = encoding
-        .get_attention_mask()
-        .iter()
-        .map(|&x| x as u32)
-        .collect();
+    let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
     let seq_len = ids.len();
     let device = model.device();
     let input_ids = Tensor::from_vec(ids, (1, seq_len), device).unwrap();

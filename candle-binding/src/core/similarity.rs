@@ -125,7 +125,7 @@ impl BertSimilarity {
         } else {
             unsafe {
                 VarBuilder::from_mmaped_safetensors(
-                    &[weights_filename.clone()],
+                    std::slice::from_ref(&weights_filename),
                     DType::F32,
                     &device,
                 )?

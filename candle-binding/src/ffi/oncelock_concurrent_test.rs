@@ -5,8 +5,8 @@
 //!
 //! These tests load real ML models and perform concurrent inference to prove thread safety.
 
-use super::classify::*;
 use super::init::*;
+use super::*;
 use rayon::prelude::*;
 use rstest::*;
 use std::ffi::CString;
@@ -32,7 +32,7 @@ fn test_p0_real_modernbert_concurrent_classification_10_threads() {
     let model_path_cstr = CString::new(model_path.clone()).unwrap();
 
     println!("Loading model from: {}", model_path);
-    let init_result = init_modernbert_classifier(model_path_cstr.as_ptr(), true);
+    let init_result = unsafe { init_modernbert_classifier(model_path_cstr.as_ptr(), true) };
 
     if !init_result {
         println!("⚠️  Model not found or failed to load: {}", model_path);
@@ -43,11 +43,9 @@ fn test_p0_real_modernbert_concurrent_classification_10_threads() {
     println!("Model loaded successfully!");
 
     // Test texts
-    let test_texts = vec![
-        "What is the best strategy for corporate mergers?",
+    let test_texts = ["What is the best strategy for corporate mergers?",
         "Hello, how are you today?",
-        "I want to book a flight to New York",
-    ];
+        "I want to book a flight to New York"];
 
     let start = Instant::now();
     let success_count = Arc::new(AtomicUsize::new(0));
@@ -59,7 +57,7 @@ fn test_p0_real_modernbert_concurrent_classification_10_threads() {
             let text = test_texts[i % test_texts.len()];
             let text_cstr = CString::new(text).unwrap();
 
-            let result = classify_modernbert_text(text_cstr.as_ptr());
+            let result = unsafe { classify_modernbert_text(text_cstr.as_ptr()) };
 
             // Validate result
             if result.predicted_class >= 0 && result.confidence >= 0.0 && result.confidence <= 1.0 {
@@ -107,7 +105,7 @@ fn test_p0_real_pii_concurrent_classification_8_threads() {
     let model_path_cstr = CString::new(model_path.clone()).unwrap();
 
     println!("Loading PII model from: {}", model_path);
-    let init_result = init_modernbert_pii_classifier(model_path_cstr.as_ptr(), true);
+    let init_result = unsafe { init_modernbert_pii_classifier(model_path_cstr.as_ptr(), true) };
 
     if !init_result {
         println!("⚠️  PII model not found or failed to load");
@@ -128,7 +126,7 @@ fn test_p0_real_pii_concurrent_classification_8_threads() {
     (0..8).into_par_iter().for_each(|_| {
         for text in &pii_texts {
             let text_cstr = CString::new(*text).unwrap();
-            let result = classify_modernbert_pii_text(text_cstr.as_ptr());
+            let result = unsafe { classify_modernbert_pii_text(text_cstr.as_ptr()) };
 
             if result.predicted_class >= 0 && result.confidence >= 0.0 {
                 success_count.fetch_add(1, Ordering::Relaxed);
@@ -164,7 +162,7 @@ fn test_p0_real_jailbreak_concurrent_classification_10_threads() {
     let model_path_cstr = CString::new(model_path.clone()).unwrap();
 
     println!("Loading Jailbreak model from: {}", model_path);
-    let init_result = init_modernbert_jailbreak_classifier(model_path_cstr.as_ptr(), true);
+    let init_result = unsafe { init_modernbert_jailbreak_classifier(model_path_cstr.as_ptr(), true) };
 
     if !init_result {
         println!("⚠️  Jailbreak model not found or failed to load");
@@ -185,7 +183,7 @@ fn test_p0_real_jailbreak_concurrent_classification_10_threads() {
     (0..10).into_par_iter().for_each(|_| {
         for text in &jailbreak_texts {
             let text_cstr = CString::new(*text).unwrap();
-            let result = classify_modernbert_jailbreak_text(text_cstr.as_ptr());
+            let result = unsafe { classify_modernbert_jailbreak_text(text_cstr.as_ptr()) };
 
             if result.predicted_class >= 0 && result.confidence >= 0.0 {
                 success_count.fetch_add(1, Ordering::Relaxed);
@@ -220,7 +218,7 @@ fn test_p1_real_model_sequential_vs_parallel_performance() {
 
     // Check if model is already initialized (from previous tests in same run)
     let test_text = CString::new("What is the best strategy for corporate mergers?").unwrap();
-    let probe_result = classify_modernbert_text(test_text.as_ptr());
+    let probe_result = unsafe { classify_modernbert_text(test_text.as_ptr()) };
 
     if probe_result.predicted_class < 0 {
         // Model not initialized, try to initialize
@@ -228,7 +226,7 @@ fn test_p1_real_model_sequential_vs_parallel_performance() {
         let model_path_cstr = CString::new(model_path.clone()).unwrap();
 
         println!("Loading model from: {}", model_path);
-        let init_result = init_modernbert_classifier(model_path_cstr.as_ptr(), true);
+        let init_result = unsafe { init_modernbert_classifier(model_path_cstr.as_ptr(), true) };
 
         if !init_result {
             println!("⚠️  Model not available, skipping test");
@@ -244,7 +242,7 @@ fn test_p1_real_model_sequential_vs_parallel_performance() {
     // Sequential execution
     let sequential_start = Instant::now();
     for _ in 0..iterations {
-        let _ = classify_modernbert_text(test_text.as_ptr());
+        let _ = unsafe { classify_modernbert_text(test_text.as_ptr()) };
     }
     let sequential_duration = sequential_start.elapsed();
 
@@ -252,7 +250,7 @@ fn test_p1_real_model_sequential_vs_parallel_performance() {
     let parallel_start = Instant::now();
     (0..5).into_par_iter().for_each(|_| {
         for _ in 0..(iterations / 5) {
-            let _ = classify_modernbert_text(test_text.as_ptr());
+            let _ = unsafe { classify_modernbert_text(test_text.as_ptr()) };
         }
     });
     let parallel_duration = parallel_start.elapsed();

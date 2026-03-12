@@ -9,7 +9,7 @@ use rstest::*;
 #[case(4096, "4KB allocation")]
 #[case(64, "Small allocation")]
 fn test_memory_safety_safe_alloc_traditional(#[case] size: usize, #[case] _description: &str) {
-    let ptr = safe_alloc_traditional(size);
+    let ptr = unsafe { safe_alloc_traditional(size) };
 
     // Verify pointer is not null
     assert!(!ptr.is_null(), "Allocated pointer should not be null");
@@ -21,7 +21,7 @@ fn test_memory_safety_safe_alloc_traditional(#[case] size: usize, #[case] _descr
     }
 
     // Clean up
-    let freed = safe_free(ptr);
+    let freed = unsafe { safe_free(ptr) };
     assert!(freed, "Memory should be successfully freed");
 
     println!("Safe alloc traditional test passed for size: {}", size);
@@ -32,7 +32,7 @@ fn test_memory_safety_safe_alloc_traditional(#[case] size: usize, #[case] _descr
 #[case(2048, "2KB LoRA allocation")]
 #[case(512, "Small LoRA allocation")]
 fn test_memory_safety_safe_alloc_lora(#[case] size: usize, #[case] _description: &str) {
-    let ptr = safe_alloc_lora(size);
+    let ptr = unsafe { safe_alloc_lora(size) };
 
     // Verify pointer is not null
     assert!(!ptr.is_null(), "Allocated LoRA pointer should not be null");
@@ -47,7 +47,7 @@ fn test_memory_safety_safe_alloc_lora(#[case] size: usize, #[case] _description:
     }
 
     // Clean up
-    let freed = safe_free(ptr);
+    let freed = unsafe { safe_free(ptr) };
     assert!(freed, "LoRA memory should be successfully freed");
 
     println!("Safe alloc LoRA test passed for size: {}", size);
@@ -56,7 +56,7 @@ fn test_memory_safety_safe_alloc_lora(#[case] size: usize, #[case] _description:
 /// Test safe_free function with null pointer
 #[rstest]
 fn test_memory_safety_safe_free_null_pointer() {
-    let result = safe_free(std::ptr::null_mut());
+    let result = unsafe { safe_free(std::ptr::null_mut()) };
 
     // Freeing null pointer should be safe and return false
     assert!(!result, "Freeing null pointer should return false");
@@ -68,17 +68,17 @@ fn test_memory_safety_safe_free_null_pointer() {
 #[rstest]
 fn test_memory_safety_memory_cleanup() {
     // Allocate some memory
-    let ptr1 = safe_alloc_traditional(1024);
-    let ptr2 = safe_alloc_lora(2048);
+    let ptr1 = unsafe { safe_alloc_traditional(1024) };
+    let ptr2 = unsafe { safe_alloc_lora(2048) };
 
     // Cleanup memory tracking
-    cleanup_dual_path_memory();
+    unsafe { cleanup_dual_path_memory() };
 
     // Note: We don't free ptr1 and ptr2 here because cleanup_dual_path_memory
     // should handle the tracking cleanup, but the actual memory might still need
     // to be freed explicitly in a real scenario
-    safe_free(ptr1);
-    safe_free(ptr2);
+    unsafe { safe_free(ptr1) };
+    unsafe { safe_free(ptr2) };
 
     println!("Memory cleanup test passed");
 }

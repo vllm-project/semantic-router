@@ -514,10 +514,13 @@ pub fn load_labels_from_model_config(model_path: &str) -> Result<Vec<String>, Un
     UnifiedConfigLoader::extract_indexed_labels(&config_json)
 }
 
+/// Return type for load_token_config
+pub type TokenConfigResult = (HashMap<usize, String>, HashMap<String, usize>, usize, usize);
+
 /// Load token config (replaces token_lora.rs logic)
 pub fn load_token_config(
     model_path: &str,
-) -> Result<(HashMap<usize, String>, HashMap<String, usize>, usize, usize), UnifiedError> {
+) -> Result<TokenConfigResult, UnifiedError> {
     let config_json = UnifiedConfigLoader::load_json_config(model_path)?;
     let id2label = UnifiedConfigLoader::extract_id2label_map(&config_json)?;
     let label2id: HashMap<String, usize> = id2label
@@ -594,8 +597,8 @@ impl GlobalConfigLoader {
 
             // Reset found sections if we're at a higher level
             if indent_level <= current_level {
-                for i in (indent_level / 2 + 1)..found_sections.len() {
-                    found_sections[i] = false;
+                for section in found_sections.iter_mut().skip(indent_level / 2 + 1) {
+                    *section = false;
                 }
             }
 
@@ -796,8 +799,8 @@ impl GlobalConfigLoader {
 
             // Reset found sections if we're at a higher level
             if indent_level <= current_level {
-                for i in (indent_level / 2 + 1)..found_sections.len() {
-                    found_sections[i] = false;
+                for section in found_sections.iter_mut().skip(indent_level / 2 + 1) {
+                    *section = false;
                 }
             }
 

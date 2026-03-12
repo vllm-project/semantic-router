@@ -10,6 +10,7 @@
 //! Use the `setup_embedding_models` fixture to initialize models before testing.
 
 use super::embedding::*;
+use super::embedding_routing::*;
 use crate::ffi::types::EmbeddingResult;
 use crate::test_fixtures::fixtures::{
     GEMMA_EMBEDDING_300M, MODELS_BASE_PATH, QWEN3_EMBEDDING_0_6B,
@@ -35,7 +36,7 @@ fn setup_embedding_models() {
         let qwen3_cstr = CString::new(qwen3_path.as_str()).unwrap();
         let gemma_cstr = CString::new(gemma_path.as_str()).unwrap();
 
-        let success = init_embedding_models(qwen3_cstr.as_ptr(), gemma_cstr.as_ptr(), true);
+        let success = unsafe { init_embedding_models(qwen3_cstr.as_ptr(), gemma_cstr.as_ptr(), true) };
 
         if !success {
             panic!("Failed to initialize embedding models for FFI tests");
@@ -59,10 +60,10 @@ fn test_get_embedding_smart_medium_text(_setup_embedding_models: ()) {
         processing_time_ms: 0.0,
     };
 
-    let status = get_embedding_smart(text.as_ptr(), 0.5, 0.5, &mut result);
+    let status = unsafe { get_embedding_smart(text.as_ptr(), 0.5, 0.5, &mut result) };
 
     assert_eq!(status, 0, "Should succeed");
-    assert_eq!(result.error, false, "Should not have error");
+    assert!(!result.error, "Should not have error");
 
     // Embedding dimension should be either 768 (Gemma) or 1024 (Qwen3)
     assert!(
@@ -84,7 +85,7 @@ fn test_get_embedding_smart_medium_text(_setup_embedding_models: ()) {
 
     // Cleanup
     if !result.data.is_null() && result.length > 0 {
-        crate::ffi::memory::free_embedding(result.data, result.length);
+        unsafe { crate::ffi::memory::free_embedding(result.data, result.length) };
     }
 }
 
@@ -109,15 +110,17 @@ fn test_get_embedding_smart_priority_combinations(
         processing_time_ms: 0.0,
     };
 
-    let status = get_embedding_smart(
-        text.as_ptr(),
-        quality_priority,
-        latency_priority,
-        &mut result,
-    );
+    let status = unsafe {
+        get_embedding_smart(
+            text.as_ptr(),
+            quality_priority,
+            latency_priority,
+            &mut result,
+        )
+    };
 
     assert_eq!(status, 0, "Should succeed with any valid priority");
-    assert_eq!(result.error, false);
+    assert!(!result.error);
 
     // Embedding dimension should be either 768 (Gemma) or 1024 (Qwen3)
     assert!(
@@ -128,6 +131,6 @@ fn test_get_embedding_smart_priority_combinations(
 
     // Cleanup
     if !result.data.is_null() && result.length > 0 {
-        crate::ffi::memory::free_embedding(result.data, result.length);
+        unsafe { crate::ffi::memory::free_embedding(result.data, result.length) };
     }
 }

@@ -121,8 +121,7 @@ fn test_classification_output_scenarios() {
     );
     assert_valid_distribution(&multi_result);
 
-    let batch_results = vec![
-        build_result(
+    let batch_results = [build_result(
             "category",
             "physics",
             &categories,
@@ -139,8 +138,7 @@ fn test_classification_output_scenarios() {
             "physics",
             &categories,
             vec![0.01, 0.02, 0.93, 0.02, 0.01, 0.01],
-        ),
-    ];
+        )];
     let average_confidence: f32 = batch_results
         .iter()
         .map(|result| result.confidence)

@@ -236,7 +236,7 @@ impl DebertaV3Classifier {
             VarBuilder::from_pth(&weights_path, DType::F32, &device)?
         } else {
             unsafe {
-                VarBuilder::from_mmaped_safetensors(&[weights_path.clone()], DType::F32, &device)?
+                VarBuilder::from_mmaped_safetensors(std::slice::from_ref(&weights_path), DType::F32, &device)?
             }
         };
 

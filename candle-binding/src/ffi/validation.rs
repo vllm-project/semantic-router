@@ -47,7 +47,7 @@ pub const MAX_MODEL_PATH_LENGTH: usize = 1000;
 /// - `text` must be a valid null-terminated C string or null
 /// - `path_type` should be 0 (Traditional) or 1 (LoRA)
 #[no_mangle]
-pub extern "C" fn validate_text_input(text: *const c_char, path_type: i32) -> ValidationResult {
+pub unsafe extern "C" fn validate_text_input(text: *const c_char, path_type: i32) -> ValidationResult {
     // Check for null pointer
     if text.is_null() {
         return create_validation_error(
@@ -107,7 +107,7 @@ pub extern "C" fn validate_text_input(text: *const c_char, path_type: i32) -> Va
 /// - `texts_count` must match the actual array size
 /// - `path_type` should be 0 (Traditional) or 1 (LoRA)
 #[no_mangle]
-pub extern "C" fn validate_batch_input(
+pub unsafe extern "C" fn validate_batch_input(
     texts: *const *const c_char,
     texts_count: i32,
     path_type: i32,
@@ -185,7 +185,7 @@ pub extern "C" fn validate_batch_input(
 /// - `model_path` must be a valid null-terminated C string or null
 /// - `path_type` should be 0 (Traditional) or 1 (LoRA)
 #[no_mangle]
-pub extern "C" fn validate_model_path(
+pub unsafe extern "C" fn validate_model_path(
     model_path: *const c_char,
     path_type: i32,
 ) -> ValidationResult {
@@ -248,12 +248,12 @@ pub extern "C" fn validate_model_path(
 /// - `confidence` should be between 0.0 and 1.0
 /// - `path_type` should be 0 (Traditional) or 1 (LoRA)
 #[no_mangle]
-pub extern "C" fn validate_confidence_threshold(
+pub unsafe extern "C" fn validate_confidence_threshold(
     confidence: f32,
     path_type: i32,
 ) -> ValidationResult {
     // Check confidence range
-    if confidence < 0.0 || confidence > 1.0 {
+    if !(0.0..=1.0).contains(&confidence) {
         return create_validation_error(
             ERROR_INVALID_CONFIDENCE,
             "Confidence threshold must be between 0.0 and 1.0",
@@ -299,7 +299,7 @@ pub extern "C" fn validate_confidence_threshold(
 /// - `size` should be a reasonable memory size
 /// - `alignment` should be a valid alignment value
 #[no_mangle]
-pub extern "C" fn validate_memory_parameters(size: usize, alignment: usize) -> ValidationResult {
+pub unsafe extern "C" fn validate_memory_parameters(size: usize, alignment: usize) -> ValidationResult {
     // Check for zero size
     if size == 0 {
         return create_validation_error(
@@ -337,7 +337,7 @@ pub extern "C" fn validate_memory_parameters(size: usize, alignment: usize) -> V
 /// - `result` must be a valid ValidationResult
 /// - Only call once per result
 #[no_mangle]
-pub extern "C" fn free_validation_result(result: ValidationResult) {
+pub unsafe extern "C" fn free_validation_result(result: ValidationResult) {
     if !result.error_message.is_null() {
         unsafe {
             let _ = CString::from_raw(result.error_message);

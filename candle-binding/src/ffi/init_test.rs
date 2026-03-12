@@ -1,6 +1,7 @@
 //! Tests for FFI initialization module
 
 use super::init::*;
+use super::init_classifiers::*;
 use super::state_manager::GlobalStateManager;
 use rayon::prelude::*;
 use rstest::*;
@@ -58,7 +59,7 @@ fn test_init_similarity_model_signature() {
     // Verify function signature compiles and can be called with invalid path
     // Note: This will likely fail/return false, but we're testing the interface
     let test_path = CString::new("/nonexistent/model/path").unwrap();
-    let result = init_similarity_model(test_path.as_ptr(), true);
+    let result = unsafe { init_similarity_model(test_path.as_ptr(), true) };
 
     // With invalid path, should return false
     assert!(!result, "Should return false with invalid path");
@@ -68,7 +69,7 @@ fn test_init_similarity_model_signature() {
 fn test_init_classifier_signature() {
     // Test with invalid path - should fail gracefully
     let test_path = CString::new("/nonexistent/model").unwrap();
-    let result = init_classifier(test_path.as_ptr(), 0, true);
+    let result = unsafe { init_classifier(test_path.as_ptr(), 0, true) };
 
     assert!(!result, "Should return false with invalid path");
 }
@@ -76,7 +77,7 @@ fn test_init_classifier_signature() {
 #[test]
 fn test_init_pii_classifier_signature() {
     let test_path = CString::new("/nonexistent/model").unwrap();
-    let result = init_pii_classifier(test_path.as_ptr(), 0, true);
+    let result = unsafe { init_pii_classifier(test_path.as_ptr(), 0, true) };
 
     assert!(!result, "Should return false with invalid path");
 }
@@ -84,7 +85,7 @@ fn test_init_pii_classifier_signature() {
 #[test]
 fn test_init_jailbreak_classifier_signature() {
     let test_path = CString::new("/nonexistent/model").unwrap();
-    let result = init_jailbreak_classifier(test_path.as_ptr(), 0, true);
+    let result = unsafe { init_jailbreak_classifier(test_path.as_ptr(), 0, true) };
 
     assert!(!result, "Should return false with invalid path");
 }
@@ -92,14 +93,14 @@ fn test_init_jailbreak_classifier_signature() {
 #[test]
 fn test_init_modernbert_classifier_signature() {
     let test_path = CString::new("/nonexistent/model").unwrap();
-    let result = init_modernbert_classifier(test_path.as_ptr(), true);
+    let result = unsafe { init_modernbert_classifier(test_path.as_ptr(), true) };
     assert!(!result, "Should return false with invalid path");
 }
 
 #[test]
 fn test_init_modernbert_pii_classifier_signature() {
     let test_path = CString::new("/nonexistent/model").unwrap();
-    let result = init_modernbert_pii_classifier(test_path.as_ptr(), true);
+    let result = unsafe { init_modernbert_pii_classifier(test_path.as_ptr(), true) };
     assert!(!result, "Should return false with invalid path");
 }
 
@@ -117,19 +118,21 @@ fn test_init_unified_classifier_c_signature() {
         empty_labels.as_ptr()
     };
 
-    let result = init_unified_classifier_c(
-        test_path.as_ptr(),
-        test_path.as_ptr(),
-        test_path.as_ptr(),
-        test_path.as_ptr(),
-        labels_ptr,
-        0,
-        labels_ptr,
-        0,
-        labels_ptr,
-        0,
-        true,
-    );
+    let result = unsafe {
+        init_unified_classifier_c(
+            test_path.as_ptr(),
+            test_path.as_ptr(),
+            test_path.as_ptr(),
+            test_path.as_ptr(),
+            labels_ptr,
+            0,
+            labels_ptr,
+            0,
+            labels_ptr,
+            0,
+            true,
+        )
+    };
 
     assert!(!result, "Should return false with invalid paths");
 }
@@ -144,7 +147,7 @@ fn test_state_manager_after_failed_init() {
 
     // Attempt init with invalid path (will fail)
     let test_path = CString::new("/nonexistent/model").unwrap();
-    let _result = init_similarity_model(test_path.as_ptr(), true);
+    let _result = unsafe { init_similarity_model(test_path.as_ptr(), true) };
 
     // State manager should still be accessible
     let state = manager.get_system_state();
@@ -174,7 +177,7 @@ fn test_concurrent_init_attempts() {
     (0..4).into_par_iter().for_each(|_| {
         // Attempt init with invalid path (will fail, but tests locking)
         let test_path = CString::new("/nonexistent/model").unwrap();
-        let _ = init_similarity_model(test_path.as_ptr(), true);
+        let _ = unsafe { init_similarity_model(test_path.as_ptr(), true) };
     });
 
     // If we get here, no deadlock occurred
@@ -229,11 +232,11 @@ fn test_init_functions_return_boolean() {
     // Test that false is returned for invalid inputs
     let test_path = CString::new("/nonexistent/model").unwrap();
 
-    assert!(!init_similarity_model(test_path.as_ptr(), true));
-    assert!(!init_classifier(test_path.as_ptr(), 0, true));
-    assert!(!init_pii_classifier(test_path.as_ptr(), 0, true));
-    assert!(!init_jailbreak_classifier(test_path.as_ptr(), 0, true));
-    assert!(!init_modernbert_classifier(test_path.as_ptr(), true));
+    assert!(!unsafe { init_similarity_model(test_path.as_ptr(), true) });
+    assert!(!unsafe { init_classifier(test_path.as_ptr(), 0, true) });
+    assert!(!unsafe { init_pii_classifier(test_path.as_ptr(), 0, true) });
+    assert!(!unsafe { init_jailbreak_classifier(test_path.as_ptr(), 0, true) });
+    assert!(!unsafe { init_modernbert_classifier(test_path.as_ptr(), true) });
 }
 
 // ============================================================================
@@ -246,7 +249,7 @@ fn test_init_functions_return_boolean() {
 fn test_use_cpu_parameter(#[case] use_cpu: bool) {
     // Test that use_cpu parameter is accepted
     let test_path = CString::new("/nonexistent/model").unwrap();
-    let result = init_similarity_model(test_path.as_ptr(), use_cpu);
+    let result = unsafe { init_similarity_model(test_path.as_ptr(), use_cpu) };
 
     // Should fail due to invalid path, but parameter should be processed
     assert!(!result);
@@ -259,7 +262,7 @@ fn test_use_cpu_parameter(#[case] use_cpu: bool) {
 fn test_num_labels_parameter(#[case] num_labels: i32) {
     // Test that num_labels parameter is accepted
     let test_path = CString::new("/nonexistent/model").unwrap();
-    let result = init_classifier(test_path.as_ptr(), num_labels, true);
+    let result = unsafe { init_classifier(test_path.as_ptr(), num_labels, true) };
 
     assert!(!result, "Should fail with invalid path");
 }
@@ -273,12 +276,12 @@ fn test_invalid_path_handling() {
     // All functions should handle invalid paths gracefully without crashing
     let test_path = CString::new("/nonexistent/model").unwrap();
 
-    let _ = init_similarity_model(test_path.as_ptr(), true);
-    let _ = init_classifier(test_path.as_ptr(), 0, true);
-    let _ = init_pii_classifier(test_path.as_ptr(), 0, true);
-    let _ = init_jailbreak_classifier(test_path.as_ptr(), 0, true);
-    let _ = init_modernbert_classifier(test_path.as_ptr(), true);
-    let _ = init_modernbert_pii_classifier(test_path.as_ptr(), true);
+    let _ = unsafe { init_similarity_model(test_path.as_ptr(), true) };
+    let _ = unsafe { init_classifier(test_path.as_ptr(), 0, true) };
+    let _ = unsafe { init_pii_classifier(test_path.as_ptr(), 0, true) };
+    let _ = unsafe { init_jailbreak_classifier(test_path.as_ptr(), 0, true) };
+    let _ = unsafe { init_modernbert_classifier(test_path.as_ptr(), true) };
+    let _ = unsafe { init_modernbert_pii_classifier(test_path.as_ptr(), true) };
 
     // If we reach here, no crashes occurred
 }
@@ -293,17 +296,14 @@ fn test_state_manager_stats_after_init_attempts() {
 
     // Try various init functions
     let test_path = CString::new("/nonexistent/model").unwrap();
-    let _ = init_similarity_model(test_path.as_ptr(), true);
-    let _ = init_modernbert_classifier(test_path.as_ptr(), true);
+    let _ = unsafe { init_similarity_model(test_path.as_ptr(), true) };
+    let _ = unsafe { init_modernbert_classifier(test_path.as_ptr(), true) };
 
     // Get stats - should work regardless of init success/failure
     let stats = manager.get_stats();
 
     // Stats should be retrievable
-    assert!(
-        stats.unified_classifier_initialized || !stats.unified_classifier_initialized,
-        "Should have stats"
-    );
+    let _: bool = stats.unified_classifier_initialized;
 }
 
 // ============================================================================
@@ -320,7 +320,7 @@ fn test_const_char_pointer_usage() {
     assert!(!ptr.is_null());
 
     // Pass to a function (will fail but tests the interface)
-    let _result = init_similarity_model(ptr, true);
+    let _result = unsafe { init_similarity_model(ptr, true) };
 }
 
 // ============================================================================
@@ -333,7 +333,7 @@ fn test_cstring_lifetime() {
     let _result = {
         let model_id = CString::new("model").unwrap();
         let ptr = model_id.as_ptr();
-        init_similarity_model(ptr, true)
+        unsafe { init_similarity_model(ptr, true) }
         // model_id is dropped here, but call already completed
     };
 
@@ -347,7 +347,7 @@ fn test_multiple_cstrings() {
     let _tokenizer_path = CString::new("tokenizer_path").unwrap();
     let _lora_path = CString::new("lora_path").unwrap();
 
-    let _result = init_classifier(model_id.as_ptr(), 2, true);
+    let _result = unsafe { init_classifier(model_id.as_ptr(), 2, true) };
 
     // All CStrings should remain valid during the call
 }

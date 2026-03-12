@@ -225,7 +225,7 @@ fn bench_sequence_lengths(
             padded_ids.extend_from_slice(ids);
 
             let mut padded_mask = vec![0u32; pad_len];
-            padded_mask.extend(mask.iter().map(|&x| x as u32));
+            padded_mask.extend(mask.iter().copied());
 
             input_ids_vec.extend(padded_ids);
             attention_mask_vec.extend(padded_mask);
@@ -382,7 +382,7 @@ fn bench_matryoshka_api(
         for i in 0..actual_len {
             if i < ids.len() {
                 input_ids_vec.push(ids[i]);
-                attention_mask_vec.push(mask[i] as u32);
+                attention_mask_vec.push(mask[i]);
             } else {
                 input_ids_vec.push(0);
                 attention_mask_vec.push(0);
@@ -494,7 +494,7 @@ fn bench_layer_early_exit(
         for i in 0..actual_len {
             if i < ids.len() {
                 input_ids_vec.push(ids[i]);
-                attention_mask_vec.push(mask[i] as u32);
+                attention_mask_vec.push(mask[i]);
             } else {
                 input_ids_vec.push(0);
                 attention_mask_vec.push(0);
@@ -620,7 +620,7 @@ fn bench_2d_matrix(
         for i in 0..actual_len {
             if i < ids.len() {
                 input_ids_vec.push(ids[i]);
-                attention_mask_vec.push(mask[i] as u32);
+                attention_mask_vec.push(mask[i]);
             } else {
                 input_ids_vec.push(0);
                 attention_mask_vec.push(0);

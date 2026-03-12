@@ -27,8 +27,10 @@ use serde::{Deserialize, Serialize};
 
 /// Supported data types for mixed precision inference
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Default)]
 pub enum MLPDType {
     /// Full precision (32-bit float) - default, best accuracy
+    #[default]
     F32,
     /// Half precision (16-bit float) - faster on GPUs with tensor cores
     F16,
@@ -38,28 +40,24 @@ pub enum MLPDType {
 
 impl MLPDType {
     /// Convert to Candle DType
-    fn to_candle_dtype(&self) -> DType {
+    fn to_candle_dtype(self) -> DType {
         match self {
             MLPDType::F32 => DType::F32,
             MLPDType::F16 => DType::F16,
             MLPDType::BF16 => DType::BF16,
         }
     }
+}
 
-    /// Parse from string (e.g., from config)
-    pub fn from_str(s: &str) -> Result<Self, String> {
+impl std::str::FromStr for MLPDType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "f32" | "float32" | "fp32" => Ok(MLPDType::F32),
             "f16" | "float16" | "fp16" | "half" => Ok(MLPDType::F16),
             "bf16" | "bfloat16" => Ok(MLPDType::BF16),
             _ => Err(format!("Unknown dtype '{}'. Supported: f32, f16, bf16", s)),
         }
-    }
-}
-
-impl Default for MLPDType {
-    fn default() -> Self {
-        MLPDType::F32
     }
 }
 

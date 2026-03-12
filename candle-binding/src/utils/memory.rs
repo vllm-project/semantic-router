@@ -7,6 +7,9 @@ use std::time::{Duration, Instant};
 
 use crate::model_architectures::traits::{ModelType, TaskType};
 
+/// Type alias for nested model pool structure (ModelType -> pool name -> TensorPool)
+type ModelPoolMap = Arc<RwLock<HashMap<ModelType, Arc<RwLock<HashMap<String, TensorPool>>>>>>;
+
 /// Multi-path memory pool for dynamic model type support
 ///
 /// Refactored from DualPathMemoryPool to support multiple model types dynamically.
@@ -14,7 +17,7 @@ use crate::model_architectures::traits::{ModelType, TaskType};
 pub struct DualPathMemoryPool {
     /// Dynamic model-specific memory pools
     /// Maps ModelType (Traditional, LoRA, LongContextEmbedding) to their tensor pools
-    model_pools: Arc<RwLock<HashMap<ModelType, Arc<RwLock<HashMap<String, TensorPool>>>>>>,
+    model_pools: ModelPoolMap,
 
     /// Shared cross-path memory pool
     shared_pool: Arc<Mutex<SharedTensorPool>>,
@@ -296,7 +299,7 @@ impl DualPathMemoryPool {
             let mut pools_write = pools.write().unwrap();
             let pool = pools_write
                 .entry(tensor_key.usage_hint.clone())
-                .or_insert_with(|| TensorPool::new());
+                .or_insert_with(TensorPool::new);
 
             pool.add_tensor(tensor_key, tensor);
         } else {
@@ -330,7 +333,7 @@ impl DualPathMemoryPool {
         tracker
             .allocations_by_type
             .entry(model_type)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(record);
 
         tracker.total_operations += 1;
@@ -432,7 +435,7 @@ impl TensorPool {
     fn add_tensor(&mut self, key: TensorKey, tensor: Tensor) {
         self.available_tensors
             .entry(key)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(tensor);
         self.deallocation_count += 1;
     }
@@ -469,7 +472,7 @@ impl SharedTensorPool {
     fn add_tensor(&mut self, key: TensorKey, tensor: SharedTensor) {
         self.shared_tensors
             .entry(key)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(tensor);
     }
 

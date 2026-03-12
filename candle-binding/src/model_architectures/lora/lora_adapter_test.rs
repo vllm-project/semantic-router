@@ -75,15 +75,13 @@ fn test_lora_config_various_ranks(#[case] rank: usize) {
 
 #[rstest]
 fn test_lora_init_method_variants() {
-    let methods = vec![
-        LoRAInitMethod::Kaiming,
+    let methods = [LoRAInitMethod::Kaiming,
         LoRAInitMethod::Xavier,
         LoRAInitMethod::Normal {
             mean: 0.0,
             std: 0.02,
         },
-        LoRAInitMethod::Zero,
-    ];
+        LoRAInitMethod::Zero];
 
     // Each variant should be distinct
     for (i, method1) in methods.iter().enumerate() {

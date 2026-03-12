@@ -251,7 +251,7 @@ impl ModelEncoder {
         let mut layers = Vec::with_capacity(config.num_hidden_layers);
 
         for i in 0..config.num_hidden_layers {
-            let layer = TransformerLayer::new(config, vb.pp(&format!("layer.{}", i)), device)?;
+            let layer = TransformerLayer::new(config, vb.pp(format!("layer.{}", i)), device)?;
             layers.push(layer);
         }
 

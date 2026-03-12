@@ -11,6 +11,7 @@ use std::path::PathBuf;
 
 /// Unified configuration for dual-path architecture
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct DualPathConfig {
     /// Traditional model configuration
     pub traditional: TraditionalConfig,
@@ -141,16 +142,6 @@ pub enum ProcessingPriority {
     Balanced,
 }
 
-impl Default for DualPathConfig {
-    fn default() -> Self {
-        Self {
-            traditional: TraditionalConfig::default(),
-            lora: LoRAConfig::default(),
-            embedding: EmbeddingConfig::default(),
-            global: GlobalConfig::default(),
-        }
-    }
-}
 
 impl Default for TraditionalConfig {
     fn default() -> Self {

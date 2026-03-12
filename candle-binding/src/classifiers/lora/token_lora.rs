@@ -91,7 +91,7 @@ impl LoRATokenClassifier {
                 "create_lora_compatibility_tokenizer",
                 None,
             )
-            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
+            .map_err(candle_core::Error::from)?;
 
         // Load LoRA configuration
         let lora_config_path = Path::new(model_path).join("lora_config.json");
@@ -173,7 +173,7 @@ impl LoRATokenClassifier {
 
         let path = Path::new(model_path);
         TokenConfigLoader::load_from_path(path)
-            .map_err(|unified_err| candle_core::Error::from(unified_err))
+            .map_err(candle_core::Error::from)
     }
 
     /// Classify tokens in text using LoRA-enhanced model
@@ -249,7 +249,7 @@ impl LoRATokenClassifier {
             .tokenizer
             .tokenize_for_lora(text)
             .with_model_context(ModelErrorType::Tokenizer, "tokenize_for_lora", Some(text))
-            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
+            .map_err(candle_core::Error::from)?;
 
         // Clone tokens before creating tensors to avoid borrow checker issues
         let token_strings = tokenization_result.tokens.clone();
@@ -257,7 +257,7 @@ impl LoRATokenClassifier {
             .tokenizer
             .create_tensors(&tokenization_result)
             .with_processing_context("create_tensors", Some("token_lora"))
-            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
+            .map_err(candle_core::Error::from)?;
 
         // Create token type IDs (all zeros for single sentence)
         let token_type_ids = token_ids_tensor.zeros_like()?;
@@ -297,12 +297,12 @@ impl LoRATokenClassifier {
             .tokenizer
             .tokenize_for_lora(word)
             .with_model_context(ModelErrorType::Tokenizer, "tokenize_for_lora", Some(word))
-            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
+            .map_err(candle_core::Error::from)?;
         let (token_ids_tensor, attention_mask_tensor) = self
             .tokenizer
             .create_tensors(&tokenization_result)
             .with_processing_context("create_tensors", Some("generate_contextual_embedding"))
-            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
+            .map_err(candle_core::Error::from)?;
 
         // Create token type IDs (all zeros for single sentence)
         let token_type_ids = token_ids_tensor.zeros_like()?;
@@ -322,14 +322,14 @@ impl LoRATokenClassifier {
         if seq_len <= 2 {
             // Only CLS and SEP tokens, use CLS token
             let cls_embedding = hidden_states.i((.., 0))?; // CLS token
-            return Ok(cls_embedding.squeeze(0)?);
+            return cls_embedding.squeeze(0);
         }
 
         // Mean pooling over actual word tokens (excluding CLS and SEP)
         let word_embeddings = hidden_states.i((.., 1..seq_len - 1))?; // Exclude CLS and SEP
         let mean_embedding = word_embeddings.mean(1)?; // Mean over sequence dimension
 
-        Ok(mean_embedding.squeeze(0)?) // Remove batch dimension
+        mean_embedding.squeeze(0) // Remove batch dimension
     }
 
     /// Get label name from ID
