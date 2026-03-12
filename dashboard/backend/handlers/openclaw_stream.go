@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // StreamChunkMessage represents a chunk update message for streaming
@@ -148,7 +147,7 @@ func (h *OpenClawHandler) queryWorkerChatStreamEndpoint(
 		req.Header.Set("X-OpenClaw-Token", token)
 	}
 
-	client := &http.Client{Timeout: 300 * time.Second}
+	client := newOpenClawWorkerChatHTTPClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", 0, "", err

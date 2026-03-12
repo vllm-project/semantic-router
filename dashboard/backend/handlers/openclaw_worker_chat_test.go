@@ -6,7 +6,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestNewOpenClawWorkerChatHTTPClient_UsesTenMinuteTimeout(t *testing.T) {
+	client := newOpenClawWorkerChatHTTPClient()
+	if client.Timeout != 10*time.Minute {
+		t.Fatalf("expected worker chat timeout 10m, got %s", client.Timeout)
+	}
+}
 
 func TestQueryWorkerChat_UsesConfiguredPrimaryAgentID(t *testing.T) {
 	tempDir := t.TempDir()

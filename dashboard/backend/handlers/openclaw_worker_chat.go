@@ -4,11 +4,22 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 var workerChatEndpointCandidates = []string{
 	"/v1/chat/completions",
 	"/api/openai/v1/chat/completions",
+}
+
+const (
+	openClawWorkerChatRequestTimeout         = 10 * time.Minute
+	openClawWorkerEndpointRecoveryTimeout    = 10 * time.Minute
+	openClawWorkerEndpointRecoveryPollPeriod = 500 * time.Millisecond
+)
+
+func newOpenClawWorkerChatHTTPClient() *http.Client {
+	return &http.Client{Timeout: openClawWorkerChatRequestTimeout}
 }
 
 type workerChatAttemptFailure struct {

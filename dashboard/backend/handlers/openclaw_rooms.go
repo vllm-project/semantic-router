@@ -645,12 +645,12 @@ func (h *OpenClawHandler) ensureWorkerChatEndpoint(worker ContainerEntry) (bool,
 		return false, fmt.Errorf("worker restart failed during endpoint recovery: %w", err)
 	}
 
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(openClawWorkerEndpointRecoveryTimeout)
 	for time.Now().Before(deadline) {
 		if h.gatewayReachable(worker.Name, worker.Port) {
 			return true, nil
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(openClawWorkerEndpointRecoveryPollPeriod)
 	}
 	return true, nil
 }
@@ -679,7 +679,7 @@ func (h *OpenClawHandler) queryWorkerChatEndpoint(
 		req.Header.Set("X-OpenClaw-Token", token)
 	}
 
-	client := &http.Client{Timeout: 300 * time.Second}
+	client := newOpenClawWorkerChatHTTPClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", 0, "", err
