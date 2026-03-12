@@ -136,6 +136,18 @@ test.describe('Playground Chat Component', () => {
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('Admin User');
     await expect(dialog).toContainText('admin@example.com');
+
+    const dialogBox = await dialog.boundingBox();
+    const viewport = page.viewportSize();
+
+    expect(dialogBox).not.toBeNull();
+    expect(viewport).not.toBeNull();
+
+    const dialogCenterX = dialogBox!.x + dialogBox!.width / 2;
+    const dialogCenterY = dialogBox!.y + dialogBox!.height / 2;
+
+    expect(Math.abs(dialogCenterX - viewport!.width / 2)).toBeLessThan(80);
+    expect(Math.abs(dialogCenterY - viewport!.height / 2)).toBeLessThan(80);
   });
 
   test('hides the guide button permanently after finishing onboarding', async ({ page }) => {

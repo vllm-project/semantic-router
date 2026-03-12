@@ -13,6 +13,7 @@ import MarkdownRenderer from './MarkdownRenderer'
 import styles from './ClawRoomChat.module.css'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import ClawRoomSidebar from './ClawRoomSidebar'
+import ClawRoomMessageMeta from './ClawRoomMessageMeta'
 
 interface TeamProfile {
   id: string
@@ -1088,7 +1089,7 @@ const ClawRoomChat = ({
         )}
 
         <section className={styles.chatPanel}>
-          <header className={styles.chatHeader}>
+          <header className={styles.chatHeader} data-testid="claw-room-header">
             <div className={styles.chatTitleWrap}>
               <h3 className={styles.chatTitle}>{selectedRoom?.name || selectedTeam?.name || 'No room selected'}</h3>
               {selectedRoomId && (
@@ -1099,15 +1100,6 @@ const ClawRoomChat = ({
                   {wsConnected ? '● Live' : '○ Reconnecting...'}
                 </span>
               )}
-            </div>
-
-            <div className={styles.teamInlineMetaRow}>
-              <span className={styles.teamInlineMetaText}>
-                {selectedTeam?.name || 'Select a team from the left panel'}
-              </span>
-              <span className={styles.teamInlineMetaText}>
-                {selectedRoom ? `Room · ${selectedRoom.name}` : 'Create or select a room to start'}
-              </span>
             </div>
           </header>
 
@@ -1131,17 +1123,14 @@ const ClawRoomChat = ({
                     data-room-message-role={message.senderType}
                   >
                     <div className={styles.messageMain}>
-                      <div className={styles.messageMeta}>
-                        <span className={`${styles.senderName} ${isLeader ? styles.senderNameLeader : ''}`}>
-                          {senderVisual.displayName}
-                        </span>
-                        <span
-                          className={`${styles.senderType} ${isLeader ? styles.senderTypeLeader : ''} ${isWorker ? styles.senderTypeWorker : ''}`}
-                        >
-                          {senderVisual.roleLabel}
-                        </span>
-                        <span className={styles.timestamp}>{formatMessageTime(message.createdAt)}</span>
-                      </div>
+                      <ClawRoomMessageMeta
+                        displayName={senderVisual.displayName}
+                        isLeader={isLeader}
+                        isUser={isUser}
+                        isWorker={isWorker}
+                        roleLabel={senderVisual.roleLabel}
+                        timestamp={formatMessageTime(message.createdAt)}
+                      />
                       <div
                         className={`${styles.messageBubble} ${isUser ? styles.messageBubbleUser : styles.messageBubbleAgent} ${isSystem ? styles.messageBubbleSystem : ''}`}
                         data-room-message-content

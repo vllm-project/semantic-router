@@ -201,12 +201,34 @@ test.describe('Readonly OpenClaw', () => {
     const sidebar = page.getByTestId('claw-room-sidebar');
     await expect(sidebar).toBeVisible();
     await expect(sidebar.getByLabel('Team')).toHaveValue('team-alpha');
-    await expect(sidebar.getByText('Members')).toBeVisible();
-    await expect(sidebar.getByText('Leader One')).toBeVisible();
-    await expect(sidebar.getByText('Worker A')).toBeVisible();
+    const teamDetailsButton = page.getByTestId('claw-room-team-details-button');
+    await expect(teamDetailsButton).toBeVisible();
     await expect(page.getByPlaceholder('New room name (optional)')).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Delete room', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Set as leader' })).toBeDisabled();
+
+    await teamDetailsButton.click();
+
+    const dialog = page.getByTestId('claw-room-team-details-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Team Alpha');
+    await expect(dialog).toContainText('Leader One');
+    await expect(dialog).toContainText('Worker A');
+    await expect(dialog.getByRole('button', { name: 'Set as leader' })).toBeDisabled();
+
+    const dialogBox = await dialog.boundingBox();
+    const viewport = page.viewportSize();
+
+    expect(dialogBox).not.toBeNull();
+    expect(viewport).not.toBeNull();
+
+    const dialogCenterX = dialogBox!.x + dialogBox!.width / 2;
+    const dialogCenterY = dialogBox!.y + dialogBox!.height / 2;
+
+    expect(Math.abs(dialogCenterX - viewport!.width / 2)).toBeLessThan(100);
+    expect(Math.abs(dialogCenterY - viewport!.height / 2)).toBeLessThan(100);
+
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
 
     const roomInput = page.getByPlaceholder('@all to mention everyone, @leader to assign tasks, or @worker-name');
     await expect(roomInput).toBeEnabled();
@@ -220,15 +242,27 @@ test.describe('Readonly OpenClaw', () => {
     await page.goto('/playground');
     await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
 
+    const header = page.getByTestId('claw-room-header');
     const transcript = page.getByTestId('claw-room-transcript');
+    await expect(header).toBeVisible();
     await expect(transcript).toBeVisible();
     await expect(page.getByText('The blocker is the staging rollout. I am assigning Worker A to verify the queue metrics now.')).toBeVisible();
 
+    const headerBackground = await header.evaluate(element => window.getComputedStyle(element).backgroundColor);
+    const headerBorderBottomWidth = await header.evaluate(element => window.getComputedStyle(element).borderBottomWidth);
+
+    expect(headerBackground).toBe('rgba(0, 0, 0, 0)');
+    expect(headerBorderBottomWidth).toBe('0px');
+    await expect(header).not.toContainText('Room ·');
+
     const userMessage = transcript.locator('[data-room-message-role="user"] [data-room-message-content]').first();
     const leaderMessage = transcript.locator('[data-room-message-role="leader"] [data-room-message-content]').first();
+    const leaderLogo = transcript.locator('[data-room-message-role="leader"] [data-room-sender-logo]').first();
 
     await expect(userMessage).toBeVisible();
     await expect(leaderMessage).toBeVisible();
+    await expect(leaderLogo).toBeVisible();
+    await expect(transcript.locator('[data-room-message-role="user"] [data-room-sender-logo]')).toHaveCount(0);
     await expect(transcript.locator('img[alt*="avatar"]')).toHaveCount(0);
 
     const transcriptBox = await transcript.boundingBox();

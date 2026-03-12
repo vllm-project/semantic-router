@@ -134,4 +134,3 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
 }
 
 export default ThinkingBlock
-

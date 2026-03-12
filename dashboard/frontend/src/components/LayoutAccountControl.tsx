@@ -1,4 +1,5 @@
 import React, { useEffect, useId } from 'react'
+import { createPortal } from 'react-dom'
 import styles from './LayoutAccountControl.module.css'
 
 interface LayoutAccountControlProps {
@@ -49,6 +50,7 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
   const initials = getAccountInitials(accountName, accountEmail)
   const roleLabel = formatRoleLabel(accountRole)
   const dialogId = useId()
+  const dialogTitleId = `${dialogId}-title`
   const isRail = variant === 'rail'
 
   useEffect(() => {
@@ -105,21 +107,22 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
         )}
       </button>
 
-      {isOpen ? (
+      {isOpen && typeof document !== 'undefined'
+        ? createPortal(
         <div className={styles.overlay} onClick={onClose}>
           <div
             id={dialogId}
             className={styles.dialog}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="layout-account-dialog-title"
+            aria-labelledby={dialogTitleId}
             data-testid="layout-account-dialog"
             onClick={(event) => event.stopPropagation()}
           >
             <div className={styles.header}>
               <div className={styles.headerCopy}>
                 <span className={styles.eyebrow}>Account</span>
-                <h2 id="layout-account-dialog-title" className={styles.title}>
+                <h2 id={dialogTitleId} className={styles.title}>
                   Account details
                 </h2>
               </div>
@@ -182,8 +185,10 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
               </button>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+          document.body,
+        )
+        : null}
     </>
   )
 }
