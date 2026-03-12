@@ -39,9 +39,9 @@ func TestScopeEmbeddingToUserIsStableForSameUser(t *testing.T) {
 func TestScopeEmbeddingToUserSeparatesDifferentUsers(t *testing.T) {
 	embedding := testUserScopeEmbedding(128)
 
-	userA := scopeEmbeddingToUser(embedding, "user-a")
-	userB := scopeEmbeddingToUser(embedding, "user-b")
-	similarity := testDotProduct(userA, userB)
+	firstScoped := scopeEmbeddingToUser(embedding, "user-a")
+	secondScoped := scopeEmbeddingToUser(embedding, "user-b")
+	similarity := testDotProduct(firstScoped, secondScoped)
 
 	if similarity >= 0.8 {
 		t.Fatalf("expected cross-user similarity below cache threshold, got %f", similarity)

@@ -128,14 +128,14 @@ func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestca
 func verifyUserScopedCacheBehavior(ctx context.Context, localPort string, verbose bool) error {
 	queryID := time.Now().UnixNano()
 	question := fmt.Sprintf("User scoped semantic cache isolation probe %d: explain mitosis versus meiosis.", queryID)
-	userA := fmt.Sprintf("cache-user-a-%d", queryID)
-	userB := fmt.Sprintf("cache-user-b-%d", queryID)
+	firstUserID := fmt.Sprintf("cache-user-a-%d", queryID)
+	secondUserID := fmt.Sprintf("cache-user-b-%d", queryID)
 
 	if verbose {
-		fmt.Printf("[Test] Verifying user-scoped cache behavior for %s and %s\n", userA, userB)
+		fmt.Printf("[Test] Verifying user-scoped cache behavior for %s and %s\n", firstUserID, secondUserID)
 	}
 
-	firstResponse, err := sendChatRequestForUser(ctx, question, localPort, userA, verbose)
+	firstResponse, err := sendChatRequestForUser(ctx, question, localPort, firstUserID, verbose)
 	if err != nil {
 		return fmt.Errorf("failed to send initial scoped cache request: %w", err)
 	}
@@ -143,7 +143,7 @@ func verifyUserScopedCacheBehavior(ctx context.Context, localPort string, verbos
 
 	time.Sleep(1 * time.Second)
 
-	secondResponse, err := sendChatRequestForUser(ctx, question, localPort, userA, verbose)
+	secondResponse, err := sendChatRequestForUser(ctx, question, localPort, firstUserID, verbose)
 	if err != nil {
 		return fmt.Errorf("failed to send same-user scoped cache request: %w", err)
 	}
@@ -156,7 +156,7 @@ func verifyUserScopedCacheBehavior(ctx context.Context, localPort string, verbos
 
 	time.Sleep(1 * time.Second)
 
-	thirdResponse, err := sendChatRequestForUser(ctx, question, localPort, userB, verbose)
+	thirdResponse, err := sendChatRequestForUser(ctx, question, localPort, secondUserID, verbose)
 	if err != nil {
 		return fmt.Errorf("failed to send cross-user scoped cache request: %w", err)
 	}
@@ -168,7 +168,7 @@ func verifyUserScopedCacheBehavior(ctx context.Context, localPort string, verbos
 	}
 
 	if verbose {
-		fmt.Printf("[Test] ✓ User scoped cache isolated responses across %s and %s\n", userA, userB)
+		fmt.Printf("[Test] ✓ User scoped cache isolated responses across %s and %s\n", firstUserID, secondUserID)
 	}
 
 	return nil
