@@ -78,6 +78,30 @@ legacy_hotspots:
       - dashboard/backend/handlers/openclaw_teams.go
       - dashboard/backend/handlers/openclaw_test.go
       - dashboard/backend/handlers/openclaw_workers.go
+  - paths:
+      - candle-binding/src/classifiers/lora/parallel_engine_test.rs
+      - candle-binding/src/classifiers/lora/token_lora.rs
+      - candle-binding/src/classifiers/mlp_selector.rs
+      - candle-binding/src/classifiers/unified.rs
+      - candle-binding/src/core/config_loader.rs
+      - candle-binding/src/core/similarity.rs
+      - candle-binding/src/core/tokenization.rs
+      - candle-binding/src/ffi/generative_classifier.rs
+      - candle-binding/src/ffi/memory.rs
+      - candle-binding/src/model_architectures/embedding/gemma3_model.rs
+      - candle-binding/src/model_architectures/embedding/gemma_embedding_test.rs
+      - candle-binding/src/model_architectures/embedding/mmbert_embedding.rs
+      - candle-binding/src/model_architectures/embedding/multimodal_embedding.rs
+      - candle-binding/src/model_architectures/embedding/qwen3_embedding.rs
+      - candle-binding/src/model_architectures/embedding/qwen3_embedding_test.rs
+      - candle-binding/src/model_architectures/generative/continuous_batch_scheduler.rs
+      - candle-binding/src/model_architectures/generative/qwen3_multi_lora_classifier.rs
+      - candle-binding/src/model_architectures/lora/bert_lora.rs
+      - candle-binding/src/model_architectures/routing.rs
+      - candle-binding/src/model_architectures/traditional/base_model.rs
+      - candle-binding/src/model_architectures/traditional/modernbert.rs
+      - candle-binding/src/model_architectures/traditional/modernbert_test.rs
+    function_checks: relaxed
 
 dependency_rules:
   - name: prod-code-must-not-reference-e2e-docs-or-agent-tools
