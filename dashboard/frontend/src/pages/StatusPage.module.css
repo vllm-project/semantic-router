@@ -143,6 +143,24 @@
   overflow: hidden;
 }
 
+.modelCard {
+  border-color: rgba(118, 185, 0, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(118, 185, 0, 0.16), transparent 45%),
+    radial-gradient(circle at bottom left, rgba(34, 197, 94, 0.08), transparent 42%),
+    color-mix(in srgb, var(--color-surface) 94%, #0f1c12 6%);
+}
+
+.modelCard .cardHeader {
+  border-bottom-color: rgba(118, 185, 0, 0.14);
+}
+
+.modelCard .modelFacts,
+.modelCard .modelReadyPanel {
+  border-color: rgba(118, 185, 0, 0.14);
+  background: rgba(118, 185, 0, 0.06);
+}
+
 .cardHeader {
   display: flex;
   align-items: flex-start;
