@@ -10,7 +10,7 @@ v0.3, codename **Themis**, is our production-readiness release for Semantic Rout
 
 This roadmap is not just about adding more capability. It is about making the full system coherent: one stable contract across Docker and Kubernetes, one cleaner deployment path, one real version story for images and packages, stronger performance validation on both NVIDIA and AMD, and a research track that directly improves the product instead of sitting outside it.
 
-![](/img/blog/themis.png)
+![img](/img/blog/themis.png)
 
 <!-- truncate -->
 
@@ -24,7 +24,7 @@ The current v0.3 milestone reflects that shift. It includes the new workstreams 
 
 The highest-priority theme in Themis is eliminating contract drift across environments. Today, router behavior, Helm-facing config, dashboard flows, and the Python CLI still expose differences that create friction for operators. Themis is where we narrow those seams.
 
-![](/img/blog/api.png)
+![img](/img/blog/api.png)
 
 At the center of that work is a canonical API and config contract across router, CLI, dashboard, and Kubernetes. The goal is simple: after this release, a user should not have to mentally maintain one configuration model for local Docker workflows and another for Kubernetes deployment. This is the core of [#1505](https://github.com/vllm-project/semantic-router/issues/1505).
 
@@ -54,7 +54,7 @@ This performance theme is also tied to product credibility. If we claim the plat
 
 That same bar increasingly applies to higher-level agent surfaces such as ClawOS. If model routing, memory, and tool execution are going to be orchestrated in room-based agent workflows, then performance and runtime visibility have to scale there too.
 
-![](/img/blog/research.png)
+![img](/img/blog/research.png)
 
 ## 4. Research that feeds the product
 
@@ -84,7 +84,7 @@ ClawOS also belongs in this product-hardening bucket. [#1521](https://github.com
 
 This is also where protocol polish and dashboard usability meet. The goal is not just to have more capability on paper, but to make those capabilities easier to operate in the dashboard, easier to expose consistently through APIs, and easier to validate end to end.
 
-![](/img/blog/clawos.png)
+![img](/img/blog/clawos.png)
 
 ## 6. Security and quality closure
 
