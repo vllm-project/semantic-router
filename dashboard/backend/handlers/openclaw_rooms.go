@@ -578,12 +578,6 @@ type openAIChatResponse struct {
 
 const openClawPrimaryAgentModel = "openclaw:main"
 
-var workerChatEndpointCandidates = []string{
-	"/v1/chat/completions",
-	"/api/openai/v1/chat/completions",
-	"/api/router/v1/chat/completions",
-}
-
 func nestedObject(parent map[string]any, key string) map[string]any {
 	if existing, ok := parent[key].(map[string]any); ok {
 		return existing
@@ -740,26 +734,15 @@ func (h *OpenClawHandler) queryWorkerChatWithMessages(
 	payload := buildWorkerChatRequest(messages, sessionUser, false)
 
 	attempt := func() (string, bool, error) {
-		allEndpointMissing := true
-		var lastErr error
+		failures := make([]workerChatAttemptFailure, 0, len(workerChatEndpointCandidates))
 		for _, endpoint := range workerChatEndpointCandidates {
 			content, statusCode, body, err := h.queryWorkerChatEndpoint(targetBase, endpoint, token, payload)
 			if err == nil {
 				return content, false, nil
 			}
-			// 404/405 both indicate the chat API endpoint is not active/available on the gateway.
-			allEndpointMissing = allEndpointMissing && (statusCode == http.StatusNotFound || statusCode == http.StatusMethodNotAllowed)
-
-			detail := strings.TrimSpace(body)
-			if detail == "" {
-				detail = err.Error()
-			}
-			lastErr = fmt.Errorf("worker chat via %s failed: %s", endpoint, detail)
+			failures = append(failures, buildWorkerChatAttemptFailure(endpoint, statusCode, body, err))
 		}
-		if lastErr == nil {
-			lastErr = fmt.Errorf("worker chat request failed for all candidate endpoints")
-		}
-		return "", allEndpointMissing, lastErr
+		return "", workerChatAllEndpointsMissing(failures), formatWorkerChatAttemptError("worker chat", failures)
 	}
 
 	content, allEndpointMissing, err := attempt()

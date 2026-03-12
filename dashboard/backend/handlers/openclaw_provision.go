@@ -232,6 +232,11 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			writeJSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		if err := h.installDefaultClawHubSkills(wsDir, req.Container.BaseImage); err != nil {
+			h.mu.Unlock()
+			writeJSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		// For bridge network names, ensure the network exists before starting
 		// the container. This is idempotent: if the network already exists the

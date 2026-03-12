@@ -195,25 +195,15 @@ func (h *OpenClawHandler) queryWorkerChatStreamWithMessages(
 	payload := buildWorkerChatRequest(messages, sessionUser, true)
 
 	attempt := func() (string, bool, error) {
-		allEndpointMissing := true
-		var lastErr error
+		failures := make([]workerChatAttemptFailure, 0, len(workerChatEndpointCandidates))
 		for _, endpoint := range workerChatEndpointCandidates {
 			content, statusCode, body, err := h.queryWorkerChatStreamEndpoint(targetBase, endpoint, token, payload, onChunk)
 			if err == nil {
 				return content, false, nil
 			}
-			allEndpointMissing = allEndpointMissing && (statusCode == http.StatusNotFound || statusCode == http.StatusMethodNotAllowed)
-
-			detail := strings.TrimSpace(body)
-			if detail == "" {
-				detail = err.Error()
-			}
-			lastErr = fmt.Errorf("worker stream chat via %s failed: %s", endpoint, detail)
+			failures = append(failures, buildWorkerChatAttemptFailure(endpoint, statusCode, body, err))
 		}
-		if lastErr == nil {
-			lastErr = fmt.Errorf("worker stream chat request failed for all candidate endpoints")
-		}
-		return "", allEndpointMissing, lastErr
+		return "", workerChatAllEndpointsMissing(failures), formatWorkerChatAttemptError("worker stream chat", failures)
 	}
 
 	content, allEndpointMissing, err := attempt()
