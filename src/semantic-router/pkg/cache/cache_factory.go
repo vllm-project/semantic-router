@@ -65,11 +65,15 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 		}
 		return NewMilvusCache(options)
 
-	case RedisCacheType:
+	case RedisCacheType, ValkeyCacheType:
+		backendLabel := "Redis"
+		if config.BackendType == ValkeyCacheType {
+			backendLabel = "Valkey"
+		}
 		var options RedisCacheOptions
 		if config.Redis != nil {
-			logging.Debugf("Creating Redis cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
-				config.Redis, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
+			logging.Debugf("Creating %s cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+				backendLabel, config.Redis, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
 			options = RedisCacheOptions{
 				Enabled:             config.Enabled,
 				SimilarityThreshold: config.SimilarityThreshold,
@@ -78,8 +82,8 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 				EmbeddingModel:      config.EmbeddingModel,
 			}
 		} else {
-			logging.Debugf("(Deprecated) Creating Redis cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
-				config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
+			logging.Debugf("(Deprecated) Creating %s cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+				backendLabel, config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
 			options = RedisCacheOptions{
 				Enabled:             config.Enabled,
 				SimilarityThreshold: config.SimilarityThreshold,
@@ -168,18 +172,18 @@ func ValidateCacheConfig(config CacheConfig) error {
 			logging.Debugf("Milvus config file found: %s", config.BackendConfigPath)
 		}
 		logging.Debugf("Milvus configuration: %+v", config.Milvus)
-	case RedisCacheType:
+	case RedisCacheType, ValkeyCacheType:
 		if config.Redis == nil {
-			logging.Debugf("Redis configuration not provided. Using backend_config_path: %s", config.BackendConfigPath)
+			logging.Debugf("%s configuration not provided. Using backend_config_path: %s", config.BackendType, config.BackendConfigPath)
 			if config.BackendConfigPath == "" {
-				return fmt.Errorf("backend_config_path is required for Redis cache backend")
+				return fmt.Errorf("backend_config_path is required for %s cache backend", config.BackendType)
 			}
 			// Ensure the Redis configuration file exists
 			if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
-				logging.Debugf("Redis config file not found: %s", config.BackendConfigPath)
-				return fmt.Errorf("redis config file not found: %s", config.BackendConfigPath)
+				logging.Debugf("%s config file not found: %s", config.BackendType, config.BackendConfigPath)
+				return fmt.Errorf("%s config file not found: %s", config.BackendType, config.BackendConfigPath)
 			}
-			logging.Debugf("Redis config file found: %s", config.BackendConfigPath)
+			logging.Debugf("%s config file found: %s", config.BackendType, config.BackendConfigPath)
 		}
 	}
 
@@ -242,6 +246,18 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 				"Persistent storage with AOF/RDB",
 				"Scalable with Redis Cluster",
 				"HNSW and FLAT indexing",
+				"Wide ecosystem support",
+				"TTL support",
+			},
+		},
+		{
+			Type:        ValkeyCacheType,
+			Name:        "Valkey Vector Database",
+			Description: "Open-source semantic cache powered by Valkey with Redis-compatible vector search",
+			Features: []string{
+				"Redis-compatible API",
+				"Open-source governance",
+				"Persistent storage support",
 				"Wide ecosystem support",
 				"TTL support",
 			},

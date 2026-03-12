@@ -700,6 +700,24 @@ development:
 				err := ValidateCacheConfig(config)
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			It("should validate Valkey backend with inline Redis configuration", func() {
+				redisCfg := &config.RedisConfig{}
+				redisCfg.Connection.Host = "valkey.default.svc"
+				redisCfg.Connection.Port = 6379
+
+				cacheConfig := CacheConfig{
+					BackendType:         ValkeyCacheType,
+					Enabled:             true,
+					SimilarityThreshold: 0.8,
+					TTLSeconds:          3600,
+					EmbeddingModel:      "bert",
+					Redis:               redisCfg,
+				}
+
+				err := ValidateCacheConfig(cacheConfig)
+				Expect(err).NotTo(HaveOccurred())
+			})
 		})
 
 		Describe("GetDefaultCacheConfig", func() {
@@ -723,7 +741,7 @@ development:
 			It("should return information about available backends", func() {
 				backends := GetAvailableCacheBackends()
 
-				Expect(backends).To(HaveLen(3)) // Memory, Milvus, and Redis
+				Expect(backends).To(HaveLen(4)) // Memory, Milvus, Redis, and Valkey
 
 				// Check memory backend info
 				memoryBackend := backends[0]
@@ -748,6 +766,14 @@ development:
 				Expect(redisBackend.Description).To(ContainSubstring("Redis with vector search"))
 				Expect(redisBackend.Features).To(ContainElement("Fast in-memory performance"))
 				Expect(redisBackend.Features).To(ContainElement("TTL support"))
+
+				// Check Valkey backend info
+				valkeyBackend := backends[3]
+				Expect(valkeyBackend.Type).To(Equal(ValkeyCacheType))
+				Expect(valkeyBackend.Name).To(Equal("Valkey Vector Database"))
+				Expect(valkeyBackend.Description).To(ContainSubstring("Valkey"))
+				Expect(valkeyBackend.Features).To(ContainElement("Redis-compatible API"))
+				Expect(valkeyBackend.Features).To(ContainElement("TTL support"))
 			})
 		})
 	})

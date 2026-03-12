@@ -276,6 +276,20 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name: "valkey with redis config succeeds",
+			cache: &vllmv1alpha1.SemanticCacheConfig{
+				Enabled:     true,
+				BackendType: "valkey",
+				Redis: &vllmv1alpha1.RedisCacheConfig{
+					Connection: vllmv1alpha1.RedisCacheConnection{
+						Host: "valkey.default.svc",
+						Port: 6379,
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
 			name: "milvus without config fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
 				Enabled:     true,
