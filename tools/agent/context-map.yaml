@@ -106,6 +106,12 @@ surfaces:
       reason: Contributor-facing wrapper around the harness workflow.
     - path: .github/PULL_REQUEST_TEMPLATE.md
       reason: Canonical PR title, body, checklist, and signoff expectations for contributor-facing changes.
+    - path: .github/ISSUE_TEMPLATE/001_feature_request.yaml
+      reason: Canonical feature-request intake fields and default labels for issue creation.
+    - path: .github/ISSUE_TEMPLATE/002_bug_report.yaml
+      reason: Canonical bug-report intake fields and default labels for issue creation.
+    - path: .prowlabels.yaml
+      reason: Canonical maintainer label taxonomy for issue or PR triage.
   local_smoke:
     - path: docs/agent/environments.md
       reason: Local build, serve, and smoke behavior by environment.

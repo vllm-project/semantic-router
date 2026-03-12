@@ -148,6 +148,7 @@ jobs:
               - '.github/copilot-instructions.md'
               - '.github/PULL_REQUEST_TEMPLATE.md'
               - '.github/ISSUE_TEMPLATE/**'
+              - '.prowlabels.yaml'
             agent_exec:
               - 'tools/agent/*.yaml'
               - 'tools/agent/scripts/**'

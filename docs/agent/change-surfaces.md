@@ -118,8 +118,8 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 ## `contributor_interface`
 
-- Contributor-facing wrappers around the harness such as README, contributing guidance, and PR or issue intake templates.
-- Typical paths: `README.md`, `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/**`
+- Contributor-facing wrappers around the harness such as README, contributing guidance, PR or issue intake templates, and maintainer label taxonomy.
+- Typical paths: `README.md`, `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/**`, `.prowlabels.yaml`
 - Task rules: `repo-docs`, `agent_text`
 
 ## `local_smoke`
