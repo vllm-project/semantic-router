@@ -8,7 +8,7 @@ import ChatConversationSidebar from './ChatConversationSidebar'
 import ChatComponentConversationViewport from './ChatComponentConversationViewport'
 import ChatComponentInputBar from './ChatComponentInputBar'
 import ChatComponentRoomToggle from './ChatComponentRoomToggle'
-import ChatComponentTopBar from './ChatComponentTopBar'
+import ChatComponentSidebarShell from './ChatComponentSidebarShell'
 import {
   buildChoicesArray,
   getFirstChoice,
@@ -1016,23 +1016,24 @@ const ChatComponent = ({
 
       <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
         <div className={styles.mainLayout}>
-          {!isTeamRoomView && isSidebarOpen && (
-            <ChatConversationSidebar
-              conversationId={conversationId}
-              conversationPreviews={conversationPreviews}
-              onDeleteConversation={handleDeleteConversation}
-              onSelectConversation={handleSelectConversation}
-            />
-          )}
+          <ChatComponentSidebarShell
+            createDisabled={roomCreateDisabled}
+            isOpen={isSidebarOpen}
+            isTeamRoomView={isTeamRoomView}
+            onCreate={handleTopBarCreate}
+            onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
+          >
+            {!isTeamRoomView ? (
+              <ChatConversationSidebar
+                conversationId={conversationId}
+                conversationPreviews={conversationPreviews}
+                onDeleteConversation={handleDeleteConversation}
+                onSelectConversation={handleSelectConversation}
+              />
+            ) : null}
+          </ChatComponentSidebarShell>
 
           <div className={styles.chatArea}>
-            <ChatComponentTopBar
-              isSidebarOpen={isSidebarOpen}
-              isTeamRoomView={isTeamRoomView}
-              createDisabled={roomCreateDisabled}
-              onCreate={handleTopBarCreate}
-              onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
-            />
             {isTeamRoomView ? (
               <ClawRoomChat
                 isSidebarOpen={isSidebarOpen}

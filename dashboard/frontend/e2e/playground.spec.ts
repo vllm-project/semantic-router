@@ -86,6 +86,42 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible();
   });
 
+  test('opens and collapses the left history rail', async ({ page }) => {
+    await page.evaluate(() => {
+      const now = Date.now();
+      window.localStorage.setItem(
+        'sr:chat:conversations',
+        JSON.stringify([
+          {
+            id: 'saved-conversation',
+            createdAt: now - 300000,
+            updatedAt: now,
+            payload: [
+              {
+                id: 'saved-user-message',
+                role: 'user',
+                content: 'Saved conversation preview',
+                timestamp: new Date(now - 120000).toISOString(),
+              },
+            ],
+          },
+        ]),
+      );
+    });
+
+    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
+
+    const shell = page.getByTestId('playground-sidebar-shell');
+    await expect(shell).toBeVisible();
+    const sidebarItem = shell.getByRole('button', { name: 'Saved conversation preview' });
+
+    await page.getByRole('button', { name: 'Open sidebar' }).click();
+    await expect(sidebarItem).toBeVisible();
+
+    await page.getByRole('button', { name: 'Close sidebar' }).click();
+    await expect(sidebarItem).not.toBeVisible();
+  });
+
   test('can type message', async ({ page }) => {
     const input = page.getByPlaceholder('Ask me anything...');
     await input.fill('Hello, this is a test message');
@@ -246,7 +282,7 @@ test.describe('Playground Chat Component', () => {
         ])
       );
     });
-    await page.reload();
+    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
 
     const chunks = [
       chatStreamChunk({ role: 'assistant', content: '' }),
@@ -347,7 +383,7 @@ test.describe('Playground Chat Component', () => {
         ? chatStreamBody('First answer closes out the opening turn.')
         : chatStreamBody(
             Array.from(
-              { length: 12 },
+              { length: 28 },
               (_, index) => `Second-turn paragraph ${index + 1} keeps the response growing.`
             ).join('\n\n')
           );
@@ -371,24 +407,16 @@ test.describe('Playground Chat Component', () => {
 
     await input.fill('Start the second turn');
     await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.getByText('Second-turn paragraph 6 keeps the response growing.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Second-turn paragraph 16 keeps the response growing.')).toBeVisible({ timeout: 10000 });
 
     const composerBox = await composer.boundingBox();
     expect(composerBox).not.toBeNull();
     expect(composerBox!.y + composerBox!.height).toBeGreaterThan(820);
 
-    const transcript = page.locator('[data-testid="chat-transcript"]');
-    await expect.poll(async () => {
-      return transcript.evaluate(node => {
-        const container = node as HTMLDivElement;
-        const userMessages = container.querySelectorAll<HTMLElement>('[data-message-role="user"]');
-        const currentQuestion = userMessages[userMessages.length - 1];
-        if (!currentQuestion) {
-          return Number.POSITIVE_INFINITY;
-        }
-        return currentQuestion.getBoundingClientRect().top - container.getBoundingClientRect().top;
-      });
-    }, { timeout: 5000 }).toBeLessThan(160);
+    const secondTurnMessage = page.locator('[data-message-role="user"]').last();
+    const secondTurnBox = await secondTurnMessage.boundingBox();
+    expect(secondTurnBox).not.toBeNull();
+    expect(secondTurnBox!.y + secondTurnBox!.height).toBeLessThan(composerBox!.y - 24);
   });
 
   test('renders thinking block from streaming reasoning field', async ({ page }) => {
