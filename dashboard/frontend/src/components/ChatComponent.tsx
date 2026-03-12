@@ -5,8 +5,8 @@ import HeaderReveal from './HeaderReveal'
 import ClawRoomChat from './ClawRoomChat'
 import { ClawModeToggle } from './ChatComponentControls'
 import ChatConversationSidebar from './ChatConversationSidebar'
+import ChatComponentConversationViewport from './ChatComponentConversationViewport'
 import ChatComponentInputBar from './ChatComponentInputBar'
-import ChatComponentMessages from './ChatComponentMessages'
 import ChatComponentRoomToggle from './ChatComponentRoomToggle'
 import ChatComponentTopBar from './ChatComponentTopBar'
 import {
@@ -1075,27 +1075,28 @@ const ChatComponent = ({
                     </button>
                   </div>
                 )}
-                <ChatComponentMessages
+                <ChatComponentConversationViewport
                   expandedToolCards={expandedToolCards}
                   messages={messages}
                   onToggleToolCard={handleToggleToolCard}
-                />
-
-                <ChatComponentInputBar
-                  enableClawMode={enableClawMode}
-                  enableWebSearch={enableWebSearch}
-                  inputRef={inputRef}
-                  inputValue={inputValue}
-                  isLoading={isLoading}
-                  isTogglingClawMode={isTogglingClawMode}
-                  modeToggleDisabled={modeToggleDisabled}
-                  onChangeInput={setInputValue}
-                  onKeyDown={handleKeyDown}
-                  onSend={handleSend}
-                  onStop={handleStop}
-                  onToggleClawMode={handleToggleClawMode}
-                  onToggleWebSearch={() => setEnableWebSearch(prev => !prev)}
-                  roomChatToggleControl={roomChatToggleControl}
+                  footer={(
+                    <ChatComponentInputBar
+                      enableClawMode={enableClawMode}
+                      enableWebSearch={enableWebSearch}
+                      inputRef={inputRef}
+                      inputValue={inputValue}
+                      isLoading={isLoading}
+                      isTogglingClawMode={isTogglingClawMode}
+                      modeToggleDisabled={modeToggleDisabled}
+                      onChangeInput={setInputValue}
+                      onKeyDown={handleKeyDown}
+                      onSend={handleSend}
+                      onStop={handleStop}
+                      onToggleClawMode={handleToggleClawMode}
+                      onToggleWebSearch={() => setEnableWebSearch(prev => !prev)}
+                      roomChatToggleControl={roomChatToggleControl}
+                    />
+                  )}
                 />
               </>
             )}

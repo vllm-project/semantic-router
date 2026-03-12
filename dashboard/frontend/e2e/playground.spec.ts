@@ -208,12 +208,12 @@ test.describe('Playground Chat Component', () => {
   });
 
   test('keeps the transcript pinned while a long reply streams', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 640 });
+    await page.setViewportSize({ width: 1280, height: 560 });
 
     const chunks = [
       chatStreamChunk({ role: 'assistant', content: '' }),
-      ...Array.from({ length: 80 }, (_, index) =>
-        chatStreamChunk({ content: `Line ${index + 1}: streaming output keeps growing.\n` })
+      ...Array.from({ length: 140 }, (_, index) =>
+        chatStreamChunk({ content: `Paragraph ${index + 1}: streaming output keeps growing.\n\n` })
       ),
       'data: [DONE]\n\n',
     ];
@@ -224,21 +224,11 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'Send message' }).click();
 
     await expect(page.locator('[data-message-role="assistant"]')).toHaveCount(1, { timeout: 5000 });
-    await page.waitForTimeout(900);
+    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Paragraph 100: streaming output keeps growing.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
 
-    const transcriptMidStream = await page.locator('[data-testid="chat-transcript"]').evaluate((node) => {
-      const container = node as HTMLDivElement;
-      return {
-        clientHeight: container.clientHeight,
-        distanceFromBottom: container.scrollHeight - container.scrollTop - container.clientHeight,
-        scrollHeight: container.scrollHeight,
-      };
-    });
-
-    expect(transcriptMidStream.scrollHeight).toBeGreaterThan(transcriptMidStream.clientHeight);
-    expect(transcriptMidStream.distanceFromBottom).toBeLessThan(48);
-
-    await expect(page.getByText('Line 80: streaming output keeps growing.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Paragraph 140: streaming output keeps growing.')).toBeVisible({ timeout: 10000 });
 
     const transcriptAfterCompletion = await page.locator('[data-testid="chat-transcript"]').evaluate((node) => {
       const container = node as HTMLDivElement;

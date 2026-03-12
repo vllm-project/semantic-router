@@ -485,13 +485,31 @@ body.playground-fullscreen .container {
   flex-direction: column;
   width: 100%;
   min-width: 0;
+  padding: 1rem;
+  min-height: 0;
+  overflow: visible;
+}
+
+.conversationViewport {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable both-edges;
   scroll-behavior: smooth;
-  padding: 1rem;
-  min-height: 0;
+}
+
+.conversationViewportContent {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
 }
 
 .messagesContainerEmpty {
@@ -637,7 +655,7 @@ body.playground-fullscreen .container {
 }
 
 .message.user .messageContent {
-  flex: 0 1 min(82%, 720px);
+  flex: 0 1 auto;
   max-width: min(82%, 720px);
 }
 

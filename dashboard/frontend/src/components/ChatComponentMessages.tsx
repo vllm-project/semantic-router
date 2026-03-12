@@ -8,7 +8,6 @@ import { MessageActionBar, TypingGreeting } from './ChatComponentControls'
 import { ContentWithCitations } from './ChatComponentCitations'
 import { ToolCard } from './ChatComponentToolCards'
 import { GREETING_LINES, type Message } from './ChatComponentTypes'
-import { useChatTranscriptAutoScroll } from './useChatTranscriptAutoScroll'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
 
 interface ChatComponentMessagesProps {
@@ -253,8 +252,6 @@ export default function ChatComponentMessages({
   messages,
   onToggleToolCard,
 }: ChatComponentMessagesProps) {
-  const { containerRef, contentRef } = useChatTranscriptAutoScroll(messages)
-
   if (messages.length === 0) {
     return (
       <div className={`${styles.messagesContainer} ${styles.messagesContainerEmpty}`}>
@@ -266,8 +263,8 @@ export default function ChatComponentMessages({
   }
 
   return (
-    <div className={styles.messagesContainer} ref={containerRef} data-testid="chat-transcript">
-      <div className={styles.messages} ref={contentRef}>
+    <div className={styles.messagesContainer}>
+      <div className={styles.messages}>
         {messages.map((message, index) => {
           const prevUserQuery = messages[index - 1]?.role === 'user' ? messages[index - 1].content : undefined
 
