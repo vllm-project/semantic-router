@@ -1489,8 +1489,11 @@ body.playground-fullscreen .container {
 }
 
 .mcpToolCard {
-  background: rgba(249, 115, 22, 0.08);
-  border-color: rgba(251, 146, 60, 0.12);
+  background: rgba(255, 255, 255, 0.025);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .webSearchHeader {
@@ -1521,8 +1524,8 @@ body.playground-fullscreen .container {
 }
 
 .mcpToolIcon {
-  background-color: rgba(249, 115, 22, 0.16);
-  color: #fdba74;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }
 
 .webSearchIcon svg {
@@ -1584,6 +1587,46 @@ body.playground-fullscreen .container {
   border: none;
   padding: 0.15rem 0.42rem;
   border-radius: 9999px;
+}
+
+.mcpToolCard .webSearchHeader:hover {
+  background-color: rgba(255, 255, 255, 0.025);
+}
+
+.mcpToolCard .webSearchTitle,
+.mcpToolCard .webSearchQuery,
+.mcpToolCard .toolCardBrand,
+.mcpToolCard .toolStatusPill,
+.mcpToolCard .webSearchChevron,
+.mcpToolCard .clawToolHighlightHeading,
+.mcpToolCard .clawToolHighlightKey,
+.mcpToolCard .clawToolHighlightValue {
+  color: #ffffff;
+}
+
+.mcpToolCard .toolCardBrand {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.mcpToolCard .toolStatusPending {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.mcpToolCard .toolStatusRunning {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.mcpToolCard .toolStatusCompleted {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.mcpToolCard .toolStatusFailed {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .webSearchQuery {
@@ -1680,7 +1723,7 @@ body.playground-fullscreen .container {
 .mcpToolLoadingBar {
   background: linear-gradient(90deg,
       transparent 0%,
-      #fb923c 50%,
+      rgba(255, 255, 255, 0.95) 50%,
       transparent 100%);
 }
 
@@ -1709,6 +1752,10 @@ body.playground-fullscreen .container {
   gap: 0.55rem;
   width: 100%;
   min-width: 0;
+}
+
+.mcpToolCard .clawToolHighlights {
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
 }
 
 .clawToolHighlightSection {
