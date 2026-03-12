@@ -254,7 +254,7 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 				"compaction": map[string]string{"mode": "safeguard"},
 			},
 			"list": []map[string]interface{}{
-				{"id": "vllm-sr", "default": true, "name": "vLLM-SR Powered Agent", "workspace": "/workspace"},
+				{"id": openClawPrimaryAgentID, "default": true, "name": "vLLM-SR Powered Agent", "workspace": "/workspace"},
 			},
 		},
 		"commands": map[string]interface{}{"native": "auto", "nativeSkills": "auto", "restart": true},

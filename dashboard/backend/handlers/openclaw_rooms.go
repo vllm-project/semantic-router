@@ -576,7 +576,10 @@ type openAIChatResponse struct {
 	} `json:"error,omitempty"`
 }
 
-const openClawPrimaryAgentModel = "openclaw:main"
+const (
+	openClawPrimaryAgentID    = "vllm-sr"
+	openClawPrimaryAgentModel = "openclaw:main"
+)
 
 func nestedObject(parent map[string]any, key string) map[string]any {
 	if existing, ok := parent[key].(map[string]any); ok {
@@ -670,7 +673,7 @@ func (h *OpenClawHandler) queryWorkerChatEndpoint(
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-OpenClaw-Agent-Id", "main")
+	req.Header.Set("X-OpenClaw-Agent-Id", openClawPrimaryAgentID)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("X-OpenClaw-Token", token)

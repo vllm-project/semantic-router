@@ -1057,8 +1057,8 @@ func TestProcessRoomUserMessage_LeaderDelegatesToWorker(t *testing.T) {
 		if r.URL.Path != "/v1/chat/completions" {
 			t.Fatalf("unexpected leader path: %s", r.URL.Path)
 		}
-		if got := r.Header.Get("X-OpenClaw-Agent-Id"); got != "main" {
-			t.Fatalf("expected X-OpenClaw-Agent-Id=main, got %q", got)
+		if got := r.Header.Get("X-OpenClaw-Agent-Id"); got != openClawPrimaryAgentID {
+			t.Fatalf("expected X-OpenClaw-Agent-Id=%s, got %q", openClawPrimaryAgentID, got)
 		}
 		var payload openAIChatRequest
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {

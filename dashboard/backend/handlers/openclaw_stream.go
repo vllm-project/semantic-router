@@ -142,7 +142,7 @@ func (h *OpenClawHandler) queryWorkerChatStreamEndpoint(
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("X-OpenClaw-Agent-Id", "main")
+	req.Header.Set("X-OpenClaw-Agent-Id", openClawPrimaryAgentID)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("X-OpenClaw-Token", token)
