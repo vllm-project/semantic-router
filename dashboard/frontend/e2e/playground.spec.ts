@@ -138,6 +138,27 @@ test.describe('Playground Chat Component', () => {
     await expect(dialog).toContainText('admin@example.com');
   });
 
+  test('hides the guide button permanently after finishing onboarding', async ({ page }) => {
+    const onboardingStatusKey = 'vllm-sr.onboarding.status';
+
+    await page.evaluate((key) => {
+      window.localStorage.setItem(key, 'pending');
+    }, onboardingStatusKey);
+    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
+
+    await expect(page.getByText('Product guide')).toBeVisible();
+
+    while (await page.getByRole('button', { name: 'Finish' }).count() === 0) {
+      await page.getByRole('button', { name: 'Next' }).click();
+    }
+
+    await page.getByRole('button', { name: 'Finish' }).click();
+    await expect(page.getByRole('button', { name: 'Guide' })).toHaveCount(0);
+
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Guide' })).toHaveCount(0);
+  });
+
   test('can type message', async ({ page }) => {
     const input = page.getByPlaceholder('Ask me anything...');
     await input.fill('Hello, this is a test message');
@@ -452,7 +473,7 @@ test.describe('Playground Chat Component', () => {
 
     await expect(page.getByText('Final streamed answer.')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Step 1: inspect the prompt.')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Completed Deep Thinking')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('My Thoughts')).toBeVisible({ timeout: 10000 });
   });
 
   test('shows streaming reasoning in thinking overlay before completion', async ({ page }) => {
@@ -498,6 +519,6 @@ test.describe('Playground Chat Component', () => {
 
     await expect(page.getByText('Final JSON answer.')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Step 1: parse message.reasoning.')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Completed Deep Thinking')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('My Thoughts')).toBeVisible({ timeout: 10000 });
   });
 });
