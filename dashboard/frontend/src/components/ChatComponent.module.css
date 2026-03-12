@@ -4,10 +4,10 @@
   flex: 1;
   height: 100%;
   min-height: 0;
-  --chat-rail-width: min(100%, 860px);
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(40px) saturate(150%);
-  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  --chat-rail-width: min(100%, 780px);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   overflow-x: hidden;
   overflow-y: hidden;
 }
@@ -488,7 +488,7 @@ body.playground-fullscreen .container {
   max-width: var(--chat-rail-width);
   margin: 0 auto;
   min-width: 0;
-  padding: 2.2rem 1.2rem 1rem;
+  padding: 1.85rem 1.25rem 1rem;
   min-height: 0;
   overflow: visible;
 }
@@ -580,7 +580,7 @@ body.playground-fullscreen .container {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 1rem;
+  gap: 1.15rem;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -609,8 +609,8 @@ body.playground-fullscreen .container {
 }
 
 .message.user {
-  align-self: flex-end;
-  flex-direction: row-reverse;
+  align-self: stretch;
+  flex-direction: row;
   justify-content: flex-end;
 }
 
@@ -660,10 +660,12 @@ body.playground-fullscreen .container {
 
 .message.user .messageContent {
   flex: 0 1 auto;
-  max-width: min(74%, 560px);
+  align-items: flex-end;
+  max-width: min(70%, 520px);
 }
 
 .message.assistant .messageContent {
+  align-items: flex-start;
   max-width: 100%;
   overflow: visible;
 }
@@ -677,8 +679,8 @@ body.playground-fullscreen .container {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding-top: 0.75rem;
-  margin-top: 0.5rem;
+  padding-top: 0.45rem;
+  margin-top: 0.1rem;
 }
 
 /* Message action bar - bottom toolbar like CodeBuddy */
@@ -721,7 +723,7 @@ body.playground-fullscreen .container {
 .messageText {
   padding: 0;
   border-radius: 0;
-  font-size: var(--text-sm);
+  font-size: 0.9375rem;
   line-height: 1.75;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -732,9 +734,9 @@ body.playground-fullscreen .container {
 /* For user messages, preserve whitespace */
 .message.user .messageText {
   white-space: pre-wrap;
-  padding: 0.78rem 1rem;
-  border-radius: 999px;
-  background-color: rgba(255, 255, 255, 0.1);
+  padding: 0.8rem 1.05rem;
+  border-radius: 1.45rem;
+  background-color: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.96);
 }
 
@@ -789,7 +791,7 @@ body.playground-fullscreen .container {
   width: var(--chat-rail-width);
   max-width: var(--chat-rail-width);
   margin: 0 auto;
-  background: rgba(42, 43, 47, 0.88);
+  background: rgba(44, 45, 49, 0.82);
   border: none;
   border-radius: 28px;
   overflow: hidden;
@@ -799,19 +801,19 @@ body.playground-fullscreen .container {
   backdrop-filter: blur(14px) saturate(118%);
   -webkit-backdrop-filter: blur(14px) saturate(118%);
   box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.22),
+    0 8px 18px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .inputWrapper:focus-within {
   box-shadow:
-    0 14px 34px rgba(0, 0, 0, 0.28),
+    0 10px 22px rgba(0, 0, 0, 0.22),
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .inputWrapper.hasContent {
   box-shadow:
-    0 14px 34px rgba(0, 0, 0, 0.28),
+    0 10px 22px rgba(0, 0, 0, 0.22),
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
@@ -1216,7 +1218,7 @@ body.playground-fullscreen .container {
   }
 
   .messagesContainer {
-    padding: 1.4rem 0.9rem 0.8rem;
+    padding: 1.25rem 0.9rem 0.8rem;
   }
 
   .messagesContainerEmpty {
@@ -1230,11 +1232,11 @@ body.playground-fullscreen .container {
   }
 
   .message.user .messageContent {
-    max-width: 82%;
+    max-width: 80%;
   }
 
   .messageText {
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     line-height: 1.5;
   }
 
@@ -1253,13 +1255,16 @@ body.playground-fullscreen .container {
   }
 
   .inputWrapper {
-    border-color: var(--color-border);
+    box-shadow:
+      0 8px 18px rgba(0, 0, 0, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .inputWrapper:focus-within,
   .inputWrapper.hasContent {
-    border-color: var(--color-primary) !important;
-    box-shadow: 0 0 0 0.5px var(--color-primary) !important;
+    box-shadow:
+      0 10px 20px rgba(0, 0, 0, 0.22),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
   }
 
   .input,
@@ -1339,11 +1344,11 @@ body.playground-fullscreen .container {
   }
 
   .message.user .messageContent {
-    max-width: 88%;
+    max-width: 86%;
   }
 
   .messageText {
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
 
   .inputContainer {
@@ -1359,8 +1364,9 @@ body.playground-fullscreen .container {
 
   .inputWrapper:focus-within,
   .inputWrapper.hasContent {
-    border-color: var(--color-primary) !important;
-    box-shadow: 0 0 0 0.5px var(--color-primary) !important;
+    box-shadow:
+      0 10px 20px rgba(0, 0, 0, 0.22),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
   }
 
   .input {
@@ -1465,30 +1471,27 @@ body.playground-fullscreen .container {
   flex-direction: column;
   gap: 0.65rem;
   margin-bottom: 0.9rem;
-  width: 100%;
+  width: min(100%, 680px);
   min-width: 0;
-  max-width: 100%;
+  max-width: min(100%, 680px);
 }
 
 /* Web Search Card */
 .webSearchCard {
-  background: linear-gradient(180deg, rgba(28, 32, 38, 0.94) 0%, rgba(18, 22, 28, 0.98) 100%);
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-left: 3px solid #3b82f6;
-  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: none;
+  border-radius: 18px;
   width: 100%;
   min-width: 0;
   overflow: hidden;
   max-width: 100%;
-  box-shadow:
-    0 14px 32px rgba(0, 0, 0, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: none;
 }
 
 .mcpToolCard {
-  border-left-color: #f97316;
-  background: linear-gradient(180deg, rgba(42, 23, 18, 0.92) 0%, rgba(20, 14, 12, 0.98) 100%);
-  border-color: rgba(251, 146, 60, 0.18);
+  background: rgba(249, 115, 22, 0.08);
+  border-color: rgba(251, 146, 60, 0.12);
 }
 
 .webSearchHeader {
@@ -1497,29 +1500,29 @@ body.playground-fullscreen .container {
   gap: 0.75rem;
   width: 100%;
   min-width: 0;
-  padding: 0.75rem 1rem;
+  padding: 0.72rem 0.95rem;
   cursor: pointer;
   transition: background-color var(--transition-fast);
 }
 
 .webSearchHeader:hover {
-  background-color: rgba(255, 255, 255, 0.035);
+  background-color: rgba(255, 255, 255, 0.03);
 }
 
 .webSearchIcon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-sm);
-  background-color: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
+  background-color: rgba(59, 130, 246, 0.12);
+  color: #93c5fd;
   flex-shrink: 0;
 }
 
 .mcpToolIcon {
-  background-color: rgba(249, 115, 22, 0.18);
+  background-color: rgba(249, 115, 22, 0.16);
   color: #fdba74;
 }
 
@@ -1578,8 +1581,8 @@ body.playground-fullscreen .container {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #fdba74;
-  background: rgba(249, 115, 22, 0.14);
-  border: 1px solid rgba(251, 146, 60, 0.2);
+  background: rgba(249, 115, 22, 0.12);
+  border: none;
   padding: 0.15rem 0.42rem;
   border-radius: 9999px;
 }
@@ -1661,7 +1664,7 @@ body.playground-fullscreen .container {
 
 /* Web Search Loading */
 .webSearchLoading {
-  padding: 0 1rem 0.75rem;
+  padding: 0 0.95rem 0.72rem;
 }
 
 .webSearchLoadingBar {
@@ -1694,17 +1697,17 @@ body.playground-fullscreen .container {
 
 /* Web Search Results */
 .webSearchResults {
-  border-top: 1px solid var(--color-border);
-  padding: 0.75rem 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.72rem 0.95rem;
   animation: fadeIn 0.2s ease;
 }
 
 .clawToolHighlights {
-  border-top: 1px solid rgba(249, 115, 22, 0.18);
-  padding: 0.7rem 1rem 0.8rem;
+  border-top: 1px solid rgba(249, 115, 22, 0.14);
+  padding: 0.72rem 0.95rem 0.78rem;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.55rem;
   width: 100%;
   min-width: 0;
 }
@@ -1712,13 +1715,13 @@ body.playground-fullscreen .container {
 .clawToolHighlightSection {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.34rem;
   width: 100%;
   min-width: 0;
-  padding: 0.55rem 0.6rem;
-  border: 1px solid rgba(249, 115, 22, 0.16);
-  border-radius: 10px;
-  background: linear-gradient(180deg, rgba(249, 115, 22, 0.08) 0%, rgba(249, 115, 22, 0.03) 100%);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .clawToolHighlightHeading {
@@ -1732,7 +1735,7 @@ body.playground-fullscreen .container {
 .clawToolHighlightRows {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.45rem 0.6rem;
+  gap: 0.25rem 0.8rem;
   width: 100%;
   min-width: 0;
 }
@@ -1745,10 +1748,10 @@ body.playground-fullscreen .container {
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  padding: 0.3rem 0.45rem;
-  border-radius: 8px;
-  background: rgba(249, 115, 22, 0.08);
-  border: 1px solid rgba(251, 146, 60, 0.14);
+  padding: 0.12rem 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
 }
 
 .clawToolHighlightKey {

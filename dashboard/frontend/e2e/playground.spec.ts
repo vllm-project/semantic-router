@@ -238,7 +238,7 @@ test.describe('Playground Chat Component', () => {
     expect(transcriptAfterCompletion).toBeLessThan(48);
   });
 
-  test('keeps the assistant rail wide during streaming and after completion', async ({ page }) => {
+  test('keeps the assistant rail centered and stable during streaming and after completion', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
 
     await mockStreamingChatFetch(page, [
@@ -256,16 +256,32 @@ test.describe('Playground Chat Component', () => {
 
     await expect(assistantContent).toBeVisible({ timeout: 5000 });
 
-    const widthWhileStreaming = await assistantContent.evaluate(node => node.getBoundingClientRect().width);
-    expect(widthWhileStreaming).toBeGreaterThan(700);
+    const boxWhileStreaming = await assistantContent.evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return {
+        center: rect.left + rect.width / 2,
+        width: rect.width,
+      };
+    });
+    expect(boxWhileStreaming.width).toBeGreaterThan(560);
+    expect(boxWhileStreaming.width).toBeLessThan(900);
+    expect(Math.abs(boxWhileStreaming.center - 640)).toBeLessThan(120);
 
     await expect(page.getByText('The final chunk lands without the message suddenly widening.')).toBeVisible({
       timeout: 10000,
     });
 
-    const widthAfterCompletion = await assistantContent.evaluate(node => node.getBoundingClientRect().width);
-    expect(widthAfterCompletion).toBeGreaterThan(700);
-    expect(Math.abs(widthAfterCompletion - widthWhileStreaming)).toBeLessThan(48);
+    const boxAfterCompletion = await assistantContent.evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return {
+        center: rect.left + rect.width / 2,
+        width: rect.width,
+      };
+    });
+    expect(boxAfterCompletion.width).toBeGreaterThan(560);
+    expect(boxAfterCompletion.width).toBeLessThan(900);
+    expect(Math.abs(boxAfterCompletion.center - 640)).toBeLessThan(120);
+    expect(Math.abs(boxAfterCompletion.width - boxWhileStreaming.width)).toBeLessThan(48);
   });
 
   test('renders thinking block from streaming reasoning field', async ({ page }) => {
