@@ -96,7 +96,7 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
             <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8c0-3.31-2.69-6-6-6S6 4.69 6 8c0 1.33.47 2.55 1.5 3.5.76.76 1.23 1.52 1.41 2.5" />
           </svg>
           <span className={`${styles.title} ${isStreaming ? styles.titleStreaming : ''}`}>
-            {isStreaming ? 'Thinking' : 'Completed Deep Thinking'}
+            {isStreaming ? 'Thinking' : 'My Thoughts'}
           </span>
         </div>
         <div className={styles.headerRight}>
@@ -134,4 +134,3 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
 }
 
 export default ThinkingBlock
-

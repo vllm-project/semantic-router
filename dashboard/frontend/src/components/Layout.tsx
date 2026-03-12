@@ -21,9 +21,16 @@ interface LayoutProps {
   configSection?: string
   onConfigSectionChange?: (section: string) => void
   hideHeaderOnMobile?: boolean
+  hideAccountControl?: boolean
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectionChange, hideHeaderOnMobile }) => {
+const Layout: React.FC<LayoutProps> = ({
+  children,
+  configSection,
+  onConfigSectionChange,
+  hideHeaderOnMobile,
+  hideAccountControl = false,
+}) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<LayoutDropdownKey | null>(null)
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false)
@@ -269,16 +276,18 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
           </nav>
 
           <div className={styles.headerRight}>
-            <LayoutAccountControl
-              accountName={accountName}
-              accountEmail={accountEmail}
-              accountRole={user?.role}
-              accountPermissions={accountPermissions}
-              isOpen={isAccountDialogOpen}
-              onToggle={toggleAccountDialog}
-              onClose={closeMenus}
-              onLogout={handleLogout}
-            />
+            {hideAccountControl ? null : (
+              <LayoutAccountControl
+                accountName={accountName}
+                accountEmail={accountEmail}
+                accountRole={user?.role}
+                accountPermissions={accountPermissions}
+                isOpen={isAccountDialogOpen}
+                onToggle={toggleAccountDialog}
+                onClose={closeMenus}
+                onLogout={handleLogout}
+              />
+            )}
             <a
               href="https://github.com/vllm-project/semantic-router"
               target="_blank"

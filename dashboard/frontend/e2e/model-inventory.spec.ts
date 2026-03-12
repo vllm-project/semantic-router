@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { mockAuthenticatedAppShell } from './support/auth'
 
 const routerModels = [
@@ -178,36 +178,40 @@ const statusPayload = {
   },
 }
 
+async function mockRouterInventoryShell(page: Page) {
+  await mockAuthenticatedAppShell(page, {
+    settings: {
+      platform: 'amd',
+    },
+  })
+
+  await page.route('**/api/router/config/all', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        signals: {},
+        decisions: [],
+        providers: { models: [] },
+        plugins: {},
+      }),
+    })
+  })
+
+  await page.route('**/api/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(statusPayload),
+    })
+  })
+}
+
 test.describe('Router model inventory surfaces', () => {
   test('renders six preview cards and keeps embedding metadata clean in status view', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1200 })
 
-    await mockAuthenticatedAppShell(page, {
-      settings: {
-        platform: 'amd',
-      },
-    })
-
-    await page.route('**/api/router/config/all', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          signals: {},
-          decisions: [],
-          providers: { models: [] },
-          plugins: {},
-        }),
-      })
-    })
-
-    await page.route('**/api/status', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(statusPayload),
-      })
-    })
+    await mockRouterInventoryShell(page)
 
     await page.goto('/dashboard')
 
@@ -230,5 +234,35 @@ test.describe('Router model inventory surfaces', () => {
     await expect(fullCard).toContainText('models/mom-embedding-ultra')
     await expect(fullCard).not.toContainText('MmBertEmbeddingModel(')
     await expect(fullCard.getByAltText('AMD platform')).toBeVisible()
+  })
+
+  test('keeps status model inventory and services reachable inside the page scroll container', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 })
+
+    await mockRouterInventoryShell(page)
+    await page.goto('/status')
+
+    const statusPage = page.getByTestId('status-page')
+    const inventorySection = page.getByTestId('status-model-inventory-section')
+    const servicesSection = page.getByTestId('status-services-section')
+    const lastModelCard = page.getByTestId('router-model-full-pii_classifier')
+
+    const metrics = await statusPage.evaluate((node) => ({
+      overflowY: window.getComputedStyle(node).overflowY,
+      scrollHeight: node.scrollHeight,
+      clientHeight: node.clientHeight,
+    }))
+
+    expect(metrics.overflowY).toBe('auto')
+    expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight)
+
+    await expect(inventorySection).toBeVisible()
+    await lastModelCard.scrollIntoViewIfNeeded()
+    await expect(lastModelCard).toBeInViewport()
+
+    await servicesSection.scrollIntoViewIfNeeded()
+    await expect(servicesSection).toBeInViewport()
+    await expect(servicesSection).toContainText('Router')
+    await expect(servicesSection).toContainText('Dashboard')
   })
 })
