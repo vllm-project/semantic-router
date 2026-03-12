@@ -28,6 +28,12 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		ctx.RequestModel = requestModel
 		ctx.RequestQuery = requestQuery
 
+		if skip, reason := r.shouldSkipSemanticCache(ctx); skip {
+			logging.Infof("[Cache] Skipping semantic cache write for personalized looper request: reason=%s decision=%s",
+				reason, categoryName)
+			return nil, false
+		}
+
 		// Add pending request for cache write (if caching is enabled)
 		cacheEnabled := r.Config.SemanticCache.Enabled
 		if categoryName != "" {
@@ -47,6 +53,12 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
+
+	if skip, reason := r.shouldSkipSemanticCache(ctx); skip {
+		logging.Infof("[Cache] Skipping semantic cache lookup and write for personalized request: reason=%s decision=%s",
+			reason, categoryName)
+		return nil, false
+	}
 
 	// Check if caching is enabled for this decision
 	cacheEnabled := r.Config.SemanticCache.Enabled
@@ -158,4 +170,44 @@ func (r *OpenAIRouter) performCacheLookup(
 	ctx.TraceContext = spanCtx
 
 	return nil, false
+}
+
+func (r *OpenAIRouter) shouldSkipSemanticCache(ctx *RequestContext) (bool, string) {
+	if r == nil || r.Config == nil {
+		return false, ""
+	}
+
+	if ctx != nil && ctx.VSRSelectedDecision != nil {
+		ragConfig := ctx.VSRSelectedDecision.GetRAGConfig()
+		if ragConfig != nil && ragConfig.Enabled {
+			return true, "rag"
+		}
+
+		memoryConfig := ctx.VSRSelectedDecision.GetMemoryConfig()
+		if memoryConfig != nil {
+			if memoryConfig.Enabled {
+				return true, "memory"
+			}
+			return false, ""
+		}
+	}
+
+	if r.Config.Memory.Enabled {
+		return true, "memory"
+	}
+
+	return false, ""
+}
+
+func (r *OpenAIRouter) shouldSkipSemanticCacheWrite(ctx *RequestContext) (bool, string) {
+	if ctx != nil {
+		if ctx.RAGRetrievedContext != "" {
+			return true, "rag_context"
+		}
+		if ctx.MemoryContext != "" {
+			return true, "memory_context"
+		}
+	}
+
+	return r.shouldSkipSemanticCache(ctx)
 }

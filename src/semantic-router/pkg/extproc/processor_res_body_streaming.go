@@ -300,9 +300,16 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 	ctx *RequestContext,
 	reconstructedJSON []byte,
 ) error {
-	// Skip cache store if a decision was selected but doesn't have semantic-cache enabled
+	// First check if cache is enabled for this decision
 	if ctx.VSRSelectedDecisionName != "" && r.Config != nil &&
 		!r.Config.IsCacheEnabledForDecision(ctx.VSRSelectedDecisionName) {
+		return nil
+	}
+
+	// Skip cache store if request has personalized context (RAG/memory)
+	if skip, reason := r.shouldSkipSemanticCacheWrite(ctx); skip {
+		logging.Infof("Skipping streaming cache update for personalized response: request_id=%s decision=%s reason=%s",
+			ctx.RequestID, ctx.VSRSelectedDecisionName, reason)
 		return nil
 	}
 
