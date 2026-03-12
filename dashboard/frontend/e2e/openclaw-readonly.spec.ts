@@ -269,6 +269,12 @@ test.describe('Readonly OpenClaw', () => {
     await expect(transcript.locator('[data-room-message-role="user"] [data-room-sender-logo]')).toHaveCount(0);
     await expect(transcript.locator('img[alt*="avatar"]')).toHaveCount(0);
 
+    const leaderLogoWidth = await leaderLogo.evaluate(element => window.getComputedStyle(element).width);
+    const leaderLogoHeight = await leaderLogo.evaluate(element => window.getComputedStyle(element).height);
+
+    expect(leaderLogoWidth).toBe('16px');
+    expect(leaderLogoHeight).toBe('16px');
+
     const transcriptBox = await transcript.boundingBox();
     const userBox = await userMessage.boundingBox();
     const leaderBox = await leaderMessage.boundingBox();

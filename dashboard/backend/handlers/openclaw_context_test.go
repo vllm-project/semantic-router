@@ -79,3 +79,11 @@ func TestDefaultOpenClawModelContextWindow_UsesEnvOverride(t *testing.T) {
 		t.Fatalf("defaultOpenClawModelContextWindow() = %d, want 300000", got)
 	}
 }
+
+func TestDefaultOpenClawModelContextWindow_UsesFallback(t *testing.T) {
+	t.Setenv("OPENCLAW_MODEL_CONTEXT_WINDOW", "")
+
+	if got := defaultOpenClawModelContextWindow(); got != 262144 {
+		t.Fatalf("defaultOpenClawModelContextWindow() = %d, want 262144", got)
+	}
+}

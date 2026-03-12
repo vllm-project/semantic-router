@@ -279,7 +279,7 @@ func defaultOpenClawModelContextWindow() int {
 			return parsed
 		}
 	}
-	return 30000
+	return 262144
 }
 
 func normalizeOpenClawModelContextWindow(requested int) int {
