@@ -192,7 +192,6 @@ const ClawRoomChat = ({
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null)
   const [newRoomName, setNewRoomName] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [settingLeaderId, setSettingLeaderId] = useState<string | null>(null)
   const [mentionAutocomplete, setMentionAutocomplete] = useState<MentionAutocompleteState | null>(null)
 
   const endRef = useRef<HTMLDivElement>(null)
@@ -278,8 +277,6 @@ const ClawRoomChat = ({
     return entries
   }, [leaderWorker, teamWorkers])
 
-  const mentionHints = useMemo(() => mentionOptions.map(option => option.token), [mentionOptions])
-
   const leaderRoleText = leaderWorker?.agentRole || selectedTeam?.role || 'Team Leader'
   const memberResumeProfiles = useMemo(() => {
     const profiles = teamWorkers.map(worker => {
@@ -288,10 +285,8 @@ const ClawRoomChat = ({
         id: worker.name,
         isLeader,
         displayName: worker.agentName || worker.name,
-        alias: `@${worker.name}`,
         roleText: worker.agentRole || (isLeader ? leaderRoleText : 'Team Worker'),
         vibeText: worker.agentVibe || selectedTeam?.vibe || 'Execution-focused',
-        principlesText: worker.agentPrinciples?.trim() || '',
       }
     })
 
@@ -865,45 +860,6 @@ const ClawRoomChat = ({
     }
   }, [deletingRoomId, fetchRooms, managementDisabled, selectedRoomId, selectedTeamId])
 
-  const handleSetLeader = useCallback(async (workerName: string) => {
-    if (managementDisabled || !workerName) return
-    setSettingLeaderId(workerName)
-    try {
-      const resp = await fetch(`/api/openclaw/workers/${encodeURIComponent(workerName)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roleKind: 'leader' }),
-      })
-      if (!resp.ok) {
-        const body = await resp.text()
-        throw new Error(body || `Failed to update leader (${resp.status})`)
-      }
-      await fetchTeamsAndWorkers()
-      setError(null)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to set leader'
-      setError(message)
-    } finally {
-      setSettingLeaderId(null)
-    }
-  }, [fetchTeamsAndWorkers, managementDisabled])
-
-  const handleInsertMention = useCallback((token: string) => {
-    if (!token) return
-    setDraft(previous => {
-      const base = previous.trim().length === 0 ? '' : `${previous}${previous.endsWith(' ') ? '' : ' '}`
-      const next = `${base}${token} `
-      requestAnimationFrame(() => {
-        const element = inputRef.current
-        if (!element) return
-        element.focus()
-        element.setSelectionRange(next.length, next.length)
-      })
-      return next
-    })
-    setMentionAutocomplete(null)
-  }, [])
-
   const handleDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     const { value, selectionStart } = event.target
     setDraft(value)
@@ -1068,21 +1024,17 @@ const ClawRoomChat = ({
             deletingRoomId={deletingRoomId}
             managementDisabled={managementDisabled}
             memberProfiles={memberResumeProfiles}
-            mentionHints={mentionHints}
             newRoomName={newRoomName}
             onChangeNewRoomName={setNewRoomName}
             onCreateRoom={event => void handleCreateRoom(event)}
             onDeleteRoom={room => void handleDeleteRoom(room)}
-            onInsertMention={handleInsertMention}
             onSelectRoom={setSelectedRoomId}
             onSelectTeam={setSelectedTeamId}
-            onSetLeader={workerId => void handleSetLeader(workerId)}
             rooms={rooms}
             selectedRoom={selectedRoom}
             selectedRoomId={selectedRoomId}
             selectedTeam={selectedTeam}
             selectedTeamId={selectedTeamId}
-            settingLeaderId={settingLeaderId}
             teamBriefText={teamBriefText}
             teams={teams}
           />

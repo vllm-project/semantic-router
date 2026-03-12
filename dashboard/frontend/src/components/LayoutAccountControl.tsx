@@ -109,7 +109,7 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
 
       {isOpen && typeof document !== 'undefined'
         ? createPortal(
-        <div className={styles.overlay} onClick={onClose}>
+        <div className={styles.overlay} data-testid="layout-account-overlay" onClick={onClose}>
           <div
             id={dialogId}
             className={styles.dialog}

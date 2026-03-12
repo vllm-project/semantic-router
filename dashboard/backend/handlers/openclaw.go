@@ -273,6 +273,22 @@ func defaultOpenClawModelBaseURL() string {
 	return "http://127.0.0.1:8801/v1"
 }
 
+func defaultOpenClawModelContextWindow() int {
+	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_MODEL_CONTEXT_WINDOW")); candidate != "" {
+		if parsed, err := strconv.Atoi(candidate); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return 30000
+}
+
+func normalizeOpenClawModelContextWindow(requested int) int {
+	if requested > 0 {
+		return requested
+	}
+	return defaultOpenClawModelContextWindow()
+}
+
 func (h *OpenClawHandler) resolveOpenClawModelBaseURL() string {
 	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_MODEL_BASE_URL")); candidate != "" {
 		return candidate
@@ -570,18 +586,19 @@ type IdentityConfig struct {
 }
 
 type ContainerConfig struct {
-	ContainerName  string `json:"containerName"`
-	GatewayPort    int    `json:"gatewayPort"`
-	AuthToken      string `json:"authToken"`
-	ModelBaseURL   string `json:"modelBaseUrl"`
-	ModelAPIKey    string `json:"modelApiKey"`
-	ModelName      string `json:"modelName"`
-	MemoryBackend  string `json:"memoryBackend"`
-	MemoryBaseURL  string `json:"memoryBaseUrl"`
-	VectorStore    string `json:"vectorStore"`
-	BrowserEnabled bool   `json:"browserEnabled"`
-	BaseImage      string `json:"baseImage"`
-	NetworkMode    string `json:"networkMode"`
+	ContainerName      string `json:"containerName"`
+	GatewayPort        int    `json:"gatewayPort"`
+	AuthToken          string `json:"authToken"`
+	ModelBaseURL       string `json:"modelBaseUrl"`
+	ModelAPIKey        string `json:"modelApiKey"`
+	ModelName          string `json:"modelName"`
+	ModelContextWindow int    `json:"modelContextWindow,omitempty"`
+	MemoryBackend      string `json:"memoryBackend"`
+	MemoryBaseURL      string `json:"memoryBaseUrl"`
+	VectorStore        string `json:"vectorStore"`
+	BrowserEnabled     bool   `json:"browserEnabled"`
+	BaseImage          string `json:"baseImage"`
+	NetworkMode        string `json:"networkMode"`
 }
 
 type ProvisionRequest struct {

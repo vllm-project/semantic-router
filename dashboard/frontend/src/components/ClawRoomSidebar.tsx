@@ -17,10 +17,8 @@ interface RoomOption {
 
 interface MemberProfile {
   id: string
-  alias: string
   displayName: string
   isLeader: boolean
-  principlesText: string
   roleText: string
   vibeText: string
 }
@@ -30,21 +28,17 @@ interface ClawRoomSidebarProps {
   deletingRoomId: string | null
   managementDisabled: boolean
   memberProfiles: MemberProfile[]
-  mentionHints: string[]
   newRoomName: string
   onChangeNewRoomName: (value: string) => void
   onCreateRoom: (event: FormEvent<HTMLFormElement>) => void
   onDeleteRoom: (room: RoomOption) => void
-  onInsertMention: (alias: string) => void
   onSelectRoom: (roomId: string) => void
   onSelectTeam: (teamId: string) => void
-  onSetLeader: (workerId: string) => void
   rooms: RoomOption[]
   selectedRoom: RoomOption | null
   selectedRoomId: string
   selectedTeam: TeamOption | null
   selectedTeamId: string
-  settingLeaderId: string | null
   teamBriefText: string
   teams: TeamOption[]
 }
@@ -54,21 +48,17 @@ export default function ClawRoomSidebar({
   deletingRoomId,
   managementDisabled,
   memberProfiles,
-  mentionHints,
   newRoomName,
   onChangeNewRoomName,
   onCreateRoom,
   onDeleteRoom,
-  onInsertMention,
   onSelectRoom,
   onSelectTeam,
-  onSetLeader,
   rooms,
   selectedRoom,
   selectedRoomId,
   selectedTeam,
   selectedTeamId,
-  settingLeaderId,
   teamBriefText,
   teams,
 }: ClawRoomSidebarProps) {
@@ -197,26 +187,14 @@ export default function ClawRoomSidebar({
           </div>
         </div>
 
-        <div className={styles.sidebarSection}>
-          <div className={styles.teamGuide}>
-            Collaboration tip: start with <code>@leader</code> for delegation.
-          </div>
-          <div className={styles.mentionsHint}>
-            Mention hints: {mentionHints.join(' ')}
-          </div>
-        </div>
       </aside>
 
       <ClawRoomTeamDetailsModal
         isOpen={isTeamDetailsOpen}
-        managementDisabled={managementDisabled}
         memberProfiles={memberProfiles}
         onClose={() => setIsTeamDetailsOpen(false)}
-        onInsertMention={onInsertMention}
-        onSetLeader={onSetLeader}
         selectedRoom={selectedRoom}
         selectedTeam={selectedTeam}
-        settingLeaderId={settingLeaderId}
         teamBriefText={teamBriefText}
       />
     </>

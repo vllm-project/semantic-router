@@ -17,24 +17,18 @@ interface RoomOption {
 
 interface MemberProfile {
   id: string
-  alias: string
   displayName: string
   isLeader: boolean
-  principlesText: string
   roleText: string
   vibeText: string
 }
 
 interface ClawRoomTeamDetailsModalProps {
   isOpen: boolean
-  managementDisabled: boolean
   memberProfiles: MemberProfile[]
   onClose: () => void
-  onInsertMention: (alias: string) => void
-  onSetLeader: (workerId: string) => void
   selectedRoom: RoomOption | null
   selectedTeam: TeamOption | null
-  settingLeaderId: string | null
   teamBriefText: string
 }
 
@@ -42,20 +36,14 @@ const OPENCLAW_LOGO_SRC = '/openclaw.svg'
 
 export default function ClawRoomTeamDetailsModal({
   isOpen,
-  managementDisabled,
   memberProfiles,
   onClose,
-  onInsertMention,
-  onSetLeader,
   selectedRoom,
   selectedTeam,
-  settingLeaderId,
   teamBriefText,
 }: ClawRoomTeamDetailsModalProps) {
   const titleId = useId()
-  const memberSubtitle = `${memberProfiles.length} ${memberProfiles.length === 1 ? 'claw' : 'claws'}${
-    memberProfiles.some(profile => profile.isLeader) ? ' · leader first' : ' · no leader set'
-  }`
+  const memberSubtitle = `${memberProfiles.length} ${memberProfiles.length === 1 ? 'claw' : 'claws'}`
 
   useEffect(() => {
     if (!isOpen) {
@@ -161,19 +149,7 @@ export default function ClawRoomTeamDetailsModal({
                         {profile.isLeader ? 'LEADER' : 'WORKER'}
                       </span>
                     </div>
-                    <div className={styles.resumeAliasRow}>
-                      <button
-                        type="button"
-                        className={styles.quickMentionButton}
-                        onClick={() => {
-                          onInsertMention(profile.alias)
-                          onClose()
-                        }}
-                      >
-                        {profile.alias}
-                      </button>
-                    </div>
-                    <div className={`${styles.memberResumeFactGrid} ${styles.memberResumeFactGridCompact}`}>
+                    <div className={styles.memberResumeFactGrid}>
                       <div className={styles.memberResumeFact}>
                         <span className={styles.memberResumeFactLabel}>Role</span>
                         <span className={styles.memberResumeFactValue}>{profile.roleText}</span>
@@ -183,19 +159,6 @@ export default function ClawRoomTeamDetailsModal({
                         <span className={styles.memberResumeFactValue}>{profile.vibeText}</span>
                       </div>
                     </div>
-                    {profile.principlesText ? (
-                      <div className={styles.memberResumeNarrative}>{profile.principlesText}</div>
-                    ) : null}
-                    {!profile.isLeader ? (
-                      <button
-                        type="button"
-                        className={styles.memberPromoteButton}
-                        onClick={() => onSetLeader(profile.id)}
-                        disabled={managementDisabled || settingLeaderId === profile.id}
-                      >
-                        {settingLeaderId === profile.id ? 'Setting…' : 'Set as leader'}
-                      </button>
-                    ) : null}
                   </article>
                 ))}
               </div>

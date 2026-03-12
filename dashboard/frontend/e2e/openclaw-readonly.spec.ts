@@ -203,6 +203,8 @@ test.describe('Readonly OpenClaw', () => {
     await expect(sidebar.getByLabel('Team')).toHaveValue('team-alpha');
     const teamDetailsButton = page.getByTestId('claw-room-team-details-button');
     await expect(teamDetailsButton).toBeVisible();
+    await expect(sidebar).not.toContainText('Collaboration tip:');
+    await expect(sidebar).not.toContainText('Mention hints:');
     await expect(page.getByPlaceholder('New room name (optional)')).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Delete room', exact: true })).toBeDisabled();
 
@@ -213,7 +215,9 @@ test.describe('Readonly OpenClaw', () => {
     await expect(dialog).toContainText('Team Alpha');
     await expect(dialog).toContainText('Leader One');
     await expect(dialog).toContainText('Worker A');
-    await expect(dialog.getByRole('button', { name: 'Set as leader' })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Set as leader' })).toHaveCount(0);
+    await expect(dialog).not.toContainText('@leader-1');
+    await expect(dialog).not.toContainText('Coordinate the team');
 
     const dialogBox = await dialog.boundingBox();
     const viewport = page.viewportSize();
@@ -276,6 +280,42 @@ test.describe('Readonly OpenClaw', () => {
     expect(leaderBox!.x - transcriptBox!.x).toBeLessThan(transcriptBox!.width * 0.3);
     expect(userBox!.x).toBeGreaterThan(leaderBox!.x + 80);
     expect(userBox!.width).toBeLessThan(transcriptBox!.width * 0.8);
+  });
+
+  test('room view opens the lower-left account dialog over the full page', async ({ page }) => {
+    await mockReadonlyOpenClaw(page);
+
+    await page.goto('/playground');
+    await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
+
+    const accountButton = page.getByTestId('playground-account-control');
+    await expect(accountButton).toBeVisible();
+    await accountButton.click();
+
+    const overlay = page.getByTestId('layout-account-overlay');
+    const dialog = page.getByTestId('layout-account-dialog');
+
+    await expect(overlay).toBeVisible();
+    await expect(dialog).toBeVisible();
+
+    const overlayBox = await overlay.boundingBox();
+    const dialogBox = await dialog.boundingBox();
+    const viewport = page.viewportSize();
+
+    expect(overlayBox).not.toBeNull();
+    expect(dialogBox).not.toBeNull();
+    expect(viewport).not.toBeNull();
+
+    expect(Math.abs(overlayBox!.x)).toBeLessThan(2);
+    expect(Math.abs(overlayBox!.y)).toBeLessThan(2);
+    expect(Math.abs(overlayBox!.width - viewport!.width)).toBeLessThan(4);
+    expect(Math.abs(overlayBox!.height - viewport!.height)).toBeLessThan(4);
+
+    const dialogCenterX = dialogBox!.x + dialogBox!.width / 2;
+    const dialogCenterY = dialogBox!.y + dialogBox!.height / 2;
+
+    expect(Math.abs(dialogCenterX - viewport!.width / 2)).toBeLessThan(100);
+    expect(Math.abs(dialogCenterY - viewport!.height / 2)).toBeLessThan(120);
   });
 
   test('openclaw page stays browsable but disables management and embedded dashboard entry', async ({ page }) => {
