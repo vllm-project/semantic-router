@@ -77,7 +77,6 @@ const ChatComponent = ({
   const [teamRoomCreateToken, setTeamRoomCreateToken] = useState(0)
   const { isReadonly, isLoading: readonlyLoading } = useReadonly()
 
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const hasHydratedConversation = useRef(false)
@@ -126,14 +125,6 @@ const ChatComponent = ({
     ),
     [baseOtherToolDefinitions, clawManagementDisabled, clawToolDefinitions, enableClawMode]
   )
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, scrollToBottom])
 
   // When headers arrive, show HeaderReveal
   useEffect(() => {
@@ -1087,7 +1078,6 @@ const ChatComponent = ({
                 <ChatComponentMessages
                   expandedToolCards={expandedToolCards}
                   messages={messages}
-                  messagesEndRef={messagesEndRef}
                   onToggleToolCard={handleToggleToolCard}
                 />
 

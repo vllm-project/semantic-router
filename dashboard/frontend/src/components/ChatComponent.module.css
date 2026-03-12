@@ -8,7 +8,7 @@
   backdrop-filter: blur(40px) saturate(150%);
   -webkit-backdrop-filter: blur(40px) saturate(150%);
   overflow-x: hidden;
-  overflow-y: visible;
+  overflow-y: hidden;
 }
 
 .mainLayout {
@@ -26,6 +26,7 @@
   min-width: 0;
   width: 100%;
   max-height: none;
+  overflow: hidden;
 }
 
 .chatTopBar {
@@ -479,15 +480,18 @@ body.playground-fullscreen .container {
 }
 
 .messagesContainer {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   width: 100%;
   min-width: 0;
   overflow-x: hidden;
-  overflow-y: visible;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  scroll-behavior: smooth;
   padding: 1rem;
-  min-height: auto;
+  min-height: 0;
 }
 
 .messagesContainerEmpty {
@@ -553,16 +557,19 @@ body.playground-fullscreen .container {
 .messages {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 1rem;
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  padding-bottom: 0.25rem;
 }
 
 .message {
   display: flex;
   gap: 0.75rem;
-  max-width: 85%;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   animation: fadeIn 0.2s ease;
 }
@@ -582,10 +589,11 @@ body.playground-fullscreen .container {
 .message.user {
   align-self: flex-end;
   flex-direction: row-reverse;
+  justify-content: flex-end;
 }
 
 .message.assistant {
-  align-self: flex-start;
+  align-self: stretch;
 }
 
 .messageAvatar {
@@ -626,6 +634,16 @@ body.playground-fullscreen .container {
   min-width: 0;
   flex: 1;
   overflow: hidden;
+}
+
+.message.user .messageContent {
+  flex: 0 1 min(82%, 720px);
+  max-width: min(82%, 720px);
+}
+
+.message.assistant .messageContent {
+  max-width: min(100%, 980px);
+  overflow: visible;
 }
 
 .messageRole {
@@ -704,6 +722,8 @@ body.playground-fullscreen .container {
 /* For assistant messages with markdown, don't preserve whitespace */
 .message.assistant .messageText {
   white-space: normal;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .message.user .messageText {
@@ -1199,8 +1219,12 @@ body.playground-fullscreen .container {
   }
 
   .message {
-    max-width: 90%;
+    width: 100%;
     gap: 0.5rem;
+  }
+
+  .message.user .messageContent {
+    max-width: 88%;
   }
 
   .messageAvatar {
@@ -1316,7 +1340,11 @@ body.playground-fullscreen .container {
   }
 
   .message {
-    max-width: 95%;
+    width: 100%;
+  }
+
+  .message.user .messageContent {
+    max-width: 92%;
   }
 
   .messageText {
@@ -1440,8 +1468,8 @@ body.playground-fullscreen .container {
 .toolCallsContainer {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: 0.65rem;
+  margin-bottom: 0.9rem;
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -1449,18 +1477,23 @@ body.playground-fullscreen .container {
 
 /* Web Search Card */
 .webSearchCard {
-  background-color: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
+  background: linear-gradient(180deg, rgba(28, 32, 38, 0.94) 0%, rgba(18, 22, 28, 0.98) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.14);
   border-left: 3px solid #3b82f6;
   border-radius: var(--radius-md);
   width: 100%;
   min-width: 0;
   overflow: hidden;
   max-width: 100%;
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .mcpToolCard {
-  border-left-color: #ef4444;
+  border-left-color: #f97316;
+  background: linear-gradient(180deg, rgba(42, 23, 18, 0.92) 0%, rgba(20, 14, 12, 0.98) 100%);
+  border-color: rgba(251, 146, 60, 0.18);
 }
 
 .webSearchHeader {
@@ -1475,7 +1508,7 @@ body.playground-fullscreen .container {
 }
 
 .webSearchHeader:hover {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: rgba(255, 255, 255, 0.035);
 }
 
 .webSearchIcon {
@@ -1491,8 +1524,8 @@ body.playground-fullscreen .container {
 }
 
 .mcpToolIcon {
-  background-color: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background-color: rgba(249, 115, 22, 0.18);
+  color: #fdba74;
 }
 
 .webSearchIcon svg {
@@ -1523,17 +1556,37 @@ body.playground-fullscreen .container {
 .webSearchInfo {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: 0.24rem;
   flex: 1;
+  min-width: 0;
+}
+
+.toolCardHeadingRow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   min-width: 0;
 }
 
 .webSearchTitle {
   font-size: 0.8125rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-text);
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.toolCardBrand {
+  flex-shrink: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fdba74;
+  background: rgba(249, 115, 22, 0.14);
+  border: 1px solid rgba(251, 146, 60, 0.2);
+  padding: 0.15rem 0.42rem;
+  border-radius: 9999px;
 }
 
 .webSearchQuery {
@@ -1552,6 +1605,43 @@ body.playground-fullscreen .container {
   gap: 0.5rem;
   min-width: 0;
   flex-shrink: 0;
+}
+
+.toolStatusPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.6rem;
+  padding: 0.22rem 0.62rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+}
+
+.toolStatusPending {
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.toolStatusRunning {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(96, 165, 250, 0.22);
+}
+
+.toolStatusCompleted {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(74, 222, 128, 0.22);
+}
+
+.toolStatusFailed {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(248, 113, 113, 0.22);
 }
 
 .webSearchCount {
@@ -1590,6 +1680,13 @@ body.playground-fullscreen .container {
   animation: shimmer 1.5s infinite;
 }
 
+.mcpToolLoadingBar {
+  background: linear-gradient(90deg,
+      transparent 0%,
+      #fb923c 50%,
+      transparent 100%);
+}
+
 @keyframes shimmer {
   0% {
     background-position: 200% 0;
@@ -1608,7 +1705,7 @@ body.playground-fullscreen .container {
 }
 
 .clawToolHighlights {
-  border-top: 1px solid rgba(239, 68, 68, 0.2);
+  border-top: 1px solid rgba(249, 115, 22, 0.18);
   padding: 0.7rem 1rem 0.8rem;
   display: flex;
   flex-direction: column;
@@ -1624,16 +1721,16 @@ body.playground-fullscreen .container {
   width: 100%;
   min-width: 0;
   padding: 0.55rem 0.6rem;
-  border: 1px solid rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(249, 115, 22, 0.16);
   border-radius: 10px;
-  background: linear-gradient(180deg, rgba(239, 68, 68, 0.06) 0%, rgba(239, 68, 68, 0.02) 100%);
+  background: linear-gradient(180deg, rgba(249, 115, 22, 0.08) 0%, rgba(249, 115, 22, 0.03) 100%);
 }
 
 .clawToolHighlightHeading {
   font-size: 0.625rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(248, 113, 113, 0.95);
+  color: #fdba74;
   font-weight: 700;
 }
 
@@ -1655,8 +1752,8 @@ body.playground-fullscreen .container {
   max-width: 100%;
   padding: 0.3rem 0.45rem;
   border-radius: 8px;
-  background: rgba(239, 68, 68, 0.06);
-  border: 1px solid rgba(248, 113, 113, 0.16);
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(251, 146, 60, 0.14);
 }
 
 .clawToolHighlightKey {
@@ -1668,7 +1765,7 @@ body.playground-fullscreen .container {
 
 .clawToolHighlightValue {
   font-size: 0.75rem;
-  color: #ef4444;
+  color: #fdba74;
   font-weight: 600;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -1817,6 +1914,11 @@ body.playground-fullscreen .container {
 
   .webSearchQuery {
     font-size: 0.6875rem;
+  }
+
+  .toolCardBrand,
+  .toolStatusPill {
+    font-size: 0.625rem;
   }
 
   .clawToolHighlights {

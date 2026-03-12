@@ -121,7 +121,7 @@ func TestProcessRoomUserMessage_StripsLeadingMentionsFromPrompt(t *testing.T) {
 		if len(firstPayload.Messages) != 2 {
 			t.Fatalf("expected only system + latest user message for %s, got %+v", workerID, firstPayload.Messages)
 		}
-			if firstPayload.Messages[len(firstPayload.Messages)-1].Content != "[You] introduce yourselves." {
+		if firstPayload.Messages[len(firstPayload.Messages)-1].Content != "[You] introduce yourselves." {
 			t.Fatalf("expected stripped latest message for %s, got %+v", workerID, firstPayload.Messages)
 		}
 		assertStructuredRoomMessages(t, firstPayload.Messages)

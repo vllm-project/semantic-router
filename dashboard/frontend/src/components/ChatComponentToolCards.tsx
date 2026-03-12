@@ -10,6 +10,18 @@ import {
   type SearchResult,
   truncateHighlight,
 } from './ChatComponentTypes'
+import {
+  getToolDisplayName,
+  getToolStatusLabel,
+  getToolSummary,
+} from './chatToolCardPresentation'
+
+const TOOL_STATUS_CLASS_NAMES: Record<ToolCall['status'], string> = {
+  pending: styles.toolStatusPending,
+  running: styles.toolStatusRunning,
+  completed: styles.toolStatusCompleted,
+  failed: styles.toolStatusFailed,
+}
 
 const WebSearchCard = ({
   toolCall,
@@ -262,7 +274,7 @@ export const ToolCard = ({
   const toolName = toolCall.function.name
   const parsedMCPTool = parseMCPToolName(toolName)
   const clawToolName = parsedMCPTool?.toolName || ''
-  const displayToolName = clawToolName || toolName
+  const displayToolName = getToolDisplayName(clawToolName || toolName)
   const isClawMCPToolCall = clawToolName.startsWith('claw_')
   const isClawCreateToolCall = clawToolName === 'claw_create_team' || clawToolName === 'claw_create_worker'
   const rawArgs = toolCall.function.arguments || ''
@@ -284,6 +296,8 @@ export const ToolCard = ({
     [clawToolName, isClawCreateToolCall, parsedArgs, rawArgs, toolResult?.content]
   )
   const showResultHighlights = isClawCreateToolCall && (toolCall.status === 'completed' || toolCall.status === 'failed')
+  const statusLabel = getToolStatusLabel(toolCall.status)
+  const summary = getToolSummary(clawToolName || toolName, parsedArgs, isClawMCPToolCall)
 
   if (toolName === 'search_web') {
     return (
@@ -320,11 +334,33 @@ export const ToolCard = ({
           )}
         </div>
         <div className={styles.webSearchInfo}>
-          <span className={styles.webSearchTitle}>{displayToolName}</span>
-          <span className={styles.webSearchQuery}>{toolCall.status}</span>
+          <div className={styles.toolCardHeadingRow}>
+            <span className={styles.webSearchTitle}>{displayToolName}</span>
+            {isClawMCPToolCall ? <span className={styles.toolCardBrand}>HireClaw</span> : null}
+          </div>
+          <span className={styles.webSearchQuery}>{summary}</span>
+        </div>
+        <div className={styles.webSearchStatus}>
+          <span className={`${styles.toolStatusPill} ${TOOL_STATUS_CLASS_NAMES[toolCall.status]}`}>
+            {statusLabel}
+          </span>
+          <svg
+            className={`${styles.webSearchChevron} ${isExpanded ? styles.expanded : ''}`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
         </div>
       </div>
-      {isClawCreateToolCall && (
+      {toolCall.status === 'running' || toolCall.status === 'pending' ? (
+        <div className={styles.webSearchLoading}>
+          <div className={`${styles.webSearchLoadingBar} ${isClawMCPToolCall ? styles.mcpToolLoadingBar : ''}`} />
+        </div>
+      ) : null}
+      {isExpanded && isClawCreateToolCall ? (
         <div className={styles.clawToolHighlights}>
           {requestHighlights.length > 0 && (
             <div className={styles.clawToolHighlightSection}>
@@ -361,7 +397,7 @@ export const ToolCard = ({
             </div>
           )}
         </div>
-      )}
+      ) : null}
       {isExpanded && toolCall.status === 'failed' && toolResult?.error && (
         <div className={styles.webSearchResults}>
           <div className={styles.sourceDetails}>

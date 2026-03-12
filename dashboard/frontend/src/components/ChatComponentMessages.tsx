@@ -1,5 +1,3 @@
-import type { Ref } from 'react'
-
 import styles from './ChatComponent.module.css'
 import HeaderDisplay from './HeaderDisplay'
 import ThinkingBlock from './ThinkingBlock'
@@ -10,12 +8,12 @@ import { MessageActionBar, TypingGreeting } from './ChatComponentControls'
 import { ContentWithCitations } from './ChatComponentCitations'
 import { ToolCard } from './ChatComponentToolCards'
 import { GREETING_LINES, type Message } from './ChatComponentTypes'
+import { useChatTranscriptAutoScroll } from './useChatTranscriptAutoScroll'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
 
 interface ChatComponentMessagesProps {
   expandedToolCards: Set<string>
   messages: Message[]
-  messagesEndRef: Ref<HTMLDivElement>
   onToggleToolCard: (toolCallId: string) => void
 }
 
@@ -252,9 +250,10 @@ function MessageCard({
 export default function ChatComponentMessages({
   expandedToolCards,
   messages,
-  messagesEndRef,
   onToggleToolCard,
 }: ChatComponentMessagesProps) {
+  const { containerRef, contentRef } = useChatTranscriptAutoScroll(messages)
+
   if (messages.length === 0) {
     return (
       <div className={`${styles.messagesContainer} ${styles.messagesContainerEmpty}`}>
@@ -266,8 +265,8 @@ export default function ChatComponentMessages({
   }
 
   return (
-    <div className={styles.messagesContainer}>
-      <div className={styles.messages}>
+    <div className={styles.messagesContainer} ref={containerRef} data-testid="chat-transcript">
+      <div className={styles.messages} ref={contentRef}>
         {messages.map((message, index) => {
           const prevUserQuery = messages[index - 1]?.role === 'user' ? messages[index - 1].content : undefined
 
@@ -281,7 +280,6 @@ export default function ChatComponentMessages({
             />
           )
         })}
-        <div ref={messagesEndRef} />
       </div>
     </div>
   )
