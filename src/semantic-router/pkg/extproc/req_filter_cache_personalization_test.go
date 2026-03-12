@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func TestHandleCachingSkipsCacheForRAGEnabledDecision(t *testing.T) {
@@ -38,12 +39,13 @@ func TestHandleCachingSkipsCacheForRAGEnabledDecision(t *testing.T) {
 	assert.False(t, mockCache.addPendingCalled)
 }
 
-func TestHandleCachingSkipsCacheForGlobalMemoryEnabled(t *testing.T) {
+func TestHandleCachingSkipsCacheForGlobalMemoryEnabledWithUserID(t *testing.T) {
 	mockCache := &mockPersonalizationCache{}
 	router, decision := newCachePersonalizationTestRouter(mockCache, true)
 	ctx := &RequestContext{
+		Headers:             map[string]string{headers.AuthzUserID: "user-123"},
 		RequestID:           "req-memory",
-		OriginalRequestBody: []byte(`{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`),
+		OriginalRequestBody: []byte(`{"model":"test-model","messages":[{"role":"user","content":"what is my budget?"}]}`),
 		VSRSelectedDecision: decision,
 	}
 
@@ -53,6 +55,23 @@ func TestHandleCachingSkipsCacheForGlobalMemoryEnabled(t *testing.T) {
 	assert.False(t, shouldReturn)
 	assert.False(t, mockCache.findSimilarCalled)
 	assert.False(t, mockCache.addPendingCalled)
+}
+
+func TestHandleCachingDoesNotSkipCacheForGlobalMemoryWithoutUserID(t *testing.T) {
+	mockCache := &mockPersonalizationCache{}
+	router, decision := newCachePersonalizationTestRouter(mockCache, true)
+	ctx := &RequestContext{
+		RequestID:           "req-memory-anon",
+		OriginalRequestBody: []byte(`{"model":"test-model","messages":[{"role":"user","content":"what is my budget?"}]}`),
+		VSRSelectedDecision: decision,
+	}
+
+	response, shouldReturn := router.handleCaching(ctx, decision.Name)
+
+	assert.Nil(t, response)
+	assert.False(t, shouldReturn)
+	assert.True(t, mockCache.findSimilarCalled)
+	assert.True(t, mockCache.addPendingCalled)
 }
 
 func TestUpdateResponseCacheSkipsWhenMemoryContextPresent(t *testing.T) {
@@ -73,6 +92,20 @@ func TestUpdateResponseCacheUpdatesWhenNotPersonalized(t *testing.T) {
 	router := &OpenAIRouter{Cache: mockCache}
 	ctx := &RequestContext{
 		RequestID: "req-normal",
+	}
+
+	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
+
+	assert.True(t, mockCache.updateCalled)
+}
+
+func TestUpdateResponseCacheUpdatesWhenGlobalMemoryHasNoUserID(t *testing.T) {
+	mockCache := &mockPersonalizationCache{}
+	router, decision := newCachePersonalizationTestRouter(mockCache, true)
+	ctx := &RequestContext{
+		RequestID:           "req-memory-no-user",
+		RequestQuery:        "what is my budget?",
+		VSRSelectedDecision: decision,
 	}
 
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
