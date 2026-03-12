@@ -266,8 +266,8 @@ func (uc *UnifiedClassifier) ClassifyBatch(texts []string) (*UnifiedBatchResults
 	// Choose implementation based on model type
 	var results *UnifiedBatchResults
 	if useLoRA {
-		if err := uc.ensureLoRAInitialized(); err != nil {
-			return nil, fmt.Errorf("failed to initialize loRA bindings: %w", err)
+		if initErr := uc.ensureLoRAInitialized(); initErr != nil {
+			return nil, fmt.Errorf("failed to initialize loRA bindings: %w", initErr)
 		}
 		results, err = uc.classifyBatchWithLoRA(texts)
 	} else {

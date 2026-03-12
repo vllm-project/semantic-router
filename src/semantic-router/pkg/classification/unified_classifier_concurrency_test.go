@@ -15,7 +15,10 @@ func TestUnifiedClassifier_ClassifyBatchDoesNotSerializeLegacyCalls(t *testing.T
 	}
 
 	release := make(chan struct{})
-	defer close(release)
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() {
+		close(release)
+	})
 	entered := make(chan struct{}, 2)
 	var current int32
 	var maxConcurrent int32
@@ -41,6 +44,9 @@ func TestUnifiedClassifier_ClassifyBatchDoesNotSerializeLegacyCalls(t *testing.T
 	}
 
 	waitForConcurrentEntries(t, entered, 2)
+	releaseOnce.Do(func() {
+		close(release)
+	})
 	wg.Wait()
 	close(errCh)
 
