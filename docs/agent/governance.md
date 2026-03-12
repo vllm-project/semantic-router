@@ -15,8 +15,8 @@ This document defines how the repository's agent rules are layered and maintaine
   - owns matching, validation, gating, and CI behavior
 - nearest local `AGENTS.md`
   - module-boundary supplements for hotspots or special subtrees
-- `CONTRIBUTING.md` and the PR template
-  - contributor-facing wrappers around the shared harness
+- `CONTRIBUTING.md`, the PR template, issue templates, and `.prowlabels.yaml`
+  - contributor-facing wrappers and label taxonomy around the shared harness
 
 ## Source of Truth Policy
 

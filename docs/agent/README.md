@@ -77,3 +77,5 @@ This directory is the human-readable system of record for the repository's agent
   - PR title classification, required change summary and validation fields, and the review checklist
 - [../../.github/ISSUE_TEMPLATE/001_feature_request.yaml](../../.github/ISSUE_TEMPLATE/001_feature_request.yaml)
 - [../../.github/ISSUE_TEMPLATE/002_bug_report.yaml](../../.github/ISSUE_TEMPLATE/002_bug_report.yaml)
+- [../../.prowlabels.yaml](../../.prowlabels.yaml)
+  - issue and triage label taxonomy used for maintainer-managed issue intake

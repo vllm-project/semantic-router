@@ -173,13 +173,14 @@ surfaces:
     task_rules:
       - agent_exec
   contributor_interface:
-    description: Contributor-facing wrappers around the harness such as README, contributing guidance, and PR or issue intake templates.
+    description: Contributor-facing wrappers around the harness such as README, contributing guidance, PR or issue intake templates, and maintainer label taxonomy.
     paths:
       - README.md
       - CONTRIBUTING.md
       - .github/copilot-instructions.md
       - .github/PULL_REQUEST_TEMPLATE.md
       - .github/ISSUE_TEMPLATE/**
+      - .prowlabels.yaml
     task_rules:
       - repo-docs
       - agent_text
@@ -242,6 +243,7 @@ skills:
         - .github/copilot-instructions.md
         - .github/PULL_REQUEST_TEMPLATE.md
         - .github/ISSUE_TEMPLATE/**
+        - .prowlabels.yaml
         - .github/workflows/ci-changes.yml
         - .github/workflows/integration-test-k8s.yml
         - .github/workflows/integration-test-vllm-sr-cli.yml
@@ -853,3 +855,8 @@ skills:
       description: Final validation checklist and reporting shape before closing a task.
       acceptance_criteria:
         - Final reports use the canonical completion sections.
+    - name: maintainer-issue-pr-management
+      path: tools/agent/skills/maintainer-issue-pr-management/SKILL.md
+      description: Maintainer workflow for creating, updating, or deleting GitHub issues and PR metadata using repo labels, templates, and validation context.
+      acceptance_criteria:
+        - Issue or PR management requests use the canonical templates, label taxonomy, and repo validation context instead of ad hoc summaries.
