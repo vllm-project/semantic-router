@@ -4,6 +4,7 @@
   flex: 1;
   height: 100%;
   min-height: 0;
+  --chat-rail-width: min(100%, 860px);
   background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(40px) saturate(150%);
   -webkit-backdrop-filter: blur(40px) saturate(150%);
@@ -483,9 +484,11 @@ body.playground-fullscreen .container {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  width: 100%;
+  width: var(--chat-rail-width);
+  max-width: var(--chat-rail-width);
+  margin: 0 auto;
   min-width: 0;
-  padding: 1rem;
+  padding: 2.2rem 1.2rem 1rem;
   min-height: 0;
   overflow: visible;
 }
@@ -510,6 +513,7 @@ body.playground-fullscreen .container {
   width: 100%;
   min-width: 0;
   min-height: 100%;
+  align-items: stretch;
 }
 
 .messagesContainerEmpty {
@@ -585,7 +589,7 @@ body.playground-fullscreen .container {
 
 .message {
   display: flex;
-  gap: 0.75rem;
+  gap: 0;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -648,26 +652,24 @@ body.playground-fullscreen .container {
 .messageContent {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
   min-width: 0;
   flex: 1;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .message.user .messageContent {
   flex: 0 1 auto;
-  max-width: min(82%, 720px);
+  max-width: min(74%, 560px);
 }
 
 .message.assistant .messageContent {
-  max-width: min(100%, 980px);
+  max-width: 100%;
   overflow: visible;
 }
 
 .messageRole {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--color-text-secondary);
+  display: none;
 }
 
 /* Wrapper for action bar + feedback buttons */
@@ -716,25 +718,24 @@ body.playground-fullscreen .container {
   height: 16px;
 }
 
-.message.user .messageRole {
-  text-align: right;
-  min-width: 2.2rem;
-}
-
 .messageText {
-  padding: 0.875rem 1rem;
-  border-radius: var(--radius-lg);
+  padding: 0;
+  border-radius: 0;
   font-size: var(--text-sm);
-  line-height: 1.6;
+  line-height: 1.75;
   word-break: break-word;
   overflow-wrap: break-word;
-  overflow-x: auto;
+  overflow: visible;
   max-width: 100%;
 }
 
 /* For user messages, preserve whitespace */
 .message.user .messageText {
   white-space: pre-wrap;
+  padding: 0.78rem 1rem;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.96);
 }
 
 /* For assistant messages with markdown, don't preserve whitespace */
@@ -742,19 +743,9 @@ body.playground-fullscreen .container {
   white-space: normal;
   width: 100%;
   box-sizing: border-box;
-}
-
-.message.user .messageText {
-  background-color: var(--color-primary);
-  color: #000;
-  border-bottom-right-radius: var(--radius-sm);
-}
-
-.message.assistant .messageText {
-  background-color: var(--color-bg-tertiary);
+  background-color: transparent;
   color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-bottom-left-radius: var(--radius-sm);
+  border: none;
 }
 
 .cursor {
@@ -781,8 +772,9 @@ body.playground-fullscreen .container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0.68rem 0.95rem 0.9rem;
-  background: transparent;
+  width: 100%;
+  padding: 1.35rem 1rem 1rem;
+  background: linear-gradient(180deg, rgba(7, 8, 10, 0) 0%, rgba(7, 8, 10, 0.72) 38%, rgba(7, 8, 10, 0.94) 100%);
   flex-shrink: 0;
   margin-top: auto;
   position: sticky;
@@ -794,12 +786,12 @@ body.playground-fullscreen .container {
 .inputWrapper {
   display: flex;
   flex-direction: column;
-  width: 100%;
-  max-width: 920px;
+  width: var(--chat-rail-width);
+  max-width: var(--chat-rail-width);
   margin: 0 auto;
-  background: rgba(22, 25, 28, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-2xl);
+  background: rgba(42, 43, 47, 0.88);
+  border: none;
+  border-radius: 28px;
   overflow: hidden;
   transition: all var(--transition-base);
   position: relative;
@@ -807,29 +799,25 @@ body.playground-fullscreen .container {
   backdrop-filter: blur(14px) saturate(118%);
   -webkit-backdrop-filter: blur(14px) saturate(118%);
   box-shadow:
-    0 16px 32px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 10px 30px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .inputWrapper:focus-within {
-  border-color: var(--color-primary);
   box-shadow:
-    0 0 0 1px rgba(118, 185, 1, 0.46),
-    0 16px 34px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 14px 34px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .inputWrapper.hasContent {
-  border-color: var(--color-primary);
   box-shadow:
-    0 0 0 1px rgba(118, 185, 1, 0.46),
-    0 16px 34px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 14px 34px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .input {
   width: 100%;
-  padding: 0.875rem 1rem 0.5rem 1rem;
+  padding: 1rem 1rem 0.42rem 1rem;
   border: none;
   background: transparent;
   color: var(--color-text);
@@ -860,7 +848,7 @@ body.playground-fullscreen .container {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.25rem 0.5rem 0.5rem 0.5rem;
+  padding: 0.2rem 0.55rem 0.6rem 0.55rem;
 }
 
 .inputActions {
@@ -1228,7 +1216,7 @@ body.playground-fullscreen .container {
   }
 
   .messagesContainer {
-    padding: 0.75rem;
+    padding: 1.4rem 0.9rem 0.8rem;
   }
 
   .messagesContainerEmpty {
@@ -1242,21 +1230,10 @@ body.playground-fullscreen .container {
   }
 
   .message.user .messageContent {
-    max-width: 88%;
-  }
-
-  .messageAvatar {
-    width: 24px;
-    height: 24px;
-    font-size: 0.75rem;
-  }
-
-  .messageRole {
-    font-size: 0.6875rem;
+    max-width: 82%;
   }
 
   .messageText {
-    padding: 0.75rem 0.875rem;
     font-size: 0.8125rem;
     line-height: 1.5;
   }
@@ -1362,11 +1339,10 @@ body.playground-fullscreen .container {
   }
 
   .message.user .messageContent {
-    max-width: 92%;
+    max-width: 88%;
   }
 
   .messageText {
-    padding: 0.625rem 0.75rem;
     font-size: 0.75rem;
   }
 
@@ -1412,8 +1388,9 @@ body.playground-fullscreen .container {
   flex-direction: column;
   gap: 0.5rem;
   align-items: center;
-  padding: 0.68rem 0.95rem 0.9rem;
-  background-color: transparent;
+  width: 100%;
+  padding: 1.35rem 1rem 1rem;
+  background: linear-gradient(180deg, rgba(7, 8, 10, 0) 0%, rgba(7, 8, 10, 0.72) 38%, rgba(7, 8, 10, 0.94) 100%);
   border-top: none;
   flex-shrink: 0;
   margin-top: auto;
