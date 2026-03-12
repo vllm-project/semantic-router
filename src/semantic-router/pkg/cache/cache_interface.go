@@ -21,8 +21,8 @@ type CacheEntry struct {
 	ExpiresAt    time.Time // Calculated expiration time based on TTL
 }
 
-// CacheBackend defines the interface for semantic cache implementations
-type CacheBackend interface {
+// CacheConnection exposes backend lifecycle and health operations.
+type CacheConnection interface {
 	// IsEnabled returns whether caching is currently active
 	IsEnabled() bool
 
@@ -30,6 +30,16 @@ type CacheBackend interface {
 	// Returns nil if the connection is healthy, error otherwise
 	// For local caches (in-memory), this may be a no-op
 	CheckConnection() error
+
+	// Close releases all resources held by the cache backend
+	Close() error
+
+	// GetStats provides cache performance and usage metrics
+	GetStats() CacheStats
+}
+
+// CacheMutation exposes cache write operations.
+type CacheMutation interface {
 
 	// AddPendingRequest stores a request awaiting its response
 	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
@@ -39,6 +49,10 @@ type CacheBackend interface {
 
 	// AddEntry stores a complete request-response pair in the cache
 	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
+}
+
+// CacheLookup exposes semantic similarity lookup operations.
+type CacheLookup interface {
 
 	// FindSimilar searches for semantically similar cached requests
 	// Returns the cached response, match status, and any error
@@ -48,12 +62,13 @@ type CacheBackend interface {
 	// This allows category-specific similarity thresholds
 	// Returns the cached response, match status, and any error
 	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
+}
 
-	// Close releases all resources held by the cache backend
-	Close() error
-
-	// GetStats provides cache performance and usage metrics
-	GetStats() CacheStats
+// CacheBackend defines the interface for semantic cache implementations
+type CacheBackend interface {
+	CacheConnection
+	CacheMutation
+	CacheLookup
 }
 
 // CacheStats holds performance metrics and usage statistics for cache operations

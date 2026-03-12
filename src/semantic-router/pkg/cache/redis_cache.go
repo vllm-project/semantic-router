@@ -25,6 +25,7 @@ import (
 type RedisCache struct {
 	client              *redis.Client
 	config              *config.RedisConfig
+	backendLabel        string
 	indexName           string
 	similarityThreshold float32
 	ttlSeconds          int
@@ -35,7 +36,6 @@ type RedisCache struct {
 	mu                  sync.RWMutex
 	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
 }
-
 // RedisCacheOptions contains configuration parameters for Redis cache initialization
 type RedisCacheOptions struct {
 	SimilarityThreshold float32
@@ -44,8 +44,8 @@ type RedisCacheOptions struct {
 	Config              *config.RedisConfig
 	ConfigPath          string
 	EmbeddingModel      string
+	BackendLabel        string
 }
-
 // NewRedisCache initializes a new Redis-backed semantic cache instance
 func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	if !options.Enabled {
@@ -70,7 +70,6 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	}
 	logging.Debugf("RedisCache: config loaded - host=%s:%d, index=%s, dimension=auto-detect",
 		redisConfig.Connection.Host, redisConfig.Connection.Port, redisConfig.Index.Name)
-
 	// Establish connection to Redis server
 	logging.Debugf("RedisCache: connecting to Redis at %s:%d", redisConfig.Connection.Host, redisConfig.Connection.Port)
 
@@ -86,10 +85,12 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	if embeddingModel == "" {
 		embeddingModel = "bert"
 	}
-
+	backendLabel := options.BackendLabel
+	if backendLabel == "" { backendLabel = string(RedisCacheType) }
 	cache := &RedisCache{
 		client:              redisClient,
 		config:              redisConfig,
+		backendLabel:        backendLabel,
 		indexName:           redisConfig.Index.Name,
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
@@ -186,7 +187,7 @@ func (c *RedisCache) initializeIndex() error {
 		indexExists = false
 		logging.Debugf("RedisCache: dropped existing index '%s' for development", c.indexName)
 		logging.LogEvent("index_dropped", map[string]interface{}{
-			"backend": "redis",
+			"backend": c.backendLabel,
 			"index":   c.indexName,
 			"reason":  "development_mode",
 		})
@@ -205,7 +206,7 @@ func (c *RedisCache) initializeIndex() error {
 		logging.Debugf("RedisCache: created new index '%s' with dimension %d",
 			c.indexName, c.config.Index.VectorField.Dimension)
 		logging.LogEvent("index_created", map[string]interface{}{
-			"backend":   "redis",
+			"backend":   c.backendLabel,
 			"index":     c.indexName,
 			"dimension": c.config.Index.VectorField.Dimension,
 		})
@@ -398,9 +399,9 @@ func (c *RedisCache) AddPendingRequest(requestID string, model string, query str
 	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
 
 	if err != nil {
-		metrics.RecordCacheOperation("redis", "add_pending", "error", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "add_pending", "error", time.Since(start).Seconds())
 	} else {
-		metrics.RecordCacheOperation("redis", "add_pending", "success", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "add_pending", "success", time.Since(start).Seconds())
 	}
 
 	return err
@@ -440,13 +441,13 @@ func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte, t
 	).Result()
 	if err != nil {
 		logging.Infof("RedisCache.UpdateWithResponse: search failed with query '%s': %v", query, err)
-		metrics.RecordCacheOperation("redis", "update_response", "error", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to search pending entry: %w", err)
 	}
 
 	if results.Total == 0 {
 		logging.Infof("RedisCache.UpdateWithResponse: no pending entry found with request_id=%s", requestID)
-		metrics.RecordCacheOperation("redis", "update_response", "error", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("no pending entry found")
 	}
 
@@ -465,12 +466,12 @@ func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte, t
 	// Update the document with response body and TTL
 	err = c.addEntry(docID, requestID, model, queryStr, []byte(requestBodyStr), responseBody, ttlSeconds)
 	if err != nil {
-		metrics.RecordCacheOperation("redis", "update_response", "error", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to update entry: %w", err)
 	}
 
 	logging.Debugf("RedisCache.UpdateWithResponse: successfully updated entry with response")
-	metrics.RecordCacheOperation("redis", "update_response", "success", time.Since(start).Seconds())
+	metrics.RecordCacheOperation(c.backendLabel, "update_response", "success", time.Since(start).Seconds())
 
 	return nil
 }
@@ -492,9 +493,9 @@ func (c *RedisCache) AddEntry(requestID string, model string, query string, requ
 	err := c.addEntry("", requestID, model, query, requestBody, responseBody, ttlSeconds)
 
 	if err != nil {
-		metrics.RecordCacheOperation("redis", "add_entry", "error", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "add_entry", "error", time.Since(start).Seconds())
 	} else {
-		metrics.RecordCacheOperation("redis", "add_entry", "success", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "add_entry", "success", time.Since(start).Seconds())
 	}
 
 	return err
@@ -577,7 +578,7 @@ func (c *RedisCache) addEntry(id string, requestID string, model string, query s
 	logging.Debugf("RedisCache.addEntry: successfully added entry to Redis (key: %s, embedding_dim: %d, request_size: %d, response_size: %d, ttl=%d)",
 		docKey, len(embedding), len(requestBody), len(responseBody), effectiveTTL)
 	logging.LogEvent("cache_entry_added", map[string]interface{}{
-		"backend":             "redis",
+		"backend":             c.backendLabel,
 		"index":               c.indexName,
 		"request_id":          requestID,
 		"query":               query,
@@ -608,7 +609,7 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	// Generate semantic embedding for similarity comparison
 	queryEmbedding, err := c.getEmbedding(query)
 	if err != nil {
-		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
@@ -639,7 +640,7 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	if err != nil {
 		logging.Infof("RedisCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, nil
 	}
 
@@ -648,7 +649,7 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	if searchResult.Total == 0 {
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Infof("RedisCache.FindSimilarWithThreshold: no entries found - cache miss")
-		metrics.RecordCacheOperation("redis", "find_similar", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "find_similar", "miss", time.Since(start).Seconds())
 		return nil, false, nil
 	}
 
@@ -663,7 +664,7 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	if !ok {
 		logging.Infof("RedisCache.FindSimilarWithThreshold: vector_distance field not found in result")
 		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, nil
 	}
 
@@ -671,7 +672,7 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); err != nil {
 		logging.Infof("RedisCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, nil
 	}
 
@@ -700,13 +701,13 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		logging.Debugf("RedisCache.FindSimilarWithThreshold: cache miss - similarity %.4f below threshold %.4f",
 			similarity, threshold)
 		logging.LogEvent("cache_miss", map[string]interface{}{
-			"backend":         "redis",
+			"backend":         c.backendLabel,
 			"best_similarity": similarity,
 			"threshold":       threshold,
 			"model":           model,
 			"index":           c.indexName,
 		})
-		metrics.RecordCacheOperation("redis", "find_similar", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "find_similar", "miss", time.Since(start).Seconds())
 		return nil, false, nil
 	}
 
@@ -716,7 +717,7 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	if !ok {
 		logging.Infof("RedisCache.FindSimilarWithThreshold: cache hit BUT response_body field is MISSING - treating as miss")
 		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, nil
 	}
 
@@ -724,7 +725,7 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	if responseBodyStr == "" {
 		logging.Infof("RedisCache.FindSimilarWithThreshold: cache hit BUT response_body is EMPTY - treating as miss")
 		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
+		metrics.RecordCacheOperation(c.backendLabel, "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, nil
 	}
 
@@ -736,13 +737,13 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	logging.Debugf("RedisCache.FindSimilarWithThreshold: cache hit - similarity=%.4f, response_size=%d bytes",
 		similarity, len(responseBody))
 	logging.LogEvent("cache_hit", map[string]interface{}{
-		"backend":    "redis",
+		"backend":    c.backendLabel,
 		"similarity": similarity,
 		"threshold":  threshold,
 		"model":      model,
 		"index":      c.indexName,
 	})
-	metrics.RecordCacheOperation("redis", "find_similar", "hit", time.Since(start).Seconds())
+	metrics.RecordCacheOperation(c.backendLabel, "find_similar", "hit", time.Since(start).Seconds())
 	return responseBody, true, nil
 }
 

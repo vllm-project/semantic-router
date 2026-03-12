@@ -331,9 +331,9 @@ type SemanticCacheConfig struct {
 	Enabled bool `json:"enabled,omitempty"`
 
 	// BackendType specifies the cache backend to use
-	// Options: "memory" (default), "redis", "valkey", "milvus", "hybrid"
+	// Options: "memory" (default), "redis", "milvus", "hybrid"
 	// +kubebuilder:default="memory"
-	// +kubebuilder:validation:Enum=memory;redis;valkey;milvus;hybrid
+	// +kubebuilder:validation:Enum=memory;redis;milvus;hybrid
 	// +optional
 	BackendType string `json:"backend_type,omitempty"`
 
@@ -359,7 +359,7 @@ type SemanticCacheConfig struct {
 	// +optional
 	EvictionPolicy string `json:"eviction_policy,omitempty"`
 
-	// Redis configuration (required when backend_type is "redis" or "valkey")
+	// Redis configuration (required when backend_type is "redis")
 	// +optional
 	Redis *RedisCacheConfig `json:"redis,omitempty"`
 
