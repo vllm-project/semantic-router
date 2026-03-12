@@ -3,11 +3,14 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -36,6 +39,7 @@ type SetupValidateResponse struct {
 	Config      map[string]interface{} `json:"config,omitempty"`
 	Models      int                    `json:"models"`
 	Decisions   int                    `json:"decisions"`
+	Signals     int                    `json:"signals"`
 	CanActivate bool                   `json:"canActivate"`
 }
 
@@ -43,6 +47,19 @@ type SetupActivateResponse struct {
 	Status    string `json:"status"`
 	SetupMode bool   `json:"setupMode"`
 	Message   string `json:"message,omitempty"`
+}
+
+type SetupImportRemoteRequest struct {
+	URL string `json:"url"`
+}
+
+type SetupImportRemoteResponse struct {
+	Config      map[string]interface{} `json:"config"`
+	Models      int                    `json:"models"`
+	Decisions   int                    `json:"decisions"`
+	Signals     int                    `json:"signals"`
+	CanActivate bool                   `json:"canActivate"`
+	SourceURL   string                 `json:"sourceUrl"`
 }
 
 func SetupStateHandler(configPath string) http.HandlerFunc {
@@ -102,6 +119,7 @@ func SetupValidateHandler(configPath string) http.HandlerFunc {
 			Config:      candidate,
 			Models:      models,
 			Decisions:   decisions,
+			Signals:     countConfiguredSignals(candidate),
 			CanActivate: models > 0 && decisions > 0,
 		}
 
@@ -199,6 +217,80 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 	}
 }
 
+func SetupImportRemoteHandler(configPath string) http.HandlerFunc {
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if _, err := loadBootstrapConfig(configPath); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		var req SetupImportRemoteRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		importURL, err := normalizeRemoteConfigURL(req.URL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		remoteReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, importURL, nil)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to create remote import request: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		resp, err := client.Do(remoteReq)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to fetch remote config: %v", err), http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+			http.Error(w, fmt.Sprintf("remote config request failed: HTTP %d", resp.StatusCode), http.StatusBadGateway)
+			return
+		}
+
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to read remote config: %v", err), http.StatusBadGateway)
+			return
+		}
+
+		remoteConfig, err := parseSetupConfigMap(body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		models := countConfiguredModels(remoteConfig)
+		decisions := countConfiguredDecisions(remoteConfig)
+		signals := countConfiguredSignals(remoteConfig)
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(SetupImportRemoteResponse{
+			Config:      remoteConfig,
+			Models:      models,
+			Decisions:   decisions,
+			Signals:     signals,
+			CanActivate: models > 0 && decisions > 0,
+			SourceURL:   importURL,
+		}); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
+	}
+}
+
 func loadConfigMap(configPath string) (map[string]interface{}, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -242,6 +334,22 @@ func countConfiguredDecisions(configMap map[string]interface{}) int {
 	return len(decisions)
 }
 
+func countConfiguredSignals(configMap map[string]interface{}) int {
+	signals, ok := configMap["signals"].(map[string]interface{})
+	if !ok {
+		return 0
+	}
+
+	total := 0
+	for _, raw := range signals {
+		if entries, ok := raw.([]interface{}); ok {
+			total += len(entries)
+		}
+	}
+
+	return total
+}
+
 func firstListenerPort(configMap map[string]interface{}) int {
 	listeners, ok := configMap["listeners"].([]interface{})
 	if !ok || len(listeners) == 0 {
@@ -266,12 +374,9 @@ func firstListenerPort(configMap map[string]interface{}) int {
 }
 
 func buildSetupCandidateConfig(configPath string, bodyReader interface{ Read([]byte) (int, error) }) (map[string]interface{}, error) {
-	configMap, err := loadConfigMap(configPath)
+	configMap, err := loadBootstrapConfig(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read existing config: %w", err)
-	}
-	if !hasSetupMode(configMap) {
-		return nil, fmt.Errorf("setup mode is not active for this workspace")
+		return nil, err
 	}
 
 	var req SetupConfigRequest
@@ -285,6 +390,49 @@ func buildSetupCandidateConfig(configPath string, bodyReader interface{ Read([]b
 	merged := deepMerge(configMap, req.Config)
 	delete(merged, setupModeKey)
 	return merged, nil
+}
+
+func loadBootstrapConfig(configPath string) (map[string]interface{}, error) {
+	configMap, err := loadConfigMap(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read existing config: %w", err)
+	}
+	if !hasSetupMode(configMap) {
+		return nil, fmt.Errorf("setup mode is not active for this workspace")
+	}
+	return configMap, nil
+}
+
+func normalizeRemoteConfigURL(rawValue string) (string, error) {
+	trimmed := strings.TrimSpace(rawValue)
+	if trimmed == "" {
+		return "", fmt.Errorf("remote config URL is required")
+	}
+
+	parsed, err := url.ParseRequestURI(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("invalid remote config URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("remote config URL must use http or https")
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("remote config URL must include a host")
+	}
+
+	return parsed.String(), nil
+}
+
+func parseSetupConfigMap(raw []byte) (map[string]interface{}, error) {
+	parsed := make(map[string]interface{})
+	if err := yaml.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("failed to parse remote config: %w", err)
+	}
+	if len(parsed) == 0 {
+		return nil, fmt.Errorf("remote config is empty")
+	}
+	delete(parsed, setupModeKey)
+	return parsed, nil
 }
 
 func validateSetupCandidate(configMap map[string]interface{}) error {

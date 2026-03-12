@@ -189,6 +189,11 @@ def _mount_config_and_state_dirs(cmd, config_file):
     models_dir = os.path.join(config_dir, "models")
     os.makedirs(models_dir, exist_ok=True)
     cmd.extend(["-v", f"{models_dir}:/app/models:z"])
+
+    dashboard_data_dir = os.path.join(config_dir, ".vllm-sr", "dashboard-data")
+    os.makedirs(dashboard_data_dir, exist_ok=True)
+    cmd.extend(["-v", f"{dashboard_data_dir}:/app/data:z"])
+    log.info(f"Mounting dashboard data directory: {dashboard_data_dir}")
     return config_dir
 
 

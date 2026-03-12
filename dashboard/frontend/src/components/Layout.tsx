@@ -1,6 +1,7 @@
 import React, { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import styles from './Layout.module.css'
+import LayoutAccountControl from './LayoutAccountControl'
 import {
   ANALYSIS_OPERATIONS_MENU_SECTIONS,
   hasActiveLayoutMenuSection,
@@ -13,19 +14,34 @@ import {
   type LayoutMenuSection,
   type LayoutNavLink,
 } from './LayoutNavSupport'
+import { useAuth } from '../contexts/AuthContext'
 
 interface LayoutProps {
   children: ReactNode
   configSection?: string
   onConfigSectionChange?: (section: string) => void
   hideHeaderOnMobile?: boolean
+  hideAccountControl?: boolean
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectionChange, hideHeaderOnMobile }) => {
+const Layout: React.FC<LayoutProps> = ({
+  children,
+  configSection,
+  onConfigSectionChange,
+  hideHeaderOnMobile,
+  hideAccountControl = false,
+}) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<LayoutDropdownKey | null>(null)
+  const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false)
+  const { user, logout } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+  const canManageUsers = user?.role === 'admin'
+  const secondaryNavLinks = SECONDARY_NAV_LINKS.filter((link) => link.to !== '/users' || canManageUsers)
+  const accountName = user?.name?.trim() || 'Account'
+  const accountEmail = user?.email?.trim() || 'Session pending'
+  const accountPermissions = user?.permissions ?? []
 
   const isConfigPage = location.pathname === '/config' || location.pathname.startsWith('/config/')
   const isManagerActive = hasActiveLayoutMenuSection(
@@ -44,10 +60,18 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
   const closeMenus = () => {
     setOpenDropdown(null)
     setMobileMenuOpen(false)
+    setIsAccountDialogOpen(false)
   }
 
   const toggleDropdown = (dropdown: LayoutDropdownKey) => {
+    setIsAccountDialogOpen(false)
     setOpenDropdown(prev => (prev === dropdown ? null : dropdown))
+  }
+
+  const toggleAccountDialog = () => {
+    setOpenDropdown(null)
+    setMobileMenuOpen(false)
+    setIsAccountDialogOpen(prev => !prev)
   }
 
   const handleMenuItemSelect = (item: LayoutMenuItem) => {
@@ -58,6 +82,12 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
       navigate(item.to)
     }
     closeMenus()
+  }
+
+  const handleLogout = () => {
+    logout()
+    closeMenus()
+    navigate('/login', { replace: true })
   }
 
   const renderTopNavLink = (link: LayoutNavLink) => (
@@ -209,7 +239,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             <div className={styles.navDivider} />
 
             <div className={`${styles.navSection} ${styles.navSectionSecondary}`} role="group" aria-label="Secondary navigation">
-              {SECONDARY_NAV_LINKS.map(renderTopNavLink)}
+              {secondaryNavLinks.map(renderTopNavLink)}
               <div className={styles.navDropdown}>
                 <button
                   type="button"
@@ -221,7 +251,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                     toggleDropdown('analysisOps')
                   }}
                 >
-                  Command
+                  System
                   <svg
                     width="12"
                     height="12"
@@ -238,7 +268,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                   ? renderDropdownMenu(
                       ANALYSIS_OPERATIONS_MENU_SECTIONS,
                       styles.dropdownMenuRight,
-                      'Command'
+                      'System'
                     )
                   : null}
               </div>
@@ -246,6 +276,18 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
           </nav>
 
           <div className={styles.headerRight}>
+            {hideAccountControl ? null : (
+              <LayoutAccountControl
+                accountName={accountName}
+                accountEmail={accountEmail}
+                accountRole={user?.role}
+                accountPermissions={accountPermissions}
+                isOpen={isAccountDialogOpen}
+                onToggle={toggleAccountDialog}
+                onClose={closeMenus}
+                onLogout={handleLogout}
+              />
+            )}
             <a
               href="https://github.com/vllm-project/semantic-router"
               target="_blank"
@@ -309,7 +351,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                 {link.label}
               </NavLink>
             ))}
-            {SECONDARY_NAV_LINKS.map(link => (
+            {secondaryNavLinks.map(link => (
               <NavLink
                 key={`mobile-${link.to}`}
                 end
@@ -321,7 +363,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               </NavLink>
             ))}
             {renderMobileMenuSection('Manager', MANAGER_MENU_SECTIONS)}
-            {renderMobileMenuSection('Command', ANALYSIS_OPERATIONS_MENU_SECTIONS)}
+            {renderMobileMenuSection('System', ANALYSIS_OPERATIONS_MENU_SECTIONS)}
           </div>
         ) : null}
       </header>
