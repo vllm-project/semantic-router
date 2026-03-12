@@ -207,8 +207,46 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({ timeout: 1000 });
   });
 
-  test('keeps the transcript pinned while a long reply streams', async ({ page }) => {
+  test('anchors the current user turn near the top and respects manual scrolling during streaming', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 560 });
+
+    await page.evaluate(() => {
+      const now = Date.now();
+      const history = Array.from({ length: 10 }, (_, index) => {
+        const offset = (10 - index) * 60_000;
+        return [
+          {
+            id: `seed-user-${index + 1}`,
+            role: 'user',
+            content: `Earlier question ${index + 1}`,
+            timestamp: new Date(now - offset).toISOString(),
+          },
+          {
+            id: `seed-assistant-${index + 1}`,
+            role: 'assistant',
+            content: Array.from(
+              { length: 8 },
+              (_, paragraphIndex) =>
+                `Earlier answer ${index + 1}, paragraph ${paragraphIndex + 1}: seeded history keeps the transcript tall.`
+            ).join('\n\n'),
+            timestamp: new Date(now - offset + 15_000).toISOString(),
+          },
+        ];
+      }).flat();
+
+      window.localStorage.setItem(
+        'sr:chat:conversations',
+        JSON.stringify([
+          {
+            id: 'seeded-conversation',
+            createdAt: now - 3600_000,
+            updatedAt: now,
+            payload: history,
+          },
+        ])
+      );
+    });
+    await page.reload();
 
     const chunks = [
       chatStreamChunk({ role: 'assistant', content: '' }),
@@ -223,19 +261,34 @@ test.describe('Playground Chat Component', () => {
     await page.getByPlaceholder('Ask me anything...').fill('Show a long streamed answer');
     await page.getByRole('button', { name: 'Send message' }).click();
 
-    await expect(page.locator('[data-message-role="assistant"]')).toHaveCount(1, { timeout: 5000 });
     await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText('Paragraph 100: streaming output keeps growing.')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
+    const currentAssistant = page.locator('[data-message-role="assistant"]').last();
+    await expect(currentAssistant).toContainText('Paragraph 40: streaming output keeps growing.', { timeout: 10000 });
 
-    await expect(page.getByText('Paragraph 140: streaming output keeps growing.')).toBeVisible({ timeout: 10000 });
+    const transcript = page.locator('[data-testid="chat-transcript"]');
+    await expect.poll(async () => {
+      return transcript.evaluate(node => {
+        const container = node as HTMLDivElement;
+        const userMessages = container.querySelectorAll<HTMLElement>('[data-message-role="user"]');
+        const currentQuestion = userMessages[userMessages.length - 1];
 
-    const transcriptAfterCompletion = await page.locator('[data-testid="chat-transcript"]').evaluate((node) => {
-      const container = node as HTMLDivElement;
-      return container.scrollHeight - container.scrollTop - container.clientHeight;
-    });
+        if (!currentQuestion) {
+          return Number.POSITIVE_INFINITY;
+        }
 
-    expect(transcriptAfterCompletion).toBeLessThan(48);
+        return currentQuestion.getBoundingClientRect().top - container.getBoundingClientRect().top;
+      });
+    }, { timeout: 5000 }).toBeLessThan(120);
+
+    const scrollTopBeforeManualScroll = await transcript.evaluate(node => (node as HTMLDivElement).scrollTop);
+    await transcript.hover();
+    await page.mouse.wheel(0, -5000);
+    await page.waitForTimeout(600);
+
+    const scrollTopAfterManualScroll = await transcript.evaluate(node => (node as HTMLDivElement).scrollTop);
+    expect(scrollTopAfterManualScroll).toBeLessThan(scrollTopBeforeManualScroll - 1000);
+
+    await expect(currentAssistant).toContainText('Paragraph 140: streaming output keeps growing.', { timeout: 10000 });
   });
 
   test('keeps the assistant rail centered and stable during streaming and after completion', async ({ page }) => {

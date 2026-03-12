@@ -193,6 +193,7 @@ function MessageCard({
     <div
       className={`${styles.message} ${styles[message.role]}`}
       translate={getTranslateAttr(message.isStreaming ?? false)}
+      data-message-id={message.id}
       data-message-role={message.role}
     >
       <div className={styles.messageContent} data-message-content>
