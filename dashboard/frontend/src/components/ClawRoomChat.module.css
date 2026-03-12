@@ -65,8 +65,20 @@
   min-height: 0;
   padding: 0.8rem 0.75rem 0.85rem;
   gap: 0.75rem;
+  overflow-y: auto;
   backdrop-filter: blur(14px) saturate(118%);
   -webkit-backdrop-filter: blur(14px) saturate(118%);
+}
+
+.sidebarSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.sidebarSection + .sidebarSection {
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .selectGroup {
@@ -185,8 +197,9 @@
 }
 
 .roomList {
-  flex: 1;
+  flex: none;
   min-height: 0;
+  max-height: 240px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -677,8 +690,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.34rem;
-  max-height: 300px;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   padding-right: 0.1rem;
 }
 
@@ -746,6 +759,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.3rem;
+}
+
+.memberResumeFactGridCompact .memberResumeFact:first-child {
+  grid-column: auto;
 }
 
 .memberResumeFact {
@@ -1475,7 +1492,7 @@
   }
 
   .memberResumeList {
-    max-height: 240px;
+    max-height: none;
   }
 
   .chatHeader {

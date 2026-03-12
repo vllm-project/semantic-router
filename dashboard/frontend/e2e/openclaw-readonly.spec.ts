@@ -198,6 +198,12 @@ test.describe('Readonly OpenClaw', () => {
 
     await expect(page.getByRole('button', { name: 'New room' })).toBeDisabled();
     await page.getByRole('button', { name: 'Open sidebar' }).click();
+    const sidebar = page.getByTestId('claw-room-sidebar');
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar.getByLabel('Team')).toHaveValue('team-alpha');
+    await expect(sidebar.getByText('Members')).toBeVisible();
+    await expect(sidebar.getByText('Leader One')).toBeVisible();
+    await expect(sidebar.getByText('Worker A')).toBeVisible();
     await expect(page.getByPlaceholder('New room name (optional)')).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Delete room', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Set as leader' })).toBeDisabled();

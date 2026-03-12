@@ -95,24 +95,11 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
-.playgroundSidebarModePill {
+.playgroundSidebarRailFooter {
   margin-top: auto;
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  width: 100%;
   justify-content: center;
-  min-height: 28px;
-  min-width: 28px;
-  padding: 0.28rem 0.5rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
 }
 
 .playgroundSidebarPanel {

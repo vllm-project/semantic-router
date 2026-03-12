@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import styles from './ChatComponent.module.css'
+import PlaygroundRailAccountControl from './PlaygroundRailAccountControl'
 
 interface ChatComponentSidebarShellProps {
   children?: ReactNode
@@ -59,9 +60,8 @@ export default function ChatComponentSidebarShell({
             <path d="M17 3v6M14 6h6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <div className={styles.playgroundSidebarRailDivider} />
-        <div className={styles.playgroundSidebarModePill}>
-          {isTeamRoomView ? 'Room' : 'Chats'}
+        <div className={styles.playgroundSidebarRailFooter}>
+          <PlaygroundRailAccountControl />
         </div>
       </div>
       {children ? (

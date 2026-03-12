@@ -12,6 +12,7 @@ import {
 import MarkdownRenderer from './MarkdownRenderer'
 import styles from './ClawRoomChat.module.css'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import ClawRoomSidebar from './ClawRoomSidebar'
 
 interface TeamProfile {
   id: string
@@ -105,7 +106,6 @@ interface ClawRoomChatProps {
   inputModeControls?: ReactNode
 }
 
-const OPENCLAW_LOGO_SRC = '/openclaw.svg'
 const parseJSON = async <T,>(resp: Response): Promise<T> => {
   const text = await resp.text()
   if (!text.trim()) {
@@ -831,7 +831,7 @@ const ClawRoomChat = ({
     void handleCreateRoom()
   }, [createRoomRequestToken, handleCreateRoom])
 
-  const handleDeleteRoom = useCallback(async (room: RoomEntry) => {
+  const handleDeleteRoom = useCallback(async (room: Pick<RoomEntry, 'id' | 'name'>) => {
     if (managementDisabled || !room?.id || deletingRoomId) {
       return
     }
@@ -1062,102 +1062,35 @@ const ClawRoomChat = ({
 
       <div className={styles.layout}>
         {isSidebarOpen && (
-          <aside className={styles.sidebar}>
-            <div className={styles.selectGroup}>
-              <label className={styles.label} htmlFor="claw-team-select">Team</label>
-              <select
-                id="claw-team-select"
-                className={styles.select}
-                value={selectedTeamId}
-                onChange={event => setSelectedTeamId(event.target.value)}
-              >
-                {teams.length === 0 && <option value="">No teams</option>}
-                {teams.map(team => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className={styles.roomsHeader}>
-              <div>
-                <div className={styles.roomsTitle}>Rooms</div>
-                <div className={styles.roomsSubtitle}>{selectedTeam?.name || 'Select a team'}</div>
-              </div>
-            </div>
-
-            <form className={styles.createRoomForm} onSubmit={event => void handleCreateRoom(event)}>
-              <input
-                type="text"
-                className={styles.createRoomInput}
-                value={newRoomName}
-                onChange={event => setNewRoomName(event.target.value)}
-                placeholder="New room name (optional)"
-                disabled={managementDisabled || !selectedTeamId || creatingRoom}
-              />
-              <button
-                type="submit"
-                className={styles.createRoomButton}
-                disabled={managementDisabled || !selectedTeamId || creatingRoom}
-              >
-                {creatingRoom ? 'Creating...' : 'Create'}
-              </button>
-            </form>
-
-            <div className={styles.roomList}>
-              {rooms.length === 0 ? (
-                <div className={styles.sidebarEmpty}>No room yet.</div>
-              ) : (
-                rooms.map(room => {
-                  const active = room.id === selectedRoomId
-                  return (
-                    <div
-                      key={room.id}
-                      className={`${styles.roomItem} ${active ? styles.roomItemActive : ''}`}
-                      onClick={() => setSelectedRoomId(room.id)}
-                      onKeyDown={event => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          setSelectedRoomId(room.id)
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <div className={styles.roomItemBody}>
-                        <span className={styles.roomName}>{room.name}</span>
-                        <span className={styles.roomId}>{room.id}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.roomDeleteButton}
-                        onClick={event => {
-                          event.stopPropagation()
-                          void handleDeleteRoom(room)
-                        }}
-                        disabled={managementDisabled || deletingRoomId === room.id}
-                        title="Delete room"
-                        aria-label="Delete room"
-                      >
-                        {deletingRoomId === room.id ? '…' : '✕'}
-                      </button>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-
-            <div className={styles.mentionsHint}>
-              Mention hints: {mentionHints.join(' ')}
-            </div>
-          </aside>
+          <ClawRoomSidebar
+            creatingRoom={creatingRoom}
+            deletingRoomId={deletingRoomId}
+            managementDisabled={managementDisabled}
+            memberProfiles={memberResumeProfiles}
+            mentionHints={mentionHints}
+            newRoomName={newRoomName}
+            onChangeNewRoomName={setNewRoomName}
+            onCreateRoom={event => void handleCreateRoom(event)}
+            onDeleteRoom={room => void handleDeleteRoom(room)}
+            onInsertMention={handleInsertMention}
+            onSelectRoom={setSelectedRoomId}
+            onSelectTeam={setSelectedTeamId}
+            onSetLeader={workerId => void handleSetLeader(workerId)}
+            rooms={rooms}
+            selectedRoom={selectedRoom}
+            selectedRoomId={selectedRoomId}
+            selectedTeam={selectedTeam}
+            selectedTeamId={selectedTeamId}
+            settingLeaderId={settingLeaderId}
+            teamBriefText={teamBriefText}
+            teams={teams}
+          />
         )}
 
         <section className={styles.chatPanel}>
           <header className={styles.chatHeader}>
             <div className={styles.chatTitleWrap}>
-              <h3 className={styles.chatTitle}>{selectedTeam?.name || 'No team selected'}</h3>
+              <h3 className={styles.chatTitle}>{selectedRoom?.name || selectedTeam?.name || 'No room selected'}</h3>
               {selectedRoomId && (
                 <span
                   className={`${styles.chatTitleStatus} ${wsConnected ? styles.wsConnected : styles.wsDisconnected}`}
@@ -1168,80 +1101,13 @@ const ClawRoomChat = ({
               )}
             </div>
 
-            <div className={styles.teamInlineInfo}>
-              <div className={styles.teamInlineMetaRow}>
-                <span className={styles.teamInlineMetaText}>
-                  {selectedRoom ? `Room · ${selectedRoom.name}` : 'Create or select a room to start'}
-                </span>
-                {(selectedTeam?.role || selectedTeam?.vibe) && (
-                  <div className={styles.metaInline}>
-                    {selectedTeam?.role && <span className={styles.metaPill}>{selectedTeam.role}</span>}
-                    {selectedTeam?.vibe && <span className={styles.metaPill}>{selectedTeam.vibe}</span>}
-                  </div>
-                )}
-              </div>
-              <div className={styles.teamInlineBrief}>{teamBriefText}</div>
-            </div>
-
-            <div className={styles.memberQueueSection}>
-              <div className={styles.memberQueueHeading}>
-                <span className={styles.memberQueueTitle}>Members</span>
-                <span className={styles.memberQueueSubtitle}>
-                  {teamWorkers.length} {teamWorkers.length === 1 ? 'claw' : 'claws'}
-                  {leaderWorker ? ' · leader first' : ' · no leader set'}
-                </span>
-              </div>
-              {memberResumeProfiles.length === 0 ? (
-                <div className={styles.memberQueueEmpty}>No workers in this team yet</div>
-              ) : (
-                <div className={styles.memberQueueList}>
-                  {memberResumeProfiles.map(profile => (
-                    <article
-                      key={profile.id}
-                      className={`${styles.memberQueueItem} ${profile.isLeader ? styles.memberQueueItemLeader : ''}`}
-                    >
-                      <div className={styles.memberQueueTop}>
-                        <span className={styles.memberQueueIdentity}>
-                          <img
-                            src={OPENCLAW_LOGO_SRC}
-                            alt={profile.isLeader ? 'leader logo' : 'worker logo'}
-                            className={styles.metaLogo}
-                          />
-                          <span className={styles.memberQueueName}>{profile.displayName}</span>
-                        </span>
-                        <span className={profile.isLeader ? styles.memberResumeRoleLeader : styles.memberResumeRoleWorker}>
-                          {profile.isLeader ? 'LEADER' : 'WORKER'}
-                        </span>
-                      </div>
-                      <div className={styles.memberQueueBody}>
-                        <button
-                          type="button"
-                          className={styles.quickMentionButton}
-                          onClick={() => handleInsertMention(profile.alias)}
-                        >
-                          {profile.alias}
-                        </button>
-                        <span className={styles.memberQueueRole}>{profile.roleText}</span>
-                        <span className={styles.memberQueueVibe}>{profile.vibeText}</span>
-                      </div>
-                      {!profile.isLeader && (
-                        <button
-                          type="button"
-                          className={styles.memberPromoteButton}
-                          onClick={() => void handleSetLeader(profile.id)}
-                          disabled={managementDisabled || settingLeaderId === profile.id}
-                        >
-                          {settingLeaderId === profile.id ? 'Setting…' : 'Set as leader'}
-                        </button>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className={styles.teamGuide}>
-              Collaboration tip: start with <code>@leader</code> for delegation.
+            <div className={styles.teamInlineMetaRow}>
+              <span className={styles.teamInlineMetaText}>
+                {selectedTeam?.name || 'Select a team from the left panel'}
+              </span>
+              <span className={styles.teamInlineMetaText}>
+                {selectedRoom ? `Room · ${selectedRoom.name}` : 'Create or select a room to start'}
+              </span>
             </div>
           </header>
 

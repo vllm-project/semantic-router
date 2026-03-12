@@ -10,6 +10,7 @@ interface LayoutAccountControlProps {
   onToggle: () => void
   onClose: () => void
   onLogout: () => void
+  variant?: 'header' | 'rail'
 }
 
 function getAccountInitials(name?: string, email?: string): string {
@@ -43,10 +44,12 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
   onToggle,
   onClose,
   onLogout,
+  variant = 'header',
 }) => {
   const initials = getAccountInitials(accountName, accountEmail)
   const roleLabel = formatRoleLabel(accountRole)
   const dialogId = useId()
+  const isRail = variant === 'rail'
 
   useEffect(() => {
     if (!isOpen) {
@@ -73,29 +76,33 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
     <>
       <button
         type="button"
-        className={`${styles.trigger} ${isOpen ? styles.triggerActive : ''}`}
+        className={`${styles.trigger} ${isOpen ? styles.triggerActive : ''} ${isRail ? styles.triggerRail : ''}`}
         aria-controls={isOpen ? dialogId : undefined}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
         aria-label={`Open account details for ${accountName}`}
+        data-testid={isRail ? 'playground-account-control' : undefined}
         onClick={onToggle}
+        title={isRail ? accountName : undefined}
       >
-        <span className={styles.triggerAvatar} aria-hidden="true">
+        <span className={`${styles.triggerAvatar} ${isRail ? styles.triggerAvatarRail : ''}`} aria-hidden="true">
           {initials}
         </span>
-        <span className={styles.triggerName}>{accountName}</span>
-        <svg
-          className={`${styles.triggerChevron} ${isOpen ? styles.triggerChevronOpen : ''}`}
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          aria-hidden="true"
-        >
-          <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        {isRail ? null : <span className={styles.triggerName}>{accountName}</span>}
+        {isRail ? null : (
+          <svg
+            className={`${styles.triggerChevron} ${isOpen ? styles.triggerChevronOpen : ''}`}
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            aria-hidden="true"
+          >
+            <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
       </button>
 
       {isOpen ? (

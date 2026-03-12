@@ -251,6 +251,7 @@ const AppRouter: React.FC = () => {
                   configSection={configSection}
                   onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
                   hideHeaderOnMobile={true}
+                  hideAccountControl={true}
                 >
                   <PlaygroundPage />
                 </Layout>

@@ -122,6 +122,22 @@ test.describe('Playground Chat Component', () => {
     await expect(sidebarItem).not.toBeVisible();
   });
 
+  test('keeps the account control in the lower-left rail on playground', async ({ page }) => {
+    const shell = page.getByTestId('playground-sidebar-shell');
+    const accountButton = page.getByTestId('playground-account-control');
+
+    await expect(shell).toBeVisible();
+    await expect(accountButton).toBeVisible();
+    await expect(page.getByRole('button', { name: /Open account details for Admin User/i })).toHaveCount(1);
+
+    await accountButton.click();
+
+    const dialog = page.getByTestId('layout-account-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Admin User');
+    await expect(dialog).toContainText('admin@example.com');
+  });
+
   test('can type message', async ({ page }) => {
     const input = page.getByPlaceholder('Ask me anything...');
     await input.fill('Hello, this is a test message');
