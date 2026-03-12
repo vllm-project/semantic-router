@@ -75,9 +75,11 @@ export function useChatTranscriptAutoScroll(messages: Message[]) {
     }
 
     if (shouldAutoFollowRef.current || liveAssistantActivity) {
-      scrollToBottom(liveAssistantActivity ? 'auto' : 'smooth')
+      requestAnimationFrame(() => {
+        scrollToBottom(liveAssistantActivity ? 'auto' : 'smooth')
+      })
     }
-  }, [liveAssistantActivity, messages.length, scrollToBottom])
+  }, [liveAssistantActivity, messages, scrollToBottom])
 
   useEffect(() => {
     const content = contentRef.current
