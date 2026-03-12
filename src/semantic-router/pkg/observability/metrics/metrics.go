@@ -271,6 +271,15 @@ var (
 		[]string{"decision_name", "plugin_type"},
 	)
 
+	// CacheWriteSkipped tracks cache write skips when response has personalized context (RAG, memory, PII, system prompt)
+	CacheWriteSkipped = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_cache_write_skipped_total",
+			Help: "Total number of cache writes skipped because response contained personalized context (rag_context, memory_context, pii_detected, system_prompt_injected)",
+		},
+		[]string{"reason"},
+	)
+
 	// PIIViolations tracks PII policy violations by model and PII data type
 	PIIViolations = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -696,6 +705,22 @@ func RecordCachePluginMiss(decisionName, pluginType string) {
 		pluginType = "semantic-cache"
 	}
 	CachePluginMisses.WithLabelValues(decisionName, pluginType).Inc()
+}
+
+// Cache write skip reasons (canonical labels for CacheWriteSkipped metric)
+const (
+	CacheWriteSkipReasonRAGContext           = "rag_context"
+	CacheWriteSkipReasonMemoryContext        = "memory_context"
+	CacheWriteSkipReasonPIIDetected          = "pii_detected"
+	CacheWriteSkipReasonSystemPromptInjected = "system_prompt_injected"
+)
+
+// RecordCacheWriteSkipped records that a cache write was skipped because the response has personalized context
+func RecordCacheWriteSkipped(reason string) {
+	if reason == "" {
+		reason = consts.UnknownLabel
+	}
+	CacheWriteSkipped.WithLabelValues(reason).Inc()
 }
 
 // RecordPIIViolation records a PII policy violation for a specific model and PII data type

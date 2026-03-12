@@ -7,10 +7,13 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 )
 
@@ -147,6 +150,15 @@ func (r *OpenAIRouter) recordResponseCost(
 
 func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []byte) {
 	if ctx.RequestID == "" || responseBody == nil {
+		return
+	}
+
+	if ok, reason := ctx.HasPersonalizedContext(); ok {
+		metrics.RecordCacheWriteSkipped(reason)
+		logging.Infof("Skipping cache write for request ID %s: response has personalized context (reason=%s)", ctx.RequestID, reason)
+		if span := trace.SpanFromContext(ctx.TraceContext); span.IsRecording() {
+			span.SetAttributes(attribute.String(tracing.AttrCacheWriteSkippedReason, reason))
+		}
 		return
 	}
 
