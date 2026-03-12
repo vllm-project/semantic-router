@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -250,6 +251,47 @@ func TestOpenClawMCP_CreateWorkerUsesServerDefaultsForRuntimeFields(t *testing.T
 	if !strings.Contains(message, "Read-only mode enabled") {
 		t.Fatalf("expected read-only error, got %q", message)
 	}
+}
+
+func TestClawCreateWorkerToolDefinition_HireClawGuidance(t *testing.T) {
+	tool := clawCreateWorkerToolDefinition()
+
+	if tool.Name != "claw_create_worker" {
+		t.Fatalf("unexpected tool name: %q", tool.Name)
+	}
+	if !strings.Contains(tool.Description, "Hire/create") {
+		t.Fatalf("expected HireClaw-oriented description, got %q", tool.Description)
+	}
+
+	required := tool.InputSchema.Required
+	for _, field := range []string{"team_id", "name", "emoji", "role", "vibe", "principles"} {
+		if !slices.Contains(required, field) {
+			t.Fatalf("expected required field %q in %v", field, required)
+		}
+	}
+
+	assertDescriptionContains := func(field string, expected ...string) {
+		t.Helper()
+
+		property, ok := tool.InputSchema.Properties[field].(map[string]any)
+		if !ok {
+			t.Fatalf("expected schema property for %q, got %#v", field, tool.InputSchema.Properties[field])
+		}
+		description, ok := property["description"].(string)
+		if !ok {
+			t.Fatalf("expected string description for %q, got %#v", field, property["description"])
+		}
+		for _, want := range expected {
+			if !strings.Contains(description, want) {
+				t.Fatalf("expected description for %q to contain %q, got %q", field, want, description)
+			}
+		}
+	}
+
+	assertDescriptionContains("name", "Human-facing worker identity name", "English first name")
+	assertDescriptionContains("role", "Concrete functional specialty")
+	assertDescriptionContains("vibe", "human collaboration style", "pressure behavior")
+	assertDescriptionContains("principles", "Team-aware operating rules", "leader coordination", "teammate expectations")
 }
 
 func TestOpenClawMCP_UpdateWorkerRoleKindPromotesLeader(t *testing.T) {

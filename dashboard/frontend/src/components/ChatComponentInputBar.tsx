@@ -37,7 +37,7 @@ export default function ChatComponentInputBar({
   roomChatToggleControl,
 }: ChatComponentInputBarProps) {
   return (
-    <div className={styles.inputContainer}>
+    <div className={styles.inputContainer} data-testid="chat-composer">
       <div className={`${styles.inputWrapper} ${inputValue.trim() ? styles.hasContent : ''}`}>
         <textarea
           ref={inputRef}

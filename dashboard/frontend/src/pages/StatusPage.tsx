@@ -56,6 +56,12 @@ const StatusPage: React.FC = () => {
     return styles.modelStatusWarn
   }
 
+  const getModelSurfaceClass = (tone: 'ok' | 'warn' | 'down') => {
+    if (tone === 'ok') return styles.modelCardOk
+    if (tone === 'down') return styles.modelCardDown
+    return styles.modelCardWarn
+  }
+
   const getOverallChipClass = (overall: string) => {
     if (overall === 'healthy') return styles.modelStatusOk
     if (overall === 'degraded') return styles.modelStatusWarn
@@ -116,7 +122,7 @@ const StatusPage: React.FC = () => {
 
   if (loading && !status) {
     return (
-      <div className={styles.container}>
+      <div className={styles.container} data-testid="status-page">
         <div className={styles.loading}>
           <div className={styles.spinner} />
           <p>Detecting deployment and checking status...</p>
@@ -126,7 +132,7 @@ const StatusPage: React.FC = () => {
   }
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} data-testid="status-page">
       <div className={styles.header}>
         <div className={styles.headerLeft}>
           <h1 className={styles.title}>System Status</h1>
@@ -214,7 +220,7 @@ const StatusPage: React.FC = () => {
               </div>
             </section>
 
-            <section className={`${styles.summaryCard} ${styles.modelCard}`}>
+            <section className={`${styles.summaryCard} ${styles.modelCard} ${getModelSurfaceClass(modelStatus.tone)}`}>
               <div className={styles.cardHeader}>
                 <div className={styles.cardTitleBlock}>
                   <h2 className={styles.cardTitle}>Model Status</h2>
@@ -297,7 +303,7 @@ const StatusPage: React.FC = () => {
             </section>
           </div>
 
-          <section className={styles.servicesSection}>
+          <section className={styles.servicesSection} data-testid="status-model-inventory-section">
             <div className={styles.servicesSectionHeader}>
               <div>
                 <span className={styles.servicesSectionTitle}>Model Inventory</span>
@@ -326,7 +332,7 @@ const StatusPage: React.FC = () => {
             </div>
           </section>
 
-          <section className={styles.servicesSection}>
+          <section className={styles.servicesSection} data-testid="status-services-section">
             <div className={styles.servicesSectionHeader}>
               <div>
                 <span className={styles.servicesSectionTitle}>Services</span>

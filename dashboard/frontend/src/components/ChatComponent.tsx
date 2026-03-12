@@ -5,10 +5,10 @@ import HeaderReveal from './HeaderReveal'
 import ClawRoomChat from './ClawRoomChat'
 import { ClawModeToggle } from './ChatComponentControls'
 import ChatConversationSidebar from './ChatConversationSidebar'
+import ChatComponentConversationViewport from './ChatComponentConversationViewport'
 import ChatComponentInputBar from './ChatComponentInputBar'
-import ChatComponentMessages from './ChatComponentMessages'
 import ChatComponentRoomToggle from './ChatComponentRoomToggle'
-import ChatComponentTopBar from './ChatComponentTopBar'
+import ChatComponentSidebarShell from './ChatComponentSidebarShell'
 import {
   buildChoicesArray,
   getFirstChoice,
@@ -77,7 +77,6 @@ const ChatComponent = ({
   const [teamRoomCreateToken, setTeamRoomCreateToken] = useState(0)
   const { isReadonly, isLoading: readonlyLoading } = useReadonly()
 
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const hasHydratedConversation = useRef(false)
@@ -126,14 +125,6 @@ const ChatComponent = ({
     ),
     [baseOtherToolDefinitions, clawManagementDisabled, clawToolDefinitions, enableClawMode]
   )
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, scrollToBottom])
 
   // When headers arrive, show HeaderReveal
   useEffect(() => {
@@ -1025,23 +1016,24 @@ const ChatComponent = ({
 
       <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
         <div className={styles.mainLayout}>
-          {!isTeamRoomView && isSidebarOpen && (
-            <ChatConversationSidebar
-              conversationId={conversationId}
-              conversationPreviews={conversationPreviews}
-              onDeleteConversation={handleDeleteConversation}
-              onSelectConversation={handleSelectConversation}
-            />
-          )}
+          <ChatComponentSidebarShell
+            createDisabled={roomCreateDisabled}
+            isOpen={isSidebarOpen}
+            isTeamRoomView={isTeamRoomView}
+            onCreate={handleTopBarCreate}
+            onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
+          >
+            {!isTeamRoomView ? (
+              <ChatConversationSidebar
+                conversationId={conversationId}
+                conversationPreviews={conversationPreviews}
+                onDeleteConversation={handleDeleteConversation}
+                onSelectConversation={handleSelectConversation}
+              />
+            ) : null}
+          </ChatComponentSidebarShell>
 
           <div className={styles.chatArea}>
-            <ChatComponentTopBar
-              isSidebarOpen={isSidebarOpen}
-              isTeamRoomView={isTeamRoomView}
-              createDisabled={roomCreateDisabled}
-              onCreate={handleTopBarCreate}
-              onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
-            />
             {isTeamRoomView ? (
               <ClawRoomChat
                 isSidebarOpen={isSidebarOpen}
@@ -1084,13 +1076,11 @@ const ChatComponent = ({
                     </button>
                   </div>
                 )}
-                <ChatComponentMessages
+                <ChatComponentConversationViewport
                   expandedToolCards={expandedToolCards}
                   messages={messages}
-                  messagesEndRef={messagesEndRef}
                   onToggleToolCard={handleToggleToolCard}
                 />
-
                 <ChatComponentInputBar
                   enableClawMode={enableClawMode}
                   enableWebSearch={enableWebSearch}

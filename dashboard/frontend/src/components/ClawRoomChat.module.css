@@ -16,17 +16,18 @@
   --nv-text-main: #eef8d9;
   --nv-text-secondary: #c8e2a4;
   --nv-text-muted: #9bb873;
+  --room-rail-width: min(100%, 860px);
 
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 0.35rem 0 0;
-  gap: 0.75rem;
+  padding: 0;
+  gap: 0.5rem;
 }
 
 .containerSidebarOpen {
-  padding-left: 0.42rem;
+  padding-left: 0;
 }
 
 .error {
@@ -47,22 +48,41 @@
   display: flex;
   flex: 1;
   min-height: 0;
-  gap: 0.85rem;
+  gap: 0;
 }
 
 .sidebar {
-  width: 290px;
+  width: 252px;
   flex-shrink: 0;
-  border-radius: 16px;
-  border: 1px solid var(--nv-border-soft);
-  background: var(--nv-bg-medium);
+  border-radius: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  background:
+    linear-gradient(180deg, rgba(46, 50, 58, 0.5) 0%, rgba(21, 23, 29, 0.76) 100%);
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0.75rem;
+  padding: 0.8rem 0.75rem 0.85rem;
   gap: 0.75rem;
-  backdrop-filter: blur(16px) saturate(125%);
-  -webkit-backdrop-filter: blur(16px) saturate(125%);
+  overflow-y: auto;
+  box-shadow:
+    inset 1px 0 0 rgba(255, 255, 255, 0.03),
+    20px 0 44px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+.sidebarSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.sidebarSection + .sidebarSection {
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .selectGroup {
@@ -80,12 +100,13 @@
 
 .select {
   border-radius: 10px;
-  border: 1px solid var(--nv-border-soft);
-  background: var(--nv-bg-subtle);
-  color: #ffffff;
-  -webkit-text-fill-color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.92);
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.92);
   padding: 0.52rem 0.65rem;
   font-size: 0.88rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .select option {
@@ -95,8 +116,10 @@
 
 .select:focus {
   outline: none;
-  border-color: var(--nv-border-strong);
-  box-shadow: 0 0 0 2px rgba(var(--nv-green-rgb), 0.2);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
 .roomsHeader {
@@ -116,6 +139,67 @@
   margin-top: 0.12rem;
   font-size: 0.76rem;
   color: #ffffff;
+}
+
+.teamDetailsButton {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.02) 100%);
+  color: #ffffff;
+  padding: 0.82rem 0.86rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 16px 36px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.teamDetailsButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.065);
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+.teamDetailsButton:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.teamDetailsButtonHead {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.teamDetailsButtonLabel {
+  font-size: 0.84rem;
+  font-weight: 650;
+  color: #ffffff;
+}
+
+.teamDetailsButtonIcon {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.teamDetailsButtonText {
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: left;
+}
+
+.teamDetailsButtonMeta {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.66);
 }
 
 .iconButton {
@@ -145,12 +229,13 @@
   flex: 1;
   min-width: 0;
   border-radius: 10px;
-  border: 1px solid var(--nv-border-soft);
-  background: rgba(var(--nv-green-rgb), 0.06);
-  color: #ffffff;
-  -webkit-text-fill-color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.92);
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.92);
   font-size: 0.83rem;
   padding: 0.45rem 0.55rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .createRoomInput::placeholder {
@@ -160,19 +245,27 @@
 
 .createRoomInput:focus {
   outline: none;
-  border-color: var(--nv-border-strong);
-  box-shadow: 0 0 0 2px rgba(var(--nv-green-rgb), 0.2);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
 .createRoomButton {
   border-radius: 10px;
-  border: 1px solid var(--nv-border-medium);
-  background: rgba(var(--nv-green-rgb), 0.18);
-  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 0.78rem;
   font-weight: 600;
   padding: 0 0.72rem;
   cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.createRoomButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .createRoomButton:disabled {
@@ -181,20 +274,21 @@
 }
 
 .roomList {
-  flex: 1;
+  flex: none;
   min-height: 0;
+  max-height: 240px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.42rem;
+  gap: 0.18rem;
   padding-right: 0.1rem;
 }
 
 .sidebarEmpty {
-  border-radius: 12px;
-  border: 1px dashed var(--nv-border-soft);
-  color: #ffffff;
-  font-size: 0.84rem;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.82rem;
   text-align: center;
   padding: 0.75rem;
 }
@@ -204,23 +298,24 @@
   align-items: center;
   gap: 0.45rem;
   width: 100%;
-  border-radius: 12px;
-  border: 1px solid var(--nv-border-soft);
-  background: rgba(var(--nv-green-rgb), 0.03);
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: transparent;
   color: #ffffff;
-  padding: 0.5rem 0.55rem;
+  padding: 0.62rem 0.7rem;
   cursor: pointer;
   text-align: left;
+  transition: all var(--transition-fast);
 }
 
 .roomItem:hover {
-  border-color: var(--nv-border-medium);
-  background: rgba(var(--nv-green-rgb), 0.09);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .roomItemActive {
-  border-color: var(--nv-border-strong);
-  background: rgba(var(--nv-green-rgb), 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .roomItemBody {
@@ -249,33 +344,34 @@
 }
 
 .roomDeleteButton {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: 10px;
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.4);
   cursor: pointer;
+  transition: all var(--transition-fast);
+  opacity: 0;
+}
+
+.roomItem:hover .roomDeleteButton,
+.roomItemActive .roomDeleteButton {
+  opacity: 1;
 }
 
 .roomDeleteButton:hover {
-  color: var(--nv-green-300);
-  background: rgba(var(--nv-green-rgb), 0.16);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .roomDeleteButton:disabled {
   cursor: not-allowed;
   opacity: 0.6;
-}
-
-.mentionsHint {
-  font-size: 0.75rem;
-  color: #ffffff;
-  line-height: 1.4;
 }
 
 .chatPanel {
@@ -295,10 +391,15 @@
 .chatHeader {
   display: flex;
   flex-direction: column;
-  gap: 0.68rem;
-  padding: 0.78rem 0.9rem;
-  border-bottom: 1px solid var(--nv-border-soft);
-  background: var(--nv-bg-medium);
+  gap: 0;
+  padding: 0.72rem 0.9rem 0.34rem;
+  border-bottom: none;
+  background: transparent;
+}
+
+.chatHeader > * {
+  width: min(100%, var(--room-rail-width));
+  margin: 0 auto;
 }
 
 .chatTitleWrap {
@@ -350,35 +451,165 @@
   50% { opacity: 0.6; }
 }
 
-.teamInlineInfo {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.34rem;
-  align-items: center;
-}
-
-.teamInlineMetaRow {
-  width: 100%;
+.teamDetailsOverlay {
+  position: fixed;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 1.2rem;
+  background: rgba(0, 0, 0, 0.66);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  z-index: 1300;
+}
+
+.teamDetailsDialog {
+  width: min(960px, calc(100vw - 2.4rem));
+  max-height: calc(100vh - 2.4rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(44, 48, 56, 0.72) 0%, rgba(17, 19, 24, 0.88) 100%);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(28px) saturate(135%);
+  -webkit-backdrop-filter: blur(28px) saturate(135%);
+}
+
+.teamDetailsHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.3rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.teamDetailsHeaderCopy {
+  display: flex;
+  flex-direction: column;
   gap: 0.36rem;
-  flex-wrap: wrap;
 }
 
-.teamInlineMetaText {
-  font-size: 0.74rem;
-  line-height: 1.35;
-  color: rgba(255, 255, 255, 0.88);
+.teamDetailsEyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
 }
 
-.teamInlineBrief {
-  width: min(980px, 100%);
-  font-size: 0.74rem;
-  line-height: 1.45;
+.teamDetailsTitle {
+  margin: 0;
+  font-size: 1.7rem;
+  line-height: 1.08;
+  font-weight: 650;
   color: #ffffff;
-  text-align: center;
+}
+
+.teamDetailsCloseButton,
+.teamDetailsFooterButton {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.teamDetailsCloseButton {
+  width: 38px;
+  height: 38px;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.teamDetailsFooterButton {
+  padding: 0.52rem 0.92rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.teamDetailsCloseButton:hover,
+.teamDetailsFooterButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.teamDetailsCloseButton:active,
+.teamDetailsFooterButton:active {
+  transform: scale(0.98);
+}
+
+.teamDetailsBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.1rem 1.3rem 1.25rem;
+  overflow-y: auto;
+}
+
+.teamDetailsHero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem 1.05rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.teamDetailsBrief {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.teamDetailsSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.7rem;
+}
+
+.teamDetailsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.72rem;
+}
+
+.teamDetailsSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.teamDetailsMemberGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.8rem;
+  align-items: start;
+}
+
+.teamDetailsMemberCard {
+  min-height: 100%;
+  padding: 0.82rem 0.9rem;
+  gap: 0.72rem;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.teamDetailsFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.95rem 1.3rem 1.2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .memberQueueSection {
@@ -409,11 +640,11 @@
 }
 
 .memberQueueEmpty {
-  font-size: 0.8rem;
-  color: #ffffff;
-  border: 1px dashed rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
-  padding: 0.46rem 0.62rem;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.58);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 0.75rem;
 }
 
 .memberQueueList {
@@ -490,17 +721,6 @@
   text-overflow: ellipsis;
 }
 
-.memberQueueItem .quickMentionButton {
-  padding: 0.1rem 0.42rem;
-  font-size: 0.66rem;
-}
-
-.memberQueueItem .memberPromoteButton {
-  align-self: flex-end;
-  padding: 0.1rem 0.45rem;
-  font-size: 0.62rem;
-}
-
 .metaGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -508,14 +728,15 @@
 }
 
 .metaCard {
-  border-radius: 12px;
-  border: 1px solid #ffffff;
-  background: rgba(var(--nv-green-rgb), 0.05);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.035);
   color: #ffffff;
   padding: 0.62rem 0.7rem;
   display: flex;
   flex-direction: column;
   gap: 0.44rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .metaLabel {
@@ -551,14 +772,13 @@
   line-height: 1.35;
 }
 
-.metaSubtle code,
-.teamGuide code {
+.metaSubtle code {
   font-size: 0.72rem;
   padding: 0.08rem 0.24rem;
   border-radius: 6px;
-  border: 1px solid var(--nv-border-soft);
-  background: rgba(var(--nv-green-rgb), 0.12);
-  color: var(--nv-green-300);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .metaCard .metaSubtle code {
@@ -576,9 +796,9 @@
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  border: 1px solid var(--nv-border-medium);
-  background: rgba(var(--nv-green-rgb), 0.14);
-  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.88);
   padding: 0.1rem 0.36rem;
   font-size: 0.68rem;
   line-height: 1.2;
@@ -617,12 +837,6 @@
   color: #ff6b68;
   border: 1px solid rgba(255, 107, 104, 0.6);
   background: rgba(127, 29, 29, 0.35);
-}
-
-.resumeAliasRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.34rem;
 }
 
 .resumeFactGrid {
@@ -668,24 +882,25 @@
   display: flex;
   flex-direction: column;
   gap: 0.34rem;
-  max-height: 300px;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   padding-right: 0.1rem;
 }
 
 .memberResumeItem {
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
   padding: 0.4rem 0.44rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .memberResumeItemLeader {
-  border-color: rgba(255, 107, 104, 0.45);
-  background: rgba(127, 29, 29, 0.16);
+  border-color: rgba(255, 141, 141, 0.2);
+  background: linear-gradient(180deg, rgba(127, 29, 29, 0.18), rgba(255, 255, 255, 0.03));
 }
 
 .memberResumeHead {
@@ -745,10 +960,6 @@
   gap: 0.12rem;
 }
 
-.memberResumeFact:first-child {
-  grid-column: 1 / -1;
-}
-
 .memberResumeFactLabel {
   font-size: 0.6rem;
   letter-spacing: 0.06em;
@@ -760,34 +971,6 @@
   font-size: 0.72rem;
   color: #ffffff;
   line-height: 1.35;
-}
-
-.memberResumeNarrative {
-  font-size: 0.7rem;
-  line-height: 1.4;
-  color: rgba(255, 255, 255, 0.9);
-  border-top: 1px dashed rgba(255, 255, 255, 0.18);
-  padding-top: 0.3rem;
-}
-
-.memberPromoteButton {
-  align-self: flex-start;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  background: rgba(255, 255, 255, 0.05);
-  color: #ffffff;
-  border-radius: 999px;
-  padding: 0.14rem 0.5rem;
-  font-size: 0.66rem;
-  cursor: pointer;
-}
-
-.memberPromoteButton:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.memberPromoteButton:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
 }
 
 .participantStrip {
@@ -875,103 +1058,78 @@
   opacity: 0.65;
 }
 
-.teamGuide {
-  font-size: 0.76rem;
-  color: #ffffff;
-  line-height: 1.45;
-  border-top: 1px dashed rgba(var(--nv-green-rgb), 0.2);
-  padding-top: 0.45rem;
-}
-
-.teamGuide code {
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.35);
-}
-
-.quickMentionRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.quickMentionButton {
-  border: 1px solid var(--nv-border-medium);
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
-  border-radius: 999px;
-  padding: 0.16rem 0.46rem;
-  font-size: 0.72rem;
-  cursor: pointer;
-}
-
-.quickMentionButton:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
-
 .messages {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0.95rem 0.9rem;
+  padding: 1rem 1rem 0.4rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 1rem;
   background: transparent;
 }
 
 .messageRow {
   display: flex;
-  align-items: flex-start;
-  gap: 0.62rem;
-  max-width: 88%;
+  width: min(100%, var(--room-rail-width));
+  max-width: var(--room-rail-width);
+  min-width: 0;
 }
 
 .messageRowAgent {
-  align-self: flex-start;
+  justify-content: flex-start;
 }
 
 .messageRowUser {
-  align-self: flex-end;
-  flex-direction: row-reverse;
-}
-
-.messageAvatar {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.86rem;
-  flex-shrink: 0;
-  background: transparent;
-  border: none;
-}
-
-.messageAvatarLogo {
-  transform: scale(1.04);
+  justify-content: flex-end;
 }
 
 .messageMain {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.22rem;
+  gap: 0.3rem;
+  width: 100%;
+  max-width: 100%;
 }
 
 .messageRowUser .messageMain {
+  width: auto;
+  max-width: min(72%, 560px);
   align-items: flex-end;
 }
 
 .messageMeta {
   display: flex;
   align-items: center;
+  gap: 0.42rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.messageRowUser .messageMeta {
+  justify-content: flex-end;
+}
+
+.senderIdentity {
+  display: inline-flex;
+  align-items: center;
   gap: 0.38rem;
   min-width: 0;
 }
 
+.senderLogo {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+  opacity: 0.96;
+}
+
 .senderName {
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 620;
   color: #ffffff;
 }
 
@@ -999,39 +1157,44 @@
 
 .timestamp {
   font-size: 0.7rem;
-  color: #ffffff;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .messageBubble {
-  border-radius: 14px;
-  padding: 0.54rem 0.74rem;
-  border: 1px solid var(--nv-border-soft);
-  max-width: min(980px, 100%);
+  width: 100%;
+  max-width: 100%;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 .messageBubbleAgent {
-  background: rgba(18, 28, 16, 0.52);
-  border-bottom-left-radius: 6px;
+  background: transparent;
 }
 
 .messageBubbleUser {
-  background: rgba(var(--nv-green-rgb), 0.2);
-  border-color: var(--nv-border-strong);
-  border-bottom-right-radius: 6px;
+  width: auto;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.96);
+  border-radius: 1.45rem;
+  padding: 0.8rem 1rem;
 }
 
 .messageBubbleSystem {
-  background: rgba(11, 18, 10, 0.56);
-  border-color: var(--nv-border-medium);
+  width: auto;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 1.1rem;
+  padding: 0.72rem 0.9rem;
 }
 
 .messageMarkdown {
   min-width: 0;
+  width: 100%;
 }
 
 .messageMarkdown :global(.markdown) {
   font-size: 0.9rem;
-  line-height: 1.55;
+  line-height: 1.68;
 }
 
 .messageMarkdown > div {
@@ -1059,17 +1222,17 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0.66rem 0.8rem 0.88rem;
+  padding: 1.2rem 1rem 1rem;
   border-top: none;
-  background: transparent;
+  background: linear-gradient(180deg, rgba(7, 8, 10, 0) 0%, rgba(7, 8, 10, 0.72) 38%, rgba(7, 8, 10, 0.94) 100%);
   position: relative;
   isolation: isolate;
 }
 
 .inputStack {
   position: relative;
-  width: 100%;
-  max-width: 920px;
+  width: var(--room-rail-width);
+  max-width: var(--room-rail-width);
   margin: 0 auto;
   z-index: 1;
 }
@@ -1077,25 +1240,23 @@
 .inputShell {
   display: flex;
   flex-direction: column;
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(22, 25, 28, 0.9);
+  border-radius: 28px;
+  border: none;
+  background: rgba(44, 45, 49, 0.82);
   padding: 0;
   min-height: 0;
-  backdrop-filter: blur(14px) saturate(116%);
-  -webkit-backdrop-filter: blur(14px) saturate(116%);
+  backdrop-filter: blur(14px) saturate(118%);
+  -webkit-backdrop-filter: blur(14px) saturate(118%);
   box-shadow:
-    0 16px 32px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 8px 18px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
   overflow: hidden;
 }
 
 .inputShell:focus-within {
-  border-color: rgba(118, 185, 1, 0.46);
   box-shadow:
-    0 0 0 1px rgba(118, 185, 1, 0.46),
-    0 16px 34px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 10px 22px rgba(0, 0, 0, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .input {
@@ -1137,7 +1298,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.45rem;
-  padding: 0.25rem 0.5rem 0.5rem 0.5rem;
+  padding: 0.2rem 0.55rem 0.6rem 0.55rem;
 }
 
 .inputModeControls {
@@ -1394,7 +1555,9 @@
 .stateHint {
   color: var(--nv-text-secondary);
   font-size: 0.92rem;
+  width: min(100%, var(--room-rail-width));
   padding: 1rem 0.25rem;
+  text-align: center;
 }
 
 @media (max-width: 1080px) {
@@ -1418,8 +1581,17 @@
     max-height: 170px;
   }
 
-  .messageRow {
-    max-width: 95%;
+  .teamDetailsDialog {
+    width: calc(100vw - 1.6rem);
+    max-height: calc(100vh - 1.6rem);
+  }
+
+  .teamDetailsMemberGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .messageRowUser .messageMain {
+    max-width: min(80%, 560px);
   }
 }
 
@@ -1430,14 +1602,6 @@
 
   .containerSidebarOpen {
     padding-left: 0.3rem;
-  }
-
-  .teamInlineMetaRow {
-    justify-content: center;
-  }
-
-  .teamInlineBrief {
-    text-align: center;
   }
 
   .memberQueueList {
@@ -1468,11 +1632,26 @@
   }
 
   .memberResumeList {
-    max-height: 240px;
+    max-height: none;
+  }
+
+  .teamDetailsOverlay {
+    padding: 0.8rem;
+  }
+
+  .teamDetailsHeader,
+  .teamDetailsBody,
+  .teamDetailsFooter {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .teamDetailsTitle {
+    font-size: 1.32rem;
   }
 
   .chatHeader {
-    padding: 0.68rem 0.72rem;
+    padding: 0.64rem 0.72rem 0.28rem;
   }
 
   .chatTitleWrap {
@@ -1484,15 +1663,8 @@
     gap: 0.62rem;
   }
 
-  .messageRow {
-    max-width: 100%;
-    gap: 0.5rem;
-  }
-
-  .messageAvatar {
-    width: 26px;
-    height: 26px;
-    font-size: 0.75rem;
+  .messageRowUser .messageMain {
+    max-width: min(88%, 100%);
   }
 
   .messageBubble {

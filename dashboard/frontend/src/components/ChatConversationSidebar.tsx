@@ -15,10 +15,11 @@ export default function ChatConversationSidebar({
   onSelectConversation,
 }: ChatConversationSidebarProps) {
   return (
-    <aside className={styles.sidebar}>
+    <div className={styles.sidebar}>
       <div className={styles.sidebarHeader}>
         <div>
-          <div className={styles.sidebarTitle}>Conversations</div>
+          <div className={styles.sidebarEyebrow}>History</div>
+          <div className={styles.sidebarTitle}>Chats</div>
           <div className={styles.sidebarSubtitle}>
             {conversationPreviews.length ? `${conversationPreviews.length} saved` : 'No saved conversations'}
           </div>
@@ -74,6 +75,6 @@ export default function ChatConversationSidebar({
           ))
         )}
       </div>
-    </aside>
+    </div>
   )
 }

@@ -138,10 +138,10 @@ export const ClawModeToggle = ({
       disabled={disabled}
       type="button"
       aria-pressed={enabled}
-      aria-label={enabled ? 'Disable ClawOS' : 'Enable ClawOS'}
+      aria-label={enabled ? 'Disable HireClaw' : 'Enable HireClaw'}
     >
       <img src="/openclaw.svg" alt="" aria-hidden="true" className={styles.clawToggleIcon} />
-      <span className={styles.clawToggleLabel}>ClawMode</span>
+      <span className={styles.clawToggleLabel}>HireClaw</span>
     </button>
   )
 }

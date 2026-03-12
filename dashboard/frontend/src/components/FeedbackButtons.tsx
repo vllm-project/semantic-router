@@ -24,6 +24,42 @@ interface FeedbackButtonsProps {
   onError?: (message: string) => void
 }
 
+function ThumbUpIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={styles.icon}
+    >
+      <path d="M9 11.5V20H5.5A1.5 1.5 0 0 1 4 18.5v-5.5A1.5 1.5 0 0 1 5.5 11.5H9Z" />
+      <path d="M9 11.5 12.3 4.9A1.8 1.8 0 0 1 15.7 6l-.7 5.5h4.2a1.8 1.8 0 0 1 1.8 2.1l-1 4.9a1.8 1.8 0 0 1-1.8 1.5H9" />
+    </svg>
+  )
+}
+
+function ThumbDownIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={styles.icon}
+    >
+      <path d="M15 12.5V4H18.5A1.5 1.5 0 0 1 20 5.5V11A1.5 1.5 0 0 1 18.5 12.5H15Z" />
+      <path d="M15 12.5 11.7 19.1A1.8 1.8 0 0 1 8.3 18l.7-5.5H4.8A1.8 1.8 0 0 1 3 10.4l1-4.9A1.8 1.8 0 0 1 5.8 4H15" />
+    </svg>
+  )
+}
+
 const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
   modelId,
   category,
@@ -136,7 +172,7 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
           {loading && selection === 'up' ? (
             <span className={styles.spinner} aria-hidden />
           ) : (
-            <span aria-hidden>👍</span>
+            <ThumbUpIcon />
           )}
         </button>
         <button
@@ -151,7 +187,7 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
           {loading && selection === 'down' ? (
             <span className={styles.spinner} aria-hidden />
           ) : (
-            <span aria-hidden>👎</span>
+            <ThumbDownIcon />
           )}
         </button>
       </div>

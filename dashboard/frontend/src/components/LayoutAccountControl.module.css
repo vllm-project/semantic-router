@@ -13,6 +13,17 @@
   transition: all var(--transition-fast);
 }
 
+.triggerRail {
+  margin-top: auto;
+  width: 40px;
+  height: 40px;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .trigger:hover {
   color: var(--color-text);
   background: rgba(255, 255, 255, 0.05);
@@ -46,6 +57,12 @@
   flex-shrink: 0;
 }
 
+.triggerAvatarRail {
+  width: 28px;
+  height: 28px;
+  font-size: 0.72rem;
+}
+
 .triggerName {
   max-width: 8rem;
   overflow: hidden;
@@ -74,18 +91,21 @@
 .overlay {
   position: fixed;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 100vw;
+  height: 100dvh;
   padding: 2rem 1rem;
   background: rgba(0, 0, 0, 0.68);
   backdrop-filter: blur(6px);
   z-index: 1200;
+  isolation: isolate;
 }
 
 .dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
   width: min(38rem, calc(100vw - 2rem));
-  max-height: calc(100vh - 4rem);
+  max-height: calc(100dvh - 4rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -96,6 +116,7 @@
     var(--color-bg-secondary);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
   animation: dialogEnter 160ms ease-out;
+  transform: translate(-50%, -50%);
 }
 
 .header {
@@ -322,12 +343,12 @@
 @keyframes dialogEnter {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.985);
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.985);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 
@@ -352,7 +373,7 @@
 
   .dialog {
     width: calc(100vw - 1.5rem);
-    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
   }
 
   .header,

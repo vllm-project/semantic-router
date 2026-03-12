@@ -20,6 +20,10 @@ const (
 	WSTypeMessageChunk   = "message_chunk"
 	WSTypeConnected      = "connected"
 	WSTypeError          = "error"
+
+	roomWSPingInterval = 5 * time.Minute
+	roomWSWriteTimeout = 5 * time.Minute
+	roomWSReadTimeout  = roomWSPingInterval * 2
 )
 
 // WSInboundMessage represents a message from client to server
@@ -168,7 +172,7 @@ func (h *OpenClawHandler) handleRoomWebSocket(w http.ResponseWriter, r *http.Req
 
 // writePump handles writing messages to the WebSocket connection
 func (c *WSClient) writePump() {
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(roomWSPingInterval)
 	defer func() {
 		ticker.Stop()
 		c.close()
@@ -183,14 +187,14 @@ func (c *WSClient) writePump() {
 				return
 			}
 
-			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(roomWSWriteTimeout))
 			if err := c.conn.WriteJSON(message); err != nil {
 				log.Printf("openclaw: WS write error for client %s: %v", c.clientID, err)
 				return
 			}
 
 		case <-ticker.C:
-			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(roomWSWriteTimeout))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -205,9 +209,9 @@ func (c *WSClient) readPump() {
 	}()
 
 	c.conn.SetReadLimit(64 * 1024) // 64KB max message size
-	_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	_ = c.conn.SetReadDeadline(time.Now().Add(roomWSReadTimeout))
 	c.conn.SetPongHandler(func(string) error {
-		_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = c.conn.SetReadDeadline(time.Now().Add(roomWSReadTimeout))
 		return nil
 	})
 

@@ -88,12 +88,22 @@
 }
 
 .cardReady {
-  border-color: color-mix(in srgb, #60a5fa 22%, var(--color-border));
+  border-color: color-mix(in srgb, rgba(134, 239, 172, 0.48) 34%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface) 94%, #102113 6%);
+}
+
+.previewCard.cardReady {
   background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 42%),
-    radial-gradient(circle at bottom left, rgba(148, 163, 184, 0.06), transparent 38%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(15, 23, 42, 0.08)),
-    color-mix(in srgb, var(--color-surface) 95%, #0f172a 5%);
+    radial-gradient(circle at top right, rgba(118, 185, 0, 0.2), transparent 42%),
+    radial-gradient(circle at bottom left, rgba(34, 197, 94, 0.14), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(12, 32, 18, 0.12)),
+    color-mix(in srgb, var(--color-surface) 93%, #102113 7%);
+}
+
+.detailCard.cardReady {
+  background:
+    linear-gradient(180deg, rgba(118, 185, 0, 0.05), rgba(16, 33, 19, 0.02)),
+    color-mix(in srgb, var(--color-surface) 95%, #101c12 5%);
 }
 
 .cardWarm {
@@ -116,7 +126,7 @@
   position: absolute;
   inset: 0 0 auto;
   height: 1px;
-  background: linear-gradient(90deg, rgba(148, 163, 184, 0.46), rgba(96, 165, 250, 0.12));
+  background: linear-gradient(90deg, rgba(190, 242, 100, 0.46), rgba(34, 197, 94, 0.14));
 }
 
 .detailCard {
@@ -136,8 +146,8 @@
   align-items: center;
   padding: 0.34rem 0.62rem;
   border-radius: 999px;
-  background: rgba(59, 130, 246, 0.12);
-  color: #bfdbfe;
+  background: rgba(118, 185, 0, 0.18);
+  color: #dcfce7;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -236,8 +246,8 @@
   align-items: center;
   padding: 0.34rem 0.58rem;
   border-radius: 999px;
-  background: rgba(59, 130, 246, 0.11);
-  color: #93c5fd;
+  background: rgba(118, 185, 0, 0.14);
+  color: #bef264;
   font-size: 0.74rem;
   line-height: 1;
 }

@@ -56,8 +56,11 @@ sudo docker run -d \
     --served-model-name openai/gpt-oss-120b Qwen/Qwen3.5-122B-A10B Qwen/Qwen3.5-9B Kimi-K2-Thinking GLM-4.7 DeepSeek-V3.2 \
     --trust-remote-code \
     --reasoning-parser qwen3 \
-    --max-model-len 32768 \
-    --gpu-memory-utilization 0.90
+    --max-model-len 262144 \
+    --language-model-only \
+    --max-num-seqs 128 \
+    --kv-cache-dtype fp8 \
+    --gpu-memory-utilization 0.85
 ```
 
 If the backend fails its startup memory check on a single MI300X, reduce `--gpu-memory-utilization` first. If it still does not fit, reduce `--max-model-len`.

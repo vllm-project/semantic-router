@@ -212,6 +212,24 @@ func writeIdentityFiles(wsDir string, id IdentityConfig) error {
 	return os.WriteFile(filepath.Join(wsDir, "USER.md"), []byte(strings.Join(userParts, "\n")+"\n"), 0o644)
 }
 
+func buildOpenClawModelProviderConfig(req ProvisionRequest) map[string]interface{} {
+	return map[string]interface{}{
+		"baseUrl": req.Container.ModelBaseURL,
+		"apiKey":  req.Container.ModelAPIKey,
+		"api":     "openai-completions",
+		"headers": map[string]string{"x-authz-user-id": "openclaw-demo-user"},
+		"models": []map[string]interface{}{
+			{
+				"id": req.Container.ModelName, "name": "SR Routed Model",
+				"reasoning": false, "input": []string{"text", "image"},
+				"cost":          map[string]interface{}{"input": 0.15, "output": 0.6, "cacheRead": 0, "cacheWrite": 0},
+				"contextWindow": normalizeOpenClawModelContextWindow(req.Container.ModelContextWindow),
+				"compat":        map[string]string{"maxTokensField": "max_tokens"},
+			},
+		},
+	}
+}
+
 func writeOpenClawConfig(path string, req ProvisionRequest) error {
 	// Recover from stale state where a previous bad bind mount caused
 	// openclaw.json to be created as a directory on host.
@@ -226,21 +244,7 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 	cfg := map[string]interface{}{
 		"models": map[string]interface{}{
 			"providers": map[string]interface{}{
-				"vllm": map[string]interface{}{
-					"baseUrl": req.Container.ModelBaseURL,
-					"apiKey":  req.Container.ModelAPIKey,
-					"api":     "openai-completions",
-					"headers": map[string]string{"x-authz-user-id": "openclaw-demo-user"},
-					"models": []map[string]interface{}{
-						{
-							"id": req.Container.ModelName, "name": "SR Routed Model",
-							"reasoning": false, "input": []string{"text", "image"},
-							"cost":          map[string]interface{}{"input": 0.15, "output": 0.6, "cacheRead": 0, "cacheWrite": 0},
-							"contextWindow": 30000, "maxTokens": 1024,
-							"compat": map[string]string{"maxTokensField": "max_tokens"},
-						},
-					},
-				},
+				"vllm": buildOpenClawModelProviderConfig(req),
 			},
 		},
 		"agents": map[string]interface{}{
@@ -250,7 +254,7 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 				"compaction": map[string]string{"mode": "safeguard"},
 			},
 			"list": []map[string]interface{}{
-				{"id": "vllm-sr", "default": true, "name": "vLLM-SR Powered Agent", "workspace": "/workspace"},
+				{"id": openClawPrimaryAgentID, "default": true, "name": "vLLM-SR Powered Agent", "workspace": "/workspace"},
 			},
 		},
 		"commands": map[string]interface{}{"native": "auto", "nativeSkills": "auto", "restart": true},

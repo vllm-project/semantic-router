@@ -1,18 +1,17 @@
 .container {
   margin-bottom: 1rem;
-  border-radius: 8px;
-  border: 1px solid rgba(118, 185, 0, 0.4);
-  background: linear-gradient(to bottom, rgba(30, 30, 35, 0.5), rgba(25, 25, 30, 0.3));
+  border-radius: 0;
+  border: none;
+  background: transparent;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   transition: all 0.2s ease;
 }
 
 .container:hover {
-  border-color: rgba(118, 185, 0, 0.6);
-  box-shadow: 0 1px 3px rgba(118, 185, 0, 0.2), 0 0 12px rgba(118, 185, 0, 0.15);
+  box-shadow: none;
 }
 
 .header {
@@ -20,7 +19,7 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 10px 14px;
+  padding: 0 0 0.6rem;
   background: none;
   border: none;
   cursor: pointer;
@@ -29,7 +28,7 @@
 }
 
 .header:hover {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: transparent;
 }
 
 .headerLeft {
@@ -67,9 +66,9 @@
 }
 
 .title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.8);
   letter-spacing: -0.01em;
 }
 
@@ -89,7 +88,7 @@
 .time {
   font-size: 12px;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.42);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   min-width: 40px;
@@ -109,9 +108,11 @@
 
 .progressBar {
   height: 2px;
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(255, 255, 255, 0.04);
   overflow: hidden;
   position: relative;
+  border-radius: 999px;
+  margin-bottom: 0.6rem;
 }
 
 .progressFill {
@@ -136,13 +137,13 @@
 }
 
 .content {
-  padding: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  background-color: rgba(20, 20, 25, 0.4);
+  padding: 0;
+  border-top: none;
+  background-color: transparent;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow-x: auto;
+  overflow: visible;
   animation: expandContent 0.2s ease;
 }
 
@@ -159,8 +160,8 @@
 
 /* Override markdown styles for dark mode */
 .content :global(.markdown) {
-  color: rgba(255, 255, 255, 0.5) !important;
-  font-size: 13px;
+  color: rgba(255, 255, 255, 0.58) !important;
+  font-size: 14px;
 }
 
 .content :global(.markdown) h1,
@@ -169,20 +170,20 @@
 .content :global(.markdown) h4,
 .content :global(.markdown) h5,
 .content :global(.markdown) h6 {
-  color: rgba(255, 255, 255, 0.65) !important;
+  color: rgba(255, 255, 255, 0.72) !important;
 }
 
 .content :global(.markdown) p,
 .content :global(.markdown) li,
 .content :global(.markdown) span,
 .content :global(.markdown) div {
-  color: rgba(255, 255, 255, 0.5) !important;
+  color: rgba(255, 255, 255, 0.58) !important;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
 .content :global(.markdown) strong {
-  color: rgba(255, 255, 255, 0.65) !important;
+  color: rgba(255, 255, 255, 0.72) !important;
 }
 
 .content :global(.markdown) code {

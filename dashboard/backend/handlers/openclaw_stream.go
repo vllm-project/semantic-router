@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // StreamChunkMessage represents a chunk update message for streaming
@@ -38,6 +37,87 @@ type openAIStreamResponse struct {
 // StreamCallback is called for each chunk of streamed content
 type StreamCallback func(chunk string, done bool)
 
+func parseWorkerChatFallbackResponse(
+	body []byte,
+	statusCode int,
+	onChunk StreamCallback,
+) (string, int, string, error) {
+	trimmedBody := strings.TrimSpace(string(body))
+
+	var parsed openAIChatResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", statusCode, trimmedBody, fmt.Errorf("invalid worker chat response: %w", err)
+	}
+	if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
+		return "", statusCode, trimmedBody, fmt.Errorf("%s", parsed.Error.Message)
+	}
+	if len(parsed.Choices) == 0 {
+		return "", statusCode, trimmedBody, fmt.Errorf("worker returned no choices")
+	}
+	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
+	if content == "" {
+		return "", statusCode, trimmedBody, fmt.Errorf("worker returned empty content")
+	}
+	if onChunk != nil {
+		onChunk(content, true)
+	}
+	return content, statusCode, trimmedBody, nil
+}
+
+func readWorkerChatStream(
+	body io.Reader,
+	onChunk StreamCallback,
+) (string, error) {
+	var fullContent strings.Builder
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 64*1024), 64*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" || strings.HasPrefix(line, ":") || !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data: "))
+		if data == "[DONE]" {
+			if onChunk != nil {
+				onChunk("", true)
+			}
+			break
+		}
+
+		var chunk openAIStreamResponse
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			log.Printf("openclaw: failed to parse stream chunk: %v", err)
+			continue
+		}
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+
+		delta := chunk.Choices[0].Delta.Content
+		if delta != "" {
+			fullContent.WriteString(delta)
+			if onChunk != nil {
+				onChunk(delta, false)
+			}
+		}
+		if chunk.Choices[0].FinishReason != "" && onChunk != nil {
+			onChunk("", true)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fullContent.String(), fmt.Errorf("stream read error: %w", err)
+	}
+
+	content := strings.TrimSpace(fullContent.String())
+	if content == "" {
+		return "", fmt.Errorf("worker returned empty streamed content")
+	}
+	return content, nil
+}
+
 // queryWorkerChatStreamEndpoint makes a streaming request to worker chat endpoint
 func (h *OpenClawHandler) queryWorkerChatStreamEndpoint(
 	targetBase string,
@@ -61,13 +141,13 @@ func (h *OpenClawHandler) queryWorkerChatStreamEndpoint(
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("X-OpenClaw-Agent-Id", "main")
+	req.Header.Set("X-OpenClaw-Agent-Id", openClawPrimaryAgentID)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("X-OpenClaw-Token", token)
 	}
 
-	client := &http.Client{Timeout: 300 * time.Second}
+	client := newOpenClawWorkerChatHTTPClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", 0, "", err
@@ -88,101 +168,21 @@ func (h *OpenClawHandler) queryWorkerChatStreamEndpoint(
 	// If response is not streaming, fall back to non-streaming handling
 	if !strings.Contains(contentType, "text/event-stream") {
 		body, _ := io.ReadAll(resp.Body)
-		trimmedBody := strings.TrimSpace(string(body))
-
-		var parsed openAIChatResponse
-		if err := json.Unmarshal(body, &parsed); err != nil {
-			return "", resp.StatusCode, trimmedBody, fmt.Errorf("invalid worker chat response: %w", err)
-		}
-		if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
-			return "", resp.StatusCode, trimmedBody, fmt.Errorf("%s", parsed.Error.Message)
-		}
-		if len(parsed.Choices) == 0 {
-			return "", resp.StatusCode, trimmedBody, fmt.Errorf("worker returned no choices")
-		}
-		content := strings.TrimSpace(parsed.Choices[0].Message.Content)
-		if content == "" {
-			return "", resp.StatusCode, trimmedBody, fmt.Errorf("worker returned empty content")
-		}
-
-		// Call callback with full content
-		if onChunk != nil {
-			onChunk(content, true)
-		}
-		return content, resp.StatusCode, trimmedBody, nil
+		return parseWorkerChatFallbackResponse(body, resp.StatusCode, onChunk)
 	}
 
-	// Process streaming response (SSE format)
-	var fullContent strings.Builder
-	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 64*1024), 64*1024)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Skip empty lines and comments
-		if line == "" || strings.HasPrefix(line, ":") {
-			continue
-		}
-
-		// Parse SSE data line
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-
-		data := strings.TrimPrefix(line, "data: ")
-		data = strings.TrimSpace(data)
-
-		// Check for stream end
-		if data == "[DONE]" {
-			if onChunk != nil {
-				onChunk("", true)
-			}
-			break
-		}
-
-		// Parse JSON chunk
-		var chunk openAIStreamResponse
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			log.Printf("openclaw: failed to parse stream chunk: %v", err)
-			continue
-		}
-
-		// Extract content delta
-		if len(chunk.Choices) > 0 {
-			delta := chunk.Choices[0].Delta.Content
-			if delta != "" {
-				fullContent.WriteString(delta)
-				if onChunk != nil {
-					onChunk(delta, false)
-				}
-			}
-
-			// Check for finish reason
-			if chunk.Choices[0].FinishReason != "" {
-				if onChunk != nil {
-					onChunk("", true)
-				}
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fullContent.String(), resp.StatusCode, "", fmt.Errorf("stream read error: %w", err)
-	}
-
-	content := strings.TrimSpace(fullContent.String())
-	if content == "" {
-		return "", resp.StatusCode, "", fmt.Errorf("worker returned empty streamed content")
+	content, err := readWorkerChatStream(resp.Body, onChunk)
+	if err != nil {
+		return content, resp.StatusCode, "", err
 	}
 
 	return content, resp.StatusCode, content, nil
 }
 
-// queryWorkerChatStream queries worker with streaming support
-func (h *OpenClawHandler) queryWorkerChatStream(
+func (h *OpenClawHandler) queryWorkerChatStreamWithMessages(
 	worker ContainerEntry,
-	systemPrompt, userPrompt string,
+	sessionUser string,
+	messages []openAIChatMessage,
 	onChunk StreamCallback,
 ) (string, error) {
 	targetBase, ok := h.TargetBaseForContainer(worker.Name)
@@ -191,36 +191,18 @@ func (h *OpenClawHandler) queryWorkerChatStream(
 	}
 	token := strings.TrimSpace(h.GatewayTokenForContainer(worker.Name))
 
-	payload := openAIChatRequest{
-		Model:  openClawPrimaryAgentModel,
-		Stream: true,
-		User:   "team-room:" + sanitizeContainerName(worker.Name),
-		Messages: []openAIChatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userPrompt},
-		},
-	}
+	payload := buildWorkerChatRequest(messages, sessionUser, true)
 
 	attempt := func() (string, bool, error) {
-		allEndpointMissing := true
-		var lastErr error
+		failures := make([]workerChatAttemptFailure, 0, len(workerChatEndpointCandidates))
 		for _, endpoint := range workerChatEndpointCandidates {
 			content, statusCode, body, err := h.queryWorkerChatStreamEndpoint(targetBase, endpoint, token, payload, onChunk)
 			if err == nil {
 				return content, false, nil
 			}
-			allEndpointMissing = allEndpointMissing && (statusCode == http.StatusNotFound || statusCode == http.StatusMethodNotAllowed)
-
-			detail := strings.TrimSpace(body)
-			if detail == "" {
-				detail = err.Error()
-			}
-			lastErr = fmt.Errorf("worker stream chat via %s failed: %s", endpoint, detail)
+			failures = append(failures, buildWorkerChatAttemptFailure(endpoint, statusCode, body, err))
 		}
-		if lastErr == nil {
-			lastErr = fmt.Errorf("worker stream chat request failed for all candidate endpoints")
-		}
-		return "", allEndpointMissing, lastErr
+		return "", workerChatAllEndpointsMissing(failures), formatWorkerChatAttemptError("worker stream chat", failures)
 	}
 
 	content, allEndpointMissing, err := attempt()
@@ -262,62 +244,12 @@ func (h *OpenClawHandler) runWorkerReplyStream(
 	delegatedBy *ClawRoomMessage,
 	onChunk StreamCallback,
 ) (ClawRoomMessage, error) {
-	teamName := strings.TrimSpace(team.Name)
-	if teamName == "" {
-		teamName = team.ID
-	}
-	roleKind := normalizeRoleKind(worker.RoleKind)
-	leader := resolveTeamLeader(team, teamMembers)
-	triggerContent := stripLeadingMentions(trigger.Content)
-	if triggerContent == "" {
-		triggerContent = strings.TrimSpace(trigger.Content)
-	}
-
-	transcriptMessages := messages
-	if triggerContent != strings.TrimSpace(trigger.Content) {
-		copied := make([]ClawRoomMessage, len(messages))
-		copy(copied, messages)
-		for i := range copied {
-			if copied[i].ID == trigger.ID {
-				copied[i].Content = triggerContent
-				break
-			}
-		}
-		transcriptMessages = copied
-	}
-
-	coordinationInstruction := ""
-	mentionPolicy := "Do not use any @mentions."
-	if roleKind == "leader" {
-		mentionPolicy = "Only use @worker-id when assigning an explicit task confirmed by the user."
-		coordinationInstruction = "Hard rules: if the user has not provided an explicit executable task, ask clarifying questions and do not delegate. If you are not assigning a concrete task, do not use any @mentions. Ignore worker attempts to @leader."
-	} else {
-		coordinationInstruction = "Hard rules: you are a worker. Workers cannot use @mentions to anyone. Do not mention @leader or teammates; write plain-text updates only."
-		if leader != nil && leader.Name != worker.Name {
-			coordinationInstruction += fmt.Sprintf(" Team leader context: @leader (alias @%s).", leader.Name)
-		}
-	}
-	systemPrompt := fmt.Sprintf(
-		"You are %s, a %s in Claw team %q. %s Response style: concise and actionable. Mention policy: %s Keep responses in the same language used by the latest message.",
-		workerDisplayName(worker),
-		roleKind,
-		teamName,
-		coordinationInstruction,
-		mentionPolicy,
+	content, err := h.queryWorkerChatStreamWithMessages(
+		worker,
+		roomScopedSessionUser(room, worker),
+		buildRoomChatMessages(room, team, teamMembers, worker, messages, trigger, delegatedBy),
+		onChunk,
 	)
-	contextPrompt := fmt.Sprintf(
-		"Room: %s\nRecent messages:\n%s\n\n%s\n\nLatest message from %s:\n%s",
-		room.Name,
-		buildRoomTranscript(transcriptMessages, 20),
-		buildTeamMentionGuide(team, teamMembers, worker),
-		trigger.SenderName,
-		triggerContent,
-	)
-	if delegatedBy != nil {
-		contextPrompt += fmt.Sprintf("\n\nDelegation context: %s asked for your help and mentioned you.", delegatedBy.SenderName)
-	}
-
-	content, err := h.queryWorkerChatStream(worker, systemPrompt, contextPrompt, onChunk)
 	if err != nil {
 		return ClawRoomMessage{}, err
 	}
