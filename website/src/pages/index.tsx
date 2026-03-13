@@ -83,18 +83,18 @@ const capabilityCards: CapabilityCard[] = [
   },
   {
     kind: 'selection',
-    title: translate({ id: 'homepage.capabilities.research.title', message: 'Research-grade model selection' }),
+    title: translate({ id: 'homepage.capabilities.research.title', message: 'Frontier LLM systems' }),
     text: translate({
       id: 'homepage.capabilities.research.text',
-      message: 'Selection stays measurable enough for papers, benchmarks, and production tuning.',
+      message: 'Research drives the stack itself, exploring frontier LLM systems beyond settled patterns.',
     }),
   },
   {
     kind: 'docs',
-    title: translate({ id: 'homepage.capabilities.docs.title', message: 'System docs' }),
+    title: translate({ id: 'homepage.capabilities.docs.title', message: 'Full dashboard support' }),
     text: translate({
       id: 'homepage.capabilities.docs.text',
-      message: 'Docs, papers, and product routes read as one system, not scattered collateral.',
+      message: 'Operate routing, topology, controls, and runtime feedback from one integrated dashboard.',
     }),
   },
 ]
@@ -191,6 +191,7 @@ function DitherHero(): JSX.Element {
         <div className={styles.heroGrid}>
           <div className={styles.heroStack}>
             <PageIntro
+              className={styles.heroIntro}
               label={<Translate id="homepage.hero.label">System-level intelligence</Translate>}
               title={(
                 <>
@@ -199,21 +200,17 @@ function DitherHero(): JSX.Element {
                   <Translate id="homepage.hero.line2">before scale</Translate>
                 </>
               )}
-              description={(
-                <Translate id="homepage.hero.description.foundation">
-                  Built on Shannon signals, entropy folding, and neural-symbolic routing.
-                </Translate>
-              )}
               actions={(
                 <>
                   <PillLink
+                    className={styles.heroPrimaryCta}
                     href="https://play.vllm-semantic-router.com/"
                     rel="noreferrer"
                     target="_blank"
                   >
                     <Translate id="homepage.hero.publicBeta">Public Beta</Translate>
                   </PillLink>
-                  <PillLink to="/white-paper" muted>
+                  <PillLink className={styles.heroSecondaryCta} to="/white-paper" muted>
                     <Translate id="homepage.hero.secondaryCta">Open white paper</Translate>
                   </PillLink>
                 </>
@@ -221,10 +218,11 @@ function DitherHero(): JSX.Element {
             />
 
             <p className={styles.heroManifesto}>
-              <Translate id="homepage.hero.manifesto">
-                A router should feel like a system brain: encoder-guided, entropy-aware, and
-                ruthlessly clear.
-              </Translate>
+              <span className={styles.heroManifestoText}>
+                <Translate id="homepage.hero.manifesto">
+                  System-brain routing: signal-led, entropy-aware, ruthlessly clear.
+                </Translate>
+              </span>
             </p>
           </div>
         </div>
@@ -244,13 +242,13 @@ function CapabilitySection(): JSX.Element {
           <div>
             <h2>
               <Translate id="homepage.capabilities.heading">
-                Neural-symbolic routing, kept legible.
+                Charting the LLM system brain.
               </Translate>
             </h2>
             <p>
               <Translate id="homepage.capabilities.copy">
-                Encoder priors, Shannon mapping, entropy folding, and model selection stay visible
-                from research prototypes to production paths.
+                A research-driven stack for uncharted territory, probing the frontier where signals,
+                policies, and models converge into one intelligence layer.
               </Translate>
             </p>
           </div>

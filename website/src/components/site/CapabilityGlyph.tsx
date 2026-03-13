@@ -18,22 +18,28 @@ const strokeProps = {
   stroke: 'currentColor',
   strokeLinecap: 'round',
   strokeLinejoin: 'round',
-  strokeWidth: 1.6,
+  strokeWidth: 1.7,
 }
 
 function SignalGlyph(): JSX.Element {
   return (
     <>
-      <circle cx="28" cy="22" r="7" {...strokeProps} />
-      <circle cx="72" cy="18" r="7" {...strokeProps} />
-      <circle cx="116" cy="22" r="7" {...strokeProps} />
-      <path d="M28 29v15m44-19v19m44-15v15" {...strokeProps} opacity="0.82" />
-      <path d="M28 44c12 12 28 18 44 18s32-6 44-18" {...strokeProps} />
-      <path d="M52 70h40" {...strokeProps} />
-      <path d="M44 78h56" {...strokeProps} opacity="0.6" />
-      <circle cx="28" cy="22" r="2.2" fill="currentColor" opacity="0.18" />
-      <circle cx="72" cy="18" r="2.2" fill="currentColor" opacity="0.18" />
-      <circle cx="116" cy="22" r="2.2" fill="currentColor" opacity="0.18" />
+      <path d="M16 28h20M16 40h24M16 52h20" {...strokeProps} opacity="0.62" />
+      <path d="M36 28c6 0 8 0 12 4M40 40h8M36 52c6 0 8 0 12-4" {...strokeProps} />
+      <rect x="48" y="20" width="26" height="40" rx="11" {...strokeProps} />
+      <path d="M61 28v0m0 12v0m0 12v0" {...strokeProps} />
+      <circle cx="61" cy="28" r="3.4" fill="currentColor" opacity="0.18" />
+      <circle cx="61" cy="40" r="3.4" fill="currentColor" opacity="0.22" />
+      <circle cx="61" cy="52" r="3.4" fill="currentColor" opacity="0.18" />
+      <path d="M74 40h10" {...strokeProps} />
+      <rect x="86" y="22" width="42" height="36" rx="10" {...strokeProps} opacity="0.88" />
+      <path d="M92 30h30" {...strokeProps} opacity="0.36" />
+      <circle cx="98" cy="40" r="2.8" fill="currentColor" opacity="0.18" />
+      <circle cx="107" cy="40" r="2.8" fill="currentColor" opacity="0.26" />
+      <circle cx="116" cy="40" r="2.8" fill="currentColor" opacity="0.34" />
+      <circle cx="98" cy="48" r="2.8" fill="currentColor" opacity="0.12" />
+      <circle cx="107" cy="48" r="2.8" fill="currentColor" opacity="0.2" />
+      <circle cx="116" cy="48" r="2.8" fill="currentColor" opacity="0.28" />
     </>
   )
 }
@@ -41,15 +47,19 @@ function SignalGlyph(): JSX.Element {
 function DecisionGlyph(): JSX.Element {
   return (
     <>
-      <circle cx="72" cy="30" r="12" {...strokeProps} />
-      <path d="M72 42v12" {...strokeProps} />
-      <path d="M72 54H34m38 0h38" {...strokeProps} />
-      <rect x="20" y="58" width="28" height="18" rx="9" {...strokeProps} />
-      <rect x="58" y="58" width="28" height="18" rx="9" {...strokeProps} />
-      <rect x="96" y="58" width="28" height="18" rx="9" {...strokeProps} />
-      <path d="M66 30h12" {...strokeProps} />
-      <path d="M72 24v12" {...strokeProps} />
-      <circle cx="72" cy="30" r="3" fill="currentColor" opacity="0.18" />
+      <circle cx="24" cy="30" r="5.5" {...strokeProps} />
+      <circle cx="24" cy="50" r="5.5" {...strokeProps} />
+      <circle cx="42" cy="40" r="5.5" {...strokeProps} />
+      <path d="M29 30l9 7m-9 20l9-7m9-10h13" {...strokeProps} opacity="0.88" />
+      <path d="M72 28l12 12-12 12-12-12z" {...strokeProps} />
+      <circle cx="72" cy="40" r="2.8" fill="currentColor" opacity="0.2" />
+      <rect x="96" y="22" width="24" height="36" rx="8" {...strokeProps} opacity="0.88" />
+      <path d="M102 32h12m-12 8h12m-12 8h8" {...strokeProps} opacity="0.56" />
+      <path d="M84 40h12" {...strokeProps} />
+      <path d="M72 52v8l-18 10m18-10l18 10" {...strokeProps} />
+      <rect x="40" y="70" width="24" height="10" rx="5" {...strokeProps} opacity="0.55" />
+      <rect x="80" y="70" width="24" height="10" rx="5" {...strokeProps} />
+      <circle cx="92" cy="75" r="2.6" fill="currentColor" opacity="0.24" />
     </>
   )
 }
@@ -57,14 +67,20 @@ function DecisionGlyph(): JSX.Element {
 function PluginGlyph(): JSX.Element {
   return (
     <>
-      <rect x="16" y="28" width="30" height="40" rx="8" {...strokeProps} />
-      <rect x="57" y="20" width="30" height="56" rx="8" {...strokeProps} />
-      <rect x="98" y="28" width="30" height="40" rx="8" {...strokeProps} />
-      <path d="M46 48h11m30 0h11" {...strokeProps} />
-      <path d="M32 36v24m40-32v40m40-32v24" {...strokeProps} opacity="0.55" />
-      <circle cx="32" cy="48" r="4" fill="currentColor" opacity="0.18" />
-      <circle cx="72" cy="48" r="4" fill="currentColor" opacity="0.18" />
-      <circle cx="112" cy="48" r="4" fill="currentColor" opacity="0.18" />
+      <path d="M20 48h88" {...strokeProps} />
+      <path d="M108 48h14" {...strokeProps} />
+      <path d="M116 40l8 8-8 8" {...strokeProps} />
+      <rect x="24" y="20" width="22" height="16" rx="7" {...strokeProps} />
+      <path d="M35 36v12" {...strokeProps} />
+      <path d="M31 28h8" {...strokeProps} opacity="0.52" />
+      <rect x="58" y="56" width="24" height="16" rx="7" {...strokeProps} opacity="0.92" />
+      <path d="M70 48v8" {...strokeProps} />
+      <path d="M64 64h12" {...strokeProps} opacity="0.52" />
+      <rect x="94" y="18" width="20" height="18" rx="7" {...strokeProps} />
+      <path d="M104 36v12" {...strokeProps} />
+      <circle cx="35" cy="28" r="2.8" fill="currentColor" opacity="0.18" />
+      <circle cx="70" cy="64" r="2.8" fill="currentColor" opacity="0.22" />
+      <circle cx="104" cy="27" r="2.8" fill="currentColor" opacity="0.18" />
     </>
   )
 }
@@ -72,15 +88,15 @@ function PluginGlyph(): JSX.Element {
 function LanguageGlyph(): JSX.Element {
   return (
     <>
-      <circle cx="34" cy="48" r="12" {...strokeProps} />
-      <path d="M46 48h20" {...strokeProps} />
-      <path d="M66 48l9-9m-9 9l9 9" {...strokeProps} />
-      <path d="M82 30h28v12H82zm0 24h28v12H82z" {...strokeProps} />
-      <path d="M96 42v12" {...strokeProps} opacity="0.72" />
-      <path d="M74 48h8m28 0h8" {...strokeProps} opacity="0.78" />
-      <circle cx="34" cy="48" r="3.2" fill="currentColor" opacity="0.18" />
-      <circle cx="96" cy="36" r="2.8" fill="currentColor" opacity="0.18" />
-      <circle cx="96" cy="60" r="2.8" fill="currentColor" opacity="0.18" />
+      <path d="M18 30a10 10 0 0 1 10-10h18a10 10 0 0 1 10 10v12a10 10 0 0 1-10 10H34l-8 8v-8h2a10 10 0 0 1-10-10z" {...strokeProps} />
+      <path d="M28 30h18m-18 8h14" {...strokeProps} opacity="0.58" />
+      <path d="M56 36h16" {...strokeProps} />
+      <path d="M64 28l10 8-10 8" {...strokeProps} />
+      <circle cx="96" cy="28" r="6" {...strokeProps} />
+      <path d="M96 34v10m0 0L80 56m16-12l16 12" {...strokeProps} />
+      <rect x="68" y="58" width="22" height="12" rx="6" {...strokeProps} opacity="0.82" />
+      <rect x="102" y="58" width="22" height="12" rx="6" {...strokeProps} />
+      <circle cx="96" cy="28" r="2.4" fill="currentColor" opacity="0.22" />
     </>
   )
 }
@@ -88,15 +104,20 @@ function LanguageGlyph(): JSX.Element {
 function SelectionGlyph(): JSX.Element {
   return (
     <>
-      <path d="M20 26h78" {...strokeProps} opacity="0.45" />
-      <path d="M20 46h96" {...strokeProps} />
-      <path d="M20 66h62" {...strokeProps} opacity="0.62" />
-      <rect x="20" y="20" width="78" height="12" rx="6" {...strokeProps} />
-      <rect x="20" y="40" width="96" height="12" rx="6" {...strokeProps} />
-      <rect x="20" y="60" width="62" height="12" rx="6" {...strokeProps} />
-      <path d="M108 46h18" {...strokeProps} />
-      <path d="M118 38l8 8-8 8" {...strokeProps} />
-      <circle cx="30" cy="46" r="3.2" fill="currentColor" opacity="0.18" />
+      <rect x="18" y="24" width="30" height="10" rx="5" {...strokeProps} opacity="0.52" />
+      <rect x="18" y="44" width="40" height="10" rx="5" {...strokeProps} />
+      <rect x="18" y="64" width="26" height="10" rx="5" {...strokeProps} opacity="0.52" />
+      <path d="M48 29c10 0 14 4 20 16m-10 4h10m-24 20c12 0 18-10 24-20" {...strokeProps} opacity="0.52" />
+      <circle cx="70" cy="49" r="6" {...strokeProps} />
+      <circle cx="70" cy="49" r="2.5" fill="currentColor" opacity="0.2" />
+      <path d="M76 47c14-2 24-12 34-20" {...strokeProps} />
+      <path d="M76 53c16 2 26 10 34 16" {...strokeProps} opacity="0.52" />
+      <path
+        d="M114 24l2.7 5.8 6.4.9-4.6 4.5 1.1 6.4-5.6-3-5.6 3 1.1-6.4-4.6-4.5 6.4-.9z"
+        {...strokeProps}
+      />
+      <circle cx="114" cy="69" r="10" {...strokeProps} opacity="0.82" />
+      <circle cx="114" cy="69" r="2.4" fill="currentColor" opacity="0.22" />
     </>
   )
 }
@@ -104,14 +125,22 @@ function SelectionGlyph(): JSX.Element {
 function DocsGlyph(): JSX.Element {
   return (
     <>
-      <rect x="20" y="18" width="34" height="48" rx="8" {...strokeProps} />
-      <rect x="55" y="28" width="34" height="48" rx="8" {...strokeProps} opacity="0.82" />
-      <rect x="90" y="18" width="34" height="48" rx="8" {...strokeProps} />
-      <path d="M32 32h10m-10 12h10m35-4h10" {...strokeProps} opacity="0.68" />
-      <path d="M54 42h9m26 0h9" {...strokeProps} />
-      <circle cx="37" cy="54" r="3.2" fill="currentColor" opacity="0.18" />
-      <circle cx="72" cy="54" r="3.2" fill="currentColor" opacity="0.18" />
-      <circle cx="107" cy="54" r="3.2" fill="currentColor" opacity="0.18" />
+      <rect x="18" y="18" width="108" height="60" rx="11" {...strokeProps} />
+      <path d="M18 32h108" {...strokeProps} opacity="0.52" />
+      <circle cx="28" cy="25" r="1.9" fill="currentColor" opacity="0.22" />
+      <circle cx="34" cy="25" r="1.9" fill="currentColor" opacity="0.18" />
+      <circle cx="40" cy="25" r="1.9" fill="currentColor" opacity="0.14" />
+      <rect x="28" y="40" width="18" height="26" rx="5" {...strokeProps} opacity="0.7" />
+      <path d="M34 46v12m6-8v8" {...strokeProps} opacity="0.52" />
+      <rect x="54" y="40" width="40" height="26" rx="6" {...strokeProps} />
+      <path d="M60 47h24" {...strokeProps} opacity="0.34" />
+      <path d="M60 58l8-8 8 4 8-10 6 4" {...strokeProps} />
+      <circle cx="68" cy="50" r="2.2" fill="currentColor" opacity="0.18" />
+      <circle cx="76" cy="54" r="2.2" fill="currentColor" opacity="0.2" />
+      <circle cx="84" cy="44" r="2.2" fill="currentColor" opacity="0.22" />
+      <rect x="102" y="40" width="16" height="10" rx="5" {...strokeProps} opacity="0.82" />
+      <rect x="102" y="56" width="16" height="10" rx="5" {...strokeProps} opacity="0.64" />
+      <path d="M105 45h10m-10 16h7" {...strokeProps} opacity="0.46" />
     </>
   )
 }
