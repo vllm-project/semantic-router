@@ -81,6 +81,7 @@ func ExtractQueryFromOpenAIRequest(requestBody []byte) (string, string, error) {
 }
 
 // ScopeQueryToUser adds a deterministic user namespace to the cache query.
+// If userID is empty, the original query is returned unchanged for backward compatibility.
 func ScopeQueryToUser(query string, userID string) string {
 	normalizedUserID := strings.TrimSpace(userID)
 	if normalizedUserID == "" || query == "" {
