@@ -36,6 +36,7 @@ type RedisCache struct {
 	mu                  sync.RWMutex
 	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
 }
+
 // RedisCacheOptions contains configuration parameters for Redis cache initialization
 type RedisCacheOptions struct {
 	SimilarityThreshold float32
@@ -46,6 +47,7 @@ type RedisCacheOptions struct {
 	EmbeddingModel      string
 	BackendLabel        string
 }
+
 // NewRedisCache initializes a new Redis-backed semantic cache instance
 func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	if !options.Enabled {
@@ -68,6 +70,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	} else {
 		redisConfig = options.Config
 	}
+
 	logging.Debugf("RedisCache: config loaded - host=%s:%d, index=%s, dimension=auto-detect",
 		redisConfig.Connection.Host, redisConfig.Connection.Port, redisConfig.Index.Name)
 	// Establish connection to Redis server
@@ -85,6 +88,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	if embeddingModel == "" {
 		embeddingModel = "bert"
 	}
+
 	backendLabel := options.BackendLabel
 	if backendLabel == "" {
 		backendLabel = string(RedisCacheType)
