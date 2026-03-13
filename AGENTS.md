@@ -12,7 +12,7 @@ This file is the short entrypoint for coding agents. The detailed human-readable
 
 ## Native Discovery vs Routed Context
 
-- Root startup should always discover this [AGENTS.md](AGENTS.md) entrypoint and the thin repo-native bridge at [.agents/skills/vllm-semantic-router-harness/SKILL.md](.agents/skills/vllm-semantic-router-harness/SKILL.md).
+- Root startup should always discover this [AGENTS.md](AGENTS.md) entrypoint and the thin repo-native bridge at [.agents/skills/harness/SKILL.md](.agents/skills/harness/SKILL.md).
 - Full task routing, primary-skill resolution, local-rule surfacing, and validation planning still come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
 - `tools/agent/**` remains the canonical harness source; `.agents/skills/**` is only a discovery bridge.
 

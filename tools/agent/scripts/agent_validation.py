@@ -149,12 +149,10 @@ def validate_routing_fixtures(errors: list[str]) -> None:
 
 
 def validate_discovery_bridge(errors: list[str]) -> None:
-    bridge_path = (
-        REPO_ROOT / ".agents" / "skills" / "vllm-semantic-router-harness" / "SKILL.md"
-    )
+    bridge_path = REPO_ROOT / ".agents" / "skills" / "harness" / "SKILL.md"
     if not bridge_path.exists():
         errors.append(
-            "Missing native-discovery bridge: .agents/skills/vllm-semantic-router-harness/SKILL.md"
+            "Missing native-discovery bridge: .agents/skills/harness/SKILL.md"
         )
         return
 
