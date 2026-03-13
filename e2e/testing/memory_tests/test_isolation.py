@@ -20,9 +20,7 @@ class UserIsolationTest(MemoryFeaturesTest):
         self.user_a_secret = "My secret PIN is 9876"
         self.user_b_secret = "My password is hunter2"
 
-    def _store_secret_with_followup(
-        self, secret: str, user_id: str, followup: str
-    ):
+    def _store_secret_with_followup(self, secret: str, user_id: str, followup: str):
         """Store a secret and send a follow-up turn for a user."""
         result = self.send_memory_request(
             message=f"Remember this: {secret}",
@@ -104,9 +102,7 @@ class UserIsolationTest(MemoryFeaturesTest):
                 f"{output[:PREVIEW_LENGTH]}"
             )
         else:
-            self.print_test_result(
-                True, "User B correctly cannot see User A's secret"
-            )
+            self.print_test_result(True, "User B correctly cannot see User A's secret")
 
     def test_03_user_a_can_see_own_memory(self):
         """User A should be able to see their own secret from Milvus."""
@@ -156,13 +152,9 @@ class UserIsolationTest(MemoryFeaturesTest):
         user_b_leak = self.milvus.search_memories(self.user_b, "9876")
 
         if user_a_leak:
-            self.fail(
-                "SECURITY: User A's Milvus partition contains User B's password!"
-            )
+            self.fail("SECURITY: User A's Milvus partition contains User B's password!")
         if user_b_leak:
-            self.fail(
-                "SECURITY: User B's Milvus partition contains User A's PIN!"
-            )
+            self.fail("SECURITY: User B's Milvus partition contains User A's PIN!")
 
         print(
             f"   ✓ Milvus isolation verified: "
@@ -217,6 +209,4 @@ class UserIsolationTest(MemoryFeaturesTest):
         if b_saw_a_pin:
             self.fail("SECURITY VIOLATION: User B saw User A's PIN from Milvus")
 
-        self.print_test_result(
-            True, "Bidirectional isolation verified at Milvus level"
-        )
+        self.print_test_result(True, "Bidirectional isolation verified at Milvus level")

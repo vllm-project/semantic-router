@@ -200,9 +200,7 @@ class MilvusVerifier:
                 return None
 
             except Exception as e:
-                print(
-                    f"⚠️  Milvus metadata query failed (attempt {attempt + 1}): {e}"
-                )
+                print(f"⚠️  Milvus metadata query failed (attempt {attempt + 1}): {e}")
                 if attempt < max_retries - 1:
                     time.sleep(2)
                     continue

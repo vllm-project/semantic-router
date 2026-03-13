@@ -132,7 +132,9 @@ class PluginCombinationTest(MemoryFeaturesTest):
             self.fail("Failed to query memory")
 
         output = query_result.get("_output_text", "").lower()
-        print(f"   Response: {query_result.get('_output_text', '')[:PREVIEW_LENGTH]}...")
+        print(
+            f"   Response: {query_result.get('_output_text', '')[:PREVIEW_LENGTH]}..."
+        )
 
         # Since this is a NEW session, "phoenix" can ONLY come from Milvus memory
         if "phoenix" in output:
