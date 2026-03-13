@@ -83,4 +83,3 @@ memory:
   embedding_model: "bert"  # Use BERT for forgiving semantic matching
   default_retrieval_limit: 5
   default_similarity_threshold: 0.45  # Tuned for all-MiniLM-L12-v2 question-to-statement pairs
-  extraction_batch_size: 1  # Extract after every turn (1%1=0 triggers extraction)
