@@ -148,13 +148,13 @@ def validate_routing_fixtures(errors: list[str]) -> None:
             )
 
 
-def validate_codex_bridge(errors: list[str]) -> None:
+def validate_discovery_bridge(errors: list[str]) -> None:
     bridge_path = (
         REPO_ROOT / ".agents" / "skills" / "vllm-semantic-router-harness" / "SKILL.md"
     )
     if not bridge_path.exists():
         errors.append(
-            "Missing Codex-native bridge: .agents/skills/vllm-semantic-router-harness/SKILL.md"
+            "Missing native-discovery bridge: .agents/skills/vllm-semantic-router-harness/SKILL.md"
         )
         return
 
@@ -168,7 +168,7 @@ def validate_codex_bridge(errors: list[str]) -> None:
     for ref in required_refs:
         if ref not in bridge_text:
             errors.append(
-                f"Codex bridge skill must reference '{ref}' in {bridge_path.relative_to(REPO_ROOT)}"
+                f"Discovery bridge skill must reference '{ref}' in {bridge_path.relative_to(REPO_ROOT)}"
             )
 
 
@@ -195,7 +195,7 @@ def collect_validation_errors() -> list[str]:
     )
     validate_skill_registry(repo_manifest, task_matrix, skill_registry, errors)
     validate_routing_fixtures(errors)
-    validate_codex_bridge(errors)
+    validate_discovery_bridge(errors)
     return errors
 
 

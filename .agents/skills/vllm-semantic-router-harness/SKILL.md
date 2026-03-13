@@ -1,11 +1,11 @@
 ---
 name: vllm-semantic-router-harness
-description: Use for any task inside the vLLM Semantic Router repository. It bridges Codex into the repo harness entrypoint, canonical agent-report routing flow, repo-local skill registry, and validation commands without duplicating the canonical rules.
+description: Use for any task inside the vLLM Semantic Router repository. It bridges native skill discovery into the repo harness entrypoint, canonical agent-report routing flow, repo-local skill registry, and validation commands without duplicating the canonical rules.
 ---
 
 # vLLM Semantic Router Harness
 
-This is a native-discovery bridge for Codex. The canonical source of truth remains:
+This is a native-discovery bridge. The canonical source of truth remains:
 
 - [`AGENTS.md`](../../../AGENTS.md)
 - [`docs/agent/README.md`](../../../docs/agent/README.md)
