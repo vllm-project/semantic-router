@@ -64,7 +64,9 @@ def select_training_split(
         )
         return "test", dataset_splits["test"]
 
-    raise ValueError(f"No usable dataset splits found for {dataset_name}: {split_names}")
+    raise ValueError(
+        f"No usable dataset splits found for {dataset_name}: {split_names}"
+    )
 
 
 def get_target_modules_for_model(model_name: str) -> List[str]:

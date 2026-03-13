@@ -415,9 +415,7 @@ def load_mmlu_dataset(max_samples=10000):
     all_texts = training_split["question"]
     all_labels = training_split["category"]
 
-    logger.info(
-        f"Loaded {len(all_texts)} raw samples from {training_split_name} split"
-    )
+    logger.info(f"Loaded {len(all_texts)} raw samples from {training_split_name} split")
 
     # Group by category
     category_samples = {}
