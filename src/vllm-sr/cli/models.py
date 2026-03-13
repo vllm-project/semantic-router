@@ -3,6 +3,11 @@
 from typing import List, Dict, Any, Optional, Literal
 from enum import Enum
 from pydantic import BaseModel, Field, model_validator
+from cli.models_memory import (
+    MemoryMilvusConfig,
+    MemoryRedisCacheConfig,
+    MemoryConfig,
+)  # noqa: F401
 
 
 class Listener(BaseModel):
@@ -909,37 +914,6 @@ class Providers(BaseModel):
     reasoning_families: Optional[Dict[str, ReasoningFamily]] = {}
     default_reasoning_effort: Optional[str] = "high"
     external_models: Optional[List[ExternalModel]] = []
-
-
-class MemoryMilvusConfig(BaseModel):
-    """Milvus configuration for memory storage."""
-
-    address: str
-    collection: str = "agentic_memory"
-    dimension: int = 384
-
-
-class MemoryConfig(BaseModel):
-    """Agentic Memory configuration for cross-session memory.
-
-    Query rewriting and fact extraction are enabled by adding external_models
-    with role="memory_rewrite" or role="memory_extraction".
-    See external_models configuration in providers section for details.
-
-    The embedding_model is auto-detected from embedding_models if not specified.
-    Priority: bert > mmbert > multimodal > qwen3 > gemma
-    """
-
-    enabled: bool = True
-    auto_store: bool = False  # Auto-store extracted facts after each response
-    milvus: Optional[MemoryMilvusConfig] = None
-    # Embedding model to use for memory vectors
-    # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
-    # If not set, auto-detected from embedding_models section (bert preferred)
-    embedding_model: Optional[str] = None
-    default_retrieval_limit: int = 5
-    default_similarity_threshold: float = 0.70
-    extraction_batch_size: int = 10  # Extract every N turns
 
 
 class EmbeddingModelsConfig(BaseModel):
