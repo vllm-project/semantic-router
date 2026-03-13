@@ -99,7 +99,7 @@ func (c *RedisCache) searchSimilarDocuments(embeddingBytes []byte) (*redis.FTSea
 	knnQuery := fmt.Sprintf("[KNN %d @%s $vec AS vector_distance]",
 		c.config.Search.TopK, c.config.Index.VectorField.Name)
 
-	return c.client.FTSearchWithArgs(ctx,
+	result, err := c.client.FTSearchWithArgs(ctx,
 		c.indexName,
 		knnQuery,
 		&redis.FTSearchOptions{
@@ -113,6 +113,10 @@ func (c *RedisCache) searchSimilarDocuments(embeddingBytes []byte) (*redis.FTSea
 			},
 		},
 	).Result()
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 func (c *RedisCache) responseSimilarity(bestDoc redis.Document) (float32, bool) {
