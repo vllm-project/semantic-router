@@ -926,6 +926,24 @@ func (d *decompiler) decompileBackends() {
 
 func (d *decompiler) decompileGlobal() {
 	d.write("GLOBAL {\n")
+	if len(d.cfg.Listeners) > 0 {
+		d.write("  listeners: [\n")
+		for i, listener := range d.cfg.Listeners {
+			d.write("    {\n")
+			d.write("      name: %q\n", listener.Name)
+			d.write("      address: %q\n", listener.Address)
+			d.write("      port: %d\n", listener.Port)
+			if listener.Timeout != "" {
+				d.write("      timeout: %q\n", listener.Timeout)
+			}
+			d.write("    }")
+			if i < len(d.cfg.Listeners)-1 {
+				d.write(",")
+			}
+			d.write("\n")
+		}
+		d.write("  ]\n")
+	}
 	if d.cfg.DefaultModel != "" {
 		d.write("  default_model: %q\n", d.cfg.DefaultModel)
 	}
@@ -1408,6 +1426,21 @@ func (d *decompiler) responseAPIToBackend() *BackendDecl {
 
 func (d *decompiler) buildGlobalDecl() *GlobalDecl {
 	fields := make(map[string]Value)
+	if len(d.cfg.Listeners) > 0 {
+		items := make([]Value, 0, len(d.cfg.Listeners))
+		for _, listener := range d.cfg.Listeners {
+			listenerFields := map[string]Value{
+				"name":    StringValue{V: listener.Name},
+				"address": StringValue{V: listener.Address},
+				"port":    IntValue{V: listener.Port},
+			}
+			if listener.Timeout != "" {
+				listenerFields["timeout"] = StringValue{V: listener.Timeout}
+			}
+			items = append(items, ObjectValue{Fields: listenerFields})
+		}
+		fields["listeners"] = ArrayValue{Items: items}
+	}
 	if d.cfg.DefaultModel != "" {
 		fields["default_model"] = StringValue{V: d.cfg.DefaultModel}
 	}

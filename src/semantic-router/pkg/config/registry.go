@@ -220,7 +220,7 @@ var DefaultModelRegistry = []ModelSpec{
 		RepoID:           "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
 		Aliases:          []string{"mmbert-embed-32k-2d-matryoshka", "mmbert-embedding", "embedding-mmbert", "mmbert", "embedding-ultra"},
 		Purpose:          PurposeEmbedding,
-		Description:      "ModernBERT 2D Matryoshka embedding: 307M params, 32K context, 1800+ languages (Glot500), STS 80.5 (exceeds Qwen3-0.6B), 1.6-3.1× faster than BGE-M3 with FA2",
+		Description:      "Multilingual 2D Matryoshka embedding model with 32K context, 64-768 dimension truncation, and 1800+ language coverage.",
 		ParameterSize:    "307M",
 		EmbeddingDim:     768, // Default, supports 512/256/128/64 via Matryoshka
 		MaxContextLength: 32768,
@@ -293,7 +293,7 @@ var DefaultModelRegistry = []ModelSpec{
 		RepoID:           "llm-semantic-router/mmbert32k-feedback-detector-lora",
 		Aliases:          []string{"mmbert32k-feedback", "mmbert-32k-feedback", "feedback-detector-32k"},
 		Purpose:          PurposeFeedbackDetection,
-		Description:      "mmBERT-32K user feedback classifier for 4 satisfaction levels",
+		Description:      "LoRA-based 4-class user feedback classifier on top of mmbert-32k-yarn.",
 		ParameterSize:    "307M + LoRA",
 		UsesLoRA:         true,
 		NumClasses:       4, // SAT / NEED_CLARIFICATION / WRONG_ANSWER / WANT_DIFFERENT
@@ -307,7 +307,7 @@ var DefaultModelRegistry = []ModelSpec{
 		RepoID:           "llm-semantic-router/mmbert32k-feedback-detector-merged",
 		Aliases:          []string{"mmbert32k-feedback-merged", "feedback-detector-32k-merged"},
 		Purpose:          PurposeFeedbackDetection,
-		Description:      "mmBERT-32K merged feedback detector (full model for Rust inference)",
+		Description:      "Merged 4-class user feedback classifier based on mmbert-32k-yarn for direct inference without PEFT.",
 		ParameterSize:    "307M",
 		UsesLoRA:         false,
 		NumClasses:       4, // SAT / NEED_CLARIFICATION / WRONG_ANSWER / WANT_DIFFERENT
@@ -321,7 +321,7 @@ var DefaultModelRegistry = []ModelSpec{
 		RepoID:           "llm-semantic-router/mmbert32k-intent-classifier-merged",
 		Aliases:          []string{"mmbert32k-intent-merged", "intent-classifier-32k-merged"},
 		Purpose:          PurposeDomainClassification,
-		Description:      "mmBERT-32K merged intent classifier (full model for Rust inference)",
+		Description:      "Merged intent classifier for 14 MMLU-Pro style categories based on mmbert-32k-yarn, ready for direct inference.",
 		ParameterSize:    "307M",
 		UsesLoRA:         false,
 		NumClasses:       14,
@@ -335,7 +335,7 @@ var DefaultModelRegistry = []ModelSpec{
 		RepoID:           "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
 		Aliases:          []string{"mmbert32k-factcheck-merged", "factcheck-classifier-32k-merged"},
 		Purpose:          PurposeHallucinationSentinel,
-		Description:      "mmBERT-32K merged fact-check classifier (full model for Rust inference)",
+		Description:      "Merged two-label fact-check classifier based on mmbert-32k-yarn for direct inference without PEFT.",
 		ParameterSize:    "307M",
 		UsesLoRA:         false,
 		NumClasses:       2,
@@ -349,7 +349,7 @@ var DefaultModelRegistry = []ModelSpec{
 		RepoID:           "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
 		Aliases:          []string{"mmbert32k-jailbreak-merged", "jailbreak-detector-32k-merged"},
 		Purpose:          PurposeJailbreakDetection,
-		Description:      "mmBERT-32K merged jailbreak detector (full model for Rust inference)",
+		Description:      "Merged jailbreak and prompt-injection detector based on mmbert-32k-yarn with 32K context support.",
 		ParameterSize:    "307M",
 		UsesLoRA:         false,
 		NumClasses:       2,
@@ -363,7 +363,7 @@ var DefaultModelRegistry = []ModelSpec{
 		RepoID:           "llm-semantic-router/mmbert32k-pii-detector-merged",
 		Aliases:          []string{"mmbert32k-pii-merged", "pii-detector-32k-merged"},
 		Purpose:          PurposePIIDetection,
-		Description:      "mmBERT-32K merged PII detector (full model for Rust inference)",
+		Description:      "Merged PII detector for 17 entity types and 35 BIO labels, based on mmbert-32k-yarn.",
 		ParameterSize:    "307M",
 		UsesLoRA:         false,
 		NumClasses:       35,
@@ -388,6 +388,10 @@ var DefaultModelRegistry = []ModelSpec{
 
 // GetModelByPath returns a model spec by its local path or alias
 func GetModelByPath(path string) *ModelSpec {
+	return findModelByPath(path)
+}
+
+func findModelByPath(path string) *ModelSpec {
 	for i := range DefaultModelRegistry {
 		model := &DefaultModelRegistry[i]
 		// Check primary path

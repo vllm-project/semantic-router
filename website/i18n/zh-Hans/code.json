@@ -369,7 +369,7 @@
     "message": "快速开始"
   },
   "homepage.hero.publicBeta": {
-    "message": "在线体验"
+    "message": "抢先体验"
   },
   "homepage.aiTech.label": {
     "message": "基于编码器模型"
@@ -1295,10 +1295,10 @@
     "message": "IBM 研究科学家，专注于 AI 研究和 LLM 推理。"
   },
   "team.members.XunzhuoLiu.role": {
-    "message": "AI 网络"
+    "message": "智能路由"
   },
   "team.members.XunzhuoLiu.bio": {
-    "message": "腾讯 AI 网络工程师，领导 vLLM Semantic Router 开发并推动项目愿景。"
+    "message": "专注于将集体智能带入 LLM 系统。"
   },
   "team.members.SenanZedan.role": {
     "message": "研发经理"

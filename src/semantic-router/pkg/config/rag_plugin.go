@@ -185,46 +185,59 @@ type VectorStoreRAGConfig struct {
 
 // GetRAGConfig returns the RAG plugin configuration for a decision
 func (d *Decision) GetRAGConfig() *RAGPluginConfig {
-	config := d.GetPluginConfig("rag")
-	if config == nil {
+	pluginConfig := d.GetPluginConfig("rag")
+	if pluginConfig == nil {
 		return nil
 	}
 
 	result := &RAGPluginConfig{}
-	if err := unmarshalPluginConfig(config, result); err != nil {
+	if err := unmarshalPluginConfig(pluginConfig, result); err != nil {
 		logging.Errorf("Failed to unmarshal RAG config: %v", err)
 		return nil
 	}
 
-	// Unmarshal backend-specific config based on Backend type
-	if result.BackendConfig != nil && result.Backend != "" {
-		var backendConfig interface{}
-		switch result.Backend {
-		case "milvus":
-			backendConfig = &MilvusRAGConfig{}
-		case "external_api":
-			backendConfig = &ExternalAPIRAGConfig{}
-		case "mcp":
-			backendConfig = &MCPRAGConfig{}
-		case "openai":
-			backendConfig = &OpenAIRAGConfig{}
-		case "vectorstore":
-			backendConfig = &VectorStoreRAGConfig{}
-		case "hybrid":
-			backendConfig = &HybridRAGConfig{}
-		default:
-			logging.Warnf("Unknown RAG backend type: %s", result.Backend)
-			return result
-		}
-
-		if err := unmarshalPluginConfig(result.BackendConfig, backendConfig); err != nil {
-			logging.Errorf("Failed to unmarshal RAG backend config for %s: %v", result.Backend, err)
-		} else {
-			result.BackendConfig = backendConfig
-		}
+	if err := hydrateRAGBackendConfig(result); err != nil {
+		logging.Errorf("Failed to unmarshal RAG backend config for %s: %v", result.Backend, err)
 	}
 
 	return result
+}
+
+func hydrateRAGBackendConfig(result *RAGPluginConfig) error {
+	if result.BackendConfig == nil || result.Backend == "" {
+		return nil
+	}
+
+	backendConfig, knownBackend := newRAGBackendConfig(result.Backend)
+	if !knownBackend {
+		logging.Warnf("Unknown RAG backend type: %s", result.Backend)
+		return nil
+	}
+
+	if err := unmarshalPluginConfig(result.BackendConfig, backendConfig); err != nil {
+		return err
+	}
+	result.BackendConfig = backendConfig
+	return nil
+}
+
+func newRAGBackendConfig(backend string) (interface{}, bool) {
+	switch backend {
+	case "milvus":
+		return &MilvusRAGConfig{}, true
+	case "external_api":
+		return &ExternalAPIRAGConfig{}, true
+	case "mcp":
+		return &MCPRAGConfig{}, true
+	case "openai":
+		return &OpenAIRAGConfig{}, true
+	case "vectorstore":
+		return &VectorStoreRAGConfig{}, true
+	case "hybrid":
+		return &HybridRAGConfig{}, true
+	default:
+		return nil, false
+	}
 }
 
 // Validate validates the RAG plugin configuration

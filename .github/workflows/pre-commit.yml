@@ -104,8 +104,20 @@ jobs:
       - name: Install pre-commit
         run: make precommit-install
 
+      - name: Install agent tooling
+        run: python3 -m pip install -r tools/agent/requirements.txt
+
       - name: Run Code Spell Check
         run: make codespell
+
+      - name: Run agent fast gate on changed files
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            export AGENT_BASE_REF="origin/${{ github.base_ref }}"
+          else
+            export AGENT_BASE_REF="HEAD^"
+          fi
+          make agent-fast-gate
 
       - name: Run pre-commit check
         run: make precommit-check

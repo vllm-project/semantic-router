@@ -349,12 +349,12 @@ development:
 
 			Context("with inline Redis configuration", func() {
 				var redisConfig *config.RedisConfig
-				// Skip Milvus tests if environment variable is set
-				if os.Getenv("SKIP_REDIS_TESTS") == "true" {
-					Skip("Redis tests skipped due to SKIP_REDIS_TESTS=true")
-				}
 
 				BeforeEach(func() {
+					if os.Getenv("SKIP_REDIS_TESTS") == "true" {
+						Skip("Redis tests skipped due to SKIP_REDIS_TESTS=true")
+					}
+
 					yamlConfig := `
 connection:
     host: "localhost"

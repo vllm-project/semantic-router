@@ -18,13 +18,26 @@ type ServiceStatus struct {
 	Component string `json:"component,omitempty"`
 }
 
+// RouterRuntimeStatus captures router startup progress beyond process-level health.
+type RouterRuntimeStatus struct {
+	Phase            string   `json:"phase"`
+	Ready            bool     `json:"ready"`
+	Message          string   `json:"message,omitempty"`
+	DownloadingModel string   `json:"downloading_model,omitempty"`
+	PendingModels    []string `json:"pending_models,omitempty"`
+	ReadyModels      int      `json:"ready_models,omitempty"`
+	TotalModels      int      `json:"total_models,omitempty"`
+}
+
 // SystemStatus represents the overall system status
 type SystemStatus struct {
-	Overall        string          `json:"overall"`
-	DeploymentType string          `json:"deployment_type"`
-	Services       []ServiceStatus `json:"services"`
-	Endpoints      []string        `json:"endpoints,omitempty"`
-	Version        string          `json:"version,omitempty"`
+	Overall        string               `json:"overall"`
+	DeploymentType string               `json:"deployment_type"`
+	Services       []ServiceStatus      `json:"services"`
+	RouterRuntime  *RouterRuntimeStatus `json:"router_runtime,omitempty"`
+	Models         *RouterModelsInfo    `json:"models,omitempty"`
+	Endpoints      []string             `json:"endpoints,omitempty"`
+	Version        string               `json:"version,omitempty"`
 }
 
 // vllmSrContainerName is the container name used by the Python vllm-sr CLI
@@ -32,7 +45,7 @@ const vllmSrContainerName = "vllm-sr-container"
 
 // StatusHandler returns the status of vLLM-SR services
 // Aligns with the vllm-sr Python CLI by using the same Docker-based detection
-func StatusHandler(routerAPIURL string) http.HandlerFunc {
+func StatusHandler(routerAPIURL, configDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
@@ -40,168 +53,7 @@ func StatusHandler(routerAPIURL string) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-
-		status := SystemStatus{
-			Overall:        "not_running",
-			DeploymentType: "none",
-			Services:       []ServiceStatus{},
-			Version:        "v0.1.0",
-		}
-
-		// Check if we're running inside a container
-		runningInContainer := isRunningInContainer()
-
-		// If running in container, report container services directly
-		if runningInContainer {
-			status.DeploymentType = "docker"
-			status.Overall = "healthy"
-			status.Endpoints = []string{"http://localhost:8888"}
-
-			// Check services from logs within the same container
-			routerHealthy, routerMsg := checkServiceFromContainerLogs("router")
-			envoyHealthy, envoyMsg := checkServiceFromContainerLogs("envoy")
-			dashboardHealthy := true
-			dashboardMsg := "Running"
-
-			status.Services = append(status.Services, ServiceStatus{
-				Name:      "Router",
-				Status:    boolToStatus(routerHealthy),
-				Healthy:   routerHealthy,
-				Message:   routerMsg,
-				Component: "container",
-			})
-
-			status.Services = append(status.Services, ServiceStatus{
-				Name:      "Envoy",
-				Status:    boolToStatus(envoyHealthy),
-				Healthy:   envoyHealthy,
-				Message:   envoyMsg,
-				Component: "container",
-			})
-
-			status.Services = append(status.Services, ServiceStatus{
-				Name:      "Dashboard",
-				Status:    boolToStatus(dashboardHealthy),
-				Healthy:   dashboardHealthy,
-				Message:   dashboardMsg,
-				Component: "container",
-			})
-
-			// Update overall status based on services
-			if !routerHealthy || !envoyHealthy || !dashboardHealthy {
-				status.Overall = "degraded"
-			}
-
-			if err := json.NewEncoder(w).Encode(status); err != nil {
-				http.Error(w, `{"error":"Failed to encode response"}`, http.StatusInternalServerError)
-			}
-			return
-		}
-
-		// Check for vllm-sr Docker container (same as vllm-sr Python CLI)
-		containerStatus := getDockerContainerStatus(vllmSrContainerName)
-
-		switch containerStatus {
-		case "running":
-			status.DeploymentType = "docker"
-			status.Overall = "healthy"
-			status.Endpoints = []string{"http://localhost:8888"}
-
-			// Check individual services by examining container logs (same as Python CLI)
-			routerHealthy, routerMsg := checkServiceFromLogs("router")
-			envoyHealthy, envoyMsg := checkServiceFromLogs("envoy")
-			dashboardHealthy, dashboardMsg := checkServiceFromLogs("dashboard")
-
-			status.Services = append(status.Services, ServiceStatus{
-				Name:      "Router",
-				Status:    boolToStatus(routerHealthy),
-				Healthy:   routerHealthy,
-				Message:   routerMsg,
-				Component: "container",
-			})
-
-			status.Services = append(status.Services, ServiceStatus{
-				Name:      "Envoy",
-				Status:    boolToStatus(envoyHealthy),
-				Healthy:   envoyHealthy,
-				Message:   envoyMsg,
-				Component: "container",
-			})
-
-			status.Services = append(status.Services, ServiceStatus{
-				Name:      "Dashboard",
-				Status:    boolToStatus(dashboardHealthy),
-				Healthy:   dashboardHealthy,
-				Message:   dashboardMsg,
-				Component: "container",
-			})
-
-			// Update overall status based on services
-			if !routerHealthy || !envoyHealthy || !dashboardHealthy {
-				status.Overall = "degraded"
-			}
-
-		case "exited":
-			status.DeploymentType = "docker"
-			status.Overall = "stopped"
-			status.Services = append(status.Services, ServiceStatus{
-				Name:    "vllm-sr-container",
-				Status:  "exited",
-				Healthy: false,
-				Message: "Container exited. Check logs with: vllm-sr logs router",
-			})
-
-		case "not found":
-			// Fallback: Check if router is accessible via HTTP (direct run)
-			if routerAPIURL != "" {
-				routerHealthy, routerMsg := checkHTTPHealth(routerAPIURL + "/health")
-				if routerHealthy {
-					status.DeploymentType = "local (direct)"
-					status.Overall = "healthy"
-					status.Services = append(status.Services, ServiceStatus{
-						Name:      "Router",
-						Status:    "running",
-						Healthy:   true,
-						Message:   routerMsg,
-						Component: "process",
-					})
-					status.Endpoints = []string{routerAPIURL}
-
-					// Also check Envoy if running locally
-					envoyRunning, envoyHealthy, envoyMsg := checkEnvoyHealth("http://localhost:8801/ready")
-					if envoyRunning {
-						status.Services = append(status.Services, ServiceStatus{
-							Name:      "Envoy",
-							Status:    boolToStatus(envoyHealthy),
-							Healthy:   envoyHealthy,
-							Message:   envoyMsg,
-							Component: "proxy",
-						})
-						if !envoyHealthy {
-							status.Overall = "degraded"
-						}
-					}
-
-					// Dashboard is always running in local mode (since we're serving this page)
-					status.Services = append(status.Services, ServiceStatus{
-						Name:      "Dashboard",
-						Status:    "running",
-						Healthy:   true,
-						Message:   "Running",
-						Component: "process",
-					})
-				}
-			}
-
-		default:
-			status.DeploymentType = "docker"
-			status.Overall = containerStatus
-			status.Services = append(status.Services, ServiceStatus{
-				Name:    "vllm-sr-container",
-				Status:  containerStatus,
-				Healthy: false,
-			})
-		}
+		status := detectSystemStatus(routerAPIURL, configDir)
 
 		if err := json.NewEncoder(w).Encode(status); err != nil {
 			http.Error(w, `{"error":"Failed to encode response"}`, http.StatusInternalServerError)
@@ -270,53 +122,6 @@ func checkServiceFromContainerLogs(service string) (bool, string) {
 	return false, "Status unknown"
 }
 
-// checkServiceFromLogs checks if a service is running by examining container logs
-// This mirrors the vllm-sr Python CLI approach
-func checkServiceFromLogs(service string) (bool, string) {
-	// Get container logs directly without shell
-	// #nosec G204 -- vllmSrContainerName is a compile-time constant, not user input
-	cmd := exec.Command("docker", "logs", "--tail", "200", vllmSrContainerName)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return false, "Status unknown (check logs)"
-	}
-
-	logContent := string(output)
-	logContentLower := strings.ToLower(logContent)
-
-	// Check for service-specific patterns from supervisord
-	switch service {
-	case "router":
-		// Check for supervisord spawn message or router startup messages
-		if strings.Contains(logContent, "spawned: 'router'") ||
-			strings.Contains(logContentLower, "starting router") ||
-			strings.Contains(logContentLower, "router entered running") ||
-			strings.Contains(logContent, "Starting insecure LLM Router ExtProc server") ||
-			strings.Contains(logContent, `"caller"`) {
-			return true, "Running"
-		}
-	case "envoy":
-		// Check for supervisord spawn message or envoy startup messages
-		if strings.Contains(logContent, "spawned: 'envoy'") ||
-			strings.Contains(logContentLower, "envoy entered running") ||
-			strings.Contains(logContent, "[info] initializing epoch") ||
-			(strings.Contains(logContent, "[20") && strings.Contains(logContent, "[info]")) ||
-			(strings.Contains(logContent, "[20") && strings.Contains(logContent, "[debug]")) {
-			return true, "Running"
-		}
-	case "dashboard":
-		// Check for supervisord spawn message or dashboard startup messages
-		if strings.Contains(logContent, "spawned: 'dashboard'") ||
-			strings.Contains(logContentLower, "dashboard entered running") ||
-			strings.Contains(logContent, "Dashboard listening on") ||
-			strings.Contains(logContent, "Semantic Router Dashboard listening") {
-			return true, "Running"
-		}
-	}
-
-	return false, "Status unknown (check logs)"
-}
-
 // boolToStatus converts a boolean to a status string
 func boolToStatus(healthy bool) string {
 	if healthy {
@@ -332,7 +137,9 @@ func checkHTTPHealth(url string) (bool, string) {
 	if err != nil {
 		return false, ""
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return true, "HTTP health check OK"
@@ -348,7 +155,9 @@ func checkEnvoyHealth(url string) (bool, bool, string) {
 	if err != nil {
 		return false, false, ""
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// Envoy is running if we got ANY response
 	isRunning := true

@@ -34,7 +34,12 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
     # Check if config file exists
     if not Path(config_path).exists():
         log.error(f"Config file not found: {config_path}")
-        log.error("Run 'vllm-sr init' to create a config file")
+        log.error(
+            "Run 'vllm-sr serve' to bootstrap setup mode and create a config file"
+        )
+        log.error(
+            "Or run 'vllm-sr init' if you want an advanced YAML sample to edit directly"
+        )
         sys.exit(1)
 
     # Parse user config

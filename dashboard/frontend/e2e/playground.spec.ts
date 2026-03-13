@@ -1,44 +1,214 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthenticatedAppShell } from './support/auth';
+
+function chatStreamChunk(delta: Record<string, unknown>): string {
+  return `data: ${JSON.stringify({ choices: [{ index: 0, delta }] })}\n\n`;
+}
+
+function chatStreamBody(content: string, reasoning = ''): string {
+  const initialLine = chatStreamChunk({ role: 'assistant', content: '' });
+  const reasoningLines = reasoning
+    ? reasoning.split('').map((char) =>
+        chatStreamChunk({ reasoning: char })
+      )
+    : [];
+
+  const contentLines = content.split('').map((char) =>
+    chatStreamChunk({ content: char })
+  );
+
+  return initialLine + [...reasoningLines, ...contentLines].join('') + 'data: [DONE]\n\n';
+}
+
+async function mockStreamingChatFetch(
+  page: import('@playwright/test').Page,
+  chunks: string[],
+  delayMs = 250,
+): Promise<void> {
+  await page.evaluate(async ({ chunks: streamChunks, delayMs: streamDelayMs }) => {
+    const originalFetch = window.fetch.bind(window);
+    const encoder = new TextEncoder();
+
+    window.fetch = async (input, init) => {
+      const url = typeof input === 'string'
+        ? input
+        : input instanceof Request
+          ? input.url
+          : String(input);
+
+      if (!url.includes('/api/router/v1/chat/completions')) {
+        return originalFetch(input, init);
+      }
+
+      let chunkIndex = 0;
+      return new Response(new ReadableStream({
+        start(controller) {
+          const pushChunk = () => {
+            if (chunkIndex >= streamChunks.length) {
+              controller.close();
+              return;
+            }
+
+            controller.enqueue(encoder.encode(streamChunks[chunkIndex]));
+            chunkIndex += 1;
+            window.setTimeout(pushChunk, streamDelayMs);
+          };
+
+          pushChunk();
+        },
+      }), {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+      });
+    };
+  }, { chunks, delayMs });
+}
+
+async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): Promise<void> {
+  await mockAuthenticatedAppShell(page);
+}
 
 test.describe('Playground Chat Component', () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sr:playground:claw-mode', 'false');
+    });
+    await mockPlaygroundBootstrap(page);
     await page.goto('/playground');
   });
 
   test('renders chat interface', async ({ page }) => {
     // Verify main elements are present
-    await expect(page.getByPlaceholder('Type a message')).toBeVisible();
-    await expect(page.getByRole('button', { name: '📤' })).toBeVisible();
-    await expect(page.getByRole('button', { name: '🗑️' })).toBeVisible();
+    await expect(page.getByPlaceholder('Ask me anything...')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible();
+  });
+
+  test('opens and collapses the left history rail', async ({ page }) => {
+    await page.evaluate(() => {
+      const now = Date.now();
+      window.localStorage.setItem(
+        'sr:chat:conversations',
+        JSON.stringify([
+          {
+            id: 'saved-conversation',
+            createdAt: now - 300000,
+            updatedAt: now,
+            payload: [
+              {
+                id: 'saved-user-message',
+                role: 'user',
+                content: 'Saved conversation preview',
+                timestamp: new Date(now - 120000).toISOString(),
+              },
+            ],
+          },
+        ]),
+      );
+    });
+
+    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
+
+    const shell = page.getByTestId('playground-sidebar-shell');
+    await expect(shell).toBeVisible();
+    const sidebarItem = shell.getByRole('button', { name: 'Saved conversation preview' });
+
+    await page.getByRole('button', { name: 'Open sidebar' }).click();
+    await expect(sidebarItem).toBeVisible();
+
+    await page.getByRole('button', { name: 'Close sidebar' }).click();
+    await expect(sidebarItem).not.toBeVisible();
+  });
+
+  test('keeps the account control in the lower-left rail on playground', async ({ page }) => {
+    const shell = page.getByTestId('playground-sidebar-shell');
+    const accountButton = page.getByTestId('playground-account-control');
+
+    await expect(shell).toBeVisible();
+    await expect(accountButton).toBeVisible();
+    await expect(page.getByRole('button', { name: /Open account details for Admin User/i })).toHaveCount(1);
+
+    await accountButton.click();
+
+    const dialog = page.getByTestId('layout-account-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Admin User');
+    await expect(dialog).toContainText('admin@example.com');
+
+    const dialogBox = await dialog.boundingBox();
+    const viewport = page.viewportSize();
+
+    expect(dialogBox).not.toBeNull();
+    expect(viewport).not.toBeNull();
+
+    const dialogCenterX = dialogBox!.x + dialogBox!.width / 2;
+    const dialogCenterY = dialogBox!.y + dialogBox!.height / 2;
+
+    expect(Math.abs(dialogCenterX - viewport!.width / 2)).toBeLessThan(80);
+    expect(Math.abs(dialogCenterY - viewport!.height / 2)).toBeLessThan(80);
+  });
+
+  test('hides the guide button permanently after finishing onboarding', async ({ page }) => {
+    const onboardingStatusKey = 'vllm-sr.onboarding.status';
+
+    await page.evaluate((key) => {
+      window.localStorage.setItem(key, 'pending');
+    }, onboardingStatusKey);
+    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
+
+    await expect(page.getByText('Product guide')).toBeVisible();
+
+    while (await page.getByRole('button', { name: 'Finish' }).count() === 0) {
+      await page.getByRole('button', { name: 'Next' }).click();
+    }
+
+    await page.getByRole('button', { name: 'Finish' }).click();
+    await expect(page.getByRole('button', { name: 'Guide' })).toHaveCount(0);
+
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Guide' })).toHaveCount(0);
   });
 
   test('can type message', async ({ page }) => {
-    const input = page.getByPlaceholder('Type a message');
+    const input = page.getByPlaceholder('Ask me anything...');
     await input.fill('Hello, this is a test message');
     await expect(input).toHaveValue('Hello, this is a test message');
   });
 
   test('send button disabled when input empty', async ({ page }) => {
-    const sendButton = page.getByRole('button', { name: '📤' });
+    const sendButton = page.getByRole('button', { name: 'Send message' });
     // Button should be disabled when input is empty
     await expect(sendButton).toBeDisabled();
     
     // Type something
-    await page.getByPlaceholder('Type a message').fill('test');
+    await page.getByPlaceholder('Ask me anything...').fill('test');
     
     // Button should be enabled
     await expect(sendButton).toBeEnabled();
   });
 
-  test('clear button clears messages', async ({ page }) => {
-    // Initially should show empty state
-    await expect(page.getByText('Start a conversation')).toBeVisible();
+  test('new conversation clears messages', async ({ page }) => {
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: chatStreamBody('Hello! This is a mock response.'),
+      });
+    });
 
-    // Click clear (should have no effect but shouldn't error)
-    await page.getByRole('button', { name: '🗑️' }).click();
+    await page.getByPlaceholder('Ask me anything...').fill('Clear me');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(page.getByText('Clear me')).toBeVisible({ timeout: 10000 });
 
-    // Empty state should still be visible
-    await expect(page.getByText('Start a conversation')).toBeVisible();
+    await page.getByRole('button', { name: 'New conversation' }).click();
+
+    await expect(page.getByText('Clear me')).not.toBeVisible();
+    await expect(page.getByRole('heading', { name: /Hi there, I am MoM/i })).toBeVisible();
   });
 
   test('sends message and receives response (mocked API)', async ({ page }) => {
@@ -61,18 +231,16 @@ test.describe('Playground Chat Component', () => {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
         },
-        body: responseText.split('').map((char) => 
-          `data: ${JSON.stringify({choices: [{delta: {content: char}}]})}\n\n`
-        ).join('') + 'data: [DONE]\n\n',
+        body: chatStreamBody(responseText),
       });
     });
 
     // Type a message
-    const input = page.getByPlaceholder('Type a message');
+    const input = page.getByPlaceholder('Ask me anything...');
     await input.fill('Hello, how are you?');
     
     // Send the message
-    await page.getByRole('button', { name: '📤' }).click();
+    await page.getByRole('button', { name: 'Send message' }).click();
     
     // User message should appear
     await expect(page.getByText('Hello, how are you?')).toBeVisible();
@@ -94,8 +262,8 @@ test.describe('Playground Chat Component', () => {
     });
 
     // Type and send a message
-    await page.getByPlaceholder('Type a message').fill('Test error handling');
-    await page.getByRole('button', { name: '📤' }).click();
+    await page.getByPlaceholder('Ask me anything...').fill('Test error handling');
+    await page.getByRole('button', { name: 'Send message' }).click();
     
     // User message should still appear
     await expect(page.getByText('Test error handling')).toBeVisible();
@@ -117,11 +285,252 @@ test.describe('Playground Chat Component', () => {
     });
 
     // Send a message
-    await page.getByPlaceholder('Type a message').fill('Test streaming');
-    await page.getByRole('button', { name: '📤' }).click();
+    await page.getByPlaceholder('Ask me anything...').fill('Test streaming');
+    await page.getByRole('button', { name: 'Send message' }).click();
     
     // Stop button should appear (look for it quickly before response completes)
-    await expect(page.getByRole('button', { name: '⏹️' })).toBeVisible({ timeout: 1000 });
+    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({ timeout: 1000 });
+  });
+
+  test('anchors the current user turn near the top and respects manual scrolling during streaming', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 560 });
+
+    await page.evaluate(() => {
+      const now = Date.now();
+      const history = Array.from({ length: 10 }, (_, index) => {
+        const offset = (10 - index) * 60_000;
+        return [
+          {
+            id: `seed-user-${index + 1}`,
+            role: 'user',
+            content: `Earlier question ${index + 1}`,
+            timestamp: new Date(now - offset).toISOString(),
+          },
+          {
+            id: `seed-assistant-${index + 1}`,
+            role: 'assistant',
+            content: Array.from(
+              { length: 8 },
+              (_, paragraphIndex) =>
+                `Earlier answer ${index + 1}, paragraph ${paragraphIndex + 1}: seeded history keeps the transcript tall.`
+            ).join('\n\n'),
+            timestamp: new Date(now - offset + 15_000).toISOString(),
+          },
+        ];
+      }).flat();
+
+      window.localStorage.setItem(
+        'sr:chat:conversations',
+        JSON.stringify([
+          {
+            id: 'seeded-conversation',
+            createdAt: now - 3600_000,
+            updatedAt: now,
+            payload: history,
+          },
+        ])
+      );
+    });
+    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
+
+    const chunks = [
+      chatStreamChunk({ role: 'assistant', content: '' }),
+      ...Array.from({ length: 140 }, (_, index) =>
+        chatStreamChunk({ content: `Paragraph ${index + 1}: streaming output keeps growing.\n\n` })
+      ),
+      'data: [DONE]\n\n',
+    ];
+
+    await mockStreamingChatFetch(page, chunks, 25);
+
+    await page.getByPlaceholder('Ask me anything...').fill('Show a long streamed answer');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({ timeout: 5000 });
+    const currentAssistant = page.locator('[data-message-role="assistant"]').last();
+    await expect(currentAssistant).toContainText('Paragraph 40: streaming output keeps growing.', { timeout: 10000 });
+
+    const transcript = page.locator('[data-testid="chat-transcript"]');
+    await expect.poll(async () => {
+      return transcript.evaluate(node => {
+        const container = node as HTMLDivElement;
+        const userMessages = container.querySelectorAll<HTMLElement>('[data-message-role="user"]');
+        const currentQuestion = userMessages[userMessages.length - 1];
+
+        if (!currentQuestion) {
+          return Number.POSITIVE_INFINITY;
+        }
+
+        return currentQuestion.getBoundingClientRect().top - container.getBoundingClientRect().top;
+      });
+    }, { timeout: 5000 }).toBeLessThan(120);
+
+    const scrollTopBeforeManualScroll = await transcript.evaluate(node => (node as HTMLDivElement).scrollTop);
+    await transcript.hover();
+    await page.mouse.wheel(0, -5000);
+    await page.waitForTimeout(600);
+
+    const scrollTopAfterManualScroll = await transcript.evaluate(node => (node as HTMLDivElement).scrollTop);
+    expect(scrollTopAfterManualScroll).toBeLessThan(scrollTopBeforeManualScroll - 1000);
+
+    await expect(currentAssistant).toContainText('Paragraph 140: streaming output keeps growing.', { timeout: 10000 });
+  });
+
+  test('keeps the assistant rail centered and stable during streaming and after completion', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+
+    await mockStreamingChatFetch(page, [
+      chatStreamChunk({ role: 'assistant', content: '' }),
+      chatStreamChunk({ content: 'This starts the streamed response. ' }),
+      chatStreamChunk({ content: 'More text arrives while the layout stays stable. ' }),
+      chatStreamChunk({ content: 'The final chunk lands without the message suddenly widening.' }),
+      'data: [DONE]\n\n',
+    ], 220);
+
+    await page.getByPlaceholder('Ask me anything...').fill('Check the assistant layout rail');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    const assistantContent = page.locator('[data-message-role="assistant"] [data-message-content]').last();
+
+    await expect(assistantContent).toBeVisible({ timeout: 5000 });
+
+    const boxWhileStreaming = await assistantContent.evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return {
+        center: rect.left + rect.width / 2,
+        width: rect.width,
+      };
+    });
+    expect(boxWhileStreaming.width).toBeGreaterThan(560);
+    expect(boxWhileStreaming.width).toBeLessThan(900);
+    expect(Math.abs(boxWhileStreaming.center - 640)).toBeLessThan(120);
+
+    await expect(page.getByText('The final chunk lands without the message suddenly widening.')).toBeVisible({
+      timeout: 10000,
+    });
+
+    const boxAfterCompletion = await assistantContent.evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return {
+        center: rect.left + rect.width / 2,
+        width: rect.width,
+      };
+    });
+    expect(boxAfterCompletion.width).toBeGreaterThan(560);
+    expect(boxAfterCompletion.width).toBeLessThan(900);
+    expect(Math.abs(boxAfterCompletion.center - 640)).toBeLessThan(120);
+    expect(Math.abs(boxAfterCompletion.width - boxWhileStreaming.width)).toBeLessThan(48);
+  });
+
+  test('keeps the composer pinned to the bottom on the second turn', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+
+    let requestCount = 0;
+    await page.route('**/api/router/v1/chat/completions', async route => {
+      requestCount += 1;
+      const body = requestCount === 1
+        ? chatStreamBody('First answer closes out the opening turn.')
+        : chatStreamBody(
+            Array.from(
+              { length: 28 },
+              (_, index) => `Second-turn paragraph ${index + 1} keeps the response growing.`
+            ).join('\n\n')
+          );
+
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body,
+      });
+    });
+
+    const input = page.getByPlaceholder('Ask me anything...');
+    const composer = page.getByTestId('chat-composer');
+
+    await input.fill('Start the first turn');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(page.getByText('First answer closes out the opening turn.')).toBeVisible({ timeout: 10000 });
+
+    await input.fill('Start the second turn');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(page.getByText('Second-turn paragraph 16 keeps the response growing.')).toBeVisible({ timeout: 10000 });
+
+    const composerBox = await composer.boundingBox();
+    expect(composerBox).not.toBeNull();
+    expect(composerBox!.y + composerBox!.height).toBeGreaterThan(820);
+
+    const secondTurnMessage = page.locator('[data-message-role="user"]').last();
+    const secondTurnBox = await secondTurnMessage.boundingBox();
+    expect(secondTurnBox).not.toBeNull();
+    expect(secondTurnBox!.y + secondTurnBox!.height).toBeLessThan(composerBox!.y - 24);
+  });
+
+  test('renders thinking block from streaming reasoning field', async ({ page }) => {
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: chatStreamBody('Final streamed answer.', 'Step 1: inspect the prompt.'),
+      });
+    });
+
+    await page.getByPlaceholder('Ask me anything...').fill('Show your work');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(page.getByText('Final streamed answer.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Step 1: inspect the prompt.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('My Thoughts')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('shows streaming reasoning in thinking overlay before completion', async ({ page }) => {
+    await mockStreamingChatFetch(page, [
+      chatStreamChunk({ role: 'assistant', content: '' }),
+      chatStreamChunk({ reasoning: 'The' }),
+      chatStreamChunk({ reasoning: ' answer' }),
+      chatStreamChunk({ content: 'Done.' }),
+      'data: [DONE]\n\n',
+    ]);
+
+    await page.getByPlaceholder('Ask me anything...').fill('Stream reasoning');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(page.getByText('Thinking Process:')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('pre').filter({ hasText: 'The answer' })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Done.')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('renders thinking block from non-stream reasoning field', async ({ page }) => {
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          choices: [
+            {
+              message: {
+                role: 'assistant',
+                content: 'Final JSON answer.',
+                reasoning: 'Step 1: parse message.reasoning.',
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.getByPlaceholder('Ask me anything...').fill('Return JSON');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(page.getByText('Final JSON answer.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Step 1: parse message.reasoning.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('My Thoughts')).toBeVisible({ timeout: 10000 });
   });
 });
-

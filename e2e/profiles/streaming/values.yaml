@@ -1,0 +1,209 @@
+# Semantic Router Configuration for Streaming Body E2E Tests
+#
+# This profile enables Envoy ext_proc STREAMED request body mode, where the
+# request body arrives as multiple gRPC chunks instead of a single BUFFERED
+# message. The router's StreamedBodyHandler accumulates chunks, detects the
+# model from the first bytes, and dispatches to the standard pipeline on EOS.
+config:
+  bert_model:
+    model_id: models/mom-embedding-light
+    threshold: 0.6
+    use_cpu: true
+
+  # --- Streamed body mode ---
+  streamed_body_mode: true
+  max_streamed_body_bytes: 10485760   # 10 MiB — reject bodies larger than this
+  streamed_body_timeout_sec: 30       # abort accumulation after 30 s
+
+  semantic_cache:
+    enabled: true
+    backend_type: "memory"
+    similarity_threshold: 0.6
+    max_entries: 1000
+    ttl_seconds: 3600
+    eviction_policy: "fifo"
+    use_hnsw: true
+    hnsw_m: 16
+    hnsw_ef_construction: 200
+    embedding_model: "bert"
+
+  tools:
+    enabled: true
+    top_k: 3
+    similarity_threshold: 0.2
+    tools_db_path: "config/tools_db.json"
+    fallback_to_empty: true
+
+  prompt_guard:
+    enabled: true
+    use_modernbert: false
+    model_id: "models/mom-jailbreak-classifier"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+    threshold: 0.7
+    use_cpu: true
+
+  classifier:
+    category_model:
+      model_id: "models/mom-domain-classifier"
+      use_modernbert: false
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    pii_model:
+      model_id: "models/mom-pii-classifier"
+      use_modernbert: false
+      threshold: 0.7
+      use_cpu: true
+      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.6
+      include_history: false
+      description: "Standard jailbreak detection for streaming tests"
+
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.7
+      include_history: false
+      description: "Block all PII"
+
+  keyword_rules:
+    - name: "code_keywords"
+      operator: "OR"
+      method: "bm25"
+      keywords:
+        - "code"
+        - "function"
+        - "implement"
+        - "debug"
+        - "algorithm"
+        - "compile"
+        - "syntax"
+        - "variable"
+        - "loop"
+        - "refactor"
+      bm25_threshold: 0.1
+      case_sensitive: false
+
+    - name: "urgent_request"
+      operator: "OR"
+      method: "ngram"
+      keywords: ["urgent", "immediate", "asap", "emergency"]
+      ngram_threshold: 0.4
+      ngram_arity: 3
+      case_sensitive: false
+
+    - name: "sensitive_data"
+      operator: "AND"
+      keywords: ["SSN", "credit card"]
+      case_sensitive: false
+
+  categories:
+    - name: code_keywords
+      description: "Programming and software development queries"
+      mmlu_categories: ["computer_science"]
+    - name: urgent_request
+      description: "Urgent and time-sensitive requests"
+      mmlu_categories: ["urgent_request"]
+    - name: sensitive_data
+      description: "Requests involving sensitive personal data"
+      mmlu_categories: ["sensitive_data"]
+    - name: business
+      description: "Business and management related queries"
+      mmlu_categories: ["business"]
+    - name: other
+      description: "General knowledge and miscellaneous topics"
+      mmlu_categories: ["other"]
+
+  strategy: "priority"
+  vllm_endpoints: []
+  model_config: {}
+
+  decisions:
+    - name: "code_keywords_decision"
+      description: "Code and programming queries (BM25 classified)"
+      priority: 150
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "code_keywords"
+      modelRefs:
+        - model: "base-model"
+          use_reasoning: true
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are an expert software engineer."
+
+    - name: "urgent_request_decision"
+      description: "Urgent and time-sensitive requests (N-gram classified)"
+      priority: 150
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "urgent_request"
+      modelRefs:
+        - model: "base-model"
+          use_reasoning: false
+
+    - name: "general_decision"
+      description: "Catch-all with semantic cache for all unmatched requests"
+      priority: 50
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "base-model"
+          use_reasoning: false
+      plugins:
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.6
+
+  default_model: base-model
+
+  reasoning_families:
+    deepseek:
+      type: "chat_template_kwargs"
+      parameter: "thinking"
+    qwen3:
+      type: "chat_template_kwargs"
+      parameter: "enable_thinking"
+    gpt-oss:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+    gpt:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+  default_reasoning_effort: high
+
+  api:
+    batch_classification:
+      max_batch_size: 100
+      concurrency_threshold: 5
+      max_concurrency: 8
+
+  embedding_models:
+    qwen3_model_path: "models/mom-embedding-pro"
+    use_cpu: true
+
+  observability:
+    tracing:
+      enabled: true
+      provider: "opentelemetry"
+      exporter:
+        type: "otlp"
+        endpoint: "jaeger:4317"
+        insecure: true
+      sampling:
+        type: "always_on"
+        rate: 1.0
+      resource:
+        service_name: "vllm-semantic-router"
+        service_version: "v0.1.0"
+        deployment_environment: "development"

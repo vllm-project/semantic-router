@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthenticatedAppShell } from './support/auth';
 
 /**
  * FeedbackButtons E2E tests.
@@ -23,6 +24,8 @@ function chatStreamBody(content: string, model: string): string {
 
 test.describe('FeedbackButtons', () => {
   test.beforeEach(async ({ page }) => {
+    await mockAuthenticatedAppShell(page);
+
     await page.route('**/api/router/v1/chat/completions', async (route) => {
       await route.fulfill({
         status: 200,
@@ -58,12 +61,26 @@ test.describe('FeedbackButtons', () => {
 
     const thumbsUp = page.getByRole('button', { name: /good response/i });
     await expect(thumbsUp).toBeVisible({ timeout: 5000 });
+    await expect(thumbsUp.locator('svg')).toHaveCount(1);
     await thumbsUp.click();
 
     expect(feedbackPayload).not.toBeNull();
     expect(feedbackPayload!.winner_model).toBe(MOCK_MODEL);
     expect(feedbackPayload!.decision_name).toBe('tech');
     await expect(page.getByText('Feedback Sent!')).toBeVisible({ timeout: 3000 });
+  });
+
+  test('renders svg icons for both feedback directions', async ({ page }) => {
+    const input = page.getByPlaceholder(/ask me anything|type a message/i);
+    await input.fill('Render feedback icons');
+    await page.getByRole('button', { name: /send|📤/i }).click();
+    await expect(page.getByText('Hello, this is a test response.')).toBeVisible({ timeout: 10000 });
+
+    const thumbsUp = page.getByRole('button', { name: /good response/i });
+    const thumbsDown = page.getByRole('button', { name: /bad response/i });
+
+    await expect(thumbsUp.locator('svg')).toHaveCount(1);
+    await expect(thumbsDown.locator('svg')).toHaveCount(1);
   });
 
   test('handles feedback API error gracefully', async ({ page }) => {

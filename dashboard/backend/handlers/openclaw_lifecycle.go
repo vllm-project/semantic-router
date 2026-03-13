@@ -61,8 +61,8 @@ func (h *OpenClawHandler) StartHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if h.readOnly {
-			http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+		if !h.canManageOpenClaw() {
+			h.writeReadOnlyError(w)
 			return
 		}
 		var req struct {
@@ -97,8 +97,8 @@ func (h *OpenClawHandler) StopHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if h.readOnly {
-			http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+		if !h.canManageOpenClaw() {
+			h.writeReadOnlyError(w)
 			return
 		}
 		var req struct {
@@ -133,8 +133,8 @@ func (h *OpenClawHandler) DeleteHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if h.readOnly {
-			http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+		if !h.canManageOpenClaw() {
+			h.writeReadOnlyError(w)
 			return
 		}
 		name := strings.TrimPrefix(r.URL.Path, "/api/openclaw/containers/")

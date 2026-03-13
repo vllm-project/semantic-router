@@ -19,7 +19,45 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 
 ## Quick Start
 
-### 1. Install vLLM Semantic Router
+### 1. Use the one-line installer (macOS/Linux)
+
+```bash
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+```
+
+The installer:
+
+- Detects Python 3.10 or newer
+- Installs `vllm-sr` into `~/.local/share/vllm-sr`
+- Writes a launcher to `~/.local/bin/vllm-sr`
+- Prepares Docker or Podman for `vllm-sr serve` unless you opt out
+- Starts `vllm-sr serve` automatically and opens the dashboard when possible
+- Prints dashboard access and remote-server hints if a browser cannot be opened
+
+Useful variants:
+
+```bash
+# Install only the CLI
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli
+
+# Pin local serve mode to Podman
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime podman
+
+# Force the first launch onto the AMD/ROCm path
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --platform amd
+
+# Install without auto-starting serve + dashboard
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --no-launch
+
+# Skip runtime bootstrap and keep only userland install steps
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
+```
+
+If `~/.local/bin` is not already on your `PATH`, the installer prints the export line to add it.
+
+Windows users should use the manual PyPI flow below.
+
+### 2. Manual PyPI install
 
 ```bash
 # Create a virtual environment (recommended)
@@ -36,83 +74,37 @@ Verify installation:
 vllm-sr --version
 ```
 
-### 2. Initialize Configuration
-
-```bash
-# Create config.yaml in current directory
-vllm-sr init
-```
-
-This creates a `config.yaml` file with default settings.
-
-### 3. Configure Your Backend
-
-Edit the generated `config.yaml` to configure your model and backend endpoint:
-
-```yaml
-providers:
-  # Model configuration
-  models:
-    - name: "qwen/qwen3-1.8b"           # Model name
-      endpoints:
-        - name: "my_vllm"
-          weight: 1
-          endpoint: "localhost:8000"    # Domain or IP:port
-          protocol: "http"              # http or https
-      access_key: "your-token-here"     # Optional: for authentication
-
-  # Default model for fallback
-  default_model: "qwen/qwen3-1.8b"
-```
-
-**Configuration Options:**
-
-- **endpoint**: Domain name or IP address with port (e.g., `localhost:8000`, `api.openai.com`)
-- **protocol**: `http` or `https`
-- **access_key**: Optional authentication token (Bearer token)
-- **weight**: Load balancing weight (default: 1)
-
-**Example: Local vLLM**
-
-```yaml
-providers:
-  models:
-    - name: "qwen/qwen3-1.8b"
-      endpoints:
-        - name: "local_vllm"
-          weight: 1
-          endpoint: "localhost:8000"
-          protocol: "http"
-  default_model: "qwen/qwen3-1.8b"
-```
-
-**Example: External API with HTTPS**
-
-```yaml
-providers:
-  models:
-    - name: "openai/gpt-4"
-      endpoints:
-        - name: "openai_api"
-          weight: 1
-          endpoint: "api.openai.com"
-          protocol: "https"
-      access_key: "sk-xxxxxx"
-  default_model: "openai/gpt-4"
-```
-
-### 4. Start the Router
+### 3. Restart `vllm-sr` later
 
 ```bash
 vllm-sr serve
 ```
 
+If you skipped `--no-launch`, the installer already ran one `vllm-sr serve` for you.
+
+If `config.yaml` does not exist yet in the current directory, `vllm-sr serve` bootstraps a minimal setup config and starts the dashboard in setup mode.
+
 The router will:
 
 - Automatically download required ML models (~1.5GB, one-time)
-- Start Envoy proxy on port 8888
-- Start the semantic router service
+- Start the dashboard on port 8700
+- Start Envoy proxy on port 8888 after activation
+- Start the semantic router service after activation
 - Enable metrics on port 9190
+
+### 4. Open the Dashboard
+
+Open [http://localhost:8700](http://localhost:8700) in your browser.
+
+If you ran the installer on a remote server and the browser did not open automatically, use the URL and SSH tunnel hint printed by the installer.
+
+For first-run setup:
+
+1. Configure one or more models.
+2. Choose a routing preset or keep the single-model baseline.
+3. Activate the generated config.
+
+After activation, `config.yaml` is written to the current directory and the router exits setup mode.
 
 ### 5. Test the Router
 
@@ -125,7 +117,7 @@ curl http://localhost:8888/v1/chat/completions \
   }'
 ```
 
-## 6. Launch Dashboard
+### 6. Optional: open the dashboard from the CLI
 
 ```bash
 vllm-sr dashboard
@@ -147,6 +139,20 @@ vllm-sr stop
 ```
 
 ## Advanced Configuration
+
+### YAML-first workflow
+
+If you prefer to edit YAML directly instead of using the dashboard setup flow:
+
+```bash
+# Generate a lean advanced sample in the current directory
+vllm-sr init
+
+# Validate it before serving
+vllm-sr validate config.yaml
+```
+
+`vllm-sr init` is optional. It generates an advanced sample and `.vllm-sr/router-defaults.yaml` for YAML-first users. `router-defaults.yaml` contains advanced runtime defaults and is not required for first-run dashboard setup.
 
 ### HuggingFace Settings
 

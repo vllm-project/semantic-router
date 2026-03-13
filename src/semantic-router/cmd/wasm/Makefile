@@ -15,6 +15,7 @@ MODULE_ROOT   = ../..
 build:
 	@echo "Building WASM binary..."
 	cd $(MODULE_ROOT) && CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
+		-buildvcs=false \
 		-o $(CURDIR)/$(WASM_OUT) \
 		-ldflags="-s -w" \
 		./cmd/wasm/

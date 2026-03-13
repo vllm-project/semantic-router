@@ -383,6 +383,7 @@ func EmitUserYAMLOrdered(cfg *config.RouterConfig) ([]byte, error) {
 func buildOrderedMap(raw map[string]interface{}) *yaml.Node {
 	// Canonical key order for top-level config
 	keyOrder := []string{
+		"listeners",
 		"signals",
 		"decisions",
 		"providers",

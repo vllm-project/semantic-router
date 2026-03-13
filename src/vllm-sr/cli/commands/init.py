@@ -23,7 +23,7 @@ def get_templates_dir():
 
 def init_command(force: bool = False):
     """
-    Initialize vLLM Semantic Router configuration.
+    Generate an advanced vLLM Semantic Router YAML sample.
 
     Creates:
     - config.yaml from config.template.yaml
@@ -33,7 +33,7 @@ def init_command(force: bool = False):
         force: Force overwrite existing files
     """
     log.info("=" * 60)
-    log.info("vLLM Semantic Router - Initialize Configuration")
+    log.info("vLLM Semantic Router - Generate Advanced YAML Sample")
     log.info("=" * 60)
 
     # Get current directory
@@ -57,9 +57,11 @@ def init_command(force: bool = False):
 
     if config_file.exists():
         if not force:
-            log.error("config.yaml already exists. Use --force to overwrite.")
+            log.error(
+                "config.yaml already exists. Use --force to overwrite the advanced sample."
+            )
             return False
-        log.warning("config.yaml already exists, overwriting...")
+        log.warning("config.yaml already exists, overwriting advanced sample...")
 
     shutil.copy2(template_config, config_file)
     log.info(f"Created config.yaml")
@@ -67,9 +69,13 @@ def init_command(force: bool = False):
     # Create .vllm-sr directory
     if vllm_sr_dir.exists():
         if not force:
-            log.error(".vllm-sr/ directory already exists. Use --force to overwrite.")
+            log.error(
+                ".vllm-sr/ directory already exists. Use --force to overwrite advanced runtime defaults."
+            )
             return False
-        log.warning(".vllm-sr/ directory already exists, overwriting...")
+        log.warning(
+            ".vllm-sr/ directory already exists, overwriting advanced runtime defaults..."
+        )
         shutil.rmtree(vllm_sr_dir)
 
     vllm_sr_dir.mkdir(exist_ok=True)
@@ -91,11 +97,16 @@ def init_command(force: bool = False):
     log.info(f"  • config.yaml")
     log.info(f"  • .vllm-sr/ ({len(copied_files)} files)")
     log.info("")
-    log.info("Next steps:")
-    log.info("  1. Edit config.yaml to configure your setup")
-    log.info("     Or use the dashboard for visual configuration")
-    log.info("  2. Start service: vllm-sr serve")
-    log.info("  3. Open dashboard: http://localhost:8700")
+    log.info("This sample is intended for YAML-first users.")
+    log.info("Most users can skip init and start with: vllm-sr serve")
+    log.info("")
+    log.info("Suggested next steps:")
+    log.info(
+        "  1. Edit config.yaml directly if you want a hand-authored routing config"
+    )
+    log.info("  2. Validate the sample: vllm-sr validate config.yaml")
+    log.info("  3. Start service or open setup UI: vllm-sr serve")
+    log.info("  4. Open dashboard: http://localhost:8700")
     log.info("=" * 60)
 
     return True

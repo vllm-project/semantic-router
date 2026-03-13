@@ -511,6 +511,13 @@ func (v *Validator) checkFieldConstraints(fields map[string]Value, pos Position,
 		if ov, ok := val.(ObjectValue); ok {
 			v.checkFieldConstraints(ov.Fields, pos, context+"."+k)
 		}
+		if av, ok := val.(ArrayValue); ok {
+			for _, item := range av.Items {
+				if ov, ok := item.(ObjectValue); ok {
+					v.checkFieldConstraints(ov.Fields, pos, context+"."+k)
+				}
+			}
+		}
 	}
 }
 

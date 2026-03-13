@@ -2083,6 +2083,12 @@ When `action: header` is configured and jailbreak content is detected:
 | `x-vsr-response-jailbreak-type` | Type of jailbreak detected |
 | `x-vsr-response-jailbreak-confidence` | Confidence score of the detection |
 
+### Memory Protection
+
+When the `response_jailbreak` plugin is enabled and jailbreak content is detected in the LLM response, the current conversation turn is **not stored** in the memory vector store. This prevents adversarial or manipulated LLM outputs from poisoning long-term memory.
+
+No additional configuration is required — memory gating activates automatically whenever `response_jailbreak` detection is enabled. The detection runs before memory storage, so the `ResponseJailbreakDetected` flag is always evaluated before any write occurs.
+
 ## Next Steps
 
 - **[Installation Guide](installation.md)** - Setup instructions

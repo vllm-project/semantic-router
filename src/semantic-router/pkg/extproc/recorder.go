@@ -6,6 +6,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -96,83 +97,67 @@ func (r *OpenAIRouter) startRouterReplay(
 	selectedModel string,
 	decisionName string,
 ) {
-	if ctx == nil || ctx.RouterReplayPluginConfig == nil || !ctx.RouterReplayPluginConfig.Enabled {
-		return
-	}
-	if ctx.RouterReplayID != "" {
+	if !shouldStartRouterReplay(ctx) {
 		return
 	}
 
-	// Get the recorder for this specific decision
-	recorder := r.ReplayRecorders[decisionName]
+	recorder := r.resolveReplayRecorder(decisionName)
 	if recorder == nil {
-		// Fall back to legacy single recorder if decision-specific one not found
-		recorder = r.ReplayRecorder
-		if recorder == nil {
-			return
-		}
+		return
 	}
 
-	cfg := ctx.RouterReplayPluginConfig
-	maxBodyBytes := cfg.MaxBodyBytes
-	if maxBodyBytes <= 0 {
-		maxBodyBytes = routerreplay.DefaultMaxBodyBytes
+	configureReplayRecorder(recorder, ctx.RouterReplayPluginConfig)
+	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
+	if !persistReplayRecord(ctx, recorder, record) {
+		return
 	}
+}
 
+func shouldStartRouterReplay(ctx *RequestContext) bool {
+	if ctx == nil || ctx.RouterReplayPluginConfig == nil || !ctx.RouterReplayPluginConfig.Enabled {
+		return false
+	}
+	return ctx.RouterReplayID == ""
+}
+
+func (r *OpenAIRouter) resolveReplayRecorder(decisionName string) *routerreplay.Recorder {
+	recorder := r.ReplayRecorders[decisionName]
+	if recorder != nil {
+		return recorder
+	}
+	return r.ReplayRecorder
+}
+
+func configureReplayRecorder(
+	recorder *routerreplay.Recorder,
+	cfg *config.RouterReplayPluginConfig,
+) {
 	recorder.SetCapturePolicy(
 		cfg.CaptureRequestBody,
 		cfg.CaptureResponseBody,
-		maxBodyBytes,
+		resolveReplayMaxBodyBytes(cfg.MaxBodyBytes),
 	)
+}
 
-	reasoningMode := ctx.VSRReasoningMode
-	if reasoningMode == "" {
-		reasoningMode = "off"
-	}
-
-	modelForRecord := selectedModel
-	if modelForRecord == "" {
-		modelForRecord = originalModel
-	}
-
-	// Determine guardrail status from decision's rules tree (whether signals are configured),
-	// not from whether they actually fired. This preserves the "configured = enabled" semantics
-	// so replay records can distinguish "not configured" from "configured but not triggered".
-	var jailbreakEnabled, piiEnabled, hallucinationEnabled bool
-	if ctx.VSRSelectedDecision != nil {
-		jailbreakEnabled = ctx.VSRSelectedDecision.HasSignalType("jailbreak")
-		piiEnabled = ctx.VSRSelectedDecision.HasSignalType("pii")
-		if hallucinationCfg := ctx.VSRSelectedDecision.GetHallucinationConfig(); hallucinationCfg != nil {
-			hallucinationEnabled = hallucinationCfg.Enabled
-		}
-	}
-	guardrailsEnabled := jailbreakEnabled || piiEnabled
-
-	// Determine RAG status from context
-	ragEnabled := ctx.RAGRetrievedContext != ""
-
-	rec := routerreplay.RoutingRecord{
+func buildReplayRoutingRecord(
+	ctx *RequestContext,
+	originalModel string,
+	selectedModel string,
+	decisionName string,
+) routerreplay.RoutingRecord {
+	guardrailsEnabled, jailbreakEnabled, piiEnabled, hallucinationEnabled := replayGuardrailState(ctx)
+	record := routerreplay.RoutingRecord{
 		RequestID:       ctx.RequestID,
 		Decision:        decisionName,
 		Category:        ctx.VSRSelectedCategory,
 		OriginalModel:   originalModel,
-		SelectedModel:   modelForRecord,
-		ReasoningMode:   reasoningMode,
+		SelectedModel:   replaySelectedModel(originalModel, selectedModel),
+		ReasoningMode:   replayReasoningMode(ctx),
 		ConfidenceScore: ctx.VSRSelectedDecisionConfidence,
 		SelectionMethod: ctx.VSRSelectionMethod,
-		Signals: routerreplay.Signal{
-			Keyword:      ctx.VSRMatchedKeywords,
-			Embedding:    ctx.VSRMatchedEmbeddings,
-			Domain:       ctx.VSRMatchedDomains,
-			FactCheck:    ctx.VSRMatchedFactCheck,
-			UserFeedback: ctx.VSRMatchedUserFeedback,
-			Preference:   ctx.VSRMatchedPreference,
-			Language:     ctx.VSRMatchedLanguage,
-			Context:      ctx.VSRMatchedContext,
-			Complexity:   ctx.VSRMatchedComplexity,
-		},
-		Streaming: ctx.ExpectStreamingResponse,
-		FromCache: ctx.VSRCacheHit,
+		Signals:         replaySignalState(ctx),
+		Streaming:       ctx.ExpectStreamingResponse,
+		FromCache:       ctx.VSRCacheHit,
 
 		GuardrailsEnabled: guardrailsEnabled,
 		JailbreakEnabled:  jailbreakEnabled,
@@ -190,22 +175,67 @@ func (r *OpenAIRouter) startRouterReplay(
 		PIIEntities: ctx.PIIEntities,
 		PIIBlocked:  ctx.PIIBlocked,
 
-		RAGEnabled:         ragEnabled,
-		RAGBackend:         ctx.RAGBackend,
-		RAGContextLength:   len(ctx.RAGRetrievedContext),
-		RAGSimilarityScore: ctx.RAGSimilarityScore,
-
+		RAGEnabled:           ctx.RAGRetrievedContext != "",
+		RAGBackend:           ctx.RAGBackend,
+		RAGContextLength:     len(ctx.RAGRetrievedContext),
+		RAGSimilarityScore:   ctx.RAGSimilarityScore,
 		HallucinationEnabled: hallucinationEnabled,
 	}
-
-	// Attach request body directly; recorder will enforce capture + truncation
 	if len(ctx.OriginalRequestBody) > 0 {
-		rec.RequestBody = string(ctx.OriginalRequestBody)
+		record.RequestBody = string(ctx.OriginalRequestBody)
 	}
+	return record
+}
 
-	replayID, err := recorder.AddRecord(rec)
+func replayReasoningMode(ctx *RequestContext) string {
+	if ctx.VSRReasoningMode == "" {
+		return "off"
+	}
+	return ctx.VSRReasoningMode
+}
+
+func replaySelectedModel(originalModel string, selectedModel string) string {
+	if selectedModel == "" {
+		return originalModel
+	}
+	return selectedModel
+}
+
+func replaySignalState(ctx *RequestContext) routerreplay.Signal {
+	return routerreplay.Signal{
+		Keyword:      ctx.VSRMatchedKeywords,
+		Embedding:    ctx.VSRMatchedEmbeddings,
+		Domain:       ctx.VSRMatchedDomains,
+		FactCheck:    ctx.VSRMatchedFactCheck,
+		UserFeedback: ctx.VSRMatchedUserFeedback,
+		Preference:   ctx.VSRMatchedPreference,
+		Language:     ctx.VSRMatchedLanguage,
+		Context:      ctx.VSRMatchedContext,
+		Complexity:   ctx.VSRMatchedComplexity,
+	}
+}
+
+func replayGuardrailState(ctx *RequestContext) (bool, bool, bool, bool) {
+	if ctx.VSRSelectedDecision == nil {
+		return false, false, false, false
+	}
+	jailbreakEnabled := ctx.VSRSelectedDecision.HasSignalType("jailbreak")
+	piiEnabled := ctx.VSRSelectedDecision.HasSignalType("pii")
+	hallucinationEnabled := false
+	if hallucinationCfg := ctx.VSRSelectedDecision.GetHallucinationConfig(); hallucinationCfg != nil {
+		hallucinationEnabled = hallucinationCfg.Enabled
+	}
+	return jailbreakEnabled || piiEnabled, jailbreakEnabled, piiEnabled, hallucinationEnabled
+}
+
+func persistReplayRecord(
+	ctx *RequestContext,
+	recorder *routerreplay.Recorder,
+	record routerreplay.RoutingRecord,
+) bool {
+	replayID, err := recorder.AddRecord(record)
 	if err != nil {
-		return
+		return false
 	}
 	ctx.RouterReplayID = replayID
 	ctx.RouterReplayRecorder = recorder
@@ -216,6 +246,7 @@ func (r *OpenAIRouter) startRouterReplay(
 			routerreplay.LogFields(stored, "router_replay_start"),
 		)
 	}
+	return true
 }
 
 // updateRouterReplayStatus updates status metadata (status code, streaming/cache flags).

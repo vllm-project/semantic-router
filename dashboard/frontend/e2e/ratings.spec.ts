@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthenticatedAppShell } from './support/auth';
 
 // Mock ratings data matching the user's expected mock API (gpt-4 #1 with 1410)
 const MOCK_RATINGS = [
@@ -20,6 +21,8 @@ function mockRatingsResponse() {
 
 test.describe('Ratings Page', () => {
   test.beforeEach(async ({ page }) => {
+    await mockAuthenticatedAppShell(page)
+
     // Mock the ratings API for consistent test results
     await page.route('**/api/router/api/v1/ratings**', async (route) => {
       const url = new URL(route.request().url());

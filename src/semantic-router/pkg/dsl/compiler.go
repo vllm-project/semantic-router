@@ -1056,6 +1056,11 @@ func (c *Compiler) compileResponseAPIBackend(b *BackendDecl) {
 func (c *Compiler) compileGlobal() {
 	g := c.prog.Global.Fields
 
+	// listeners
+	if obj, ok := g["listeners"]; ok {
+		c.config.Listeners = c.compileListeners(obj, c.prog.Global.Pos)
+	}
+
 	if v, ok := getStringField(g, "default_model"); ok {
 		c.config.DefaultModel = v
 	}
@@ -1181,6 +1186,47 @@ func (c *Compiler) compileGlobal() {
 			}
 		}
 	}
+}
+
+func (c *Compiler) compileListeners(value Value, pos Position) []config.Listener {
+	av, ok := value.(ArrayValue)
+	if !ok {
+		c.addError(pos, "GLOBAL listeners must be an array of listener objects")
+		return nil
+	}
+
+	listeners := make([]config.Listener, 0, len(av.Items))
+	for i, item := range av.Items {
+		ov, ok := item.(ObjectValue)
+		if !ok {
+			c.addError(pos, "GLOBAL listeners[%d] must be an object", i)
+			continue
+		}
+
+		listener := config.Listener{}
+		if v, ok := getStringField(ov.Fields, "name"); ok && v != "" {
+			listener.Name = v
+		} else {
+			c.addError(pos, "GLOBAL listeners[%d].name is required", i)
+		}
+		if v, ok := getStringField(ov.Fields, "address"); ok && v != "" {
+			listener.Address = v
+		} else {
+			c.addError(pos, "GLOBAL listeners[%d].address is required", i)
+		}
+		if v, ok := getIntField(ov.Fields, "port"); ok && v > 0 {
+			listener.Port = v
+		} else {
+			c.addError(pos, "GLOBAL listeners[%d].port must be a positive integer", i)
+		}
+		if v, ok := getStringField(ov.Fields, "timeout"); ok {
+			listener.Timeout = v
+		}
+
+		listeners = append(listeners, listener)
+	}
+
+	return listeners
 }
 
 func (c *Compiler) compileObservability(fields map[string]Value) {

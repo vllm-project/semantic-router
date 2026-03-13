@@ -71,6 +71,8 @@
 }
 
 .paperWorkspace {
+  --paper-figure-nav-item-height: 4.3rem;
+  --paper-figure-rail-height: 29.55rem;
   position: relative;
   z-index: 1;
   display: grid;
@@ -80,12 +82,14 @@
   max-width: 1120px;
   margin: 0 auto;
   min-width: 0;
+  min-height: var(--paper-figure-rail-height);
 }
 
 .figureNav {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-height: var(--paper-figure-rail-height);
 }
 
 .figureNavItem {
@@ -96,6 +100,7 @@
   width: 100%;
   text-align: left;
   padding: 0.85rem 0.9rem;
+  min-height: var(--paper-figure-nav-item-height);
   border-radius: 12px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   background: rgba(255, 255, 255, 0.8);
@@ -157,10 +162,12 @@
   border: 1px solid rgba(0, 0, 0, 0.1);
   background: rgba(255, 255, 255, 0.9);
   padding: 1.5rem;
-  min-height: 420px;
+  min-height: var(--paper-figure-rail-height);
+  height: var(--paper-figure-rail-height);
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 [data-theme='dark'] .figureStage {
@@ -171,6 +178,11 @@
 .figureStageHeader {
   margin-bottom: 1.25rem;
   flex: 0 0 auto;
+}
+
+.figureStage > :last-child {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .figureMeta {
@@ -1420,5 +1432,327 @@
   .taxonomyArrow {
     justify-self: center;
     transform: rotate(90deg);
+  }
+}
+
+/* Homepage redesign overrides */
+.paperFigureSection,
+[data-theme='dark'] .paperFigureSection {
+  padding: 5rem 0;
+  border-bottom: 1px solid var(--site-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 38%),
+    #050505;
+}
+
+.paperFigureSection::before,
+[data-theme='dark'] .paperFigureSection::before {
+  background:
+    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.08), transparent 34%),
+    radial-gradient(circle at 82% 78%, rgba(255, 255, 255, 0.05), transparent 32%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: auto, auto, 30px 30px, 30px 30px;
+  opacity: 0.45;
+}
+
+.paperHeader,
+[data-theme='dark'] .paperHeader {
+  text-align: left;
+  max-width: 58rem;
+  margin: 0 0 2rem;
+}
+
+.paperLabel,
+[data-theme='dark'] .paperLabel,
+.mappingSideLabel,
+[data-theme='dark'] .mappingSideLabel,
+.layerTag,
+[data-theme='dark'] .layerTag,
+.layerDetailKicker,
+[data-theme='dark'] .layerDetailKicker,
+.transformerBusLabel,
+[data-theme='dark'] .transformerBusLabel,
+.transformerBlockTag,
+[data-theme='dark'] .transformerBlockTag,
+.transformerEntropyLabel,
+[data-theme='dark'] .transformerEntropyLabel,
+.transformerExitLabel,
+[data-theme='dark'] .transformerExitLabel,
+.figureMetaLabel,
+[data-theme='dark'] .figureMetaLabel,
+.agentFlowVerb,
+[data-theme='dark'] .agentFlowVerb,
+.agentLoopDropText,
+[data-theme='dark'] .agentLoopDropText,
+.agentLoopReturnText,
+[data-theme='dark'] .agentLoopReturnText,
+.agentNodeOutput,
+[data-theme='dark'] .agentNodeOutput {
+  color: var(--site-muted-bright);
+}
+
+.paperTitle,
+[data-theme='dark'] .paperTitle,
+.figureStageTitle,
+[data-theme='dark'] .figureStageTitle,
+.figureNavText,
+[data-theme='dark'] .figureNavText,
+.mappingNode,
+[data-theme='dark'] .mappingNode,
+.layerTitle,
+[data-theme='dark'] .layerTitle,
+.taxonomyTitle,
+[data-theme='dark'] .taxonomyTitle,
+.agentNodeLabel,
+[data-theme='dark'] .agentNodeLabel,
+.agentFeedbackTitle,
+[data-theme='dark'] .agentFeedbackTitle,
+.transformerBlockTitle,
+[data-theme='dark'] .transformerBlockTitle {
+  color: var(--site-text);
+}
+
+.paperDescription,
+[data-theme='dark'] .paperDescription,
+.figureStageSummary,
+[data-theme='dark'] .figureStageSummary,
+.mappingNote,
+[data-theme='dark'] .mappingNote,
+.entropyLabel,
+[data-theme='dark'] .entropyLabel,
+.entropyNote,
+[data-theme='dark'] .entropyNote,
+.layerText,
+[data-theme='dark'] .layerText,
+.layerDetailText,
+[data-theme='dark'] .layerDetailText,
+.taxonomyNote,
+[data-theme='dark'] .taxonomyNote,
+.agentNodeDetail,
+[data-theme='dark'] .agentNodeDetail,
+.agentFeedbackDetail,
+[data-theme='dark'] .agentFeedbackDetail,
+.agentFlowNote,
+[data-theme='dark'] .agentFlowNote,
+.foldNote,
+[data-theme='dark'] .foldNote,
+.transformerBlockFormula,
+[data-theme='dark'] .transformerBlockFormula {
+  color: var(--site-muted);
+}
+
+.paperWorkspace,
+[data-theme='dark'] .paperWorkspace {
+  max-width: none;
+  gap: 1rem;
+  align-items: start;
+}
+
+.figureNavItem,
+[data-theme='dark'] .figureNavItem,
+.figureStage,
+[data-theme='dark'] .figureStage,
+.figureCanvas,
+[data-theme='dark'] .figureCanvas,
+.mappingSubBlock,
+[data-theme='dark'] .mappingSubBlock,
+.mappingSubBlockSecondary,
+[data-theme='dark'] .mappingSubBlockSecondary,
+.entropyStageChip,
+[data-theme='dark'] .entropyStageChip,
+.layerCard,
+[data-theme='dark'] .layerCard,
+.layerDetailCard,
+[data-theme='dark'] .layerDetailCard,
+.taxonomyCard,
+[data-theme='dark'] .taxonomyCard,
+.agentNode,
+[data-theme='dark'] .agentNode,
+.agentNodeAgent,
+[data-theme='dark'] .agentNodeAgent,
+.agentNodeEngine,
+[data-theme='dark'] .agentNodeEngine,
+.agentFeedbackCard,
+[data-theme='dark'] .agentFeedbackCard,
+.agentLoopTrack,
+[data-theme='dark'] .agentLoopTrack,
+.transformerBus,
+[data-theme='dark'] .transformerBus,
+.transformerBlock,
+[data-theme='dark'] .transformerBlock,
+.transformerBlockDecision,
+[data-theme='dark'] .transformerBlockDecision,
+.transformerExitLane,
+[data-theme='dark'] .transformerExitLane,
+.transformerEntropyTrack,
+[data-theme='dark'] .transformerEntropyTrack {
+  border-color: var(--site-border);
+  background: var(--site-surface);
+  box-shadow: none;
+}
+
+.figureNavItem:hover,
+[data-theme='dark'] .figureNavItem:hover,
+.mappingColumn:hover .mappingSubBlock,
+[data-theme='dark'] .mappingColumn:hover .mappingSubBlock,
+.layerCard:hover,
+[data-theme='dark'] .layerCard:hover,
+.taxonomyCard:hover,
+[data-theme='dark'] .taxonomyCard:hover,
+.agentNode:hover,
+[data-theme='dark'] .agentNode:hover,
+.agentFeedbackCard:hover,
+[data-theme='dark'] .agentFeedbackCard:hover,
+.transformerBlock:hover,
+[data-theme='dark'] .transformerBlock:hover {
+  border-color: var(--site-border-strong);
+  transform: translateY(-2px);
+}
+
+.figureNavItemActive,
+[data-theme='dark'] .figureNavItemActive,
+.mappingColumnActive .mappingSubBlock,
+[data-theme='dark'] .mappingColumnActive .mappingSubBlock,
+.entropyStageChipActive,
+[data-theme='dark'] .entropyStageChipActive,
+.layerCardActive,
+[data-theme='dark'] .layerCardActive,
+.taxonomyCardActive,
+[data-theme='dark'] .taxonomyCardActive,
+.tokenTagActive,
+[data-theme='dark'] .tokenTagActive,
+.agentNodeActive,
+[data-theme='dark'] .agentNodeActive,
+.agentFeedbackCardActive,
+[data-theme='dark'] .agentFeedbackCardActive,
+.transformerBlockActive,
+[data-theme='dark'] .transformerBlockActive,
+.transformerExitDotActive,
+[data-theme='dark'] .transformerExitDotActive {
+  border-color: var(--site-border-strong);
+  background: var(--site-surface-alt);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.figureIndex,
+[data-theme='dark'] .figureIndex,
+.figureMetaValue,
+[data-theme='dark'] .figureMetaValue,
+.tokenTag,
+[data-theme='dark'] .tokenTag,
+.taxonomyResult,
+[data-theme='dark'] .taxonomyResult,
+.agentRobot,
+[data-theme='dark'] .agentRobot,
+.agentSpeaker,
+[data-theme='dark'] .agentSpeaker,
+.agentCode,
+[data-theme='dark'] .agentCode,
+.agentEngine,
+[data-theme='dark'] .agentEngine,
+.transformerExitDot,
+[data-theme='dark'] .transformerExitDot {
+  border: 1px solid var(--site-border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--site-text);
+}
+
+.tokenTagMuted,
+[data-theme='dark'] .tokenTagMuted,
+.taxonomyCardMuted,
+[data-theme='dark'] .taxonomyCardMuted,
+.agentNodeMuted,
+[data-theme='dark'] .agentNodeMuted,
+.transformerBlockMuted,
+[data-theme='dark'] .transformerBlockMuted {
+  opacity: 0.6;
+}
+
+.mappingBridge,
+[data-theme='dark'] .mappingBridge,
+.layerConnector,
+[data-theme='dark'] .layerConnector,
+.taxonomyArrow,
+[data-theme='dark'] .taxonomyArrow,
+.agentFlowArrow,
+[data-theme='dark'] .agentFlowArrow,
+.agentLoopDropArrow,
+[data-theme='dark'] .agentLoopDropArrow,
+.agentLoopReturnArrow,
+[data-theme='dark'] .agentLoopReturnArrow,
+.transformerArrow,
+[data-theme='dark'] .transformerArrow {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.entropyLabelActive,
+[data-theme='dark'] .entropyLabelActive {
+  color: var(--site-text);
+}
+
+.entropyBar,
+[data-theme='dark'] .entropyBar,
+.transformerEntropyBar,
+[data-theme='dark'] .transformerEntropyBar,
+.transformerDepthBars span,
+[data-theme='dark'] .transformerDepthBars span {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.18));
+}
+
+.figureCanvas,
+[data-theme='dark'] .figureCanvas {
+  gap: 1rem;
+}
+
+.transformerStackRow,
+[data-theme='dark'] .transformerStackRow {
+  padding-bottom: 0.35rem;
+}
+
+@media screen and (max-width: 996px) {
+  .paperWorkspace,
+  [data-theme='dark'] .paperWorkspace {
+    min-height: 0;
+  }
+
+  .paperHeader,
+  [data-theme='dark'] .paperHeader {
+    margin-bottom: 1.6rem;
+  }
+
+  .figureNav,
+  [data-theme='dark'] .figureNav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+    min-height: 0;
+  }
+
+  .figureNavItem,
+  [data-theme='dark'] .figureNavItem {
+    min-height: 0;
+  }
+
+  .figureStage,
+  [data-theme='dark'] .figureStage {
+    min-height: 420px;
+    height: auto;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .paperFigureSection,
+  [data-theme='dark'] .paperFigureSection {
+    padding: 3.5rem 0;
+  }
+
+  .paperTitle,
+  [data-theme='dark'] .paperTitle {
+    font-size: clamp(2rem, 8vw, 3rem);
+  }
+
+  .figureNav,
+  [data-theme='dark'] .figureNav {
+    grid-template-columns: 1fr;
   }
 }
