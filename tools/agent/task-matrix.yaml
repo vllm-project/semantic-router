@@ -74,8 +74,6 @@ rules:
     doc_only: false
     paths:
       - src/semantic-router/**
-      - config/**
-      - scripts/**
     fast_tests:
       - make test-semantic-router
     feature_tests: []

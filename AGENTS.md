@@ -10,6 +10,12 @@ This file is the short entrypoint for coding agents. The detailed human-readable
 4. [docs/agent/change-surfaces.md](docs/agent/change-surfaces.md)
 5. `make agent-report ENV=cpu|amd CHANGED_FILES="..."`
 
+## Native Discovery vs Routed Context
+
+- Root startup should always discover this [AGENTS.md](AGENTS.md) entrypoint and the thin repo-native bridge at [.agents/skills/harness/SKILL.md](.agents/skills/harness/SKILL.md).
+- Full task routing, primary-skill resolution, local-rule surfacing, and validation planning still come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
+- `tools/agent/**` remains the canonical harness source; `.agents/skills/**` is only a discovery bridge.
+
 If you need real AMD model deployment details instead of the minimal smoke path, also read [deploy/amd/README.md](deploy/amd/README.md) and [deploy/amd/config.yaml](deploy/amd/config.yaml).
 
 ## Supported Environments

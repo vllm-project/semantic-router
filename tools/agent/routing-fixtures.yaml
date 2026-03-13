@@ -1,0 +1,32 @@
+version: 1
+
+cases:
+  - name: config-router-only
+    changed_files:
+      - src/semantic-router/pkg/config/observability_config.go
+    expected_primary_skill: config-platform-change
+  - name: config-router-and-cli-schema
+    changed_files:
+      - src/semantic-router/pkg/config/observability_config.go
+      - src/vllm-sr/cli/models.py
+    expected_primary_skill: config-platform-change
+  - name: config-router-cli-and-dashboard-config
+    changed_files:
+      - src/semantic-router/pkg/config/observability_config.go
+      - src/vllm-sr/cli/models.py
+      - dashboard/frontend/src/pages/ConfigPage.tsx
+    expected_primary_skill: config-platform-change
+  - name: config-platform-with-dsl-and-k8s
+    changed_files:
+      - src/semantic-router/pkg/config/observability_config.go
+      - src/vllm-sr/cli/models.py
+      - dashboard/frontend/src/pages/BuilderPage.tsx
+      - src/semantic-router/pkg/dsl/compiler.go
+      - src/semantic-router/pkg/k8s/converter.go
+    expected_primary_skill: config-platform-change
+  - name: classification-signal-with-shared-config-surfaces
+    changed_files:
+      - src/semantic-router/pkg/classification/classifier.go
+      - src/vllm-sr/cli/models.py
+      - dashboard/frontend/src/pages/ConfigPage.tsx
+    expected_primary_skill: signal-end-to-end

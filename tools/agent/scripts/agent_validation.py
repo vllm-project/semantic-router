@@ -9,8 +9,10 @@ from agent_doc_validation import (
     validate_agent_harness_layers,
     validate_support_files,
 )
+from agent_resolution import resolve_primary_skill
 from agent_skill_validation import validate_skill_registry
 from agent_support import (
+    AGENT_DIR,
     REPO_ROOT,
     append_missing_make_target,
     build_skill_lookup,
@@ -18,6 +20,7 @@ from agent_support import (
     collect_manifest_globs,
     load_context_map,
     load_manifests,
+    load_yaml,
     validate_glob,
 )
 
@@ -104,6 +107,69 @@ def validate_manifest_globs(
             errors.append(f"Pattern has no matches: {pattern}")
 
 
+def validate_routing_fixtures(errors: list[str]) -> None:
+    fixtures_path = AGENT_DIR / "routing-fixtures.yaml"
+    if not fixtures_path.exists():
+        errors.append(
+            "Missing routing fixtures file: tools/agent/routing-fixtures.yaml"
+        )
+        return
+
+    fixtures = load_yaml(fixtures_path)
+    for case in fixtures.get("cases", []):
+        case_name = case.get("name", "<unnamed>")
+        changed_files = case.get("changed_files", [])
+        expected_primary_skill = case.get("expected_primary_skill")
+
+        if not changed_files:
+            errors.append(f"Routing fixture '{case_name}' has no changed_files")
+            continue
+        if not expected_primary_skill:
+            errors.append(
+                f"Routing fixture '{case_name}' is missing expected_primary_skill"
+            )
+            continue
+
+        missing_files = [
+            path for path in changed_files if not (REPO_ROOT / path).exists()
+        ]
+        if missing_files:
+            errors.append(
+                f"Routing fixture '{case_name}' references missing files: "
+                + ", ".join(missing_files)
+            )
+            continue
+
+        resolved_primary_skill = resolve_primary_skill(changed_files)["name"]
+        if resolved_primary_skill != expected_primary_skill:
+            errors.append(
+                f"Routing fixture '{case_name}' resolved '{resolved_primary_skill}' "
+                f"instead of '{expected_primary_skill}'"
+            )
+
+
+def validate_discovery_bridge(errors: list[str]) -> None:
+    bridge_path = REPO_ROOT / ".agents" / "skills" / "harness" / "SKILL.md"
+    if not bridge_path.exists():
+        errors.append(
+            "Missing native-discovery bridge: .agents/skills/harness/SKILL.md"
+        )
+        return
+
+    bridge_text = bridge_path.read_text(encoding="utf-8")
+    required_refs = [
+        "AGENTS.md",
+        "docs/agent/README.md",
+        "make agent-report",
+        "tools/agent/skills/",
+    ]
+    for ref in required_refs:
+        if ref not in bridge_text:
+            errors.append(
+                f"Discovery bridge skill must reference '{ref}' in {bridge_path.relative_to(REPO_ROOT)}"
+            )
+
+
 def collect_validation_errors() -> list[str]:
     repo_manifest, task_matrix, e2e_map, structure_rules, skill_registry = (
         load_manifests()
@@ -126,6 +192,8 @@ def collect_validation_errors() -> list[str]:
         repo_manifest, task_matrix, skill_registry, context_map, errors
     )
     validate_skill_registry(repo_manifest, task_matrix, skill_registry, errors)
+    validate_routing_fixtures(errors)
+    validate_discovery_bridge(errors)
     return errors
 
 

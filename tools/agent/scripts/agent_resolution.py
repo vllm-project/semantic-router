@@ -286,6 +286,23 @@ def selector_match_count(
     )
 
 
+def anchor_match_count(
+    skill: dict, changed_files: list[str], local_rule_path_set: set[str]
+) -> int:
+    anchor_paths = skill.get("anchor_paths", [])
+    if not anchor_paths:
+        return 0
+    return sum(
+        1
+        for path in changed_files
+        if matches_with_local_rule_policy(
+            path,
+            anchor_paths,
+            local_rule_path_set,
+        )
+    )
+
+
 def resolve_primary_skill(changed_files: list[str]) -> dict:
     repo_manifest, _, _, _, skill_registry = load_manifests()
     local_rule_path_set = local_agent_rule_paths(repo_manifest)
@@ -303,7 +320,8 @@ def resolve_primary_skill(changed_files: list[str]) -> dict:
         if match_count == 0:
             continue
 
-        score = (match_count, skill.get("priority", 0))
+        anchor_count = anchor_match_count(skill, changed_files, local_rule_path_set)
+        score = (anchor_count, match_count, skill.get("priority", 0))
         if best_score is None or score > best_score:
             best_match = skill
             best_score = score

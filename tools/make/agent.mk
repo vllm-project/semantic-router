@@ -10,6 +10,8 @@ AGENT_BASE_REF ?=
 AGENT_SERVE_CONFIG ?=
 AGENT_SERVE_ARGS ?=
 AGENT_SMOKE_TIMEOUT ?= 90
+AGENT_STACK_NAME ?=
+AGENT_PORT_OFFSET ?= 0
 
 agent-help: ## Show help for agent-specific targets
 	@echo "Agent commands:"
@@ -18,6 +20,7 @@ agent-help: ## Show help for agent-specific targets
 	@echo "  make agent-scorecard"
 	@echo "  make agent-dev ENV=cpu|amd"
 	@echo "  make agent-serve-local ENV=cpu|amd"
+	@echo "    optional: AGENT_STACK_NAME=<name> AGENT_PORT_OFFSET=<n>"
 	@echo "  make agent-report ENV=cpu|amd CHANGED_FILES=\"...\""
 	@echo "  make agent-lint CHANGED_FILES=\"...\""
 	@echo "  make agent-fast-gate CHANGED_FILES=\"...\""
@@ -72,15 +75,17 @@ agent-serve-local: ## Start vllm-sr with the canonical local image flow
 	fi; \
 	if [ "$(ENV)" = "amd" ]; then \
 		echo "Starting local AMD workflow..."; \
+		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" \
 		vllm-sr serve --image-pull-policy never --platform amd $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
 	else \
 		echo "Starting local CPU workflow..."; \
+		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" \
 		vllm-sr serve --image-pull-policy never $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
 	fi
 
 agent-stop-local: ## Stop local vllm-sr services
 	@$(LOG_TARGET)
-	@vllm-sr stop || true
+	@VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" vllm-sr stop || true
 
 agent-lint: agent-bootstrap ## Run lint and structure gates for changed files
 	@$(LOG_TARGET)
@@ -120,9 +125,14 @@ agent-ci-gate: ## Run the repo-standard fast CI gate
 
 agent-smoke-local: ## Validate local container, router, envoy, and dashboard health
 	@$(LOG_TARGET)
-	@START_TIME="$$(date +%s)"; \
+	@STACK_CONTAINER="$(VLLM_SR_CONTAINER)"; \
+	if [ -n "$(AGENT_STACK_NAME)" ] && [ "$(AGENT_STACK_NAME)" != "vllm-sr" ]; then \
+		STACK_CONTAINER="$(AGENT_STACK_NAME)-vllm-sr-container"; \
+	fi; \
+	STACK_DASHBOARD_PORT=$$((8700 + $(AGENT_PORT_OFFSET))); \
+	START_TIME="$$(date +%s)"; \
 	while true; do \
-		STATUS_OUTPUT="$$(vllm-sr status all 2>&1 || true)"; \
+		STATUS_OUTPUT="$$(VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" vllm-sr status all 2>&1 || true)"; \
 		if echo "$$STATUS_OUTPUT" | grep -q "Container Status: Running" && \
 		   echo "$$STATUS_OUTPUT" | grep -q "Router: Running" && \
 		   echo "$$STATUS_OUTPUT" | grep -q "Envoy: Running" && \
@@ -138,9 +148,9 @@ agent-smoke-local: ## Validate local container, router, envoy, and dashboard hea
 		fi; \
 		sleep 5; \
 	done; \
-	curl -fsS http://localhost:8700 >/dev/null; \
-	$(CONTAINER_RUNTIME) ps --filter "name=$(VLLM_SR_CONTAINER)" --format '{{.Names}}' | grep -q '^$(VLLM_SR_CONTAINER)$$'; \
-	if $(CONTAINER_RUNTIME) logs $(VLLM_SR_CONTAINER) 2>&1 | grep -E "Image not found locally|Failed to pull image|Container exited unexpectedly" >/dev/null; then \
+	curl -fsS "http://localhost:$$STACK_DASHBOARD_PORT" >/dev/null; \
+	$(CONTAINER_RUNTIME) ps --filter "name=$$STACK_CONTAINER" --format '{{.Names}}' | grep -q "^$$STACK_CONTAINER$$"; \
+	if $(CONTAINER_RUNTIME) logs $$STACK_CONTAINER 2>&1 | grep -E "Image not found locally|Failed to pull image|Container exited unexpectedly" >/dev/null; then \
 		echo "Detected startup failure in container logs"; \
 		exit 1; \
 	fi; \
@@ -156,10 +166,10 @@ agent-feature-gate: ## Run lint, targeted tests, local smoke, and affected E2E p
 	$(MAKE) agent-ci-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"; \
 	python3 tools/agent/scripts/agent_gate.py run-tests --mode feature-only --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"; \
 	if [ "$$(python3 tools/agent/scripts/agent_gate.py needs-smoke --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)")" = "true" ]; then \
-		trap 'vllm-sr stop >/dev/null 2>&1 || true' EXIT; \
+		trap '$(MAKE) agent-stop-local ENV=$(ENV) AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)" >/dev/null 2>&1 || true' EXIT; \
 		$(MAKE) agent-dev ENV=$(ENV); \
-		$(MAKE) agent-serve-local ENV=$(ENV); \
-		$(MAKE) agent-smoke-local; \
+		$(MAKE) agent-serve-local ENV=$(ENV) AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)"; \
+		$(MAKE) agent-smoke-local AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)"; \
 	fi; \
 	$(MAKE) agent-e2e-affected CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"; \
 	python3 tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"

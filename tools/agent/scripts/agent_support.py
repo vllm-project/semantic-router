@@ -123,6 +123,7 @@ def collect_manifest_globs(
         manifest_globs.extend(surface["paths"])
     for skill in iter_registry_skills(skill_registry):
         manifest_globs.extend(skill.get("selector_paths", []))
+        manifest_globs.extend(skill.get("anchor_paths", []))
 
     return manifest_globs
 

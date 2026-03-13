@@ -2,10 +2,11 @@
 
 import json
 import os
-import shutil
 import subprocess
+from pathlib import Path
 
 from cli.docker_runtime import get_container_runtime
+from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import getLogger
 
 log = getLogger(__name__)
@@ -160,10 +161,14 @@ def docker_remove_network(network_name):
         return (exc.returncode, exc.stdout, exc.stderr)
 
 
-def docker_start_jaeger(network_name="vllm-sr-network"):
+def docker_start_jaeger(
+    network_name=None, stack_layout: RuntimeStackLayout | None = None
+):
     """Start Jaeger container for distributed tracing."""
     runtime = get_container_runtime()
-    container_name = "vllm-sr-jaeger"
+    stack_layout = stack_layout or resolve_runtime_stack()
+    container_name = stack_layout.jaeger_container_name
+    network_name = network_name or stack_layout.network_name
     _replace_existing_container(container_name)
 
     cmd = [
@@ -177,18 +182,24 @@ def docker_start_jaeger(network_name="vllm-sr-network"):
         "-e",
         "COLLECTOR_OTLP_ENABLED=true",
         "-p",
-        "4318:4317",
+        f"{stack_layout.jaeger_otlp_port}:4317",
         "-p",
-        "16686:16686",
+        f"{stack_layout.jaeger_ui_port}:16686",
         "jaegertracing/all-in-one:latest",
     ]
     return _run_service_start(cmd, "Jaeger")
 
 
-def docker_start_prometheus(network_name="vllm-sr-network", config_dir=None):
+def docker_start_prometheus(
+    network_name=None,
+    config_dir=None,
+    stack_layout: RuntimeStackLayout | None = None,
+):
     """Start Prometheus container for metrics collection."""
     runtime = get_container_runtime()
-    container_name = "vllm-sr-prometheus"
+    stack_layout = stack_layout or resolve_runtime_stack()
+    container_name = stack_layout.prometheus_container_name
+    network_name = network_name or stack_layout.network_name
     _replace_existing_container(container_name)
 
     config_dir = _ensure_hidden_config_dir(config_dir)
@@ -210,7 +221,11 @@ def docker_start_prometheus(network_name="vllm-sr-network", config_dir=None):
     os.makedirs(prometheus_config_dir, exist_ok=True)
     prometheus_config = os.path.join(prometheus_config_dir, "prometheus.yaml")
     template_dir = os.path.join(os.path.dirname(__file__), "templates")
-    shutil.copy(os.path.join(template_dir, "prometheus.serve.yaml"), prometheus_config)
+    _render_template_copy(
+        os.path.join(template_dir, "prometheus.serve.yaml"),
+        prometheus_config,
+        stack_layout,
+    )
 
     cmd = [
         runtime,
@@ -225,7 +240,7 @@ def docker_start_prometheus(network_name="vllm-sr-network", config_dir=None):
         "-v",
         f"{os.path.abspath(prometheus_data_dir)}:/prometheus",
         "-p",
-        "9090:9090",
+        f"{stack_layout.prometheus_port}:9090",
         "prom/prometheus:v2.53.0",
         "--config.file=/etc/prometheus/prometheus.yaml",
         "--storage.tsdb.path=/prometheus/data",
@@ -234,10 +249,16 @@ def docker_start_prometheus(network_name="vllm-sr-network", config_dir=None):
     return _run_service_start(cmd, "Prometheus")
 
 
-def docker_start_grafana(network_name="vllm-sr-network", config_dir=None):
+def docker_start_grafana(
+    network_name=None,
+    config_dir=None,
+    stack_layout: RuntimeStackLayout | None = None,
+):
     """Start Grafana container for visualization."""
     runtime = get_container_runtime()
-    container_name = "vllm-sr-grafana"
+    stack_layout = stack_layout or resolve_runtime_stack()
+    container_name = stack_layout.grafana_container_name
+    network_name = network_name or stack_layout.network_name
     _replace_existing_container(container_name)
 
     grafana_dir = os.path.join(_ensure_hidden_config_dir(config_dir), "grafana")
@@ -251,8 +272,10 @@ def docker_start_grafana(network_name="vllm-sr-network", config_dir=None):
         "grafana-dashboard.serve.yaml",
         "llm-router-dashboard.serve.json",
     ]:
-        shutil.copy(
-            os.path.join(template_dir, filename), os.path.join(grafana_dir, filename)
+        _render_template_copy(
+            os.path.join(template_dir, filename),
+            os.path.join(grafana_dir, filename),
+            stack_layout,
         )
 
     cmd = [
@@ -268,7 +291,7 @@ def docker_start_grafana(network_name="vllm-sr-network", config_dir=None):
         "-e",
         "GF_SECURITY_ADMIN_PASSWORD=admin",
         "-e",
-        "PROMETHEUS_URL=vllm-sr-prometheus:9090",
+        f"PROMETHEUS_URL={stack_layout.prometheus_container_name}:9090",
         "-v",
         f"{os.path.abspath(os.path.join(grafana_dir, 'grafana.serve.ini'))}:/etc/grafana/grafana.ini:ro",
         "-v",
@@ -280,7 +303,7 @@ def docker_start_grafana(network_name="vllm-sr-network", config_dir=None):
         "-v",
         f"{os.path.abspath(os.path.join(grafana_dir, 'llm-router-dashboard.serve.json'))}:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro",
         "-p",
-        "3000:3000",
+        f"{stack_layout.grafana_port}:3000",
         "grafana/grafana:11.5.1",
     ]
     return _run_service_start(cmd, "Grafana")
@@ -353,6 +376,29 @@ def _ensure_hidden_config_dir(config_dir):
         config_dir = os.path.join(config_dir, ".vllm-sr")
     os.makedirs(config_dir, exist_ok=True)
     return config_dir
+
+
+def _render_template_copy(
+    source_path: str, destination_path: str, stack_layout: RuntimeStackLayout
+) -> None:
+    source = Path(source_path)
+    destination = Path(destination_path)
+    rendered = render_observability_template(source.read_text(), stack_layout)
+    destination.write_text(rendered, encoding="utf-8")
+
+
+def render_observability_template(
+    template_text: str, stack_layout: RuntimeStackLayout
+) -> str:
+    replacements = {
+        "vllm-sr-container": stack_layout.container_name,
+        "vllm-sr-prometheus": stack_layout.prometheus_container_name,
+        "vllm-sr-jaeger": stack_layout.jaeger_container_name,
+    }
+    rendered = template_text
+    for source, target in replacements.items():
+        rendered = rendered.replace(source, target)
+    return rendered
 
 
 def _run_service_start(cmd, service_name):
