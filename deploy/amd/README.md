@@ -63,17 +63,6 @@ sudo docker run -d \
     --gpu-memory-utilization 0.85
 ```
 
-If the backend fails its startup memory check on a single MI300X, reduce `--gpu-memory-utilization` first. If it still does not fit, reduce `--max-model-len`.
-
-Verify that the container is up and that all aliases are visible:
-
-```bash
-sudo docker ps --filter name=vllm
-curl -s "http://localhost:${VLLM_PORT_122B:-8090}/v1/models"
-```
-
-The `/v1/models` response should include all six alias IDs listed above.
-
 ### Step 2: Install vLLM Semantic Router
 
 Install vllm-sr with one command:
