@@ -5,7 +5,6 @@ import sys
 import os
 from cli.utils import getLogger, load_config, wait_for_healthy, get_envoy_port
 from cli.consts import (
-    VLLM_SR_DOCKER_NAME,
     HEALTH_CHECK_TIMEOUT,
     DEFAULT_API_PORT,
     DEFAULT_ENVOY_PORT,
@@ -30,6 +29,7 @@ from cli.docker_cli import (
     load_openclaw_registry,
 )
 from cli.logo import print_vllm_logo
+from cli.runtime_stack import resolve_runtime_stack
 
 log = getLogger(__name__)
 
@@ -49,6 +49,7 @@ def start_vllm_sr(
     """
     if env_vars is None:
         env_vars = {}
+    stack_layout = resolve_runtime_stack()
 
     # Print vLLM logo
     print_vllm_logo()
@@ -62,6 +63,9 @@ def start_vllm_sr(
         sys.exit(1)
 
     log.info(f"Starting vLLM Semantic Router")
+    log.info(
+        f"Runtime stack: {stack_layout.stack_name} (port offset {stack_layout.port_offset})"
+    )
     log.info(f"Config file: {config_file}")
     log.info(f"Configured listeners:")
     for listener in listeners:
@@ -71,13 +75,13 @@ def start_vllm_sr(
         log.info(f"  - {name}: {address}:{port}")
 
     # Check if container already exists
-    status = docker_container_status(VLLM_SR_DOCKER_NAME)
+    status = docker_container_status(stack_layout.container_name)
     if status != "not found":
         log.info(f"Existing container found (status: {status}), cleaning up...")
-        docker_stop_container(VLLM_SR_DOCKER_NAME)
-        docker_remove_container(VLLM_SR_DOCKER_NAME)
+        docker_stop_container(stack_layout.container_name)
+        docker_remove_container(stack_layout.container_name)
 
-    shared_network_name = "vllm-sr-network"
+    shared_network_name = stack_layout.network_name
     network_name = None
     config_dir = os.path.dirname(os.path.abspath(config_file))
 
@@ -94,21 +98,27 @@ def start_vllm_sr(
         network_name = shared_network_name
 
         # Start Jaeger
-        return_code, stdout, stderr = docker_start_jaeger(network_name)
+        return_code, stdout, stderr = docker_start_jaeger(
+            network_name, stack_layout=stack_layout
+        )
         if return_code != 0:
             log.error(f"Failed to start Jaeger: {stderr}")
             sys.exit(1)
         log.info("Jaeger started successfully")
 
         # Start Prometheus
-        return_code, stdout, stderr = docker_start_prometheus(network_name, config_dir)
+        return_code, stdout, stderr = docker_start_prometheus(
+            network_name, config_dir, stack_layout=stack_layout
+        )
         if return_code != 0:
             log.error(f"Failed to start Prometheus: {stderr}")
             sys.exit(1)
         log.info("Prometheus started successfully")
 
         # Start Grafana
-        return_code, stdout, stderr = docker_start_grafana(network_name, config_dir)
+        return_code, stdout, stderr = docker_start_grafana(
+            network_name, config_dir, stack_layout=stack_layout
+        )
         if return_code != 0:
             log.error(f"Failed to start Grafana: {stderr}")
             sys.exit(1)
@@ -117,10 +127,10 @@ def start_vllm_sr(
         # Add observability environment variables
         env_vars.update(
             {
-                "TARGET_JAEGER_URL": "http://vllm-sr-jaeger:16686",
-                "TARGET_GRAFANA_URL": "http://vllm-sr-grafana:3000",
-                "TARGET_PROMETHEUS_URL": "http://vllm-sr-prometheus:9090",
-                "OTEL_EXPORTER_OTLP_ENDPOINT": "http://vllm-sr-jaeger:4317",
+                "TARGET_JAEGER_URL": stack_layout.jaeger_service_url,
+                "TARGET_GRAFANA_URL": stack_layout.grafana_service_url,
+                "TARGET_PROMETHEUS_URL": stack_layout.prometheus_service_url,
+                "OTEL_EXPORTER_OTLP_ENDPOINT": stack_layout.otlp_service_endpoint,
             }
         )
 
@@ -138,6 +148,7 @@ def start_vllm_sr(
         network_name=network_name,
         openclaw_network_name=shared_network_name,
         minimal=dashboard_disabled,
+        stack_layout=stack_layout,
     )
 
     if return_code != 0:
@@ -149,16 +160,16 @@ def start_vllm_sr(
     # Ensure the dashboard container is always present on the shared OpenClaw
     # bridge network, regardless of its primary startup network.
     rc, _, connect_err = docker_network_connect(
-        shared_network_name, VLLM_SR_DOCKER_NAME
+        shared_network_name, stack_layout.container_name
     )
     if rc != 0:
         log.error(
-            f"Failed to connect {VLLM_SR_DOCKER_NAME} to {shared_network_name}: {connect_err}"
+            f"Failed to connect {stack_layout.container_name} to {shared_network_name}: {connect_err}"
         )
-        docker_stop_container(VLLM_SR_DOCKER_NAME)
-        docker_remove_container(VLLM_SR_DOCKER_NAME)
+        docker_stop_container(stack_layout.container_name)
+        docker_remove_container(stack_layout.container_name)
         sys.exit(1)
-    log.info(f"✓ Connected {VLLM_SR_DOCKER_NAME} to {shared_network_name}")
+    log.info(f"✓ Connected {stack_layout.container_name} to {shared_network_name}")
 
     if setup_mode:
         if dashboard_disabled:
@@ -172,7 +183,7 @@ def start_vllm_sr(
         healthy = False
         while time.time() - start_time < HEALTH_CHECK_TIMEOUT:
             return_code, stdout, stderr = docker_exec(
-                VLLM_SR_DOCKER_NAME,
+                stack_layout.container_name,
                 ["curl", "-f", "-s", "http://localhost:8700/healthz"],
             )
             if return_code == 0:
@@ -182,20 +193,20 @@ def start_vllm_sr(
 
         if not healthy:
             log.error("Dashboard failed to become healthy in setup mode")
-            docker_logs(VLLM_SR_DOCKER_NAME, follow=False, tail=100)
+            docker_logs(stack_layout.container_name, follow=False, tail=100)
             sys.exit(1)
 
-        status = docker_container_status(VLLM_SR_DOCKER_NAME)
+        status = docker_container_status(stack_layout.container_name)
         if status == "exited":
             log.error("Container exited unexpectedly during setup mode")
-            docker_logs(VLLM_SR_DOCKER_NAME, follow=False)
+            docker_logs(stack_layout.container_name, follow=False)
             sys.exit(1)
 
         log.info("=" * 60)
         log.info("vLLM Semantic Router setup mode is running!")
         log.info("")
         log.info("Next steps:")
-        log.info("  • Open http://localhost:8700")
+        log.info(f"  • Open {stack_layout.dashboard_url}")
         log.info("  • Configure your first model in the dashboard")
         log.info("  • Activate a runnable config to enable routing")
         log.info("")
@@ -225,7 +236,7 @@ def start_vllm_sr(
 
         # Get and print new logs since last check
         return_code, stdout, stderr = docker_logs_since(
-            VLLM_SR_DOCKER_NAME, int(last_log_time)
+            stack_layout.container_name, int(last_log_time)
         )
 
         # Print new logs if any (filter for lines containing "caller")
@@ -242,7 +253,7 @@ def start_vllm_sr(
 
         # Check health
         return_code, stdout, stderr = docker_exec(
-            VLLM_SR_DOCKER_NAME,
+            stack_layout.container_name,
             ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
         )
 
@@ -268,15 +279,15 @@ def start_vllm_sr(
         log.info("-" * 60)
         log.error(f"Router failed to become healthy after {HEALTH_CHECK_TIMEOUT}s")
         log.info("Showing full container logs:")
-        docker_logs(VLLM_SR_DOCKER_NAME, follow=False, tail=100)
+        docker_logs(stack_layout.container_name, follow=False, tail=100)
         sys.exit(1)
 
     # Check container status
-    status = docker_container_status(VLLM_SR_DOCKER_NAME)
+    status = docker_container_status(stack_layout.container_name)
     if status == "exited":
         log.error("Container exited unexpectedly")
         log.info("Showing container logs:")
-        docker_logs(VLLM_SR_DOCKER_NAME, follow=False)
+        docker_logs(stack_layout.container_name, follow=False)
         sys.exit(1)
 
     # Recover OpenClaw containers that were stopped by a previous `vllm-sr stop`.
@@ -315,19 +326,21 @@ def start_vllm_sr(
     log.info("")
     log.info("Endpoints:")
     if not dashboard_disabled:
-        log.info(f"  • Dashboard: http://localhost:8700")
+        log.info(f"  • Dashboard: {stack_layout.dashboard_url}")
     for listener in listeners:
         name = listener.get("name", "unknown")
         port = listener.get("port", "unknown")
+        if isinstance(port, int):
+            port += stack_layout.port_offset
         log.info(f"  • {name}: http://localhost:{port}")
-    log.info(f"  • Metrics: http://localhost:9190/metrics")
+    log.info(f"  • Metrics: {stack_layout.metrics_url}")
 
     if enable_observability:
         log.info("")
         log.info("Observability:")
-        log.info(f"  • Jaeger UI: http://localhost:16686")
-        log.info(f"  • Grafana: http://localhost:3000 (admin/admin)")
-        log.info(f"  • Prometheus: http://localhost:9090")
+        log.info(f"  • Jaeger UI: {stack_layout.jaeger_ui_url}")
+        log.info(f"  • Grafana: {stack_layout.grafana_url} (admin/admin)")
+        log.info(f"  • Prometheus: {stack_layout.prometheus_url}")
 
     log.info("")
     log.info("Commands:")
@@ -341,6 +354,8 @@ def start_vllm_sr(
     # Get first listener port for curl example
     if listeners:
         first_port = listeners[0].get("port", DEFAULT_LISTENER_PORT)
+        if isinstance(first_port, int):
+            first_port += stack_layout.port_offset
         print()  # Empty line without timestamp
         print("Test with curl:")
         print()
@@ -358,8 +373,9 @@ def start_vllm_sr(
 def stop_vllm_sr():
     """Stop vLLM Semantic Router and observability containers."""
     log.info("Stopping vLLM Semantic Router...")
+    stack_layout = resolve_runtime_stack()
 
-    status = docker_container_status(VLLM_SR_DOCKER_NAME)
+    status = docker_container_status(stack_layout.container_name)
     if status == "not found":
         log.info("Container not found. Nothing to stop.")
         return
@@ -369,7 +385,7 @@ def stop_vllm_sr():
     default_openclaw_data_dir = os.path.join(config_dir, ".vllm-sr", "openclaw-data")
     openclaw_data_dir = os.getenv("OPENCLAW_DATA_DIR") or default_openclaw_data_dir
     openclaw_data_dir = os.path.abspath(openclaw_data_dir)
-    network_name = "vllm-sr-network"
+    network_name = stack_layout.network_name
 
     # Stop and disconnect OpenClaw containers before removing the network.
     # Containers are stopped but NOT removed so they can be recovered on next serve.
@@ -388,16 +404,16 @@ def stop_vllm_sr():
         docker_network_disconnect(network_name, name)
 
     if status == "running":
-        docker_stop_container(VLLM_SR_DOCKER_NAME)
+        docker_stop_container(stack_layout.container_name)
 
-    docker_remove_container(VLLM_SR_DOCKER_NAME)
+    docker_remove_container(stack_layout.container_name)
     log.info("vLLM Semantic Router stopped")
 
     # Stop observability containers if they exist
     observability_containers = [
-        "vllm-sr-grafana",
-        "vllm-sr-prometheus",
-        "vllm-sr-jaeger",
+        stack_layout.grafana_container_name,
+        stack_layout.prometheus_container_name,
+        stack_layout.jaeger_container_name,
     ]
 
     for container_name in observability_containers:
@@ -423,12 +439,14 @@ def show_logs(service: str, follow: bool = False):
         service: Service to show logs for ('envoy', 'router', or 'dashboard')
         follow: Whether to follow log output
     """
+    stack_layout = resolve_runtime_stack()
+
     if service not in ["envoy", "router", "dashboard"]:
         log.error(f"Invalid service: {service}")
         log.error("Must be 'envoy', 'router', or 'dashboard'")
         sys.exit(1)
 
-    status = docker_container_status(VLLM_SR_DOCKER_NAME)
+    status = docker_container_status(stack_layout.container_name)
     if status == "not found":
         log.error("Container not found. Is vLLM Semantic Router running?")
         log.info("Start it with: vllm-sr serve")
@@ -458,7 +476,7 @@ def show_logs(service: str, follow: bool = False):
         try:
             # Use docker logs -f and grep for the service
             cmd = (
-                f'docker logs -f {VLLM_SR_DOCKER_NAME} 2>&1 | grep -E "{grep_pattern}"'
+                f'docker logs -f {stack_layout.container_name} 2>&1 | grep -E "{grep_pattern}"'
             )
             subprocess.run(cmd, shell=True)
         except KeyboardInterrupt:
@@ -466,7 +484,7 @@ def show_logs(service: str, follow: bool = False):
     else:
         # Get recent logs and filter by service
         try:
-            cmd = f'docker logs --tail 200 {VLLM_SR_DOCKER_NAME} 2>&1 | grep -E "{grep_pattern}" | tail -50'
+            cmd = f'docker logs --tail 200 {stack_layout.container_name} 2>&1 | grep -E "{grep_pattern}" | tail -50'
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
             if result.stdout:
                 print(result.stdout)
@@ -484,7 +502,8 @@ def show_status(service: str = "all"):
     Args:
         service: Service to check ('envoy', 'router', or 'all')
     """
-    status = docker_container_status(VLLM_SR_DOCKER_NAME)
+    stack_layout = resolve_runtime_stack()
+    status = docker_container_status(stack_layout.container_name)
 
     if status == "not found":
         log.info("Status: Not running")
@@ -510,7 +529,7 @@ def show_status(service: str = "all"):
         try:
             # Check if router service is running via health endpoint
             return_code, stdout, stderr = docker_exec(
-                VLLM_SR_DOCKER_NAME,
+                stack_layout.container_name,
                 ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
             )
 
@@ -526,7 +545,7 @@ def show_status(service: str = "all"):
         try:
             # Check if envoy service is running via ready endpoint
             return_code, stdout, stderr = docker_exec(
-                VLLM_SR_DOCKER_NAME,
+                stack_layout.container_name,
                 [
                     "curl",
                     "-f",
@@ -551,7 +570,7 @@ def show_status(service: str = "all"):
         try:
             # Check if dashboard is responding via HTTP
             return_code, stdout, stderr = docker_exec(
-                VLLM_SR_DOCKER_NAME,
+                stack_layout.container_name,
                 [
                     "curl",
                     "-f",
@@ -565,7 +584,7 @@ def show_status(service: str = "all"):
             )
 
             if return_code == 0 and stdout.strip() in ["200", "301", "302"]:
-                log.info("Dashboard: Running (http://localhost:8700)")
+                log.info(f"Dashboard: Running ({stack_layout.dashboard_url})")
             else:
                 log.info("⚠ Dashboard: Status unknown")
         except Exception as e:
