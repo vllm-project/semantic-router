@@ -700,7 +700,6 @@ development:
 				err := ValidateCacheConfig(config)
 				Expect(err).NotTo(HaveOccurred())
 			})
-
 		})
 
 		Describe("GetDefaultCacheConfig", func() {
@@ -749,7 +748,6 @@ development:
 				Expect(redisBackend.Description).To(ContainSubstring("Redis with vector search"))
 				Expect(redisBackend.Features).To(ContainElement("Fast in-memory performance"))
 				Expect(redisBackend.Features).To(ContainElement("TTL support"))
-
 			})
 		})
 	})

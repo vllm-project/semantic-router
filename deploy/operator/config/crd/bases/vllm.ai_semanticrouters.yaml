@@ -1471,11 +1471,10 @@ spec:
                         default: memory
                         description: |-
                           BackendType specifies the cache backend to use
-                          Options: "memory" (default), "redis", "valkey", "milvus", "hybrid"
+                          Options: "memory" (default), "redis", "milvus", "hybrid"
                         enum:
                         - memory
                         - redis
-                        - valkey
                         - milvus
                         - hybrid
                         type: string
@@ -1814,7 +1813,7 @@ spec:
                         type: object
                       redis:
                         description: Redis configuration (required when backend_type
-                          is "redis" or "valkey")
+                          is "redis")
                         properties:
                           connection:
                             description: Connection settings for Redis server

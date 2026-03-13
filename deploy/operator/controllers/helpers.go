@@ -194,8 +194,13 @@ func validateSemanticCacheConfig(cache *vllmv1alpha1.SemanticCacheConfig) error 
 	}
 
 	switch cache.BackendType {
-	case "redis", "valkey":
-		return validateRedisLikeCacheConfig(cache)
+	case "redis":
+		if cache.Redis == nil {
+			return fmt.Errorf("redis configuration required when backend_type is 'redis'")
+		}
+		if cache.Redis.Connection.Host == "" {
+			return fmt.Errorf("redis.connection.host is required")
+		}
 	case "milvus":
 		if cache.Milvus == nil {
 			return fmt.Errorf("milvus configuration required when backend_type is 'milvus'")
@@ -214,18 +219,8 @@ func validateSemanticCacheConfig(cache *vllmv1alpha1.SemanticCacheConfig) error 
 	case "memory", "":
 		// No additional validation needed for memory backend
 	default:
-		return fmt.Errorf("unsupported backend_type: %s (must be one of: memory, redis, valkey, milvus, hybrid)", cache.BackendType)
+		return fmt.Errorf("unsupported backend_type: %s (must be one of: memory, redis, milvus, hybrid)", cache.BackendType)
 	}
 
-	return nil
-}
-
-func validateRedisLikeCacheConfig(cache *vllmv1alpha1.SemanticCacheConfig) error {
-	if cache.Redis == nil {
-		return fmt.Errorf("redis configuration required when backend_type is '%s'", cache.BackendType)
-	}
-	if cache.Redis.Connection.Host == "" {
-		return fmt.Errorf("redis.connection.host is required")
-	}
 	return nil
 }

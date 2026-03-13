@@ -269,17 +269,5 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 				"TTL support",
 			},
 		},
-		{
-			Type:        ValkeyCacheType,
-			Name:        "Valkey Vector Database",
-			Description: "Open-source semantic cache powered by Valkey with Redis-compatible vector search",
-			Features: []string{
-				"Redis-compatible API",
-				"Open-source governance",
-				"Persistent storage support",
-				"Wide ecosystem support",
-				"TTL support",
-			},
-		},
 	}
 }
