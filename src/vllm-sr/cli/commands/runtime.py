@@ -28,10 +28,10 @@ from cli.consts import (
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
     VLLM_SR_DOCKER_IMAGE_DEFAULT,
-    VLLM_SR_DOCKER_NAME,
 )
 from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
 from cli.docker_cli import docker_container_status
+from cli.runtime_stack import resolve_runtime_stack
 from cli.utils import getLogger
 
 log = getLogger(__name__)
@@ -229,11 +229,12 @@ def dashboard(no_open: bool) -> None:
         vllm-sr dashboard
         vllm-sr dashboard --no-open
     """
-    status = docker_container_status(VLLM_SR_DOCKER_NAME)
+    stack_layout = resolve_runtime_stack()
+    status = docker_container_status(stack_layout.container_name)
     if status != "running":
         raise ValueError("vLLM Semantic Router is not running")
 
-    dashboard_url = "http://localhost:8700"
+    dashboard_url = stack_layout.dashboard_url
     if no_open:
         log.info(f"Dashboard URL: {dashboard_url}")
         return

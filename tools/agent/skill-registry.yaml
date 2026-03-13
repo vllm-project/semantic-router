@@ -283,6 +283,14 @@ skills:
         - onnx-binding/**
         - dashboard/frontend/src/pages/ConfigPage*.tsx
         - dashboard/frontend/src/components/Header*.tsx
+      anchor_paths:
+        - src/semantic-router/pkg/classification/**
+        - src/semantic-router/pkg/extproc/req_filter_classification.go
+        - candle-binding/**
+        - ml-binding/**
+        - nlp-binding/**
+        - onnx-binding/**
+        - dashboard/frontend/src/components/Header*.tsx
       fragments:
         - signal-runtime
         - python-cli-schema
@@ -388,7 +396,7 @@ skills:
     - name: config-platform-change
       path: tools/agent/skills/config-platform-change/SKILL.md
       description: Evolve a config representation that must stay aligned across router config, CLI schema, dashboard config UI, and platform translation layers.
-      priority: 102
+      priority: 112
       selector_paths:
         - src/semantic-router/pkg/config/**
         - src/vllm-sr/cli/models.py
@@ -396,6 +404,10 @@ skills:
         - src/vllm-sr/cli/validator.py
         - src/vllm-sr/cli/merger.py
         - dashboard/frontend/src/pages/ConfigPage*.tsx
+        - dashboard/frontend/src/pages/BuilderPage*.tsx
+        - src/semantic-router/pkg/dsl/**
+        - src/semantic-router/pkg/k8s/**
+      anchor_paths:
         - dashboard/frontend/src/pages/BuilderPage*.tsx
         - src/semantic-router/pkg/dsl/**
         - src/semantic-router/pkg/k8s/**
