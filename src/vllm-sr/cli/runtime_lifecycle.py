@@ -1,0 +1,365 @@
+"""Startup and readiness helpers for vLLM Semantic Router runtime."""
+
+from __future__ import annotations
+
+import os
+import time
+from collections.abc import Callable
+
+from cli.consts import (
+    DEFAULT_API_PORT,
+    DEFAULT_LISTENER_PORT,
+    HEALTH_CHECK_INTERVAL,
+    HEALTH_CHECK_TIMEOUT,
+)
+from cli.docker_cli import (
+    docker_container_status,
+    docker_create_network,
+    docker_exec,
+    docker_logs,
+    docker_logs_since,
+    docker_network_connect,
+    docker_remove_container,
+    docker_start_container,
+    docker_start_grafana,
+    docker_start_jaeger,
+    docker_start_prometheus,
+    docker_stop_container,
+    load_openclaw_registry,
+)
+from cli.runtime_stack import RuntimeStackLayout
+from cli.utils import getLogger
+
+log = getLogger(__name__)
+
+ServiceStarter = Callable[[], tuple[int, str, str]]
+
+
+def log_startup_banner(
+    config_file, listeners, stack_layout: RuntimeStackLayout
+) -> None:
+    """Log the selected runtime stack and configured listener endpoints."""
+    log.info("Starting vLLM Semantic Router")
+    log.info(
+        f"Runtime stack: {stack_layout.stack_name} (port offset {stack_layout.port_offset})"
+    )
+    log.info(f"Config file: {config_file}")
+    log.info("Configured listeners:")
+    for listener in listeners:
+        name = listener.get("name", "unknown")
+        port = listener.get("port", "unknown")
+        address = listener.get("address", "0.0.0.0")
+        log.info(f"  - {name}: {address}:{port}")
+
+
+def ensure_clean_runtime_container(container_name: str) -> None:
+    """Stop and remove any existing runtime container before restarting."""
+    status = docker_container_status(container_name)
+    if status == "not found":
+        return
+    log.info(f"Existing container found (status: {status}), cleaning up...")
+    docker_stop_container(container_name)
+    docker_remove_container(container_name)
+
+
+def ensure_shared_network(shared_network_name: str) -> None:
+    """Create the shared OpenClaw bridge network used by local stacks."""
+    return_code, _stdout, stderr = docker_create_network(shared_network_name)
+    if return_code != 0:
+        log.error(f"Failed to create shared OpenClaw network: {stderr}")
+        raise SystemExit(1)
+
+
+def start_observability_stack(
+    enable_observability: bool,
+    shared_network_name: str,
+    config_dir: str,
+    env_vars: dict[str, str],
+    stack_layout: RuntimeStackLayout,
+) -> str | None:
+    """Start Jaeger, Prometheus, and Grafana when observability is enabled."""
+    if not enable_observability:
+        return None
+
+    log.info("Starting observability stack (Jaeger + Prometheus + Grafana)...")
+    _start_named_service(
+        "Jaeger",
+        lambda: docker_start_jaeger(shared_network_name, stack_layout=stack_layout),
+    )
+    _start_named_service(
+        "Prometheus",
+        lambda: docker_start_prometheus(
+            shared_network_name, config_dir, stack_layout=stack_layout
+        ),
+    )
+    _start_named_service(
+        "Grafana",
+        lambda: docker_start_grafana(
+            shared_network_name, config_dir, stack_layout=stack_layout
+        ),
+    )
+
+    env_vars.update(
+        {
+            "TARGET_JAEGER_URL": stack_layout.jaeger_service_url,
+            "TARGET_GRAFANA_URL": stack_layout.grafana_service_url,
+            "TARGET_PROMETHEUS_URL": stack_layout.prometheus_service_url,
+            "OTEL_EXPORTER_OTLP_ENDPOINT": stack_layout.otlp_service_endpoint,
+        }
+    )
+    return shared_network_name
+
+
+def connect_runtime_container(
+    shared_network_name: str, stack_layout: RuntimeStackLayout
+) -> None:
+    """Attach the runtime container to the shared OpenClaw bridge network."""
+    return_code, _stdout, stderr = docker_network_connect(
+        shared_network_name, stack_layout.container_name
+    )
+    if return_code != 0:
+        log.error(
+            f"Failed to connect {stack_layout.container_name} to "
+            f"{shared_network_name}: {stderr}"
+        )
+        docker_stop_container(stack_layout.container_name)
+        docker_remove_container(stack_layout.container_name)
+        raise SystemExit(1)
+    log.info(f"Connected {stack_layout.container_name} to {shared_network_name}")
+
+
+def maybe_finish_setup_mode(
+    setup_mode: bool,
+    dashboard_disabled: bool,
+    stack_layout: RuntimeStackLayout,
+) -> bool:
+    """Wait for dashboard-only setup mode and print next-step guidance."""
+    if not setup_mode:
+        return False
+    if dashboard_disabled:
+        log.error("Setup mode started without dashboard enabled")
+        raise SystemExit(1)
+
+    log.info("Setup mode detected: skipping Router and Envoy health checks")
+    log.info("Waiting for Dashboard to become healthy...")
+    _wait_for_setup_dashboard(stack_layout.container_name)
+    ensure_runtime_container_not_exited(
+        stack_layout.container_name, phase="during setup mode"
+    )
+
+    log.info("=" * 60)
+    log.info("vLLM Semantic Router setup mode is running!")
+    log.info("")
+    log.info("Next steps:")
+    log.info(f"  - Open {stack_layout.dashboard_url}")
+    log.info("  - Configure your first model in the dashboard")
+    log.info("  - Activate a runnable config to enable routing")
+    _log_runtime_commands(dashboard_disabled=False)
+    log.info("=" * 60)
+    return True
+
+
+def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
+    """Block until the router health endpoint responds or the timeout elapses."""
+    log.info("Waiting for Router to become healthy...")
+    log.info(f"Health check timeout: {HEALTH_CHECK_TIMEOUT}s")
+    log.info("Showing Router logs during startup:")
+    log.info("-" * 60)
+
+    start_time = time.time()
+    last_log_time = start_time
+    check_count = 0
+
+    while time.time() - start_time < HEALTH_CHECK_TIMEOUT:
+        check_count += 1
+        _emit_router_startup_logs(stack_layout.container_name, int(last_log_time))
+        last_log_time = time.time()
+
+        return_code, _stdout, _stderr = docker_exec(
+            stack_layout.container_name,
+            ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
+        )
+        if return_code == 0:
+            elapsed = int(time.time() - start_time)
+            log.info("-" * 60)
+            log.info(f"Router is healthy (after {elapsed}s, {check_count} checks)")
+            return
+
+        if check_count % 10 == 0:
+            elapsed = int(time.time() - start_time)
+            remaining = int(HEALTH_CHECK_TIMEOUT - elapsed)
+            log.info(
+                f"  ... still waiting ({elapsed}s elapsed, {remaining}s remaining)"
+            )
+
+        time.sleep(HEALTH_CHECK_INTERVAL)
+
+    log.info("-" * 60)
+    log.error(f"Router failed to become healthy after {HEALTH_CHECK_TIMEOUT}s")
+    log.info("Showing full container logs:")
+    docker_logs(stack_layout.container_name, follow=False, tail=100)
+    raise SystemExit(1)
+
+
+def ensure_runtime_container_not_exited(
+    container_name: str, phase: str | None = None
+) -> None:
+    """Abort if the runtime container exited unexpectedly."""
+    status = docker_container_status(container_name)
+    if status != "exited":
+        return
+
+    suffix = f" {phase}" if phase else ""
+    log.error(f"Container exited unexpectedly{suffix}")
+    log.info("Showing container logs:")
+    docker_logs(container_name, follow=False)
+    raise SystemExit(1)
+
+
+def recover_openclaw_containers(
+    config_dir: str, env_vars: dict[str, str], shared_network_name: str
+) -> None:
+    """Reconnect and restart previously stopped OpenClaw containers."""
+    openclaw_data_dir = resolve_openclaw_data_dir(config_dir, env_vars)
+    openclaw_entries = load_openclaw_registry(openclaw_data_dir)
+    if not openclaw_entries:
+        return
+
+    log.info(f"Recovering {len(openclaw_entries)} OpenClaw container(s)...")
+    for entry in openclaw_entries:
+        name = entry.get("name") or entry.get("containerName")
+        if not name:
+            continue
+        status = docker_container_status(name)
+        if status == "not found":
+            log.warning(f"OpenClaw container {name} no longer exists, skipping")
+            continue
+
+        return_code, _stdout, _stderr = docker_network_connect(
+            shared_network_name, name
+        )
+        if return_code == 0:
+            log.info(f"Connected {name} to {shared_network_name}")
+        else:
+            log.warning(f"Failed to connect {name} to {shared_network_name}")
+
+        if status != "running":
+            log.info(f"Starting OpenClaw container: {name}")
+            docker_start_container(name)
+
+
+def resolve_openclaw_data_dir(
+    config_dir: str, env_vars: dict[str, str] | None = None
+) -> str:
+    """Resolve the persisted OpenClaw data directory for the current workspace."""
+    env_vars = env_vars or {}
+    default_path = os.path.join(config_dir, ".vllm-sr", "openclaw-data")
+    openclaw_data_dir = (
+        env_vars.get("OPENCLAW_DATA_DIR")
+        or os.getenv("OPENCLAW_DATA_DIR")
+        or default_path
+    )
+    return os.path.abspath(openclaw_data_dir)
+
+
+def log_runtime_summary(
+    listeners,
+    stack_layout: RuntimeStackLayout,
+    dashboard_disabled: bool,
+    enable_observability: bool,
+) -> None:
+    """Print the local endpoints and common follow-up commands."""
+    log.info("=" * 60)
+    log.info("vLLM Semantic Router is running!")
+    log.info("")
+    log.info("Endpoints:")
+    if not dashboard_disabled:
+        log.info(f"  - Dashboard: {stack_layout.dashboard_url}")
+    for listener in listeners:
+        name = listener.get("name", "unknown")
+        port = listener.get("port", "unknown")
+        if isinstance(port, int):
+            port += stack_layout.port_offset
+        log.info(f"  - {name}: http://localhost:{port}")
+    log.info(f"  - Metrics: {stack_layout.metrics_url}")
+
+    if enable_observability:
+        log.info("")
+        log.info("Observability:")
+        log.info(f"  - Jaeger UI: {stack_layout.jaeger_ui_url}")
+        log.info(f"  - Grafana: {stack_layout.grafana_url} (admin/admin)")
+        log.info(f"  - Prometheus: {stack_layout.prometheus_url}")
+
+    _log_runtime_commands(dashboard_disabled)
+    _print_curl_example(listeners, stack_layout)
+
+
+def _start_named_service(service_name: str, starter: ServiceStarter) -> None:
+    return_code, _stdout, stderr = starter()
+    if return_code != 0:
+        log.error(f"Failed to start {service_name}: {stderr}")
+        raise SystemExit(1)
+    log.info(f"{service_name} started successfully")
+
+
+def _wait_for_setup_dashboard(container_name: str) -> None:
+    start_time = time.time()
+    while time.time() - start_time < HEALTH_CHECK_TIMEOUT:
+        return_code, _stdout, _stderr = docker_exec(
+            container_name,
+            ["curl", "-f", "-s", "http://localhost:8700/healthz"],
+        )
+        if return_code == 0:
+            return
+        time.sleep(HEALTH_CHECK_INTERVAL)
+
+    log.error("Dashboard failed to become healthy in setup mode")
+    docker_logs(container_name, follow=False, tail=100)
+    raise SystemExit(1)
+
+
+def _emit_router_startup_logs(container_name: str, since_timestamp: int) -> None:
+    return_code, stdout, stderr = docker_logs_since(container_name, since_timestamp)
+    if return_code != 0:
+        return
+    _print_matching_lines(stdout)
+    _print_matching_lines(stderr)
+
+
+def _print_matching_lines(text: str) -> None:
+    if not text:
+        return
+    for line in text.strip().split("\n"):
+        if line.strip() and "caller" in line.lower():
+            print(f"  {line}")
+
+
+def _log_runtime_commands(dashboard_disabled: bool) -> None:
+    log.info("")
+    log.info("Commands:")
+    if not dashboard_disabled:
+        log.info("  - vllm-sr dashboard              Open dashboard in browser")
+    log.info("  - vllm-sr logs <envoy|router|dashboard> [-f]")
+    log.info("  - vllm-sr status [envoy|router|dashboard|all]")
+    log.info("  - vllm-sr stop")
+
+
+def _print_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
+    if not listeners:
+        return
+    first_port = listeners[0].get("port", DEFAULT_LISTENER_PORT)
+    if isinstance(first_port, int):
+        first_port += stack_layout.port_offset
+
+    print()
+    print("Test with curl:")
+    print()
+    print(f"curl -v http://localhost:{first_port}/v1/chat/completions \\")
+    print('  -H "Content-Type: application/json" \\')
+    print("  -d '{")
+    print('    "model": "MoM",')
+    print('    "messages": [')
+    print('      {"role": "user", "content": "What is the derivative of x^2?"}')
+    print("    ]")
+    print("  }'")
+    print()
