@@ -10,10 +10,10 @@ from cli.consts import (
     DEFAULT_NOFILE_LIMIT,
     MIN_NOFILE_LIMIT,
     PLATFORM_AMD,
-    VLLM_SR_DOCKER_NAME,
 )
 from cli.docker_images import _normalize_platform, get_docker_image
 from cli.docker_runtime import get_container_runtime
+from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import getLogger
 
 log = getLogger(__name__)
@@ -28,6 +28,7 @@ def docker_start_vllm_sr(
     network_name=None,
     openclaw_network_name=None,
     minimal=False,
+    stack_layout: RuntimeStackLayout | None = None,
 ):
     """
     Start vLLM Semantic Router container.
@@ -37,6 +38,7 @@ def docker_start_vllm_sr(
     """
     runtime = get_container_runtime()
     env_vars = dict(env_vars or {})
+    stack_layout = stack_layout or resolve_runtime_stack()
 
     normalized_platform = _resolve_platform(env_vars)
     image = get_docker_image(
@@ -44,10 +46,10 @@ def docker_start_vllm_sr(
     )
     nofile_limit = _resolve_nofile_limit()
 
-    cmd = _build_base_run_command(runtime, nofile_limit, network_name)
+    cmd = _build_base_run_command(runtime, nofile_limit, network_name, stack_layout)
     _append_amd_gpu_passthrough(cmd, normalized_platform)
     _append_host_gateway(cmd, runtime)
-    _append_listener_and_service_ports(cmd, listeners, minimal)
+    _append_listener_and_service_ports(cmd, listeners, minimal, stack_layout)
 
     config_dir = _mount_config_and_state_dirs(cmd, config_file)
     _configure_openclaw_support(
@@ -56,6 +58,7 @@ def docker_start_vllm_sr(
         config_dir,
         openclaw_network_name,
         runtime,
+        stack_layout,
     )
 
     for key, value in env_vars.items():
@@ -94,13 +97,13 @@ def _resolve_nofile_limit():
     return nofile_limit
 
 
-def _build_base_run_command(runtime, nofile_limit, network_name):
+def _build_base_run_command(runtime, nofile_limit, network_name, stack_layout):
     cmd = [
         runtime,
         "run",
         "-d",
         "--name",
-        VLLM_SR_DOCKER_NAME,
+        stack_layout.container_name,
         "--ulimit",
         f"nofile={nofile_limit}:{nofile_limit}",
     ]
@@ -162,17 +165,17 @@ def _append_host_gateway(cmd, runtime):
         log.info("Podman will use host.containers.internal by default")
 
 
-def _append_listener_and_service_ports(cmd, listeners, minimal):
+def _append_listener_and_service_ports(cmd, listeners, minimal, stack_layout):
     for listener in listeners:
         port = listener.get("port")
         if port:
-            cmd.extend(["-p", f"{port}:{port}"])
+            cmd.extend(["-p", f"{port + stack_layout.port_offset}:{port}"])
 
-    cmd.extend(["-p", "50051:50051"])
-    cmd.extend(["-p", "9190:9190"])
+    cmd.extend(["-p", f"{stack_layout.router_port}:50051"])
+    cmd.extend(["-p", f"{stack_layout.metrics_port}:9190"])
     if not minimal:
-        cmd.extend(["-p", "8700:8700"])
-    cmd.extend(["-p", "8080:8080"])
+        cmd.extend(["-p", f"{stack_layout.dashboard_port}:8700"])
+    cmd.extend(["-p", f"{stack_layout.api_port}:8080"])
 
 
 def _mount_config_and_state_dirs(cmd, config_file):
@@ -203,6 +206,7 @@ def _configure_openclaw_support(
     config_dir,
     openclaw_network_name,
     runtime,
+    stack_layout,
 ):
     default_openclaw_data_dir = os.path.join(config_dir, ".vllm-sr", "openclaw-data")
     openclaw_data_dir = (
@@ -222,7 +226,7 @@ def _configure_openclaw_support(
     )
     env_vars.setdefault(
         "OPENCLAW_DEFAULT_NETWORK_MODE",
-        openclaw_network_name or "vllm-sr-network",
+        openclaw_network_name or stack_layout.network_name,
     )
 
     if runtime == "docker":
