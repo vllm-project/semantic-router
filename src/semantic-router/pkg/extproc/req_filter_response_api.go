@@ -8,6 +8,7 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
@@ -171,20 +172,18 @@ func (f *ResponseAPIFilter) TranslateResponse(ctx context.Context, respCtx *Resp
 		}
 	}
 
-	// Parse Chat Completions response
-	var completionResp responseapi.ChatCompletionResponse
+	// Parse Chat Completions response using official SDK type
+	var completionResp openai.ChatCompletion
 	if err := json.Unmarshal(body, &completionResp); err != nil {
 		logging.Errorf("Response API: Failed to parse completion response: %v", err)
 		return body, nil // Return original on parse error
 	}
 
-	// Validate that we have a valid completion response
 	if completionResp.ID == "" && len(completionResp.Choices) == 0 {
 		logging.Warnf("Response API: Invalid completion response (no id or choices), passing through")
 		return body, nil
 	}
 
-	// Translate to Response API format
 	responseAPIResp := f.translator.TranslateToResponseAPIResponse(
 		respCtx.OriginalRequest,
 		&completionResp,

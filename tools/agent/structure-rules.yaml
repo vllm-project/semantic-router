@@ -60,6 +60,9 @@ legacy_hotspots:
       - src/semantic-router/pkg/extproc/req_filter_tools_test.go
     function_checks: relaxed
   - paths:
+      - src/semantic-router/pkg/modelselection/benchmark_runner.go
+    function_checks: relaxed
+  - paths:
       - src/semantic-router/pkg/extproc/processor_req_body.go
       - src/semantic-router/pkg/extproc/processor_res_body.go
       - src/semantic-router/pkg/promptcompression/compressor_nlp_test.go

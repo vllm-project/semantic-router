@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/openai/openai-go"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -295,26 +297,18 @@ func (r *BenchmarkRunner) LoadQueriesFromTrainingData(trainingDataPath string) e
 	return nil
 }
 
-// ChatCompletionRequest represents an OpenAI-compatible chat request
-type ChatCompletionRequest struct {
-	Model     string        `json:"model"`
-	Messages  []ChatMessage `json:"messages"`
-	MaxTokens int           `json:"max_tokens,omitempty"`
+// benchmarkRequest is a minimal OpenAI-compatible request body for benchmarking.
+// Uses SDK message types for wire-format compatibility.
+type benchmarkRequest struct {
+	Model     string                                   `json:"model"`
+	Messages  []openai.ChatCompletionMessageParamUnion `json:"messages"`
+	MaxTokens int                                      `json:"max_tokens,omitempty"`
 }
 
-// ChatMessage represents a chat message
-type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-// ChatCompletionResponse represents an OpenAI-compatible response
-type ChatCompletionResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
+// benchmarkResponse wraps openai.ChatCompletion with an optional error field
+// that some providers include in the JSON body instead of using HTTP status codes.
+type benchmarkResponse struct {
+	openai.ChatCompletion
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
@@ -448,10 +442,14 @@ func (r *BenchmarkRunner) callOpenAICompatibleModel(ctx context.Context, modelNa
 		requestModel = r.getExternalModelID(modelName, "nvidia")
 	}
 
-	reqBody := ChatCompletionRequest{
+	reqBody := benchmarkRequest{
 		Model: requestModel,
-		Messages: []ChatMessage{
-			{Role: "user", Content: query},
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String(query),
+				},
+			}},
 		},
 		MaxTokens: 512,
 	}
@@ -488,7 +486,7 @@ func (r *BenchmarkRunner) callOpenAICompatibleModel(ctx context.Context, modelNa
 		return "", latencyMs, fmt.Errorf("non-200 status: %d - %s", resp.StatusCode, string(body))
 	}
 
-	var chatResp ChatCompletionResponse
+	var chatResp benchmarkResponse
 	if err := json.Unmarshal(body, &chatResp); err != nil {
 		return "", latencyMs, fmt.Errorf("failed to parse response: %w", err)
 	}
