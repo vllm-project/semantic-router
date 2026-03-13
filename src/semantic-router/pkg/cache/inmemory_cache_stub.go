@@ -33,22 +33,22 @@ func (c *InMemoryCache) IsEnabled() bool {
 }
 
 // AddPendingRequest stores a request awaiting its response
-func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int, userID ...string) error {
+func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
 	return nil
 }
 
 // UpdateWithResponse completes a pending request with its response
-func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
+func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte) error {
 	return nil
 }
 
 // AddEntry stores a complete request-response pair
-func (c *InMemoryCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int, userID ...string) error {
+func (c *InMemoryCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
 	return nil
 }
 
 // FindSimilar searches for semantically similar cached requests
-func (c *InMemoryCache) FindSimilar(model string, query string, userID ...string) ([]byte, bool, error) {
+func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, error) {
 	if !c.enabled {
 		return nil, false, nil
 	}
@@ -57,7 +57,7 @@ func (c *InMemoryCache) FindSimilar(model string, query string, userID ...string
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32, userID ...string) ([]byte, bool, error) {
+func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
 	if !c.enabled {
 		return nil, false, nil
 	}

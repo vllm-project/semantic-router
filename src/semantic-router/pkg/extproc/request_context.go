@@ -36,6 +36,7 @@ type RequestContext struct {
 	OriginalRequestBody []byte
 	RequestModel        string
 	RequestQuery        string
+	CacheQuery          string
 	StartTime           time.Time
 	ProcessingStartTime time.Time
 

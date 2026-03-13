@@ -1,82 +1,99 @@
 package cache
 
 import (
-	"math"
+	"strings"
 	"testing"
 )
 
-func TestScopeEmbeddingToUserReturnsOriginalWithoutUserID(t *testing.T) {
-	embedding := []float32{3, 4, -2, 1}
+func TestScopeQueryToUserReturnsOriginalWithoutUserID(t *testing.T) {
+	query := "explain mitosis versus meiosis"
 
-	scoped := scopeEmbeddingToUser(embedding, "")
+	scoped := ScopeQueryToUser(query, "")
 
-	if len(scoped) != len(embedding) {
-		t.Fatalf("expected scoped embedding length %d, got %d", len(embedding), len(scoped))
+	if scoped != query {
+		t.Fatalf("expected original query without user scope, got %q", scoped)
 	}
-	for i := range embedding {
-		if scoped[i] != embedding[i] {
-			t.Fatalf("expected unchanged embedding at index %d, got %f want %f", i, scoped[i], embedding[i])
+}
+
+func TestScopeQueryToUserIsStableForSameUser(t *testing.T) {
+	query := "explain mitosis versus meiosis"
+
+	first := ScopeQueryToUser(query, "user-a")
+	second := ScopeQueryToUser(query, "user-a")
+
+	if first != second {
+		t.Fatalf("expected deterministic scoped query, got %q and %q", first, second)
+	}
+}
+
+func TestScopeQueryToUserSeparatesDifferentUsers(t *testing.T) {
+	query := "explain mitosis versus meiosis"
+
+	firstScoped := ScopeQueryToUser(query, "user-a")
+	secondScoped := ScopeQueryToUser(query, "user-b")
+
+	if firstScoped == secondScoped {
+		t.Fatal("expected different users to produce different scoped queries")
+	}
+}
+
+func TestScopeQueryToUserDoesNotExposeRawUserID(t *testing.T) {
+	query := "explain mitosis versus meiosis"
+	scoped := ScopeQueryToUser(query, "user-a")
+
+	if strings.Contains(scoped, "user-a") {
+		t.Fatalf("expected scoped query to hide raw user id, got %q", scoped)
+	}
+}
+
+func TestScopeQueryToUserPreservesOriginalQueryText(t *testing.T) {
+	query := "explain mitosis versus meiosis"
+	scoped := ScopeQueryToUser(query, "user-a")
+
+	if !strings.Contains(scoped, query) {
+		t.Fatalf("expected scoped query to retain original text, got %q", scoped)
+	}
+}
+
+func TestScopeQueryToUserRepeatsNamespaceMarker(t *testing.T) {
+	query := "explain mitosis versus meiosis"
+	scoped := ScopeQueryToUser(query, "user-a")
+
+	if strings.Count(scoped, "cache-scope") != 1 {
+		t.Fatalf("expected a single cache scope prefix block, got %q", scoped)
+	}
+	if strings.Count(scoped, userScopeNamespace("user-a")) != 3 {
+		t.Fatalf("expected repeated namespace marker, got %q", scoped)
+	}
+}
+
+func TestUserScopeNamespaceIsStableForSameUser(t *testing.T) {
+	first := userScopeNamespace("user-a")
+	second := userScopeNamespace("user-a")
+
+	if first != second {
+		t.Fatalf("expected stable namespace, got %q and %q", first, second)
+	}
+}
+
+func TestUserScopeNamespaceSeparatesDifferentUsers(t *testing.T) {
+	first := userScopeNamespace("user-a")
+	second := userScopeNamespace("user-b")
+
+	if first == second {
+		t.Fatalf("expected different namespaces, got %q", first)
+	}
+}
+
+func TestUserScopeNamespaceHasCompactHashLength(t *testing.T) {
+	namespace := userScopeNamespace("user-a")
+
+	if len(namespace) != 16 {
+		t.Fatalf("expected 16-char namespace hash, got %d (%q)", len(namespace), namespace)
+	}
+	for _, char := range namespace {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			t.Fatalf("expected lowercase hex namespace, got %q", namespace)
 		}
 	}
-}
-
-func TestScopeEmbeddingToUserIsStableForSameUser(t *testing.T) {
-	embedding := testUserScopeEmbedding(64)
-
-	first := scopeEmbeddingToUser(embedding, "user-a")
-	second := scopeEmbeddingToUser(embedding, "user-a")
-
-	if len(first) != len(second) {
-		t.Fatalf("expected equal lengths, got %d and %d", len(first), len(second))
-	}
-	for i := range first {
-		if math.Abs(float64(first[i]-second[i])) > 1e-6 {
-			t.Fatalf("expected deterministic scoped embedding at index %d, diff=%f", i, first[i]-second[i])
-		}
-	}
-}
-
-func TestScopeEmbeddingToUserSeparatesDifferentUsers(t *testing.T) {
-	embedding := testUserScopeEmbedding(128)
-
-	firstScoped := scopeEmbeddingToUser(embedding, "user-a")
-	secondScoped := scopeEmbeddingToUser(embedding, "user-b")
-	similarity := testDotProduct(firstScoped, secondScoped)
-
-	if similarity >= 0.8 {
-		t.Fatalf("expected cross-user similarity below cache threshold, got %f", similarity)
-	}
-}
-
-func TestScopeEmbeddingToUserSeparatesScopedAndUnscopedQueries(t *testing.T) {
-	embedding := testUserScopeEmbedding(128)
-
-	unscoped := normalizeEmbedding(embedding)
-	scoped := scopeEmbeddingToUser(embedding, "user-a")
-	similarity := testDotProduct(unscoped, scoped)
-
-	if similarity >= 0.8 {
-		t.Fatalf("expected scoped and unscoped similarity below cache threshold, got %f", similarity)
-	}
-}
-
-func testUserScopeEmbedding(size int) []float32 {
-	embedding := make([]float32, size)
-	for i := range embedding {
-		embedding[i] = float32((i%11)-5) / 5
-	}
-	return embedding
-}
-
-func testDotProduct(a, b []float32) float32 {
-	limit := len(a)
-	if len(b) < limit {
-		limit = len(b)
-	}
-
-	var total float32
-	for i := 0; i < limit; i++ {
-		total += a[i] * b[i]
-	}
-	return total
 }

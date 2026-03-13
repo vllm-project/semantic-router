@@ -164,7 +164,6 @@ func (m *mockStreamingCache) AddPendingRequest(
 	_ string,
 	_ []byte,
 	_ int,
-	_ ...string,
 ) error {
 	return nil
 }
@@ -181,14 +180,13 @@ func (m *mockStreamingCache) AddEntry(
 	requestBody []byte,
 	_ []byte,
 	_ int,
-	_ ...string,
 ) error {
 	m.addEntryCalled = true
 	m.addEntryRequestBody = append([]byte(nil), requestBody...)
 	return m.addEntryErr
 }
 
-func (m *mockStreamingCache) FindSimilar(_ string, _ string, _ ...string) ([]byte, bool, error) {
+func (m *mockStreamingCache) FindSimilar(_ string, _ string) ([]byte, bool, error) {
 	return nil, false, nil
 }
 
@@ -196,7 +194,6 @@ func (m *mockStreamingCache) FindSimilarWithThreshold(
 	_ string,
 	_ string,
 	_ float32,
-	_ ...string,
 ) ([]byte, bool, error) {
 	return nil, false, nil
 }
