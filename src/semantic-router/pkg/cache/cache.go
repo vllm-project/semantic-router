@@ -1,9 +1,11 @@
 package cache
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -96,6 +98,24 @@ func ScopeQueryToUser(query string, userID string) string {
 }
 
 func userScopeNamespace(userID string) string {
+	// Use a keyed construction (HMAC-SHA256) to avoid exposing a plain hash
+	// of the userID, which is vulnerable to offline guessing attacks when
+	// user IDs are predictable (e.g., emails, incremental IDs).
+	//
+	// The secret key is expected to be provided via environment variable
+	// USER_SCOPE_NAMESPACE_SECRET so that it is not hard-coded in source
+	// and can be managed per deployment.
+	secret := os.Getenv("USER_SCOPE_NAMESPACE_SECRET")
+	if secret != "" {
+		mac := hmac.New(sha256.New, []byte(secret))
+		_, _ = mac.Write([]byte(userID))
+		sum := mac.Sum(nil)
+		return fmt.Sprintf("%x", sum[:8])
+	}
+
+	// Fallback to the previous behavior if no secret is configured, to avoid
+	// breaking existing deployments. For production use, configuring a secret
+	// is strongly recommended.
 	digest := sha256.Sum256([]byte(userID))
 	return fmt.Sprintf("%x", digest[:8])
 }
