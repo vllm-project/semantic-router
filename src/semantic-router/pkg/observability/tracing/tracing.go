@@ -345,6 +345,7 @@ const (
 	AttrProcessingTimeMs         = "processing.time_ms"
 	AttrClassificationTimeMs     = "classification.time_ms"
 	AttrCacheLookupTimeMs        = "cache.lookup_time_ms"
+	AttrCacheWriteSkippedReason  = "cache.write_skipped_reason"
 	AttrPIIDetectionTimeMs       = "pii.detection_time_ms"
 	AttrJailbreakDetectionTimeMs = "jailbreak.detection_time_ms"
 )
