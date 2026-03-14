@@ -41,7 +41,7 @@ const MMLU_PRO_CATEGORIES = [
   'physics',
   'chemistry',
   'biology',
-  'computer_science',
+  'computer science',
   'engineering',
   'business',
   'economics',
@@ -153,7 +153,7 @@ export const routingPresets: RoutingPresetDefinition[] = [
           buildDomainSignal(
             'science-and-computing',
             'Science and computing questions across biology, chemistry, and computer science.',
-            ['biology', 'chemistry', 'computer_science'],
+            ['biology', 'chemistry', 'computer science'],
           ),
           buildDomainSignal(
             'business-and-social',
@@ -362,7 +362,7 @@ export const routingPresets: RoutingPresetDefinition[] = [
           buildDomainSignal(
             'coding-domain',
             'Technical programming and systems questions detected from MMLU-Pro computer science and engineering buckets.',
-            ['computer_science', 'engineering'],
+            ['computer science', 'engineering'],
           ),
         ],
         keywords: [

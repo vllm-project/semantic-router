@@ -134,7 +134,8 @@ resources:
 
 config:
   providers:
-    default_model: "my-model"
+    defaults:
+      default_model: "my-model"
     models:
       - name: "my-model"
         provider_model_id: "my-model"
@@ -276,7 +277,8 @@ helm rollback semantic-router 1 --namespace vllm-semantic-router-system
 ```yaml
 config:
   providers:
-    default_model: "my-model"
+    defaults:
+      default_model: "my-model"
     models:
       - name: "my-model"
         provider_model_id: "my-model"

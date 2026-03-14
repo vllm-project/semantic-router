@@ -396,14 +396,14 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
         errors.append(
             ValidationError(
                 f"Default model '{config.providers.default_model}' not found in models",
-                field="providers.default_model",
+                field="providers.defaults.default_model",
             )
         )
     elif config.providers.default_model not in routing_model_names:
         errors.append(
             ValidationError(
                 f"Default model '{config.providers.default_model}' not found in routing.modelCards",
-                field="providers.default_model",
+                field="providers.defaults.default_model",
             )
         )
 

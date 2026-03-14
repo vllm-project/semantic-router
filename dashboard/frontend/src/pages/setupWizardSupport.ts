@@ -316,7 +316,9 @@ export function buildSetupConfig(
   const config: Record<string, unknown> = {
     providers: {
       models: builtModels,
-      default_model: defaultModel.name,
+      defaults: {
+        default_model: defaultModel.name,
+      },
     },
     routing: {
       modelCards: builtModels.map((model) => ({

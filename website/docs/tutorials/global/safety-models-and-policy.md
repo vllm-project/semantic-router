@@ -34,46 +34,56 @@ Use these blocks when:
 
 ```yaml
 global:
-  prompt_guard:
-    use_modernbert: false
-  classifier:
-    category_model:
-      threshold: 0.6
+  model_catalog:
+    modules:
+      prompt_guard:
+        model_ref: prompt_guard
+        use_modernbert: false
+      classifier:
+        domain:
+          model_ref: domain_classifier
+          threshold: 0.6
 ```
 
 ### Embedding and External Models
 
 ```yaml
 global:
-  embedding_models:
-    use_cpu: true
+  model_catalog:
+    embeddings:
+      semantic:
+        use_cpu: true
 ```
 
 ### Authz and Rate Limit
 
 ```yaml
 global:
-  authz:
-    enabled: true
-  ratelimit:
-    enabled: true
+  services:
+    authz:
+      enabled: true
+    ratelimit:
+      enabled: true
 ```
 
 ### Model Selection and Looper Defaults
 
 ```yaml
 global:
-  model_selection:
-    enabled: true
-  looper:
-    enabled: true
+  router:
+    model_selection:
+      enabled: true
+  integrations:
+    looper:
+      enabled: true
 ```
 
 ### System Models
 
 ```yaml
 global:
-  system_models:
-    prompt_guard: models/mom-jailbreak-classifier
-    domain_classifier: models/mom-domain-classifier
+  model_catalog:
+    system:
+      prompt_guard: models/mom-jailbreak-classifier
+      domain_classifier: models/mom-domain-classifier
 ```

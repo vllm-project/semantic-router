@@ -5,8 +5,9 @@ listeners:
   port: 8899
   timeout: 1200s
 providers:
-  default_model: openai/gpt-oss-120b
-  default_reasoning_effort: high
+  defaults:
+    default_model: openai/gpt-oss-120b
+    default_reasoning_effort: high
   models:
   - name: openai/gpt-oss-120b
     provider_model_id: openai/gpt-oss-120b

@@ -180,33 +180,23 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   clear_route_cache: true,
   model_selection: {
     enabled: true,
-    default_algorithm: 'knn',
-    llm_candidates_path: 'config/model_selection/llm_candidates.json',
-    models_path: 'models/model_selection',
-    training_data_path: 'config/model_selection/routing_training_data.jsonl',
-    knn: {
-      k: 5,
-      weights: 'distance',
-      metric: 'cosine',
-      model_file: 'knn_model.json',
-    },
-    kmeans: {
-      num_clusters: 8,
-      efficiency_weight: 0.3,
-      max_iterations: 100,
-      model_file: 'kmeans_model.json',
-    },
-    svm: {
-      kernel: 'rbf',
-      c: 1.0,
-      gamma: 'auto',
-      model_file: 'svm_model.json',
-    },
-    custom_training: {
-      enabled: false,
-      custom_data_path: '',
-      merge_with_pretrained: true,
-      min_samples: 50,
+    method: 'knn',
+    ml: {
+      models_path: 'models/model_selection',
+      knn: {
+        k: 5,
+        pretrained_path: 'knn_model.json',
+      },
+      kmeans: {
+        num_clusters: 8,
+        efficiency_weight: 0.3,
+        pretrained_path: 'kmeans_model.json',
+      },
+      svm: {
+        kernel: 'rbf',
+        gamma: 0.0,
+        pretrained_path: 'svm_model.json',
+      },
     },
   } satisfies ModelSelectionConfig,
   api: {

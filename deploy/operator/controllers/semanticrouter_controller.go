@@ -621,9 +621,19 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 		},
 	}
 	providers := map[string]interface{}{
-		"models": []map[string]interface{}{},
+		"defaults": map[string]interface{}{},
+		"models":   []map[string]interface{}{},
 	}
-	global := map[string]interface{}{}
+	globalServices := map[string]interface{}{}
+	globalStores := map[string]interface{}{}
+	globalIntegrations := map[string]interface{}{}
+	globalModelCatalog := map[string]interface{}{}
+	global := map[string]interface{}{
+		"services":      globalServices,
+		"stores":        globalStores,
+		"integrations":  globalIntegrations,
+		"model_catalog": globalModelCatalog,
+	}
 	config := map[string]interface{}{
 		"version": "v0.3",
 		"listeners": []map[string]interface{}{
@@ -699,41 +709,80 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 					}
 					routing["modelCards"] = modelCards
 					providers["models"] = providerModels
-					providers["default_model"] = defaultModel
+					if defaults, ok := providers["defaults"].(map[string]interface{}); ok {
+						defaults["default_model"] = defaultModel
+					}
 				}
 			}
 		}
 	}
 
 	if sr.Spec.Config.BertModel != nil {
-		global["bert_model"] = r.convertToConfigMap(sr.Spec.Config.BertModel)
+		globalModelCatalog["embeddings"] = map[string]interface{}{
+			"bert": r.convertToConfigMap(sr.Spec.Config.BertModel),
+		}
 	}
 	if sr.Spec.Config.SemanticCache != nil {
-		global["semantic_cache"] = r.convertToConfigMap(sr.Spec.Config.SemanticCache)
+		globalStores["semantic_cache"] = r.convertToConfigMap(sr.Spec.Config.SemanticCache)
 	}
 	if sr.Spec.Config.Tools != nil {
-		global["tools"] = r.convertToConfigMap(sr.Spec.Config.Tools)
+		globalIntegrations["tools"] = r.convertToConfigMap(sr.Spec.Config.Tools)
 	}
 	if sr.Spec.Config.PromptGuard != nil {
-		global["prompt_guard"] = r.convertToConfigMap(sr.Spec.Config.PromptGuard)
+		moduleCatalog, _ := globalModelCatalog["modules"].(map[string]interface{})
+		if moduleCatalog == nil {
+			moduleCatalog = map[string]interface{}{}
+		}
+		moduleCatalog["prompt_guard"] = r.convertToConfigMap(sr.Spec.Config.PromptGuard)
+		globalModelCatalog["modules"] = moduleCatalog
 	}
 	if sr.Spec.Config.Classifier != nil {
-		global["classifier"] = r.convertToConfigMap(sr.Spec.Config.Classifier)
+		classifierConfig, _ := r.convertToConfigMap(sr.Spec.Config.Classifier).(map[string]interface{})
+		canonicalClassifier := map[string]interface{}{}
+		if categoryModel, ok := classifierConfig["category_model"]; ok {
+			canonicalClassifier["domain"] = categoryModel
+		}
+		if piiModel, ok := classifierConfig["pii_model"]; ok {
+			canonicalClassifier["pii"] = piiModel
+		}
+		if mcpModel, ok := classifierConfig["mcp_category_model"]; ok {
+			canonicalClassifier["mcp"] = mcpModel
+		}
+		if preferenceModel, ok := classifierConfig["preference_model"]; ok {
+			canonicalClassifier["preference"] = preferenceModel
+		}
+		if len(canonicalClassifier) > 0 {
+			moduleCatalog, _ := globalModelCatalog["modules"].(map[string]interface{})
+			if moduleCatalog == nil {
+				moduleCatalog = map[string]interface{}{}
+			}
+			moduleCatalog["classifier"] = canonicalClassifier
+			globalModelCatalog["modules"] = moduleCatalog
+		}
 	}
 	if sr.Spec.Config.ReasoningFamilies != nil {
-		providers["reasoning_families"] = r.convertToConfigMap(sr.Spec.Config.ReasoningFamilies)
+		if defaults, ok := providers["defaults"].(map[string]interface{}); ok {
+			defaults["reasoning_families"] = r.convertToConfigMap(sr.Spec.Config.ReasoningFamilies)
+		}
 	}
 	if sr.Spec.Config.DefaultReasoningEffort != "" {
-		providers["default_reasoning_effort"] = sr.Spec.Config.DefaultReasoningEffort
+		if defaults, ok := providers["defaults"].(map[string]interface{}); ok {
+			defaults["default_reasoning_effort"] = sr.Spec.Config.DefaultReasoningEffort
+		}
 	}
 	if sr.Spec.Config.API != nil {
-		global["api"] = r.convertToConfigMap(sr.Spec.Config.API)
+		globalServices["api"] = r.convertToConfigMap(sr.Spec.Config.API)
 	}
 	if sr.Spec.Config.Observability != nil {
-		global["observability"] = r.convertToConfigMap(sr.Spec.Config.Observability)
+		globalServices["observability"] = r.convertToConfigMap(sr.Spec.Config.Observability)
 	}
 	if sr.Spec.Config.EmbeddingModels != nil {
-		global["embedding_models"] = r.convertToConfigMap(sr.Spec.Config.EmbeddingModels)
+		embeddings, _ := globalModelCatalog["embeddings"].(map[string]interface{})
+		if embeddings == nil {
+			embeddings = map[string]interface{}{}
+		}
+		embeddings["semantic"] = r.convertToConfigMap(sr.Spec.Config.EmbeddingModels)
+		globalModelCatalog["embeddings"] = embeddings
 	}
 	// Add complexity rules under routing.signals
 	if len(sr.Spec.Config.ComplexityRules) > 0 {
@@ -742,7 +791,12 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 		}
 	}
 	if sr.Spec.Config.Strategy != "" {
-		global["strategy"] = sr.Spec.Config.Strategy
+		routerRuntime, _ := global["router"].(map[string]interface{})
+		if routerRuntime == nil {
+			routerRuntime = map[string]interface{}{}
+		}
+		routerRuntime["strategy"] = sr.Spec.Config.Strategy
+		global["router"] = routerRuntime
 	}
 	if len(sr.Spec.Config.Decisions) > 0 {
 		routing["decisions"] = r.convertToConfigMap(sr.Spec.Config.Decisions)

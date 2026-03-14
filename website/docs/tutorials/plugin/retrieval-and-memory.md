@@ -91,4 +91,4 @@ routing:
             capture_inputs: true
 ```
 
-These plugins often depend on `global:` backing config such as `global.semantic_cache`, `global.memory`, or shared retrieval stores. Keep the route-local plugin small and put shared storage settings in `global/`.
+These plugins often depend on `global:` backing config such as `global.stores.semantic_cache`, `global.stores.memory`, or shared retrieval stores. Keep the route-local plugin small and put shared storage settings in `global/`.

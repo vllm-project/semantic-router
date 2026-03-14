@@ -51,7 +51,7 @@ Simplified canonical example:
 ```yaml
 routing:
   decisions:
-    - name: computer_science_route
+    - name: computer-science-route
       rules:
         operator: AND
         conditions:

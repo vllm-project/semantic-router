@@ -89,7 +89,7 @@ class ComplexityRule(BaseModel):
     """Complexity-based signal configuration using embedding similarity.
 
     The composer field allows filtering based on other signals (e.g., only apply
-    code_complexity when domain is "computer_science"). This is evaluated after
+    code_complexity when domain is "computer science"). This is evaluated after
     all signals are computed in parallel, enabling signal dependencies.
     """
 
@@ -908,15 +908,33 @@ class BackendRef(BaseModel):
         return None
 
 
-class Providers(BaseModel):
-    """Provider configuration."""
+class ProviderDefaults(BaseModel):
+    """Provider-wide defaults that should not be mixed into per-model access bindings."""
 
-    models: List[Model] = Field(default_factory=list)
     default_model: Optional[str] = None
-    reasoning_families: Optional[Dict[str, ReasoningFamily]] = Field(
+    reasoning_families: Optional[Dict[str, "ReasoningFamily"]] = Field(
         default_factory=dict
     )
     default_reasoning_effort: Optional[str] = "high"
+
+
+class Providers(BaseModel):
+    """Provider configuration."""
+
+    defaults: ProviderDefaults = Field(default_factory=ProviderDefaults)
+    models: List[Model] = Field(default_factory=list)
+
+    @property
+    def default_model(self) -> Optional[str]:
+        return self.defaults.default_model
+
+    @property
+    def reasoning_families(self) -> Dict[str, "ReasoningFamily"]:
+        return self.defaults.reasoning_families or {}
+
+    @property
+    def default_reasoning_effort(self) -> Optional[str]:
+        return self.defaults.default_reasoning_effort
 
 
 class Routing(BaseModel):
@@ -943,9 +961,9 @@ class MemoryConfig(BaseModel):
 
     Query rewriting and fact extraction are enabled by adding external_models
     with role="memory_rewrite" or role="memory_extraction".
-    See global.external_models configuration for details.
+    See global.model_catalog.external configuration for details.
 
-    The embedding_model is auto-detected from embedding_models if not specified.
+    The embedding_model is auto-detected from global.model_catalog.embeddings.semantic if not specified.
     Priority: bert > mmbert > multimodal > qwen3 > gemma
     """
 
@@ -954,7 +972,7 @@ class MemoryConfig(BaseModel):
     milvus: Optional[MemoryMilvusConfig] = None
     # Embedding model to use for memory vectors
     # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
-    # If not set, auto-detected from embedding_models section (bert preferred)
+    # If not set, auto-detected from global.model_catalog.embeddings.semantic (bert preferred)
     embedding_model: Optional[str] = None
     default_retrieval_limit: int = 5
     default_similarity_threshold: float = 0.70

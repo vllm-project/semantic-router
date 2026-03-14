@@ -4,7 +4,7 @@
 
 `global:` is the router-wide override layer.
 
-Unlike `signal/`, `decision/`, `algorithm/`, and `plugin/`, this section is not route-local. It defines shared runtime behavior, shared backing services, and built-in model bindings.
+Unlike `signal/`, `decision/`, `algorithm/`, and `plugin/`, this section is not route-local. It defines shared runtime behavior, shared backing services, built-in model assets, and shared capability modules.
 
 ## Key Advantages
 
@@ -34,18 +34,19 @@ Canonical placement:
 
 ```yaml
 global:
-  observability:
-    metrics:
-      enabled: true
+  services:
+    observability:
+      metrics:
+        enabled: true
 ```
 
 The latest global docs mirror the main runtime groupings:
 
 | Global area | Examples | Doc |
 |-------------|----------|-----|
-| interfaces and observability | `api`, `response_api`, `observability`, `router_replay` | [API and Observability](./api-and-observability) |
-| stores and tools | `semantic_cache`, `memory`, `vector_store`, `tools` | [Stores and Tools](./stores-and-tools) |
-| safety, models, and policy | `prompt_guard`, `classifier`, `embedding_models`, `external_models`, `authz`, `ratelimit`, `model_selection`, `system_models`, `looper` | [Safety, Models, and Policy](./safety-models-and-policy) |
+| router and services | `router.model_selection`, `services.api`, `services.response_api`, `services.observability`, `services.router_replay` | [API and Observability](./api-and-observability) |
+| stores and integrations | `stores.semantic_cache`, `stores.memory`, `stores.vector_store`, `integrations.tools`, `integrations.looper` | [Stores and Tools](./stores-and-tools) |
+| model catalog and modules | `model_catalog.embeddings`, `model_catalog.external`, `model_catalog.system`, `model_catalog.modules.prompt_guard`, `model_catalog.modules.classifier`, `model_catalog.modules.hallucination_mitigation` | [Safety, Models, and Policy](./safety-models-and-policy) |
 
 Keep these rules in mind:
 

@@ -34,32 +34,36 @@ Use these blocks when:
 
 ```yaml
 global:
-  api:
-    enabled: true
+  services:
+    api:
+      enabled: true
 ```
 
 ### Response API
 
 ```yaml
 global:
-  response_api:
-    enabled: true
-    store_backend: memory
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
 ```
 
 ### Observability
 
 ```yaml
 global:
-  observability:
-    metrics:
-      enabled: true
+  services:
+    observability:
+      metrics:
+        enabled: true
 ```
 
 ### Router Replay
 
 ```yaml
 global:
-  router_replay:
-    async_writes: true
+  services:
+    router_replay:
+      async_writes: true
 ```

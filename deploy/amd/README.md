@@ -15,7 +15,7 @@ This playbook documents the reference AMD profile for a single real ROCm vLLM ba
   - `DeepSeek-V3.2`
 - Reference routing profile: [config.yaml](./config.yaml)
   - Canonical layout: `version/listeners/providers/routing/global`
-  - This profile uses `providers.models[].backend_refs[]` for access bindings and `routing.modelCards` for semantic model metadata
+  - This profile uses `providers.defaults` for provider-wide defaults, `providers.models[].backend_refs[]` for access bindings, and `routing.modelCards` for semantic model metadata
 
 The active AMD profile contains 20 routing decisions. Each decision has exactly one `modelRef`. Guardrail and PII examples remain in the YAML as commented templates, but they are not active in this reference profile.
 

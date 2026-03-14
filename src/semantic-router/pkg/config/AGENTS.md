@@ -11,6 +11,15 @@
 - Treat adjacent files as the place for plugin contracts, validators, and load/registry helpers.
 - Treat canonical `version/listeners/providers/routing/global` parsing as the only steady-state runtime contract.
 - Keep migration-only compatibility out of the runtime parser; legacy user layouts belong in explicit migration tooling, not in normal config loading.
+- Keep canonical `providers` split readable:
+  - `providers.defaults` owns default selection and reasoning-family metadata
+  - `providers.models[]` owns concrete backend access bindings directly
+- Keep canonical `global` layered, not flat:
+  - `global.router` for router-engine control knobs
+  - `global.services` for shared APIs and control-plane services
+  - `global.stores` for shared storage-backed services
+  - `global.integrations` for helper runtime integrations
+  - `global.model_catalog` for router-owned model assets, stable system-model bindings, and module configs that resolve through that shared model catalog
 - Keep layer-specific contracts distinct:
   - signal definitions own extraction-oriented config
   - decision config owns boolean composition and control logic

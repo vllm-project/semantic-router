@@ -35,7 +35,7 @@ In canonical v0.3 YAML, algorithms live inside each matched decision:
 ```yaml
 routing:
   decisions:
-    - name: computer_science_reasoning
+    - name: computer-science-reasoning
       rules:
         operator: AND
         conditions:

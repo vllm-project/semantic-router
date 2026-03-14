@@ -62,8 +62,10 @@ type SemanticRouterSpec struct {
 	Persistence PersistenceSpec `json:"persistence,omitempty"`
 
 	// Configuration overrides merged into the canonical v0.3 config.yaml.
-	// Runtime and system settings land under config.global, while provider
-	// defaults land under config.providers.
+	// Router-wide runtime overrides land under config.global.router/services/stores/
+	// integrations/model_catalog, with model-backed modules nested under
+	// config.global.model_catalog.modules. Provider defaults land under
+	// config.providers.defaults.
 	// +optional
 	Config ConfigSpec `json:"config,omitempty"`
 

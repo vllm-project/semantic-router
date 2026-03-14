@@ -7,21 +7,22 @@ listeners:
     timeout: 300s
 
 providers:
-  default_model: qwen2.5:3b
-  default_reasoning_effort: low
-  reasoning_families:
-    deepseek:
-      type: chat_template_kwargs
-      parameter: thinking
-    qwen3:
-      type: chat_template_kwargs
-      parameter: enable_thinking
-    gpt-oss:
-      type: reasoning_effort
-      parameter: reasoning_effort
-    gpt:
-      type: reasoning_effort
-      parameter: reasoning_effort
+  defaults:
+    default_model: qwen2.5:3b
+    default_reasoning_effort: low
+    reasoning_families:
+      deepseek:
+        type: chat_template_kwargs
+        parameter: thinking
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+      gpt-oss:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      gpt:
+        type: reasoning_effort
+        parameter: reasoning_effort
   models:
     - name: qwen2.5:3b
       provider_model_id: qwen2.5:3b
@@ -177,46 +178,62 @@ routing:
             pii_types_allowed: []
 
 global:
-  router_replay:
-    async_writes: true
-  semantic_cache:
-    similarity_threshold: 0.8
-    use_hnsw: true
-    hnsw_m: 16
-    hnsw_ef_construction: 200
-  tools:
-    enabled: true
-    top_k: 3
-    similarity_threshold: 0.2
-    tools_db_path: examples/runtime/tools/tools_db.json
-    fallback_to_empty: true
-  prompt_guard:
-    use_modernbert: false
-    use_mmbert_32k: false
-    jailbreak_mapping_path: models/mom-jailbreak-classifier/label_mapping.json
-  classifier:
-    category_model:
-      threshold: 0.6
-      use_modernbert: false
-      use_mmbert_32k: false
-      category_mapping_path: models/mom-domain-classifier/category_mapping.json
-    pii_model:
-      threshold: 0.9
-      use_mmbert_32k: false
-      pii_mapping_path: models/mom-pii-classifier/label_mapping.json
-  embedding_models:
-    qwen3_model_path: models/mom-embedding-pro
-    use_cpu: true
-    hnsw_config:
-      model_type: qwen3
-      preload_embeddings: true
-      target_dimension: 1024
-      enable_soft_matching: true
-      min_score_threshold: 0.5
-  system_models:
-    prompt_guard: models/mom-jailbreak-classifier
-    domain_classifier: models/mom-domain-classifier
-    pii_classifier: models/mom-pii-classifier
-    fact_check_classifier: models/mom-halugate-sentinel
-    hallucination_detector: models/mom-halugate-detector
-    hallucination_explainer: models/mom-halugate-explainer
+  services:
+    router_replay:
+      async_writes: true
+  stores:
+    semantic_cache:
+      similarity_threshold: 0.8
+      use_hnsw: true
+      hnsw_m: 16
+      hnsw_ef_construction: 200
+  integrations:
+    tools:
+      enabled: true
+      top_k: 3
+      similarity_threshold: 0.2
+      tools_db_path: examples/runtime/tools/tools_db.json
+      fallback_to_empty: true
+  model_catalog:
+    embeddings:
+      semantic:
+        qwen3_model_path: models/mom-embedding-pro
+        use_cpu: true
+        hnsw_config:
+          model_type: qwen3
+          preload_embeddings: true
+          target_dimension: 1024
+          enable_soft_matching: true
+          min_score_threshold: 0.5
+    system:
+      prompt_guard: models/mom-jailbreak-classifier
+      domain_classifier: models/mom-domain-classifier
+      pii_classifier: models/mom-pii-classifier
+      fact_check_classifier: models/mom-halugate-sentinel
+      hallucination_detector: models/mom-halugate-detector
+      hallucination_explainer: models/mom-halugate-explainer
+    modules:
+      prompt_guard:
+        model_ref: prompt_guard
+        use_modernbert: false
+        use_mmbert_32k: false
+        jailbreak_mapping_path: models/mom-jailbreak-classifier/label_mapping.json
+      classifier:
+        domain:
+          model_ref: domain_classifier
+          threshold: 0.6
+          use_modernbert: false
+          use_mmbert_32k: false
+          category_mapping_path: models/mom-domain-classifier/category_mapping.json
+        pii:
+          model_ref: pii_classifier
+          threshold: 0.9
+          use_mmbert_32k: false
+          pii_mapping_path: models/mom-pii-classifier/label_mapping.json
+      hallucination_mitigation:
+        fact_check:
+          model_ref: fact_check_classifier
+        detector:
+          model_ref: hallucination_detector
+        explainer:
+          model_ref: hallucination_explainer

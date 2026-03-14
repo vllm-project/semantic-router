@@ -10,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from cli.config_migration import migrate_config_data  # noqa: E402
 from cli.main import main  # noqa: E402
+from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
 
 
 def test_migrate_config_data_splits_legacy_provider_models():
@@ -91,7 +92,8 @@ def test_migrate_config_data_splits_legacy_provider_models():
             ],
         }
     ]
-    assert migrated["global"]["memory"]["enabled"] is True
+    assert migrated["providers"]["defaults"]["default_model"] == "gpt-4o"
+    assert migrated["global"]["stores"]["memory"]["enabled"] is True
 
 
 def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
@@ -142,7 +144,7 @@ def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
     migrated = yaml.safe_load(migrated_path.read_text())
 
     assert migrated["version"] == "v0.3"
-    assert migrated["providers"]["default_model"] == "gpt-4o-mini"
+    assert migrated["providers"]["defaults"]["default_model"] == "gpt-4o-mini"
     assert migrated["routing"]["modelCards"][0]["name"] == "gpt-4o-mini"
     assert migrated["providers"]["models"][0]["backend_refs"] == [
         {
@@ -152,3 +154,86 @@ def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
             "weight": 100,
         }
     ]
+
+
+def test_migrate_config_data_moves_global_modules_under_model_catalog():
+    legacy = {
+        "version": "v0.3",
+        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        "providers": {"defaults": {"default_model": "gpt-4o-mini"}},
+        "routing": {
+            "modelCards": [{"name": "gpt-4o-mini"}],
+            "decisions": [
+                {
+                    "name": "default-route",
+                    "description": "fallback",
+                    "priority": 100,
+                    "rules": {"operator": "AND", "conditions": []},
+                    "modelRefs": [{"model": "gpt-4o-mini"}],
+                }
+            ],
+        },
+        "global": {
+            "model_catalog": {
+                "system": {"prompt_guard": "models/mom-jailbreak-classifier"}
+            },
+            "modules": {"prompt_guard": {"enabled": True, "model_ref": "prompt_guard"}},
+        },
+    }
+
+    migrated = migrate_config_data(legacy)
+
+    assert "modules" not in migrated["global"]
+    assert migrated["global"]["model_catalog"]["modules"]["prompt_guard"] == {
+        "enabled": True,
+        "model_ref": "prompt_guard",
+    }
+
+
+def test_parse_user_config_rejects_deprecated_global_modules(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "listeners": [
+                    {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
+                ],
+                "providers": {
+                    "defaults": {"default_model": "gpt-4o-mini"},
+                    "models": [
+                        {
+                            "name": "gpt-4o-mini",
+                            "backend_refs": [
+                                {
+                                    "endpoint": "host.docker.internal:8000",
+                                    "protocol": "http",
+                                }
+                            ],
+                        }
+                    ],
+                },
+                "routing": {
+                    "modelCards": [{"name": "gpt-4o-mini"}],
+                    "decisions": [
+                        {
+                            "name": "default-route",
+                            "description": "fallback",
+                            "priority": 100,
+                            "rules": {"operator": "AND", "conditions": []},
+                            "modelRefs": [{"model": "gpt-4o-mini"}],
+                        }
+                    ],
+                },
+                "global": {"modules": {"prompt_guard": {"model_ref": "prompt_guard"}}},
+            },
+            sort_keys=False,
+        )
+    )
+
+    try:
+        parse_user_config(str(config_path))
+    except ConfigParseError as exc:
+        assert "global.modules" in str(exc)
+    else:
+        raise AssertionError("expected ConfigParseError")

@@ -21,8 +21,12 @@ class TestConfigTemplate(unittest.TestCase):
 
         self.assertEqual(data["version"], "v0.3")
         self.assertEqual(len(data["listeners"]), 1)
-        self.assertEqual(data["providers"]["default_model"], "replace-with-your-model")
+        self.assertEqual(
+            data["providers"]["defaults"]["default_model"],
+            "replace-with-your-model",
+        )
         self.assertEqual(len(data["providers"]["models"]), 1)
+        self.assertIn("backend_refs", data["providers"]["models"][0])
         self.assertEqual(len(data["routing"]["modelCards"]), 1)
         self.assertEqual(len(data["routing"]["decisions"]), 1)
         self.assertEqual(data["routing"]["decisions"][0]["name"], "default-route")

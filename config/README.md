@@ -8,6 +8,13 @@
 - `config/algorithm/`: reusable `decision.algorithm` snippets
 - `config/plugin/`: reusable route plugin snippets
 
+Inside canonical `config.yaml`:
+
+- `providers.defaults` holds provider-wide defaults such as `default_model` and reasoning families
+- `providers.models[]` holds concrete backend access details directly
+- `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
+- router-owned model-backed module config lives under `global.model_catalog.modules`
+
 `config/decision/` is organized by boolean rule shape:
 
 - `single/`: one signal condition

@@ -45,7 +45,9 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 func createValidSetupPatch() map[string]interface{} {
 	return map[string]interface{}{
 		"providers": map[string]interface{}{
-			"default_model": "test-model",
+			"defaults": map[string]interface{}{
+				"default_model": "test-model",
+			},
 			"models": []map[string]interface{}{
 				{
 					"name": "test-model",
@@ -191,7 +193,8 @@ func TestSetupImportRemoteHandler(t *testing.T) {
 		_, _ = w.Write([]byte(`
 version: v0.3
 providers:
-  default_model: remote-model
+  defaults:
+    default_model: remote-model
   models:
     - name: remote-model
       backend_refs:
@@ -251,8 +254,10 @@ routing:
 	if !resp.CanActivate {
 		t.Fatalf("expected canActivate=true")
 	}
-	if providers, ok := resp.Config["providers"].(map[string]interface{}); !ok || providers["default_model"] != "remote-model" {
-		t.Fatalf("expected imported config providers.default_model=remote-model, got %#v", resp.Config["providers"])
+	if providers, ok := resp.Config["providers"].(map[string]interface{}); !ok {
+		t.Fatalf("expected imported config providers map, got %#v", resp.Config["providers"])
+	} else if defaults, ok := providers["defaults"].(map[string]interface{}); !ok || defaults["default_model"] != "remote-model" {
+		t.Fatalf("expected imported config providers.defaults.default_model=remote-model, got %#v", resp.Config["providers"])
 	}
 	if routing, ok := resp.Config["routing"].(map[string]interface{}); !ok || routing["modelCards"] == nil {
 		t.Fatalf("expected imported config routing.modelCards to be preserved, got %#v", resp.Config["routing"])

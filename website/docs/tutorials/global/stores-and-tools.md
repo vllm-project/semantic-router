@@ -34,33 +34,37 @@ Use these blocks when:
 
 ```yaml
 global:
-  semantic_cache:
-    similarity_threshold: 0.8
-    use_hnsw: true
+  stores:
+    semantic_cache:
+      similarity_threshold: 0.8
+      use_hnsw: true
 ```
 
 ### Memory
 
 ```yaml
 global:
-  memory:
-    enabled: true
+  stores:
+    memory:
+      enabled: true
 ```
 
 ### Vector Store
 
 ```yaml
 global:
-  vector_store:
-    provider: milvus
+  stores:
+    vector_store:
+      provider: milvus
 ```
 
 ### Tools
 
 ```yaml
 global:
-  tools:
-    enabled: true
-    top_k: 3
-    tools_db_path: examples/runtime/tools/tools_db.json
+  integrations:
+    tools:
+      enabled: true
+      top_k: 3
+      tools_db_path: examples/runtime/tools/tools_db.json
 ```

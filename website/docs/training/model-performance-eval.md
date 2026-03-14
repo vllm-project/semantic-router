@@ -65,24 +65,32 @@ The `--served-model-name` parameter in your vLLM command **must exactly match** 
 
 ```yaml
 # config/config.yaml must match the --served-model-name values above
-vllm_endpoints:
-  - name: "endpoint1"
-    address: "127.0.0.1"
-    port: 11434
-  - name: "endpoint2"
-    address: "127.0.0.1"
-    port: 11435
+providers:
+  models:
+    - name: "phi4"            # ✅ Matches --served_model_name phi4
+      provider_model_id: "phi4"
+      backend_refs:
+        - name: "endpoint1"
+          endpoint: "127.0.0.1:11434"
+          protocol: "http"
+    - name: "qwen3-0.6B"      # ✅ Matches --served_model_name qwen3-0.6B
+      provider_model_id: "qwen3-0.6B"
+      backend_refs:
+        - name: "endpoint2"
+          endpoint: "127.0.0.1:11435"
+          protocol: "http"
+  defaults:
+    default_model: "phi4"
 
-model_config:
-  "phi4":                     # ✅ Matches --served_model_name phi4
-    # ... configuration
-  "qwen3-0.6B":               # ✅ Matches --served_model_name qwen3-0.6B
-    # ... configuration
+routing:
+  modelCards:
+    - name: "phi4"
+    - name: "qwen3-0.6B"
 ```
 
 **Optional tip:**
 
-- Ensure your `config/config.yaml` includes your deployed model names under `vllm_endpoints[].models` and any pricing/policy under `model_config` if you plan to use the generated config directly.
+- Ensure your `config/config.yaml` includes your deployed model names under `providers.models[]` and the matching semantic catalog under `routing.modelCards` if you plan to use the generated config directly.
 
 ## 2.Evaluate on MMLU-Pro
 see script in [mmul_pro_vllm_eval.py](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_eval/mmlu_pro_vllm_eval.py)
@@ -299,92 +307,98 @@ prompt_guard:
   use_cpu: true
   jailbreak_mapping_path: models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json
 
-# Lack of endpoint config and model_config right here, modify here as needed
+# Add provider bindings separately; this fragment focuses on routing semantics
 
-classifier:
-  category_model:
-    model_id: models/category_classifier_modernbert-base_model
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
-  pii_model:
-    model_id: models/pii_classifier_modernbert-base_presidio_token_model
-    use_modernbert: true
-    threshold: 0.7
-    use_cpu: true
-    pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
-categories:
-- name: business
-- name: law
-- name: engineering
+providers:
+  defaults:
+    default_reasoning_effort: medium
+    default_model: phi4
 
-decisions:
-- name: business
-  description: "Route business queries"
-  priority: 10
-  reasoning_effort: low
-  rules:
-    operator: "OR"
-    conditions:
-      - type: "domain"
-        name: "business"
-  modelRefs:
-  - model: phi4
-    use_reasoning: false
-  - model: qwen3-0.6B
-    use_reasoning: false
-  plugins:
-    - type: "system_prompt"
-      configuration:
-        enabled: true
-        system_prompt: "Business content is typically conversational"
-        mode: "replace"
+routing:
+  signals:
+    domains:
+      - name: business
+      - name: law
+      - name: engineering
+  decisions:
+    - name: business
+      description: "Route business queries"
+      priority: 10
+      reasoning_effort: low
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "business"
+      modelRefs:
+        - model: phi4
+          use_reasoning: false
+        - model: qwen3-0.6B
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "Business content is typically conversational"
+            mode: "replace"
 
-- name: law
-  description: "Route legal queries"
-  priority: 10
-  reasoning_effort: medium
-  rules:
-    operator: "OR"
-    conditions:
-      - type: "domain"
-        name: "law"
-  modelRefs:
-  - model: phi4
-    use_reasoning: false
-  - model: qwen3-0.6B
-    use_reasoning: false
-  plugins:
-    - type: "system_prompt"
-      configuration:
-        enabled: true
-        system_prompt: "Legal content is typically explanatory"
-        mode: "replace"
+    - name: law
+      description: "Route legal queries"
+      priority: 10
+      reasoning_effort: medium
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "law"
+      modelRefs:
+        - model: phi4
+          use_reasoning: false
+        - model: qwen3-0.6B
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "Legal content is typically explanatory"
+            mode: "replace"
 
-# Ignore some categories here
+    # Ignore some categories here
+    - name: engineering
+      description: "Route engineering queries"
+      priority: 10
+      reasoning_effort: high
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "engineering"
+      modelRefs:
+        - model: phi4
+          use_reasoning: true
+        - model: qwen3-0.6B
+          use_reasoning: true
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "Engineering problems require systematic problem-solving"
+            mode: "replace"
 
-- name: engineering
-  description: "Route engineering queries"
-  priority: 10
-  reasoning_effort: high
-  rules:
-    operator: "OR"
-    conditions:
-      - type: "domain"
-        name: "engineering"
-  modelRefs:
-  - model: phi4
-    use_reasoning: true
-  - model: qwen3-0.6B
-    use_reasoning: true
-  plugins:
-    - type: "system_prompt"
-      configuration:
-        enabled: true
-        system_prompt: "Engineering problems require systematic problem-solving"
-        mode: "replace"
-
-default_reasoning_effort: medium
-default_model: phi4
+global:
+  model_catalog:
+    modules:
+      classifier:
+        domain:
+          model_id: models/category_classifier_modernbert-base_model
+          use_modernbert: true
+          threshold: 0.6
+          use_cpu: true
+          category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
+        pii:
+          model_id: models/pii_classifier_modernbert-base_presidio_token_model
+          use_modernbert: true
+          threshold: 0.7
+          use_cpu: true
+          pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
 ```
