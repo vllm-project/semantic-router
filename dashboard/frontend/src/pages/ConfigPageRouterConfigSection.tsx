@@ -53,7 +53,7 @@ export default function ConfigPageRouterConfigSection({
 
     const fetchRouterDefaults = async () => {
       try {
-        const response = await fetch('/api/router/config/defaults')
+        const response = await fetch('/api/router/config/global')
         if (!response.ok) {
           if (!cancelled) {
             setRouterDefaults(null)
@@ -98,7 +98,7 @@ export default function ConfigPageRouterConfigSection({
   })
 
   const configuredCount = sectionCards.filter((card) => card.data !== undefined).length
-  const routerDefaultsCount = sectionCards.filter((card) => card.sourceLabel === '.vllm-sr/router-defaults.yaml').length
+  const routerDefaultsCount = sectionCards.filter((card) => card.sourceLabel === 'router effective defaults').length
   const missingCount = sectionCards.length - configuredCount
 
   const saveRouterSettings = async (updates: Partial<ConfigData>) => {
@@ -114,7 +114,7 @@ export default function ConfigPageRouterConfigSection({
       return
     }
 
-    const response = await fetch('/api/router/config/defaults/update', {
+    const response = await fetch('/api/router/config/global/update', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -127,7 +127,7 @@ export default function ConfigPageRouterConfigSection({
       throw new Error(errorText || `HTTP ${response.status}: ${response.statusText}`)
     }
 
-    const refreshed = await fetch('/api/router/config/defaults')
+    const refreshed = await fetch('/api/router/config/global')
     if (refreshed.ok) {
       setRouterDefaults(await refreshed.json())
     }
@@ -150,8 +150,8 @@ export default function ConfigPageRouterConfigSection({
   return (
     <ConfigPageManagerLayout
       eyebrow="Runtime"
-      title="Router Config"
-      description="System-level defaults come from .vllm-sr/router-defaults.yaml for Python CLI setups. This surface keeps dashboard runtime controls aligned with the CLI template while preserving config.yaml fallbacks when older deployments still inline these settings."
+      title="Global Runtime"
+      description="Router-owned runtime defaults are merged with your `config.yaml` `global` override. This surface edits only the canonical `global` block while preserving the router's built-in defaults."
     >
       <div className={pageStyles.sectionPanel}>
         <div className={pageStyles.sectionTableBlock}>
@@ -160,27 +160,27 @@ export default function ConfigPageRouterConfigSection({
               <h2 className={styles.blockTitle}>System Defaults Overview</h2>
               <p className={styles.blockDescription}>
                 {routerDefaults
-                  ? 'Local router-defaults.yaml is loaded. Edits in this section write back to the system defaults file.'
-                  : 'No local router-defaults.yaml was loaded. Cards below still follow the Python CLI template order and show config.yaml fallback values when present.'}
+                  ? 'The router resolved effective defaults successfully. Edits in this section write back to `config.yaml` under `global:`.'
+                  : 'Effective router defaults are unavailable right now. Cards below still show the canonical `global` sections and any loaded config.yaml overrides.'}
               </p>
             </div>
           </div>
 
           <div className={styles.overviewGrid}>
             <div className={styles.overviewCard}>
-              <span className={styles.overviewLabel}>Template Sections</span>
+              <span className={styles.overviewLabel}>Global Sections</span>
               <strong className={styles.overviewValue}>{sectionCards.length}</strong>
-              <span className={styles.overviewHint}>Top-level router-defaults surfaces tracked by the dashboard.</span>
+              <span className={styles.overviewHint}>Canonical `global` sections tracked by the dashboard.</span>
             </div>
             <div className={styles.overviewCard}>
-              <span className={styles.overviewLabel}>Loaded From Defaults</span>
+              <span className={styles.overviewLabel}>Resolved By Router</span>
               <strong className={styles.overviewValue}>{routerDefaultsCount}</strong>
-              <span className={styles.overviewHint}>Sections sourced directly from `.vllm-sr/router-defaults.yaml`.</span>
+              <span className={styles.overviewHint}>Sections currently backed by router-owned defaults or effective merged values.</span>
             </div>
             <div className={styles.overviewCard}>
-              <span className={styles.overviewLabel}>Missing Or Template-Only</span>
+              <span className={styles.overviewLabel}>Missing Or Inactive</span>
               <strong className={styles.overviewValue}>{missingCount}</strong>
-              <span className={styles.overviewHint}>Template sections that still need local values if you want them persisted.</span>
+              <span className={styles.overviewHint}>Sections not currently present in the effective `global` surface.</span>
             </div>
           </div>
         </div>
@@ -190,7 +190,7 @@ export default function ConfigPageRouterConfigSection({
             <div>
               <h2 className={styles.blockTitle}>Runtime System Sections</h2>
               <p className={styles.blockDescription}>
-                Cards mirror the Python CLI router-defaults template instead of the older flat config subset. Each editor writes an entire top-level section so nested runtime defaults stay intact.
+                Cards mirror the canonical `global` block. Each editor writes an entire top-level section so nested runtime overrides stay intact.
               </p>
             </div>
           </div>

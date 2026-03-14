@@ -3,6 +3,7 @@
 import pytest
 import tempfile
 import os
+import yaml
 from pydantic import ValidationError as PydanticValidationError
 
 from cli.models import (
@@ -11,8 +12,43 @@ from cli.models import (
     RouterReplayPluginConfig,
     RAGPluginConfig,
 )
+from cli.config_migration import migrate_config_data
 from cli.parser import parse_user_config
 from cli.validator import validate_user_config
+
+
+def _write_config(config_yaml: str) -> str:
+    data = yaml.safe_load(config_yaml)
+    providers = data.get("providers") if isinstance(data, dict) else None
+    models = providers.get("models", []) if isinstance(providers, dict) else []
+    if isinstance(data, dict) and (
+        "signals" in data
+        or "decisions" in data
+        or any(
+            isinstance(model, dict)
+            and any(
+                key in model
+                for key in (
+                    "endpoints",
+                    "access_key",
+                    "reasoning_family",
+                    "param_size",
+                    "context_window_size",
+                    "description",
+                    "capabilities",
+                    "quality_score",
+                    "modality",
+                    "tags",
+                )
+            )
+            for model in models
+        )
+    ):
+        data = migrate_config_data(data)
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        yaml.safe_dump(data, f, sort_keys=False)
+        return f.name
 
 
 class TestPluginTypeValidation:
@@ -22,13 +58,13 @@ class TestPluginTypeValidation:
         """Test that all valid plugin types are accepted."""
         valid_types = [
             PluginType.SEMANTIC_CACHE.value,
-            PluginType.JAILBREAK.value,
-            PluginType.PII.value,
             PluginType.SYSTEM_PROMPT.value,
             PluginType.HEADER_MUTATION.value,
             PluginType.HALLUCINATION.value,
             PluginType.ROUTER_REPLAY.value,
+            PluginType.MEMORY.value,
             PluginType.RAG.value,
+            PluginType.FAST_RESPONSE.value,
         ]
 
         for plugin_type in valid_types:
@@ -114,9 +150,7 @@ providers:
   default_model: "test_model"
 """
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(config_yaml)
-            temp_path = f.name
+        temp_path = _write_config(config_yaml)
 
         try:
             config = parse_user_config(temp_path)
@@ -184,9 +218,7 @@ providers:
   default_model: "test_model"
 """
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(config_yaml)
-            temp_path = f.name
+        temp_path = _write_config(config_yaml)
 
         try:
             config = parse_user_config(temp_path)
@@ -240,9 +272,7 @@ providers:
   default_model: "test_model"
 """
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(config_yaml)
-            temp_path = f.name
+        temp_path = _write_config(config_yaml)
 
         try:
             config = parse_user_config(temp_path)
@@ -286,9 +316,7 @@ providers:
   default_model: "test_model"
 """
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(config_yaml)
-            temp_path = f.name
+        temp_path = _write_config(config_yaml)
 
         try:
             config = parse_user_config(temp_path)
@@ -452,9 +480,7 @@ providers:
   default_model: "test_model"
 """
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(config_yaml)
-            temp_path = f.name
+        temp_path = _write_config(config_yaml)
 
         try:
             config = parse_user_config(temp_path)
@@ -530,9 +556,7 @@ providers:
   default_model: "test_model"
 """
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(config_yaml)
-            temp_path = f.name
+        temp_path = _write_config(config_yaml)
 
         try:
             config = parse_user_config(temp_path)
@@ -597,9 +621,7 @@ providers:
   default_model: "test_model"
 """
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(config_yaml)
-            temp_path = f.name
+        temp_path = _write_config(config_yaml)
 
         try:
             config = parse_user_config(temp_path)
@@ -686,9 +708,7 @@ providers:
   default_model: "test_model"
 """
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(config_yaml)
-            temp_path = f.name
+        temp_path = _write_config(config_yaml)
 
         try:
             config = parse_user_config(temp_path)

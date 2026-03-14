@@ -1,7 +1,5 @@
 import React from "react";
 
-import type { ASTBackendDecl } from "@/types/dsl";
-
 import styles from "./BuilderPage.module.css";
 import { getBool, getNum, getObj, getStr } from "./builderPageGlobalSettingsSupport";
 
@@ -256,8 +254,8 @@ const GlobalSettingsObservabilitySection: React.FC<
 
 interface GlobalSettingsEndpointsSectionProps {
   collapsedSections: Record<string, boolean>;
-  vllmEndpoints: ASTBackendDecl[];
-  providerProfiles: ASTBackendDecl[];
+  vllmEndpoints: Array<{ name: string; fields: Record<string, unknown> }>;
+  providerProfiles: Array<{ name: string; fields: Record<string, unknown> }>;
   onToggleSection: (key: string) => void;
 }
 

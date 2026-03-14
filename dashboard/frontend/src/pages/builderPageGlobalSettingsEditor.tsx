@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { ASTBackendDecl } from "@/types/dsl";
-
 import styles from "./BuilderPage.module.css";
 import {
   GlobalSettingsEndpointsSection,
@@ -17,13 +15,17 @@ import {
 import { GlobalSettingsRoutingSection } from "./builderPageGlobalSettingsRoutingSection";
 import {
   DslPreviewPanel,
-  generateGlobalDslPreview,
+  generateGlobalOverridePreview,
 } from "./builderPageSharedDslEditors";
 
 const GlobalSettingsEditor: React.FC<{
   fields: Record<string, unknown>;
   onUpdate: (fields: Record<string, unknown>) => void;
-  endpoints: ASTBackendDecl[];
+  endpoints: Array<{
+    backendType: string;
+    name: string;
+    fields: Record<string, unknown>;
+  }>;
   onSelectEndpoint: () => void;
 }> = ({ fields, onUpdate, endpoints: allEndpoints }) => {
   const [local, setLocal] = useState<Record<string, unknown>>(() =>
@@ -76,7 +78,10 @@ const GlobalSettingsEditor: React.FC<{
     onUpdate(local);
   }, [local, onUpdate]);
 
-  const dslPreview = useMemo(() => generateGlobalDslPreview(local), [local]);
+  const globalPreview = useMemo(
+    () => generateGlobalOverridePreview(local),
+    [local],
+  );
 
   const promptGuard = getObj(local, "prompt_guard");
   const hallucination = getObj(local, "hallucination_mitigation");
@@ -208,7 +213,10 @@ const GlobalSettingsEditor: React.FC<{
         onToggleSection={toggleCollapse}
       />
 
-      <DslPreviewPanel dslText={dslPreview} />
+      <DslPreviewPanel
+        title="Canonical global override"
+        dslText={globalPreview}
+      />
     </div>
   );
 };

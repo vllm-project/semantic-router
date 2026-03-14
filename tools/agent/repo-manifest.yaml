@@ -9,7 +9,7 @@ supported_envs:
     serve_command: vllm-sr serve --image-pull-policy never
     description: Default local Docker image workflow.
     local_env: true
-    smoke_config: config/testing/config.agent-smoke.cpu.yaml
+    smoke_config: e2e/config/config.agent-smoke.cpu.yaml
     local_dev_fragment: local-dev-cpu
   amd-local:
     aliases:
@@ -18,7 +18,7 @@ supported_envs:
     serve_command: vllm-sr serve --image-pull-policy never --platform amd
     description: AMD ROCm local workflow.
     local_env: true
-    smoke_config: config/testing/config.agent-smoke.amd.yaml
+    smoke_config: e2e/config/config.agent-smoke.amd.yaml
     local_dev_fragment: local-dev-amd
     deployment_reference: deploy/amd/README.md
     example_config: deploy/amd/config.yaml
@@ -121,6 +121,7 @@ docs:
   - docs/agent/plans/README.md
   - docs/agent/plans/pl-0001-harness-roadmap.md
   - docs/agent/plans/pl-0002-e2e-rationalization-roadmap.md
+  - docs/agent/plans/pl-0003-v0-3-config-contract-rollout.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
   - docs/agent/tech-debt/td-001-config-surface-fragmentation.md
@@ -200,6 +201,9 @@ doc_governance:
     - path: docs/agent/plans/pl-0002-e2e-rationalization-roadmap.md
       steward: e2e
       freshness: update at the start and end of each E2E rationalization loop and after each completed loop task
+    - path: docs/agent/plans/pl-0003-v0-3-config-contract-rollout.md
+      steward: agent-contract
+      freshness: update at the start and end of each v0.3 config rollout loop and after each completed loop task
     - path: docs/agent/tech-debt-register.md
       steward: agent-contract
       freshness: update when debt workflow or landing-page guidance changes

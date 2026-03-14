@@ -154,6 +154,9 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 		// Explicitly validate vLLM endpoints (Parse doesn't validate endpoints by default)
 		if len(parsedConfig.VLLMEndpoints) > 0 {
 			for _, endpoint := range parsedConfig.VLLMEndpoints {
+				if endpoint.ProviderProfileName != "" && endpoint.Address == "" {
+					continue
+				}
 				if err := validateEndpointAddress(endpoint.Address); err != nil {
 					http.Error(w, fmt.Sprintf("Config validation failed: vLLM endpoint '%s' address validation failed: %v\n\nSupported formats:\n- IPv4: 192.168.1.1, 127.0.0.1\n- IPv6: ::1, 2001:db8::1\n- DNS names: localhost, example.com, api.example.com\n\nUnsupported formats:\n- Protocol prefixes: http://, https://\n- Paths: /api/v1, /health\n- Ports in address: use 'port' field instead", endpoint.Name, err), http.StatusBadRequest)
 					return
@@ -182,8 +185,8 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 	}
 }
 
-// RouterDefaultsHandler reads and serves the router-defaults.yaml file as JSON
-// This file is located in .vllm-sr/router-defaults.yaml relative to config directory
+// RouterDefaultsHandler returns effective canonical global config merged from
+// router-owned defaults plus any current config.yaml global overrides.
 func RouterDefaultsHandler(configDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -191,37 +194,20 @@ func RouterDefaultsHandler(configDir string) http.HandlerFunc {
 			return
 		}
 
-		// router-defaults.yaml is in .vllm-sr directory relative to config
-		routerDefaultsPath := filepath.Join(configDir, ".vllm-sr", "router-defaults.yaml")
-
-		data, err := os.ReadFile(routerDefaultsPath)
+		defaults, err := currentGlobalDefaults(configDir)
 		if err != nil {
-			// If file doesn't exist, return empty config
-			if os.IsNotExist(err) {
-				w.Header().Set("Content-Type", "application/json")
-				if encErr := json.NewEncoder(w).Encode(map[string]interface{}{}); encErr != nil {
-					log.Printf("Error encoding empty response: %v", encErr)
-				}
-				return
-			}
-			http.Error(w, fmt.Sprintf("Failed to read router-defaults: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		var config interface{}
-		if err := yaml.Unmarshal(data, &config); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse router-defaults: %v", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Failed to load defaults: %v", err), http.StatusInternalServerError)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(config); err != nil {
-			log.Printf("Error encoding router-defaults to JSON: %v", err)
+		if err := json.NewEncoder(w).Encode(defaults); err != nil {
+			log.Printf("Error encoding global defaults to JSON: %v", err)
 		}
 	}
 }
 
-// UpdateRouterDefaultsHandler updates the router-defaults.yaml file
+// UpdateRouterDefaultsHandler updates the canonical global override block in config.yaml.
 func UpdateRouterDefaultsHandler(configDir string, readonlyMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost && r.Method != http.MethodPut {
@@ -248,36 +234,23 @@ func UpdateRouterDefaultsHandler(configDir string, readonlyMode bool) http.Handl
 			return
 		}
 
-		routerDefaultsPath := filepath.Join(configDir, ".vllm-sr", "router-defaults.yaml")
-
-		// Read existing config and merge with updates
+		configPath := filepath.Join(configDir, "config.yaml")
 		existingMap := make(map[string]interface{})
-		existingData, err := os.ReadFile(routerDefaultsPath)
-		if err == nil {
-			if unmarshalErr := yaml.Unmarshal(existingData, &existingMap); unmarshalErr != nil {
-				log.Printf("Warning: failed to parse existing router-defaults, starting fresh: %v", unmarshalErr)
-			}
+		existingData, err := os.ReadFile(configPath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if unmarshalErr := yaml.Unmarshal(existingData, &existingMap); unmarshalErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to parse config: %v", unmarshalErr), http.StatusInternalServerError)
+			return
 		}
 
-		// Merge updates into existing config (deep merge for nested maps)
-		for key, value := range configData {
-			if existingValue, exists := existingMap[key]; exists {
-				if existingMapValue, ok := existingValue.(map[string]interface{}); ok {
-					if newMapValue, ok := value.(map[string]interface{}); ok {
-						mergedMap := make(map[string]interface{})
-						for k, v := range existingMapValue {
-							mergedMap[k] = v
-						}
-						for k, v := range newMapValue {
-							mergedMap[k] = v
-						}
-						existingMap[key] = mergedMap
-						continue
-					}
-				}
-			}
-			existingMap[key] = value
+		globalMap, _ := existingMap["global"].(map[string]interface{})
+		if globalMap == nil {
+			globalMap = make(map[string]interface{})
 		}
+		existingMap["global"] = deepMerge(globalMap, configData)
 
 		// Convert to YAML
 		yamlData, err := yaml.Marshal(existingMap)
@@ -286,15 +259,29 @@ func UpdateRouterDefaultsHandler(configDir string, readonlyMode bool) http.Handl
 			return
 		}
 
-		// Ensure .vllm-sr directory exists
-		vllmSrDir := filepath.Join(configDir, ".vllm-sr")
-		if mkdirErr := os.MkdirAll(vllmSrDir, 0o755); mkdirErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to create .vllm-sr directory: %v", mkdirErr), http.StatusInternalServerError)
+		tempFile := filepath.Join(os.TempDir(), "config_validate_global.yaml")
+		if err = os.WriteFile(tempFile, yamlData, 0o644); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to validate: %v", err), http.StatusInternalServerError)
+			return
+		}
+		defer func() {
+			if removeErr := os.Remove(tempFile); removeErr != nil {
+				log.Printf("Warning: failed to remove temp file: %v", removeErr)
+			}
+		}()
+
+		if _, err := routerconfig.Parse(tempFile); err != nil {
+			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
 			return
 		}
 
-		if err := os.WriteFile(routerDefaultsPath, yamlData, 0o644); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to write router-defaults: %v", err), http.StatusInternalServerError)
+		if err := writeConfigAtomically(configPath, yamlData); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		if err := propagateConfigToRuntime(configPath, configDir); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to apply config to runtime: %v", err), http.StatusInternalServerError)
 			return
 		}
 
@@ -382,64 +369,8 @@ func validateEndpointAddress(address string) error {
 
 const defaultEnvoyConfigPath = "/etc/envoy/envoy.yaml"
 
-// regenerateRouterConfigSync calls the Python CLI to regenerate .vllm-sr/router-config.yaml
-// from the user-facing config.yaml. This bridges the gap between the Dashboard
-// (which edits the nested Python CLI format) and the Router (which reads the flat format).
-// The Router's fsnotify watcher will detect the change and hot-reload automatically.
-
-func regenerateRouterConfigSync(configPath string, configDir string) error {
-	outputDir := filepath.Join(configDir, ".vllm-sr")
-
-	// Check if output directory exists; if not, this is likely a dev environment
-	// without the Python CLI setup, so skip silently.
-	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-		log.Printf("Config propagation: .vllm-sr directory not found at %s, skipping router config regeneration (dev mode?)", outputDir)
-		return nil
-	}
-
-	output, err := generateRouterConfigWithPython(configPath, outputDir)
-	if err != nil {
-		return fmt.Errorf("failed to regenerate router config: %w (output: %s)", err, strings.TrimSpace(output))
-	}
-
-	log.Printf("Config propagation: %s", strings.TrimSpace(output))
-	return nil
-}
-
-func generateRouterConfigWithPython(configPath string, outputDir string) (string, error) {
-	cliRoot := detectPythonCLIRoot()
-	if cliRoot == "" {
-		return "SKIP: Python CLI not available, skipping router config regeneration", nil
-	}
-
-	pythonScript := fmt.Sprintf(`
-import sys
-sys.path.insert(0, %q)
-try:
-    from cli.commands.serve import generate_router_config
-    result = generate_router_config(%q, %q, force=True)
-    print(f"Regenerated router config: {result}")
-except ImportError:
-    print("SKIP: Python CLI not available, skipping router config regeneration")
-except Exception as e:
-    print(f"ERROR: Failed to regenerate router config: {e}", file=sys.stderr)
-    sys.exit(1)
-`, cliRoot, configPath, outputDir)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "python3", "-c", pythonScript)
-	cmd.Dir = filepath.Dir(configPath)
-	output, err := cmd.CombinedOutput()
-	return string(output), err
-}
-
 func propagateConfigToRuntime(configPath string, configDir string) error {
 	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
-		if err := regenerateRouterConfigSync(configPath, configDir); err != nil {
-			return err
-		}
 		return regenerateAndReloadEnvoyLocally(configPath)
 	}
 
@@ -447,7 +378,7 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 		return propagateConfigToManagedContainer()
 	}
 
-	return regenerateRouterConfigSync(configPath, configDir)
+	return nil
 }
 
 func writeConfigAtomically(configPath string, yamlData []byte) error {
@@ -503,12 +434,6 @@ func regenerateAndReloadEnvoyLocally(configPath string) error {
 }
 
 func propagateConfigToManagedContainer() error {
-	if output, err := generateRouterConfigInManagedContainer(); err != nil {
-		return fmt.Errorf("failed to regenerate router config in %s: %w (output: %s)", vllmSrContainerName, err, strings.TrimSpace(output))
-	} else {
-		log.Printf("Config propagation: %s", strings.TrimSpace(output))
-	}
-
 	if output, err := generateEnvoyConfigInManagedContainer(); err != nil {
 		return fmt.Errorf("failed to regenerate Envoy config in %s: %w (output: %s)", vllmSrContainerName, err, strings.TrimSpace(output))
 	} else {
@@ -572,13 +497,29 @@ func detectEnvoyConfigPath() string {
 	return ""
 }
 
-func generateRouterConfigInManagedContainer() (string, error) {
-	pythonScript := `
-from cli.commands.serve import generate_router_config
-result = generate_router_config("/app/config.yaml", "/app/.vllm-sr", force=True)
-print(f"Regenerated router config: {result}")
-`
-	return execInManagedContainer(30*time.Second, "python3", "-c", pythonScript)
+func currentGlobalDefaults(configDir string) (map[string]interface{}, error) {
+	data, err := yaml.Marshal(routerconfig.DefaultCanonicalGlobal())
+	if err != nil {
+		return nil, err
+	}
+
+	defaults := make(map[string]interface{})
+	if unmarshalErr := yaml.Unmarshal(data, &defaults); unmarshalErr != nil {
+		return nil, unmarshalErr
+	}
+
+	configPath := filepath.Join(configDir, "config.yaml")
+	configData, err := os.ReadFile(configPath)
+	if err == nil {
+		currentConfig := make(map[string]interface{})
+		if unmarshalErr := yaml.Unmarshal(configData, &currentConfig); unmarshalErr == nil {
+			if currentGlobal, ok := currentConfig["global"].(map[string]interface{}); ok {
+				defaults = deepMerge(defaults, currentGlobal)
+			}
+		}
+	}
+
+	return defaults, nil
 }
 
 func generateEnvoyConfigInManagedContainer() (string, error) {

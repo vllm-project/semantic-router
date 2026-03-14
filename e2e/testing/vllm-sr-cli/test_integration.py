@@ -27,7 +27,7 @@ class TestServeIntegration(CLITestBase):
     def _create_minimal_config(self, port: int = 8888) -> str:
         """Create a lean active config without requiring `vllm-sr init`."""
         config_path = os.path.join(self.test_dir, "config.yaml")
-        config_content = f"""version: v0.1
+        config_content = f"""version: v0.3
 
 listeners:
   - name: "test-listener"
@@ -35,26 +35,30 @@ listeners:
     port: {port}
     timeout: "60s"
 
-decisions:
-  - name: "default-route"
-    description: "Default route for integration testing"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions: []
-    modelRefs:
-      - model: "test-model"
-        use_reasoning: false
-
 providers:
+  default_model: "test-model"
   models:
     - name: "test-model"
-      endpoints:
+      provider_model_id: "test-model"
+      backend_refs:
         - name: "primary"
           weight: 100
           endpoint: "host.docker.internal:8000/v1"
           protocol: "http"
-  default_model: "test-model"
+
+routing:
+  modelCards:
+    - name: "test-model"
+  decisions:
+    - name: "default-route"
+      description: "Default route for integration testing"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "test-model"
+          use_reasoning: false
 """
         with open(config_path, "w") as f:
             f.write(config_content)

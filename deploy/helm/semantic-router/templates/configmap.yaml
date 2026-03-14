@@ -1,7 +1,8 @@
 {{- $config := deepCopy .Values.config -}}
-{{- $semanticCache := (get $config "semantic_cache") | default (dict) -}}
-{{- $responseAPI := (get $config "response_api") | default (dict) -}}
-{{- $observability := (get $config "observability") | default (dict) -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $semanticCache := (get $global "semantic_cache") | default (dict) -}}
+{{- $responseAPI := (get $global "response_api") | default (dict) -}}
+{{- $observability := (get $global "observability") | default (dict) -}}
 {{- $tracing := (get $observability "tracing") | default (dict) -}}
 {{- $tracingExporter := (get $tracing "exporter") | default (dict) -}}
 {{- $tracingResource := (get $tracing "resource") | default (dict) -}}
@@ -39,9 +40,13 @@
 {{- end -}}
 {{- $_ := set $observability "tracing" $tracing -}}
 
-{{- $_ := set $config "semantic_cache" $semanticCache -}}
-{{- $_ := set $config "response_api" $responseAPI -}}
-{{- $_ := set $config "observability" $observability -}}
+{{- $_ := set $global "semantic_cache" $semanticCache -}}
+{{- $_ := set $global "response_api" $responseAPI -}}
+{{- $_ := set $global "observability" $observability -}}
+{{- $_ := set $config "global" $global -}}
+{{- if not (get $config "version") -}}
+{{- $_ := set $config "version" "v0.3" -}}
+{{- end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:

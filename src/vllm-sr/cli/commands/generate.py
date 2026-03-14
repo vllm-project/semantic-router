@@ -1,16 +1,15 @@
 """Generate command implementation."""
 
 import sys
-from pathlib import Path
 
 from cli.commands.serve import (
-    generate_router_config,
-    copy_defaults_reference,
-    ensure_output_directory,
     DEFAULT_OUTPUT_DIR,
+    ensure_output_directory,
+    generate_router_config,
+    write_global_defaults_reference,
 )
-from cli.parser import parse_user_config, ConfigParseError
 from cli.config_generator import generate_envoy_config_from_user_config
+from cli.parser import ConfigParseError, parse_user_config
 from cli.utils import getLogger
 
 log = getLogger(__name__)
@@ -44,8 +43,8 @@ def generate_command(
     # Generate router config
     router_config_path = generate_router_config(config_path, output_dir, force=force)
 
-    # Copy defaults for reference
-    defaults_path = copy_defaults_reference(output_dir)
+    # Write defaults note for reference
+    defaults_path = write_global_defaults_reference(output_dir)
 
     # Generate Envoy config
     envoy_config_path = None
@@ -61,13 +60,13 @@ def generate_command(
     log.info("=" * 60)
     log.info("Configurations generated successfully")
     log.info(f"  Output directory: {output_path.absolute()}")
-    log.info(f"  Router config: {router_config_path.name}")
+    log.info(f"  Canonical config: {router_config_path.name}")
     if envoy_config_path:
         log.info(f"  Envoy config: {envoy_config_path.name}")
     log.info(f"  Defaults reference: {defaults_path.name}")
     log.info("=" * 60)
     log.info("\nYou can now:")
-    log.info(f"  • Edit {router_config_path} to customize system settings")
+    log.info(f"  • Edit {router_config_path} to customize routing/deployment settings")
     if envoy_config_path:
         log.info(f"  • Edit {envoy_config_path} to customize Envoy settings")
     log.info(f"  • Start service with: vllm-sr serve {config_path}")

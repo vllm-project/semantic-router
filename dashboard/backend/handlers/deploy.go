@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // deployMu ensures only one deploy operation at a time
@@ -204,7 +206,7 @@ func ConfigVersionsHandler(configPath string) http.HandlerFunc {
 	}
 }
 
-// ==================== Deploy: write config.yaml + regenerate router-config.yaml ====================
+// ==================== Deploy: write canonical config.yaml ====================
 
 func deployDirectWrite(w http.ResponseWriter, configPath string, configDir string, req DeployRequest) {
 	// Acquire deploy lock (only one deploy at a time)
@@ -245,6 +247,16 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 				}
 			}
 		}
+	}
+
+	if _, err := routerconfig.ParseYAMLBytes(yamlBytes); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_validation_error",
+			"message": fmt.Sprintf("Merged config validation failed: %v", err),
+		})
+		return
 	}
 
 	// Step 3: Create backup of current config
