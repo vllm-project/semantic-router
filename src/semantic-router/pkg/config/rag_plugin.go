@@ -128,7 +128,7 @@ type OpenAIRAGConfig struct {
 	// Can be created via OpenAI API or referenced if already exists
 	VectorStoreID string `json:"vector_store_id" yaml:"vector_store_id"`
 
-	// OpenAI API base URL (defaults to https://api.openai.com/v1)
+	// OpenAI API base URL (defaults to https://api.openai.com)
 	BaseURL string `json:"base_url,omitempty" yaml:"base_url,omitempty"`
 
 	// OpenAI API key (required)
