@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from datasets import load_dataset
 from tqdm import tqdm
 
+from .constants import SYSTEM_MATCHED_SIGNAL_KEYS, SYSTEM_SIGNAL_KEYS
 from .types import TestResult
 
 
@@ -217,6 +218,7 @@ class SystemEvalMixin:
         incorrect = 0
         skipped = 0
         latency_ms: List[float] = []
+        signal_stats = self._init_signal_stats()
 
         results: List[Dict[str, Any]] = []
         for row in tqdm(dataset, desc=f"Evaluating {dataset_id}"):
@@ -224,6 +226,7 @@ class SystemEvalMixin:
             expected = self._extract_label(row, config, dataset, dimension)
 
             response = self._post_eval_request({"text": text})
+            self._collect_signal_stats(signal_stats, response)
             predicted = self._extract_prediction(response, dimension)
 
             is_correct = None
@@ -264,8 +267,80 @@ class SystemEvalMixin:
             "skipped": skipped,
             "accuracy": accuracy,
             "avg_latency_ms": avg_latency,
+            "signal_coverage": self._finalize_signal_stats(signal_stats, total),
         }
         return results, metrics
+
+    def _init_signal_stats(self) -> Dict[str, Dict[str, float]]:
+        stats: Dict[str, Dict[str, float]] = {}
+        for signal in SYSTEM_SIGNAL_KEYS:
+            stats[signal] = {
+                "matched_samples": 0.0,
+                "metric_available_samples": 0.0,
+                "confidence_samples": 0.0,
+                "confidence_nonzero_samples": 0.0,
+                "latency_sum_ms": 0.0,
+                "confidence_sum": 0.0,
+            }
+        return stats
+
+    def _collect_signal_stats(
+        self, signal_stats: Dict[str, Dict[str, float]], response: Dict[str, Any]
+    ) -> None:
+        decision = response.get("decision_result") or {}
+        matched = decision.get("matched_signals") or {}
+        metrics = response.get("metrics") or {}
+
+        for signal in SYSTEM_SIGNAL_KEYS:
+            matched_key = SYSTEM_MATCHED_SIGNAL_KEYS.get(signal, signal)
+            matched_values = matched.get(matched_key) or []
+            if matched_values:
+                signal_stats[signal]["matched_samples"] += 1.0
+
+            metric_entry = metrics.get(signal) or {}
+            if not metric_entry:
+                continue
+
+            latency = metric_entry.get("execution_time_ms")
+            if latency is not None:
+                signal_stats[signal]["metric_available_samples"] += 1.0
+                signal_stats[signal]["latency_sum_ms"] += float(latency)
+
+            confidence = metric_entry.get("confidence")
+            if confidence is not None:
+                signal_stats[signal]["confidence_samples"] += 1.0
+                signal_stats[signal]["confidence_sum"] += float(confidence)
+                if float(confidence) > 0.0:
+                    signal_stats[signal]["confidence_nonzero_samples"] += 1.0
+
+    def _finalize_signal_stats(
+        self, signal_stats: Dict[str, Dict[str, float]], total_samples: int
+    ) -> Dict[str, Dict[str, float]]:
+        total = float(total_samples) if total_samples > 0 else 1.0
+        result: Dict[str, Dict[str, float]] = {}
+        for signal, stats in signal_stats.items():
+            metric_count = stats["metric_available_samples"]
+            confidence_count = stats["confidence_samples"]
+
+            avg_latency = 0.0
+            if metric_count > 0:
+                avg_latency = stats["latency_sum_ms"] / metric_count
+
+            avg_confidence = 0.0
+            if confidence_count > 0:
+                avg_confidence = stats["confidence_sum"] / confidence_count
+
+            result[signal] = {
+                "matched_samples": int(stats["matched_samples"]),
+                "match_rate": stats["matched_samples"] / total,
+                "metric_available_samples": int(metric_count),
+                "metric_coverage_rate": metric_count / total,
+                "avg_latency_ms": avg_latency,
+                "confidence_nonzero_samples": int(stats["confidence_nonzero_samples"]),
+                "confidence_nonzero_rate": stats["confidence_nonzero_samples"] / total,
+                "avg_confidence": avg_confidence,
+            }
+        return result
 
     def _extract_text(self, row: Dict[str, Any], config: Dict[str, Any]) -> str:
         for field in [
