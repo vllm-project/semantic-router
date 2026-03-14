@@ -53,38 +53,39 @@ Jailbreak 检测现在是信号层中的**一等公民信号**。在 `signals.ja
 ### 基础 Jailbreak 防护
 
 ```yaml
-# router-config.yaml
+# config.yaml
 
-# ── Prompt Guard 模型 ─────────────────────────────────────────────────────
-prompt_guard:
-  enabled: true
-  use_modernbert: false
-  model_id: "models/mom-jailbreak-classifier"
-  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-  threshold: 0.7
-  use_cpu: true
+global:
+  prompt_guard:
+    enabled: true
+    use_modernbert: false
+    model_id: "models/mom-jailbreak-classifier"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+    threshold: 0.7
+    use_cpu: true
 
-# ── 信号 ──────────────────────────────────────────────────────────────────
-signals:
-  jailbreak:
-    - name: "jailbreak_detected"
-      threshold: 0.7
-      description: "标准 Jailbreak 检测"
+routing:
+  signals:
+    jailbreak:
+      - name: "jailbreak_detected"
+        threshold: 0.7
+        description: "标准 Jailbreak 检测"
 
-# ── 决策 ──────────────────────────────────────────────────────────────────
-decisions:
-  - name: "block_jailbreak"
-    priority: 1000
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "jailbreak"
-          name: "jailbreak_detected"
-    plugins:
-      - type: "fast_response"
-        configuration:
-          message: "很抱歉，该请求违反了使用政策，无法处理。"
+  decisions:
+    - name: "block_jailbreak"
+      priority: 1000
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "jailbreak"
+            name: "jailbreak_detected"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "很抱歉，该请求违反了使用政策，无法处理。"
 ```
+
+为简洁起见，本指南后续示例主要聚焦 `routing:` 子树。完整 canonical 配置里，运行时检测器配置保留在 `global:` 下，而信号和决策定义保留在 `routing:` 下。
 
 ### 多级灵敏度
 

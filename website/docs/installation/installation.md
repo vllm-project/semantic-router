@@ -145,14 +145,11 @@ vllm-sr stop
 If you prefer to edit YAML directly instead of using the dashboard setup flow:
 
 ```bash
-# Generate a lean advanced sample in the current directory
-vllm-sr init
-
-# Validate it before serving
+# Validate your canonical config before serving
 vllm-sr validate config.yaml
 ```
 
-`vllm-sr init` is optional. It generates an advanced sample and `.vllm-sr/router-defaults.yaml` for YAML-first users. `router-defaults.yaml` contains advanced runtime defaults and is not required for first-run dashboard setup.
+`vllm-sr init` was removed in v0.3. Create `config.yaml` directly with the canonical `version/listeners/providers/routing/global` layout, or migrate an older file with `vllm-sr config migrate --config old-config.yaml`.
 
 ### HuggingFace Settings
 

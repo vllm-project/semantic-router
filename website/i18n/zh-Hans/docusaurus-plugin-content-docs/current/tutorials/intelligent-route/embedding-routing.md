@@ -232,4 +232,4 @@ dimension: 768  # 或使用 512, 256, 128 实现 Matryoshka
 
 ## 参考
 
-完整配置请参见 [embedding.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/embedding.yaml)。
+可复用的 embedding signal 片段请参见 [config/signal/embedding/support.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/signal/embedding/support.yaml)，完整 canonical 入口请参见 [config/config.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)。

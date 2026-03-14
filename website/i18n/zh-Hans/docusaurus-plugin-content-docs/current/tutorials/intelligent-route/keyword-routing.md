@@ -213,5 +213,6 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 
 ## 参考
 
-- [keyword.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword.yaml) — 仅 regex 配置
-- [keyword-nlp.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword-nlp.yaml) — BM25 + N-gram + regex 配置
+- [config/signal/keyword/regex.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/signal/keyword/regex.yaml) — 仅包含 regex 的 signal 片段
+- [config/signal/keyword/nlp.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/signal/keyword/nlp.yaml) — BM25 + N-gram 的 keyword 片段
+- [config/config.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) — 展示这些片段如何落到 canonical `providers/routing/global` 结构中的 starter config

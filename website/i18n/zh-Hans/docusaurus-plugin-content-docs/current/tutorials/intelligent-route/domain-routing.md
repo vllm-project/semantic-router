@@ -422,4 +422,4 @@ decisions:
 
 ## 参考
 
-完整配置请参见 [bert_classification.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/bert_classification.yaml)。
+Domain signal 目录片段请参见 [config/signal/domain/mmlu.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/signal/domain/mmlu.yaml)，对应的单条件 route 片段请参见 [config/decision/single/domain-business.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/decision/single/domain-business.yaml)。

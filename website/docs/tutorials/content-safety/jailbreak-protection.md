@@ -47,38 +47,39 @@ Jailbreak detection is now a **first-class signal** in the signal layer. You def
 ### Basic Jailbreak Protection
 
 ```yaml
-# router-config.yaml
+# config.yaml
 
-# ── Prompt Guard Model ────────────────────────────────────────────────────
-prompt_guard:
-  enabled: true
-  use_modernbert: false
-  model_id: "models/mom-jailbreak-classifier"
-  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-  threshold: 0.7
-  use_cpu: true
+global:
+  prompt_guard:
+    enabled: true
+    use_modernbert: false
+    model_id: "models/mom-jailbreak-classifier"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+    threshold: 0.7
+    use_cpu: true
 
-# ── Signals ───────────────────────────────────────────────────────────────
-signals:
-  jailbreak:
-    - name: "jailbreak_detected"
-      threshold: 0.7
-      description: "Standard jailbreak detection"
+routing:
+  signals:
+    jailbreak:
+      - name: "jailbreak_detected"
+        threshold: 0.7
+        description: "Standard jailbreak detection"
 
-# ── Decisions ─────────────────────────────────────────────────────────────
-decisions:
-  - name: "block_jailbreak"
-    priority: 1000
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "jailbreak"
-          name: "jailbreak_detected"
-    plugins:
-      - type: "fast_response"
-        configuration:
-          message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
+  decisions:
+    - name: "block_jailbreak"
+      priority: 1000
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "jailbreak"
+            name: "jailbreak_detected"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
 ```
+
+For brevity, the remaining snippets in this guide focus on the `routing:` subtree. In a full canonical config, runtime detector settings stay under `global:` and signal/decision authoring stays under `routing:`.
 
 ### Multi-Tier Sensitivity
 

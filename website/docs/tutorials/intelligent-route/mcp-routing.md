@@ -293,4 +293,4 @@ def classify_text(request: ClassifyRequest):
 
 ## Reference
 
-See [config-mcp-classifier.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/out-tree/config-mcp-classifier.yaml) for complete configuration.
+This flow no longer ships as a full standalone example file. Use the canonical `config.yaml` structure on this page: keep MCP classifier settings in `global.classifier.mcp_category_model`, keep route semantics in `routing`, and treat DSL as routing-only.

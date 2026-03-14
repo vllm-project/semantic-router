@@ -116,10 +116,10 @@ response_api:
   store_backend: "redis"
   ttl_seconds: 86400
   redis:
-    config_path: "config/response-api/redis-cluster.yaml"
+    config_path: "examples/runtime/response-api/redis-cluster.yaml"
 ```
 
-Then edit `config/response-api/redis-cluster.yaml` with cluster addresses.
+Then edit `examples/runtime/response-api/redis-cluster.yaml` with cluster addresses.
 
 ### 3. Run Semantic Router
 
@@ -311,5 +311,5 @@ docker network rm redis-cluster-net
 ## Reference
 
 - [Redis Storage (Standalone)](redis-storage.md) - Simple standalone setup
-- Configuration: `config/response-api/redis-cluster.yaml`
+- Configuration: `examples/runtime/response-api/redis-cluster.yaml`
 - Integration tests: `pkg/responsestore/redis_store_integration_test.go`

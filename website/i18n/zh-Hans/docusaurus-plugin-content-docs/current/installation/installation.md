@@ -150,14 +150,11 @@ vllm-sr stop
 如果您更倾向于直接编辑 YAML，而不是使用 dashboard setup flow：
 
 ```bash
-# 在当前目录生成一个精简的高级样板
-vllm-sr init
-
-# 启动前校验它
 vllm-sr validate config.yaml
+vllm-sr serve --config config.yaml
 ```
 
-`vllm-sr init` 是可选的。它会为 YAML-first 用户生成 advanced sample 和 `.vllm-sr/router-defaults.yaml`。`router-defaults.yaml` 保存的是高级 runtime defaults，不是首次进入 dashboard 时必须编辑的文件。
+`vllm-sr init` 已在 v0.3 移除。请直接使用 canonical `config.yaml`，结构固定为 `version/listeners/providers/routing/global`。如果您在本仓库中开发，可直接从 `config/config.yaml` 开始，并按需复用 `config/signal/`、`config/decision/`、`config/algorithm/`、`config/plugin/` 里的片段。
 
 ### HuggingFace 设置
 

@@ -49,38 +49,38 @@ PII 检测现在是信号层中的**一等公民信号**。在 `signals.pii` 下
 ### 基础 PII 检测
 
 ```yaml
-# router-config.yaml
-
-# ── PII 分类器模型 ────────────────────────────────────────────────────────
-classifier:
-  pii_model:
-    model_id: "models/mom-pii-classifier"
-    use_modernbert: false
-    threshold: 0.9
-    use_cpu: true
-  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
-
-# ── 信号 ──────────────────────────────────────────────────────────────────
-signals:
-  pii:
-    - name: "pii_deny_all"
+# config.yaml
+global:
+  classifier:
+    pii_model:
+      model_id: "models/mom-pii-classifier"
+      use_modernbert: false
       threshold: 0.9
-      description: "拦截所有 PII 类型"
+      use_cpu: true
+    pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
 
-# ── 决策 ──────────────────────────────────────────────────────────────────
-decisions:
-  - name: "block_pii"
-    priority: 999
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "pii"
-          name: "pii_deny_all"
-    plugins:
-      - type: "fast_response"
-        configuration:
-          message: "请求被拦截：检测到个人信息，请删除敏感数据后重试。"
+routing:
+  signals:
+    pii:
+      - name: "pii_deny_all"
+        threshold: 0.9
+        description: "拦截所有 PII 类型"
+
+  decisions:
+    - name: "block_pii"
+      priority: 999
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "pii"
+            name: "pii_deny_all"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "请求被拦截：检测到个人信息，请删除敏感数据后重试。"
 ```
+
+为简洁起见，本指南后续示例主要聚焦 `routing:` 子树。完整 canonical 配置里，分类器模型放在 `global:` 下，而信号和决策定义放在 `routing:` 下。
 
 ### 允许列表：允许特定 PII 类型
 

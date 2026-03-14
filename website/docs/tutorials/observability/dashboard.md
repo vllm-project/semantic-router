@@ -39,7 +39,7 @@ Key routes:
 
 - Health and setup: `/healthz`, `/api/settings`, `/api/setup/state`, `/api/setup/import-remote`, `/api/setup/validate`, `/api/setup/activate`
 - Auth and admin: `/api/auth/*`, `/api/admin/users`, `/api/admin/permissions`, `/api/admin/audit-logs`
-- Config lifecycle: `/api/router/config/all`, `/api/router/config/yaml`, `/api/router/config/update`, `/api/router/config/deploy/preview`, `/api/router/config/deploy`, `/api/router/config/rollback`, `/api/router/config/versions`, `/api/router/config/defaults`, `/api/router/config/defaults/update`
+- Config lifecycle: `/api/router/config/all`, `/api/router/config/yaml`, `/api/router/config/update`, `/api/router/config/deploy/preview`, `/api/router/config/deploy`, `/api/router/config/rollback`, `/api/router/config/versions`, `/api/router/config/global`, `/api/router/config/global/update`
 - Tooling and operator APIs: `/api/tools-db`, `/api/tools/web-search`, `/api/tools/open-web`, `/api/tools/fetch-raw`, `/api/status`, `/api/logs`, `/api/topology/test-query`
 - Evaluation and ML workflows: `/api/evaluation/*`, `/api/ml-pipeline/*`
 - Agent integrations: `/api/mcp/*`, `/api/openclaw/*`, `/embedded/grafana/*`, `/embedded/prometheus/*`, `/embedded/jaeger*`, `/metrics/router`

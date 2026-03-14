@@ -46,10 +46,10 @@ graph TB
 
 ### Redis Backend Configuration
 
-Configure in `config/semantic-cache/redis.yaml`:
+Configure in `examples/runtime/semantic-cache/redis.yaml`:
 
 ```yaml
-# config/semantic-cache/redis.yaml
+# examples/runtime/semantic-cache/redis.yaml
 connection:
   address: "localhost:6379"
   password: ""
@@ -100,14 +100,14 @@ docker exec redis-semantic-cache redis-cli PING
 Basic Redis Configuration:
 
 - Set `backend_type: "redis"` in `config/config.yaml`
-- Set `backend_config_path: "config/semantic-cache/redis.yaml"` in `config/config.yaml`
+- Set `backend_config_path: "examples/runtime/semantic-cache/redis.yaml"` in `config/config.yaml`
 
 ```yaml
 # config/config.yaml
 semantic_cache:
   enabled: true
   backend_type: "redis"
-  backend_config_path: "config/semantic-cache/redis.yaml"
+  backend_config_path: "examples/runtime/semantic-cache/redis.yaml"
   similarity_threshold: 0.8
   ttl_seconds: 3600
 ```

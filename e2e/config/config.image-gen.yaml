@@ -1,0 +1,77 @@
+# Image generation demo config for local router development.
+# Keeps the legacy runtime shape because image_gen_backends and modality_detector
+# have not been fully pulled into the canonical public config contract yet.
+
+semantic_cache:
+  enabled: false
+
+tools:
+  enabled: false
+
+prompt_guard:
+  enabled: false
+
+response_api:
+  enabled: true
+  store_backend: "memory"
+  ttl_seconds: 3600
+  max_responses: 100
+
+vllm_endpoints:
+  - name: "vllm-omni"
+    address: "127.0.0.1"
+    port: 8001
+    weight: 1
+    health_check_path: "/health"
+
+model_config:
+  "Qwen/Qwen-Image":
+    preferred_endpoints: ["vllm-omni"]
+    modality: "diffusion"
+    image_gen_backend: "vllm_omni_local"
+
+image_gen_backends:
+  vllm_omni_local:
+    type: "vllm_omni"
+    base_url: "http://localhost:8001"
+    model: "Qwen/Qwen-Image"
+    num_inference_steps: 4
+    cfg_scale: 0.0
+    default_width: 1024
+    default_height: 1024
+    timeout_seconds: 120
+
+modality_detector:
+  enabled: true
+  method: "keyword"
+  prompt_prefixes:
+    - "generate an image of "
+    - "create an image of "
+  keywords:
+    - "generate an image"
+    - "create an image"
+    - "draw a picture"
+
+modality_rules:
+  - name: "image_only"
+    description: "Pure image generation requests"
+
+decisions:
+  - name: "image_only"
+    description: "Route image-generation prompts into the image backend"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "modality"
+          name: "image_only"
+    modelRefs:
+      - model: "Qwen/Qwen-Image"
+        use_reasoning: false
+    plugins:
+      - type: "image_gen"
+        configuration:
+          enabled: true
+          backend: "vllm_omni_local"
+
+default_model: "Qwen/Qwen-Image"

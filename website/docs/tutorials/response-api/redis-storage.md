@@ -44,9 +44,9 @@ response_api:
 
 **Configuration examples:**
 
-- See `config/response-api/redis-simple.yaml` for basic standalone setup
-- See `config/response-api/redis-cluster.yaml` for cluster configuration
-- See `config/response-api/redis-production.yaml` for production with TLS
+- See `examples/runtime/response-api/redis-simple.yaml` for basic standalone setup
+- See `examples/runtime/response-api/redis-cluster.yaml` for cluster configuration
+- See `examples/runtime/response-api/redis-production.yaml` for production with TLS
 
 ### Standalone Redis Configuration
 
@@ -87,19 +87,19 @@ response_api:
 
 ### External Configuration File
 
-For complex configurations, use `config/response-api/redis.yaml`:
+For complex configurations, use one of the external example files under `examples/runtime/response-api/`:
 
 ```yaml
 # config/config.yaml
 response_api:
   redis:
-    config_path: "config/response-api/redis-production.yaml"
+    config_path: "examples/runtime/response-api/redis-production.yaml"
 ```
 
 Example production config:
 
 ```yaml
-# config/response-api/redis-production.yaml
+# examples/runtime/response-api/redis-production.yaml
 address: "redis.production.svc.cluster.local:6379"
 password: "${REDIS_PASSWORD}"
 db: 0
@@ -474,4 +474,4 @@ response_api:
 
 - **Response API Overview**: See `docs/tutorials/intelligent-route/router-memory.md` for general Response API documentation
 - **Redis Cluster Setup**: See `redis-cluster-storage.md` for distributed deployment with Redis Cluster
-- **Configuration Examples**: See `config/response-api/` directory for sample configurations
+- **Configuration Examples**: See `examples/runtime/response-api/` for standalone, cluster, and production Redis samples

@@ -10,7 +10,6 @@ from typing import Any, Dict
 import yaml
 
 from cli.consts import DEFAULT_LISTENER_PORT
-from cli.defaults import get_defaults_yaml
 
 SETUP_MODE_ENV = "VLLM_SR_SETUP_MODE"
 DASHBOARD_SETUP_MODE_ENV = "DASHBOARD_SETUP_MODE"
@@ -44,7 +43,7 @@ def build_bootstrap_config(port: int = DEFAULT_SETUP_LISTENER_PORT) -> Dict[str,
     """Build the minimal config needed for dashboard-first setup."""
 
     return {
-        "version": "v0.1",
+        "version": "v0.3",
         "listeners": [
             {
                 "name": f"http-{port}",
@@ -94,12 +93,6 @@ def ensure_bootstrap_workspace(
     if not output_dir.exists():
         output_dir.mkdir(parents=True, exist_ok=True)
         created_output_dir = True
-
-    defaults_path = output_dir / "router-defaults.yaml"
-    if not defaults_path.exists():
-        with open(defaults_path, "w") as f:
-            f.write(get_defaults_yaml())
-        created_defaults = True
 
     if not path.exists():
         bootstrap_config = build_bootstrap_config()

@@ -1,0 +1,7 @@
+algorithm:
+  type: automix
+  automix:
+    verification_threshold: 0.78
+    max_escalations: 2
+    cost_aware_routing: true
+

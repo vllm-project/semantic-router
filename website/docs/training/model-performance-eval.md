@@ -289,7 +289,7 @@ tools:
   enabled: true
   top_k: 3
   similarity_threshold: 0.2
-  tools_db_path: config/tools_db.json
+  tools_db_path: examples/runtime/tools/tools_db.json
   fallback_to_empty: true
 prompt_guard:
   enabled: true

@@ -413,4 +413,4 @@ decisions:
 
 ## Reference
 
-See [bert_classification.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/bert_classification.yaml) for complete configuration.
+See [config/signal/domain/mmlu.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/signal/domain/mmlu.yaml) for the domain-signal catalog and [config/decision/single/domain-business.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/decision/single/domain-business.yaml) for the matching single-condition route fragment.

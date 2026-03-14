@@ -2,15 +2,11 @@
 
 import os
 import sys
-import yaml
 from pathlib import Path
 
 from cli.parser import parse_user_config, ConfigParseError
-from cli.defaults import load_embedded_defaults, get_defaults_yaml, load_defaults
-from cli.merger import merge_configs
 from cli.validator import (
     validate_user_config,
-    validate_merged_config,
     print_validation_errors,
 )
 from cli.config_generator import generate_envoy_config_from_user_config
@@ -98,28 +94,16 @@ def generate_router_config(
     config_path: str, output_dir: str = DEFAULT_OUTPUT_DIR, force: bool = False
 ) -> Path:
     """
-    Generate router configuration from user config.
+    Resolve the router configuration path from canonical config.
 
     Args:
         config_path: Path to user config.yaml
         output_dir: Output directory
-        force: Force regeneration even if file exists
+        force: Unused compatibility flag
 
     Returns:
-        Path: Path to generated router config
+        Path: Path to canonical router config
     """
-    output_path = ensure_output_directory(output_dir)
-    router_config_path = output_path / "router-config.yaml"
-
-    # Check if router config already exists
-    if router_config_path.exists() and not force:
-        log.info(f"Using existing {router_config_path}")
-        log.info(f"  (Use --regenerate to recreate from {config_path})")
-        return router_config_path
-
-    log.info(f"Generating {router_config_path}...")
-
-    # Parse user config
     try:
         user_config = parse_user_config(config_path)
     except ConfigParseError as e:
@@ -132,40 +116,15 @@ def generate_router_config(
         print_validation_errors(errors)
         sys.exit(1)
 
-    # Load defaults (prefer local router-defaults.yaml if it exists)
-    defaults = load_defaults(output_dir)
-
-    # Log which defaults were used
-    local_defaults_path = Path(output_dir) / "router-defaults.yaml"
-    if local_defaults_path.exists():
-        log.info(f"  Using local defaults: {local_defaults_path}")
-    else:
-        log.info(f"  Using embedded defaults")
-
-    # Merge configs
-    merged = merge_configs(user_config, defaults)
-    apply_platform_gpu_defaults(merged)
-
-    # Validate merged config
-    errors = validate_merged_config(merged)
-    if errors:
-        print_validation_errors(errors)
-        sys.exit(1)
-
-    # Write router config
-    with open(router_config_path, "w") as f:
-        yaml.dump(merged, f, default_flow_style=False, sort_keys=False)
-
-    log.info(f"Generated {router_config_path}")
-
-    return router_config_path
+    log.info(
+        "Router reads canonical config directly; skipping router-config.yaml generation"
+    )
+    return Path(config_path)
 
 
-def copy_defaults_reference(output_dir: str) -> Path:
+def write_global_defaults_reference(output_dir: str) -> Path:
     """
-    Copy embedded defaults to output directory for reference.
-
-    Will NOT overwrite existing router-defaults.yaml to preserve user modifications.
+    Write a read-only global defaults reference for inspection.
 
     Args:
         output_dir: Output directory
@@ -174,18 +133,13 @@ def copy_defaults_reference(output_dir: str) -> Path:
         Path: Path to defaults reference file
     """
     output_path = Path(output_dir)
-    defaults_path = output_path / "router-defaults.yaml"
-
+    defaults_path = output_path / "global-defaults.yaml"
     if defaults_path.exists():
-        log.info(f"Using existing {defaults_path} (preserving user modifications)")
         return defaults_path
-
-    log.info(f"Copying router-defaults.yaml (for reference)...")
-
-    with open(defaults_path, "w") as f:
-        f.write(get_defaults_yaml())
-
-    log.info(f"Copied {defaults_path}")
+    defaults_path.write_text(
+        "# Router-owned global defaults are now built into the Go router.\n"
+        "# Use the dashboard or `vllm-sr config router` to inspect effective config.\n"
+    )
 
     return defaults_path
 
@@ -221,7 +175,7 @@ def serve_command(
         log.error(f"Failed to parse configuration: {e}")
         sys.exit(1)
 
-    # Generate or use existing router config
+    # Resolve or use router config
     if router_config:
         log.info(f"Using custom router config: {router_config}")
         router_config_path = Path(router_config)
@@ -230,8 +184,8 @@ def serve_command(
             config_path, output_dir, force=regenerate
         )
 
-    # Copy defaults for reference
-    copy_defaults_reference(output_dir)
+    # Write defaults note for reference
+    write_global_defaults_reference(output_dir)
 
     # Generate Envoy config
     envoy_config_path = None

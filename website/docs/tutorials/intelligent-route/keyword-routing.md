@@ -206,5 +206,6 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 
 ## Reference
 
-- [keyword.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword.yaml) — regex-only configuration
-- [keyword-nlp.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword-nlp.yaml) — BM25 + N-gram + regex configuration
+- [config/signal/keyword/regex.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/signal/keyword/regex.yaml) — regex-only signal fragment
+- [config/signal/keyword/nlp.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/signal/keyword/nlp.yaml) — BM25 + N-gram keyword fragment
+- [config/config.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) — canonical starter config that shows how these fragments fit into `providers`, `routing`, and `global`

@@ -48,58 +48,59 @@ signals:
 
 ### External LLM Configuration
 
-Configure external LLM for preference matching in `router-defaults.yaml`:
+Configure the external LLM for preference matching in the canonical `config.yaml` `global` block:
 
 ```yaml
-# External models configuration
-# Used for advanced routing signals like preference-based routing via external LLM
-external_models:
-  - llm_provider: "vllm"
-    model_role: "preference"
-    llm_endpoint:
-      address: "127.0.0.1"
-      port: 8000
-    llm_model_name: "openai/gpt-oss-120b"
-    llm_timeout_seconds: 30
-    parser_type: "json"
-    access_key: ""  # Optional: for Authorization header (Bearer token)
+# config.yaml
+global:
+  external_models:
+    - llm_provider: "vllm"
+      model_role: "preference"
+      llm_endpoint:
+        address: "127.0.0.1"
+        port: 8000
+      llm_model_name: "openai/gpt-oss-120b"
+      llm_timeout_seconds: 30
+      parser_type: "json"
+      access_key: ""  # Optional: for Authorization header (Bearer token)
 ```
 
 ### Use in Decision Rules
 
 ```yaml
-decisions:
-  - name: preference_code_generation
-    description: "Route code generation requests based on LLM preference matching"
-    priority: 200
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "preference"
-          name: "code_generation"
-    modelRefs:
-      - model: "openai/gpt-oss-120b"
-        use_reasoning: false
-    plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are an expert code generator. Write clean, efficient, and well-documented code."
+routing:
+  decisions:
+    - name: preference_code_generation
+      description: "Route code generation requests based on LLM preference matching"
+      priority: 200
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "preference"
+            name: "code_generation"
+      modelRefs:
+        - model: "openai/gpt-oss-120b"
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are an expert code generator. Write clean, efficient, and well-documented code."
 
-  - name: preference_bug_fixing
-    description: "Route bug fixing requests based on LLM preference matching"
-    priority: 200
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "preference"
-          name: "bug_fixing"
-    modelRefs:
-      - model: "openai/gpt-oss-120b"
-        use_reasoning: true
-    plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are an expert debugger. Analyze the issue carefully, identify the root cause, and provide a clear fix with explanation."
+    - name: preference_bug_fixing
+      description: "Route bug fixing requests based on LLM preference matching"
+      priority: 200
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "preference"
+            name: "bug_fixing"
+      modelRefs:
+        - model: "openai/gpt-oss-120b"
+          use_reasoning: true
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are an expert debugger. Analyze the issue carefully, identify the root cause, and provide a clear fix with explanation."
 ```
 
 ## How It Works

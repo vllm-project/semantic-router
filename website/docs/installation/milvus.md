@@ -216,7 +216,7 @@ Ensure these settings in your router configuration:
 ```yaml
 semantic_cache:
   backend_type: "milvus"
-  backend_config_path: "config/semantic-cache/milvus.yaml"
+  backend_config_path: "examples/runtime/semantic-cache/milvus.yaml"
 ```
 
 ## Networking and Security

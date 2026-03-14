@@ -24,32 +24,31 @@ Hallucination detection operates in a three-stage pipeline:
 
 ### Global Model Configuration
 
-First, configure the hallucination detection models in `router-defaults.yaml`:
+First, configure the hallucination detection models in the canonical `config.yaml` `global` block:
 
 ```yaml
-# router-defaults.yaml
-# Hallucination mitigation configuration
-# Disabled by default - enable in decisions via hallucination plugin
-hallucination_mitigation:
-  enabled: false
+# config.yaml
+global:
+  hallucination_mitigation:
+    enabled: false
 
-  # Fact-check classifier: determines if a prompt needs fact verification
-  fact_check_model:
-    model_id: "models/mom-halugate-sentinel"
-    threshold: 0.6
-    use_cpu: true
+    # Fact-check classifier: determines if a prompt needs fact verification
+    fact_check_model:
+      model_id: "models/mom-halugate-sentinel"
+      threshold: 0.6
+      use_cpu: true
 
-  # Hallucination detector: verifies if LLM response is grounded in context
-  hallucination_model:
-    model_id: "models/mom-halugate-detector"
-    threshold: 0.8
-    use_cpu: true
+    # Hallucination detector: verifies if LLM response is grounded in context
+    hallucination_model:
+      model_id: "models/mom-halugate-detector"
+      threshold: 0.8
+      use_cpu: true
 
-  # NLI model: provides explanations for hallucinated spans
-  nli_model:
-    model_id: "models/mom-halugate-explainer"
-    threshold: 0.9
-    use_cpu: true
+    # NLI model: provides explanations for hallucinated spans
+    nli_model:
+      model_id: "models/mom-halugate-explainer"
+      threshold: 0.9
+      use_cpu: true
 ```
 
 ### Enable Hallucination Detection in Decisions
@@ -58,31 +57,32 @@ Enable hallucination detection per decision using the `hallucination` plugin:
 
 ```yaml
 # config.yaml
-decisions:
-  - name: "general_decision"
-    description: "General questions with fact-checking"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "general"
-        - type: "fact_check"
-          name: "needs_fact_check"
-    modelRefs:
-      - model: "openai/gpt-oss-120b"
-        use_reasoning: false
-    plugins:
-      - type: "hallucination"
-        configuration:
-          enabled: true
-          use_nli: true  # Enable NLI for detailed explanations
-          # Action when hallucination detected: "header", "body", "block", or "none"
-          hallucination_action: "header"
-          # Action when fact-check needed but no tool context: "header", "body", or "none"
-          unverified_factual_action: "header"
-          # Include detailed info (confidence, spans) in body warning
-          include_hallucination_details: true
+routing:
+  decisions:
+    - name: "general_decision"
+      description: "General questions with fact-checking"
+      priority: 100
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "general"
+          - type: "fact_check"
+            name: "needs_fact_check"
+      modelRefs:
+        - model: "openai/gpt-oss-120b"
+          use_reasoning: false
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: true
+            use_nli: true  # Enable NLI for detailed explanations
+            # Action when hallucination detected: "header", "body", "block", or "none"
+            hallucination_action: "header"
+            # Action when fact-check needed but no tool context: "header", "body", or "none"
+            unverified_factual_action: "header"
+            # Include detailed info (confidence, spans) in body warning
+            include_hallucination_details: true
 ```
 
 ### Plugin Configuration Options

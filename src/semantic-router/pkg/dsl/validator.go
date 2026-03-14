@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // DiagLevel represents the severity level of a diagnostic.
@@ -67,9 +69,9 @@ type Validator struct {
 	diagnostics []Diagnostic
 
 	// Symbol tables (built during validation)
-	signalNames  map[string]map[string]bool // signalType → {name → true}
-	pluginNames  map[string]bool            // template name → true
-	backendNames map[string]map[string]bool // backendType → {name → true}
+	signalNames map[string]map[string]bool // signalType → {name → true}
+	modelNames  map[string]bool            // top-level model catalog entries
+	pluginNames map[string]bool            // template name → true
 }
 
 // SymbolInfo represents a named symbol extracted from the AST.
@@ -81,11 +83,10 @@ type SymbolInfo struct {
 // SymbolTable contains all declared symbols from a DSL source, for use by
 // editor features such as context-aware completion.
 type SymbolTable struct {
-	Signals  []SymbolInfo `json:"signals"`
-	Models   []string     `json:"models"`
-	Plugins  []string     `json:"plugins"`
-	Backends []SymbolInfo `json:"backends"`
-	Routes   []string     `json:"routes"`
+	Signals []SymbolInfo `json:"signals"`
+	Models  []string     `json:"models"`
+	Plugins []string     `json:"plugins"`
+	Routes  []string     `json:"routes"`
 }
 
 // Validate performs 3-level validation on a DSL source string.
@@ -118,10 +119,10 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 	}
 
 	v := &Validator{
-		prog:         prog,
-		signalNames:  make(map[string]map[string]bool),
-		pluginNames:  make(map[string]bool),
-		backendNames: make(map[string]map[string]bool),
+		prog:        prog,
+		signalNames: make(map[string]map[string]bool),
+		modelNames:  make(map[string]bool),
+		pluginNames: make(map[string]bool),
 	}
 
 	// Level 1: Parser errors become Error diagnostics
@@ -151,10 +152,10 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 // ValidateAST performs Level 2 and Level 3 validation on an existing AST.
 func ValidateAST(prog *Program) []Diagnostic {
 	v := &Validator{
-		prog:         prog,
-		signalNames:  make(map[string]map[string]bool),
-		pluginNames:  make(map[string]bool),
-		backendNames: make(map[string]map[string]bool),
+		prog:        prog,
+		signalNames: make(map[string]map[string]bool),
+		modelNames:  make(map[string]bool),
+		pluginNames: make(map[string]bool),
 	}
 	v.buildSymbolTable()
 	v.checkReferences()
@@ -172,15 +173,12 @@ func (v *Validator) buildSymbolTable() {
 		v.signalNames[s.SignalType][s.Name] = true
 	}
 
-	for _, p := range v.prog.Plugins {
-		v.pluginNames[p.Name] = true
+	for _, m := range v.prog.Models {
+		v.modelNames[m.Name] = true
 	}
 
-	for _, b := range v.prog.Backends {
-		if v.backendNames[b.BackendType] == nil {
-			v.backendNames[b.BackendType] = make(map[string]bool)
-		}
-		v.backendNames[b.BackendType][b.Name] = true
+	for _, p := range v.prog.Plugins {
+		v.pluginNames[p.Name] = true
 	}
 }
 
@@ -204,21 +202,12 @@ func (v *Validator) extractSymbolTable() *SymbolTable {
 	// Plugins
 	st.Plugins = keysOfBool(v.pluginNames)
 
-	// Backends
-	for bType, names := range v.backendNames {
-		for name := range names {
-			st.Backends = append(st.Backends, SymbolInfo{Name: name, Type: bType})
-		}
-	}
-	sort.Slice(st.Backends, func(i, j int) bool {
-		if st.Backends[i].Type != st.Backends[j].Type {
-			return st.Backends[i].Type < st.Backends[j].Type
-		}
-		return st.Backends[i].Name < st.Backends[j].Name
-	})
-
-	// Models: collect unique model names from all ROUTE declarations
+	// Models: prefer explicit top-level model catalog, but keep route refs visible
+	// so completions still work when editing legacy DSL without model declarations.
 	modelSet := make(map[string]bool)
+	for name := range v.modelNames {
+		modelSet[name] = true
+	}
 	for _, route := range v.prog.Routes {
 		for _, m := range route.Models {
 			if m.Model != "" {
@@ -265,6 +254,19 @@ func (v *Validator) checkReferences() {
 				fmt.Sprintf("Route %q has no MODEL specified", route.Name),
 				nil,
 			)
+			continue
+		}
+
+		if len(v.modelNames) > 0 {
+			for _, mr := range route.Models {
+				if mr.Model == "" || v.modelNames[mr.Model] {
+					continue
+				}
+				v.addDiag(DiagWarning, mr.Pos,
+					fmt.Sprintf("Model %q is not declared in the top-level model catalog", mr.Model),
+					v.suggestModel(mr.Model),
+				)
+			}
 		}
 	}
 }
@@ -307,14 +309,7 @@ func (v *Validator) isSignalDefined(signalType, name string) bool {
 
 // isInlinePluginType returns true if the name is a recognized inline plugin type.
 func isInlinePluginType(name string) bool {
-	switch name {
-	case "semantic_cache", "memory", "system_prompt",
-		"header_mutation", "hallucination", "router_replay", "rag", "image_gen",
-		"fast_response":
-		return true
-	default:
-		return false
-	}
+	return config.IsSupportedDecisionPluginType(name)
 }
 
 // ---------- Level 3: Constraint Checks ----------
@@ -356,29 +351,13 @@ func (v *Validator) checkConstraints() {
 	for _, r := range v.prog.Routes {
 		v.checkRouteConstraints(r)
 	}
-
-	// Check backends
-	for _, b := range v.prog.Backends {
-		v.checkFieldConstraints(b.Fields, b.Pos, fmt.Sprintf("BACKEND %s %s", b.BackendType, b.Name))
-	}
-
-	// Check global
-	if v.prog.Global != nil {
-		v.checkGlobalConstraints(v.prog.Global)
-	}
 }
 
 func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 	context := fmt.Sprintf("SIGNAL %s %s", s.SignalType, s.Name)
 
 	// Check valid signal types
-	validSignalTypes := map[string]bool{
-		"keyword": true, "embedding": true, "domain": true, "fact_check": true,
-		"user_feedback": true, "preference": true, "language": true,
-		"context": true, "complexity": true, "modality": true, "authz": true,
-		"jailbreak": true, "pii": true,
-	}
-	if !validSignalTypes[s.SignalType] {
+	if !config.IsSupportedSignalType(s.SignalType) {
 		v.addDiag(DiagConstraint, s.Pos,
 			fmt.Sprintf("Unknown signal type %q in %s", s.SignalType, context),
 			nil,
@@ -431,14 +410,9 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 }
 
 func (v *Validator) checkAlgorithmConstraints(algo *AlgoSpec, parentContext string) {
-	validAlgoTypes := map[string]bool{
-		"confidence": true, "ratings": true, "remom": true, "static": true,
-		"elo": true, "router_dc": true, "automix": true, "hybrid": true,
-		"rl_driven": true, "gmtrouter": true, "latency_aware": true,
-		"knn": true, "kmeans": true, "svm": true,
-	}
-	if !validAlgoTypes[algo.AlgoType] {
-		similar := suggestSimilar(algo.AlgoType, keysOf(validAlgoTypes))
+	validAlgoTypes := config.SupportedDecisionAlgorithmTypes()
+	if !config.IsSupportedDecisionAlgorithmType(algo.AlgoType) {
+		similar := suggestSimilar(algo.AlgoType, validAlgoTypes)
 		fix := (*QuickFix)(nil)
 		if similar != "" {
 			fix = &QuickFix{Description: fmt.Sprintf("Change to %q", similar), NewText: similar}
@@ -451,30 +425,6 @@ func (v *Validator) checkAlgorithmConstraints(algo *AlgoSpec, parentContext stri
 
 	if algo.Fields != nil {
 		v.checkFieldConstraints(algo.Fields, algo.Pos, parentContext+" ALGORITHM")
-	}
-}
-
-func (v *Validator) checkGlobalConstraints(g *GlobalDecl) {
-	// Check prompt_guard threshold
-	if obj, ok := g.Fields["prompt_guard"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			v.checkFieldConstraints(ov.Fields, g.Pos, "GLOBAL prompt_guard")
-		}
-	}
-
-	// Check observability nested fields
-	if obj, ok := g.Fields["observability"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			if tracing, ok := ov.Fields["tracing"]; ok {
-				if tv, ok := tracing.(ObjectValue); ok {
-					if sampling, ok := tv.Fields["sampling"]; ok {
-						if sv, ok := sampling.(ObjectValue); ok {
-							v.checkFieldConstraints(sv.Fields, g.Pos, "GLOBAL observability.tracing.sampling")
-						}
-					}
-				}
-			}
-		}
 	}
 }
 
@@ -541,6 +491,18 @@ func (v *Validator) suggestSignal(signalType, name string) *QuickFix {
 
 func (v *Validator) suggestPlugin(name string) *QuickFix {
 	candidates := keysOfBool(v.pluginNames)
+	closest := suggestSimilar(name, candidates)
+	if closest == "" {
+		return nil
+	}
+	return &QuickFix{
+		Description: fmt.Sprintf("Change to %q", closest),
+		NewText:     closest,
+	}
+}
+
+func (v *Validator) suggestModel(name string) *QuickFix {
+	candidates := keysOfBool(v.modelNames)
 	closest := suggestSimilar(name, candidates)
 	if closest == "" {
 		return nil
@@ -630,8 +592,4 @@ func keysOfBool(m map[string]bool) []string {
 	}
 	sort.Strings(result)
 	return result
-}
-
-func keysOf(m map[string]bool) []string {
-	return keysOfBool(m)
 }

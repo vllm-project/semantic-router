@@ -42,38 +42,38 @@ PII detection is now a **first-class signal** in the signal layer. You define na
 ### Basic PII Detection
 
 ```yaml
-# router-config.yaml
-
-# ── PII Classifier Model ──────────────────────────────────────────────────
-classifier:
-  pii_model:
-    model_id: "models/mom-pii-classifier"
-    use_modernbert: false
-    threshold: 0.9
-    use_cpu: true
-  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
-
-# ── Signals ───────────────────────────────────────────────────────────────
-signals:
-  pii:
-    - name: "pii_deny_all"
+# config.yaml
+global:
+  classifier:
+    pii_model:
+      model_id: "models/mom-pii-classifier"
+      use_modernbert: false
       threshold: 0.9
-      description: "Block all PII types"
+      use_cpu: true
+    pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
 
-# ── Decisions ─────────────────────────────────────────────────────────────
-decisions:
-  - name: "block_pii"
-    priority: 999
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "pii"
-          name: "pii_deny_all"
-    plugins:
-      - type: "fast_response"
-        configuration:
-          message: "Request blocked: personal information detected. Please remove sensitive data and try again."
+routing:
+  signals:
+    pii:
+      - name: "pii_deny_all"
+        threshold: 0.9
+        description: "Block all PII types"
+
+  decisions:
+    - name: "block_pii"
+      priority: 999
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "pii"
+            name: "pii_deny_all"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "Request blocked: personal information detected. Please remove sensitive data and try again."
 ```
+
+For brevity, the remaining snippets in this guide focus on the `routing:` subtree. In a full canonical config, the classifier model stays under `global:` and signal/decision authoring stays under `routing:`.
 
 ### Allow-List: Permit Specific PII Types
 

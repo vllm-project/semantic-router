@@ -137,28 +137,24 @@ All MoM models are:
 
 ### Using MoM Models in Router
 
-MoM models are pre-configured in `router-defaults.yaml`:
+MoM models are configured in the canonical `config.yaml` `global` block:
 
 ```yaml
-# Domain classification
-classifier:
-  category_model:
-    model_id: "models/mom-domain-classifier"
-    threshold: 0.6
-    use_cpu: true
+global:
+  classifier:
+    category_model:
+      model_id: "models/mom-domain-classifier"
+      threshold: 0.6
+      use_cpu: true
+    pii_model:
+      model_id: "models/mom-pii-classifier"
+      threshold: 0.9
+      use_cpu: true
 
-# PII detection
-classifier:
-  pii_model:
-    model_id: "models/mom-pii-classifier"
-    threshold: 0.9
+  prompt_guard:
+    model_id: "models/mom-jailbreak-classifier"
+    threshold: 0.7
     use_cpu: true
-
-# Jailbreak protection
-prompt_guard:
-  model_id: "models/mom-jailbreak-classifier"
-  threshold: 0.7
-  use_cpu: true
 ```
 
 ### Custom Model Registry

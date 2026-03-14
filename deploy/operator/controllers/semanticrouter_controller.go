@@ -608,18 +608,8 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 }
 
 func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) (string, error) {
-	config := map[string]interface{}{
-		// Add required fields for router config
-		"version": "v0.1",
-		"listeners": []map[string]interface{}{
-			{
-				"name":    "grpc-50051",
-				"address": "0.0.0.0",
-				"port":    50051,
-				"timeout": "300s",
-			},
-		},
-		// Add default signals/domains section for category classification
+	routing := map[string]interface{}{
+		"modelCards": []map[string]interface{}{},
 		"signals": map[string]interface{}{
 			"domains": []map[string]interface{}{
 				{
@@ -630,6 +620,24 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 			},
 		},
 	}
+	providers := map[string]interface{}{
+		"models": []map[string]interface{}{},
+	}
+	global := map[string]interface{}{}
+	config := map[string]interface{}{
+		"version": "v0.3",
+		"listeners": []map[string]interface{}{
+			{
+				"name":    "grpc-50051",
+				"address": "0.0.0.0",
+				"port":    50051,
+				"timeout": "300s",
+			},
+		},
+		"providers": providers,
+		"routing":   routing,
+		"global":    global,
+	}
 
 	// Generate vLLM endpoints and model configs if specified
 	if len(sr.Spec.VLLMEndpoints) > 0 {
@@ -638,114 +646,106 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 			return "", fmt.Errorf("failed to generate vLLM endpoints config: %w", err)
 		}
 
-		// Add vllm_endpoints section
 		if endpointsConfig != nil {
-			if vllmEndpoints, ok := endpointsConfig["vllm_endpoints"]; ok {
-				config["vllm_endpoints"] = vllmEndpoints
-			}
-		}
-
-		// Add model_config section
-		if len(modelConfigs) > 0 {
-			config["model_config"] = modelConfigs
-		}
-
-		// Add providers section with models and default_model if vLLM endpoints exist
-		if len(modelConfigs) > 0 {
-			var defaultModel string
-			models := []map[string]interface{}{}
-
-			// Build models array from vllm_endpoints
-			if vllmEndpoints, ok := config["vllm_endpoints"].([]interface{}); ok {
+			if vllmEndpoints, ok := endpointsConfig["vllm_endpoints"].([]interface{}); ok {
+				backendByName := map[string]map[string]interface{}{}
 				for _, ep := range vllmEndpoints {
-					if epMap, ok := ep.(map[string]interface{}); ok {
-						endpointName := epMap["name"].(string)
-						models = append(models, map[string]interface{}{
-							"name": endpointName,
-							"endpoints": []map[string]interface{}{
-								{
-									"name":     endpointName,
-									"weight":   1,
-									"endpoint": "localhost:8000", // Placeholder - will be overridden by vllm_endpoints
-									"protocol": "http",
-								},
-							},
-						})
-						if defaultModel == "" {
-							defaultModel = endpointName
+					epMap, ok := ep.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					name, _ := epMap["name"].(string)
+					address, _ := epMap["address"].(string)
+					port, _ := epMap["port"].(int)
+					weight, _ := epMap["weight"].(int)
+					protocol, _ := epMap["protocol"].(string)
+					if port > 0 {
+						backendByName[name] = map[string]interface{}{
+							"name":     name,
+							"endpoint": fmt.Sprintf("%s:%d", address, port),
+							"protocol": protocol,
+							"weight":   weight,
 						}
 					}
 				}
-			}
 
-			// If no vllm_endpoints, use model_config
-			if len(models) == 0 {
-				for modelName := range modelConfigs {
-					models = append(models, map[string]interface{}{
-						"name": modelName,
-						"endpoints": []map[string]interface{}{
-							{
-								"name":     modelName,
-								"weight":   1,
-								"endpoint": "localhost:8000",
-								"protocol": "http",
-							},
-						},
-					})
-					if defaultModel == "" {
-						defaultModel = modelName
+				if len(modelConfigs) > 0 {
+					modelCards := routing["modelCards"].([]map[string]interface{})
+					providerModels := providers["models"].([]map[string]interface{})
+					var defaultModel string
+					for modelName, rawConfig := range modelConfigs {
+						modelEntry := map[string]interface{}{"name": modelName}
+						if rawConfig.ReasoningFamily != "" {
+							modelEntry["reasoning_family_ref"] = rawConfig.ReasoningFamily
+						}
+						modelCards = append(modelCards, modelEntry)
+
+						providerModel := map[string]interface{}{
+							"name":         modelName,
+							"backend_refs": []map[string]interface{}{},
+						}
+						backendRefs := providerModel["backend_refs"].([]map[string]interface{})
+						for _, endpointName := range rawConfig.PreferredEndpoints {
+							if backend, ok := backendByName[endpointName]; ok {
+								backendRefs = append(backendRefs, backend)
+							}
+						}
+						providerModel["backend_refs"] = backendRefs
+						providerModels = append(providerModels, providerModel)
+
+						if defaultModel == "" {
+							defaultModel = modelName
+						}
 					}
+					routing["modelCards"] = modelCards
+					providers["models"] = providerModels
+					providers["default_model"] = defaultModel
 				}
-			}
-
-			config["providers"] = map[string]interface{}{
-				"default_model": defaultModel,
-				"models":        models,
 			}
 		}
 	}
 
 	if sr.Spec.Config.BertModel != nil {
-		config["bert_model"] = r.convertToConfigMap(sr.Spec.Config.BertModel)
+		global["bert_model"] = r.convertToConfigMap(sr.Spec.Config.BertModel)
 	}
 	if sr.Spec.Config.SemanticCache != nil {
-		config["semantic_cache"] = r.convertToConfigMap(sr.Spec.Config.SemanticCache)
+		global["semantic_cache"] = r.convertToConfigMap(sr.Spec.Config.SemanticCache)
 	}
 	if sr.Spec.Config.Tools != nil {
-		config["tools"] = r.convertToConfigMap(sr.Spec.Config.Tools)
+		global["tools"] = r.convertToConfigMap(sr.Spec.Config.Tools)
 	}
 	if sr.Spec.Config.PromptGuard != nil {
-		config["prompt_guard"] = r.convertToConfigMap(sr.Spec.Config.PromptGuard)
+		global["prompt_guard"] = r.convertToConfigMap(sr.Spec.Config.PromptGuard)
 	}
 	if sr.Spec.Config.Classifier != nil {
-		config["classifier"] = r.convertToConfigMap(sr.Spec.Config.Classifier)
+		global["classifier"] = r.convertToConfigMap(sr.Spec.Config.Classifier)
 	}
 	if sr.Spec.Config.ReasoningFamilies != nil {
-		config["reasoning_families"] = r.convertToConfigMap(sr.Spec.Config.ReasoningFamilies)
+		providers["reasoning_families"] = r.convertToConfigMap(sr.Spec.Config.ReasoningFamilies)
 	}
 	if sr.Spec.Config.DefaultReasoningEffort != "" {
-		config["default_reasoning_effort"] = sr.Spec.Config.DefaultReasoningEffort
+		providers["default_reasoning_effort"] = sr.Spec.Config.DefaultReasoningEffort
 	}
 	if sr.Spec.Config.API != nil {
-		config["api"] = r.convertToConfigMap(sr.Spec.Config.API)
+		global["api"] = r.convertToConfigMap(sr.Spec.Config.API)
 	}
 	if sr.Spec.Config.Observability != nil {
-		config["observability"] = r.convertToConfigMap(sr.Spec.Config.Observability)
+		global["observability"] = r.convertToConfigMap(sr.Spec.Config.Observability)
 	}
 	if sr.Spec.Config.EmbeddingModels != nil {
-		config["embedding_models"] = r.convertToConfigMap(sr.Spec.Config.EmbeddingModels)
+		global["embedding_models"] = r.convertToConfigMap(sr.Spec.Config.EmbeddingModels)
 	}
-	// Add complexity_rules under signals section
+	// Add complexity rules under routing.signals
 	if len(sr.Spec.Config.ComplexityRules) > 0 {
-		if signals, ok := config["signals"].(map[string]interface{}); ok {
+		if signals, ok := routing["signals"].(map[string]interface{}); ok {
 			signals["complexity"] = r.convertToConfigMap(sr.Spec.Config.ComplexityRules)
 		}
 	}
 	if sr.Spec.Config.Strategy != "" {
-		config["strategy"] = sr.Spec.Config.Strategy
+		global["strategy"] = sr.Spec.Config.Strategy
 	}
 	if len(sr.Spec.Config.Decisions) > 0 {
-		config["decisions"] = r.convertToConfigMap(sr.Spec.Config.Decisions)
+		routing["decisions"] = r.convertToConfigMap(sr.Spec.Config.Decisions)
 	}
 
 	data, err := yaml.Marshal(config)

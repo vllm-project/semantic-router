@@ -230,6 +230,6 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ## 下一步
 
-- 查看 [完整的 LoRA 路由示例](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/lora_routing.yaml)
+- 查看 [config/decision/single/domain-technical-lora.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/decision/single/domain-technical-lora.yaml) 中的 LoRA route 片段
 - 了解 [决策配置](../../installation/configuration.md#决策规则---信号融合)
 - 阅读 [模块化 LoRA 博客文章](https://blog.vllm.ai/2025/10/27/semantic-router-modular.html) 了解架构详情

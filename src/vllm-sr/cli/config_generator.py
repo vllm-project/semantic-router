@@ -5,6 +5,7 @@ import yaml
 import ipaddress
 from pathlib import Path
 from typing import Dict, Any, Optional
+from urllib.parse import urlparse
 from jinja2 import Environment, FileSystemLoader
 from cli.utils import getLogger
 from cli.models import UserConfig
@@ -103,29 +104,43 @@ def generate_envoy_config_from_user_config(
         has_https = False
         uses_dns = False
 
-        for endpoint in model.endpoints:
+        backend_refs = model.backend_refs
+        for index, backend in enumerate(backend_refs):
             # Parse endpoint: can be "host", "host:port", or "host/path" or "host:port/path"
-            endpoint_str = endpoint.endpoint
+            endpoint_str = backend.endpoint or backend.base_url or ""
+            if not endpoint_str:
+                continue
             path = ""
 
-            # Extract path if present (e.g., "host/path" or "host:port/path")
-            if "/" in endpoint_str:
-                # Split by first "/" to separate host[:port] from path
-                parts = endpoint_str.split("/", 1)
-                endpoint_str = parts[0]  # host or host:port
-                path = "/" + parts[1]  # /path
-
-            # Parse host and port
-            if ":" in endpoint_str:
-                host, port = endpoint_str.split(":", 1)
-                port = int(port)
+            if "://" in endpoint_str:
+                parsed = urlparse(endpoint_str)
+                host = parsed.netloc
+                path = parsed.path.rstrip("/")
+                protocol = parsed.scheme or backend.protocol
+                port = parsed.port or (443 if protocol == "https" else 80)
+                if parsed.port is None and ":" in host:
+                    host = parsed.hostname or host
             else:
-                host = endpoint_str
-                # Default port based on protocol
-                port = 443 if endpoint.protocol == "https" else 80
+                protocol = backend.protocol
+
+                # Extract path if present (e.g., "host/path" or "host:port/path")
+                if "/" in endpoint_str:
+                    # Split by first "/" to separate host[:port] from path
+                    parts = endpoint_str.split("/", 1)
+                    endpoint_str = parts[0]  # host or host:port
+                    path = "/" + parts[1]  # /path
+
+                # Parse host and port
+                if ":" in endpoint_str:
+                    host, port = endpoint_str.split(":", 1)
+                    port = int(port)
+                else:
+                    host = endpoint_str
+                    # Default port based on protocol
+                    port = 443 if protocol == "https" else 80
 
             # Check if this is HTTPS (for transport_socket)
-            is_https = endpoint.protocol == "https"
+            is_https = protocol == "https"
             if is_https:
                 has_https = True
 
@@ -137,18 +152,21 @@ def generate_envoy_config_from_user_config(
 
             endpoints.append(
                 {
-                    "name": endpoint.name,
+                    "name": backend.name or f"backend-{index + 1}",
                     "address": host,
                     "port": int(port),
                     "path": path,
-                    "weight": endpoint.weight,
-                    "protocol": endpoint.protocol,
+                    "weight": backend.weight,
+                    "protocol": protocol,
                     "is_https": is_https,
                     "is_domain": is_domain,
                 }
             )
 
         # Sanitize model name for cluster name (replace / with _)
+        if not endpoints:
+            continue
+
         cluster_name = model.name.replace("/", "_").replace("-", "_")
 
         # Determine cluster type based on whether endpoints use domain names

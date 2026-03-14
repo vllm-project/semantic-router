@@ -1,8 +1,11 @@
 /**
  * Configuration types for vLLM Semantic Router Dashboard
- * 
- * This file defines TypeScript interfaces for the Python CLI config format.
- * The format uses: providers, signals, decisions (not vllm_endpoints, model_config)
+ *
+ * Public config uses the canonical v0.3 layout:
+ *   version / listeners / providers / routing / global
+ *
+ * Some interfaces below are dashboard view-model adapters that flatten
+ * routing-owned data for editing and legacy read-only fallback handling.
  */
 
 // =============================================================================

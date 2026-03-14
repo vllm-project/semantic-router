@@ -10,11 +10,10 @@ import "encoding/json"
 
 // ProgramJSON is the JSON-serializable form of Program.
 type ProgramJSON struct {
-	Signals  []*SignalDeclJSON  `json:"signals"`
-	Routes   []*RouteDeclJSON   `json:"routes"`
-	Plugins  []*PluginDeclJSON  `json:"plugins"`
-	Backends []*BackendDeclJSON `json:"backends"`
-	Global   *GlobalDeclJSON    `json:"global,omitempty"`
+	Signals []*SignalDeclJSON `json:"signals"`
+	Routes  []*RouteDeclJSON  `json:"routes"`
+	Models  []*ModelDeclJSON  `json:"models"`
+	Plugins []*PluginDeclJSON `json:"plugins"`
 }
 
 // SignalDeclJSON is the JSON form of SignalDecl.
@@ -35,6 +34,13 @@ type RouteDeclJSON struct {
 	Algorithm   *AlgoSpecJSON    `json:"algorithm,omitempty"`
 	Plugins     []*PluginRefJSON `json:"plugins"`
 	Pos         Position         `json:"pos"`
+}
+
+// ModelDeclJSON is the JSON form of ModelDecl.
+type ModelDeclJSON struct {
+	Name   string                 `json:"name"`
+	Fields map[string]interface{} `json:"fields"`
+	Pos    Position               `json:"pos"`
 }
 
 // ModelRefJSON is the JSON form of ModelRef.
@@ -71,20 +77,6 @@ type PluginRefJSON struct {
 	Pos    Position               `json:"pos"`
 }
 
-// BackendDeclJSON is the JSON form of BackendDecl.
-type BackendDeclJSON struct {
-	BackendType string                 `json:"backendType"`
-	Name        string                 `json:"name"`
-	Fields      map[string]interface{} `json:"fields"`
-	Pos         Position               `json:"pos"`
-}
-
-// GlobalDeclJSON is the JSON form of GlobalDecl.
-type GlobalDeclJSON struct {
-	Fields map[string]interface{} `json:"fields"`
-	Pos    Position               `json:"pos"`
-}
-
 // ProgramToJSON converts a resolved AST Program to its JSON-serializable form.
 func ProgramToJSON(prog *Program) *ProgramJSON {
 	if prog == nil {
@@ -92,10 +84,10 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 	}
 
 	result := &ProgramJSON{
-		Signals:  make([]*SignalDeclJSON, 0, len(prog.Signals)),
-		Routes:   make([]*RouteDeclJSON, 0, len(prog.Routes)),
-		Plugins:  make([]*PluginDeclJSON, 0, len(prog.Plugins)),
-		Backends: make([]*BackendDeclJSON, 0, len(prog.Backends)),
+		Signals: make([]*SignalDeclJSON, 0, len(prog.Signals)),
+		Routes:  make([]*RouteDeclJSON, 0, len(prog.Routes)),
+		Models:  make([]*ModelDeclJSON, 0, len(prog.Models)),
+		Plugins: make([]*PluginDeclJSON, 0, len(prog.Plugins)),
 	}
 
 	for _, s := range prog.Signals {
@@ -149,6 +141,14 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 		result.Routes = append(result.Routes, rj)
 	}
 
+	for _, m := range prog.Models {
+		result.Models = append(result.Models, &ModelDeclJSON{
+			Name:   m.Name,
+			Fields: marshalFields(m.Fields),
+			Pos:    m.Pos,
+		})
+	}
+
 	for _, p := range prog.Plugins {
 		result.Plugins = append(result.Plugins, &PluginDeclJSON{
 			Name:       p.Name,
@@ -156,22 +156,6 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 			Fields:     marshalFields(p.Fields),
 			Pos:        p.Pos,
 		})
-	}
-
-	for _, b := range prog.Backends {
-		result.Backends = append(result.Backends, &BackendDeclJSON{
-			BackendType: b.BackendType,
-			Name:        b.Name,
-			Fields:      marshalFields(b.Fields),
-			Pos:         b.Pos,
-		})
-	}
-
-	if prog.Global != nil {
-		result.Global = &GlobalDeclJSON{
-			Fields: marshalFields(prog.Global.Fields),
-			Pos:    prog.Global.Pos,
-		}
 	}
 
 	return result

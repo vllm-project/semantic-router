@@ -250,9 +250,11 @@ type ModelParams struct {
 	LoRAs              []LoRAAdapter     `yaml:"loras,omitempty"`
 	AccessKey          string            `yaml:"access_key,omitempty"`
 	ParamSize          string            `yaml:"param_size,omitempty"`
+	ContextWindowSize  int               `yaml:"context_window_size,omitempty"`
 	APIFormat          string            `yaml:"api_format,omitempty"`
 	Description        string            `yaml:"description,omitempty"`
 	Capabilities       []string          `yaml:"capabilities,omitempty"`
+	Tags               []string          `yaml:"tags,omitempty"`
 	QualityScore       float64           `yaml:"quality_score,omitempty"`
 	ExternalModelIDs   map[string]string `yaml:"external_model_ids,omitempty"`
 	Modality           string            `yaml:"modality,omitempty"`

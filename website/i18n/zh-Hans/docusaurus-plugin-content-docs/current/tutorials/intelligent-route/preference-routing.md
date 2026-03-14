@@ -55,21 +55,23 @@ signals:
 
 ### 外部 LLM 配置
 
-在 `router-defaults.yaml` 中配置用于偏好匹配的外部 LLM：
+在 canonical `config.yaml` 的 `global:` 块中配置用于偏好匹配的外部 LLM：
 
 ```yaml
+# config.yaml
+global:
 # 外部模型配置
 # 用于高级路由信号，如通过外部 LLM 进行的基于偏好的路由
-external_models:
-  - llm_provider: "vllm"
-    model_role: "preference"
-    llm_endpoint:
-      address: "127.0.0.1"
-      port: 8000
-    llm_model_name: "openai/gpt-oss-120b"
-    llm_timeout_seconds: 30
-    parser_type: "json"
-    access_key: ""  # 可选：用于 Authorization Header (Bearer token)
+  external_models:
+    - llm_provider: "vllm"
+      model_role: "preference"
+      llm_endpoint:
+        address: "127.0.0.1"
+        port: 8000
+      llm_model_name: "openai/gpt-oss-120b"
+      llm_timeout_seconds: 30
+      parser_type: "json"
+      access_key: ""  # 可选：用于 Authorization Header (Bearer token)
 ```
 
 ### 在决策规则中使用

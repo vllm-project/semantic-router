@@ -300,4 +300,4 @@ def classify_text(request: ClassifyRequest):
 
 ## 参考
 
-完整配置请参见 [config-mcp-classifier.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/out-tree/config-mcp-classifier.yaml)。
+这个场景不再提供单独的完整示例文件。请按本页的 canonical 结构配置：把 MCP classifier 放在 `global.classifier.mcp_category_model`，把 route 语义放在 `routing`，DSL 只负责 routing 片段。

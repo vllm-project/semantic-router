@@ -564,7 +564,7 @@ test.describe("Dashboard auth flow", () => {
       });
     });
 
-    await page.route("**/api/router/config/defaults", async (route) => {
+    await page.route("**/api/router/config/global", async (route) => {
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },
