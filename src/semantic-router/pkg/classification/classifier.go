@@ -1265,7 +1265,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	}
 
 	results := &SignalResults{
-		Metrics: &SignalMetricsCollection{}, // Always initialize, no overhead
+		Metrics:           &SignalMetricsCollection{},
+		SignalConfidences: make(map[string]float64),
 	}
 
 	var wg sync.WaitGroup
@@ -1343,11 +1344,6 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 					// Append rule name to the matched list
 					results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, mr.RuleName)
 
-					// Store real similarity score for this rule
-					// The Decision Engine will use this instead of hardcoded 1.0
-					if results.SignalConfidences == nil {
-						results.SignalConfidences = make(map[string]float64)
-					}
 					results.SignalConfidences["embedding:"+mr.RuleName] = mr.Score
 
 					logging.Infof("[Signal Computation] Embedding match: rule=%q, score=%.4f, method=%s",
@@ -1360,48 +1356,57 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		logging.Infof("[Signal Computation] Embedding signal not used in any decision, skipping evaluation")
 	}
 
-	// Evaluate domain rules (category classification) in parallel (only if used in decisions)
+	// Evaluate domain rules: uses entropy analysis for multi-category matching when available, top-1 fallback otherwise (BERT-base, mmBERT-32K).
 	if isSignalTypeUsed(usedSignals, config.SignalTypeDomain) && c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			result, err := c.categoryInference.Classify(textForSignal(config.SignalTypeDomain))
+			domainResult, err := c.categoryInference.ClassifyWithProbabilities(textForSignal(config.SignalTypeDomain))
+			if err != nil {
+				// Fall back to Classify() (top-1 only) when ClassifyWithProbabilities is unavailable.
+				logging.Infof("[Signal Computation] ClassifyWithProbabilities unavailable, falling back to Classify: %v", err)
+				basicResult, basicErr := c.categoryInference.Classify(textForSignal(config.SignalTypeDomain))
+				if basicErr != nil {
+					err = basicErr
+				} else {
+					domainResult = candle_binding.ClassResultWithProbs{
+						Class:      basicResult.Class,
+						Confidence: basicResult.Confidence,
+					}
+					err = nil
+				}
+			}
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
-			var categoryName string
+			categoryName := ""
 			if err == nil {
-				// Map class index to category name
-				if name, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class); ok {
-					categoryName = name
+				if name, ok := c.CategoryMapping.GetCategoryFromIndex(domainResult.Class); ok {
+					categoryName = c.translateMMLUToGeneric(name)
 				}
 			}
 
-			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeDomain, categoryName, latencySeconds)
 
-			// Record metrics (use microseconds for better precision)
+			// Record metrics
 			results.Metrics.Domain.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			if categoryName != "" && err == nil {
-				results.Metrics.Domain.Confidence = float64(result.Confidence)
+				results.Metrics.Domain.Confidence = float64(domainResult.Confidence)
 			}
-
 			logging.Infof("[Signal Computation] Domain signal evaluation completed in %v", elapsed)
+
 			if err != nil {
 				logging.Errorf("domain rule evaluation failed: %v", err)
-			} else if result.Confidence >= c.Config.CategoryModel.Threshold {
-				// Only add domain if confidence meets threshold
-				// Without this check, low-confidence misclassifications can still match decisions,
-				// causing incorrect routing for typo-laden text
-				if categoryName != "" {
-					// Record signal match
-					metrics.RecordSignalMatch(config.SignalTypeDomain, categoryName)
-
-					mu.Lock()
-					results.MatchedDomainRules = append(results.MatchedDomainRules, categoryName)
-					mu.Unlock()
+			} else {
+				matched := c.matchDomainCategories(domainResult, categoryName)
+				mu.Lock()
+				for _, cat := range matched {
+					metrics.RecordSignalMatch(config.SignalTypeDomain, cat.Category)
+					results.MatchedDomainRules = append(results.MatchedDomainRules, cat.Category)
+					results.SignalConfidences["domain:"+cat.Category] = float64(cat.Probability)
 				}
+				mu.Unlock()
 			}
 		}()
 	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeDomain) {
@@ -1797,9 +1802,6 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 								results.JailbreakType = "contrastive"
 								results.JailbreakConfidence = confidence
 							}
-							if results.SignalConfidences == nil {
-								results.SignalConfidences = make(map[string]float64)
-							}
 							results.SignalConfidences["jailbreak:"+rule.Name] = float64(confidence)
 							mu.Unlock()
 
@@ -1848,9 +1850,6 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 								results.JailbreakDetected = true
 								results.JailbreakType = bestType
 								results.JailbreakConfidence = bestConf
-							}
-							if results.SignalConfidences == nil {
-								results.SignalConfidences = make(map[string]float64)
 							}
 							results.SignalConfidences["jailbreak:"+rule.Name] = float64(bestConf)
 							mu.Unlock()
@@ -2681,50 +2680,6 @@ func (c *Classifier) GetCategoryDescription(category string) (string, bool) {
 }
 
 // buildCategoryNameMappings builds translation maps between MMLU-Pro and generic categories
-func (c *Classifier) buildCategoryNameMappings() {
-	c.MMLUToGeneric = make(map[string]string)
-	c.GenericToMMLU = make(map[string][]string)
-
-	// Build set of known MMLU-Pro categories from the model mapping (if available)
-	knownMMLU := make(map[string]bool)
-	if c.CategoryMapping != nil {
-		for _, label := range c.CategoryMapping.IdxToCategory {
-			knownMMLU[strings.ToLower(label)] = true
-		}
-	}
-
-	for _, cat := range c.Config.Categories {
-		if len(cat.MMLUCategories) > 0 {
-			for _, mmlu := range cat.MMLUCategories {
-				key := strings.ToLower(mmlu)
-				c.MMLUToGeneric[key] = cat.Name
-				c.GenericToMMLU[cat.Name] = append(c.GenericToMMLU[cat.Name], mmlu)
-			}
-		} else {
-			// Fallback: identity mapping when the generic name matches an MMLU category
-			nameLower := strings.ToLower(cat.Name)
-			if knownMMLU[nameLower] {
-				c.MMLUToGeneric[nameLower] = cat.Name
-				c.GenericToMMLU[cat.Name] = append(c.GenericToMMLU[cat.Name], cat.Name)
-			}
-		}
-	}
-}
-
-// translateMMLUToGeneric translates an MMLU-Pro category to a generic category if mapping exists
-func (c *Classifier) translateMMLUToGeneric(mmluCategory string) string {
-	if mmluCategory == "" {
-		return ""
-	}
-	if c.MMLUToGeneric == nil {
-		return mmluCategory
-	}
-	if generic, ok := c.MMLUToGeneric[strings.ToLower(mmluCategory)]; ok {
-		return generic
-	}
-	return mmluCategory
-}
-
 // selectBestModelInternalForDecision performs the core model selection logic for decisions
 //
 // modelFilter is optional - if provided, only models passing the filter will be considered

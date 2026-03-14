@@ -188,7 +188,7 @@ categories:
     mmlu_categories: ["physics"]
   - name: computer_science
     description: "Computer science and programming"
-    mmlu_categories: ["computer_science"]
+    mmlu_categories: ["computer science"]
   - name: philosophy
     description: "Philosophy and ethical questions"
     mmlu_categories: ["philosophy"]

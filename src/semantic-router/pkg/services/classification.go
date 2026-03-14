@@ -202,14 +202,14 @@ type EvalDecisionResult struct {
 	UnmatchedSignals *MatchedSignals `json:"unmatched_signals"` // Signals that didn't match
 }
 
-// EvalResponse represents the response from eval classification
-// This is specifically designed for evaluation scenarios with comprehensive signal information
+// EvalResponse represents the eval classification response with comprehensive signal information.
 type EvalResponse struct {
 	OriginalText      string                                  `json:"original_text"` // The original query text
 	DecisionResult    *EvalDecisionResult                     `json:"decision_result,omitempty"`
 	RecommendedModels []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs
 	RoutingDecision   string                                  `json:"routing_decision,omitempty"`
-	Metrics           *classification.SignalMetricsCollection `json:"metrics"` // Performance and confidence for each signal
+	Metrics           *classification.SignalMetricsCollection `json:"metrics"`                      // Performance and confidence for each signal
+	SignalConfidences map[string]float64                      `json:"signal_confidences,omitempty"` // Real ML confidence scores per signal, e.g. "domain:economics" → 0.81
 }
 
 // IntentResponse represents the response from intent classification
@@ -947,7 +947,6 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 		}
 	}
 
-	// Build eval response
 	response := s.buildEvalResponse(req.Text, signals, decisionResult)
 
 	return response, nil
@@ -960,8 +959,9 @@ func (s *ClassificationService) buildEvalResponse(
 	decisionResult *decision.DecisionResult,
 ) *EvalResponse {
 	response := &EvalResponse{
-		OriginalText: text,
-		Metrics:      signals.Metrics,
+		OriginalText:      text,
+		Metrics:           signals.Metrics,
+		SignalConfidences: signals.SignalConfidences,
 	}
 
 	// Build matched signals
