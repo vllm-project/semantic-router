@@ -27,6 +27,15 @@ MAKEFILES = [
     *sorted((REPO_ROOT / "tools" / "make").glob("*.mk")),
 ]
 GO_AGENT_CONFIG = REPO_ROOT / "tools" / "linter" / "go" / ".golangci.agent.yml"
+GO_MODULE_CONFIG_OVERRIDES = {
+    REPO_ROOT
+    / "dashboard"
+    / "backend": REPO_ROOT
+    / "tools"
+    / "linter"
+    / "go"
+    / ".golangci.yml",
+}
 RUFF_CONFIG = REPO_ROOT / "tools" / "linter" / "python" / ".ruff.toml"
 ABSOLUTE_MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]+\]\((/[^)]+)\)")
 
@@ -114,6 +123,7 @@ def collect_manifest_globs(
         manifest_globs.extend(surface["paths"])
     for skill in iter_registry_skills(skill_registry):
         manifest_globs.extend(skill.get("selector_paths", []))
+        manifest_globs.extend(skill.get("anchor_paths", []))
 
     return manifest_globs
 
@@ -190,6 +200,7 @@ def run_go_lint(changed_files: list[str], base_ref: str | None = None) -> int:
 
     golangci_lint = resolve_golangci_lint(REPO_ROOT)
     for module_root, files in grouped.items():
+        config_path = GO_MODULE_CONFIG_OVERRIDES.get(module_root, GO_AGENT_CONFIG)
         changed_paths = {file.relative_to(REPO_ROOT).as_posix() for file in files}
         package_dirs = sorted(
             {
@@ -205,7 +216,7 @@ def run_go_lint(changed_files: list[str], base_ref: str | None = None) -> int:
             golangci_lint,
             "run",
             "--config",
-            str(GO_AGENT_CONFIG),
+            str(config_path),
         ]
         if base_ref:
             command.extend(["--new-from-rev", base_ref])

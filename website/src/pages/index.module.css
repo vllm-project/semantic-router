@@ -18,7 +18,7 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  opacity: 0.82;
+  opacity: 0.74;
 }
 
 .heroGrid {
@@ -35,14 +35,88 @@
   gap: 1.4rem;
 }
 
+.heroIntro {
+  max-width: 46rem;
+}
+
+.heroPrimaryCta,
+.heroSecondaryCta {
+  min-width: 15rem;
+  min-height: 3rem;
+  border-width: 1px;
+  font-size: 0.84rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 14px 28px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(10px);
+}
+
+.heroPrimaryCta {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f0f0f;
+}
+
+.heroPrimaryCta:hover {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #080808;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 18px 34px rgba(255, 255, 255, 0.12);
+}
+
+.heroSecondaryCta {
+  border-color: rgba(255, 255, 255, 0.26);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(14, 14, 14, 0.78);
+  color: var(--site-text-strong);
+}
+
+.heroSecondaryCta:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05)),
+    rgba(18, 18, 18, 0.9);
+  color: var(--site-text-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 18px 34px rgba(0, 0, 0, 0.22);
+}
+
 .heroManifesto {
   max-width: 38rem;
   margin: 0;
-  color: var(--site-text);
-  font-size: clamp(1.15rem, 2vw, 1.45rem);
-  line-height: 1.45;
-  letter-spacing: -0.02em;
-  text-wrap: balance;
+  padding-top: 0.05rem;
+}
+
+.heroManifesto::before {
+  content: '';
+  display: block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-bottom: 0.56rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.04);
+}
+
+.heroManifestoText {
+  display: inline-block;
+  max-width: 34rem;
+  padding: 0.08rem 0.9rem 0.12rem 1rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.24);
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.36), rgba(0, 0, 0, 0.12) 72%, transparent);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: clamp(1rem, 1.2vw, 1.12rem);
+  font-weight: 540;
+  line-height: 1.55;
+  letter-spacing: -0.012em;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.28);
+  text-wrap: pretty;
 }
 
 .statsSection,
@@ -420,8 +494,25 @@
 }
 
 @media (max-width: 768px) {
+  .heroPrimaryCta,
+  .heroSecondaryCta {
+    min-width: 100%;
+    font-size: 0.8rem;
+  }
+
   .heroManifesto {
-    font-size: 1.05rem;
+    padding-top: 0;
+  }
+
+  .heroManifesto::before {
+    width: 0.46rem;
+    height: 0.46rem;
+    margin-bottom: 0.48rem;
+  }
+
+  .heroManifestoText {
+    padding: 0.04rem 0.72rem 0.08rem 0.84rem;
+    font-size: 0.98rem;
   }
 
   .encoderSection {

@@ -4,6 +4,7 @@ import {
   getOnboardingStatus,
   markOnboardingPending,
   setOnboardingStatus,
+  type OnboardingStatus,
 } from '../utils/onboarding'
 import styles from './OnboardingGuide.module.css'
 
@@ -96,9 +97,11 @@ const OnboardingGuide: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
   const [isReady, setIsReady] = useState(false)
+  const [status, setStatus] = useState<OnboardingStatus>('idle')
 
   useEffect(() => {
     const status = getOnboardingStatus()
+    setStatus(status)
     setIsOpen(status === 'pending')
     setIsReady(true)
   }, [])
@@ -112,18 +115,21 @@ const OnboardingGuide: React.FC = () => {
 
   const handleReplay = () => {
     markOnboardingPending()
+    setStatus('pending')
     setStepIndex(0)
     setIsOpen(true)
   }
 
   const handleSkip = () => {
     setOnboardingStatus('dismissed')
+    setStatus('dismissed')
     setIsOpen(false)
   }
 
   const handleNext = () => {
     if (stepIndex === GUIDE_STEPS.length - 1) {
       setOnboardingStatus('completed')
+      setStatus('completed')
       setIsOpen(false)
       return
     }
@@ -140,6 +146,10 @@ const OnboardingGuide: React.FC = () => {
   }
 
   if (!isOpen) {
+    if (status === 'completed') {
+      return null
+    }
+
     return (
       <button className={styles.replayButton} onClick={handleReplay}>
         Guide

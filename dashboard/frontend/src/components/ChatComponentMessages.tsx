@@ -1,5 +1,3 @@
-import type { Ref } from 'react'
-
 import styles from './ChatComponent.module.css'
 import HeaderDisplay from './HeaderDisplay'
 import ThinkingBlock from './ThinkingBlock'
@@ -15,7 +13,6 @@ import { getTranslateAttr } from '../hooks/useNoTranslate'
 interface ChatComponentMessagesProps {
   expandedToolCards: Set<string>
   messages: Message[]
-  messagesEndRef: Ref<HTMLDivElement>
   onToggleToolCard: (toolCallId: string) => void
 }
 
@@ -196,22 +193,10 @@ function MessageCard({
     <div
       className={`${styles.message} ${styles[message.role]}`}
       translate={getTranslateAttr(message.isStreaming ?? false)}
+      data-message-id={message.id}
+      data-message-role={message.role}
     >
-      <div className={styles.messageAvatar}>
-        {message.role === 'user' ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path
-              d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        ) : (
-          <img src="/vllm.png" alt="vLLM SR" className={styles.avatarImage} />
-        )}
-      </div>
-      <div className={styles.messageContent}>
-        <div className={styles.messageRole}>{message.role === 'user' ? 'You' : 'vLLM SR'}</div>
+      <div className={styles.messageContent} data-message-content>
         {message.role !== 'assistant' ? (
           <UserOrSystemMessage message={message} />
         ) : isRatingsMessage ? (
@@ -252,7 +237,6 @@ function MessageCard({
 export default function ChatComponentMessages({
   expandedToolCards,
   messages,
-  messagesEndRef,
   onToggleToolCard,
 }: ChatComponentMessagesProps) {
   if (messages.length === 0) {
@@ -281,7 +265,6 @@ export default function ChatComponentMessages({
             />
           )
         })}
-        <div ref={messagesEndRef} />
       </div>
     </div>
   )

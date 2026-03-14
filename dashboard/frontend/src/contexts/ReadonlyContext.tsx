@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { useAuth } from './AuthContext'
 import { preloadPlatformAssets } from '../utils/platformAssets'
 
 interface ReadonlyContextType {
@@ -23,6 +24,7 @@ interface ReadonlyProviderProps {
 }
 
 export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) => {
+  const { token } = useAuth()
   const [isReadonly, setIsReadonly] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [platform, setPlatform] = useState('')
@@ -30,6 +32,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
 
   useEffect(() => {
     const fetchSettings = async () => {
+      setIsLoading(true)
       try {
         const response = await fetch('/api/settings')
         if (response.ok) {
@@ -49,7 +52,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
     }
 
     fetchSettings()
-  }, [])
+  }, [token])
 
   return (
     <ReadonlyContext.Provider value={{ isReadonly, isLoading, platform, envoyUrl }}>

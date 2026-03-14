@@ -78,6 +78,23 @@ func TestVectorStoreClient_SearchVectorStore(t *testing.T) {
 	}
 }
 
+func TestVectorStoreClient_SearchVectorStore_WithVersionedBaseURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/vector_stores/vs_123/search" {
+			t.Errorf("Unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
+	}))
+	defer server.Close()
+
+	client := NewVectorStoreClient(server.URL+"/v1", "test-key")
+	_, err := client.SearchVectorStore(context.Background(), "vs_123", "test query", 10, nil)
+	if err != nil {
+		t.Fatalf("SearchVectorStore failed with versioned base URL: %v", err)
+	}
+}
+
 func TestVectorStoreClient_ListVectorStores(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" || r.URL.Path != "/v1/vector_stores" {
