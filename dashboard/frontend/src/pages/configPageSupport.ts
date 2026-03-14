@@ -93,6 +93,28 @@ export interface ModelConfigEntry {
   pricing?: ModelPricing
 }
 
+export interface BackendRefEntry {
+  name?: string
+  endpoint?: string
+  protocol?: 'http' | 'https'
+  weight?: number
+  base_url?: string
+  api_key?: string
+  api_key_env?: string
+}
+
+export interface RoutingModelCard {
+  name: string
+  reasoning_family_ref?: string
+  param_size?: string
+  context_window_size?: number
+  description?: string
+  capabilities?: string[]
+  tags?: string[]
+  quality_score?: number
+  modality?: string
+}
+
 export interface NormalizedModel {
   name: string
   reasoning_family?: string
@@ -341,12 +363,14 @@ export interface ConfigData {
     models: Array<{
       name: string
       reasoning_family?: string
-      endpoints: Array<{
+      provider_model_id?: string
+      endpoints?: Array<{
         name: string
         weight: number
         endpoint: string
         protocol: 'http' | 'https'
       }>
+      backend_refs?: BackendRefEntry[]
       access_key?: string
       pricing?: {
         currency?: string
@@ -357,6 +381,11 @@ export interface ConfigData {
     default_model: string
     reasoning_families?: Record<string, ReasoningFamily>
     default_reasoning_effort?: string
+  }
+  routing?: {
+    modelCards?: RoutingModelCard[]
+    signals?: ConfigData['signals']
+    decisions?: ConfigData['decisions']
   }
   bert_model?: ModelConfig
   semantic_cache?: SemanticCacheConfig

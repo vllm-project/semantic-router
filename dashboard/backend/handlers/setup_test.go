@@ -17,7 +17,7 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 
 	configPath := filepath.Join(dir, "config.yaml")
 	config := map[string]interface{}{
-		"version": "v0.1",
+		"version": "v0.3",
 		"listeners": []map[string]interface{}{
 			{
 				"name":    "http-8899",
@@ -44,63 +44,71 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 
 func createValidSetupPatch() map[string]interface{} {
 	return map[string]interface{}{
-		"signals": map[string]interface{}{
-			"domains": []map[string]interface{}{
-				{
-					"name":        "other",
-					"description": "General requests",
-				},
-			},
-			"keywords": []map[string]interface{}{
-				{
-					"name":           "test_keywords",
-					"operator":       "OR",
-					"keywords":       []string{"test"},
-					"case_sensitive": false,
-				},
-			},
-		},
-		"decisions": []map[string]interface{}{
-			{
-				"name":        "default_route",
-				"description": "Default setup route",
-				"priority":    100,
-				"rules": map[string]interface{}{
-					"operator": "AND",
-					"conditions": []map[string]interface{}{
-						{
-							"type": "domain",
-							"name": "other",
-						},
-						{
-							"type": "keyword",
-							"name": "test_keywords",
-						},
-					},
-				},
-				"modelRefs": []map[string]interface{}{
-					{
-						"model":         "test-model",
-						"use_reasoning": false,
-					},
-				},
-			},
-		},
 		"providers": map[string]interface{}{
+			"default_model": "test-model",
 			"models": []map[string]interface{}{
 				{
 					"name": "test-model",
-					"endpoints": []map[string]interface{}{
+					"backend_refs": []map[string]interface{}{
 						{
-							"name":     "test-endpoint",
-							"weight":   1,
+							"name":     "primary",
 							"endpoint": "host.docker.internal:8000",
 							"protocol": "http",
+							"weight":   1,
 						},
 					},
 				},
 			},
-			"default_model": "test-model",
+		},
+		"routing": map[string]interface{}{
+			"modelCards": []map[string]interface{}{
+				{
+					"name":     "test-model",
+					"modality": "text",
+				},
+			},
+			"signals": map[string]interface{}{
+				"domains": []map[string]interface{}{
+					{
+						"name":        "other",
+						"description": "General requests",
+					},
+				},
+				"keywords": []map[string]interface{}{
+					{
+						"name":           "test_keywords",
+						"operator":       "OR",
+						"keywords":       []string{"test"},
+						"case_sensitive": false,
+					},
+				},
+			},
+			"decisions": []map[string]interface{}{
+				{
+					"name":        "default_route",
+					"description": "Default setup route",
+					"priority":    100,
+					"rules": map[string]interface{}{
+						"operator": "AND",
+						"conditions": []map[string]interface{}{
+							{
+								"type": "domain",
+								"name": "other",
+							},
+							{
+								"type": "keyword",
+								"name": "test_keywords",
+							},
+						},
+					},
+					"modelRefs": []map[string]interface{}{
+						{
+							"model":         "test-model",
+							"use_reasoning": false,
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -163,6 +171,9 @@ func TestSetupValidateHandler(t *testing.T) {
 	if !resp.CanActivate {
 		t.Fatalf("expected canActivate=true")
 	}
+	if resp.Models != 1 || resp.Decisions != 1 {
+		t.Fatalf("expected models=1 and decisions=1, got models=%d decisions=%d", resp.Models, resp.Decisions)
+	}
 	if resp.Signals != 2 {
 		t.Fatalf("expected signals=2, got %d", resp.Signals)
 	}
@@ -178,31 +189,36 @@ func TestSetupImportRemoteHandler(t *testing.T) {
 	remoteConfigServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-yaml")
 		_, _ = w.Write([]byte(`
-signals:
-  domains:
-    - name: remote-domain
-      description: Remote domain signal
-decisions:
-  - name: remote-route
-    description: Remote route
-    priority: 100
-    rules:
-      operator: AND
-      conditions:
-        - type: domain
-          name: remote-domain
-    modelRefs:
-      - model: remote-model
-        use_reasoning: false
+version: v0.3
 providers:
+  default_model: remote-model
   models:
     - name: remote-model
-      endpoints:
-        - name: remote-primary
-          weight: 100
+      backend_refs:
+        - name: primary
           endpoint: remote.example.com
           protocol: https
-  default_model: remote-model
+          weight: 100
+routing:
+  modelCards:
+    - name: remote-model
+      modality: text
+  signals:
+    domains:
+      - name: remote-domain
+        description: Remote domain signal
+  decisions:
+    - name: remote-route
+      description: Remote route
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: remote-domain
+      modelRefs:
+        - model: remote-model
+          use_reasoning: false
 `))
 	}))
 	defer remoteConfigServer.Close()
@@ -237,6 +253,9 @@ providers:
 	}
 	if providers, ok := resp.Config["providers"].(map[string]interface{}); !ok || providers["default_model"] != "remote-model" {
 		t.Fatalf("expected imported config providers.default_model=remote-model, got %#v", resp.Config["providers"])
+	}
+	if routing, ok := resp.Config["routing"].(map[string]interface{}); !ok || routing["modelCards"] == nil {
+		t.Fatalf("expected imported config routing.modelCards to be preserved, got %#v", resp.Config["routing"])
 	}
 }
 

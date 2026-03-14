@@ -1,0 +1,7 @@
+routing:
+  signals:
+    modality:
+      - name: image_generation
+        description: Requests that should route into image generation flows.
+      - name: document_analysis
+        description: Requests that reference files, screenshots, or long documents.

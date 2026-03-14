@@ -32,7 +32,6 @@ export interface SymbolTable {
   signals: SymbolInfo[]
   models: string[]
   plugins: string[]
-  backends: SymbolInfo[]
   routes: string[]
 }
 
@@ -91,6 +90,12 @@ export interface ASTRouteDecl {
   pos: ASTPosition
 }
 
+export interface ASTModelDecl {
+  name: string
+  fields: Record<string, unknown>
+  pos: ASTPosition
+}
+
 export interface ASTPluginDecl {
   name: string
   pluginType: string
@@ -98,24 +103,11 @@ export interface ASTPluginDecl {
   pos: ASTPosition
 }
 
-export interface ASTBackendDecl {
-  backendType: string
-  name: string
-  fields: Record<string, unknown>
-  pos: ASTPosition
-}
-
-export interface ASTGlobalDecl {
-  fields: Record<string, unknown>
-  pos: ASTPosition
-}
-
 export interface ASTProgram {
   signals: ASTSignalDecl[]
   routes: ASTRouteDecl[]
+  models?: ASTModelDecl[]
   plugins: ASTPluginDecl[]
-  backends: ASTBackendDecl[]
-  global?: ASTGlobalDecl
 }
 
 // ---------- WASM Result Types ----------

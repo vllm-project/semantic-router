@@ -99,7 +99,7 @@ def log_bootstrap_result(requested_config: str, bootstrap: BootstrapResult) -> N
         log.info(f"Created bootstrap output directory: {bootstrap.output_dir}")
     if bootstrap.created_defaults:
         log.info(
-            f"Copied router defaults reference: {bootstrap.output_dir / 'router-defaults.yaml'}"
+            f"Wrote global defaults reference: {bootstrap.output_dir / 'global-defaults.yaml'}"
         )
 
 

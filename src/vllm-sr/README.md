@@ -54,14 +54,11 @@ To run parallel local stacks from the same machine or multiple worktrees, set `V
 ### Advanced YAML-first setup
 
 ```bash
-# Generate an advanced sample config if you prefer editing YAML directly
-vllm-sr init
-
-# Validate the sample before serving
-vllm-sr validate
+# Validate a hand-authored canonical config before serving
+vllm-sr validate config.yaml
 ```
 
-`vllm-sr init` is optional. It generates a lean advanced sample plus `.vllm-sr/router-defaults.yaml` for users who want to hand-author routing config. `router-defaults.yaml` contains advanced runtime defaults; it is not required for first-run dashboard setup.
+`vllm-sr init` was removed in v0.3. Author `config.yaml` directly using the canonical `version/listeners/providers/routing/global` layout, or migrate an older file with `vllm-sr config migrate --config old-config.yaml`. Router-wide defaults come from the router itself and can be overridden under `global:`.
 
 ## Features
 
@@ -213,14 +210,11 @@ plugins:
 **CLI Commands:**
 
 ```bash
-# Generate an advanced YAML sample if you want to edit config directly
-vllm-sr init
-
 # Validate configuration (including plugins)
 vllm-sr validate
 
-# Generate router config with plugins
-vllm-sr config router --config config.yaml
+# Migrate older configs to the canonical contract
+vllm-sr config migrate --config old-config.yaml
 ```
 
 ### File Descriptor Limits

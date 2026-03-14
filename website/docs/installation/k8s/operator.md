@@ -137,25 +137,50 @@ spec:
     storageClassName: "standard"
 
   config:
-    bert_model:
-      model_id: "models/mom-embedding-light"
-      threshold: "0.6"
-      use_cpu: true
+    providers:
+      default_model: llama3-8b
+      default_reasoning_effort: medium
+      reasoning_families:
+        qwen3:
+          type: effort
+          parameter: reasoning.effort
+      models:
+        - name: llama3-8b
+          provider_model_id: llama3-8b
+          backend_refs:
+            - name: llama3-8b-endpoint
+              endpoint: llama-3-8b-predictor.default.svc.cluster.local:80
+              protocol: http
 
-    semantic_cache:
-      enabled: true
-      backend_type: "memory"
-      max_entries: 1000
-      ttl_seconds: 3600
+    routing:
+      modelCards:
+        - name: llama3-8b
+          modality: text
+          capabilities: ["chat", "reasoning"]
+      decisions:
+        - name: default-route
+          description: Catch-all route
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: llama3-8b
+              use_reasoning: false
 
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: "0.2"
-
-    prompt_guard:
-      enabled: true
-      threshold: "0.7"
+    global:
+      semantic_cache:
+        enabled: true
+        backend_type: memory
+        max_entries: 1000
+        ttl_seconds: 3600
+      tools:
+        enabled: true
+        top_k: 3
+        similarity_threshold: 0.2
+      prompt_guard:
+        enabled: true
+        threshold: 0.7
 
   toolsDb:
     - tool:
@@ -180,6 +205,8 @@ Apply the configuration:
 ```bash
 kubectl apply -f my-router.yaml
 ```
+
+`spec.config` should use the same canonical `providers/routing/global` layout as local `config.yaml`. `spec.vllmEndpoints` remains the Kubernetes adapter for discovering backends and served-model aliases; the operator translates it into canonical `providers.models[].backend_refs[]` and `routing.modelCards` entries when rendering the runtime config.
 
 ## Advanced Features
 
@@ -1803,6 +1830,6 @@ kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
 ## Next Steps
 
 - [Configure semantic router features](../configuration)
-- [Set up monitoring and observability](../../tutorials/observability/dashboard)
+- [Set up monitoring and observability](../../tutorials/global/api-and-observability)
 - [Explore other deployment options](../installation.md)
 - [Join the community](../../community/overview)

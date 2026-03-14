@@ -69,7 +69,7 @@ const GUIDE_STEPS: GuideStep[] = [
       'Use Builder when presets stop being expressive enough.',
     highlights: [
       'Open the Guide drawer for DSL snippets',
-      'Author signals, routes, plugins, and backends',
+      'Author model cards, signals, routes, and plugins',
       'Compile and deploy deeper routing changes',
     ],
     route: '/builder',

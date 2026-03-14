@@ -32,7 +32,7 @@ func NewWriter(configPath string) *Writer {
 	return &Writer{path: StatusPathFromConfigPath(configPath)}
 }
 
-// StatusPathFromConfigPath returns the runtime status file path next to router-config.yaml.
+// StatusPathFromConfigPath returns the runtime status file path next to config.yaml.
 func StatusPathFromConfigPath(configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "router-runtime.json")
 }

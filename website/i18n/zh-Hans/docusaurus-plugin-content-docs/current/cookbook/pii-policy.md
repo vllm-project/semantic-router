@@ -32,7 +32,7 @@ decisions:
           message: "请求被拦截：检测到个人信息。"
 ```
 
-> 参见：[config/prompt-guard/hybrid.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/prompt-guard/hybrid.yaml)。
+> 参见：[config/plugin/content-safety/hybrid.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/plugin/content-safety/hybrid.yaml)。
 
 ## 允许特定 PII 类型
 

@@ -1,0 +1,12 @@
+plugin:
+  type: rag
+  configuration:
+    enabled: true
+    backend: milvus
+    top_k: 5
+    similarity_threshold: 0.78
+    injection_mode: tool_role
+    on_failure: warn
+    backend_config:
+      collection: docs
+      endpoint: http://milvus:19530

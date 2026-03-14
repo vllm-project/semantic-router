@@ -129,12 +129,12 @@ function enabledBadge(value: boolean | undefined): RouterSectionBadge {
 
 function sourceBadge(key: RouterSystemKey, routerDefaults: ConfigData | null, data: unknown): { label: string; tone: 'active' | 'inactive' | 'info' } {
   if (routerDefaults && routerDefaults[key] !== undefined) {
-    return { label: '.vllm-sr/router-defaults.yaml', tone: 'active' }
+    return { label: 'router effective defaults', tone: 'active' }
   }
   if (data !== undefined) {
-    return { label: 'config.yaml fallback', tone: 'info' }
+    return { label: 'config.yaml override', tone: 'info' }
   }
-  return { label: 'Template section', tone: 'inactive' }
+  return { label: 'Router default available', tone: 'inactive' }
 }
 
 function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummaryItem[] {

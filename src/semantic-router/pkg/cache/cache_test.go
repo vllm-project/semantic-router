@@ -1055,7 +1055,7 @@ development:
 				MaxEntries:          2000,
 				TTLSeconds:          7200,
 				EmbeddingModel:      "bert",
-				BackendConfigPath:   "config/semantic-cache/milvus.yaml",
+				BackendConfigPath:   "examples/runtime/semantic-cache/milvus.yaml",
 			}
 
 			// Verify all fields are accessible
@@ -1064,7 +1064,7 @@ development:
 			Expect(config.SimilarityThreshold).To(Equal(float32(0.9)))
 			Expect(config.MaxEntries).To(Equal(2000))
 			Expect(config.TTLSeconds).To(Equal(7200))
-			Expect(config.BackendConfigPath).To(Equal("config/semantic-cache/milvus.yaml"))
+			Expect(config.BackendConfigPath).To(Equal("examples/runtime/semantic-cache/milvus.yaml"))
 		})
 	})
 
@@ -2343,13 +2343,13 @@ func getMilvusConfigPath() string {
 	}
 
 	// Try relative from project root (when run via make)
-	configPath := "config/semantic-cache/milvus.yaml"
+	configPath := "examples/runtime/semantic-cache/milvus.yaml"
 	if _, err := os.Stat(configPath); err == nil {
 		return configPath
 	}
 
 	// Fallback to relative from test directory
-	return "../../../../../config/semantic-cache/milvus.yaml"
+	return "../../../../../examples/runtime/semantic-cache/milvus.yaml"
 }
 
 // BenchmarkHybridVsMilvus is the comprehensive benchmark comparing hybrid cache vs pure Milvus
