@@ -1,6 +1,6 @@
 routing:
   decisions:
-    - name: computer_science_route
+    - name: computer-science-route
       description: Route computer science requests to the technical LoRA adapter.
       priority: 100
       rules:

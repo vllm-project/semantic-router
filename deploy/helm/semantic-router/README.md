@@ -27,18 +27,6 @@ A Helm chart for deploying Semantic Router - an intelligent routing system for L
 | https://milvus-io.github.io/milvus-helm/ | semantic-cache-milvus(milvus) | >=0.0.0 |
 | https://prometheus-community.github.io/helm-charts | prometheus | >=0.0.0 |
 
-## Canonical Config
-
-The chart's `config` value follows the v0.3 canonical router contract:
-
-* `config.version`
-* `config.listeners`
-* `config.providers`
-* `config.routing`
-* `config.global`
-
-Use `config.routing` for dynamic routing semantics. Keep backend endpoints, auth, default model selection, and runtime overrides under `config.providers` and `config.global`.
-
 ## Values
 
 | Key | Type | Default | Description |
@@ -49,78 +37,81 @@ Use `config.routing` for dynamic routing semantics. Keep backend endpoints, auth
 | autoscaling.maxReplicas | int | `10` | Maximum number of replicas |
 | autoscaling.minReplicas | int | `1` | Minimum number of replicas |
 | autoscaling.targetCPUUtilizationPercentage | int | `80` | Target CPU utilization percentage |
-| config.global.api.batch_classification.concurrency_threshold | int | `5` |  |
-| config.global.api.batch_classification.max_batch_size | int | `100` |  |
-| config.global.api.batch_classification.max_concurrency | int | `8` |  |
-| config.global.api.batch_classification.metrics.detailed_goroutine_tracking | bool | `true` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[0] | float | `0.001` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[10] | int | `5` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[11] | int | `10` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[12] | int | `30` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[1] | float | `0.005` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[2] | float | `0.01` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[3] | float | `0.025` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[4] | float | `0.05` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[5] | float | `0.1` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[6] | float | `0.25` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[7] | float | `0.5` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[8] | int | `1` |  |
-| config.global.api.batch_classification.metrics.duration_buckets[9] | float | `2.5` |  |
-| config.global.api.batch_classification.metrics.enabled | bool | `true` |  |
-| config.global.api.batch_classification.metrics.high_resolution_timing | bool | `false` |  |
-| config.global.api.batch_classification.metrics.sample_rate | float | `1` |  |
-| config.global.api.batch_classification.metrics.size_buckets[0] | int | `1` |  |
-| config.global.api.batch_classification.metrics.size_buckets[1] | int | `2` |  |
-| config.global.api.batch_classification.metrics.size_buckets[2] | int | `5` |  |
-| config.global.api.batch_classification.metrics.size_buckets[3] | int | `10` |  |
-| config.global.api.batch_classification.metrics.size_buckets[4] | int | `20` |  |
-| config.global.api.batch_classification.metrics.size_buckets[5] | int | `50` |  |
-| config.global.api.batch_classification.metrics.size_buckets[6] | int | `100` |  |
-| config.global.api.batch_classification.metrics.size_buckets[7] | int | `200` |  |
-| config.global.bert_model.model_id | string | `"models/mom-embedding-light"` |  |
-| config.global.bert_model.threshold | float | `0.6` |  |
-| config.global.bert_model.use_cpu | bool | `true` |  |
-| config.global.classifier.category_model.category_mapping_path | string | `"models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"` |  |
-| config.global.classifier.category_model.model_id | string | `"models/lora_intent_classifier_bert-base-uncased_model"` |  |
-| config.global.classifier.category_model.threshold | float | `0.6` |  |
-| config.global.classifier.category_model.use_cpu | bool | `true` |  |
-| config.global.classifier.category_model.use_modernbert | bool | `false` |  |
-| config.global.classifier.pii_model.model_id | string | `"models/pii_classifier_modernbert-base_presidio_token_model"` |  |
-| config.global.classifier.pii_model.pii_mapping_path | string | `"models/mom-pii-classifier/pii_type_mapping.json"` |  |
-| config.global.classifier.pii_model.threshold | float | `0.7` |  |
-| config.global.classifier.pii_model.use_cpu | bool | `true` |  |
-| config.global.classifier.pii_model.use_modernbert | bool | `true` |  |
-| config.global.observability.tracing.enabled | bool | `false` |  |
-| config.global.observability.tracing.exporter.endpoint | string | `"jaeger:4317"` |  |
-| config.global.observability.tracing.exporter.insecure | bool | `true` |  |
-| config.global.observability.tracing.exporter.type | string | `"otlp"` |  |
-| config.global.observability.tracing.provider | string | `"opentelemetry"` |  |
-| config.global.observability.tracing.resource.deployment_environment | string | `"development"` |  |
-| config.global.observability.tracing.resource.service_name | string | `"vllm-semantic-router"` |  |
-| config.global.observability.tracing.resource.service_version | string | `""` |  |
-| config.global.observability.tracing.sampling.rate | float | `1` |  |
-| config.global.observability.tracing.sampling.type | string | `"always_on"` |  |
-| config.global.prompt_guard.enabled | bool | `true` |  |
-| config.global.prompt_guard.jailbreak_mapping_path | string | `"models/mom-jailbreak-classifier/jailbreak_type_mapping.json"` |  |
-| config.global.prompt_guard.model_id | string | `"models/mom-jailbreak-classifier"` |  |
-| config.global.prompt_guard.threshold | float | `0.7` |  |
-| config.global.prompt_guard.use_cpu | bool | `true` |  |
-| config.global.prompt_guard.use_modernbert | bool | `false` |  |
-| config.global.response_api.enabled | bool | `false` |  |
-| config.global.response_api.max_responses | int | `1000` |  |
-| config.global.response_api.store_backend | string | `"memory"` |  |
-| config.global.response_api.ttl_seconds | int | `86400` |  |
-| config.global.semantic_cache.backend_type | string | `"memory"` |  |
-| config.global.semantic_cache.enabled | bool | `true` |  |
-| config.global.semantic_cache.eviction_policy | string | `"fifo"` |  |
-| config.global.semantic_cache.max_entries | int | `1000` |  |
-| config.global.semantic_cache.similarity_threshold | float | `0.8` |  |
-| config.global.semantic_cache.ttl_seconds | int | `3600` |  |
-| config.global.tools.enabled | bool | `true` |  |
-| config.global.tools.fallback_to_empty | bool | `true` |  |
-| config.global.tools.similarity_threshold | float | `0.2` |  |
-| config.global.tools.tools_db_path | string | `"config/tools_db.json"` |  |
-| config.global.tools.top_k | int | `3` |  |
+| config.global.integrations.tools.enabled | bool | `true` |  |
+| config.global.integrations.tools.fallback_to_empty | bool | `true` |  |
+| config.global.integrations.tools.similarity_threshold | float | `0.2` |  |
+| config.global.integrations.tools.tools_db_path | string | `"config/tools_db.json"` |  |
+| config.global.integrations.tools.top_k | int | `3` |  |
+| config.global.model_catalog.embeddings.bert.model_id | string | `"models/mom-embedding-light"` |  |
+| config.global.model_catalog.embeddings.bert.threshold | float | `0.6` |  |
+| config.global.model_catalog.embeddings.bert.use_cpu | bool | `true` |  |
+| config.global.model_catalog.system.domain_classifier | string | `"models/lora_intent_classifier_bert-base-uncased_model"` |  |
+| config.global.model_catalog.system.pii_classifier | string | `"models/pii_classifier_modernbert-base_presidio_token_model"` |  |
+| config.global.model_catalog.system.prompt_guard | string | `"models/mom-jailbreak-classifier"` |  |
+| config.global.model_catalog.modules.classifier.domain.category_mapping_path | string | `"models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"` |  |
+| config.global.model_catalog.modules.classifier.domain.model_ref | string | `"domain_classifier"` |  |
+| config.global.model_catalog.modules.classifier.domain.threshold | float | `0.6` |  |
+| config.global.model_catalog.modules.classifier.domain.use_cpu | bool | `true` |  |
+| config.global.model_catalog.modules.classifier.domain.use_modernbert | bool | `false` |  |
+| config.global.model_catalog.modules.classifier.pii.model_ref | string | `"pii_classifier"` |  |
+| config.global.model_catalog.modules.classifier.pii.pii_mapping_path | string | `"models/mom-pii-classifier/pii_type_mapping.json"` |  |
+| config.global.model_catalog.modules.classifier.pii.threshold | float | `0.7` |  |
+| config.global.model_catalog.modules.classifier.pii.use_cpu | bool | `true` |  |
+| config.global.model_catalog.modules.classifier.pii.use_modernbert | bool | `true` |  |
+| config.global.model_catalog.modules.prompt_guard.enabled | bool | `true` |  |
+| config.global.model_catalog.modules.prompt_guard.jailbreak_mapping_path | string | `"models/mom-jailbreak-classifier/jailbreak_type_mapping.json"` |  |
+| config.global.model_catalog.modules.prompt_guard.model_ref | string | `"prompt_guard"` |  |
+| config.global.model_catalog.modules.prompt_guard.threshold | float | `0.7` |  |
+| config.global.model_catalog.modules.prompt_guard.use_cpu | bool | `true` |  |
+| config.global.model_catalog.modules.prompt_guard.use_modernbert | bool | `false` |  |
+| config.global.services.api.batch_classification.concurrency_threshold | int | `5` |  |
+| config.global.services.api.batch_classification.max_batch_size | int | `100` |  |
+| config.global.services.api.batch_classification.max_concurrency | int | `8` |  |
+| config.global.services.api.batch_classification.metrics.detailed_goroutine_tracking | bool | `true` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[0] | float | `0.001` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[10] | int | `5` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[11] | int | `10` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[12] | int | `30` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[1] | float | `0.005` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[2] | float | `0.01` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[3] | float | `0.025` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[4] | float | `0.05` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[5] | float | `0.1` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[6] | float | `0.25` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[7] | float | `0.5` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[8] | int | `1` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[9] | float | `2.5` |  |
+| config.global.services.api.batch_classification.metrics.enabled | bool | `true` |  |
+| config.global.services.api.batch_classification.metrics.high_resolution_timing | bool | `false` |  |
+| config.global.services.api.batch_classification.metrics.sample_rate | float | `1` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[0] | int | `1` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[1] | int | `2` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[2] | int | `5` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[3] | int | `10` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[4] | int | `20` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[5] | int | `50` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[6] | int | `100` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[7] | int | `200` |  |
+| config.global.services.observability.tracing.enabled | bool | `false` |  |
+| config.global.services.observability.tracing.exporter.endpoint | string | `"jaeger:4317"` |  |
+| config.global.services.observability.tracing.exporter.insecure | bool | `true` |  |
+| config.global.services.observability.tracing.exporter.type | string | `"otlp"` |  |
+| config.global.services.observability.tracing.provider | string | `"opentelemetry"` |  |
+| config.global.services.observability.tracing.resource.deployment_environment | string | `"development"` |  |
+| config.global.services.observability.tracing.resource.service_name | string | `"vllm-semantic-router"` |  |
+| config.global.services.observability.tracing.resource.service_version | string | `""` |  |
+| config.global.services.observability.tracing.sampling.rate | float | `1` |  |
+| config.global.services.observability.tracing.sampling.type | string | `"always_on"` |  |
+| config.global.services.response_api.enabled | bool | `false` |  |
+| config.global.services.response_api.max_responses | int | `1000` |  |
+| config.global.services.response_api.store_backend | string | `"memory"` |  |
+| config.global.services.response_api.ttl_seconds | int | `86400` |  |
+| config.global.stores.semantic_cache.backend_type | string | `"memory"` |  |
+| config.global.stores.semantic_cache.enabled | bool | `true` |  |
+| config.global.stores.semantic_cache.eviction_policy | string | `"fifo"` |  |
+| config.global.stores.semantic_cache.max_entries | int | `1000` |  |
+| config.global.stores.semantic_cache.similarity_threshold | float | `0.8` |  |
+| config.global.stores.semantic_cache.ttl_seconds | int | `3600` |  |
 | config.listeners[0].address | string | `"0.0.0.0"` |  |
 | config.listeners[0].name | string | `"grpc-50051"` |  |
 | config.listeners[0].port | int | `50051` |  |
@@ -129,22 +120,22 @@ Use `config.routing` for dynamic routing semantics. Keep backend endpoints, auth
 | config.listeners[1].name | string | `"http-8080"` |  |
 | config.listeners[1].port | int | `8080` |  |
 | config.listeners[1].timeout | string | `"300s"` |  |
-| config.providers.default_model | string | `"replace-with-your-model"` |  |
-| config.providers.default_reasoning_effort | string | `"high"` |  |
+| config.providers.defaults.default_model | string | `"replace-with-your-model"` |  |
+| config.providers.defaults.default_reasoning_effort | string | `"high"` |  |
+| config.providers.defaults.reasoning_families.deepseek.parameter | string | `"thinking"` |  |
+| config.providers.defaults.reasoning_families.deepseek.type | string | `"chat_template_kwargs"` |  |
+| config.providers.defaults.reasoning_families.gpt-oss.parameter | string | `"reasoning_effort"` |  |
+| config.providers.defaults.reasoning_families.gpt-oss.type | string | `"reasoning_effort"` |  |
+| config.providers.defaults.reasoning_families.gpt.parameter | string | `"reasoning_effort"` |  |
+| config.providers.defaults.reasoning_families.gpt.type | string | `"reasoning_effort"` |  |
+| config.providers.defaults.reasoning_families.qwen3.parameter | string | `"enable_thinking"` |  |
+| config.providers.defaults.reasoning_families.qwen3.type | string | `"chat_template_kwargs"` |  |
 | config.providers.models[0].backend_refs[0].endpoint | string | `"replace-with-your-vllm-service:8000"` |  |
 | config.providers.models[0].backend_refs[0].name | string | `"primary"` |  |
 | config.providers.models[0].backend_refs[0].protocol | string | `"http"` |  |
 | config.providers.models[0].backend_refs[0].weight | int | `100` |  |
 | config.providers.models[0].name | string | `"replace-with-your-model"` |  |
 | config.providers.models[0].provider_model_id | string | `"replace-with-your-model"` |  |
-| config.providers.reasoning_families.deepseek.parameter | string | `"thinking"` |  |
-| config.providers.reasoning_families.deepseek.type | string | `"chat_template_kwargs"` |  |
-| config.providers.reasoning_families.gpt-oss.parameter | string | `"reasoning_effort"` |  |
-| config.providers.reasoning_families.gpt-oss.type | string | `"reasoning_effort"` |  |
-| config.providers.reasoning_families.gpt.parameter | string | `"reasoning_effort"` |  |
-| config.providers.reasoning_families.gpt.type | string | `"reasoning_effort"` |  |
-| config.providers.reasoning_families.qwen3.parameter | string | `"enable_thinking"` |  |
-| config.providers.reasoning_families.qwen3.type | string | `"chat_template_kwargs"` |  |
 | config.routing.decisions[0].description | string | `"Default route for every request while you wire real backends."` |  |
 | config.routing.decisions[0].modelRefs[0].model | string | `"replace-with-your-model"` |  |
 | config.routing.decisions[0].modelRefs[0].use_reasoning | bool | `false` |  |

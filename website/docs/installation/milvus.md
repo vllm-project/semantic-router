@@ -215,10 +215,11 @@ Ensure these settings in your canonical router configuration:
 
 ```yaml
 global:
-  semantic_cache:
-    enabled: true
-    backend_type: "milvus"
-    backend_config_path: "examples/runtime/semantic-cache/milvus.yaml"
+  stores:
+    semantic_cache:
+      enabled: true
+      backend_type: "milvus"
+      backend_config_path: "examples/runtime/semantic-cache/milvus.yaml"
 ```
 
 ## Networking and Security

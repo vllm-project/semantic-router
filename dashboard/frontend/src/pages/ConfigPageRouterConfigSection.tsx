@@ -6,15 +6,13 @@ import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import {
   buildEffectiveRouterConfig,
   buildRouterSectionCards,
-  type RouterConfigSectionData,
   type RouterSectionBadge,
 } from './configPageRouterDefaultsSupport'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
-import type { ConfigData, Tool } from './configPageSupport'
+import type { CanonicalGlobalConfig, ConfigData, Tool } from './configPageSupport'
 
 interface ConfigPageRouterConfigSectionProps {
   config: ConfigData | null
-  routerConfig: RouterConfigSectionData
   toolsData: Tool[]
   toolsLoading: boolean
   toolsError: string | null
@@ -37,7 +35,6 @@ function badgeClassName(badge: RouterSectionBadge): string {
 
 export default function ConfigPageRouterConfigSection({
   config,
-  routerConfig,
   toolsData,
   toolsLoading,
   toolsError,
@@ -46,7 +43,7 @@ export default function ConfigPageRouterConfigSection({
   saveConfig,
   showLegacyCategories = false,
 }: ConfigPageRouterConfigSectionProps) {
-  const [routerDefaults, setRouterDefaults] = useState<ConfigData | null>(null)
+  const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -80,13 +77,8 @@ export default function ConfigPageRouterConfigSection({
   }, [])
 
   const effectiveRouterConfig = useMemo(() => {
-    const configWithParentFallback = {
-      ...(config || {}),
-      ...(routerConfig || {}),
-    } as ConfigData
-
-    return buildEffectiveRouterConfig(routerDefaults, configWithParentFallback)
-  }, [config, routerConfig, routerDefaults])
+    return buildEffectiveRouterConfig(routerDefaults, config)
+  }, [config, routerDefaults])
 
   const sectionCards = buildRouterSectionCards({
     config,

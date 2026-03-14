@@ -429,7 +429,7 @@ rules:
     - operator: "OR"
       conditions:
         - type: "domain"
-          name: "computer_science"
+          name: "computer science"
         - type: "domain"
           name: "math"
 ```
@@ -486,7 +486,7 @@ decisions:
         - operator: "OR"                    # composite child
           conditions:
             - type: "domain"
-              name: "computer_science"
+              name: "computer science"
             - type: "keyword"
               name: "math_request"
         - type: "language"                  # leaf child

@@ -239,23 +239,24 @@ config:
       timeout: "300s"
 
   providers:
-    default_model: "replace-with-your-model"
+    defaults:
+      default_model: "replace-with-your-model"
 
-    reasoning_families:
-      deepseek:
-        type: "chat_template_kwargs"
-        parameter: "thinking"
-      qwen3:
-        type: "chat_template_kwargs"
-        parameter: "enable_thinking"
-      gpt-oss:
-        type: "reasoning_effort"
-        parameter: "reasoning_effort"
-      gpt:
-        type: "reasoning_effort"
-        parameter: "reasoning_effort"
+      reasoning_families:
+        deepseek:
+          type: "chat_template_kwargs"
+          parameter: "thinking"
+        qwen3:
+          type: "chat_template_kwargs"
+          parameter: "enable_thinking"
+        gpt-oss:
+          type: "reasoning_effort"
+          parameter: "reasoning_effort"
+        gpt:
+          type: "reasoning_effort"
+          parameter: "reasoning_effort"
 
-    default_reasoning_effort: high
+      default_reasoning_effort: high
 
     models:
       - name: "replace-with-your-model"
@@ -288,82 +289,91 @@ config:
             use_reasoning: false
 
   global:
-    bert_model:
-      model_id: models/mom-embedding-light
-      threshold: 0.6
-      use_cpu: true
-
-    semantic_cache:
-      enabled: true
-      backend_type: "memory"
-      similarity_threshold: 0.8
-      max_entries: 1000
-      ttl_seconds: 3600
-      eviction_policy: "fifo"
-
-    response_api:
-      enabled: false
-      store_backend: "memory"
-      ttl_seconds: 86400
-      max_responses: 1000
-
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: 0.2
-      tools_db_path: "config/tools_db.json"
-      fallback_to_empty: true
-
-    prompt_guard:
-      enabled: true
-      use_modernbert: false
-      model_id: "models/mom-jailbreak-classifier"
-      threshold: 0.7
-      use_cpu: true
-      jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-
-    classifier:
-      category_model:
-        model_id: "models/lora_intent_classifier_bert-base-uncased_model"
-        use_modernbert: false
-        threshold: 0.6
-        use_cpu: true
-        category_mapping_path: "models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"
-      pii_model:
-        model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
-        use_modernbert: true
-        threshold: 0.7
-        use_cpu: true
-        pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
-
-    api:
-      batch_classification:
-        max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
-        metrics:
-          enabled: true
-          detailed_goroutine_tracking: true
-          high_resolution_timing: false
-          sample_rate: 1.0
-          duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
-          size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
-
-    observability:
-      tracing:
+    services:
+      response_api:
         enabled: false
-        provider: "opentelemetry"
-        exporter:
-          type: "otlp"
-          endpoint: "jaeger:4317"
-          insecure: true
-        sampling:
-          type: "always_on"
-          rate: 1.0
-        resource:
-          service_name: "vllm-semantic-router"
-          service_version: ""
-          deployment_environment: "development"
+        store_backend: "memory"
+        ttl_seconds: 86400
+        max_responses: 1000
+
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+          metrics:
+            enabled: true
+            detailed_goroutine_tracking: true
+            high_resolution_timing: false
+            sample_rate: 1.0
+            duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+            size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+      observability:
+        tracing:
+          enabled: false
+          provider: "opentelemetry"
+          exporter:
+            type: "otlp"
+            endpoint: "jaeger:4317"
+            insecure: true
+          sampling:
+            type: "always_on"
+            rate: 1.0
+          resource:
+            service_name: "vllm-semantic-router"
+            service_version: ""
+            deployment_environment: "development"
+
+    stores:
+      semantic_cache:
+        enabled: true
+        backend_type: "memory"
+        similarity_threshold: 0.8
+        max_entries: 1000
+        ttl_seconds: 3600
+        eviction_policy: "fifo"
+
+    integrations:
+      tools:
+        enabled: true
+        top_k: 3
+        similarity_threshold: 0.2
+        tools_db_path: "config/tools_db.json"
+        fallback_to_empty: true
+
+    model_catalog:
+      embeddings:
+        bert:
+          model_id: models/mom-embedding-light
+          threshold: 0.6
+          use_cpu: true
+      system:
+        prompt_guard: "models/mom-jailbreak-classifier"
+        domain_classifier: "models/lora_intent_classifier_bert-base-uncased_model"
+        pii_classifier: "models/pii_classifier_modernbert-base_presidio_token_model"
+      modules:
+        prompt_guard:
+          enabled: true
+          model_ref: "prompt_guard"
+          use_modernbert: false
+          threshold: 0.7
+          use_cpu: true
+          jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+
+        classifier:
+          domain:
+            model_ref: "domain_classifier"
+            use_modernbert: false
+            threshold: 0.6
+            use_cpu: true
+            category_mapping_path: "models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"
+          pii:
+            model_ref: "pii_classifier"
+            use_modernbert: true
+            threshold: 0.7
+            use_cpu: true
+            pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
 # Tools database configuration
 toolsDb:

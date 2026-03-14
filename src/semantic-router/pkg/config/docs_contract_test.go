@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+func repoRel(parts ...string) string {
+	return filepath.Join(parts...)
+}
+
 func TestConfigContractDocsStayAligned(t *testing.T) {
 	root := repoRootFromTestFile(t)
 
@@ -27,10 +31,18 @@ func TestConfigContractDocsStayAligned(t *testing.T) {
 			},
 		},
 		{
-			path: "website/docs/installation/configuration.md",
+			path: repoRel("website", "docs", "installation", "configuration.md"),
 			required: []string{
 				"`version/listeners/providers/routing/global`",
 				"`routing.modelCards`",
+				"`providers.defaults`",
+				"`providers.models[*]`",
+				"`global.router`",
+				"`global.services`",
+				"`global.stores`",
+				"`global.integrations`",
+				"`global.model_catalog`",
+				"`global.model_catalog.modules`",
 				"`config/algorithm/`",
 				"`tutorials/global/`",
 				"vllm-sr config migrate --config old-config.yaml",
@@ -38,13 +50,59 @@ func TestConfigContractDocsStayAligned(t *testing.T) {
 			},
 		},
 		{
-			path: "website/docs/proposals/unified-config-contract-v0-3.md",
+			path: repoRel("website", "docs", "proposals", "unified-config-contract-v0-3.md"),
 			required: []string{
 				"version:\nlisteners:\nproviders:\nrouting:\nglobal:",
 				"`routing.modelCards`",
 				"`config/algorithm/`",
-				"`providers.models`",
+				"`providers.defaults`",
+				"`providers.models[].backend_refs[]`",
 				"vllm-sr init",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "installation", "milvus.md"),
+			required: []string{
+				"global:\n  stores:\n    semantic_cache:",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "overview", "mom-model-family.md"),
+			required: []string{
+				"`global.model_catalog`",
+				"`global.model_catalog.modules`",
+				"model_ref",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "training", "ml-model-selection.md"),
+			required: []string{
+				"global:\n  router:\n    model_selection:",
+				"routing:\n  decisions:",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "training", "model-performance-eval.md"),
+			required: []string{
+				"providers:\n  defaults:",
+				"routing:\n  modelCards:",
+				"global:\n  model_catalog:\n    modules:",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "installation", "k8s", "operator.md"),
+			required: []string{
+				"providers:\n      defaults:",
+				"global:\n      model_catalog:",
+				"      stores:",
+				"        modules:",
+				"      services:",
+			},
+		},
+		{
+			path: "deploy/helm/README.md",
+			required: []string{
+				"providers:\n    defaults:",
 			},
 		},
 	}
@@ -63,11 +121,107 @@ func TestConfigContractDocsStayAligned(t *testing.T) {
 	}
 }
 
+func TestCurrentConfigDocsAvoidRetiredCanonicalExamples(t *testing.T) {
+	root := repoRootFromTestFile(t)
+
+	testCases := []struct {
+		path      string
+		forbidden []string
+	}{
+		{
+			path: repoRel("website", "docs", "installation", "milvus.md"),
+			forbidden: []string{
+				"global:\n  semantic_cache:",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "overview", "mom-model-family.md"),
+			forbidden: []string{
+				"global:\n  classifier:",
+				"global:\n  prompt_guard:",
+				"global:\n  modules:",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "training", "ml-model-selection.md"),
+			forbidden: []string{
+				"config:\n  model_selection:",
+				"\nmodel_selection:\n",
+				"\nembedding_models:\n",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "training", "model-performance-eval.md"),
+			forbidden: []string{
+				"\nvllm_endpoints:\n",
+				"\nmodel_config:\n",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "installation", "k8s", "operator.md"),
+			forbidden: []string{
+				"spec:\n  config:\n    semantic_cache:",
+				"spec:\n  config:\n    classifier:",
+				"spec:\n  config:\n    prompt_guard:",
+			},
+		},
+		{
+			path: "deploy/helm/README.md",
+			forbidden: []string{
+				"providers:\n    default_model:",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
+			forbidden: []string{
+				"computer_science",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "tutorials", "algorithm", "selection.md"),
+			forbidden: []string{
+				"computer_science",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "overview", "signal-driven-decisions.md"),
+			forbidden: []string{
+				"computer_science",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "training", "training-overview.md"),
+			forbidden: []string{
+				"computer_science",
+			},
+		},
+		{
+			path: repoRel("website", "docs", "troubleshooting", "vsr-headers.md"),
+			forbidden: []string{
+				"computer_science",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		data, err := os.ReadFile(filepath.Join(root, tc.path))
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", tc.path, err)
+		}
+		content := string(data)
+		for _, needle := range tc.forbidden {
+			if strings.Contains(content, needle) {
+				t.Fatalf("%s still contains retired config example text %q", tc.path, needle)
+			}
+		}
+	}
+}
+
 func TestCurrentTutorialDocsDoNotReferenceRemovedConfigFiles(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	docRoots := []string{
-		filepath.Join(root, "website/docs/tutorials"),
-		filepath.Join(root, "website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/tutorials"),
+		filepath.Join(root, repoRel("website", "docs", "tutorials")),
+		filepath.Join(root, repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "tutorials")),
 	}
 	forbidden := []string{
 		"router-config.yaml",
@@ -107,7 +261,7 @@ func TestCurrentTutorialDocsDoNotReferenceRemovedConfigFiles(t *testing.T) {
 func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 	root := repoRootFromTestFile(t)
 
-	sidebarPath := filepath.Join(root, "website/sidebars.ts")
+	sidebarPath := filepath.Join(root, repoRel("website", "sidebars.ts"))
 	sidebarData, err := os.ReadFile(sidebarPath)
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", sidebarPath, err)
@@ -126,7 +280,7 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 		"'tutorials/global/overview'",
 	} {
 		if !strings.Contains(sidebar, needle) {
-			t.Fatalf("website/sidebars.ts is missing tutorial taxonomy entry %q", needle)
+			t.Fatalf("%s is missing tutorial taxonomy entry %q", sidebarPath, needle)
 		}
 	}
 
@@ -147,7 +301,7 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 		"'tutorials/runtime/",
 	} {
 		if strings.Contains(sidebar, forbidden) {
-			t.Fatalf("website/sidebars.ts still exposes retired latest-nav entry %q", forbidden)
+			t.Fatalf("%s still exposes retired latest-nav entry %q", sidebarPath, forbidden)
 		}
 	}
 
@@ -156,14 +310,14 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 		required []string
 	}{
 		{
-			path: "website/docs/tutorials/signal/overview.md",
+			path: repoRel("website", "docs", "tutorials", "signal", "overview.md"),
 			required: []string{
 				"`config/signal/`",
 				"[Routing Signals](./routing)",
 			},
 		},
 		{
-			path: "website/docs/tutorials/decision/overview.md",
+			path: repoRel("website", "docs", "tutorials", "decision", "overview.md"),
 			required: []string{
 				"`config/decision/`",
 				"`decision.algorithm`",
@@ -171,7 +325,7 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 			},
 		},
 		{
-			path: "website/docs/tutorials/algorithm/overview.md",
+			path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
 			required: []string{
 				"`config/algorithm/`",
 				"[Selection](./selection)",
@@ -179,14 +333,14 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 			},
 		},
 		{
-			path: "website/docs/tutorials/plugin/overview.md",
+			path: repoRel("website", "docs", "tutorials", "plugin", "overview.md"),
 			required: []string{
 				"`config/plugin/`",
 				"`routing.decisions[].plugins`",
 			},
 		},
 		{
-			path: "website/docs/tutorials/global/overview.md",
+			path: repoRel("website", "docs", "tutorials", "global", "overview.md"),
 			required: []string{
 				"`global:`",
 				"`signal/`",
@@ -206,7 +360,7 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 		}
 	}
 
-	err = filepath.Walk(filepath.Join(root, "website/docs/tutorials"), func(path string, info os.FileInfo, walkErr error) error {
+	err = filepath.Walk(filepath.Join(root, repoRel("website", "docs", "tutorials")), func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -229,7 +383,8 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 		t.Fatalf("failed to walk latest tutorial files: %v", err)
 	}
 
-	entries, err := os.ReadDir(filepath.Join(root, "website/docs/tutorials"))
+	tutorialRoot := filepath.Join(root, repoRel("website", "docs", "tutorials"))
+	entries, err := os.ReadDir(tutorialRoot)
 	if err != nil {
 		t.Fatalf("failed to read latest tutorial root: %v", err)
 	}
@@ -245,11 +400,11 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 			continue
 		}
 		if !allowed[entry.Name()] {
-			t.Fatalf("website/docs/tutorials contains retired top-level directory %q", entry.Name())
+			t.Fatalf("%s contains retired top-level directory %q", tutorialRoot, entry.Name())
 		}
 		delete(allowed, entry.Name())
 	}
 	for remaining := range allowed {
-		t.Fatalf("website/docs/tutorials is missing required top-level directory %q", remaining)
+		t.Fatalf("%s is missing required top-level directory %q", tutorialRoot, remaining)
 	}
 }

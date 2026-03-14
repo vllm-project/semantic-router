@@ -137,35 +137,42 @@ All MoM models are:
 
 ### Using MoM Models in Router
 
-MoM models are configured in the canonical `config.yaml` `global` block:
+MoM models are configured through the canonical `global.model_catalog` block, with module-level settings living under `global.model_catalog.modules`:
 
 ```yaml
 global:
-  classifier:
-    category_model:
-      model_id: "models/mom-domain-classifier"
-      threshold: 0.6
-      use_cpu: true
-    pii_model:
-      model_id: "models/mom-pii-classifier"
-      threshold: 0.9
-      use_cpu: true
-
-  prompt_guard:
-    model_id: "models/mom-jailbreak-classifier"
-    threshold: 0.7
-    use_cpu: true
+  model_catalog:
+    system:
+      domain_classifier: "models/mom-domain-classifier"
+      pii_classifier: "models/mom-pii-classifier"
+      prompt_guard: "models/mom-jailbreak-classifier"
+    modules:
+      classifier:
+        domain:
+          model_ref: "domain_classifier"
+          threshold: 0.6
+          use_cpu: true
+        pii:
+          model_ref: "pii_classifier"
+          threshold: 0.9
+          use_cpu: true
+      prompt_guard:
+        model_ref: "prompt_guard"
+        threshold: 0.7
+        use_cpu: true
 ```
 
-### Custom Model Registry
+### Custom System Bindings
 
-Override the default registry in your `config.yaml`:
+Override the built-in system-model bindings in your `config.yaml`:
 
 ```yaml
-mom_registry:
-  "models/mom-domain-classifier": "your-org/custom-domain-classifier"
-  "models/mom-pii-classifier": "your-org/custom-pii-detector"
-  "models/mom-embedding-pro": "your-org/custom-embeddings"
+global:
+  model_catalog:
+    system:
+      domain_classifier: "models/your-domain-classifier"
+      pii_classifier: "models/your-pii-classifier"
+      prompt_guard: "models/your-prompt-guard"
 ```
 
 ## Model Architecture

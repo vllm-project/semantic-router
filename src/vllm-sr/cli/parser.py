@@ -30,7 +30,14 @@ def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
 
     providers = data.get("providers")
     if isinstance(providers, dict):
-        for field_name in ("model_targets", "backends", "auth_profiles"):
+        for field_name in (
+            "model_targets",
+            "backends",
+            "auth_profiles",
+            "default_model",
+            "reasoning_families",
+            "default_reasoning_effort",
+        ):
             if field_name in providers:
                 fields.append(f"providers.{field_name}")
 
@@ -39,6 +46,8 @@ def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
             for index, model in enumerate(models):
                 if not isinstance(model, dict):
                     continue
+                if "access" in model:
+                    fields.append(f"providers.models[{index}].access")
                 for field_name in (
                     "endpoints",
                     "access_key",
@@ -53,6 +62,10 @@ def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
                 ):
                     if field_name in model:
                         fields.append(f"providers.models[{index}].{field_name}")
+
+    global_config = data.get("global")
+    if isinstance(global_config, dict) and "modules" in global_config:
+        fields.append("global.modules")
 
     return fields
 

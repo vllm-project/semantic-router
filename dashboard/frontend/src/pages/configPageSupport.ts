@@ -239,14 +239,83 @@ export interface LooperConfig {
 
 export interface ModelSelectionConfig {
   enabled?: boolean
-  default_algorithm?: string
-  llm_candidates_path?: string
-  models_path?: string
-  training_data_path?: string
-  knn?: Record<string, unknown>
-  kmeans?: Record<string, unknown>
-  svm?: Record<string, unknown>
-  custom_training?: Record<string, unknown>
+  method?: string
+  elo?: Record<string, unknown>
+  router_dc?: Record<string, unknown>
+  automix?: Record<string, unknown>
+  hybrid?: Record<string, unknown>
+  ml?: Record<string, unknown>
+}
+
+export interface CanonicalClassifierConfig {
+  domain?: (ModelConfig & { model_ref?: string; fallback_category?: string })
+  mcp?: MCPCategoryModel
+  pii?: (ModelConfig & { model_ref?: string })
+  preference?: {
+    use_contrastive?: boolean
+    embedding_model?: string
+  }
+}
+
+export interface CanonicalHallucinationModuleConfig {
+  enabled?: boolean
+  on_hallucination_detected?: string
+  fact_check?: Record<string, unknown>
+  detector?: Record<string, unknown>
+  explainer?: Record<string, unknown>
+}
+
+export interface CanonicalEmbeddingCatalogConfig {
+  semantic?: EmbeddingModelsConfig
+  bert?: ModelConfig
+}
+
+export interface CanonicalGlobalConfig {
+  router?: {
+    strategy?: string
+    auto_model_name?: string
+    include_config_models_in_list?: boolean
+    clear_route_cache?: boolean
+    streamed_body?: Record<string, unknown>
+    model_selection?: ModelSelectionConfig
+  }
+  services?: {
+    api?: APIConfig
+    response_api?: ResponseAPIConfig
+    observability?: ObservabilityConfig
+    authz?: Record<string, unknown>
+    ratelimit?: Record<string, unknown>
+    router_replay?: RouterReplayConfig
+  }
+  stores?: {
+    semantic_cache?: SemanticCacheConfig
+    memory?: MemoryConfig
+    vector_store?: Record<string, unknown>
+  }
+  integrations?: {
+    tools?: {
+      enabled?: boolean
+      top_k?: number
+      similarity_threshold?: number
+      tools_db_path?: string
+      fallback_to_empty?: boolean
+      advanced_filtering?: Record<string, unknown>
+    }
+    looper?: LooperConfig
+  }
+  model_catalog?: {
+    embeddings?: CanonicalEmbeddingCatalogConfig
+    system?: Record<string, string>
+    external?: Array<Record<string, unknown>>
+    modules?: {
+      prompt_compression?: Record<string, unknown>
+      prompt_guard?: (ModelConfig & { enabled?: boolean; model_ref?: string; use_vllm?: boolean })
+      classifier?: CanonicalClassifierConfig
+      hallucination_mitigation?: CanonicalHallucinationModuleConfig
+      feedback_detector?: (FeedbackDetectorConfig & { model_ref?: string })
+      modality_detector?: Record<string, unknown>
+    }
+  }
 }
 
 export interface KeywordSignal {
@@ -360,6 +429,11 @@ export interface ConfigData {
     plugins?: Array<{ type: string; configuration: Record<string, unknown> }>
   }>
   providers?: {
+    defaults?: {
+      default_model?: string
+      reasoning_families?: Record<string, ReasoningFamily>
+      default_reasoning_effort?: string
+    }
     models: Array<{
       name: string
       reasoning_family?: string
@@ -378,15 +452,13 @@ export interface ConfigData {
         completion_per_1m?: number
       }
     }>
-    default_model: string
-    reasoning_families?: Record<string, ReasoningFamily>
-    default_reasoning_effort?: string
   }
   routing?: {
     modelCards?: RoutingModelCard[]
     signals?: ConfigData['signals']
     decisions?: ConfigData['decisions']
   }
+  global?: CanonicalGlobalConfig
   bert_model?: ModelConfig
   semantic_cache?: SemanticCacheConfig
   tools?: {

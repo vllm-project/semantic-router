@@ -10,7 +10,7 @@ configuration architecture
 
 ## Summary
 
-The v0.3 canonical-config rollout is complete for the public config contract. Steady-state runtime config is now canonical-only, router-owned defaults are the single default source, and repo-owned config assets are enforced against the supported routing surface catalog.
+This debt tracked the repo-wide rollout from fragmented router/CLI/dashboard/Kubernetes config surfaces to the canonical v0.3 contract. The rollout is now complete for the steady-state user contract: `version/listeners/providers/routing/global`, with `providers.models[]` carrying deployment bindings directly and router-owned module configs living under `global.model_catalog.modules`.
 
 ## Evidence
 
@@ -21,6 +21,8 @@ The v0.3 canonical-config rollout is complete for the public config contract. St
 - [src/semantic-router/pkg/dsl/emitter_yaml.go](../../../src/semantic-router/pkg/dsl/emitter_yaml.go)
 - [src/semantic-router/pkg/dsl/routing_contract.go](../../../src/semantic-router/pkg/dsl/routing_contract.go)
 - [dashboard/backend/handlers/setup.go](../../../dashboard/backend/handlers/setup.go)
+- [dashboard/frontend/src/pages/ConfigPage.tsx](../../../dashboard/frontend/src/pages/ConfigPage.tsx)
+- [dashboard/frontend/src/pages/setupWizardSupport.ts](../../../dashboard/frontend/src/pages/setupWizardSupport.ts)
 - [dashboard/frontend/src/lib/dslLanguage.ts](../../../dashboard/frontend/src/lib/dslLanguage.ts)
 - [dashboard/frontend/src/lib/dslMutations.ts](../../../dashboard/frontend/src/lib/dslMutations.ts)
 - [dashboard/frontend/src/pages/DslEditorPage.tsx](../../../dashboard/frontend/src/pages/DslEditorPage.tsx)
@@ -34,6 +36,7 @@ The v0.3 canonical-config rollout is complete for the public config contract. St
 - [e2e/config/README.md](../../../e2e/config/README.md)
 - [deploy/operator/api/v1alpha1/semanticrouter_types.go](../../../deploy/operator/api/v1alpha1/semanticrouter_types.go)
 - [deploy/operator/controllers/semanticrouter_controller.go](../../../deploy/operator/controllers/semanticrouter_controller.go)
+- [website/docs/installation/k8s/operator.md](../../../website/docs/installation/k8s/operator.md)
 - [src/vllm-sr/cli/models.py](../../../src/vllm-sr/cli/models.py)
 - [src/vllm-sr/cli/parser.py](../../../src/vllm-sr/cli/parser.py)
 - [website/docs/installation/configuration.md](../../../website/docs/installation/configuration.md)
@@ -52,6 +55,8 @@ The v0.3 canonical-config rollout is complete for the public config contract. St
 
 - One canonical config contract with Go as schema owner and thin adapters for CLI, dashboard, DSL, and Kubernetes deployment.
 - The DSL owns only routing semantics, while provider deployment bindings and global runtime overrides stay outside the DSL.
+- Provider deployment bindings are expressed consistently as `providers.models[]` with direct `backend_refs` and related access fields.
+- Router-wide overrides are expressed consistently as `global.router/services/stores/integrations/model_catalog`, with model-backed module settings under `global.model_catalog.modules`.
 - No user-visible docs or dashboard entrypoints imply that `.vllm-sr/router-defaults.yaml` or a second router defaults file is a normal file users must edit.
 - Dashboard config-management views understand the canonical split between `routing.modelCards` and `providers.models` instead of reconstructing earlier mixed layouts.
 - Repo-owned config assets are organized around canonical `config/config.yaml` plus `signal/decision/algorithm/plugin` fragments, while runtime examples and harness manifests live outside `config/`.
@@ -66,6 +71,12 @@ The v0.3 canonical-config rollout is complete for the public config contract. St
 - Migration-only provider-model compatibility fields are no longer part of the normal CLI typed config path.
 - Router-side migration helpers do not silently expand back into a second user-facing config contract.
 - Dashboard runtime-defaults surfaces are either backed by router-owned defaults APIs or relabeled so they no longer imply a required local defaults file.
-- Current docs, translated docs, and maintained versioned docs all describe the same canonical `version/listeners/providers/routing/global` contract for the active workflow.
+- Dashboard config pages, onboarding helpers, and topology/editor types no longer assume pre-`providers.defaults` or pre-`providers.models[]` shapes.
+- Current docs, translated docs, and maintained versioned docs all describe the same canonical `version/listeners/providers/routing/global` contract and the current `global.router/services/stores/integrations/model_catalog` hierarchy, including `global.model_catalog.modules`, for the active workflow.
 
-All exit criteria are satisfied as of 2026-03-14. Remaining hotspot size and structure-rule gaps are tracked separately in [TD006](td-006-structural-rule-target-vs-legacy-hotspots.md), not as a second config contract.
+## Retirement Notes
+
+- Canonical runtime parsing is now Go-owned and steady-state runtime loading is canonical-only.
+- CLI typed schema, migration tooling, dashboard editing flows, Helm, operator, and DSL import/export now converge on the same canonical top-level layout.
+- Repository config assets and latest tutorials are organized by `signal/decision/algorithm/plugin/global`, with Go tests guarding contract and doc drift.
+- Remaining large-file or structure-rule issues live under [TD006 Structural Rule Target Still Exceeds Reality in Key Legacy Hotspots](td-006-structural-rule-target-vs-legacy-hotspots.md), not this config-surface debt.

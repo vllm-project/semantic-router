@@ -54,7 +54,7 @@ routing:
 
 Decision matching stays separate from:
 
-- `providers.models`, which carries deployment bindings
+- `providers.models[]`, which carries deployment bindings
 - `decision.algorithm`, which chooses among multiple candidate models
 - `decision.plugins`, which post-processes a matched route
 

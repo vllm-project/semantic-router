@@ -74,8 +74,9 @@ It no longer owns endpoints, API keys, listeners, or router-global runtime setti
 Model semantics and deployment bindings are now separated explicitly:
 
 - `routing.modelCards` carries semantic catalog data such as size, context window, description, and capabilities
-- `providers.models` carries access bindings such as `provider_model_id` and `backend_refs`
-- each `backend_refs` item carries its own endpoint, protocol, weight, and API key reference
+- `providers.defaults` carries provider-wide defaults such as `default_model`, `reasoning_families`, and `default_reasoning_effort`
+- `providers.models` carries per-model access bindings directly
+- each `providers.models[].backend_refs[]` item carries its own endpoint, protocol, weight, and API key reference
 
 ## Global defaults
 
@@ -83,6 +84,12 @@ Router-global defaults are now owned by the router itself, not by a second user-
 
 - the router provides typed built-in defaults
 - `global:` only overrides what you need to change
+- `global.router` groups router-engine control knobs
+- `global.services` groups shared APIs and runtime services
+- `global.stores` groups storage-backed services
+- `global.integrations` groups helper runtime integrations
+- `global.model_catalog` groups router-owned model assets and the classifier/guardrail modules that resolve through those assets
+- `global.model_catalog.modules` is the home for module-specific runtime settings
 - omitted fields keep the built-in default
 
 This makes local, dashboard, Helm, and operator behavior converge on the same baseline.
@@ -133,8 +140,8 @@ The repo now has one public config story:
 
 - full router configuration lives in canonical YAML
 - DSL is the routing-semantic view of that config
-- deployment bindings live in `providers.models`
-- runtime overrides live in `global`
+- deployment bindings live in `providers.defaults` and `providers.models[]`
+- runtime overrides live in `global.router/services/stores/integrations/model_catalog`, with model-backed modules under `global.model_catalog.modules`
 - built-in defaults live in the router
 - repo-owned sample assets are organized by `signal/decision/algorithm/plugin` fragments instead of parallel full-config examples
 

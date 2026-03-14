@@ -22,6 +22,7 @@ interface DecisionRule {
   priority?: number
   rules?: unknown[]
   modelRefs?: unknown[]
+  plugins?: unknown[]
   [key: string]: unknown
 }
 
@@ -29,15 +30,22 @@ interface RouterConfig {
   signals?: Record<string, SignalConfig[]>
   decisions?: DecisionRule[]
   providers?: {
-    default_model?: string
+    defaults?: {
+      default_model?: string
+    }
     models?: Array<{
       name?: string
+      backend_refs?: Array<{ name?: string }>
       endpoints?: Array<{ name?: string }>
       preferred_endpoints?: string[]
       [key: string]: unknown
     }>
     vllm_endpoints?: unknown[]
     [key: string]: unknown
+  }
+  routing?: {
+    signals?: Record<string, SignalConfig[]>
+    decisions?: DecisionRule[]
   }
   vllm_endpoints?: Array<{ name?: string }>
   plugins?: Record<string, unknown>
@@ -52,8 +60,9 @@ interface RouterConfig {
 function countSignals(cfg: RouterConfig): { total: number; byType: Record<string, number> } {
   const byType: Record<string, number> = {}
   let total = 0
-  if (cfg.signals) {
-    for (const [type, arr] of Object.entries(cfg.signals)) {
+  const signals = cfg.routing?.signals ?? cfg.signals
+  if (signals) {
+    for (const [type, arr] of Object.entries(signals)) {
       if (Array.isArray(arr)) {
         byType[type] = arr.length
         total += arr.length
@@ -64,7 +73,8 @@ function countSignals(cfg: RouterConfig): { total: number; byType: Record<string
 }
 
 function countDecisions(cfg: RouterConfig): number {
-  return Array.isArray(cfg.decisions) ? cfg.decisions.length : 0
+  const decisions = cfg.routing?.decisions ?? cfg.decisions
+  return Array.isArray(decisions) ? decisions.length : 0
 }
 
 function countModels(cfg: RouterConfig): number {
@@ -81,6 +91,10 @@ function countModels(cfg: RouterConfig): number {
 }
 
 function countPlugins(cfg: RouterConfig): number {
+  const decisions = cfg.routing?.decisions ?? cfg.decisions
+  if (Array.isArray(decisions)) {
+    return decisions.reduce((count, decision) => count + (Array.isArray(decision.plugins) ? decision.plugins.length : 0), 0)
+  }
   if (!cfg.plugins || typeof cfg.plugins !== 'object') return 0
   return Object.keys(cfg.plugins).length
 }
@@ -292,6 +306,7 @@ const DashboardPage: React.FC = () => {
   const decisionCount = useMemo(() => config ? countDecisions(config) : 0, [config])
   const modelCount = useMemo(() => config ? countModels(config) : 0, [config])
   const pluginCount = useMemo(() => config ? countPlugins(config) : 0, [config])
+  const currentDecisions = useMemo(() => config?.routing?.decisions ?? config?.decisions ?? [], [config])
   const healthyServices = useMemo(() => status?.services.filter(s => s.healthy).length ?? 0, [status])
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
   const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
@@ -301,11 +316,12 @@ const DashboardPage: React.FC = () => {
 
   // Categorize decisions for the table
   const categorizedDecisions = useMemo(() => {
-    if (!config?.decisions) return { guardrails: [], routing: [], fallbacks: [] }
+    const decisions = config?.routing?.decisions ?? config?.decisions
+    if (!decisions) return { guardrails: [], routing: [], fallbacks: [] }
     const guardrails: DecisionRule[] = []
     const routing: DecisionRule[] = []
     const fallbacks: DecisionRule[] = []
-    for (const d of config.decisions) {
+    for (const d of decisions) {
       const cat = getDecisionCategory(d.priority)
       if (cat === 'guardrail') guardrails.push(d)
       else if (cat === 'fallback') fallbacks.push(d)
@@ -626,7 +642,7 @@ const DashboardPage: React.FC = () => {
         )}
 
         {/* Decisions Overview Table */}
-        {config?.decisions && config.decisions.length > 0 && (
+        {currentDecisions.length > 0 && (
           <div className={styles.card}>
             <div className={styles.cardHeader}>
               <h2 className={styles.cardTitle}>Decisions Overview</h2>
@@ -667,9 +683,9 @@ const DashboardPage: React.FC = () => {
                     </div>
                   )
                 })}
-              {config.decisions.length > 10 && (
+              {currentDecisions.length > 10 && (
                 <button className={styles.decisionTableMore} onClick={() => navigate('/config/decisions')}>
-                  +{config.decisions.length - 10} more decisions &rsaquo;
+                  +{currentDecisions.length - 10} more decisions &rsaquo;
                 </button>
               )}
             </div>

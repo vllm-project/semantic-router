@@ -11,7 +11,8 @@ listeners:
     timeout: "300s"
 
 providers:
-  default_model: "replace-with-your-model"
+  defaults:
+    default_model: "replace-with-your-model"
   models:
     - name: "replace-with-your-model"
       backend_refs:

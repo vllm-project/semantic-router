@@ -82,6 +82,35 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 	}
 }
 
+func TestConfigFragmentsAvoidRetiredDomainAliases(t *testing.T) {
+	root := repoRootFromTestFile(t)
+	configRoot := filepath.Join(root, "config")
+
+	err := filepath.Walk(configRoot, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() || !strings.HasSuffix(info.Name(), ".yaml") {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		content := string(data)
+		for _, forbidden := range []string{"computer_science", "name: technical\n"} {
+			if strings.Contains(content, forbidden) {
+				t.Fatalf("%s still contains retired domain alias %q", path, forbidden)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to walk config fragment catalog: %v", err)
+	}
+}
+
 func repoRootFromTestFile(t *testing.T) string {
 	t.Helper()
 	_, filename, _, ok := runtime.Caller(0)

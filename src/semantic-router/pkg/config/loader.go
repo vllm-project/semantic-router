@@ -133,7 +133,14 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 	}
 
 	providers := nestedStringMap(raw["providers"])
-	for _, key := range []string{"model_targets", "backends", "auth_profiles"} {
+	for _, key := range []string{
+		"model_targets",
+		"backends",
+		"auth_profiles",
+		"default_model",
+		"reasoning_families",
+		"default_reasoning_effort",
+	} {
 		if _, ok := providers[key]; ok {
 			fields = append(fields, "providers."+key)
 		}
@@ -143,6 +150,7 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 		for index, rawModel := range models {
 			model := nestedStringMap(rawModel)
 			for _, key := range []string{
+				"access",
 				"endpoints",
 				"access_key",
 				"reasoning_family",
@@ -159,6 +167,11 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 				}
 			}
 		}
+	}
+
+	global := nestedStringMap(raw["global"])
+	if _, ok := global["modules"]; ok {
+		fields = append(fields, "global.modules")
 	}
 
 	return fields

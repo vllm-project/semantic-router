@@ -37,9 +37,9 @@ Finish the repo-wide rollout of the v0.3 canonical config contract where Go owns
 
 ## Current Loop
 
-- Current focus: finish P11 full-harness validation after the config fragment taxonomy and parser cleanup.
-- Last completed loop: removed the remaining non-user-facing assets from `config/`, moved runtime support examples to `examples/runtime/`, moved harness manifests to `e2e/config/`, split reusable routing fragments into `signal/decision/algorithm/plugin`, and removed the router's legacy user-config parse path so steady-state runtime config is canonical-only.
-- Next loop: run the remaining local smoke/E2E ladder for P11 and decide whether any config-specific debt remains after the fragment-catalog enforcement and docs sync.
+- Current focus: finish P11 validation cleanup after the final `global.model_catalog.modules` hierarchy alignment and debt retirement.
+- Last completed loop: nested router-owned module config under `global.model_catalog.modules`, propagated the change through Go defaults/parser, CLI migration and deprecation checks, dashboard types, operator/Helm/config assets, and the latest docs/tutorials.
+- Next loop: rerun the remaining harness ladder, then separate any surviving gate noise into non-config debt if it is only structural-hotspot residue.
 
 ## Decision Log
 
@@ -50,6 +50,7 @@ Finish the repo-wide rollout of the v0.3 canonical config contract where Go owns
 - 2026-03-14: Remove legacy DSL `BACKEND`/`GLOBAL` authoring support completely instead of keeping it as a migration-era compatibility surface.
 - 2026-03-14: Remove CLI-side `router-defaults.yaml` and merger helpers; router-owned defaults plus explicit `config migrate` are the only supported path.
 - 2026-03-14: Treat `routing.models`, `providers.model_targets`, `providers.backends`, and `providers.auth_profiles` as removed contract fields; parser paths now fail fast instead of silently accepting them.
+- 2026-03-14: Treat router-owned capability modules as part of `global.model_catalog`; module settings now live under `global.model_catalog.modules`, not as a peer top-level global block.
 
 ## Follow-up Debt / ADR Links
 

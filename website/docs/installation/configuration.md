@@ -31,12 +31,17 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `routing.signals`
   - `routing.decisions`
 - `providers` owns deployment and default-selection metadata.
-  - `default_model`
-  - `reasoning_families`
-  - `default_reasoning_effort`
+  - `defaults`
   - `models`
+  - `providers.defaults` holds `default_model`, `reasoning_families`, and `default_reasoning_effort`
+  - `providers.models[*]` holds `provider_model_id`, `backend_refs`, `pricing`, `api_format`, and `external_model_ids`
 - `global` owns router-wide runtime overrides.
-  - Examples: `observability`, `semantic_cache`, `prompt_guard`, `tools`, `model_selection`
+  - `global.router` groups router-engine control knobs such as route-cache and model-selection defaults
+  - `global.services` groups shared APIs and control-plane services such as `response_api`, `router_replay`, `observability`, `authz`, and `ratelimit`
+  - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`
+  - `global.integrations` groups helper runtime integrations such as `tools` and `looper`
+  - `global.model_catalog` groups router-owned model assets such as embeddings, system models, external models, and model-backed modules
+  - `global.model_catalog.modules` groups capability modules such as `prompt_guard`, `classifier`, and `hallucination_mitigation`
 
 ## Canonical example
 
@@ -50,12 +55,13 @@ listeners:
     timeout: 300s
 
 providers:
-  default_model: qwen3-8b
-  reasoning_families:
-    qwen3:
-      type: effort
-      parameter: reasoning.effort
-  default_reasoning_effort: medium
+  defaults:
+    default_model: qwen3-8b
+    reasoning_families:
+      qwen3:
+        type: effort
+        parameter: reasoning.effort
+    default_reasoning_effort: medium
   models:
     - name: qwen3-8b
       provider_model_id: qwen3-8b
@@ -93,9 +99,10 @@ routing:
           use_reasoning: true
 
 global:
-  observability:
-    metrics:
-      enabled: true
+  services:
+    observability:
+      metrics:
+        enabled: true
 ```
 
 ## Repository config assets
@@ -130,7 +137,7 @@ Repo-owned runtime and harness assets now live outside `config/`:
 
 Test-only ONNX binding assets now live under `e2e/config/onnx-binding/`.
 
-Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the starter config points `global.tools.tools_db_path` at `examples/runtime/tools/tools_db.json` for local development.
+Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the starter config points `global.integrations.tools.tools_db_path` at `examples/runtime/tools/tools_db.json` for local development.
 
 ## How to use it
 
@@ -179,7 +186,8 @@ Helm values now mirror the same canonical contract under `config`.
 config:
   version: v0.3
   providers:
-    default_model: qwen3-8b
+    defaults:
+      default_model: qwen3-8b
     models:
       - name: qwen3-8b
         provider_model_id: qwen3-8b
@@ -270,9 +278,9 @@ into canonical `providers/routing/global`.
 
 ### Router local
 
-1. Keep deployment bindings in `providers.models[].backend_refs[]`.
+1. Keep provider-wide defaults in `providers.defaults` and deployment bindings in `providers.models[].backend_refs[]`.
 2. Keep routing semantics in `routing.modelCards/signals/decisions`.
-3. Put only runtime overrides you actually need under `global:`.
+3. Put only runtime overrides you actually need under `global.router/services/stores/integrations/model_catalog`, and keep model-backed module settings under `global.model_catalog.modules`.
 
 ### Helm
 

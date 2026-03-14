@@ -530,10 +530,50 @@ export interface ConfigData {
     }>
   }>
   providers?: {
+    defaults?: {
+      default_model?: string
+    }
     models?: Array<{
       name: string
       reasoning_family?: string
     }>
-    default_model?: string
+  }
+  routing?: {
+    modelCards?: Array<{
+      name: string
+      reasoning_family_ref?: string
+    }>
+    signals?: ConfigData['signals']
+    decisions?: ConfigData['decisions']
+  }
+  global?: {
+    router?: {
+      strategy?: 'priority' | 'confidence'
+    }
+    stores?: {
+      semantic_cache?: {
+        enabled?: boolean
+        backend_type?: string
+        similarity_threshold?: number
+        ttl_seconds?: number
+      }
+    }
+    model_catalog?: {
+      modules?: {
+        prompt_guard?: {
+          enabled?: boolean
+          model_id?: string
+          threshold?: number
+          use_modernbert?: boolean
+          use_vllm?: boolean
+        }
+        classifier?: {
+          pii?: {
+            model_id?: string
+            threshold?: number
+          }
+        }
+      }
+    }
   }
 }

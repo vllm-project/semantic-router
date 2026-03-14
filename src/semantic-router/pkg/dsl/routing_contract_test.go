@@ -139,12 +139,13 @@ listeners:
     address: 0.0.0.0
     port: 8080
 providers:
-  default_model: math-small
-  reasoning_families:
-    openai:
-      type: effort
-      parameter: reasoning.effort
-  default_reasoning_effort: medium
+  defaults:
+    default_model: math-small
+    reasoning_families:
+      openai:
+        type: effort
+        parameter: reasoning.effort
+    default_reasoning_effort: medium
   models:
     - name: math-small
       provider_model_id: qwen/qwen3
@@ -175,7 +176,8 @@ routing:
       modelRefs:
         - model: math-small
 global:
-  strategy: priority
+  router:
+    strategy: priority
 `
 
 	cfg, err := config.ParseYAMLBytes([]byte(configYAML))

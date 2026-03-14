@@ -2,12 +2,9 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
-
-	"gopkg.in/yaml.v2"
 )
 
 // CanonicalConfig is the public v0.3 config contract.
@@ -56,79 +53,6 @@ type RoutingModel struct {
 	Tags               []string `yaml:"tags,omitempty"`
 }
 
-// CanonicalProviders holds deployment bindings and provider defaults.
-type CanonicalProviders struct {
-	DefaultModel           string                           `yaml:"default_model,omitempty"`
-	ReasoningFamilies      map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
-	DefaultReasoningEffort string                           `yaml:"default_reasoning_effort,omitempty"`
-	Models                 []CanonicalProviderModel         `yaml:"models,omitempty"`
-}
-
-// CanonicalProviderModel binds a logical routing model to concrete access details.
-type CanonicalProviderModel struct {
-	Name             string                `yaml:"name"`
-	ProviderModelID  string                `yaml:"provider_model_id,omitempty"`
-	BackendRefs      []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
-	Pricing          ModelPricing          `yaml:"pricing,omitempty"`
-	APIFormat        string                `yaml:"api_format,omitempty"`
-	ExternalModelIDs map[string]string     `yaml:"external_model_ids,omitempty"`
-}
-
-// CanonicalBackendRef defines one physical backend target for a provider model.
-type CanonicalBackendRef struct {
-	Name         string            `yaml:"name,omitempty"`
-	Endpoint     string            `yaml:"endpoint,omitempty"`
-	Protocol     string            `yaml:"protocol,omitempty"`
-	Weight       int               `yaml:"weight,omitempty"`
-	Type         string            `yaml:"type,omitempty"`
-	BaseURL      string            `yaml:"base_url,omitempty"`
-	Provider     string            `yaml:"provider,omitempty"`
-	AuthHeader   string            `yaml:"auth_header,omitempty"`
-	AuthPrefix   string            `yaml:"auth_prefix,omitempty"`
-	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
-	APIVersion   string            `yaml:"api_version,omitempty"`
-	ChatPath     string            `yaml:"chat_path,omitempty"`
-	APIKey       string            `yaml:"api_key,omitempty"`
-	APIKeyEnv    string            `yaml:"api_key_env,omitempty"`
-}
-
-// CanonicalGlobal contains router-managed runtime defaults plus sparse overrides.
-type CanonicalGlobal struct {
-	Strategy                  string `yaml:"strategy,omitempty"`
-	AutoModelName             string `yaml:"auto_model_name,omitempty"`
-	IncludeConfigModelsInList bool   `yaml:"include_config_models_in_list,omitempty"`
-	ClearRouteCache           bool   `yaml:"clear_route_cache,omitempty"`
-	StreamedBodyMode          bool   `yaml:"streamed_body_mode,omitempty"`
-	MaxStreamedBodyBytes      int64  `yaml:"max_streamed_body_bytes,omitempty"`
-	StreamedBodyTimeoutSec    int    `yaml:"streamed_body_timeout_sec,omitempty"`
-	InlineModels              `yaml:",inline"`
-	ExternalModels            []ExternalModelConfig `yaml:"external_models,omitempty"`
-	SemanticCache             SemanticCache         `yaml:"semantic_cache,omitempty"`
-	Memory                    MemoryConfig          `yaml:"memory,omitempty"`
-	VectorStore               *VectorStoreConfig    `yaml:"vector_store,omitempty"`
-	ResponseAPI               ResponseAPIConfig     `yaml:"response_api,omitempty"`
-	RouterReplay              RouterReplayConfig    `yaml:"router_replay,omitempty"`
-	Looper                    LooperConfig          `yaml:"looper,omitempty"`
-	API                       APIConfig             `yaml:"api,omitempty"`
-	Observability             ObservabilityConfig   `yaml:"observability,omitempty"`
-	Tools                     ToolsConfig           `yaml:"tools,omitempty"`
-	Authz                     AuthzConfig           `yaml:"authz,omitempty"`
-	RateLimit                 RateLimitConfig       `yaml:"ratelimit,omitempty"`
-	ModelSelection            ModelSelectionConfig  `yaml:"model_selection,omitempty"`
-	SystemModels              CanonicalSystemModels `yaml:"system_models,omitempty"`
-}
-
-// CanonicalSystemModels centralizes stable capability bindings for built-in models.
-type CanonicalSystemModels struct {
-	PromptGuard            string `yaml:"prompt_guard,omitempty"`
-	DomainClassifier       string `yaml:"domain_classifier,omitempty"`
-	PIIClassifier          string `yaml:"pii_classifier,omitempty"`
-	FactCheckClassifier    string `yaml:"fact_check_classifier,omitempty"`
-	HallucinationDetector  string `yaml:"hallucination_detector,omitempty"`
-	HallucinationExplainer string `yaml:"hallucination_explainer,omitempty"`
-	FeedbackDetector       string `yaml:"feedback_detector,omitempty"`
-}
-
 func isCanonicalConfig(raw map[string]interface{}) bool {
 	_, hasRouting := raw["routing"]
 	_, hasGlobal := raw["global"]
@@ -155,9 +79,10 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
 
-	cfg.DefaultModel = canonical.Providers.DefaultModel
-	cfg.DefaultReasoningEffort = canonical.Providers.DefaultReasoningEffort
-	cfg.ReasoningFamilies = copyReasoningFamilies(canonical.Providers.ReasoningFamilies)
+	providerDefaults := canonicalProviderDefaults(canonical.Providers)
+	cfg.DefaultModel = providerDefaults.DefaultModel
+	cfg.DefaultReasoningEffort = providerDefaults.DefaultReasoningEffort
+	cfg.ReasoningFamilies = copyReasoningFamilies(providerDefaults.ReasoningFamilies)
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {
@@ -215,15 +140,15 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 		}
 		modelsByName[model.Name] = model
 		if model.ReasoningFamilyRef != "" {
-			if _, ok := canonical.Providers.ReasoningFamilies[model.ReasoningFamilyRef]; !ok {
-				return fmt.Errorf("routing.modelCards[%s].reasoning_family_ref %q not found in providers.reasoning_families", model.Name, model.ReasoningFamilyRef)
+			if _, ok := canonicalProviderDefaults(canonical.Providers).ReasoningFamilies[model.ReasoningFamilyRef]; !ok {
+				return fmt.Errorf("routing.modelCards[%s].reasoning_family_ref %q not found in providers.defaults.reasoning_families", model.Name, model.ReasoningFamilyRef)
 			}
 		}
 	}
 
-	if canonical.Providers.DefaultModel != "" {
-		if _, ok := modelsByName[canonical.Providers.DefaultModel]; !ok {
-			return fmt.Errorf("providers.default_model %q not found in routing.modelCards", canonical.Providers.DefaultModel)
+	if canonicalProviderDefaults(canonical.Providers).DefaultModel != "" {
+		if _, ok := modelsByName[canonicalProviderDefaults(canonical.Providers).DefaultModel]; !ok {
+			return fmt.Errorf("providers.defaults.default_model %q not found in routing.modelCards", canonicalProviderDefaults(canonical.Providers).DefaultModel)
 		}
 	}
 
@@ -244,39 +169,6 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 		}
 	}
 
-	return nil
-}
-
-func resolveCanonicalGlobal(override *CanonicalGlobal) (CanonicalGlobal, error) {
-	defaults := DefaultCanonicalGlobal()
-	if override == nil {
-		return defaults, nil
-	}
-
-	resolved := defaults
-	overrideBytes, err := yaml.Marshal(override)
-	if err != nil {
-		return CanonicalGlobal{}, fmt.Errorf("failed to marshal global override: %w", err)
-	}
-	if err := yaml.Unmarshal(overrideBytes, &resolved); err != nil {
-		return CanonicalGlobal{}, fmt.Errorf("failed to merge global override: %w", err)
-	}
-
-	applySystemModelOverrides(&resolved, &defaults)
-	return resolved, nil
-}
-
-func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
-	if global == nil {
-		return nil
-	}
-	data, err := yaml.Marshal(global)
-	if err != nil {
-		return fmt.Errorf("failed to marshal canonical global config: %w", err)
-	}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return fmt.Errorf("failed to apply canonical global config: %w", err)
-	}
 	return nil
 }
 
@@ -306,10 +198,6 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 
 func canonicalRoutingModels(routing CanonicalRouting) []RoutingModel {
 	return routing.ModelCards
-}
-
-func canonicalBackendRefs(model CanonicalProviderModel) []CanonicalBackendRef {
-	return model.BackendRefs
 }
 
 func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[string]ProviderProfile, []VLLMEndpoint, map[string]ModelParams, error) {
@@ -404,16 +292,6 @@ func normalizeExternalModelIDsFromProviderModel(model CanonicalProviderModel) ma
 		return nil
 	}
 	return result
-}
-
-func resolveBackendAPIKey(ref CanonicalBackendRef) string {
-	if ref.APIKey != "" {
-		return ref.APIKey
-	}
-	if ref.APIKeyEnv != "" {
-		return os.Getenv(ref.APIKeyEnv)
-	}
-	return ""
 }
 
 func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, index int) string {
