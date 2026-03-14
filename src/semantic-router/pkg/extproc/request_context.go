@@ -154,3 +154,25 @@ type RequestContext struct {
 	// Rate limit context - stored after Check() for post-response Report()
 	RateLimitCtx *ratelimit.Context
 }
+
+// HasPersonalizedContext returns true if the request/response is tainted with user-specific
+// context (RAG, memory, PII, injected system prompt) that should prevent caching the response.
+// The second return value is the canonical reason for observability (metrics/tracing).
+func (ctx *RequestContext) HasPersonalizedContext() (bool, string) {
+	if ctx == nil {
+		return false, ""
+	}
+	if ctx.RAGRetrievedContext != "" {
+		return true, "rag_context"
+	}
+	if ctx.MemoryContext != "" {
+		return true, "memory_context"
+	}
+	if ctx.PIIDetected {
+		return true, "pii_detected"
+	}
+	if ctx.VSRInjectedSystemPrompt {
+		return true, "system_prompt_injected"
+	}
+	return false, ""
+}
