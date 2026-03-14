@@ -63,51 +63,25 @@ sudo docker run -d \
     --gpu-memory-utilization 0.85
 ```
 
-If the backend fails its startup memory check on a single MI300X, reduce `--gpu-memory-utilization` first. If it still does not fit, reduce `--max-model-len`.
-
-Verify that the container is up and that all aliases are visible:
-
-```bash
-sudo docker ps --filter name=vllm
-curl -s "http://localhost:${VLLM_PORT_122B:-8090}/v1/models"
-```
-
-The `/v1/models` response should include all six alias IDs listed above.
-
 ### Step 2: Install vLLM Semantic Router
 
-```bash
-sudo apt-get install python3.12-venv
-python3 -m venv vsr
-source vsr/bin/activate
-pip3 install vllm-sr
-```
-
-### Step 3: Prepare the AMD routing profile
-
-If you are running from this repository, use [config.yaml](./config.yaml) directly as the reference AMD profile. If you want a standalone copy, download it:
+Install vllm-sr with one command:
 
 ```bash
-wget -O config.yaml https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/amd/config.yaml
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 ```
 
-### Step 4: Start vLLM Semantic Router
+### Step 3: Access the dashboard
 
-Use the canonical AMD local serve path:
-
-```bash
-vllm-sr serve --image-pull-policy never --platform amd
-```
-
-If you are using a local `config.yaml` in the current directory, the router will load it automatically on startup.
-
-### Step 5: Access the dashboard
+If everything is working, you should be able to access the dashboard at:
 
 ```text
 http://<your-server-ip>:8700
 ```
 
-You should see routing metrics, selected decision metadata, and selected model aliases for each request.
+Complete the user registration, onboarding process, and import the reference profile (from remote).
+
+> Import the profile from: https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/amd/config.yaml
 
 ## Architecture
 
