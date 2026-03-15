@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -14,6 +16,7 @@ import (
 func main() {
 	// Command-line flags
 	compareBaseline := flag.String("compare-baseline", "", "Path to baseline directory")
+	currentResults := flag.String("current", "", "Path to current benchmark results (JSON)")
 	thresholdFile := flag.String("threshold-file", "", "Path to thresholds configuration file")
 	outputPath := flag.String("output", "", "Output path for reports")
 	generateReport := flag.Bool("generate-report", false, "Generate performance report")
@@ -34,7 +37,7 @@ func main() {
 	}
 
 	if *compareBaseline != "" {
-		if err := compareWithBaseline(*compareBaseline, *thresholdFile, *outputPath); err != nil {
+		if err := compareWithBaseline(*compareBaseline, *currentResults, *thresholdFile, *outputPath); err != nil {
 			fmt.Fprintf(os.Stderr, "Error comparing with baseline: %v\n", err)
 			os.Exit(1)
 		}
@@ -45,15 +48,16 @@ func main() {
 	fmt.Println("Performance Testing Tool")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  perftest --compare-baseline=<dir> --threshold-file=<file> --output=<file>")
+	fmt.Println("  perftest --compare-baseline=<dir> --current=<file> --threshold-file=<file> --output=<file>")
 	fmt.Println("  perftest --generate-report --input=<file> --output=<file>")
 	fmt.Println()
 	flag.PrintDefaults()
 }
 
-func compareWithBaseline(baselineDir, thresholdFile, outputPath string) error {
+func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputPath string) error {
 	fmt.Println("Comparing performance with baseline...")
 	fmt.Printf("Baseline directory: %s\n", baselineDir)
+	fmt.Printf("Current results: %s\n", currentResultsFile)
 	fmt.Printf("Threshold file: %s\n", thresholdFile)
 
 	// Load thresholds
@@ -66,14 +70,75 @@ func compareWithBaseline(baselineDir, thresholdFile, outputPath string) error {
 		}
 	}
 
-	// For now, create a simple comparison
-	// In a real implementation, this would parse Go benchmark output
-	// and compare against saved baselines
+	// Load baseline
+	baselinePath := filepath.Join(baselineDir, "baseline.json")
+	baseline, err := benchmark.LoadBaseline(baselinePath)
+	if err != nil {
+		return fmt.Errorf("failed to load baseline: %w", err)
+	}
+	fmt.Printf("Loaded baseline with %d benchmarks\n", len(baseline.Benchmarks))
 
-	fmt.Println("Baseline comparison complete")
+	// Load current results
+	var current *benchmark.Baseline
+	if currentResultsFile != "" {
+		currentData, err := os.ReadFile(currentResultsFile)
+		if err != nil {
+			return fmt.Errorf("failed to read current results: %w", err)
+		}
+		if err := json.Unmarshal(currentData, &current); err != nil {
+			return fmt.Errorf("failed to parse current results: %w", err)
+		}
+	} else {
+		// Look for current.json in baseline dir
+		currentPath := filepath.Join(baselineDir, "current.json")
+		currentData, err := os.ReadFile(currentPath)
+		if err != nil {
+			return fmt.Errorf("failed to read current results: %w", err)
+		}
+		if err := json.Unmarshal(currentData, &current); err != nil {
+			return fmt.Errorf("failed to parse current results: %w", err)
+		}
+	}
+	fmt.Printf("Loaded current results with %d benchmarks\n", len(current.Benchmarks))
 
+	// Compare with baseline
+	results, err := benchmark.CompareWithBaseline(current, baseline, thresholds)
+	if err != nil {
+		return fmt.Errorf("failed to compare results: %w", err)
+	}
+
+	// Print results
+	benchmark.PrintComparisonResults(results)
+
+	// Generate comparison output
+	comparisonOutput := struct {
+		BaselineDir    string                    `json:"baseline_dir"`
+		CurrentFile    string                    `json:"current_file"`
+		Timestamp      time.Time                 `json:"timestamp"`
+		Results        []benchmark.ComparisonResult `json:"results"`
+		HasRegressions bool                      `json:"has_regressions"`
+	}{
+		BaselineDir:    baselineDir,
+		CurrentFile:    currentResultsFile,
+		Timestamp:      time.Now(),
+		Results:        results,
+		HasRegressions: benchmark.HasRegressions(results),
+	}
+
+	// Save comparison output
 	if outputPath != "" {
-		fmt.Printf("Results saved to: %s\n", outputPath)
+		outputData, err := json.MarshalIndent(comparisonOutput, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal comparison: %w", err)
+		}
+		if err := os.WriteFile(outputPath, outputData, 0644); err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		fmt.Printf("Comparison results saved to: %s\n", outputPath)
+	}
+
+	if benchmark.HasRegressions(results) {
+		fmt.Println("\n⚠️ WARNING: Performance regressions detected!")
 	}
 
 	return nil
