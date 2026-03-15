@@ -43,6 +43,9 @@ type OpenAIRouter struct {
 	// RateLimiter enforces per-user/model rate limits from multiple sources
 	// (Envoy RLS -> local limiter).
 	RateLimiter *ratelimit.RateLimitResolver
+
+	// StopPruneSweep stops the background memory prune sweep goroutine (nil if not started).
+	StopPruneSweep func()
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls.
