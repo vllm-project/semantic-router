@@ -576,63 +576,65 @@ Example configuration:
 
 ```yaml
 # config/config.yaml (excerpt)
-classifier:
-  category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+global:
+  model_catalog:
+    modules:
+      classifier:
+        domain:
+          model_id: "models/category_classifier_modernbert-base_model"
+          use_modernbert: true
+          threshold: 0.6
+          use_cpu: true
+          category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
 
-categories:
-  - name: tech
-    # Map generic "tech" to multiple MMLU-Pro categories
-    mmlu_categories: ["computer science", "engineering"]
-  - name: finance
-    # Map generic "finance" to MMLU economics
-    mmlu_categories: ["economics"]
-  - name: politics
-    # If mmlu_categories is omitted and the name matches an MMLU category,
-    # the router falls back to identity mapping automatically.
-
-decisions:
-  - name: tech
-    description: "Route technical queries"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "tech"
-    modelRefs:
-      - model: phi4
-        use_reasoning: false
-      - model: mistral-small3.1
-        use_reasoning: false
-
-  - name: finance
-    description: "Route finance queries"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "finance"
-    modelRefs:
-      - model: gemma3:27b
-        use_reasoning: false
-
-  - name: politics
-    description: "Route politics queries"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "politics"
-    modelRefs:
-      - model: gemma3:27b
-        use_reasoning: false
+routing:
+  signals:
+    domains:
+      - name: tech
+        # Map generic "tech" to multiple MMLU-Pro categories
+        mmlu_categories: ["computer science", "engineering"]
+      - name: finance
+        # Map generic "finance" to MMLU economics
+        mmlu_categories: ["economics"]
+      - name: politics
+        # If mmlu_categories is omitted and the name matches an MMLU category,
+        # the router falls back to identity mapping automatically.
+  decisions:
+    - name: tech
+      description: "Route technical queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "tech"
+      modelRefs:
+        - model: phi4
+          use_reasoning: false
+        - model: mistral-small3.1
+          use_reasoning: false
+    - name: finance
+      description: "Route finance queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "finance"
+      modelRefs:
+        - model: gemma3:27b
+          use_reasoning: false
+    - name: politics
+      description: "Route politics queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "politics"
+      modelRefs:
+        - model: gemma3:27b
+          use_reasoning: false
 ```
 
 Notes:

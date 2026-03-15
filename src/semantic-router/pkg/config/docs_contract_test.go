@@ -93,9 +93,27 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "training", "model-performance-eval.md"),
 		needles: []string{
+			"listeners: []",
 			"providers:\n  defaults:",
 			"routing:\n  modelCards:",
-			"global:\n  model_catalog:\n    modules:",
+			"model_catalog:",
+			"modules:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "proposals", "hallucination-mitigation-milestone.md"),
+		needles: []string{
+			"global:\n  model_catalog:\n    modules:\n      hallucination_mitigation:",
+			"routing:\n  decisions:",
+			"hallucination_action:",
+		},
+	},
+	{
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "proposals", "hallucination-mitigation-milestone.md"),
+		needles: []string{
+			"global:\n  model_catalog:\n    modules:\n      hallucination_mitigation:",
+			"routing:\n  decisions:",
+			"hallucination_action:",
 		},
 	},
 	{
@@ -107,11 +125,43 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
+		path: repoRel("website", "docs", "api", "classification.md"),
+		needles: []string{
+			"global:\n  model_catalog:\n    modules:\n      classifier:",
+			"routing:\n  signals:\n    domains:",
+			"decisions:",
+		},
+	},
+	{
 		path: repoRel("website", "docs", "troubleshooting", "common-errors.md"),
 		needles: []string{
 			"backend_refs:",
 			"`10.0.0.1:8000`",
 			"[config/config.yaml]",
+			"global:\n  stores:\n    semantic_cache:",
+			"global:\n  model_catalog:\n    modules:\n      classifier:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "proposals", "nvidia-dynamo-integration.md"),
+		needles: []string{
+			"global:\n  model_catalog:\n    modules:\n      classifier:",
+			"global:\n  model_catalog:\n    modules:\n      prompt_guard:",
+		},
+	},
+	{
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "classification.md"),
+		needles: []string{
+			"global:\n  model_catalog:\n    modules:\n      classifier:",
+			"routing:\n  signals:\n    domains:",
+			"decisions:",
+		},
+	},
+	{
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "proposals", "nvidia-dynamo-integration.md"),
+		needles: []string{
+			"global:\n  model_catalog:\n    modules:\n      classifier:",
+			"global:\n  model_catalog:\n    modules:\n      prompt_guard:",
 		},
 	},
 	{
@@ -129,6 +179,23 @@ var configContractRequiredDocs = []docNeedles{
 		path: "deploy/helm/README.md",
 		needles: []string{
 			"providers:\n    defaults:",
+		},
+	},
+	{
+		path: "deploy/addons/mcp-classifier-server/README.md",
+		needles: []string{
+			"providers:\n  defaults:",
+			"routing:\n  modelCards:",
+			"global:\n  model_catalog:\n    modules:\n      classifier:",
+		},
+	},
+	{
+		path: repoRel("src", "semantic-router", "pkg", "modelselection", "README.md"),
+		needles: []string{
+			"global:\n  router:\n    model_selection:",
+			"providers:\n  models:",
+			"backend_refs:",
+			"routing:\n  decisions:",
 		},
 	},
 }
@@ -161,6 +228,22 @@ var configContractForbiddenDocs = []docNeedles{
 		needles: []string{
 			"\nvllm_endpoints:\n",
 			"\nmodel_config:\n",
+			"\nprompt_guard:\n",
+			"\nclassifier:\n",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "proposals", "hallucination-mitigation-milestone.md"),
+		needles: []string{
+			"\nhallucination:\n",
+			"\n  - name: \"medical_assistant\"\n",
+		},
+	},
+	{
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "proposals", "hallucination-mitigation-milestone.md"),
+		needles: []string{
+			"\nhallucination:\n",
+			"\n  - name: \"medical_assistant\"\n",
 		},
 	},
 	{
@@ -171,10 +254,42 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
+		path: repoRel("website", "docs", "api", "classification.md"),
+		needles: []string{
+			"\nclassifier:\n",
+			"\ncategories:\n",
+			"\ndecisions:\n",
+		},
+	},
+	{
 		path: repoRel("website", "docs", "troubleshooting", "common-errors.md"),
 		needles: []string{
 			"\nvllm_endpoints:\n",
 			"#vllm_endpoints",
+			"\nsemantic_cache:\n",
+			"\nclassifier:\n",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "proposals", "nvidia-dynamo-integration.md"),
+		needles: []string{
+			"\nclassifier:\n",
+			"\nprompt_guard:\n",
+		},
+	},
+	{
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "classification.md"),
+		needles: []string{
+			"\nclassifier:\n",
+			"\ncategories:\n",
+			"\ndecisions:\n",
+		},
+	},
+	{
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "proposals", "nvidia-dynamo-integration.md"),
+		needles: []string{
+			"\nclassifier:\n",
+			"\nprompt_guard:\n",
 		},
 	},
 	{
@@ -189,6 +304,21 @@ var configContractForbiddenDocs = []docNeedles{
 		path: "deploy/helm/README.md",
 		needles: []string{
 			"providers:\n    default_model:",
+		},
+	},
+	{
+		path: "deploy/addons/mcp-classifier-server/README.md",
+		needles: []string{
+			"\nclassifier:\n",
+			"categories: []",
+		},
+	},
+	{
+		path: repoRel("src", "semantic-router", "pkg", "modelselection", "README.md"),
+		needles: []string{
+			"\nvllm_endpoints:\n",
+			"\nmodel_config:\n",
+			"access_key:",
 		},
 	},
 	{

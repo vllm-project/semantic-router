@@ -373,13 +373,16 @@ bert_model:
 **配置：**
 
 ```yaml
-classifier:
-  category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+global:
+  model_catalog:
+    modules:
+      classifier:
+        domain:
+          model_id: "models/category_classifier_modernbert-base_model"
+          use_modernbert: true
+          threshold: 0.6
+          use_cpu: true
+          category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
 ```
 
 **模型选择影响：**
@@ -417,13 +420,16 @@ classifier:
 **配置：**
 
 ```yaml
-classifier:
-  pii_model:
-    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
-    use_modernbert: true
-    threshold: 0.7
-    use_cpu: true
-    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+global:
+  model_catalog:
+    modules:
+      classifier:
+        pii:
+          model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+          use_modernbert: true
+          threshold: 0.7
+          use_cpu: true
+          pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 ```
 
 **策略执行：**
@@ -481,12 +487,15 @@ routing:
 **配置：**
 
 ```yaml
-prompt_guard:
-  enabled: true
-  use_modernbert: true
-  threshold: 0.7
-  use_cpu: true
-  # model_id 和 jailbreak_mapping_path 会被自动发现
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        enabled: true
+        use_modernbert: true
+        threshold: 0.7
+        use_cpu: true
+        # model_id 和 jailbreak_mapping_path 会被自动发现
 ```
 
 **响应头（被拦截时）：**
@@ -1362,17 +1371,20 @@ routing:
 **示例配置：**
 
 ```yaml
-prompt_guard:
-  enabled: true
-  # model_id 从 models 目录自动发现：
-  # - 遗留模型：models/jailbreak_classifier_modernbert-base_model
-  # - LoRA 模型：models/lora_jailbreak_classifier_bert_model (首选)
-  #               models/lora_jailbreak_classifier_roberta_model
-  #               models/lora_jailbreak_classifier_modernbert_model
-  threshold: 0.5
-  use_cpu: false
-  use_modernbert: true
-  # jailbreak_mapping_path 从模型目录自动发现
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        enabled: true
+        # model_id 从 models 目录自动发现：
+        # - 遗留模型：models/jailbreak_classifier_modernbert-base_model
+        # - LoRA 模型：models/lora_jailbreak_classifier_bert_model (首选)
+        #               models/lora_jailbreak_classifier_roberta_model
+        #               models/lora_jailbreak_classifier_modernbert_model
+        threshold: 0.5
+        use_cpu: false
+        use_modernbert: true
+        # jailbreak_mapping_path 从模型目录自动发现
 ```
 
 **注：** Jailbreak 分类器使用自动发现功能在 `models/` 目录中寻找模型。为了获得更好的准确性，系统更倾向于使用 LoRA 模型 (BERT > RoBERTa > ModernBERT) 而非遗留的 ModernBERT 模型。

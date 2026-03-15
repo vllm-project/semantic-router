@@ -67,10 +67,12 @@ milvus config path is required
 **Fix:** Set `backend_config_path` when using Milvus backend:
 
 ```yaml
-semantic_cache:
-  enabled: true
-  backend_type: "milvus"
-  backend_config_path: "config/milvus.yaml" # ← Add this
+global:
+  stores:
+    semantic_cache:
+      enabled: true
+      backend_type: "milvus"
+      backend_config_path: "config/milvus.yaml" # ← Add this
 ```
 
 ---
@@ -104,8 +106,10 @@ redis store not yet implemented
 **Note:** Redis response store is not yet available. Use `memory` or `milvus` instead:
 
 ```yaml
-semantic_cache:
-  backend_type: "memory" # or "milvus"
+global:
+  stores:
+    semantic_cache:
+      backend_type: "memory" # or "milvus"
 ```
 
 > See code: [pkg/cache](https://github.com/vllm-project/semantic-router/tree/main/src/semantic-router/pkg/cache) AND [pkg/responsestore](https://github.com/vllm-project/semantic-router/tree/main/src/semantic-router/pkg/responsestore).
@@ -300,8 +304,10 @@ bert_model:
 **Fix:** Lower similarity threshold:
 
 ```yaml
-semantic_cache:
-  similarity_threshold: 0.75 # Lower from default 0.8
+global:
+  stores:
+    semantic_cache:
+      similarity_threshold: 0.75 # Lower from default 0.8
 
 # Or per-decision
 plugins:
@@ -319,9 +325,12 @@ plugins:
 **Fix:** Lower category threshold:
 
 ```yaml
-classifier:
-  category_model:
-    threshold: 0.5 # Lower from default 0.6
+global:
+  model_catalog:
+    modules:
+      classifier:
+        domain:
+          threshold: 0.5 # Lower from default 0.6
 ```
 
 ---
