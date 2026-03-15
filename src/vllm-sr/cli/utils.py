@@ -128,11 +128,6 @@ def stream_logs_from_file(log_file, follow=False):
                     time.sleep(0.1)
 
 
-def get_vllm_endpoints(config):
-    """Extract vLLM endpoints from config."""
-    return config.get("vllm_endpoints", [])
-
-
 def get_envoy_port(config):
     """Get Envoy listen port from config or use default."""
     from cli.consts import DEFAULT_ENVOY_PORT

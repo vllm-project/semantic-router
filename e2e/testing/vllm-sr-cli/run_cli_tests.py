@@ -12,7 +12,7 @@ Usage:
     python run_cli_tests.py                    # Run all unit tests
     python run_cli_tests.py --integration      # Run including integration tests
     python run_cli_tests.py --verbose          # Verbose output
-    python run_cli_tests.py --pattern "init"   # Run tests matching pattern
+    python run_cli_tests.py --pattern "lifecycle"   # Run tests matching pattern
 
 """
 

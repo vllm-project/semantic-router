@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
-import yaml
 from jinja2 import Environment, FileSystemLoader
 
 from cli.consts import DEFAULT_LISTENER_PORT, EXTERNAL_API_MODEL_FORMATS
@@ -222,117 +221,6 @@ def generate_envoy_config_from_user_config(
         log.warning(f"Template not found: {template_path}")
         log.warning("Skipping Envoy config generation")
         log.warning("To generate Envoy config, provide envoy.template.yaml")
-        return None
-
-    # Render template
-    try:
-        env = Environment(loader=FileSystemLoader(template_root))
-        template = env.get_template(template_file)
-        rendered = template.render(template_data)
-    except Exception as e:
-        log.error(f"Failed to render template: {e}")
-        raise
-
-    # Ensure output directory exists
-    output_path = Path(output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Write output
-    try:
-        with open(output_path, "w") as f:
-            f.write(rendered)
-        log.info(f"Generated Envoy config: {output_path}")
-    except Exception as e:
-        log.error(f"Failed to write Envoy config: {e}")
-        raise
-
-    return output_path
-
-
-def generate_envoy_config_from_router_config(
-    router_config_file: str,
-    output_file: str,
-    template_file: str | None = None,
-    template_root: str | None = None,
-) -> Path:
-    """
-    Generate Envoy configuration from router config file.
-
-    Args:
-        router_config_file: Path to router config YAML
-        output_file: Output file path for Envoy config
-        template_file: Path to Envoy template (optional)
-        template_root: Template root directory (optional)
-
-    Returns:
-        Path: Path to generated Envoy config
-    """
-    # Default template paths - templates are now in cli/templates/
-    if template_file is None:
-        template_file = os.getenv("ENVOY_TEMPLATE_FILE", "envoy.template.yaml")
-    if template_root is None:
-        # Default to templates directory in cli package
-        cli_dir = Path(__file__).parent  # cli/config_generator.py -> cli/
-        default_template_root = cli_dir / "templates"
-        template_root = os.getenv("TEMPLATE_ROOT", str(default_template_root))
-
-    log.info(f"Generating Envoy config from {router_config_file}")
-
-    # Load router config
-    try:
-        with open(router_config_file) as f:
-            router_config = yaml.safe_load(f)
-    except Exception as e:
-        log.error(f"Failed to load router config: {e}")
-        raise
-
-    # Extract configuration
-    vllm_endpoints = router_config.get("vllm_endpoints", [])
-
-    # Extract listeners from router config or use default
-    config_listeners = router_config.get("listeners", [])
-    listeners = []
-    if config_listeners:
-        for listener in config_listeners:
-            listeners.append(
-                {
-                    "name": listener.get("name", "listener_0"),
-                    "address": listener.get("address", "0.0.0.0"),
-                    "port": listener.get("port", DEFAULT_LISTENER_PORT),
-                    "timeout": listener.get("timeout", "300s"),
-                }
-            )
-    else:
-        # Default listener
-        listeners.append(
-            {
-                "name": "listener_0",
-                "address": "0.0.0.0",
-                "port": DEFAULT_LISTENER_PORT,
-                "timeout": "300s",
-            }
-        )
-
-    # Prepare template data
-    template_data = {
-        "listeners": listeners,
-        "extproc_port": 50051,
-        "vllm_endpoints": vllm_endpoints,
-        "use_original_dst": False,  # Use static clusters for now
-    }
-
-    log.info("Listeners:")
-    for listener in listeners:
-        log.info(f"  - {listener['name']}: {listener['address']}:{listener['port']}")
-    log.info(f"Found {len(vllm_endpoints)} vLLM endpoints")
-    for endpoint in vllm_endpoints:
-        log.info(f"  - {endpoint['name']}: {endpoint['address']}:{endpoint['port']}")
-
-    # Check if template exists
-    template_path = Path(template_root) / template_file
-    if not template_path.exists():
-        log.warning(f"Template not found: {template_path}")
-        log.warning("Skipping Envoy config generation")
         return None
 
     # Render template

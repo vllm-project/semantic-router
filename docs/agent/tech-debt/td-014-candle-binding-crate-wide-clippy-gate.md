@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -37,3 +37,9 @@ The repository's canonical harness currently runs `cargo clippy --no-default-fea
 - `make agent-lint CHANGED_FILES="...,candle-binding/src/core/config_loader.rs,..."` no longer fails because of unrelated pre-existing Clippy findings elsewhere in the crate.
 - The executable rule layer documents how Candle binding Rust lint is scoped or ratcheted.
 - If ratcheting is used, the repo records the baseline explicitly rather than treating whole-crate historical failures as PR-local regressions.
+
+## Retirement Notes
+
+- `tools/agent/scripts/agent_support.py` now runs Rust Clippy with JSON output and filters diagnostics to the changed Rust file set before deciding whether `agent-lint` fails.
+- Branch-level `make agent-lint` continues to compile the crate, but pre-existing Clippy findings in untouched `candle-binding` modules no longer masquerade as PR-local regressions.
+- `docs/agent/playbooks/rust-bindings.md` documents the new split: diff-scoped Clippy in `agent-lint`, crate-wide correctness in `cargo check` and the binding test targets.
