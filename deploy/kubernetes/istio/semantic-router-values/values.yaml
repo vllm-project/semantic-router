@@ -269,7 +269,7 @@ config:
             laws and phenomena. Provide clear explanations with mathematical derivations
             when appropriate.
           mode: replace
-    - name: computer_science
+    - name: "computer science"
       description: Route computer science queries
       priority: 10
       rules:

@@ -900,6 +900,7 @@ routing:
 
 global:
   router:
+    config_source: file
     strategy: priority
     auto_model_name: exhaustive-reference
     include_config_models_in_list: true

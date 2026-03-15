@@ -271,6 +271,28 @@ global:
 	}
 }
 
+func TestParseYAMLBytesAppliesCanonicalRouterConfigSource(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners: []
+providers:
+  defaults: {}
+routing:
+  signals: {}
+global:
+  router:
+    config_source: kubernetes
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+	if cfg.ConfigSource != ConfigSourceKubernetes {
+		t.Fatalf("expected ConfigSourceKubernetes, got %q", cfg.ConfigSource)
+	}
+}
+
 func TestParseYAMLBytesParsesCanonicalLoRACatalog(t *testing.T) {
 	canonicalYAML := []byte(`
 version: v0.3

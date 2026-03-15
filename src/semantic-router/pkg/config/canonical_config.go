@@ -164,7 +164,10 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 			return fmt.Errorf("providers.models[%s] does not match any routing.modelCards entry", model.Name)
 		}
 		if len(canonicalBackendRefs(model)) == 0 {
-			return fmt.Errorf("providers.models[%s].backend_refs cannot be empty", model.Name)
+			if !canonicalProviderModelHasMetadata(model) {
+				return fmt.Errorf("providers.models[%s] must define backend_refs or provider metadata such as pricing, api_format, external_model_ids, or provider_model_id", model.Name)
+			}
+			continue
 		}
 		for _, backendRef := range canonicalBackendRefs(model) {
 			if strings.TrimSpace(backendRef.Endpoint) == "" && strings.TrimSpace(backendRef.BaseURL) == "" {
@@ -217,6 +220,13 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 
 func canonicalRoutingModels(routing CanonicalRouting) []RoutingModel {
 	return routing.ModelCards
+}
+
+func canonicalProviderModelHasMetadata(model CanonicalProviderModel) bool {
+	if model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
+		return true
+	}
+	return model.Pricing != (ModelPricing{})
 }
 
 func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[string]ProviderProfile, []VLLMEndpoint, map[string]ModelParams, error) {

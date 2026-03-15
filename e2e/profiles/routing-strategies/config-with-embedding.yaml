@@ -402,7 +402,7 @@ routing:
       description: Physics and physical sciences
       mmlu_categories:
       - physics
-    - name: computer_science
+    - name: "computer science"
       description: Computer science and programming
       mmlu_categories:
       - "computer science"

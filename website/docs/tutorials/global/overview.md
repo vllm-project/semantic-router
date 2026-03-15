@@ -34,6 +34,8 @@ Canonical placement:
 
 ```yaml
 global:
+  router:
+    config_source: file
   services:
     observability:
       metrics:
@@ -44,12 +46,13 @@ The latest global docs mirror the main runtime groupings:
 
 | Global area | Examples | Doc |
 |-------------|----------|-----|
-| router and services | `router.model_selection`, `services.api`, `services.response_api`, `services.observability`, `services.router_replay` | [API and Observability](./api-and-observability) |
+| router and services | `router.config_source`, `router.model_selection`, `services.api`, `services.response_api`, `services.observability`, `services.router_replay` | [API and Observability](./api-and-observability) |
 | stores and integrations | `stores.semantic_cache`, `stores.memory`, `stores.vector_store`, `integrations.tools`, `integrations.looper` | [Stores and Tools](./stores-and-tools) |
 | model catalog and modules | `model_catalog.embeddings`, `model_catalog.external`, `model_catalog.system`, `model_catalog.modules.prompt_guard`, `model_catalog.modules.classifier`, `model_catalog.modules.hallucination_mitigation` | [Safety, Models, and Policy](./safety-models-and-policy) |
 
 Keep these rules in mind:
 
 - keep `global:` sparse; rely on router defaults when possible
+- keep `global.router.config_source` at `file` unless Kubernetes CRD reconciliation is intentionally driving runtime config
 - put shared backing services in `global:`
 - keep route-local matching in `routing:`

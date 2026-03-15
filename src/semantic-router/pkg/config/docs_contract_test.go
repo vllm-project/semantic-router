@@ -40,6 +40,7 @@ var configContractRequiredDocs = []docNeedles{
 			"`providers.defaults`",
 			"`providers.models[*]`",
 			"`global.router`",
+			"`global.router.config_source`",
 			"`global.services`",
 			"`global.stores`",
 			"`global.integrations`",
@@ -52,6 +53,7 @@ var configContractRequiredDocs = []docNeedles{
 			"`lora_name`",
 			"`make agent-lint`",
 			"exhaustive canonical reference config",
+			"`global.router.config_source: kubernetes`",
 		},
 	},
 	{
@@ -64,6 +66,7 @@ var configContractRequiredDocs = []docNeedles{
 			"`providers.defaults`",
 			"`providers.models[].backend_refs[]`",
 			"`lora_name`",
+			"`global.router.config_source`",
 			"vllm-sr init",
 			"exhaustive canonical reference config",
 			"`make agent-lint`",

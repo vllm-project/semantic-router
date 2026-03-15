@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,7 +10,7 @@ legacy Kubernetes CRD controller path
 
 ## Summary
 
-The primary router, CLI, dashboard, Helm, operator, and maintained config assets now converge on the canonical v0.3 `version/listeners/providers/routing/global` contract. One older Kubernetes path still bypasses that contract: the in-process `pkg/k8s` controller that watches `IntelligentPool` and `IntelligentRoute` CRDs and converts them directly into legacy `config.BackendModels` and `config.IntelligentRouting` runtime structs.
+The primary router, CLI, dashboard, Helm, operator, and maintained config assets now converge on the canonical v0.3 `version/listeners/providers/routing/global` contract. The last older Kubernetes path that previously bypassed that contract, the in-process `pkg/k8s` controller watching `IntelligentPool` and `IntelligentRoute`, now emits canonical v0.3 config and normalizes it through the same parser as the rest of the system.
 
 ## Evidence
 
@@ -18,22 +18,31 @@ The primary router, CLI, dashboard, Helm, operator, and maintained config assets
 - [src/semantic-router/pkg/k8s/controller.go](../../../src/semantic-router/pkg/k8s/controller.go)
 - [src/semantic-router/pkg/k8s/reconciler.go](../../../src/semantic-router/pkg/k8s/reconciler.go)
 - [src/semantic-router/pkg/k8s/converter.go](../../../src/semantic-router/pkg/k8s/converter.go)
-- [src/semantic-router/pkg/k8s/testdata/output/intelligent-pool-converted.yaml](../../../src/semantic-router/pkg/k8s/testdata/output/intelligent-pool-converted.yaml)
-- [src/semantic-router/pkg/k8s/testdata/output/intelligent-route-converted.yaml](../../../src/semantic-router/pkg/k8s/testdata/output/intelligent-route-converted.yaml)
+- [src/semantic-router/pkg/config/canonical_export.go](../../../src/semantic-router/pkg/config/canonical_export.go)
+- [src/semantic-router/pkg/config/canonical_global.go](../../../src/semantic-router/pkg/config/canonical_global.go)
+- [src/semantic-router/pkg/k8s/testdata/base-config.yaml](../../../src/semantic-router/pkg/k8s/testdata/base-config.yaml)
+- [src/semantic-router/pkg/k8s/testdata/output/01-basic.yaml](../../../src/semantic-router/pkg/k8s/testdata/output/01-basic.yaml)
+- [src/semantic-router/pkg/k8s/testdata/output/04-domain-only.yaml](../../../src/semantic-router/pkg/k8s/testdata/output/04-domain-only.yaml)
 
 ## Why It Matters
 
-- This controller path is still active in the router binary, so it remains a real behavior surface instead of dead compatibility code.
-- It reconstructs legacy runtime-only fields such as `default_model`, `model_config`, `vllm_endpoints`, and `categories`, which means one Kubernetes workflow still reasons about a different contract than the public v0.3 schema.
-- Leaving the gap undocumented would make the closed status of the main rollout look more complete than the code actually is.
+- This controller path is still active in the router binary, so it had to converge on the same parser and public contract instead of silently keeping a second runtime-only shape alive.
+- The contract now has one documented switch for that path, `global.router.config_source: kubernetes`, instead of an implicit legacy seam.
 
 ## Desired End State
 
-- The legacy in-process CRD controller either emits canonical v0.3 config and normalizes through the same parser as the rest of the system, or it is explicitly retired from the active router runtime.
+- The in-process CRD controller emits canonical v0.3 config and normalizes through the same parser as the rest of the system.
 - Test fixtures and docs for this path no longer rely on legacy runtime YAML as the steady-state artifact.
 
 ## Exit Criteria
 
 - `src/semantic-router/pkg/k8s/converter.go` no longer produces legacy `BackendModels` and `IntelligentRouting` as its public output shape.
-- The active router startup path in `src/semantic-router/cmd/main.go` no longer needs a legacy-only config conversion seam for `IntelligentPool` / `IntelligentRoute`.
-- `pkg/k8s` test fixtures either validate canonical config output or the legacy controller path is removed and its fixtures retired.
+- The active router startup path in `src/semantic-router/cmd/main.go` re-enters canonical config normalization for `IntelligentPool` / `IntelligentRoute` instead of merging legacy runtime structs directly.
+- `pkg/k8s` test fixtures validate canonical config output, and the enablement path is documented as `global.router.config_source: kubernetes`.
+
+## Retirement Notes
+
+- `pkg/k8s` now converts `IntelligentPool` and `IntelligentRoute` into canonical `version/listeners/providers/routing/global` config and then normalizes through `config.ParseYAMLBytes`.
+- `config.CanonicalStaticConfigFromRouterConfig` provides the static canonical base for this path, so the reconciler no longer merges CRD output directly into legacy runtime-only structs.
+- `global.router.config_source` is the public contract switch for Kubernetes-backed reconciliation, with `file` remaining the default for YAML-first workflows.
+- `pkg/k8s/testdata/base-config.yaml` and generated output fixtures now use canonical v0.3 YAML instead of legacy runtime layout.

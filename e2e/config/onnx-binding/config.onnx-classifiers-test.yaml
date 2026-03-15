@@ -95,7 +95,7 @@ routing:
     domains:
     - name: general
       description: General queries
-    - name: technical
+    - name: engineering
       description: Technical questions
     - name: biology
       description: Biology questions
@@ -103,7 +103,7 @@ routing:
       description: Math questions
     - name: physics
       description: Physics questions
-    - name: computer_science
+    - name: "computer science"
       description: Computer science questions
     fact_check:
     - name: needs_fact_check
