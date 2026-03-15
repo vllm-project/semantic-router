@@ -172,6 +172,21 @@ def run_test_commands(commands: list[str], label: str) -> int:
     return 0
 
 
+def run_reference_config_lint() -> int:
+    module_root = REPO_ROOT / "src" / "semantic-router"
+    command = [
+        "go",
+        "test",
+        "./pkg/config/...",
+        "-run",
+        "TestReferenceConfig",
+        "-count=1",
+    ]
+    print(f"+ {' '.join(command)} (cwd={module_root})")
+    result = subprocess.run(command, cwd=module_root, check=False)
+    return result.returncode
+
+
 def group_files_by_module(
     changed_files: list[str], manifest_name: str, extensions: set[str]
 ) -> dict[Path, list[Path]]:

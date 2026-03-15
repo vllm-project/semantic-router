@@ -107,9 +107,9 @@ global:
 
 ## Repository config assets
 
-The repository now separates the runnable starter config from reusable routing fragments:
+The repository now separates the exhaustive canonical reference config from reusable routing fragments:
 
-- `config/config.yaml`: canonical runnable starter config
+- `config/config.yaml`: exhaustive canonical reference config
 - `config/signal/`: reusable `routing.signals` fragments
 - `config/decision/`: reusable `routing.decisions` rule-shape fragments
 - `config/algorithm/`: reusable `decision.algorithm` snippets
@@ -137,7 +137,12 @@ Repo-owned runtime and harness assets now live outside `config/`:
 
 Test-only ONNX binding assets now live under `e2e/config/onnx-binding/`.
 
-Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the starter config points `global.integrations.tools.tools_db_path` at `examples/runtime/tools/tools_db.json` for local development.
+Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the exhaustive reference config points `global.integrations.tools.tools_db_path` at `examples/runtime/tools/tools_db.json` for local development.
+
+`config/config.yaml` is not just a sample anymore. The repository enforces it as the exhaustive public-contract reference:
+
+- `go test ./pkg/config/...` checks that it stays aligned to the canonical schema and routing surface catalog
+- `make agent-lint` runs the same reference-config contract check at lint level, so config/schema drift is blocked before merge
 
 ## How to use it
 
@@ -157,7 +162,7 @@ vllm-sr validate config.yaml
 ```
 
 `vllm-sr init` was removed in v0.3. The steady-state file is `config.yaml`.
-Inside this repository, the default starter file is [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).
+Inside this repository, the default exhaustive reference file is [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).
 
 ### Router local / YAML-first
 

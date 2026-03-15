@@ -7,394 +7,367 @@ import (
 	"testing"
 )
 
+type docNeedles struct {
+	path    string
+	needles []string
+}
+
 func repoRel(parts ...string) string {
 	return filepath.Join(parts...)
 }
 
+var configContractRequiredDocs = []docNeedles{
+	{
+		path: "config/README.md",
+		needles: []string{
+			"`config/config.yaml`",
+			"exhaustive canonical reference config",
+			"`config/signal/`",
+			"`config/decision/`",
+			"`config/algorithm/`",
+			"`config/plugin/`",
+			"`tutorials/global/`",
+			"`go test ./pkg/config/...`",
+			"`make agent-lint`",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "installation", "configuration.md"),
+		needles: []string{
+			"`version/listeners/providers/routing/global`",
+			"`routing.modelCards`",
+			"`providers.defaults`",
+			"`providers.models[*]`",
+			"`global.router`",
+			"`global.services`",
+			"`global.stores`",
+			"`global.integrations`",
+			"`global.model_catalog`",
+			"`global.model_catalog.modules`",
+			"`config/algorithm/`",
+			"`tutorials/global/`",
+			"vllm-sr config migrate --config old-config.yaml",
+			"v0.3. The steady-state file is `config.yaml`",
+			"`make agent-lint`",
+			"exhaustive canonical reference config",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "proposals", "unified-config-contract-v0-3.md"),
+		needles: []string{
+			"version:\nlisteners:\nproviders:\nrouting:\nglobal:",
+			"`routing.modelCards`",
+			"`config/algorithm/`",
+			"`providers.defaults`",
+			"`providers.models[].backend_refs[]`",
+			"vllm-sr init",
+			"exhaustive canonical reference config",
+			"`make agent-lint`",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "installation", "milvus.md"),
+		needles: []string{
+			"global:\n  stores:\n    semantic_cache:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "overview", "mom-model-family.md"),
+		needles: []string{
+			"`global.model_catalog`",
+			"`global.model_catalog.modules`",
+			"model_ref",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "training", "ml-model-selection.md"),
+		needles: []string{
+			"global:\n  router:\n    model_selection:",
+			"routing:\n  decisions:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "training", "model-performance-eval.md"),
+		needles: []string{
+			"providers:\n  defaults:",
+			"routing:\n  modelCards:",
+			"global:\n  model_catalog:\n    modules:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "installation", "k8s", "operator.md"),
+		needles: []string{
+			"providers:\n      defaults:",
+			"global:\n      model_catalog:",
+			"      stores:",
+			"        modules:",
+			"      services:",
+		},
+	},
+	{
+		path: "deploy/helm/README.md",
+		needles: []string{
+			"providers:\n    defaults:",
+		},
+	},
+}
+
+var configContractForbiddenDocs = []docNeedles{
+	{
+		path: repoRel("website", "docs", "installation", "milvus.md"),
+		needles: []string{
+			"global:\n  semantic_cache:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "overview", "mom-model-family.md"),
+		needles: []string{
+			"global:\n  classifier:",
+			"global:\n  prompt_guard:",
+			"global:\n  modules:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "training", "ml-model-selection.md"),
+		needles: []string{
+			"config:\n  model_selection:",
+			"\nmodel_selection:\n",
+			"\nembedding_models:\n",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "training", "model-performance-eval.md"),
+		needles: []string{
+			"\nvllm_endpoints:\n",
+			"\nmodel_config:\n",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "installation", "k8s", "operator.md"),
+		needles: []string{
+			"spec:\n  config:\n    semantic_cache:",
+			"spec:\n  config:\n    classifier:",
+			"spec:\n  config:\n    prompt_guard:",
+		},
+	},
+	{
+		path: "deploy/helm/README.md",
+		needles: []string{
+			"providers:\n    default_model:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
+		needles: []string{
+			"computer_science",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "tutorials", "algorithm", "selection.md"),
+		needles: []string{
+			"computer_science",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "overview", "signal-driven-decisions.md"),
+		needles: []string{
+			"computer_science",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "training", "training-overview.md"),
+		needles: []string{
+			"computer_science",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "troubleshooting", "vsr-headers.md"),
+		needles: []string{
+			"computer_science",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "proposals", "nvidia-dynamo-integration.md"),
+		needles: []string{
+			"computer_science",
+		},
+	},
+	{
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "pii-policy.md"),
+		needles: []string{
+			"computer_science",
+		},
+	},
+	{
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "training", "training-overview.md"),
+		needles: []string{
+			"computer_science",
+		},
+	},
+	{
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "troubleshooting", "vsr-headers.md"),
+		needles: []string{
+			"computer_science",
+		},
+	},
+}
+
+var latestTutorialOverviewDocs = []docNeedles{
+	{
+		path: repoRel("website", "docs", "tutorials", "signal", "overview.md"),
+		needles: []string{
+			"`config/signal/`",
+			"[Routing Signals](./routing)",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "tutorials", "decision", "overview.md"),
+		needles: []string{
+			"`config/decision/`",
+			"`decision.algorithm`",
+			"`decision.plugins`",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
+		needles: []string{
+			"`config/algorithm/`",
+			"[Selection](./selection)",
+			"[Looper](./looper)",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "tutorials", "plugin", "overview.md"),
+		needles: []string{
+			"`config/plugin/`",
+			"`routing.decisions[].plugins`",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "tutorials", "global", "overview.md"),
+		needles: []string{
+			"`global:`",
+			"`signal/`",
+		},
+	},
+}
+
+var latestTutorialSidebarRequired = []string{
+	"label: 'Signals'",
+	"label: 'Decisions'",
+	"label: 'Algorithms'",
+	"label: 'Plugins'",
+	"label: 'Global'",
+	"'tutorials/signal/overview'",
+	"'tutorials/decision/overview'",
+	"'tutorials/algorithm/overview'",
+	"'tutorials/plugin/overview'",
+	"'tutorials/global/overview'",
+}
+
+var latestTutorialSidebarForbidden = []string{
+	"'tutorials/intelligent-route/",
+	"'tutorials/content-safety/",
+	"'tutorials/semantic-cache/",
+	"'tutorials/observability/",
+	"'tutorials/response-api/",
+	"'tutorials/performance-tuning/",
+	"'tutorials/runtime/",
+}
+
+var latestTutorialRequiredSections = []string{
+	"## Overview",
+	"## Key Advantages",
+	"## What Problem Does It Solve?",
+	"## When to Use",
+	"## Configuration",
+}
+
+var latestTutorialAllowedDirectories = map[string]bool{
+	"signal":    true,
+	"decision":  true,
+	"algorithm": true,
+	"plugin":    true,
+	"global":    true,
+}
+
 func TestConfigContractDocsStayAligned(t *testing.T) {
-	root := repoRootFromTestFile(t)
-
-	testCases := []struct {
-		path     string
-		required []string
-	}{
-		{
-			path: "config/README.md",
-			required: []string{
-				"`config/config.yaml`",
-				"`config/signal/`",
-				"`config/decision/`",
-				"`config/algorithm/`",
-				"`config/plugin/`",
-				"`tutorials/global/`",
-				"`go test ./pkg/config/...`",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "installation", "configuration.md"),
-			required: []string{
-				"`version/listeners/providers/routing/global`",
-				"`routing.modelCards`",
-				"`providers.defaults`",
-				"`providers.models[*]`",
-				"`global.router`",
-				"`global.services`",
-				"`global.stores`",
-				"`global.integrations`",
-				"`global.model_catalog`",
-				"`global.model_catalog.modules`",
-				"`config/algorithm/`",
-				"`tutorials/global/`",
-				"vllm-sr config migrate --config old-config.yaml",
-				"v0.3. The steady-state file is `config.yaml`",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "proposals", "unified-config-contract-v0-3.md"),
-			required: []string{
-				"version:\nlisteners:\nproviders:\nrouting:\nglobal:",
-				"`routing.modelCards`",
-				"`config/algorithm/`",
-				"`providers.defaults`",
-				"`providers.models[].backend_refs[]`",
-				"vllm-sr init",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "installation", "milvus.md"),
-			required: []string{
-				"global:\n  stores:\n    semantic_cache:",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "overview", "mom-model-family.md"),
-			required: []string{
-				"`global.model_catalog`",
-				"`global.model_catalog.modules`",
-				"model_ref",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "training", "ml-model-selection.md"),
-			required: []string{
-				"global:\n  router:\n    model_selection:",
-				"routing:\n  decisions:",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "training", "model-performance-eval.md"),
-			required: []string{
-				"providers:\n  defaults:",
-				"routing:\n  modelCards:",
-				"global:\n  model_catalog:\n    modules:",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "installation", "k8s", "operator.md"),
-			required: []string{
-				"providers:\n      defaults:",
-				"global:\n      model_catalog:",
-				"      stores:",
-				"        modules:",
-				"      services:",
-			},
-		},
-		{
-			path: "deploy/helm/README.md",
-			required: []string{
-				"providers:\n    defaults:",
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		data, err := os.ReadFile(filepath.Join(root, tc.path))
-		if err != nil {
-			t.Fatalf("failed to read %s: %v", tc.path, err)
-		}
-		content := string(data)
-		for _, needle := range tc.required {
-			if !strings.Contains(content, needle) {
-				t.Fatalf("%s is missing required config-contract text %q", tc.path, needle)
-			}
-		}
-	}
+	assertDocsContainAll(t, repoRootFromTestFile(t), configContractRequiredDocs)
 }
 
 func TestCurrentConfigDocsAvoidRetiredCanonicalExamples(t *testing.T) {
-	root := repoRootFromTestFile(t)
-
-	testCases := []struct {
-		path      string
-		forbidden []string
-	}{
-		{
-			path: repoRel("website", "docs", "installation", "milvus.md"),
-			forbidden: []string{
-				"global:\n  semantic_cache:",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "overview", "mom-model-family.md"),
-			forbidden: []string{
-				"global:\n  classifier:",
-				"global:\n  prompt_guard:",
-				"global:\n  modules:",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "training", "ml-model-selection.md"),
-			forbidden: []string{
-				"config:\n  model_selection:",
-				"\nmodel_selection:\n",
-				"\nembedding_models:\n",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "training", "model-performance-eval.md"),
-			forbidden: []string{
-				"\nvllm_endpoints:\n",
-				"\nmodel_config:\n",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "installation", "k8s", "operator.md"),
-			forbidden: []string{
-				"spec:\n  config:\n    semantic_cache:",
-				"spec:\n  config:\n    classifier:",
-				"spec:\n  config:\n    prompt_guard:",
-			},
-		},
-		{
-			path: "deploy/helm/README.md",
-			forbidden: []string{
-				"providers:\n    default_model:",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
-			forbidden: []string{
-				"computer_science",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "tutorials", "algorithm", "selection.md"),
-			forbidden: []string{
-				"computer_science",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "overview", "signal-driven-decisions.md"),
-			forbidden: []string{
-				"computer_science",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "training", "training-overview.md"),
-			forbidden: []string{
-				"computer_science",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "troubleshooting", "vsr-headers.md"),
-			forbidden: []string{
-				"computer_science",
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		data, err := os.ReadFile(filepath.Join(root, tc.path))
-		if err != nil {
-			t.Fatalf("failed to read %s: %v", tc.path, err)
-		}
-		content := string(data)
-		for _, needle := range tc.forbidden {
-			if strings.Contains(content, needle) {
-				t.Fatalf("%s still contains retired config example text %q", tc.path, needle)
-			}
-		}
-	}
+	assertDocsDoNotContainAny(t, repoRootFromTestFile(t), configContractForbiddenDocs)
 }
 
 func TestCurrentTutorialDocsDoNotReferenceRemovedConfigFiles(t *testing.T) {
 	root := repoRootFromTestFile(t)
-	docRoots := []string{
-		filepath.Join(root, repoRel("website", "docs", "tutorials")),
-		filepath.Join(root, repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "tutorials")),
-	}
-	forbidden := []string{
-		"router-config.yaml",
-		"router-defaults.yaml",
-	}
-
-	for _, docRoot := range docRoots {
-		if _, err := os.Stat(docRoot); os.IsNotExist(err) {
-			continue
-		}
-		err := filepath.Walk(docRoot, func(path string, info os.FileInfo, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if info.IsDir() || filepath.Ext(path) != ".md" {
-				return nil
-			}
-
-			data, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			content := string(data)
-			for _, needle := range forbidden {
-				if strings.Contains(content, needle) {
-					t.Fatalf("%s still references removed config file %q", path, needle)
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("failed to walk tutorial docs under %s: %v", docRoot, err)
-		}
+	for _, docRoot := range tutorialDocRoots(root) {
+		assertMarkdownTreeDoesNotContainAny(t, docRoot, []string{"router-config.yaml", "router-defaults.yaml"})
 	}
 }
 
 func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 	root := repoRootFromTestFile(t)
 
-	sidebarPath := filepath.Join(root, repoRel("website", "sidebars.ts"))
-	sidebarData, err := os.ReadFile(sidebarPath)
-	if err != nil {
-		t.Fatalf("failed to read %s: %v", sidebarPath, err)
-	}
-	sidebar := string(sidebarData)
-	for _, needle := range []string{
-		"label: 'Signals'",
-		"label: 'Decisions'",
-		"label: 'Algorithms'",
-		"label: 'Plugins'",
-		"label: 'Global'",
-		"'tutorials/signal/overview'",
-		"'tutorials/decision/overview'",
-		"'tutorials/algorithm/overview'",
-		"'tutorials/plugin/overview'",
-		"'tutorials/global/overview'",
-	} {
-		if !strings.Contains(sidebar, needle) {
-			t.Fatalf("%s is missing tutorial taxonomy entry %q", sidebarPath, needle)
-		}
-	}
+	assertTutorialSidebarTaxonomy(t, root)
+	assertDocsContainAll(t, root, latestTutorialOverviewDocs)
+	assertTutorialFilesContainRequiredSections(t, root)
+	assertTutorialRootDirectories(t, root)
+}
 
-	requiredSections := []string{
-		"## Overview",
-		"## Key Advantages",
-		"## What Problem Does It Solve?",
-		"## When to Use",
-		"## Configuration",
+func assertDocsContainAll(t *testing.T, root string, docs []docNeedles) {
+	t.Helper()
+	for _, doc := range docs {
+		assertStringContainsAll(t, readRepoFile(t, root, doc.path), doc.path, doc.needles)
 	}
-	for _, forbidden := range []string{
-		"'tutorials/intelligent-route/",
-		"'tutorials/content-safety/",
-		"'tutorials/semantic-cache/",
-		"'tutorials/observability/",
-		"'tutorials/response-api/",
-		"'tutorials/performance-tuning/",
-		"'tutorials/runtime/",
-	} {
-		if strings.Contains(sidebar, forbidden) {
-			t.Fatalf("%s still exposes retired latest-nav entry %q", sidebarPath, forbidden)
-		}
-	}
+}
 
-	testCases := []struct {
-		path     string
-		required []string
-	}{
-		{
-			path: repoRel("website", "docs", "tutorials", "signal", "overview.md"),
-			required: []string{
-				"`config/signal/`",
-				"[Routing Signals](./routing)",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "tutorials", "decision", "overview.md"),
-			required: []string{
-				"`config/decision/`",
-				"`decision.algorithm`",
-				"`decision.plugins`",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
-			required: []string{
-				"`config/algorithm/`",
-				"[Selection](./selection)",
-				"[Looper](./looper)",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "tutorials", "plugin", "overview.md"),
-			required: []string{
-				"`config/plugin/`",
-				"`routing.decisions[].plugins`",
-			},
-		},
-		{
-			path: repoRel("website", "docs", "tutorials", "global", "overview.md"),
-			required: []string{
-				"`global:`",
-				"`signal/`",
-			},
-		},
+func assertDocsDoNotContainAny(t *testing.T, root string, docs []docNeedles) {
+	t.Helper()
+	for _, doc := range docs {
+		assertStringContainsNone(t, readRepoFile(t, root, doc.path), doc.path, doc.needles)
 	}
-	for _, tc := range testCases {
-		data, readErr := os.ReadFile(filepath.Join(root, tc.path))
-		if readErr != nil {
-			t.Fatalf("failed to read %s: %v", tc.path, readErr)
-		}
-		content := string(data)
-		for _, needle := range tc.required {
-			if !strings.Contains(content, needle) {
-				t.Fatalf("%s is missing required tutorial-taxonomy text %q", tc.path, needle)
-			}
-		}
-	}
+}
 
-	err = filepath.Walk(filepath.Join(root, repoRel("website", "docs", "tutorials")), func(path string, info os.FileInfo, walkErr error) error {
+func assertTutorialSidebarTaxonomy(t *testing.T, root string) {
+	t.Helper()
+	sidebarPath := repoRel("website", "sidebars.ts")
+	content := readRepoFile(t, root, sidebarPath)
+	assertStringContainsAll(t, content, sidebarPath, latestTutorialSidebarRequired)
+	assertStringContainsNone(t, content, sidebarPath, latestTutorialSidebarForbidden)
+}
+
+func assertTutorialFilesContainRequiredSections(t *testing.T, root string) {
+	t.Helper()
+	tutorialRoot := filepath.Join(root, repoRel("website", "docs", "tutorials"))
+	err := filepath.Walk(tutorialRoot, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if info.IsDir() || filepath.Ext(path) != ".md" {
 			return nil
 		}
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
+		contentBytes, err := os.ReadFile(path)
+		if err != nil {
+			return err
 		}
-		content := string(data)
-		for _, heading := range requiredSections {
-			if !strings.Contains(content, heading) {
-				t.Fatalf("%s is missing required tutorial section %q", path, heading)
-			}
-		}
+		assertStringContainsAll(t, string(contentBytes), path, latestTutorialRequiredSections)
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("failed to walk latest tutorial files: %v", err)
 	}
+}
 
+func assertTutorialRootDirectories(t *testing.T, root string) {
+	t.Helper()
 	tutorialRoot := filepath.Join(root, repoRel("website", "docs", "tutorials"))
 	entries, err := os.ReadDir(tutorialRoot)
 	if err != nil {
 		t.Fatalf("failed to read latest tutorial root: %v", err)
 	}
-	allowed := map[string]bool{
-		"signal":    true,
-		"decision":  true,
-		"algorithm": true,
-		"plugin":    true,
-		"global":    true,
-	}
+
+	allowed := copyStringBoolMap(latestTutorialAllowedDirectories)
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -407,4 +380,70 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 	for remaining := range allowed {
 		t.Fatalf("%s is missing required top-level directory %q", tutorialRoot, remaining)
 	}
+}
+
+func assertMarkdownTreeDoesNotContainAny(t *testing.T, root string, forbidden []string) {
+	t.Helper()
+	if _, err := os.Stat(root); os.IsNotExist(err) {
+		return
+	}
+	err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() || filepath.Ext(path) != ".md" {
+			return nil
+		}
+		contentBytes, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		assertStringContainsNone(t, string(contentBytes), path, forbidden)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to walk tutorial docs under %s: %v", root, err)
+	}
+}
+
+func tutorialDocRoots(root string) []string {
+	return []string{
+		filepath.Join(root, repoRel("website", "docs", "tutorials")),
+		filepath.Join(root, repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "tutorials")),
+	}
+}
+
+func readRepoFile(t *testing.T, root string, relPath string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, relPath))
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", relPath, err)
+	}
+	return string(data)
+}
+
+func assertStringContainsAll(t *testing.T, content string, label string, needles []string) {
+	t.Helper()
+	for _, needle := range needles {
+		if !strings.Contains(content, needle) {
+			t.Fatalf("%s is missing required text %q", label, needle)
+		}
+	}
+}
+
+func assertStringContainsNone(t *testing.T, content string, label string, needles []string) {
+	t.Helper()
+	for _, needle := range needles {
+		if strings.Contains(content, needle) {
+			t.Fatalf("%s still contains retired text %q", label, needle)
+		}
+	}
+}
+
+func copyStringBoolMap(source map[string]bool) map[string]bool {
+	clone := make(map[string]bool, len(source))
+	for key, value := range source {
+		clone[key] = value
+	}
+	return clone
 }

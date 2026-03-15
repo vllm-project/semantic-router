@@ -110,13 +110,14 @@ The router parser itself now accepts only canonical v0.3 YAML for steady-state r
 
 The repo no longer ships large full-example trees under `config/intelligent-routing/` and similar directories. Instead:
 
-- `config/config.yaml` is the canonical runnable starter config
+- `config/config.yaml` is the exhaustive canonical reference config
 - `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/` hold reusable routing fragments
 - `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
 - `config/algorithm/` is organized by routing policy family (`looper`, `selection`)
 - latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface
 - runtime support examples such as `examples/runtime/semantic-cache/`, `examples/runtime/response-api/`, and `examples/runtime/tools/` stay separate because they are not part of the user-facing config contract
 - harness-only manifests live under `e2e/config/`
+- `go test ./pkg/config/...` and `make agent-lint` enforce that `config/config.yaml` stays exhaustive and aligned with the public config contract
 
 ### Helm and operator
 
