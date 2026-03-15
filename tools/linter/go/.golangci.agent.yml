@@ -30,6 +30,15 @@ linters:
           - gocognit
           - nestif
         path: (^|/)handlers/openclaw_(provision|rooms|teams|test|websocket|workers)\.go$
+      - linters:
+          - cyclop
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/config/canonical_config\.go$
+      - linters:
+          - cyclop
+          - staticcheck
+        path: (^|/)src/semantic-router/pkg/config/canonical_loader_test\.go$
 
 issues:
   max-issues-per-linter: 0

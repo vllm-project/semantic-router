@@ -14,6 +14,8 @@ type CanonicalConfig struct {
 	Providers CanonicalProviders `yaml:"providers,omitempty"`
 	Routing   CanonicalRouting   `yaml:"routing,omitempty"`
 	Global    *CanonicalGlobal   `yaml:"global,omitempty"`
+
+	globalOverrideRaw interface{} `yaml:"-"`
 }
 
 // CanonicalRouting contains the DSL-owned routing surface.
@@ -64,7 +66,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 		return nil, err
 	}
 
-	global, err := resolveCanonicalGlobal(canonical.Global)
+	global, err := resolveCanonicalGlobal(canonical.Global, canonical.globalOverrideRaw)
 	if err != nil {
 		return nil, err
 	}

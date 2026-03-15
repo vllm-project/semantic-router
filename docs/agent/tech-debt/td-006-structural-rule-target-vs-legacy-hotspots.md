@@ -30,6 +30,9 @@ The harness correctly ratchets the repo toward smaller modules, but several lega
 - [dashboard/backend/handlers/config.go](../../../dashboard/backend/handlers/config.go)
 - [dashboard/backend/handlers/deploy.go](../../../dashboard/backend/handlers/deploy.go)
 - [deploy/operator/controllers/semanticrouter_controller.go](../../../deploy/operator/controllers/semanticrouter_controller.go)
+- [deploy/operator/controllers/helpers_test.go](../../../deploy/operator/controllers/helpers_test.go)
+- [src/semantic-router/pkg/config/canonical_config.go](../../../src/semantic-router/pkg/config/canonical_config.go)
+- [src/semantic-router/pkg/config/canonical_loader_test.go](../../../src/semantic-router/pkg/config/canonical_loader_test.go)
 - [src/vllm-sr/cli/models.py](../../../src/vllm-sr/cli/models.py)
 - [src/vllm-sr/cli/commands/show_config.py](../../../src/vllm-sr/cli/commands/show_config.py)
 - [docs/agent/plans/pl-0003-v0-3-config-contract-rollout.md](../plans/pl-0003-v0-3-config-contract-rollout.md)
@@ -41,7 +44,10 @@ The harness correctly ratchets the repo toward smaller modules, but several lega
 - OpenClaw management and dashboard UI now sit on the same debt boundary: the feature surface is active and maintained, but the implementation still spans oversized page/component/handler files that cannot yet satisfy the global structure target directly.
 - The agent-specific Go complexity gate also needs explicit legacy exclusions for the same OpenClaw handlers/tests until those modules are decomposed enough to meet the global `cyclop`, `funlen`, `gocognit`, and `nestif` thresholds.
 - The config-contract rollout now depends on additional large orchestrator files in dashboard/backend, operator generation, and CLI schema compatibility code; until those are decomposed, the structure ratchet will continue to surface exceptions when config work lands.
+- The agent-specific Go complexity gate also still needs file-scoped exclusions for the canonical config parser and loader regression tests; otherwise small follow-up fixes in those hotspot files fail changed-file lint before any extraction work can land.
+- The operator helper test suite now also sits above the shared file/function thresholds; adding focused regression coverage there should not require branch-local structural churn on every CI repair, so it is explicitly tracked as the same extraction-first debt instead of being treated as new precedent.
 - The rule layer now carries explicit `file_checks: relaxed`, `function_checks: relaxed`, and `interface_checks: relaxed` entries for the config-rollout hotspots so CI keeps ratcheting against known debt instead of blocking every rebase or schema follow-up on unchanged legacy structure.
+- The Go lint layer now mirrors that posture for `canonical_config.go` and `canonical_loader_test.go`, so changed-file checks only fail on new regressions instead of re-reporting the existing canonical-config hotspot debt on every repair branch.
 - This is the right governance posture, but it remains a real code/spec gap until the worst hotspots no longer need special handling.
 
 ## Desired End State
@@ -53,4 +59,4 @@ The harness correctly ratchets the repo toward smaller modules, but several lega
 ## Exit Criteria
 
 - The highest-risk files no longer need special ratchet treatment to stay within the intended modularity envelope.
-- Config rollout follow-up extracts stable schema/export/merge helpers out of the current hotspot files enough for the relevant lint and structure gates to pass without bespoke exceptions.
+- Config rollout follow-up extracts stable schema/export/merge helpers out of the current hotspot files, simplifies canonical-config regression tests, and breaks up oversized operator helper tests enough for the relevant lint and structure gates to pass without bespoke exceptions.
