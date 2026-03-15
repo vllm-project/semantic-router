@@ -12,9 +12,11 @@
 # Architecture:
 #   Client -> Envoy -> ext_proc (semantic router) -> vLLM endpoints
 #
-# Identity headers (x-authz-user-id, x-authz-user-groups) are injected
-# directly in test requests to simulate what an auth backend would set.
-# No JWT, Authorino, or any external auth system is required.
+# Identity headers (x-authz-user-id, x-authz-user-groups) must come from
+# validated auth backends (JWT, Authorino, etc.), not from client requests.
+# SECURITY: The Envoy configuration strips any client-supplied identity headers
+# to prevent spoofing attacks. For e2e tests, use JWT tokens in the Authorization
+# header; Envoy validates the JWT and extracts claims into identity headers.
 #
 # Test Users:
 #   alice / platform-admins  → admin
@@ -41,33 +43,6 @@ config:
   # The router reads x-authz-user-id and x-authz-user-groups headers.
   authz:
     fail_open: true
-
-  # --- Rate Limiting ---
-  # Local limiter: per-user sliding window counters, no external service.
-  # Limits are intentionally low for testability:
-  #   free-tier       → 3 RPM  (easy to exhaust in e2e tests)
-  #   premium-tier    → 10 RPM
-  #   platform-admins → 500 RPM
-  ratelimit:
-    fail_open: false
-    providers:
-      - type: local-limiter
-        rules:
-          - name: "free-rpm"
-            match:
-              group: "free-tier"
-            requests_per_unit: 3
-            unit: minute
-          - name: "premium-rpm"
-            match:
-              group: "premium-tier"
-            requests_per_unit: 10
-            unit: minute
-          - name: "admin-rpm"
-            match:
-              group: "platform-admins"
-            requests_per_unit: 500
-            unit: minute
 
   # --- Endpoints ---
   # Two vLLM simulator instances: 14B (high capability) and 7B (efficient)
@@ -266,6 +241,12 @@ config:
   semantic_cache:
     enabled: false
 
+  # --- Router Configuration ---
+  router:
+    high_confidence_threshold: 0.99
+    low_latency_threshold_ms: 2000
+    default_confidence_threshold: 0.95
+    default_max_latency_ms: 5000
 
   # --- Observability ---
   observability:

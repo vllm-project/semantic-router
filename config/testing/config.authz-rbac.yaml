@@ -7,8 +7,10 @@
 #   Client -> Envoy -> ext_proc (semantic router) -> vLLM endpoints
 #
 # Identity headers are injected by the auth backend (JWT, Authorino, etc.).
-# For e2e testing, we simulate this by injecting headers directly in the
-# test requests — the router doesn't care who set the headers.
+# SECURITY: In production, these headers must ONLY come from validated auth backends.
+# Client-supplied identity headers are stripped by Envoy configuration to prevent spoofing.
+# For e2e tests, use JWT tokens in the Authorization header; Envoy validates the JWT
+# and extracts claims into identity headers.
 #
 # RBAC tiers:
 #   admin        → 14B (unrestricted, reasoning enabled)
@@ -25,7 +27,9 @@
 
 # --------------------------------------------------------------------------
 # Authz — default identity headers (Authorino convention)
-# In e2e tests, we inject these headers directly in curl requests.
+# In e2e tests, we send JWT tokens in Authorization header.
+# Envoy validates the JWT and extracts claims into identity headers.
+# Client-supplied identity headers are stripped by Envoy configuration.
 # --------------------------------------------------------------------------
 authz:
   fail_open: true
