@@ -72,6 +72,14 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		return requestDecisionState{}, r.createErrorResponse(403, authzErr.Error())
 	}
 
+	// Apply CRM: if momentum overrides the decision, re-evaluate with adjusted signals
+	if r.Config.RoutingMomentum.Enabled && len(ctx.AllUserMessages) > 0 {
+		if newDecision, newModel := r.applyCRMOverride(ctx, decisionName, selectedModel); newDecision != "" {
+			decisionName = newDecision
+			selectedModel = newModel
+		}
+	}
+
 	metrics.RecordModelRequest(selectedModel)
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)

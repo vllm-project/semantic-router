@@ -162,6 +162,7 @@ type InlineModels struct {
 	EmbeddingModels         `yaml:"embedding_models"`
 	BertModel               `yaml:"bert_model"`
 	Classifier              `yaml:"classifier"`
+	RoutingMomentum         RoutingMomentumConfig         `yaml:"routing_momentum"`
 	PromptCompression       PromptCompressionConfig       `yaml:"prompt_compression"`
 	PromptGuard             PromptGuardConfig             `yaml:"prompt_guard"`
 	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`

@@ -1,0 +1,134 @@
+# CRM Demo Config — Realistic Models
+# Expensive: qwen3.5:35b-a3b (36B) vs Cheap: qwen2.5:14b (14.8B)
+# Toggle routing_momentum.enabled to compare with/without CRM
+
+semantic_cache:
+  enabled: false
+tools:
+  enabled: false
+prompt_guard:
+  enabled: false
+hallucination_mitigation:
+  enabled: false
+
+classifier:
+  category_model:
+    model_id: "models/mom-domain-classifier"
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+
+embedding_models:
+  qwen3_model_path: "models/mom-embedding-pro"
+  use_cpu: true
+  hnsw_config:
+    model_type: "qwen3"
+    preload_embeddings: true
+    target_dimension: 1024
+    enable_soft_matching: true
+    min_score_threshold: 0.5
+
+vllm_endpoints:
+  - name: "ollama"
+    address: "127.0.0.1"
+    port: 11434
+    weight: 1
+
+model_config:
+  "qwen3.5:35b-a3b":
+    preferred_endpoints: ["ollama"]
+  "qwen2.5:14b":
+    preferred_endpoints: ["ollama"]
+
+complexity_rules:
+  - name: "prompt_complexity"
+    threshold: 0.15
+    description: "Classify prompt complexity for routing decisions"
+    hard:
+      candidates:
+        - "Implement a concurrent lock-free data structure with memory ordering guarantees"
+        - "Design a distributed consensus algorithm for fault-tolerant systems"
+        - "Write a compiler optimization pass for loop vectorization"
+        - "Build a real-time stream processing pipeline with exactly-once semantics"
+        - "Implement a B+ tree with concurrent readers and writers"
+        - "Design a garbage collector with generational collection and compaction"
+        - "Write an optimized matrix multiplication kernel with cache tiling"
+        - "Implement a raft consensus protocol with log compaction"
+        - "Explain the mathematical proof of the P vs NP problem"
+        - "Analyze the time complexity of this recursive algorithm with memoization"
+    easy:
+      candidates:
+        - "yes"
+        - "no"
+        - "ok"
+        - "sure"
+        - "thanks"
+        - "got it"
+        - "sounds good"
+        - "please do"
+        - "go ahead"
+        - "that works"
+        - "hello"
+        - "hi"
+        - "looks good, commit it"
+        - "now add tests"
+        - "deploy it"
+
+categories:
+  - name: computer_science
+    description: "Computer science and programming"
+    mmlu_categories: ["computer_science"]
+  - name: other
+    description: "General topics"
+    mmlu_categories: ["other"]
+
+strategy: "priority"
+
+decisions:
+  - name: "complex_query"
+    description: "Complex queries routed to capable model"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "prompt_complexity:hard"
+    modelRefs:
+      - model: "qwen3.5:35b-a3b"
+        use_reasoning: false
+
+  - name: "simple_query"
+    description: "Simple queries routed to efficient model"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "prompt_complexity:easy"
+    modelRefs:
+      - model: "qwen2.5:14b"
+        use_reasoning: false
+
+  - name: "fallback"
+    description: "Fallback"
+    priority: 1
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "qwen2.5:14b"
+        use_reasoning: false
+
+default_model: "qwen2.5:14b"
+
+# CRM — toggle this to compare behavior
+routing_momentum:
+  enabled: true    # CRM enabled for CRM demo
+
+observability:
+  metrics:
+    enabled: true
+  tracing:
+    enabled: false
