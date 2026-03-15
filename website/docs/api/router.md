@@ -72,7 +72,7 @@ Lists available models and includes a synthetic "MoM" (Mixture of Models) model 
 
 Notes:
 
-- The concrete model list is sourced from your configured vLLM endpoints in `config.yaml` (see `vllm_endpoints[].models`).
+- The concrete model list is sourced from the logical model catalog in `config.yaml`, with deployment bindings declared under `providers.models[].backend_refs[]`.
 - The special `MoM` (Mixture of Models) model is always present and instructs the router to classify and route to the best backend model automatically. For backward compatibility, the model name `auto` is also accepted as an alias.
 
 ### Chat Completions Endpoint
@@ -362,22 +362,23 @@ These are included in the provided Grafana dashboard at deploy/llm-router-dashbo
 Provide per-1M pricing for your models so the router can compute request cost and emit metrics/logs.
 
 ```yaml
-model_config:
-  phi4:
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.07
-      completion_per_1m: 0.35
-  "mistral-small3.1":
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.1
-      completion_per_1m: 0.3
-  gemma3:27b:
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.067
-      completion_per_1m: 0.267
+providers:
+  models:
+    - name: phi4
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.07
+        completion_per_1m: 0.35
+    - name: mistral-small3.1
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.1
+        completion_per_1m: 0.3
+    - name: gemma3:27b
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.067
+        completion_per_1m: 0.267
 ```
 
 Notes:

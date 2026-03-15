@@ -134,6 +134,17 @@ func (d *decompiler) decompileRoutingModels(models []config.RoutingModel) {
 		if len(model.Capabilities) > 0 {
 			d.write("  capabilities: %s\n", quotedStringArray(model.Capabilities))
 		}
+		if len(model.LoRAs) > 0 {
+			d.write("  loras: [\n")
+			for _, adapter := range model.LoRAs {
+				d.write("    { name: %q", adapter.Name)
+				if adapter.Description != "" {
+					d.write(", description: %q", adapter.Description)
+				}
+				d.write(" },\n")
+			}
+			d.write("  ]\n")
+		}
 		if len(model.Tags) > 0 {
 			d.write("  tags: %s\n", quotedStringArray(model.Tags))
 		}
@@ -163,6 +174,19 @@ func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	}
 	if len(model.Capabilities) > 0 {
 		fields["capabilities"] = stringsToArray(model.Capabilities)
+	}
+	if len(model.LoRAs) > 0 {
+		items := make([]Value, 0, len(model.LoRAs))
+		for _, adapter := range model.LoRAs {
+			loraFields := map[string]Value{
+				"name": StringValue{V: adapter.Name},
+			}
+			if adapter.Description != "" {
+				loraFields["description"] = StringValue{V: adapter.Description}
+			}
+			items = append(items, ObjectValue{Fields: loraFields})
+		}
+		fields["loras"] = ArrayValue{Items: items}
 	}
 	if len(model.Tags) > 0 {
 		fields["tags"] = stringsToArray(model.Tags)

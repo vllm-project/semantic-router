@@ -37,9 +37,9 @@ Finish the repo-wide rollout of the v0.3 canonical config contract where Go owns
 
 ## Current Loop
 
-- Current focus: finish P11 validation cleanup after the final `global.model_catalog.modules` hierarchy alignment and debt retirement.
-- Last completed loop: nested router-owned module config under `global.model_catalog.modules`, propagated the change through Go defaults/parser, CLI migration and deprecation checks, dashboard types, operator/Helm/config assets, and the latest docs/tutorials.
-- Next loop: rerun the remaining harness ladder, then separate any surviving gate noise into non-config debt if it is only structural-hotspot residue.
+- Current focus: finish P11 validation cleanup and isolate the remaining maintained legacy config assets that still need explicit migration out of E2E/deploy examples.
+- Last completed loop: added canonical `routing.modelCards[].loras` support across Go parser/export, CLI migration/validation, DSL compile-decompile/validation, dashboard decision editing, operator `vllmEndpoints`, reference config assets, and docs.
+- Next loop: migrate the remaining maintained E2E/deploy/example assets that still embed legacy `model_config`/`vllm_endpoints` fragments, then retire TD001 once those adapter remnants are gone.
 
 ## Decision Log
 
@@ -51,7 +51,10 @@ Finish the repo-wide rollout of the v0.3 canonical config contract where Go owns
 - 2026-03-14: Remove CLI-side `router-defaults.yaml` and merger helpers; router-owned defaults plus explicit `config migrate` are the only supported path.
 - 2026-03-14: Treat `routing.models`, `providers.model_targets`, `providers.backends`, and `providers.auth_profiles` as removed contract fields; parser paths now fail fast instead of silently accepting them.
 - 2026-03-14: Treat router-owned capability modules as part of `global.model_catalog`; module settings now live under `global.model_catalog.modules`, not as a peer top-level global block.
+- 2026-03-15: Normalize dashboard config editing around canonical `providers/routing/global` on both read and save, so editing a legacy file no longer writes `model_config`/`vllm_endpoints` back to disk.
+- 2026-03-15: The steady-state router parser now rejects deprecated legacy user config directly; the remaining TD001 scope is maintained harness/deploy/example assets and internal adapters that still need migration.
 
 ## Follow-up Debt / ADR Links
 
+- [TD001 Config Surface Fragmentation Across Router, CLI, K8s, and Dashboard](../tech-debt/td-001-config-surface-fragmentation.md)
 - [TD006 Structural Rule Target Still Exceeds Reality in Key Legacy Hotspots](../tech-debt/td-006-structural-rule-target-vs-legacy-hotspots.md)

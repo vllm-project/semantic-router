@@ -74,9 +74,11 @@ It no longer owns endpoints, API keys, listeners, or router-global runtime setti
 Model semantics and deployment bindings are now separated explicitly:
 
 - `routing.modelCards` carries semantic catalog data such as size, context window, description, and capabilities
+- `routing.modelCards[].loras` carries the canonical LoRA adapter catalog for each logical model
 - `providers.defaults` carries provider-wide defaults such as `default_model`, `reasoning_families`, and `default_reasoning_effort`
 - `providers.models` carries per-model access bindings directly
 - each `providers.models[].backend_refs[]` item carries its own endpoint, protocol, weight, and API key reference
+- `routing.decisions[].modelRefs[].lora_name` resolves against the matching `routing.modelCards[].loras` entry, so `lora_name` is now part of the supported routing contract instead of a runtime-only escape hatch
 
 ## Global defaults
 
@@ -132,6 +134,8 @@ vllm-sr config migrate --config old-config.yaml
 ```
 
 That command rewrites legacy config into canonical `providers/routing/global`.
+
+It covers both mixed nested layouts and older flat runtime layouts such as top-level `keyword_rules`, `model_config`, `vllm_endpoints`, and `provider_profiles`.
 
 `vllm-sr init` was removed as part of the cleanup. Canonical `config.yaml` is now the only steady-state file users are expected to author.
 

@@ -11,6 +11,15 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import {
+  canonicalizeConfigForManagerSave,
+  cloneConfigData,
+  ensureProviderDefaultsConfig,
+  ensureProvidersConfig,
+  projectCanonicalConfigForManager,
+  removeRoutingModelCard,
+  upsertRoutingModelCard,
+} from './configPageCanonicalization'
+import {
   getRoutingPreset,
   listDecisionNames,
   listSignalNames,
@@ -37,7 +46,6 @@ import {
   formatThreshold,
   ModelConfigEntry, NormalizedModel, normalizeEndpoint, normalizeEndpoints,
   ReasoningFamily,
-  RoutingModelCard,
   SignalType,
   TABLE_COLUMN_WIDTH,
   Tool,
@@ -100,85 +108,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     fetchRouterDefaults()
   }, [])
 
-  const cloneConfig = (value: ConfigData): ConfigData =>
-    JSON.parse(JSON.stringify(value)) as ConfigData
-
   const getRoutingModelCards = (cfg?: ConfigData) =>
     cfg?.routing?.modelCards || []
-
-  const ensureRouting = (cfg: ConfigData) => {
-    if (!cfg.routing) {
-      cfg.routing = {}
-    }
-    if (!cfg.routing.modelCards) {
-      cfg.routing.modelCards = getRoutingModelCards(cfg)
-    }
-    return cfg.routing
-  }
-
-  const ensureProviders = (cfg: ConfigData) => {
-    if (!cfg.providers) {
-      cfg.providers = { models: [] }
-    }
-    if (!cfg.providers.models) {
-      cfg.providers.models = []
-    }
-    return cfg.providers
-  }
-
-  const ensureProviderDefaults = (cfg: ConfigData) => {
-    const providers = ensureProviders(cfg)
-    if (!providers.defaults) {
-      providers.defaults = {}
-    }
-    return providers.defaults
-  }
-
-  const upsertRoutingModelCard = (
-    cfg: ConfigData,
-    name: string,
-    patch: Partial<RoutingModelCard> = {}
-  ) => {
-    const routing = ensureRouting(cfg)
-    const cards = [...(routing.modelCards || [])]
-    const index = cards.findIndex((card) => card.name === name)
-    if (index >= 0) {
-      cards[index] = { ...cards[index], ...patch, name }
-    } else {
-      cards.push({ name, ...patch })
-    }
-    routing.modelCards = cards
-  }
-
-  const removeRoutingModelCard = (cfg: ConfigData, name: string) => {
-    const routing = ensureRouting(cfg)
-    routing.modelCards = (routing.modelCards || []).filter((card) => card.name !== name)
-  }
-
-  const projectCanonicalConfigForManager = (data: ConfigData): ConfigData => {
-    const next = cloneConfig(data)
-    if (next.routing?.signals && !next.signals) {
-      next.signals = next.routing.signals
-    }
-    if (next.routing?.decisions && !next.decisions) {
-      next.decisions = next.routing.decisions
-    }
-    return next
-  }
-
-  const canonicalizeConfigForSave = (updatedConfig: ConfigData): ConfigData => {
-    const next = cloneConfig(updatedConfig)
-    const routing = ensureRouting(next)
-    if (next.signals) {
-      routing.signals = next.signals
-      delete next.signals
-    }
-    if (next.decisions) {
-      routing.decisions = next.decisions
-      delete next.decisions
-    }
-    return next
-  }
 
   const normalizeProviderModelEndpoints = (
     model: {
@@ -205,6 +136,54 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       })
     }
     return normalizeEndpoints(model.endpoints)
+  }
+
+  const mergeProviderBackendRefs = (
+    existingRefs: BackendRefEntry[] | undefined,
+    endpoints: Endpoint[],
+    accessKey?: string
+  ): BackendRefEntry[] => {
+    const existing = Array.isArray(existingRefs) ? existingRefs : []
+
+    return endpoints.map((ep, index) => {
+      const matched =
+        existing.find((ref) => ref.name === ep.name) ||
+        existing[index]
+
+      const merged: BackendRefEntry = {
+        ...(matched || {}),
+        name: ep.name,
+        protocol: ep.protocol,
+        weight: ep.weight,
+      }
+
+      const matchedDisplayEndpoint =
+        typeof matched?.endpoint === 'string' && matched.endpoint.trim()
+          ? matched.endpoint.trim()
+          : typeof matched?.base_url === 'string'
+            ? matched.base_url.trim()
+            : ''
+
+      if (matched?.base_url && !matched?.endpoint) {
+        if (ep.endpoint.trim() && ep.endpoint.trim() !== matchedDisplayEndpoint) {
+          merged.base_url = ep.endpoint.trim()
+        } else {
+          merged.base_url = matched.base_url
+        }
+        delete merged.endpoint
+      } else {
+        merged.endpoint = ep.endpoint
+      }
+
+      if (accessKey?.trim()) {
+        merged.api_key = accessKey.trim()
+        delete merged.api_key_env
+      } else if (!matched?.api_key && matched?.api_key_env) {
+        delete merged.api_key
+      }
+
+      return merged
+    })
   }
 
   // Fetch tools database when config is loaded
@@ -290,7 +269,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     }
 
     try {
-      const canonicalConfig = canonicalizeConfigForSave(updatedConfig as ConfigData)
+      const canonicalConfig = canonicalizeConfigForManagerSave(updatedConfig as ConfigData)
       const response = await fetch('/api/router/config/update', {
         method: 'POST',
         headers: {
@@ -1839,7 +1818,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         priority: 1,
         operator: 'AND',
         conditions: [{ type: 'keyword', name: '' }],
-        modelRefs: [{ model: '', use_reasoning: false }],
+        modelRefs: [
+          {
+            model: '',
+            use_reasoning: false,
+            reasoning_description: '',
+            reasoning_effort: '',
+            lora_name: '',
+          },
+        ],
         plugins: []
       }
 
@@ -1854,7 +1841,11 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         })),
         modelRefs: (decision.modelRefs || []).map((ref) => ({
           model: ref.model,
-          use_reasoning: !!ref.use_reasoning
+          use_reasoning: !!ref.use_reasoning,
+          reasoning_description: ref.reasoning_description || '',
+          reasoning_effort: ref.reasoning_effort || '',
+          lora_name: ref.lora_name || '',
+          weight: typeof ref.weight === 'number' ? ref.weight : undefined,
         })),
         plugins: (decision.plugins || []).map((plugin) => ({
           type: plugin.type,
@@ -1957,19 +1948,29 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         value: DecisionFormState['modelRefs'],
         onChange: (value: DecisionFormState['modelRefs']) => void
       ) => {
-        const rows = (Array.isArray(value) ? value : []).length ? value : [{ model: '', use_reasoning: false }]
+        const rows = (Array.isArray(value) ? value : []).length
+          ? value
+          : [{ model: '', use_reasoning: false, reasoning_description: '', reasoning_effort: '', lora_name: '' }]
 
-        const updateItem = (index: number, key: 'model' | 'use_reasoning', val: string | boolean) => {
+        const updateItem = (
+          index: number,
+          key: 'model' | 'use_reasoning' | 'reasoning_description' | 'reasoning_effort' | 'lora_name' | 'weight',
+          val: string | boolean | number | undefined
+        ) => {
           const next = rows.map((item, idx) => idx === index ? { ...item, [key]: val } : item)
           onChange(next)
         }
 
         const removeItem = (index: number) => {
           const next = rows.filter((_, idx) => idx !== index)
-          onChange(next.length ? next : [{ model: '', use_reasoning: false }])
+          onChange(next.length ? next : [{ model: '', use_reasoning: false, reasoning_description: '', reasoning_effort: '', lora_name: '' }])
         }
 
-        const addItem = () => onChange([...rows, { model: '', use_reasoning: false }])
+        const addItem = () =>
+          onChange([
+            ...rows,
+            { model: '', use_reasoning: false, reasoning_description: '', reasoning_effort: '', lora_name: '' },
+          ])
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1978,39 +1979,91 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                 key={idx}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr auto auto',
-                  gap: '0.5rem',
-                  alignItems: 'center'
+                  gap: '0.75rem',
+                  padding: '0.75rem',
+                  borderRadius: 8,
+                  border: '1px solid var(--color-border)'
                 }}
               >
-                <input
-                  type="text"
-                  value={ref?.model || ''}
-                  onChange={(e) => updateItem(idx, 'model', e.target.value)}
-                  placeholder="Model name (e.g. gpt-4o)"
-                  style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
-                />
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--color-text-secondary)' }}>
-                  <input
-                    type="checkbox"
-                    checked={!!ref?.use_reasoning}
-                    onChange={(e) => updateItem(idx, 'use_reasoning', e.target.checked)}
-                  />
-                  Use reasoning
-                </label>
-                <button
-                  type="button"
-                  onClick={() => removeItem(idx)}
+                <div
                   style={{
-                    padding: '0.5rem 0.75rem',
-                    borderRadius: 6,
-                    border: '1px solid var(--color-border)',
-                    background: 'transparent',
-                    color: 'var(--color-text)'
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(220px, 1fr) minmax(180px, 220px) auto auto',
+                    gap: '0.5rem',
+                    alignItems: 'center'
                   }}
                 >
-                  Remove
-                </button>
+                  <input
+                    type="text"
+                    value={ref?.model || ''}
+                    onChange={(e) => updateItem(idx, 'model', e.target.value)}
+                    placeholder="Model name (e.g. qwen3-32b)"
+                    style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+                  />
+                  <select
+                    value={ref?.reasoning_effort || ''}
+                    onChange={(e) => updateItem(idx, 'reasoning_effort', e.target.value)}
+                    style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+                  >
+                    <option value="">Default effort</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--color-text-secondary)' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!ref?.use_reasoning}
+                      onChange={(e) => updateItem(idx, 'use_reasoning', e.target.checked)}
+                    />
+                    Use reasoning
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(idx)}
+                    style={{
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: 6,
+                      border: '1px solid var(--color-border)',
+                      background: 'transparent',
+                      color: 'var(--color-text)'
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(220px, 1fr) minmax(140px, 180px)',
+                    gap: '0.5rem',
+                    alignItems: 'center'
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={ref?.lora_name || ''}
+                    onChange={(e) => updateItem(idx, 'lora_name', e.target.value)}
+                    placeholder="LoRA adapter name (optional)"
+                    style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+                  />
+                  <input
+                    type="number"
+                    value={typeof ref?.weight === 'number' ? ref.weight : ''}
+                    onChange={(e) => updateItem(idx, 'weight', e.target.value === '' ? undefined : Number(e.target.value))}
+                    placeholder="Weight"
+                    step="0.1"
+                    min="0"
+                    style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={ref?.reasoning_description || ''}
+                  onChange={(e) => updateItem(idx, 'reasoning_description', e.target.value)}
+                  placeholder="Reasoning description (optional)"
+                  style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+                />
               </div>
             ))}
             <button
@@ -2202,7 +2255,26 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           if (!model) {
             throw new Error(`Model reference #${idx + 1} is missing a model name.`)
           }
-          return { model, use_reasoning: !!m?.use_reasoning }
+          const modelRef: DecisionConfig['modelRefs'][number] = {
+            model,
+            use_reasoning: !!m?.use_reasoning,
+          }
+          const reasoningDescription = (m?.reasoning_description || '').trim()
+          if (reasoningDescription) {
+            modelRef.reasoning_description = reasoningDescription
+          }
+          const reasoningEffort = (m?.reasoning_effort || '').trim()
+          if (reasoningEffort) {
+            modelRef.reasoning_effort = reasoningEffort
+          }
+          const loraName = (m?.lora_name || '').trim()
+          if (loraName) {
+            modelRef.lora_name = loraName
+          }
+          if (typeof m?.weight === 'number' && Number.isFinite(m.weight)) {
+            modelRef.weight = m.weight
+          }
+          return modelRef
         })
 
         const normalizedPlugins = (formData.plugins || []).filter((p) => {
@@ -2635,23 +2707,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           // Endpoints are already validated by EndpointsEditor
           const endpoints = normalizeEndpoints(data.endpoints)
 
-          const newConfig = cloneConfig(config)
+          const newConfig = cloneConfigData(config)
 
           if (isPythonCLI) {
-            const providers = ensureProviders(newConfig)
+            const providers = ensureProvidersConfig(newConfig)
             upsertRoutingModelCard(newConfig, data.model_name, {
               reasoning_family_ref: data.reasoning_family || undefined,
             })
             providers.models.push({
               name: data.model_name,
               provider_model_id: data.model_name,
-              backend_refs: endpoints.map((ep: Endpoint) => ({
-                name: ep.name,
-                endpoint: ep.endpoint,
-                protocol: ep.protocol,
-                weight: ep.weight,
-                api_key: data.access_key || undefined,
-              })),
+              backend_refs: mergeProviderBackendRefs(undefined, endpoints, data.access_key),
               pricing: {
                 currency: data.currency,
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
@@ -2748,13 +2814,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           if (!config) {
             return
           }
-          const newConfig = cloneConfig(config)
+          const newConfig = cloneConfigData(config)
 
           // Endpoints are already validated by EndpointsEditor
           const endpoints = normalizeEndpoints(data.endpoints)
 
           if (isPythonCLI && newConfig.providers?.models) {
-            const providers = ensureProviders(newConfig)
+            const providers = ensureProvidersConfig(newConfig)
             upsertRoutingModelCard(newConfig, model.name, {
               reasoning_family_ref: data.reasoning_family || undefined,
             })
@@ -2763,13 +2829,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               m.name === model.name ? {
                 ...m,
                 provider_model_id: m.provider_model_id || model.name,
-                backend_refs: endpoints.map((ep: Endpoint) => ({
-                  name: ep.name,
-                  endpoint: ep.endpoint,
-                  protocol: ep.protocol,
-                  weight: ep.weight,
-                  api_key: data.access_key || undefined,
-                })),
+                backend_refs: mergeProviderBackendRefs(m.backend_refs, endpoints, data.access_key),
                 pricing: {
                   currency: data.currency,
                   prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
@@ -2807,14 +2867,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       if (!config) {
         return
       }
-      const newConfig = cloneConfig(config)
+      const newConfig = cloneConfigData(config)
       if (isPythonCLI && newConfig.providers?.models) {
-        const providers = ensureProviders(newConfig)
+        const providers = ensureProvidersConfig(newConfig)
         type ModelType = NonNullable<ConfigData['providers']>['models'][number]
         providers.models = providers.models.filter((m: ModelType) => m.name !== modelName)
         removeRoutingModelCard(newConfig, modelName)
         // Update default model if deleted
-        const defaults = ensureProviderDefaults(newConfig)
+        const defaults = ensureProviderDefaultsConfig(newConfig)
         if (defaults.default_model === modelName) {
           defaults.default_model = providers.models[0]?.name || ''
         }
@@ -2885,7 +2945,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         async (data) => {
           const newConfig = { ...config }
           if (isPythonCLI) {
-            const defaults = ensureProviderDefaults(newConfig)
+            const defaults = ensureProviderDefaultsConfig(newConfig)
             if (!defaults.reasoning_families) {
               defaults.reasoning_families = {}
             }
@@ -2934,7 +2994,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
           const newConfig = { ...config }
           if (isPythonCLI) {
-            const defaults = ensureProviderDefaults(newConfig)
+            const defaults = ensureProviderDefaultsConfig(newConfig)
             if (!defaults.reasoning_families) {
               defaults.reasoning_families = {}
             }
@@ -2958,7 +3018,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
       const newConfig = { ...config }
       if (isPythonCLI && newConfig.providers?.defaults?.reasoning_families) {
-        const defaults = ensureProviderDefaults(newConfig)
+        const defaults = ensureProviderDefaultsConfig(newConfig)
         defaults.reasoning_families = { ...defaults.reasoning_families }
         delete defaults.reasoning_families[familyName]
       } else if (newConfig.reasoning_families) {

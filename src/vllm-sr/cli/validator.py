@@ -349,7 +349,8 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
     errors = []
 
     provider_model_names = {model.name for model in config.providers.models}
-    routing_model_names = {card.name for card in config.routing.model_cards}
+    routing_cards = {card.name: card for card in config.routing.model_cards}
+    routing_model_names = set(routing_cards.keys())
 
     for model in config.providers.models:
         if model.name not in routing_model_names:
@@ -390,6 +391,28 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
                         field=f"decisions.{decision.name}.modelRefs",
                     )
                 )
+                continue
+            if model_ref.lora_name:
+                declared_loras = {
+                    adapter.name
+                    for adapter in (routing_cards[model_ref.model].loras or [])
+                    if adapter.name
+                }
+                if not declared_loras:
+                    errors.append(
+                        ValidationError(
+                            f"Decision '{decision.name}' references LoRA '{model_ref.lora_name}' for model '{model_ref.model}', "
+                            "but routing.modelCards declares no loras for that model",
+                            field=f"decisions.{decision.name}.modelRefs",
+                        )
+                    )
+                elif model_ref.lora_name not in declared_loras:
+                    errors.append(
+                        ValidationError(
+                            f"Decision '{decision.name}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
+                            field=f"decisions.{decision.name}.modelRefs",
+                        )
+                    )
 
     # Check default model
     if config.providers.default_model not in provider_model_names:

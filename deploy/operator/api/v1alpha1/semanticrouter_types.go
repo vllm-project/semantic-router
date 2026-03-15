@@ -1420,7 +1420,7 @@ type IngressTLS struct {
 
 // VLLMEndpointSpec defines a vLLM model backend endpoint
 type VLLMEndpointSpec struct {
-	// Name of the endpoint (used in model_config.preferred_endpoints)
+	// Name of the backend ref generated under config.providers.models[].backend_refs
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
@@ -1432,6 +1432,11 @@ type VLLMEndpointSpec struct {
 	// +optional
 	ReasoningFamily string `json:"reasoningFamily,omitempty"`
 
+	// LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards.
+	// +optional
+	// +kubebuilder:validation:MaxItems=50
+	LoRAs []LoRAAdapterSpec `json:"loras,omitempty"`
+
 	// Backend configuration
 	Backend VLLMBackend `json:"backend"`
 
@@ -1439,6 +1444,19 @@ type VLLMEndpointSpec struct {
 	// +optional
 	// +kubebuilder:default=1
 	Weight int `json:"weight,omitempty"`
+}
+
+// LoRAAdapterSpec defines one LoRA adapter exposed by a VLLMEndpoint model.
+type LoRAAdapterSpec struct {
+	// Name is the unique adapter identifier referenced by decision.modelRefs[].lora_name.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=100
+	Name string `json:"name"`
+
+	// Description provides a short human-readable summary for UI and docs surfaces.
+	// +optional
+	// +kubebuilder:validation:MaxLength=500
+	Description string `json:"description,omitempty"`
 }
 
 // VLLMBackend specifies how to reach the vLLM service

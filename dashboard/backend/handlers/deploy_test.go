@@ -524,12 +524,16 @@ func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
-	// Deploy config with only keyword_rules (simulating DSL output that only has signals)
-	deployYAML := `keyword_rules:
-  - name: test-signal
+	// Deploy a routing-only fragment (simulating current DSL output).
+	deployYAML := `routing:
+  signals:
     keywords:
-      - hello
-      - world
+      - name: test-signal
+        operator: OR
+        keywords:
+          - hello
+          - world
+        case_sensitive: false
 `
 	body := DeployRequest{YAML: deployYAML}
 	bodyBytes, _ := json.Marshal(body)
@@ -545,21 +549,22 @@ func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
 		t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())
 	}
 
-	// Read deployed config and verify deep merge preserved existing fields
+	// Read deployed config and verify deep merge preserved existing canonical fields.
 	data, _ := os.ReadFile(configPath)
 	configStr := string(data)
 
-	// These fields from the original config should be preserved
-	if !contains(configStr, "default_model") {
-		t.Error("default_model should be preserved after deploy")
+	if !contains(configStr, "providers:") {
+		t.Error("providers block should be preserved after deploy")
 	}
-	if !contains(configStr, "vllm_endpoints") {
-		t.Error("vllm_endpoints should be preserved after deploy")
+	if !contains(configStr, "backend_refs:") {
+		t.Error("providers.models[].backend_refs should be preserved after deploy")
 	}
 
-	// The deployed keyword_rules should be present
-	if !contains(configStr, "keyword_rules") {
-		t.Error("keyword_rules from deploy should be present")
+	if !contains(configStr, "default_model: test-model") {
+		t.Error("providers.defaults.default_model should be preserved after deploy")
+	}
+	if !contains(configStr, "routing:") || !contains(configStr, "keywords:") {
+		t.Error("routing signals from deploy should be present")
 	}
 }
 
@@ -568,7 +573,7 @@ func TestDeployHandler_NoDSLSource(t *testing.T) {
 	configPath := createValidTestConfig(t, tempDir)
 
 	// Deploy without DSL source
-	body := DeployRequest{YAML: "default_model: new-model\n"}
+	body := DeployRequest{YAML: "providers:\n  defaults:\n    default_model: test-model\n"}
 	bodyBytes, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy", bytes.NewReader(bodyBytes))
@@ -979,23 +984,10 @@ func TestDeployAndRollback_Integration(t *testing.T) {
 	}
 }
 
-// ============================================================
-// UpdateConfigHandler deep merge upgrade test
-// ============================================================
-
-func TestUpdateConfigHandler_DeepMergeNested(t *testing.T) {
+func TestUpdateConfigHandler_ReplacesLegacyConfigWithCanonicalPayload(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := createValidTestConfig(t, tempDir)
-
-	// Update only a deeply nested field — classifier.category_model.threshold
-	// The rest of classifier should be preserved
-	updateBody := map[string]interface{}{
-		"classifier": map[string]interface{}{
-			"category_model": map[string]interface{}{
-				"threshold": 0.9,
-			},
-		},
-	}
+	configPath := createLegacyTestConfig(t, tempDir)
+	updateBody := canonicalConfigBody("127.0.0.1:8000")
 
 	bodyBytes, _ := json.Marshal(updateBody)
 	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
@@ -1009,22 +1001,17 @@ func TestUpdateConfigHandler_DeepMergeNested(t *testing.T) {
 		t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())
 	}
 
-	// Read back and verify deep merge
+	// Read back and verify the full canonical payload replaced the legacy file.
 	data, _ := os.ReadFile(configPath)
 	configStr := string(data)
 
-	// The pii_model should be preserved (not in the update, but was in original)
-	if !contains(configStr, "pii_model") {
-		t.Error("pii_model should be preserved by deep merge")
+	if contains(configStr, "model_config:") {
+		t.Error("legacy model_config should be removed after canonical replace")
 	}
-
-	// The category_model.model_id should be preserved
-	if !contains(configStr, "all-MiniLM-L12-v2") || !contains(configStr, "bert_model") {
-		t.Error("bert_model should be preserved")
+	if contains(configStr, "vllm_endpoints:") {
+		t.Error("legacy vllm_endpoints should be removed after canonical replace")
 	}
-
-	// default_model should be preserved
-	if !contains(configStr, "test-model") {
-		t.Error("default_model should be preserved")
+	if !contains(configStr, "providers:") || !contains(configStr, "routing:") {
+		t.Error("canonical providers/routing blocks should be written")
 	}
 }

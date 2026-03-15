@@ -32,6 +32,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 			ContextWindowSize: model.ContextWindowSize,
 			Description:       model.Description,
 			Capabilities:      append([]string(nil), model.Capabilities...),
+			LoRAs:             copyLoRAAdapters(model.LoRAs),
 			Tags:              append([]string(nil), model.Tags...),
 			QualityScore:      model.QualityScore,
 			Modality:          model.Modality,

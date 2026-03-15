@@ -41,6 +41,7 @@ func TestReferenceConfigCoversSupportedRoutingSurfaces(t *testing.T) {
 	decisions := mustSliceAt(t, root, "routing", "decisions")
 
 	assertSupportedSignalTypesInReferenceConfig(t, root)
+	assertReferenceLoRACatalogCoverage(t, root)
 	assertSupportedAlgorithmsInReferenceConfig(t, decisions)
 	assertSupportedPluginsInReferenceConfig(t, decisions)
 	assertDecisionRuleCompositionInReferenceConfig(t, decisions)

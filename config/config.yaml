@@ -106,6 +106,9 @@ routing:
       context_window_size: 131072
       description: Higher-quality text model for complex and verified requests.
       capabilities: [chat, reasoning, long-context]
+      loras:
+        - name: computer-science-expert
+          description: Adapter specialized for advanced computer science and software design prompts.
       quality_score: 0.96
       modality: ar
       tags: [premium, analysis]
@@ -425,6 +428,7 @@ routing:
           use_reasoning: true
           reasoning_description: Use the strongest text model for synthesis.
           reasoning_effort: high
+          lora_name: computer-science-expert
           weight: 0.5
         - model: llava-omni
           use_reasoning: true

@@ -2,7 +2,7 @@
 
 ## Status
 
-Closed
+Open
 
 ## Scope
 
@@ -10,7 +10,7 @@ configuration architecture
 
 ## Summary
 
-This debt tracked the repo-wide rollout from fragmented router/CLI/dashboard/Kubernetes config surfaces to the canonical v0.3 contract. The rollout is now complete for the steady-state user contract: `version/listeners/providers/routing/global`, with `providers.models[]` carrying deployment bindings directly and router-owned module configs living under `global.model_catalog.modules`.
+The repo-wide rollout to the canonical v0.3 contract has landed across the public steady-state user contract, the router parser now rejects deprecated user-facing legacy fields, and the dashboard manager normalizes legacy config into canonical `providers/routing/global` before editing or saving. The debt remains open because several maintained deploy/E2E/example assets and a few adapter-oriented code paths still rely on `model_config`, `vllm_endpoints`, and `provider_profiles` semantics instead of going through explicit migration first.
 
 ## Evidence
 
@@ -18,6 +18,7 @@ This debt tracked the repo-wide rollout from fragmented router/CLI/dashboard/Kub
 - [src/semantic-router/pkg/config/canonical_defaults.go](../../../src/semantic-router/pkg/config/canonical_defaults.go)
 - [src/semantic-router/pkg/config/canonical_export.go](../../../src/semantic-router/pkg/config/canonical_export.go)
 - [src/semantic-router/pkg/config/config.go](../../../src/semantic-router/pkg/config/config.go)
+- [src/semantic-router/pkg/config/loader.go](../../../src/semantic-router/pkg/config/loader.go)
 - [src/semantic-router/pkg/dsl/emitter_yaml.go](../../../src/semantic-router/pkg/dsl/emitter_yaml.go)
 - [src/semantic-router/pkg/dsl/routing_contract.go](../../../src/semantic-router/pkg/dsl/routing_contract.go)
 - [dashboard/backend/handlers/setup.go](../../../dashboard/backend/handlers/setup.go)
@@ -29,6 +30,8 @@ This debt tracked the repo-wide rollout from fragmented router/CLI/dashboard/Kub
 - [dashboard/frontend/src/pages/builderPageImportModal.tsx](../../../dashboard/frontend/src/pages/builderPageImportModal.tsx)
 - [dashboard/frontend/src/pages/ConfigPageRouterConfigSection.tsx](../../../dashboard/frontend/src/pages/ConfigPageRouterConfigSection.tsx)
 - [dashboard/frontend/src/pages/ConfigPage.tsx](../../../dashboard/frontend/src/pages/ConfigPage.tsx)
+- [dashboard/frontend/src/pages/configPageCanonicalization.ts](../../../dashboard/frontend/src/pages/configPageCanonicalization.ts)
+- [dashboard/backend/handlers/config.go](../../../dashboard/backend/handlers/config.go)
 - [dashboard/backend/router/core_routes.go](../../../dashboard/backend/router/core_routes.go)
 - [config/config.yaml](../../../config/config.yaml)
 - [config/README.md](../../../config/README.md)
@@ -41,6 +44,10 @@ This debt tracked the repo-wide rollout from fragmented router/CLI/dashboard/Kub
 - [src/vllm-sr/cli/parser.py](../../../src/vllm-sr/cli/parser.py)
 - [website/docs/installation/configuration.md](../../../website/docs/installation/configuration.md)
 - [website/docs/proposals/unified-config-contract-v0-3.md](../../../website/docs/proposals/unified-config-contract-v0-3.md)
+- [e2e/config/config.e2e.yaml](../../../e2e/config/config.e2e.yaml)
+- [e2e/config/config.response-api.yaml](../../../e2e/config/config.response-api.yaml)
+- [e2e/config/config.multi-provider.yaml](../../../e2e/config/config.multi-provider.yaml)
+- [deploy/kserve/configmap-router-config.yaml](../../../deploy/kserve/configmap-router-config.yaml)
 - [website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/installation/installation.md](../../../website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/installation/installation.md)
 - [website/versioned_docs/version-v0.1/installation/installation.md](../../../website/versioned_docs/version-v0.1/installation/installation.md)
 - [docs/agent/plans/pl-0003-v0-3-config-contract-rollout.md](../plans/pl-0003-v0-3-config-contract-rollout.md)
@@ -49,7 +56,7 @@ This debt tracked the repo-wide rollout from fragmented router/CLI/dashboard/Kub
 
 - The original issue was schema drift between router, CLI, dashboard, and Kubernetes-facing workflows.
 - That drift also made repo-owned config assets hard to keep in sync, because the example tree did not encode which fragments were required to cover the active routing surface.
-- As long as the router kept accepting a second legacy user-config shape directly, contributors could accidentally treat migration compatibility as an equal steady-state contract.
+- As long as maintained deploy/E2E assets and helper code still encode a second legacy user-config shape, contributors can accidentally reintroduce it as if it were an equal steady-state contract.
 
 ## Desired End State
 
@@ -74,9 +81,10 @@ This debt tracked the repo-wide rollout from fragmented router/CLI/dashboard/Kub
 - Dashboard config pages, onboarding helpers, and topology/editor types no longer assume pre-`providers.defaults` or pre-`providers.models[]` shapes.
 - Current docs, translated docs, and maintained versioned docs all describe the same canonical `version/listeners/providers/routing/global` contract and the current `global.router/services/stores/integrations/model_catalog` hierarchy, including `global.model_catalog.modules`, for the active workflow.
 
-## Retirement Notes
+## Reopen Notes
 
-- Canonical runtime parsing is now Go-owned and steady-state runtime loading is canonical-only.
-- CLI typed schema, migration tooling, dashboard editing flows, Helm, operator, and DSL import/export now converge on the same canonical top-level layout.
-- Repository config assets and latest tutorials are organized by `signal/decision/algorithm/plugin/global`, with Go tests guarding contract and doc drift.
-- Remaining large-file or structure-rule issues live under [TD006 Structural Rule Target Still Exceeds Reality in Key Legacy Hotspots](td-006-structural-rule-target-vs-legacy-hotspots.md), not this config-surface debt.
+- The canonical public contract is still the right target, and most steady-state surfaces now use it.
+- The router parser itself no longer accepts deprecated steady-state user config; migration is explicit.
+- Dashboard config management no longer writes back `model_config`/`vllm_endpoints` after editing legacy files; it rewrites them into canonical `providers/routing/global`.
+- The remaining gap is that maintained harness assets and a few adapter-oriented code paths still encode legacy runtime fragments instead of canonical v0.3 YAML plus explicit migration.
+- Once maintained deploy/E2E/example assets stop relying on those fragments, this debt can be closed again.

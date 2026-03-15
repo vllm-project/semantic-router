@@ -14,7 +14,31 @@ _TOP_LEVEL_KEYS = {
     "global",
     "setup",
 }
-_LEGACY_ROUTING_KEYS = {"signals", "decisions"}
+_LEGACY_ROUTING_KEYS = {
+    "signals",
+    "decisions",
+    "keyword_rules",
+    "embedding_rules",
+    "categories",
+    "fact_check_rules",
+    "user_feedback_rules",
+    "preference_rules",
+    "language_rules",
+    "context_rules",
+    "complexity_rules",
+    "modality_rules",
+    "role_bindings",
+    "jailbreak",
+    "pii",
+}
+_LEGACY_PROVIDER_KEYS = {
+    "default_model",
+    "reasoning_families",
+    "default_reasoning_effort",
+    "model_config",
+    "vllm_endpoints",
+    "provider_profiles",
+}
 
 
 def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -25,8 +49,13 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
     routing_models, routing_models_by_name = _collect_routing_models(routing)
 
     _move_legacy_routing_blocks(source, routing)
+    _move_legacy_flat_signal_blocks(source, routing)
+    _move_legacy_provider_defaults(source, providers)
     provider_models = _migrate_provider_models(
         providers, routing_models, routing_models_by_name
+    )
+    _migrate_legacy_flat_model_bindings(
+        source, provider_models, routing_models, routing_models_by_name
     )
     _ensure_routing_model_refs(
         providers, provider_models, routing_models, routing_models_by_name
@@ -80,6 +109,49 @@ def _move_legacy_routing_blocks(
         routing["signals"] = deepcopy(source["signals"])
     if "decisions" in source and "decisions" not in routing:
         routing["decisions"] = deepcopy(source["decisions"])
+
+
+def _move_legacy_flat_signal_blocks(
+    source: dict[str, Any], routing: dict[str, Any]
+) -> None:
+    signals = _ensure_dict(routing, "signals")
+    key_map = {
+        "keyword_rules": "keywords",
+        "embedding_rules": "embeddings",
+        "categories": "domains",
+        "fact_check_rules": "fact_check",
+        "user_feedback_rules": "user_feedbacks",
+        "preference_rules": "preferences",
+        "language_rules": "language",
+        "context_rules": "context",
+        "complexity_rules": "complexity",
+        "modality_rules": "modality",
+        "role_bindings": "role_bindings",
+        "jailbreak": "jailbreak",
+        "pii": "pii",
+    }
+
+    for legacy_key, canonical_key in key_map.items():
+        if canonical_key in signals:
+            continue
+        legacy_value = _clone_list(source.get(legacy_key))
+        if legacy_value:
+            signals[canonical_key] = legacy_value
+
+
+def _move_legacy_provider_defaults(
+    source: dict[str, Any], providers: dict[str, Any]
+) -> None:
+    defaults = _as_dict(providers.get("defaults"))
+    for key in (
+        "default_model",
+        "reasoning_families",
+        "default_reasoning_effort",
+    ):
+        if key not in defaults:
+            _set_if_missing(defaults, key, source.get(key))
+    if defaults:
+        providers["defaults"] = defaults
 
 
 def _migrate_provider_models(
@@ -168,6 +240,7 @@ def _populate_semantic_model_fields(
     )
     _set_if_missing(semantic_model, "description", model.get("description"))
     _set_if_missing(semantic_model, "capabilities", model.get("capabilities"))
+    _set_if_missing(semantic_model, "loras", model.get("loras"))
     _set_if_missing(semantic_model, "quality_score", model.get("quality_score"))
     _set_if_missing(semantic_model, "modality", model.get("modality"))
     _set_if_missing(semantic_model, "tags", model.get("tags"))
@@ -235,7 +308,11 @@ def _move_legacy_global_blocks(
         model_catalog["external"] = deepcopy(providers.pop("external_models"))
 
     for key, value in source.items():
-        if key in _TOP_LEVEL_KEYS or key in _LEGACY_ROUTING_KEYS:
+        if (
+            key in _TOP_LEVEL_KEYS
+            or key in _LEGACY_ROUTING_KEYS
+            or key in _LEGACY_PROVIDER_KEYS
+        ):
             continue
         if value in (None, "", [], {}):
             continue
@@ -276,6 +353,121 @@ def _ensure_routing_model(
     routing_models.append(created)
     routing_models_by_name[model_name] = created
     return created
+
+
+def _migrate_legacy_flat_model_bindings(
+    source: dict[str, Any],
+    provider_models: list[dict[str, Any]],
+    routing_models: list[dict[str, Any]],
+    routing_models_by_name: dict[str, dict[str, Any]],
+) -> None:
+    legacy_model_config = _as_dict(source.get("model_config"))
+    if not legacy_model_config:
+        return
+
+    provider_models_by_name = {
+        str(model.get("name")): model
+        for model in provider_models
+        if isinstance(model, dict) and model.get("name")
+    }
+    backend_catalog = _build_legacy_backend_catalog(source)
+
+    for model_name, raw_entry in legacy_model_config.items():
+        if not isinstance(raw_entry, dict):
+            continue
+
+        semantic_model = _ensure_routing_model(
+            str(model_name), routing_models, routing_models_by_name
+        )
+        _populate_semantic_model_fields(semantic_model, raw_entry)
+
+        provider_model = provider_models_by_name.get(str(model_name))
+        if provider_model is None:
+            provider_model = {"name": str(model_name)}
+            provider_models.append(provider_model)
+            provider_models_by_name[str(model_name)] = provider_model
+
+        _set_if_missing(provider_model, "provider_model_id", raw_entry.get("model_id"))
+        _set_if_missing(provider_model, "pricing", raw_entry.get("pricing"))
+        _set_if_missing(provider_model, "api_format", raw_entry.get("api_format"))
+        _set_if_missing(
+            provider_model, "external_model_ids", raw_entry.get("external_model_ids")
+        )
+
+        if "backend_refs" not in provider_model:
+            backend_refs = _legacy_backend_refs_for_model(raw_entry, backend_catalog)
+            if backend_refs:
+                provider_model["backend_refs"] = backend_refs
+
+
+def _build_legacy_backend_catalog(source: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    profiles = _as_dict(source.get("provider_profiles"))
+    catalog: dict[str, dict[str, Any]] = {}
+
+    for raw_endpoint in _clone_list(source.get("vllm_endpoints")):
+        if not isinstance(raw_endpoint, dict):
+            continue
+
+        endpoint_name = str(raw_endpoint.get("name", "")).strip()
+        if not endpoint_name:
+            continue
+
+        backend_ref: dict[str, Any] = {"name": endpoint_name}
+        profile_name = raw_endpoint.get("provider_profile")
+        profile = (
+            profiles.get(profile_name)
+            if isinstance(profile_name, str)
+            and isinstance(profiles.get(profile_name), dict)
+            else None
+        )
+        if isinstance(profile, dict):
+            for key in (
+                "base_url",
+                "type",
+                "auth_header",
+                "auth_prefix",
+                "extra_headers",
+                "api_version",
+                "chat_path",
+            ):
+                value = profile.get(key)
+                target_key = "provider" if key == "type" else key
+                _set_if_missing(backend_ref, target_key, value)
+
+        address = raw_endpoint.get("address")
+        port = raw_endpoint.get("port")
+        if isinstance(address, str) and address.strip():
+            endpoint_value = address.strip()
+            if isinstance(port, int) and port > 0:
+                endpoint_value = f"{endpoint_value}:{port}"
+            _set_if_missing(backend_ref, "endpoint", endpoint_value)
+
+        for key in ("protocol", "weight", "type", "api_key", "api_key_env"):
+            _set_if_missing(backend_ref, key, raw_endpoint.get(key))
+
+        catalog[endpoint_name] = backend_ref
+
+    return catalog
+
+
+def _legacy_backend_refs_for_model(
+    legacy_model: dict[str, Any],
+    backend_catalog: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    backend_refs: list[dict[str, Any]] = []
+    access_key = legacy_model.get("access_key")
+
+    for endpoint_name in _clone_list(legacy_model.get("preferred_endpoints")):
+        if not isinstance(endpoint_name, str):
+            continue
+        backend = backend_catalog.get(endpoint_name)
+        if not isinstance(backend, dict):
+            continue
+        backend_ref = deepcopy(backend)
+        _set_if_missing(backend_ref, "api_key", access_key)
+        backend_refs.append(backend_ref)
+
+    return backend_refs
 
 
 def _convert_model_targets_to_provider_models(

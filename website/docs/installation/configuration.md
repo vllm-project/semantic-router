@@ -28,6 +28,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 
 - `routing` is the DSL-owned surface.
   - `routing.modelCards`
+  - `routing.modelCards[].loras`
   - `routing.signals`
   - `routing.decisions`
 - `providers` owns deployment and default-selection metadata.
@@ -59,8 +60,8 @@ providers:
     default_model: qwen3-8b
     reasoning_families:
       qwen3:
-        type: effort
-        parameter: reasoning.effort
+        type: chat_template_kwargs
+        parameter: enable_thinking
     default_reasoning_effort: medium
   models:
     - name: qwen3-8b
@@ -78,6 +79,9 @@ routing:
       modality: text
       capabilities: [chat, reasoning]
       reasoning_family_ref: qwen3
+      loras:
+        - name: math-adapter
+          description: Adapter used for symbolic math and proof-style prompts.
 
   signals:
     keywords:
@@ -97,6 +101,7 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
+          lora_name: math-adapter
 
 global:
   services:
@@ -182,6 +187,7 @@ Use the dashboard when you want to import or edit the full canonical YAML direct
 - onboarding remote import accepts a complete `version/listeners/providers/routing/global` file
 - the config page edits the same canonical contract
 - the DSL editor can import the same YAML, but it only decompiles `routing`
+- decision model refs can carry `lora_name`, and those names resolve against `routing.modelCards[].loras`
 
 ### Helm
 
@@ -219,7 +225,7 @@ The operator keeps the same logical contract, but it wraps it inside the CRD:
 - `spec.config.routing`
 - `spec.config.global`
 
-`spec.vllmEndpoints` is still the Kubernetes-native backend discovery adapter. The controller projects that data into canonical `providers.models[].backend_refs[]` and `routing.modelCards` entries when it renders the router config.
+`spec.vllmEndpoints` is still the Kubernetes-native backend discovery adapter. The controller projects that data into canonical `providers.models[].backend_refs[]` and `routing.modelCards` entries, including any declared `loras`, when it renders the router config.
 
 See [Kubernetes Operator](./k8s/operator).
 
@@ -267,7 +273,9 @@ vllm-sr config migrate --config old-config.yaml
 
 This migrates legacy shapes such as:
 
-- top-level `signals` and `decisions`
+- top-level `signals`, flat `keyword_rules`/`categories`/other signal blocks, and `decisions`
+- top-level `model_config`
+- top-level `vllm_endpoints` and `provider_profiles`
 - `providers.models[].endpoints`
 - inline `access_key`
 

@@ -159,6 +159,7 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 				"context_window_size",
 				"description",
 				"capabilities",
+				"loras",
 				"quality_score",
 				"modality",
 				"tags",

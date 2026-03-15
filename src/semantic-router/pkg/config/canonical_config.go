@@ -44,15 +44,16 @@ type CanonicalSignals struct {
 
 // RoutingModel defines the logical model catalog available to routing decisions.
 type RoutingModel struct {
-	Name               string   `yaml:"name"`
-	ReasoningFamilyRef string   `yaml:"reasoning_family_ref,omitempty"`
-	ParamSize          string   `yaml:"param_size,omitempty"`
-	ContextWindowSize  int      `yaml:"context_window_size,omitempty"`
-	Description        string   `yaml:"description,omitempty"`
-	Capabilities       []string `yaml:"capabilities,omitempty"`
-	QualityScore       float64  `yaml:"quality_score,omitempty"`
-	Modality           string   `yaml:"modality,omitempty"`
-	Tags               []string `yaml:"tags,omitempty"`
+	Name               string        `yaml:"name"`
+	ReasoningFamilyRef string        `yaml:"reasoning_family_ref,omitempty"`
+	ParamSize          string        `yaml:"param_size,omitempty"`
+	ContextWindowSize  int           `yaml:"context_window_size,omitempty"`
+	Description        string        `yaml:"description,omitempty"`
+	Capabilities       []string      `yaml:"capabilities,omitempty"`
+	LoRAs              []LoRAAdapter `yaml:"loras,omitempty"`
+	QualityScore       float64       `yaml:"quality_score,omitempty"`
+	Modality           string        `yaml:"modality,omitempty"`
+	Tags               []string      `yaml:"tags,omitempty"`
 }
 
 func isCanonicalConfig(raw map[string]interface{}) bool {
@@ -94,6 +95,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 			ContextWindowSize: model.ContextWindowSize,
 			Description:       model.Description,
 			Capabilities:      append([]string(nil), model.Capabilities...),
+			LoRAs:             copyLoRAAdapters(model.LoRAs),
 			Tags:              append([]string(nil), model.Tags...),
 			QualityScore:      model.QualityScore,
 			Modality:          model.Modality,
@@ -167,6 +169,21 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 		for _, backendRef := range canonicalBackendRefs(model) {
 			if strings.TrimSpace(backendRef.Endpoint) == "" && strings.TrimSpace(backendRef.BaseURL) == "" {
 				return fmt.Errorf("providers.models[%s].backend_refs requires endpoint or base_url", model.Name)
+			}
+		}
+	}
+
+	for _, decision := range canonical.Routing.Decisions {
+		for _, modelRef := range decision.ModelRefs {
+			if modelRef.Model == "" || modelRef.LoRAName == "" {
+				continue
+			}
+			card, ok := modelsByName[modelRef.Model]
+			if !ok {
+				return fmt.Errorf("routing.decisions[%s].modelRefs[%s] references unknown model %q", decision.Name, modelRef.Model, modelRef.Model)
+			}
+			if !routingModelHasLoRA(card, modelRef.LoRAName) {
+				return fmt.Errorf("routing.decisions[%s].modelRefs[%s].lora_name %q not found in routing.modelCards[%s].loras", decision.Name, modelRef.Model, modelRef.LoRAName, modelRef.Model)
 			}
 		}
 	}
@@ -439,4 +456,22 @@ func copyStringMap(input map[string]string) map[string]string {
 		output[key] = value
 	}
 	return output
+}
+
+func copyLoRAAdapters(input []LoRAAdapter) []LoRAAdapter {
+	if len(input) == 0 {
+		return nil
+	}
+	output := make([]LoRAAdapter, len(input))
+	copy(output, input)
+	return output
+}
+
+func routingModelHasLoRA(model RoutingModel, loraName string) bool {
+	for _, adapter := range model.LoRAs {
+		if adapter.Name == loraName {
+			return true
+		}
+	}
+	return false
 }

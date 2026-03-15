@@ -42,6 +42,12 @@ func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{
 		reflect.TypeOf(RoutingModel{}),
 		"routing.modelCards",
 	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectNestedSliceItems(t, mustSliceAt(t, routing, "modelCards"), "loras", "routing.modelCards"),
+		reflect.TypeOf(LoRAAdapter{}),
+		"routing.modelCards[].loras",
+	)
 	assertReferenceConfigSignalCoverage(t, mustMapAt(t, routing, "signals"))
 	assertReferenceConfigDecisionCoverage(t, mustSliceAt(t, routing, "decisions"))
 }
@@ -102,7 +108,6 @@ func assertReferenceConfigDecisionCoverage(t testingT, decisions []interface{}) 
 		collectNestedSliceItems(t, decisions, "modelRefs", "routing.decisions"),
 		reflect.TypeOf(ModelRef{}),
 		"routing.decisions[].modelRefs",
-		"lora_name",
 	)
 	assertSliceUnionCoversStructFields(
 		t,

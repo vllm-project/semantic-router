@@ -29,6 +29,9 @@ func (c *Compiler) compileModels() {
 		if v, ok := getStringArrayField(model.Fields, "capabilities"); ok {
 			params.Capabilities = v
 		}
+		if v, ok := getLoRAAdapterField(model.Fields, "loras"); ok {
+			params.LoRAs = v
+		}
 		if v, ok := getStringArrayField(model.Fields, "tags"); ok {
 			params.Tags = v
 		}
@@ -40,4 +43,34 @@ func (c *Compiler) compileModels() {
 		}
 		c.config.ModelConfig[model.Name] = params
 	}
+}
+
+func getLoRAAdapterField(fields map[string]Value, key string) ([]config.LoRAAdapter, bool) {
+	raw, ok := fields[key]
+	if !ok {
+		return nil, false
+	}
+
+	av, ok := raw.(ArrayValue)
+	if !ok {
+		return nil, false
+	}
+
+	adapters := make([]config.LoRAAdapter, 0, len(av.Items))
+	for _, item := range av.Items {
+		ov, ok := item.(ObjectValue)
+		if !ok {
+			continue
+		}
+		name, ok := getStringField(ov.Fields, "name")
+		if !ok || name == "" {
+			continue
+		}
+		adapter := config.LoRAAdapter{Name: name}
+		if description, ok := getStringField(ov.Fields, "description"); ok {
+			adapter.Description = description
+		}
+		adapters = append(adapters, adapter)
+	}
+	return adapters, true
 }

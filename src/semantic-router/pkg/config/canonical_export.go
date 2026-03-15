@@ -68,6 +68,7 @@ func routingModelsFromRouterConfig(cfg *RouterConfig) []RoutingModel {
 			ContextWindowSize:  params.ContextWindowSize,
 			Description:        params.Description,
 			Capabilities:       append([]string(nil), params.Capabilities...),
+			LoRAs:              copyLoRAAdapters(params.LoRAs),
 			Tags:               append([]string(nil), params.Tags...),
 			QualityScore:       params.QualityScore,
 			Modality:           params.Modality,

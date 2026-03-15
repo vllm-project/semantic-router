@@ -36,6 +36,7 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"`version/listeners/providers/routing/global`",
 			"`routing.modelCards`",
+			"`routing.modelCards[].loras`",
 			"`providers.defaults`",
 			"`providers.models[*]`",
 			"`global.router`",
@@ -48,6 +49,7 @@ var configContractRequiredDocs = []docNeedles{
 			"`tutorials/global/`",
 			"vllm-sr config migrate --config old-config.yaml",
 			"v0.3. The steady-state file is `config.yaml`",
+			"`lora_name`",
 			"`make agent-lint`",
 			"exhaustive canonical reference config",
 		},
@@ -57,9 +59,11 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"version:\nlisteners:\nproviders:\nrouting:\nglobal:",
 			"`routing.modelCards`",
+			"`routing.modelCards[].loras`",
 			"`config/algorithm/`",
 			"`providers.defaults`",
 			"`providers.models[].backend_refs[]`",
+			"`lora_name`",
 			"vllm-sr init",
 			"exhaustive canonical reference config",
 			"`make agent-lint`",
@@ -95,6 +99,22 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
+		path: repoRel("website", "docs", "api", "router.md"),
+		needles: []string{
+			"providers:\n  models:",
+			"pricing:",
+			"`providers.models[].backend_refs[]`",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "troubleshooting", "common-errors.md"),
+		needles: []string{
+			"backend_refs:",
+			"`10.0.0.1:8000`",
+			"[config/config.yaml]",
+		},
+	},
+	{
 		path: repoRel("website", "docs", "installation", "k8s", "operator.md"),
 		needles: []string{
 			"providers:\n      defaults:",
@@ -102,6 +122,7 @@ var configContractRequiredDocs = []docNeedles{
 			"      stores:",
 			"        modules:",
 			"      services:",
+			"loras:",
 		},
 	},
 	{
@@ -140,6 +161,20 @@ var configContractForbiddenDocs = []docNeedles{
 		needles: []string{
 			"\nvllm_endpoints:\n",
 			"\nmodel_config:\n",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "api", "router.md"),
+		needles: []string{
+			"\nmodel_config:\n",
+			"vllm_endpoints[].models",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "troubleshooting", "common-errors.md"),
+		needles: []string{
+			"\nvllm_endpoints:\n",
+			"#vllm_endpoints",
 		},
 	},
 	{
@@ -188,12 +223,6 @@ var configContractForbiddenDocs = []docNeedles{
 	},
 	{
 		path: repoRel("website", "docs", "proposals", "nvidia-dynamo-integration.md"),
-		needles: []string{
-			"computer_science",
-		},
-	},
-	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "pii-policy.md"),
 		needles: []string{
 			"computer_science",
 		},
@@ -291,6 +320,14 @@ var latestTutorialAllowedDirectories = map[string]bool{
 	"global":    true,
 }
 
+var retiredCurrentTranslationOverrides = []string{
+	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "classifier-tuning.md"),
+	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "pii-policy.md"),
+	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "vllm-endpoints.md"),
+	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "training", "model-performance-eval.md"),
+	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "troubleshooting", "common-errors.md"),
+}
+
 func TestConfigContractDocsStayAligned(t *testing.T) {
 	assertDocsContainAll(t, repoRootFromTestFile(t), configContractRequiredDocs)
 }
@@ -313,6 +350,7 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 	assertDocsContainAll(t, root, latestTutorialOverviewDocs)
 	assertTutorialFilesContainRequiredSections(t, root)
 	assertTutorialRootDirectories(t, root)
+	assertPathsDoNotExist(t, root, retiredCurrentTranslationOverrides)
 }
 
 func assertDocsContainAll(t *testing.T, root string, docs []docNeedles) {
@@ -403,6 +441,18 @@ func assertMarkdownTreeDoesNotContainAny(t *testing.T, root string, forbidden []
 	})
 	if err != nil {
 		t.Fatalf("failed to walk tutorial docs under %s: %v", root, err)
+	}
+}
+
+func assertPathsDoNotExist(t *testing.T, root string, relPaths []string) {
+	t.Helper()
+	for _, relPath := range relPaths {
+		fullPath := filepath.Join(root, relPath)
+		if _, err := os.Stat(fullPath); err == nil {
+			t.Fatalf("%s should not exist; let latest docs fall back to the canonical current source instead", relPath)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("failed to stat %s: %v", relPath, err)
+		}
 	}
 }
 

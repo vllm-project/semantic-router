@@ -71,7 +71,9 @@ func ConfigYAMLHandler(configPath string) http.HandlerFunc {
 	}
 }
 
-// UpdateConfigHandler updates the config.yaml file with validation.
+// UpdateConfigHandler replaces config.yaml with a validated full config payload.
+// The dashboard editor always sends the whole canonical document, so this path
+// intentionally does not deep-merge into any legacy on-disk layout.
 // After writing, it synchronously propagates the change to the managed runtime
 // so Router and Envoy pick up the new config before the API returns success.
 func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string) http.HandlerFunc {
@@ -99,35 +101,19 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
 		}
+		if err := validateRawCanonicalEndpointRefs(configData); err != nil {
+			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
+			return
+		}
 
-		// Read existing config and merge with updates
+		// Read existing config so runtime rollback can restore the previous file if needed.
 		existingData, err := os.ReadFile(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read existing config: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		existingMap := make(map[string]interface{})
-		if err = yaml.Unmarshal(existingData, &existingMap); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse existing config: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		// Store original key count for validation
-		originalKeyCount := len(existingMap)
-
-		// Merge updates into existing config (recursive deep merge for nested maps)
-		existingMap = deepMerge(existingMap, configData)
-
-		// Safety check: merged config should have at least as many keys as original
-		// (it might have more if new keys were added, but should never have fewer)
-		if len(existingMap) < originalKeyCount {
-			http.Error(w, fmt.Sprintf("Merge would result in data loss: original had %d keys, merged has %d keys. This indicates a bug. File: %s", originalKeyCount, len(existingMap), configPath), http.StatusInternalServerError)
-			return
-		}
-
-		// Convert merged config to YAML
-		yamlData, err := yaml.Marshal(existingMap)
+		yamlData, err := yaml.Marshal(configData)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to convert to YAML: %v", err), http.StatusInternalServerError)
 			return
@@ -362,6 +348,48 @@ func validateEndpointAddress(address string) error {
 	if strings.HasPrefix(address, ".") || strings.HasSuffix(address, ".") ||
 		strings.Contains(address, "..") {
 		return fmt.Errorf("invalid DNS name format")
+	}
+
+	return nil
+}
+
+func validateRawCanonicalEndpointRefs(configData map[string]interface{}) error {
+	providers, ok := configData["providers"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	models, ok := providers["models"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	for modelIndex, rawModel := range models {
+		model, ok := rawModel.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		backendRefs, ok := model["backend_refs"].([]interface{})
+		if !ok {
+			continue
+		}
+		for backendIndex, rawBackend := range backendRefs {
+			backend, ok := rawBackend.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			endpoint, _ := backend["endpoint"].(string)
+			endpoint = strings.TrimSpace(endpoint)
+			if endpoint == "" {
+				continue
+			}
+			if strings.Contains(endpoint, "://") {
+				return fmt.Errorf("providers.models[%d].backend_refs[%d].endpoint %q must not include a protocol prefix", modelIndex, backendIndex, endpoint)
+			}
+			if strings.Contains(endpoint, "/") {
+				return fmt.Errorf("providers.models[%d].backend_refs[%d].endpoint %q must not include a path", modelIndex, backendIndex, endpoint)
+			}
+		}
 	}
 
 	return nil
