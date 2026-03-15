@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/promptcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -43,6 +44,12 @@ type OpenAIRouter struct {
 	// RateLimiter enforces per-user/model rate limits from multiple sources
 	// (Envoy RLS -> local limiter).
 	RateLimiter *ratelimit.RateLimitResolver
+
+	// InferenceCompressor selects the domain-specific compression Pipeline
+	// used to compress request messages before forwarding to vLLM (UC2).
+	// Nil when inference compression is disabled.
+	// Populated by router_build.go when prompt_compression.inference_enabled is true.
+	InferenceCompressor *promptcompression.PipelineSelector
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls.

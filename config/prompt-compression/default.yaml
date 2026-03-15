@@ -1,0 +1,43 @@
+# default.yaml — general-purpose compression pipeline
+#
+# Used as the fallback when no domain-specific pipeline is configured.
+# Equivalent to DefaultConfig(4096) with a full four-signal scorer stack.
+#
+# Recommended for:
+#   - UC1 (pre-classification): single fixed pipeline, domain not yet known
+#   - UC2 fallback: any domain without a dedicated config
+#
+# Adjust max_tokens to match your vLLM model's context window minus the
+# expected output token budget.
+
+max_tokens: 4096
+preserve_first_n: 3    # system prompt + opening context + jailbreak prefix
+preserve_last_n: 2     # user question + final user instruction
+output_headroom: 512   # reserved for model generation
+
+pipeline:
+
+  pre: []
+
+  scoring:
+    # TextRank: graph-based sentence centrality
+    - name: textrank
+      weight: 0.20
+
+    # Position: U-shaped attention — primacy + recency bias
+    - name: position
+      weight: 0.40
+      params:
+        depth: 0.5
+
+    # TF-IDF: information density
+    - name: tfidf
+      weight: 0.35
+
+    # Novelty: inverse centrality — surfaces jailbreaks, PII, outliers
+    - name: novelty
+      weight: 0.05
+
+  adjust: []
+
+  select: []
