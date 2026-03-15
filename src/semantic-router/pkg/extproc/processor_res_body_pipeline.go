@@ -152,6 +152,11 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if ctx.RequestID == "" || responseBody == nil {
 		return
 	}
+	if skip, reason := r.shouldSkipSemanticCacheWrite(ctx); skip {
+		logging.Infof("Skipping cache update for personalized response: request_id=%s decision=%s reason=%s",
+			ctx.RequestID, ctx.VSRSelectedDecisionName, reason)
+		return
+	}
 
 	// Skip cache store if a decision was selected but doesn't have semantic-cache enabled
 	if ctx.VSRSelectedDecisionName != "" && r.Config != nil &&
