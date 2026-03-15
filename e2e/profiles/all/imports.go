@@ -5,6 +5,7 @@ import (
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 	aibrix "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
 	authzrbac "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
+	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
 	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
@@ -32,6 +33,7 @@ func init() {
 	register("ai-gateway", func() framework.Profile { return aigateway.NewProfile() }, framework.ProfileCapabilities{})
 	register("aibrix", func() framework.Profile { return aibrix.NewProfile() }, framework.ProfileCapabilities{})
 	register("authz-rbac", func() framework.Profile { return authzrbac.NewProfile() }, framework.ProfileCapabilities{})
+	register("dashboard", func() framework.Profile { return dashboard.NewProfile() }, framework.ProfileCapabilities{})
 	register("dynamic-config", func() framework.Profile { return dynamicconfig.NewProfile() }, framework.ProfileCapabilities{})
 	register("dynamo", func() framework.Profile { return dynamo.NewProfile() }, framework.ProfileCapabilities{RequiresGPU: true})
 	register("istio", func() framework.Profile { return istio.NewProfile() }, framework.ProfileCapabilities{})

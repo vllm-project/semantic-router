@@ -18,8 +18,10 @@ spec:
         - name: dashboard
           image: ghcr.io/vllm-project/semantic-router/dashboard:latest
           imagePullPolicy: IfNotPresent
-          # The image ENTRYPOINT is /app/entrypoint.sh (exec su-exec nonroot "$@"),
-          # so args must include the binary path as the first element.
+          # The image ENTRYPOINT is /app/entrypoint.sh which calls:
+          #   exec su-exec nonroot:nonroot "$@"
+          # So args must begin with the binary path; flags-only args would
+          # make su-exec treat the first flag as a username and exit(1).
           args:
             [
               "/app/dashboard-backend",
@@ -62,11 +64,10 @@ spec:
                   optional: true
             - name: ROUTER_CONFIG_PATH
               value: /app/config/config.yaml
-            # ML service sidecar: connect to localhost since it's in the same pod
-            - name: ML_SERVICE_URL
-              value: "http://localhost:8686"
+            # ML pipeline disabled in E2E — ml-training-service image is not
+            # available in CI and the pipeline is not part of the dashboard contract.
             - name: ML_PIPELINE_ENABLED
-              value: "true"
+              value: "false"
           ports:
             - name: http
               containerPort: 8700
@@ -74,47 +75,7 @@ spec:
             - name: router-config
               mountPath: /app/config
               readOnly: true
-            - name: ml-data
-              mountPath: /app/data/ml-pipeline
-
-        # ML Training Service sidecar (Python)
-        - name: ml-service
-          image: ghcr.io/vllm-project/semantic-router/ml-training-service:latest
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: ML_SERVICE_PORT
-              value: "8686"
-            - name: PYTHONUNBUFFERED
-              value: "1"
-          ports:
-            - name: ml-http
-              containerPort: 8686
-          volumeMounts:
-            - name: ml-data
-              mountPath: /app/data
-          resources:
-            requests:
-              memory: "512Mi"
-              cpu: "250m"
-            limits:
-              memory: "4Gi"
-              cpu: "2"
-          readinessProbe:
-            httpGet:
-              path: /api/health
-              port: 8686
-            initialDelaySeconds: 10
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /api/health
-              port: 8686
-            initialDelaySeconds: 30
-            periodSeconds: 30
-
       volumes:
         - name: router-config
           configMap:
             name: semantic-router-config
-        - name: ml-data
-          emptyDir: {}
