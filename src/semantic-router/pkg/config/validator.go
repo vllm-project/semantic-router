@@ -134,6 +134,10 @@ func validateConfigStructure(cfg *RouterConfig) error {
 				return fmt.Errorf("decision '%s': %w", decision.Name, err)
 			}
 		}
+
+		if err := validateDecisionRAGAndMemoryPlugins(cfg, &decision); err != nil {
+			return err
+		}
 	}
 
 	// Validate modality detector configuration
@@ -470,6 +474,46 @@ func validateAdvancedToolFilteringUnitFloat(name string, value *float32) error {
 		return nil
 	}
 	return fmt.Errorf("tools.advanced_filtering.%s must be between 0.0 and 1.0", name)
+}
+
+// validateDecisionRAGAndMemoryPlugins validates RAG config and warns about
+// cache + personalization conflicts for a single decision.
+func validateDecisionRAGAndMemoryPlugins(cfg *RouterConfig, decision *Decision) error {
+	ragCfg := decision.GetRAGConfig()
+	if ragCfg != nil {
+		if err := ragCfg.Validate(); err != nil {
+			return fmt.Errorf("decision '%s': RAG plugin: %w", decision.Name, err)
+		}
+	}
+
+	cacheCfg := decision.GetSemanticCacheConfig()
+	memCfg := decision.GetMemoryConfig()
+	cacheActive := cacheCfg != nil && cacheCfg.Enabled
+	ragActive := ragCfg != nil && ragCfg.Enabled
+	memActive := memCfg != nil && memCfg.Enabled
+	if !memActive && cfg.Memory.Enabled {
+		memActive = memCfg == nil
+	}
+	if cacheActive && (ragActive || memActive) {
+		logging.Warnf("Decision '%s': semantic-cache is enabled alongside %s. "+
+			"Cache reads will be automatically bypassed to preserve personalized responses. "+
+			"Cache writes still occur for observability. Remove the cache plugin if this is intentional.",
+			decision.Name, cachePersonalizationConflictDescription(ragActive, memActive))
+	}
+	return nil
+}
+
+// cachePersonalizationConflictDescription returns a human-readable description of which
+// personalization plugins conflict with the semantic cache.
+func cachePersonalizationConflictDescription(ragActive, memActive bool) string {
+	switch {
+	case ragActive && memActive:
+		return "RAG and memory plugins"
+	case ragActive:
+		return "RAG plugin"
+	default:
+		return "memory plugin"
+	}
 }
 
 // validateLoRAName checks if the specified LoRA name is defined in the model's configuration

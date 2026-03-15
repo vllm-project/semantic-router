@@ -15,55 +15,30 @@ import (
 
 // handleCaching handles cache lookup and storage with category-specific settings
 func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
-	// Skip cache read for looper internal requests
-	// Looper requests should not return cached responses, but should still write to cache
 	if ctx.LooperRequest {
-		logging.Debugf("[Cache] Skipping cache read for looper internal request")
-		// Still extract model and query for potential cache write later
-		requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
-		if err != nil {
-			logging.Errorf("Error extracting query from request: %v", err)
-			return nil, false
-		}
-		ctx.RequestModel = requestModel
-		ctx.RequestQuery = requestQuery
-
-		// Add pending request for cache write (if caching is enabled)
-		cacheEnabled := r.Config.SemanticCache.Enabled
-		if categoryName != "" {
-			cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
-		}
-		if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
-			ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-			err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
-			if err != nil {
-				logging.Errorf("Error adding pending request to cache: %v", err)
-			}
-		}
-		return nil, false
+		return r.handleLooperCacheSkip(ctx, categoryName)
 	}
 
-	// Extract the model and query for cache lookup
 	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {
 		logging.Errorf("Error extracting query from request: %v", err)
-		// Continue without caching
 		return nil, false
 	}
 
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
 
-	// Check if caching is enabled for this decision
 	cacheEnabled := r.Config.SemanticCache.Enabled
 	if categoryName != "" {
 		cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
 	}
 
-	logging.Infof("handleCaching: requestQuery='%s' (len=%d), cacheEnabled=%v, r.Cache.IsEnabled()=%v",
-		requestQuery, len(requestQuery), cacheEnabled, r.Cache.IsEnabled())
+	skipCacheRead := r.shouldSkipCacheReadForPersonalization(categoryName)
 
-	if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
+	logging.Infof("handleCaching: requestQuery='%s' (len=%d), cacheEnabled=%v, r.Cache.IsEnabled()=%v, skipCacheRead=%v",
+		requestQuery, len(requestQuery), cacheEnabled, r.Cache.IsEnabled(), skipCacheRead)
+
+	if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled && !skipCacheRead { //nolint:nestif // pre-existing nesting; refactoring cache control flow is out of scope
 		// Get decision-specific threshold
 		threshold := r.Config.GetCacheSimilarityThreshold()
 		if categoryName != "" {
@@ -135,14 +110,53 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		ctx.TraceContext = spanCtx
 	}
 
-	// Cache miss, store the request for later
-	// Get decision-specific TTL
+	r.addPendingCacheRequest(ctx, categoryName)
+	return nil, false
+}
+
+// handleLooperCacheSkip extracts the query for a looper request (skipping read)
+// and registers a pending cache write if caching is enabled.
+func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
+	logging.Debugf("[Cache] Skipping cache read for looper internal request")
+
+	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+	if err != nil {
+		logging.Errorf("Error extracting query from request: %v", err)
+		return nil, false
+	}
+	ctx.RequestModel = requestModel
+	ctx.RequestQuery = requestQuery
+
+	cacheEnabled := r.Config.SemanticCache.Enabled
+	if categoryName != "" {
+		cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
+	}
+	if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
+		r.addPendingCacheRequest(ctx, categoryName)
+	}
+	return nil, false
+}
+
+// addPendingCacheRequest stores a cache-miss request for later write-back.
+func (r *OpenAIRouter) addPendingCacheRequest(ctx *RequestContext, categoryName string) {
 	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
+	err := r.Cache.AddPendingRequest(ctx.RequestID, ctx.RequestModel, ctx.RequestQuery, ctx.OriginalRequestBody, ttlSeconds)
 	if err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
-		// Continue without caching
 	}
+}
 
-	return nil, false
+// shouldSkipCacheReadForPersonalization returns true when cache reads should
+// be bypassed because the decision has RAG or memory plugins that inject
+// personalized context. Returning a cached response would skip that injection.
+func (r *OpenAIRouter) shouldSkipCacheReadForPersonalization(categoryName string) bool {
+	if categoryName == "" || !r.Config.HasPersonalizationPlugins(categoryName) {
+		return false
+	}
+	logging.Infof("[Cache] Bypassing cache read for decision '%s': RAG=%v, Memory=%v",
+		categoryName,
+		r.Config.IsRAGEnabledForDecision(categoryName),
+		r.Config.IsMemoryEnabledForDecision(categoryName))
+	metrics.RecordCachePluginMiss(categoryName, "semantic-cache-bypass-personalization")
+	return true
 }

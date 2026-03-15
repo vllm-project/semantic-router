@@ -46,6 +46,10 @@ vector_store:
   #   # request_timeout_seconds: 30   # optional HTTP timeout
 
 # Semantic cache (independent of vector store)
+# NOTE: When a decision has both semantic-cache and RAG (or memory) plugins
+# enabled, cache reads are automatically bypassed to ensure personalized
+# RAG/memory context is always injected. Cache writes still occur for
+# observability. A startup warning is emitted for this configuration.
 semantic_cache:
   enabled: false
   backend_type: "memory"
