@@ -73,6 +73,7 @@ from common_lora_utils import (
     get_all_gpu_info,
     log_memory_usage,
     resolve_model_path,
+    select_training_split,
     set_gpu_device,
     setup_logging,
 )
@@ -408,8 +409,13 @@ def load_mmlu_dataset(max_samples=10000):
     logger.info("Loading MMLU-Pro dataset...")
 
     dataset = load_dataset("TIGER-Lab/MMLU-Pro")
-    all_texts = dataset["test"]["question"]
-    all_labels = dataset["test"]["category"]
+    training_split_name, training_split = select_training_split(
+        dataset, "TIGER-Lab/MMLU-Pro"
+    )
+    all_texts = training_split["question"]
+    all_labels = training_split["category"]
+
+    logger.info(f"Loaded {len(all_texts)} raw samples from {training_split_name} split")
 
     # Group by category
     category_samples = {}

@@ -16,6 +16,59 @@ import torch
 logger = logging.getLogger(__name__)
 
 
+def select_training_split(
+    dataset_splits, dataset_name: str, preferred_splits: Optional[List[str]] = None
+) -> Tuple[str, object]:
+    """
+    Select the safest available split for training data.
+
+    Preference order is train-like splits first. The test split is only used as a
+    last resort when the dataset exposes no better option.
+
+    Args:
+        dataset_splits: Hugging Face dataset dict or similar mapping of split names to data
+        dataset_name: Dataset identifier for logging
+        preferred_splits: Optional ordered list of preferred split names
+
+    Returns:
+        Tuple of (split_name, split_data)
+
+    Raises:
+        ValueError: If the dataset exposes no usable splits
+    """
+    split_names = list(dataset_splits.keys())
+    priorities = preferred_splits or ["train", "validation", "dev"]
+
+    for split_name in priorities:
+        if split_name in dataset_splits:
+            logger.info(
+                "Using %s split from %s for training data", split_name, dataset_name
+            )
+            return split_name, dataset_splits[split_name]
+
+    non_test_splits = [split_name for split_name in split_names if split_name != "test"]
+    if non_test_splits:
+        selected_split = non_test_splits[0]
+        logger.warning(
+            "No preferred training split found for %s. Falling back to non-test split %s from available splits %s",
+            dataset_name,
+            selected_split,
+            split_names,
+        )
+        return selected_split, dataset_splits[selected_split]
+
+    if "test" in dataset_splits:
+        logger.warning(
+            "Falling back to test split for %s because no train-like split is available. Do not use this path for final quality claims.",
+            dataset_name,
+        )
+        return "test", dataset_splits["test"]
+
+    raise ValueError(
+        f"No usable dataset splits found for {dataset_name}: {split_names}"
+    )
+
+
 def get_target_modules_for_model(model_name: str) -> List[str]:
     """
     Get appropriate target_modules for LoRA based on model architecture.

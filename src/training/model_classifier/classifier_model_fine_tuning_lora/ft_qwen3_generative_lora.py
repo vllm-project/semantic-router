@@ -74,6 +74,7 @@ if _parent_dir not in sys.path:
 from common_lora_utils import (
     clear_gpu_memory,
     log_memory_usage,
+    select_training_split,
     set_gpu_device,
     setup_logging,
 )
@@ -153,10 +154,15 @@ class MMLU_Dataset:
             dataset = load_dataset(self.dataset_name)
             logger.info(f"Dataset splits: {dataset.keys()}")
 
-            all_texts = dataset["test"]["question"]
-            all_labels = dataset["test"]["category"]
+            training_split_name, training_split = select_training_split(
+                dataset, self.dataset_name
+            )
+            all_texts = training_split["question"]
+            all_labels = training_split["category"]
 
-            logger.info(f"Total samples in dataset: {len(all_texts)}")
+            logger.info(
+                f"Total samples in {training_split_name} split: {len(all_texts)}"
+            )
 
             # Group samples by category
             category_samples = {}

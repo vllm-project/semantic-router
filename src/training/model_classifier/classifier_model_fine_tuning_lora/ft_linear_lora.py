@@ -84,6 +84,7 @@ from common_lora_utils import (
     get_all_gpu_info,
     log_memory_usage,
     resolve_model_path,
+    select_training_split,
     set_gpu_device,
     setup_logging,
     validate_lora_config,
@@ -191,12 +192,15 @@ class MMLU_Dataset:
             dataset = load_dataset(self.dataset_name)
             logger.info(f"Dataset splits: {dataset.keys()}")
 
-            # Extract questions and categories from the test split
-            # Note: MMLU-Pro typically uses 'test' split for training data
-            all_texts = list(dataset["test"]["question"])
-            all_labels = list(dataset["test"]["category"])
+            training_split_name, training_split = select_training_split(
+                dataset, self.dataset_name
+            )
+            all_texts = list(training_split["question"])
+            all_labels = list(training_split["category"])
 
-            logger.info(f"MMLU-Pro base samples: {len(all_texts)}")
+            logger.info(
+                f"MMLU-Pro base samples from {training_split_name}: {len(all_texts)}"
+            )
 
             # Load and merge supplementary training data
             # This includes casual "other" examples for better fallback detection
