@@ -240,6 +240,11 @@ const (
 	// Value: "true"
 	VSRLooperRequest = "x-vsr-looper-request"
 
+	// VSRLooperSecret carries the shared secret that authenticates looper requests.
+	// The router generates this secret at startup and passes it to the looper client.
+	// External requests with x-vsr-looper-request but without a valid secret are rejected.
+	VSRLooperSecret = "x-vsr-looper-secret" //nolint:gosec // header name constant, not a credential
+
 	// VSRLooperIteration indicates the current iteration number in the looper loop.
 	// Value: "1", "2", "3", etc.
 	VSRLooperIteration = "x-vsr-looper-iteration"

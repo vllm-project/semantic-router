@@ -8,6 +8,7 @@ type LooperConfig struct {
 	TimeoutSeconds   int               `yaml:"timeout_seconds,omitempty"`
 	RetryCount       int               `yaml:"retry_count,omitempty"`
 	Headers          map[string]string `yaml:"headers,omitempty"`
+	InternalSecret   string            `yaml:"-"` // runtime-only; not serialized
 }
 
 func (l *LooperConfig) IsEnabled() bool {

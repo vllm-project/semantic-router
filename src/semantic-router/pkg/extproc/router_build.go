@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
@@ -42,6 +44,15 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	cfg, err := loadRouterConfig(configPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if cfg.Looper.IsEnabled() && cfg.Looper.InternalSecret == "" {
+		secretBytes := make([]byte, 32)
+		if _, randErr := rand.Read(secretBytes); randErr != nil {
+			return nil, fmt.Errorf("failed to generate looper internal secret: %w", randErr)
+		}
+		cfg.Looper.InternalSecret = hex.EncodeToString(secretBytes)
+		logging.Infof("Generated looper internal secret for request authentication")
 	}
 
 	components, err := buildRouterComponents(cfg)
