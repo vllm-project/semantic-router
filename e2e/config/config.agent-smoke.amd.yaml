@@ -7,6 +7,8 @@ listeners:
     timeout: "60s"
 
 providers:
+  defaults:
+    default_model: "smoke-model"
   models:
     - name: "smoke-model"
       provider_model_id: "smoke-model"
@@ -15,7 +17,6 @@ providers:
           weight: 100
           endpoint: "host.docker.internal:8000/v1"
           protocol: "http"
-  default_model: "smoke-model"
 
 routing:
   modelCards:

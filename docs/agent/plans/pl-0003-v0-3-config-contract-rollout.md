@@ -33,13 +33,13 @@ Finish the repo-wide rollout of the v0.3 canonical config contract where Go owns
 - [x] P08 Migrate CRD and Helm value/schema surfaces to canonical `providers/routing/global`.
 - [x] P09 Add explicit `config migrate` coverage for old nested provider endpoint/auth layouts.
 - [x] P10 Retire remaining legacy DSL compile/decompile expectations and related docs/tests.
-- [ ] P11 Run full harness gates and close remaining structural hotspot debt exposed by this rollout.
+- [x] P11 Run full harness gates and close remaining structural hotspot debt exposed by this rollout.
 
 ## Current Loop
 
-- Current focus: finish P11 validation cleanup and isolate the remaining maintained legacy config assets that still need explicit migration out of E2E/deploy examples.
-- Last completed loop: added canonical `routing.modelCards[].loras` support across Go parser/export, CLI migration/validation, DSL compile-decompile/validation, dashboard decision editing, operator `vllmEndpoints`, reference config assets, and docs.
-- Next loop: migrate the remaining maintained E2E/deploy/example assets that still embed legacy `model_config`/`vllm_endpoints` fragments, then retire TD001 once those adapter remnants are gone.
+- Current focus: rollout closed for the steady-state v0.3 contract; keep future follow-up limited to normal feature work and unrelated structural debt.
+- Last completed loop: removed the router's steady-state legacy runtime parser fallback, migrated the remaining maintained deploy/E2E/example assets to canonical v0.3, added maintained-asset contract tests, regenerated CRDs, and retired TD001.
+- Next loop: no rollout-specific work remains; future changes should land against the canonical contract and open new debt only if they introduce a fresh architectural gap.
 
 ## Decision Log
 
@@ -53,8 +53,8 @@ Finish the repo-wide rollout of the v0.3 canonical config contract where Go owns
 - 2026-03-14: Treat router-owned capability modules as part of `global.model_catalog`; module settings now live under `global.model_catalog.modules`, not as a peer top-level global block.
 - 2026-03-15: Normalize dashboard config editing around canonical `providers/routing/global` on both read and save, so editing a legacy file no longer writes `model_config`/`vllm_endpoints` back to disk.
 - 2026-03-15: The steady-state router parser now rejects deprecated legacy user config directly; the remaining TD001 scope is maintained harness/deploy/example assets and internal adapters that still need migration.
+- 2026-03-16: The final maintained deploy/E2E/example assets and embedded `values.yaml` config blocks were migrated to canonical v0.3, maintained-asset contract tests were added, and TD001 was retired.
 
 ## Follow-up Debt / ADR Links
 
-- [TD001 Config Surface Fragmentation Across Router, CLI, K8s, and Dashboard](../tech-debt/td-001-config-surface-fragmentation.md)
 - [TD006 Structural Rule Target Still Exceeds Reality in Key Legacy Hotspots](../tech-debt/td-006-structural-rule-target-vs-legacy-hotspots.md)

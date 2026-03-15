@@ -429,11 +429,20 @@ classifier:
 **Policy Enforcement:**
 
 ```yaml
-model_config:
-  public-model:
-    pii_policy:
-      allow_by_default: false
-      pii_types_allowed: ["PERSON"]  # Only person names allowed
+routing:
+  signals:
+    pii:
+      - name: public-model-allow-person
+        pii_types_allowed: ["PERSON"]  # Only person names allowed
+  decisions:
+    - name: public-model-route
+      rules:
+        operator: AND
+        conditions:
+          - type: pii
+            name: public-model-allow-person
+      modelRefs:
+        - model: public-model
 ```
 
 **Response Headers (when blocked):**
@@ -1315,11 +1324,20 @@ Dynamo Frontend discovers workers through Kubernetes Headless Services, which pr
 **Example Configuration:**
 
 ```yaml
-model_config:
-  public-model:
-    pii_policy:
-      allow_by_default: false
-      pii_types_allowed: ["PERSON"]  # Only person names allowed
+routing:
+  signals:
+    pii:
+      - name: public-model-allow-person
+        pii_types_allowed: ["PERSON"]  # Only person names allowed
+  decisions:
+    - name: public-model-route
+      rules:
+        operator: AND
+        conditions:
+          - type: pii
+            name: public-model-allow-person
+      modelRefs:
+        - model: public-model
 ```
 
 ### 6.2 Jailbreak Prevention (Prompt Guard)

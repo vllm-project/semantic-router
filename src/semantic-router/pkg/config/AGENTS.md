@@ -46,6 +46,7 @@
   - load/registry behavior in `loader.go` and `registry.go`
 - Keep fragment-catalog enforcement tests adjacent to the config package so drift is caught by `go test ./pkg/config/...`.
 - Keep exhaustive `config/config.yaml` reference-config enforcement adjacent to the config package too, and wire it into harness lint so public-schema drift is blocked before merge.
+- Keep maintained `deploy/` and `e2e/` router config assets under the same guard as the canonical contract so repo-owned examples and harness profiles do not regress to legacy steady-state fields.
 - Keep config-doc consistency tests adjacent to the config package too, so canonical terminology and fragment-directory guidance stay aligned with the implemented contract.
 - Keep the latest tutorial tree aligned to the canonical doc taxonomy: `signal/decision/algorithm/plugin/global`, not ad hoc feature folders.
 - If a change touches `config.go`, prefer a net reduction in file size or responsibility count.

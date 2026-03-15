@@ -148,6 +148,7 @@ Those directories are support assets, not the main user-facing config contract. 
 
 - `go test ./pkg/config/...` checks that it stays aligned to the canonical schema and routing surface catalog
 - `make agent-lint` runs the same reference-config contract check at lint level, so config/schema drift is blocked before merge
+- maintained `deploy/` and `e2e/` router config assets are checked against the same canonical contract, so repo-owned examples and harness profiles cannot drift back to legacy steady-state fields
 
 ## How to use it
 

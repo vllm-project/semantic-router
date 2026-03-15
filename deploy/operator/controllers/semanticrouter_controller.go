@@ -651,76 +651,74 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 
 	// Generate vLLM endpoints and model configs if specified
 	if len(sr.Spec.VLLMEndpoints) > 0 {
-		endpointsConfig, modelConfigs, err := generateVLLMEndpointsConfig(ctx, r.Client, sr.Spec.VLLMEndpoints, sr.Namespace)
+		discoveredBackends, modelConfigs, err := discoverVLLMBackends(ctx, r.Client, sr.Spec.VLLMEndpoints, sr.Namespace)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate vLLM endpoints config: %w", err)
 		}
 
-		if endpointsConfig != nil {
-			if vllmEndpoints, ok := normalizeEndpointConfigSlice(endpointsConfig["vllm_endpoints"]); ok {
-				backendByName := map[string]map[string]interface{}{}
-				for _, ep := range vllmEndpoints {
-					name, _ := ep["name"].(string)
-					address, _ := ep["address"].(string)
-					port, _ := ep["port"].(int)
-					weight, _ := ep["weight"].(int)
-					protocol, _ := ep["protocol"].(string)
-					if port > 0 {
-						backendByName[name] = map[string]interface{}{
-							"name":     name,
-							"endpoint": fmt.Sprintf("%s:%d", address, port),
-							"protocol": protocol,
-							"weight":   weight,
-						}
+		if len(discoveredBackends) > 0 {
+			backendByName := map[string]map[string]interface{}{}
+			for _, ep := range discoveredBackends {
+				name, _ := ep["name"].(string)
+				address, _ := ep["address"].(string)
+				port, _ := ep["port"].(int)
+				weight, _ := ep["weight"].(int)
+				protocol, _ := ep["protocol"].(string)
+				if port > 0 {
+					backendByName[name] = map[string]interface{}{
+						"name":     name,
+						"endpoint": fmt.Sprintf("%s:%d", address, port),
+						"protocol": protocol,
+						"weight":   weight,
 					}
 				}
+			}
 
-				if len(modelConfigs) > 0 {
-					modelCards := routing["modelCards"].([]map[string]interface{})
-					providerModels := providers["models"].([]map[string]interface{})
-					var defaultModel string
-					for modelName, rawConfig := range modelConfigs {
-						modelEntry := map[string]interface{}{"name": modelName}
-						if rawConfig.ReasoningFamily != "" {
-							modelEntry["reasoning_family_ref"] = rawConfig.ReasoningFamily
-						}
-						if len(rawConfig.LoRAs) > 0 {
-							loras := make([]map[string]interface{}, 0, len(rawConfig.LoRAs))
-							for _, adapter := range rawConfig.LoRAs {
-								loraEntry := map[string]interface{}{
-									"name": adapter.Name,
-								}
-								if adapter.Description != "" {
-									loraEntry["description"] = adapter.Description
-								}
-								loras = append(loras, loraEntry)
+			if len(modelConfigs) > 0 {
+				modelCards := routing["modelCards"].([]map[string]interface{})
+				providerModels := providers["models"].([]map[string]interface{})
+				var defaultModel string
+				for modelName, rawConfig := range modelConfigs {
+					modelEntry := map[string]interface{}{"name": modelName}
+					if rawConfig.ReasoningFamily != "" {
+						modelEntry["reasoning_family_ref"] = rawConfig.ReasoningFamily
+					}
+					if len(rawConfig.LoRAs) > 0 {
+						loras := make([]map[string]interface{}, 0, len(rawConfig.LoRAs))
+						for _, adapter := range rawConfig.LoRAs {
+							loraEntry := map[string]interface{}{
+								"name": adapter.Name,
 							}
-							modelEntry["loras"] = loras
-						}
-						modelCards = append(modelCards, modelEntry)
-
-						providerModel := map[string]interface{}{
-							"name":         modelName,
-							"backend_refs": []map[string]interface{}{},
-						}
-						backendRefs := providerModel["backend_refs"].([]map[string]interface{})
-						for _, endpointName := range rawConfig.PreferredEndpoints {
-							if backend, ok := backendByName[endpointName]; ok {
-								backendRefs = append(backendRefs, backend)
+							if adapter.Description != "" {
+								loraEntry["description"] = adapter.Description
 							}
+							loras = append(loras, loraEntry)
 						}
-						providerModel["backend_refs"] = backendRefs
-						providerModels = append(providerModels, providerModel)
+						modelEntry["loras"] = loras
+					}
+					modelCards = append(modelCards, modelEntry)
 
-						if defaultModel == "" {
-							defaultModel = modelName
+					providerModel := map[string]interface{}{
+						"name":         modelName,
+						"backend_refs": []map[string]interface{}{},
+					}
+					backendRefs := providerModel["backend_refs"].([]map[string]interface{})
+					for _, endpointName := range rawConfig.PreferredEndpoints {
+						if backend, ok := backendByName[endpointName]; ok {
+							backendRefs = append(backendRefs, backend)
 						}
 					}
-					routing["modelCards"] = modelCards
-					providers["models"] = providerModels
-					if defaults, ok := providers["defaults"].(map[string]interface{}); ok {
-						defaults["default_model"] = defaultModel
+					providerModel["backend_refs"] = backendRefs
+					providerModels = append(providerModels, providerModel)
+
+					if defaultModel == "" {
+						defaultModel = modelName
 					}
+				}
+				routing["modelCards"] = modelCards
+				providers["models"] = providerModels
+				if defaults, ok := providers["defaults"].(map[string]interface{}); ok {
+					defaults["default_model"] = defaultModel
 				}
 			}
 		}
@@ -817,25 +815,6 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 	}
 
 	return string(data), nil
-}
-
-func normalizeEndpointConfigSlice(raw interface{}) ([]map[string]interface{}, bool) {
-	switch typed := raw.(type) {
-	case []map[string]interface{}:
-		return typed, true
-	case []interface{}:
-		result := make([]map[string]interface{}, 0, len(typed))
-		for _, item := range typed {
-			entry, ok := item.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			result = append(result, entry)
-		}
-		return result, true
-	default:
-		return nil, false
-	}
 }
 
 func (r *SemanticRouterReconciler) generateToolsJSON(sr *vllmv1alpha1.SemanticRouter) (string, error) {

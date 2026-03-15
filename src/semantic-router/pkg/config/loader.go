@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -92,11 +93,15 @@ func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
 			return nil, err
 		}
 	default:
-		cfg = &RouterConfig{}
-		if unmarshalErr := yaml.Unmarshal(data, cfg); unmarshalErr != nil {
-			logging.Debugf("[config.Parse] ERROR parsing legacy runtime YAML: %v", unmarshalErr)
-			return nil, fmt.Errorf("failed to parse config file: %w", unmarshalErr)
+		unsupported := unsupportedTopLevelConfigFields(raw)
+		detail := "missing canonical routing/global sections"
+		if len(unsupported) > 0 {
+			detail = fmt.Sprintf("unexpected top-level keys: %s", strings.Join(unsupported, ", "))
 		}
+		return nil, fmt.Errorf(
+			"config file must use canonical v0.3 version/listeners/providers/routing/global; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3 providers/routing/global",
+			detail,
+		)
 	}
 
 	// Log decisions found after YAML unmarshal
@@ -176,6 +181,25 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 		fields = append(fields, "global.modules")
 	}
 
+	return fields
+}
+
+func unsupportedTopLevelConfigFields(raw map[string]interface{}) []string {
+	allowed := map[string]bool{
+		"version":   true,
+		"listeners": true,
+		"providers": true,
+		"routing":   true,
+		"global":    true,
+	}
+
+	fields := make([]string, 0)
+	for key := range raw {
+		if !allowed[key] {
+			fields = append(fields, key)
+		}
+	}
+	sort.Strings(fields)
 	return fields
 }
 

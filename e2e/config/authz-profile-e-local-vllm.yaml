@@ -6,16 +6,18 @@
 # WARNING: With fail_open=true, if ext_authz is misconfigured or down, requests
 # will silently proceed without per-user keys. The router logs a WARN for each
 # such request so operators can detect the issue via monitoring.
-#
-# Do NOT use this profile when routing to external LLM providers (OpenAI,
-# Anthropic, etc.) — those requests will fail with 401 at the provider side.
 
-authz:
-  fail_open: true              # allow requests without keys (local backends only)
-  providers:
-    - type: static-config      # optional: still try static config first
+global:
+  services:
+    authz:
+      fail_open: true
+      providers:
+        - type: static-config
 
-model_config:
-  my-local-llama:
-    model_name: meta-llama/Llama-3-8B
-    access_key: ""             # no key needed for local vLLM
+providers:
+  models:
+    - name: my-local-llama
+      provider_model_id: meta-llama/Llama-3-8B
+      backend_refs:
+        - name: local-vllm
+          api_key: ""
