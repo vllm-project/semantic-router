@@ -24,7 +24,6 @@ The current vLLM-SR pipeline has no post-selection legitimacy verification. PRIS
 ### Design principle: add without breaking
 
 PRISM integrates as **optional extensions** of existing components:
-
  
 - If `prism.enabled` is absent from a model's config → existing behavior **unchanged**
 - If no `type: "prism-execution"` plugin block in a decision → Key 3 **skipped**
