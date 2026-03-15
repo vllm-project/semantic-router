@@ -12,36 +12,60 @@ func (c *Compiler) compileModels() {
 
 	for _, model := range c.prog.Models {
 		params := c.config.ModelConfig[model.Name]
-		if v, ok := getStringField(model.Fields, "reasoning_family_ref"); ok {
-			params.ReasoningFamily = v
-		} else if v, ok := getStringField(model.Fields, "reasoning_family"); ok {
-			params.ReasoningFamily = v
-		}
-		if v, ok := getStringField(model.Fields, "param_size"); ok {
-			params.ParamSize = v
-		}
-		if v, ok := getIntField(model.Fields, "context_window_size"); ok {
-			params.ContextWindowSize = v
-		}
-		if v, ok := getStringField(model.Fields, "description"); ok {
-			params.Description = v
-		}
-		if v, ok := getStringArrayField(model.Fields, "capabilities"); ok {
-			params.Capabilities = v
-		}
-		if v, ok := getLoRAAdapterField(model.Fields, "loras"); ok {
-			params.LoRAs = v
-		}
-		if v, ok := getStringArrayField(model.Fields, "tags"); ok {
-			params.Tags = v
-		}
-		if v, ok := getFloat64Field(model.Fields, "quality_score"); ok {
-			params.QualityScore = v
-		}
-		if v, ok := getStringField(model.Fields, "modality"); ok {
-			params.Modality = v
-		}
+		applyRoutingModelReasoningFamily(&params, model.Fields)
+		applyRoutingModelTextFields(&params, model.Fields)
+		applyRoutingModelNumericFields(&params, model.Fields)
+		applyRoutingModelArrayFields(&params, model.Fields)
 		c.config.ModelConfig[model.Name] = params
+	}
+}
+
+func applyRoutingModelReasoningFamily(
+	params *config.ModelParams,
+	fields map[string]Value,
+) {
+	if v, ok := getStringField(fields, "reasoning_family_ref"); ok {
+		params.ReasoningFamily = v
+		return
+	}
+	if v, ok := getStringField(fields, "reasoning_family"); ok {
+		params.ReasoningFamily = v
+	}
+}
+
+func applyRoutingModelTextFields(params *config.ModelParams, fields map[string]Value) {
+	if v, ok := getStringField(fields, "param_size"); ok {
+		params.ParamSize = v
+	}
+	if v, ok := getStringField(fields, "description"); ok {
+		params.Description = v
+	}
+	if v, ok := getStringField(fields, "modality"); ok {
+		params.Modality = v
+	}
+}
+
+func applyRoutingModelNumericFields(
+	params *config.ModelParams,
+	fields map[string]Value,
+) {
+	if v, ok := getIntField(fields, "context_window_size"); ok {
+		params.ContextWindowSize = v
+	}
+	if v, ok := getFloat64Field(fields, "quality_score"); ok {
+		params.QualityScore = v
+	}
+}
+
+func applyRoutingModelArrayFields(params *config.ModelParams, fields map[string]Value) {
+	if v, ok := getStringArrayField(fields, "capabilities"); ok {
+		params.Capabilities = v
+	}
+	if v, ok := getLoRAAdapterField(fields, "loras"); ok {
+		params.LoRAs = v
+	}
+	if v, ok := getStringArrayField(fields, "tags"); ok {
+		params.Tags = v
 	}
 }
 

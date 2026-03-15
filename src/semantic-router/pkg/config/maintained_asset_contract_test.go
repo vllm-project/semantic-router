@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	yamlv3 "gopkg.in/yaml.v3"
@@ -32,6 +33,8 @@ var maintainedFullConfigAssets = []string{
 	repoRel("e2e", "config", "onnx-binding", "config.onnx-binding-test.yaml"),
 	repoRel("e2e", "config", "onnx-binding", "config.onnx-classifiers-test.yaml"),
 	repoRel("e2e", "profiles", "routing-strategies", "config-with-embedding.yaml"),
+	repoRel("bench", "hallucination", "config.yaml"),
+	repoRel("bench", "hallucination", "config-7b.yaml"),
 }
 
 var maintainedEmbeddedConfigAssets = []string{
@@ -64,6 +67,29 @@ var maintainedValuesConfigAssets = []string{
 	repoRel("e2e", "profiles", "streaming", "values.yaml"),
 }
 
+type templatedConfigAsset struct {
+	rel          string
+	replacements map[string]string
+}
+
+var maintainedTemplatedConfigAssets = []templatedConfigAsset{
+	{
+		rel: repoRel("bench", "cpu-vs-gpu", "config-bench.yaml"),
+		replacements: map[string]string{
+			"USE_CPU_PLACEHOLDER":                       "false",
+			"PROMPT_COMPRESSION_PLACEHOLDER":            "false",
+			"PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER": "512",
+		},
+	},
+	{
+		rel: repoRel("bench", "cpu-vs-gpu", "config-bench-candle.yaml"),
+		replacements: map[string]string{
+			"PROMPT_COMPRESSION_PLACEHOLDER":            "false",
+			"PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER": "512",
+		},
+	},
+}
+
 func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
 	for _, rel := range maintainedFullConfigAssets {
 		t.Run(rel, func(t *testing.T) {
@@ -80,6 +106,12 @@ func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
 	for _, rel := range maintainedValuesConfigAssets {
 		t.Run(rel, func(t *testing.T) {
 			validateMaintainedConfigAsset(t, rel, readValuesConfigAsset(t, rel))
+		})
+	}
+
+	for _, asset := range maintainedTemplatedConfigAssets {
+		t.Run(asset.rel, func(t *testing.T) {
+			validateMaintainedConfigAsset(t, asset.rel, readTemplatedConfigAsset(t, asset))
 		})
 	}
 }
@@ -112,6 +144,16 @@ func readValuesConfigAsset(t *testing.T, rel string) []byte {
 		t.Fatalf("failed to marshal %s config block: %v", rel, err)
 	}
 	return data
+}
+
+func readTemplatedConfigAsset(t *testing.T, asset templatedConfigAsset) []byte {
+	t.Helper()
+	content := string(mustReadRepoFile(t, asset.rel))
+	replacerPairs := make([]string, 0, len(asset.replacements)*2)
+	for oldValue, newValue := range asset.replacements {
+		replacerPairs = append(replacerPairs, oldValue, newValue)
+	}
+	return []byte(strings.NewReplacer(replacerPairs...).Replace(content))
 }
 
 func validateMaintainedConfigAsset(t *testing.T, rel string, data []byte) {

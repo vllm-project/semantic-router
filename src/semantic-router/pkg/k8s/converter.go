@@ -242,27 +242,37 @@ func mergeProviderMetadata(
 		merged = append(merged, providerModel)
 	}
 	for _, providerModel := range overlay {
-		if existingIndex, ok := index[providerModel.Name]; ok {
-			existing := merged[existingIndex]
-			if providerModel.Pricing != (config.ModelPricing{}) {
-				existing.Pricing = providerModel.Pricing
-			}
-			if providerModel.ProviderModelID != "" {
-				existing.ProviderModelID = providerModel.ProviderModelID
-			}
-			if providerModel.APIFormat != "" {
-				existing.APIFormat = providerModel.APIFormat
-			}
-			if len(providerModel.ExternalModelIDs) > 0 {
-				existing.ExternalModelIDs = providerModel.ExternalModelIDs
-			}
-			merged[existingIndex] = existing
+		existingIndex, ok := index[providerModel.Name]
+		if !ok {
+			index[providerModel.Name] = len(merged)
+			merged = append(merged, providerModel)
 			continue
 		}
-		index[providerModel.Name] = len(merged)
-		merged = append(merged, providerModel)
+		merged[existingIndex] = mergeCanonicalProviderMetadata(
+			merged[existingIndex],
+			providerModel,
+		)
 	}
 	return merged
+}
+
+func mergeCanonicalProviderMetadata(
+	existing config.CanonicalProviderModel,
+	overlay config.CanonicalProviderModel,
+) config.CanonicalProviderModel {
+	if overlay.Pricing != (config.ModelPricing{}) {
+		existing.Pricing = overlay.Pricing
+	}
+	if overlay.ProviderModelID != "" {
+		existing.ProviderModelID = overlay.ProviderModelID
+	}
+	if overlay.APIFormat != "" {
+		existing.APIFormat = overlay.APIFormat
+	}
+	if len(overlay.ExternalModelIDs) > 0 {
+		existing.ExternalModelIDs = overlay.ExternalModelIDs
+	}
+	return existing
 }
 
 func cloneCanonicalConfig(base *config.CanonicalConfig) (*config.CanonicalConfig, error) {

@@ -54,19 +54,19 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 
 func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
 	return CanonicalSignals{
-		Keywords:      append([]KeywordRule(nil), cfg.Signals.KeywordRules...),
-		Embeddings:    append([]EmbeddingRule(nil), cfg.Signals.EmbeddingRules...),
-		Domains:       append([]Category(nil), cfg.Signals.Categories...),
-		FactCheck:     append([]FactCheckRule(nil), cfg.Signals.FactCheckRules...),
-		UserFeedbacks: append([]UserFeedbackRule(nil), cfg.Signals.UserFeedbackRules...),
-		Preferences:   append([]PreferenceRule(nil), cfg.Signals.PreferenceRules...),
-		Language:      append([]LanguageRule(nil), cfg.Signals.LanguageRules...),
-		Context:       append([]ContextRule(nil), cfg.Signals.ContextRules...),
-		Complexity:    append([]ComplexityRule(nil), cfg.Signals.ComplexityRules...),
-		Modality:      append([]ModalityRule(nil), cfg.Signals.ModalityRules...),
-		RoleBindings:  append([]RoleBinding(nil), cfg.Signals.RoleBindings...),
-		Jailbreak:     append([]JailbreakRule(nil), cfg.Signals.JailbreakRules...),
-		PII:           append([]PIIRule(nil), cfg.Signals.PIIRules...),
+		Keywords:      append([]KeywordRule(nil), cfg.KeywordRules...),
+		Embeddings:    append([]EmbeddingRule(nil), cfg.EmbeddingRules...),
+		Domains:       append([]Category(nil), cfg.Categories...),
+		FactCheck:     append([]FactCheckRule(nil), cfg.FactCheckRules...),
+		UserFeedbacks: append([]UserFeedbackRule(nil), cfg.UserFeedbackRules...),
+		Preferences:   append([]PreferenceRule(nil), cfg.PreferenceRules...),
+		Language:      append([]LanguageRule(nil), cfg.LanguageRules...),
+		Context:       append([]ContextRule(nil), cfg.ContextRules...),
+		Complexity:    append([]ComplexityRule(nil), cfg.ComplexityRules...),
+		Modality:      append([]ModalityRule(nil), cfg.ModalityRules...),
+		RoleBindings:  append([]RoleBinding(nil), cfg.RoleBindings...),
+		Jailbreak:     append([]JailbreakRule(nil), cfg.JailbreakRules...),
+		PII:           append([]PIIRule(nil), cfg.PIIRules...),
 	}
 }
 
@@ -157,8 +157,8 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			},
 			System: CanonicalSystemModels{
 				PromptGuard:            cfg.PromptGuard.ModelID,
-				DomainClassifier:       cfg.Classifier.CategoryModel.ModelID,
-				PIIClassifier:          cfg.Classifier.PIIModel.ModelID,
+				DomainClassifier:       cfg.CategoryModel.ModelID,
+				PIIClassifier:          cfg.PIIModel.ModelID,
 				FactCheckClassifier:    cfg.HallucinationMitigation.FactCheckModel.ModelID,
 				HallucinationDetector:  cfg.HallucinationMitigation.HallucinationModel.ModelID,
 				HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
@@ -173,15 +173,15 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 				},
 				Classifier: CanonicalClassifierModule{
 					Domain: CanonicalCategoryModule{
-						CategoryModel: cfg.Classifier.CategoryModel,
+						CategoryModel: cfg.CategoryModel,
 						ModelRef:      "domain_classifier",
 					},
-					MCP: cfg.Classifier.MCPCategoryModel,
+					MCP: cfg.MCPCategoryModel,
 					PII: CanonicalPIIModule{
-						PIIModel: cfg.Classifier.PIIModel,
+						PIIModel: cfg.PIIModel,
 						ModelRef: "pii_classifier",
 					},
-					Preference: cfg.Classifier.PreferenceModel,
+					Preference: cfg.PreferenceModel,
 				},
 				HallucinationMitigation: CanonicalHallucinationModule{
 					Enabled:                 cfg.HallucinationMitigation.Enabled,
@@ -216,7 +216,34 @@ func canonicalProviderModelsFromRouterConfig(cfg *RouterConfig) []CanonicalProvi
 		return nil
 	}
 
-	modelNames := map[string]bool{}
+	modelNames := canonicalProviderModelNames(cfg)
+	if len(modelNames) == 0 {
+		return nil
+	}
+
+	names := sortedCanonicalProviderModelNames(modelNames)
+	endpointsByName, endpointsByModel := canonicalEndpointIndexes(cfg.VLLMEndpoints)
+
+	models := make([]CanonicalProviderModel, 0, len(names))
+	for _, name := range names {
+		providerModel := canonicalProviderModelFromRuntime(
+			name,
+			cfg.ModelConfig[name],
+			endpointsByName,
+			endpointsByModel,
+			cfg.ProviderProfiles,
+		)
+		if len(providerModel.BackendRefs) == 0 && !canonicalProviderModelHasMetadata(providerModel) {
+			continue
+		}
+		models = append(models, providerModel)
+	}
+
+	return models
+}
+
+func canonicalProviderModelNames(cfg *RouterConfig) map[string]bool {
+	modelNames := make(map[string]bool, len(cfg.ModelConfig))
 	for name := range cfg.ModelConfig {
 		modelNames[name] = true
 	}
@@ -225,46 +252,56 @@ func canonicalProviderModelsFromRouterConfig(cfg *RouterConfig) []CanonicalProvi
 			modelNames[endpoint.Model] = true
 		}
 	}
-	if len(modelNames) == 0 {
-		return nil
-	}
+	return modelNames
+}
 
+func sortedCanonicalProviderModelNames(modelNames map[string]bool) []string {
 	names := make([]string, 0, len(modelNames))
 	for name := range modelNames {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	return names
+}
 
-	profiles := cfg.ProviderProfiles
-	endpointsByName := make(map[string]VLLMEndpoint, len(cfg.VLLMEndpoints))
+func canonicalEndpointIndexes(
+	endpoints []VLLMEndpoint,
+) (map[string]VLLMEndpoint, map[string][]VLLMEndpoint) {
+	endpointsByName := make(map[string]VLLMEndpoint, len(endpoints))
 	endpointsByModel := make(map[string][]VLLMEndpoint)
-	for _, endpoint := range cfg.VLLMEndpoints {
+	for _, endpoint := range endpoints {
 		endpointsByName[endpoint.Name] = endpoint
 		if endpoint.Model != "" {
 			endpointsByModel[endpoint.Model] = append(endpointsByModel[endpoint.Model], endpoint)
 		}
 	}
+	return endpointsByName, endpointsByModel
+}
 
-	models := make([]CanonicalProviderModel, 0, len(names))
-	for _, name := range names {
-		params := cfg.ModelConfig[name]
-		providerModel := CanonicalProviderModel{
-			Name:             name,
-			APIFormat:        params.APIFormat,
-			Pricing:          params.Pricing,
-			ExternalModelIDs: copyStringMap(params.ExternalModelIDs),
-		}
-		if providerModelID := canonicalProviderModelID(params.ExternalModelIDs); providerModelID != "" {
-			providerModel.ProviderModelID = providerModelID
-		}
-		providerModel.BackendRefs = canonicalProviderBackendRefs(name, params, endpointsByName, endpointsByModel, profiles)
-		if len(providerModel.BackendRefs) == 0 && !canonicalProviderModelHasMetadata(providerModel) {
-			continue
-		}
-		models = append(models, providerModel)
+func canonicalProviderModelFromRuntime(
+	name string,
+	params ModelParams,
+	endpointsByName map[string]VLLMEndpoint,
+	endpointsByModel map[string][]VLLMEndpoint,
+	profiles map[string]ProviderProfile,
+) CanonicalProviderModel {
+	providerModel := CanonicalProviderModel{
+		Name:             name,
+		APIFormat:        params.APIFormat,
+		Pricing:          params.Pricing,
+		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),
+		BackendRefs: canonicalProviderBackendRefs(
+			name,
+			params,
+			endpointsByName,
+			endpointsByModel,
+			profiles,
+		),
 	}
-
-	return models
+	if providerModelID := canonicalProviderModelID(params.ExternalModelIDs); providerModelID != "" {
+		providerModel.ProviderModelID = providerModelID
+	}
+	return providerModel
 }
 
 func canonicalProviderModelID(externalModelIDs map[string]string) string {

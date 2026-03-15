@@ -65,26 +65,39 @@ ROUTE math_route {
 	if !ok {
 		t.Fatal("expected compiled model catalog entry")
 	}
-	if params.ReasoningFamily != "openai" {
-		t.Fatalf("reasoning family = %q", params.ReasoningFamily)
-	}
-	if params.ParamSize != "3b" {
-		t.Fatalf("param_size = %q", params.ParamSize)
-	}
-	if params.Description != "Math focused local model" {
-		t.Fatalf("description = %q", params.Description)
-	}
-	if len(params.Capabilities) != 2 || params.Capabilities[0] != "math" {
-		t.Fatalf("capabilities = %#v", params.Capabilities)
-	}
+	assertCompiledTopLevelModelCatalog(t, params)
+}
+
+func assertCompiledTopLevelModelCatalog(t *testing.T, params config.ModelParams) {
+	t.Helper()
+	assertStringField(t, "reasoning family", "openai", params.ReasoningFamily)
+	assertStringField(t, "param_size", "3b", params.ParamSize)
+	assertStringField(t, "description", "Math focused local model", params.Description)
+	assertStringField(t, "modality", "ar", params.Modality)
+	assertLeadingStringSlice(t, "capabilities", params.Capabilities, 2, "math")
+	assertLeadingStringSlice(t, "tags", params.Tags, 2, "local")
 	if len(params.LoRAs) != 1 || params.LoRAs[0].Name != "math-adapter" {
 		t.Fatalf("loras = %#v", params.LoRAs)
 	}
-	if len(params.Tags) != 2 || params.Tags[0] != "local" {
-		t.Fatalf("tags = %#v", params.Tags)
+}
+
+func assertStringField(t *testing.T, name, want, got string) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s = %q", name, got)
 	}
-	if params.Modality != "ar" {
-		t.Fatalf("modality = %q", params.Modality)
+}
+
+func assertLeadingStringSlice(
+	t *testing.T,
+	name string,
+	values []string,
+	wantLen int,
+	wantFirst string,
+) {
+	t.Helper()
+	if len(values) != wantLen || values[0] != wantFirst {
+		t.Fatalf("%s = %#v", name, values)
 	}
 }
 

@@ -45,6 +45,11 @@ The repo-wide rollout to the canonical v0.3 contract is now closed for the activ
 - [website/docs/installation/configuration.md](../../../website/docs/installation/configuration.md)
 - [website/docs/proposals/unified-config-contract-v0-3.md](../../../website/docs/proposals/unified-config-contract-v0-3.md)
 - [src/semantic-router/pkg/config/maintained_asset_contract_test.go](../../../src/semantic-router/pkg/config/maintained_asset_contract_test.go)
+- [bench/README.md](../../../bench/README.md)
+- [bench/hallucination/config.yaml](../../../bench/hallucination/config.yaml)
+- [bench/hallucination/config-7b.yaml](../../../bench/hallucination/config-7b.yaml)
+- [bench/cpu-vs-gpu/config-bench.yaml](../../../bench/cpu-vs-gpu/config-bench.yaml)
+- [bench/cpu-vs-gpu/config-bench-candle.yaml](../../../bench/cpu-vs-gpu/config-bench-candle.yaml)
 - [e2e/config/config.e2e.yaml](../../../e2e/config/config.e2e.yaml)
 - [e2e/config/config.response-api.yaml](../../../e2e/config/config.response-api.yaml)
 - [e2e/config/config.multi-provider.yaml](../../../e2e/config/config.multi-provider.yaml)
@@ -87,7 +92,7 @@ The repo-wide rollout to the canonical v0.3 contract is now closed for the activ
 ## Retirement Notes
 
 - The steady-state router parser now rejects both deprecated canonical-user fields and top-level legacy runtime layouts; migration remains explicit via `vllm-sr config migrate`.
-- Repo-owned maintained config assets are enforced by `go test ./pkg/config/...` to stay on canonical v0.3, including embedded `config.yaml` payloads in KServe manifests and `values.yaml`-embedded config blocks in deploy/E2E profiles.
+- Repo-owned maintained config assets are enforced by `go test ./pkg/config/...` to stay on canonical v0.3, including embedded `config.yaml` payloads in KServe manifests, `values.yaml`-embedded config blocks in deploy/E2E profiles, and benchmark-owned config templates/fragments under `bench/`.
 - Dashboard import/edit/save flows canonicalize legacy config before writing it back, so config management no longer re-emits `model_config`, `vllm_endpoints`, or `provider_profiles` as steady-state output.
 - Operator, Helm, DSL, CLI, config fragments, and latest docs now describe or emit the same canonical `providers/routing/global` shape.
 - If a future change reintroduces a second steady-state user config contract or allows maintained repo assets to drift back to legacy runtime layout, reopen this item.

@@ -169,6 +169,35 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
+		path: repoRel("bench", "README.md"),
+		needles: []string{
+			"`vsr_canonical_patch.yaml`",
+			"`vsr_canonical_patch_recommendation.json`",
+			"providers:\n  defaults:\n    reasoning_families:",
+			"routing:\n  modelCards:",
+			"routing:\n  decisions:",
+			"default_reasoning_effort: medium",
+		},
+	},
+	{
+		path: repoRel("bench", "hallucination", "README.md"),
+		needles: []string{
+			"providers:\n  models:",
+			"backend_refs:",
+			"global:\n  model_catalog:\n    modules:\n      prompt_guard:",
+			"global:\n  model_catalog:\n    modules:\n      hallucination_mitigation:",
+		},
+	},
+	{
+		path: repoRel("bench", "cpu-vs-gpu", "README.md"),
+		needles: []string{
+			"`config-bench.yaml`",
+			"`config-bench-candle.yaml`",
+			"`global.router.streamed_body.enabled`",
+			"`bench-3way.sh`",
+		},
+	},
+	{
 		path: repoRel("website", "docs", "proposals", "nvidia-dynamo-integration.md"),
 		needles: []string{
 			"global:\n  model_catalog:\n    modules:\n      classifier:",
@@ -315,6 +344,32 @@ var configContractForbiddenDocs = []docNeedles{
 			"\nplugins:\n",
 			"make generate     - Generate configurations",
 			"make show-config",
+		},
+	},
+	{
+		path: repoRel("bench", "README.md"),
+		needles: []string{
+			"\nmodel_config:\n",
+			"vsr_model_config.yaml",
+			"vsr_model_config_recommendation.json",
+			"config.yaml model_config section",
+			"preferred_endpoints:",
+			"\ndefault_reasoning_effort:",
+			"\ncategories:\n",
+		},
+	},
+	{
+		path: repoRel("bench", "hallucination", "README.md"),
+		needles: []string{
+			"\nvllm_endpoints:\n",
+			"\nmodel_config:\n",
+			"\nhallucination_mitigation:\n",
+		},
+	},
+	{
+		path: repoRel("bench", "cpu-vs-gpu", "README.md"),
+		needles: []string{
+			"streamed_body_mode",
 		},
 	},
 	{

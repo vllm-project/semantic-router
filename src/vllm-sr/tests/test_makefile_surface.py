@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 MAKEFILE_PATH = Path(__file__).resolve().parents[1] / "Makefile"
 
 

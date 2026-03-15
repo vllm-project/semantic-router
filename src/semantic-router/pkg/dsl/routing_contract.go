@@ -64,7 +64,19 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
 	prog := &Program{}
+	d.appendSignalsToProgram(prog)
+	d.appendModelsToProgram(prog)
+	d.appendRoutesToProgram(prog)
+	return prog
+}
 
+func (d *decompiler) appendSignalsToProgram(prog *Program) {
+	d.appendCoreSignals(prog)
+	d.appendOperationalSignals(prog)
+	d.appendSafetySignals(prog)
+}
+
+func (d *decompiler) appendCoreSignals(prog *Program) {
 	for _, cat := range d.cfg.Categories {
 		prog.Signals = append(prog.Signals, d.categoryToSignal(&cat))
 	}
@@ -83,6 +95,9 @@ func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	for _, pref := range d.cfg.PreferenceRules {
 		prog.Signals = append(prog.Signals, d.preferenceToSignal(&pref))
 	}
+}
+
+func (d *decompiler) appendOperationalSignals(prog *Program) {
 	for _, lang := range d.cfg.LanguageRules {
 		prog.Signals = append(prog.Signals, d.languageToSignal(&lang))
 	}
@@ -98,64 +113,83 @@ func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	for _, rb := range d.cfg.RoleBindings {
 		prog.Signals = append(prog.Signals, d.roleBindingToSignal(&rb))
 	}
+}
+
+func (d *decompiler) appendSafetySignals(prog *Program) {
 	for _, jb := range d.cfg.JailbreakRules {
 		prog.Signals = append(prog.Signals, d.jailbreakToSignal(&jb))
 	}
 	for _, pii := range d.cfg.PIIRules {
 		prog.Signals = append(prog.Signals, d.piiToSignal(&pii))
 	}
+}
 
-	for _, model := range config.CanonicalRoutingFromRouterConfig(cfg).ModelCards {
+func (d *decompiler) appendModelsToProgram(prog *Program) {
+	for _, model := range config.CanonicalRoutingFromRouterConfig(d.cfg).ModelCards {
 		prog.Models = append(prog.Models, routingModelToDecl(model))
 	}
+}
 
+func (d *decompiler) appendRoutesToProgram(prog *Program) {
 	for _, dec := range d.cfg.Decisions {
 		prog.Routes = append(prog.Routes, d.decisionToRoute(&dec))
 	}
-
-	return prog
 }
 
 func (d *decompiler) decompileRoutingModels(models []config.RoutingModel) {
 	for _, model := range models {
 		d.write("MODEL %s {\n", quoteName(model.Name))
-		if model.ReasoningFamilyRef != "" {
-			d.write("  reasoning_family_ref: %q\n", model.ReasoningFamilyRef)
-		}
-		if model.ParamSize != "" {
-			d.write("  param_size: %q\n", model.ParamSize)
-		}
-		if model.ContextWindowSize > 0 {
-			d.write("  context_window_size: %d\n", model.ContextWindowSize)
-		}
-		if model.Description != "" {
-			d.write("  description: %q\n", model.Description)
-		}
-		if len(model.Capabilities) > 0 {
-			d.write("  capabilities: %s\n", quotedStringArray(model.Capabilities))
-		}
-		if len(model.LoRAs) > 0 {
-			d.write("  loras: [\n")
-			for _, adapter := range model.LoRAs {
-				d.write("    { name: %q", adapter.Name)
-				if adapter.Description != "" {
-					d.write(", description: %q", adapter.Description)
-				}
-				d.write(" },\n")
-			}
-			d.write("  ]\n")
-		}
-		if len(model.Tags) > 0 {
-			d.write("  tags: %s\n", quotedStringArray(model.Tags))
-		}
-		if model.QualityScore != 0 {
-			d.write("  quality_score: %s\n", strconv.FormatFloat(model.QualityScore, 'f', -1, 64))
-		}
-		if model.Modality != "" {
-			d.write("  modality: %q\n", model.Modality)
-		}
+		d.writeRoutingModelFields(model)
 		d.write("}\n\n")
 	}
+}
+
+func (d *decompiler) writeRoutingModelFields(model config.RoutingModel) {
+	d.writeOptionalRoutingModelString("reasoning_family_ref", model.ReasoningFamilyRef)
+	d.writeOptionalRoutingModelString("param_size", model.ParamSize)
+	if model.ContextWindowSize > 0 {
+		d.write("  context_window_size: %d\n", model.ContextWindowSize)
+	}
+	d.writeOptionalRoutingModelString("description", model.Description)
+	d.writeOptionalRoutingModelArray("capabilities", model.Capabilities)
+	d.writeRoutingModelLoRAs(model.LoRAs)
+	d.writeOptionalRoutingModelArray("tags", model.Tags)
+	if model.QualityScore != 0 {
+		d.write(
+			"  quality_score: %s\n",
+			strconv.FormatFloat(model.QualityScore, 'f', -1, 64),
+		)
+	}
+	d.writeOptionalRoutingModelString("modality", model.Modality)
+}
+
+func (d *decompiler) writeOptionalRoutingModelString(key, value string) {
+	if value == "" {
+		return
+	}
+	d.write("  %s: %q\n", key, value)
+}
+
+func (d *decompiler) writeOptionalRoutingModelArray(key string, values []string) {
+	if len(values) == 0 {
+		return
+	}
+	d.write("  %s: %s\n", key, quotedStringArray(values))
+}
+
+func (d *decompiler) writeRoutingModelLoRAs(adapters []config.LoRAAdapter) {
+	if len(adapters) == 0 {
+		return
+	}
+	d.write("  loras: [\n")
+	for _, adapter := range adapters {
+		d.write("    { name: %q", adapter.Name)
+		if adapter.Description != "" {
+			d.write(", description: %q", adapter.Description)
+		}
+		d.write(" },\n")
+	}
+	d.write("  ]\n")
 }
 
 func routingModelToDecl(model config.RoutingModel) *ModelDecl {

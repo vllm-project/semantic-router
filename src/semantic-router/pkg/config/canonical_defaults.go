@@ -4,101 +4,141 @@ package config
 // canonical config omits all or part of the global block.
 func DefaultCanonicalGlobal() CanonicalGlobal {
 	defaults := CanonicalGlobal{
-		Router: CanonicalRouterGlobal{
-			ConfigSource:              ConfigSourceFile,
-			AutoModelName:             "MoM",
-			IncludeConfigModelsInList: false,
-			ClearRouteCache:           true,
-			ModelSelection: ModelSelectionConfig{
-				Enabled: true,
-				Method:  "knn",
-			},
-		},
-		Services: CanonicalServiceGlobal{
-			ResponseAPI: ResponseAPIConfig{
-				Enabled:      true,
-				StoreBackend: "memory",
-				TTLSeconds:   86400,
-				MaxResponses: 1000,
-			},
-			RouterReplay: RouterReplayConfig{
-				StoreBackend: "memory",
-				TTLSeconds:   2592000,
-				AsyncWrites:  false,
-			},
-			Observability: ObservabilityConfig{
-				Metrics: MetricsConfig{
-					Enabled: canonicalBoolPtr(true),
-				},
-				Tracing: TracingConfig{
-					Enabled:  true,
-					Provider: "opentelemetry",
-					Exporter: TracingExporterConfig{
-						Type:     "otlp",
-						Endpoint: "vllm-sr-jaeger:4317",
-						Insecure: true,
-					},
-					Sampling: TracingSamplingConfig{
-						Type: "always_on",
-						Rate: 1.0,
-					},
-					Resource: TracingResourceConfig{
-						ServiceName:           "vllm-sr",
-						ServiceVersion:        "v0.3.0",
-						DeploymentEnvironment: "development",
-					},
-				},
-			},
-		},
-		Stores: CanonicalStoreGlobal{
-			Memory: MemoryConfig{
-				Enabled:                    false,
-				AutoStore:                  false,
-				Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory", Dimension: 384},
-				DefaultRetrievalLimit:      5,
-				DefaultSimilarityThreshold: 0.70,
-				ExtractionBatchSize:        10,
-			},
-			SemanticCache: SemanticCache{
-				Enabled:        true,
-				BackendType:    "memory",
-				MaxEntries:     1000,
-				TTLSeconds:     3600,
-				EvictionPolicy: "fifo",
-			},
-		},
-		Integrations: CanonicalIntegrationGlobal{
-			Tools: ToolsConfig{
-				Enabled:         false,
-				TopK:            3,
-				ToolsDBPath:     "config/tools_db.json",
-				FallbackToEmpty: true,
-			},
-			Looper: LooperConfig{
-				Endpoint:       "http://localhost:8899/v1/chat/completions",
-				TimeoutSeconds: 1200,
-				Headers:        map[string]string{},
-			},
-		},
-		ModelCatalog: CanonicalModelCatalog{
-			Embeddings: CanonicalEmbeddingModels{
-				Semantic: EmbeddingModels{
-					MmBertModelPath: "models/mom-embedding-ultra",
-					UseCPU:          true,
-					HNSWConfig: HNSWConfig{
-						ModelType:         "mmbert",
-						PreloadEmbeddings: true,
-						TargetDimension:   768,
-						TargetLayer:       22,
-						MinScoreThreshold: 0.5,
-					},
-				},
-			},
-			System: DefaultSystemModels(),
+		Router:       defaultCanonicalRouterGlobal(),
+		Services:     defaultCanonicalServiceGlobal(),
+		Stores:       defaultCanonicalStoreGlobal(),
+		Integrations: defaultCanonicalIntegrationGlobal(),
+		ModelCatalog: defaultCanonicalModelCatalog(),
+	}
+	return defaults
+}
+
+func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
+	return CanonicalRouterGlobal{
+		ConfigSource:              ConfigSourceFile,
+		AutoModelName:             "MoM",
+		IncludeConfigModelsInList: false,
+		ClearRouteCache:           true,
+		ModelSelection: ModelSelectionConfig{
+			Enabled: true,
+			Method:  "knn",
 		},
 	}
+}
 
-	defaults.ModelCatalog.Modules.PromptGuard = CanonicalPromptGuardModule{
+func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
+	return CanonicalServiceGlobal{
+		ResponseAPI: ResponseAPIConfig{
+			Enabled:      true,
+			StoreBackend: "memory",
+			TTLSeconds:   86400,
+			MaxResponses: 1000,
+		},
+		RouterReplay: RouterReplayConfig{
+			StoreBackend: "memory",
+			TTLSeconds:   2592000,
+			AsyncWrites:  false,
+		},
+		Observability: ObservabilityConfig{
+			Metrics: MetricsConfig{
+				Enabled: canonicalBoolPtr(true),
+			},
+			Tracing: TracingConfig{
+				Enabled:  true,
+				Provider: "opentelemetry",
+				Exporter: TracingExporterConfig{
+					Type:     "otlp",
+					Endpoint: "vllm-sr-jaeger:4317",
+					Insecure: true,
+				},
+				Sampling: TracingSamplingConfig{
+					Type: "always_on",
+					Rate: 1.0,
+				},
+				Resource: TracingResourceConfig{
+					ServiceName:           "vllm-sr",
+					ServiceVersion:        "v0.3.0",
+					DeploymentEnvironment: "development",
+				},
+			},
+		},
+	}
+}
+
+func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
+	return CanonicalStoreGlobal{
+		Memory: MemoryConfig{
+			Enabled:                    false,
+			AutoStore:                  false,
+			Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory", Dimension: 384},
+			DefaultRetrievalLimit:      5,
+			DefaultSimilarityThreshold: 0.70,
+			ExtractionBatchSize:        10,
+		},
+		SemanticCache: SemanticCache{
+			Enabled:        true,
+			BackendType:    "memory",
+			MaxEntries:     1000,
+			TTLSeconds:     3600,
+			EvictionPolicy: "fifo",
+		},
+	}
+}
+
+func defaultCanonicalIntegrationGlobal() CanonicalIntegrationGlobal {
+	return CanonicalIntegrationGlobal{
+		Tools: ToolsConfig{
+			Enabled:         false,
+			TopK:            3,
+			ToolsDBPath:     "config/tools_db.json",
+			FallbackToEmpty: true,
+		},
+		Looper: LooperConfig{
+			Endpoint:       "http://localhost:8899/v1/chat/completions",
+			TimeoutSeconds: 1200,
+			Headers:        map[string]string{},
+		},
+	}
+}
+
+func defaultCanonicalModelCatalog() CanonicalModelCatalog {
+	catalog := CanonicalModelCatalog{
+		Embeddings: defaultCanonicalEmbeddingModels(),
+		System:     DefaultSystemModels(),
+		Modules:    defaultCanonicalModelModules(),
+	}
+	enabledSoftMatching := true
+	catalog.Embeddings.Semantic.HNSWConfig.EnableSoftMatching = &enabledSoftMatching
+	return catalog
+}
+
+func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
+	return CanonicalEmbeddingModels{
+		Semantic: EmbeddingModels{
+			MmBertModelPath: "models/mom-embedding-ultra",
+			UseCPU:          true,
+			HNSWConfig: HNSWConfig{
+				ModelType:         "mmbert",
+				PreloadEmbeddings: true,
+				TargetDimension:   768,
+				TargetLayer:       22,
+				MinScoreThreshold: 0.5,
+			},
+		},
+	}
+}
+
+func defaultCanonicalModelModules() CanonicalModelModules {
+	return CanonicalModelModules{
+		PromptGuard:             defaultPromptGuardModule(),
+		Classifier:              defaultClassifierModule(),
+		HallucinationMitigation: defaultHallucinationModule(),
+		FeedbackDetector:        defaultFeedbackDetectorModule(),
+	}
+}
+
+func defaultPromptGuardModule() CanonicalPromptGuardModule {
+	return CanonicalPromptGuardModule{
 		ModelRef: "prompt_guard",
 		PromptGuardConfig: PromptGuardConfig{
 			Enabled:              true,
@@ -108,7 +148,10 @@ func DefaultCanonicalGlobal() CanonicalGlobal {
 			JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
 		},
 	}
-	defaults.ModelCatalog.Modules.Classifier = CanonicalClassifierModule{
+}
+
+func defaultClassifierModule() CanonicalClassifierModule {
+	return CanonicalClassifierModule{
 		Domain: CanonicalCategoryModule{
 			ModelRef: "domain_classifier",
 			CategoryModel: CategoryModel{
@@ -128,7 +171,10 @@ func DefaultCanonicalGlobal() CanonicalGlobal {
 			},
 		},
 	}
-	defaults.ModelCatalog.Modules.HallucinationMitigation = CanonicalHallucinationModule{
+}
+
+func defaultHallucinationModule() CanonicalHallucinationModule {
+	return CanonicalHallucinationModule{
 		Enabled: false,
 		FactCheck: CanonicalFactCheckModule{
 			ModelRef: "fact_check_classifier",
@@ -158,7 +204,10 @@ func DefaultCanonicalGlobal() CanonicalGlobal {
 			},
 		},
 	}
-	defaults.ModelCatalog.Modules.FeedbackDetector = CanonicalFeedbackDetectorModule{
+}
+
+func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
+	return CanonicalFeedbackDetectorModule{
 		ModelRef: "feedback_detector",
 		FeedbackDetectorConfig: FeedbackDetectorConfig{
 			Enabled:      true,
@@ -167,11 +216,6 @@ func DefaultCanonicalGlobal() CanonicalGlobal {
 			UseMmBERT32K: true,
 		},
 	}
-
-	enabledSoftMatching := true
-	defaults.ModelCatalog.Embeddings.Semantic.HNSWConfig.EnableSoftMatching = &enabledSoftMatching
-
-	return defaults
 }
 
 // DefaultSystemModels returns stable capability bindings for built-in runtime models.

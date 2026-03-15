@@ -24,7 +24,7 @@ routing:
   modelCards:
     - name: auto
       reasoning_family_ref: qwen3
-      description: Benchmark target model for ONNX signal extraction latency comparisons.
+      description: Benchmark target model for Candle CPU signal extraction latency comparisons.
       capabilities: [chat]
       modality: ar
   signals:
@@ -88,25 +88,25 @@ global:
       prompt_guard:
         enabled: true
         use_mmbert_32k: true
-        model_id: models/mmbert32k-jailbreak-detector-merged-onnx
+        model_id: models/mmbert32k-jailbreak-detector-merged
         threshold: 0.7
-        use_cpu: USE_CPU_PLACEHOLDER
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged-onnx/jailbreak_type_mapping.json
+        use_cpu: true
+        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
         model_ref: prompt_guard
       classifier:
         domain:
-          model_id: models/mmbert32k-intent-classifier-merged-onnx
-          category_mapping_path: models/mmbert32k-intent-classifier-merged-onnx/category_mapping.json
+          model_id: models/mmbert32k-intent-classifier-merged
+          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
           fallback_category: other
           use_mmbert_32k: true
-          use_cpu: USE_CPU_PLACEHOLDER
+          use_cpu: true
           threshold: 0.5
           model_ref: domain_classifier
         pii:
-          model_id: models/mmbert32k-pii-detector-merged-onnx
-          pii_mapping_path: models/mmbert32k-pii-detector-merged-onnx/pii_type_mapping.json
+          model_id: models/mmbert32k-pii-detector-merged
+          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
           use_mmbert_32k: true
-          use_cpu: USE_CPU_PLACEHOLDER
+          use_cpu: true
           threshold: 0.7
           model_ref: pii_classifier
       hallucination_mitigation:
