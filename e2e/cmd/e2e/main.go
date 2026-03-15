@@ -17,11 +17,14 @@ import (
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
+	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
+	raghybridsearch "github.com/vllm-project/semantic-router/e2e/profiles/rag-hybrid-search"
 	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
 	responseapiredis "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
 	responseapirediscluster "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
+	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 
 	// Import profiles to register test cases
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
@@ -31,11 +34,14 @@ import (
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/rag-hybrid-search"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 )
 
 const version = "v1.0.0"
@@ -133,8 +139,12 @@ func getProfile(name string) (framework.Profile, error) {
 		return llmd.NewProfile(), nil
 	case "ml-model-selection":
 		return mlmodelselection.NewProfile(), nil
+	case "multi-endpoint":
+		return multiendpoint.NewProfile(), nil
 	case "production-stack":
 		return productionstack.NewProfile(), nil
+	case "rag-hybrid-search":
+		return raghybridsearch.NewProfile(), nil
 	case "response-api":
 		return responseapi.NewProfile(), nil
 	case "response-api-redis":
@@ -143,6 +153,8 @@ func getProfile(name string) (framework.Profile, error) {
 		return responseapirediscluster.NewProfile(), nil
 	case "routing-strategies":
 		return routingstrategies.NewProfile(), nil
+	case "streaming":
+		return streaming.NewProfile(), nil
 	default:
 		return nil, fmt.Errorf("unknown profile: %s", name)
 	}
