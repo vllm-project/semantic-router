@@ -1,11 +1,15 @@
+import importlib
 import pathlib
 import sys
-
 
 TEST_DIR = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(TEST_DIR))
 
-import result_to_config  # noqa: E402
+result_to_config = importlib.import_module("result_to_config")
+
+EXPECTED_PHI4_QUALITY_SCORE = 0.775
+EXPECTED_QWEN3_QUALITY_SCORE = 0.76
+EXPECTED_SIMILARITY_THRESHOLD = 0.85
 
 
 def test_parse_args_defaults_to_eval_config(monkeypatch):
@@ -55,8 +59,8 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
 
     routing_models = {model["name"]: model for model in config["routing"]["modelCards"]}
     assert set(routing_models) == {"phi4", "qwen3-8b"}
-    assert routing_models["phi4"]["quality_score"] == 0.775
-    assert routing_models["qwen3-8b"]["quality_score"] == 0.76
+    assert routing_models["phi4"]["quality_score"] == EXPECTED_PHI4_QUALITY_SCORE
+    assert routing_models["qwen3-8b"]["quality_score"] == EXPECTED_QWEN3_QUALITY_SCORE
 
     domains = {
         domain["name"]: domain for domain in config["routing"]["signals"]["domains"]
@@ -70,7 +74,10 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
     assert domains["law"]["model_scores"][0]["use_reasoning"] is False
     assert config["routing"]["decisions"] == []
 
-    assert config["global"]["stores"]["semantic_cache"]["similarity_threshold"] == 0.85
+    assert (
+        config["global"]["stores"]["semantic_cache"]["similarity_threshold"]
+        == EXPECTED_SIMILARITY_THRESHOLD
+    )
     assert (
         config["global"]["model_catalog"]["modules"]["classifier"]["domain"][
             "fallback_category"

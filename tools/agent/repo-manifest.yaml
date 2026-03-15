@@ -137,6 +137,7 @@ docs:
   - docs/agent/tech-debt/td-011-apiserver-runtime-state-split.md
   - docs/agent/tech-debt/td-012-canonical-lora-catalog-gap.md
   - docs/agent/tech-debt/td-013-legacy-k8s-controller-bypasses-canonical-v0-3.md
+  - docs/agent/tech-debt/td-014-candle-binding-crate-wide-clippy-gate.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
@@ -251,6 +252,9 @@ doc_governance:
     - path: docs/agent/tech-debt/td-013-legacy-k8s-controller-bypasses-canonical-v0-3.md
       steward: agent-contract
       freshness: update when the TD013 debt record changes materially
+    - path: docs/agent/tech-debt/td-014-candle-binding-crate-wide-clippy-gate.md
+      steward: rust-bindings
+      freshness: update when the TD014 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change

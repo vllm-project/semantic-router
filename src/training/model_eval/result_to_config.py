@@ -8,7 +8,6 @@ from collections import defaultdict
 
 import yaml
 
-
 DEFAULT_OUTPUT_FILE = "config/config.eval.yaml"
 
 DEFAULT_BERT_MODEL = {

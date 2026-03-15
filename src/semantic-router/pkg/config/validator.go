@@ -472,17 +472,26 @@ func validateAdvancedToolFilteringUnitFloat(name string, value *float32) error {
 	return fmt.Errorf("tools.advanced_filtering.%s must be between 0.0 and 1.0", name)
 }
 
-// validateLoRAName checks if the specified LoRA name is defined in the model's configuration
+// validateLoRAName checks if the specified LoRA name is defined in the
+// canonical routing model catalog for the selected model.
 func validateLoRAName(cfg *RouterConfig, modelName string, loraName string) error {
-	// Check if the model exists in model_config
+	// Check if the model exists in the routing model catalog.
 	modelParams, exists := cfg.ModelConfig[modelName]
 	if !exists {
-		return fmt.Errorf("lora_name '%s' specified but model '%s' is not defined in model_config", loraName, modelName)
+		return fmt.Errorf(
+			"lora_name %q specified but model %q is not declared in routing.modelCards",
+			loraName,
+			modelName,
+		)
 	}
 
-	// Check if the model has any LoRAs defined
+	// Check if the model exposes any canonical LoRA adapters.
 	if len(modelParams.LoRAs) == 0 {
-		return fmt.Errorf("lora_name '%s' specified but model '%s' has no loras defined in model_config", loraName, modelName)
+		return fmt.Errorf(
+			"lora_name %q specified but model %q declares no routing.modelCards[].loras entries",
+			loraName,
+			modelName,
+		)
 	}
 
 	// Check if the specified LoRA name exists in the model's LoRA list
@@ -497,5 +506,10 @@ func validateLoRAName(cfg *RouterConfig, modelName string, loraName string) erro
 	for i, lora := range modelParams.LoRAs {
 		availableLoRAs[i] = lora.Name
 	}
-	return fmt.Errorf("lora_name '%s' is not defined in model '%s' loras. Available LoRAs: %v", loraName, modelName, availableLoRAs)
+	return fmt.Errorf(
+		"lora_name %q is not declared in routing.modelCards[%q].loras. Available LoRAs: %v",
+		loraName,
+		modelName,
+		availableLoRAs,
+	)
 }
