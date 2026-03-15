@@ -2,7 +2,7 @@
 
 `config/` is now the user-facing config surface only.
 
-- `config/config.yaml`: canonical runnable starter config
+- `config/config.yaml`: exhaustive canonical reference config
 - `config/signal/`: reusable `routing.signals` fragments
 - `config/decision/`: reusable `routing.decisions` rule-shape fragments
 - `config/algorithm/`: reusable `decision.algorithm` snippets
@@ -28,7 +28,7 @@ Inside canonical `config.yaml`:
 - `looper/`: multi-model execution policies such as `confidence`, `ratings`, and `remom`
 - `selection/`: candidate-selection policies such as `elo`, `router_dc`, `automix`, and `latency_aware`
 
-The repository enforces this fragment catalog and the core public config docs in Go tests. When a supported signal, decision algorithm, plugin surface, or canonical contract term changes, `go test ./pkg/config/...` will fail until both `config/` and the core config docs are updated to match.
+The repository enforces this fragment catalog, the exhaustive reference config, and the core public config docs in Go tests. When a supported signal, decision algorithm, plugin surface, or canonical contract term changes, both `go test ./pkg/config/...` and `make agent-lint` will fail until `config/` and the core config docs are updated to match.
 
 Latest official tutorials mirror the same top-level taxonomy:
 
@@ -44,4 +44,4 @@ Latest official tutorials mirror the same top-level taxonomy:
 - Local Envoy moved to `deploy/local/envoy.yaml`
 - Harness and smoke manifests moved to `e2e/config/`
 
-The old full-example trees under `config/intelligent-routing/`, `config/memory-rag/`, `config/multi-modal/`, `config/observability/`, and `config/prompt-guard/` were retired in v0.3. Build new configs from canonical `config/config.yaml` plus the fragment directories above.
+The old full-example trees under `config/intelligent-routing/`, `config/memory-rag/`, `config/multi-modal/`, `config/observability/`, and `config/prompt-guard/` were retired in v0.3. Use `config/config.yaml` as the exhaustive contract reference, then copy or trim it into deployment-specific `config.yaml` files as needed.

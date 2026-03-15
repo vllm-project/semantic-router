@@ -364,7 +364,7 @@ bert_model:
   - Rotary Position Embeddings (RoPE) for better long-context handling
   - Flash Attention 2 for faster inference
   - Fine-tuned on MMLU-Pro dataset for domain classification
-- **Categories:** 14 domains (math, computer_science, physics, chemistry, biology, engineering, economics, business, law, psychology, philosophy, history, health, other)
+- **Categories:** 14 domains (math, computer science, physics, chemistry, biology, engineering, economics, business, law, psychology, philosophy, history, health, other)
 - **Output:** Category label + confidence score
 - **Threshold:** 0.6 (configurable)
 - **Training Data:** MMLU-Pro dataset with domain-specific examples

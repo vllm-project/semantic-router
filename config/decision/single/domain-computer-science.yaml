@@ -1,7 +1,7 @@
 routing:
   decisions:
     - name: computer-science-route
-      description: Route computer science requests to the technical LoRA adapter.
+      description: Route computer science requests to the higher-reasoning model tier.
       priority: 100
       rules:
         operator: AND
@@ -9,6 +9,5 @@ routing:
           - type: domain
             name: "computer science"
       modelRefs:
-        - model: llama2-7b
-          lora_name: technical-lora
+        - model: qwen3-32b
           use_reasoning: true

@@ -163,8 +163,8 @@ signals:
       mmlu_categories: ["health"]
     - name: "economics"
       mmlu_categories: ["economics"]
-    - name: "computer_science"
-      mmlu_categories: ["computer_science"]
+    - name: "computer science"
+      mmlu_categories: ["computer science"]
 
 decisions:
   # 医疗：拦截除邮件/电话外的所有 PII（允许预约）
@@ -206,7 +206,7 @@ decisions:
         - type: "pii"
           name: "pii_allow_org_location"
         - type: "domain"
-          name: "computer_science"
+          name: "computer science"
     plugins:
       - type: "fast_response"
         configuration:
