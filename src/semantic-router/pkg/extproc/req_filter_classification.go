@@ -49,6 +49,20 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
+	// Hard limit on evaluation text length to prevent DoS via giant prompts.
+	// Signal evaluation latency grows super-linearly with input size (embedding
+	// models are O(n) to O(n²) depending on attention implementation).
+	// Default: 8192 characters (~2K tokens). Configurable via max_evaluation_chars.
+	maxChars := r.Config.MaxEvaluationChars
+	if maxChars == 0 {
+		maxChars = 8192 // default safety limit
+	}
+	if maxChars > 0 && len(evaluationText) > maxChars {
+		logging.Warnf("Truncating evaluation text from %d to %d chars (max_evaluation_chars limit)",
+			len(evaluationText), maxChars)
+		evaluationText = evaluationText[:maxChars]
+	}
+
 	// For context token counting, we need to include ALL messages (user + non-user)
 	// This ensures multi-turn conversations are properly counted
 	var allMessagesText string

@@ -3687,4 +3687,34 @@ skip_signals:
 			})
 		})
 	})
+
+	// -----------------------------------------------------------------------
+	// MaxEvaluationChars
+	// -----------------------------------------------------------------------
+	Describe("MaxEvaluationChars", func() {
+		It("should be zero by default (runtime applies 8192)", func() {
+			cfg := RouterConfig{}
+			Expect(cfg.MaxEvaluationChars).To(Equal(0))
+		})
+
+		It("should parse from YAML", func() {
+			yamlStr := `
+max_evaluation_chars: 4096
+`
+			var cfg RouterConfig
+			err := yaml.Unmarshal([]byte(yamlStr), &cfg)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.MaxEvaluationChars).To(Equal(4096))
+		})
+
+		It("should support disabling with -1", func() {
+			yamlStr := `
+max_evaluation_chars: -1
+`
+			var cfg RouterConfig
+			err := yaml.Unmarshal([]byte(yamlStr), &cfg)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.MaxEvaluationChars).To(Equal(-1))
+		})
+	})
 })

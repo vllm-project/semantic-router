@@ -162,6 +162,7 @@ type InlineModels struct {
 	EmbeddingModels         `yaml:"embedding_models"`
 	BertModel               `yaml:"bert_model"`
 	Classifier              `yaml:"classifier"`
+	MaxEvaluationChars      int                           `yaml:"max_evaluation_chars,omitempty"`
 	PromptCompression       PromptCompressionConfig       `yaml:"prompt_compression"`
 	PromptGuard             PromptGuardConfig             `yaml:"prompt_guard"`
 	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`
