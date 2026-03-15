@@ -126,7 +126,10 @@ func (r *OpenAIRouter) lookupCachedResponse(
 }
 
 func (r *OpenAIRouter) shouldLookupSemanticCache(requestQuery string, categoryName string) bool {
-	cacheEnabled := r.isCacheEnabledForDecision(categoryName)
+	cacheEnabled := r.Config.SemanticCache.Enabled
+	if categoryName != "" {
+		cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
+	}
 	logging.Infof("handleCaching: requestQuery='%s' (len=%d), cacheEnabled=%v, r.Cache.IsEnabled()=%v",
 		requestQuery, len(requestQuery), cacheEnabled, r.Cache.IsEnabled())
 	return requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled
@@ -142,25 +145,6 @@ func (r *OpenAIRouter) addPendingCacheRequest(ctx *RequestContext, categoryName 
 	if err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 	}
-}
-
-func (r *OpenAIRouter) isCacheEnabledForDecision(categoryName string) bool {
-	cacheEnabled := r.Config.SemanticCache.Enabled
-	if categoryName != "" {
-		cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
-	}
-
-	logging.Infof("handleCaching: requestQuery='%s' (len=%d), cacheEnabled=%v, r.Cache.IsEnabled()=%v",
-		requestQuery, len(requestQuery), cacheEnabled, r.Cache.IsEnabled())
-
-	if response, shouldReturn := r.performCacheLookup(ctx, categoryName, requestModel, requestQuery, cacheEnabled); shouldReturn {
-		return response, true
-	}
-
-	// Cache miss, store the request for later (only if caching is enabled for this decision)
-	r.storePendingCacheRequest(ctx, categoryName, requestModel, requestQuery, cacheEnabled)
-
-	return nil, false
 }
 
 // storePendingCacheRequest adds a pending cache request if caching is enabled for this decision.
