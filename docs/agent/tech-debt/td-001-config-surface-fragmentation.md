@@ -10,7 +10,7 @@ configuration architecture
 
 ## Summary
 
-The repo-wide rollout to the canonical v0.3 contract is now closed for the active steady-state workflow. The router parser accepts only canonical `version/listeners/providers/routing/global`, maintained deploy/E2E/example assets parse as canonical config under contract tests, dashboard config management rewrites legacy input to canonical before editing or saving, and the operator/Helm/DSL paths all emit or consume the same public structure. A narrower remaining legacy controller path for `IntelligentPool` / `IntelligentRoute` is tracked separately under [TD013](td-013-legacy-k8s-controller-bypasses-canonical-v0-3.md).
+The repo-wide rollout to the canonical v0.3 contract is now closed for the active steady-state workflow. The router parser accepts only canonical `version/listeners/providers/routing/global`, maintained deploy/E2E/example assets parse as canonical config under contract tests, dashboard config management rewrites legacy input to canonical before editing or saving, and the operator/Helm/DSL paths all emit or consume the same public structure. The in-process `IntelligentPool` / `IntelligentRoute` controller path now re-enters the same canonical parser through `global.router.config_source: kubernetes`.
 
 ## Evidence
 

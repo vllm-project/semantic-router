@@ -351,7 +351,7 @@ routing:
       min_tokens: 8K
       max_tokens: 1024K
     complexity:
-    - name: computer_science
+    - name: "computer science"
       composer:
         operator: AND
         conditions:

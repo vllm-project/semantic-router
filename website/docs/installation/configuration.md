@@ -37,7 +37,8 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `providers.defaults` holds `default_model`, `reasoning_families`, and `default_reasoning_effort`
   - `providers.models[*]` holds `provider_model_id`, `backend_refs`, `pricing`, `api_format`, and `external_model_ids`
 - `global` owns router-wide runtime overrides.
-  - `global.router` groups router-engine control knobs such as route-cache and model-selection defaults
+  - `global.router` groups router-engine control knobs such as config-source selection, route-cache, and model-selection defaults
+  - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)
   - `global.services` groups shared APIs and control-plane services such as `response_api`, `router_replay`, `observability`, `authz`, and `ratelimit`
   - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`
   - `global.integrations` groups helper runtime integrations such as `tools` and `looper`
@@ -104,6 +105,8 @@ routing:
           lora_name: math-adapter
 
 global:
+  router:
+    config_source: file
   services:
     observability:
       metrics:
@@ -295,6 +298,7 @@ into canonical `providers/routing/global`.
 1. Keep provider-wide defaults in `providers.defaults` and deployment bindings in `providers.models[].backend_refs[]`.
 2. Keep routing semantics in `routing.modelCards/signals/decisions`.
 3. Put only runtime overrides you actually need under `global.router/services/stores/integrations/model_catalog`, and keep model-backed module settings under `global.model_catalog.modules`.
+4. Use `global.router.config_source: kubernetes` only when the in-process `IntelligentPool` / `IntelligentRoute` controller is the active source of truth. Leave it as `file` for normal local, CLI, dashboard, Helm, and operator-authored canonical YAML.
 
 ### Helm
 

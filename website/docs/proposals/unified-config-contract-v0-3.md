@@ -86,7 +86,7 @@ Router-global defaults are now owned by the router itself, not by a second user-
 
 - the router provides typed built-in defaults
 - `global:` only overrides what you need to change
-- `global.router` groups router-engine control knobs
+- `global.router` groups router-engine control knobs, including `config_source`
 - `global.services` groups shared APIs and runtime services
 - `global.stores` groups storage-backed services
 - `global.integrations` groups helper runtime integrations
@@ -107,6 +107,8 @@ Remote onboarding import can fetch and apply a full canonical YAML file. That ke
 DSL import still accepts a full router config YAML, but it decompiles only the `routing` section into DSL. Static deployment and global runtime settings stay in YAML.
 
 The router parser itself now accepts only canonical v0.3 YAML for steady-state runtime config. Legacy mixed layouts must go through explicit migration first.
+
+The remaining in-process CRD reconciliation path now also re-enters the same canonical parser through `global.router.config_source: kubernetes`, instead of maintaining a separate steady-state runtime layout.
 
 ### Repository config assets
 
@@ -147,6 +149,7 @@ The repo now has one public config story:
 - DSL is the routing-semantic view of that config
 - deployment bindings live in `providers.defaults` and `providers.models[]`
 - runtime overrides live in `global.router/services/stores/integrations/model_catalog`, with model-backed modules under `global.model_catalog.modules`
+- `global.router.config_source` is the canonical switch between file-backed config and Kubernetes CRD-backed reconciliation
 - built-in defaults live in the router
 - repo-owned sample assets are organized by `signal/decision/algorithm/plugin` fragments instead of parallel full-config examples
 

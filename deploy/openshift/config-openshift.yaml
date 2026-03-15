@@ -217,7 +217,7 @@ routing:
         system_prompt: You are a physics expert with deep understanding of physical
           laws and phenomena.
         mode: replace
-  - name: computer_science
+  - name: "computer science"
     description: Route computer science queries
     priority: 10
     rules:

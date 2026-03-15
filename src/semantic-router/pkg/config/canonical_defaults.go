@@ -5,6 +5,7 @@ package config
 func DefaultCanonicalGlobal() CanonicalGlobal {
 	defaults := CanonicalGlobal{
 		Router: CanonicalRouterGlobal{
+			ConfigSource:              ConfigSourceFile,
 			AutoModelName:             "MoM",
 			IncludeConfigModelsInList: false,
 			ClearRouteCache:           true,

@@ -64,7 +64,8 @@ config:
           use_cpu: true
           jailbreak_mapping_path: models/mom-jailbreak-classifier/jailbreak_type_mapping.json
           model_ref: prompt_guard
-    router: {}
+    router:
+      config_source: kubernetes
     services:
       api:
         batch_classification:

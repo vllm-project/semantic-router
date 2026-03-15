@@ -19,6 +19,7 @@ type CanonicalGlobal struct {
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
+	ConfigSource              ConfigSource          `yaml:"config_source,omitempty"`
 	Strategy                  string                `yaml:"strategy,omitempty"`
 	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
 	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
@@ -201,6 +202,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 		return nil
 	}
 
+	cfg.ConfigSource = global.Router.ConfigSource
 	cfg.Strategy = global.Router.Strategy
 	cfg.AutoModelName = global.Router.AutoModelName
 	cfg.IncludeConfigModelsInList = global.Router.IncludeConfigModelsInList

@@ -30,7 +30,7 @@ routing:
     domains:
     - name: general
       description: General queries
-    - name: technical
+    - name: engineering
       description: Technical questions
   modelCards:
   - name: qwen2.5:3b
