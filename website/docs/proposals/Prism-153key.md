@@ -25,6 +25,7 @@ The current vLLM-SR pipeline has no post-selection legitimacy verification. PRIS
 
 PRISM integrates as **optional extensions** of existing components:
 
+ 
 - If `prism.enabled` is absent from a model's config → existing behavior **unchanged**
 - If no `type: "prism-execution"` plugin block in a decision → Key 3 **skipped**
 - If PRISM registry is not ready at request time → fallback to `"general"` → standard vLLM-SR routing
