@@ -2,7 +2,7 @@
 translation:
   source_commit: "545f5e3"
   source_file: "docs/installation/installation.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 sidebar_position: 2
 ---

@@ -2,7 +2,7 @@
 translation:
   source_commit: "c7573f1"
   source_file: "docs/overview/signal-driven-decisions.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 sidebar_position: 4
 ---
