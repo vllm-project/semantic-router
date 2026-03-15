@@ -14,6 +14,8 @@ This playbook documents the reference AMD profile for a single real ROCm vLLM ba
   - `GLM-4.7`
   - `DeepSeek-V3.2`
 - Reference routing profile: [config.yaml](./config.yaml)
+  - Canonical layout: `version/listeners/providers/routing/global`
+  - This profile uses `providers.defaults` for provider-wide defaults, `providers.models[].backend_refs[]` for access bindings, and `routing.modelCards` for semantic model metadata
 
 The active AMD profile contains 20 routing decisions. Each decision has exactly one `modelRef`. Guardrail and PII examples remain in the YAML as commented templates, but they are not active in this reference profile.
 
@@ -83,6 +85,8 @@ Complete the user registration, onboarding process, and import the reference pro
 
 > Import the profile from: https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/amd/config.yaml
 
+Onboarding remote import can apply this full YAML directly. If you import the same file into the DSL editor, only `routing.modelCards`, `routing.signals`, and `routing.decisions` are decompiled into DSL; `providers` and `global` remain in YAML.
+
 ## Architecture
 
 ```text
@@ -119,7 +123,7 @@ Single ROCm vLLM backend on vllm:8000
 Qwen/Qwen3.5-122B-A10B-FP8
 ```
 
-The router does not use `external_model_ids` in this profile. The selected alias is sent directly to the backend, and the backend accepts it because the container was started with matching `--served-model-name` entries.
+The router does not use `external_model_ids` in this profile. Every provider model entry points at the shared inline `backend_refs` target, and the selected alias is forwarded unchanged because the backend was started with matching `--served-model-name` entries.
 
 ## Alias Catalog
 

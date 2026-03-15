@@ -26,6 +26,8 @@ import {
 import { MCPConfigPanel } from '../components/MCPConfigPanel'
 import {
   AddSignalFormState,
+  BackendRefEntry,
+  CanonicalGlobalConfig,
   clonePresetDecisions,
   clonePresetSignals,
   collectConfiguredSignalNames,
@@ -35,6 +37,7 @@ import {
   formatThreshold,
   ModelConfigEntry, NormalizedModel, normalizeEndpoint, normalizeEndpoints,
   ReasoningFamily,
+  RoutingModelCard,
   SignalType,
   TABLE_COLUMN_WIDTH,
   Tool,
@@ -54,8 +57,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const [error, setError] = useState<string | null>(null)
   const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
 
-  // Router defaults state (from .vllm-sr/router-defaults.yaml)
-  const [routerDefaults, setRouterDefaults] = useState<ConfigData | null>(null)
+  // Effective global runtime config resolved from router defaults + config.yaml overrides
+  const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
 
   // Tools database state
   const [toolsData, setToolsData] = useState<Tool[]>([])
@@ -97,12 +100,128 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     fetchRouterDefaults()
   }, [])
 
+  const cloneConfig = (value: ConfigData): ConfigData =>
+    JSON.parse(JSON.stringify(value)) as ConfigData
+
+  const getRoutingModelCards = (cfg?: ConfigData) =>
+    cfg?.routing?.modelCards || []
+
+  const ensureRouting = (cfg: ConfigData) => {
+    if (!cfg.routing) {
+      cfg.routing = {}
+    }
+    if (!cfg.routing.modelCards) {
+      cfg.routing.modelCards = getRoutingModelCards(cfg)
+    }
+    return cfg.routing
+  }
+
+  const ensureProviders = (cfg: ConfigData) => {
+    if (!cfg.providers) {
+      cfg.providers = { models: [] }
+    }
+    if (!cfg.providers.models) {
+      cfg.providers.models = []
+    }
+    return cfg.providers
+  }
+
+  const ensureProviderDefaults = (cfg: ConfigData) => {
+    const providers = ensureProviders(cfg)
+    if (!providers.defaults) {
+      providers.defaults = {}
+    }
+    return providers.defaults
+  }
+
+  const upsertRoutingModelCard = (
+    cfg: ConfigData,
+    name: string,
+    patch: Partial<RoutingModelCard> = {}
+  ) => {
+    const routing = ensureRouting(cfg)
+    const cards = [...(routing.modelCards || [])]
+    const index = cards.findIndex((card) => card.name === name)
+    if (index >= 0) {
+      cards[index] = { ...cards[index], ...patch, name }
+    } else {
+      cards.push({ name, ...patch })
+    }
+    routing.modelCards = cards
+  }
+
+  const removeRoutingModelCard = (cfg: ConfigData, name: string) => {
+    const routing = ensureRouting(cfg)
+    routing.modelCards = (routing.modelCards || []).filter((card) => card.name !== name)
+  }
+
+  const projectCanonicalConfigForManager = (data: ConfigData): ConfigData => {
+    const next = cloneConfig(data)
+    if (next.routing?.signals && !next.signals) {
+      next.signals = next.routing.signals
+    }
+    if (next.routing?.decisions && !next.decisions) {
+      next.decisions = next.routing.decisions
+    }
+    return next
+  }
+
+  const canonicalizeConfigForSave = (updatedConfig: ConfigData): ConfigData => {
+    const next = cloneConfig(updatedConfig)
+    const routing = ensureRouting(next)
+    if (next.signals) {
+      routing.signals = next.signals
+      delete next.signals
+    }
+    if (next.decisions) {
+      routing.decisions = next.decisions
+      delete next.decisions
+    }
+    return next
+  }
+
+  const normalizeProviderModelEndpoints = (
+    model: {
+      endpoints?: Partial<Endpoint>[]
+      backend_refs?: BackendRefEntry[]
+    }
+  ): Endpoint[] => {
+    if (Array.isArray(model.backend_refs) && model.backend_refs.length > 0) {
+      return model.backend_refs.map((backend, index) => {
+        const baseURL = typeof backend.base_url === 'string' ? backend.base_url.trim() : ''
+        const endpoint =
+          typeof backend.endpoint === 'string' && backend.endpoint.trim()
+            ? backend.endpoint.trim()
+            : baseURL
+        const protocol =
+          backend.protocol ||
+          (baseURL.startsWith('https://') ? 'https' : 'http')
+        return normalizeEndpoint({
+          name: backend.name,
+          endpoint,
+          protocol,
+          weight: backend.weight,
+        }, index)
+      })
+    }
+    return normalizeEndpoints(model.endpoints)
+  }
+
   // Fetch tools database when config is loaded
   useEffect(() => {
-    if (config?.tools?.tools_db_path || routerDefaults?.tools?.tools_db_path) {
+    const toolsDBPath =
+      routerDefaults?.integrations?.tools?.tools_db_path ||
+      config?.global?.integrations?.tools?.tools_db_path ||
+      config?.tools?.tools_db_path
+
+    if (toolsDBPath) {
       fetchToolsDB()
     }
-  }, [config?.tools?.tools_db_path, routerDefaults?.tools?.tools_db_path])
+  }, [
+    config?.global?.integrations?.tools?.tools_db_path,
+    config?.tools?.tools_db_path,
+    routerDefaults?.integrations?.tools?.tools_db_path,
+  ])
 
   const fetchConfig = async () => {
     setLoading(true)
@@ -113,9 +232,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
       const data = await response.json()
-      setConfig(data)
+      const normalized = projectCanonicalConfigForManager(data)
+      setConfig(normalized)
       // Detect config format
-      const format = detectConfigFormat(data)
+      const format = detectConfigFormat(normalized)
       setConfigFormat(format)
       if (format === 'legacy') {
         console.warn('Legacy config format detected. Consider migrating to Python CLI format.')
@@ -130,16 +250,16 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
   const fetchRouterDefaults = async () => {
     try {
-      const response = await fetch('/api/router/config/defaults')
+      const response = await fetch('/api/router/config/global')
       if (!response.ok) {
-        console.warn('Router defaults not available:', response.statusText)
+        console.warn('Global runtime config not available:', response.statusText)
         setRouterDefaults(null)
         return
       }
       const data = await response.json()
       setRouterDefaults(data)
     } catch (err) {
-      console.warn('Failed to fetch router defaults:', err)
+      console.warn('Failed to fetch global runtime config:', err)
       setRouterDefaults(null)
     }
   }
@@ -170,12 +290,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     }
 
     try {
+      const canonicalConfig = canonicalizeConfigForSave(updatedConfig as ConfigData)
       const response = await fetch('/api/router/config/update', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updatedConfig),
+        body: JSON.stringify(canonicalConfig),
       })
 
       if (!response.ok) {
@@ -282,7 +403,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   }
 
   const getSelectedPresetConflicts = () => {
-    if (!config?.providers?.default_model || !selectedRoutingPresetId) {
+    const defaultModel = getDefaultModel()
+    if (!config || !defaultModel || !selectedRoutingPresetId) {
       return []
     }
 
@@ -291,7 +413,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       return []
     }
 
-    const fragment = preset.build(config.providers.default_model)
+    const fragment = preset.build(defaultModel)
     const existingSignalNames = collectConfiguredSignalNames(config.signals)
     const existingDecisionNames = new Set((config.decisions || []).map((decision) => decision.name))
     const conflicts: string[] = []
@@ -312,7 +434,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   }
 
   const handleApplyRoutingPreset = async () => {
-    if (!config || !isPythonCLI || !selectedRoutingPresetId || !config.providers?.default_model) {
+    const defaultModel = getDefaultModel()
+    if (!config || !isPythonCLI || !selectedRoutingPresetId || !defaultModel) {
       return
     }
 
@@ -326,7 +449,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       return
     }
 
-    const fragment = preset.build(config.providers.default_model)
+    const fragment = preset.build(defaultModel)
     const mergedSignals = clonePresetSignals(fragment.signals as Record<string, unknown> | undefined)
     const mergedDecisions = clonePresetDecisions(fragment.decisions)
     const nextSignals = { ...(config.signals || {}) } as Record<string, Array<Record<string, unknown>>>
@@ -389,18 +512,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     setViewModalEditCallback(null)
   }
 
-  // Get effective config value - check router defaults first, then main config
-  // Utility for merging config sources, will be used in render functions
-  const getEffectiveConfig = (key: string) => {
-    // For router defaults sections, prefer routerDefaults
-    if (routerDefaults && routerDefaults[key] !== undefined) {
-      return routerDefaults[key]
-    }
-    return config?.[key]
-  }
-  // Mark as used to avoid linting error
-  void getEffectiveConfig
-
   // ============================================================================
   // HELPER FUNCTIONS - Normalize data access across config formats
   // ============================================================================
@@ -409,33 +520,32 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const isPythonCLI = configFormat === 'python-cli'
   const selectedPresetConflicts = getSelectedPresetConflicts()
 
-  // Effective router config - merges routerDefaults (system settings) with config (fallback)
-  // For Python CLI: system settings like bert_model, tools, prompt_guard come from routerDefaults
-  // For Legacy: these settings are in config.yaml directly
-  const routerConfig = {
-    bert_model: routerDefaults?.bert_model ?? config?.bert_model,
-    semantic_cache: routerDefaults?.semantic_cache ?? config?.semantic_cache,
-    tools: routerDefaults?.tools ?? config?.tools,
-    prompt_guard: routerDefaults?.prompt_guard ?? config?.prompt_guard,
-    classifier: routerDefaults?.classifier ?? config?.classifier,
-    observability: routerDefaults?.observability ?? config?.observability,
-    api: routerDefaults?.api ?? config?.api,
-  }
-
   // Get models - from providers.models (Python CLI) or model_config (legacy)
   const getModels = (): NormalizedModel[] => {
     if (isPythonCLI && config?.providers?.models) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return config.providers.models.map((m: any): NormalizedModel => {
-        const model: NormalizedModel = {
-          name: m.name,
-          reasoning_family: m.reasoning_family,
-          endpoints: normalizeEndpoints(m.endpoints),
-          access_key: m.access_key,
-          pricing: m.pricing,
+      const cards = getRoutingModelCards(config)
+      const cardByName = new Map(cards.map((card) => [card.name, card]))
+      const models = config.providers.models.map((m): NormalizedModel => ({
+        name: m.name,
+        reasoning_family: cardByName.get(m.name)?.reasoning_family_ref,
+        endpoints: normalizeProviderModelEndpoints(m),
+        access_key: m.backend_refs?.find((ref) => ref.api_key || ref.api_key_env)?.api_key,
+        pricing: m.pricing,
+      }))
+
+      for (const card of cards) {
+        if (models.some((model) => model.name === card.name)) {
+          continue
         }
-        return model
-      })
+        models.push({
+          name: card.name,
+          reasoning_family: card.reasoning_family_ref,
+          endpoints: [],
+          pricing: undefined,
+        })
+      }
+
+      return models
     }
     // Legacy format - convert model_config to array
     if (config?.model_config) {
@@ -461,7 +571,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   // Get default model
   const getDefaultModel = (): string => {
     if (isPythonCLI) {
-      return config?.providers?.default_model || ''
+      return config?.providers?.defaults?.default_model || ''
     }
     return config?.default_model || ''
   }
@@ -469,7 +579,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   // Get reasoning families
   const getReasoningFamilies = (): Record<string, ReasoningFamily> => {
     if (isPythonCLI) {
-      return config?.providers?.reasoning_families || {}
+      return config?.providers?.defaults?.reasoning_families || {}
     }
     return config?.reasoning_families || {}
   }
@@ -1110,7 +1220,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           name: 'composer_conditions',
           label: 'Composer Conditions (complexity only)',
           type: 'textarea',
-          placeholder: 'One condition per line in format type:name, e.g.:\ndomain:computer_science\nkeyword:coding',
+          placeholder: 'One condition per line in format type:name, e.g.:\ndomain:computer science\nkeyword:coding',
           description: 'Filter this complexity signal based on other signals (RECOMMENDED). Format: type:name per line',
           shouldHide: conditionallyHideFieldExceptType('Complexity')
         },
@@ -2172,7 +2282,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               searchValue={decisionsSearch}
               onSearchChange={setDecisionsSearch}
               onSecondaryAction={
-                isPythonCLI && config?.providers?.default_model
+                isPythonCLI && getDefaultModel()
                   ? () => {
                       setPresetApplyError(null)
                       setPresetModalOpen(true)
@@ -2432,7 +2542,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         sections.push({
           title: 'Authentication',
           fields: [
-            { label: 'Access Key', value: '••••••••' }
+            { label: 'API Key', value: '••••••••' }
           ]
         })
       }
@@ -2491,7 +2601,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           },
           {
             name: 'access_key',
-            label: 'Access Key',
+            label: 'API Key',
             type: 'text',
             placeholder: 'API key for this model',
             description: 'Optional: API key for authentication'
@@ -2519,21 +2629,29 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           }
         ],
         async (data) => {
+          if (!config) {
+            return
+          }
           // Endpoints are already validated by EndpointsEditor
           const endpoints = normalizeEndpoints(data.endpoints)
 
-          const newConfig = { ...config }
+          const newConfig = cloneConfig(config)
 
-          if (isPythonCLI && newConfig.providers) {
-            newConfig.providers = { ...newConfig.providers }
-            if (!newConfig.providers.models) {
-              newConfig.providers.models = []
-            }
-            newConfig.providers.models.push({
+          if (isPythonCLI) {
+            const providers = ensureProviders(newConfig)
+            upsertRoutingModelCard(newConfig, data.model_name, {
+              reasoning_family_ref: data.reasoning_family || undefined,
+            })
+            providers.models.push({
               name: data.model_name,
-              reasoning_family: data.reasoning_family,
-              access_key: data.access_key,
-              endpoints: endpoints,
+              provider_model_id: data.model_name,
+              backend_refs: endpoints.map((ep: Endpoint) => ({
+                name: ep.name,
+                endpoint: ep.endpoint,
+                protocol: ep.protocol,
+                weight: ep.weight,
+                api_key: data.access_key || undefined,
+              })),
               pricing: {
                 currency: data.currency,
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
@@ -2599,7 +2717,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           },
           {
             name: 'access_key',
-            label: 'Access Key',
+            label: 'API Key',
             type: 'text',
             placeholder: 'API key for this model',
             description: 'Optional: API key for authentication'
@@ -2627,20 +2745,31 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           }
         ],
         async (data) => {
-          const newConfig = { ...config }
+          if (!config) {
+            return
+          }
+          const newConfig = cloneConfig(config)
 
           // Endpoints are already validated by EndpointsEditor
           const endpoints = normalizeEndpoints(data.endpoints)
 
           if (isPythonCLI && newConfig.providers?.models) {
-            newConfig.providers = { ...newConfig.providers }
+            const providers = ensureProviders(newConfig)
+            upsertRoutingModelCard(newConfig, model.name, {
+              reasoning_family_ref: data.reasoning_family || undefined,
+            })
             type ModelType = NonNullable<ConfigData['providers']>['models'][number]
-            newConfig.providers.models = newConfig.providers.models.map((m: ModelType) =>
+            providers.models = providers.models.map((m: ModelType) =>
               m.name === model.name ? {
                 ...m,
-                reasoning_family: data.reasoning_family,
-                access_key: data.access_key,
-                endpoints: endpoints,
+                provider_model_id: m.provider_model_id || model.name,
+                backend_refs: endpoints.map((ep: Endpoint) => ({
+                  name: ep.name,
+                  endpoint: ep.endpoint,
+                  protocol: ep.protocol,
+                  weight: ep.weight,
+                  api_key: data.access_key || undefined,
+                })),
                 pricing: {
                   currency: data.currency,
                   prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
@@ -2675,14 +2804,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     }
 
     const handleDeleteModelAction = async (modelName: string) => {
-      const newConfig = { ...config }
+      if (!config) {
+        return
+      }
+      const newConfig = cloneConfig(config)
       if (isPythonCLI && newConfig.providers?.models) {
-        newConfig.providers = { ...newConfig.providers }
+        const providers = ensureProviders(newConfig)
         type ModelType = NonNullable<ConfigData['providers']>['models'][number]
-        newConfig.providers.models = newConfig.providers.models.filter((m: ModelType) => m.name !== modelName)
+        providers.models = providers.models.filter((m: ModelType) => m.name !== modelName)
+        removeRoutingModelCard(newConfig, modelName)
         // Update default model if deleted
-        if (newConfig.providers.default_model === modelName) {
-          newConfig.providers.default_model = newConfig.providers.models[0]?.name || ''
+        const defaults = ensureProviderDefaults(newConfig)
+        if (defaults.default_model === modelName) {
+          defaults.default_model = providers.models[0]?.name || ''
         }
       } else if (newConfig.model_config) {
         delete newConfig.model_config[modelName]
@@ -2750,12 +2884,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         ],
         async (data) => {
           const newConfig = { ...config }
-          if (isPythonCLI && newConfig.providers) {
-            newConfig.providers = { ...newConfig.providers }
-            if (!newConfig.providers.reasoning_families) {
-              newConfig.providers.reasoning_families = {}
+          if (isPythonCLI) {
+            const defaults = ensureProviderDefaults(newConfig)
+            if (!defaults.reasoning_families) {
+              defaults.reasoning_families = {}
             }
-            newConfig.providers.reasoning_families[familyName] = data
+            defaults.reasoning_families[familyName] = data
           } else if (newConfig.reasoning_families) {
             newConfig.reasoning_families[familyName] = data
           }
@@ -2799,12 +2933,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           delete data.name
 
           const newConfig = { ...config }
-          if (isPythonCLI && newConfig.providers) {
-            newConfig.providers = { ...newConfig.providers }
-            if (!newConfig.providers.reasoning_families) {
-              newConfig.providers.reasoning_families = {}
+          if (isPythonCLI) {
+            const defaults = ensureProviderDefaults(newConfig)
+            if (!defaults.reasoning_families) {
+              defaults.reasoning_families = {}
             }
-            newConfig.providers.reasoning_families[familyName] = data
+            defaults.reasoning_families[familyName] = data
           } else {
             if (!newConfig.reasoning_families) {
               newConfig.reasoning_families = {}
@@ -2823,10 +2957,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       }
 
       const newConfig = { ...config }
-      if (isPythonCLI && newConfig.providers?.reasoning_families) {
-        newConfig.providers = { ...newConfig.providers }
-        newConfig.providers.reasoning_families = { ...newConfig.providers.reasoning_families }
-        delete newConfig.providers.reasoning_families[familyName]
+      if (isPythonCLI && newConfig.providers?.defaults?.reasoning_families) {
+        const defaults = ensureProviderDefaults(newConfig)
+        defaults.reasoning_families = { ...defaults.reasoning_families }
+        delete defaults.reasoning_families[familyName]
       } else if (newConfig.reasoning_families) {
         delete newConfig.reasoning_families[familyName]
       }
@@ -2911,14 +3045,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     )
   }
 
-  // Router Configuration Section - System defaults from router-defaults.yaml
+  // Global Runtime section - canonical global override editor backed by effective router defaults
   const renderRouterConfigSection = () => (
-    <ConfigPageRouterConfigSection
-      config={config}
-      routerConfig={routerConfig}
-      toolsData={toolsData}
-      toolsLoading={toolsLoading}
-      toolsError={toolsError}
+          <ConfigPageRouterConfigSection
+            config={config}
+            toolsData={toolsData}
+            toolsLoading={toolsLoading}
+            toolsError={toolsError}
       isReadonly={isReadonly}
       openEditModal={openEditModal}
       saveConfig={saveConfig}
@@ -2992,7 +3125,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
       <RoutingPresetModal
         isOpen={presetModalOpen}
-        defaultModel={config?.providers?.default_model || ''}
+        defaultModel={getDefaultModel()}
         selectedPresetId={selectedRoutingPresetId}
         conflicts={selectedPresetConflicts}
         error={presetApplyError}

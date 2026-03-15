@@ -95,8 +95,8 @@ func denormalizeProviders(raw map[string]interface{}) {
 		if len(models) > 0 {
 			providers["models"] = models
 		}
-		delete(raw, "vllm_endpoints")
 	}
+	delete(raw, "vllm_endpoints")
 	delete(raw, "model_config")
 
 	// Hoist simple keys into providers
@@ -603,38 +603,21 @@ func moveKey(src, dst map[string]interface{}, key string) {
 	}
 }
 
-// EmitHelm wraps a RouterConfig into a Helm values.yaml structure compatible
-// with the semantic-router Helm chart (deploy/helm/semantic-router/).
-//
-// The chart's ConfigMap template renders `.Values.config` as the routing config
-// (config.yaml), so we nest the RouterConfig under a `config:` key and prune
-// infrastructure zero values just like EmitUserYAML does for clean output.
+// EmitHelm emits a Helm values fragment that only carries the DSL-owned routing
+// surface under the chart's canonical `config:` key.
 func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
-	flatBytes, err := yaml.Marshal(cfg)
-	if err != nil {
-		return nil, err
-	}
-	var raw map[string]interface{}
-	if err := yaml.Unmarshal(flatBytes, &raw); err != nil {
-		return nil, err
+	type helmValuesConfig struct {
+		Version string                  `yaml:"version"`
+		Routing config.CanonicalRouting `yaml:"routing"`
 	}
 
-	// Remove zero-value infrastructure sections
-	pruneZeroValueInfra(raw)
-
-	// Remove strategy if empty
-	if v, ok := raw["strategy"]; ok {
-		if s, ok := v.(string); ok && s == "" {
-			delete(raw, "strategy")
-		}
-	}
-
-	// Wrap in Helm values structure
 	values := map[string]interface{}{
-		"config": raw,
+		"config": helmValuesConfig{
+			Version: "v0.3",
+			Routing: config.CanonicalRoutingFromRouterConfig(cfg),
+		},
 	}
 
-	// Build ordered output
 	doc := &yaml.Node{Kind: yaml.DocumentNode}
 	mapNode := &yaml.Node{Kind: yaml.MappingNode}
 	addKeyValue(mapNode, "config", values["config"])

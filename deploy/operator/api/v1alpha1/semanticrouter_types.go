@@ -61,7 +61,11 @@ type SemanticRouterSpec struct {
 	// +optional
 	Persistence PersistenceSpec `json:"persistence,omitempty"`
 
-	// Configuration for the semantic router
+	// Configuration overrides merged into the canonical v0.3 config.yaml.
+	// Router-wide runtime overrides land under config.global.router/services/stores/
+	// integrations/model_catalog, with model-backed modules nested under
+	// config.global.model_catalog.modules. Provider defaults land under
+	// config.providers.defaults.
 	// +optional
 	Config ConfigSpec `json:"config,omitempty"`
 
@@ -69,7 +73,9 @@ type SemanticRouterSpec struct {
 	// +optional
 	ToolsDb []ToolEntry `json:"toolsDb,omitempty"`
 
-	// VLLMEndpoints configuration - generates vllm_endpoints and model_config in config.yaml
+	// VLLMEndpoints is a Kubernetes-native backend discovery adapter.
+	// It generates canonical config.providers.models[].backend_refs
+	// and config.routing.modelCards entries.
 	// +optional
 	VLLMEndpoints []VLLMEndpointSpec `json:"vllmEndpoints,omitempty"`
 

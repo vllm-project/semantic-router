@@ -1,8 +1,11 @@
 /**
  * Configuration types for vLLM Semantic Router Dashboard
- * 
- * This file defines TypeScript interfaces for the Python CLI config format.
- * The format uses: providers, signals, decisions (not vllm_endpoints, model_config)
+ *
+ * Public config uses the canonical v0.3 layout:
+ *   version / listeners / providers / routing / global
+ *
+ * Some interfaces below are dashboard view-model adapters that flatten
+ * routing-owned data for editing and legacy read-only fallback handling.
  */
 
 // =============================================================================
@@ -14,18 +17,31 @@ export interface ProviderEndpoint {
   weight: number
   endpoint: string  // e.g., "host.docker.internal:8000" or "api.openai.com"
   protocol: 'http' | 'https'
+  base_url?: string
+  provider?: 'openai' | 'anthropic'
+  api_key?: string
+  api_key_env?: string
 }
 
 export interface ProviderModel {
   name: string  // e.g., "openai/gpt-oss-120b"
-  reasoning_family?: string
-  endpoints: ProviderEndpoint[]
+  provider_model_id?: string
+  backend_refs?: ProviderEndpoint[]
+  endpoints?: ProviderEndpoint[]
   access_key?: string
+  api_format?: 'anthropic'
+  external_model_ids?: Record<string, string>
   pricing?: {
     currency?: string
     prompt_per_1m?: number
     completion_per_1m?: number
   }
+}
+
+export interface ProviderDefaults {
+  default_model?: string
+  reasoning_families?: Record<string, ReasoningFamily>
+  default_reasoning_effort?: string
 }
 
 export interface ReasoningFamily {
@@ -35,9 +51,7 @@ export interface ReasoningFamily {
 
 export interface Providers {
   models: ProviderModel[]
-  default_model: string
-  reasoning_families?: Record<string, ReasoningFamily>
-  default_reasoning_effort?: string
+  defaults?: ProviderDefaults
 }
 
 // =============================================================================

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v2"
@@ -58,10 +59,44 @@ func Parse(configPath string) (*RouterConfig, error) {
 	}
 	logging.Debugf("[config.Parse] Read config file: size=%d bytes", len(data))
 
-	cfg := &RouterConfig{}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		logging.Debugf("[config.Parse] ERROR parsing YAML: %v", err)
-		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	return ParseYAMLBytes(data)
+}
+
+// ParseYAMLBytes parses config YAML content without touching the filesystem.
+func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
+	var raw map[string]interface{}
+	if unmarshalErr := yaml.Unmarshal(data, &raw); unmarshalErr != nil {
+		logging.Debugf("[config.Parse] ERROR parsing YAML map: %v", unmarshalErr)
+		return nil, fmt.Errorf("failed to parse config file: %w", unmarshalErr)
+	}
+	if deprecated := deprecatedUserConfigFields(raw); len(deprecated) > 0 {
+		return nil, fmt.Errorf(
+			"deprecated config fields are no longer supported: %s; rewrite the file to canonical v0.3 providers/routing/global or run `vllm-sr config migrate --config old-config.yaml`",
+			strings.Join(deprecated, ", "),
+		)
+	}
+
+	var cfg *RouterConfig
+	var err error
+	switch {
+	case isCanonicalConfig(raw):
+		canonical := &CanonicalConfig{}
+		if unmarshalErr := yaml.Unmarshal(data, canonical); unmarshalErr != nil {
+			logging.Debugf("[config.Parse] ERROR parsing canonical YAML: %v", unmarshalErr)
+			return nil, fmt.Errorf("failed to parse canonical config file: %w", unmarshalErr)
+		}
+		canonical.globalOverrideRaw = raw["global"]
+		cfg, err = normalizeCanonicalConfig(canonical)
+		if err != nil {
+			logging.Debugf("[config.Parse] ERROR normalizing canonical YAML: %v", err)
+			return nil, err
+		}
+	default:
+		cfg = &RouterConfig{}
+		if unmarshalErr := yaml.Unmarshal(data, cfg); unmarshalErr != nil {
+			logging.Debugf("[config.Parse] ERROR parsing legacy runtime YAML: %v", unmarshalErr)
+			return nil, fmt.Errorf("failed to parse config file: %w", unmarshalErr)
+		}
 	}
 
 	// Log decisions found after YAML unmarshal
@@ -76,6 +111,10 @@ func Parse(configPath string) (*RouterConfig, error) {
 		cfg.MoMRegistry = ToLegacyRegistry()
 	}
 
+	if cfg.VectorStore != nil {
+		cfg.VectorStore.ApplyDefaults()
+	}
+
 	// Validation after parsing
 	if err := validateConfigStructure(cfg); err != nil {
 		logging.Debugf("[config.Parse] ERROR validation failed: %v", err)
@@ -84,6 +123,78 @@ func Parse(configPath string) (*RouterConfig, error) {
 
 	logging.Debugf("[config.Parse] Config loaded successfully: decisions=%d", len(cfg.Decisions))
 	return cfg, nil
+}
+
+func deprecatedUserConfigFields(raw map[string]interface{}) []string {
+	fields := []string{}
+
+	routing := nestedStringMap(raw["routing"])
+	if _, ok := routing["models"]; ok {
+		fields = append(fields, "routing.models")
+	}
+
+	providers := nestedStringMap(raw["providers"])
+	for _, key := range []string{
+		"model_targets",
+		"backends",
+		"auth_profiles",
+		"default_model",
+		"reasoning_families",
+		"default_reasoning_effort",
+	} {
+		if _, ok := providers[key]; ok {
+			fields = append(fields, "providers."+key)
+		}
+	}
+
+	if models, ok := providers["models"].([]interface{}); ok {
+		for index, rawModel := range models {
+			model := nestedStringMap(rawModel)
+			for _, key := range []string{
+				"access",
+				"endpoints",
+				"access_key",
+				"reasoning_family",
+				"param_size",
+				"context_window_size",
+				"description",
+				"capabilities",
+				"quality_score",
+				"modality",
+				"tags",
+			} {
+				if _, ok := model[key]; ok {
+					fields = append(fields, fmt.Sprintf("providers.models[%d].%s", index, key))
+				}
+			}
+		}
+	}
+
+	global := nestedStringMap(raw["global"])
+	if _, ok := global["modules"]; ok {
+		fields = append(fields, "global.modules")
+	}
+
+	return fields
+}
+
+func nestedStringMap(raw interface{}) map[string]interface{} {
+	switch typed := raw.(type) {
+	case map[string]interface{}:
+		return typed
+	case map[interface{}]interface{}:
+		converted := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			keyString, ok := key.(string)
+			if !ok {
+				continue
+			}
+			converted[keyString] = value
+		}
+		return converted
+	default:
+		return map[string]interface{}{}
+	}
 }
 
 // Replace replaces the globally cached config. It is safe for concurrent readers.

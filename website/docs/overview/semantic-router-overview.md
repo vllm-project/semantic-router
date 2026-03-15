@@ -156,6 +156,6 @@ if (has_math_keywords AND is_math_domain) OR has_high_math_embedding:
 
 ## Next Steps
 
-- [What is Collective Intelligence?](collective-intelligence.md) - How signals create system intelligence
-- [What is Signal-Driven Decision?](signal-driven-decisions.md) - Deep dive into the decision engine
-- [Configuration Guide](../installation/configuration.md) - Set up your semantic router
+- [What is Collective Intelligence?](collective-intelligence) - How signals create system intelligence
+- [What is Signal-Driven Decision?](signal-driven-decisions) - Deep dive into the decision engine
+- [Configuration Guide](../installation/configuration) - Set up your semantic router

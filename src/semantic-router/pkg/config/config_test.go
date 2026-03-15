@@ -1491,7 +1491,7 @@ semantic_cache:
   backend_type: "milvus"
   similarity_threshold: 0.9
   ttl_seconds: 7200
-  backend_config_path: "config/semantic-cache/milvus.yaml"
+  backend_config_path: "examples/runtime/semantic-cache/milvus.yaml"
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -1505,7 +1505,7 @@ semantic_cache:
 				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.9)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(7200))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("config/semantic-cache/milvus.yaml"))
+				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("examples/runtime/semantic-cache/milvus.yaml"))
 
 				// MaxEntries should be ignored for Milvus backend
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
@@ -1946,7 +1946,7 @@ semantic_cache:
   backend_type: "milvus"
   similarity_threshold: 0.85
   ttl_seconds: 86400  # 24 hours
-  backend_config_path: "config/semantic-cache/milvus.yaml"
+  backend_config_path: "examples/runtime/semantic-cache/milvus.yaml"
 
 categories:
   - name: "production"
@@ -1976,7 +1976,7 @@ default_model: "gpt-4"
 				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.85)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(86400))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("config/semantic-cache/milvus.yaml"))
+				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("examples/runtime/semantic-cache/milvus.yaml"))
 
 				// Verify threshold resolution
 				threshold := cfg.GetCacheSimilarityThreshold()
@@ -2001,7 +2001,7 @@ semantic_cache:
 
   # Production configuration (commented out)
   # backend_type: "milvus"
-  # backend_config_path: "config/semantic-cache/milvus.yaml"
+  # backend_config_path: "examples/runtime/semantic-cache/milvus.yaml"
   # max_entries is ignored for Milvus
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)

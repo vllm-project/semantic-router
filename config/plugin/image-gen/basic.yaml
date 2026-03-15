@@ -1,0 +1,5 @@
+plugin:
+  type: image_gen
+  configuration:
+    enabled: true
+    backend: image-primary

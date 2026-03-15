@@ -515,7 +515,7 @@ func TestUpdateConfigHandler_ReadonlyMode(t *testing.T) {
 	}
 }
 
-// TestUpdateRouterDefaultsHandler_ReadonlyMode verifies that readonly mode blocks router defaults updates
+// TestUpdateRouterDefaultsHandler_ReadonlyMode verifies that readonly mode blocks global runtime updates.
 func TestUpdateRouterDefaultsHandler_ReadonlyMode(t *testing.T) {
 	tempDir := t.TempDir()
 
@@ -524,7 +524,7 @@ func TestUpdateRouterDefaultsHandler_ReadonlyMode(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(updateBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/router/config/defaults/update", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/global/update", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -542,12 +542,12 @@ func TestUpdateRouterDefaultsHandler_ReadonlyMode(t *testing.T) {
 		t.Errorf("Expected 'read-only mode' in error message, got: %s", body)
 	}
 
-	// Ensure router-defaults file was not created
-	routerDefaultsPath := filepath.Join(tempDir, ".vllm-sr", "router-defaults.yaml")
-	if _, err := os.Stat(routerDefaultsPath); err == nil {
-		t.Errorf("Expected router-defaults.yaml not to be created in read-only mode")
+	// Ensure no defaults reference file was created as a side effect.
+	defaultsPath := filepath.Join(tempDir, ".vllm-sr", "global-defaults.yaml")
+	if _, err := os.Stat(defaultsPath); err == nil {
+		t.Errorf("Expected global-defaults.yaml not to be created in read-only mode")
 	} else if !os.IsNotExist(err) {
-		t.Errorf("Unexpected error checking router-defaults.yaml: %v", err)
+		t.Errorf("Unexpected error checking global-defaults.yaml: %v", err)
 	}
 }
 

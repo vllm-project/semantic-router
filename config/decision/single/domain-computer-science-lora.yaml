@@ -1,0 +1,14 @@
+routing:
+  decisions:
+    - name: computer-science-route
+      description: Route computer science requests to the technical LoRA adapter.
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: "computer science"
+      modelRefs:
+        - model: llama2-7b
+          lora_name: technical-lora
+          use_reasoning: true

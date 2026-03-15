@@ -1,14 +1,13 @@
 """Show config command implementation."""
 
 import sys
-import yaml
 from pathlib import Path
 
-from cli.parser import parse_user_config, ConfigParseError
-from cli.defaults import load_embedded_defaults, load_defaults
-from cli.merger import merge_configs
-from cli.validator import validate_user_config, print_validation_errors
+import yaml
+
+from cli.parser import ConfigParseError, parse_user_config
 from cli.utils import getLogger
+from cli.validator import print_validation_errors, validate_user_config
 
 log = getLogger(__name__)
 
@@ -20,7 +19,7 @@ def print_section_header(title: str):
     print("=" * 80)
 
 
-def print_yaml_section(data: dict, max_lines: int = None):
+def print_yaml_section(data: dict, max_lines: int | None = None):
     """Print YAML data with optional line limit."""
     yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False)
     lines = yaml_str.split("\n")
@@ -82,18 +81,10 @@ def show_config_command(
 
     # Generate router configuration
     if show_router:
-        print_section_header("ROUTER CONFIGURATION (router-config.yaml)")
-
-        # Check if router config exists
-        router_config_path = Path(output_dir) / "router-config.yaml"
-        if router_config_path.exists():
-            log.info(f"Loading existing: {router_config_path}")
-            with open(router_config_path, "r") as f:
-                router_config = yaml.safe_load(f)
-        else:
-            log.info("Generating router configuration...")
-            defaults = load_defaults(output_dir)
-            router_config = merge_configs(user_config, defaults)
+        print_section_header("ROUTER CONFIGURATION (config.yaml)")
+        router_config_path = Path(config_path)
+        log.info("Router now reads canonical config directly")
+        router_config = user_config.model_dump(by_alias=True, exclude_none=True)
 
         if full:
             print_yaml_section(router_config)
@@ -107,7 +98,7 @@ def show_config_command(
         envoy_config_path = Path(output_dir) / "envoy-config.yaml"
         if envoy_config_path.exists():
             log.info(f"Loading existing: {envoy_config_path}")
-            with open(envoy_config_path, "r") as f:
+            with open(envoy_config_path) as f:
                 envoy_config = yaml.safe_load(f)
 
             if full:
@@ -127,16 +118,13 @@ def show_config_command(
         print(f"User config: {config_path}")
 
     if show_router:
-        if router_config_path.exists():
-            print(f"Router config: {router_config_path}")
-        else:
-            print(f"⚠ Router config: Not generated yet")
+        print(f"Router config: {router_config_path}")
 
     if show_envoy:
         if envoy_config_path.exists():
             print(f"Envoy config: {envoy_config_path}")
         else:
-            print(f"⚠ Envoy config: Not generated yet")
+            print("⚠ Envoy config: Not generated yet")
 
     print("\nOptions:")
     print("  --full          Show full configuration without truncation")

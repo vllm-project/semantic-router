@@ -1,7 +1,10 @@
 {{- $config := deepCopy .Values.config -}}
-{{- $semanticCache := (get $config "semantic_cache") | default (dict) -}}
-{{- $responseAPI := (get $config "response_api") | default (dict) -}}
-{{- $observability := (get $config "observability") | default (dict) -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $stores := (get $global "stores") | default (dict) -}}
+{{- $services := (get $global "services") | default (dict) -}}
+{{- $semanticCache := (get $stores "semantic_cache") | default (dict) -}}
+{{- $responseAPI := (get $services "response_api") | default (dict) -}}
+{{- $observability := (get $services "observability") | default (dict) -}}
 {{- $tracing := (get $observability "tracing") | default (dict) -}}
 {{- $tracingExporter := (get $tracing "exporter") | default (dict) -}}
 {{- $tracingResource := (get $tracing "resource") | default (dict) -}}
@@ -39,9 +42,15 @@
 {{- end -}}
 {{- $_ := set $observability "tracing" $tracing -}}
 
-{{- $_ := set $config "semantic_cache" $semanticCache -}}
-{{- $_ := set $config "response_api" $responseAPI -}}
-{{- $_ := set $config "observability" $observability -}}
+{{- $_ := set $stores "semantic_cache" $semanticCache -}}
+{{- $_ := set $services "response_api" $responseAPI -}}
+{{- $_ := set $services "observability" $observability -}}
+{{- $_ := set $global "stores" $stores -}}
+{{- $_ := set $global "services" $services -}}
+{{- $_ := set $config "global" $global -}}
+{{- if not (get $config "version") -}}
+{{- $_ := set $config "version" "v0.3" -}}
+{{- end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:

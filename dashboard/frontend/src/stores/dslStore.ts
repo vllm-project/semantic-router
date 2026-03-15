@@ -7,26 +7,25 @@
  * - Editor mode switching (DSL / Visual / NL)
  * - Debounced validation on keystroke
  * - Full compile on demand
- * - Decompile (YAML → DSL) for import workflows
+ * - Decompile router YAML → routing-only DSL for import workflows
  * - Format (canonical pretty-print)
  */
 
 import { create } from 'zustand'
 import { wasmBridge } from '@/lib/wasm'
 import {
+  updateModel,
+  addModel as addModelMut,
+  deleteModel as deleteModelMut,
   updateSignal,
   addSignal as addSignalMut,
   deleteSignal as deleteSignalMut,
   updatePlugin,
   addPlugin as addPluginMut,
   deletePlugin as deletePluginMut,
-  updateBackend,
-  addBackend as addBackendMut,
-  deleteBackend as deleteBackendMut,
   deleteRoute as deleteRouteMut,
   updateRoute as updateRouteMut,
   addRoute as addRouteMut,
-  updateGlobal as updateGlobalMut,
 } from '@/lib/dslMutations'
 import type { RouteInput } from '@/lib/dslMutations'
 import type {
@@ -106,7 +105,7 @@ interface DSLActions {
   /** Parse DSL → AST + diagnostics + symbols (for Visual Builder). */
   parseAST(): void
 
-  /** Decompile YAML → DSL (for import from existing config). */
+  /** Decompile YAML → routing-only DSL (for import from existing config). */
   decompile(yaml: string): string | null
 
   /** Format the current DSL source. */
@@ -121,13 +120,22 @@ interface DSLActions {
   /** Load DSL source from external input (e.g., file import). */
   loadDsl(source: string): void
 
-  /** Load YAML and decompile to DSL. */
+  /** Load YAML and decompile only its routing section to DSL. */
   importYaml(yaml: string): void
 
-  /** Fetch current router config YAML and decompile to DSL. */
+  /** Fetch current router config YAML and decompile only its routing section to DSL. */
   loadFromRouter(): Promise<void>
 
   // --- Visual Builder mutations (Phase 2) ---
+
+  /** Update a model's fields in DSL source text, then re-parse AST. */
+  mutateModel(name: string, fields: Record<string, unknown>): void
+
+  /** Add a new model to DSL source text, then re-parse AST. */
+  addModel(name: string, fields: Record<string, unknown>): void
+
+  /** Delete a model from DSL source text, then re-parse AST. */
+  deleteModel(name: string): void
 
   /** Update a signal's fields in DSL source text, then re-parse AST. */
   mutateSignal(signalType: string, name: string, fields: Record<string, unknown>): void
@@ -147,15 +155,6 @@ interface DSLActions {
   /** Delete a plugin declaration, then re-parse AST. */
   deletePlugin(name: string, pluginType: string): void
 
-  /** Update a backend declaration's fields, then re-parse AST. */
-  mutateBackend(backendType: string, name: string, fields: Record<string, unknown>): void
-
-  /** Add a new backend declaration, then re-parse AST. */
-  addBackend(backendType: string, name: string, fields: Record<string, unknown>): void
-
-  /** Delete a backend declaration, then re-parse AST. */
-  deleteBackend(backendType: string, name: string): void
-
   /** Delete a route declaration, then re-parse AST. */
   deleteRoute(name: string): void
 
@@ -164,9 +163,6 @@ interface DSLActions {
 
   /** Add a new route, then re-parse AST. */
   addRoute(name: string, input: RouteInput): void
-
-  /** Update the GLOBAL block's fields, then re-parse AST. */
-  mutateGlobal(fields: Record<string, unknown>): void
 
   // --- Deploy actions ---
 
@@ -410,6 +406,29 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
 
   // --- Visual Builder mutations (Phase 2) ---
 
+  mutateModel(name: string, fields: Record<string, unknown>) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = updateModel(dslSource, name, fields)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  addModel(name: string, fields: Record<string, unknown>) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = addModelMut(dslSource, name, fields)
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  deleteModel(name: string) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = deleteModelMut(dslSource, name)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
   mutateSignal(signalType: string, name: string, fields: Record<string, unknown>) {
     const { dslSource, wasmReady } = get()
     const newSrc = updateSignal(dslSource, signalType, name, fields)
@@ -456,29 +475,6 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (wasmReady) get().parseAST()
   },
 
-  mutateBackend(backendType: string, name: string, fields: Record<string, unknown>) {
-    const { dslSource, wasmReady } = get()
-    const newSrc = updateBackend(dslSource, backendType, name, fields)
-    if (newSrc === dslSource) return
-    set({ dslSource: newSrc, dirty: true })
-    if (wasmReady) get().parseAST()
-  },
-
-  addBackend(backendType: string, name: string, fields: Record<string, unknown>) {
-    const { dslSource, wasmReady } = get()
-    const newSrc = addBackendMut(dslSource, backendType, name, fields)
-    set({ dslSource: newSrc, dirty: true })
-    if (wasmReady) get().parseAST()
-  },
-
-  deleteBackend(backendType: string, name: string) {
-    const { dslSource, wasmReady } = get()
-    const newSrc = deleteBackendMut(dslSource, backendType, name)
-    if (newSrc === dslSource) return
-    set({ dslSource: newSrc, dirty: true })
-    if (wasmReady) get().parseAST()
-  },
-
   deleteRoute(name: string) {
     const { dslSource, wasmReady } = get()
     const newSrc = deleteRouteMut(dslSource, name)
@@ -498,14 +494,6 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   addRoute(name: string, input: RouteInput) {
     const { dslSource, wasmReady } = get()
     const newSrc = addRouteMut(dslSource, name, input)
-    set({ dslSource: newSrc, dirty: true })
-    if (wasmReady) get().parseAST()
-  },
-
-  mutateGlobal(fields: Record<string, unknown>) {
-    const { dslSource, wasmReady } = get()
-    const newSrc = updateGlobalMut(dslSource, fields)
-    if (newSrc === dslSource) return
     set({ dslSource: newSrc, dirty: true })
     if (wasmReady) get().parseAST()
   },

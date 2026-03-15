@@ -137,39 +137,42 @@ All MoM models are:
 
 ### Using MoM Models in Router
 
-MoM models are pre-configured in `router-defaults.yaml`:
+MoM models are configured through the canonical `global.model_catalog` block, with module-level settings living under `global.model_catalog.modules`:
 
 ```yaml
-# Domain classification
-classifier:
-  category_model:
-    model_id: "models/mom-domain-classifier"
-    threshold: 0.6
-    use_cpu: true
-
-# PII detection
-classifier:
-  pii_model:
-    model_id: "models/mom-pii-classifier"
-    threshold: 0.9
-    use_cpu: true
-
-# Jailbreak protection
-prompt_guard:
-  model_id: "models/mom-jailbreak-classifier"
-  threshold: 0.7
-  use_cpu: true
+global:
+  model_catalog:
+    system:
+      domain_classifier: "models/mom-domain-classifier"
+      pii_classifier: "models/mom-pii-classifier"
+      prompt_guard: "models/mom-jailbreak-classifier"
+    modules:
+      classifier:
+        domain:
+          model_ref: "domain_classifier"
+          threshold: 0.6
+          use_cpu: true
+        pii:
+          model_ref: "pii_classifier"
+          threshold: 0.9
+          use_cpu: true
+      prompt_guard:
+        model_ref: "prompt_guard"
+        threshold: 0.7
+        use_cpu: true
 ```
 
-### Custom Model Registry
+### Custom System Bindings
 
-Override the default registry in your `config.yaml`:
+Override the built-in system-model bindings in your `config.yaml`:
 
 ```yaml
-mom_registry:
-  "models/mom-domain-classifier": "your-org/custom-domain-classifier"
-  "models/mom-pii-classifier": "your-org/custom-pii-detector"
-  "models/mom-embedding-pro": "your-org/custom-embeddings"
+global:
+  model_catalog:
+    system:
+      domain_classifier: "models/your-domain-classifier"
+      pii_classifier: "models/your-pii-classifier"
+      prompt_guard: "models/your-prompt-guard"
 ```
 
 ## Model Architecture
@@ -194,7 +197,7 @@ Newer models use ModernBERT for better performance:
 
 ## Next Steps
 
-- **[Signal-Driven Decisions](./signal-driven-decisions.md)** - Learn how MoM models power routing decisions
-- **[Domain Routing](../tutorials/intelligent-route/domain-routing.md)** - Use mom-domain-classifier for routing
-- **[PII Detection](../tutorials/content-safety/pii-detection.md)** - Configure mom-pii-classifier
-- **[Semantic Cache](../tutorials/semantic-cache/in-memory-cache.md)** - Use MoM embedding models
+- **[Signal-Driven Decisions](./signal-driven-decisions)** - Learn how MoM models power routing decisions
+- **[Routing Signals](../tutorials/signal/routing)** - Use mom-domain-classifier for routing
+- **[Safety Signals](../tutorials/signal/safety)** - Configure mom-pii-classifier
+- **[Retrieval and Memory Plugins](../tutorials/plugin/retrieval-and-memory)** - Use MoM embedding models

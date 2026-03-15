@@ -1,0 +1,21 @@
+routing:
+  signals:
+    embeddings:
+      - name: technical_support
+        threshold: 0.75
+        aggregation_method: max
+        candidates:
+          - how to configure the system
+          - installation guide
+          - troubleshooting steps
+          - error message explanation
+          - setup instructions
+      - name: account_management
+        threshold: 0.72
+        aggregation_method: max
+        candidates:
+          - password reset
+          - account settings
+          - profile update
+          - subscription management
+          - billing information

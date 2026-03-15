@@ -15,10 +15,63 @@ import {
   CustomSelect,
   FieldEditor,
   GenericFieldsEditor,
+  ModelIcon,
   PluginIcon,
   SignalIcon,
 } from "./builderPageFormPrimitives";
 import { PluginSchemaEditor } from "./builderPageSharedDslEditors";
+
+const AddModelForm: React.FC<{
+  onAdd: (name: string, fields: Record<string, unknown>) => void;
+  onCancel: () => void;
+}> = ({ onAdd, onCancel }) => {
+  const [name, setName] = useState("");
+  const [fields, setFields] = useState<Record<string, unknown>>({});
+
+  const handleSubmit = useCallback(() => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onAdd(trimmed, fields);
+  }, [name, fields, onAdd]);
+
+  return (
+    <div className={styles.editorPanel}>
+      <div className={styles.editorHeader}>
+        <div className={styles.editorTitle}>
+          <ModelIcon className={styles.statIcon} />
+          New Model
+        </div>
+        <div className={styles.editorActions}>
+          <button className={styles.toolbarBtn} onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            className={styles.toolbarBtnPrimary}
+            onClick={handleSubmit}
+            disabled={!name.trim()}
+          >
+            Create
+          </button>
+        </div>
+      </div>
+
+      <div className={styles.fieldGroup}>
+        <label className={styles.fieldLabel}>
+          Name <span style={{ color: "var(--color-danger)" }}>*</span>
+        </label>
+        <input
+          className={styles.fieldInput}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder='e.g. "qwen3:32b"'
+          autoFocus
+        />
+      </div>
+
+      <GenericFieldsEditor fields={fields} onUpdate={setFields} />
+    </div>
+  );
+};
 
 const AddSignalForm: React.FC<{
   onAdd: (
@@ -276,4 +329,4 @@ const AddBackendForm: React.FC<{
   );
 };
 
-export { AddBackendForm, AddPluginForm, AddSignalForm };
+export { AddBackendForm, AddModelForm, AddPluginForm, AddSignalForm };

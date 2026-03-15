@@ -9,14 +9,13 @@ import type { RouteInput } from "@/lib/dslMutations";
 
 import styles from "./BuilderPage.module.css";
 import {
-  BackendIcon,
-  GlobalIcon,
+  ModelIcon,
   PluginIcon,
   RouteIcon,
   SignalIcon,
 } from "./builderPageFormPrimitives";
 import {
-  AddBackendForm,
+  AddModelForm,
   AddPluginForm,
   AddSignalForm,
 } from "./builderPageEntityForms";
@@ -44,16 +43,16 @@ interface VisualModeProps {
   sections: SectionState;
   onToggleSection: (key: keyof SectionState) => void;
   selectedEntity: BuilderSelectedEntity;
+  modelCount: number;
   signalCount: number;
   routeCount: number;
   pluginCount: number;
-  backendCount: number;
-  hasGlobal: boolean;
   wasmReady: boolean;
   wasmError: string | null;
   addingEntity: EntityKind | null;
   onSetAddingEntity: (kind: EntityKind | null) => void;
   onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void;
+  onUpdateModelFields: (name: string, fields: Record<string, unknown>) => void;
   onUpdateSignalFields: (
     signalType: string,
     name: string,
@@ -64,11 +63,7 @@ interface VisualModeProps {
     pluginType: string,
     fields: Record<string, unknown>,
   ) => void;
-  onUpdateBackendFields: (
-    backendType: string,
-    name: string,
-    fields: Record<string, unknown>,
-  ) => void;
+  onAddModel: (name: string, fields: Record<string, unknown>) => void;
   onAddSignal: (
     signalType: string,
     name: string,
@@ -79,13 +74,7 @@ interface VisualModeProps {
     pluginType: string,
     fields: Record<string, unknown>,
   ) => void;
-  onAddBackend: (
-    backendType: string,
-    name: string,
-    fields: Record<string, unknown>,
-  ) => void;
   onUpdateRoute: (name: string, input: RouteInput) => void;
-  onUpdateGlobalFields: (fields: Record<string, unknown>) => void;
   onAddRoute: (name: string, input: RouteInput) => void;
   errorCount: number;
   isValid: boolean;
@@ -100,24 +89,22 @@ const VisualMode: React.FC<VisualModeProps> = ({
   sections,
   onToggleSection,
   selectedEntity,
+  modelCount,
   signalCount,
   routeCount,
   pluginCount,
-  backendCount,
-  hasGlobal,
   wasmReady,
   wasmError,
   addingEntity,
   onSetAddingEntity,
   onDeleteEntity,
+  onUpdateModelFields,
   onUpdateSignalFields,
   onUpdatePluginFields,
-  onUpdateBackendFields,
+  onAddModel,
   onAddSignal,
   onAddPlugin,
-  onAddBackend,
   onUpdateRoute,
-  onUpdateGlobalFields,
   onAddRoute,
   errorCount,
   isValid,
@@ -145,8 +132,15 @@ const VisualMode: React.FC<VisualModeProps> = ({
       [],
     [ast?.plugins],
   );
-  // Collect available model names from all routes for selection
+  const semanticModels = useMemo(
+    () => ast?.models?.map((model) => model.name) ?? [],
+    [ast?.models],
+  );
+  // Collect available model names for route selection.
   const availableModels = useMemo(() => {
+    if (semanticModels.length > 0) {
+      return [...semanticModels].sort()
+    }
     const modelSet = new Set<string>();
     ast?.routes?.forEach((r) =>
       r.models.forEach((m) => {
@@ -154,7 +148,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
       }),
     );
     return Array.from(modelSet).sort();
-  }, [ast?.routes]);
+  }, [ast?.routes, semanticModels]);
 
   // Validation panel state
   const [validationOpen, setValidationOpen] = useState(true);
@@ -232,6 +226,36 @@ const VisualMode: React.FC<VisualModeProps> = ({
             </svg>
             Dashboard
           </div>
+
+          <SidebarSection
+            title="Models"
+            count={modelCount}
+            open={sections.models}
+            onToggle={() => onToggleSection("models")}
+            onAdd={() => {
+              onSetAddingEntity("model");
+              onSelect(null);
+            }}
+          >
+            {ast?.models?.map((model) => (
+              <li
+                key={model.name}
+                className={
+                  selection?.kind === "model" && selection.name === model.name
+                    ? styles.sidebarItemActive
+                    : styles.sidebarItem
+                }
+                onClick={() => {
+                  onSetAddingEntity(null);
+                  onSelect({ kind: "model", name: model.name });
+                }}
+              >
+                <ModelIcon className={styles.sidebarItemIcon} />
+                <span className={styles.sidebarItemName}>{model.name}</span>
+                <span className={styles.sidebarItemType}>catalog</span>
+              </li>
+            ))}
+          </SidebarSection>
 
           {/* Signals */}
           <SidebarSection
@@ -326,61 +350,6 @@ const VisualMode: React.FC<VisualModeProps> = ({
             ))}
           </SidebarSection>
 
-          {/* Backends */}
-          <SidebarSection
-            title="Backends"
-            count={backendCount}
-            open={sections.backends}
-            onToggle={() => onToggleSection("backends")}
-            onAdd={() => {
-              onSetAddingEntity("backend");
-              onSelect(null);
-            }}
-          >
-            {ast?.backends?.map((b) => (
-              <li
-                key={b.name}
-                className={
-                  selection?.kind === "backend" && selection.name === b.name
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
-                }
-                onClick={() => {
-                  onSetAddingEntity(null);
-                  onSelect({ kind: "backend", name: b.name });
-                }}
-              >
-                <BackendIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>{b.name}</span>
-                <span className={styles.sidebarItemType}>{b.backendType}</span>
-              </li>
-            ))}
-          </SidebarSection>
-
-          {/* Global */}
-          <SidebarSection
-            title="Global"
-            count={hasGlobal ? 1 : 0}
-            open={sections.global}
-            onToggle={() => onToggleSection("global")}
-          >
-            {hasGlobal && (
-              <li
-                className={
-                  selection?.kind === "global"
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
-                }
-                onClick={() => {
-                  onSetAddingEntity(null);
-                  onSelect({ kind: "global", name: "global" });
-                }}
-              >
-                <GlobalIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>Global Settings</span>
-              </li>
-            )}
-          </SidebarSection>
         </div>
 
         {/* Main panel */}
@@ -393,7 +362,12 @@ const VisualMode: React.FC<VisualModeProps> = ({
           )}
 
           <div className={styles.mainPanelContent}>
-            {addingEntity === "signal" ? (
+            {addingEntity === "model" ? (
+              <AddModelForm
+                onAdd={onAddModel}
+                onCancel={() => onSetAddingEntity(null)}
+              />
+            ) : addingEntity === "signal" ? (
               <AddSignalForm
                 onAdd={onAddSignal}
                 onCancel={() => onSetAddingEntity(null)}
@@ -401,11 +375,6 @@ const VisualMode: React.FC<VisualModeProps> = ({
             ) : addingEntity === "plugin" ? (
               <AddPluginForm
                 onAdd={onAddPlugin}
-                onCancel={() => onSetAddingEntity(null)}
-              />
-            ) : addingEntity === "backend" ? (
-              <AddBackendForm
-                onAdd={onAddBackend}
                 onCancel={() => onSetAddingEntity(null)}
               />
             ) : addingEntity === "route" ? (
@@ -419,11 +388,10 @@ const VisualMode: React.FC<VisualModeProps> = ({
             ) : !selection ? (
               <DashboardView
                 ast={ast}
+                modelCount={modelCount}
                 signalCount={signalCount}
                 routeCount={routeCount}
                 pluginCount={pluginCount}
-                backendCount={backendCount}
-                hasGlobal={hasGlobal}
                 isValid={isValid}
                 errorCount={errorCount}
                 onSelect={onSelect}
@@ -442,13 +410,11 @@ const VisualMode: React.FC<VisualModeProps> = ({
               <EntityDetailView
                 selection={selection}
                 entity={selectedEntity}
-                ast={ast}
                 onDeleteEntity={onDeleteEntity}
+                onUpdateModelFields={onUpdateModelFields}
                 onUpdateSignalFields={onUpdateSignalFields}
                 onUpdatePluginFields={onUpdatePluginFields}
-                onUpdateBackendFields={onUpdateBackendFields}
                 onUpdateRoute={onUpdateRoute}
-                onUpdateGlobalFields={onUpdateGlobalFields}
                 availableSignals={availableSignals}
                 availablePlugins={availablePlugins}
                 availableModels={availableModels}

@@ -4,19 +4,23 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"syscall/js"
 	"testing"
 )
 
-const validDSL = `SIGNAL keyword intent { operator: "any" keywords: ["hello"] threshold: 0.8 }
+const validDSL = `MODEL qwen {
+  modality: "text"
+  capabilities: ["chat"]
+}
+
+SIGNAL keyword intent { operator: "any" keywords: ["hello"] threshold: 0.8 }
 
 ROUTE r1 {
   PRIORITY 1
   WHEN keyword("intent")
   MODEL "qwen"
-}
-
-BACKEND vllm_endpoint b1 { address: "127.0.0.1" port: 8000 }`
+}`
 
 func TestCompileValidDSL(t *testing.T) {
 	input := js.ValueOf(validDSL)
@@ -88,8 +92,7 @@ ROUTE r1 {
   PRIORITY 1
   WHEN keyword("undefined_signal")
   MODEL "m1"
-}
-BACKEND vllm_endpoint b1 { address: "127.0.0.1" port: 8000 }`)
+}`)
 
 	result := validate(js.Undefined(), []js.Value{input})
 	str := result.(string)
@@ -113,25 +116,34 @@ func TestValidateNoArgs(t *testing.T) {
 }
 
 func TestDecompileValidYAML(t *testing.T) {
-	yamlInput := js.ValueOf(`signals:
-  - name: s1
-    type: keyword
-    keyword:
-      patterns: ["hello"]
-      threshold: 0.8
-routes:
-  - name: r1
-    model: qwen
-    backends: ["b1"]
-    rule:
-      signal_ref: s1
-    priority: 1
-backends:
-  - name: b1
-    type: vllm
-    vllm:
-      url: http://localhost:8000
-      model: qwen`)
+	yamlInput := js.ValueOf(`version: v0.3
+providers:
+  default_model: qwen
+  models:
+    - name: qwen
+      backend_refs:
+        - name: primary
+          endpoint: http://localhost:8000/v1
+          protocol: http
+routing:
+  modelCards:
+    - name: qwen
+      modality: text
+  signals:
+    keywords:
+      - name: s1
+        operator: any
+        keywords: ["hello"]
+  decisions:
+    - name: r1
+      priority: 1
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: s1
+      modelRefs:
+        - model: qwen`)
 
 	result := decompile(js.Undefined(), []js.Value{yamlInput})
 	str := result.(string)
@@ -143,6 +155,9 @@ backends:
 	}
 	if dr.Error != "" {
 		t.Errorf("unexpected error: %s", dr.Error)
+	}
+	if !strings.Contains(dr.DSL, "MODEL qwen") {
+		t.Errorf("expected routing model catalog in decompiled DSL, got:\n%s", dr.DSL)
 	}
 }
 

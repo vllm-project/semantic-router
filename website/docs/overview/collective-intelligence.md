@@ -192,6 +192,6 @@ plugins_applied:
 
 ## Next Steps
 
-- [What is Signal-Driven Decision?](signal-driven-decisions.md) - Deep dive into the decision engine
-- [Configuration Guide](../installation/configuration.md) - Set up your own collective intelligence system
-- [Intelligent Route Tutorials](../tutorials/intelligent-route/keyword-routing.md) - Learn to configure signals
+- [What is Signal-Driven Decision?](signal-driven-decisions) - Deep dive into the decision engine
+- [Configuration Guide](../installation/configuration) - Set up your own collective intelligence system
+- [Signal Tutorials](../tutorials/signal/overview) - Learn to configure signals and decisions
