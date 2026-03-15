@@ -288,6 +288,15 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
+		path: repoRel("website", "docs", "training", "training-overview.md"),
+		needles: []string{
+			"\nvllm_endpoints:\n",
+			"\nmodel_config:\n",
+			"\nprovider_profiles:\n",
+			"router-defaults.yaml",
+		},
+	},
+	{
 		path: repoRel("website", "docs", "proposals", "hallucination-mitigation-milestone.md"),
 		needles: []string{
 			"\nhallucination:\n",
@@ -299,6 +308,15 @@ var configContractForbiddenDocs = []docNeedles{
 		needles: []string{
 			"\nhallucination:\n",
 			"\n  - name: \"medical_assistant\"\n",
+		},
+	},
+	{
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "training", "training-overview.md"),
+		needles: []string{
+			"\nvllm_endpoints:\n",
+			"\nmodel_config:\n",
+			"\nprovider_profiles:\n",
+			"router-defaults.yaml",
 		},
 	},
 	{

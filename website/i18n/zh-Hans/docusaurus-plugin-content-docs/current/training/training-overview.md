@@ -251,21 +251,21 @@ mmlu_categories = {
 #### 训练配置
 
 ```yaml
-model_config:
+model_training:
   base_model: "modernbert-base"
-  task_type: "sequence_classification" 
+  task_type: "sequence_classification"
   num_labels: 10
-  
-training_config:
+
+training_recipe:
   epochs: 3
   batch_size: 8
   learning_rate: 2e-5
   weight_decay: 0.1
-  
-evaluation_metrics:
-  - accuracy: 94.2%
-  - f1_weighted: 93.8%
-  - per_category_precision: "所有类别 >90%"
+
+evaluation_targets:
+  accuracy: "94.2%"
+  f1_weighted: "93.8%"
+  per_category_precision: "所有类别 >90%"
 ```
 
 #### 模型性能
