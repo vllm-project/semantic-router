@@ -100,12 +100,15 @@ modelRefs:
 Plugins work together to enhance responses:
 
 ```yaml
-plugins:
-  - type: "semantic-cache"    # Speed optimization
-  - type: "jailbreak"         # Security layer
-  - type: "pii"               # Privacy protection
-  - type: "system_prompt"     # Context injection
-  - type: "hallucination"     # Quality assurance
+routing:
+  decisions:
+    - name: "protected-route"
+      plugins:
+        - type: "semantic-cache"    # Speed optimization
+        - type: "jailbreak"         # Security layer
+        - type: "pii"               # Privacy protection
+        - type: "system_prompt"     # Context injection
+        - type: "hallucination"     # Quality assurance
 ```
 
 **Collective benefit**: Multiple layers of processing create a more robust and secure system.

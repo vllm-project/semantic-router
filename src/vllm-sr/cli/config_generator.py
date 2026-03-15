@@ -9,9 +9,9 @@ from jinja2 import Environment, FileSystemLoader
 
 from cli.consts import DEFAULT_LISTENER_PORT, EXTERNAL_API_MODEL_FORMATS
 from cli.models import UserConfig
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 def _is_ip_address(host: str) -> bool:

@@ -310,10 +310,13 @@ global:
       similarity_threshold: 0.75 # Lower from default 0.8
 
 # Or per-decision
-plugins:
-  - type: "semantic-cache"
-    configuration:
-      similarity_threshold: 0.70
+routing:
+  decisions:
+    - name: "cached-route"
+      plugins:
+        - type: "semantic-cache"
+          configuration:
+            similarity_threshold: 0.70
 ```
 
 ---

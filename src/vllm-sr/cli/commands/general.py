@@ -7,9 +7,9 @@ import click
 from cli.commands.common import exit_with_logged_error
 from cli.commands.config import config_command, migrate_config_command
 from cli.commands.validate import validate_command
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 @click.group(invoke_without_command=True)

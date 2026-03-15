@@ -143,6 +143,29 @@ var configContractRequiredDocs = []docNeedles{
 			"[config/config.yaml]",
 			"global:\n  stores:\n    semantic_cache:",
 			"global:\n  model_catalog:\n    modules:\n      classifier:",
+			"routing:\n  decisions:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "overview", "semantic-router-overview.md"),
+		needles: []string{
+			"routing:\n  decisions:",
+			"      plugins:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "overview", "collective-intelligence.md"),
+		needles: []string{
+			"routing:\n  decisions:",
+			"      plugins:",
+		},
+	},
+	{
+		path: repoRel("src", "vllm-sr", "README.md"),
+		needles: []string{
+			"`routing.decisions[]`",
+			"routing:\n  decisions:",
+			"vllm-sr config migrate --config old-config.yaml",
 		},
 	},
 	{
@@ -271,6 +294,27 @@ var configContractForbiddenDocs = []docNeedles{
 			"#vllm_endpoints",
 			"\nsemantic_cache:\n",
 			"\nclassifier:\n",
+			"\nplugins:\n",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "overview", "semantic-router-overview.md"),
+		needles: []string{
+			"\nplugins:\n",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "overview", "collective-intelligence.md"),
+		needles: []string{
+			"\nplugins:\n",
+		},
+	},
+	{
+		path: repoRel("src", "vllm-sr", "README.md"),
+		needles: []string{
+			"\nplugins:\n",
+			"make generate     - Generate configurations",
+			"make show-config",
 		},
 	},
 	{

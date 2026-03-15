@@ -29,9 +29,9 @@ from cli.runtime_lifecycle import (
     wait_for_router_health,
 )
 from cli.runtime_stack import resolve_runtime_stack
-from cli.utils import getLogger, load_config
+from cli.utils import get_logger, load_config
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 SERVICE_LOG_PATTERNS = {
     "router": r'"caller"|spawned: \'router\'|success: router|cli\.commands',

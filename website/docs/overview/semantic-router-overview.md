@@ -86,12 +86,15 @@ Based on the decision, the router selects the best model:
 Before and after model execution, plugins process the request/response:
 
 ```yaml
-plugins:
-  - type: "semantic-cache"    # Check cache first
-  - type: "jailbreak"         # Detect adversarial prompts
-  - type: "pii"               # Filter sensitive data
-  - type: "system_prompt"     # Add context
-  - type: "hallucination"     # Verify facts
+routing:
+  decisions:
+    - name: "guarded-route"
+      plugins:
+        - type: "semantic-cache"    # Check cache first
+        - type: "jailbreak"         # Detect adversarial prompts
+        - type: "pii"               # Filter sensitive data
+        - type: "system_prompt"     # Add context
+        - type: "hallucination"     # Verify facts
 ```
 
 ## Key Concepts

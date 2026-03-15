@@ -36,7 +36,6 @@ The harness correctly ratchets the repo toward smaller modules, but several lega
 - [src/semantic-router/pkg/config/canonical_config.go](../../../src/semantic-router/pkg/config/canonical_config.go)
 - [src/semantic-router/pkg/config/canonical_loader_test.go](../../../src/semantic-router/pkg/config/canonical_loader_test.go)
 - [src/vllm-sr/cli/models.py](../../../src/vllm-sr/cli/models.py)
-- [src/vllm-sr/cli/commands/show_config.py](../../../src/vllm-sr/cli/commands/show_config.py)
 - [candle-binding/src/core/config_loader.rs](../../../candle-binding/src/core/config_loader.rs)
 - [docs/agent/plans/pl-0003-v0-3-config-contract-rollout.md](../plans/pl-0003-v0-3-config-contract-rollout.md)
 
