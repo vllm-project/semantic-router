@@ -10,7 +10,7 @@ architecture ratchet versus current code
 
 ## Summary
 
-The harness correctly ratchets the repo toward smaller modules, but several legacy hotspots still depend on explicit exceptions. The v0.3 config-contract rollout also touched additional hotspot files that still need extraction-first follow-up before they can satisfy the structural target directly.
+The harness correctly ratchets the repo toward smaller modules, but several legacy hotspots still depend on explicit exceptions. The v0.3 config-contract rollout also touched additional hotspot files that still need extraction-first follow-up before they can satisfy the structural target directly. The current rule layer now distinguishes three kinds of temporary relief for those files: file-size ratchets, per-function ratchets, and interface-size ratchets.
 
 ## Evidence
 
@@ -41,12 +41,14 @@ The harness correctly ratchets the repo toward smaller modules, but several lega
 - OpenClaw management and dashboard UI now sit on the same debt boundary: the feature surface is active and maintained, but the implementation still spans oversized page/component/handler files that cannot yet satisfy the global structure target directly.
 - The agent-specific Go complexity gate also needs explicit legacy exclusions for the same OpenClaw handlers/tests until those modules are decomposed enough to meet the global `cyclop`, `funlen`, `gocognit`, and `nestif` thresholds.
 - The config-contract rollout now depends on additional large orchestrator files in dashboard/backend, operator generation, and CLI schema compatibility code; until those are decomposed, the structure ratchet will continue to surface exceptions when config work lands.
+- The rule layer now carries explicit `file_checks: relaxed`, `function_checks: relaxed`, and `interface_checks: relaxed` entries for the config-rollout hotspots so CI keeps ratcheting against known debt instead of blocking every rebase or schema follow-up on unchanged legacy structure.
 - This is the right governance posture, but it remains a real code/spec gap until the worst hotspots no longer need special handling.
 
 ## Desired End State
 
 - The global structure rules become the common case rather than something many hotspot directories can only approach gradually.
 - Config contract rollout work can land by extending narrower helper modules instead of growing dashboard handler, operator controller, or CLI hotspot files.
+- The temporary ratchet extensions added for the v0.3 rollout can be removed once the dashboard/backend handlers, operator controller/types, config tests, DSL compiler/decompiler, response-store interfaces, and CLI schema modules are extracted below the structural thresholds.
 
 ## Exit Criteria
 

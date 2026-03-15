@@ -62,7 +62,7 @@ def collect_model_accuracies(results_dir):
         model_display_name = f"{model_name}:{approach}"
 
         # Load analysis data
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             analysis = json.load(f)
 
         # Store category accuracies
@@ -124,7 +124,7 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
 
     # Get the best model overall to use as default (excluding 'auto')
     all_models_avg = defaultdict(list)
-    for category, models in category_accuracies.items():
+    for _category, models in category_accuracies.items():
         for model_name, accuracy in models.items():
             base_model = model_name.split(":")[0]
             if base_model != "auto":
@@ -271,7 +271,7 @@ def main():
     print(f"Analyzing MMLU-Pro results in {args.results_dir}...")
     category_accuracies = collect_model_accuracies(args.results_dir)
 
-    print(f"Generating config.yaml...")
+    print("Generating config.yaml...")
     config = generate_config_yaml(category_accuracies, args.similarity_threshold)
 
     print(f"Saving config to {args.output_file}...")

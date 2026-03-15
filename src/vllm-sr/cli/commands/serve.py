@@ -4,15 +4,17 @@ import os
 import sys
 from pathlib import Path
 
-from cli.parser import parse_user_config, ConfigParseError
-from cli.validator import (
-    validate_user_config,
-    print_validation_errors,
-)
 from cli.config_generator import generate_envoy_config_from_user_config
+from cli.parser import ConfigParseError, parse_user_config
 from cli.utils import getLogger
+from cli.validator import (
+    print_validation_errors,
+    validate_user_config,
+)
 
 log = getLogger(__name__)
+
+AMD_OVERRIDE_PREVIEW_LIMIT = 8
 
 DEFAULT_OUTPUT_DIR = ".vllm-sr"
 
@@ -67,8 +69,8 @@ def apply_platform_gpu_defaults(merged_config: dict) -> None:
         log.info("Platform amd detected: no use_cpu flags found to override")
         return
 
-    preview = ", ".join(changed_paths[:8])
-    if len(changed_paths) > 8:
+    preview = ", ".join(changed_paths[:AMD_OVERRIDE_PREVIEW_LIMIT])
+    if len(changed_paths) > AMD_OVERRIDE_PREVIEW_LIMIT:
         preview = f"{preview}, ..."
     log.info(
         f"Platform amd detected: set {len(changed_paths)} use_cpu flag(s) to false for GPU default ({preview})"
@@ -148,8 +150,8 @@ def serve_command(
     config_path: str,
     output_dir: str = DEFAULT_OUTPUT_DIR,
     regenerate: bool = False,
-    router_config: str = None,
-    envoy_config: str = None,
+    router_config: str | None = None,
+    envoy_config: str | None = None,
 ):
     """
     Start vLLM Semantic Router service.
