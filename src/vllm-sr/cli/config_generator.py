@@ -1,15 +1,16 @@
 """Envoy configuration generator for vLLM Semantic Router."""
 
-import os
-import yaml
 import ipaddress
+import os
 from pathlib import Path
-from typing import Dict, Any, Optional
 from urllib.parse import urlparse
+
+import yaml
 from jinja2 import Environment, FileSystemLoader
-from cli.utils import getLogger
-from cli.models import UserConfig
+
 from cli.consts import DEFAULT_LISTENER_PORT, EXTERNAL_API_MODEL_FORMATS
+from cli.models import UserConfig
+from cli.utils import getLogger
 
 log = getLogger(__name__)
 
@@ -34,8 +35,8 @@ def _is_ip_address(host: str) -> bool:
 def generate_envoy_config_from_user_config(
     user_config: UserConfig,
     output_file: str,
-    template_file: str = None,
-    template_root: str = None,
+    template_file: str | None = None,
+    template_root: str | None = None,
 ) -> Path:
     """
     Generate Envoy configuration from user config.
@@ -58,7 +59,7 @@ def generate_envoy_config_from_user_config(
         default_template_root = cli_dir / "templates"
         template_root = os.getenv("TEMPLATE_ROOT", str(default_template_root))
 
-    log.info(f"Generating Envoy config...")
+    log.info("Generating Envoy config...")
 
     # Extract all listeners
     listeners = []
@@ -200,7 +201,7 @@ def generate_envoy_config_from_user_config(
         "use_original_dst": False,  # Use static clusters for now
     }
 
-    log.info(f"  Listeners:")
+    log.info("  Listeners:")
     for listener in listeners:
         log.info(f"    - {listener['name']}: {listener['address']}:{listener['port']}")
     log.info(f"  Found {len(models)} vLLM model(s):")
@@ -251,8 +252,8 @@ def generate_envoy_config_from_user_config(
 def generate_envoy_config_from_router_config(
     router_config_file: str,
     output_file: str,
-    template_file: str = None,
-    template_root: str = None,
+    template_file: str | None = None,
+    template_root: str | None = None,
 ) -> Path:
     """
     Generate Envoy configuration from router config file.
@@ -279,7 +280,7 @@ def generate_envoy_config_from_router_config(
 
     # Load router config
     try:
-        with open(router_config_file, "r") as f:
+        with open(router_config_file) as f:
             router_config = yaml.safe_load(f)
     except Exception as e:
         log.error(f"Failed to load router config: {e}")
@@ -320,7 +321,7 @@ def generate_envoy_config_from_router_config(
         "use_original_dst": False,  # Use static clusters for now
     }
 
-    log.info(f"Listeners:")
+    log.info("Listeners:")
     for listener in listeners:
         log.info(f"  - {listener['name']}: {listener['address']}:{listener['port']}")
     log.info(f"Found {len(vllm_endpoints)} vLLM endpoints")
@@ -362,9 +363,11 @@ def generate_envoy_config_from_router_config(
 if __name__ == "__main__":
     """Entry point when run as: python -m cli.config_generator"""
     import sys
+
     from cli.parser import parse_user_config
 
-    if len(sys.argv) < 3:
+    minimum_args = 3
+    if len(sys.argv) < minimum_args:
         print("Usage: python -m cli.config_generator <config.yaml> <output_envoy.yaml>")
         print("  Generates Envoy configuration from user config.yaml")
         sys.exit(1)
@@ -385,4 +388,4 @@ if __name__ == "__main__":
         import traceback
 
         traceback.print_exc()
-        exit(1)
+        sys.exit(1)

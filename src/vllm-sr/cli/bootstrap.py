@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -30,7 +30,7 @@ class BootstrapResult:
     created_defaults: bool = False
 
 
-def _setup_metadata() -> Dict[str, Any]:
+def _setup_metadata() -> dict[str, Any]:
     return {
         "mode": True,
         "state": "bootstrap",
@@ -39,7 +39,7 @@ def _setup_metadata() -> Dict[str, Any]:
     }
 
 
-def build_bootstrap_config(port: int = DEFAULT_SETUP_LISTENER_PORT) -> Dict[str, Any]:
+def build_bootstrap_config(port: int = DEFAULT_SETUP_LISTENER_PORT) -> dict[str, Any]:
     """Build the minimal config needed for dashboard-first setup."""
 
     return {
@@ -56,11 +56,11 @@ def build_bootstrap_config(port: int = DEFAULT_SETUP_LISTENER_PORT) -> Dict[str,
     }
 
 
-def _load_yaml_dict(config_path: Path) -> Dict[str, Any]:
+def _load_yaml_dict(config_path: Path) -> dict[str, Any]:
     if not config_path.exists():
         return {}
 
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         data = yaml.safe_load(f) or {}
 
     return data if isinstance(data, dict) else {}
