@@ -37,6 +37,7 @@ The harness correctly ratchets the repo toward smaller modules, but several lega
 - [src/semantic-router/pkg/config/canonical_loader_test.go](../../../src/semantic-router/pkg/config/canonical_loader_test.go)
 - [src/vllm-sr/cli/models.py](../../../src/vllm-sr/cli/models.py)
 - [src/vllm-sr/cli/commands/show_config.py](../../../src/vllm-sr/cli/commands/show_config.py)
+- [candle-binding/src/core/config_loader.rs](../../../candle-binding/src/core/config_loader.rs)
 - [docs/agent/plans/pl-0003-v0-3-config-contract-rollout.md](../plans/pl-0003-v0-3-config-contract-rollout.md)
 
 ## Why It Matters
@@ -49,17 +50,19 @@ The harness correctly ratchets the repo toward smaller modules, but several lega
 - The agent-specific Go complexity gate also still needs file-scoped exclusions for the canonical config parser and loader regression tests; otherwise small follow-up fixes in those hotspot files fail changed-file lint before any extraction work can land.
 - The operator helper test suite now also sits above the shared file/function thresholds; adding focused regression coverage there should not require branch-local structural churn on every CI repair, so it is explicitly tracked as the same extraction-first debt instead of being treated as new precedent.
 - The same config-rollout branch also depends on oversized dashboard/operator regression suites (`deploy_test.go` and `semanticrouter_controller_test.go`); those files now need explicit file-size ratchets until their table-driven fixtures are extracted out of the monolithic test files.
+- The Candle binding still concentrates YAML walking, default resolution, and compatibility fallbacks inside `candle-binding/src/core/config_loader.rs`; even narrow canonical-v0.3 fixes there currently trip the shared file/function limits before any extraction work can land.
 - The rule layer now carries explicit `file_checks: relaxed`, `function_checks: relaxed`, and `interface_checks: relaxed` entries for the config-rollout hotspots so CI keeps ratcheting against known debt instead of blocking every rebase or schema follow-up on unchanged legacy structure.
 - The Go lint layer now mirrors that posture for `canonical_config.go` and `canonical_loader_test.go`, so changed-file checks only fail on new regressions instead of re-reporting the existing canonical-config hotspot debt on every repair branch.
+- The same posture now explicitly covers `candle-binding/src/core/config_loader.rs`; this keeps the current audit focused on canonical-path correctness while preserving the requirement to extract the file later instead of blessing its current size and nesting as precedent.
 - This is the right governance posture, but it remains a real code/spec gap until the worst hotspots no longer need special handling.
 
 ## Desired End State
 
 - The global structure rules become the common case rather than something many hotspot directories can only approach gradually.
 - Config contract rollout work can land by extending narrower helper modules instead of growing dashboard handler, operator controller, or CLI hotspot files.
-- The temporary ratchet extensions added for the v0.3 rollout can be removed once the dashboard/backend handlers and tests, operator controller/types/tests, config tests, DSL compiler/decompiler, response-store interfaces, and CLI schema modules are extracted below the structural thresholds.
+- The temporary ratchet extensions added for the v0.3 rollout can be removed once the dashboard/backend handlers and tests, operator controller/types/tests, config tests, DSL compiler/decompiler, response-store interfaces, CLI schema modules, and Candle binding config loader are extracted below the structural thresholds.
 
 ## Exit Criteria
 
 - The highest-risk files no longer need special ratchet treatment to stay within the intended modularity envelope.
-- Config rollout follow-up extracts stable schema/export/merge helpers out of the current hotspot files, simplifies canonical-config regression tests, and breaks up oversized dashboard/operator regression suites enough for the relevant lint and structure gates to pass without bespoke exceptions.
+- Config rollout follow-up extracts stable schema/export/merge helpers out of the current hotspot files, simplifies canonical-config regression tests, breaks up oversized dashboard/operator regression suites, and decomposes the Candle binding config loader enough for the relevant lint and structure gates to pass without bespoke exceptions.

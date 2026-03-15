@@ -373,13 +373,16 @@ bert_model:
 **Configuration:**
 
 ```yaml
-classifier:
-  category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+global:
+  model_catalog:
+    modules:
+      classifier:
+        domain:
+          model_id: "models/category_classifier_modernbert-base_model"
+          use_modernbert: true
+          threshold: 0.6
+          use_cpu: true
+          category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
 ```
 
 **Model Selection Impact:**
@@ -417,13 +420,16 @@ classifier:
 **Configuration:**
 
 ```yaml
-classifier:
-  pii_model:
-    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
-    use_modernbert: true
-    threshold: 0.7
-    use_cpu: true
-    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+global:
+  model_catalog:
+    modules:
+      classifier:
+        pii:
+          model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+          use_modernbert: true
+          threshold: 0.7
+          use_cpu: true
+          pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 ```
 
 **Policy Enforcement:**
@@ -481,12 +487,15 @@ routing:
 **Configuration:**
 
 ```yaml
-prompt_guard:
-  enabled: true
-  use_modernbert: true
-  threshold: 0.7
-  use_cpu: true
-  # model_id and jailbreak_mapping_path are auto-discovered
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        enabled: true
+        use_modernbert: true
+        threshold: 0.7
+        use_cpu: true
+        # model_id and jailbreak_mapping_path are auto-discovered
 ```
 
 **Response Headers (when blocked):**
@@ -1362,17 +1371,20 @@ routing:
 **Example Configuration:**
 
 ```yaml
-prompt_guard:
-  enabled: true
-  # model_id is auto-discovered from models directory:
-  # - Legacy: models/jailbreak_classifier_modernbert-base_model
-  # - LoRA: models/lora_jailbreak_classifier_bert_model (preferred)
-  #         models/lora_jailbreak_classifier_roberta_model
-  #         models/lora_jailbreak_classifier_modernbert_model
-  threshold: 0.5
-  use_cpu: false
-  use_modernbert: true
-  # jailbreak_mapping_path is auto-discovered from model directory
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        enabled: true
+        # model_id is auto-discovered from models directory:
+        # - Legacy: models/jailbreak_classifier_modernbert-base_model
+        # - LoRA: models/lora_jailbreak_classifier_bert_model (preferred)
+        #         models/lora_jailbreak_classifier_roberta_model
+        #         models/lora_jailbreak_classifier_modernbert_model
+        threshold: 0.5
+        use_cpu: false
+        use_modernbert: true
+        # jailbreak_mapping_path is auto-discovered from model directory
 ```
 
 **Note:** The jailbreak classifier uses auto-discovery to find models in the `models/` directory. The system prefers LoRA models (BERT > RoBERTa > ModernBERT) over legacy ModernBERT models for better accuracy.
