@@ -14,9 +14,9 @@ from cli.consts import (
 from cli.docker_images import _normalize_platform, get_docker_image
 from cli.docker_runtime import get_container_runtime
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 def docker_start_vllm_sr(

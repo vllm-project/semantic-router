@@ -113,87 +113,110 @@ The CLI supports configuring plugins in your routing decisions. Plugins are per-
 
 **Plugin Examples:**
 
+Each example shows the plugin list inside a canonical `routing.decisions[]` entry.
+
 1. **semantic-cache** - Cache similar requests:
 
 ```yaml
-plugins:
-  - type: "semantic-cache"
-    configuration:
-      enabled: true
-      similarity_threshold: 0.92  # 0.0-1.0, higher = more strict
-      ttl_seconds: 3600  # Optional: cache TTL in seconds
+routing:
+  decisions:
+    - name: "cached-route"
+      plugins:
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.92  # 0.0-1.0, higher = more strict
+            ttl_seconds: 3600  # Optional: cache TTL in seconds
 ```
 
 2. **jailbreak** - Block adversarial prompts:
 
 ```yaml
-plugins:
-  - type: "jailbreak"
-    configuration:
-      enabled: true
-      threshold: 0.8  # Optional: detection sensitivity 0.0-1.0
+routing:
+  decisions:
+    - name: "guarded-route"
+      plugins:
+        - type: "jailbreak"
+          configuration:
+            enabled: true
+            threshold: 0.8  # Optional: detection sensitivity 0.0-1.0
 ```
 
 3. **pii** - Enforce PII policies:
 
 ```yaml
-plugins:
-  - type: "pii"
-    configuration:
-      enabled: true
-      threshold: 0.7  # Optional: detection sensitivity 0.0-1.0
-      pii_types_allowed: ["EMAIL_ADDRESS"]  # Optional: list of allowed PII types
+routing:
+  decisions:
+    - name: "pii-route"
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            threshold: 0.7  # Optional: detection sensitivity 0.0-1.0
+            pii_types_allowed: ["EMAIL_ADDRESS"]  # Optional: list of allowed PII types
 ```
 
 4. **system_prompt** - Inject custom instructions:
 
 ```yaml
-plugins:
-  - type: "system_prompt"
-    configuration:
-      enabled: true
-      system_prompt: "You are a helpful assistant."
-      mode: "replace"  # "replace" (default) or "insert" (prepend)
+routing:
+  decisions:
+    - name: "persona-route"
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a helpful assistant."
+            mode: "replace"  # "replace" (default) or "insert" (prepend)
 ```
 
 5. **header_mutation** - Modify HTTP headers:
 
 ```yaml
-plugins:
-  - type: "header_mutation"
-    configuration:
-      add:
-        - name: "X-Custom-Header"
-          value: "custom-value"
-      update:
-        - name: "User-Agent"
-          value: "SemanticRouter/1.0"
-      delete:
-        - "X-Old-Header"
+routing:
+  decisions:
+    - name: "header-route"
+      plugins:
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "X-Custom-Header"
+                value: "custom-value"
+            update:
+              - name: "User-Agent"
+                value: "SemanticRouter/1.0"
+            delete:
+              - "X-Old-Header"
 ```
 
 6. **hallucination** - Detect hallucinations:
 
 ```yaml
-plugins:
-  - type: "hallucination"
-    configuration:
-      enabled: true
-      use_nli: false  # Optional: use NLI for detailed analysis
-      hallucination_action: "header"  # "header", "body", or "none"
+routing:
+  decisions:
+    - name: "fact-check-route"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: true
+            use_nli: false  # Optional: use NLI for detailed analysis
+            hallucination_action: "header"  # "header", "body", or "none"
 ```
 
 7. **router_replay** - Record decisions for debugging:
 
 ```yaml
-plugins:
-  - type: "router_replay"
-    configuration:
-      enabled: true
-      max_records: 200  # Optional: max records in memory (default: 200)
-      capture_request_body: false  # Optional: capture request payloads (default: false)
-      capture_response_body: false  # Optional: capture response payloads (default: false)
-      max_body_bytes: 4096  # Optional: max bytes to capture (default: 4096)
+routing:
+  decisions:
+    - name: "debug-route"
+      plugins:
+        - type: "router_replay"
+          configuration:
+            enabled: true
+            max_records: 200  # Optional: max records in memory (default: 200)
+            capture_request_body: false  # Optional: capture request payloads (default: false)
+            capture_response_body: false  # Optional: capture response payloads (default: false)
+            max_body_bytes: 4096  # Optional: max bytes to capture (default: 4096)
 ```
 
 **Validation Rules:**

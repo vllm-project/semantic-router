@@ -14,10 +14,10 @@ from cli.models import (
     RAGPluginConfig,
 )
 from pydantic import ValidationError as PydanticValidationError
-from cli.utils import getLogger
+from cli.utils import get_logger
 from cli.consts import EXTERNAL_API_MODEL_FORMATS
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 class ValidationError:

@@ -15,9 +15,9 @@ from cli.bootstrap import (
     SETUP_MODE_ENV,
     BootstrapResult,
 )
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 _temp_dirs: list[str] = []
 

@@ -11,13 +11,13 @@ import yaml
 from cli.config_generator import generate_envoy_config_from_user_config
 from cli.config_migration import migrate_config_data
 from cli.parser import ConfigParseError, load_config_file, parse_user_config
-from cli.utils import getLogger
+from cli.utils import get_logger
 from cli.validator import (
     print_validation_errors,
     validate_user_config,
 )
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 def config_command(config_type: str, config_path: str = "config.yaml"):

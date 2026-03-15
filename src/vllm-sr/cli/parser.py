@@ -6,9 +6,9 @@ from typing import Dict, Any
 from pydantic import ValidationError
 
 from cli.models import UserConfig
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 class ConfigParseError(Exception):

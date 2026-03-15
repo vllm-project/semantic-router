@@ -6,13 +6,13 @@ from pathlib import Path
 
 from cli.config_generator import generate_envoy_config_from_user_config
 from cli.parser import ConfigParseError, parse_user_config
-from cli.utils import getLogger
+from cli.utils import get_logger
 from cli.validator import (
     print_validation_errors,
     validate_user_config,
 )
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 AMD_OVERRIDE_PREVIEW_LIMIT = 8
 

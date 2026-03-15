@@ -32,9 +32,9 @@ from cli.consts import (
 from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
 from cli.docker_cli import docker_container_status
 from cli.runtime_stack import resolve_runtime_stack
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 inject_algorithm_into_config = _inject_algorithm_into_config
 
 
