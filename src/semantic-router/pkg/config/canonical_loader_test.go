@@ -185,3 +185,63 @@ global:
 		t.Fatalf("expected canonical provider endpoint to normalize, got %#v", cfg.VLLMEndpoints)
 	}
 }
+
+func TestParseYAMLBytesPreservesGlobalServiceDefaultsForSparseCanonicalOverrides(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: qwen3
+  models:
+    - name: qwen3
+      provider_model_id: qwen3
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: qwen3
+      modality: text
+  decisions:
+    - name: default_route
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: general
+      modelRefs:
+        - model: qwen3
+global:
+  stores:
+    memory:
+      enabled: true
+      auto_store: true
+  model_catalog:
+    embeddings:
+      semantic:
+        bert_model_path: models/mom-embedding-light
+        use_cpu: true
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	if !cfg.ResponseAPI.Enabled {
+		t.Fatal("expected sparse global override to preserve default response_api.enabled=true")
+	}
+	if cfg.ResponseAPI.StoreBackend != "memory" {
+		t.Fatalf("expected response api backend to keep default, got %q", cfg.ResponseAPI.StoreBackend)
+	}
+	if cfg.ResponseAPI.TTLSeconds != 86400 {
+		t.Fatalf("expected response api ttl default to be preserved, got %d", cfg.ResponseAPI.TTLSeconds)
+	}
+	if !cfg.Memory.Enabled || !cfg.Memory.AutoStore {
+		t.Fatalf("expected memory override to still apply, got enabled=%v auto_store=%v", cfg.Memory.Enabled, cfg.Memory.AutoStore)
+	}
+}

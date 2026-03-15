@@ -85,6 +85,7 @@ func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
 			logging.Debugf("[config.Parse] ERROR parsing canonical YAML: %v", unmarshalErr)
 			return nil, fmt.Errorf("failed to parse canonical config file: %w", unmarshalErr)
 		}
+		canonical.globalOverrideRaw = raw["global"]
 		cfg, err = normalizeCanonicalConfig(canonical)
 		if err != nil {
 			logging.Debugf("[config.Parse] ERROR normalizing canonical YAML: %v", err)

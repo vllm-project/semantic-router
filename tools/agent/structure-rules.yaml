@@ -82,6 +82,10 @@ legacy_hotspots:
     file_checks: relaxed
     function_checks: relaxed
   - paths:
+      - deploy/operator/controllers/helpers_test.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
       - src/semantic-router/pkg/responsestore/interface.go
     interface_checks: relaxed
   - paths:

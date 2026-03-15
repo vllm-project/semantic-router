@@ -168,9 +168,9 @@ func (m CanonicalHallucinationModule) runtimeConfig() HallucinationMitigationCon
 	}
 }
 
-func resolveCanonicalGlobal(override *CanonicalGlobal) (CanonicalGlobal, error) {
+func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride interface{}) (CanonicalGlobal, error) {
 	defaults := DefaultCanonicalGlobal()
-	if override == nil {
+	if rawOverride == nil && override == nil {
 		if err := resolveModuleModelRefs(&defaults); err != nil {
 			return CanonicalGlobal{}, err
 		}
@@ -178,7 +178,12 @@ func resolveCanonicalGlobal(override *CanonicalGlobal) (CanonicalGlobal, error) 
 	}
 
 	resolved := defaults
-	overrideBytes, err := yaml.Marshal(override)
+	overrideSource := rawOverride
+	if overrideSource == nil {
+		overrideSource = override
+	}
+
+	overrideBytes, err := yaml.Marshal(overrideSource)
 	if err != nil {
 		return CanonicalGlobal{}, fmt.Errorf("failed to marshal global override: %w", err)
 	}
