@@ -1,0 +1,85 @@
+# multi-turn.yaml — pipeline for long multi-turn chat sessions
+#
+# Intended for: UC2 pre-inference compression of extended conversations.
+# Use with CompressMessages (not CompressWithPipeline) to activate role_weight
+# and age_decay, both of which rely on per-sentence metadata.
+#
+# Key behaviors vs default:
+#   - dedup:          removes repeated context (same file read twice across turns)
+#   - age_decay:      discounts older turns — recent turns score higher
+#   - role_weight:    user messages ×2.0, assistant ×0.7, tool ×1.3
+#   - pattern_boost:  preserves error lines and file references that persist
+#                     across multiple turns
+#   - larger preserve_last_n: 5 — keep the full recent "hot tail"
+#
+# age_decay factor=0.12: turn age 0 → score 1.0, age 5 → ~0.55, age 10 → ~0.30
+# Adjust factor up for more aggressive recency bias.
+
+max_tokens: 8192
+preserve_first_n: 2    # system prompt + first user message (problem statement)
+preserve_last_n: 5     # recent hot tail: last tool output + user follow-ups
+output_headroom: 1024
+
+pipeline:
+
+  pre:
+    - name: dedup
+      params:
+        threshold: 0.90   # slightly lower threshold: drop same-file reads
+
+  scoring:
+    - name: textrank
+      weight: 0.15
+
+    - name: position
+      weight: 0.25
+      params:
+        depth: 0.5
+
+    - name: tfidf
+      weight: 0.35
+
+    - name: novelty
+      weight: 0.10
+
+    # age_decay: the hot-tail scorer. Set weight > 0 only with CompressMessages.
+    # Sentence ages are assigned per-message-turn by the caller if needed,
+    # otherwise all sentences default to age=0 (current turn) and this is a no-op.
+    - name: age_decay
+      weight: 0.15
+      params:
+        factor: 0.12
+
+  adjust:
+    - name: pattern_boost
+      params:
+        patterns:
+          - regex: "(?i)(error|exception|panic|fatal|warn)[\\s:]"
+            multiplier: 1.8
+          - regex: "\\w+\\.\\w{1,5}:\\d+"
+            multiplier: 1.6
+          - regex: "\\b(TODO|FIXME|HACK|BUG)\\b"
+            multiplier: 1.4
+
+    - name: role_weight
+      params:
+        weights:
+          system:    1.5
+          user:      2.0
+          assistant: 0.7   # assistant reasoning is more droppable than user intent
+          tool:      1.3   # tool outputs carry high information density
+
+    # focus_keywords: leave empty by default; callers can supply at request time
+    # by constructing the Pipeline directly with populated keywords.
+    - name: focus_keywords
+      params:
+        keywords: []
+        boost: 2.0
+
+  select:
+    # Hard-preserve: explicit task markers and error sentinel lines.
+    # Extend substrings here for project-specific invariants.
+    - name: must_contain
+      params:
+        substrings: []
+        patterns:   []

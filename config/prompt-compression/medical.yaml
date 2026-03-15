@@ -1,0 +1,69 @@
+# medical.yaml — compression pipeline for medical/clinical prompts
+#
+# Optimized for: symptom descriptions, treatment queries, medication questions.
+#
+# Key behaviors vs default:
+#   - higher novelty weight: surfaces specific symptoms and abnormal values
+#     that are clinically unique (different from the general narrative)
+#   - pattern_boost: retains numeric lab values, medication names, and dosages
+#   - must_contain: guarantees allergy and contraindication markers are kept
+#   - no dedup: medical history is rarely repeated verbatim; skip for safety
+#   - conservative max_tokens: medical context tends to be shorter; 2048 is enough
+
+max_tokens: 2048
+preserve_first_n: 3    # patient background, chief complaint, context
+preserve_last_n: 2     # most recent symptom update + specific question
+output_headroom: 512
+
+pipeline:
+
+  pre: []   # no dedup — risk of dropping clinically distinct near-duplicate phrases
+
+  scoring:
+    - name: textrank
+      weight: 0.20
+
+    - name: position
+      weight: 0.35
+      params:
+        depth: 0.5
+
+    - name: tfidf
+      weight: 0.30
+
+    # Higher novelty: abnormal lab values and rare symptoms are outliers
+    # that must survive compression even when surrounded by general narrative
+    - name: novelty
+      weight: 0.15
+
+  adjust:
+    # Preserve: numeric lab values, dosages, vital signs, medication names
+    - name: pattern_boost
+      params:
+        patterns:
+          # Numeric lab values: "HbA1c 8.2%", "WBC 12.4 × 10³/μL"
+          - regex: "\\b\\d+\\.?\\d*\\s*(mg|mcg|mL|mmol|mmHg|bpm|%|IU|ng|pg)\\b"
+            multiplier: 1.8
+          # Temperature, BP, HR readings: "102.4°F", "140/90 mmHg"
+          - regex: "\\b\\d{2,3}(\\.\\d)?\\s*(°[FC]|mmHg|bpm)\\b"
+            multiplier: 1.7
+          # ICD-style or medication keywords
+          - regex: "(?i)\\b(diagnosis|prescribed|contraindicated|allergy|adverse)\\b"
+            multiplier: 1.6
+          # Duration markers: "for 3 weeks", "since Monday"
+          - regex: "(?i)\\bfor \\d+ (day|week|month|year)s?\\b"
+            multiplier: 1.4
+
+  select:
+    # Hard-preserve allergy and contraindication disclosures
+    - name: must_contain
+      params:
+        substrings:
+          - "allergic to"
+          - "allergy:"
+          - "contraindicated"
+          - "do not administer"
+          - "anaphylaxis"
+        patterns:
+          - "(?i)\\bDNR\\b"                # Do Not Resuscitate order
+          - "(?i)\\badvance directive\\b"

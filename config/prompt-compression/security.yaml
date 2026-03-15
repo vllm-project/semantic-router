@@ -1,0 +1,75 @@
+# security.yaml — compression pipeline for security / threat analysis prompts
+#
+# Optimized for: vulnerability reports, threat hunting, incident response.
+#
+# Key behaviors vs default:
+#   - very high novelty weight (0.30): jailbreaks, CVEs, and IoC lines are
+#     outliers relative to the surrounding narrative — they must survive
+#   - pattern_boost: CVE IDs, IP/hash indicators, CVSS scores, privilege escalation
+#   - must_contain: hard-guarantees CVE IDs, CRITICAL/HIGH severity markers, and
+#     indicators of compromise (IP addresses, file hashes) are never dropped
+#   - no dedup: security context is rarely verbatim-duplicate; skip for safety
+#   - tight budget: security analysis should be precise, not verbose
+
+max_tokens: 2048
+preserve_first_n: 2    # threat description + scope
+preserve_last_n: 3     # remediation steps + confirmation question
+output_headroom: 256
+
+pipeline:
+
+  pre: []   # no dedup: each IoC mention may carry distinct context
+
+  scoring:
+    - name: textrank
+      weight: 0.15
+
+    - name: position
+      weight: 0.30
+      params:
+        depth: 0.6
+
+    - name: tfidf
+      weight: 0.25
+
+    # Highest novelty weight across all domain configs:
+    # CVE details, IoCs, and privilege-escalation lines stand out from narrative
+    - name: novelty
+      weight: 0.30
+
+  adjust:
+    # Preserve CVE IDs, CVSS scores, IP addresses, file hashes, escalation phrases
+    - name: pattern_boost
+      params:
+        patterns:
+          - regex: "\\bCVE-\\d{4}-\\d+\\b"
+            multiplier: 2.5
+          - regex: "CVSS\\s*(score|v\\d)?:?\\s*\\d+\\.\\d+"
+            multiplier: 2.0
+          - regex: "(?i)\\b(critical|high|medium|low)\\s+severity\\b"
+            multiplier: 1.8
+          # IPv4 addresses (potential IoCs)
+          - regex: "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b"
+            multiplier: 1.7
+          # SHA-256 / MD5 file hashes
+          - regex: "\\b[0-9a-fA-F]{32,64}\\b"
+            multiplier: 1.7
+          # Privilege escalation / lateral movement indicators
+          - regex: "(?i)\\b(privilege escalation|lateral movement|persistence|exfiltration)\\b"
+            multiplier: 1.9
+          # Error / exploit lines
+          - regex: "(?i)(exploit|payload|shellcode|RCE|SQLi|XSS|SSRF)[\\s:]"
+            multiplier: 1.6
+
+  select:
+    # Hard-preserve: CVE IDs, severity labels, hash IoCs, jailbreak markers
+    - name: must_contain
+      params:
+        substrings:
+          - "CRITICAL:"
+          - "HIGH:"
+          - "CVE-"
+        patterns:
+          - "\\bCVE-\\d{4}-\\d+\\b"
+          - "(?i)\\b(root|admin)\\s+access\\s+(granted|obtained|escalated)"
+          - "(?i)\\bzero.?day\\b"

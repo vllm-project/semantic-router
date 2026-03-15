@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
@@ -9,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/promptcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -35,6 +37,8 @@ type routerComponents struct {
 	memoryExtractor      *memory.MemoryExtractor
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
+	// inferenceCompressor is nil when inference compression is disabled.
+	inferenceCompressor *promptcompression.PipelineSelector
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -44,7 +48,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		return nil, err
 	}
 
-	components, err := buildRouterComponents(cfg)
+	components, err := buildRouterComponents(configPath, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +81,7 @@ func loadRouterConfig(configPath string) (*config.RouterConfig, error) {
 	return cfg, nil
 }
 
-func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) {
+func buildRouterComponents(configPath string, cfg *config.RouterConfig) (*routerComponents, error) {
 	mappings, err := loadClassifierMappings(cfg)
 	if err != nil {
 		return nil, err
@@ -111,6 +115,18 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		logging.Infof("Rate limit resolver initialized with providers: %v", rateLimiter.ProviderNames())
 	}
 
+	// UC2: build the inference-time PipelineSelector when enabled.
+	var inferenceCompressor *promptcompression.PipelineSelector
+	if cfg.PromptCompression.InferenceEnabled {
+		sel, err := buildInferenceCompressor(configPath, cfg.PromptCompression)
+		if err != nil {
+			return nil, fmt.Errorf("inference compression: %w", err)
+		}
+		inferenceCompressor = sel
+		logging.Infof("[InferenceCompression] Enabled with %d domain pipeline(s)",
+			len(cfg.PromptCompression.DomainPipelines))
+	}
+
 	return &routerComponents{
 		cfg:                  cfg,
 		categoryDescriptions: categoryDescriptions,
@@ -125,7 +141,21 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		memoryExtractor:      memoryExtractor,
 		credentialResolver:   credentialResolver,
 		rateLimiter:          rateLimiter,
+		inferenceCompressor:  inferenceCompressor,
 	}, nil
+}
+
+// buildInferenceCompressor constructs a PipelineSelector from the
+// inference-compression section of PromptCompressionConfig.
+// Relative YAML paths are resolved relative to the router config file.
+func buildInferenceCompressor(configPath string, pc config.PromptCompressionConfig) (*promptcompression.PipelineSelector, error) {
+	baseDir := filepath.Dir(configPath)
+	selCfg := promptcompression.SelectorConfig{
+		DefaultPipeline: pc.DefaultPipeline,
+		DomainPipelines: pc.DomainPipelines,
+		BaseDir:         baseDir,
+	}
+	return promptcompression.NewPipelineSelector(selCfg)
 }
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
@@ -143,5 +173,6 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		MemoryExtractor:      components.memoryExtractor,
 		CredentialResolver:   components.credentialResolver,
 		RateLimiter:          components.rateLimiter,
+		InferenceCompressor:  components.inferenceCompressor,
 	}
 }

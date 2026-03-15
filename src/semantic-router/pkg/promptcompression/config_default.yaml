@@ -1,0 +1,40 @@
+# config_default.yaml
+#
+# Drop-in equivalent of DefaultConfig(512).
+# This is the baseline pipeline; swap or extend optimizers without touching Go code.
+#
+# Usage:
+#   p, err := promptcompression.LoadPipeline("config_default.yaml")
+#   result := promptcompression.CompressWithPipeline(text, p)
+
+max_tokens: 512
+preserve_first_n: 3   # primacy: system prompt + jailbreak prefix + opening PII
+preserve_last_n: 2    # recency: user's actual question
+output_headroom: 0    # increase to reserve space for model output tokens
+
+pipeline:
+
+  pre: []   # no pre-processing by default; add "dedup" here when needed
+
+  scoring:
+    # TextRank: graph-based centrality (Mihalcea & Tarau, EMNLP 2004)
+    - name: textrank
+      weight: 0.20
+
+    # Position: U-shaped attention curve (Liu et al., "Lost in the Middle", TACL 2024)
+    - name: position
+      weight: 0.40
+      params:
+        depth: 0.5   # 0=flat, 1=maximum penalty for middle sentences
+
+    # TF-IDF: information density proxy (Selective Context, Li et al., EMNLP 2023)
+    - name: tfidf
+      weight: 0.35
+
+    # Novelty: inverse centrality — surfaces outliers like jailbreaks and PII
+    - name: novelty
+      weight: 0.05
+
+  adjust: []   # no multiplicative adjustments by default
+
+  select: []   # no hard-preservation rules by default

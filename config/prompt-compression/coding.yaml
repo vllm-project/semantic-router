@@ -1,0 +1,77 @@
+# coding.yaml — compression pipeline for software engineering prompts
+#
+# Optimized for: debugging sessions, code reviews, stack traces, file diffs.
+#
+# Key behaviors vs default:
+#   - dedup:          removes repeated file reads (same content fetched multiple times)
+#   - pattern_boost:  strongly boosts error lines, file:line references, function signatures
+#   - role_weight:    preserves user questions (×2.0) and tool output (×1.5);
+#                     aggressively drops intermediate assistant reasoning (×0.4)
+#   - must_contain:   guarantees stack trace markers and TODO/FIXME lines are retained
+#   - preserve_last_n: 4 — keeps more trailing context (recent tool results + user follow-up)
+
+max_tokens: 4096
+preserve_first_n: 2    # system prompt + initial user problem statement
+preserve_last_n: 4     # last tool result + last 2 user turns + latest assistant response
+output_headroom: 1024  # extra headroom for code generation output
+
+pipeline:
+
+  pre:
+    # Drop near-identical file reads. Keeps the latest copy (most recent state).
+    - name: dedup
+      params:
+        threshold: 0.92
+
+  scoring:
+    - name: textrank
+      weight: 0.15
+
+    - name: position
+      weight: 0.30
+      params:
+        depth: 0.6      # steeper U-curve: punish middle reasoning more
+
+    - name: tfidf
+      weight: 0.40      # high weight: code is info-dense; TF-IDF excels here
+
+    - name: novelty
+      weight: 0.15      # surface panic messages and anomalous log lines
+
+  adjust:
+    # Preserve: errors, file:line refs, function signatures, task markers
+    - name: pattern_boost
+      params:
+        patterns:
+          - regex: "(?i)(error|exception|panic|fatal|warn)[\\s:]"
+            multiplier: 2.0
+          - regex: "\\w+\\.\\w{1,5}:\\d+"          # file.ext:lineno
+            multiplier: 1.8
+          - regex: "\\bfunc \\w+\\(|\\bdef \\w+\\(|\\bfunction \\w+\\("
+            multiplier: 1.6
+          - regex: "\\b(TODO|FIXME|HACK|BUG)\\b"
+            multiplier: 1.5
+          - regex: "^\\s*at \\S+\\(\\S+\\.\\w+:\\d+\\)"   # Java/JS stack frame
+            multiplier: 1.7
+
+    # User questions kept verbatim; assistant's step-by-step reasoning is droppable
+    - name: role_weight
+      params:
+        weights:
+          system:    1.2
+          user:      2.0
+          assistant: 0.4   # intermediate reasoning is the most droppable
+          tool:      1.5   # tool output (file contents, test results) is high-value
+
+  select:
+    # Hard-preserve: panic lines, assertion failures, explicit task markers
+    - name: must_contain
+      params:
+        substrings:
+          - "panic:"
+          - "FATAL:"
+          - "Traceback (most recent call last)"
+          - "goroutine "        # Go goroutine dump header
+        patterns:
+          - "\\bFAIL\\b"        # go test failure
+          - "assertion.*failed" # test assertion failure (case-insensitive)

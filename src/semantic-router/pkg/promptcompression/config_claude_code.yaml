@@ -1,0 +1,113 @@
+# config_claude_code.yaml
+#
+# Claude Code-inspired pipeline. Translates the key ideas from Claude Code's
+# LLM-based compaction into equivalent NLP operations — no model inference required.
+#
+# Claude Code idea                  → NLP translation
+# ─────────────────────────────────────────────────────────────────────────────
+# Microcompaction (drop old copies) → dedup pre-processor (cosine sim threshold)
+# §3 files + §4 errors preserved    → pattern_boost (errors, paths, signatures)
+# §6 all user messages verbatim     → role_weight (user ×2.0, assistant ×0.6)
+# /compact focus on X               → focus_keywords (caller-supplied keywords)
+# Recency (re-read last 5 files)    → steeper U-curve + larger PreserveLastN
+# Hot tail (recent tool results)    → age_decay scorer (opt-in via CompressMessages)
+# Hard guarantees                   → must_contain selector
+#
+# Usage (flat text):
+#   p, _ := promptcompression.LoadPipeline("config_claude_code.yaml")
+#   result := promptcompression.CompressWithPipeline(text, p)
+#
+# Usage (multi-turn, role-aware):
+#   p, _ := promptcompression.LoadPipeline("config_claude_code.yaml")
+#   result := promptcompression.CompressMessages([]promptcompression.Message{
+#       {Role: "system",    Content: "You are a helpful assistant."},
+#       {Role: "user",      Content: "Help me debug the auth service."},
+#       {Role: "assistant", Content: "I'll read the relevant files first..."},
+#       {Role: "tool",      Content: "...file contents..."},
+#       {Role: "user",      Content: "The token refresh still fails with 401."},
+#   }, p)
+
+max_tokens: 512
+preserve_first_n: 3
+preserve_last_n: 3    # recency: keep more trailing context than the default
+output_headroom: 0
+
+pipeline:
+
+  pre:
+    # Drop near-identical repeated sentences (same file read multiple times, etc.)
+    # Keeps the later (more recent) copy — mirrors microcompaction's "hot tail."
+    - name: dedup
+      params:
+        threshold: 0.95
+
+  scoring:
+    # TextRank slightly down-weighted: pure centrality misses safety-critical outliers
+    - name: textrank
+      weight: 0.15
+
+    # Steeper U-curve: punish middle sentences more aggressively
+    - name: position
+      weight: 0.35
+      params:
+        depth: 0.6
+
+    # TF-IDF unchanged: good proxy for information density
+    - name: tfidf
+      weight: 0.35
+
+    # Novelty up-weighted: better surface PII, jailbreaks, and one-off errors
+    - name: novelty
+      weight: 0.15
+
+    # age_decay: opt-in hot-tail policy for multi-turn sessions.
+    # Leave weight: 0 to disable; set to e.g. 0.10 when using CompressMessages.
+    # - name: age_decay
+    #   weight: 0.10
+    #   params:
+    #     factor: 0.15   # score = exp(-factor * turn_age); age=0 → newest turn
+
+  adjust:
+    # pattern_boost: preserve errors, file paths with line numbers, and function
+    # signatures — the NLP analog of Claude Code's structured §3 and §4.
+    - name: pattern_boost
+      params:
+        patterns:
+          # Error lines (Claude Code §4: errors encountered and how fixed)
+          - regex: "(?i)(error|exception|panic|fatal|warn)[\\s:]"
+            multiplier: 1.8
+          # File references with line numbers, e.g. "auth.go:142" (Claude Code §3)
+          - regex: "\\w+\\.\\w{1,5}:\\d+"
+            multiplier: 1.6
+          # Function / method signatures (Claude Code §3: exact function signatures)
+          - regex: "\\bfunc \\w+\\(|\\bdef \\w+\\(|\\bfunction \\w+\\("
+            multiplier: 1.5
+          # Task markers (Claude Code §7: pending tasks)
+          - regex: "\\b(TODO|FIXME|HACK|BUG)\\b"
+            multiplier: 1.4
+
+    # role_weight: mirror Claude Code §6 ("all user messages verbatim") and
+    # aggressive pruning of intermediate assistant reasoning.
+    # Only active when SentenceRoles is populated (i.e. via CompressMessages).
+    - name: role_weight
+      params:
+        weights:
+          system:    1.5   # framing context — important but not verbatim-critical
+          user:      2.0   # kept verbatim in Claude Code §6
+          assistant: 0.6   # intermediate reasoning — most droppable
+          tool:      1.0   # TF-IDF already handles relevance of tool outputs
+
+    # focus_keywords: boost sentences containing specific terms.
+    # Set keywords to a non-empty list to activate, e.g. for /compact focus.
+    - name: focus_keywords
+      params:
+        keywords: []   # e.g. ["authentication", "JWT", "token refresh"]
+        boost: 2.0
+
+  select:
+    # must_contain: hard-preserve sentences with these substrings or regexes.
+    # Add entries here for project-specific invariants, e.g. "CRITICAL:" markers.
+    - name: must_contain
+      params:
+        substrings: []   # e.g. ["CRITICAL:", "MUST NOT", "DO NOT"]
+        patterns: []     # e.g. ["\\bCVE-\\d{4}-\\d+\\b"]
