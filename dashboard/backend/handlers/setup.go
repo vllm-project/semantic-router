@@ -498,6 +498,10 @@ func parseSetupConfigMap(raw []byte) (map[string]interface{}, error) {
 }
 
 func validateSetupCandidate(configMap map[string]interface{}) error {
+	if err := validateRawCanonicalEndpointRefs(configMap); err != nil {
+		return err
+	}
+
 	yamlData, err := yaml.Marshal(configMap)
 	if err != nil {
 		return err

@@ -198,6 +198,10 @@ export interface DecisionRules {
 export interface ModelRef {
   model: string
   use_reasoning: boolean
+  reasoning_description?: string
+  reasoning_effort?: string
+  lora_name?: string
+  weight?: number
 }
 
 export interface PluginConfig {

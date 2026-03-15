@@ -25,8 +25,9 @@ spec:
   # ====================
   # NEW: vLLM Backend Endpoints Configuration
   # ====================
-  # Configure model backends that semantic router routes to after classification
-  # Generates vllm_endpoints and model_config sections in ConfigMap
+  # Configure model backends that semantic router routes to after classification.
+  # The operator renders these into canonical providers.models[].backend_refs
+  # and routing.modelCards entries in config.yaml.
   vllmEndpoints:
     # Example 1: KServe InferenceService (RHOAI 3)
     - name: kserve-llama3-8b

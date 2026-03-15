@@ -71,6 +71,7 @@ type Validator struct {
 	// Symbol tables (built during validation)
 	signalNames map[string]map[string]bool // signalType → {name → true}
 	modelNames  map[string]bool            // top-level model catalog entries
+	modelLoRAs  map[string]map[string]bool // model name → lora adapter names
 	pluginNames map[string]bool            // template name → true
 }
 
@@ -122,6 +123,7 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 		prog:        prog,
 		signalNames: make(map[string]map[string]bool),
 		modelNames:  make(map[string]bool),
+		modelLoRAs:  make(map[string]map[string]bool),
 		pluginNames: make(map[string]bool),
 	}
 
@@ -155,6 +157,7 @@ func ValidateAST(prog *Program) []Diagnostic {
 		prog:        prog,
 		signalNames: make(map[string]map[string]bool),
 		modelNames:  make(map[string]bool),
+		modelLoRAs:  make(map[string]map[string]bool),
 		pluginNames: make(map[string]bool),
 	}
 	v.buildSymbolTable()
@@ -175,6 +178,9 @@ func (v *Validator) buildSymbolTable() {
 
 	for _, m := range v.prog.Models {
 		v.modelNames[m.Name] = true
+		if loras := collectModelLoRANames(m.Fields); len(loras) > 0 {
+			v.modelLoRAs[m.Name] = loras
+		}
 	}
 
 	for _, p := range v.prog.Plugins {
@@ -232,42 +238,72 @@ func (v *Validator) extractSymbolTable() *SymbolTable {
 
 func (v *Validator) checkReferences() {
 	for _, route := range v.prog.Routes {
-		// Check WHEN expression signal references
-		if route.When != nil {
-			v.walkBoolExpr(route.When)
-		}
+		v.checkRouteReferences(route)
+	}
+}
 
-		// Check PLUGIN references
-		for _, pr := range route.Plugins {
-			if !v.pluginNames[pr.Name] && !isInlinePluginType(pr.Name) {
-				fix := v.suggestPlugin(pr.Name)
-				v.addDiag(DiagWarning, pr.Pos,
-					fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type", pr.Name),
-					fix,
-				)
-			}
-		}
+func (v *Validator) checkRouteReferences(route *RouteDecl) {
+	if route.When != nil {
+		v.walkBoolExpr(route.When)
+	}
 
-		// Check MODEL — at least one model should be specified
-		if len(route.Models) == 0 {
-			v.addDiag(DiagWarning, route.Pos,
-				fmt.Sprintf("Route %q has no MODEL specified", route.Name),
-				nil,
+	for _, pr := range route.Plugins {
+		if !v.pluginNames[pr.Name] && !isInlinePluginType(pr.Name) {
+			fix := v.suggestPlugin(pr.Name)
+			v.addDiag(DiagWarning, pr.Pos,
+				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type", pr.Name),
+				fix,
 			)
+		}
+	}
+
+	if len(route.Models) == 0 {
+		v.addDiag(DiagWarning, route.Pos,
+			fmt.Sprintf("Route %q has no MODEL specified", route.Name),
+			nil,
+		)
+		return
+	}
+
+	if len(v.modelNames) > 0 {
+		v.checkRouteModelReferences(route)
+	}
+}
+
+func (v *Validator) checkRouteModelReferences(route *RouteDecl) {
+	for _, mr := range route.Models {
+		if mr.Model == "" || v.modelNames[mr.Model] {
+			v.checkRouteLoRAReference(route, mr)
 			continue
 		}
+		v.addDiag(DiagWarning, mr.Pos,
+			fmt.Sprintf("Model %q is not declared in the top-level model catalog", mr.Model),
+			v.suggestModel(mr.Model),
+		)
+	}
+}
 
-		if len(v.modelNames) > 0 {
-			for _, mr := range route.Models {
-				if mr.Model == "" || v.modelNames[mr.Model] {
-					continue
-				}
-				v.addDiag(DiagWarning, mr.Pos,
-					fmt.Sprintf("Model %q is not declared in the top-level model catalog", mr.Model),
-					v.suggestModel(mr.Model),
-				)
-			}
-		}
+func (v *Validator) checkRouteLoRAReference(route *RouteDecl, mr *ModelRef) {
+	if mr == nil {
+		return
+	}
+
+	if mr.LoRA == "" || !v.modelNames[mr.Model] {
+		return
+	}
+
+	loras := v.modelLoRAs[mr.Model]
+	switch {
+	case len(loras) == 0:
+		v.addDiag(DiagWarning, mr.Pos,
+			fmt.Sprintf("Model %q declares no LoRA adapters, but route %q references LoRA %q", mr.Model, route.Name, mr.LoRA),
+			nil,
+		)
+	case !loras[mr.LoRA]:
+		v.addDiag(DiagWarning, mr.Pos,
+			fmt.Sprintf("LoRA %q is not declared for model %q in the top-level model catalog", mr.LoRA, mr.Model),
+			v.suggestLoRA(mr.Model, mr.LoRA),
+		)
 	}
 }
 
@@ -511,6 +547,45 @@ func (v *Validator) suggestModel(name string) *QuickFix {
 		Description: fmt.Sprintf("Change to %q", closest),
 		NewText:     closest,
 	}
+}
+
+func (v *Validator) suggestLoRA(modelName, loraName string) *QuickFix {
+	candidates := keysOfBool(v.modelLoRAs[modelName])
+	closest := suggestSimilar(loraName, candidates)
+	if closest == "" {
+		return nil
+	}
+	return &QuickFix{
+		Description: fmt.Sprintf("Change to %q", closest),
+		NewText:     closest,
+	}
+}
+
+func collectModelLoRANames(fields map[string]Value) map[string]bool {
+	if fields == nil {
+		return nil
+	}
+	raw, ok := fields["loras"]
+	if !ok {
+		return nil
+	}
+	av, ok := raw.(ArrayValue)
+	if !ok {
+		return nil
+	}
+	loras := make(map[string]bool)
+	for _, item := range av.Items {
+		ov, ok := item.(ObjectValue)
+		if !ok {
+			continue
+		}
+		nameValue, ok := ov.Fields["name"].(StringValue)
+		if !ok || nameValue.V == "" {
+			continue
+		}
+		loras[nameValue.V] = true
+	}
+	return loras
 }
 
 // suggestSimilar finds the closest match using Levenshtein distance.

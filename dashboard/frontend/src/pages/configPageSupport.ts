@@ -7,6 +7,11 @@ export interface VLLMEndpoint {
   port: number
   weight: number
   health_check_path: string
+  protocol?: 'http' | 'https'
+  provider_profile?: string
+  type?: string
+  api_key?: string
+  api_key_env?: string
 }
 
 export interface ModelConfig {
@@ -87,10 +92,27 @@ export interface ModelPricing {
   completion_per_1m?: number
 }
 
+export interface LoRAAdapter {
+  name: string
+  description?: string
+}
+
 export interface ModelConfigEntry {
+  model_id?: string
   reasoning_family?: string
   preferred_endpoints?: string[]
+  access_key?: string
   pricing?: ModelPricing
+  api_format?: string
+  external_model_ids?: Record<string, string>
+  param_size?: string
+  context_window_size?: number
+  description?: string
+  capabilities?: string[]
+  loras?: LoRAAdapter[]
+  tags?: string[]
+  quality_score?: number
+  modality?: string
 }
 
 export interface BackendRefEntry {
@@ -98,7 +120,14 @@ export interface BackendRefEntry {
   endpoint?: string
   protocol?: 'http' | 'https'
   weight?: number
+  type?: string
   base_url?: string
+  provider?: string
+  auth_header?: string
+  auth_prefix?: string
+  extra_headers?: Record<string, string>
+  api_version?: string
+  chat_path?: string
   api_key?: string
   api_key_env?: string
 }
@@ -110,6 +139,7 @@ export interface RoutingModelCard {
   context_window_size?: number
   description?: string
   capabilities?: string[]
+  loras?: LoRAAdapter[]
   tags?: string[]
   quality_score?: number
   modality?: string
@@ -425,7 +455,14 @@ export interface ConfigData {
       operator: 'AND' | 'OR' | 'NOT'
       conditions: Array<{ type: string; name: string }>
     }
-    modelRefs: Array<{ model: string; use_reasoning: boolean }>
+    modelRefs: Array<{
+      model: string
+      use_reasoning: boolean
+      reasoning_description?: string
+      reasoning_effort?: string
+      lora_name?: string
+      weight?: number
+    }>
     plugins?: Array<{ type: string; configuration: Record<string, unknown> }>
   }>
   providers?: {
@@ -438,6 +475,8 @@ export interface ConfigData {
       name: string
       reasoning_family?: string
       provider_model_id?: string
+      api_format?: string
+      external_model_ids?: Record<string, string>
       endpoints?: Array<{
         name: string
         weight: number
@@ -527,7 +566,14 @@ export interface DecisionFormState {
   priority: number
   operator: 'AND' | 'OR' | 'NOT'
   conditions: { type: string; name: string }[]
-  modelRefs: { model: string; use_reasoning: boolean }[]
+  modelRefs: Array<{
+    model: string
+    use_reasoning: boolean
+    reasoning_description?: string
+    reasoning_effort?: string
+    lora_name?: string
+    weight?: number
+  }>
   plugins: { type: string; configuration: string | Record<string, unknown> }[]
 }
 

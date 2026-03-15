@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,7 +10,7 @@ canonical routing model catalog versus runtime-only LoRA adapter support
 
 ## Summary
 
-The runtime router and several compatibility/public surfaces still understand `decision.modelRefs[].lora_name` and `model_config[*].loras`, but the canonical v0.3 public contract has no steady-state place to declare those LoRA adapters under `version/listeners/providers/routing/global`. As a result, user-facing canonical assets now avoid LoRA examples, the exhaustive reference-config contract intentionally excludes `lora_name`, and the repo still carries an exposed feature that the supported canonical config cannot describe end to end.
+The canonical v0.3 routing contract now owns the LoRA adapter catalog under `routing.modelCards[].loras`, and every active surface that exposes `decision.modelRefs[].lora_name` now resolves against that same catalog. The repo no longer relies on runtime-only `model_config[*].loras` as the only end-to-end path.
 
 ## Evidence
 
@@ -18,11 +18,27 @@ The runtime router and several compatibility/public surfaces still understand `d
 - [src/semantic-router/pkg/config/model_config_types.go](../../../src/semantic-router/pkg/config/model_config_types.go)
 - [src/semantic-router/pkg/config/validator.go](../../../src/semantic-router/pkg/config/validator.go)
 - [src/semantic-router/pkg/config/canonical_config.go](../../../src/semantic-router/pkg/config/canonical_config.go)
+- [src/semantic-router/pkg/config/canonical_export.go](../../../src/semantic-router/pkg/config/canonical_export.go)
 - [src/semantic-router/pkg/config/reference_config_contract_test.go](../../../src/semantic-router/pkg/config/reference_config_contract_test.go)
+- [src/semantic-router/pkg/config/reference_config_routing_surface_test.go](../../../src/semantic-router/pkg/config/reference_config_routing_surface_test.go)
 - [src/vllm-sr/cli/models.py](../../../src/vllm-sr/cli/models.py)
+- [src/vllm-sr/cli/config_migration.py](../../../src/vllm-sr/cli/config_migration.py)
+- [src/vllm-sr/cli/validator.py](../../../src/vllm-sr/cli/validator.py)
+- [src/vllm-sr/tests/test_config_migrate.py](../../../src/vllm-sr/tests/test_config_migrate.py)
+- [src/semantic-router/pkg/dsl/compiler_models.go](../../../src/semantic-router/pkg/dsl/compiler_models.go)
+- [src/semantic-router/pkg/dsl/routing_contract.go](../../../src/semantic-router/pkg/dsl/routing_contract.go)
+- [src/semantic-router/pkg/dsl/validator.go](../../../src/semantic-router/pkg/dsl/validator.go)
+- [src/semantic-router/pkg/dsl/routing_contract_test.go](../../../src/semantic-router/pkg/dsl/routing_contract_test.go)
+- [dashboard/frontend/src/pages/ConfigPage.tsx](../../../dashboard/frontend/src/pages/ConfigPage.tsx)
+- [dashboard/frontend/src/pages/configPageSupport.ts](../../../dashboard/frontend/src/pages/configPageSupport.ts)
 - [deploy/operator/api/v1alpha1/semanticrouter_types.go](../../../deploy/operator/api/v1alpha1/semanticrouter_types.go)
-- [deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml](../../../deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml)
+- [deploy/operator/controllers/backend_discovery.go](../../../deploy/operator/controllers/backend_discovery.go)
+- [deploy/operator/controllers/semanticrouter_controller.go](../../../deploy/operator/controllers/semanticrouter_controller.go)
+- [deploy/operator/controllers/semanticrouter_controller_test.go](../../../deploy/operator/controllers/semanticrouter_controller_test.go)
+- [config/config.yaml](../../../config/config.yaml)
 - [config/decision/single/domain-computer-science.yaml](../../../config/decision/single/domain-computer-science.yaml)
+- [website/docs/installation/configuration.md](../../../website/docs/installation/configuration.md)
+- [website/docs/proposals/unified-config-contract-v0-3.md](../../../website/docs/proposals/unified-config-contract-v0-3.md)
 
 ## Why It Matters
 
@@ -40,3 +56,10 @@ The runtime router and several compatibility/public surfaces still understand `d
 - Canonical config has one explicit, documented LoRA catalog field with parser, validator, CLI, dashboard, and DSL support.
 - `config/config.yaml` and `config/decision/` can include LoRA examples without relying on runtime-only legacy fields.
 - The reference-config contract test no longer needs to exclude `lora_name`.
+
+## Retirement Notes
+
+- Canonical routing config now exposes `routing.modelCards[].loras`, and the router parser/normalizer validates `decision.modelRefs[].lora_name` against that catalog.
+- CLI migration converts legacy flat `model_config[*].loras`, `vllm_endpoints`, and `provider_profiles` into canonical `routing/providers` structures instead of leaving LoRA support behind in migration-only runtime fields.
+- DSL compile/decompile/validation now carries model-catalog LoRA entries as part of the routing-owned surface.
+- Dashboard decision editing preserves and emits `lora_name`, while the operator's `spec.vllmEndpoints[].loras` adapter now projects into canonical `routing.modelCards[].loras`.

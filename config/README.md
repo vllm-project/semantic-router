@@ -12,6 +12,7 @@ Inside canonical `config.yaml`:
 
 - `providers.defaults` holds provider-wide defaults such as `default_model` and reasoning families
 - `providers.models[]` holds concrete backend access details directly
+- `routing.modelCards[]` holds semantic model metadata, including optional `loras[]` catalogs for decision-level `lora_name` references
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
 - router-owned model-backed module config lives under `global.model_catalog.modules`
 
@@ -22,6 +23,8 @@ Inside canonical `config.yaml`:
 - `or/`: disjunction examples
 - `not/`: exclusion examples
 - `composite/`: nested AND/OR/NOT cases
+
+Decision fragments may reference `modelRefs[].lora_name`, but those adapter names must be declared in the base config's `routing.modelCards[].loras`.
 
 `config/algorithm/` is organized by routing policy:
 

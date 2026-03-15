@@ -41,8 +41,9 @@ type BackendEndpoint struct {
 
 // ModelConfig represents model configuration for vllm
 type ModelConfig struct {
-	ReasoningFamily    string   `yaml:"reasoning_family,omitempty"`
-	PreferredEndpoints []string `yaml:"preferred_endpoints,omitempty"`
+	ReasoningFamily    string                         `yaml:"reasoning_family,omitempty"`
+	PreferredEndpoints []string                       `yaml:"preferred_endpoints,omitempty"`
+	LoRAs              []vllmv1alpha1.LoRAAdapterSpec `yaml:"loras,omitempty"`
 }
 
 // discoverKServeBackend discovers backend from KServe InferenceService
@@ -209,7 +210,9 @@ func discoverBackendEndpoint(ctx context.Context, c client.Client, vllmEndpoint 
 	return endpoint, nil
 }
 
-// generateVLLMEndpointsConfig generates YAML configuration for vllm_endpoints and model_config
+// generateVLLMEndpointsConfig discovers Kubernetes backends and returns the
+// intermediate endpoint + model metadata used to render canonical
+// providers.models[].backend_refs and routing.modelCards.
 func generateVLLMEndpointsConfig(ctx context.Context, c client.Client, vllmEndpoints []vllmv1alpha1.VLLMEndpointSpec, namespace string) (map[string]interface{}, map[string]ModelConfig, error) {
 	logger := log.FromContext(ctx)
 
@@ -243,6 +246,7 @@ func generateVLLMEndpointsConfig(ctx context.Context, c client.Client, vllmEndpo
 			modelConfig := ModelConfig{
 				ReasoningFamily:    vllmEndpoint.ReasoningFamily,
 				PreferredEndpoints: []string{endpoint.Name},
+				LoRAs:              append([]vllmv1alpha1.LoRAAdapterSpec(nil), vllmEndpoint.LoRAs...),
 			}
 			modelConfigs[vllmEndpoint.Model] = modelConfig
 		}

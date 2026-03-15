@@ -250,10 +250,12 @@ class ModelRef(BaseModel):
 
     model: str
     use_reasoning: Optional[bool] = False
+    reasoning_description: Optional[str] = None
     reasoning_effort: Optional[str] = (
         None  # Model-specific reasoning effort level (low, medium, high)
     )
     lora_name: Optional[str] = None  # LoRA adapter name (if using LoRA)
+    weight: Optional[float] = None
 
 
 class HybridWeightsConfig(BaseModel):
@@ -860,6 +862,13 @@ class Model(BaseModel):
     external_model_ids: Optional[Dict[str, str]] = None
 
 
+class LoRAAdapter(BaseModel):
+    """LoRA adapter metadata exposed under routing.modelCards[].loras."""
+
+    name: str
+    description: Optional[str] = None
+
+
 class RoutingModel(BaseModel):
     """Semantic model catalog entry exposed to routing/DSL."""
 
@@ -869,6 +878,8 @@ class RoutingModel(BaseModel):
     context_window_size: Optional[int] = Field(default=None, ge=1)
     description: Optional[str] = None
     capabilities: Optional[List[str]] = None
+    loras: Optional[List[LoRAAdapter]] = None
+    tags: Optional[List[str]] = None
     quality_score: Optional[float] = Field(default=None, ge=0, le=1)
     modality: Optional[str] = None
 

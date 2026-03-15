@@ -250,18 +250,21 @@ invalid endpoint address: <address>
 
 | Wrong                  | Correct                              |
 | ---------------------- | ------------------------------------ |
-| `http://10.0.0.1:8000` | `10.0.0.1` (address) + `8000` (port) |
-| `vllm.example.com`     | Use IP address instead               |
-| `10.0.0.1:8000`        | Separate address and port fields     |
+| `http://10.0.0.1:8000` | `10.0.0.1:8000` (`endpoint`)         |
+| `vllm.example.com`     | `vllm.example.com:8000`              |
+| `10.0.0.1`             | `10.0.0.1:8000`                      |
 
 ```yaml
-vllm_endpoints:
-  - name: "endpoint1"
-    address: "10.0.0.1" # IP only, no protocol/port
-    port: 8000 # Port separate
+providers:
+  models:
+    - name: qwen3-8b
+      backend_refs:
+        - name: endpoint1
+          endpoint: "10.0.0.1:8000" # host:port, no scheme
+          protocol: http
 ```
 
-> See: [config.yaml#vllm_endpoints](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml#L43-L51) AND [pkg/extproc](https://github.com/vllm-project/semantic-router/tree/main/src/semantic-router/pkg/extproc).
+> See: [config/config.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) and [Configuration](../installation/configuration).
 
 ---
 

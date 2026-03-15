@@ -163,6 +163,23 @@ func assertDecisionRuleCompositionInReferenceConfig(t testingT, decisions []inte
 	}
 }
 
+func assertReferenceLoRACatalogCoverage(t testingT, root map[string]interface{}) {
+	modelCards := mustSliceAt(t, root, "routing", "modelCards")
+	if len(collectNestedSliceItems(t, modelCards, "loras", "routing.modelCards")) == 0 {
+		t.Fatalf("config/config.yaml must declare at least one routing.modelCards[].loras entry")
+	}
+
+	decisions := mustSliceAt(t, root, "routing", "decisions")
+	modelRefs := collectNestedSliceItems(t, decisions, "modelRefs", "routing.decisions")
+	for _, rawModelRef := range modelRefs {
+		modelRef := mustMapValue(t, rawModelRef, "routing.decisions[].modelRefs")
+		if _, ok := modelRef["lora_name"]; ok {
+			return
+		}
+	}
+	t.Fatalf("config/config.yaml must exercise routing.decisions[].modelRefs[].lora_name")
+}
+
 func referenceAlgorithmsByType(t testingT, decisions []interface{}) map[string]map[string]interface{} {
 	algorithms := collectChildMapsFromSlice(t, decisions, "algorithm", "routing.decisions")
 	result := make(map[string]map[string]interface{}, len(algorithms))

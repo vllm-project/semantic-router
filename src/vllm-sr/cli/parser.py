@@ -56,6 +56,7 @@ def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
                     "context_window_size",
                     "description",
                     "capabilities",
+                    "loras",
                     "quality_score",
                     "modality",
                     "tags",

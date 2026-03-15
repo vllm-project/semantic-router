@@ -245,3 +245,58 @@ global:
 		t.Fatalf("expected memory override to still apply, got enabled=%v auto_store=%v", cfg.Memory.Enabled, cfg.Memory.AutoStore)
 	}
 }
+
+func TestParseYAMLBytesParsesCanonicalLoRACatalog(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: qwen3
+  models:
+    - name: qwen3
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: qwen3
+      loras:
+        - name: sql-expert
+          description: SQL-specialized adapter
+        - name: code-review
+  signals:
+    domains:
+      - name: other
+        description: fallback
+  decisions:
+    - name: default_route
+      priority: 1
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: other
+      modelRefs:
+        - model: qwen3
+          lora_name: sql-expert
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	loras := cfg.ModelConfig["qwen3"].LoRAs
+	if len(loras) != 2 {
+		t.Fatalf("expected 2 LoRA adapters, got %#v", loras)
+	}
+	if loras[0].Name != "sql-expert" || loras[0].Description != "SQL-specialized adapter" {
+		t.Fatalf("unexpected first LoRA adapter: %#v", loras[0])
+	}
+	if cfg.Decisions[0].ModelRefs[0].LoRAName != "sql-expert" {
+		t.Fatalf("expected lora_name to survive parse, got %q", cfg.Decisions[0].ModelRefs[0].LoRAName)
+	}
+}

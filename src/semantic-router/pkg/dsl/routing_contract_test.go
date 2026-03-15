@@ -43,6 +43,9 @@ MODEL "math-small" {
   param_size: "3b"
   description: "Math focused local model"
   capabilities: ["math", "chat"]
+  loras: [
+    { name: "math-adapter", description: "Improves symbolic math responses" },
+  ]
   tags: ["local", "fast"]
   quality_score: 0.91
   modality: "ar"
@@ -50,7 +53,7 @@ MODEL "math-small" {
 
 ROUTE math_route {
   PRIORITY 10
-  MODEL "math-small"
+  MODEL "math-small"(lora = "math-adapter")
 }`
 
 	cfg, errs := Compile(input)
@@ -74,6 +77,9 @@ ROUTE math_route {
 	if len(params.Capabilities) != 2 || params.Capabilities[0] != "math" {
 		t.Fatalf("capabilities = %#v", params.Capabilities)
 	}
+	if len(params.LoRAs) != 1 || params.LoRAs[0].Name != "math-adapter" {
+		t.Fatalf("loras = %#v", params.LoRAs)
+	}
 	if len(params.Tags) != 2 || params.Tags[0] != "local" {
 		t.Fatalf("tags = %#v", params.Tags)
 	}
@@ -90,13 +96,16 @@ MODEL "math-small" {
   reasoning_family_ref: "openai"
   param_size: "3b"
   capabilities: ["math", "chat"]
+  loras: [
+    { name: "math-adapter", description: "Improves symbolic math responses" },
+  ]
   tags: ["local", "fast"]
 }
 
 ROUTE math_route {
   PRIORITY 10
   WHEN domain("math")
-  MODEL "math-small"
+  MODEL "math-small"(lora = "math-adapter")
 }`
 
 	cfg, errs := Compile(input)
@@ -129,6 +138,12 @@ ROUTE math_route {
 	if doc.Routing.ModelCards[0].Name != "math-small" {
 		t.Fatalf("routing model = %q", doc.Routing.ModelCards[0].Name)
 	}
+	if len(doc.Routing.ModelCards[0].LoRAs) != 1 || doc.Routing.ModelCards[0].LoRAs[0].Name != "math-adapter" {
+		t.Fatalf("routing model loras = %#v", doc.Routing.ModelCards[0].LoRAs)
+	}
+	if doc.Routing.Decisions[0].ModelRefs[0].LoRAName != "math-adapter" {
+		t.Fatalf("decision lora_name = %q", doc.Routing.Decisions[0].ModelRefs[0].LoRAName)
+	}
 }
 
 func TestDecompileRoutingIgnoresStaticCanonicalSections(t *testing.T) {
@@ -160,6 +175,9 @@ routing:
       reasoning_family_ref: openai
       param_size: 3b
       capabilities: [math, chat]
+      loras:
+        - name: math-adapter
+          description: Improves symbolic math responses
       tags: [local, fast]
   signals:
     domains:
@@ -175,6 +193,7 @@ routing:
             name: math
       modelRefs:
         - model: math-small
+          lora_name: math-adapter
 global:
   router:
     strategy: priority
@@ -193,7 +212,40 @@ global:
 	if !strings.Contains(dslText, `MODEL math-small`) {
 		t.Fatalf("expected routing model catalog in DSL:\n%s", dslText)
 	}
+	if !strings.Contains(dslText, `lora = "math-adapter"`) {
+		t.Fatalf("expected LoRA reference to survive decompile:\n%s", dslText)
+	}
+	if !strings.Contains(dslText, `name: "math-adapter"`) {
+		t.Fatalf("expected LoRA catalog to survive decompile:\n%s", dslText)
+	}
 	if strings.Contains(dslText, "BACKEND ") || strings.Contains(dslText, "GLOBAL {") {
 		t.Fatalf("routing-only decompile leaked static sections:\n%s", dslText)
 	}
+}
+
+func TestValidateRouteLoRAAgainstModelCatalog(t *testing.T) {
+	input := `
+MODEL "math-small" {
+  loras: [
+    { name: "math-adapter" },
+  ]
+}
+
+ROUTE math_route {
+  PRIORITY 10
+  MODEL "math-small"(lora = "missing-adapter")
+}`
+
+	diags, errs := Validate(input)
+	if len(errs) > 0 {
+		t.Fatalf("unexpected parse errors: %v", errs)
+	}
+
+	for _, diag := range diags {
+		if strings.Contains(diag.Message, `LoRA "missing-adapter" is not declared for model "math-small"`) {
+			return
+		}
+	}
+
+	t.Fatalf("expected missing LoRA diagnostic, got %#v", diags)
 }

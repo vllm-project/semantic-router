@@ -118,6 +118,9 @@ spec:
     - name: llama3-8b-endpoint
       model: llama3-8b
       reasoningFamily: qwen3
+      loras:
+        - name: computer-science-expert
+          description: Adapter for advanced computer science prompts
       backend:
         type: kserve
         inferenceServiceName: llama-3-8b
@@ -143,8 +146,8 @@ spec:
         default_reasoning_effort: medium
         reasoning_families:
           qwen3:
-            type: effort
-            parameter: reasoning.effort
+            type: chat_template_kwargs
+            parameter: enable_thinking
       models:
         - name: llama3-8b
           provider_model_id: llama3-8b
@@ -214,7 +217,7 @@ Apply the configuration:
 kubectl apply -f my-router.yaml
 ```
 
-`spec.config` should use the same canonical `providers/routing/global` layout as local `config.yaml`. `spec.vllmEndpoints` remains the Kubernetes adapter for discovering backends and served-model aliases; the operator translates it into canonical `providers.models[].backend_refs[]` and `routing.modelCards` entries when rendering the runtime config.
+`spec.config` should use the same canonical `providers/routing/global` layout as local `config.yaml`. `spec.vllmEndpoints` remains the Kubernetes adapter for discovering backends and served-model aliases; the operator translates it into canonical `providers.models[].backend_refs[]` and `routing.modelCards` entries, including optional `loras`, when rendering the runtime config.
 
 ## Advanced Features
 

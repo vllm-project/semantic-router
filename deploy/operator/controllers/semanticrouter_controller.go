@@ -657,18 +657,14 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 		}
 
 		if endpointsConfig != nil {
-			if vllmEndpoints, ok := endpointsConfig["vllm_endpoints"].([]interface{}); ok {
+			if vllmEndpoints, ok := normalizeEndpointConfigSlice(endpointsConfig["vllm_endpoints"]); ok {
 				backendByName := map[string]map[string]interface{}{}
 				for _, ep := range vllmEndpoints {
-					epMap, ok := ep.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					name, _ := epMap["name"].(string)
-					address, _ := epMap["address"].(string)
-					port, _ := epMap["port"].(int)
-					weight, _ := epMap["weight"].(int)
-					protocol, _ := epMap["protocol"].(string)
+					name, _ := ep["name"].(string)
+					address, _ := ep["address"].(string)
+					port, _ := ep["port"].(int)
+					weight, _ := ep["weight"].(int)
+					protocol, _ := ep["protocol"].(string)
 					if port > 0 {
 						backendByName[name] = map[string]interface{}{
 							"name":     name,
@@ -687,6 +683,19 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 						modelEntry := map[string]interface{}{"name": modelName}
 						if rawConfig.ReasoningFamily != "" {
 							modelEntry["reasoning_family_ref"] = rawConfig.ReasoningFamily
+						}
+						if len(rawConfig.LoRAs) > 0 {
+							loras := make([]map[string]interface{}, 0, len(rawConfig.LoRAs))
+							for _, adapter := range rawConfig.LoRAs {
+								loraEntry := map[string]interface{}{
+									"name": adapter.Name,
+								}
+								if adapter.Description != "" {
+									loraEntry["description"] = adapter.Description
+								}
+								loras = append(loras, loraEntry)
+							}
+							modelEntry["loras"] = loras
 						}
 						modelCards = append(modelCards, modelEntry)
 
@@ -808,6 +817,25 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 	}
 
 	return string(data), nil
+}
+
+func normalizeEndpointConfigSlice(raw interface{}) ([]map[string]interface{}, bool) {
+	switch typed := raw.(type) {
+	case []map[string]interface{}:
+		return typed, true
+	case []interface{}:
+		result := make([]map[string]interface{}, 0, len(typed))
+		for _, item := range typed {
+			entry, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			result = append(result, entry)
+		}
+		return result, true
+	default:
+		return nil, false
+	}
 }
 
 func (r *SemanticRouterReconciler) generateToolsJSON(sr *vllmv1alpha1.SemanticRouter) (string, error) {
