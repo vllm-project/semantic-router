@@ -135,13 +135,14 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		ctx.TraceContext = spanCtx
 	}
 
-	// Cache miss, store the request for later
-	// Get decision-specific TTL
-	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
-	if err != nil {
-		logging.Errorf("Error adding pending request to cache: %v", err)
-		// Continue without caching
+	// Cache miss, store the request for later (only if caching is enabled for this decision)
+	if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
+		ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
+		err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
+		if err != nil {
+			logging.Errorf("Error adding pending request to cache: %v", err)
+			// Continue without caching
+		}
 	}
 
 	return nil, false
