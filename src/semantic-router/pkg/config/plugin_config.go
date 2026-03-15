@@ -8,10 +8,11 @@ import (
 )
 
 // DecisionPlugin represents a plugin configuration for a decision.
+// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak",
+// "pii", "system_prompt", "header_mutation", "hallucination",
+// "response_jailbreak", "router_replay", "memory", "fast_response", "request_params".
 type DecisionPlugin struct {
-	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak",
-	// "pii", "system_prompt", "header_mutation", "hallucination",
-	// "response_jailbreak", "router_replay", "memory", "fast_response".
+	// Type specifies the plugin type.
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration is the raw configuration for this plugin.
@@ -41,6 +42,19 @@ type MemoryPluginConfig struct {
 // FastResponsePluginConfig represents configuration for fast_response plugin.
 type FastResponsePluginConfig struct {
 	Message string `json:"message" yaml:"message"`
+}
+
+// RequestParamsPluginConfig represents configuration for request_params plugin.
+// This plugin validates and strips request body parameters per decision.
+type RequestParamsPluginConfig struct {
+	// BlockedParams is a list of parameters that should be blocked/stripped.
+	BlockedParams []string `json:"blocked_params,omitempty" yaml:"blocked_params,omitempty"`
+	// MaxTokensLimit sets the maximum allowed value for max_tokens.
+	MaxTokensLimit *int `json:"max_tokens_limit,omitempty" yaml:"max_tokens_limit,omitempty"`
+	// MaxN is the maximum allowed value for n (number of completions).
+	MaxN *int `json:"max_n,omitempty" yaml:"max_n,omitempty"`
+	// StripUnknown if true, removes fields not in the OpenAI spec.
+	StripUnknown bool `json:"strip_unknown,omitempty" yaml:"strip_unknown,omitempty"`
 }
 
 // SystemPromptPluginConfig represents configuration for system_prompt plugin.
@@ -210,6 +224,12 @@ func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
 func (d *Decision) GetFastResponseConfig() *FastResponsePluginConfig {
 	result := &FastResponsePluginConfig{}
 	return decodeDecisionPlugin(d, "fast_response", result)
+}
+
+// GetRequestParamsConfig returns the request_params plugin configuration.
+func (d *Decision) GetRequestParamsConfig() *RequestParamsPluginConfig {
+	result := &RequestParamsPluginConfig{}
+	return decodeDecisionPlugin(d, "request_params", result)
 }
 
 func decodeDecisionPlugin[T any](d *Decision, pluginType string, result *T) *T {
