@@ -266,7 +266,7 @@ def main():
 Examples:
     python run_cli_tests.py                    # Run all unit tests
     python run_cli_tests.py --integration      # Include integration tests
-    python run_cli_tests.py --pattern init     # Run tests matching 'init'
+    python run_cli_tests.py --pattern lifecycle # Run tests matching 'lifecycle'
     python run_cli_tests.py -v                 # Verbose output
 
 Integration Tests:
@@ -285,7 +285,7 @@ Integration Tests:
     parser.add_argument(
         "--pattern",
         "-p",
-        help="Pattern to filter test files (e.g., 'init' matches test_vllm_sr_init.py)",
+        help="Pattern to filter test files (e.g., 'lifecycle' matches test_unit_lifecycle.py)",
     )
     parser.add_argument(
         "--verbose",

@@ -71,7 +71,18 @@ def inject_algorithm_into_config(config_path: Path, algorithm: str) -> Path:
     with config_path.open() as handle:
         config = yaml.safe_load(handle)
 
-    decisions = config.get("decisions", [])
+    routing = config.get("routing")
+    if not isinstance(routing, dict):
+        log.warning("No routing section found; skipping --algorithm override")
+        decisions = []
+    else:
+        decisions = routing.get("decisions", [])
+        if not isinstance(decisions, list):
+            log.warning(
+                "routing.decisions is not a list; skipping --algorithm override"
+            )
+            decisions = []
+
     for decision in decisions:
         if "algorithm" not in decision:
             decision["algorithm"] = {}
