@@ -159,6 +159,12 @@ type SemanticCache struct {
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
 	BackendConfigPath   string        `yaml:"backend_config_path,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
+	// ContextWindowTurns enables context-aware cache keys for multi-turn conversations.
+	// 0 = disabled (default): cache key is the last user message only.
+	// N > 0: include the system prompt and up to N prior user+assistant turn pairs
+	// before the current user message. Prevents false cache hits when the same
+	// question appears in different conversation contexts.
+	ContextWindowTurns int `yaml:"context_window_turns,omitempty"`
 }
 
 type MemoryConfig struct {

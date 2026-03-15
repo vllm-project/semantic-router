@@ -15,12 +15,14 @@ import (
 
 // handleCaching handles cache lookup and storage with category-specific settings
 func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
+	contextWindowTurns := r.Config.SemanticCache.ContextWindowTurns
+
 	// Skip cache read for looper internal requests
 	// Looper requests should not return cached responses, but should still write to cache
 	if ctx.LooperRequest {
 		logging.Debugf("[Cache] Skipping cache read for looper internal request")
 		// Still extract model and query for potential cache write later
-		requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+		requestModel, requestQuery, cacheKey, err := cache.BuildContextAwareCacheQuery(ctx.OriginalRequestBody, contextWindowTurns)
 		if err != nil {
 			logging.Errorf("Error extracting query from request: %v", err)
 			return nil, false
@@ -33,9 +35,9 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		if categoryName != "" {
 			cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
 		}
-		if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
+		if cacheKey != "" && r.Cache.IsEnabled() && cacheEnabled {
 			ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-			err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
+			err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, cacheKey, ctx.OriginalRequestBody, ttlSeconds)
 			if err != nil {
 				logging.Errorf("Error adding pending request to cache: %v", err)
 			}
@@ -43,8 +45,11 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		return nil, false
 	}
 
-	// Extract the model and query for cache lookup
-	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+	// Extract the model and query for cache lookup.
+	// cacheKey incorporates conversation context when context_window_turns > 0,
+	// so that identical last-user messages in different conversation threads do
+	// not produce false cache hits.
+	requestModel, requestQuery, cacheKey, err := cache.BuildContextAwareCacheQuery(ctx.OriginalRequestBody, contextWindowTurns)
 	if err != nil {
 		logging.Errorf("Error extracting query from request: %v", err)
 		// Continue without caching
@@ -52,7 +57,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	}
 
 	ctx.RequestModel = requestModel
-	ctx.RequestQuery = requestQuery
+	ctx.RequestQuery = requestQuery // last user message only – used for logging/metrics
 
 	// Check if caching is enabled for this decision
 	cacheEnabled := r.Config.SemanticCache.Enabled
@@ -63,7 +68,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	logging.Infof("handleCaching: requestQuery='%s' (len=%d), cacheEnabled=%v, r.Cache.IsEnabled()=%v",
 		requestQuery, len(requestQuery), cacheEnabled, r.Cache.IsEnabled())
 
-	if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
+	if cacheKey != "" && r.Cache.IsEnabled() && cacheEnabled {
 		// Get decision-specific threshold
 		threshold := r.Config.GetCacheSimilarityThreshold()
 		if categoryName != "" {
@@ -77,8 +82,10 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
 
 		startTime := time.Now()
-		// Try to find a similar cached response using category-specific threshold
-		cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, requestQuery, threshold)
+		// Try to find a similar cached response using category-specific threshold.
+		// cacheKey is the context-enriched embedding text (or plain last-user-message
+		// when context_window_turns == 0).
+		cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, cacheKey, threshold)
 		lookupTime := time.Since(startTime).Milliseconds()
 
 		logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
@@ -135,10 +142,10 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		ctx.TraceContext = spanCtx
 	}
 
-	// Cache miss, store the request for later
-	// Get decision-specific TTL
+	// Cache miss, store the request for later.
+	// Use the same cacheKey so future lookups with matching context hit this entry.
 	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
+	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, cacheKey, ctx.OriginalRequestBody, ttlSeconds)
 	if err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 		// Continue without caching
