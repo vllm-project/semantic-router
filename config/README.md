@@ -31,7 +31,7 @@ Decision fragments may reference `modelRefs[].lora_name`, but those adapter name
 - `looper/`: multi-model execution policies such as `confidence`, `ratings`, and `remom`
 - `selection/`: candidate-selection policies such as `elo`, `router_dc`, `automix`, and `latency_aware`
 
-The repository enforces this fragment catalog, the exhaustive reference config, and the core public config docs in Go tests. When a supported signal, decision algorithm, plugin surface, or canonical contract term changes, both `go test ./pkg/config/...` and `make agent-lint` will fail until `config/` and the core config docs are updated to match.
+The repository enforces this fragment catalog, the exhaustive reference config, the maintained deploy/E2E config assets, and the core public config docs in Go tests. When a supported signal, decision algorithm, plugin surface, or canonical contract term changes, both `go test ./pkg/config/...` and `make agent-lint` will fail until `config/`, maintained `deploy/` / `e2e/` config assets, and the core config docs are updated to match.
 
 Latest official tutorials mirror the same top-level taxonomy:
 

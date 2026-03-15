@@ -5,19 +5,22 @@
 #   - Simple deployments where a single API key per model is sufficient
 #   - Testing without running an authorization service
 #
-# FAIL-CLOSED: if a model's access_key is empty, the request is rejected.
-# This catches missing config instead of sending unauthenticated requests
-# to LLM providers (which would return cryptic 401 errors).
+# FAIL-CLOSED: if a model backend ref has no api_key, the request is rejected.
 
-authz:
-  fail_open: false             # reject if access_key is missing
-  providers:
-    - type: static-config
+global:
+  services:
+    authz:
+      fail_open: false
+      providers:
+        - type: static-config
 
-model_config:
-  gpt-4o-mini:
-    model_name: gpt-4o-mini
-    access_key: "sk-proj-my-openai-key"
-  claude-sonnet-4-5-20250929:
-    model_name: claude-sonnet-4-5-20250929
-    access_key: "sk-ant-my-anthropic-key"
+providers:
+  models:
+    - name: gpt-4o-mini
+      backend_refs:
+        - name: static-openai
+          api_key: "sk-proj-my-openai-key"
+    - name: claude-sonnet-4-5-20250929
+      backend_refs:
+        - name: static-anthropic
+          api_key: "sk-ant-my-anthropic-key"

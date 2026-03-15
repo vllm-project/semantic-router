@@ -49,6 +49,31 @@ providers:
 	}
 }
 
+func TestParseYAMLBytesRejectsTopLevelLegacyRuntimeLayout(t *testing.T) {
+	legacyYAML := []byte(`
+version: v0.3
+default_model: qwen2.5:3b
+semantic_cache:
+  enabled: false
+`)
+
+	_, err := ParseYAMLBytes(legacyYAML)
+	if err == nil {
+		t.Fatal("expected top-level legacy runtime layout to be rejected")
+	}
+
+	message := err.Error()
+	for _, fragment := range []string{
+		"config file must use canonical v0.3 version/listeners/providers/routing/global",
+		"unexpected top-level keys: default_model, semantic_cache",
+		"vllm-sr config migrate --config old-config.yaml",
+	} {
+		if !strings.Contains(message, fragment) {
+			t.Fatalf("expected error to mention %q, got: %s", fragment, message)
+		}
+	}
+}
+
 func TestParseYAMLBytesRejectsDeprecatedGlobalModulesLayout(t *testing.T) {
 	canonicalYAML := []byte(`
 version: v0.3

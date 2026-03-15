@@ -6,23 +6,29 @@
 #
 # FAIL-CLOSED: prevents requests from reaching any provider without a key.
 
-authz:
-  fail_open: false
-  providers:
-    - type: header-injection
-      headers:
-        openai: "x-user-openai-key"
-        anthropic: "x-user-anthropic-key"
-        gemini: "x-user-gemini-key"
-    - type: static-config
+global:
+  services:
+    authz:
+      fail_open: false
+      providers:
+        - type: header-injection
+          headers:
+            openai: "x-user-openai-key"
+            anthropic: "x-user-anthropic-key"
+            gemini: "x-user-gemini-key"
+        - type: static-config
 
-model_config:
-  gpt-4o-mini:
-    model_name: gpt-4o-mini
-    access_key: ""
-  claude-sonnet-4-5-20250929:
-    model_name: claude-sonnet-4-5-20250929
-    access_key: ""
-  gemini-2.0-flash:
-    model_name: gemini-2.0-flash
-    access_key: ""
+providers:
+  models:
+    - name: gpt-4o-mini
+      backend_refs:
+        - name: openai-static
+          api_key: ""
+    - name: claude-sonnet-4-5-20250929
+      backend_refs:
+        - name: anthropic-static
+          api_key: ""
+    - name: gemini-2.0-flash
+      backend_refs:
+        - name: gemini-static
+          api_key: ""

@@ -210,10 +210,10 @@ func discoverBackendEndpoint(ctx context.Context, c client.Client, vllmEndpoint 
 	return endpoint, nil
 }
 
-// generateVLLMEndpointsConfig discovers Kubernetes backends and returns the
-// intermediate endpoint + model metadata used to render canonical
-// providers.models[].backend_refs and routing.modelCards.
-func generateVLLMEndpointsConfig(ctx context.Context, c client.Client, vllmEndpoints []vllmv1alpha1.VLLMEndpointSpec, namespace string) (map[string]interface{}, map[string]ModelConfig, error) {
+// discoverVLLMBackends discovers Kubernetes backends and returns the backend
+// refs plus model metadata used to render canonical providers.models[].backend_refs
+// and routing.modelCards.
+func discoverVLLMBackends(ctx context.Context, c client.Client, vllmEndpoints []vllmv1alpha1.VLLMEndpointSpec, namespace string) ([]map[string]interface{}, map[string]ModelConfig, error) {
 	logger := log.FromContext(ctx)
 
 	if len(vllmEndpoints) == 0 {
@@ -257,10 +257,6 @@ func generateVLLMEndpointsConfig(ctx context.Context, c client.Client, vllmEndpo
 		return nil, nil, nil
 	}
 
-	vllmEndpointsConfig := map[string]interface{}{
-		"vllm_endpoints": endpoints,
-	}
-
-	logger.Info("Generated vLLM endpoints configuration", "count", len(endpoints))
-	return vllmEndpointsConfig, modelConfigs, nil
+	logger.Info("Generated discovered backend refs", "count", len(endpoints))
+	return endpoints, modelConfigs, nil
 }

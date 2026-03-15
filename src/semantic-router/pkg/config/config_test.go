@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,6 +12,58 @@ import (
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 )
+
+func loadLegacyRuntimeConfigForTest(configPath string) (*RouterConfig, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	cfg := &RouterConfig{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	if len(cfg.MoMRegistry) == 0 {
+		cfg.MoMRegistry = ToLegacyRegistry()
+	}
+	if cfg.VectorStore != nil {
+		cfg.VectorStore.ApplyDefaults()
+	}
+	if err := validateConfigStructure(cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+func writeCanonicalLoadTestConfig(path string) error {
+	return os.WriteFile(path, []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: test-model
+  models:
+    - name: test-model
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: test-model
+  decisions:
+    - name: default-route
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: test-model
+          use_reasoning: false
+`), 0o644)
+}
 
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -120,7 +173,7 @@ tools:
 			})
 
 			It("should load configuration successfully", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).NotTo(BeNil())
 
@@ -188,6 +241,8 @@ tools:
 			})
 
 			It("should return the same config instance on subsequent calls (singleton)", func() {
+				Expect(writeCanonicalLoadTestConfig(configFile)).To(Succeed())
+
 				cfg1, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -247,7 +302,7 @@ tools:
 			})
 
 			It("should parse advanced tool filtering settings", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).NotTo(BeNil())
 
@@ -304,7 +359,7 @@ tools:
 			})
 
 			It("should reject out-of-range values", func() {
-				_, err := Load(configFile)
+				_, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("min_combined_score must be between 0.0 and 1.0"))
 			})
@@ -329,7 +384,7 @@ observability:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg.Observability.Metrics.Enabled).To(BeNil())
 			})
@@ -345,7 +400,7 @@ observability:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg.Observability.Metrics.Enabled).NotTo(BeNil())
 				Expect(*cfg.Observability.Metrics.Enabled).To(BeFalse())
@@ -362,7 +417,7 @@ observability:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg.Observability.Metrics.Enabled).NotTo(BeNil())
 				Expect(*cfg.Observability.Metrics.Enabled).To(BeTrue())
@@ -381,7 +436,7 @@ bert_model:
 			})
 
 			It("should return a parsing error", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).To(HaveOccurred())
 				Expect(cfg).To(BeNil())
 				Expect(err.Error()).To(ContainSubstring("failed to parse config file"))
@@ -395,7 +450,7 @@ bert_model:
 			})
 
 			It("should load successfully with zero values", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).NotTo(BeNil())
 				Expect(cfg.BertModel.ModelID).To(BeEmpty())
@@ -405,14 +460,7 @@ bert_model:
 
 		Context("concurrent access", func() {
 			BeforeEach(func() {
-				validConfig := `
-bert_model:
-  model_id: "test-model"
-  threshold: 0.8
-default_model: "model-b"
-`
-				err := os.WriteFile(configFile, []byte(validConfig), 0o644)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(writeCanonicalLoadTestConfig(configFile)).To(Succeed())
 			})
 
 			It("should handle concurrent Load calls safely", func() {
@@ -461,7 +509,7 @@ semantic_cache:
 			})
 
 			It("should return the semantic cache threshold", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				threshold := cfg.GetCacheSimilarityThreshold()
@@ -482,7 +530,7 @@ semantic_cache:
 			})
 
 			It("should return the BERT model threshold", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				threshold := cfg.GetCacheSimilarityThreshold()
@@ -523,7 +571,7 @@ default_model: "default-model"
 
 		Context("with valid decision index", func() {
 			It("should return the best model for the decision", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				model := cfg.GetModelForDecisionIndex(0)
@@ -536,7 +584,7 @@ default_model: "default-model"
 
 		Context("with invalid decision index", func() {
 			It("should return the default model for negative index", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				model := cfg.GetModelForDecisionIndex(-1)
@@ -544,7 +592,7 @@ default_model: "default-model"
 			})
 
 			It("should return the default model for index beyond range", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				model := cfg.GetModelForDecisionIndex(10)
@@ -572,7 +620,7 @@ default_model: "fallback-model"
 
 			It("should return the default model", func() {
 				// Empty modelRefs is now allowed - decisions without models are valid
-				_, err := Load(configFile)
+				_, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -590,7 +638,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeTrue())
@@ -605,7 +653,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
@@ -620,7 +668,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
@@ -638,7 +686,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsCategoryClassifierEnabled()).To(BeTrue())
@@ -649,7 +697,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(""), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsCategoryClassifierEnabled()).To(BeFalse())
@@ -667,7 +715,7 @@ prompt_guard:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPromptGuardEnabled()).To(BeTrue())
@@ -683,7 +731,7 @@ prompt_guard:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPromptGuardEnabled()).To(BeFalse())
@@ -698,7 +746,7 @@ prompt_guard:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPromptGuardEnabled()).To(BeFalse())
@@ -729,7 +777,7 @@ categories:
 			})
 
 			It("should return all category descriptions", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				descriptions := cfg.GetCategoryDescriptions()
@@ -763,7 +811,7 @@ categories:
 			})
 
 			It("should use category name as fallback for missing descriptions", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				descriptions := cfg.GetCategoryDescriptions()
@@ -781,7 +829,7 @@ categories:
 				err := os.WriteFile(configFile, []byte(""), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				descriptions := cfg.GetCategoryDescriptions()
@@ -802,7 +850,7 @@ semantic_cache:
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
-			cfg, err := Load(configFile)
+			cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cfg.BertModel.Threshold).To(Equal(float32(0)))
 			Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
@@ -818,7 +866,7 @@ model_config:
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
-			cfg, err := Load(configFile)
+			cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cfg.ModelConfig["large-model"].PreferredEndpoints).To(ContainElement("endpoint1"))
 		})
@@ -839,7 +887,7 @@ categories:
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
-			cfg, err := Load(configFile)
+			cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cfg.BertModel.ModelID).To(Equal("model/with/slashes"))
 			Expect(cfg.DefaultModel).To(Equal("model-with-hyphens_and_underscores"))
@@ -890,7 +938,7 @@ default_model: "model-b"
 
 		Describe("GetEndpointsForModel", func() {
 			It("should return preferred endpoints when configured", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoints := cfg.GetEndpointsForModel("model-a")
@@ -900,7 +948,7 @@ default_model: "model-b"
 			})
 
 			It("should return empty slice when no preferred endpoints configured", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoints := cfg.GetEndpointsForModel("model-c")
@@ -908,7 +956,7 @@ default_model: "model-b"
 			})
 
 			It("should return empty slice for non-existent model", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoints := cfg.GetEndpointsForModel("non-existent-model")
@@ -916,7 +964,7 @@ default_model: "model-b"
 			})
 
 			It("should return only preferred endpoints", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// model-b has preferred endpoint2
@@ -928,7 +976,7 @@ default_model: "model-b"
 
 		Describe("GetEndpointByName", func() {
 			It("should return endpoint when it exists", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoint, found := cfg.GetEndpointByName("endpoint1")
@@ -939,7 +987,7 @@ default_model: "model-b"
 			})
 
 			It("should return false when endpoint doesn't exist", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoint, found := cfg.GetEndpointByName("non-existent")
@@ -950,7 +998,7 @@ default_model: "model-b"
 
 		Describe("GetAllModels", func() {
 			It("should return all models from model_config", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				models := cfg.GetAllModels()
@@ -961,7 +1009,7 @@ default_model: "model-b"
 
 		Describe("SelectBestEndpointForModel", func() {
 			It("should select endpoint with highest weight when multiple available", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// model-a has preferred endpoints: endpoint1 (weight 1) and endpoint3 (weight 1)
@@ -972,7 +1020,7 @@ default_model: "model-b"
 			})
 
 			It("should return false for non-existent model", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpointName, found := cfg.SelectBestEndpointForModel("non-existent-model")
@@ -981,7 +1029,7 @@ default_model: "model-b"
 			})
 
 			It("should return false when model has no preferred endpoints", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpointName, found := cfg.SelectBestEndpointForModel("model-c")
@@ -991,7 +1039,7 @@ default_model: "model-b"
 
 			Describe("SelectBestEndpointAddressForModel", func() {
 				It("should return endpoint address when model has preferred endpoints", func() {
-					cfg, err := Load(configFile)
+					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 					Expect(err).NotTo(HaveOccurred())
 
 					// model-a has preferred endpoints
@@ -1002,7 +1050,7 @@ default_model: "model-b"
 				})
 
 				It("should return false when model has no preferred endpoints", func() {
-					cfg, err := Load(configFile)
+					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 					Expect(err).NotTo(HaveOccurred())
 
 					// model-c has no preferred_endpoints configured
@@ -1013,7 +1061,7 @@ default_model: "model-b"
 				})
 
 				It("should return false for non-existent model", func() {
-					cfg, err := Load(configFile)
+					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 					Expect(err).NotTo(HaveOccurred())
 
 					endpointAddress, found, addrErr := cfg.SelectBestEndpointAddressForModel("non-existent-model")
@@ -1026,7 +1074,7 @@ default_model: "model-b"
 
 		Describe("SelectBestEndpointWithDetailsForModel", func() {
 			It("should return address and endpoint name for model with single endpoint", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// model-b has a single preferred endpoint: endpoint2
@@ -1038,7 +1086,7 @@ default_model: "model-b"
 			})
 
 			It("should return the highest-weight endpoint for model with multiple endpoints", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// model-a has endpoint1 (weight 1) and endpoint3 (weight 1)
@@ -1051,7 +1099,7 @@ default_model: "model-b"
 			})
 
 			It("should return false for non-existent model", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("non-existent-model")
@@ -1062,7 +1110,7 @@ default_model: "model-b"
 			})
 
 			It("should return false for model with no preferred endpoints", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// model-c has no preferred endpoints configured
@@ -1100,7 +1148,7 @@ default_model: "weighted-model"
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("weighted-model")
@@ -1137,7 +1185,7 @@ default_model: "my-alias"
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				resolved := cfg.ResolveExternalModelID("my-alias", "vllm-ep")
@@ -1168,7 +1216,7 @@ default_model: "my-alias"
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Endpoint has no type, so defaults to "vllm"
@@ -1200,7 +1248,7 @@ default_model: "my-alias"
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Non-existent endpoint name falls back to "vllm" type
@@ -1234,7 +1282,7 @@ default_model: "my-alias"
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				resolved := cfg.ResolveExternalModelID("my-alias", "ollama-ep")
@@ -1242,7 +1290,7 @@ default_model: "my-alias"
 			})
 
 			It("should return original model name when no external_model_ids configured", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Using the base fixture which has no external_model_ids
@@ -1251,7 +1299,7 @@ default_model: "my-alias"
 			})
 
 			It("should return original model name for non-existent model", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				resolved := cfg.ResolveExternalModelID("non-existent-model", "endpoint1")
@@ -1283,7 +1331,7 @@ default_model: "my-alias"
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Endpoint type is "openrouter" but external_model_ids only has "vllm"
@@ -1320,7 +1368,7 @@ default_model: "my-alias"
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				resolved := cfg.ResolveExternalModelID("my-alias", "ep1")
@@ -1330,7 +1378,7 @@ default_model: "my-alias"
 
 		Describe("ValidateEndpoints", func() {
 			It("should pass validation when all models have endpoints", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = cfg.ValidateEndpoints()
@@ -1354,7 +1402,7 @@ default_model: "missing-default-model"
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = cfg.ValidateEndpoints()
@@ -1389,7 +1437,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					cfg, err := Load(configFile)
+					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("127.0.0.1"))
 				})
@@ -1418,7 +1466,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					cfg, err := Load(configFile)
+					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("::1"))
 				})
@@ -1447,7 +1495,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					cfg, err := Load(configFile)
+					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("example.com"))
 				})
@@ -1471,7 +1519,7 @@ semantic_cache:
 			})
 
 			It("should parse memory backend configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1498,7 +1546,7 @@ semantic_cache:
 			})
 
 			It("should parse file base milvus backend configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1582,7 +1630,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend connection configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus).ToNot(BeNil())
@@ -1601,7 +1649,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend collection configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Collection).ToNot(BeNil())
@@ -1616,7 +1664,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend search configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Search).ToNot(BeNil())
@@ -1626,7 +1674,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend performance configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Performance).ToNot(BeNil())
@@ -1638,7 +1686,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend data management configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.DataManagement).ToNot(BeNil())
@@ -1650,7 +1698,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend logging configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Logging.Level).To(Equal("info"))
@@ -1659,7 +1707,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend development configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Development.DropCollectionOnStartup).To(BeTrue())
@@ -1715,7 +1763,7 @@ semantic_cache:
 			})
 
 			It("should parse inline redis backend connection configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis).ToNot(BeNil())
@@ -1732,7 +1780,7 @@ semantic_cache:
 			})
 
 			It("should parse inline redis backend index configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis.Index).ToNot(BeNil())
@@ -1747,7 +1795,7 @@ semantic_cache:
 			})
 
 			It("should parse inline redis backend search configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis.Search).ToNot(BeNil())
@@ -1755,7 +1803,7 @@ semantic_cache:
 			})
 
 			It("should parse inline redis backend logging configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis.Logging.Level).To(Equal("info"))
@@ -1764,7 +1812,7 @@ semantic_cache:
 			})
 
 			It("should parse inline redis backend development configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis.Development.DropIndexOnStartup).To(BeTrue())
@@ -1788,7 +1836,7 @@ semantic_cache:
 			})
 
 			It("should preserve configuration even when cache is disabled", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeFalse())
@@ -1808,7 +1856,7 @@ semantic_cache:
 			})
 
 			It("should handle minimal configuration with default values", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1838,7 +1886,7 @@ semantic_cache:
 			})
 
 			It("should parse all semantic cache fields correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1870,7 +1918,7 @@ semantic_cache:
 			})
 
 			It("should fall back to BERT threshold when cache threshold not specified", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil())
@@ -1897,7 +1945,7 @@ semantic_cache:
 			})
 
 			It("should handle edge case values correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1922,7 +1970,7 @@ semantic_cache:
 			})
 
 			It("should parse unsupported backend type without error (validation happens at runtime)", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Configuration parsing should succeed
@@ -1963,7 +2011,7 @@ default_model: "gpt-4"
 			})
 
 			It("should handle production-like configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify BERT config
@@ -2009,7 +2057,7 @@ semantic_cache:
 			})
 
 			It("should parse active configuration and ignore commented alternatives", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -2434,7 +2482,28 @@ var _ = Describe("ParseConfigFile and ReplaceGlobalConfig", func() {
 
 		// Create real config target
 		target := filepath.Join(tempDir, "real-config.yaml")
-		content := []byte("default_model: test-model\n")
+		content := []byte(`
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: test-model
+  models:
+    - name: test-model
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: test-model
+  decisions:
+    - name: default-route
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: test-model
+`)
 		Expect(os.WriteFile(target, content, 0o644)).To(Succeed())
 
 		// Create symlink pointing to target
@@ -2953,7 +3022,7 @@ hallucination_mitigation:
 			})
 
 			It("should parse hallucination mitigation configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.HallucinationMitigation.Enabled).To(BeTrue())
@@ -2983,7 +3052,7 @@ hallucination_mitigation:
 			})
 
 			It("should parse with default values for optional fields", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.HallucinationMitigation.Enabled).To(BeTrue())
@@ -3004,7 +3073,7 @@ hallucination_mitigation:
 			})
 
 			It("should have enabled set to false", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.HallucinationMitigation.Enabled).To(BeFalse())
@@ -3021,7 +3090,7 @@ default_model: "test-model"
 			})
 
 			It("should have hallucination mitigation disabled by default", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.HallucinationMitigation.Enabled).To(BeFalse())

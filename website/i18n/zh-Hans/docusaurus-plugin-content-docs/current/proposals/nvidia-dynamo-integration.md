@@ -429,11 +429,20 @@ classifier:
 **策略执行：**
 
 ```yaml
-model_config:
-  public-model:
-    pii_policy:
-      allow_by_default: false
-      pii_types_allowed: ["PERSON"]  # 仅允许人名
+routing:
+  signals:
+    pii:
+      - name: public-model-allow-person
+        pii_types_allowed: ["PERSON"]  # 仅允许人名
+  decisions:
+    - name: public-model-route
+      rules:
+        operator: AND
+        conditions:
+          - type: pii
+            name: public-model-allow-person
+      modelRefs:
+        - model: public-model
 ```
 
 **响应头（被拦截时）：**
@@ -1315,11 +1324,20 @@ Dynamo Frontend 通过 Kubernetes Headless Service 发现工作节点，这些�
 **示例配置：**
 
 ```yaml
-model_config:
-  public-model:
-    pii_policy:
-      allow_by_default: false
-      pii_types_allowed: ["PERSON"]  # 仅允许人名
+routing:
+  signals:
+    pii:
+      - name: public-model-allow-person
+        pii_types_allowed: ["PERSON"]  # 仅允许人名
+  decisions:
+    - name: public-model-route
+      rules:
+        operator: AND
+        conditions:
+          - type: pii
+            name: public-model-allow-person
+      modelRefs:
+        - model: public-model
 ```
 
 ### 6.2 Jailbreak 防护 (Prompt Guard)
