@@ -33,13 +33,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		if categoryName != "" {
 			cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
 		}
-		if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
-			ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-			err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
-			if err != nil {
-				logging.Errorf("Error adding pending request to cache: %v", err)
-			}
-		}
+		r.storePendingCacheRequest(ctx, categoryName, requestModel, requestQuery, cacheEnabled)
 		return nil, false
 	}
 
@@ -63,86 +57,105 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	logging.Infof("handleCaching: requestQuery='%s' (len=%d), cacheEnabled=%v, r.Cache.IsEnabled()=%v",
 		requestQuery, len(requestQuery), cacheEnabled, r.Cache.IsEnabled())
 
-	if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
-		// Get decision-specific threshold
-		threshold := r.Config.GetCacheSimilarityThreshold()
-		if categoryName != "" {
-			threshold = r.Config.GetCacheSimilarityThresholdForDecision(categoryName)
-		}
-
-		logging.Infof("handleCaching: Performing cache lookup - model=%s, query='%s', threshold=%.2f",
-			requestModel, requestQuery, threshold)
-
-		// Start semantic-cache plugin span
-		spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
-
-		startTime := time.Now()
-		// Try to find a similar cached response using category-specific threshold
-		cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, requestQuery, threshold)
-		lookupTime := time.Since(startTime).Milliseconds()
-
-		logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
-
-		// Keep legacy attributes for backward compatibility
-		tracing.SetSpanAttributes(span,
-			attribute.String(tracing.AttrCacheKey, requestQuery),
-			attribute.Bool(tracing.AttrCacheHit, found),
-			attribute.Int64(tracing.AttrCacheLookupTimeMs, lookupTime),
-			attribute.String(tracing.AttrCategoryName, categoryName),
-			attribute.Float64("cache.threshold", float64(threshold)))
-
-		if cacheErr != nil {
-			logging.Errorf("Error searching cache: %v", cacheErr)
-			tracing.RecordError(span, cacheErr)
-			tracing.EndPluginSpan(span, "error", lookupTime, "lookup_failed")
-		} else if found {
-			// Mark this request as a cache hit
-			ctx.VSRCacheHit = true
-
-			// Set VSR decision context even for cache hits so headers are populated
-			// The categoryName passed here is the decision name from classification
-			if categoryName != "" {
-				ctx.VSRSelectedDecisionName = categoryName
-			}
-
-			// Record cache plugin hit with decision name
-			metrics.RecordCachePluginHit(categoryName, "semantic-cache")
-
-			// End plugin span with cache hit status
-			tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
-
-			// Start router replay capture if enabled, even when serving from cache
-			r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
-			// Log cache hit
-			logging.LogEvent("cache_hit", map[string]interface{}{
-				"request_id": ctx.RequestID,
-				"model":      requestModel,
-				"query":      requestQuery,
-				"category":   categoryName,
-				"threshold":  threshold,
-			})
-			// Return immediate response from cache
-			response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, categoryName, ctx.VSRSelectedDecisionName, ctx.VSRMatchedKeywords)
-			r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
-			r.attachRouterReplayResponse(ctx, cachedResponse, true)
-			ctx.TraceContext = spanCtx
-			return response, true
-		} else {
-			// Cache miss - record cache plugin miss with decision name
-			metrics.RecordCachePluginMiss(categoryName, "semantic-cache")
-			tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
-		}
-		ctx.TraceContext = spanCtx
+	if response, shouldReturn := r.performCacheLookup(ctx, categoryName, requestModel, requestQuery, cacheEnabled); shouldReturn {
+		return response, true
 	}
 
-	// Cache miss, store the request for later
-	// Get decision-specific TTL
+	// Cache miss, store the request for later (only if caching is enabled for this decision)
+	r.storePendingCacheRequest(ctx, categoryName, requestModel, requestQuery, cacheEnabled)
+
+	return nil, false
+}
+
+// storePendingCacheRequest adds a pending cache request if caching is enabled for this decision.
+func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryName, requestModel, requestQuery string, cacheEnabled bool) {
+	if requestQuery == "" || !r.Cache.IsEnabled() || !cacheEnabled {
+		return
+	}
 	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
-	if err != nil {
+	if err := r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
-		// Continue without caching
 	}
+}
+
+// performCacheLookup searches for a cached response matching the request query.
+// Returns the cached response and true on cache hit, or nil and false on miss/error/skip.
+func (r *OpenAIRouter) performCacheLookup(
+	ctx *RequestContext, categoryName, requestModel, requestQuery string, cacheEnabled bool,
+) (*ext_proc.ProcessingResponse, bool) {
+	if requestQuery == "" || !r.Cache.IsEnabled() || !cacheEnabled {
+		return nil, false
+	}
+
+	// Get decision-specific threshold
+	threshold := r.Config.GetCacheSimilarityThreshold()
+	if categoryName != "" {
+		threshold = r.Config.GetCacheSimilarityThresholdForDecision(categoryName)
+	}
+
+	logging.Infof("handleCaching: Performing cache lookup - model=%s, query='%s', threshold=%.2f",
+		requestModel, requestQuery, threshold)
+
+	// Start semantic-cache plugin span
+	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
+
+	startTime := time.Now()
+	// Try to find a similar cached response using category-specific threshold
+	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, requestQuery, threshold)
+	lookupTime := time.Since(startTime).Milliseconds()
+
+	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
+
+	// Keep legacy attributes for backward compatibility
+	tracing.SetSpanAttributes(span,
+		attribute.String(tracing.AttrCacheKey, requestQuery),
+		attribute.Bool(tracing.AttrCacheHit, found),
+		attribute.Int64(tracing.AttrCacheLookupTimeMs, lookupTime),
+		attribute.String(tracing.AttrCategoryName, categoryName),
+		attribute.Float64("cache.threshold", float64(threshold)))
+
+	if cacheErr != nil {
+		logging.Errorf("Error searching cache: %v", cacheErr)
+		tracing.RecordError(span, cacheErr)
+		tracing.EndPluginSpan(span, "error", lookupTime, "lookup_failed")
+	} else if found {
+		// Mark this request as a cache hit
+		ctx.VSRCacheHit = true
+
+		// Set VSR decision context even for cache hits so headers are populated
+		// The categoryName passed here is the decision name from classification
+		if categoryName != "" {
+			ctx.VSRSelectedDecisionName = categoryName
+		}
+
+		// Record cache plugin hit with decision name
+		metrics.RecordCachePluginHit(categoryName, "semantic-cache")
+
+		// End plugin span with cache hit status
+		tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
+
+		// Start router replay capture if enabled, even when serving from cache
+		r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
+		// Log cache hit
+		logging.LogEvent("cache_hit", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      requestModel,
+			"query":      requestQuery,
+			"category":   categoryName,
+			"threshold":  threshold,
+		})
+		// Return immediate response from cache
+		response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, categoryName, ctx.VSRSelectedDecisionName, ctx.VSRMatchedKeywords)
+		r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
+		r.attachRouterReplayResponse(ctx, cachedResponse, true)
+		ctx.TraceContext = spanCtx
+		return response, true
+	} else {
+		// Cache miss - record cache plugin miss with decision name
+		metrics.RecordCachePluginMiss(categoryName, "semantic-cache")
+		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
+	}
+	ctx.TraceContext = spanCtx
 
 	return nil, false
 }

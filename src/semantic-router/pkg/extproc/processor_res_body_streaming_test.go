@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // TestParseStreamingChunk tests the parseStreamingChunk function
@@ -201,3 +202,96 @@ func (m *mockStreamingCache) FindSimilarWithThreshold(
 func (m *mockStreamingCache) Close() error { return nil }
 
 func (m *mockStreamingCache) GetStats() cache.CacheStats { return cache.CacheStats{} }
+
+func TestCacheReconstructedStreamingResponse_SkipsWhenDecisionCacheDisabled(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	cfg := &config.RouterConfig{
+		SemanticCache: config.SemanticCache{Enabled: true},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name:      "no-cache-decision",
+					ModelRefs: []config.ModelRef{{Model: "test"}},
+					// No semantic-cache plugin
+				},
+			},
+		},
+	}
+	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
+	ctx := &RequestContext{
+		RequestID:               "req-1",
+		RequestModel:            "test-model",
+		RequestQuery:            "hello",
+		VSRSelectedDecisionName: "no-cache-decision",
+	}
+
+	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
+	assert.NoError(t, err)
+	assert.False(t, mockCache.addEntryCalled, "should not call AddEntry when decision has no semantic-cache plugin")
+	assert.False(t, mockCache.updateCalled, "should not call UpdateWithResponse when decision has no semantic-cache plugin")
+}
+
+func TestCacheReconstructedStreamingResponse_SkipsWhenDecisionCacheExplicitlyDisabled(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	cfg := &config.RouterConfig{
+		SemanticCache: config.SemanticCache{Enabled: true},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name:      "disabled-cache-decision",
+					ModelRefs: []config.ModelRef{{Model: "test"}},
+					Plugins: []config.DecisionPlugin{
+						{
+							Type:          "semantic-cache",
+							Configuration: map[string]interface{}{"enabled": false},
+						},
+					},
+				},
+			},
+		},
+	}
+	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
+	ctx := &RequestContext{
+		RequestID:               "req-1",
+		RequestModel:            "test-model",
+		RequestQuery:            "hello",
+		VSRSelectedDecisionName: "disabled-cache-decision",
+	}
+
+	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
+	assert.NoError(t, err)
+	assert.False(t, mockCache.addEntryCalled, "should not call AddEntry when decision has semantic-cache disabled")
+	assert.False(t, mockCache.updateCalled, "should not call UpdateWithResponse when decision has semantic-cache disabled")
+}
+
+func TestCacheReconstructedStreamingResponse_StoresWhenDecisionCacheEnabled(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	cfg := &config.RouterConfig{
+		SemanticCache: config.SemanticCache{Enabled: true},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name:      "cache-decision",
+					ModelRefs: []config.ModelRef{{Model: "test"}},
+					Plugins: []config.DecisionPlugin{
+						{
+							Type:          "semantic-cache",
+							Configuration: map[string]interface{}{"enabled": true},
+						},
+					},
+				},
+			},
+		},
+	}
+	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
+	ctx := &RequestContext{
+		RequestID:               "req-1",
+		RequestModel:            "test-model",
+		RequestQuery:            "hello",
+		VSRSelectedDecisionName: "cache-decision",
+	}
+
+	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
+	assert.NoError(t, err)
+	assert.True(t, mockCache.addEntryCalled, "should call AddEntry when decision has semantic-cache enabled")
+}
