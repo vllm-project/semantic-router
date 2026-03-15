@@ -50,6 +50,7 @@ legacy_hotspots:
       - src/semantic-router/pkg/config/config.go
       - src/semantic-router/pkg/config/rag_plugin.go
       - src/semantic-router/pkg/config/validator.go
+      - src/semantic-router/pkg/config/validator_test.go
   - paths:
       - src/semantic-router/pkg/extproc/extproc_test.go
     function_checks: relaxed

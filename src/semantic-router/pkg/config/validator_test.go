@@ -377,4 +377,35 @@ var _ = Describe("validateConfigStructure", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("legacy latency config is no longer supported"))
 	})
+
+})
+
+var _ = Describe("validateReMoMBreadthSchedule", func() {
+	It("accepts reasonable breadth_schedule", func() {
+		err := validateReMoMBreadthSchedule("remom-ok", "remom", &ReMoMAlgorithmConfig{
+			BreadthSchedule: []int{4},
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("rejects excessive breadth_schedule", func() {
+		err := validateReMoMBreadthSchedule("remom-expensive", "remom", &ReMoMAlgorithmConfig{
+			BreadthSchedule: []int{32, 16, 8, 4, 4},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("backend calls per request"))
+		Expect(err.Error()).To(ContainSubstring("max 64"))
+	})
+
+	It("rejects zero breadth value", func() {
+		err := validateReMoMBreadthSchedule("remom-zero", "remom", &ReMoMAlgorithmConfig{
+			BreadthSchedule: []int{4, 0},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("must be positive"))
+	})
+
+	It("skips validation for non-remom types", func() {
+		Expect(validateReMoMBreadthSchedule("x", "confidence", nil)).To(Succeed())
+	})
 })
