@@ -310,7 +310,7 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 		return nil
 	}
 
-	if ctx.RequestQuery == "" || ctx.RequestModel == "" {
+	if cacheQueryForContext(ctx) == "" || ctx.RequestModel == "" {
 		return r.updateStreamingCacheEntry(ctx.RequestID, reconstructedJSON, ttlSeconds)
 	}
 
@@ -331,7 +331,7 @@ func (r *OpenAIRouter) addStreamingCacheEntry(
 	return r.Cache.AddEntry(
 		ctx.RequestID,
 		ctx.RequestModel,
-		ctx.RequestQuery,
+		cacheQueryForContext(ctx),
 		streamingCacheRequestBody(ctx),
 		reconstructedJSON,
 		ttlSeconds,
