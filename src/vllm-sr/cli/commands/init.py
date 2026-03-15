@@ -104,7 +104,7 @@ def init_command(force: bool = False):
     log.info(
         "  1. Edit config.yaml directly if you want a hand-authored routing config"
     )
-    log.info("  2. Validate the sample: vllm-sr validate config.yaml")
+    log.info("  2. Validate the sample: vllm-sr validate")
     log.info("  3. Start service or open setup UI: vllm-sr serve")
     log.info("  4. Open dashboard: http://localhost:8700")
     log.info("=" * 60)

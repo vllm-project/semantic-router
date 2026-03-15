@@ -107,7 +107,7 @@ If you prefer to edit YAML directly instead of using the dashboard setup flow:
 vllm-sr init
 
 # Validate it before serving
-vllm-sr validate config.yaml
+vllm-sr validate
 ```
 
 `vllm-sr init` is optional. It generates an advanced sample and `.vllm-sr/router-defaults.yaml` for YAML-first users. `router-defaults.yaml` contains advanced runtime defaults and is not required for first-run dashboard setup.

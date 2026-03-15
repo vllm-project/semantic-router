@@ -154,7 +154,7 @@ vllm-sr stop
 vllm-sr init
 
 # 启动前校验它
-vllm-sr validate config.yaml
+vllm-sr validate
 ```
 
 `vllm-sr init` 是可选的。它会为 YAML-first 用户生成 advanced sample 和 `.vllm-sr/router-defaults.yaml`。`router-defaults.yaml` 保存的是高级 runtime defaults，不是首次进入 dashboard 时必须编辑的文件。
