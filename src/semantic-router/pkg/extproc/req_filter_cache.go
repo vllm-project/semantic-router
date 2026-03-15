@@ -126,7 +126,7 @@ func (r *OpenAIRouter) lookupCachedResponse(
 }
 
 func (r *OpenAIRouter) shouldLookupSemanticCache(requestQuery string, categoryName string) bool {
-	cacheEnabled := r.Config.SemanticCache.Enabled
+	cacheEnabled := r.Config.Enabled
 	if categoryName != "" {
 		cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
 	}
