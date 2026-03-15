@@ -23,7 +23,7 @@ func (r *OpenAIRouter) retrieveFromOpenAI(traceCtx context.Context, ctx *Request
 
 	baseURL := openaiConfig.BaseURL
 	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
+		baseURL = "https://api.openai.com"
 	}
 
 	query := ctx.UserContent

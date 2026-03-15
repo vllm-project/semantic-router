@@ -1,27 +1,14 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getModelStatusSummary, type RouterRuntimeStatus } from '../utils/routerRuntime'
+import RouterModelInventory from '../components/RouterModelInventory'
+import {
+  getLoadedModelCount,
+  getModelStatusSummary,
+  getRouterModelAnchor,
+  getTotalKnownModelCount,
+  type SystemStatus,
+} from '../utils/routerRuntime'
 import styles from './DashboardPage.module.css'
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-
-interface ServiceStatus {
-  name: string
-  status: string
-  healthy: boolean
-  message?: string
-  component?: string
-}
-
-interface SystemStatus {
-  overall: string
-  deployment_type: string
-  services: ServiceStatus[]
-  version?: string
-  router_runtime?: RouterRuntimeStatus
-}
 
 interface SignalConfig {
   name?: string
@@ -308,6 +295,9 @@ const DashboardPage: React.FC = () => {
   const healthyServices = useMemo(() => status?.services.filter(s => s.healthy).length ?? 0, [status])
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
   const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
+  const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
+  const knownModels = useMemo(() => getTotalKnownModelCount(status?.models), [status])
+  const previewModelLimit = 6
 
   // Categorize decisions for the table
   const categorizedDecisions = useMemo(() => {
@@ -581,6 +571,27 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <div>
+            <h2 className={styles.cardTitle}>Loaded Models</h2>
+            {knownModels > 0 && (
+              <span className={styles.cardSubtitle}>{loadedModels}/{knownModels} ready</span>
+            )}
+          </div>
+          <button className={styles.cardAction} onClick={() => navigate('/status')}>
+            Status &rsaquo;
+          </button>
+        </div>
+        <RouterModelInventory
+          mode="preview"
+          previewLimit={previewModelLimit > 0 ? previewModelLimit : undefined}
+          modelsInfo={status?.models}
+          emptyMessage="Router model inventory will appear here after the router reports its active models."
+          onSelectModel={(model) => navigate(`/status#${encodeURIComponent(getRouterModelAnchor(model))}`)}
+        />
       </div>
 
       {/* Signal Breakdown + Decisions Overview — 2 column layout */}

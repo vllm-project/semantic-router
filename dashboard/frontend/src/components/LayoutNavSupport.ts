@@ -34,6 +34,7 @@ export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
 ]
 
 export const SECONDARY_NAV_LINKS: LayoutNavLink[] = [
+  { label: 'Users', to: '/users' },
   { label: 'ClawOS', to: '/clawos' },
 ]
 

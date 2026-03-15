@@ -10,6 +10,12 @@ This file is the short entrypoint for coding agents. The detailed human-readable
 4. [docs/agent/change-surfaces.md](docs/agent/change-surfaces.md)
 5. `make agent-report ENV=cpu|amd CHANGED_FILES="..."`
 
+## Native Discovery vs Routed Context
+
+- Root startup should always discover this [AGENTS.md](AGENTS.md) entrypoint and the thin repo-native bridge at [.agents/skills/harness/SKILL.md](.agents/skills/harness/SKILL.md).
+- Full task routing, primary-skill resolution, local-rule surfacing, and validation planning still come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
+- `tools/agent/**` remains the canonical harness source; `.agents/skills/**` is only a discovery bridge.
+
 If you need real AMD model deployment details instead of the minimal smoke path, also read [deploy/amd/README.md](deploy/amd/README.md) and [deploy/amd/config.yaml](deploy/amd/config.yaml).
 
 ## Supported Environments
@@ -24,7 +30,7 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 - Start from a project-level primary skill. Fragment skills are support material, not the default entrypoint.
 - Run the smallest relevant gate first: `make agent-validate`, `make agent-lint`, `make agent-ci-gate`, then `make agent-feature-gate`.
 - Treat docs-only and website-only edits as lightweight unless the task matrix says otherwise.
-- Contributor workflow and PR intake rules live in `CONTRIBUTING.md` and `.github/PULL_REQUEST_TEMPLATE.md`; commits intended for PRs must use `git commit -s`.
+- Contributor workflow, issue or PR intake rules, and maintainer label taxonomy live in `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/**`, and `.prowlabels.yaml`; commits intended for PRs must use `git commit -s`.
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes need E2E updates unless the change is a pure refactor.
 - If the work needs multiple resumable loops across sessions or contributors, use the indexed execution plans under [docs/agent/plans/README.md](docs/agent/plans/README.md) instead of ad hoc task notes.
 - If the desired architecture and the current implementation still diverge after your change, add or update the durable debt entry indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md) instead of leaving the gap only in chat or PR text.

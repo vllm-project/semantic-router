@@ -23,8 +23,12 @@ pip install -e .
 # Start the router (includes dashboard and first-run setup)
 HF_TOKEN=hf_xxx vllm-sr serve
 
+# Start an isolated second local stack on offset host ports
+VLLM_SR_STACK_NAME=lane-b VLLM_SR_PORT_OFFSET=200 HF_TOKEN=hf_xxx vllm-sr serve
+
 # Open the dashboard
 # http://localhost:8700
+# second stack example: http://localhost:8900
 
 # Optional: open the dashboard in your browser
 vllm-sr dashboard
@@ -43,6 +47,10 @@ vllm-sr stop
 
 If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspace and opens the dashboard in setup mode. Configure your first model there, then activate routing.
 
+Local dashboard state is persisted under `.vllm-sr/dashboard-data/` and bind-mounted into the container at `/app/data`. User accounts, evaluation history, and ML pipeline artifacts survive `vllm-sr stop` followed by a new `vllm-sr serve` as long as that workspace directory is kept.
+
+To run parallel local stacks from the same machine or multiple worktrees, set `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET` before `vllm-sr serve`, `vllm-sr status`, `vllm-sr dashboard`, and `vllm-sr stop`. The stack name isolates container and network names, and the port offset shifts the published host ports while keeping internal container ports unchanged.
+
 ### Advanced YAML-first setup
 
 ```bash
@@ -50,7 +58,7 @@ If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspa
 vllm-sr init
 
 # Validate the sample before serving
-vllm-sr validate config.yaml
+vllm-sr validate
 ```
 
 `vllm-sr init` is optional. It generates a lean advanced sample plus `.vllm-sr/router-defaults.yaml` for users who want to hand-author routing config. `router-defaults.yaml` contains advanced runtime defaults; it is not required for first-run dashboard setup.
@@ -209,7 +217,7 @@ plugins:
 vllm-sr init
 
 # Validate configuration (including plugins)
-vllm-sr validate config.yaml
+vllm-sr validate
 
 # Generate router config with plugins
 vllm-sr config router --config config.yaml

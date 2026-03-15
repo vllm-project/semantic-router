@@ -49,8 +49,12 @@ func (s *fakeResolvedClassificationService) ClassifyUserFeedback(req services.Us
 	return nil, fmt.Errorf("not used in this test: %q", req.Text)
 }
 
-func (s *fakeResolvedClassificationService) HasUnifiedClassifier() bool { return true }
-func (s *fakeResolvedClassificationService) HasClassifier() bool        { return true }
+func (s *fakeResolvedClassificationService) HasUnifiedClassifier() bool      { return true }
+func (s *fakeResolvedClassificationService) HasClassifier() bool             { return true }
+func (s *fakeResolvedClassificationService) HasFactCheckClassifier() bool    { return true }
+func (s *fakeResolvedClassificationService) HasHallucinationDetector() bool  { return true }
+func (s *fakeResolvedClassificationService) HasHallucinationExplainer() bool { return true }
+func (s *fakeResolvedClassificationService) HasFeedbackDetector() bool       { return true }
 func (s *fakeResolvedClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
 	s.updatedConfig = newConfig
 }

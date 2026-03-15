@@ -12,6 +12,8 @@ import {
 import MarkdownRenderer from './MarkdownRenderer'
 import styles from './ClawRoomChat.module.css'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import ClawRoomSidebar from './ClawRoomSidebar'
+import ClawRoomMessageMeta from './ClawRoomMessageMeta'
 
 interface TeamProfile {
   id: string
@@ -97,7 +99,6 @@ interface MentionAutocompleteState {
 interface SenderVisual {
   displayName: string
   roleLabel: string
-  avatar: string
 }
 
 interface ClawRoomChatProps {
@@ -105,9 +106,6 @@ interface ClawRoomChatProps {
   createRoomRequestToken?: number
   inputModeControls?: ReactNode
 }
-
-const OPENCLAW_LOGO_SRC = '/openclaw.svg'
-const VLLM_AVATAR_SRC = '/vllm.png'
 
 const parseJSON = async <T,>(resp: Response): Promise<T> => {
   const text = await resp.text()
@@ -194,7 +192,6 @@ const ClawRoomChat = ({
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null)
   const [newRoomName, setNewRoomName] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [settingLeaderId, setSettingLeaderId] = useState<string | null>(null)
   const [mentionAutocomplete, setMentionAutocomplete] = useState<MentionAutocompleteState | null>(null)
 
   const endRef = useRef<HTMLDivElement>(null)
@@ -280,8 +277,6 @@ const ClawRoomChat = ({
     return entries
   }, [leaderWorker, teamWorkers])
 
-  const mentionHints = useMemo(() => mentionOptions.map(option => option.token), [mentionOptions])
-
   const leaderRoleText = leaderWorker?.agentRole || selectedTeam?.role || 'Team Leader'
   const memberResumeProfiles = useMemo(() => {
     const profiles = teamWorkers.map(worker => {
@@ -290,10 +285,8 @@ const ClawRoomChat = ({
         id: worker.name,
         isLeader,
         displayName: worker.agentName || worker.name,
-        alias: `@${worker.name}`,
         roleText: worker.agentRole || (isLeader ? leaderRoleText : 'Team Worker'),
         vibeText: worker.agentVibe || selectedTeam?.vibe || 'Execution-focused',
-        principlesText: worker.agentPrinciples?.trim() || '',
       }
     })
 
@@ -834,7 +827,7 @@ const ClawRoomChat = ({
     void handleCreateRoom()
   }, [createRoomRequestToken, handleCreateRoom])
 
-  const handleDeleteRoom = useCallback(async (room: RoomEntry) => {
+  const handleDeleteRoom = useCallback(async (room: Pick<RoomEntry, 'id' | 'name'>) => {
     if (managementDisabled || !room?.id || deletingRoomId) {
       return
     }
@@ -866,45 +859,6 @@ const ClawRoomChat = ({
       setDeletingRoomId(null)
     }
   }, [deletingRoomId, fetchRooms, managementDisabled, selectedRoomId, selectedTeamId])
-
-  const handleSetLeader = useCallback(async (workerName: string) => {
-    if (managementDisabled || !workerName) return
-    setSettingLeaderId(workerName)
-    try {
-      const resp = await fetch(`/api/openclaw/workers/${encodeURIComponent(workerName)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roleKind: 'leader' }),
-      })
-      if (!resp.ok) {
-        const body = await resp.text()
-        throw new Error(body || `Failed to update leader (${resp.status})`)
-      }
-      await fetchTeamsAndWorkers()
-      setError(null)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to set leader'
-      setError(message)
-    } finally {
-      setSettingLeaderId(null)
-    }
-  }, [fetchTeamsAndWorkers, managementDisabled])
-
-  const handleInsertMention = useCallback((token: string) => {
-    if (!token) return
-    setDraft(previous => {
-      const base = previous.trim().length === 0 ? '' : `${previous}${previous.endsWith(' ') ? '' : ' '}`
-      const next = `${base}${token} `
-      requestAnimationFrame(() => {
-        const element = inputRef.current
-        if (!element) return
-        element.focus()
-        element.setSelectionRange(next.length, next.length)
-      })
-      return next
-    })
-    setMentionAutocomplete(null)
-  }, [])
 
   const handleDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     const { value, selectionStart } = event.target
@@ -991,7 +945,6 @@ const ClawRoomChat = ({
       return {
         displayName: message.senderName || 'You',
         roleLabel: 'USER',
-        avatar: VLLM_AVATAR_SRC,
       }
     }
 
@@ -999,7 +952,6 @@ const ClawRoomChat = ({
       return {
         displayName: message.senderName || 'ClawOS',
         roleLabel: 'SYSTEM',
-        avatar: '⚙️',
       }
     }
 
@@ -1012,7 +964,6 @@ const ClawRoomChat = ({
     return {
       displayName,
       roleLabel: message.senderType === 'leader' ? 'LEADER' : 'WORKER',
-      avatar: OPENCLAW_LOGO_SRC,
     }
   }, [workerLookup])
 
@@ -1068,102 +1019,31 @@ const ClawRoomChat = ({
 
       <div className={styles.layout}>
         {isSidebarOpen && (
-          <aside className={styles.sidebar}>
-            <div className={styles.selectGroup}>
-              <label className={styles.label} htmlFor="claw-team-select">Team</label>
-              <select
-                id="claw-team-select"
-                className={styles.select}
-                value={selectedTeamId}
-                onChange={event => setSelectedTeamId(event.target.value)}
-              >
-                {teams.length === 0 && <option value="">No teams</option>}
-                {teams.map(team => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className={styles.roomsHeader}>
-              <div>
-                <div className={styles.roomsTitle}>Rooms</div>
-                <div className={styles.roomsSubtitle}>{selectedTeam?.name || 'Select a team'}</div>
-              </div>
-            </div>
-
-            <form className={styles.createRoomForm} onSubmit={event => void handleCreateRoom(event)}>
-              <input
-                type="text"
-                className={styles.createRoomInput}
-                value={newRoomName}
-                onChange={event => setNewRoomName(event.target.value)}
-                placeholder="New room name (optional)"
-                disabled={managementDisabled || !selectedTeamId || creatingRoom}
-              />
-              <button
-                type="submit"
-                className={styles.createRoomButton}
-                disabled={managementDisabled || !selectedTeamId || creatingRoom}
-              >
-                {creatingRoom ? 'Creating...' : 'Create'}
-              </button>
-            </form>
-
-            <div className={styles.roomList}>
-              {rooms.length === 0 ? (
-                <div className={styles.sidebarEmpty}>No room yet.</div>
-              ) : (
-                rooms.map(room => {
-                  const active = room.id === selectedRoomId
-                  return (
-                    <div
-                      key={room.id}
-                      className={`${styles.roomItem} ${active ? styles.roomItemActive : ''}`}
-                      onClick={() => setSelectedRoomId(room.id)}
-                      onKeyDown={event => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          setSelectedRoomId(room.id)
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <div className={styles.roomItemBody}>
-                        <span className={styles.roomName}>{room.name}</span>
-                        <span className={styles.roomId}>{room.id}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.roomDeleteButton}
-                        onClick={event => {
-                          event.stopPropagation()
-                          void handleDeleteRoom(room)
-                        }}
-                        disabled={managementDisabled || deletingRoomId === room.id}
-                        title="Delete room"
-                        aria-label="Delete room"
-                      >
-                        {deletingRoomId === room.id ? '…' : '✕'}
-                      </button>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-
-            <div className={styles.mentionsHint}>
-              Mention hints: {mentionHints.join(' ')}
-            </div>
-          </aside>
+          <ClawRoomSidebar
+            creatingRoom={creatingRoom}
+            deletingRoomId={deletingRoomId}
+            managementDisabled={managementDisabled}
+            memberProfiles={memberResumeProfiles}
+            newRoomName={newRoomName}
+            onChangeNewRoomName={setNewRoomName}
+            onCreateRoom={event => void handleCreateRoom(event)}
+            onDeleteRoom={room => void handleDeleteRoom(room)}
+            onSelectRoom={setSelectedRoomId}
+            onSelectTeam={setSelectedTeamId}
+            rooms={rooms}
+            selectedRoom={selectedRoom}
+            selectedRoomId={selectedRoomId}
+            selectedTeam={selectedTeam}
+            selectedTeamId={selectedTeamId}
+            teamBriefText={teamBriefText}
+            teams={teams}
+          />
         )}
 
         <section className={styles.chatPanel}>
-          <header className={styles.chatHeader}>
+          <header className={styles.chatHeader} data-testid="claw-room-header">
             <div className={styles.chatTitleWrap}>
-              <h3 className={styles.chatTitle}>{selectedTeam?.name || 'No team selected'}</h3>
+              <h3 className={styles.chatTitle}>{selectedRoom?.name || selectedTeam?.name || 'No room selected'}</h3>
               {selectedRoomId && (
                 <span
                   className={`${styles.chatTitleStatus} ${wsConnected ? styles.wsConnected : styles.wsDisconnected}`}
@@ -1173,85 +1053,9 @@ const ClawRoomChat = ({
                 </span>
               )}
             </div>
-
-            <div className={styles.teamInlineInfo}>
-              <div className={styles.teamInlineMetaRow}>
-                <span className={styles.teamInlineMetaText}>
-                  {selectedRoom ? `Room · ${selectedRoom.name}` : 'Create or select a room to start'}
-                </span>
-                {(selectedTeam?.role || selectedTeam?.vibe) && (
-                  <div className={styles.metaInline}>
-                    {selectedTeam?.role && <span className={styles.metaPill}>{selectedTeam.role}</span>}
-                    {selectedTeam?.vibe && <span className={styles.metaPill}>{selectedTeam.vibe}</span>}
-                  </div>
-                )}
-              </div>
-              <div className={styles.teamInlineBrief}>{teamBriefText}</div>
-            </div>
-
-            <div className={styles.memberQueueSection}>
-              <div className={styles.memberQueueHeading}>
-                <span className={styles.memberQueueTitle}>Members</span>
-                <span className={styles.memberQueueSubtitle}>
-                  {teamWorkers.length} {teamWorkers.length === 1 ? 'claw' : 'claws'}
-                  {leaderWorker ? ' · leader first' : ' · no leader set'}
-                </span>
-              </div>
-              {memberResumeProfiles.length === 0 ? (
-                <div className={styles.memberQueueEmpty}>No workers in this team yet</div>
-              ) : (
-                <div className={styles.memberQueueList}>
-                  {memberResumeProfiles.map(profile => (
-                    <article
-                      key={profile.id}
-                      className={`${styles.memberQueueItem} ${profile.isLeader ? styles.memberQueueItemLeader : ''}`}
-                    >
-                      <div className={styles.memberQueueTop}>
-                        <span className={styles.memberQueueIdentity}>
-                          <img
-                            src={OPENCLAW_LOGO_SRC}
-                            alt={profile.isLeader ? 'leader logo' : 'worker logo'}
-                            className={styles.metaLogo}
-                          />
-                          <span className={styles.memberQueueName}>{profile.displayName}</span>
-                        </span>
-                        <span className={profile.isLeader ? styles.memberResumeRoleLeader : styles.memberResumeRoleWorker}>
-                          {profile.isLeader ? 'LEADER' : 'WORKER'}
-                        </span>
-                      </div>
-                      <div className={styles.memberQueueBody}>
-                        <button
-                          type="button"
-                          className={styles.quickMentionButton}
-                          onClick={() => handleInsertMention(profile.alias)}
-                        >
-                          {profile.alias}
-                        </button>
-                        <span className={styles.memberQueueRole}>{profile.roleText}</span>
-                        <span className={styles.memberQueueVibe}>{profile.vibeText}</span>
-                      </div>
-                      {!profile.isLeader && (
-                        <button
-                          type="button"
-                          className={styles.memberPromoteButton}
-                          onClick={() => void handleSetLeader(profile.id)}
-                          disabled={managementDisabled || settingLeaderId === profile.id}
-                        >
-                          {settingLeaderId === profile.id ? 'Setting…' : 'Set as leader'}
-                        </button>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className={styles.teamGuide}>
-              Collaboration tip: start with <code>@leader</code> for delegation.
-            </div>
           </header>
 
-          <div className={styles.messages}>
+          <div className={styles.messages} data-testid="claw-room-transcript">
             {!selectedRoomId ? (
               <div className={styles.stateHint}>Select a room from the left panel.</div>
             ) : messages.length === 0 ? (
@@ -1267,32 +1071,21 @@ const ClawRoomChat = ({
                   <div
                     key={message.id}
                     className={`${styles.messageRow} ${isUser ? styles.messageRowUser : styles.messageRowAgent}`}
+                    data-room-message-id={message.id}
+                    data-room-message-role={message.senderType}
                   >
-                    <div className={styles.messageAvatar}>
-                      {senderVisual.avatar === OPENCLAW_LOGO_SRC || senderVisual.avatar === VLLM_AVATAR_SRC ? (
-                        <img
-                          src={senderVisual.avatar}
-                          alt={`${senderVisual.roleLabel.toLowerCase()} avatar`}
-                          className={`${styles.avatarLogo} ${styles.messageAvatarLogo}`}
-                        />
-                      ) : (
-                        senderVisual.avatar
-                      )}
-                    </div>
                     <div className={styles.messageMain}>
-                      <div className={styles.messageMeta}>
-                        <span className={`${styles.senderName} ${isLeader ? styles.senderNameLeader : ''}`}>
-                          {senderVisual.displayName}
-                        </span>
-                        <span
-                          className={`${styles.senderType} ${isLeader ? styles.senderTypeLeader : ''} ${isWorker ? styles.senderTypeWorker : ''}`}
-                        >
-                          {senderVisual.roleLabel}
-                        </span>
-                        <span className={styles.timestamp}>{formatMessageTime(message.createdAt)}</span>
-                      </div>
+                      <ClawRoomMessageMeta
+                        displayName={senderVisual.displayName}
+                        isLeader={isLeader}
+                        isUser={isUser}
+                        isWorker={isWorker}
+                        roleLabel={senderVisual.roleLabel}
+                        timestamp={formatMessageTime(message.createdAt)}
+                      />
                       <div
                         className={`${styles.messageBubble} ${isUser ? styles.messageBubbleUser : styles.messageBubbleAgent} ${isSystem ? styles.messageBubbleSystem : ''}`}
+                        data-room-message-content
                       >
                         <div className={styles.messageMarkdown}>
                           <MarkdownRenderer content={message.content} />

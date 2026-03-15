@@ -43,6 +43,7 @@ This document is the human-readable index for the repository's skill system.
 ## Support Skills
 
 - `feature-complete-checklist`
+- `maintainer-issue-pr-management`
 
 ## Source of Truth
 

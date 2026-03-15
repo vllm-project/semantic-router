@@ -12,6 +12,7 @@ export interface VLLMEndpoint {
 export interface ModelConfig {
   model_id: string
   use_modernbert?: boolean
+  use_mmbert_32k?: boolean
   threshold: number
   use_cpu: boolean
   use_contrastive?: boolean
@@ -137,6 +138,93 @@ export interface APIConfig {
       size_buckets?: number[]
     }
   }
+}
+
+export interface ResponseAPIConfig {
+  enabled?: boolean
+  store_backend?: string
+  ttl_seconds?: number
+  max_responses?: number
+}
+
+export interface RouterReplayConfig {
+  store_backend?: string
+  ttl_seconds?: number
+  async_writes?: boolean
+}
+
+export interface MemoryConfig {
+  enabled?: boolean
+  auto_store?: boolean
+  milvus?: Record<string, unknown>
+  embedding?: Record<string, unknown>
+  default_retrieval_limit?: number
+  default_similarity_threshold?: number
+  extraction_batch_size?: number
+}
+
+export interface SemanticCacheConfig {
+  enabled?: boolean
+  backend_type?: string
+  similarity_threshold?: number
+  max_entries?: number
+  ttl_seconds?: number
+  eviction_policy?: string
+  use_hnsw?: boolean
+  hnsw_m?: number
+  hnsw_ef_construction?: number
+  embedding_model?: string
+  max_memory_entries?: number
+  backend_config_path?: string
+}
+
+export interface HallucinationMitigationConfig {
+  enabled?: boolean
+  fact_check_model?: Record<string, unknown>
+  hallucination_model?: Record<string, unknown>
+  nli_model?: Record<string, unknown>
+}
+
+export interface FeedbackDetectorConfig {
+  enabled?: boolean
+  model_id?: string
+  threshold?: number
+  use_cpu?: boolean
+  use_mmbert_32k?: boolean
+  use_modernbert?: boolean
+}
+
+export interface EmbeddingModelsConfig {
+  qwen3_model_path?: string
+  gemma_model_path?: string
+  mmbert_model_path?: string
+  multimodal_model_path?: string
+  use_cpu?: boolean
+  hnsw_config?: Record<string, unknown>
+}
+
+export interface ObservabilityConfig {
+  tracing?: TracingConfig
+  metrics?: { enabled?: boolean }
+}
+
+export interface LooperConfig {
+  enabled?: boolean
+  endpoint?: string
+  timeout_seconds?: number
+  headers?: Record<string, string>
+}
+
+export interface ModelSelectionConfig {
+  enabled?: boolean
+  default_algorithm?: string
+  llm_candidates_path?: string
+  models_path?: string
+  training_data_path?: string
+  knn?: Record<string, unknown>
+  kmeans?: Record<string, unknown>
+  svm?: Record<string, unknown>
+  custom_training?: Record<string, unknown>
 }
 
 export interface KeywordSignal {
@@ -271,15 +359,7 @@ export interface ConfigData {
     default_reasoning_effort?: string
   }
   bert_model?: ModelConfig
-  semantic_cache?: {
-    enabled: boolean
-    backend_type?: string
-    similarity_threshold: number
-    max_entries: number
-    ttl_seconds: number
-    eviction_policy?: string
-    embedding_model?: string
-  }
+  semantic_cache?: SemanticCacheConfig
   tools?: {
     enabled: boolean
     top_k: number
@@ -300,11 +380,18 @@ export interface ConfigData {
   default_model?: string
   model_config?: Record<string, ModelConfigEntry>
   reasoning_families?: Record<string, ReasoningFamily>
+  response_api?: ResponseAPIConfig
+  router_replay?: RouterReplayConfig
+  memory?: MemoryConfig
+  hallucination_mitigation?: HallucinationMitigationConfig
+  feedback_detector?: FeedbackDetectorConfig
+  external_models?: Array<Record<string, unknown>>
+  embedding_models?: EmbeddingModelsConfig
   api?: APIConfig
-  observability?: {
-    tracing?: TracingConfig
-    metrics?: { enabled: boolean }
-  }
+  observability?: ObservabilityConfig
+  looper?: LooperConfig
+  clear_route_cache?: boolean
+  model_selection?: ModelSelectionConfig
   keyword_rules?: KeywordSignal[]
   embedding_rules?: EmbeddingSignal[]
   fact_check_rules?: FactCheckSignal[]
