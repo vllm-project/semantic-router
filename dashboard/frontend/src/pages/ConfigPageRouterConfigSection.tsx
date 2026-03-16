@@ -218,6 +218,15 @@ export default function ConfigPageRouterConfigSection({
       eyebrow="Runtime"
       title="Global Config"
       description="Router-owned runtime defaults are merged with your `config.yaml` `global` override. This surface edits the canonical `global` block while preserving the router's built-in defaults."
+      configArea="Global"
+      scope="Router runtime defaults and overrides"
+      panelEyebrow="Runtime"
+      panelTitle="Canonical Global Config"
+      panelDescription="Review the resolved router defaults, edit layered `global` overrides, and keep runtime modules aligned with the canonical v0.3 structure."
+      pills={sectionGroups.map((group, index) => ({
+        label: group.meta?.title || group.layer,
+        active: index === 0,
+      }))}
     >
       <div className={pageStyles.sectionPanel}>
         <div className={pageStyles.sectionTableBlock}>

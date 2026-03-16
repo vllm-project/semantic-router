@@ -9,8 +9,8 @@ import type {
   DecisionConfig,
   DecisionFormState,
   NormalizedModel,
-  TABLE_COLUMN_WIDTH,
 } from './configPageSupport'
+import { TABLE_COLUMN_WIDTH } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 

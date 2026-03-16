@@ -23,7 +23,8 @@ import type {
   Subject,
   UserFeedbackSignal,
 } from './configPageSupport'
-import { formatThreshold, hasFlatSignals } from '../types/config'
+import { formatThreshold } from './configPageSupport'
+import { hasFlatSignals } from '../types/config'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 

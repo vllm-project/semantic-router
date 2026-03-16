@@ -31,6 +31,7 @@ import {
   collectConfiguredSignalNames,
   ConfigData,
   DecisionConfig,
+  SignalType,
   Tool,
   getDefaultModelName,
   getNormalizedModels,
@@ -93,9 +94,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     fetchConfig()
     fetchRouterDefaults()
   }, [])
-
-  const getRoutingModelCards = (cfg?: ConfigData) =>
-    cfg?.routing?.modelCards || []
 
   // Fetch tools database when config is loaded
   useEffect(() => {
@@ -306,7 +304,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   }
 
   const getSelectedPresetConflicts = () => {
-    const defaultModel = getDefaultModel()
     if (!config || !defaultModel || !selectedRoutingPresetId) {
       return []
     }
@@ -337,7 +334,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   }
 
   const handleApplyRoutingPreset = async () => {
-    const defaultModel = getDefaultModel()
     if (!config || !isPythonCLI || !selectedRoutingPresetId || !defaultModel) {
       return
     }
@@ -421,10 +417,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
 
   // Helper: Check if using Python CLI format
   const isPythonCLI = configFormat === 'python-cli'
-  const selectedPresetConflicts = getSelectedPresetConflicts()
   const models = getNormalizedModels(config, isPythonCLI)
   const defaultModel = getDefaultModelName(config, isPythonCLI)
   const reasoningFamilies = getReasoningFamiliesMap(config, isPythonCLI)
+  const selectedPresetConflicts = getSelectedPresetConflicts()
 
   // ============================================================================
   // SECTION PANEL RENDERS - Aligned with Python CLI config structure
@@ -510,7 +506,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       case 'global-config':
         return renderGlobalConfigSection()
       case 'mcp':
-        return <MCPConfigPanel />
+        return <ConfigPageMCPSection />
       default:
         return renderGlobalConfigSection()
     }
@@ -565,7 +561,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
 
       <RoutingPresetModal
         isOpen={presetModalOpen}
-        defaultModel={getDefaultModel()}
+        defaultModel={defaultModel}
         selectedPresetId={selectedRoutingPresetId}
         conflicts={selectedPresetConflicts}
         error={presetApplyError}
