@@ -1,7 +1,7 @@
 ---
 name: local-dev-cpu
 category: fragment
-description: Canonical CPU-local image build, serve, and smoke workflow.
+description: Builds Docker images, starts local servers, and runs smoke tests for the CPU-only development environment. Use when validating changes locally on CPU, building CPU container images, or running CPU-specific smoke and E2E tests.
 ---
 
 # Local Dev CPU
@@ -21,6 +21,14 @@ description: Canonical CPU-local image build, serve, and smoke workflow.
 ## Stop Conditions
 
 - CPU-local smoke cannot be run in the current workspace/runtime
+
+## Workflow
+
+1. Read environment docs and CLI Docker playbook to understand the CPU build setup
+2. Build the CPU image with `make agent-dev ENV=cpu`
+3. Start the local server with `make agent-serve-local ENV=cpu`
+4. Run smoke tests with `make agent-smoke-local` to validate the build
+5. Verify `vllm-sr status all` and dashboard smoke checks pass
 
 ## Must Read
 
