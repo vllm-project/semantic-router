@@ -32,6 +32,13 @@ export type RouterSystemKey =
 
 export type RouterConfigSectionData = Partial<Record<RouterSystemKey, unknown>>
 
+export type RouterLayerKey =
+  | 'router'
+  | 'services'
+  | 'stores'
+  | 'integrations'
+  | 'model_catalog'
+
 export interface RouterSectionBadge {
   label: string
   tone: 'active' | 'inactive' | 'info'
@@ -44,6 +51,8 @@ export interface RouterSectionSummaryItem {
 
 export interface RouterSectionCard {
   key: RouterSystemKey
+  layer: RouterLayerKey
+  path: string[]
   title: string
   eyebrow: string
   description: string
@@ -65,6 +74,32 @@ interface RouterSectionContext {
   toolsData: Tool[]
   toolsLoading: boolean
   toolsError: string | null
+}
+
+export const ROUTER_LAYER_META: Record<
+  RouterLayerKey,
+  { title: string; description: string }
+> = {
+  router: {
+    title: 'Router',
+    description: 'Core router-engine controls, startup behavior, and model-selection strategy.',
+  },
+  services: {
+    title: 'Services',
+    description: 'APIs, replay, observability, and other router-owned service surfaces.',
+  },
+  stores: {
+    title: 'Stores',
+    description: 'Shared storage-backed capabilities such as semantic cache and memory.',
+  },
+  integrations: {
+    title: 'Integrations',
+    description: 'Auxiliary runtime integrations used by routing and tool selection.',
+  },
+  model_catalog: {
+    title: 'Model Catalog',
+    description: 'Router-owned embedding catalogs, external models, and model-backed modules.',
+  },
 }
 
 function cloneDefaultSection(key: RouterSystemKey): unknown {
@@ -89,6 +124,26 @@ const GLOBAL_SECTION_PATHS: Record<RouterSystemKey, string[]> = {
   model_selection: ['router', 'model_selection'],
   api: ['services', 'api'],
   bert_model: ['model_catalog', 'embeddings', 'bert'],
+}
+
+const ROUTER_SECTION_LAYERS: Record<RouterSystemKey, RouterLayerKey> = {
+  response_api: 'services',
+  router_replay: 'services',
+  memory: 'stores',
+  semantic_cache: 'stores',
+  tools: 'integrations',
+  prompt_guard: 'model_catalog',
+  classifier: 'model_catalog',
+  hallucination_mitigation: 'model_catalog',
+  feedback_detector: 'model_catalog',
+  external_models: 'model_catalog',
+  embedding_models: 'model_catalog',
+  observability: 'services',
+  looper: 'integrations',
+  clear_route_cache: 'router',
+  model_selection: 'router',
+  api: 'services',
+  bert_model: 'model_catalog',
 }
 
 const LEGACY_ROOT_KEYS: Partial<Record<RouterSystemKey, keyof ConfigData>> = {
@@ -649,6 +704,8 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
 
     return {
       key,
+      layer: ROUTER_SECTION_LAYERS[key],
+      path: GLOBAL_SECTION_PATHS[key],
       title: meta.title,
       eyebrow: meta.eyebrow,
       description: meta.description,

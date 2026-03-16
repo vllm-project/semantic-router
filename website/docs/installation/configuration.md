@@ -66,6 +66,7 @@ providers:
     default_reasoning_effort: medium
   models:
     - name: qwen3-8b
+      reasoning_family: qwen3
       provider_model_id: qwen3-8b
       backend_refs:
         - name: primary
@@ -79,7 +80,6 @@ routing:
     - name: qwen3-8b
       modality: text
       capabilities: [chat, reasoning]
-      reasoning_family_ref: qwen3
       loras:
         - name: math-adapter
           description: Adapter used for symbolic math and proof-style prompts.

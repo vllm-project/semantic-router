@@ -19,6 +19,7 @@ providers:
         parameter: reasoning.effort
   models:
     - name: qwen3-8b
+      reasoning_family: qwen3
       provider_model_id: qwen3-8b-instruct
       api_format: openai
       pricing:
@@ -47,6 +48,7 @@ providers:
           api_key: static-demo-key
           weight: 20
     - name: qwen3-32b
+      reasoning_family: gpt
       provider_model_id: qwen3-32b-instruct
       api_format: anthropic
       pricing:
@@ -92,7 +94,6 @@ providers:
 routing:
   modelCards:
     - name: qwen3-8b
-      reasoning_family_ref: qwen3
       param_size: 8B
       context_window_size: 131072
       description: General-purpose text model for the default routing tier.
@@ -101,7 +102,6 @@ routing:
       modality: ar
       tags: [default, fast]
     - name: qwen3-32b
-      reasoning_family_ref: gpt
       param_size: 32B
       context_window_size: 131072
       description: Higher-quality text model for complex and verified requests.

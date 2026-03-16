@@ -656,13 +656,10 @@ func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelPar
 	if mr.Weight != 0 {
 		opts = append(opts, fmt.Sprintf("weight = %g", mr.Weight))
 	}
-	// Pull param_size and reasoning_family from model_config
+	// Pull param_size from model_config.
 	if mc, ok := modelConfig[mr.Model]; ok {
 		if mc.ParamSize != "" {
 			opts = append(opts, fmt.Sprintf("param_size = %q", mc.ParamSize))
-		}
-		if mc.ReasoningFamily != "" {
-			opts = append(opts, fmt.Sprintf("reasoning_family = %q", mc.ReasoningFamily))
 		}
 	}
 	return strings.Join(opts, ", ")
@@ -985,10 +982,9 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 			LoRA:      mr.LoRAName,
 			Weight:    mr.Weight,
 		}
-		// Pull param_size and reasoning_family from model_config
+		// Pull param_size from model_config.
 		if mc, ok := d.cfg.ModelConfig[mr.Model]; ok {
 			ref.ParamSize = mc.ParamSize
-			ref.ReasoningFamily = mc.ReasoningFamily
 		}
 		route.Models = append(route.Models, ref)
 	}

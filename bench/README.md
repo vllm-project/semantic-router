@@ -88,10 +88,12 @@ providers:
       qwen3:
         type: chat_template_kwargs
         parameter: enable_thinking
+  models:
+    - name: qwen3-14b
+      reasoning_family: qwen3
 routing:
   modelCards:
     - name: qwen3-14b
-      reasoning_family_ref: qwen3
 ```
 
 **Supported reasoning families:**
@@ -225,11 +227,13 @@ providers:
       qwen3:
         type: chat_template_kwargs
         parameter: enable_thinking
+  models:
+    - name: qwen3-14b
+      reasoning_family: qwen3
 
 routing:
   modelCards:
     - name: qwen3-14b
-      reasoning_family_ref: qwen3
 ```
 
 ### 3. Enable Reasoning in Routes (Optional)

@@ -31,6 +31,7 @@ providers:
         parameter: reasoning_effort
   models:
     - name: test-model
+      reasoning_family: qwen3
       provider_model_id: test-model
       backend_refs:
         - name: endpoint1
@@ -40,7 +41,6 @@ providers:
 routing:
   modelCards:
     - name: test-model
-      reasoning_family_ref: qwen3
   signals:
     domains:
       - name: business
@@ -112,6 +112,7 @@ func canonicalConfigBody(endpoint string) map[string]interface{} {
 			"models": []map[string]interface{}{
 				{
 					"name":              "test-model",
+					"reasoning_family":  "qwen3",
 					"provider_model_id": "test-model",
 					"backend_refs": []map[string]interface{}{
 						{
@@ -127,8 +128,7 @@ func canonicalConfigBody(endpoint string) map[string]interface{} {
 		"routing": map[string]interface{}{
 			"modelCards": []map[string]interface{}{
 				{
-					"name":                 "test-model",
-					"reasoning_family_ref": "qwen3",
+					"name": "test-model",
 				},
 			},
 			"signals": map[string]interface{}{

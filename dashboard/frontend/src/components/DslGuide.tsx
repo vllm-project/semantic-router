@@ -172,7 +172,6 @@ ROUTE ai_route (description = "AI-related requests") {
 }`
 
 const MODEL_SNIPPET = `MODEL "qwen2.5:3b" {
-  reasoning_family_ref: "qwen3"
   param_size: "3b"
   modality: "text"
   capabilities: ["general", "reasoning"]
@@ -281,7 +280,6 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
           <table className={styles.fieldTable}>
             <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>reasoning_family_ref</code></td><td>string</td><td>References provider reasoning family metadata</td></tr>
               <tr><td><code>param_size</code></td><td>string</td><td>Logical size hint such as <code>3b</code> or <code>70b</code></td></tr>
               <tr><td><code>description</code></td><td>string</td><td>Human-readable routing summary</td></tr>
               <tr><td><code>capabilities</code></td><td>string[]</td><td>Semantic tags used by selection or tooling</td></tr>

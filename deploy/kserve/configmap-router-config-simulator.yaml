@@ -28,11 +28,13 @@ data:
         default_reasoning_effort: high
       models:
         - name: '{{MODEL_NAME_A}}'
+          reasoning_family: qwen3
           backend_refs:
             - name: model-a-endpoint
               endpoint: '{{PREDICTOR_SERVICE_IP_A}}:8000'
               weight: 1
         - name: '{{MODEL_NAME_B}}'
+          reasoning_family: qwen3
           backend_refs:
             - name: model-b-endpoint
               endpoint: '{{PREDICTOR_SERVICE_IP_B}}:8000'
@@ -160,9 +162,7 @@ data:
               - engineering
       modelCards:
         - name: '{{MODEL_NAME_A}}'
-          reasoning_family_ref: qwen3
         - name: '{{MODEL_NAME_B}}'
-          reasoning_family_ref: qwen3
     global:
       model_catalog:
         embeddings:

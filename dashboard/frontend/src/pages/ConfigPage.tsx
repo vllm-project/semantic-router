@@ -52,10 +52,13 @@ import {
   KeywordSignal,
   LanguageSignal,
   ModelConfigEntry, NormalizedModel, normalizeEndpoint, normalizeEndpoints,
+  ModalitySignal,
   PIISignal,
   PreferenceSignal,
   ReasoningFamily,
+  RoleBindingSignal,
   SignalType,
+  Subject,
   TABLE_COLUMN_WIDTH,
   Tool,
   UserFeedbackSignal,
@@ -377,6 +380,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       case 'Complexity':
         cfg.signals.complexity = (cfg.signals.complexity || []).filter(s => s.name !== targetName)
         break
+      case 'Modality':
+        cfg.signals.modality = (cfg.signals.modality || []).filter(s => s.name !== targetName)
+        break
+      case 'Authz':
+        cfg.signals.role_bindings = (cfg.signals.role_bindings || []).filter(s => s.name !== targetName)
+        break
       case 'Jailbreak':
         cfg.signals.jailbreak = (cfg.signals.jailbreak || []).filter(s => s.name !== targetName)
         break
@@ -517,9 +526,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       const cardByName = new Map(cards.map((card) => [card.name, card]))
       const models = config.providers.models.map((m): NormalizedModel => ({
         name: m.name,
-        reasoning_family: cardByName.get(m.name)?.reasoning_family_ref,
+        reasoning_family: m.reasoning_family,
         endpoints: normalizeProviderModelEndpoints(m),
         access_key: m.backend_refs?.find((ref) => ref.api_key || ref.api_key_env)?.api_key,
+        param_size: cardByName.get(m.name)?.param_size,
+        context_window_size: cardByName.get(m.name)?.context_window_size,
+        description: cardByName.get(m.name)?.description,
+        capabilities: cardByName.get(m.name)?.capabilities,
+        loras: cardByName.get(m.name)?.loras,
+        tags: cardByName.get(m.name)?.tags,
+        quality_score: cardByName.get(m.name)?.quality_score,
+        modality: cardByName.get(m.name)?.modality,
         pricing: m.pricing,
       }))
 
@@ -529,8 +546,16 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         }
         models.push({
           name: card.name,
-          reasoning_family: card.reasoning_family_ref,
+          reasoning_family: undefined,
           endpoints: [],
+          param_size: card.param_size,
+          context_window_size: card.context_window_size,
+          description: card.description,
+          capabilities: card.capabilities,
+          loras: card.loras,
+          tags: card.tags,
+          quality_score: card.quality_score,
+          modality: card.modality,
           pricing: undefined,
         })
       }
@@ -584,16 +609,22 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     // Support both nested (signals.*) and flat (keyword_rules, etc.) formats.
     // After deploy, Router flattens signals.keywords → keyword_rules, etc.
     const signals = config?.signals
-    const flatSignals = !signals && hasFlatSignals(config) ? {
+    const flatSignals: ConfigData['signals'] | null = !signals && hasFlatSignals(config) ? {
       keywords: config?.keyword_rules,
       embeddings: config?.embedding_rules,
-      domains: config?.categories,
+      domains: (config?.categories || []).map((category) => ({
+        name: category.name,
+        description: category.description || '',
+        mmlu_categories: category.mmlu_categories,
+      })),
       fact_check: config?.fact_check_rules,
       user_feedbacks: config?.user_feedback_rules,
       preferences: config?.preference_rules,
       language: config?.language_rules,
       context: config?.context_rules,
       complexity: config?.complexity_rules,
+      modality: undefined,
+      role_bindings: undefined,
       jailbreak: config?.jailbreak,
       pii: config?.pii,
     } : null
@@ -609,6 +640,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       LanguageSignal &
       ContextSignal &
       ComplexitySignal &
+      ModalitySignal &
+      RoleBindingSignal &
       JailbreakSignal &
       PIISignal
     >
@@ -719,6 +752,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       })
     })
 
+    // Modality
+    effectiveSignals?.modality?.forEach(modality => {
+      allSignals.push({
+        name: modality.name,
+        type: 'Modality',
+        summary: modality.description || 'Modality signal',
+        rawData: modality,
+      })
+    })
+
+    // Authz role bindings
+    effectiveSignals?.role_bindings?.forEach(binding => {
+      const subjectCount = binding.subjects?.length || 0
+      allSignals.push({
+        name: binding.name,
+        type: 'Authz',
+        summary: `${binding.role} • ${subjectCount} ${subjectCount === 1 ? 'subject' : 'subjects'}`,
+        rawData: binding,
+      })
+    })
+
     // Jailbreak
     effectiveSignals?.jailbreak?.forEach(jb => {
       const method = jb.method || 'classifier'
@@ -772,6 +826,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
             'Language': 'rgba(59, 130, 246, 0.15)',
             'Context': 'rgba(251, 146, 60, 0.15)',
             'Complexity': 'rgba(66, 153, 225, 0.15)',
+            'Modality': 'rgba(20, 184, 166, 0.15)',
+            'Authz': 'rgba(168, 85, 247, 0.15)',
             'Jailbreak': 'rgba(239, 68, 68, 0.15)',
             'PII': 'rgba(245, 158, 11, 0.15)'
           }
@@ -993,6 +1049,32 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           title: 'Complexity Signal',
           fields
         })
+      } else if (signal.type === 'Modality') {
+        sections.push({
+          title: 'Modality Signal',
+          fields: [
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+          ]
+        })
+      } else if (signal.type === 'Authz') {
+        sections.push({
+          title: 'Role Binding',
+          fields: [
+            { label: 'Role', value: signal.rawData.role || 'N/A' },
+            {
+              label: 'Subjects',
+              value: signal.rawData.subjects?.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
+                  {signal.rawData.subjects.map((subject: Subject, i: number) => (
+                    <div key={i}>{subject.kind}:{subject.name}</div>
+                  ))}
+                </div>
+              ) : 'No subjects',
+              fullWidth: true,
+            },
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+          ]
+        })
       } else if (signal.type === 'Jailbreak') {
         const fields = [
           { label: 'Method', value: signal.rawData.method || 'classifier', fullWidth: true },
@@ -1051,6 +1133,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         min_tokens: '0',
         max_tokens: '8K',
         complexity_threshold: 0.1,
+        role: '',
+        subjects: '',
         hard_candidates: '',
         easy_candidates: '',
         composer_operator: 'AND',
@@ -1081,6 +1165,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         min_tokens: signal.rawData.min_tokens || '0',
         max_tokens: signal.rawData.max_tokens || '8K',
         complexity_threshold: signal.rawData.threshold ?? 0.1,
+        role: signal.type === 'Authz' ? signal.rawData.role || '' : '',
+        subjects: signal.type === 'Authz'
+          ? (signal.rawData.subjects || []).map((subject: Subject) => `${subject.kind}:${subject.name}`).join('\n')
+          : '',
         hard_candidates: (signal.rawData.hard?.candidates || []).join('\n'),
         easy_candidates: (signal.rawData.easy?.candidates || []).join('\n'),
         composer_operator: signal.rawData.composer?.operator || 'AND',
@@ -1202,6 +1290,25 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         }
       ]
 
+      const modalityFields: FieldConfig[] = []
+
+      const authzFields: FieldConfig[] = [
+        {
+          name: 'role',
+          label: 'Role (authz only)',
+          type: 'text',
+          placeholder: 'admin',
+          shouldHide: conditionallyHideFieldExceptType('Authz')
+        },
+        {
+          name: 'subjects',
+          label: 'Subjects (authz only)',
+          type: 'textarea',
+          placeholder: 'One subject per line, e.g.:\nUser:alice\nGroup:admins',
+          shouldHide: conditionallyHideFieldExceptType('Authz')
+        }
+      ]
+
       const complexityFields: FieldConfig[] = [
         {
           name: 'complexity_threshold',
@@ -1319,7 +1426,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           name: 'type',
           label: 'Type',
           type: 'select',
-          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Context', 'Complexity', 'Jailbreak', 'PII'],
+          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Context', 'Complexity', 'Modality', 'Authz', 'Jailbreak', 'PII'],
           required: true,
           description: 'Fields are validated based on the selected type.'
         },
@@ -1342,6 +1449,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         ...domainFields,
         ...contextFields,
         ...complexityFields,
+        ...modalityFields,
+        ...authzFields,
         ...jailbreakFields,
         ...piiFields,
       ]
@@ -1547,6 +1656,44 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
                 },
                 description: formData.description || undefined,
                 ...(composer && { composer })
+              }
+            ]
+            break
+          }
+          case 'Modality': {
+            newConfig.signals.modality = [
+              ...(newConfig.signals.modality || []),
+              {
+                name,
+                description: formData.description || undefined,
+              }
+            ]
+            break
+          }
+          case 'Authz': {
+            const role = (formData.role || '').trim()
+            if (!role) {
+              throw new Error('Role is required for authz signals.')
+            }
+            const subjects = listInputToArray(formData.subjects || '').map((entry) => {
+              const [kindRaw, ...nameParts] = entry.split(':')
+              const kind = (kindRaw || '').trim()
+              const subjectName = nameParts.join(':').trim()
+              if ((kind !== 'User' && kind !== 'Group') || !subjectName) {
+                throw new Error(`Invalid authz subject "${entry}". Expected User:name or Group:name.`)
+              }
+              return { kind, name: subjectName } as Subject
+            })
+            if (subjects.length === 0) {
+              throw new Error('At least one subject is required for authz signals.')
+            }
+            newConfig.signals.role_bindings = [
+              ...(newConfig.signals.role_bindings || []),
+              {
+                name,
+                role,
+                subjects,
+                description: formData.description || undefined,
               }
             ]
             break
@@ -1815,7 +1962,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
 
     const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
       setViewModalOpen(false)
-      const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'language'] as const
+      const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'fact_check', 'language', 'context', 'complexity', 'modality', 'authz', 'jailbreak', 'pii'] as const
 
       const getConditionNameOptions = (type?: DecisionConditionType) => {
         // derive condition name options based on signals configured
@@ -1830,9 +1977,30 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
             return config?.signals?.user_feedbacks?.map((u) => u.name) || []
           case 'embedding':
             return config?.signals?.embeddings?.map((e) => e.name) || []
+          case 'fact_check':
+            return config?.signals?.fact_check?.map((f) => f.name) || []
           default:
-            return []
+            break
+          case 'language':
+            return config?.signals?.language?.map((l) => l.name) || []
+          case 'context':
+            return config?.signals?.context?.map((c) => c.name) || []
+          case 'complexity':
+            return (config?.signals?.complexity || []).flatMap((signal) => [
+              `${signal.name}:easy`,
+              `${signal.name}:medium`,
+              `${signal.name}:hard`,
+            ])
+          case 'modality':
+            return config?.signals?.modality?.map((m) => m.name) || []
+          case 'authz':
+            return config?.signals?.role_bindings?.map((binding) => binding.name) || []
+          case 'jailbreak':
+            return config?.signals?.jailbreak?.map((rule) => rule.name) || []
+          case 'pii':
+            return config?.signals?.pii?.map((rule) => rule.name) || []
         }
+        return []
       }
 
       const defaultForm: DecisionFormState = {
@@ -1971,6 +2139,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         value: DecisionFormState['modelRefs'],
         onChange: (value: DecisionFormState['modelRefs']) => void
       ) => {
+        const modelOptions = getModels().map((model) => model.name)
         const rows = (Array.isArray(value) ? value : []).length
           ? value
           : [{ model: '', use_reasoning: false, reasoning_description: '', reasoning_effort: '', lora_name: '' }]
@@ -2016,13 +2185,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
                     alignItems: 'center'
                   }}
                 >
-                  <input
-                    type="text"
+                  <select
                     value={ref?.model || ''}
                     onChange={(e) => updateItem(idx, 'model', e.target.value)}
-                    placeholder="Model name (e.g. qwen3-32b)"
                     style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
-                  />
+                  >
+                    <option value="">Select model</option>
+                    {ref?.model && !modelOptions.includes(ref.model) ? (
+                      <option value={ref.model}>{ref.model}</option>
+                    ) : null}
+                    {modelOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                   <select
                     value={ref?.reasoning_effort || ''}
                     onChange={(e) => updateItem(idx, 'reasoning_effort', e.target.value)}
@@ -2552,10 +2727,26 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           fields: [
             { label: 'Model Name', value: model.name },
             { label: 'Reasoning Family', value: model.reasoning_family || 'N/A' },
-            { label: 'Is Default', value: model.name === getDefaultModel() ? 'Yes' : 'No' }
+            { label: 'Is Default', value: model.name === getDefaultModel() ? 'Yes' : 'No' },
+            { label: 'Modality', value: model.modality || 'N/A' },
+            { label: 'Param Size', value: model.param_size || 'N/A' },
+            { label: 'Context Window', value: model.context_window_size ? `${model.context_window_size}` : 'N/A' },
           ]
         }
       ]
+
+      if (model.description || model.capabilities?.length || model.tags?.length || model.loras?.length || typeof model.quality_score === 'number') {
+        sections.push({
+          title: 'Routing Metadata',
+          fields: [
+            { label: 'Description', value: model.description || 'N/A', fullWidth: true },
+            { label: 'Capabilities', value: model.capabilities?.join(', ') || 'N/A', fullWidth: true },
+            { label: 'Tags', value: model.tags?.join(', ') || 'N/A', fullWidth: true },
+            { label: 'LoRAs', value: model.loras?.map((lora) => lora.name).join(', ') || 'N/A', fullWidth: true },
+            { label: 'Quality Score', value: typeof model.quality_score === 'number' ? `${model.quality_score}` : 'N/A' },
+          ]
+        })
+      }
 
       if (model.endpoints && model.endpoints.length > 0) {
         sections.push({
@@ -2659,6 +2850,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           model_name: '',
           reasoning_family: reasoningFamilyNames[0] || '',
           access_key: '',
+          param_size: '',
+          context_window_size: '',
+          description: '',
+          capabilities: '',
+          loras: [],
+          tags: '',
+          quality_score: '',
+          modality: '',
           endpoints: [{
             name: 'endpoint-1',
             endpoint: 'localhost:8000',
@@ -2684,6 +2883,57 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
             type: 'select',
             options: reasoningFamilyNames,
             description: 'Select from configured reasoning families'
+          },
+          {
+            name: 'param_size',
+            label: 'Parameter Size',
+            type: 'text',
+            placeholder: 'e.g., 8B'
+          },
+          {
+            name: 'context_window_size',
+            label: 'Context Window Size',
+            type: 'number',
+            placeholder: 'e.g., 131072'
+          },
+          {
+            name: 'modality',
+            label: 'Modality',
+            type: 'text',
+            placeholder: 'e.g., text, omni, diffusion'
+          },
+          {
+            name: 'description',
+            label: 'Description',
+            type: 'textarea',
+            placeholder: 'Short routing-facing model description'
+          },
+          {
+            name: 'capabilities',
+            label: 'Capabilities',
+            type: 'textarea',
+            placeholder: 'Comma or newline separated capabilities'
+          },
+          {
+            name: 'tags',
+            label: 'Tags',
+            type: 'textarea',
+            placeholder: 'Comma or newline separated tags'
+          },
+          {
+            name: 'quality_score',
+            label: 'Quality Score',
+            type: 'number',
+            min: 0,
+            max: 1,
+            step: 0.01,
+            placeholder: '0.85'
+          },
+          {
+            name: 'loras',
+            label: 'LoRAs (JSON)',
+            type: 'json',
+            placeholder: '[{\"name\":\"adapter\",\"description\":\"optional\"}]'
           },
           {
             name: 'endpoints',
@@ -2729,16 +2979,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           }
           // Endpoints are already validated by EndpointsEditor
           const endpoints = normalizeEndpoints(data.endpoints)
+          const capabilities = listInputToArray(data.capabilities || '')
+          const tags = listInputToArray(data.tags || '')
+          const loras = Array.isArray(data.loras) ? data.loras : []
 
           const newConfig = cloneConfigData(config)
 
           if (isPythonCLI) {
             const providers = ensureProvidersConfig(newConfig)
             upsertRoutingModelCard(newConfig, data.model_name, {
-              reasoning_family_ref: data.reasoning_family || undefined,
+              param_size: data.param_size || undefined,
+              context_window_size: data.context_window_size ? Number(data.context_window_size) : undefined,
+              description: data.description || undefined,
+              capabilities: capabilities.length > 0 ? capabilities : undefined,
+              loras: loras.length > 0 ? loras : undefined,
+              tags: tags.length > 0 ? tags : undefined,
+              quality_score: data.quality_score === '' || data.quality_score === undefined ? undefined : Number(data.quality_score),
+              modality: data.modality || undefined,
             })
             providers.models.push({
               name: data.model_name,
+              reasoning_family: data.reasoning_family || undefined,
               provider_model_id: data.model_name,
               backend_refs: mergeProviderBackendRefs(undefined, endpoints, data.access_key),
               pricing: {
@@ -2780,6 +3041,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         {
           reasoning_family: model.reasoning_family || '',
           access_key: model.access_key || '',
+          param_size: model.param_size || '',
+          context_window_size: model.context_window_size || '',
+          description: model.description || '',
+          capabilities: (model.capabilities || []).join('\n'),
+          loras: model.loras || [],
+          tags: (model.tags || []).join('\n'),
+          quality_score: model.quality_score ?? '',
+          modality: model.modality || '',
           // Endpoints
           endpoints: normalizeEndpoints(model.endpoints),
           // Pricing
@@ -2794,6 +3063,57 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
             type: 'select',
             options: reasoningFamilyNames,
             description: 'Select from configured reasoning families'
+          },
+          {
+            name: 'param_size',
+            label: 'Parameter Size',
+            type: 'text',
+            placeholder: 'e.g., 8B'
+          },
+          {
+            name: 'context_window_size',
+            label: 'Context Window Size',
+            type: 'number',
+            placeholder: 'e.g., 131072'
+          },
+          {
+            name: 'modality',
+            label: 'Modality',
+            type: 'text',
+            placeholder: 'e.g., text, omni, diffusion'
+          },
+          {
+            name: 'description',
+            label: 'Description',
+            type: 'textarea',
+            placeholder: 'Short routing-facing model description'
+          },
+          {
+            name: 'capabilities',
+            label: 'Capabilities',
+            type: 'textarea',
+            placeholder: 'Comma or newline separated capabilities'
+          },
+          {
+            name: 'tags',
+            label: 'Tags',
+            type: 'textarea',
+            placeholder: 'Comma or newline separated tags'
+          },
+          {
+            name: 'quality_score',
+            label: 'Quality Score',
+            type: 'number',
+            min: 0,
+            max: 1,
+            step: 0.01,
+            placeholder: '0.85'
+          },
+          {
+            name: 'loras',
+            label: 'LoRAs (JSON)',
+            type: 'json',
+            placeholder: '[{\"name\":\"adapter\",\"description\":\"optional\"}]'
           },
           {
             name: 'endpoints',
@@ -2841,16 +3161,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
 
           // Endpoints are already validated by EndpointsEditor
           const endpoints = normalizeEndpoints(data.endpoints)
+          const capabilities = listInputToArray(data.capabilities || '')
+          const tags = listInputToArray(data.tags || '')
+          const loras = Array.isArray(data.loras) ? data.loras : []
 
           if (isPythonCLI && newConfig.providers?.models) {
             const providers = ensureProvidersConfig(newConfig)
             upsertRoutingModelCard(newConfig, model.name, {
-              reasoning_family_ref: data.reasoning_family || undefined,
+              param_size: data.param_size || undefined,
+              context_window_size: data.context_window_size ? Number(data.context_window_size) : undefined,
+              description: data.description || undefined,
+              capabilities: capabilities.length > 0 ? capabilities : undefined,
+              loras: loras.length > 0 ? loras : undefined,
+              tags: tags.length > 0 ? tags : undefined,
+              quality_score: data.quality_score === '' || data.quality_score === undefined ? undefined : Number(data.quality_score),
+              modality: data.modality || undefined,
             })
             type ModelType = NonNullable<ConfigData['providers']>['models'][number]
             providers.models = providers.models.map((m: ModelType) =>
               m.name === model.name ? {
                 ...m,
+                reasoning_family: data.reasoning_family || undefined,
                 provider_model_id: m.provider_model_id || model.name,
                 backend_refs: mergeProviderBackendRefs(m.backend_refs, endpoints, data.access_key),
                 pricing: {

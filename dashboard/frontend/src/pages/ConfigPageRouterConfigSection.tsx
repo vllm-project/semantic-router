@@ -6,6 +6,7 @@ import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import {
   buildEffectiveRouterConfig,
   buildRouterSectionCards,
+  ROUTER_LAYER_META,
   type RouterSectionBadge,
 } from './configPageRouterDefaultsSupport'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
@@ -126,6 +127,19 @@ export default function ConfigPageRouterConfigSection({
   const configuredCount = sectionCards.filter((card) => card.data !== undefined).length
   const routerDefaultsCount = sectionCards.filter((card) => card.sourceLabel === 'router effective defaults').length
   const missingCount = sectionCards.length - configuredCount
+  const sectionGroups = useMemo(() => {
+    const groups = new Map<string, typeof sectionCards>()
+    for (const card of sectionCards) {
+      const existing = groups.get(card.layer) || []
+      existing.push(card)
+      groups.set(card.layer, existing)
+    }
+    return Array.from(groups.entries()).map(([layer, cards]) => ({
+      layer,
+      meta: ROUTER_LAYER_META[layer as keyof typeof ROUTER_LAYER_META],
+      cards,
+    }))
+  }, [sectionCards])
 
   const saveRouterSettings = async (updates: Partial<ConfigData>) => {
     if (showLegacyCategories) {
@@ -259,65 +273,75 @@ export default function ConfigPageRouterConfigSection({
               <div>
                 <h2 className={styles.blockTitle}>Runtime Global Sections</h2>
                 <p className={styles.blockDescription}>
-                  Cards mirror the canonical `global` block. Each editor writes an entire top-level section so nested runtime overrides stay intact.
+                  Cards mirror the layered canonical `global` block. Each editor writes back to the matching `global.router`, `global.services`, `global.stores`, `global.integrations`, or `global.model_catalog` path.
                 </p>
               </div>
             </div>
 
-            <div className={styles.sectionGrid}>
-              {sectionCards.map((card) => (
-                <article key={card.key} className={styles.systemCard}>
-                  <div className={styles.cardHeader}>
-                    <div className={styles.cardCopy}>
-                      <span className={styles.cardEyebrow}>{card.eyebrow}</span>
-                      <h3 className={styles.cardTitle}>{card.title}</h3>
-                      <p className={styles.cardDescription}>{card.description}</p>
-                    </div>
-                    <div className={styles.cardBadges}>
-                      <span className={`${styles.badge} ${badgeClassName({ label: card.sourceLabel, tone: card.sourceTone })}`}>
-                        {card.sourceLabel}
-                      </span>
-                      <span className={`${styles.badge} ${badgeClassName(card.status)}`}>
-                        {card.status.label}
-                      </span>
-                    </div>
+            {sectionGroups.map((group) => (
+              <section key={group.layer} className={styles.sectionGroup}>
+                <div className={styles.groupHeader}>
+                  <div>
+                    <h3 className={styles.groupTitle}>{group.meta.title}</h3>
+                    <p className={styles.groupDescription}>{group.meta.description}</p>
                   </div>
-
-                  <div className={styles.summaryList}>
-                    {card.summary.map((item) => (
-                      <div key={`${card.key}-${item.label}`} className={styles.summaryRow}>
-                        <span className={styles.summaryLabel}>{item.label}</span>
-                        <span className={styles.summaryValue}>{item.value}</span>
+                </div>
+                <div className={styles.sectionGrid}>
+                  {group.cards.map((card) => (
+                    <article key={card.key} className={styles.systemCard}>
+                      <div className={styles.cardHeader}>
+                        <div className={styles.cardCopy}>
+                          <span className={styles.cardEyebrow}>{card.eyebrow}</span>
+                          <h3 className={styles.cardTitle}>{card.title}</h3>
+                          <p className={styles.cardDescription}>{card.description}</p>
+                        </div>
+                        <div className={styles.cardBadges}>
+                          <span className={`${styles.badge} ${badgeClassName({ label: card.sourceLabel, tone: card.sourceTone })}`}>
+                            {card.sourceLabel}
+                          </span>
+                          <span className={`${styles.badge} ${badgeClassName(card.status)}`}>
+                            {card.status.label}
+                          </span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
 
-                  {card.badges.length > 0 && (
-                    <div className={styles.tagRow}>
-                      {card.badges.map((badge) => (
-                        <span key={`${card.key}-${badge.label}`} className={`${styles.badge} ${badgeClassName(badge)}`}>
-                          {badge.label}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                      <div className={styles.summaryList}>
+                        {card.summary.map((item) => (
+                          <div key={`${card.key}-${item.label}`} className={styles.summaryRow}>
+                            <span className={styles.summaryLabel}>{item.label}</span>
+                            <span className={styles.summaryValue}>{item.value}</span>
+                          </div>
+                        ))}
+                      </div>
 
-                  <div className={styles.cardFooter}>
-                    <code className={styles.sectionKey}>{card.key}</code>
-                    {!isReadonly ? (
-                      <button
-                        className={pageStyles.sectionEditButton}
-                        onClick={() => {
-                          handleEditSection(card)
-                        }}
-                      >
-                        {card.data !== undefined ? 'Edit Section' : 'Add Section'}
-                      </button>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            </div>
+                      {card.badges.length > 0 && (
+                        <div className={styles.tagRow}>
+                          {card.badges.map((badge) => (
+                            <span key={`${card.key}-${badge.label}`} className={`${styles.badge} ${badgeClassName(badge)}`}>
+                              {badge.label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className={styles.cardFooter}>
+                        <code className={styles.sectionKey}>{`global.${card.path.join('.')}`}</code>
+                        {!isReadonly ? (
+                          <button
+                            className={pageStyles.sectionEditButton}
+                            onClick={() => {
+                              handleEditSection(card)
+                            }}
+                          >
+                            {card.data !== undefined ? 'Edit Section' : 'Add Section'}
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
         ) : (
           <div className={pageStyles.sectionTableBlock}>
@@ -325,7 +349,7 @@ export default function ConfigPageRouterConfigSection({
               <div>
                 <h2 className={styles.blockTitle}>Raw Global YAML</h2>
                 <p className={styles.blockDescription}>
-                  Edit only the contents of `config.yaml` under `global:`. Saving raw YAML replaces the current `global` override block.
+                  This editor shows the effective merged `global` block: router defaults plus your current overrides. Saving raw YAML writes the full `global:` block back to `config.yaml`.
                 </p>
               </div>
               <div className={styles.rawToolbar}>

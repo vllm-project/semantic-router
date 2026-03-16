@@ -10,6 +10,7 @@ config:
           parameter: enable_thinking
     models:
     - name: base-model
+      reasoning_family: qwen3
       backend_refs:
       - name: local-vllm
         endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
@@ -34,7 +35,6 @@ config:
         description: General knowledge and miscellaneous topics
     modelCards:
     - name: base-model
-      reasoning_family_ref: qwen3
       loras:
       - name: general-expert
         description: General-purpose adapter

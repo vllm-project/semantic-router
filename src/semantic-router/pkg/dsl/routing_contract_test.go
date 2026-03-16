@@ -12,7 +12,6 @@ import (
 func TestParseTopLevelModelCatalog(t *testing.T) {
 	input := `
 MODEL "math-small" {
-  reasoning_family_ref: "openai"
   param_size: "3b"
   capabilities: ["math", "chat"]
   tags: ["local", "fast"]
@@ -39,7 +38,6 @@ ROUTE math_route {
 func TestCompileTopLevelModelCatalog(t *testing.T) {
 	input := `
 MODEL "math-small" {
-  reasoning_family_ref: "openai"
   param_size: "3b"
   description: "Math focused local model"
   capabilities: ["math", "chat"]
@@ -70,7 +68,7 @@ ROUTE math_route {
 
 func assertCompiledTopLevelModelCatalog(t *testing.T, params config.ModelParams) {
 	t.Helper()
-	assertStringField(t, "reasoning family", "openai", params.ReasoningFamily)
+	assertStringField(t, "reasoning family", "", params.ReasoningFamily)
 	assertStringField(t, "param_size", "3b", params.ParamSize)
 	assertStringField(t, "description", "Math focused local model", params.Description)
 	assertStringField(t, "modality", "ar", params.Modality)
@@ -106,7 +104,6 @@ func TestEmitRoutingYAMLFromConfig(t *testing.T) {
 SIGNAL domain math { description: "math" }
 
 MODEL "math-small" {
-  reasoning_family_ref: "openai"
   param_size: "3b"
   capabilities: ["math", "chat"]
   loras: [
@@ -176,6 +173,7 @@ providers:
     default_reasoning_effort: medium
   models:
     - name: math-small
+      reasoning_family: openai
       provider_model_id: qwen/qwen3
       backend_refs:
         - name: local
@@ -185,7 +183,6 @@ providers:
 routing:
   modelCards:
     - name: math-small
-      reasoning_family_ref: openai
       param_size: 3b
       capabilities: [math, chat]
       loras:

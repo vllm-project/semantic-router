@@ -135,8 +135,7 @@ func convertRoutingModelCards(models []v1alpha1.ModelConfig) []config.RoutingMod
 	cards := make([]config.RoutingModel, 0, len(models))
 	for _, model := range models {
 		card := config.RoutingModel{
-			Name:               model.Name,
-			ReasoningFamilyRef: model.ReasoningFamily,
+			Name: model.Name,
 		}
 		if len(model.LoRAs) > 0 {
 			card.LoRAs = make([]config.LoRAAdapter, len(model.LoRAs))
@@ -211,16 +210,20 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 func convertProviderMetadata(models []v1alpha1.ModelConfig) []config.CanonicalProviderModel {
 	converted := make([]config.CanonicalProviderModel, 0, len(models))
 	for _, model := range models {
-		if model.Pricing == nil {
+		providerModel := config.CanonicalProviderModel{
+			Name:            model.Name,
+			ReasoningFamily: model.ReasoningFamily,
+		}
+		if model.Pricing == nil && providerModel.ReasoningFamily == "" {
 			continue
 		}
-		converted = append(converted, config.CanonicalProviderModel{
-			Name: model.Name,
-			Pricing: config.ModelPricing{
+		if model.Pricing != nil {
+			providerModel.Pricing = config.ModelPricing{
 				PromptPer1M:     model.Pricing.InputTokenPrice * 1000000,
 				CompletionPer1M: model.Pricing.OutputTokenPrice * 1000000,
-			},
-		})
+			}
+		}
+		converted = append(converted, providerModel)
 	}
 	return converted
 }
@@ -260,6 +263,9 @@ func mergeCanonicalProviderMetadata(
 ) config.CanonicalProviderModel {
 	if overlay.Pricing != (config.ModelPricing{}) {
 		existing.Pricing = overlay.Pricing
+	}
+	if overlay.ReasoningFamily != "" {
+		existing.ReasoningFamily = overlay.ReasoningFamily
 	}
 	if overlay.ProviderModelID != "" {
 		existing.ProviderModelID = overlay.ProviderModelID

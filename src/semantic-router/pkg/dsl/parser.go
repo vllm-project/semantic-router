@@ -272,10 +272,6 @@ func rawToModelRef(r *rawModelRef) *ModelRef {
 			} else if v.Float != nil {
 				m.Weight = *v.Float
 			}
-		case "reasoning_family":
-			if v.Str != nil {
-				m.ReasoningFamily = unquote(*v.Str)
-			}
 		}
 	}
 	return m

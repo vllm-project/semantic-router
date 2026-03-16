@@ -18,12 +18,14 @@ data:
         default_reasoning_effort: medium
       models:
         - name: granite32-8b
+          reasoning_family: qwen3
           provider_model_id: granite32-8b
           backend_refs:
             - name: granite32-8b-endpoint
               endpoint: granite32-8b-predictor.<namespace>.svc.cluster.local:80
               weight: 1
         - name: granite32-78b
+          reasoning_family: qwen3
           provider_model_id: granite32-78b
           backend_refs:
             - name: granite32-78b-endpoint
@@ -32,13 +34,11 @@ data:
     routing:
       modelCards:
         - name: granite32-8b
-          reasoning_family_ref: qwen3
           param_size: 8B
           capabilities:
             - chat
             - reasoning
         - name: granite32-78b
-          reasoning_family_ref: qwen3
           param_size: 78B
           capabilities:
             - chat

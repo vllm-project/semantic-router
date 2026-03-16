@@ -543,7 +543,6 @@ export interface ConfigData {
   routing?: {
     modelCards?: Array<{
       name: string
-      reasoning_family_ref?: string
     }>
     signals?: ConfigData['signals']
     decisions?: ConfigData['decisions']

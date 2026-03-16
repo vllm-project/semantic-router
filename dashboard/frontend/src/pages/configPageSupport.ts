@@ -134,7 +134,6 @@ export interface BackendRefEntry {
 
 export interface RoutingModelCard {
   name: string
-  reasoning_family_ref?: string
   param_size?: string
   context_window_size?: number
   description?: string
@@ -150,6 +149,14 @@ export interface NormalizedModel {
   reasoning_family?: string
   endpoints: Endpoint[]
   access_key?: string
+  param_size?: string
+  context_window_size?: number
+  description?: string
+  capabilities?: string[]
+  loras?: LoRAAdapter[]
+  tags?: string[]
+  quality_score?: number
+  modality?: string
   pricing?: {
     currency?: string
     prompt_per_1m?: number
@@ -421,6 +428,23 @@ export interface DomainSignal {
   mmlu_categories?: string[]
 }
 
+export interface ModalitySignal {
+  name: string
+  description?: string
+}
+
+export interface Subject {
+  kind: 'User' | 'Group'
+  name: string
+}
+
+export interface RoleBindingSignal {
+  name: string
+  role: string
+  subjects: Subject[]
+  description?: string
+}
+
 export interface FactCheckSignal {
   name: string
   description: string
@@ -440,6 +464,7 @@ export interface PreferenceSignal {
 
 export interface LanguageSignal {
   name: string
+  description?: string
 }
 
 export interface ContextSignal {
@@ -497,6 +522,8 @@ export interface ConfigData {
     language?: LanguageSignal[]
     context?: ContextSignal[]
     complexity?: ComplexitySignal[]
+    modality?: ModalitySignal[]
+    role_bindings?: RoleBindingSignal[]
     jailbreak?: JailbreakSignal[]
     pii?: PIISignal[]
   }
@@ -608,6 +635,8 @@ export type SignalType =
   | 'Language'
   | 'Context'
   | 'Complexity'
+  | 'Modality'
+  | 'Authz'
   | 'Jailbreak'
   | 'PII'
 
@@ -646,6 +675,8 @@ export interface AddSignalFormState {
   preference_examples?: string
   preference_threshold?: number
   complexity_threshold?: number
+  role?: string
+  subjects?: string
   hard_candidates?: string
   easy_candidates?: string
   composer_operator?: 'AND' | 'OR' | 'NOT'

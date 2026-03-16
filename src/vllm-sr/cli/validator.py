@@ -361,15 +361,15 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
                 )
             )
 
-    for card in config.routing.model_cards:
+    for model in config.providers.models:
         if (
-            card.reasoning_family_ref
-            and card.reasoning_family_ref not in config.providers.reasoning_families
+            model.reasoning_family
+            and model.reasoning_family not in config.providers.reasoning_families
         ):
             errors.append(
                 ValidationError(
-                    f"Routing model '{card.name}' references unknown reasoning family '{card.reasoning_family_ref}'",
-                    field=f"routing.modelCards.{card.name}.reasoning_family_ref",
+                    f"Provider model '{model.name}' references unknown reasoning family '{model.reasoning_family}'",
+                    field=f"providers.models.{model.name}.reasoning_family",
                 )
             )
 

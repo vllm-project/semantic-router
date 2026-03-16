@@ -8,11 +8,13 @@ providers:
         parameter: enable_thinking
   models:
   - name: Model-A
+    reasoning_family: qwen3
     backend_refs:
     - name: model-a-endpoint
       endpoint: DYNAMIC_MODEL_A_IP:8000
       weight: 1
   - name: Model-B
+    reasoning_family: qwen3
     backend_refs:
     - name: model-b-endpoint
       endpoint: DYNAMIC_MODEL_B_IP:8001
@@ -306,9 +308,7 @@ routing:
     - name: general
   modelCards:
   - name: Model-A
-    reasoning_family_ref: qwen3
   - name: Model-B
-    reasoning_family_ref: qwen3
 global:
   model_catalog:
     embeddings:

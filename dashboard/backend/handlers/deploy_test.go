@@ -352,8 +352,7 @@ func TestDeployPreviewHandler_IgnoresOrderOnlyDiff(t *testing.T) {
       - description: Business and management related queries
         name: business
   modelCards:
-    - reasoning_family_ref: qwen3
-      name: test-model
+    - name: test-model
 `
 	body, _ := json.Marshal(DeployRequest{YAML: previewRequest})
 	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", bytes.NewReader(body))
@@ -636,6 +635,7 @@ providers:
         parameter: reasoning_effort
   models:
     - name: imported-model
+      reasoning_family: qwen3
       provider_model_id: imported-model
       backend_refs:
         - name: imported-endpoint
@@ -644,7 +644,6 @@ providers:
 routing:
   modelCards:
     - name: imported-model
-      reasoning_family_ref: qwen3
   signals:
     domains:
       - name: imported

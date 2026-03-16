@@ -19,6 +19,7 @@ providers:
     default_reasoning_effort: high
   models:
   - name: qwen3
+    reasoning_family: qwen3
     backend_refs:
     - name: endpoint1
       endpoint: 172.28.0.20:8002
@@ -416,7 +417,6 @@ routing:
       - engineering
   modelCards:
   - name: qwen3
-    reasoning_family_ref: qwen3
 global:
   model_catalog:
     embeddings:

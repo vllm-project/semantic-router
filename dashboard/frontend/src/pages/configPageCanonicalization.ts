@@ -232,6 +232,9 @@ const mergeLegacyModelIntoProviderModel = (
   modelConfig: ModelConfigEntry,
   backendCatalog: Record<string, BackendRefEntry>,
 ) => {
+  if (!existing.reasoning_family && modelConfig.reasoning_family) {
+    existing.reasoning_family = modelConfig.reasoning_family
+  }
   if (!existing.provider_model_id && modelConfig.model_id) {
     existing.provider_model_id = modelConfig.model_id
   }
@@ -260,9 +263,6 @@ const promoteLegacyModelBindings = (cfg: ConfigData) => {
 
   for (const [modelName, modelConfig] of Object.entries(cfg.model_config)) {
     const cardPatch: Partial<RoutingModelCard> = {}
-    if (modelConfig.reasoning_family) {
-      cardPatch.reasoning_family_ref = modelConfig.reasoning_family
-    }
     if (modelConfig.param_size) {
       cardPatch.param_size = modelConfig.param_size
     }
@@ -297,6 +297,7 @@ const promoteLegacyModelBindings = (cfg: ConfigData) => {
 
     const providerModel = {
       name: modelName,
+      reasoning_family: modelConfig.reasoning_family,
       provider_model_id: modelConfig.model_id,
       backend_refs: legacyBackendRefsForModel(modelConfig, backendCatalog),
       pricing: modelConfig.pricing ? cloneUnknown(modelConfig.pricing) : undefined,

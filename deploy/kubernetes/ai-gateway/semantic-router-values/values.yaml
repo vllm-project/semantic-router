@@ -20,6 +20,7 @@ config:
       default_reasoning_effort: high
     models:
     - name: base-model
+      reasoning_family: qwen3
       backend_refs:
       - name: local-vllm
         endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
@@ -410,7 +411,6 @@ config:
         description: General knowledge and miscellaneous topics
     modelCards:
     - name: base-model
-      reasoning_family_ref: qwen3
       loras:
       - name: science-expert
         description: 'Specialized for science domains: biology, chemistry, physics,

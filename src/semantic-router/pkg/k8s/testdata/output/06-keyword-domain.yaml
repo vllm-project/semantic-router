@@ -15,22 +15,22 @@ providers:
     default_reasoning_effort: high
   models:
     - name: deepseek-v3
+      reasoning_family: deepseek
       pricing:
         prompt_per_1m: 0.27
         completion_per_1m: 1.1
     - name: deepseek-r1
+      reasoning_family: deepseek
       pricing:
         prompt_per_1m: 0.55
         completion_per_1m: 2.2
 routing:
   modelCards:
     - name: deepseek-v3
-      reasoning_family_ref: deepseek
       loras:
         - name: homework-helper
           description: Homework assistance specialist
     - name: deepseek-r1
-      reasoning_family_ref: deepseek
       loras:
         - name: academic-expert
           description: Advanced academic problem solver

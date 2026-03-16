@@ -25,6 +25,7 @@ export interface ProviderEndpoint {
 
 export interface ProviderModel {
   name: string  // e.g., "openai/gpt-oss-120b"
+  reasoning_family?: string
   provider_model_id?: string
   backend_refs?: ProviderEndpoint[]
   endpoints?: ProviderEndpoint[]
@@ -184,7 +185,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'context' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'fact_check' | 'language' | 'context' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string

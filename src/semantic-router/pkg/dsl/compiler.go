@@ -348,17 +348,14 @@ func (c *Compiler) compileRoutes() {
 			}
 			decision.ModelRefs = append(decision.ModelRefs, ref)
 
-			// Populate model_config for metadata fields (param_size, reasoning_family)
-			if m.ParamSize != "" || m.ReasoningFamily != "" {
+			// Populate model_config for route-local model metadata fields.
+			if m.ParamSize != "" {
 				if c.config.ModelConfig == nil {
 					c.config.ModelConfig = make(map[string]config.ModelParams)
 				}
 				mc := c.config.ModelConfig[m.Model]
 				if m.ParamSize != "" {
 					mc.ParamSize = m.ParamSize
-				}
-				if m.ReasoningFamily != "" {
-					mc.ReasoningFamily = m.ReasoningFamily
 				}
 				c.config.ModelConfig[m.Model] = mc
 			}

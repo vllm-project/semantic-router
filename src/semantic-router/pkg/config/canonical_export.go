@@ -97,16 +97,15 @@ func routingModelsFromRouterConfig(cfg *RouterConfig) []RoutingModel {
 	for _, name := range names {
 		params := cfg.ModelConfig[name]
 		models = append(models, RoutingModel{
-			Name:               name,
-			ReasoningFamilyRef: params.ReasoningFamily,
-			ParamSize:          params.ParamSize,
-			ContextWindowSize:  params.ContextWindowSize,
-			Description:        params.Description,
-			Capabilities:       append([]string(nil), params.Capabilities...),
-			LoRAs:              copyLoRAAdapters(params.LoRAs),
-			Tags:               append([]string(nil), params.Tags...),
-			QualityScore:       params.QualityScore,
-			Modality:           params.Modality,
+			Name:              name,
+			ParamSize:         params.ParamSize,
+			ContextWindowSize: params.ContextWindowSize,
+			Description:       params.Description,
+			Capabilities:      append([]string(nil), params.Capabilities...),
+			LoRAs:             copyLoRAAdapters(params.LoRAs),
+			Tags:              append([]string(nil), params.Tags...),
+			QualityScore:      params.QualityScore,
+			Modality:          params.Modality,
 		})
 	}
 	return models
@@ -287,6 +286,7 @@ func canonicalProviderModelFromRuntime(
 ) CanonicalProviderModel {
 	providerModel := CanonicalProviderModel{
 		Name:             name,
+		ReasoningFamily:  params.ReasoningFamily,
 		APIFormat:        params.APIFormat,
 		Pricing:          params.Pricing,
 		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),

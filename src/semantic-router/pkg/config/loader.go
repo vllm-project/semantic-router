@@ -143,6 +143,14 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 	if _, ok := routing["models"]; ok {
 		fields = append(fields, "routing.models")
 	}
+	if cards, ok := routing["modelCards"].([]interface{}); ok {
+		for index, rawCard := range cards {
+			card := nestedStringMap(rawCard)
+			if _, ok := card["reasoning_family_ref"]; ok {
+				fields = append(fields, fmt.Sprintf("routing.modelCards[%d].reasoning_family_ref", index))
+			}
+		}
+	}
 
 	providers := nestedStringMap(raw["providers"])
 	for _, key := range []string{
@@ -165,7 +173,6 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 				"access",
 				"endpoints",
 				"access_key",
-				"reasoning_family",
 				"param_size",
 				"context_window_size",
 				"description",

@@ -18,6 +18,7 @@ type CanonicalProviderDefaults struct {
 // details without mixing those access details into provider-wide defaults.
 type CanonicalProviderModel struct {
 	Name             string                `yaml:"name"`
+	ReasoningFamily  string                `yaml:"reasoning_family,omitempty"`
 	ProviderModelID  string                `yaml:"provider_model_id,omitempty"`
 	BackendRefs      []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
 	Pricing          ModelPricing          `yaml:"pricing,omitempty"`

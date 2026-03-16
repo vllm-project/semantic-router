@@ -690,7 +690,6 @@ ROUTE math_route {
 const fullDSLExample = `
 # Models
 MODEL "qwen2.5:3b" {
-  reasoning_family_ref: "qwen3"
   param_size: "3b"
   context_window_size: 32768
   description: "Compact reasoning model for general and STEM traffic"
@@ -700,7 +699,6 @@ MODEL "qwen2.5:3b" {
 }
 
 MODEL "qwen3:70b" {
-  reasoning_family_ref: "qwen3"
   param_size: "70b"
   context_window_size: 131072
   description: "Large reasoning model for urgent and difficult AI queries"

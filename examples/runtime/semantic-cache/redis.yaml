@@ -2,7 +2,7 @@
 # This configuration file contains settings for using Redis with vector search as the semantic cache backend.
 # To use this configuration:
 # 1. Set backend_type: "redis" in your main config.yaml
-# 2. Set backend_config_path: "config/semantic-cache/redis.yaml" in your main config.yaml
+# 2. Set global.stores.semantic_cache.backend_type: "redis" and inline the Redis settings from this file into your canonical config.yaml
 # 3. Ensure Redis server with RediSearch module is running and accessible
 # 4. Redis Stack or Redis Enterprise with vector search capability is required
 
@@ -128,4 +128,3 @@ development:
 # - For index_type:
 #   * HNSW: Fast approximate search, recommended for >10k entries
 #   * FLAT: Exact search, better for <10k entries or when recall must be 100%
-

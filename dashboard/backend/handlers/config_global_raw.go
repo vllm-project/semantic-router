@@ -13,9 +13,10 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// GlobalConfigYAMLHandler returns the canonical config.yaml global override block
-// as raw YAML. The response body contains only the contents that live under
-// config.yaml `global:`, not the full config document.
+// GlobalConfigYAMLHandler returns the effective canonical global config as raw
+// YAML. The response body contains the merged result of router-owned defaults
+// plus any config.yaml `global:` overrides, without the surrounding top-level
+// `global:` key.
 func GlobalConfigYAMLHandler(configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -23,7 +24,7 @@ func GlobalConfigYAMLHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		globalYAML, err := readRawGlobalOverrideYAML(configPath)
+		globalYAML, err := readEffectiveGlobalYAML(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read global config: %v", err), http.StatusInternalServerError)
 			return
@@ -35,8 +36,8 @@ func GlobalConfigYAMLHandler(configPath string) http.HandlerFunc {
 	}
 }
 
-// UpdateGlobalConfigYAMLHandler replaces the config.yaml global override block
-// using a raw YAML payload that represents the contents nested under `global:`.
+// UpdateGlobalConfigYAMLHandler replaces the config.yaml global block using a
+// raw YAML payload that represents the contents nested under `global:`.
 func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost && r.Method != http.MethodPut {
@@ -94,19 +95,26 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 	}
 }
 
-func readRawGlobalOverrideYAML(configPath string) ([]byte, error) {
-	cfg, err := readCanonicalConfigFile(configPath)
+func readEffectiveGlobalYAML(configPath string) ([]byte, error) {
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
 
-	if cfg.Global == nil {
-		return []byte("{}\n"), nil
+	parsed, err := routerconfig.ParseYAMLBytes(data)
+	if err != nil {
+		return nil, fmt.Errorf("parse config.yaml: %w", err)
 	}
 
-	globalYAML, err := yaml.Marshal(cfg.Global)
+	global := routerconfig.CanonicalGlobalFromRouterConfig(parsed)
+	if global == nil {
+		defaults := routerconfig.DefaultCanonicalGlobal()
+		global = &defaults
+	}
+
+	globalYAML, err := yaml.Marshal(global)
 	if err != nil {
-		return nil, fmt.Errorf("marshal global override: %w", err)
+		return nil, fmt.Errorf("marshal effective global config: %w", err)
 	}
 	return globalYAML, nil
 }

@@ -2,7 +2,7 @@
 # This configuration file contains settings for using Milvus as the semantic cache backend.
 # To use this configuration:
 # 1. Set backend_type: "milvus" in your main config.yaml
-# 2. Set backend_config_path: "config/semantic-cache/milvus.yaml" in your main config.yaml
+# 2. Set global.stores.semantic_cache.backend_type: "milvus" and inline the Milvus settings from this file into your canonical config.yaml
 # 3. Ensure Milvus server is running and accessible
 # 4. Build with Milvus support: go build -tags=milvus
 

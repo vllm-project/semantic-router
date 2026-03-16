@@ -215,6 +215,7 @@ def _normalize_existing_provider_model(
     _set_if_missing(
         provider_model, "external_model_ids", model.get("external_model_ids")
     )
+    _set_if_missing(provider_model, "reasoning_family", model.get("reasoning_family"))
 
     backend_refs = _clone_list(access.get("backend_refs") or model.get("backend_refs"))
     if backend_refs:
@@ -231,9 +232,6 @@ def _normalize_existing_provider_model(
 def _populate_semantic_model_fields(
     semantic_model: dict[str, Any], model: dict[str, Any]
 ) -> None:
-    _set_if_missing(
-        semantic_model, "reasoning_family_ref", model.get("reasoning_family")
-    )
     _set_if_missing(semantic_model, "param_size", model.get("param_size"))
     _set_if_missing(
         semantic_model, "context_window_size", model.get("context_window_size")
@@ -393,6 +391,7 @@ def _migrate_legacy_flat_model_bindings(
         _set_if_missing(
             provider_model, "external_model_ids", raw_entry.get("external_model_ids")
         )
+        _set_if_missing(provider_model, "reasoning_family", raw_entry.get("reasoning_family"))
 
         if "backend_refs" not in provider_model:
             backend_refs = _legacy_backend_refs_for_model(raw_entry, backend_catalog)

@@ -145,7 +145,6 @@ func (d *decompiler) decompileRoutingModels(models []config.RoutingModel) {
 }
 
 func (d *decompiler) writeRoutingModelFields(model config.RoutingModel) {
-	d.writeOptionalRoutingModelString("reasoning_family_ref", model.ReasoningFamilyRef)
 	d.writeOptionalRoutingModelString("param_size", model.ParamSize)
 	if model.ContextWindowSize > 0 {
 		d.write("  context_window_size: %d\n", model.ContextWindowSize)
@@ -194,9 +193,6 @@ func (d *decompiler) writeRoutingModelLoRAs(adapters []config.LoRAAdapter) {
 
 func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	fields := make(map[string]Value)
-	if model.ReasoningFamilyRef != "" {
-		fields["reasoning_family_ref"] = StringValue{V: model.ReasoningFamilyRef}
-	}
 	if model.ParamSize != "" {
 		fields["param_size"] = StringValue{V: model.ParamSize}
 	}

@@ -28,6 +28,7 @@ data:
         default_reasoning_effort: high
       models:
         - name: '{{MODEL_NAME}}'
+          reasoning_family: qwen3
           backend_refs:
             - name: '{{INFERENCESERVICE_NAME}}-endpoint'
               endpoint: '{{PREDICTOR_SERVICE_IP}}:8000'
@@ -155,7 +156,6 @@ data:
               - engineering
       modelCards:
         - name: '{{MODEL_NAME}}'
-          reasoning_family_ref: qwen3
     global:
       model_catalog:
         embeddings:

@@ -15,22 +15,22 @@ providers:
     default_reasoning_effort: high
   models:
     - name: qwen-2.5-7b
+      reasoning_family: qwen3
       pricing:
         prompt_per_1m: 0.5
         completion_per_1m: 1
     - name: qwen-2.5-72b
+      reasoning_family: qwen3
       pricing:
         prompt_per_1m: 3
         completion_per_1m: 6
 routing:
   modelCards:
     - name: qwen-2.5-7b
-      reasoning_family_ref: qwen3
       loras:
         - name: tech-support
           description: Technical support specialist
     - name: qwen-2.5-72b
-      reasoning_family_ref: qwen3
       loras:
         - name: advanced-reasoning
           description: Advanced reasoning and problem solving

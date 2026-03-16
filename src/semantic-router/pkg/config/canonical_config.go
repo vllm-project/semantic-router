@@ -44,16 +44,15 @@ type CanonicalSignals struct {
 
 // RoutingModel defines the logical model catalog available to routing decisions.
 type RoutingModel struct {
-	Name               string        `yaml:"name"`
-	ReasoningFamilyRef string        `yaml:"reasoning_family_ref,omitempty"`
-	ParamSize          string        `yaml:"param_size,omitempty"`
-	ContextWindowSize  int           `yaml:"context_window_size,omitempty"`
-	Description        string        `yaml:"description,omitempty"`
-	Capabilities       []string      `yaml:"capabilities,omitempty"`
-	LoRAs              []LoRAAdapter `yaml:"loras,omitempty"`
-	QualityScore       float64       `yaml:"quality_score,omitempty"`
-	Modality           string        `yaml:"modality,omitempty"`
-	Tags               []string      `yaml:"tags,omitempty"`
+	Name              string        `yaml:"name"`
+	ParamSize         string        `yaml:"param_size,omitempty"`
+	ContextWindowSize int           `yaml:"context_window_size,omitempty"`
+	Description       string        `yaml:"description,omitempty"`
+	Capabilities      []string      `yaml:"capabilities,omitempty"`
+	LoRAs             []LoRAAdapter `yaml:"loras,omitempty"`
+	QualityScore      float64       `yaml:"quality_score,omitempty"`
+	Modality          string        `yaml:"modality,omitempty"`
+	Tags              []string      `yaml:"tags,omitempty"`
 }
 
 func isCanonicalConfig(raw map[string]interface{}) bool {
@@ -90,7 +89,6 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {
 		cfg.ModelConfig[model.Name] = ModelParams{
-			ReasoningFamily:   model.ReasoningFamilyRef,
 			ParamSize:         model.ParamSize,
 			ContextWindowSize: model.ContextWindowSize,
 			Description:       model.Description,
@@ -110,6 +108,9 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	cfg.VLLMEndpoints = endpoints
 	for modelName, providerParams := range modelParams {
 		params := cfg.ModelConfig[modelName]
+		if params.ReasoningFamily == "" {
+			params.ReasoningFamily = providerParams.ReasoningFamily
+		}
 		if len(providerParams.PreferredEndpoints) > 0 {
 			params.PreferredEndpoints = append([]string(nil), providerParams.PreferredEndpoints...)
 		}
@@ -143,11 +144,6 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 			return fmt.Errorf("routing.modelCards[%s]: duplicate model name", model.Name)
 		}
 		modelsByName[model.Name] = model
-		if model.ReasoningFamilyRef != "" {
-			if _, ok := canonicalProviderDefaults(canonical.Providers).ReasoningFamilies[model.ReasoningFamilyRef]; !ok {
-				return fmt.Errorf("routing.modelCards[%s].reasoning_family_ref %q not found in providers.defaults.reasoning_families", model.Name, model.ReasoningFamilyRef)
-			}
-		}
 	}
 
 	if canonicalProviderDefaults(canonical.Providers).DefaultModel != "" {
@@ -163,9 +159,14 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 		if _, ok := modelsByName[model.Name]; !ok {
 			return fmt.Errorf("providers.models[%s] does not match any routing.modelCards entry", model.Name)
 		}
+		if model.ReasoningFamily != "" {
+			if _, ok := canonicalProviderDefaults(canonical.Providers).ReasoningFamilies[model.ReasoningFamily]; !ok {
+				return fmt.Errorf("providers.models[%s].reasoning_family %q not found in providers.defaults.reasoning_families", model.Name, model.ReasoningFamily)
+			}
+		}
 		if len(canonicalBackendRefs(model)) == 0 {
 			if !canonicalProviderModelHasMetadata(model) {
-				return fmt.Errorf("providers.models[%s] must define backend_refs or provider metadata such as pricing, api_format, external_model_ids, or provider_model_id", model.Name)
+				return fmt.Errorf("providers.models[%s] must define backend_refs or provider metadata such as reasoning_family, pricing, api_format, external_model_ids, or provider_model_id", model.Name)
 			}
 			continue
 		}
@@ -223,7 +224,7 @@ func canonicalRoutingModels(routing CanonicalRouting) []RoutingModel {
 }
 
 func canonicalProviderModelHasMetadata(model CanonicalProviderModel) bool {
-	if model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
+	if model.ReasoningFamily != "" || model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
 		return true
 	}
 	return model.Pricing != (ModelPricing{})
@@ -240,6 +241,7 @@ func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[stri
 
 	for _, model := range models {
 		params := modelParams[model.Name]
+		params.ReasoningFamily = model.ReasoningFamily
 		params.Pricing = model.Pricing
 		params.APIFormat = model.APIFormat
 		params.ExternalModelIDs = normalizeExternalModelIDsFromProviderModel(model)

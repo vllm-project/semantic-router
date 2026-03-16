@@ -481,16 +481,14 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
         configuration: p.configuration,
       }))
 
-      // Find reasoning_family from routing.modelCards when canonical metadata exists
       const modelRefs: ModelRefConfig[] = (decision.modelRefs || []).map(ref => {
-        const modelCard = config.routing?.modelCards?.find((card) => card.name === ref.model)
         const modelConfig = config.providers?.models?.find(m => m.name === ref.model)
         return {
           model: ref.model,
           use_reasoning: ref.use_reasoning,
           reasoning_effort: ref.reasoning_effort,
           lora_name: ref.lora_name,
-          reasoning_family: modelCard?.reasoning_family_ref || modelConfig?.reasoning_family,
+          reasoning_family: modelConfig?.reasoning_family,
         }
       })
 
@@ -548,15 +546,12 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
  */
 function extractModels(config: ConfigData): ModelConfig[] {
   const models: ModelConfig[] = []
-  const modelCardsByName = new Map(
-    (config.routing?.modelCards || []).map((card) => [card.name, card]),
-  )
 
   // From providers.models
   config.providers?.models?.forEach(model => {
     models.push({
       name: model.name,
-      reasoning_family: modelCardsByName.get(model.name)?.reasoning_family_ref || model.reasoning_family,
+      reasoning_family: model.reasoning_family,
     })
   })
 
@@ -564,7 +559,7 @@ function extractModels(config: ConfigData): ModelConfig[] {
     if (!models.find((model) => model.name === card.name)) {
       models.push({
         name: card.name,
-        reasoning_family: card.reasoning_family_ref,
+        reasoning_family: undefined,
       })
     }
   }

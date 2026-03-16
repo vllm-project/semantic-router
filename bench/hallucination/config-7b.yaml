@@ -12,6 +12,7 @@ providers:
         parameter: enable_thinking
   models:
     - name: Qwen/Qwen2.5-14B-Instruct-AWQ
+      reasoning_family: qwen3
       provider_model_id: Qwen/Qwen2.5-14B-Instruct-AWQ
       api_format: openai
       backend_refs:
@@ -24,7 +25,6 @@ providers:
 routing:
   modelCards:
     - name: Qwen/Qwen2.5-14B-Instruct-AWQ
-      reasoning_family_ref: qwen3
       description: Benchmark target model for hallucination mitigation evaluation.
       capabilities: [chat, reasoning]
       modality: ar

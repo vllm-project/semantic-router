@@ -11,6 +11,7 @@ providers:
         parameter: enable_thinking
   models:
     - name: auto
+      reasoning_family: qwen3
       provider_model_id: auto
       api_format: openai
       backend_refs:
@@ -23,7 +24,6 @@ providers:
 routing:
   modelCards:
     - name: auto
-      reasoning_family_ref: qwen3
       description: Benchmark target model for Candle CPU signal extraction latency comparisons.
       capabilities: [chat]
       modality: ar

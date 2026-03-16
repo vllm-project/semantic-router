@@ -12,24 +12,10 @@ func (c *Compiler) compileModels() {
 
 	for _, model := range c.prog.Models {
 		params := c.config.ModelConfig[model.Name]
-		applyRoutingModelReasoningFamily(&params, model.Fields)
 		applyRoutingModelTextFields(&params, model.Fields)
 		applyRoutingModelNumericFields(&params, model.Fields)
 		applyRoutingModelArrayFields(&params, model.Fields)
 		c.config.ModelConfig[model.Name] = params
-	}
-}
-
-func applyRoutingModelReasoningFamily(
-	params *config.ModelParams,
-	fields map[string]Value,
-) {
-	if v, ok := getStringField(fields, "reasoning_family_ref"); ok {
-		params.ReasoningFamily = v
-		return
-	}
-	if v, ok := getStringField(fields, "reasoning_family"); ok {
-		params.ReasoningFamily = v
 	}
 }
 

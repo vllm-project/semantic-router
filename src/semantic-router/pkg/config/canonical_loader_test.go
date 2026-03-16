@@ -132,6 +132,7 @@ providers:
         parameter: enable_thinking
   models:
     - name: qwen2.5:3b
+      reasoning_family: qwen3
       provider_model_id: served-qwen
       backend_refs:
         - name: primary
@@ -140,7 +141,6 @@ providers:
 routing:
   modelCards:
     - name: qwen2.5:3b
-      reasoning_family_ref: qwen3
       param_size: 3b
 global:
   router:
@@ -204,7 +204,7 @@ global:
 		t.Fatalf("expected bert model override, got %q", cfg.BertModel.ModelID)
 	}
 	if got := cfg.ModelConfig["qwen2.5:3b"].ReasoningFamily; got != "qwen3" {
-		t.Fatalf("expected routing model reasoning family, got %q", got)
+		t.Fatalf("expected provider model reasoning family, got %q", got)
 	}
 	if len(cfg.VLLMEndpoints) != 1 || cfg.VLLMEndpoints[0].Name != "qwen2.5:3b_primary" {
 		t.Fatalf("expected canonical provider endpoint to normalize, got %#v", cfg.VLLMEndpoints)

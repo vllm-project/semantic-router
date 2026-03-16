@@ -71,7 +71,6 @@ def test_migrate_config_data_splits_legacy_provider_models():
     assert migrated["routing"]["modelCards"] == [
         {
             "name": "gpt-4o",
-            "reasoning_family_ref": "openai",
             "description": "General reasoning model",
             "capabilities": ["general", "reasoning"],
             "quality_score": 0.95,
@@ -81,6 +80,7 @@ def test_migrate_config_data_splits_legacy_provider_models():
     assert migrated["providers"]["models"] == [
         {
             "name": "gpt-4o",
+            "reasoning_family": "openai",
             "backend_refs": [
                 {
                     "name": "primary",
@@ -329,7 +329,6 @@ def test_migrate_config_data_promotes_legacy_lora_catalog_and_backend_refs():
     assert migrated["routing"]["modelCards"] == [
         {
             "name": "qwen3-32b",
-            "reasoning_family_ref": "qwen3",
             "description": "Premium reasoning tier",
             "capabilities": ["chat", "reasoning"],
             "loras": [
@@ -343,6 +342,7 @@ def test_migrate_config_data_promotes_legacy_lora_catalog_and_backend_refs():
     assert migrated["providers"]["models"] == [
         {
             "name": "qwen3-32b",
+            "reasoning_family": "qwen3",
             "pricing": {
                 "currency": "USD",
                 "prompt_per_1m": 1.2,

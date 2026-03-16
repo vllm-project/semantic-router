@@ -19,6 +19,7 @@ providers:
     default_reasoning_effort: high
   models:
   - name: openai/gpt-oss-20b
+    reasoning_family: gpt-oss
     backend_refs:
     - name: mock
       endpoint: 172.28.0.10:8000
@@ -49,7 +50,6 @@ routing:
       - other
   modelCards:
   - name: openai/gpt-oss-20b
-    reasoning_family_ref: gpt-oss
 global:
   model_catalog:
     embeddings:

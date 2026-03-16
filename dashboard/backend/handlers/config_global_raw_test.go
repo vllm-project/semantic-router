@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestGlobalConfigYAMLHandler_ReturnsGlobalOverrideOnly(t *testing.T) {
+func TestGlobalConfigYAMLHandler_ReturnsEffectiveGlobalConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
@@ -71,11 +71,42 @@ global:
 	}
 
 	body := w.Body.String()
-	if strings.Contains(body, "version:") || strings.Contains(body, "routing:") {
+	if strings.Contains(body, "\nversion:") || strings.Contains(body, "\nproviders:") || strings.Contains(body, "\nrouting:") {
 		t.Fatalf("raw global response should only contain the global block, got:\n%s", body)
 	}
 	if !strings.Contains(body, "router:") || !strings.Contains(body, "response_api:") {
 		t.Fatalf("raw global response missing expected sections, got:\n%s", body)
+	}
+	if !strings.Contains(body, "stores:") || !strings.Contains(body, "semantic_cache:") {
+		t.Fatalf("raw global response should include effective router defaults, got:\n%s", body)
+	}
+}
+
+func TestGlobalConfigYAMLHandler_ReturnsDefaultsWhenGlobalMissing(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/router/config/global/raw", nil)
+	w := httptest.NewRecorder()
+
+	GlobalConfigYAMLHandler(configPath)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	body := w.Body.String()
+	for _, fragment := range []string{
+		"router:",
+		"services:",
+		"stores:",
+		"model_catalog:",
+		"response_api:",
+		"semantic_cache:",
+	} {
+		if !strings.Contains(body, fragment) {
+			t.Fatalf("effective global response missing %q:\n%s", fragment, body)
+		}
 	}
 }
 
@@ -154,9 +185,6 @@ router:
 		t.Fatalf("read updated config: %v", err)
 	}
 	updated := string(updatedData)
-	if strings.Contains(updated, "response_api:") {
-		t.Fatalf("raw global save should replace the previous global block, got:\n%s", updated)
-	}
 	if !strings.Contains(updated, "semantic_cache:") || !strings.Contains(updated, "clear_route_cache: true") {
 		t.Fatalf("raw global save did not persist the new block, got:\n%s", updated)
 	}

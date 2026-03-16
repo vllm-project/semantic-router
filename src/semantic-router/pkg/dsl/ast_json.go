@@ -45,14 +45,13 @@ type ModelDeclJSON struct {
 
 // ModelRefJSON is the JSON form of ModelRef.
 type ModelRefJSON struct {
-	Model           string   `json:"model"`
-	Reasoning       *bool    `json:"reasoning,omitempty"`
-	Effort          string   `json:"effort,omitempty"`
-	LoRA            string   `json:"lora,omitempty"`
-	ParamSize       string   `json:"paramSize,omitempty"`
-	Weight          float64  `json:"weight,omitempty"`
-	ReasoningFamily string   `json:"reasoningFamily,omitempty"`
-	Pos             Position `json:"pos"`
+	Model     string   `json:"model"`
+	Reasoning *bool    `json:"reasoning,omitempty"`
+	Effort    string   `json:"effort,omitempty"`
+	LoRA      string   `json:"lora,omitempty"`
+	ParamSize string   `json:"paramSize,omitempty"`
+	Weight    float64  `json:"weight,omitempty"`
+	Pos       Position `json:"pos"`
 }
 
 // AlgoSpecJSON is the JSON form of AlgoSpec.
@@ -157,14 +156,13 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 		}
 		for _, m := range r.Models {
 			rj.Models = append(rj.Models, &ModelRefJSON{
-				Model:           m.Model,
-				Reasoning:       m.Reasoning,
-				Effort:          m.Effort,
-				LoRA:            m.LoRA,
-				ParamSize:       m.ParamSize,
-				Weight:          m.Weight,
-				ReasoningFamily: m.ReasoningFamily,
-				Pos:             m.Pos,
+				Model:     m.Model,
+				Reasoning: m.Reasoning,
+				Effort:    m.Effort,
+				LoRA:      m.LoRA,
+				ParamSize: m.ParamSize,
+				Weight:    m.Weight,
+				Pos:       m.Pos,
 			})
 		}
 		if r.Algorithm != nil {

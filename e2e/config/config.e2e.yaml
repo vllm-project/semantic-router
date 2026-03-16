@@ -19,6 +19,7 @@ providers:
     default_reasoning_effort: medium
   models:
   - name: Model-A
+    reasoning_family: qwen3
     backend_refs:
     - name: qwen-endpoint
       endpoint: 127.0.0.1:8000
@@ -383,7 +384,6 @@ routing:
       - engineering
   modelCards:
   - name: Model-A
-    reasoning_family_ref: qwen3
   - name: Model-B
 global:
   model_catalog:

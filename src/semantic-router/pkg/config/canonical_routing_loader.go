@@ -27,7 +27,6 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 
 	for _, model := range canonicalRoutingModels(doc.Routing) {
 		cfg.ModelConfig[model.Name] = ModelParams{
-			ReasoningFamily:   model.ReasoningFamilyRef,
 			ParamSize:         model.ParamSize,
 			ContextWindowSize: model.ContextWindowSize,
 			Description:       model.Description,

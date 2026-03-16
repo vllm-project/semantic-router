@@ -8,6 +8,7 @@ providers:
         parameter: enable_thinking
   models:
   - name: qwen2.5:3b
+    reasoning_family: qwen3
     backend_refs:
     - name: ollama
       endpoint: 127.0.0.1:11434
@@ -34,7 +35,6 @@ routing:
       description: Technical questions
   modelCards:
   - name: qwen2.5:3b
-    reasoning_family_ref: qwen3
 global:
   model_catalog:
     embeddings:

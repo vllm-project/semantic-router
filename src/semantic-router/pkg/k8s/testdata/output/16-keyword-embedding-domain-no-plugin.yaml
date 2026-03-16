@@ -15,22 +15,22 @@ providers:
     default_reasoning_effort: high
   models:
     - name: qwen-2.5-14b
+      reasoning_family: qwen3
       pricing:
         prompt_per_1m: 1
         completion_per_1m: 2
     - name: qwen-2.5-32b
+      reasoning_family: qwen3
       pricing:
         prompt_per_1m: 2
         completion_per_1m: 4
 routing:
   modelCards:
     - name: qwen-2.5-14b
-      reasoning_family_ref: qwen3
       loras:
         - name: general-assistant
           description: General purpose assistant
     - name: qwen-2.5-32b
-      reasoning_family_ref: qwen3
       loras:
         - name: advanced-assistant
           description: Advanced general purpose assistant

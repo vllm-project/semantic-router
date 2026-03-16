@@ -855,6 +855,7 @@ class Model(BaseModel):
     """Provider model binding for canonical providers.models entries."""
 
     name: str
+    reasoning_family: Optional[str] = None
     provider_model_id: Optional[str] = None
     backend_refs: List["BackendRef"] = Field(default_factory=list)
     pricing: Optional[ModelPricing] = None
@@ -873,7 +874,6 @@ class RoutingModel(BaseModel):
     """Semantic model catalog entry exposed to routing/DSL."""
 
     name: str
-    reasoning_family_ref: Optional[str] = None
     param_size: Optional[str] = None
     context_window_size: Optional[int] = Field(default=None, ge=1)
     description: Optional[str] = None
