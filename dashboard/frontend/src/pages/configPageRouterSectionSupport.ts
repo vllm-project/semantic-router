@@ -1,14 +1,12 @@
-import type { FieldConfig } from '../components/EditModal'
+import type { EditFormData, FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
 import type { ConfigData, Tool } from './configPageSupport'
 
 export type OpenEditModal = (
   title: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any,
+  data: EditFormData,
   fields: FieldConfig[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  callback: (data: any) => Promise<void>,
+  callback: (data: EditFormData) => Promise<void>,
   mode?: 'edit' | 'add'
 ) => void
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import styles from './ConfigPage.module.css'
 import { ConfigSection } from '../components/ConfigNav'
-import EditModal, { FieldConfig } from '../components/EditModal'
+import EditModal, { type EditFormData, FieldConfig } from '../components/EditModal'
 import ViewModal, { ViewSection } from '../components/ViewModal'
 import RoutingPresetModal from '../components/RoutingPresetModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
@@ -30,6 +30,7 @@ import {
   clonePresetSignals,
   collectConfiguredSignalNames,
   ConfigData,
+  ConfigSignals,
   SignalType,
   Tool,
   getDefaultModelName,
@@ -64,12 +65,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editModalTitle, setEditModalTitle] = useState('')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [editModalData, setEditModalData] = useState<any>(null)
+  const [editModalData, setEditModalData] = useState<EditFormData | null>(null)
   const [editModalFields, setEditModalFields] = useState<FieldConfig[]>([])
   const [editModalMode, setEditModalMode] = useState<'edit' | 'add'>('edit')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [editModalCallback, setEditModalCallback] = useState<((data: any) => Promise<void>) | null>(null)
+  const [editModalCallback, setEditModalCallback] = useState<((data: EditFormData) => Promise<void>) | null>(null)
 
   // View modal state
   const [viewModalOpen, setViewModalOpen] = useState(false)
@@ -215,11 +214,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
 
   const openEditModal = (
     title: string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    data: any,
+    data: EditFormData,
     fields: FieldConfig[],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    callback: (data: any) => Promise<void>,
+    callback: (data: EditFormData) => Promise<void>,
     mode: 'edit' | 'add' = 'edit'
   ) => {
     setEditModalTitle(title)
@@ -348,9 +345,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     }
 
     const fragment = preset.build(defaultModel)
-    const mergedSignals = clonePresetSignals(fragment.signals as Record<string, unknown> | undefined)
+    const mergedSignals = clonePresetSignals(fragment.signals as Partial<ConfigSignals> | undefined)
     const mergedDecisions = clonePresetDecisions(fragment.decisions)
-    const nextSignals = { ...(config.signals || {}) } as Record<string, Array<Record<string, unknown>>>
+    const nextSignals: Partial<ConfigSignals> = { ...(config.signals || {}) }
 
     const nextConfig: ConfigData = {
       ...config,
@@ -367,7 +364,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         const existingValues = nextSignals[key] || []
         nextSignals[key] = [
           ...existingValues,
-          ...(value as Array<Record<string, unknown>>),
+          ...value,
         ]
       }
     }

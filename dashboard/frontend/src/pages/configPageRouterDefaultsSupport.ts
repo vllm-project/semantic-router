@@ -1,4 +1,4 @@
-import type { FieldConfig } from '../components/EditModal'
+import type { EditFormData, FieldConfig } from '../components/EditModal'
 import {
   DEFAULT_SECTIONS,
   OPTIONAL_ROUTER_KEYS,
@@ -69,9 +69,9 @@ export interface RouterSectionCard {
   status: RouterSectionBadge
   badges: RouterSectionBadge[]
   summary: RouterSectionSummaryItem[]
-  editData: Record<string, unknown>
+  editData: EditFormData
   editFields: FieldConfig[]
-  save: (data: Record<string, unknown>) => Partial<ConfigData>
+  save: (data: EditFormData) => Partial<ConfigData>
 }
 
 interface RouterSectionContext {
@@ -313,7 +313,7 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
     case 'memory':
       return [
         { label: 'Milvus address', value: stringOrFallback(asObject(section?.milvus)?.address) },
-        { label: 'Embedding model', value: stringOrFallback(asObject(section?.embedding)?.model) },
+        { label: 'Embedding model', value: stringOrFallback(section?.embedding_model) },
         { label: 'Similarity threshold', value: percentOrFallback(section?.default_similarity_threshold) },
       ]
     case 'semantic_cache':
@@ -383,7 +383,7 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         const bert = asObject(section?.bert)
         return [
           { label: 'Semantic path', value: stringOrFallback(semantic?.mmbert_model_path ?? semantic?.qwen3_model_path ?? semantic?.gemma_model_path ?? semantic?.multimodal_model_path) },
-          { label: 'BERT path', value: stringOrFallback(bert?.model_id) },
+          { label: 'BERT path', value: stringOrFallback(semantic?.bert_model_path ?? bert?.model_id) },
           { label: 'Runtime', value: semantic?.use_cpu ? 'CPU' : 'GPU' },
         ]
       }
@@ -502,6 +502,14 @@ function statusForKey(data: unknown): RouterSectionBadge {
 
 function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
   switch (key) {
+    case 'router_core':
+      return [
+        { name: 'config_source', label: 'Config Source', type: 'select', options: ['file', 'kubernetes'], required: true },
+        { name: 'strategy', label: 'Routing Strategy', type: 'text', placeholder: 'static, elo, router_dc, automix...' },
+        { name: 'auto_model_name', label: 'Auto Model Name', type: 'text', placeholder: 'MoM' },
+        { name: 'include_config_models_in_list', label: 'Include Config Models In List', type: 'boolean' },
+        { name: 'streamed_body', label: 'Streamed Body (JSON)', type: 'json', placeholder: '{"enabled":false}' },
+      ]
     case 'response_api':
       return [
         { name: 'enabled', label: 'Enable Response API', type: 'boolean' },
@@ -515,15 +523,31 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '2592000' },
         { name: 'async_writes', label: 'Async Writes', type: 'boolean' },
       ]
+    case 'authz':
+      return [
+        { name: 'fail_open', label: 'Fail Open', type: 'boolean' },
+        { name: 'identity', label: 'Identity Headers (JSON)', type: 'json', placeholder: '{"user_id_header":"x-authz-user-id","user_groups_header":"x-authz-user-groups"}' },
+        { name: 'providers', label: 'Providers (JSON)', type: 'json', placeholder: '[]' },
+      ]
+    case 'ratelimit':
+      return [
+        { name: 'fail_open', label: 'Fail Open', type: 'boolean' },
+        { name: 'providers', label: 'Providers (JSON)', type: 'json', placeholder: '[]' },
+      ]
     case 'memory':
       return [
         { name: 'enabled', label: 'Enable Memory', type: 'boolean' },
         { name: 'auto_store', label: 'Auto Store Facts', type: 'boolean' },
         { name: 'milvus', label: 'Milvus Config (JSON)', type: 'json', placeholder: '{"address":"","collection":"agentic_memory","dimension":384}' },
-        { name: 'embedding', label: 'Embedding Config (JSON)', type: 'json', placeholder: '{"model":"all-MiniLM-L6-v2","dimension":384}' },
+        { name: 'embedding_model', label: 'Embedding Model', type: 'text', placeholder: 'bert' },
         { name: 'default_retrieval_limit', label: 'Default Retrieval Limit', type: 'number', placeholder: '5' },
         { name: 'default_similarity_threshold', label: 'Similarity Threshold', type: 'percentage', placeholder: '70' },
         { name: 'extraction_batch_size', label: 'Extraction Batch Size', type: 'number', placeholder: '10' },
+        { name: 'hybrid_search', label: 'Hybrid Search', type: 'boolean' },
+        { name: 'hybrid_mode', label: 'Hybrid Mode', type: 'text', placeholder: 'rerank' },
+        { name: 'adaptive_threshold', label: 'Adaptive Threshold', type: 'boolean' },
+        { name: 'quality_scoring', label: 'Quality Scoring (JSON)', type: 'json' },
+        { name: 'reflection', label: 'Reflection (JSON)', type: 'json' },
       ]
     case 'semantic_cache':
       return [
@@ -539,6 +563,20 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'embedding_model', label: 'Embedding Model Override', type: 'text', placeholder: 'mmbert' },
         { name: 'max_memory_entries', label: 'Hybrid Max Memory Entries', type: 'number', placeholder: '100000' },
       ]
+    case 'vector_store':
+      return [
+        { name: 'enabled', label: 'Enable Vector Store', type: 'boolean' },
+        { name: 'backend_type', label: 'Backend Type', type: 'select', options: ['memory', 'milvus', 'llama_stack'], required: true },
+        { name: 'file_storage_dir', label: 'File Storage Dir', type: 'text', placeholder: '/var/lib/vsr/data' },
+        { name: 'max_file_size_mb', label: 'Max File Size (MB)', type: 'number', placeholder: '50' },
+        { name: 'embedding_model', label: 'Embedding Model', type: 'select', options: ['bert', 'qwen3', 'gemma', 'mmbert', 'multimodal'] },
+        { name: 'embedding_dimension', label: 'Embedding Dimension', type: 'number', placeholder: '384' },
+        { name: 'ingestion_workers', label: 'Ingestion Workers', type: 'number', placeholder: '2' },
+        { name: 'supported_formats', label: 'Supported Formats (JSON)', type: 'json', placeholder: '[".txt",".md",".json",".csv",".html"]' },
+        { name: 'memory', label: 'Memory Backend (JSON)', type: 'json' },
+        { name: 'milvus', label: 'Milvus Backend (JSON)', type: 'json' },
+        { name: 'llama_stack', label: 'Llama Stack Backend (JSON)', type: 'json' },
+      ]
     case 'tools':
       return [
         { name: 'enabled', label: 'Enable Tool Auto Selection', type: 'boolean' },
@@ -546,6 +584,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'similarity_threshold', label: 'Similarity Threshold', type: 'percentage', placeholder: '20' },
         { name: 'tools_db_path', label: 'Tools DB Path', type: 'text', placeholder: 'config/tools_db.json' },
         { name: 'fallback_to_empty', label: 'Fallback To Empty', type: 'boolean' },
+        { name: 'advanced_filtering', label: 'Advanced Filtering (JSON)', type: 'json' },
       ]
     case 'prompt_guard':
       return [
@@ -560,18 +599,18 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
       ]
     case 'classifier':
       return [
-        { name: 'category_model', label: 'Domain Model (JSON)', type: 'json' },
-        { name: 'pii_model', label: 'PII Model (JSON)', type: 'json' },
-        { name: 'mcp_category_model', label: 'MCP Model (JSON)', type: 'json' },
-        { name: 'preference_model', label: 'Preference Model (JSON)', type: 'json' },
+        { name: 'domain', label: 'Domain Module (JSON)', type: 'json' },
+        { name: 'pii', label: 'PII Module (JSON)', type: 'json' },
+        { name: 'mcp', label: 'MCP Module (JSON)', type: 'json' },
+        { name: 'preference', label: 'Preference Module (JSON)', type: 'json' },
       ]
     case 'hallucination_mitigation':
       return [
         { name: 'enabled', label: 'Enable Hallucination Mitigation', type: 'boolean' },
         { name: 'on_hallucination_detected', label: 'On Detection Action', type: 'text', placeholder: 'block' },
-        { name: 'fact_check_model', label: 'Fact Check Module (JSON)', type: 'json' },
-        { name: 'hallucination_model', label: 'Detector Module (JSON)', type: 'json' },
-        { name: 'nli_model', label: 'Explainer Module (JSON)', type: 'json' },
+        { name: 'fact_check', label: 'Fact Check Module (JSON)', type: 'json' },
+        { name: 'detector', label: 'Detector Module (JSON)', type: 'json' },
+        { name: 'explainer', label: 'Explainer Module (JSON)', type: 'json' },
       ]
     case 'feedback_detector':
       return [
@@ -585,15 +624,48 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
       ]
     case 'external_models':
       return [{ name: 'items', label: 'External Models (JSON)', type: 'json', placeholder: '[]' }]
+    case 'system_models':
+      return [
+        { name: 'prompt_guard', label: 'Prompt Guard Binding', type: 'text', placeholder: 'models/mmbert32k-jailbreak-detector-merged' },
+        { name: 'domain_classifier', label: 'Domain Classifier Binding', type: 'text', placeholder: 'models/mmbert32k-intent-classifier-merged' },
+        { name: 'pii_classifier', label: 'PII Classifier Binding', type: 'text', placeholder: 'models/mmbert32k-pii-detector-merged' },
+        { name: 'fact_check_classifier', label: 'Fact Check Binding', type: 'text', placeholder: 'models/mmbert32k-factcheck-classifier-merged' },
+        { name: 'hallucination_detector', label: 'Hallucination Detector Binding', type: 'text', placeholder: 'models/mom-halugate-detector' },
+        { name: 'hallucination_explainer', label: 'Hallucination Explainer Binding', type: 'text', placeholder: 'models/mom-halugate-explainer' },
+        { name: 'feedback_detector', label: 'Feedback Detector Binding', type: 'text', placeholder: 'models/mmbert32k-feedback-detector-merged' },
+      ]
     case 'embedding_models':
       return [
         { name: 'qwen3_model_path', label: 'Qwen3 Model Path', type: 'text', placeholder: 'models/mom-embedding-pro' },
         { name: 'gemma_model_path', label: 'Gemma Model Path', type: 'text', placeholder: 'models/mom-embedding-flash' },
         { name: 'mmbert_model_path', label: 'mmBERT Model Path', type: 'text', placeholder: 'models/mom-embedding-ultra' },
         { name: 'multimodal_model_path', label: 'Multimodal Model Path', type: 'text', placeholder: 'models/mom-embedding-multimodal' },
+        { name: 'bert_model_path', label: 'BERT Model Path', type: 'text', placeholder: 'models/mom-embedding-bert' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
         { name: 'embedding_config', label: 'Embedding Config (JSON)', type: 'json' },
         { name: 'bert', label: 'BERT Catalog Entry (JSON)', type: 'json' },
+      ]
+    case 'prompt_compression':
+      return [
+        { name: 'enabled', label: 'Enable Prompt Compression', type: 'boolean' },
+        { name: 'max_tokens', label: 'Max Tokens', type: 'number', placeholder: '512' },
+        { name: 'min_length', label: 'Min Length', type: 'number', placeholder: '64' },
+        { name: 'skip_signals', label: 'Skip Signals (JSON)', type: 'json', placeholder: '["jailbreak","pii"]' },
+        { name: 'textrank_weight', label: 'TextRank Weight', type: 'number', step: 0.01, placeholder: '1.0' },
+        { name: 'position_weight', label: 'Position Weight', type: 'number', step: 0.01, placeholder: '1.0' },
+        { name: 'tfidf_weight', label: 'TFIDF Weight', type: 'number', step: 0.01, placeholder: '1.0' },
+        { name: 'position_depth', label: 'Position Depth', type: 'number', step: 0.01, placeholder: '1.0' },
+      ]
+    case 'modality_detector':
+      return [
+        { name: 'enabled', label: 'Enable Modality Detector', type: 'boolean' },
+        { name: 'prompt_prefixes', label: 'Prompt Prefixes (JSON)', type: 'json', placeholder: '["generate an image of ","draw "]' },
+        { name: 'method', label: 'Detection Method', type: 'select', options: ['classifier', 'keyword', 'hybrid'] },
+        { name: 'classifier', label: 'Classifier (JSON)', type: 'json' },
+        { name: 'keywords', label: 'Keywords (JSON)', type: 'json' },
+        { name: 'both_keywords', label: 'Both Keywords (JSON)', type: 'json' },
+        { name: 'confidence_threshold', label: 'Confidence Threshold', type: 'percentage', placeholder: '80' },
+        { name: 'lower_threshold_ratio', label: 'Lower Threshold Ratio', type: 'percentage', placeholder: '60' },
       ]
     case 'observability':
       return [
@@ -635,20 +707,30 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
   return []
 }
 
-function editDataForKey(key: RouterSystemKey, data: unknown): Record<string, unknown> {
+function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   if (key === 'clear_route_cache') {
     return { value: Boolean(data) }
   }
   if (key === 'external_models') {
     return { items: Array.isArray(data) ? data : cloneDefaultSection(key) }
   }
+  if (key === 'router_core') {
+    const router = asObject(data)
+    return {
+      config_source: router?.config_source,
+      strategy: router?.strategy,
+      auto_model_name: router?.auto_model_name,
+      include_config_models_in_list: router?.include_config_models_in_list,
+      streamed_body: asObject(router?.streamed_body) || {},
+    }
+  }
   if (key === 'classifier') {
     const classifier = asObject(data)
     return {
-      category_model: asObject(classifier?.domain) || {},
-      pii_model: asObject(classifier?.pii) || {},
-      mcp_category_model: asObject(classifier?.mcp) || {},
-      preference_model: asObject(classifier?.preference) || {},
+      domain: asObject(classifier?.domain) || {},
+      pii: asObject(classifier?.pii) || {},
+      mcp: asObject(classifier?.mcp) || {},
+      preference: asObject(classifier?.preference) || {},
     }
   }
   if (key === 'hallucination_mitigation') {
@@ -656,9 +738,9 @@ function editDataForKey(key: RouterSystemKey, data: unknown): Record<string, unk
     return {
       enabled: hallucination?.enabled,
       on_hallucination_detected: hallucination?.on_hallucination_detected,
-      fact_check_model: asObject(hallucination?.fact_check) || {},
-      hallucination_model: asObject(hallucination?.detector) || {},
-      nli_model: asObject(hallucination?.explainer) || {},
+      fact_check: asObject(hallucination?.fact_check) || {},
+      detector: asObject(hallucination?.detector) || {},
+      explainer: asObject(hallucination?.explainer) || {},
     }
   }
   if (key === 'embedding_models') {
@@ -685,32 +767,44 @@ function editDataForKey(key: RouterSystemKey, data: unknown): Record<string, unk
       hybrid: asObject(selection?.hybrid) || {},
     }
   }
+  if (key === 'clear_route_cache') {
+    return { value: Boolean(data) }
+  }
   const objectData = asObject(data)
   return objectData ? { ...objectData } : asObject(cloneDefaultSection(key)) || {}
 }
 
-function saveForKey(key: RouterSystemKey, data: Record<string, unknown>): Partial<ConfigData> {
+function saveForKey(key: RouterSystemKey, data: EditFormData): Partial<ConfigData> {
   if (key === 'clear_route_cache') {
     return buildNestedPatch(GLOBAL_SECTION_PATHS[key], Boolean(data.value)) as Partial<ConfigData>
   }
   if (key === 'external_models') {
     return buildNestedPatch(GLOBAL_SECTION_PATHS[key], Array.isArray(data.items) ? data.items : []) as Partial<ConfigData>
   }
+  if (key === 'router_core') {
+    return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
+      config_source: data.config_source,
+      strategy: data.strategy,
+      auto_model_name: data.auto_model_name,
+      include_config_models_in_list: Boolean(data.include_config_models_in_list),
+      streamed_body: asObject(data.streamed_body) || {},
+    }) as Partial<ConfigData>
+  }
   if (key === 'classifier') {
     return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
-      domain: asObject(data.category_model) || {},
-      pii: asObject(data.pii_model) || {},
-      mcp: asObject(data.mcp_category_model) || {},
-      preference: asObject(data.preference_model) || {},
+      domain: asObject(data.domain) || {},
+      pii: asObject(data.pii) || {},
+      mcp: asObject(data.mcp) || {},
+      preference: asObject(data.preference) || {},
     }) as Partial<ConfigData>
   }
   if (key === 'hallucination_mitigation') {
     return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
       enabled: Boolean(data.enabled),
       on_hallucination_detected: data.on_hallucination_detected,
-      fact_check: asObject(data.fact_check_model) || {},
-      detector: asObject(data.hallucination_model) || {},
-      explainer: asObject(data.nli_model) || {},
+      fact_check: asObject(data.fact_check) || {},
+      detector: asObject(data.detector) || {},
+      explainer: asObject(data.explainer) || {},
     }) as Partial<ConfigData>
   }
   if (key === 'embedding_models') {
@@ -744,17 +838,24 @@ export function buildEffectiveRouterConfig(
   config: ConfigData | null,
 ): RouterConfigSectionData {
   return {
+    router_core: getSectionValue(routerDefaults, 'router_core') ?? getSectionValue(config, 'router_core'),
     response_api: getSectionValue(routerDefaults, 'response_api') ?? getSectionValue(config, 'response_api'),
     router_replay: getSectionValue(routerDefaults, 'router_replay') ?? getSectionValue(config, 'router_replay'),
+    authz: getSectionValue(routerDefaults, 'authz') ?? getSectionValue(config, 'authz'),
+    ratelimit: getSectionValue(routerDefaults, 'ratelimit') ?? getSectionValue(config, 'ratelimit'),
     memory: getSectionValue(routerDefaults, 'memory') ?? getSectionValue(config, 'memory'),
     semantic_cache: getSectionValue(routerDefaults, 'semantic_cache') ?? getSectionValue(config, 'semantic_cache'),
+    vector_store: getSectionValue(routerDefaults, 'vector_store') ?? getSectionValue(config, 'vector_store'),
     tools: getSectionValue(routerDefaults, 'tools') ?? getSectionValue(config, 'tools'),
     prompt_guard: getSectionValue(routerDefaults, 'prompt_guard') ?? getSectionValue(config, 'prompt_guard'),
     classifier: getSectionValue(routerDefaults, 'classifier') ?? getSectionValue(config, 'classifier'),
     hallucination_mitigation: getSectionValue(routerDefaults, 'hallucination_mitigation') ?? getSectionValue(config, 'hallucination_mitigation'),
     feedback_detector: getSectionValue(routerDefaults, 'feedback_detector') ?? getSectionValue(config, 'feedback_detector'),
     external_models: getSectionValue(routerDefaults, 'external_models') ?? getSectionValue(config, 'external_models'),
+    system_models: getSectionValue(routerDefaults, 'system_models') ?? getSectionValue(config, 'system_models'),
     embedding_models: getSectionValue(routerDefaults, 'embedding_models') ?? getSectionValue(config, 'embedding_models'),
+    prompt_compression: getSectionValue(routerDefaults, 'prompt_compression') ?? getSectionValue(config, 'prompt_compression'),
+    modality_detector: getSectionValue(routerDefaults, 'modality_detector') ?? getSectionValue(config, 'modality_detector'),
     observability: getSectionValue(routerDefaults, 'observability') ?? getSectionValue(config, 'observability'),
     looper: getSectionValue(routerDefaults, 'looper') ?? getSectionValue(config, 'looper'),
     clear_route_cache: getSectionValue(routerDefaults, 'clear_route_cache') ?? getSectionValue(config, 'clear_route_cache'),

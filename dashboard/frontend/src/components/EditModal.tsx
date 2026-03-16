@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import styles from './EditModal.module.css'
 
+export type EditFormData = Record<string, unknown>
+
 interface EditModalProps {
   isOpen: boolean
   onClose: () => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onSave: (data: any) => Promise<void>
+  onSave: (data: EditFormData) => Promise<void>
   title: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any
+  data: EditFormData | null
   fields: FieldConfig[]
   mode?: 'edit' | 'add'
 }
@@ -24,10 +24,8 @@ export interface FieldConfig {
   min?: number
   max?: number
   step?: number
-  shouldHide?: (data: // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    any) => boolean
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  customRender?: (value: any, onChange: (value: any) => void) => React.ReactNode
+  shouldHide?: (data: EditFormData) => boolean
+  customRender?: (value: unknown, onChange: (value: unknown) => void) => React.ReactNode
 }
 
 const EditModal: React.FC<EditModalProps> = ({
@@ -39,8 +37,7 @@ const EditModal: React.FC<EditModalProps> = ({
   fields,
   mode = 'edit'
 }) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [formData, setFormData] = useState<any>({})
+  const [formData, setFormData] = useState<EditFormData>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,10 +55,8 @@ const EditModal: React.FC<EditModalProps> = ({
     }
   }, [isOpen, data, fields])
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleChange = (fieldName: string, value: any) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setFormData((prev: any) => ({
+  const handleChange = (fieldName: string, value: unknown) => {
+    setFormData((prev) => ({
       ...prev,
       [fieldName]: value
     }))

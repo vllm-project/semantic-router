@@ -262,14 +262,16 @@ export interface TracingConfig {
 
 export interface APIConfig {
   batch_classification?: {
-    max_batch_size: number
-    concurrency_threshold: number
-    max_concurrency: number
     metrics?: {
-      enabled: boolean
+      enabled?: boolean
       detailed_goroutine_tracking?: boolean
       high_resolution_timing?: boolean
       sample_rate?: number
+      batch_size_ranges?: Array<{
+        min: number
+        max: number
+        label: string
+      }>
       duration_buckets?: number[]
       size_buckets?: number[]
     }
@@ -318,11 +320,9 @@ export interface SemanticCacheConfig {
   max_entries?: number
   ttl_seconds?: number
   eviction_policy?: string
-  use_hnsw?: boolean
-  hnsw_m?: number
-  hnsw_ef_construction?: number
   embedding_model?: string
-  max_memory_entries?: number
+  redis?: SemanticCacheRedisConfig
+  milvus?: VectorStoreMilvusConfig
 }
 
 export interface FactCheckModelModuleConfig {
@@ -389,13 +389,25 @@ export interface EmbeddingModelsConfig {
 
 export interface ObservabilityConfig {
   tracing?: TracingConfig
-  metrics?: { enabled?: boolean }
+  metrics?: {
+    enabled?: boolean
+    windowed_metrics?: {
+      enabled?: boolean
+      time_windows?: string[]
+      update_interval?: string
+      model_metrics?: boolean
+      queue_depth_estimation?: boolean
+      max_models?: number
+    }
+  }
 }
 
 export interface LooperConfig {
-  enabled?: boolean
   endpoint?: string
+  model_endpoints?: Record<string, string>
+  grpc_max_msg_size_mb?: number
   timeout_seconds?: number
+  retry_count?: number
   headers?: Record<string, string>
 }
 
@@ -1185,7 +1197,9 @@ export const collectConfiguredSignalNames = (signals?: ConfigData['signals']) =>
   )
 }
 
-export const clonePresetSignals = (signals?: Record<string, unknown>) => {
+export const clonePresetSignals = (
+  signals?: Partial<ConfigSignals>
+): Partial<ConfigSignals> | undefined => {
   if (!signals) {
     return undefined
   }
@@ -1195,7 +1209,7 @@ export const clonePresetSignals = (signals?: Record<string, unknown>) => {
       key,
       Array.isArray(value) ? value.map((item) => ({ ...item })) : value,
     ]),
-  )
+  ) as Partial<ConfigSignals>
 }
 
 export const clonePresetDecisions = (decisions: DecisionConfig[]) =>

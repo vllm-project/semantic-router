@@ -9,6 +9,7 @@ import type {
   ConfigDecisionConditionType,
   DecisionConfig,
   DecisionFormState,
+  DecisionPluginConfiguration,
   NormalizedModel,
 } from './configPageSupport'
 import { TABLE_COLUMN_WIDTH } from './configPageSupport'
@@ -518,7 +519,7 @@ export default function ConfigPageDecisionsSection({
     ) => {
       const rows = Array.isArray(value) ? value : []
 
-      const updateItem = (index: number, key: 'type' | 'configuration', val: string | Record<string, unknown>) => {
+      const updateItem = (index: number, key: 'type' | 'configuration', val: string | DecisionPluginConfiguration) => {
         const next = rows.map((item, idx) => idx === index ? { ...item, [key]: val } : item)
         onChange(next)
       }
@@ -718,7 +719,7 @@ export default function ConfigPageDecisionsSection({
           throw new Error(`Plugin #${idx + 1} must include a type.`)
         }
 
-        let configuration: Record<string, unknown> = {}
+        let configuration: DecisionPluginConfiguration = {}
         if (typeof pluginValue?.configuration === 'string') {
           const trimmed = pluginValue.configuration.trim()
           if (trimmed) {
@@ -729,7 +730,7 @@ export default function ConfigPageDecisionsSection({
             }
           }
         } else if (pluginValue?.configuration && typeof pluginValue.configuration === 'object') {
-          configuration = pluginValue.configuration as Record<string, unknown>
+          configuration = pluginValue.configuration as DecisionPluginConfiguration
         }
 
         return { type, configuration }
