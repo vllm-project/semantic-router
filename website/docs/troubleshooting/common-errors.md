@@ -56,15 +56,15 @@ failed to read config file: <error>
 
 ## Cache & Storage Errors
 
-### Milvus config path is required
+### Milvus configuration is required
 
 **Log Pattern:**
 
 ```
-milvus config path is required
+milvus configuration is required for Milvus cache backend
 ```
 
-**Fix:** Set `backend_config_path` when using Milvus backend:
+**Fix:** Inline the `semantic_cache.milvus` settings when using the Milvus backend:
 
 ```yaml
 global:
@@ -72,7 +72,12 @@ global:
     semantic_cache:
       enabled: true
       backend_type: "milvus"
-      backend_config_path: "config/milvus.yaml" # ← Add this
+      milvus:
+        connection:
+          host: "milvus"
+          port: 19530
+        collection:
+          name: "semantic_cache"
 ```
 
 ---

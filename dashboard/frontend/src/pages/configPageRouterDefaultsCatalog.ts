@@ -139,7 +139,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   embedding_models: {
     mmbert_model_path: 'models/mom-embedding-ultra',
     use_cpu: true,
-    hnsw_config: {
+    embedding_config: {
       model_type: 'mmbert',
       preload_embeddings: true,
       target_dimension: 768,

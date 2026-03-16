@@ -157,7 +157,6 @@ type SemanticCache struct {
 	EvictionPolicy      string        `yaml:"eviction_policy,omitempty"`
 	Redis               *RedisConfig  `yaml:"redis,omitempty"`
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
-	BackendConfigPath   string        `yaml:"backend_config_path,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
 }
 

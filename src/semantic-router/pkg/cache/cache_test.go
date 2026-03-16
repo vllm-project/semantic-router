@@ -146,13 +146,16 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("should create Milvus cache backend successfully with valid config (Deprecated)", func() {
+				It("should create Milvus cache backend successfully with valid inline config", func() {
+					milvusConfig, err := loadMilvusConfig(milvusConfigPath)
+					Expect(err).NotTo(HaveOccurred())
+
 					config := CacheConfig{
 						BackendType:         MilvusCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.85,
 						TTLSeconds:          7200,
-						BackendConfigPath:   milvusConfigPath,
+						Milvus:              milvusConfig,
 						EmbeddingModel:      "bert",
 					}
 
@@ -174,13 +177,16 @@ development:
 					}
 				})
 
-				It("should handle disabled Milvus cache (Deprecated)", func() {
+				It("should handle disabled Milvus cache", func() {
+					milvusConfig, err := loadMilvusConfig(milvusConfigPath)
+					Expect(err).NotTo(HaveOccurred())
+
 					config := CacheConfig{
 						BackendType:         MilvusCacheType,
 						Enabled:             false,
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
-						BackendConfigPath:   milvusConfigPath,
+						Milvus:              milvusConfig,
 						EmbeddingModel:      "bert",
 					}
 
@@ -303,13 +309,16 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("should create Redis cache backend successfully with valid config (Deprecated)", func() {
+				It("should create Redis cache backend successfully with valid inline config", func() {
+					redisConfig, err := loadRedisConfig(redisConfigPath)
+					Expect(err).NotTo(HaveOccurred())
+
 					config := CacheConfig{
 						BackendType:         RedisCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
-						BackendConfigPath:   redisConfigPath,
+						Redis:               redisConfig,
 						EmbeddingModel:      "bert",
 					}
 
@@ -329,13 +338,16 @@ development:
 					}
 				})
 
-				It("should handle disabled Redis cache (Deprecated)", func() {
+				It("should handle disabled Redis cache", func() {
+					redisConfig, err := loadRedisConfig(redisConfigPath)
+					Expect(err).NotTo(HaveOccurred())
+
 					config := CacheConfig{
 						BackendType:         RedisCacheType,
 						Enabled:             false,
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
-						BackendConfigPath:   redisConfigPath,
+						Redis:               redisConfig,
 						EmbeddingModel:      "bert",
 					}
 
@@ -644,34 +656,46 @@ development:
 				Expect(err.Error()).To(ContainSubstring("unsupported eviction_policy"))
 			})
 
-			It("should return error for Milvus backend without config path", func() {
+			It("should return error for Milvus backend without inline config", func() {
 				config := CacheConfig{
 					BackendType:         MilvusCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					TTLSeconds:          3600,
 					EmbeddingModel:      "bert",
-					// BackendConfigPath is missing
 				}
 
 				err := ValidateCacheConfig(config)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("backend_config_path is required for Milvus"))
+				Expect(err.Error()).To(ContainSubstring("milvus configuration is required"))
 			})
 
-			It("should return error when Milvus backend_config_path file doesn't exist", func() {
+			It("should return error for Redis backend without inline config", func() {
 				config := CacheConfig{
-					BackendType:         MilvusCacheType,
+					BackendType:         RedisCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					TTLSeconds:          3600,
 					EmbeddingModel:      "bert",
-					BackendConfigPath:   "/nonexistent/milvus.yaml",
 				}
 
 				err := ValidateCacheConfig(config)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("config file not found"))
+				Expect(err.Error()).To(ContainSubstring("redis configuration is required"))
+			})
+
+			It("should return error for hybrid backend without inline Milvus config", func() {
+				config := CacheConfig{
+					BackendType:         HybridCacheType,
+					Enabled:             true,
+					SimilarityThreshold: 0.8,
+					TTLSeconds:          3600,
+					EmbeddingModel:      "bert",
+				}
+
+				err := ValidateCacheConfig(config)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("milvus configuration is required"))
 			})
 
 			It("should validate edge case values", func() {
@@ -711,8 +735,6 @@ development:
 				Expect(config.SimilarityThreshold).To(Equal(float32(0.8)))
 				Expect(config.MaxEntries).To(Equal(1000))
 				Expect(config.TTLSeconds).To(Equal(3600))
-				Expect(config.BackendConfigPath).To(BeEmpty())
-
 				// Default config should pass validation
 				err := ValidateCacheConfig(config)
 				Expect(err).NotTo(HaveOccurred())
@@ -1055,7 +1077,7 @@ development:
 				MaxEntries:          2000,
 				TTLSeconds:          7200,
 				EmbeddingModel:      "bert",
-				BackendConfigPath:   "examples/runtime/semantic-cache/milvus.yaml",
+				Milvus:              &config.MilvusConfig{},
 			}
 
 			// Verify all fields are accessible
@@ -1064,7 +1086,7 @@ development:
 			Expect(config.SimilarityThreshold).To(Equal(float32(0.9)))
 			Expect(config.MaxEntries).To(Equal(2000))
 			Expect(config.TTLSeconds).To(Equal(7200))
-			Expect(config.BackendConfigPath).To(Equal("examples/runtime/semantic-cache/milvus.yaml"))
+			Expect(config.Milvus).NotTo(BeNil())
 		})
 	})
 

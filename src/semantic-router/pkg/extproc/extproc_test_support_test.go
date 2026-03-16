@@ -129,8 +129,8 @@ func newTestToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error
 	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 		SimilarityThreshold: toolsSimilarityThreshold,
 		Enabled:             toolCfg.Enabled,
-		ModelType:           cfg.HNSWConfig.ModelType,
-		TargetDimension:     cfg.HNSWConfig.TargetDimension,
+		ModelType:           cfg.EmbeddingModels.EmbeddingConfig.ModelType,
+		TargetDimension:     cfg.EmbeddingModels.EmbeddingConfig.TargetDimension,
 	})
 	if !toolCfg.Enabled || toolCfg.ToolsDBPath == "" {
 		return toolsDatabase, nil

@@ -43,7 +43,7 @@ spec:
       use_cpu: true
 
       # HNSW configuration for embedding-based classification
-      hnsw_config:
+      embedding_config:
         # Use mmBERT model
         model_type: "mmbert"
 

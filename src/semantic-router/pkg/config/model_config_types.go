@@ -39,10 +39,10 @@ type EmbeddingModels struct {
 	MultiModalModelPath string     `yaml:"multimodal_model_path,omitempty"`
 	BertModelPath       string     `yaml:"bert_model_path"`
 	UseCPU              bool       `yaml:"use_cpu"`
-	HNSWConfig          HNSWConfig `yaml:"hnsw_config,omitempty"`
+	EmbeddingConfig     HNSWConfig `yaml:"embedding_config,omitempty"`
 }
 
-// HNSWConfig contains settings for optimizing the embedding classifier.
+// HNSWConfig contains settings for optimizing embedding-backed classification.
 type HNSWConfig struct {
 	ModelType          string  `yaml:"model_type,omitempty"`
 	PreloadEmbeddings  bool    `yaml:"preload_embeddings"`

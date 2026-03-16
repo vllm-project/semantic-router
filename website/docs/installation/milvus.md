@@ -219,7 +219,12 @@ global:
     semantic_cache:
       enabled: true
       backend_type: "milvus"
-      backend_config_path: "examples/runtime/semantic-cache/milvus.yaml"
+      milvus:
+        connection:
+          host: "milvus"
+          port: 19530
+        collection:
+          name: "semantic_cache"
 ```
 
 ## Networking and Security

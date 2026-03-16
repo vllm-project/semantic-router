@@ -239,7 +239,6 @@ export interface SemanticCacheConfig {
   hnsw_ef_construction?: number
   embedding_model?: string
   max_memory_entries?: number
-  backend_config_path?: string
 }
 
 export interface FactCheckModelModuleConfig {
@@ -285,7 +284,7 @@ export interface FeedbackDetectorConfig {
   use_modernbert?: boolean
 }
 
-export interface EmbeddingHNSWConfig {
+export interface EmbeddingOptimizationConfig {
   model_type?: string
   preload_embeddings?: boolean
   target_dimension?: number
@@ -300,7 +299,7 @@ export interface EmbeddingModelsConfig {
   mmbert_model_path?: string
   multimodal_model_path?: string
   use_cpu?: boolean
-  hnsw_config?: EmbeddingHNSWConfig
+  embedding_config?: EmbeddingOptimizationConfig
 }
 
 export interface ObservabilityConfig {

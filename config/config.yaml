@@ -1100,7 +1100,6 @@ global:
       max_entries: 50000
       ttl_seconds: 7200
       eviction_policy: lru
-      backend_config_path: config/backends/semantic-cache.yaml
       embedding_model: mmbert
       redis:
         connection:
@@ -1335,7 +1334,7 @@ global:
         multimodal_model_path: models/mom-embedding-multimodal
         bert_model_path: models/mom-embedding-bert
         use_cpu: true
-        hnsw_config:
+        embedding_config:
           model_type: mmbert
           preload_embeddings: true
           target_dimension: 768

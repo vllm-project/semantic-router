@@ -250,7 +250,7 @@ spec:
           semantic:
             mmbert_model_path: "models/mmbert-embedding"
             use_cpu: true
-            hnsw_config:
+            embedding_config:
               model_type: "mmbert"
               # Layer early exit: balance speed vs accuracy
               # Layer 3: ~7x speedup (fast, good for high-volume queries)

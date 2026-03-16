@@ -207,7 +207,6 @@ tools:
 
 				// New fields should have default/zero values when not specified
 				Expect(cfg.SemanticCache.BackendType).To(BeEmpty())
-				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
 
 				// Verify prompt guard
 				Expect(cfg.PromptGuard.Enabled).To(BeTrue())
@@ -1527,11 +1526,10 @@ semantic_cache:
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.85)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(2000))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(1800))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
 			})
 		})
 
-		Context("(Deprecated) with file base milvus backend configuration", func() {
+		Context("with inline milvus backend configuration", func() {
 			BeforeEach(func() {
 				configContent := `
 semantic_cache:
@@ -1539,13 +1537,18 @@ semantic_cache:
   backend_type: "milvus"
   similarity_threshold: 0.9
   ttl_seconds: 7200
-  backend_config_path: "examples/runtime/semantic-cache/milvus.yaml"
+  milvus:
+    connection:
+      host: "localhost"
+      port: 19530
+    collection:
+      name: "semantic_cache"
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should parse file base milvus backend configuration correctly", func() {
+			It("should parse inline milvus backend configuration correctly", func() {
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1553,7 +1556,7 @@ semantic_cache:
 				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.9)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(7200))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("examples/runtime/semantic-cache/milvus.yaml"))
+				Expect(cfg.SemanticCache.Milvus).NotTo(BeNil())
 
 				// MaxEntries should be ignored for Milvus backend
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
@@ -1864,7 +1867,6 @@ semantic_cache:
 				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil()) // Will fallback to BERT threshold
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(0))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
 			})
 		})
 
@@ -1879,7 +1881,12 @@ semantic_cache:
   backend_type: "milvus"
   similarity_threshold: 0.95
   ttl_seconds: 14400
-  backend_config_path: "config/cache/production_milvus.yaml"
+  milvus:
+    connection:
+      host: "milvus"
+      port: 19530
+    collection:
+      name: "production_cache"
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -1893,7 +1900,7 @@ semantic_cache:
 				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.95)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(14400))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("config/cache/production_milvus.yaml"))
+				Expect(cfg.SemanticCache.Milvus).NotTo(BeNil())
 
 				// Verify threshold resolution
 				threshold := cfg.GetCacheSimilarityThreshold()
@@ -1938,7 +1945,6 @@ semantic_cache:
   similarity_threshold: 1.0
   max_entries: 0
   ttl_seconds: -1
-  backend_config_path: ""
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -1953,7 +1959,6 @@ semantic_cache:
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(1.0)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(-1))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
 			})
 		})
 
@@ -1994,7 +1999,12 @@ semantic_cache:
   backend_type: "milvus"
   similarity_threshold: 0.85
   ttl_seconds: 86400  # 24 hours
-  backend_config_path: "examples/runtime/semantic-cache/milvus.yaml"
+  milvus:
+    connection:
+      host: "milvus"
+      port: 19530
+    collection:
+      name: "semantic_cache"
 
 categories:
   - name: "production"
@@ -2024,7 +2034,7 @@ default_model: "gpt-4"
 				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.85)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(86400))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("examples/runtime/semantic-cache/milvus.yaml"))
+				Expect(cfg.SemanticCache.Milvus).NotTo(BeNil())
 
 				// Verify threshold resolution
 				threshold := cfg.GetCacheSimilarityThreshold()
@@ -2049,7 +2059,10 @@ semantic_cache:
 
   # Production configuration (commented out)
   # backend_type: "milvus"
-  # backend_config_path: "examples/runtime/semantic-cache/milvus.yaml"
+  # milvus:
+  #   connection:
+  #     host: "milvus"
+  #     port: 19530
   # max_entries is ignored for Milvus
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
@@ -2065,7 +2078,6 @@ semantic_cache:
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.8)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(1000))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(3600))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty()) // Comments are ignored
 			})
 		})
 	})

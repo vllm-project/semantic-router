@@ -108,7 +108,7 @@ func defaultCanonicalModelCatalog() CanonicalModelCatalog {
 		Modules:    defaultCanonicalModelModules(),
 	}
 	enabledSoftMatching := true
-	catalog.Embeddings.Semantic.HNSWConfig.EnableSoftMatching = &enabledSoftMatching
+	catalog.Embeddings.Semantic.EmbeddingConfig.EnableSoftMatching = &enabledSoftMatching
 	return catalog
 }
 
@@ -117,7 +117,7 @@ func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 		Semantic: EmbeddingModels{
 			MmBertModelPath: "models/mom-embedding-ultra",
 			UseCPU:          true,
-			HNSWConfig: HNSWConfig{
+			EmbeddingConfig: HNSWConfig{
 				ModelType:         "mmbert",
 				PreloadEmbeddings: true,
 				TargetDimension:   768,

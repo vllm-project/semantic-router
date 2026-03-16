@@ -480,7 +480,7 @@ func CreateTestConfig() *config.RouterConfig {
 				UseCPU:    true,
 			},
 			EmbeddingModels: config.EmbeddingModels{
-				HNSWConfig: config.HNSWConfig{
+				EmbeddingConfig: config.HNSWConfig{
 					ModelType:       "qwen3",
 					TargetDimension: 768,
 				},

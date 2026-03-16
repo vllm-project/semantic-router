@@ -259,7 +259,7 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 		return fmt.Errorf("keyword embedding similarity match is not properly configured")
 	}
 
-	modelType := strings.ToLower(strings.TrimSpace(c.Config.EmbeddingModels.HNSWConfig.ModelType))
+	modelType := strings.ToLower(strings.TrimSpace(c.Config.EmbeddingModels.EmbeddingConfig.ModelType))
 	if modelType == "multimodal" {
 		mmPath := config.ResolveModelPath(c.Config.EmbeddingModels.MultiModalModelPath)
 		if mmPath == "" {

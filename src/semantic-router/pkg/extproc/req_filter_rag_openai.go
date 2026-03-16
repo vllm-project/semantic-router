@@ -41,8 +41,8 @@ func (r *OpenAIRouter) retrieveFromOpenAI(traceCtx context.Context, ctx *Request
 	// The LLM will call it and results will be in response annotations
 	if workflowMode == "tool_based" {
 		logging.Infof("OpenAI RAG: Using tool-based workflow (Responses API), adding file_search tool")
-		if err := r.addFileSearchToolToRequest(ctx, openaiConfig); err != nil {
-			return "", fmt.Errorf("failed to add file_search tool: %w", err)
+		if toolErr := r.addFileSearchToolToRequest(ctx, openaiConfig); toolErr != nil {
+			return "", fmt.Errorf("failed to add file_search tool: %w", toolErr)
 		}
 		// Return empty - context will be retrieved from tool response annotations
 		// This requires response handling to extract context from annotations
@@ -118,8 +118,8 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 
 	// Parse the request body
 	var requestMap map[string]interface{}
-	if err := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); err != nil {
-		return fmt.Errorf("failed to parse request body: %w", err)
+	if unmarshalErr := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); unmarshalErr != nil {
+		return fmt.Errorf("failed to parse request body: %w", unmarshalErr)
 	}
 
 	// Get or create tools array
@@ -154,9 +154,9 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 			}
 			// Update the request body
 			requestMap["tools"] = tools
-			updatedBody, err := json.Marshal(requestMap)
-			if err != nil {
-				return fmt.Errorf("failed to marshal updated request: %w", err)
+			updatedBody, marshalErr := json.Marshal(requestMap)
+			if marshalErr != nil {
+				return fmt.Errorf("failed to marshal updated request: %w", marshalErr)
 			}
 			ctx.OriginalRequestBody = updatedBody
 			return nil
@@ -188,9 +188,9 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 	requestMap["tools"] = tools
 
 	// Update the request body
-	updatedBody, err := json.Marshal(requestMap)
-	if err != nil {
-		return fmt.Errorf("failed to marshal updated request: %w", err)
+	updatedBody, marshalErr := json.Marshal(requestMap)
+	if marshalErr != nil {
+		return fmt.Errorf("failed to marshal updated request: %w", marshalErr)
 	}
 
 	ctx.OriginalRequestBody = updatedBody

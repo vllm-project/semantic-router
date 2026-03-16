@@ -1010,7 +1010,7 @@ class EmbeddingModelsConfig(BaseModel):
         None,
         description="Path to BERT/MiniLM model (recommended for memory retrieval)",
     )
-    hnsw_config: Optional[Dict[str, Any]] = Field(
+    embedding_config: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Embedding classifier tuning (model_type/target_dimension/etc.)",
     )

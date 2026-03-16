@@ -915,9 +915,9 @@ type EmbeddingModelsConfig struct {
 	// +optional
 	UseCPU bool `json:"use_cpu,omitempty"`
 
-	// HNSW configuration for embedding-based classification
+	// Embedding configuration for embedding-based classification
 	// +optional
-	HNSWConfig *HNSWEmbeddingConfig `json:"hnsw_config,omitempty"`
+	EmbeddingConfig *HNSWEmbeddingConfig `json:"embedding_config,omitempty"`
 }
 
 // HNSWEmbeddingConfig contains settings for embedding classification with HNSW indexing

@@ -339,7 +339,7 @@ function badgesForKey(key: RouterSystemKey, data: unknown, ctx: RouterSectionCon
   }
 
   if (key === 'embedding_models') {
-    const hnsw = asObject(section?.hnsw_config)
+    const hnsw = asObject(section?.embedding_config)
     if (hnsw?.preload_embeddings !== undefined) {
       badges.push({
         label: hnsw.preload_embeddings ? 'Preload embeddings' : 'Lazy embeddings',
@@ -412,7 +412,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'hnsw_ef_construction', label: 'HNSW EF Construction', type: 'number', placeholder: '200' },
         { name: 'embedding_model', label: 'Embedding Model Override', type: 'text', placeholder: 'mmbert' },
         { name: 'max_memory_entries', label: 'Hybrid Max Memory Entries', type: 'number', placeholder: '100000' },
-        { name: 'backend_config_path', label: 'Backend Config Path', type: 'text', placeholder: 'config/milvus.yaml' },
       ]
     case 'tools':
       return [
@@ -467,7 +466,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'mmbert_model_path', label: 'mmBERT Model Path', type: 'text', placeholder: 'models/mom-embedding-ultra' },
         { name: 'multimodal_model_path', label: 'Multimodal Model Path', type: 'text', placeholder: 'models/mom-embedding-multimodal' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
-        { name: 'hnsw_config', label: 'HNSW Config (JSON)', type: 'json' },
+        { name: 'embedding_config', label: 'Embedding Config (JSON)', type: 'json' },
         { name: 'bert', label: 'BERT Catalog Entry (JSON)', type: 'json' },
       ]
     case 'observability':

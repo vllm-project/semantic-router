@@ -450,10 +450,6 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func firstString(values ...string) string {
-	return firstNonEmpty(values...)
-}
-
 func maxInt(values ...int) int {
 	maxValue := 0
 	for _, value := range values {

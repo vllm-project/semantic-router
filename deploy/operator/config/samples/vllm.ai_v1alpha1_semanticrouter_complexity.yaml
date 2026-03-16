@@ -52,7 +52,7 @@ spec:
       qwen3_model_path: "models/mom-embedding-pro"
       use_cpu: true
 
-      hnsw_config:
+      embedding_config:
         model_type: "qwen3"
         preload_embeddings: true
         enable_soft_matching: true

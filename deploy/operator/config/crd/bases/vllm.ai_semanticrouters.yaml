@@ -1314,7 +1314,7 @@ spec:
                           Path to EmbeddingGemma-300M model directory
                           Gemma provides 8K context and fast embeddings (768 dimensions)
                         type: string
-                      hnsw_config:
+                      embedding_config:
                         description: HNSW configuration for embedding-based classification
                         properties:
                           enable_soft_matching:

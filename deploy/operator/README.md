@@ -479,7 +479,7 @@ spec:
       mmbert_model_path: "models/mmbert-embedding"
       use_cpu: true
 
-      hnsw_config:
+      embedding_config:
         model_type: "mmbert"
         target_layer: 6      # Balanced speed/quality (3.6x speedup)
         target_dimension: 256  # Reduced dimension for faster search

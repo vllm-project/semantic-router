@@ -179,9 +179,9 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	}
 
 	resolved := defaults
-	var overrideSource interface{} = rawOverride
-	if overrideSource == nil {
-		overrideSource = override
+	overrideSource := interface{}(override)
+	if rawOverride != nil {
+		overrideSource = rawOverride
 	}
 
 	overrideBytes, err := yaml.Marshal(overrideSource)

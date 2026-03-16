@@ -103,6 +103,28 @@ func (r *SemanticRouterReconciler) applyDiscoveredBackends(ctx context.Context, 
 }
 
 func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
+	if err := r.applyOperatorModelCatalog(canonical, spec); err != nil {
+		return err
+	}
+	if err := r.applyOperatorStoresAndIntegrations(canonical, spec); err != nil {
+		return err
+	}
+	if err := r.applyOperatorProviderDefaults(canonical, spec); err != nil {
+		return err
+	}
+	if err := r.applyOperatorServices(canonical, spec); err != nil {
+		return err
+	}
+	if err := r.applyOperatorRouting(canonical, spec); err != nil {
+		return err
+	}
+	if spec.Strategy != "" {
+		canonical.Global.Router.Strategy = spec.Strategy
+	}
+	return nil
+}
+
+func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
 	if spec.BertModel != nil {
 		bert, err := convertToTypedConfig[routerconfig.BertModel](r, spec.BertModel)
 		if err != nil {
@@ -117,22 +139,6 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 			return fmt.Errorf("config.embedding_models: %w", err)
 		}
 		canonical.Global.ModelCatalog.Embeddings.Semantic = embeddings
-	}
-
-	if spec.SemanticCache != nil {
-		semanticCache, err := convertToTypedConfig[routerconfig.SemanticCache](r, spec.SemanticCache)
-		if err != nil {
-			return fmt.Errorf("config.semantic_cache: %w", err)
-		}
-		canonical.Global.Stores.SemanticCache = semanticCache
-	}
-
-	if spec.Tools != nil {
-		tools, err := convertToTypedConfig[routerconfig.ToolsConfig](r, spec.Tools)
-		if err != nil {
-			return fmt.Errorf("config.tools: %w", err)
-		}
-		canonical.Global.Integrations.Tools = tools
 	}
 
 	if spec.PromptGuard != nil {
@@ -150,14 +156,38 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 		}
 		canonical.Global.ModelCatalog.Modules.Classifier = classifier
 	}
+	return nil
+}
 
+func (r *SemanticRouterReconciler) applyOperatorStoresAndIntegrations(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
+	if spec.SemanticCache != nil {
+		semanticCache, err := convertToTypedConfig[routerconfig.SemanticCache](r, spec.SemanticCache)
+		if err != nil {
+			return fmt.Errorf("config.semantic_cache: %w", err)
+		}
+		canonical.Global.Stores.SemanticCache = semanticCache
+	}
+	if spec.Tools != nil {
+		tools, err := convertToTypedConfig[routerconfig.ToolsConfig](r, spec.Tools)
+		if err != nil {
+			return fmt.Errorf("config.tools: %w", err)
+		}
+		canonical.Global.Integrations.Tools = tools
+	}
+	return nil
+}
+
+func (r *SemanticRouterReconciler) applyOperatorProviderDefaults(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
 	if spec.ReasoningFamilies != nil {
 		canonical.Providers.Defaults.ReasoningFamilies = convertReasoningFamilies(spec.ReasoningFamilies)
 	}
 	if spec.DefaultReasoningEffort != "" {
 		canonical.Providers.Defaults.DefaultReasoningEffort = spec.DefaultReasoningEffort
 	}
+	return nil
+}
 
+func (r *SemanticRouterReconciler) applyOperatorServices(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
 	if spec.API != nil {
 		api, err := convertToTypedConfig[routerconfig.APIConfig](r, spec.API)
 		if err != nil {
@@ -165,7 +195,6 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 		}
 		canonical.Global.Services.API = api
 	}
-
 	if spec.Observability != nil {
 		observability, err := convertToTypedConfig[routerconfig.ObservabilityConfig](r, spec.Observability)
 		if err != nil {
@@ -173,7 +202,10 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 		}
 		canonical.Global.Services.Observability = observability
 	}
+	return nil
+}
 
+func (r *SemanticRouterReconciler) applyOperatorRouting(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
 	if len(spec.ComplexityRules) > 0 {
 		complexity, err := r.convertComplexityRules(spec.ComplexityRules)
 		if err != nil {
@@ -181,11 +213,6 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 		}
 		canonical.Routing.Signals.Complexity = complexity
 	}
-
-	if spec.Strategy != "" {
-		canonical.Global.Router.Strategy = spec.Strategy
-	}
-
 	if len(spec.Decisions) > 0 {
 		decisions, err := convertToTypedConfig[[]routerconfig.Decision](r, spec.Decisions)
 		if err != nil {
@@ -193,7 +220,6 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 		}
 		canonical.Routing.Decisions = decisions
 	}
-
 	return nil
 }
 
