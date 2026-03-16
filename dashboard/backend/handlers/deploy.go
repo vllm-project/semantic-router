@@ -29,6 +29,9 @@ type DeployRequest struct {
 	YAML string `json:"yaml"`
 	// DSL is the original DSL source (archived for audit trail)
 	DSL string `json:"dsl,omitempty"`
+	// BaseYAML is the full canonical config imported into the builder, if any.
+	// Routing-only fragments are ignored as merge bases.
+	BaseYAML string `json:"baseYaml,omitempty"`
 }
 
 // DeployResponse is the JSON response for a deploy operation
@@ -86,28 +89,24 @@ func DeployPreviewHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		// Read current config
 		currentData, err := os.ReadFile(configPath)
+		currentForDiffBytes := currentData
 		if err != nil {
-			currentData = []byte("# No existing config\n")
+			currentForDiffBytes = []byte("# No existing config\n")
 		}
 
-		// Compute merged preview (same logic as deployDirectWrite)
-		previewBytes := yamlBytes
-		if len(currentData) > 0 {
-			existingMap := make(map[string]interface{})
-			if err := yaml.Unmarshal(currentData, &existingMap); err == nil {
-				newMap := make(map[string]interface{})
-				if err := yaml.Unmarshal(yamlBytes, &newMap); err == nil {
-					merged := deepMerge(existingMap, newMap)
-					if mergedYAML, err := yaml.Marshal(merged); err == nil {
-						previewBytes = mergedYAML
-					}
-				}
-			}
+		previewBytes, err := mergeDeployPayload(currentData, req)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error":   "deploy_preview_error",
+				"message": err.Error(),
+			})
+			return
 		}
 
-		currentForDiff := canonicalizeYAMLForDiff(currentData)
+		currentForDiff := canonicalizeYAMLForDiff(currentForDiffBytes)
 		previewForDiff := canonicalizeYAMLForDiff(previewBytes)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -234,19 +233,21 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 		return
 	}
 
-	// Step 2: Deep merge with existing config (same as UpdateConfigHandler)
 	existingData, err := os.ReadFile(configPath)
-	if err == nil && len(existingData) > 0 {
-		existingMap := make(map[string]interface{})
-		if err := yaml.Unmarshal(existingData, &existingMap); err == nil {
-			newMap := make(map[string]interface{})
-			if err := yaml.Unmarshal(yamlBytes, &newMap); err == nil {
-				merged := deepMerge(existingMap, newMap)
-				if mergedYAML, err := yaml.Marshal(merged); err == nil {
-					yamlBytes = mergedYAML
-				}
-			}
-		}
+	if err != nil {
+		existingData = nil
+	}
+
+	// Step 2: Deep merge the routing fragment into the deploy base.
+	yamlBytes, err = mergeDeployPayload(existingData, req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_merge_error",
+			"message": err.Error(),
+		})
+		return
 	}
 
 	if _, err := routerconfig.ParseYAMLBytes(yamlBytes); err != nil {
@@ -312,6 +313,63 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 		Version: version,
 		Message: "Config deployed successfully. Router and Envoy have been updated.",
 	})
+}
+
+func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
+	fragmentBytes := []byte(req.YAML)
+	baseData, err := resolveDeployBaseYAML(currentData, req.BaseYAML)
+	if err != nil {
+		return nil, err
+	}
+	if len(baseData) == 0 {
+		return fragmentBytes, nil
+	}
+
+	baseMap := make(map[string]interface{})
+	unmarshalErr := yaml.Unmarshal(baseData, &baseMap)
+	if unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse deploy base config: %w", unmarshalErr)
+	}
+
+	fragmentMap := make(map[string]interface{})
+	unmarshalErr = yaml.Unmarshal(fragmentBytes, &fragmentMap)
+	if unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse compiled routing fragment: %w", unmarshalErr)
+	}
+
+	mergedYAML, err := yaml.Marshal(deepMerge(baseMap, fragmentMap))
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal merged config: %w", err)
+	}
+	return mergedYAML, nil
+}
+
+func resolveDeployBaseYAML(currentData []byte, providedBase string) ([]byte, error) {
+	if strings.TrimSpace(providedBase) == "" {
+		return currentData, nil
+	}
+
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal([]byte(providedBase), &raw); err != nil {
+		return nil, fmt.Errorf("invalid imported base config: %w", err)
+	}
+	if !looksLikeFullCanonicalDeployBase(raw) {
+		return currentData, nil
+	}
+	return []byte(providedBase), nil
+}
+
+func looksLikeFullCanonicalDeployBase(raw map[string]interface{}) bool {
+	if _, ok := raw["routing"]; !ok {
+		return false
+	}
+
+	for _, key := range []string{"version", "listeners", "providers", "global"} {
+		if _, ok := raw[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir string, version string) {

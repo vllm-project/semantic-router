@@ -491,28 +491,100 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 			fmt.Fprintf(&sb, "    delete: %s\n", formatStringArray(cfg.Delete))
 		}
 	}
-	// Also handle map[string]interface{} from raw YAML deserialization
-	if m, ok := p.Configuration.(map[string]interface{}); ok {
-		for k, v := range m {
-			switch val := v.(type) {
-			case bool:
-				fmt.Fprintf(&sb, "    %s: %v\n", k, val)
-			case string:
-				if val != "" {
-					fmt.Fprintf(&sb, "    %s: %q\n", k, val)
-				}
-			case int:
-				if val != 0 {
-					fmt.Fprintf(&sb, "    %s: %d\n", k, val)
-				}
-			case float64:
-				if val != 0 {
-					fmt.Fprintf(&sb, "    %s: %v\n", k, val)
-				}
-			}
-		}
+	// Also handle raw YAML maps from config parsing.
+	if rawMap, ok := normalizePluginConfigMap(p.Configuration); ok {
+		writePluginConfigMap(&sb, rawMap, "    ")
 	}
 	return sb.String()
+}
+
+func writePluginConfigMap(sb *strings.Builder, raw map[string]interface{}, indent string) {
+	keys := make([]string, 0, len(raw))
+	for key := range raw {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Fprintf(sb, "%s%s: %s\n", indent, key, formatPluginConfigValue(raw[key]))
+	}
+}
+
+func normalizePluginConfigMap(raw interface{}) (map[string]interface{}, bool) {
+	switch typed := raw.(type) {
+	case map[string]interface{}:
+		normalized := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			normalized[key] = normalizePluginConfigValue(value)
+		}
+		return normalized, true
+	case map[interface{}]interface{}:
+		normalized := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			normalized[fmt.Sprintf("%v", key)] = normalizePluginConfigValue(value)
+		}
+		return normalized, true
+	default:
+		return nil, false
+	}
+}
+
+func normalizePluginConfigValue(raw interface{}) interface{} {
+	if normalizedMap, ok := normalizePluginConfigMap(raw); ok {
+		return normalizedMap
+	}
+
+	switch typed := raw.(type) {
+	case []interface{}:
+		normalized := make([]interface{}, len(typed))
+		for index, value := range typed {
+			normalized[index] = normalizePluginConfigValue(value)
+		}
+		return normalized
+	default:
+		return raw
+	}
+}
+
+func formatPluginConfigValue(raw interface{}) string {
+	normalized := normalizePluginConfigValue(raw)
+	switch typed := normalized.(type) {
+	case string:
+		return fmt.Sprintf("%q", typed)
+	case bool:
+		if typed {
+			return "true"
+		}
+		return "false"
+	case int:
+		return fmt.Sprintf("%d", typed)
+	case int64:
+		return fmt.Sprintf("%d", typed)
+	case float32:
+		return fmt.Sprintf("%v", typed)
+	case float64:
+		return fmt.Sprintf("%v", typed)
+	case []interface{}:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			parts = append(parts, formatPluginConfigValue(item))
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	case map[string]interface{}:
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, key := range keys {
+			parts = append(parts, fmt.Sprintf("%s: %s", key, formatPluginConfigValue(typed[key])))
+		}
+		return "{ " + strings.Join(parts, ", ") + " }"
+	case nil:
+		return "null"
+	default:
+		return fmt.Sprintf("%v", normalized)
+	}
 }
 
 func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelParams) string {

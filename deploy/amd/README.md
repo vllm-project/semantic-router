@@ -150,12 +150,12 @@ The router does not use `external_model_ids` in this profile. Every provider mod
 | 144 | `engineering_problems` | `domain:engineering` | `DeepSeek-V3.2` | `medium` |
 | 143 | `law_legal` | `domain:law` | `openai/gpt-oss-120b` | `medium` |
 | 142 | `business_economics` | `domain:business` or `domain:economics` | `openai/gpt-oss-120b` | `medium` |
-| 141 | `complex_engineering` | `domain:computer science` + `embedding:deep_thinking_en` + `complexity:computer_science:hard` | `DeepSeek-V3.2` | `high` |
+| 141 | `complex_engineering` | `domain:computer science` + `embedding:deep_thinking_en` + `complexity:computer science:hard` | `DeepSeek-V3.2` | `high` |
 | 138 | `psychology_queries` | `domain:psychology` | `openai/gpt-oss-120b` | `medium` |
 | 137 | `philosophy_queries` | `domain:philosophy` | `Kimi-K2-Thinking` | `high` |
 | 136 | `history_queries` | `domain:history` | `GLM-4.7` | `medium` |
 | 131 | `complex_reasoning` | `embedding:deep_thinking_zh` or `keyword:thinking_zh` | `Kimi-K2-Thinking` | `high` |
-| 131 | `fast_coding` | `domain:computer science` or `complexity:computer_science:easy/medium` | `DeepSeek-V3.2` | `low` |
+| 131 | `fast_coding` | `domain:computer science` or `complexity:computer science:easy/medium` | `DeepSeek-V3.2` | `low` |
 | 130 | `quick_question` | `embedding:fast_qa_zh` + `language:zh` + `context:short_context` | `GLM-4.7` | `off` |
 | 120 | `fast_qa` | `embedding:fast_qa_en` + `language:en` + `context:short_context` | `GLM-4.7` | `off` |
 | 110 | `deep_thinking` | `embedding:deep_thinking_en` or `keyword:thinking_en` or `context:long_context` | `Kimi-K2-Thinking` | `high` |

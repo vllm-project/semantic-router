@@ -800,7 +800,7 @@ routing:
       - type: embedding
         name: deep_thinking_en
       - type: complexity
-        name: computer_science:hard
+        name: "computer science:hard"
     modelRefs:
     - model: DeepSeek-V3.2
       use_reasoning: true
@@ -916,9 +916,9 @@ routing:
       - type: domain
         name: computer science
       - type: complexity
-        name: computer_science:easy
+        name: "computer science:easy"
       - type: complexity
-        name: computer_science:medium
+        name: "computer science:medium"
     modelRefs:
     - model: DeepSeek-V3.2
       use_reasoning: true

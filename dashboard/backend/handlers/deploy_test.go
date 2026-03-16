@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
 )
 
 // ============================================================
@@ -565,6 +568,227 @@ func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
 	}
 	if !contains(configStr, "routing:") || !contains(configStr, "keywords:") {
 		t.Error("routing signals from deploy should be present")
+	}
+}
+
+func TestDeployHandler_UsesImportedCanonicalBaseConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	importedBase := `version: v0.3
+listeners:
+  - name: imported
+    address: 0.0.0.0
+    port: 9901
+providers:
+  defaults:
+    default_model: imported-model
+    reasoning_families:
+      qwen3:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+    - name: imported-model
+      provider_model_id: imported-model
+      backend_refs:
+        - name: imported-endpoint
+          endpoint: 192.168.1.10:9000
+          protocol: http
+routing:
+  modelCards:
+    - name: imported-model
+      reasoning_family_ref: qwen3
+  signals:
+    domains:
+      - name: imported
+        description: Imported domain
+  decisions:
+    - name: imported-route
+      priority: 10
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: imported
+      modelRefs:
+        - model: imported-model
+global:
+  router:
+    strategy: priority
+`
+
+	deployYAML := `routing:
+  signals:
+    domains:
+      - name: imported
+        description: Imported domain
+      - name: deployed
+        description: Deployed domain
+  decisions:
+    - name: deployed-route
+      priority: 20
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: deployed
+      modelRefs:
+        - model: imported-model
+`
+	body := DeployRequest{
+		YAML:     deployYAML,
+		BaseYAML: importedBase,
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeployHandler(configPath, false, tempDir)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	data, _ := os.ReadFile(configPath)
+	configStr := string(data)
+	if !contains(configStr, "default_model: imported-model") {
+		t.Fatalf("expected imported base providers.defaults.default_model to be preserved:\n%s", configStr)
+	}
+	if !contains(configStr, "endpoint: 192.168.1.10:9000") {
+		t.Fatalf("expected imported backend_refs to be preserved:\n%s", configStr)
+	}
+	if !contains(configStr, "name: deployed-route") || !contains(configStr, "name: deployed") {
+		t.Fatalf("expected deployed routing fragment to be merged onto imported base:\n%s", configStr)
+	}
+	if contains(configStr, "default_model: test-model") || contains(configStr, "endpoint: 127.0.0.1:8000") {
+		t.Fatalf("expected current on-disk config to be replaced as merge base when imported base is provided:\n%s", configStr)
+	}
+}
+
+func TestDeployPreviewHandler_UsesImportedCanonicalBaseConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	importedBase := `version: v0.3
+providers:
+  defaults:
+    default_model: imported-model
+  models:
+    - name: imported-model
+      provider_model_id: imported-model
+      backend_refs:
+        - name: imported-endpoint
+          endpoint: 10.0.0.1:9000
+          protocol: http
+routing:
+  modelCards:
+    - name: imported-model
+  signals:
+    domains:
+      - name: imported
+        description: Imported domain
+  decisions:
+    - name: imported-route
+      priority: 10
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: imported
+      modelRefs:
+        - model: imported-model
+`
+
+	deployYAML := `routing:
+  signals:
+    domains:
+      - name: previewed
+        description: Preview domain
+`
+
+	bodyBytes, _ := json.Marshal(DeployRequest{
+		YAML:     deployYAML,
+		BaseYAML: importedBase,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeployPreviewHandler(configPath)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp DeployPreviewResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode preview response: %v", err)
+	}
+	if !contains(resp.Current, "default_model: test-model") {
+		t.Fatalf("expected current preview to show on-disk config, got:\n%s", resp.Current)
+	}
+	if !contains(resp.Preview, "default_model: imported-model") || !contains(resp.Preview, "endpoint: 10.0.0.1:9000") {
+		t.Fatalf("expected preview to use imported base config, got:\n%s", resp.Preview)
+	}
+	if !contains(resp.Preview, "name: previewed") {
+		t.Fatalf("expected preview to include compiled routing fragment, got:\n%s", resp.Preview)
+	}
+}
+
+func TestMergeDeployPayload_RoundTripsMaintainedAMDConfig(t *testing.T) {
+	assetPath := filepath.Join("..", "..", "..", "deploy", "amd", "config.yaml")
+	originalYAML, err := os.ReadFile(assetPath)
+	if err != nil {
+		t.Fatalf("failed to read maintained AMD config: %v", err)
+	}
+
+	originalCfg, err := routerconfig.ParseYAMLBytes(originalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes(original) error: %v", err)
+	}
+
+	dslText, err := dsl.DecompileRouting(originalCfg)
+	if err != nil {
+		t.Fatalf("DecompileRouting error: %v", err)
+	}
+
+	compiledCfg, errs := dsl.Compile(dslText)
+	if len(errs) > 0 {
+		t.Fatalf("Compile errors: %v", errs)
+	}
+
+	routingFragment, err := dsl.EmitRoutingYAMLFromConfig(compiledCfg)
+	if err != nil {
+		t.Fatalf("EmitRoutingYAMLFromConfig error: %v", err)
+	}
+
+	mergedYAML, err := mergeDeployPayload(originalYAML, DeployRequest{
+		YAML:     string(routingFragment),
+		BaseYAML: string(originalYAML),
+	})
+	if err != nil {
+		t.Fatalf("mergeDeployPayload error: %v", err)
+	}
+
+	mergedCfg, err := routerconfig.ParseYAMLBytes(mergedYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes(merged) error: %v", err)
+	}
+
+	originalCanonical, err := yaml.Marshal(routerconfig.CanonicalConfigFromRouterConfig(originalCfg))
+	if err != nil {
+		t.Fatalf("marshal original canonical config: %v", err)
+	}
+
+	mergedCanonical, err := yaml.Marshal(routerconfig.CanonicalConfigFromRouterConfig(mergedCfg))
+	if err != nil {
+		t.Fatalf("marshal merged canonical config: %v", err)
+	}
+
+	if got, want := canonicalizeYAMLForDiff(mergedCanonical), canonicalizeYAMLForDiff(originalCanonical); got != want {
+		t.Fatalf("import/decompile/compile/merge should preserve maintained AMD config\nwant:\n%s\n\ngot:\n%s", want, got)
 	}
 }
 

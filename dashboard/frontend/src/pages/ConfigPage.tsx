@@ -500,7 +500,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const selectedPresetConflicts = getSelectedPresetConflicts()
 
   // Get models - from providers.models (Python CLI) or model_config (legacy)
-  const getModels = (): NormalizedModel[] => {
+  function getModels(): NormalizedModel[] {
     if (isPythonCLI && config?.providers?.models) {
       const cards = getRoutingModelCards(config)
       const cardByName = new Map(cards.map((card) => [card.name, card]))
@@ -548,7 +548,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   }
 
   // Get default model
-  const getDefaultModel = (): string => {
+  function getDefaultModel(): string {
     if (isPythonCLI) {
       return config?.providers?.defaults?.default_model || ''
     }
@@ -556,7 +556,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   }
 
   // Get reasoning families
-  const getReasoningFamilies = (): Record<string, ReasoningFamily> => {
+  function getReasoningFamilies(): Record<string, ReasoningFamily> {
     if (isPythonCLI) {
       return config?.providers?.defaults?.reasoning_families || {}
     }

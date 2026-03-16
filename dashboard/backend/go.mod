@@ -14,6 +14,7 @@ require (
 )
 
 require (
+	github.com/alecthomas/participle/v2 v2.1.4 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect

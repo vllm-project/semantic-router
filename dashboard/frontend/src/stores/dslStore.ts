@@ -61,6 +61,7 @@ interface DSLState {
   symbols: SymbolTable | null
   /** Parsed AST from last successful parse (for Visual Builder) */
   ast: ASTProgram | null
+  baseConfigYaml: string
 
   // --- Runtime ---
   wasmReady: boolean
@@ -117,7 +118,7 @@ interface DSLActions {
   /** Reset editor state to initial values. */
   reset(): void
 
-  /** Load DSL source from external input (e.g., file import). */
+  /** Load DSL source without preserving an imported full-config deploy base. */
   loadDsl(source: string): void
 
   /** Load YAML and decompile only its routing section to DSL. */
@@ -198,6 +199,7 @@ const initialState: DSLState = {
   diagnostics: [],
   symbols: null,
   ast: null,
+  baseConfigYaml: '',
   wasmReady: false,
   wasmError: null,
   loading: false,
@@ -373,7 +375,13 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 
   loadDsl(source: string) {
-    set({ dslSource: source, dirty: false, diagnostics: [], compileError: null })
+    set({
+      dslSource: source,
+      dirty: false,
+      diagnostics: [],
+      compileError: null,
+      baseConfigYaml: '',
+    })
     // Trigger validation after load
     const state = get()
     if (state.wasmReady && source.trim()) {
@@ -386,7 +394,17 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (!dsl) {
       throw new Error('Failed to decompile YAML')
     }
-    get().loadDsl(dsl)
+    set({
+      dslSource: dsl,
+      dirty: false,
+      diagnostics: [],
+      compileError: null,
+      baseConfigYaml: yaml,
+    })
+    const state = get()
+    if (state.wasmReady && dsl.trim()) {
+      state.validate()
+    }
   },
 
   async loadFromRouter() {
@@ -501,7 +519,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   // --- Deploy actions ---
 
   requestDeploy() {
-    const { yamlOutput, dslSource, wasmReady, dirty } = get()
+    const { yamlOutput, dslSource, wasmReady, dirty, baseConfigYaml } = get()
     if (!wasmReady || !dslSource.trim()) return
 
     // Re-compile if DSL was modified since last compile, or never compiled
@@ -537,7 +555,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     fetch('/api/router/config/deploy/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ yaml }),
+      body: JSON.stringify({ yaml, baseYaml: baseConfigYaml }),
     })
       .then(async (resp) => {
         if (!resp.ok) {
@@ -562,7 +580,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 
   async executeDeploy() {
-    const { yamlOutput, dslSource } = get()
+    const { yamlOutput, dslSource, baseConfigYaml } = get()
     if (!yamlOutput) return
 
     console.log('[dslStore.executeDeploy] Sending deploy: YAML size=%d, DSL size=%d', yamlOutput.length, dslSource.length)
@@ -578,7 +596,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       const resp = await fetch('/api/router/config/deploy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ yaml: yamlOutput, dsl: dslSource }),
+        body: JSON.stringify({ yaml: yamlOutput, dsl: dslSource, baseYaml: baseConfigYaml }),
       })
 
       const responseText = await resp.text()
