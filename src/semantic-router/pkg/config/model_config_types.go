@@ -82,8 +82,26 @@ type MCPCategoryModel struct {
 	TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
 }
 
-// PromptCompressionConfig controls NLP-based prompt compression before signal extraction.
+// PromptCompressionConfig controls NLP-based prompt compression.
+//
+// There are two distinct compression use cases with different wiring:
+//
+//	Use Case 1 — pre-classification (fields: Enabled, MaxTokens, …)
+//	  Compresses the prompt BEFORE signal evaluation to cut classification
+//	  latency. The domain is not yet known, so a single fixed pipeline is
+//	  used. Signals in SkipSignals (default: jailbreak, pii) always receive
+//	  the original uncompressed text.
+//	  Wiring: req_filter_classification.go → performDecisionEvaluation.
+//
+//	Use Case 2 — pre-inference (fields: InferenceEnabled, DefaultPipeline, …)
+//	  Compresses the prompt BEFORE forwarding to vLLM to cut inference
+//	  latency. The domain IS known at this point (DecisionResult is already
+//	  computed), so a domain-specific pipeline can be selected via
+//	  DomainPipelines. The compressed text is sent to vLLM; the original
+//	  prompt is never mutated.
+//	  Wiring: processor_req_body_routing.go → modifyRequestBodyForAutoRouting.
 type PromptCompressionConfig struct {
+	// ── Use Case 1: pre-classification ──────────────────────────────────────
 	Enabled        bool     `yaml:"enabled"`
 	MaxTokens      int      `yaml:"max_tokens"`
 	MinLength      int      `yaml:"min_length,omitempty"`
@@ -92,6 +110,29 @@ type PromptCompressionConfig struct {
 	PositionWeight float64  `yaml:"position_weight,omitempty"`
 	TFIDFWeight    float64  `yaml:"tfidf_weight,omitempty"`
 	PositionDepth  float64  `yaml:"position_depth,omitempty"`
+
+	// ── Use Case 2: pre-inference ────────────────────────────────────────────
+	// InferenceEnabled activates compression of the request body before it is
+	// forwarded to vLLM. Disabled by default.
+	InferenceEnabled bool `yaml:"inference_enabled,omitempty"`
+
+	// DefaultPipeline is the path to the YAML pipeline config used for
+	// inference compression when no domain-specific pipeline matches the
+	// routing decision. Relative paths are resolved from the router config
+	// file's directory.
+	DefaultPipeline string `yaml:"default_pipeline,omitempty"`
+
+	// DomainPipelines maps decision/domain names (the Name field of the
+	// matched Decision) to YAML pipeline config paths. Each pipeline's own
+	// max_tokens controls how aggressively inference-time compression runs
+	// for that domain.
+	//
+	// Example:
+	//   domain_pipelines:
+	//     coding:   ./compression/coding.yaml    # max_tokens: 8192
+	//     medical:  ./compression/medical.yaml   # max_tokens: 4096
+	//     security: ./compression/security.yaml  # max_tokens: 2048
+	DomainPipelines map[string]string `yaml:"domain_pipelines,omitempty"`
 }
 
 func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {

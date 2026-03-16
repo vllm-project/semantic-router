@@ -69,6 +69,26 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 		return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
 	}
 
+	// Use Case 2: pre-inference compression.
+	// Domain is known here (decisionName already computed by performDecisionEvaluation),
+	// so we can select the domain-specific pipeline from the PipelineSelector.
+	// This runs AFTER serialization so it operates on raw JSON bytes — the same
+	// pattern used by injectMemoryMessages — and BEFORE reasoning/system-prompt
+	// mutations so those additions are never accidentally compressed away.
+	if r.InferenceCompressor != nil {
+		pipeline := r.InferenceCompressor.Select(decisionName)
+		if pipeline.MaxTokens > 0 {
+			compressed, cerr := compressMessagesInBody(modifiedBody, pipeline)
+			if cerr != nil {
+				logging.Warnf("[InferenceCompression] Skipping: %v", cerr)
+			} else if len(compressed) < len(modifiedBody) {
+				logging.Infof("[InferenceCompression] decision=%s body: %d→%d bytes",
+					decisionName, len(modifiedBody), len(compressed))
+				modifiedBody = compressed
+			}
+		}
+	}
+
 	if decisionName != "" {
 		modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, decisionName)
 		if err != nil {

@@ -119,6 +119,10 @@ type Result struct {
 }
 
 // ScoredSentence pairs a sentence with its component and composite scores.
+//
+// TextRank, Position, TFIDF, and Novelty are populated by the built-in
+// Compress function. CompressWithPipeline populates only Composite and
+// Scores (keyed by optimizer name), leaving the named fields at zero.
 type ScoredSentence struct {
 	Index     int
 	Text      string
@@ -128,6 +132,10 @@ type ScoredSentence struct {
 	TFIDF     float64
 	Novelty   float64
 	Composite float64
+	// Scores holds per-optimizer scores from a pipeline run.
+	// Key is the optimizer name (e.g. "textrank", "pattern_boost").
+	// Nil when produced by the built-in Compress function.
+	Scores map[string]float64
 }
 
 // maxSentences caps the number of sentences fed into the TextRank O(n²)
