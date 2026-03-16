@@ -8,7 +8,6 @@ import {
   TABLE_COLUMN_WIDTH,
   type BackendRefEntry,
   ConfigData,
-  type DecisionConfig,
   NormalizedModel,
   ReasoningFamily,
   type ModelPricing,
