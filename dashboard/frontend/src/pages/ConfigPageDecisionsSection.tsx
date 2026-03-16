@@ -600,7 +600,7 @@ export default function ConfigPageDecisionsSection({
       )
     }
 
-    const fields: FieldConfig[] = [
+    const fields: FieldConfig<DecisionFormState>[] = [
       {
         name: 'name',
         label: 'Name',
@@ -634,21 +634,30 @@ export default function ConfigPageDecisionsSection({
         label: 'Conditions',
         type: 'custom',
         description: 'Add routing conditions (type and name).',
-        customRender: renderConditionsEditor
+        customRender: (value, onChange) => renderConditionsEditor(
+          Array.isArray(value) ? value as DecisionFormState['conditions'] : [],
+          (nextValue) => onChange(nextValue)
+        )
       },
       {
         name: 'modelRefs',
         label: 'Model References',
         type: 'custom',
         description: 'Set target models and whether to enable reasoning.',
-        customRender: renderModelRefsEditor
+        customRender: (value, onChange) => renderModelRefsEditor(
+          Array.isArray(value) ? value as DecisionFormState['modelRefs'] : [],
+          (nextValue) => onChange(nextValue)
+        )
       },
       {
         name: 'plugins',
         label: 'Plugins',
         type: 'custom',
         description: 'Optional plugins applied to this decision.',
-        customRender: renderPluginsEditor
+        customRender: (value, onChange) => renderPluginsEditor(
+          Array.isArray(value) ? value as DecisionFormState['plugins'] : [],
+          (nextValue) => onChange(nextValue)
+        )
       }
     ]
 
@@ -759,7 +768,7 @@ export default function ConfigPageDecisionsSection({
       await saveConfig(newConfig)
     }
 
-    openEditModal(
+    openEditModal<DecisionFormState>(
       mode === 'add' ? 'Add Decision' : `Edit Decision: ${decision?.name}`,
       initialData,
       fields,

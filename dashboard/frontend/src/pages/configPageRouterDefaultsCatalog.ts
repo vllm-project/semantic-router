@@ -178,7 +178,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     threshold: 0.7,
     use_cpu: true,
     use_mmbert_32k: true,
-  } satisfies FeedbackDetectorConfig,
+  } satisfies FeedbackDetectorConfig & { model_ref?: string },
   external_models: [],
   system_models: {
     prompt_guard: 'models/mmbert32k-jailbreak-detector-merged',
@@ -244,7 +244,11 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     enabled: true,
     method: 'knn',
   } satisfies ModelSelectionConfig,
-  api: {} satisfies APIConfig,
+  api: {
+    batch_classification: {
+      metrics: {},
+    },
+  } satisfies APIConfig,
   bert_model: {
     model_id: '',
     threshold: 0,

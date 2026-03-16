@@ -425,11 +425,16 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         ]
       }
     case 'api':
-      return [
-        { label: 'Max batch size', value: stringOrFallback(asObject(section?.batch_classification)?.max_batch_size) },
-        { label: 'Concurrency threshold', value: stringOrFallback(asObject(section?.batch_classification)?.concurrency_threshold) },
-        { label: 'Metrics', value: asObject(asObject(section?.batch_classification)?.metrics)?.enabled ? 'Enabled' : 'Disabled' },
-      ]
+      {
+        const batchClassification = asObject(section?.batch_classification)
+        const metrics = asObject(batchClassification?.metrics)
+        const batchRanges = Array.isArray(metrics?.batch_size_ranges) ? metrics.batch_size_ranges.length : 0
+        return [
+          { label: 'Metrics', value: metrics?.enabled ? 'Enabled' : 'Disabled' },
+          { label: 'Batch size ranges', value: `${batchRanges}` },
+          { label: 'Sample rate', value: typeof metrics?.sample_rate === 'number' ? `${metrics.sample_rate}` : 'Not set' },
+        ]
+      }
     case 'bert_model':
       return [
         { label: 'Model ID', value: stringOrFallback(section?.model_id) },
@@ -552,16 +557,14 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'semantic_cache':
       return [
         { name: 'enabled', label: 'Enable Semantic Cache', type: 'boolean' },
-        { name: 'backend_type', label: 'Backend Type', type: 'select', options: ['memory', 'milvus', 'hybrid', 'redis', 'memcached'], required: true },
+        { name: 'backend_type', label: 'Backend Type', type: 'select', options: ['memory', 'milvus', 'redis'], required: true },
         { name: 'similarity_threshold', label: 'Similarity Threshold', type: 'percentage', placeholder: '80' },
         { name: 'max_entries', label: 'Max Entries', type: 'number', placeholder: '1000' },
         { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '3600' },
         { name: 'eviction_policy', label: 'Eviction Policy', type: 'select', options: ['fifo', 'lru', 'lfu'] },
-        { name: 'use_hnsw', label: 'Enable HNSW', type: 'boolean' },
-        { name: 'hnsw_m', label: 'HNSW M', type: 'number', placeholder: '16' },
-        { name: 'hnsw_ef_construction', label: 'HNSW EF Construction', type: 'number', placeholder: '200' },
         { name: 'embedding_model', label: 'Embedding Model Override', type: 'text', placeholder: 'mmbert' },
-        { name: 'max_memory_entries', label: 'Hybrid Max Memory Entries', type: 'number', placeholder: '100000' },
+        { name: 'redis', label: 'Redis Backend (JSON)', type: 'json' },
+        { name: 'milvus', label: 'Milvus Backend (JSON)', type: 'json' },
       ]
     case 'vector_store':
       return [
@@ -695,7 +698,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'hybrid', label: 'Hybrid Config (JSON)', type: 'json' },
       ]
     case 'api':
-      return [{ name: 'batch_classification', label: 'Batch Classification (JSON)', type: 'json' }]
+      return [{ name: 'batch_classification', label: 'Batch Classification (JSON)', type: 'json', placeholder: '{"metrics":{"enabled":true}}' }]
     case 'bert_model':
       return [
         { name: 'model_id', label: 'Model ID', type: 'text', required: true, placeholder: 'sentence-transformers/all-MiniLM-L6-v2' },
@@ -766,9 +769,6 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
       automix: asObject(selection?.automix) || {},
       hybrid: asObject(selection?.hybrid) || {},
     }
-  }
-  if (key === 'clear_route_cache') {
-    return { value: Boolean(data) }
   }
   const objectData = asObject(data)
   return objectData ? { ...objectData } : asObject(cloneDefaultSection(key)) || {}

@@ -212,18 +212,18 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     }
   }
 
-  const openEditModal = (
+  const openEditModal = <TForm extends object>(
     title: string,
-    data: EditFormData,
-    fields: FieldConfig[],
-    callback: (data: EditFormData) => Promise<void>,
+    data: TForm,
+    fields: FieldConfig<TForm>[],
+    callback: (data: TForm) => Promise<void>,
     mode: 'edit' | 'add' = 'edit'
   ) => {
     setEditModalTitle(title)
-    setEditModalData(data)
-    setEditModalFields(fields)
+    setEditModalData(data as EditFormData)
+    setEditModalFields(fields as FieldConfig[])
     setEditModalMode(mode)
-    setEditModalCallback(() => callback)
+    setEditModalCallback(() => async (rawData: EditFormData) => callback(rawData as TForm))
     setEditModalOpen(true)
   }
 
@@ -355,18 +355,44 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       decisions: [...(config.decisions || [])],
     }
 
-    if (mergedSignals) {
-      for (const [key, value] of Object.entries(mergedSignals)) {
-        if (!Array.isArray(value) || value.length === 0) {
-          continue
-        }
-
-        const existingValues = nextSignals[key] || []
-        nextSignals[key] = [
-          ...existingValues,
-          ...value,
-        ]
-      }
+    if (mergedSignals?.keywords?.length) {
+      nextSignals.keywords = [...(nextSignals.keywords || []), ...mergedSignals.keywords]
+    }
+    if (mergedSignals?.embeddings?.length) {
+      nextSignals.embeddings = [...(nextSignals.embeddings || []), ...mergedSignals.embeddings]
+    }
+    if (mergedSignals?.domains?.length) {
+      nextSignals.domains = [...(nextSignals.domains || []), ...mergedSignals.domains]
+    }
+    if (mergedSignals?.fact_check?.length) {
+      nextSignals.fact_check = [...(nextSignals.fact_check || []), ...mergedSignals.fact_check]
+    }
+    if (mergedSignals?.user_feedbacks?.length) {
+      nextSignals.user_feedbacks = [...(nextSignals.user_feedbacks || []), ...mergedSignals.user_feedbacks]
+    }
+    if (mergedSignals?.preferences?.length) {
+      nextSignals.preferences = [...(nextSignals.preferences || []), ...mergedSignals.preferences]
+    }
+    if (mergedSignals?.language?.length) {
+      nextSignals.language = [...(nextSignals.language || []), ...mergedSignals.language]
+    }
+    if (mergedSignals?.context?.length) {
+      nextSignals.context = [...(nextSignals.context || []), ...mergedSignals.context]
+    }
+    if (mergedSignals?.complexity?.length) {
+      nextSignals.complexity = [...(nextSignals.complexity || []), ...mergedSignals.complexity]
+    }
+    if (mergedSignals?.modality?.length) {
+      nextSignals.modality = [...(nextSignals.modality || []), ...mergedSignals.modality]
+    }
+    if (mergedSignals?.role_bindings?.length) {
+      nextSignals.role_bindings = [...(nextSignals.role_bindings || []), ...mergedSignals.role_bindings]
+    }
+    if (mergedSignals?.jailbreak?.length) {
+      nextSignals.jailbreak = [...(nextSignals.jailbreak || []), ...mergedSignals.jailbreak]
+    }
+    if (mergedSignals?.pii?.length) {
+      nextSignals.pii = [...(nextSignals.pii || []), ...mergedSignals.pii]
     }
 
     nextConfig.decisions = [...(nextConfig.decisions || []), ...mergedDecisions]

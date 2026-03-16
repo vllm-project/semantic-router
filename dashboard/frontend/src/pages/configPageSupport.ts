@@ -46,6 +46,14 @@ export interface MCPCategoryModel {
   timeout_seconds?: number
 }
 
+export interface PreferenceModelConfig {
+  use_contrastive?: boolean
+  embedding_model?: string
+  model_id?: string
+  threshold?: number
+  use_cpu?: boolean
+}
+
 export interface ModelScore {
   model: string
   score: number
@@ -851,6 +859,65 @@ export interface VectorStoreMilvusConfig {
   development?: VectorStoreMilvusDevelopmentConfig
 }
 
+export interface SemanticCacheRedisTLSConfig {
+  enabled?: boolean
+  cert_file?: string
+  key_file?: string
+  ca_file?: string
+}
+
+export interface SemanticCacheRedisConnectionConfig {
+  host?: string
+  port?: number
+  database?: number
+  password?: string
+  timeout?: number
+  tls?: SemanticCacheRedisTLSConfig
+}
+
+export interface SemanticCacheRedisVectorFieldConfig {
+  name?: string
+  dimension?: number
+  metric_type?: string
+}
+
+export interface SemanticCacheRedisIndexParamsConfig {
+  M?: number
+  efConstruction?: number
+}
+
+export interface SemanticCacheRedisIndexConfig {
+  name?: string
+  prefix?: string
+  vector_field?: SemanticCacheRedisVectorFieldConfig
+  index_type?: string
+  params?: SemanticCacheRedisIndexParamsConfig
+}
+
+export interface SemanticCacheRedisSearchConfig {
+  topk?: number
+}
+
+export interface SemanticCacheRedisDevelopmentConfig {
+  drop_index_on_startup?: boolean
+  auto_create_index?: boolean
+  verbose_errors?: boolean
+}
+
+export interface SemanticCacheRedisLoggingConfig {
+  level?: string
+  enable_query_log?: boolean
+  enable_metrics?: boolean
+}
+
+export interface SemanticCacheRedisConfig {
+  connection?: SemanticCacheRedisConnectionConfig
+  index?: SemanticCacheRedisIndexConfig
+  search?: SemanticCacheRedisSearchConfig
+  development?: SemanticCacheRedisDevelopmentConfig
+  logging?: SemanticCacheRedisLoggingConfig
+}
+
 export interface KeywordSignal {
   name: string
   operator: 'AND' | 'OR'
@@ -957,20 +1024,14 @@ export interface ConfigData {
   global?: CanonicalGlobalConfig
   bert_model?: ModelConfig
   semantic_cache?: SemanticCacheConfig
-  tools?: {
-    enabled: boolean
-    top_k: number
-    similarity_threshold: number
-    tools_db_path: string
-    fallback_to_empty: boolean
-  }
+  tools?: ToolIntegrationConfig
   prompt_guard?: ModelConfig & { enabled: boolean }
   vllm_endpoints?: VLLMEndpoint[]
   classifier?: {
     category_model?: ModelConfig
     mcp_category_model?: MCPCategoryModel
     pii_model?: ModelConfig
-    preference_model?: ModelConfig
+    preference_model?: PreferenceModelConfig
   }
   categories?: (Category & { mmlu_categories?: string[] })[]
   default_reasoning_effort?: string

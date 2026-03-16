@@ -608,7 +608,7 @@ export default function ConfigPageSignalsSection({
       return (formData: AddSignalFormState) => formData.type !== type
     }
 
-    const fields: FieldConfig[] = [
+    const fields: FieldConfig<AddSignalFormState>[] = [
       {
         name: 'type',
         label: 'Type',
@@ -1136,7 +1136,7 @@ export default function ConfigPageSignalsSection({
       await saveConfig(newConfig)
     }
 
-    openEditModal(
+    openEditModal<AddSignalFormState>(
       mode === 'add' ? 'Add Signal' : `Edit Signal: ${signal?.name}`,
       initialData,
       fields,

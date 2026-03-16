@@ -38,6 +38,12 @@ interface ConfigPageModelsSectionProps {
   listInputToArray: (input: string) => string[]
 }
 
+interface ReasoningFamilyFormState {
+  name: string
+  type: string
+  parameter: string
+}
+
 export default function ConfigPageModelsSection({
   config,
   isPythonCLI,
@@ -824,9 +830,9 @@ export default function ConfigPageModelsSection({
   const handleAddReasoningFamily = () => {
     if (!config) return
 
-    openEditModal(
+    openEditModal<ReasoningFamilyFormState>(
       'Add Reasoning Family',
-      { type: 'reasoning_effort', parameter: '' },
+      { name: '', type: 'reasoning_effort', parameter: '' },
       [
         {
           name: 'name',
@@ -855,7 +861,10 @@ export default function ConfigPageModelsSection({
       ],
       async (data) => {
         const familyName = data.name
-        delete data.name
+        const familyConfig = {
+          type: data.type,
+          parameter: data.parameter,
+        }
 
         const newConfig = cloneConfigData(config)
         if (isPythonCLI) {
@@ -863,12 +872,12 @@ export default function ConfigPageModelsSection({
           if (!defaults.reasoning_families) {
             defaults.reasoning_families = {}
           }
-          defaults.reasoning_families[familyName] = data
+          defaults.reasoning_families[familyName] = familyConfig
         } else {
           if (!newConfig.reasoning_families) {
             newConfig.reasoning_families = {}
           }
-          newConfig.reasoning_families[familyName] = data
+          newConfig.reasoning_families[familyName] = familyConfig
         }
         await saveConfig(newConfig)
       },

@@ -1,12 +1,12 @@
-import type { EditFormData, FieldConfig } from '../components/EditModal'
+import type { FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
 import type { ConfigData, Tool } from './configPageSupport'
 
-export type OpenEditModal = (
+export type OpenEditModal = <TForm extends object>(
   title: string,
-  data: EditFormData,
-  fields: FieldConfig[],
-  callback: (data: EditFormData) => Promise<void>,
+  data: TForm,
+  fields: FieldConfig<TForm>[],
+  callback: (data: TForm) => Promise<void>,
   mode?: 'edit' | 'add'
 ) => void
 
