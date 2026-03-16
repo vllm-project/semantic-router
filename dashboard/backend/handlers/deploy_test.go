@@ -271,17 +271,37 @@ func TestToStringKeyMap(t *testing.T) {
 }
 
 func TestCanonicalizeYAMLForDiff_EquivalentMapOrder(t *testing.T) {
-	yamlA := []byte(`router:
-  default_model: gpt-4o
-  settings:
-    timeout: 30
-    retries: 3
+	yamlA := []byte(`version: v0.3
+providers:
+  defaults:
+    default_model: test-model
+routing:
+  modelCards:
+    - name: test-model
+  decisions:
+    - name: default-route
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: test-model
 `)
-	yamlB := []byte(`router:
-  settings:
-    retries: 3
-    timeout: 30
-  default_model: gpt-4o
+	yamlB := []byte(`routing:
+  decisions:
+    - rules:
+        conditions: []
+        operator: AND
+      modelRefs:
+        - model: test-model
+      priority: 1
+      name: default-route
+  modelCards:
+    - name: test-model
+providers:
+  defaults:
+    default_model: test-model
+version: v0.3
 `)
 
 	canonicalA := canonicalizeYAMLForDiff(yamlA)
@@ -308,19 +328,32 @@ func TestDeployPreviewHandler_IgnoresOrderOnlyDiff(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.yaml")
 
-	current := `alpha:
-  first: 1
-  second: 2
-beta: true
-`
-	if err := os.WriteFile(configPath, []byte(current), 0o644); err != nil {
-		t.Fatalf("failed to write config: %v", err)
+	currentPath := createValidTestConfig(t, tempDir)
+	current, err := os.ReadFile(currentPath)
+	if err != nil {
+		t.Fatalf("failed to read current config: %v", err)
 	}
 
-	previewRequest := `beta: true
-alpha:
-  second: 2
-  first: 1
+	previewRequest := `routing:
+  decisions:
+    - name: default-business
+      description: Route business requests to the default model
+      priority: 1
+      modelRefs:
+        - use_reasoning: false
+          model: test-model
+      rules:
+        conditions:
+          - name: business
+            type: domain
+        operator: OR
+  signals:
+    domains:
+      - description: Business and management related queries
+        name: business
+  modelCards:
+    - reasoning_family_ref: qwen3
+      name: test-model
 `
 	body, _ := json.Marshal(DeployRequest{YAML: previewRequest})
 	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", bytes.NewReader(body))
@@ -338,6 +371,9 @@ alpha:
 		t.Fatalf("failed to decode preview response: %v", err)
 	}
 
+	if canonicalizeYAMLForDiff(current) != resp.Current {
+		t.Fatalf("expected current preview to match canonicalized current config\nwant:\n%s\n\ngot:\n%s", canonicalizeYAMLForDiff(current), resp.Current)
+	}
 	if resp.Current != resp.Preview {
 		t.Fatalf("expected no diff after canonicalization, but responses differ\ncurrent:\n%s\npreview:\n%s", resp.Current, resp.Preview)
 	}
@@ -455,8 +491,19 @@ func TestDeployHandler_SuccessfulDeploy(t *testing.T) {
 	// Read original config to verify preservation after merge
 	originalData, _ := os.ReadFile(configPath)
 
-	// Deploy a minimal valid config (just adds a new key)
-	deployYAML := `default_model: deployed-model
+	deployYAML := `routing:
+  decisions:
+    - name: deployed-default
+      description: Deployed route
+      priority: 5
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+      modelRefs:
+        - model: test-model
+          use_reasoning: false
 `
 	body := DeployRequest{
 		YAML: deployYAML,
@@ -797,7 +844,19 @@ func TestDeployHandler_NoDSLSource(t *testing.T) {
 	configPath := createValidTestConfig(t, tempDir)
 
 	// Deploy without DSL source
-	body := DeployRequest{YAML: "providers:\n  defaults:\n    default_model: test-model\n"}
+	body := DeployRequest{YAML: `routing:
+  decisions:
+    - name: no-dsl-route
+      priority: 9
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+      modelRefs:
+        - model: test-model
+          use_reasoning: false
+`}
 	bodyBytes, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy", bytes.NewReader(bodyBytes))
@@ -918,7 +977,31 @@ func TestRollbackHandler_SuccessfulRollback(t *testing.T) {
 	}
 
 	// Modify current config so we can verify rollback restores it
-	modifiedConfig := `default_model: modified-model
+	modifiedConfig := `version: v0.3
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8801
+providers:
+  defaults:
+    default_model: test-model
+  models:
+    - name: test-model
+      backend_refs:
+        - name: endpoint1
+          endpoint: 127.0.0.1:8000
+          protocol: http
+routing:
+  modelCards:
+    - name: test-model
+  decisions:
+    - name: modified-route
+      priority: 9
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: test-model
 `
 	if err := os.WriteFile(configPath, []byte(modifiedConfig), 0o644); err != nil {
 		t.Fatalf("Failed to modify config: %v", err)
@@ -1149,7 +1232,19 @@ func TestDeployAndRollback_Integration(t *testing.T) {
 	originalData, _ := os.ReadFile(configPath)
 
 	// Deploy
-	deployYAML := "default_model: integrated-deploy\n"
+	deployYAML := `routing:
+  decisions:
+    - name: integrated-deploy
+      priority: 11
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+      modelRefs:
+        - model: test-model
+          use_reasoning: false
+`
 	body := DeployRequest{YAML: deployYAML}
 	bodyBytes, _ := json.Marshal(body)
 

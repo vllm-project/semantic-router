@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -13,8 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -27,22 +25,15 @@ func ConfigHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 
-		data, err := os.ReadFile(configPath)
+		configData, err := readCanonicalConfigFile(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		var config interface{}
-		if err := yaml.Unmarshal(data, &config); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse config: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		if err := json.NewEncoder(w).Encode(config); err != nil {
+		if err := writeYAMLTaggedJSON(w, configData); err != nil {
 			log.Printf("Error encoding config to JSON: %v", err)
 		}
 	}
@@ -87,7 +78,7 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 		if readonlyMode {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			if err := json.NewEncoder(w).Encode(map[string]string{
+			if err := writeYAMLTaggedJSON(w, map[string]string{
 				"error":   "readonly_mode",
 				"message": "Dashboard is in read-only mode. Configuration editing is disabled.",
 			}); err != nil {
@@ -96,13 +87,13 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		var configData map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&configData); err != nil {
+		configData, err := decodeYAMLTaggedBody[routerconfig.CanonicalConfig](r.Body)
+		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
 		}
-		if err := validateRawCanonicalEndpointRefs(configData); err != nil {
-			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
+		if validationErr := validateCanonicalEndpointRefs(configData); validationErr != nil {
+			http.Error(w, fmt.Sprintf("Config validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
 
@@ -113,25 +104,13 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		yamlData, err := yaml.Marshal(configData)
+		yamlData, err := marshalYAMLBytes(configData)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to convert to YAML: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		// Validate using router's config parser
-		tempFile := filepath.Join(os.TempDir(), "config_validate.yaml")
-		if err = os.WriteFile(tempFile, yamlData, 0o644); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to validate: %v", err), http.StatusInternalServerError)
-			return
-		}
-		defer func() {
-			if removeErr := os.Remove(tempFile); removeErr != nil {
-				log.Printf("Warning: failed to remove temp file: %v", removeErr)
-			}
-		}()
-
-		parsedConfig, err := routerconfig.Parse(tempFile)
+		parsedConfig, err := routerconfig.ParseYAMLBytes(yamlData)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
 			return
@@ -164,8 +143,7 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]string{"status": "success"}); err != nil {
+		if err := writeYAMLTaggedJSON(w, map[string]string{"status": "success"}); err != nil {
 			log.Printf("Error encoding response: %v", err)
 		}
 	}
@@ -186,8 +164,7 @@ func RouterDefaultsHandler(configDir string) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(defaults); err != nil {
+		if err := writeYAMLTaggedJSON(w, defaults); err != nil {
 			log.Printf("Error encoding global defaults to JSON: %v", err)
 		}
 	}
@@ -205,7 +182,7 @@ func UpdateRouterDefaultsHandler(configDir string, readonlyMode bool) http.Handl
 		if readonlyMode {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			if err := json.NewEncoder(w).Encode(map[string]string{
+			if err := writeYAMLTaggedJSON(w, map[string]string{
 				"error":   "readonly_mode",
 				"message": "Dashboard is in read-only mode. Configuration editing is disabled.",
 			}); err != nil {
@@ -214,49 +191,26 @@ func UpdateRouterDefaultsHandler(configDir string, readonlyMode bool) http.Handl
 			return
 		}
 
-		var configData map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&configData); err != nil {
+		rawPatch, err := io.ReadAll(r.Body)
+		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
 		}
 
 		configPath := filepath.Join(configDir, "config.yaml")
-		existingMap := make(map[string]interface{})
 		existingData, err := os.ReadFile(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
 		}
-		if unmarshalErr := yaml.Unmarshal(existingData, &existingMap); unmarshalErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse config: %v", unmarshalErr), http.StatusInternalServerError)
-			return
-		}
 
-		globalMap, _ := existingMap["global"].(map[string]interface{})
-		if globalMap == nil {
-			globalMap = make(map[string]interface{})
-		}
-		existingMap["global"] = deepMerge(globalMap, configData)
-
-		// Convert to YAML
-		yamlData, err := yaml.Marshal(existingMap)
+		yamlData, err := mergeGlobalOverridePatchYAML(existingData, rawPatch)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to convert to YAML: %v", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
 			return
 		}
 
-		tempFile := filepath.Join(os.TempDir(), "config_validate_global.yaml")
-		if err = os.WriteFile(tempFile, yamlData, 0o644); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to validate: %v", err), http.StatusInternalServerError)
-			return
-		}
-		defer func() {
-			if removeErr := os.Remove(tempFile); removeErr != nil {
-				log.Printf("Warning: failed to remove temp file: %v", removeErr)
-			}
-		}()
-
-		if _, err := routerconfig.Parse(tempFile); err != nil {
+		if _, err := routerconfig.ParseYAMLBytes(yamlData); err != nil {
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
 			return
 		}
@@ -271,8 +225,7 @@ func UpdateRouterDefaultsHandler(configDir string, readonlyMode bool) http.Handl
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]string{"status": "success"}); err != nil {
+		if err := writeYAMLTaggedJSON(w, map[string]string{"status": "success"}); err != nil {
 			log.Printf("Error encoding response: %v", err)
 		}
 	}
@@ -353,33 +306,10 @@ func validateEndpointAddress(address string) error {
 	return nil
 }
 
-func validateRawCanonicalEndpointRefs(configData map[string]interface{}) error {
-	providers, ok := configData["providers"].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-
-	models, ok := providers["models"].([]interface{})
-	if !ok {
-		return nil
-	}
-
-	for modelIndex, rawModel := range models {
-		model, ok := rawModel.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		backendRefs, ok := model["backend_refs"].([]interface{})
-		if !ok {
-			continue
-		}
-		for backendIndex, rawBackend := range backendRefs {
-			backend, ok := rawBackend.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			endpoint, _ := backend["endpoint"].(string)
-			endpoint = strings.TrimSpace(endpoint)
+func validateCanonicalEndpointRefs(configData routerconfig.CanonicalConfig) error {
+	for modelIndex, model := range configData.Providers.Models {
+		for backendIndex, backend := range model.BackendRefs {
+			endpoint := strings.TrimSpace(backend.Endpoint)
 			if endpoint == "" {
 				continue
 			}
@@ -525,29 +455,25 @@ func detectEnvoyConfigPath() string {
 	return ""
 }
 
-func currentGlobalDefaults(configDir string) (map[string]interface{}, error) {
-	data, err := yaml.Marshal(routerconfig.DefaultCanonicalGlobal())
-	if err != nil {
-		return nil, err
-	}
-
-	defaults := make(map[string]interface{})
-	if unmarshalErr := yaml.Unmarshal(data, &defaults); unmarshalErr != nil {
-		return nil, unmarshalErr
-	}
-
+func currentGlobalDefaults(configDir string) (*routerconfig.CanonicalGlobal, error) {
+	defaults := routerconfig.DefaultCanonicalGlobal()
 	configPath := filepath.Join(configDir, "config.yaml")
 	configData, err := os.ReadFile(configPath)
-	if err == nil {
-		currentConfig := make(map[string]interface{})
-		if unmarshalErr := yaml.Unmarshal(configData, &currentConfig); unmarshalErr == nil {
-			if currentGlobal, ok := currentConfig["global"].(map[string]interface{}); ok {
-				defaults = deepMerge(defaults, currentGlobal)
-			}
-		}
+	if err != nil {
+		return &defaults, nil
 	}
 
-	return defaults, nil
+	parsed, err := routerconfig.ParseYAMLBytes(configData)
+	if err != nil {
+		return &defaults, nil
+	}
+
+	global := routerconfig.CanonicalGlobalFromRouterConfig(parsed)
+	if global == nil {
+		return &defaults, nil
+	}
+
+	return global, nil
 }
 
 func generateEnvoyConfigInManagedContainer() (string, error) {

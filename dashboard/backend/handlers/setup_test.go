@@ -115,6 +115,15 @@ func createValidSetupPatch() map[string]interface{} {
 	}
 }
 
+func mustJSONRaw(t *testing.T, value interface{}) json.RawMessage {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("failed to marshal JSON payload: %v", err)
+	}
+	return json.RawMessage(data)
+}
+
 func TestSetupStateHandler(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
@@ -148,7 +157,7 @@ func TestSetupValidateHandler(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 
-	body, err := json.Marshal(SetupConfigRequest{Config: createValidSetupPatch()})
+	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
 	if err != nil {
 		t.Fatalf("failed to marshal request: %v", err)
 	}
@@ -179,7 +188,11 @@ func TestSetupValidateHandler(t *testing.T) {
 	if resp.Signals != 2 {
 		t.Fatalf("expected signals=2, got %d", resp.Signals)
 	}
-	if _, hasSetup := resp.Config["setup"]; hasSetup {
+	var configMap map[string]interface{}
+	if err := json.Unmarshal(resp.Config, &configMap); err != nil {
+		t.Fatalf("failed to decode validated config: %v", err)
+	}
+	if _, hasSetup := configMap["setup"]; hasSetup {
 		t.Fatalf("validated config should not contain setup marker")
 	}
 }
@@ -254,13 +267,17 @@ routing:
 	if !resp.CanActivate {
 		t.Fatalf("expected canActivate=true")
 	}
-	if providers, ok := resp.Config["providers"].(map[string]interface{}); !ok {
-		t.Fatalf("expected imported config providers map, got %#v", resp.Config["providers"])
-	} else if defaults, ok := providers["defaults"].(map[string]interface{}); !ok || defaults["default_model"] != "remote-model" {
-		t.Fatalf("expected imported config providers.defaults.default_model=remote-model, got %#v", resp.Config["providers"])
+	var importedConfig map[string]interface{}
+	if err := json.Unmarshal(resp.Config, &importedConfig); err != nil {
+		t.Fatalf("failed to decode imported config: %v", err)
 	}
-	if routing, ok := resp.Config["routing"].(map[string]interface{}); !ok || routing["modelCards"] == nil {
-		t.Fatalf("expected imported config routing.modelCards to be preserved, got %#v", resp.Config["routing"])
+	if providers, ok := importedConfig["providers"].(map[string]interface{}); !ok {
+		t.Fatalf("expected imported config providers map, got %#v", importedConfig["providers"])
+	} else if defaults, ok := providers["defaults"].(map[string]interface{}); !ok || defaults["default_model"] != "remote-model" {
+		t.Fatalf("expected imported config providers.defaults.default_model=remote-model, got %#v", importedConfig["providers"])
+	}
+	if routing, ok := importedConfig["routing"].(map[string]interface{}); !ok || routing["modelCards"] == nil {
+		t.Fatalf("expected imported config routing.modelCards to be preserved, got %#v", importedConfig["routing"])
 	}
 }
 
@@ -268,7 +285,7 @@ func TestSetupActivateHandler(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 
-	body, err := json.Marshal(SetupConfigRequest{Config: createValidSetupPatch()})
+	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
 	if err != nil {
 		t.Fatalf("failed to marshal request: %v", err)
 	}

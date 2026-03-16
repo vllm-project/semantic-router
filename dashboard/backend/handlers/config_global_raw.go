@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -48,7 +47,7 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 		if readonlyMode {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			if err := json.NewEncoder(w).Encode(map[string]string{
+			if err := writeYAMLTaggedJSON(w, map[string]string{
 				"error":   "readonly_mode",
 				"message": "Dashboard is in read-only mode. Configuration editing is disabled.",
 			}); err != nil {
@@ -89,25 +88,23 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]string{"status": "success"}); err != nil {
+		if err := writeYAMLTaggedJSON(w, map[string]string{"status": "success"}); err != nil {
 			log.Printf("Error encoding response: %v", err)
 		}
 	}
 }
 
 func readRawGlobalOverrideYAML(configPath string) ([]byte, error) {
-	existingMap, err := readCanonicalConfigMap(configPath)
+	cfg, err := readCanonicalConfigFile(configPath)
 	if err != nil {
 		return nil, err
 	}
 
-	globalValue, ok := existingMap["global"]
-	if !ok || globalValue == nil {
+	if cfg.Global == nil {
 		return []byte("{}\n"), nil
 	}
 
-	globalYAML, err := yaml.Marshal(globalValue)
+	globalYAML, err := yaml.Marshal(cfg.Global)
 	if err != nil {
 		return nil, fmt.Errorf("marshal global override: %w", err)
 	}
@@ -115,23 +112,27 @@ func readRawGlobalOverrideYAML(configPath string) ([]byte, error) {
 }
 
 func replaceGlobalOverrideYAML(existingData, rawGlobalYAML []byte) ([]byte, error) {
-	existingMap := make(map[string]interface{})
-	if err := yaml.Unmarshal(existingData, &existingMap); err != nil {
+	existingDoc, err := parseYAMLDocument(existingData)
+	if err != nil {
 		return nil, fmt.Errorf("parse config.yaml: %w", err)
 	}
+	root, err := documentMappingNode(existingDoc)
+	if err != nil {
+		return nil, err
+	}
 
-	globalOverride, hasOverride, err := parseRawGlobalOverride(rawGlobalYAML)
+	globalOverride, hasOverride, err := parseRawGlobalOverrideNode(rawGlobalYAML)
 	if err != nil {
 		return nil, err
 	}
 
 	if hasOverride {
-		existingMap["global"] = globalOverride
+		setMappingValueNode(root, "global", globalOverride)
 	} else {
-		delete(existingMap, "global")
+		deleteMappingValueNode(root, "global")
 	}
 
-	updatedYAML, err := yaml.Marshal(existingMap)
+	updatedYAML, err := marshalYAMLDocument(existingDoc)
 	if err != nil {
 		return nil, fmt.Errorf("marshal updated config: %w", err)
 	}
@@ -143,38 +144,58 @@ func replaceGlobalOverrideYAML(existingData, rawGlobalYAML []byte) ([]byte, erro
 	return updatedYAML, nil
 }
 
-func parseRawGlobalOverride(raw []byte) (map[string]interface{}, bool, error) {
+func parseRawGlobalOverrideNode(raw []byte) (*yaml.Node, bool, error) {
 	if strings.TrimSpace(string(raw)) == "" {
 		return nil, false, nil
 	}
 
-	var parsed interface{}
-	if err := yaml.Unmarshal(raw, &parsed); err != nil {
+	doc, err := parseYAMLDocument(raw)
+	if err != nil {
+		return nil, false, fmt.Errorf("invalid YAML: %w", err)
+	}
+	root, err := documentMappingNode(doc)
+	if err != nil {
 		return nil, false, fmt.Errorf("invalid YAML: %w", err)
 	}
 
-	if parsed == nil {
+	if len(root.Content) == 0 {
 		return nil, false, nil
 	}
 
-	globalOverride, ok := toStringKeyMap(parsed)
-	if !ok {
-		return nil, false, fmt.Errorf("global override must be a YAML mapping")
-	}
-
-	return globalOverride, true, nil
+	return cloneYAMLNode(root), true, nil
 }
 
-func readCanonicalConfigMap(configPath string) (map[string]interface{}, error) {
-	data, err := os.ReadFile(configPath)
+func mergeGlobalOverridePatchYAML(existingData, rawPatch []byte) ([]byte, error) {
+	existingDoc, err := parseYAMLDocument(existingData)
+	if err != nil {
+		return nil, fmt.Errorf("parse config.yaml: %w", err)
+	}
+	root, err := documentMappingNode(existingDoc)
 	if err != nil {
 		return nil, err
 	}
 
-	configMap := make(map[string]interface{})
-	if err := yaml.Unmarshal(data, &configMap); err != nil {
+	patchDoc, err := parseYAMLDocument(rawPatch)
+	if err != nil {
+		return nil, fmt.Errorf("invalid request body: %w", err)
+	}
+	patchRoot, err := documentMappingNode(patchDoc)
+	if err != nil {
+		return nil, fmt.Errorf("invalid request body: %w", err)
+	}
+
+	existingGlobal := mappingValueNode(root, "global")
+	if existingGlobal == nil {
+		existingGlobal = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		setMappingValueNode(root, "global", existingGlobal)
+		existingGlobal = mappingValueNode(root, "global")
+	}
+	if existingGlobal.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("config.yaml global block must be a YAML mapping")
+	}
+	if err := mergeMappingNodes(existingGlobal, patchRoot); err != nil {
 		return nil, err
 	}
 
-	return configMap, nil
+	return marshalYAMLDocument(existingDoc)
 }

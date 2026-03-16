@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -74,7 +75,7 @@ func TestSampleCRValidation(t *testing.T) {
 			}
 
 			// Validate the CR using webhook validation
-			_, err = sr.ValidateCreate()
+			_, err = sr.ValidateCreate(context.Background(), &sr)
 			if err != nil {
 				t.Errorf("Sample CR validation failed: %v", err)
 			}
