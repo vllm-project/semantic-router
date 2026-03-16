@@ -33,7 +33,8 @@ func NewWriter(configPath string) *Writer {
 	return &Writer{path: StatusPathFromConfigPath(configPath)}
 }
 
-// StatusPathFromConfigPath returns the runtime status file path next to config.yaml.
+// StatusPathFromConfigPath returns the runtime status path, preferring the config
+// directory when it is writable and otherwise falling back to a temp-owned path.
 func StatusPathFromConfigPath(configPath string) string {
 	statusDir := runtimeStatusDirFromConfigPath(configPath)
 	return filepath.Join(statusDir, "router-runtime.json")
@@ -45,19 +46,28 @@ func runtimeStatusDirFromConfigPath(configPath string) string {
 	}
 
 	configDir := filepath.Dir(configPath)
-	if dirProbablyWritable(configDir) {
+	if dirWritable(configDir) {
 		return configDir
 	}
 
 	return filepath.Join(os.TempDir(), "vllm-sr", "runtime-status", stablePathToken(configDir))
 }
 
-func dirProbablyWritable(path string) bool {
+func dirWritable(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil || !info.IsDir() {
 		return false
 	}
-	return info.Mode().Perm()&0o222 != 0
+	probe, err := os.CreateTemp(path, ".vllm-sr-write-check-*")
+	if err != nil {
+		return false
+	}
+	probePath := probe.Name()
+	if closeErr := probe.Close(); closeErr != nil {
+		_ = os.Remove(probePath)
+		return false
+	}
+	return os.Remove(probePath) == nil
 }
 
 func stablePathToken(path string) string {
