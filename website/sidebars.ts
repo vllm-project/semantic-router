@@ -106,8 +106,32 @@ const sidebars: SidebarsConfig = {
           label: 'Algorithms',
           items: [
             'tutorials/algorithm/overview',
-            'tutorials/algorithm/selection',
-            'tutorials/algorithm/looper',
+            {
+              type: 'category',
+              label: 'Selection',
+              items: [
+                'tutorials/algorithm/selection/automix',
+                'tutorials/algorithm/selection/elo',
+                'tutorials/algorithm/selection/gmtrouter',
+                'tutorials/algorithm/selection/hybrid',
+                'tutorials/algorithm/selection/kmeans',
+                'tutorials/algorithm/selection/knn',
+                'tutorials/algorithm/selection/latency-aware',
+                'tutorials/algorithm/selection/rl-driven',
+                'tutorials/algorithm/selection/router-dc',
+                'tutorials/algorithm/selection/static',
+                'tutorials/algorithm/selection/svm',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Looper',
+              items: [
+                'tutorials/algorithm/looper/confidence',
+                'tutorials/algorithm/looper/ratings',
+                'tutorials/algorithm/looper/remom',
+              ],
+            },
           ],
         },
         {
@@ -115,9 +139,37 @@ const sidebars: SidebarsConfig = {
           label: 'Plugins',
           items: [
             'tutorials/plugin/overview',
-            'tutorials/plugin/response-and-mutation',
-            'tutorials/plugin/retrieval-and-memory',
-            'tutorials/plugin/safety-and-generation',
+            {
+              type: 'category',
+              label: 'Response and Mutation',
+              items: [
+                'tutorials/plugin/fast-response',
+                'tutorials/plugin/header-mutation',
+                'tutorials/plugin/image-gen',
+                'tutorials/plugin/system-prompt',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Retrieval and Memory',
+              items: [
+                'tutorials/plugin/memory',
+                'tutorials/plugin/rag',
+                'tutorials/plugin/router-replay',
+                'tutorials/plugin/semantic-cache',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Safety and Generation',
+              items: [
+                'tutorials/plugin/content-safety',
+                'tutorials/plugin/hallucination',
+                'tutorials/plugin/jailbreak',
+                'tutorials/plugin/pii',
+                'tutorials/plugin/response-jailbreak',
+              ],
+            },
           ],
         },
         {

@@ -32,6 +32,15 @@ Decision fragments may reference `modelRefs[].lora_name`, but those adapter name
 - `looper/`: multi-model execution policies such as `confidence`, `ratings`, and `remom`
 - `selection/`: candidate-selection policies such as `elo`, `router_dc`, `automix`, and `latency_aware`
 
+Each supported algorithm now has its own tutorial page under `website/docs/tutorials/algorithm/`.
+
+`config/plugin/` is organized by route-local plugin or reusable plugin bundle:
+
+- one directory per plugin or bundle, such as `semantic-cache/`, `rag/`, `memory/`, or `content-safety/`
+- one fragment example per directory in the current catalog
+
+Each supported plugin now has its own tutorial page under `website/docs/tutorials/plugin/`.
+
 The repository enforces this fragment catalog, the exhaustive reference config, the maintained deploy/E2E config assets, and the core public config docs in Go tests. When a supported signal, decision algorithm, plugin surface, or canonical contract term changes, both `go test ./pkg/config/...` and `make agent-lint` will fail until `config/`, maintained `deploy/` / `e2e/` config assets, and the core config docs are updated to match.
 
 Latest official tutorials mirror the same top-level taxonomy:
@@ -40,8 +49,8 @@ Latest official tutorials mirror the same top-level taxonomy:
   - `tutorials/signal/heuristic/` for rule-based and lightweight detector signals
   - `tutorials/signal/learned/` for embedding- and classifier-driven signals
 - `tutorials/decision/`
-- `tutorials/algorithm/`
-- `tutorials/plugin/`
+- `tutorials/algorithm/` with one page per algorithm
+- `tutorials/plugin/` with one page per plugin
 - `tutorials/global/`
 
 `config/` no longer carries runtime support files or test manifests.

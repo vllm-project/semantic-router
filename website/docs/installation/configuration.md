@@ -125,14 +125,15 @@ The repository now separates the exhaustive canonical reference config from reus
 
 `config/decision/` is organized by boolean case shape: `single/`, `and/`, `or/`, `not/`, and `composite/`.
 `config/algorithm/` is organized by routing policy family: `looper/` and `selection/`.
+`config/plugin/` is organized one plugin or reusable bundle per directory.
 The repository enforces this fragment catalog in `go test ./pkg/config/...`, so routing-surface changes must update the `config/` tree in the same change.
 
 Latest tutorials follow the same taxonomy:
 
 - `tutorials/signal/overview` plus `tutorials/signal/heuristic/` and `tutorials/signal/learned/` for `config/signal/`
 - `tutorials/decision/` for `config/decision/`
-- `tutorials/algorithm/` for `config/algorithm/`
-- `tutorials/plugin/` for `config/plugin/`
+- `tutorials/algorithm/` for `config/algorithm/`, with one page per algorithm
+- `tutorials/plugin/` for `config/plugin/`, with one page per plugin
 - `tutorials/global/` for sparse router-wide overrides under `global:`
 
 Repo-owned runtime and harness assets now live outside `config/`:

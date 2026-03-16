@@ -452,12 +452,6 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "docs", "tutorials", "algorithm", "selection.md"),
-		needles: []string{
-			"computer_science",
-		},
-	},
-	{
 		path: repoRel("website", "docs", "overview", "signal-driven-decisions.md"),
 		needles: []string{
 			"computer_science",
@@ -518,8 +512,10 @@ var latestTutorialOverviewDocs = []docNeedles{
 		path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
 		needles: []string{
 			"`config/algorithm/`",
-			"[Selection](./selection)",
-			"[Looper](./looper)",
+			"### Selection Algorithms",
+			"### Looper Algorithms",
+			"[Static](./selection/static)",
+			"[Confidence](./looper/confidence)",
 		},
 	},
 	{
@@ -527,6 +523,8 @@ var latestTutorialOverviewDocs = []docNeedles{
 		needles: []string{
 			"`config/plugin/`",
 			"`routing.decisions[].plugins`",
+			"[Fast Response](./fast-response)",
+			"[Semantic Cache](./semantic-cache)",
 		},
 	},
 	{
@@ -544,7 +542,12 @@ var latestTutorialSidebarRequired = []string{
 	"label: 'Learned'",
 	"label: 'Decisions'",
 	"label: 'Algorithms'",
+	"label: 'Selection'",
+	"label: 'Looper'",
 	"label: 'Plugins'",
+	"label: 'Response and Mutation'",
+	"label: 'Retrieval and Memory'",
+	"label: 'Safety and Generation'",
 	"label: 'Global'",
 	"'tutorials/signal/overview'",
 	"'tutorials/decision/overview'",
@@ -564,6 +567,11 @@ var latestTutorialSidebarForbidden = []string{
 	"'tutorials/response-api/",
 	"'tutorials/performance-tuning/",
 	"'tutorials/runtime/",
+	"'tutorials/algorithm/selection'",
+	"'tutorials/algorithm/looper'",
+	"'tutorials/plugin/response-and-mutation'",
+	"'tutorials/plugin/retrieval-and-memory'",
+	"'tutorials/plugin/safety-and-generation'",
 }
 
 var proposalSidebarRequired = []string{
@@ -618,6 +626,8 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 	assertTutorialFilesContainRequiredSections(t, root)
 	assertTutorialRootDirectories(t, root)
 	assertSignalTutorialDocsMatchConfigHierarchy(t, root)
+	assertAlgorithmTutorialDocsMatchConfigHierarchy(t, root)
+	assertPluginTutorialDocsMatchConfigHierarchy(t, root)
 	assertPathsDoNotExist(t, root, retiredCurrentTranslationOverrides)
 }
 
@@ -648,6 +658,8 @@ func assertTutorialSidebarTaxonomy(t *testing.T, root string) {
 	content := readRepoFile(t, root, sidebarPath)
 	required := append([]string(nil), latestTutorialSidebarRequired...)
 	required = append(required, signalTutorialSidebarEntries()...)
+	required = append(required, algorithmTutorialSidebarEntries()...)
+	required = append(required, pluginTutorialSidebarEntries()...)
 	assertStringContainsAll(t, content, sidebarPath, required)
 	assertStringContainsNone(t, content, sidebarPath, latestTutorialSidebarForbidden)
 }

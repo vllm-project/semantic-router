@@ -11,7 +11,7 @@ Algorithms only matter after a decision matches and exposes multiple candidate m
 - Separates route eligibility from model selection policy.
 - Lets one decision keep several candidate models without inlining ranking logic.
 - Supports both one-model ranking and multi-model orchestration.
-- Maps cleanly to `config/algorithm/selection/` and `config/algorithm/looper/`.
+- Mirrors the repo fragment tree exactly: one tutorial page per algorithm under `config/algorithm/selection/` and `config/algorithm/looper/`.
 
 ## What Problem Does It Solve?
 
@@ -50,12 +50,24 @@ routing:
           temperature: 0.07
 ```
 
-Algorithm families mirror the fragment tree:
+The repo now keeps one tutorial page per algorithm.
 
-| Family | Fragment tree | Purpose |
-|--------|---------------|---------|
-| `selection` | `config/algorithm/selection/` | choose one model from the candidates |
-| `looper` | `config/algorithm/looper/` | coordinate multiple candidates in an execution loop |
+### Selection Algorithms
 
-- [Selection](./selection) covers the one-model choice algorithms under `config/algorithm/selection/`.
-- [Looper](./looper) covers the multi-model orchestration algorithms under `config/algorithm/looper/`.
+- [Automix](./selection/automix)
+- [Elo](./selection/elo)
+- [GMT Router](./selection/gmtrouter)
+- [Hybrid](./selection/hybrid)
+- [KMeans](./selection/kmeans)
+- [KNN](./selection/knn)
+- [Latency Aware](./selection/latency-aware)
+- [RL Driven](./selection/rl-driven)
+- [Router DC](./selection/router-dc)
+- [Static](./selection/static)
+- [SVM](./selection/svm)
+
+### Looper Algorithms
+
+- [Confidence](./looper/confidence)
+- [Ratings](./looper/ratings)
+- [ReMoM](./looper/remom)

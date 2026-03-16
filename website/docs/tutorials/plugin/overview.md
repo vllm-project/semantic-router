@@ -11,7 +11,7 @@ In canonical v0.3 YAML, plugins live under `routing.decisions[].plugins`.
 - Keeps route-local behavior attached to the route that needs it.
 - Avoids pushing all behavior into `global:` defaults.
 - Lets one route opt into caching, mutation, retrieval, or safety controls without affecting others.
-- Maps directly to the fragment tree under `config/plugin/`.
+- Maps directly to the fragment tree under `config/plugin/`, with one tutorial page per plugin or plugin bundle.
 
 ## What Problem Does It Solve?
 
@@ -42,10 +42,26 @@ routing:
             enabled: true
 ```
 
-The plugin docs mirror `config/plugin/`:
+The plugin docs now mirror `config/plugin/` one page at a time.
 
-| Plugin family | Fragment examples | Purpose | Doc |
-|---------------|-------------------|---------|-----|
-| response and mutation | `fast-response`, `header-mutation`, `system-prompt`, `image-gen` | change or short-circuit route output | [Response and Mutation](./response-and-mutation) |
-| retrieval and memory | `semantic-cache`, `rag`, `memory`, `router-replay` | reuse context, retrieval, or state | [Retrieval and Memory](./retrieval-and-memory) |
-| safety and generation | `content-safety`, `jailbreak`, `pii`, `hallucination`, `response-jailbreak` | apply route-local safety or generation controls | [Safety and Generation](./safety-and-generation) |
+### Response and Mutation
+
+- [Fast Response](./fast-response)
+- [Header Mutation](./header-mutation)
+- [Image Generation](./image-gen)
+- [System Prompt](./system-prompt)
+
+### Retrieval and Memory
+
+- [Memory](./memory)
+- [RAG](./rag)
+- [Router Replay](./router-replay)
+- [Semantic Cache](./semantic-cache)
+
+### Safety and Generation
+
+- [Content Safety](./content-safety)
+- [Hallucination](./hallucination)
+- [Jailbreak](./jailbreak)
+- [PII](./pii)
+- [Response Jailbreak](./response-jailbreak)
