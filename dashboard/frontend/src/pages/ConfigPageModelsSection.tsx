@@ -3,15 +3,15 @@ import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
-import EndpointsEditor, { type Endpoint } from '../components/EndpointsEditor'
 import type { ViewSection } from '../components/ViewModal'
-import type {
+import {
+  TABLE_COLUMN_WIDTH,
+  type BackendRefEntry,
   ConfigData,
-  ModelConfigEntry,
+  type DecisionConfig,
   NormalizedModel,
   ReasoningFamily,
-  TABLE_COLUMN_WIDTH,
-  VLLMEndpoint,
+  type ModelPricing,
 } from './configPageSupport'
 import {
   ensureProviderDefaultsConfig,
@@ -20,11 +20,6 @@ import {
   removeRoutingModelCard,
   upsertRoutingModelCard,
 } from './configPageCanonicalization'
-import {
-  mergeProviderBackendRefs,
-  normalizeEndpoint,
-  normalizeEndpoints,
-} from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 
 interface ConfigPageModelsSectionProps {

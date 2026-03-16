@@ -132,6 +132,34 @@ export interface BackendRefEntry {
   api_key_env?: string
 }
 
+export interface ProviderModelConfig {
+  name: string
+  reasoning_family?: string
+  provider_model_id?: string
+  api_format?: string
+  external_model_ids?: Record<string, string>
+  backend_refs?: BackendRefEntry[]
+  endpoints?: Array<{
+    name: string
+    weight: number
+    endpoint: string
+    protocol: 'http' | 'https'
+  }>
+  access_key?: string
+  pricing?: ModelPricing
+}
+
+export interface ProviderDefaultsConfig {
+  default_model?: string
+  reasoning_families?: Record<string, ReasoningFamily>
+  default_reasoning_effort?: string
+}
+
+export interface ProvidersConfig {
+  defaults?: ProviderDefaultsConfig
+  models: ProviderModelConfig[]
+}
+
 export interface RoutingModelCard {
   name: string
   param_size?: string
@@ -144,11 +172,53 @@ export interface RoutingModelCard {
   modality?: string
 }
 
+export interface DecisionCondition {
+  type: string
+  name: string
+}
+
+export interface DecisionRuleSet {
+  operator: 'AND' | 'OR' | 'NOT'
+  conditions: DecisionCondition[]
+}
+
+export interface DecisionModelRef {
+  model: string
+  use_reasoning: boolean
+  reasoning_description?: string
+  reasoning_effort?: string
+  lora_name?: string
+  weight?: number
+}
+
+export interface DecisionPluginConfig {
+  type: string
+  configuration: Record<string, unknown>
+}
+
+export interface DecisionConfig {
+  name: string
+  description: string
+  priority: number
+  rules: DecisionRuleSet
+  modelRefs: DecisionModelRef[]
+  plugins?: DecisionPluginConfig[]
+}
+
+export interface RoutingConfig {
+  modelCards?: RoutingModelCard[]
+  signals?: ConfigData['signals']
+  decisions?: DecisionConfig[]
+}
+
 export interface NormalizedModel {
   name: string
   reasoning_family?: string
+  provider_model_id?: string
+  api_format?: string
+  external_model_ids?: Record<string, string>
+  backend_refs?: BackendRefEntry[]
   endpoints: Endpoint[]
-  access_key?: string
   param_size?: string
   context_window_size?: number
   description?: string
@@ -528,55 +598,9 @@ export interface ConfigData {
     pii?: PIISignal[]
   }
   decisions?: Array<{
-    name: string
-    description: string
-    priority: number
-    rules: {
-      operator: 'AND' | 'OR' | 'NOT'
-      conditions: Array<{ type: string; name: string }>
-    }
-    modelRefs: Array<{
-      model: string
-      use_reasoning: boolean
-      reasoning_description?: string
-      reasoning_effort?: string
-      lora_name?: string
-      weight?: number
-    }>
-    plugins?: Array<{ type: string; configuration: Record<string, unknown> }>
-  }>
-  providers?: {
-    defaults?: {
-      default_model?: string
-      reasoning_families?: Record<string, ReasoningFamily>
-      default_reasoning_effort?: string
-    }
-    models: Array<{
-      name: string
-      reasoning_family?: string
-      provider_model_id?: string
-      api_format?: string
-      external_model_ids?: Record<string, string>
-      endpoints?: Array<{
-        name: string
-        weight: number
-        endpoint: string
-        protocol: 'http' | 'https'
-      }>
-      backend_refs?: BackendRefEntry[]
-      access_key?: string
-      pricing?: {
-        currency?: string
-        prompt_per_1m?: number
-        completion_per_1m?: number
-      }
-    }>
-  }
-  routing?: {
-    modelCards?: RoutingModelCard[]
-    signals?: ConfigData['signals']
-    decisions?: ConfigData['decisions']
-  }
+  decisions?: DecisionConfig[]
+  providers?: ProvidersConfig
+  routing?: RoutingConfig
   global?: CanonicalGlobalConfig
   bert_model?: ModelConfig
   semantic_cache?: SemanticCacheConfig
@@ -640,22 +664,13 @@ export type SignalType =
   | 'Jailbreak'
   | 'PII'
 
-export type DecisionConfig = NonNullable<ConfigData['decisions']>[number]
-
 export interface DecisionFormState {
   name: string
   description: string
   priority: number
   operator: 'AND' | 'OR' | 'NOT'
-  conditions: { type: string; name: string }[]
-  modelRefs: Array<{
-    model: string
-    use_reasoning: boolean
-    reasoning_description?: string
-    reasoning_effort?: string
-    lora_name?: string
-    weight?: number
-  }>
+  conditions: DecisionCondition[]
+  modelRefs: DecisionModelRef[]
   plugins: { type: string; configuration: string | Record<string, unknown> }[]
 }
 
@@ -889,8 +904,11 @@ export const getNormalizedModels = (
     const models = config.providers.models.map((m): NormalizedModel => ({
       name: m.name,
       reasoning_family: m.reasoning_family,
+      provider_model_id: m.provider_model_id,
+      api_format: m.api_format,
+      external_model_ids: m.external_model_ids,
+      backend_refs: m.backend_refs,
       endpoints: normalizeProviderModelEndpoints(m),
-      access_key: m.backend_refs?.find((ref) => ref.api_key || ref.api_key_env)?.api_key,
       param_size: cardByName.get(m.name)?.param_size,
       context_window_size: cardByName.get(m.name)?.context_window_size,
       description: cardByName.get(m.name)?.description,
@@ -909,6 +927,10 @@ export const getNormalizedModels = (
       models.push({
         name: card.name,
         reasoning_family: undefined,
+        provider_model_id: undefined,
+        api_format: undefined,
+        external_model_ids: undefined,
+        backend_refs: undefined,
         endpoints: [],
         param_size: card.param_size,
         context_window_size: card.context_window_size,
