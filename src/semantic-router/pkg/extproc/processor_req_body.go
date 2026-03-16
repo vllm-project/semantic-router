@@ -34,8 +34,14 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
+	if validationResp := r.validateRequestBody(requestBody, ctx); validationResp != nil {
+		return validationResp, nil
+	}
 
 	fast, err := r.extractFastRequestState(requestBody, ctx)
+	if validationResp := r.validationResponseFromRequestError(err); validationResp != nil {
+		return validationResp, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -58,8 +64,14 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	}
 
 	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, fast.UserContent, ctx)
-	if earlyResponse != nil || err != nil {
-		return earlyResponse, err
+	if earlyResponse != nil {
+		return earlyResponse, nil
+	}
+	if validationResp := r.validationResponseFromRequestError(err); validationResp != nil {
+		return validationResp, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return r.handleModelRouting(
@@ -140,6 +152,9 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	// Select endpoint for the matched model
 	selectedEndpoint, selectedEndpointName, endpointErr := r.selectEndpointForModel(ctx, matchedModel)
 	if endpointErr != nil {
+		if validationResp := r.validationResponseFromRoutingError(matchedModel, endpointErr); validationResp != nil {
+			return validationResp, nil
+		}
 		return nil, fmt.Errorf("auto routing: %w", endpointErr)
 	}
 
@@ -192,6 +207,9 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	// Select endpoint for the specified model
 	selectedEndpoint, selectedEndpointName, endpointErr := r.selectEndpointForModel(ctx, originalModel)
 	if endpointErr != nil {
+		if validationResp := r.validationResponseFromRoutingError(originalModel, endpointErr); validationResp != nil {
+			return validationResp, nil
+		}
 		return nil, fmt.Errorf("specified model routing: %w", endpointErr)
 	}
 
