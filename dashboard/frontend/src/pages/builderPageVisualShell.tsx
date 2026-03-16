@@ -3,6 +3,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import type {
   Diagnostic,
   EditorMode,
+  DSLFieldObject,
 } from "@/types/dsl";
 import { useDSLStore } from "@/stores/dslStore";
 import type { RouteInput } from "@/lib/dslMutations";
@@ -52,27 +53,27 @@ interface VisualModeProps {
   addingEntity: EntityKind | null;
   onSetAddingEntity: (kind: EntityKind | null) => void;
   onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void;
-  onUpdateModelFields: (name: string, fields: Record<string, unknown>) => void;
+  onUpdateModelFields: (name: string, fields: DSLFieldObject) => void;
   onUpdateSignalFields: (
     signalType: string,
     name: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
   onUpdatePluginFields: (
     name: string,
     pluginType: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
-  onAddModel: (name: string, fields: Record<string, unknown>) => void;
+  onAddModel: (name: string, fields: DSLFieldObject) => void;
   onAddSignal: (
     signalType: string,
     name: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
   onAddPlugin: (
     name: string,
     pluginType: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
   onUpdateRoute: (name: string, input: RouteInput) => void;
   onAddRoute: (name: string, input: RouteInput) => void;

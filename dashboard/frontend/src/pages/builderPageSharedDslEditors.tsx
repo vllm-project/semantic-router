@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { ASTSignalDecl } from "@/types/dsl";
+import type {
+  ASTSignalDecl,
+  DSLFieldObject,
+  DSLFieldScalar,
+  DSLFieldValue,
+} from "@/types/dsl";
 import {
   getAlgorithmFieldSchema,
   getPluginFieldSchema,
@@ -15,7 +20,7 @@ import { FieldEditor, tryParseValue } from "./builderPageFormPrimitives";
 function generateSignalDslPreview(
   signalType: string,
   signalName: string,
-  fields: Record<string, unknown>,
+  fields: DSLFieldObject,
 ): string {
   const body = serializeFields(fields);
   if (!body.trim()) {
@@ -24,7 +29,7 @@ function generateSignalDslPreview(
   return `SIGNAL ${signalType} ${signalName} {\n${body}\n}`;
 }
 
-function generateGlobalDslPreview(fields: Record<string, unknown>): string {
+function generateGlobalDslPreview(fields: DSLFieldObject): string {
   return generateGlobalOverridePreview(fields);
 }
 
@@ -32,7 +37,7 @@ function yamlIndent(level: number): string {
   return "  ".repeat(level);
 }
 
-function yamlScalar(value: string | number | boolean): string {
+function yamlScalar(value: DSLFieldScalar): string {
   if (typeof value === "string") {
     if (
       value === "" ||
@@ -51,7 +56,7 @@ function yamlScalar(value: string | number | boolean): string {
 function appendYamlField(
   lines: string[],
   key: string,
-  value: unknown,
+  value: DSLFieldValue,
   level: number,
 ): void {
   if (value === undefined || value === null) return;
@@ -73,7 +78,7 @@ function appendYamlField(
     if (simple) {
       const items = value
         .filter((item) => item !== undefined && item !== null)
-        .map((item) => yamlScalar(item as string | number | boolean));
+        .map((item) => yamlScalar(item as DSLFieldScalar));
       lines.push(`${yamlIndent(level)}${key}: [${items.join(", ")}]`);
       return;
     }
@@ -83,36 +88,34 @@ function appendYamlField(
     return;
   }
 
-  if (typeof value === "object") {
-    const entries = yamlObjectEntries(value as Record<string, unknown>);
+  if (isDSLFieldObject(value)) {
+    const entries = yamlObjectEntries(value);
     if (entries.length === 0) {
       lines.push(`${yamlIndent(level)}${key}: {}`);
       return;
     }
 
     lines.push(`${yamlIndent(level)}${key}:`);
-    appendYamlObject(lines, value as Record<string, unknown>, level + 1);
+    appendYamlObject(lines, value, level + 1);
     return;
   }
 
   lines.push(
     `${yamlIndent(level)}${key}: ${yamlScalar(
-      value as string | number | boolean,
+      value as DSLFieldScalar,
     )}`,
   );
 }
 
-function yamlObjectEntries(
-  value: Record<string, unknown>,
-): Array<[string, unknown]> {
+function yamlObjectEntries(value: DSLFieldObject): Array<[string, DSLFieldValue]> {
   return Object.entries(value).filter(
     ([, childValue]) => childValue !== undefined && childValue !== null,
-  );
+  ) as Array<[string, DSLFieldValue]>;
 }
 
 function appendYamlObject(
   lines: string[],
-  value: Record<string, unknown>,
+  value: DSLFieldObject,
   level: number,
 ): void {
   yamlObjectEntries(value).forEach(([childKey, childValue]) =>
@@ -122,7 +125,7 @@ function appendYamlObject(
 
 function appendYamlArrayItem(
   lines: string[],
-  value: unknown,
+  value: DSLFieldValue,
   level: number,
 ): void {
   if (
@@ -132,7 +135,7 @@ function appendYamlArrayItem(
     typeof value === "number" ||
     typeof value === "boolean"
   ) {
-    lines.push(`${yamlIndent(level)}- ${yamlScalar(value as string | number | boolean)}`);
+    lines.push(`${yamlIndent(level)}- ${yamlScalar(value as DSLFieldScalar)}`);
     return;
   }
 
@@ -142,7 +145,12 @@ function appendYamlArrayItem(
     return;
   }
 
-  const entries = yamlObjectEntries(value as Record<string, unknown>);
+  if (!isDSLFieldObject(value)) {
+    lines.push(`${yamlIndent(level)}- ${String(value)}`);
+    return;
+  }
+
+  const entries = yamlObjectEntries(value);
   if (entries.length === 0) {
     lines.push(`${yamlIndent(level)}- {}`);
     return;
@@ -158,13 +166,13 @@ function appendYamlArrayItem(
   ) {
     lines.push(
       `${yamlIndent(level)}- ${firstKey}: ${yamlScalar(
-        firstValue as string | number | boolean,
+        firstValue as DSLFieldScalar,
       )}`,
     );
   } else {
     lines.push(`${yamlIndent(level)}- ${firstKey}:`);
-    if (typeof firstValue === "object" && !Array.isArray(firstValue)) {
-      appendYamlObject(lines, firstValue as Record<string, unknown>, level + 1);
+    if (isDSLFieldObject(firstValue)) {
+      appendYamlObject(lines, firstValue, level + 1);
     } else {
       appendYamlArrayItem(lines, firstValue, level + 1);
     }
@@ -175,11 +183,13 @@ function appendYamlArrayItem(
   );
 }
 
-function generateGlobalOverridePreview(fields: Record<string, unknown>): string {
+function generateGlobalOverridePreview(fields: DSLFieldObject): string {
   const lines: string[] = [];
-  Object.entries(fields)
-    .filter(([, value]) => value !== undefined && value !== null)
-    .forEach(([key, value]) => appendYamlField(lines, key, value, 1));
+  (Object.entries(fields).filter(
+    ([, value]) => value !== undefined && value !== null,
+  ) as Array<[string, DSLFieldValue]>).forEach(([key, value]) =>
+    appendYamlField(lines, key, value, 1),
+  );
 
   if (lines.length === 0) {
     return "global: {}";
@@ -203,9 +213,9 @@ const DslPreviewPanel: React.FC<{
 };
 
 const ExtraFieldsEditor: React.FC<{
-  fields: Record<string, unknown>;
+  fields: DSLFieldObject;
   schemaKeys: string[];
-  onUpdate: (fields: Record<string, unknown>) => void;
+  onUpdate: (fields: DSLFieldObject) => void;
 }> = ({ fields, schemaKeys, onUpdate }) => {
   const extraEntries = useMemo(() => {
     const known = new Set(schemaKeys);
@@ -216,7 +226,7 @@ const ExtraFieldsEditor: React.FC<{
 
   const updateField = useCallback(
     (key: string, rawValue: string) => {
-      const parsed = tryParseValue(rawValue);
+      const parsed = tryParseValue(rawValue) as DSLFieldValue;
       onUpdate({ ...fields, [key]: parsed });
     },
     [fields, onUpdate],
@@ -309,13 +319,13 @@ const ExtraFieldsEditor: React.FC<{
 
 const AlgorithmSchemaEditor: React.FC<{
   algoType: string;
-  fields: Record<string, unknown>;
-  onUpdate: (fields: Record<string, unknown>) => void;
+  fields: DSLFieldObject;
+  onUpdate: (fields: DSLFieldObject) => void;
 }> = ({ algoType, fields, onUpdate }) => {
   const schema = useMemo(() => getAlgorithmFieldSchema(algoType), [algoType]);
 
   const updateField = useCallback(
-    (key: string, value: unknown) => {
+    (key: string, value: DSLFieldValue) => {
       onUpdate({ ...fields, [key]: value });
     },
     [fields, onUpdate],
@@ -341,11 +351,11 @@ const AlgorithmSchemaEditor: React.FC<{
     >
       {schema.map((field) => (
         <FieldEditor
-          key={field.key}
-          schema={field}
-          value={fields[field.key]}
-          onChange={(value) => updateField(field.key, value)}
-        />
+              key={field.key}
+              schema={field}
+              value={fields[field.key]}
+              onChange={(value) => updateField(field.key, value as DSLFieldValue)}
+            />
       ))}
       <ExtraFieldsEditor
         fields={fields}
@@ -358,13 +368,13 @@ const AlgorithmSchemaEditor: React.FC<{
 
 const SignalEditorForm: React.FC<{
   signal: ASTSignalDecl;
-  onUpdate: (fields: Record<string, unknown>) => void;
+  onUpdate: (fields: DSLFieldObject) => void;
 }> = ({ signal, onUpdate }) => {
   const schema = useMemo(
     () => getSignalFieldSchema(signal.signalType),
     [signal.signalType],
   );
-  const [localFields, setLocalFields] = useState<Record<string, unknown>>(
+  const [localFields, setLocalFields] = useState<DSLFieldObject>(
     () => ({ ...signal.fields }),
   );
 
@@ -372,7 +382,7 @@ const SignalEditorForm: React.FC<{
     setLocalFields({ ...signal.fields });
   }, [signal.name, signal.signalType, signal.fields]);
 
-  const updateField = useCallback((key: string, value: unknown) => {
+  const updateField = useCallback((key: string, value: DSLFieldValue) => {
     setLocalFields((previous) => ({ ...previous, [key]: value }));
   }, []);
 
@@ -411,7 +421,7 @@ const SignalEditorForm: React.FC<{
               key={field.key}
               schema={field}
               value={localFields[field.key]}
-              onChange={(value) => updateField(field.key, value)}
+              onChange={(value) => updateField(field.key, value as DSLFieldValue)}
             />
           ))}
         </div>
@@ -424,8 +434,8 @@ const SignalEditorForm: React.FC<{
 const PluginSchemaEditor: React.FC<{
   pluginType: string;
   pluginName?: string;
-  fields: Record<string, unknown>;
-  onUpdate: (fields: Record<string, unknown>) => void;
+  fields: DSLFieldObject;
+  onUpdate: (fields: DSLFieldObject) => void;
   buffered?: boolean;
   compact?: boolean;
 }> = ({
@@ -437,7 +447,7 @@ const PluginSchemaEditor: React.FC<{
   compact = false,
 }) => {
   const schema = useMemo(() => getPluginFieldSchema(pluginType), [pluginType]);
-  const [localFields, setLocalFields] = useState<Record<string, unknown>>(
+  const [localFields, setLocalFields] = useState<DSLFieldObject>(
     () => ({ ...fields }),
   );
 
@@ -449,7 +459,7 @@ const PluginSchemaEditor: React.FC<{
   const doUpdate = buffered ? setLocalFields : onUpdate;
 
   const updateField = useCallback(
-    (key: string, value: unknown) => {
+    (key: string, value: DSLFieldValue) => {
       doUpdate({ ...currentFields, [key]: value });
     },
     [currentFields, doUpdate],
@@ -499,7 +509,7 @@ const PluginSchemaEditor: React.FC<{
             key={field.key}
             schema={field}
             value={currentFields[field.key]}
-            onChange={(value) => updateField(field.key, value)}
+            onChange={(value) => updateField(field.key, value as DSLFieldValue)}
           />
         ))}
         <ExtraFieldsEditor
@@ -552,7 +562,7 @@ const PluginSchemaEditor: React.FC<{
             key={field.key}
             schema={field}
             value={currentFields[field.key]}
-            onChange={(value) => updateField(field.key, value)}
+            onChange={(value) => updateField(field.key, value as DSLFieldValue)}
           />
         ))}
         <ExtraFieldsEditor
@@ -575,3 +585,6 @@ export {
   PluginSchemaEditor,
   SignalEditorForm,
 };
+function isDSLFieldObject(value: DSLFieldValue): value is DSLFieldObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

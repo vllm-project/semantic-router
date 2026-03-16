@@ -38,6 +38,7 @@ import type {
   DeployStep,
   DeployResult,
   ConfigVersion,
+  DSLFieldObject,
 } from '@/types/dsl'
 
 interface DeployStatusService {
@@ -130,28 +131,28 @@ interface DSLActions {
   // --- Visual Builder mutations (Phase 2) ---
 
   /** Update a model's fields in DSL source text, then re-parse AST. */
-  mutateModel(name: string, fields: Record<string, unknown>): void
+  mutateModel(name: string, fields: DSLFieldObject): void
 
   /** Add a new model to DSL source text, then re-parse AST. */
-  addModel(name: string, fields: Record<string, unknown>): void
+  addModel(name: string, fields: DSLFieldObject): void
 
   /** Delete a model from DSL source text, then re-parse AST. */
   deleteModel(name: string): void
 
   /** Update a signal's fields in DSL source text, then re-parse AST. */
-  mutateSignal(signalType: string, name: string, fields: Record<string, unknown>): void
+  mutateSignal(signalType: string, name: string, fields: DSLFieldObject): void
 
   /** Add a new signal to DSL source text, then re-parse AST. */
-  addSignal(signalType: string, name: string, fields: Record<string, unknown>): void
+  addSignal(signalType: string, name: string, fields: DSLFieldObject): void
 
   /** Delete a signal from DSL source text, then re-parse AST. */
   deleteSignal(signalType: string, name: string): void
 
   /** Update a plugin declaration's fields, then re-parse AST. */
-  mutatePlugin(name: string, pluginType: string, fields: Record<string, unknown>): void
+  mutatePlugin(name: string, pluginType: string, fields: DSLFieldObject): void
 
   /** Add a new plugin declaration, then re-parse AST. */
-  addPlugin(name: string, pluginType: string, fields: Record<string, unknown>): void
+  addPlugin(name: string, pluginType: string, fields: DSLFieldObject): void
 
   /** Delete a plugin declaration, then re-parse AST. */
   deletePlugin(name: string, pluginType: string): void
@@ -424,7 +425,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
 
   // --- Visual Builder mutations (Phase 2) ---
 
-  mutateModel(name: string, fields: Record<string, unknown>) {
+  mutateModel(name: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
     const newSrc = updateModel(dslSource, name, fields)
     if (newSrc === dslSource) return
@@ -432,7 +433,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (wasmReady) get().parseAST()
   },
 
-  addModel(name: string, fields: Record<string, unknown>) {
+  addModel(name: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
     const newSrc = addModelMut(dslSource, name, fields)
     set({ dslSource: newSrc, dirty: true })
@@ -447,7 +448,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (wasmReady) get().parseAST()
   },
 
-  mutateSignal(signalType: string, name: string, fields: Record<string, unknown>) {
+  mutateSignal(signalType: string, name: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
     const newSrc = updateSignal(dslSource, signalType, name, fields)
     if (newSrc === dslSource) return
@@ -455,7 +456,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (wasmReady) get().parseAST()
   },
 
-  addSignal(signalType: string, name: string, fields: Record<string, unknown>) {
+  addSignal(signalType: string, name: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
     const newSrc = addSignalMut(dslSource, signalType, name, fields)
     set({ dslSource: newSrc, dirty: true })
@@ -470,7 +471,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (wasmReady) get().parseAST()
   },
 
-  mutatePlugin(name: string, pluginType: string, fields: Record<string, unknown>) {
+  mutatePlugin(name: string, pluginType: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
     const newSrc = updatePlugin(dslSource, name, pluginType, fields)
     if (newSrc === dslSource) return
@@ -478,7 +479,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (wasmReady) get().parseAST()
   },
 
-  addPlugin(name: string, pluginType: string, fields: Record<string, unknown>) {
+  addPlugin(name: string, pluginType: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
     const newSrc = addPluginMut(dslSource, name, pluginType, fields)
     set({ dslSource: newSrc, dirty: true })

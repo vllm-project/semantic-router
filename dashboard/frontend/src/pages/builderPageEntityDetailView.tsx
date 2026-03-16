@@ -5,6 +5,7 @@ import type {
   ASTPluginDecl,
   ASTRouteDecl,
   ASTSignalDecl,
+  DSLFieldObject,
 } from "@/types/dsl";
 import type { RouteInput } from "@/lib/dslMutations";
 
@@ -36,14 +37,14 @@ interface EntityDetailViewProps {
   onUpdateSignalFields: (
     signalType: string,
     name: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
   onUpdatePluginFields: (
     name: string,
     pluginType: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
-  onUpdateModelFields: (name: string, fields: Record<string, unknown>) => void;
+  onUpdateModelFields: (name: string, fields: DSLFieldObject) => void;
   onUpdateRoute: (name: string, input: RouteInput) => void;
   availableSignals: AvailableSignal[];
   availablePlugins: AvailablePlugin[];
@@ -169,9 +170,7 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
       {selection.kind === "plugin" && "pluginType" in entity && (
         <PluginSchemaEditor
           pluginType={(entity as ASTPluginDecl).pluginType}
-          fields={
-            "fields" in entity ? (entity.fields as Record<string, unknown>) : {}
-          }
+          fields={"fields" in entity ? entity.fields : {}}
           onUpdate={(fields) =>
             onUpdatePluginFields(
               (entity as ASTPluginDecl).name,

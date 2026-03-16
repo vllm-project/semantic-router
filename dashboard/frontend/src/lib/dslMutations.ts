@@ -9,6 +9,8 @@
  * After each mutation, the caller should call parseAST() to refresh the AST.
  */
 
+import type { BoolExprNode, DSLFieldObject, DSLFieldValue } from '@/types/dsl'
+
 // ---------- Block finding ----------
 
 interface BlockSpan {
@@ -93,7 +95,7 @@ export function findBlock(
 export function updateModel(
   src: string,
   name: string,
-  fields: Record<string, unknown>,
+  fields: DSLFieldObject,
 ): string {
   const block = findBlock(src, 'MODEL', null, name)
   if (!block) return src
@@ -109,7 +111,7 @@ export function updateModel(
 export function addModel(
   src: string,
   name: string,
-  fields: Record<string, unknown>,
+  fields: DSLFieldObject,
 ): string {
   const body = serializeFields(fields)
   const newBlock = `MODEL ${formatDslName(name)} {\n${body}\n}\n`
@@ -162,9 +164,9 @@ export function deleteModel(src: string, name: string): string {
  * Serialize a signal's fields to DSL block body text.
  * Supports recursive indentation to match Go decompiler output format.
  */
-export function serializeFields(fields: Record<string, unknown>, indent = '  ', opts?: { blankLineBefore?: boolean }): string {
+export function serializeFields(fields: DSLFieldObject, indent = '  ', opts?: { blankLineBefore?: boolean }): string {
   const lines: string[] = []
-  const entries = Object.entries(fields).filter(([, v]) => v !== undefined && v !== null)
+  const entries = Object.entries(fields).filter(([, v]) => v !== undefined && v !== null) as Array<[string, DSLFieldValue]>
   for (const [key, value] of entries) {
     const serialized = serializeValue(value, indent)
     // Add blank line before nested object blocks (matches Go decompiler)
@@ -179,12 +181,12 @@ export function serializeFields(fields: Record<string, unknown>, indent = '  ', 
 /**
  * Count the number of leaf (non-object) fields in an object, recursively.
  */
-function countLeafFields(obj: Record<string, unknown>): number {
+function countLeafFields(obj: DSLFieldObject): number {
   let count = 0
   for (const v of Object.values(obj)) {
     if (v === undefined || v === null) continue
-    if (typeof v === 'object' && !Array.isArray(v)) {
-      count += countLeafFields(v as Record<string, unknown>)
+    if (isDSLFieldObject(v)) {
+      count += countLeafFields(v)
     } else {
       count++
     }
@@ -192,10 +194,11 @@ function countLeafFields(obj: Record<string, unknown>): number {
   return count
 }
 
-function serializeValue(value: unknown, currentIndent = '  '): string {
+function serializeValue(value: DSLFieldValue, currentIndent = '  '): string {
   if (typeof value === 'string') return `"${value}"`
   if (typeof value === 'number') return String(value)
   if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (value === null) return 'null'
   if (Array.isArray(value)) {
     if (value.length === 0) return '[]'
     const simple = value.every(v => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
@@ -206,12 +209,11 @@ function serializeValue(value: unknown, currentIndent = '  '): string {
     const items = value.map(v => `${childIndent}${serializeValue(v, childIndent)}`).join(',\n')
     return `[\n${items}\n${currentIndent}]`
   }
-  if (typeof value === 'object' && value !== null) {
-    const obj = value as Record<string, unknown>
-    const entries = Object.entries(obj).filter(([, v]) => v !== undefined && v !== null)
+  if (isDSLFieldObject(value)) {
+    const entries = Object.entries(value).filter(([, v]) => v !== undefined && v !== null) as Array<[string, DSLFieldValue]>
     if (entries.length === 0) return '{}'
     // Inline small flat objects (≤3 leaf fields, all primitive) — matches Go decompiler style
-    const leafCount = countLeafFields(obj)
+    const leafCount = countLeafFields(value)
     const allPrimitive = entries.every(([, v]) => typeof v !== 'object' || v === null)
     if (allPrimitive && leafCount <= 3) {
       const parts = entries.map(([k, v]) => `${k}: ${serializeValue(v, currentIndent)}`)
@@ -219,7 +221,7 @@ function serializeValue(value: unknown, currentIndent = '  '): string {
     }
     // Multi-line nested object
     const childIndent = currentIndent + '  '
-    const inner = serializeFields(obj, childIndent)
+    const inner = serializeFields(value, childIndent)
     if (!inner.trim()) return '{}'
     return `{\n${inner}\n${currentIndent}}`
   }
@@ -234,7 +236,7 @@ export function updateSignal(
   src: string,
   signalType: string,
   name: string,
-  fields: Record<string, unknown>,
+  fields: DSLFieldObject,
 ): string {
   const block = findBlock(src, 'SIGNAL', signalType, name)
   if (!block) return src
@@ -253,7 +255,7 @@ export function addSignal(
   src: string,
   signalType: string,
   name: string,
-  fields: Record<string, unknown>,
+  fields: DSLFieldObject,
 ): string {
   const body = serializeFields(fields)
   const newBlock = `SIGNAL ${signalType} ${name} {\n${body}\n}\n`
@@ -299,7 +301,7 @@ export function updatePlugin(
   src: string,
   name: string,
   pluginType: string,
-  fields: Record<string, unknown>,
+  fields: DSLFieldObject,
 ): string {
   const block = findBlock(src, 'PLUGIN', pluginType, name)
   if (!block) return src
@@ -316,7 +318,7 @@ export function addPlugin(
   src: string,
   name: string,
   pluginType: string,
-  fields: Record<string, unknown>,
+  fields: DSLFieldObject,
 ): string {
   const body = serializeFields(fields)
   const newBlock = `PLUGIN ${name} ${pluginType} {\n${body}\n}\n`
@@ -388,12 +390,12 @@ export interface RouteModelInput {
 
 export interface RouteAlgoInput {
   algoType: string
-  fields: Record<string, unknown>
+  fields: DSLFieldObject
 }
 
 export interface RoutePluginInput {
   name: string
-  fields?: Record<string, unknown>
+  fields?: DSLFieldObject
 }
 
 export interface RouteInput {
@@ -531,21 +533,25 @@ export function addRoute(
 /**
  * Serialize a BoolExprNode back to DSL text.
  */
-export function serializeBoolExpr(expr: Record<string, unknown>): string {
-  if (!expr || typeof expr !== 'object') return ''
-  const type = expr.type as string
+export function serializeBoolExpr(expr: BoolExprNode | null): string {
+  if (!expr) return ''
+  const type = expr.type
   switch (type) {
     case 'signal_ref':
       return `${expr.signalType}("${expr.signalName}")`
     case 'and':
-      return `${serializeBoolExpr(expr.left as Record<string, unknown>)} AND ${serializeBoolExpr(expr.right as Record<string, unknown>)}`
+      return `${serializeBoolExpr(expr.left)} AND ${serializeBoolExpr(expr.right)}`
     case 'or':
-      return `(${serializeBoolExpr(expr.left as Record<string, unknown>)} OR ${serializeBoolExpr(expr.right as Record<string, unknown>)})`
+      return `(${serializeBoolExpr(expr.left)} OR ${serializeBoolExpr(expr.right)})`
     case 'not':
-      return `NOT ${serializeBoolExpr(expr.expr as Record<string, unknown>)}`
+      return `NOT ${serializeBoolExpr(expr.expr)}`
     default:
       return ''
   }
+}
+
+function isDSLFieldObject(value: DSLFieldValue): value is DSLFieldObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /**

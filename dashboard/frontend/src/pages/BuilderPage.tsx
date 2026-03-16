@@ -7,6 +7,7 @@ import React, {
 } from "react";
 
 import { useDSLStore } from "@/stores/dslStore";
+import type { DSLFieldObject } from "@/types/dsl";
 import type { EditorMode } from "@/types/dsl";
 import type { RouteInput } from "@/lib/dslMutations";
 
@@ -165,14 +166,14 @@ const BuilderPage: React.FC = () => {
   );
 
   const handleUpdateModelFields = useCallback(
-    (name: string, fields: Record<string, unknown>) => {
+    (name: string, fields: DSLFieldObject) => {
       mutateModel(name, fields);
     },
     [mutateModel],
   );
 
   const handleAddModel = useCallback(
-    (name: string, fields: Record<string, unknown>) => {
+    (name: string, fields: DSLFieldObject) => {
       addModel(name, fields);
       setSelection({ kind: "model", name });
       setAddingEntity(null);
@@ -181,21 +182,21 @@ const BuilderPage: React.FC = () => {
   );
 
   const handleUpdateSignalFields = useCallback(
-    (signalType: string, name: string, fields: Record<string, unknown>) => {
+    (signalType: string, name: string, fields: DSLFieldObject) => {
       mutateSignal(signalType, name, fields);
     },
     [mutateSignal],
   );
 
   const handleUpdatePluginFields = useCallback(
-    (name: string, pluginType: string, fields: Record<string, unknown>) => {
+    (name: string, pluginType: string, fields: DSLFieldObject) => {
       mutatePlugin(name, pluginType, fields);
     },
     [mutatePlugin],
   );
 
   const handleAddSignal = useCallback(
-    (signalType: string, name: string, fields: Record<string, unknown>) => {
+    (signalType: string, name: string, fields: DSLFieldObject) => {
       addSignal(signalType, name, fields);
       setSelection({ kind: "signal", name });
       setAddingEntity(null);
@@ -204,7 +205,7 @@ const BuilderPage: React.FC = () => {
   );
 
   const handleAddPlugin = useCallback(
-    (name: string, pluginType: string, fields: Record<string, unknown>) => {
+    (name: string, pluginType: string, fields: DSLFieldObject) => {
       addPlugin(name, pluginType, fields);
       setSelection({ kind: "plugin", name });
       setAddingEntity(null);

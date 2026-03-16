@@ -6,9 +6,6 @@ Open
 
 ## Scope
 
-- `dashboard/frontend/src/components/EditModal.tsx`
-- `dashboard/frontend/src/pages/ConfigPage.tsx`
-- `dashboard/frontend/src/pages/configPageSupport.ts`
 - `dashboard/frontend/src/stores/dslStore.ts`
 - `dashboard/frontend/src/lib/dslMutations.ts`
 - `src/semantic-router/pkg/dsl/decompiler.go`
@@ -35,17 +32,11 @@ The branch has already removed the worst contract-level weak typing from the rou
 
 The remaining gaps are narrower and now cluster around two places:
 
-- the dashboard manager/editor still uses schema-driven generic form state and `any` in modal/edit flows
+- the dashboard DSL/builder mutation layer still uses schema-driven generic field bags
 - the DSL YAML emit/decompile helpers still fall back to raw `map[string]interface{}` / `interface{}` while formatting arbitrary field bags
 
 ## Evidence
 
-- [EditModal.tsx](../../../dashboard/frontend/src/components/EditModal.tsx)
-  - generic modal state still typed as `any`
-- [ConfigPage.tsx](../../../dashboard/frontend/src/pages/ConfigPage.tsx)
-  - edit modal callbacks and config mutation flow still typed as `any`
-- [configPageSupport.ts](../../../dashboard/frontend/src/pages/configPageSupport.ts)
-  - several global/editor sections still use `Record<string, unknown>` or array-of-record fallbacks
 - [dslStore.ts](../../../dashboard/frontend/src/stores/dslStore.ts)
   - builder mutation APIs still pass field bags as `Record<string, unknown>`
 - [dslMutations.ts](../../../dashboard/frontend/src/lib/dslMutations.ts)
@@ -71,13 +62,13 @@ The remaining gaps are narrower and now cluster around two places:
 
 ## Why It Matters
 
-- dashboard generic editor state weakens manager/global safety exactly where users expect config surfaces to be authoritative
+- dashboard DSL builder field bags still weaken config safety exactly where users expect authoring surfaces to stay contract-aware
 - raw DSL field-bag helpers still hide contract changes from the compiler, so builder/import/export regressions surface late
 - these weakly typed seams undermine the v0.3 canonical-config cleanup by leaving the last high-traffic authoring paths dynamically shaped
 
 ## Desired End State
 
-- dashboard editor state and callbacks use typed per-surface models or reusable typed form abstractions, not `any`/unbounded record blobs
+- dashboard DSL builder/store APIs use typed per-entity mutation payloads, not unbounded record blobs
 - DSL builder/store/export helpers use named field/value abstractions instead of raw maps
 - branch-level config/dashboard/DSL changes can be validated without reopening raw field-bag questions in each surface
 

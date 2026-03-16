@@ -1,15 +1,16 @@
 import React from "react";
 
+import type { DSLFieldObject, DSLFieldValue } from "@/types/dsl";
 import styles from "./BuilderPage.module.css";
 import { getBool, getNum, getObj, getStr } from "./builderPageGlobalSettingsSupport";
 
 interface GlobalSettingsObservabilitySectionProps {
-  local: Record<string, unknown>;
+  local: DSLFieldObject;
   collapsedSections: Record<string, boolean>;
-  tracing: Record<string, unknown>;
-  metrics: Record<string, unknown>;
+  tracing: DSLFieldObject;
+  metrics: DSLFieldObject;
   onToggleSection: (key: string) => void;
-  onSetField: (key: string, value: unknown) => void;
+  onSetField: (key: string, value: DSLFieldValue) => void;
 }
 
 const GlobalSettingsObservabilitySection: React.FC<
@@ -254,8 +255,8 @@ const GlobalSettingsObservabilitySection: React.FC<
 
 interface GlobalSettingsEndpointsSectionProps {
   collapsedSections: Record<string, boolean>;
-  vllmEndpoints: Array<{ name: string; fields: Record<string, unknown> }>;
-  providerProfiles: Array<{ name: string; fields: Record<string, unknown> }>;
+  vllmEndpoints: Array<{ name: string; fields: DSLFieldObject }>;
+  providerProfiles: Array<{ name: string; fields: DSLFieldObject }>;
   onToggleSection: (key: string) => void;
 }
 
