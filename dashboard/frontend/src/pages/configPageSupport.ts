@@ -1,6 +1,13 @@
 import type { Endpoint } from '../components/EndpointsEditor'
 import type { DecisionConditionType } from '../types/config'
 
+export interface ListenerConfig {
+  name: string
+  address: string
+  port: number
+  timeout?: string
+}
+
 export interface VLLMEndpoint {
   name: string
   address: string
@@ -193,7 +200,7 @@ export interface DecisionModelRef {
 
 export interface DecisionPluginConfig {
   type: string
-  configuration: Record<string, unknown>
+  configuration: DecisionPluginConfiguration
 }
 
 export interface DecisionConfig {
@@ -207,7 +214,7 @@ export interface DecisionConfig {
 
 export interface RoutingConfig {
   modelCards?: RoutingModelCard[]
-  signals?: ConfigData['signals']
+  signals?: ConfigSignals
   decisions?: DecisionConfig[]
 }
 
@@ -289,19 +296,19 @@ export interface MemoryMilvusConfig {
   num_partitions?: number
 }
 
-export interface MemoryEmbeddingConfig {
-  model?: string
-  dimension?: number
-}
-
 export interface MemoryConfig {
   enabled?: boolean
   auto_store?: boolean
   milvus?: MemoryMilvusConfig
-  embedding?: MemoryEmbeddingConfig
+  embedding_model?: string
   default_retrieval_limit?: number
   default_similarity_threshold?: number
   extraction_batch_size?: number
+  hybrid_search?: boolean
+  hybrid_mode?: string
+  adaptive_threshold?: boolean
+  quality_scoring?: MemoryQualityScoringConfig
+  reflection?: MemoryReflectionConfig
 }
 
 export interface SemanticCacheConfig {
@@ -375,6 +382,7 @@ export interface EmbeddingModelsConfig {
   gemma_model_path?: string
   mmbert_model_path?: string
   multimodal_model_path?: string
+  bert_model_path?: string
   use_cpu?: boolean
   embedding_config?: EmbeddingOptimizationConfig
 }
@@ -460,7 +468,7 @@ export interface VectorStoreConfig {
   embedding_dimension?: number
   ingestion_workers?: number
   supported_formats?: string[]
-  milvus?: MilvusConfig
+  milvus?: VectorStoreMilvusConfig
   memory?: VectorStoreMemoryConfig
   llama_stack?: LlamaStackVectorStoreConfig
 }
@@ -624,53 +632,211 @@ export interface CanonicalEmbeddingCatalogConfig {
   bert?: ModelConfig
 }
 
+export interface RouterCoreConfig {
+  config_source?: string
+  strategy?: string
+  auto_model_name?: string
+  include_config_models_in_list?: boolean
+  clear_route_cache?: boolean
+  streamed_body?: StreamedBodyConfig
+  model_selection?: ModelSelectionConfig
+}
+
+export interface CanonicalServiceGlobalConfig {
+  api?: APIConfig
+  response_api?: ResponseAPIConfig
+  observability?: ObservabilityConfig
+  authz?: AuthzConfig
+  ratelimit?: RateLimitConfig
+  router_replay?: RouterReplayConfig
+}
+
+export interface CanonicalStoreGlobalConfig {
+  semantic_cache?: SemanticCacheConfig
+  memory?: MemoryConfig
+  vector_store?: VectorStoreConfig
+}
+
+export interface ToolIntegrationConfig {
+  enabled?: boolean
+  top_k?: number
+  similarity_threshold?: number
+  tools_db_path?: string
+  fallback_to_empty?: boolean
+  advanced_filtering?: AdvancedToolFilteringConfig
+}
+
+export interface CanonicalIntegrationGlobalConfig {
+  tools?: ToolIntegrationConfig
+  looper?: LooperConfig
+}
+
+export interface CanonicalModelModulesConfig {
+  prompt_compression?: PromptCompressionConfig
+  prompt_guard?: (ModelConfig & { enabled?: boolean; model_ref?: string; use_vllm?: boolean })
+  classifier?: CanonicalClassifierConfig
+  hallucination_mitigation?: CanonicalHallucinationModuleConfig
+  feedback_detector?: (FeedbackDetectorConfig & { model_ref?: string })
+  modality_detector?: ModalityDetectorConfig
+}
+
+export interface CanonicalModelCatalogConfig {
+  embeddings?: CanonicalEmbeddingCatalogConfig
+  system?: CanonicalSystemModels
+  external?: ExternalModelConfig[]
+  modules?: CanonicalModelModulesConfig
+}
+
 export interface CanonicalGlobalConfig {
-  router?: {
-    config_source?: string
-    strategy?: string
-    auto_model_name?: string
-    include_config_models_in_list?: boolean
-    clear_route_cache?: boolean
-    streamed_body?: StreamedBodyConfig
-    model_selection?: ModelSelectionConfig
-  }
-  services?: {
-    api?: APIConfig
-    response_api?: ResponseAPIConfig
-    observability?: ObservabilityConfig
-    authz?: AuthzConfig
-    ratelimit?: RateLimitConfig
-    router_replay?: RouterReplayConfig
-  }
-  stores?: {
-    semantic_cache?: SemanticCacheConfig
-    memory?: MemoryConfig
-    vector_store?: VectorStoreConfig
-  }
-  integrations?: {
-    tools?: {
-      enabled?: boolean
-      top_k?: number
-      similarity_threshold?: number
-      tools_db_path?: string
-      fallback_to_empty?: boolean
-      advanced_filtering?: AdvancedToolFilteringConfig
-    }
-    looper?: LooperConfig
-  }
-  model_catalog?: {
-    embeddings?: CanonicalEmbeddingCatalogConfig
-    system?: CanonicalSystemModels
-    external?: ExternalModelConfig[]
-    modules?: {
-      prompt_compression?: PromptCompressionConfig
-      prompt_guard?: (ModelConfig & { enabled?: boolean; model_ref?: string; use_vllm?: boolean })
-      classifier?: CanonicalClassifierConfig
-      hallucination_mitigation?: CanonicalHallucinationModuleConfig
-      feedback_detector?: (FeedbackDetectorConfig & { model_ref?: string })
-      modality_detector?: ModalityDetectorConfig
-    }
-  }
+  router?: RouterCoreConfig
+  services?: CanonicalServiceGlobalConfig
+  stores?: CanonicalStoreGlobalConfig
+  integrations?: CanonicalIntegrationGlobalConfig
+  model_catalog?: CanonicalModelCatalogConfig
+}
+
+export interface ConfigSignals {
+  keywords?: KeywordSignal[]
+  embeddings?: EmbeddingSignal[]
+  domains?: DomainSignal[]
+  fact_check?: FactCheckSignal[]
+  user_feedbacks?: UserFeedbackSignal[]
+  preferences?: PreferenceSignal[]
+  language?: LanguageSignal[]
+  context?: ContextSignal[]
+  complexity?: ComplexitySignal[]
+  modality?: ModalitySignal[]
+  role_bindings?: RoleBindingSignal[]
+  jailbreak?: JailbreakSignal[]
+  pii?: PIISignal[]
+}
+
+export interface DecisionPluginConfiguration {
+  [key: string]: unknown
+}
+
+export interface MemoryQualityScoringConfig {
+  initial_strength_days?: number
+  prune_threshold?: number
+  max_memories_per_user?: number
+}
+
+export interface MemoryReflectionConfig {
+  enabled?: boolean
+  algorithm?: string
+  max_inject_tokens?: number
+  recency_decay_days?: number
+  dedup_threshold?: number
+  block_patterns?: string[]
+}
+
+export interface VectorStoreMilvusConnectionAuthConfig {
+  enabled?: boolean
+  username?: string
+  password?: string
+}
+
+export interface VectorStoreMilvusConnectionTLSConfig {
+  enabled?: boolean
+  cert_file?: string
+  key_file?: string
+  ca_file?: string
+}
+
+export interface VectorStoreMilvusConnectionConfig {
+  host?: string
+  port?: number
+  database?: string
+  timeout?: number
+  auth?: VectorStoreMilvusConnectionAuthConfig
+  tls?: VectorStoreMilvusConnectionTLSConfig
+}
+
+export interface VectorStoreMilvusVectorFieldConfig {
+  name?: string
+  dimension?: number
+  metric_type?: string
+}
+
+export interface VectorStoreMilvusIndexParamsConfig {
+  M?: number
+  efConstruction?: number
+}
+
+export interface VectorStoreMilvusIndexConfig {
+  type?: string
+  params?: VectorStoreMilvusIndexParamsConfig
+}
+
+export interface VectorStoreMilvusCollectionConfig {
+  name?: string
+  description?: string
+  vector_field?: VectorStoreMilvusVectorFieldConfig
+  index?: VectorStoreMilvusIndexConfig
+}
+
+export interface VectorStoreMilvusSearchParamsConfig {
+  ef?: number
+}
+
+export interface VectorStoreMilvusSearchConfig {
+  params?: VectorStoreMilvusSearchParamsConfig
+  topk?: number
+  consistency_level?: string
+}
+
+export interface VectorStoreMilvusConnectionPoolConfig {
+  max_connections?: number
+  max_idle_connections?: number
+  acquire_timeout?: number
+}
+
+export interface VectorStoreMilvusBatchConfig {
+  insert_batch_size?: number
+  timeout?: number
+}
+
+export interface VectorStoreMilvusPerformanceConfig {
+  connection_pool?: VectorStoreMilvusConnectionPoolConfig
+  batch?: VectorStoreMilvusBatchConfig
+}
+
+export interface VectorStoreMilvusTTLConfig {
+  enabled?: boolean
+  timestamp_field?: string
+  cleanup_interval?: number
+}
+
+export interface VectorStoreMilvusCompactionConfig {
+  enabled?: boolean
+  interval?: number
+}
+
+export interface VectorStoreMilvusDataManagementConfig {
+  ttl?: VectorStoreMilvusTTLConfig
+  compaction?: VectorStoreMilvusCompactionConfig
+}
+
+export interface VectorStoreMilvusLoggingConfig {
+  level?: string
+  enable_query_log?: boolean
+  enable_metrics?: boolean
+}
+
+export interface VectorStoreMilvusDevelopmentConfig {
+  drop_collection_on_startup?: boolean
+  auto_create_collection?: boolean
+  verbose_errors?: boolean
+}
+
+export interface VectorStoreMilvusConfig {
+  connection?: VectorStoreMilvusConnectionConfig
+  collection?: VectorStoreMilvusCollectionConfig
+  search?: VectorStoreMilvusSearchConfig
+  performance?: VectorStoreMilvusPerformanceConfig
+  data_management?: VectorStoreMilvusDataManagementConfig
+  logging?: VectorStoreMilvusLoggingConfig
+  development?: VectorStoreMilvusDevelopmentConfig
 }
 
 export interface KeywordSignal {
@@ -771,27 +937,8 @@ export interface PIISignal {
 
 export interface ConfigData {
   version?: string
-  listeners?: Array<{
-    name: string
-    address: string
-    port: number
-    timeout?: string
-  }>
-  signals?: {
-    keywords?: KeywordSignal[]
-    embeddings?: EmbeddingSignal[]
-    domains?: DomainSignal[]
-    fact_check?: FactCheckSignal[]
-    user_feedbacks?: UserFeedbackSignal[]
-    preferences?: PreferenceSignal[]
-    language?: LanguageSignal[]
-    context?: ContextSignal[]
-    complexity?: ComplexitySignal[]
-    modality?: ModalitySignal[]
-    role_bindings?: RoleBindingSignal[]
-    jailbreak?: JailbreakSignal[]
-    pii?: PIISignal[]
-  }
+  listeners?: ListenerConfig[]
+  signals?: ConfigSignals
   decisions?: DecisionConfig[]
   providers?: ProvidersConfig
   routing?: RoutingConfig
@@ -823,7 +970,7 @@ export interface ConfigData {
   memory?: MemoryConfig
   hallucination_mitigation?: HallucinationMitigationConfig
   feedback_detector?: FeedbackDetectorConfig
-  external_models?: Array<Record<string, unknown>>
+  external_models?: ExternalModelConfig[]
   embedding_models?: EmbeddingModelsConfig
   api?: APIConfig
   observability?: ObservabilityConfig
@@ -840,7 +987,6 @@ export interface ConfigData {
   complexity_rules?: ComplexitySignal[]
   jailbreak?: JailbreakSignal[]
   pii?: PIISignal[]
-  [key: string]: unknown
 }
 
 export type SignalType =
@@ -865,7 +1011,7 @@ export interface DecisionFormState {
   operator: 'AND' | 'OR' | 'NOT'
   conditions: DecisionCondition[]
   modelRefs: DecisionModelRef[]
-  plugins: { type: string; configuration: string | Record<string, unknown> }[]
+  plugins: { type: string; configuration: string | DecisionPluginConfiguration }[]
 }
 
 export interface AddSignalFormState {
