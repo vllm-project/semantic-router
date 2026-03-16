@@ -168,7 +168,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const saveConfig = async (updatedConfig: ConfigData) => {
     // Prevent save in read-only mode
     if (isReadonly) {

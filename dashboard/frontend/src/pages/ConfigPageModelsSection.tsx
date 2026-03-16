@@ -501,27 +501,27 @@ export default function ConfigPageModelsSection({
           name: 'loras',
           label: 'LoRAs (JSON)',
           type: 'json',
-          placeholder: '[{\"name\":\"adapter\",\"description\":\"optional\"}]'
+          placeholder: '[{"name":"adapter","description":"optional"}]'
         },
         {
           name: 'backend_refs',
           label: 'Backend Refs (JSON)',
           type: 'json',
-          placeholder: '[{\"name\":\"endpoint-1\",\"endpoint\":\"localhost:8000\",\"protocol\":\"http\",\"weight\":1}]',
+          placeholder: '[{"name":"endpoint-1","endpoint":"localhost:8000","protocol":"http","weight":1}]',
           description: 'Latest provider binding format stored under providers.models[].backend_refs'
         },
         {
           name: 'external_model_ids',
           label: 'External Model IDs (JSON)',
           type: 'json',
-          placeholder: '{\"openai\":\"gpt-4.1\"}',
+          placeholder: '{"openai":"gpt-4.1"}',
           description: 'Optional external provider aliases stored under providers.models[].external_model_ids'
         },
         {
           name: 'pricing',
           label: 'Pricing (JSON)',
           type: 'json',
-          placeholder: '{\"currency\":\"USD\",\"prompt_per_1m\":0.5,\"completion_per_1m\":1.5}',
+          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"completion_per_1m":1.5}',
           description: 'Structured pricing block stored under providers.models[].pricing'
         }
       ],
@@ -659,27 +659,27 @@ export default function ConfigPageModelsSection({
           name: 'loras',
           label: 'LoRAs (JSON)',
           type: 'json',
-          placeholder: '[{\"name\":\"adapter\",\"description\":\"optional\"}]'
+          placeholder: '[{"name":"adapter","description":"optional"}]'
         },
         {
           name: 'backend_refs',
           label: 'Backend Refs (JSON)',
           type: 'json',
-          placeholder: '[{\"name\":\"endpoint-1\",\"endpoint\":\"localhost:8000\",\"protocol\":\"http\",\"weight\":1}]',
+          placeholder: '[{"name":"endpoint-1","endpoint":"localhost:8000","protocol":"http","weight":1}]',
           description: 'Latest provider binding format stored under providers.models[].backend_refs'
         },
         {
           name: 'external_model_ids',
           label: 'External Model IDs (JSON)',
           type: 'json',
-          placeholder: '{\"openai\":\"gpt-4.1\"}',
+          placeholder: '{"openai":"gpt-4.1"}',
           description: 'Optional external provider aliases stored under providers.models[].external_model_ids'
         },
         {
           name: 'pricing',
           label: 'Pricing (JSON)',
           type: 'json',
-          placeholder: '{\"currency\":\"USD\",\"prompt_per_1m\":0.5,\"completion_per_1m\":1.5}',
+          placeholder: '{"currency":"USD","prompt_per_1m":0.5,"completion_per_1m":1.5}',
           description: 'Structured pricing block stored under providers.models[].pricing'
         }
       ],

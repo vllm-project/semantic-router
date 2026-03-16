@@ -157,9 +157,9 @@ export default function ConfigPageToolsObservabilitySection({
                 [
                   { name: 'enabled', label: 'Enable Tracing', type: 'boolean', description: 'Enable distributed tracing' },
                   { name: 'provider', label: 'Provider', type: 'select', options: ['jaeger', 'zipkin', 'otlp'], description: 'Tracing provider' },
-                  { name: 'exporter', label: 'Exporter Configuration (JSON)', type: 'json', placeholder: '{\"type\": \"otlp\", \"endpoint\": \"http://localhost:4318\"}', description: 'Exporter configuration as JSON object' },
-                  { name: 'sampling', label: 'Sampling Configuration (JSON)', type: 'json', placeholder: '{\"type\": \"probabilistic\", \"rate\": 0.1}', description: 'Sampling configuration as JSON object' },
-                  { name: 'resource', label: 'Resource Configuration (JSON)', type: 'json', placeholder: '{\"service_name\": \"semantic-router\", \"service_version\": \"1.0.0\", \"deployment_environment\": \"production\"}', description: 'Resource attributes as JSON object' },
+	                  { name: 'exporter', label: 'Exporter Configuration (JSON)', type: 'json', placeholder: '{"type": "otlp", "endpoint": "http://localhost:4318"}', description: 'Exporter configuration as JSON object' },
+	                  { name: 'sampling', label: 'Sampling Configuration (JSON)', type: 'json', placeholder: '{"type": "probabilistic", "rate": 0.1}', description: 'Sampling configuration as JSON object' },
+	                  { name: 'resource', label: 'Resource Configuration (JSON)', type: 'json', placeholder: '{"service_name": "semantic-router", "service_version": "1.0.0", "deployment_environment": "production"}', description: 'Resource attributes as JSON object' },
                 ],
                 async (data) => {
                   const newConfig = cloneConfig(config)
@@ -219,7 +219,7 @@ export default function ConfigPageToolsObservabilitySection({
 	                  { name: 'sample_rate', label: 'Sample Rate', type: 'percentage', placeholder: '10', description: 'Sampling rate for metrics collection (0-100%)', step: 1 },
 	                  { name: 'detailed_goroutine_tracking', label: 'Detailed Goroutine Tracking', type: 'boolean', description: 'Track goroutine activity in batch classification metrics' },
 	                  { name: 'high_resolution_timing', label: 'High Resolution Timing', type: 'boolean', description: 'Collect high-resolution latency metrics' },
-	                  { name: 'batch_size_ranges', label: 'Batch Size Ranges (JSON)', type: 'json', placeholder: '[{\"min\":1,\"max\":8,\"label\":\"1-8\"}]' },
+	                  { name: 'batch_size_ranges', label: 'Batch Size Ranges (JSON)', type: 'json', placeholder: '[{"min":1,"max":8,"label":"1-8"}]' },
 	                  { name: 'duration_buckets', label: 'Duration Buckets (JSON)', type: 'json', placeholder: '[0.01,0.05,0.1,0.5,1]' },
 	                  { name: 'size_buckets', label: 'Size Buckets (JSON)', type: 'json', placeholder: '[1,8,16,32,64]' },
 	                ],

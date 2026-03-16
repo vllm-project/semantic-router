@@ -777,7 +777,7 @@ export default function ConfigPageSignalsSection({
         label: 'Method (jailbreak only)',
         type: 'select',
         options: ['classifier', 'contrastive'],
-        description: 'Detection method: \"classifier\" (BERT-based) or \"contrastive\" (embedding KB similarity)',
+        description: 'Detection method: "classifier" (BERT-based) or "contrastive" (embedding KB similarity)',
         shouldHide: conditionallyHideFieldExceptType('Jailbreak')
       },
       {

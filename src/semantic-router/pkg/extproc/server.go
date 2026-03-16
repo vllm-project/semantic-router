@@ -159,15 +159,14 @@ func shouldReloadForConfigEvent(cfgFile, cfgDir, eventPath string) bool {
 		return true
 	}
 
-	if filepath.Base(cleanEventPath) == filepath.Base(cfgFile) {
-		return true
-	}
-
 	if filepath.Dir(cleanEventPath) != filepath.Clean(cfgDir) {
 		return false
 	}
 
 	base := filepath.Base(cleanEventPath)
+	if base == filepath.Base(cfgFile) {
+		return true
+	}
 	if strings.HasPrefix(base, ".vllm-sr-write-check-") {
 		return false
 	}
