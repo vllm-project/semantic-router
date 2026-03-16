@@ -45,16 +45,12 @@ Dataset:
 """
 
 import json
-import logging
 import os
 import sys
-from pathlib import Path
-from typing import Dict, List, Optional
 
 import torch
 from datasets import Dataset, load_dataset
-from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
-from sklearn.metrics import accuracy_score, f1_score
+from peft import LoraConfig, PeftModel, TaskType, get_peft_model
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoModelForCausalLM,
@@ -71,9 +67,10 @@ _parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
 
-from common_lora_utils import (
+from common_lora_utils import (  # noqa: E402
     clear_gpu_memory,
     log_memory_usage,
+    select_training_split,
     set_gpu_device,
     setup_logging,
 )
@@ -119,7 +116,7 @@ Q: {question}
 A:"""
 
 
-def get_qwen3_target_modules() -> List[str]:
+def get_qwen3_target_modules() -> list[str]:
     """Get LoRA target modules for Qwen3 architecture."""
     return [
         "q_proj",  # Query projection
@@ -132,7 +129,7 @@ def get_qwen3_target_modules() -> List[str]:
     ]
 
 
-class MMLU_Dataset:
+class MMLU_Dataset:  # noqa: N801
     """Dataset class for MMLU-Pro category classification."""
 
     def __init__(self, dataset_name="TIGER-Lab/MMLU-Pro"):
@@ -153,14 +150,19 @@ class MMLU_Dataset:
             dataset = load_dataset(self.dataset_name)
             logger.info(f"Dataset splits: {dataset.keys()}")
 
-            all_texts = dataset["test"]["question"]
-            all_labels = dataset["test"]["category"]
+            training_split_name, training_split = select_training_split(
+                dataset, self.dataset_name
+            )
+            all_texts = training_split["question"]
+            all_labels = training_split["category"]
 
-            logger.info(f"Total samples in dataset: {len(all_texts)}")
+            logger.info(
+                f"Total samples in {training_split_name} split: {len(all_texts)}"
+            )
 
             # Group samples by category
             category_samples = {}
-            for text, label in zip(all_texts, all_labels):
+            for text, label in zip(all_texts, all_labels, strict=False):
                 if label not in category_samples:
                     category_samples[label] = []
                 category_samples[label].append(text)
@@ -207,7 +209,7 @@ class MMLU_Dataset:
         texts, labels = self.load_huggingface_dataset(max_samples_per_category)
 
         # Create label mapping
-        unique_labels = sorted(list(set(labels)))
+        unique_labels = sorted(set(labels))
         ordered_labels = [cat for cat in REQUIRED_CATEGORIES if cat in unique_labels]
 
         self.label2id = {label: idx for idx, label in enumerate(ordered_labels)}
@@ -228,7 +230,7 @@ class MMLU_Dataset:
             stratify=temp_labels,
         )
 
-        logger.info(f"Dataset sizes:")
+        logger.info("Dataset sizes:")
         logger.info(f"  Train: {len(train_texts)}")
         logger.info(f"  Validation: {len(val_texts)}")
         logger.info(f"  Test: {len(test_texts)}")
@@ -240,7 +242,9 @@ class MMLU_Dataset:
         }
 
 
-def format_instruction(question: str, category: str = None) -> List[Dict[str, str]]:
+def format_instruction(
+    question: str, category: str | None = None
+) -> list[dict[str, str]]:
     """
     Format a question-category pair as chat messages for proper instruction fine-tuning.
 
@@ -270,7 +274,7 @@ def format_instruction(question: str, category: str = None) -> List[Dict[str, st
 
 
 def create_generative_dataset(
-    texts: List[str], labels: List[str], tokenizer, max_length=512
+    texts: list[str], labels: list[str], tokenizer, max_length=512
 ):
     """
     Create dataset in chat format for proper instruction fine-tuning.
@@ -286,7 +290,7 @@ def create_generative_dataset(
     labels_list = []
     attention_mask_list = []
 
-    for text, label in zip(texts, labels):
+    for text, label in zip(texts, labels, strict=False):
         # Get messages (user instruction + assistant category)
         messages = format_instruction(text, label)
 
@@ -350,7 +354,7 @@ def compute_metrics_generative(eval_pred, tokenizer, label2id):
 
     This checks if the model predicts the correct category token.
     """
-    import numpy as np
+    import numpy as np  # noqa: PLC0415
 
     predictions, labels = eval_pred
 
@@ -362,10 +366,10 @@ def compute_metrics_generative(eval_pred, tokenizer, label2id):
         predictions = np.array(predictions)
 
     # Get predicted tokens (argmax over vocabulary if logits, otherwise use as-is)
-    if len(predictions.shape) == 3:
+    if len(predictions.shape) == 3:  # noqa: PLR2004
         # Logits shape: apply argmax to get token IDs
         pred_tokens = np.argmax(predictions, axis=-1)
-    elif len(predictions.shape) == 2:
+    elif len(predictions.shape) == 2:  # noqa: PLR2004
         # Already token IDs
         pred_tokens = predictions
     else:
@@ -376,7 +380,7 @@ def compute_metrics_generative(eval_pred, tokenizer, label2id):
         return {"token_accuracy": 0.0}
 
     # Only evaluate non-padding positions (labels != -100)
-    mask = labels != -100
+    mask = labels != -100  # noqa: PLR2004
 
     # Token-level accuracy
     correct_tokens = (pred_tokens == labels) & mask
@@ -390,7 +394,7 @@ def compute_metrics_generative(eval_pred, tokenizer, label2id):
     }
 
 
-def main(
+def main(  # noqa: C901, PLR0912, PLR0915
     model_name: str = "Qwen/Qwen3-0.6B",
     lora_rank: int = 16,
     lora_alpha: int = 32,
@@ -400,8 +404,8 @@ def main(
     learning_rate: float = 3e-4,  # Higher LR for small model
     max_samples_per_category: int = 150,  # Samples per category for balanced dataset
     num_workers: int = 0,  # Number of dataloader workers (0=single process, 2-4 for multiprocessing)
-    output_dir: str = None,
-    gpu_id: Optional[int] = None,
+    output_dir: str | None = None,
+    gpu_id: int | None = None,
 ):
     """Main training function for generative Qwen3 classification.
 
@@ -498,7 +502,7 @@ def main(
     train_dataset = create_generative_dataset(train_texts, train_labels, tokenizer)
     val_dataset = create_generative_dataset(val_texts, val_labels, tokenizer)
 
-    logger.info(f"Example training input:")
+    logger.info("Example training input:")
     logger.info(tokenizer.decode(train_dataset[0]["input_ids"][:100]))
 
     # Setup output directory
@@ -641,7 +645,7 @@ def main(
         # If no match, take first 2 words (for "computer science" etc)
         if predicted_category == "unknown" and answer_text:
             words = answer_text.split()
-            if len(words) >= 2:
+            if len(words) >= 2:  # noqa: PLR2004
                 predicted_category = " ".join(words[:2])
             elif len(words) == 1:
                 predicted_category = words[0]
@@ -654,7 +658,7 @@ def main(
         total += 1
 
         # Log first 5 and last 5 examples
-        if i < 5 or i >= num_test_samples - 5:
+        if i < 5 or i >= num_test_samples - 5:  # noqa: PLR2004
             logger.info(f"\n[{i+1}/{num_test_samples}] Question: {question[:100]}...")
             logger.info(f"  True: {true_category}")
             logger.info(f"  Predicted: {predicted_category}")
@@ -674,8 +678,8 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
 
     try:
         # Load label mapping
-        with open(os.path.join(model_path, "label_mapping.json"), "r") as f:
-            mapping_data = json.load(f)
+        with open(os.path.join(model_path, "label_mapping.json")) as f:
+            json.load(f)
 
         # Load tokenizer
         tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
@@ -709,8 +713,6 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
         ]
 
         logger.info("Running inference...")
-        correct = 0
-        total = 0
 
         for example in test_examples:
             # Format using chat template
@@ -764,7 +766,7 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
                 words = answer_text.split()
                 category = (
                     " ".join(words[:2])
-                    if len(words) >= 2
+                    if len(words) >= 2  # noqa: PLR2004
                     else words[0] if words else "unknown"
                 )
 
@@ -775,7 +777,7 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
 
     except Exception as e:
         logger.error(f"Error during inference: {e}")
-        import traceback
+        import traceback  # noqa: PLC0415
 
         traceback.print_exc()
 

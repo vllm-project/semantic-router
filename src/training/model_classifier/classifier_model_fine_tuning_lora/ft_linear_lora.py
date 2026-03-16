@@ -55,19 +55,17 @@ Key Features:
 """
 
 import json
-import logging
 import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import torch
-import torch.nn as nn
 from datasets import Dataset, load_dataset
 from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
-from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
+from torch import nn
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -80,13 +78,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common_lora_utils import (
     clear_gpu_memory,
     create_lora_config,
-    find_free_gpu,
     get_all_gpu_info,
     log_memory_usage,
     resolve_model_path,
+    select_training_split,
     set_gpu_device,
     setup_logging,
-    validate_lora_config,
 )
 
 # Setup logging
@@ -111,7 +108,7 @@ REQUIRED_CATEGORIES = [
 ]
 
 
-def create_tokenizer_for_model(model_path: str, base_model_name: str = None):
+def create_tokenizer_for_model(model_path: str, base_model_name: str | None = None):
     """
     Create tokenizer with model-specific configuration.
 
@@ -133,7 +130,7 @@ def create_tokenizer_for_model(model_path: str, base_model_name: str = None):
 DEFAULT_SUPPLEMENT_DATASET = "LLM-Semantic-Router/category-classifier-supplement"
 
 
-class MMLU_Dataset:
+class MMLU_Dataset:  # noqa: N801
     """Dataset class for MMLU-Pro category classification fine-tuning with supplement data."""
 
     def __init__(
@@ -172,7 +169,7 @@ class MMLU_Dataset:
             data = (
                 supplement["train"]
                 if "train" in supplement
-                else supplement[list(supplement.keys())[0]]
+                else supplement[next(iter(supplement.keys()))]
             )
 
             samples = [(item["text"], item["label"]) for item in data]
@@ -182,7 +179,9 @@ class MMLU_Dataset:
             logger.warning(f"Failed to load supplement dataset: {e}")
             return []
 
-    def load_huggingface_dataset(self, max_samples=1000):
+    def load_huggingface_dataset(  # noqa: C901, PLR0912, PLR0915
+        self, max_samples=1000
+    ):
         """Load the MMLU-Pro dataset from HuggingFace with balanced category sampling and supplement data."""
         logger.info(f"Loading dataset from HuggingFace: {self.dataset_name}")
 
@@ -191,18 +190,21 @@ class MMLU_Dataset:
             dataset = load_dataset(self.dataset_name)
             logger.info(f"Dataset splits: {dataset.keys()}")
 
-            # Extract questions and categories from the test split
-            # Note: MMLU-Pro typically uses 'test' split for training data
-            all_texts = list(dataset["test"]["question"])
-            all_labels = list(dataset["test"]["category"])
+            training_split_name, training_split = select_training_split(
+                dataset, self.dataset_name
+            )
+            all_texts = list(training_split["question"])
+            all_labels = list(training_split["category"])
 
-            logger.info(f"MMLU-Pro base samples: {len(all_texts)}")
+            logger.info(
+                f"MMLU-Pro base samples from {training_split_name}: {len(all_texts)}"
+            )
 
             # Load and merge supplementary training data
             # This includes casual "other" examples for better fallback detection
             supplement_samples = self._load_supplement_data()
             if supplement_samples:
-                supp_texts, supp_labels = zip(*supplement_samples)
+                supp_texts, supp_labels = zip(*supplement_samples, strict=False)
                 all_texts.extend(supp_texts)
                 all_labels.extend(supp_labels)
                 logger.info(f"Added {len(supplement_samples)} supplement samples")
@@ -211,7 +213,7 @@ class MMLU_Dataset:
 
             # Group samples by category
             category_samples = {}
-            for text, label in zip(all_texts, all_labels):
+            for text, label in zip(all_texts, all_labels, strict=False):
                 if label not in category_samples:
                     category_samples[label] = []
                 category_samples[label].append(text)
@@ -313,7 +315,7 @@ class MMLU_Dataset:
         texts, labels = self.load_huggingface_dataset(max_samples)
 
         # Create label mapping using required categories order for consistency
-        unique_labels = sorted(list(set(labels)))
+        unique_labels = sorted(set(labels))
 
         # Ensure we use the same order as legacy model for consistency
         ordered_labels = [cat for cat in REQUIRED_CATEGORIES if cat in unique_labels]
@@ -343,7 +345,7 @@ class MMLU_Dataset:
             stratify=temp_labels,
         )
 
-        logger.info(f"Dataset sizes:")
+        logger.info("Dataset sizes:")
         logger.info(f"  Train: {len(train_texts)}")
         logger.info(f"  Validation: {len(val_texts)}")
         logger.info(f"  Test: {len(test_texts)}")
@@ -365,7 +367,9 @@ def create_mmlu_dataset(max_samples=1000):
 
     # Convert to the format expected by our training
     sample_data = []
-    for text, label in zip(train_texts + val_texts, train_labels + val_labels):
+    for text, label in zip(
+        train_texts + val_texts, train_labels + val_labels, strict=False
+    ):
         sample_data.append({"text": text, "label": label})
 
     logger.info(f"Created dataset with {len(sample_data)} samples")
@@ -478,7 +482,7 @@ def compute_metrics(eval_pred):
     return {"accuracy": accuracy, "f1": f1}
 
 
-def main(
+def main(  # noqa: PLR0915
     model_name: str = "modernbert-base",
     lora_rank: int = 8,
     lora_alpha: int = 16,
@@ -487,10 +491,10 @@ def main(
     batch_size: int = 8,
     learning_rate: float = 3e-5,  # Reduced from 1e-4 to prevent gradient explosion
     max_samples: int = 1000,
-    output_dir: str = None,
+    output_dir: str | None = None,
     enable_feature_alignment: bool = False,
     alignment_weight: float = 0.1,
-    gpu_id: int = None,
+    gpu_id: int | None = None,
 ):
     """Main training function for LoRA intent classification."""
     logger.info("Starting Enhanced LoRA Intent Classification Training")
@@ -498,10 +502,12 @@ def main(
     # GPU selection and device configuration
     if gpu_id is not None:
         logger.info(f"Using specified GPU: {gpu_id}")
-        device_str, selected_gpu = set_gpu_device(gpu_id=gpu_id, auto_select=False)
+        device_str, selected_gpu = set_gpu_device(  # noqa: RUF059
+            gpu_id=gpu_id, auto_select=False
+        )
     else:
         logger.info("Auto-selecting best available GPU...")
-        device_str, selected_gpu = set_gpu_device(gpu_id=None, auto_select=True)
+        _device_str, selected_gpu = set_gpu_device(gpu_id=None, auto_select=True)
 
     # Log all GPU info
     all_gpus = get_all_gpu_info()
@@ -636,7 +642,7 @@ def merge_lora_adapter_to_full_model(
     logger.info(f"Loading base model: {base_model_path}")
 
     # Load label mapping to get correct number of labels
-    with open(os.path.join(lora_adapter_path, "label_mapping.json"), "r") as f:
+    with open(os.path.join(lora_adapter_path, "label_mapping.json")) as f:
         mapping_data = json.load(f)
     num_labels = len(mapping_data["idx_to_category"])
 
@@ -670,7 +676,7 @@ def merge_lora_adapter_to_full_model(
     # Fix config.json to include correct id2label mapping for Rust compatibility
     config_path = os.path.join(output_path, "config.json")
     if os.path.exists(config_path):
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = json.load(f)
 
         # Update id2label mapping with actual intent classification labels
@@ -730,7 +736,7 @@ def demo_inference(model_path: str, model_name: str = "modernbert-base"):
 
     try:
         # Load label mapping first to get the correct number of labels
-        with open(os.path.join(model_path, "label_mapping.json"), "r") as f:
+        with open(os.path.join(model_path, "label_mapping.json")) as f:
             mapping_data = json.load(f)
         idx_to_category = {
             int(k): v for k, v in mapping_data["idx_to_category"].items()
