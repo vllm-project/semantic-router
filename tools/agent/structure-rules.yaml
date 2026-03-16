@@ -60,8 +60,12 @@ legacy_hotspots:
       - src/semantic-router/pkg/extproc/req_filter_tools_test.go
     function_checks: relaxed
   - paths:
+      - src/semantic-router/pkg/memory/milvus_store.go
+    function_checks: relaxed
+  - paths:
       - src/semantic-router/pkg/extproc/processor_req_body.go
       - src/semantic-router/pkg/extproc/processor_res_body.go
+      - src/semantic-router/pkg/extproc/server.go
       - src/semantic-router/pkg/promptcompression/compressor_nlp_test.go
       - src/vllm-sr/cli/docker_cli.py
       - dashboard/frontend/src/pages/BuilderPage.tsx

@@ -180,6 +180,21 @@ type MemoryQualityScoringConfig struct {
 	InitialStrengthDays int     `yaml:"initial_strength_days,omitempty"`
 	PruneThreshold      float64 `yaml:"prune_threshold,omitempty"`
 	MaxMemoriesPerUser  int     `yaml:"max_memories_per_user,omitempty"`
+
+	// PruneInterval is the interval between background sweep runs (e.g. "6h", "24h").
+	// Empty or "0" disables the background sweep. Requires PruneSweepEnabled to be true.
+	PruneInterval string `yaml:"prune_interval,omitempty"`
+
+	// PruneBatchSize is the number of users to prune per batch during the background sweep (default: 50).
+	PruneBatchSize int `yaml:"prune_batch_size,omitempty"`
+
+	// PruneSweepEnabled enables the background prune sweep on this replica.
+	// In multi-replica deployments, set this to true on only one replica to avoid duplicate work.
+	PruneSweepEnabled bool `yaml:"prune_sweep_enabled,omitempty"`
+
+	// MaxConcurrentPrunes limits how many pruneIfOverCap goroutines can run at once
+	// to avoid overwhelming Milvus during high-throughput Store() bursts (default: 10).
+	MaxConcurrentPrunes int `yaml:"max_concurrent_prunes,omitempty"`
 }
 
 type MemoryReflectionConfig struct {
