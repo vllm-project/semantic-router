@@ -58,7 +58,7 @@ interface ConfigPageProps {
 
 // Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
-const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => {
+const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config' }) => {
   const { isReadonly } = useReadonly()
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -3105,18 +3105,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     )
   }
 
-  // Global Runtime section - canonical global override editor backed by effective router defaults
-  const renderRouterConfigSection = () => (
+  // Global Config section - canonical global override editor backed by effective router defaults
+  const renderGlobalConfigSection = () => (
           <ConfigPageRouterConfigSection
             config={config}
             toolsData={toolsData}
             toolsLoading={toolsLoading}
             toolsError={toolsError}
-      isReadonly={isReadonly}
-      openEditModal={openEditModal}
-      saveConfig={saveConfig}
-      showLegacyCategories={!isPythonCLI}
-    />
+            isReadonly={isReadonly}
+            openEditModal={openEditModal}
+            saveConfig={saveConfig}
+            refreshConfig={fetchConfig}
+            showLegacyCategories={!isPythonCLI}
+          />
   )
 
   const renderActiveSection = () => {
@@ -3127,12 +3128,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         return renderDecisionsSection()
       case 'models':
         return renderModelsSection()
-      case 'router-config':
-        return renderRouterConfigSection()
+      case 'global-config':
+        return renderGlobalConfigSection()
       case 'mcp':
         return <MCPConfigPanel />
       default:
-        return renderSignalsSection()
+        return renderGlobalConfigSection()
     }
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import styles from './ConfigPageRouterConfigSection.module.css'
 import pageStyles from './ConfigPage.module.css'
 import ConfigPageLegacyCategoriesSection from './ConfigPageLegacyCategoriesSection'
@@ -11,6 +11,8 @@ import {
 import type { OpenEditModal } from './configPageRouterSectionSupport'
 import type { CanonicalGlobalConfig, ConfigData, Tool } from './configPageSupport'
 
+type GlobalEditorMode = 'visual' | 'raw'
+
 interface ConfigPageRouterConfigSectionProps {
   config: ConfigData | null
   toolsData: Tool[]
@@ -19,6 +21,7 @@ interface ConfigPageRouterConfigSectionProps {
   isReadonly: boolean
   openEditModal: OpenEditModal
   saveConfig: (config: ConfigData) => Promise<void>
+  refreshConfig: () => Promise<void>
   showLegacyCategories?: boolean
 }
 
@@ -41,40 +44,71 @@ export default function ConfigPageRouterConfigSection({
   isReadonly,
   openEditModal,
   saveConfig,
+  refreshConfig,
   showLegacyCategories = false,
 }: ConfigPageRouterConfigSectionProps) {
   const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
+  const [editorMode, setEditorMode] = useState<GlobalEditorMode>('visual')
+  const [rawYaml, setRawYaml] = useState('{}\n')
+  const [rawLoading, setRawLoading] = useState(false)
+  const [rawSaving, setRawSaving] = useState(false)
+  const [rawError, setRawError] = useState<string | null>(null)
+  const [rawDirty, setRawDirty] = useState(false)
+
+  const loadRawGlobalConfig = useCallback(async () => {
+    setRawLoading(true)
+    setRawError(null)
+    try {
+      const response = await fetch('/api/router/config/global/raw')
+      if (!response.ok) {
+        const message = await response.text()
+        throw new Error(message || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const text = await response.text()
+      setRawYaml(text || '{}\n')
+      setRawDirty(false)
+    } catch (err) {
+      setRawError(err instanceof Error ? err.message : 'Failed to load raw global config')
+    } finally {
+      setRawLoading(false)
+    }
+  }, [])
+
+  const loadRouterDefaults = useCallback(async () => {
+    const response = await fetch('/api/router/config/global')
+    if (!response.ok) {
+      setRouterDefaults(null)
+      return
+    }
+    setRouterDefaults(await response.json())
+  }, [])
 
   useEffect(() => {
     let cancelled = false
 
-    const fetchRouterDefaults = async () => {
+    const fetchGlobalState = async () => {
       try {
-        const response = await fetch('/api/router/config/global')
-        if (!response.ok) {
-          if (!cancelled) {
-            setRouterDefaults(null)
-          }
-          return
-        }
-
-        const data = await response.json()
         if (!cancelled) {
-          setRouterDefaults(data)
+          await loadRouterDefaults()
         }
       } catch {
         if (!cancelled) {
           setRouterDefaults(null)
         }
       }
+
+      if (!cancelled) {
+        await loadRawGlobalConfig()
+      }
     }
 
-    fetchRouterDefaults()
+    void fetchGlobalState()
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadRawGlobalConfig, loadRouterDefaults])
 
   const effectiveRouterConfig = useMemo(() => {
     return buildEffectiveRouterConfig(routerDefaults, config)
@@ -119,10 +153,9 @@ export default function ConfigPageRouterConfigSection({
       throw new Error(errorText || `HTTP ${response.status}: ${response.statusText}`)
     }
 
-    const refreshed = await fetch('/api/router/config/global')
-    if (refreshed.ok) {
-      setRouterDefaults(await refreshed.json())
-    }
+    await refreshConfig()
+    await loadRouterDefaults()
+    await loadRawGlobalConfig()
   }
 
   const handleEditSection = (card: typeof sectionCards[number]) => {
@@ -139,22 +172,65 @@ export default function ConfigPageRouterConfigSection({
     )
   }
 
+  const handleSaveRawYaml = async () => {
+    setRawSaving(true)
+    setRawError(null)
+    try {
+      const response = await fetch('/api/router/config/global/raw/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/yaml; charset=utf-8',
+        },
+        body: rawYaml,
+      })
+
+      if (!response.ok) {
+        const message = await response.text()
+        throw new Error(message || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      await refreshConfig()
+      await loadRouterDefaults()
+      await loadRawGlobalConfig()
+    } catch (err) {
+      setRawError(err instanceof Error ? err.message : 'Failed to save raw global config')
+    } finally {
+      setRawSaving(false)
+    }
+  }
+
   return (
     <ConfigPageManagerLayout
       eyebrow="Runtime"
-      title="Global Runtime"
-      description="Router-owned runtime defaults are merged with your `config.yaml` `global` override. This surface edits only the canonical `global` block while preserving the router's built-in defaults."
+      title="Global Config"
+      description="Router-owned runtime defaults are merged with your `config.yaml` `global` override. This surface edits the canonical `global` block while preserving the router's built-in defaults."
     >
       <div className={pageStyles.sectionPanel}>
         <div className={pageStyles.sectionTableBlock}>
           <div className={styles.blockHeader}>
             <div>
-              <h2 className={styles.blockTitle}>System Defaults Overview</h2>
+              <h2 className={styles.blockTitle}>Global Config Overview</h2>
               <p className={styles.blockDescription}>
                 {routerDefaults
                   ? 'The router resolved effective defaults successfully. Edits in this section write back to `config.yaml` under `global:`.'
                   : 'Effective router defaults are unavailable right now. Cards below still show the canonical `global` sections and any loaded config.yaml overrides.'}
               </p>
+            </div>
+            <div className={styles.modeToggle} role="tablist" aria-label="Global config editor mode">
+              <button
+                type="button"
+                className={`${styles.modeButton} ${editorMode === 'visual' ? styles.modeButtonActive : ''}`}
+                onClick={() => setEditorMode('visual')}
+              >
+                Visual
+              </button>
+              <button
+                type="button"
+                className={`${styles.modeButton} ${editorMode === 'raw' ? styles.modeButtonActive : ''}`}
+                onClick={() => setEditorMode('raw')}
+              >
+                Raw YAML
+              </button>
             </div>
           </div>
 
@@ -177,71 +253,130 @@ export default function ConfigPageRouterConfigSection({
           </div>
         </div>
 
-        <div className={pageStyles.sectionTableBlock}>
-          <div className={styles.blockHeader}>
-            <div>
-              <h2 className={styles.blockTitle}>Runtime System Sections</h2>
-              <p className={styles.blockDescription}>
-                Cards mirror the canonical `global` block. Each editor writes an entire top-level section so nested runtime overrides stay intact.
-              </p>
+        {editorMode === 'visual' ? (
+          <div className={pageStyles.sectionTableBlock}>
+            <div className={styles.blockHeader}>
+              <div>
+                <h2 className={styles.blockTitle}>Runtime Global Sections</h2>
+                <p className={styles.blockDescription}>
+                  Cards mirror the canonical `global` block. Each editor writes an entire top-level section so nested runtime overrides stay intact.
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className={styles.sectionGrid}>
-            {sectionCards.map((card) => (
-              <article key={card.key} className={styles.systemCard}>
-                <div className={styles.cardHeader}>
-                  <div className={styles.cardCopy}>
-                    <span className={styles.cardEyebrow}>{card.eyebrow}</span>
-                    <h3 className={styles.cardTitle}>{card.title}</h3>
-                    <p className={styles.cardDescription}>{card.description}</p>
-                  </div>
-                  <div className={styles.cardBadges}>
-                    <span className={`${styles.badge} ${badgeClassName({ label: card.sourceLabel, tone: card.sourceTone })}`}>
-                      {card.sourceLabel}
-                    </span>
-                    <span className={`${styles.badge} ${badgeClassName(card.status)}`}>
-                      {card.status.label}
-                    </span>
-                  </div>
-                </div>
-
-                <div className={styles.summaryList}>
-                  {card.summary.map((item) => (
-                    <div key={`${card.key}-${item.label}`} className={styles.summaryRow}>
-                      <span className={styles.summaryLabel}>{item.label}</span>
-                      <span className={styles.summaryValue}>{item.value}</span>
+            <div className={styles.sectionGrid}>
+              {sectionCards.map((card) => (
+                <article key={card.key} className={styles.systemCard}>
+                  <div className={styles.cardHeader}>
+                    <div className={styles.cardCopy}>
+                      <span className={styles.cardEyebrow}>{card.eyebrow}</span>
+                      <h3 className={styles.cardTitle}>{card.title}</h3>
+                      <p className={styles.cardDescription}>{card.description}</p>
                     </div>
-                  ))}
-                </div>
-
-                {card.badges.length > 0 && (
-                  <div className={styles.tagRow}>
-                    {card.badges.map((badge) => (
-                      <span key={`${card.key}-${badge.label}`} className={`${styles.badge} ${badgeClassName(badge)}`}>
-                        {badge.label}
+                    <div className={styles.cardBadges}>
+                      <span className={`${styles.badge} ${badgeClassName({ label: card.sourceLabel, tone: card.sourceTone })}`}>
+                        {card.sourceLabel}
                       </span>
+                      <span className={`${styles.badge} ${badgeClassName(card.status)}`}>
+                        {card.status.label}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className={styles.summaryList}>
+                    {card.summary.map((item) => (
+                      <div key={`${card.key}-${item.label}`} className={styles.summaryRow}>
+                        <span className={styles.summaryLabel}>{item.label}</span>
+                        <span className={styles.summaryValue}>{item.value}</span>
+                      </div>
                     ))}
                   </div>
-                )}
 
-                <div className={styles.cardFooter}>
-                  <code className={styles.sectionKey}>{card.key}</code>
-                  {!isReadonly ? (
-                    <button
-                      className={pageStyles.sectionEditButton}
-                      onClick={() => {
-                        handleEditSection(card)
-                      }}
-                    >
-                      {card.data !== undefined ? 'Edit Section' : 'Add Section'}
-                    </button>
-                  ) : null}
-                </div>
-              </article>
-            ))}
+                  {card.badges.length > 0 && (
+                    <div className={styles.tagRow}>
+                      {card.badges.map((badge) => (
+                        <span key={`${card.key}-${badge.label}`} className={`${styles.badge} ${badgeClassName(badge)}`}>
+                          {badge.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className={styles.cardFooter}>
+                    <code className={styles.sectionKey}>{card.key}</code>
+                    {!isReadonly ? (
+                      <button
+                        className={pageStyles.sectionEditButton}
+                        onClick={() => {
+                          handleEditSection(card)
+                        }}
+                      >
+                        {card.data !== undefined ? 'Edit Section' : 'Add Section'}
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className={pageStyles.sectionTableBlock}>
+            <div className={styles.blockHeader}>
+              <div>
+                <h2 className={styles.blockTitle}>Raw Global YAML</h2>
+                <p className={styles.blockDescription}>
+                  Edit only the contents of `config.yaml` under `global:`. Saving raw YAML replaces the current `global` override block.
+                </p>
+              </div>
+              <div className={styles.rawToolbar}>
+                <button
+                  type="button"
+                  className={styles.rawToolbarButton}
+                  onClick={() => {
+                    void loadRawGlobalConfig()
+                  }}
+                  disabled={rawLoading || rawSaving}
+                >
+                  Reload
+                </button>
+                {!isReadonly ? (
+                  <button
+                    type="button"
+                    className={`${styles.rawToolbarButton} ${styles.rawToolbarButtonPrimary}`}
+                    onClick={() => {
+                      void handleSaveRawYaml()
+                    }}
+                    disabled={rawLoading || rawSaving || !rawDirty}
+                  >
+                    {rawSaving ? 'Saving…' : 'Save YAML'}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className={styles.rawEditorPanel}>
+              {rawError ? <div className={styles.rawError}>{rawError}</div> : null}
+              <textarea
+                className={styles.rawEditor}
+                value={rawYaml}
+                onChange={(event) => {
+                  setRawYaml(event.target.value)
+                  setRawDirty(true)
+                }}
+                spellCheck={false}
+                readOnly={isReadonly || rawLoading || rawSaving}
+              />
+              <div className={styles.rawHintRow}>
+                <span className={styles.rawHint}>
+                  Empty content removes the `global:` override block. Router defaults remain available at runtime.
+                </span>
+                <span className={styles.rawDirtyState}>
+                  {rawLoading ? 'Loading…' : rawDirty ? 'Unsaved changes' : 'Saved'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showLegacyCategories ? (
           <ConfigPageLegacyCategoriesSection

@@ -6,6 +6,38 @@
   margin-bottom: 1rem;
 }
 
+.modeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(7, 11, 10, 0.82);
+}
+
+.modeButton {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.5rem 0.9rem;
+  color: var(--color-text-secondary);
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.modeButton:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.modeButtonActive {
+  color: #081000;
+  background: var(--color-primary);
+}
+
 .blockTitle {
   margin: 0;
   color: var(--color-text);
@@ -213,6 +245,89 @@
   font-family: var(--font-mono);
 }
 
+.rawToolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.rawToolbarButton {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.85rem;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rawToolbarButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.rawToolbarButtonPrimary {
+  border-color: rgba(118, 185, 0, 0.2);
+  background: rgba(118, 185, 0, 0.16);
+  color: var(--color-primary-light);
+}
+
+.rawEditorPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.rawEditor {
+  min-height: 420px;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  background: rgba(4, 8, 8, 0.92);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.rawEditor:focus {
+  outline: 1px solid rgba(118, 185, 0, 0.4);
+  border-color: rgba(118, 185, 0, 0.28);
+}
+
+.rawHintRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.rawHint {
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.rawDirtyState {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rawError {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(255, 105, 97, 0.2);
+  border-radius: var(--radius-md);
+  background: rgba(255, 105, 97, 0.08);
+  color: #ffb4ad;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
 @media (max-width: 960px) {
   .overviewGrid {
     grid-template-columns: 1fr;
@@ -222,6 +337,11 @@
 @media (max-width: 640px) {
   .systemCard {
     padding: 0.9rem;
+  }
+
+  .blockHeader,
+  .rawHintRow {
+    flex-direction: column;
   }
 
   .summaryRow,

@@ -43,9 +43,11 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config) {
 
 	mux.HandleFunc("/api/router/config/global", handlers.RouterDefaultsHandler(cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/global/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir, cfg.ReadonlyMode))
+	mux.HandleFunc("/api/router/config/global/raw", handlers.GlobalConfigYAMLHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/router/config/global/raw/update", handlers.UpdateGlobalConfigYAMLHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/defaults", handlers.RouterDefaultsHandler(cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/defaults/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir, cfg.ReadonlyMode))
-	log.Printf("Global config API endpoints registered: /api/router/config/global, /api/router/config/global/update (legacy aliases: /api/router/config/defaults, /api/router/config/defaults/update)")
+	log.Printf("Global config API endpoints registered: /api/router/config/global, /api/router/config/global/update, /api/router/config/global/raw, /api/router/config/global/raw/update (legacy aliases: /api/router/config/defaults, /api/router/config/defaults/update)")
 }
 
 func registerToolRoutes(mux *http.ServeMux, cfg *config.Config) {

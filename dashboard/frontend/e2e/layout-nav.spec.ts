@@ -18,6 +18,84 @@ const settingsResponse = {
   envoyUrl: '',
 };
 
+const configResponse = {
+  version: 'v0.3',
+  listeners: [{ name: 'public', address: '0.0.0.0', port: 8801 }],
+  providers: {
+    defaults: {
+      default_model: 'test-model',
+      reasoning_families: {
+        qwen3: {
+          type: 'reasoning_effort',
+          parameter: 'reasoning_effort',
+        },
+      },
+    },
+    models: [
+      {
+        name: 'test-model',
+        provider_model_id: 'test-model',
+        backend_refs: [
+          {
+            name: 'endpoint1',
+            endpoint: '127.0.0.1:8000',
+            protocol: 'http',
+          },
+        ],
+      },
+    ],
+  },
+  routing: {
+    modelCards: [{ name: 'test-model' }],
+    signals: {
+      domains: [{ name: 'business', description: 'Business' }],
+    },
+    decisions: [
+      {
+        name: 'business-route',
+        priority: 1,
+        rules: {
+          operator: 'AND',
+          conditions: [{ type: 'domain', name: 'business' }],
+        },
+        modelRefs: [{ model: 'test-model' }],
+      },
+    ],
+  },
+  global: {
+    router: { strategy: 'priority' },
+    services: {
+      response_api: { enabled: true },
+    },
+  },
+};
+
+const rawGlobalYaml = `router:
+  strategy: priority
+services:
+  response_api:
+    enabled: true
+`;
+
+const statusResponse = {
+  overall: 'healthy',
+  deployment_type: 'local',
+  services: [
+    {
+      name: 'router',
+      status: 'healthy',
+      healthy: true,
+    },
+  ],
+  models: {
+    models: [],
+    summary: {
+      loaded_models: 0,
+      total_models: 0,
+    },
+  },
+};
+
 async function mockCommon(
   page: Page,
   options: {
@@ -46,6 +124,30 @@ async function mockCommon(
 
   await page.route('**/api/mcp/servers', async route => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+  });
+
+  await page.route('**/api/router/config/all', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(configResponse) });
+  });
+
+  await page.route('**/api/router/config/global', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(configResponse.global),
+    });
+  });
+
+  await page.route('**/api/router/config/global/raw', async route => {
+    await route.fulfill({ status: 200, contentType: 'text/yaml', body: rawGlobalYaml });
+  });
+
+  await page.route('**/api/status', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(statusResponse),
+    });
   });
 
   await page.route('**/api/auth/bootstrap/can-register', async route => {
@@ -78,20 +180,23 @@ test.describe('Layout top navigation', () => {
 
     await expect(secondaryGroup.getByRole('link', { name: 'Users' })).toBeVisible();
     await expect(secondaryGroup.getByRole('link', { name: 'ClawOS' })).toBeVisible();
-    await expect(secondaryGroup.getByRole('button', { name: 'Command' })).toBeVisible();
+    await expect(secondaryGroup.getByRole('button', { name: 'System' })).toBeVisible();
     await expect(globalNav.getByRole('button', { name: 'Analysis', exact: true })).toHaveCount(0);
     await expect(globalNav.getByRole('button', { name: 'Operations', exact: true })).toHaveCount(0);
 
-    await secondaryGroup.getByRole('button', { name: 'Command' }).click();
+    await secondaryGroup.getByRole('button', { name: 'System' }).click();
 
-    const menu = page.getByRole('menu', { name: 'Command' });
+    const menu = page.getByRole('menu', { name: 'System' });
     await expect(menu.getByText('Analysis')).toBeVisible();
+    const menuItems = menu.getByRole('menuitem');
+    await expect(menuItems.nth(0)).toHaveText('Global Config');
+    await expect(menuItems.nth(1)).toHaveText('Evaluation');
+    await expect(menu.getByRole('menuitem', { name: 'Global Config' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Evaluation' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Replay' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Ratings' })).toBeVisible();
     await expect(menu.getByText('Operations')).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'ML Setup' })).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'Router Config' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'MCP Servers' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Status' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Logs' })).toBeVisible();
@@ -129,5 +234,19 @@ test.describe('Layout top navigation', () => {
 
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible();
+  });
+
+  test('defaults /config to Global Config and loads raw global YAML', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockCommon(page);
+
+    await page.goto('/config');
+
+    await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Global Config Overview' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Raw YAML' }).click();
+    await expect(page.getByRole('heading', { name: 'Raw Global YAML' })).toBeVisible();
+    await expect(page.locator('textarea')).toHaveValue(rawGlobalYaml);
   });
 });

@@ -42,15 +42,24 @@ const ConfigSectionRoute: React.FC<{
   const { section } = useParams<{ section: string }>()
 
   useEffect(() => {
-    if (!section) return
+    if (!section) {
+      if (configSection !== 'global-config') {
+        setConfigSection('global-config')
+      }
+      return
+    }
 
     const normalized = section.toLowerCase()
     const sectionMap: Record<string, ConfigSection> = {
+      global: 'global-config',
+      'global-config': 'global-config',
+      'router-config': 'global-config',
       signals: 'signals',
       routes: 'decisions',
       decisions: 'decisions',
       endpoints: 'models',
       models: 'models',
+      mcp: 'mcp',
     }
 
     const mapped = sectionMap[normalized]
@@ -164,7 +173,7 @@ const AuthenticatedShell: React.FC = () => {
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
-  const [configSection, setConfigSection] = useState<ConfigSection>('models')
+  const [configSection, setConfigSection] = useState<ConfigSection>('global-config')
 
   if (isLoading) {
     return (
