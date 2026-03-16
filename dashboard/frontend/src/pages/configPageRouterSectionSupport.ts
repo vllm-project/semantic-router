@@ -1,4 +1,5 @@
 import type { FieldConfig } from '../components/EditModal'
+import type { ViewSection } from '../components/ViewModal'
 import type { ConfigData, Tool } from './configPageSupport'
 
 export type OpenEditModal = (
@@ -9,6 +10,12 @@ export type OpenEditModal = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   callback: (data: any) => Promise<void>,
   mode?: 'edit' | 'add'
+) => void
+
+export type OpenViewModal = (
+  title: string,
+  sections: ViewSection[],
+  onEdit?: () => void
 ) => void
 
 export type RouterConfigSectionData = Pick<

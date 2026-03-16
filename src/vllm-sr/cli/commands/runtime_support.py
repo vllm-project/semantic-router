@@ -52,6 +52,8 @@ ALGORITHM_HINTS = {
     "router_r1": "  Tip: Requires Router-R1 server (see training docs)",
 }
 
+AMD_OVERRIDE_PREVIEW_LIMIT = 8
+
 
 def _cleanup_temp_dirs() -> None:
     """Clean up temp directories created for transient config translation."""
@@ -64,6 +66,86 @@ def _cleanup_temp_dirs() -> None:
 
 
 atexit.register(_cleanup_temp_dirs)
+
+
+def _normalize_platform(value: str | None) -> str:
+    """Normalize platform value for comparisons."""
+    if value is None:
+        return ""
+    return str(value).strip().lower()
+
+
+def _write_temp_config(config: dict[str, object], filename: str) -> Path:
+    temp_dir = tempfile.mkdtemp(prefix="vllm-sr-")
+    _temp_dirs.append(temp_dir)
+    temp_config_path = Path(temp_dir) / filename
+    with temp_config_path.open("w") as handle:
+        yaml.dump(config, handle, default_flow_style=False, sort_keys=False)
+    return temp_config_path
+
+
+def _set_use_cpu_false_for_amd(
+    config_node: object, path: str, changed_paths: list[str]
+) -> None:
+    """Recursively set use_cpu=true to false for AMD GPU defaults."""
+    if isinstance(config_node, dict):
+        for key, value in config_node.items():
+            current_path = f"{path}.{key}" if path else key
+            if key == "use_cpu" and value is True:
+                config_node[key] = False
+                changed_paths.append(current_path)
+            else:
+                _set_use_cpu_false_for_amd(value, current_path, changed_paths)
+        return
+
+    if isinstance(config_node, list):
+        for index, item in enumerate(config_node):
+            _set_use_cpu_false_for_amd(item, f"{path}[{index}]", changed_paths)
+
+
+def _platform_requires_gpu_defaults(platform: str | None) -> bool:
+    normalized_platform = _normalize_platform(
+        platform or os.getenv("VLLM_SR_PLATFORM") or os.getenv("DASHBOARD_PLATFORM")
+    )
+    if normalized_platform != "amd":
+        return False
+
+    force_gpu = os.getenv("VLLM_SR_AMD_FORCE_GPU", "1").strip().lower()
+    if force_gpu in {"0", "false", "no", "off"}:
+        log.info(
+            "Platform amd detected but GPU default override disabled by VLLM_SR_AMD_FORCE_GPU"
+        )
+        return False
+    return True
+
+
+def apply_platform_gpu_defaults(
+    merged_config: dict[str, object], platform: str | None
+) -> bool:
+    """
+    Apply platform-specific GPU defaults.
+
+    For AMD platform, default all `use_cpu` flags to false so inference prefers GPU.
+    Can be disabled by setting VLLM_SR_AMD_FORCE_GPU=0/false/no/off.
+    """
+    if not _platform_requires_gpu_defaults(platform):
+        return False
+
+    changed_paths: list[str] = []
+    _set_use_cpu_false_for_amd(merged_config, "", changed_paths)
+    if not changed_paths:
+        log.info("Platform amd detected: no use_cpu flags found to override")
+        return False
+
+    preview = ", ".join(changed_paths[:AMD_OVERRIDE_PREVIEW_LIMIT])
+    if len(changed_paths) > AMD_OVERRIDE_PREVIEW_LIMIT:
+        preview = f"{preview}, ..."
+    log.info(
+        "Platform amd detected: set %d use_cpu flag(s) to false for GPU default (%s)",
+        len(changed_paths),
+        preview,
+    )
+    return True
 
 
 def inject_algorithm_into_config(config_path: Path, algorithm: str) -> Path:
@@ -91,12 +173,7 @@ def inject_algorithm_into_config(config_path: Path, algorithm: str) -> Path:
             f"  Injected algorithm.type={algorithm} into decision '{decision.get('name', 'unnamed')}'"
         )
 
-    temp_dir = tempfile.mkdtemp(prefix="vllm-sr-")
-    _temp_dirs.append(temp_dir)
-    temp_config_path = Path(temp_dir) / "config-with-algorithm.yaml"
-    with temp_config_path.open("w") as handle:
-        yaml.dump(config, handle, default_flow_style=False, sort_keys=False)
-
+    temp_config_path = _write_temp_config(config, "config-with-algorithm.yaml")
     log.info(f"Created config with algorithm: {temp_config_path}")
     return temp_config_path
 
@@ -169,21 +246,68 @@ def apply_runtime_mode_env_vars(
 
 
 def resolve_effective_config_path(
-    config_path: Path, algorithm: str | None, setup_mode: bool
+    config_path: Path, algorithm: str | None, setup_mode: bool, platform: str | None
 ) -> Path:
-    """Apply CLI algorithm override translation when appropriate."""
-    if not algorithm:
+    """Apply CLI algorithm and platform override translation when appropriate."""
+    apply_algorithm = bool(algorithm)
+    apply_gpu_defaults = _platform_requires_gpu_defaults(platform)
+
+    if not apply_algorithm and not apply_gpu_defaults:
         return config_path
-    if setup_mode:
+    if apply_algorithm and setup_mode:
         log.warning(
             f"--algorithm={algorithm} ignored in setup mode until a runnable config is activated"
         )
+        apply_algorithm = False
+        if not apply_gpu_defaults:
+            return config_path
+
+    with config_path.open() as handle:
+        config = yaml.safe_load(handle)
+
+    changed = False
+    if apply_algorithm:
+        normalized = algorithm.lower()
+        log.info(f"Model selection algorithm: {normalized}")
+        routing = config.get("routing")
+        if not isinstance(routing, dict):
+            log.warning("No routing section found; skipping --algorithm override")
+            decisions = []
+        else:
+            decisions = routing.get("decisions", [])
+            if not isinstance(decisions, list):
+                log.warning(
+                    "routing.decisions is not a list; skipping --algorithm override"
+                )
+                decisions = []
+
+        for decision in decisions:
+            if "algorithm" not in decision:
+                decision["algorithm"] = {}
+            decision["algorithm"]["type"] = normalized
+            log.info(
+                "  Injected algorithm.type=%s into decision '%s'",
+                normalized,
+                decision.get("name", "unnamed"),
+            )
+        if decisions:
+            changed = True
+        log_algorithm_hint(normalized)
+
+    if apply_platform_gpu_defaults(config, platform):
+        changed = True
+
+    if not changed:
         return config_path
 
-    normalized = algorithm.lower()
-    log.info(f"Model selection algorithm: {normalized}")
-    effective_config = inject_algorithm_into_config(config_path, normalized)
-    log_algorithm_hint(normalized)
+    suffix_parts: list[str] = []
+    if apply_algorithm and algorithm:
+        suffix_parts.append(f"algorithm-{algorithm.lower()}")
+    if apply_gpu_defaults:
+        suffix_parts.append("platform-overrides")
+    filename = "config-with-" + "-".join(suffix_parts) + ".yaml"
+    effective_config = _write_temp_config(config, filename)
+    log.info(f"Created effective runtime config: {effective_config}")
     return effective_config
 
 

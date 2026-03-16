@@ -12,6 +12,25 @@
   width: 100%;
 }
 
+.embeddedPanel {
+  max-height: none;
+  min-height: 0;
+}
+
+.embeddedToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 16px 20px 8px;
+}
+
+.embeddedSummary {
+  color: var(--text-secondary, #a6adc8);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .header {
   display: flex;
   align-items: center;

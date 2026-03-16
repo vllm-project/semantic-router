@@ -28,6 +28,8 @@ type Writer struct {
 	mu   sync.Mutex
 }
 
+var statusDirCache sync.Map
+
 // NewWriter creates a writer using a router config path.
 func NewWriter(configPath string) *Writer {
 	return &Writer{path: StatusPathFromConfigPath(configPath)}
@@ -46,11 +48,17 @@ func runtimeStatusDirFromConfigPath(configPath string) string {
 	}
 
 	configDir := filepath.Dir(configPath)
-	if dirWritable(configDir) {
-		return configDir
+	cacheKey := filepath.Clean(configDir)
+	if cached, ok := statusDirCache.Load(cacheKey); ok {
+		return cached.(string)
 	}
 
-	return filepath.Join(os.TempDir(), "vllm-sr", "runtime-status", stablePathToken(configDir))
+	statusDir := filepath.Join(os.TempDir(), "vllm-sr", "runtime-status", stablePathToken(configDir))
+	if dirWritable(configDir) {
+		statusDir = configDir
+	}
+	statusDirCache.Store(cacheKey, statusDir)
+	return statusDir
 }
 
 func dirWritable(path string) bool {

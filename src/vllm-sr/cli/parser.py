@@ -27,14 +27,6 @@ def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
     routing = data.get("routing")
     if isinstance(routing, dict) and "models" in routing:
         fields.append("routing.models")
-    if isinstance(routing, dict):
-        model_cards = routing.get("modelCards")
-        if isinstance(model_cards, list):
-            for index, model_card in enumerate(model_cards):
-                if isinstance(model_card, dict) and "reasoning_family_ref" in model_card:
-                    fields.append(
-                        f"routing.modelCards[{index}].reasoning_family_ref"
-                    )
 
     providers = data.get("providers")
     if isinstance(providers, dict):

@@ -724,6 +724,81 @@ export const normalizeEndpoint = (
 export const normalizeEndpoints = (endpoints: Partial<Endpoint>[] | undefined): Endpoint[] =>
   Array.isArray(endpoints) ? endpoints.map((endpoint, index) => normalizeEndpoint(endpoint, index)) : []
 
+export const normalizeProviderModelEndpoints = (
+  model: {
+    endpoints?: Partial<Endpoint>[]
+    backend_refs?: BackendRefEntry[]
+  }
+): Endpoint[] => {
+  if (Array.isArray(model.backend_refs) && model.backend_refs.length > 0) {
+    return model.backend_refs.map((backend, index) => {
+      const baseURL = typeof backend.base_url === 'string' ? backend.base_url.trim() : ''
+      const endpoint =
+        typeof backend.endpoint === 'string' && backend.endpoint.trim()
+          ? backend.endpoint.trim()
+          : baseURL
+      const protocol =
+        backend.protocol ||
+        (baseURL.startsWith('https://') ? 'https' : 'http')
+      return normalizeEndpoint({
+        name: backend.name,
+        endpoint,
+        protocol,
+        weight: backend.weight,
+      }, index)
+    })
+  }
+  return normalizeEndpoints(model.endpoints)
+}
+
+export const mergeProviderBackendRefs = (
+  existingRefs: BackendRefEntry[] | undefined,
+  endpoints: Endpoint[],
+  accessKey?: string
+): BackendRefEntry[] => {
+  const existing = Array.isArray(existingRefs) ? existingRefs : []
+
+  return endpoints.map((ep, index) => {
+    const matched =
+      existing.find((ref) => ref.name === ep.name) ||
+      existing[index]
+
+    const merged: BackendRefEntry = {
+      ...(matched || {}),
+      name: ep.name,
+      protocol: ep.protocol,
+      weight: ep.weight,
+    }
+
+    const matchedDisplayEndpoint =
+      typeof matched?.endpoint === 'string' && matched.endpoint.trim()
+        ? matched.endpoint.trim()
+        : typeof matched?.base_url === 'string'
+          ? matched.base_url.trim()
+          : ''
+
+    if (matched?.base_url && !matched?.endpoint) {
+      if (ep.endpoint.trim() && ep.endpoint.trim() !== matchedDisplayEndpoint) {
+        merged.base_url = ep.endpoint.trim()
+      } else {
+        merged.base_url = matched.base_url
+      }
+      delete merged.endpoint
+    } else {
+      merged.endpoint = ep.endpoint
+    }
+
+    if (accessKey?.trim()) {
+      merged.api_key = accessKey.trim()
+      delete merged.api_key_env
+    } else if (!matched?.api_key && matched?.api_key_env) {
+      delete merged.api_key
+    }
+
+    return merged
+  })
+}
+
 export const TABLE_COLUMN_WIDTH = {
   compact: '140px',
   medium: '160px',
@@ -783,3 +858,90 @@ export const clonePresetDecisions = (decisions: DecisionConfig[]) =>
   }))
 
 export type ConfigDecisionConditionType = DecisionConditionType
+
+export const getDefaultModelName = (
+  config: ConfigData | null,
+  isPythonCLI: boolean
+): string => {
+  if (isPythonCLI) {
+    return config?.providers?.defaults?.default_model || ''
+  }
+  return config?.default_model || ''
+}
+
+export const getReasoningFamiliesMap = (
+  config: ConfigData | null,
+  isPythonCLI: boolean
+): Record<string, ReasoningFamily> => {
+  if (isPythonCLI) {
+    return config?.providers?.defaults?.reasoning_families || {}
+  }
+  return config?.reasoning_families || {}
+}
+
+export const getNormalizedModels = (
+  config: ConfigData | null,
+  isPythonCLI: boolean
+): NormalizedModel[] => {
+  if (isPythonCLI && config?.providers?.models) {
+    const cards = config?.routing?.modelCards || []
+    const cardByName = new Map(cards.map((card) => [card.name, card]))
+    const models = config.providers.models.map((m): NormalizedModel => ({
+      name: m.name,
+      reasoning_family: m.reasoning_family,
+      endpoints: normalizeProviderModelEndpoints(m),
+      access_key: m.backend_refs?.find((ref) => ref.api_key || ref.api_key_env)?.api_key,
+      param_size: cardByName.get(m.name)?.param_size,
+      context_window_size: cardByName.get(m.name)?.context_window_size,
+      description: cardByName.get(m.name)?.description,
+      capabilities: cardByName.get(m.name)?.capabilities,
+      loras: cardByName.get(m.name)?.loras,
+      tags: cardByName.get(m.name)?.tags,
+      quality_score: cardByName.get(m.name)?.quality_score,
+      modality: cardByName.get(m.name)?.modality,
+      pricing: m.pricing,
+    }))
+
+    for (const card of cards) {
+      if (models.some((model) => model.name === card.name)) {
+        continue
+      }
+      models.push({
+        name: card.name,
+        reasoning_family: undefined,
+        endpoints: [],
+        param_size: card.param_size,
+        context_window_size: card.context_window_size,
+        description: card.description,
+        capabilities: card.capabilities,
+        loras: card.loras,
+        tags: card.tags,
+        quality_score: card.quality_score,
+        modality: card.modality,
+        pricing: undefined,
+      })
+    }
+
+    return models
+  }
+
+  if (config?.model_config) {
+    return (Object.entries(config.model_config) as [string, ModelConfigEntry][]).map(([name, cfg]) => ({
+      name,
+      reasoning_family: cfg.reasoning_family,
+      endpoints: cfg.preferred_endpoints?.map((ep: string) => {
+        const endpoint = config.vllm_endpoints?.find((entry: VLLMEndpoint) => entry.name === ep)
+        return endpoint ? normalizeEndpoint({
+          name: ep,
+          weight: endpoint.weight || 1,
+          endpoint: `${endpoint.address}:${endpoint.port}`,
+          protocol: 'http',
+        }, 0) : null
+      }).filter((entry): entry is NonNullable<typeof entry> => entry !== null) || [],
+      access_key: undefined,
+      pricing: cfg.pricing,
+    }))
+  }
+
+  return []
+}

@@ -158,7 +158,7 @@ def serve(
     apply_runtime_mode_env_vars(env_vars, minimal, readonly, setup_mode, platform)
 
     effective_config_path = resolve_effective_config_path(
-        config_path, algorithm, setup_mode
+        config_path, algorithm, setup_mode, platform
     )
     start_vllm_sr(
         config_file=str(effective_config_path.absolute()),

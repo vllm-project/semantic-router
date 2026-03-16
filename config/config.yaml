@@ -983,7 +983,6 @@ global:
       store_backend: redis
       ttl_seconds: 86400
       max_responses: 2000
-      backend_config_path: config/backends/response-api.yaml
       milvus:
         address: milvus:19530
         database: responses
