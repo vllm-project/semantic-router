@@ -3,6 +3,7 @@ package startupstatus
 import (
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"path/filepath"
 	"sync"
@@ -34,7 +35,35 @@ func NewWriter(configPath string) *Writer {
 
 // StatusPathFromConfigPath returns the runtime status file path next to config.yaml.
 func StatusPathFromConfigPath(configPath string) string {
-	return filepath.Join(filepath.Dir(configPath), "router-runtime.json")
+	statusDir := runtimeStatusDirFromConfigPath(configPath)
+	return filepath.Join(statusDir, "router-runtime.json")
+}
+
+func runtimeStatusDirFromConfigPath(configPath string) string {
+	if overrideDir := os.Getenv("VLLM_SR_RUNTIME_STATUS_DIR"); overrideDir != "" {
+		return overrideDir
+	}
+
+	configDir := filepath.Dir(configPath)
+	if dirProbablyWritable(configDir) {
+		return configDir
+	}
+
+	return filepath.Join(os.TempDir(), "vllm-sr", "runtime-status", stablePathToken(configDir))
+}
+
+func dirProbablyWritable(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	return info.Mode().Perm()&0o222 != 0
+}
+
+func stablePathToken(path string) string {
+	hasher := fnv.New64a()
+	_, _ = hasher.Write([]byte(filepath.Clean(path)))
+	return fmt.Sprintf("%016x", hasher.Sum64())
 }
 
 // Write persists the provided state atomically.

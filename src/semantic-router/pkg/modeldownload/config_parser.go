@@ -43,28 +43,7 @@ func extractFromValue(v reflect.Value, paths *[]string, seen map[string]bool) {
 		t := v.Type()
 		for i := 0; i < v.NumField(); i++ {
 			field := v.Field(i)
-			fieldType := t.Field(i)
-			fieldName := fieldType.Name
-
-			// Check if this is a model path field
-			// Matches: ModelID, Qwen3ModelPath, GemmaModelPath, or any field ending with "ModelPath"
-			isModelField := fieldName == "ModelID" ||
-				fieldName == "Qwen3ModelPath" ||
-				fieldName == "GemmaModelPath" ||
-				strings.HasSuffix(fieldName, "ModelPath")
-
-			if isModelField && field.Kind() == reflect.String {
-				path := field.String()
-				if path != "" && strings.HasPrefix(path, "models/") && !seen[path] {
-					// Only add if it looks like a model directory (not a file path)
-					if !strings.Contains(path[7:], "/") || isModelDirectory(path) {
-						*paths = append(*paths, path)
-						seen[path] = true
-					}
-				}
-			}
-
-			// Recursively process nested structs
+			recordModelPath(t.Field(i).Name, field, paths, seen)
 			extractFromValue(field, paths, seen)
 		}
 
@@ -78,6 +57,31 @@ func extractFromValue(v reflect.Value, paths *[]string, seen map[string]bool) {
 			extractFromValue(v.MapIndex(key), paths, seen)
 		}
 	}
+}
+
+func recordModelPath(fieldName string, field reflect.Value, paths *[]string, seen map[string]bool) {
+	if !isModelPathField(fieldName) || field.Kind() != reflect.String {
+		return
+	}
+
+	path := field.String()
+	if path == "" || !strings.HasPrefix(path, "models/") || seen[path] {
+		return
+	}
+
+	if strings.Contains(path[7:], "/") && !isModelDirectory(path) {
+		return
+	}
+
+	*paths = append(*paths, path)
+	seen[path] = true
+}
+
+func isModelPathField(fieldName string) bool {
+	return fieldName == "ModelID" ||
+		fieldName == "Qwen3ModelPath" ||
+		fieldName == "GemmaModelPath" ||
+		strings.HasSuffix(fieldName, "ModelPath")
 }
 
 // isModelDirectory checks if a path looks like a model directory (not a file)
