@@ -379,36 +379,35 @@ func (r *OpenAIRouter) buildSpecifiedModelBodyMutation(
 	ctx *RequestContext,
 ) *ext_proc.BodyMutation {
 	bodyBytes := getBodyMutationSource(ctx)
-
-	needsRequestParamsMutation := false
-	if ctx.VSRSelectedDecision != nil {
-		needsRequestParamsMutation = ctx.VSRSelectedDecision.GetRequestParamsConfig() != nil
-	}
-
-	if len(bodyBytes) > 0 && (needsBodyMutation || needsRequestParamsMutation) {
-		state.removeHeaders = append(state.removeHeaders, "content-length")
-
-		if upstreamModel != model {
-			rewritten, err := rewriteModelInBody(bodyBytes, upstreamModel)
-			if err != nil {
-				logging.Warnf("Failed to rewrite model in body: %v, sending original body", err)
-			} else {
-				bodyBytes = rewritten
-			}
-		}
-
-		if needsRequestParamsMutation {
-			modified, err := r.buildRequestParamsMutations(ctx.VSRSelectedDecision, bodyBytes)
-			if err != nil {
-				logging.Warnf("Failed to apply request params mutation: %v", err)
-			} else {
-				bodyBytes = modified
-			}
-		}
-	}
-
 	if len(bodyBytes) == 0 {
 		return nil
+	}
+
+	needsRequestParamsMutation := ctx.VSRSelectedDecision != nil &&
+		ctx.VSRSelectedDecision.GetRequestParamsConfig() != nil
+
+	if !needsBodyMutation && !needsRequestParamsMutation {
+		return nil
+	}
+
+	state.removeHeaders = append(state.removeHeaders, "content-length")
+
+	if upstreamModel != model {
+		rewritten, err := rewriteModelInBody(bodyBytes, upstreamModel)
+		if err != nil {
+			logging.Warnf("Failed to rewrite model in body: %v, sending original body", err)
+		} else {
+			bodyBytes = rewritten
+		}
+	}
+
+	if needsRequestParamsMutation {
+		modified, err := r.buildRequestParamsMutations(ctx.VSRSelectedDecision, bodyBytes)
+		if err != nil {
+			logging.Warnf("Failed to apply request params mutation: %v", err)
+		} else {
+			bodyBytes = modified
+		}
 	}
 
 	appendContentLengthHeader(&state.setHeaders, len(bodyBytes))
