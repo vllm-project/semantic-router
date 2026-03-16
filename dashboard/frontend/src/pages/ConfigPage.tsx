@@ -30,7 +30,6 @@ import {
   clonePresetSignals,
   collectConfiguredSignalNames,
   ConfigData,
-  DecisionConfig,
   SignalType,
   Tool,
   getDefaultModelName,
@@ -387,23 +386,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       setPresetApplyState('idle')
     }
   }
-
-
-  const handleDeleteDecision = async (decision: DecisionConfig) => {
-    if (!confirm(`Are you sure you want to delete decision "${decision.name}"?`)) {
-      return
-    }
-
-    if (!config || !isPythonCLI) {
-      alert('Deleting decisions is only supported for Python CLI configs.')
-      return
-    }
-
-    const newConfig: ConfigData = { ...config }
-    removeDecisionByName(newConfig, decision.name)
-    await saveConfig(newConfig)
-  }
-
   const handleCloseViewModal = () => {
     setViewModalOpen(false)
     setViewModalTitle('')

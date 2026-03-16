@@ -397,14 +397,208 @@ export interface StreamedBodyConfig {
   timeout_sec?: number
 }
 
+export interface IdentityConfig {
+  user_id_header?: string
+  user_groups_header?: string
+}
+
+export interface AuthzProviderConfig {
+  type: string
+  headers?: Record<string, string>
+}
+
+export interface AuthzConfig {
+  fail_open?: boolean
+  identity?: IdentityConfig
+  providers?: AuthzProviderConfig[]
+}
+
+export interface RateLimitMatch {
+  user?: string
+  group?: string
+  model?: string
+}
+
+export interface RateLimitRule {
+  name: string
+  match: RateLimitMatch
+  requests_per_unit?: number
+  tokens_per_unit?: number
+  unit: string
+}
+
+export interface RateLimitProviderConfig {
+  type: string
+  address?: string
+  domain?: string
+  rules?: RateLimitRule[]
+}
+
+export interface RateLimitConfig {
+  fail_open?: boolean
+  providers?: RateLimitProviderConfig[]
+}
+
+export interface VectorStoreMemoryConfig {
+  max_entries_per_store?: number
+}
+
+export interface LlamaStackVectorStoreConfig {
+  endpoint: string
+  auth_token?: string
+  embedding_model?: string
+  request_timeout_seconds?: number
+  search_type?: string
+}
+
+export interface VectorStoreConfig {
+  enabled?: boolean
+  backend_type?: string
+  file_storage_dir?: string
+  max_file_size_mb?: number
+  embedding_model?: string
+  embedding_dimension?: number
+  ingestion_workers?: number
+  supported_formats?: string[]
+  milvus?: MilvusConfig
+  memory?: VectorStoreMemoryConfig
+  llama_stack?: LlamaStackVectorStoreConfig
+}
+
+export interface PromptCompressionConfig {
+  enabled?: boolean
+  max_tokens?: number
+  min_length?: number
+  skip_signals?: string[]
+  textrank_weight?: number
+  position_weight?: number
+  tfidf_weight?: number
+  position_depth?: number
+}
+
+export interface ModalityClassifierConfig {
+  model_path?: string
+  use_cpu?: boolean
+}
+
+export interface ModalityDetectionConfig {
+  method?: string
+  classifier?: ModalityClassifierConfig
+  keywords?: string[]
+  both_keywords?: string[]
+  confidence_threshold?: number
+  lower_threshold_ratio?: number
+}
+
+export interface ModalityDetectorConfig {
+  enabled?: boolean
+  prompt_prefixes?: string[]
+  method?: string
+  classifier?: ModalityClassifierConfig
+  keywords?: string[]
+  both_keywords?: string[]
+  confidence_threshold?: number
+  lower_threshold_ratio?: number
+}
+
+export interface ExternalModelEndpointConfig {
+  address?: string
+  port?: number
+  protocol?: string
+  name?: string
+  use_chat_template?: boolean
+  prompt_template?: string
+}
+
+export interface ExternalModelConfig {
+  llm_provider: string
+  model_role: string
+  llm_endpoint?: ExternalModelEndpointConfig
+  llm_model_name?: string
+  llm_timeout_seconds?: number
+  parser_type?: string
+  threshold?: number
+  access_key?: string
+  max_tokens?: number
+  temperature?: number
+}
+
+export interface ToolFilteringWeights {
+  embed?: number
+  lexical?: number
+  tag?: number
+  name?: number
+  category?: number
+}
+
+export interface AdvancedToolFilteringConfig {
+  enabled?: boolean
+  candidate_pool_size?: number
+  min_lexical_overlap?: number
+  min_combined_score?: number
+  weights?: ToolFilteringWeights
+  use_category_filter?: boolean
+  category_confidence_threshold?: number
+  allow_tools?: string[]
+  block_tools?: string[]
+}
+
+export interface CanonicalSystemModels {
+  prompt_guard?: string
+  domain_classifier?: string
+  pii_classifier?: string
+  fact_check_classifier?: string
+  hallucination_detector?: string
+  hallucination_explainer?: string
+  feedback_detector?: string
+}
+
 export interface ModelSelectionConfig {
   enabled?: boolean
   method?: string
-  elo?: Record<string, unknown>
-  router_dc?: Record<string, unknown>
-  automix?: Record<string, unknown>
-  hybrid?: Record<string, unknown>
-  ml?: Record<string, unknown>
+  elo?: {
+    initial_rating?: number
+    k_factor?: number
+    category_weighted?: boolean
+    decay_factor?: number
+    min_comparisons?: number
+    cost_scaling_factor?: number
+    storage_path?: string
+    auto_save_interval?: string
+  }
+  router_dc?: {
+    temperature?: number
+    dimension_size?: number
+    min_similarity?: number
+    use_query_contrastive?: boolean
+    use_model_contrastive?: boolean
+    require_descriptions?: boolean
+    use_capabilities?: boolean
+  }
+  automix?: {
+    verification_threshold?: number
+    max_escalations?: number
+    cost_aware_routing?: boolean
+    cost_quality_tradeoff?: number
+    discount_factor?: number
+    use_logprob_verification?: boolean
+  }
+  hybrid?: {
+    elo_weight?: number
+    router_dc_weight?: number
+    automix_weight?: number
+    cost_weight?: number
+    quality_gap_threshold?: number
+    normalize_scores?: boolean
+  }
+  ml?: {
+    models_path?: string
+    embedding_dim?: number
+    knn?: { k?: number; pretrained_path?: string }
+    kmeans?: { num_clusters?: number; efficiency_weight?: number; pretrained_path?: string }
+    svm?: { kernel?: string; gamma?: number; pretrained_path?: string }
+    mlp?: { device?: string; pretrained_path?: string }
+  }
 }
 
 export interface CanonicalClassifierConfig {
@@ -432,6 +626,7 @@ export interface CanonicalEmbeddingCatalogConfig {
 
 export interface CanonicalGlobalConfig {
   router?: {
+    config_source?: string
     strategy?: string
     auto_model_name?: string
     include_config_models_in_list?: boolean
@@ -443,14 +638,14 @@ export interface CanonicalGlobalConfig {
     api?: APIConfig
     response_api?: ResponseAPIConfig
     observability?: ObservabilityConfig
-    authz?: Record<string, unknown>
-    ratelimit?: Record<string, unknown>
+    authz?: AuthzConfig
+    ratelimit?: RateLimitConfig
     router_replay?: RouterReplayConfig
   }
   stores?: {
     semantic_cache?: SemanticCacheConfig
     memory?: MemoryConfig
-    vector_store?: Record<string, unknown>
+    vector_store?: VectorStoreConfig
   }
   integrations?: {
     tools?: {
@@ -459,21 +654,21 @@ export interface CanonicalGlobalConfig {
       similarity_threshold?: number
       tools_db_path?: string
       fallback_to_empty?: boolean
-      advanced_filtering?: Record<string, unknown>
+      advanced_filtering?: AdvancedToolFilteringConfig
     }
     looper?: LooperConfig
   }
   model_catalog?: {
     embeddings?: CanonicalEmbeddingCatalogConfig
-    system?: Record<string, string>
-    external?: Array<Record<string, unknown>>
+    system?: CanonicalSystemModels
+    external?: ExternalModelConfig[]
     modules?: {
-      prompt_compression?: Record<string, unknown>
+      prompt_compression?: PromptCompressionConfig
       prompt_guard?: (ModelConfig & { enabled?: boolean; model_ref?: string; use_vllm?: boolean })
       classifier?: CanonicalClassifierConfig
       hallucination_mitigation?: CanonicalHallucinationModuleConfig
       feedback_detector?: (FeedbackDetectorConfig & { model_ref?: string })
-      modality_detector?: Record<string, unknown>
+      modality_detector?: ModalityDetectorConfig
     }
   }
 }
@@ -597,7 +792,6 @@ export interface ConfigData {
     jailbreak?: JailbreakSignal[]
     pii?: PIISignal[]
   }
-  decisions?: Array<{
   decisions?: DecisionConfig[]
   providers?: ProvidersConfig
   routing?: RoutingConfig

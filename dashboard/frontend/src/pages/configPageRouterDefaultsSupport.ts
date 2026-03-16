@@ -12,17 +12,24 @@ import type {
 } from './configPageSupport'
 
 export type RouterSystemKey =
+  | 'router_core'
   | 'response_api'
   | 'router_replay'
+  | 'authz'
+  | 'ratelimit'
   | 'memory'
   | 'semantic_cache'
+  | 'vector_store'
   | 'tools'
   | 'prompt_guard'
   | 'classifier'
   | 'hallucination_mitigation'
   | 'feedback_detector'
   | 'external_models'
+  | 'system_models'
   | 'embedding_models'
+  | 'prompt_compression'
+  | 'modality_detector'
   | 'observability'
   | 'looper'
   | 'clear_route_cache'
@@ -107,17 +114,24 @@ function cloneDefaultSection(key: RouterSystemKey): unknown {
 }
 
 const GLOBAL_SECTION_PATHS: Record<RouterSystemKey, string[]> = {
+  router_core: ['router'],
   response_api: ['services', 'response_api'],
   router_replay: ['services', 'router_replay'],
+  authz: ['services', 'authz'],
+  ratelimit: ['services', 'ratelimit'],
   memory: ['stores', 'memory'],
   semantic_cache: ['stores', 'semantic_cache'],
+  vector_store: ['stores', 'vector_store'],
   tools: ['integrations', 'tools'],
   prompt_guard: ['model_catalog', 'modules', 'prompt_guard'],
   classifier: ['model_catalog', 'modules', 'classifier'],
   hallucination_mitigation: ['model_catalog', 'modules', 'hallucination_mitigation'],
   feedback_detector: ['model_catalog', 'modules', 'feedback_detector'],
   external_models: ['model_catalog', 'external'],
+  system_models: ['model_catalog', 'system'],
   embedding_models: ['model_catalog', 'embeddings'],
+  prompt_compression: ['model_catalog', 'modules', 'prompt_compression'],
+  modality_detector: ['model_catalog', 'modules', 'modality_detector'],
   observability: ['services', 'observability'],
   looper: ['integrations', 'looper'],
   clear_route_cache: ['router', 'clear_route_cache'],
@@ -127,17 +141,24 @@ const GLOBAL_SECTION_PATHS: Record<RouterSystemKey, string[]> = {
 }
 
 const ROUTER_SECTION_LAYERS: Record<RouterSystemKey, RouterLayerKey> = {
+  router_core: 'router',
   response_api: 'services',
   router_replay: 'services',
+  authz: 'services',
+  ratelimit: 'services',
   memory: 'stores',
   semantic_cache: 'stores',
+  vector_store: 'stores',
   tools: 'integrations',
   prompt_guard: 'model_catalog',
   classifier: 'model_catalog',
   hallucination_mitigation: 'model_catalog',
   feedback_detector: 'model_catalog',
   external_models: 'model_catalog',
+  system_models: 'model_catalog',
   embedding_models: 'model_catalog',
+  prompt_compression: 'model_catalog',
+  modality_detector: 'model_catalog',
   observability: 'services',
   looper: 'integrations',
   clear_route_cache: 'router',
@@ -259,6 +280,12 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
   const section = asObject(data)
 
   switch (key) {
+    case 'router_core':
+      return [
+        { label: 'Config source', value: stringOrFallback(section?.config_source, 'file') },
+        { label: 'Strategy', value: stringOrFallback(section?.strategy) },
+        { label: 'Auto model name', value: stringOrFallback(section?.auto_model_name) },
+      ]
     case 'response_api':
       return [
         { label: 'Store backend', value: stringOrFallback(section?.store_backend) },
@@ -271,6 +298,18 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         { label: 'Retention', value: section?.ttl_seconds ? `${section.ttl_seconds}s` : 'Not set' },
         { label: 'Async writes', value: stringOrFallback(section?.async_writes, 'Disabled') },
       ]
+    case 'authz':
+      return [
+        { label: 'Fail open', value: stringOrFallback(section?.fail_open, 'Disabled') },
+        { label: 'User header', value: stringOrFallback(asObject(section?.identity)?.user_id_header, 'x-authz-user-id') },
+        { label: 'Providers', value: `${(asArray(section?.providers) || []).length}` },
+      ]
+    case 'ratelimit':
+      return [
+        { label: 'Fail open', value: stringOrFallback(section?.fail_open, 'Disabled') },
+        { label: 'Providers', value: `${(asArray(section?.providers) || []).length}` },
+        { label: 'Rules', value: `${(asArray(section?.providers) || []).flatMap((provider) => asArray(provider.rules) || []).length}` },
+      ]
     case 'memory':
       return [
         { label: 'Milvus address', value: stringOrFallback(asObject(section?.milvus)?.address) },
@@ -282,6 +321,12 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         { label: 'Backend', value: stringOrFallback(section?.backend_type) },
         { label: 'Similarity threshold', value: percentOrFallback(section?.similarity_threshold) },
         { label: 'Retention', value: section?.ttl_seconds ? `${section.ttl_seconds}s` : 'Not set' },
+      ]
+    case 'vector_store':
+      return [
+        { label: 'Backend', value: stringOrFallback(section?.backend_type) },
+        { label: 'Embedding model', value: stringOrFallback(section?.embedding_model) },
+        { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
       ]
     case 'tools':
       return [
@@ -326,6 +371,12 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         { label: 'Providers', value: models.map((item) => typeof item.llm_provider === 'string' ? item.llm_provider : null).filter(Boolean).join(', ') || 'Not set' },
       ]
     }
+    case 'system_models':
+      return [
+        { label: 'Prompt Guard', value: stringOrFallback(section?.prompt_guard) },
+        { label: 'Domain', value: stringOrFallback(section?.domain_classifier) },
+        { label: 'PII', value: stringOrFallback(section?.pii_classifier) },
+      ]
     case 'embedding_models':
       {
         const semantic = asObject(section?.semantic)
@@ -336,6 +387,18 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
           { label: 'Runtime', value: semantic?.use_cpu ? 'CPU' : 'GPU' },
         ]
       }
+    case 'prompt_compression':
+      return [
+        { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
+        { label: 'Max tokens', value: stringOrFallback(section?.max_tokens) },
+        { label: 'Skip signals', value: (Array.isArray(section?.skip_signals) ? section?.skip_signals.join(', ') : 'Not set') || 'Not set' },
+      ]
+    case 'modality_detector':
+      return [
+        { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
+        { label: 'Method', value: stringOrFallback(section?.method) },
+        { label: 'Prompt prefixes', value: `${Array.isArray(section?.prompt_prefixes) ? section.prompt_prefixes.length : 0}` },
+      ]
     case 'observability':
       return [
         { label: 'Metrics', value: asObject(section?.metrics)?.enabled ? 'Enabled' : 'Disabled' },
@@ -401,6 +464,14 @@ function badgesForKey(key: RouterSystemKey, data: unknown, ctx: RouterSectionCon
         tone: hnsw.preload_embeddings ? 'active' : 'info',
       })
     }
+  }
+
+  if (key === 'system_models') {
+    const configuredRefs = Object.values(section || {}).filter((value) => typeof value === 'string' && value.trim()).length
+    badges.push({
+      label: `${configuredRefs} bindings`,
+      tone: configuredRefs > 0 ? 'active' : 'inactive',
+    })
   }
 
   if (key === 'external_models') {

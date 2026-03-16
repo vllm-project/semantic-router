@@ -3,6 +3,7 @@ import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
+import type { FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
 import type {
   AddSignalFormState,
@@ -607,7 +608,7 @@ export default function ConfigPageSignalsSection({
       return (formData: AddSignalFormState) => formData.type !== type
     }
 
-    const fields = [
+    const fields: FieldConfig[] = [
       {
         name: 'type',
         label: 'Type',

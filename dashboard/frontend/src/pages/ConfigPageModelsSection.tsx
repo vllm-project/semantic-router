@@ -393,7 +393,9 @@ export default function ConfigPageModelsSection({
       {
         model_name: '',
         reasoning_family: reasoningFamilyNames[0] || '',
-        access_key: '',
+        provider_model_id: '',
+        api_format: '',
+        external_model_ids: {},
         param_size: '',
         context_window_size: '',
         description: '',
@@ -402,15 +404,17 @@ export default function ConfigPageModelsSection({
         tags: '',
         quality_score: '',
         modality: '',
-        endpoints: [{
+        backend_refs: [{
           name: 'endpoint-1',
           endpoint: 'localhost:8000',
           protocol: 'http' as const,
-          weight: 1
+          weight: 1,
         }],
-        currency: 'USD',
-        prompt_per_1m: 0,
-        completion_per_1m: 0
+        pricing: {
+          currency: 'USD',
+          prompt_per_1m: 0,
+          completion_per_1m: 0,
+        },
       },
       [
         {
@@ -429,6 +433,20 @@ export default function ConfigPageModelsSection({
           description: 'Select from configured reasoning families'
         },
         {
+          name: 'provider_model_id',
+          label: 'Provider Model ID',
+          type: 'text',
+          placeholder: 'e.g., openai/gpt-4.1',
+          description: 'Concrete upstream model identifier stored under providers.models[].provider_model_id'
+        },
+        {
+          name: 'api_format',
+          label: 'API Format',
+          type: 'text',
+          placeholder: 'e.g., openai',
+          description: 'Provider-specific wire format stored under providers.models[].api_format'
+        },
+        {
           name: 'param_size',
           label: 'Parameter Size',
           type: 'text',
@@ -480,48 +498,31 @@ export default function ConfigPageModelsSection({
           placeholder: '[{\"name\":\"adapter\",\"description\":\"optional\"}]'
         },
         {
-          name: 'endpoints',
-          label: 'Endpoints',
-          type: 'custom',
-          description: 'Configure endpoints for this model',
-          customRender: (value: Endpoint[], onChange: (value: Endpoint[]) => void) => (
-            <EndpointsEditor endpoints={value || []} onChange={onChange} />
-          )
+          name: 'backend_refs',
+          label: 'Backend Refs (JSON)',
+          type: 'json',
+          placeholder: '[{\"name\":\"endpoint-1\",\"endpoint\":\"localhost:8000\",\"protocol\":\"http\",\"weight\":1}]',
+          description: 'Latest provider binding format stored under providers.models[].backend_refs'
         },
         {
-          name: 'access_key',
-          label: 'API Key',
-          type: 'text',
-          placeholder: 'API key for this model',
-          description: 'Optional: API key for authentication'
+          name: 'external_model_ids',
+          label: 'External Model IDs (JSON)',
+          type: 'json',
+          placeholder: '{\"openai\":\"gpt-4.1\"}',
+          description: 'Optional external provider aliases stored under providers.models[].external_model_ids'
         },
         {
-          name: 'currency',
-          label: 'Pricing Currency',
-          type: 'text',
-          placeholder: 'USD',
-          description: 'ISO currency code (e.g., USD, EUR, CNY)'
-        },
-        {
-          name: 'prompt_per_1m',
-          label: 'Prompt Price per 1M Tokens',
-          type: 'number',
-          placeholder: '0.50',
-          description: 'Cost per 1 million prompt tokens'
-        },
-        {
-          name: 'completion_per_1m',
-          label: 'Completion Price per 1M Tokens',
-          type: 'number',
-          placeholder: '1.50',
-          description: 'Cost per 1 million completion tokens'
+          name: 'pricing',
+          label: 'Pricing (JSON)',
+          type: 'json',
+          placeholder: '{\"currency\":\"USD\",\"prompt_per_1m\":0.5,\"completion_per_1m\":1.5}',
+          description: 'Structured pricing block stored under providers.models[].pricing'
         }
       ],
       async (data) => {
         if (!config) {
           return
         }
-        const endpoints = normalizeEndpoints(data.endpoints)
         const capabilities = listInputToArray(data.capabilities || '')
         const tags = listInputToArray(data.tags || '')
         const loras = Array.isArray(data.loras) ? data.loras : []
@@ -540,29 +541,18 @@ export default function ConfigPageModelsSection({
             quality_score: data.quality_score === '' || data.quality_score === undefined ? undefined : Number(data.quality_score),
             modality: data.modality || undefined,
           })
-          providers.models.push({
-            name: data.model_name,
-            reasoning_family: data.reasoning_family || undefined,
-            provider_model_id: data.model_name,
-            backend_refs: mergeProviderBackendRefs(undefined, endpoints, data.access_key),
-            pricing: {
-              currency: data.currency,
-              prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
-              completion_per_1m: parseFloat(data.completion_per_1m) || 0
-            }
-          })
+          providers.models.push(buildProviderModelPayload(data.model_name, data))
         } else {
           if (!newConfig.model_config) {
             newConfig.model_config = {}
           }
           newConfig.model_config[data.model_name] = {
             reasoning_family: data.reasoning_family,
-            preferred_endpoints: endpoints.map((ep: { name: string }) => ep.name),
-            pricing: {
-              currency: data.currency,
-              prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
-              completion_per_1m: parseFloat(data.completion_per_1m) || 0
-            }
+            pricing: normalizePricing(data.pricing),
+            api_format: typeof data.api_format === 'string' ? data.api_format : undefined,
+            external_model_ids: normalizeStringMap(data.external_model_ids),
+            preferred_endpoints: normalizeBackendRefs(data.backend_refs).map((backendRef) => backendRef.name || '').filter(Boolean),
+            model_id: typeof data.provider_model_id === 'string' ? data.provider_model_id : data.model_name,
           }
         }
         await saveConfig(newConfig)
@@ -578,7 +568,9 @@ export default function ConfigPageModelsSection({
       `Edit Model: ${model.name}`,
       {
         reasoning_family: model.reasoning_family || '',
-        access_key: model.access_key || '',
+        provider_model_id: model.provider_model_id || '',
+        api_format: model.api_format || '',
+        external_model_ids: model.external_model_ids || {},
         param_size: model.param_size || '',
         context_window_size: model.context_window_size || '',
         description: model.description || '',
@@ -587,10 +579,8 @@ export default function ConfigPageModelsSection({
         tags: (model.tags || []).join('\n'),
         quality_score: model.quality_score ?? '',
         modality: model.modality || '',
-        endpoints: normalizeEndpoints(model.endpoints),
-        currency: model.pricing?.currency || 'USD',
-        prompt_per_1m: model.pricing?.prompt_per_1m || 0,
-        completion_per_1m: model.pricing?.completion_per_1m || 0
+        backend_refs: model.backend_refs || [],
+        pricing: model.pricing || {}
       },
       [
         {
@@ -599,6 +589,20 @@ export default function ConfigPageModelsSection({
           type: 'select',
           options: reasoningFamilyNames,
           description: 'Select from configured reasoning families'
+        },
+        {
+          name: 'provider_model_id',
+          label: 'Provider Model ID',
+          type: 'text',
+          placeholder: 'e.g., openai/gpt-4.1',
+          description: 'Concrete upstream model identifier stored under providers.models[].provider_model_id'
+        },
+        {
+          name: 'api_format',
+          label: 'API Format',
+          type: 'text',
+          placeholder: 'e.g., openai',
+          description: 'Provider-specific wire format stored under providers.models[].api_format'
         },
         {
           name: 'param_size',
@@ -652,41 +656,25 @@ export default function ConfigPageModelsSection({
           placeholder: '[{\"name\":\"adapter\",\"description\":\"optional\"}]'
         },
         {
-          name: 'endpoints',
-          label: 'Endpoints',
-          type: 'custom',
-          description: 'Configure endpoints for this model',
-          customRender: (value: Endpoint[], onChange: (value: Endpoint[]) => void) => (
-            <EndpointsEditor endpoints={value || []} onChange={onChange} />
-          )
+          name: 'backend_refs',
+          label: 'Backend Refs (JSON)',
+          type: 'json',
+          placeholder: '[{\"name\":\"endpoint-1\",\"endpoint\":\"localhost:8000\",\"protocol\":\"http\",\"weight\":1}]',
+          description: 'Latest provider binding format stored under providers.models[].backend_refs'
         },
         {
-          name: 'access_key',
-          label: 'API Key',
-          type: 'text',
-          placeholder: 'API key for this model',
-          description: 'Optional: API key for authentication'
+          name: 'external_model_ids',
+          label: 'External Model IDs (JSON)',
+          type: 'json',
+          placeholder: '{\"openai\":\"gpt-4.1\"}',
+          description: 'Optional external provider aliases stored under providers.models[].external_model_ids'
         },
         {
-          name: 'currency',
-          label: 'Pricing Currency',
-          type: 'text',
-          placeholder: 'USD',
-          description: 'ISO currency code (e.g., USD, EUR, CNY)'
-        },
-        {
-          name: 'prompt_per_1m',
-          label: 'Prompt Price per 1M Tokens',
-          type: 'number',
-          placeholder: '0.50',
-          description: 'Cost per 1 million prompt tokens'
-        },
-        {
-          name: 'completion_per_1m',
-          label: 'Completion Price per 1M Tokens',
-          type: 'number',
-          placeholder: '1.50',
-          description: 'Cost per 1 million completion tokens'
+          name: 'pricing',
+          label: 'Pricing (JSON)',
+          type: 'json',
+          placeholder: '{\"currency\":\"USD\",\"prompt_per_1m\":0.5,\"completion_per_1m\":1.5}',
+          description: 'Structured pricing block stored under providers.models[].pricing'
         }
       ],
       async (data) => {
@@ -694,7 +682,6 @@ export default function ConfigPageModelsSection({
           return
         }
         const newConfig = cloneConfigData(config)
-        const endpoints = normalizeEndpoints(data.endpoints)
         const capabilities = listInputToArray(data.capabilities || '')
         const tags = listInputToArray(data.tags || '')
         const loras = Array.isArray(data.loras) ? data.loras : []
@@ -715,26 +702,18 @@ export default function ConfigPageModelsSection({
           providers.models = providers.models.map((providerModel: ProviderModel) =>
             providerModel.name === model.name ? {
               ...providerModel,
-              reasoning_family: data.reasoning_family || undefined,
-              provider_model_id: providerModel.provider_model_id || model.name,
-              backend_refs: mergeProviderBackendRefs(providerModel.backend_refs, endpoints, data.access_key),
-              pricing: {
-                currency: data.currency,
-                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
-                completion_per_1m: parseFloat(data.completion_per_1m) || 0
-              }
+              ...buildProviderModelPayload(model.name, data, providerModel),
             } : providerModel
           )
         } else if (newConfig.model_config) {
           newConfig.model_config[model.name] = {
             ...newConfig.model_config[model.name],
             reasoning_family: data.reasoning_family,
-            preferred_endpoints: endpoints.map((ep: { name: string }) => ep.name),
-            pricing: {
-              currency: data.currency,
-              prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
-              completion_per_1m: parseFloat(data.completion_per_1m) || 0
-            }
+            pricing: normalizePricing(data.pricing),
+            api_format: typeof data.api_format === 'string' ? data.api_format : undefined,
+            external_model_ids: normalizeStringMap(data.external_model_ids),
+            preferred_endpoints: normalizeBackendRefs(data.backend_refs).map((backendRef) => backendRef.name || '').filter(Boolean),
+            model_id: typeof data.provider_model_id === 'string' ? data.provider_model_id : model.name,
           }
         }
         await saveConfig(newConfig)

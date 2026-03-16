@@ -2,10 +2,11 @@ import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
+import type { FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
 import type {
   ConfigData,
-  DecisionConditionType,
+  ConfigDecisionConditionType,
   DecisionConfig,
   DecisionFormState,
   NormalizedModel,
@@ -164,10 +165,21 @@ export default function ConfigPageDecisionsSection({
                     padding: '0.5rem',
                     background: 'rgba(147, 51, 234, 0.1)',
                     borderRadius: '4px',
-                    fontFamily: 'var(--font-mono)',
                     fontSize: '0.875rem'
                   }}>
-                    {plugin.type}
+                    <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{plugin.type}</div>
+                    <pre style={{
+                      margin: '0.5rem 0 0',
+                      padding: '0.5rem',
+                      borderRadius: '4px',
+                      background: 'rgba(0, 0, 0, 0.18)',
+                      overflowX: 'auto',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.8rem',
+                      whiteSpace: 'pre-wrap',
+                    }}>
+                      {JSON.stringify(plugin.configuration || {}, null, 2)}
+                    </pre>
                   </div>
                 ))}
               </div>
@@ -184,7 +196,7 @@ export default function ConfigPageDecisionsSection({
   const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
     const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'fact_check', 'language', 'context', 'complexity', 'modality', 'authz', 'jailbreak', 'pii'] as const
 
-    const getConditionNameOptions = (type?: DecisionConditionType) => {
+    const getConditionNameOptions = (type?: ConfigDecisionConditionType) => {
       switch (type) {
         case 'keyword':
           return config?.signals?.keywords?.map((k) => k.name) || []
@@ -313,10 +325,10 @@ export default function ConfigPageDecisionsSection({
                 style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
               >
                 <option value="" disabled>Select name</option>
-                {getConditionNameOptions(cond?.type as DecisionConditionType).map((opt) => (
+                {getConditionNameOptions(cond?.type as ConfigDecisionConditionType).map((opt) => (
                   <option key={opt} value={opt}>{opt}</option>
                 ))}
-                {getConditionNameOptions(cond?.type as DecisionConditionType).length === 0 && (
+                {getConditionNameOptions(cond?.type as ConfigDecisionConditionType).length === 0 && (
                   <option value="" disabled>No matching signals</option>
                 )}
               </select>
@@ -587,7 +599,7 @@ export default function ConfigPageDecisionsSection({
       )
     }
 
-    const fields = [
+    const fields: FieldConfig[] = [
       {
         name: 'name',
         label: 'Name',
