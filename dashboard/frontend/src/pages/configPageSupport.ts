@@ -205,11 +205,23 @@ export interface RouterReplayConfig {
   async_writes?: boolean
 }
 
+export interface MemoryMilvusConfig {
+  address?: string
+  collection?: string
+  dimension?: number
+  num_partitions?: number
+}
+
+export interface MemoryEmbeddingConfig {
+  model?: string
+  dimension?: number
+}
+
 export interface MemoryConfig {
   enabled?: boolean
   auto_store?: boolean
-  milvus?: Record<string, unknown>
-  embedding?: Record<string, unknown>
+  milvus?: MemoryMilvusConfig
+  embedding?: MemoryEmbeddingConfig
   default_retrieval_limit?: number
   default_similarity_threshold?: number
   extraction_batch_size?: number
@@ -230,11 +242,38 @@ export interface SemanticCacheConfig {
   backend_config_path?: string
 }
 
+export interface FactCheckModelModuleConfig {
+  model_id?: string
+  model_ref?: string
+  threshold?: number
+  use_cpu?: boolean
+  use_mmbert_32k?: boolean
+}
+
+export interface HallucinationDetectorModuleConfig {
+  model_id?: string
+  model_ref?: string
+  threshold?: number
+  use_cpu?: boolean
+  min_span_length?: number
+  min_span_confidence?: number
+  context_window_size?: number
+  enable_nli_filtering?: boolean
+  nli_entailment_threshold?: number
+}
+
+export interface NLIExplainerModuleConfig {
+  model_id?: string
+  model_ref?: string
+  threshold?: number
+  use_cpu?: boolean
+}
+
 export interface HallucinationMitigationConfig {
   enabled?: boolean
-  fact_check_model?: Record<string, unknown>
-  hallucination_model?: Record<string, unknown>
-  nli_model?: Record<string, unknown>
+  fact_check_model?: FactCheckModelModuleConfig
+  hallucination_model?: HallucinationDetectorModuleConfig
+  nli_model?: NLIExplainerModuleConfig
 }
 
 export interface FeedbackDetectorConfig {
@@ -246,13 +285,22 @@ export interface FeedbackDetectorConfig {
   use_modernbert?: boolean
 }
 
+export interface EmbeddingHNSWConfig {
+  model_type?: string
+  preload_embeddings?: boolean
+  target_dimension?: number
+  target_layer?: number
+  enable_soft_matching?: boolean
+  min_score_threshold?: number
+}
+
 export interface EmbeddingModelsConfig {
   qwen3_model_path?: string
   gemma_model_path?: string
   mmbert_model_path?: string
   multimodal_model_path?: string
   use_cpu?: boolean
-  hnsw_config?: Record<string, unknown>
+  hnsw_config?: EmbeddingHNSWConfig
 }
 
 export interface ObservabilityConfig {
@@ -265,6 +313,12 @@ export interface LooperConfig {
   endpoint?: string
   timeout_seconds?: number
   headers?: Record<string, string>
+}
+
+export interface StreamedBodyConfig {
+  enabled?: boolean
+  max_bytes?: number
+  timeout_sec?: number
 }
 
 export interface ModelSelectionConfig {
@@ -290,9 +344,9 @@ export interface CanonicalClassifierConfig {
 export interface CanonicalHallucinationModuleConfig {
   enabled?: boolean
   on_hallucination_detected?: string
-  fact_check?: Record<string, unknown>
-  detector?: Record<string, unknown>
-  explainer?: Record<string, unknown>
+  fact_check?: FactCheckModelModuleConfig
+  detector?: HallucinationDetectorModuleConfig
+  explainer?: NLIExplainerModuleConfig
 }
 
 export interface CanonicalEmbeddingCatalogConfig {
@@ -306,7 +360,7 @@ export interface CanonicalGlobalConfig {
     auto_model_name?: string
     include_config_models_in_list?: boolean
     clear_route_cache?: boolean
-    streamed_body?: Record<string, unknown>
+    streamed_body?: StreamedBodyConfig
     model_selection?: ModelSelectionConfig
   }
   services?: {

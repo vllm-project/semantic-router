@@ -232,7 +232,7 @@ func (r *SemanticRouterReconciler) convertComplexityRules(spec []vllmv1alpha1.Co
 		}
 		if entry.Composer != nil {
 			rule.Composer = &routerconfig.RuleCombination{
-				Operator: entry.Composer.Operator,
+				Operator:   entry.Composer.Operator,
 				Conditions: convertCompositionConditions(entry.Composer.Conditions),
 			}
 		}

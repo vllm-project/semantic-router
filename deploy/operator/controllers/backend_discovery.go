@@ -44,7 +44,7 @@ type BackendEndpoint struct {
 // DiscoveredProviderModel represents one logical model plus its discovered
 // backend bindings and routing metadata.
 type DiscoveredProviderModel struct {
-	ReasoningFamily string                         `yaml:"reasoning_family,omitempty"`
+	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
 	BackendRefs     []routerconfig.CanonicalBackendRef
 	LoRAs           []vllmv1alpha1.LoRAAdapterSpec `yaml:"loras,omitempty"`
 }

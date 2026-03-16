@@ -287,4 +287,3 @@ const EditModal: React.FC<EditModalProps> = ({
 }
 
 export default EditModal
-

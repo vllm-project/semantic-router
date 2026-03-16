@@ -39,16 +39,27 @@ import {
   CanonicalGlobalConfig,
   clonePresetDecisions,
   clonePresetSignals,
+  ComplexitySignal,
   collectConfiguredSignalNames,
   ConfigData,
   DecisionConfig,
   DecisionFormState,
+  DomainSignal,
+  EmbeddingSignal,
+  FactCheckSignal,
   formatThreshold,
+  JailbreakSignal,
+  KeywordSignal,
+  LanguageSignal,
   ModelConfigEntry, NormalizedModel, normalizeEndpoint, normalizeEndpoints,
+  PIISignal,
+  PreferenceSignal,
   ReasoningFamily,
   SignalType,
   TABLE_COLUMN_WIDTH,
   Tool,
+  UserFeedbackSignal,
+  ContextSignal,
   VLLMEndpoint,
 } from './configPageSupport'
 
@@ -588,12 +599,25 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     } : null
     const effectiveSignals = signals || flatSignals
 
+    type UnifiedSignalData = Partial<
+      KeywordSignal &
+      EmbeddingSignal &
+      DomainSignal &
+      PreferenceSignal &
+      FactCheckSignal &
+      UserFeedbackSignal &
+      LanguageSignal &
+      ContextSignal &
+      ComplexitySignal &
+      JailbreakSignal &
+      PIISignal
+    >
+
     interface UnifiedSignal {
       name: string
       type: SignalType
       summary: string
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rawData: any
+      rawData: UnifiedSignalData
     }
 
     // Flatten all signals into a unified array
@@ -801,7 +825,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
               label: 'Keywords',
               value: (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {signal.rawData.keywords.map((kw: string, i: number) => (
+                  {(signal.rawData.keywords || []).map((kw: string, i: number) => (
                     <span key={i} style={{
                       padding: '0.25rem 0.75rem',
                       background: 'rgba(118, 185, 0, 0.1)',
@@ -822,13 +846,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         sections.push({
           title: 'Embeddings Configuration',
           fields: [
-            { label: 'Threshold', value: `${Math.round(signal.rawData.threshold * 100)}%` },
+            { label: 'Threshold', value: `${Math.round((signal.rawData.threshold || 0) * 100)}%` },
             { label: 'Aggregation Method', value: signal.rawData.aggregation_method },
             {
               label: 'Candidates',
               value: (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {signal.rawData.candidates.map((c: string, i: number) => (
+                  {(signal.rawData.candidates || []).map((c: string, i: number) => (
                     <div key={i} style={{
                       padding: '0.5rem',
                       background: 'rgba(0, 212, 255, 0.1)',
@@ -1533,8 +1557,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
               throw new Error('Jailbreak threshold must be between 0.0 and 1.0.')
             }
             const method = formData.jailbreak_method || 'classifier'
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const jailbreakEntry: any = {
+            const jailbreakEntry: JailbreakSignal = {
               name,
               threshold: jailbreak_threshold,
               include_history: formData.include_history || false,
