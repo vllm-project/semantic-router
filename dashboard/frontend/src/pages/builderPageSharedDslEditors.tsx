@@ -41,7 +41,7 @@ function yamlScalar(value: DSLFieldScalar): string {
   if (typeof value === "string") {
     if (
       value === "" ||
-      /[:#{}\[\],&*!?|>'"%@`]/.test(value) ||
+      /[:#{}[\],&*!?|>'"%@`]/.test(value) ||
       /^\s|\s$/.test(value) ||
       /^(true|false|null|yes|no|on|off)$/i.test(value) ||
       /^-?\d+(\.\d+)?$/.test(value)

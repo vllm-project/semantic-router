@@ -1,4 +1,4 @@
-# TD015: Weak Typing Still Leaks Through Dashboard Editor Models and DSL Serialization Helpers
+# TD015: Weak Typing Still Leaks Through DSL YAML Helpers and Dashboard Config Utilities
 
 ## Status
 
@@ -6,11 +6,13 @@ Open
 
 ## Scope
 
-- `dashboard/frontend/src/stores/dslStore.ts`
-- `dashboard/frontend/src/lib/dslMutations.ts`
+- `src/semantic-router/pkg/dsl/compiler.go`
 - `src/semantic-router/pkg/dsl/decompiler.go`
 - `src/semantic-router/pkg/dsl/emitter_yaml.go`
-- related typed transport and validation seams already cleaned in:
+- `dashboard/frontend/src/pages/configPageCanonicalization.ts`
+- `dashboard/frontend/src/pages/configPageRouterDefaultsSupport.ts`
+- `dashboard/frontend/src/pages/setupWizardSupport.ts`
+- related typed transport and editor seams already cleaned in:
   - `src/semantic-router/pkg/config/canonical_config.go`
   - `src/semantic-router/pkg/config/canonical_global.go`
   - `src/semantic-router/pkg/config/plugin_config.go`
@@ -22,6 +24,21 @@ Open
   - `dashboard/backend/handlers/config_global_raw.go`
   - `dashboard/backend/handlers/deploy.go`
   - `dashboard/backend/handlers/setup.go`
+  - `dashboard/frontend/src/stores/dslStore.ts`
+  - `dashboard/frontend/src/lib/dslMutations.ts`
+  - `dashboard/frontend/src/pages/BuilderPage.tsx`
+  - `dashboard/frontend/src/pages/builderPageSharedDslEditors.tsx`
+  - `dashboard/frontend/src/pages/builderPageVisualShell.tsx`
+  - `dashboard/frontend/src/pages/builderPageAddEntityForms.tsx`
+  - `dashboard/frontend/src/pages/builderPageEntityDetailView.tsx`
+  - `dashboard/frontend/src/pages/builderPageGenericFieldsEditor.tsx`
+  - `dashboard/frontend/src/pages/builderPageGlobalSettingsEditor.tsx`
+  - `dashboard/frontend/src/pages/builderPageGlobalSettingsObservabilitySections.tsx`
+  - `dashboard/frontend/src/pages/builderPageGlobalSettingsRoutingSection.tsx`
+  - `dashboard/frontend/src/pages/builderPageGlobalSettingsSafetySection.tsx`
+  - `dashboard/frontend/src/pages/builderPageRouteEditorForm.tsx`
+  - `dashboard/frontend/src/pages/builderPageAddRouteForm.tsx`
+  - `dashboard/frontend/src/pages/builderPageRouteSharedControls.tsx`
   - `deploy/operator/controllers/backend_discovery.go`
   - `deploy/operator/controllers/canonical_config_builder.go`
   - `deploy/operator/controllers/semanticrouter_controller.go`
@@ -30,21 +47,27 @@ Open
 
 The branch has already removed the worst contract-level weak typing from the router config package: plugin payloads now use `StructuredPayload`, RAG/image-generation backends use typed accessors, canonical global sparse overrides no longer hang off a raw `interface{}`, Hugging Face card unions use explicit string-list wrappers, and the DSL AST JSON bridge exports named recursive node types instead of raw field maps.
 
+The dashboard visual builder and global-editor mutation layer now also uses named recursive field types (`DSLFieldObject` / `DSLFieldValue`) instead of passing `Record<string, unknown>` through the store, page orchestration, and shared editors.
+
 The remaining gaps are narrower and now cluster around two places:
 
-- the dashboard DSL/builder mutation layer still uses schema-driven generic field bags
-- the DSL YAML emit/decompile helpers still fall back to raw `map[string]interface{}` / `interface{}` while formatting arbitrary field bags
+- the Go DSL YAML compile/decompile/emit helpers still fall back to raw `map[string]interface{}` / `interface{}` while formatting arbitrary field bags
+- dashboard setup/canonicalization utilities still manipulate open-ended config fragments as mutable record bags instead of named helper payloads
 
 ## Evidence
 
-- [dslStore.ts](../../../dashboard/frontend/src/stores/dslStore.ts)
-  - builder mutation APIs still pass field bags as `Record<string, unknown>`
-- [dslMutations.ts](../../../dashboard/frontend/src/lib/dslMutations.ts)
-  - route/model/plugin serialization helpers still use unbounded field maps
+- [compiler.go](../../../src/semantic-router/pkg/dsl/compiler.go)
+  - compiler field lowering still emits `map[string]interface{}` / `interface{}` through `fieldsToMap` and `valueToInterface`
 - [decompiler.go](../../../src/semantic-router/pkg/dsl/decompiler.go)
   - plugin config normalization still formats through `map[string]interface{}`
 - [emitter_yaml.go](../../../src/semantic-router/pkg/dsl/emitter_yaml.go)
   - canonical/CRD emit paths still assemble YAML through raw infra maps
+- [configPageCanonicalization.ts](../../../dashboard/frontend/src/pages/configPageCanonicalization.ts)
+  - legacy-to-canonical promotion still mutates config through `MutableRecord`
+- [configPageRouterDefaultsSupport.ts](../../../dashboard/frontend/src/pages/configPageRouterDefaultsSupport.ts)
+  - router-default/global-section helpers still traverse mutable `Record<string, unknown>` trees
+- [setupWizardSupport.ts](../../../dashboard/frontend/src/pages/setupWizardSupport.ts)
+  - first-run setup scaffolding still builds and masks config through open-ended record bags
 - This change already retired the worst transport-level weak typing in:
   - [canonical_config.go](../../../src/semantic-router/pkg/config/canonical_config.go)
   - [canonical_global.go](../../../src/semantic-router/pkg/config/canonical_global.go)
@@ -57,23 +80,38 @@ The remaining gaps are narrower and now cluster around two places:
   - [config_global_raw.go](../../../dashboard/backend/handlers/config_global_raw.go)
   - [deploy.go](../../../dashboard/backend/handlers/deploy.go)
   - [setup.go](../../../dashboard/backend/handlers/setup.go)
+  - [dslStore.ts](../../../dashboard/frontend/src/stores/dslStore.ts)
+  - [dslMutations.ts](../../../dashboard/frontend/src/lib/dslMutations.ts)
+  - [BuilderPage.tsx](../../../dashboard/frontend/src/pages/BuilderPage.tsx)
+  - [builderPageSharedDslEditors.tsx](../../../dashboard/frontend/src/pages/builderPageSharedDslEditors.tsx)
+  - [builderPageVisualShell.tsx](../../../dashboard/frontend/src/pages/builderPageVisualShell.tsx)
+  - [builderPageAddEntityForms.tsx](../../../dashboard/frontend/src/pages/builderPageAddEntityForms.tsx)
+  - [builderPageEntityDetailView.tsx](../../../dashboard/frontend/src/pages/builderPageEntityDetailView.tsx)
+  - [builderPageGenericFieldsEditor.tsx](../../../dashboard/frontend/src/pages/builderPageGenericFieldsEditor.tsx)
+  - [builderPageGlobalSettingsEditor.tsx](../../../dashboard/frontend/src/pages/builderPageGlobalSettingsEditor.tsx)
+  - [builderPageGlobalSettingsObservabilitySections.tsx](../../../dashboard/frontend/src/pages/builderPageGlobalSettingsObservabilitySections.tsx)
+  - [builderPageGlobalSettingsRoutingSection.tsx](../../../dashboard/frontend/src/pages/builderPageGlobalSettingsRoutingSection.tsx)
+  - [builderPageGlobalSettingsSafetySection.tsx](../../../dashboard/frontend/src/pages/builderPageGlobalSettingsSafetySection.tsx)
+  - [builderPageRouteEditorForm.tsx](../../../dashboard/frontend/src/pages/builderPageRouteEditorForm.tsx)
+  - [builderPageAddRouteForm.tsx](../../../dashboard/frontend/src/pages/builderPageAddRouteForm.tsx)
+  - [builderPageRouteSharedControls.tsx](../../../dashboard/frontend/src/pages/builderPageRouteSharedControls.tsx)
   - [backend_discovery.go](../../../deploy/operator/controllers/backend_discovery.go)
   - [canonical_config_builder.go](../../../deploy/operator/controllers/canonical_config_builder.go)
 
 ## Why It Matters
 
-- dashboard DSL builder field bags still weaken config safety exactly where users expect authoring surfaces to stay contract-aware
-- raw DSL field-bag helpers still hide contract changes from the compiler, so builder/import/export regressions surface late
-- these weakly typed seams undermine the v0.3 canonical-config cleanup by leaving the last high-traffic authoring paths dynamically shaped
+- raw DSL field-bag helpers still hide contract changes from the compiler, so import/export regressions surface late
+- dashboard setup/canonicalization record bags still bypass the same named config seams used by the steady-state editor
+- these weakly typed seams undermine the v0.3 canonical-config cleanup by leaving YAML/setup helpers dynamically shaped even after the main editor surface was typed
 
 ## Desired End State
 
-- dashboard DSL builder/store APIs use typed per-entity mutation payloads, not unbounded record blobs
-- DSL builder/store/export helpers use named field/value abstractions instead of raw maps
-- branch-level config/dashboard/DSL changes can be validated without reopening raw field-bag questions in each surface
+- dashboard setup/canonicalization helpers use named helper payloads instead of mutable record bags
+- Go DSL compile/decompile/emit helpers use named value abstractions or `yaml.Node` transforms instead of raw maps
+- branch-level config/dashboard/DSL changes can be validated without reopening raw field-bag questions in setup/import/export helpers
 
 ## Exit Criteria
 
-- dashboard config editor hotspots no longer require `any` for modal state and save callbacks
-- DSL builder/store/export hotspots no longer require raw `map[string]interface{}` / `Record<string, unknown>` field bags
+- dashboard setup/import/defaults helpers no longer require mutable `Record<string, unknown>` bags for config shaping
+- DSL compiler/decompile/export hotspots no longer require raw `map[string]interface{}` / `interface{}` field bags
 - active config/dashboard/DSL branch diffs can pass harness lint without new weak-typing exemptions for these surfaces
