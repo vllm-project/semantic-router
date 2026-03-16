@@ -15,6 +15,8 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
+const authzUserIDHeader = "x-authz-user-id"
+
 func init() {
 	pkgtestcases.Register("semantic-cache", pkgtestcases.TestCase{
 		Description: "Test semantic cache hit rate with similar questions",
@@ -97,13 +99,18 @@ func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestca
 		hitRate = float64(cacheHits) / float64(totalRequests) * 100
 	}
 
+	if err := verifyUserScopedCacheBehavior(ctx, localPort, opts.Verbose); err != nil {
+		return err
+	}
+
 	// Set details for reporting
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"total_requests": totalRequests,
-			"cache_hits":     cacheHits,
-			"cache_misses":   totalRequests - cacheHits,
-			"hit_rate":       fmt.Sprintf("%.2f%%", hitRate),
+			"total_requests":           totalRequests,
+			"cache_hits":               cacheHits,
+			"cache_misses":             totalRequests - cacheHits,
+			"hit_rate":                 fmt.Sprintf("%.2f%%", hitRate),
+			"user_scoped_cache_status": "pass",
 		})
 	}
 
@@ -116,6 +123,83 @@ func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestca
 	}
 
 	return nil
+}
+
+func verifyUserScopedCacheBehavior(ctx context.Context, localPort string, verbose bool) error {
+	queryID := time.Now().UnixNano()
+	question := fmt.Sprintf("User scoped semantic cache isolation probe %d: explain mitosis versus meiosis.", queryID)
+	firstUserID := fmt.Sprintf("cache-user-a-%d", queryID)
+	secondUserID := fmt.Sprintf("cache-user-b-%d", queryID)
+
+	if verbose {
+		fmt.Printf("[Test] Verifying user-scoped cache behavior for %s and %s\n", firstUserID, secondUserID)
+	}
+
+	firstResponse, err := sendChatRequestForUser(ctx, question, localPort, firstUserID, verbose)
+	if err != nil {
+		return fmt.Errorf("failed to send initial scoped cache request: %w", err)
+	}
+	drainAndClose(firstResponse)
+
+	sameUserCacheHit, err := pollForCacheHit(ctx, question, localPort, firstUserID, verbose)
+	if err != nil {
+		return err
+	}
+	if sameUserCacheHit != "true" {
+		return fmt.Errorf("expected same-user cache hit for scoped query, got cache-hit=%q", sameUserCacheHit)
+	}
+
+	// Cross-user request should NOT hit cache (different user scope).
+	thirdResponse, err := sendChatRequestForUser(ctx, question, localPort, secondUserID, verbose)
+	if err != nil {
+		return fmt.Errorf("failed to send cross-user scoped cache request: %w", err)
+	}
+	crossUserCacheHit := thirdResponse.Header.Get("x-vsr-cache-hit")
+	drainAndClose(thirdResponse)
+
+	if crossUserCacheHit == "true" {
+		return fmt.Errorf("expected cross-user cache miss for scoped query, got cache-hit=%q", crossUserCacheHit)
+	}
+
+	if verbose {
+		fmt.Printf("[Test] ✓ User scoped cache isolated responses across %s and %s\n", firstUserID, secondUserID)
+	}
+
+	return nil
+}
+
+// drainAndClose reads remaining bytes from the response body and closes it so
+// that the underlying connection is properly released.
+func drainAndClose(resp *http.Response) {
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+}
+
+// pollForCacheHit retries the same-user request until a cache hit is observed
+// or the retry budget is exhausted. Returns the final cache-hit header value.
+func pollForCacheHit(ctx context.Context, question, localPort, userID string, verbose bool) (string, error) {
+	const maxRetries = 10
+	const retryInterval = time.Second
+	var cacheHit string
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		time.Sleep(retryInterval)
+		resp, err := sendChatRequestForUser(ctx, question, localPort, userID, verbose)
+		if err != nil {
+			if attempt == maxRetries {
+				return "", fmt.Errorf("failed to send same-user scoped cache request: %w", err)
+			}
+			continue
+		}
+		cacheHit = resp.Header.Get("x-vsr-cache-hit")
+		drainAndClose(resp)
+		if cacheHit == "true" {
+			break
+		}
+		if verbose {
+			fmt.Printf("[Test] Retry %d/%d: cache not yet populated for same-user query\n", attempt, maxRetries)
+		}
+	}
+	return cacheHit, nil
 }
 
 func loadCacheCases(filepath string) ([]CacheTestCase, error) {
@@ -163,6 +247,10 @@ func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, questio
 }
 
 func sendChatRequest(ctx context.Context, question, localPort string, verbose bool) (*http.Response, error) {
+	return sendChatRequestForUser(ctx, question, localPort, "", verbose)
+}
+
+func sendChatRequestForUser(ctx context.Context, question, localPort, userID string, verbose bool) (*http.Response, error) {
 	// Create chat completion request
 	requestBody := map[string]interface{}{
 		"model": "MoM",
@@ -183,6 +271,9 @@ func sendChatRequest(ctx context.Context, question, localPort string, verbose bo
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if userID != "" {
+		req.Header.Set(authzUserIDHeader, userID)
+	}
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	resp, err := httpClient.Do(req)
