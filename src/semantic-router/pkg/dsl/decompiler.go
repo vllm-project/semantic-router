@@ -375,8 +375,12 @@ func flattenRuleNode(node *config.RuleCombination, op string) []string {
 // decompilePluginConfig emits field lines for a DecisionPlugin's Configuration.
 func decompilePluginConfig(p *config.DecisionPlugin) string {
 	var sb strings.Builder
-	switch cfg := p.Configuration.(type) {
-	case config.SystemPromptPluginConfig:
+	switch p.Type {
+	case "system_prompt":
+		cfg, ok := decodePluginConfig[config.SystemPromptPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled != nil {
 			if *cfg.Enabled {
 				fmt.Fprintf(&sb, "    enabled: true\n")
@@ -390,14 +394,22 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.Mode != "" {
 			fmt.Fprintf(&sb, "    mode: %q\n", cfg.Mode)
 		}
-	case config.SemanticCachePluginConfig:
+	case "semantic-cache":
+		cfg, ok := decodePluginConfig[config.SemanticCachePluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
 		if cfg.SimilarityThreshold != nil {
 			fmt.Fprintf(&sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
 		}
-	case config.RouterReplayPluginConfig:
+	case "router_replay":
+		cfg, ok := decodePluginConfig[config.RouterReplayPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
@@ -413,7 +425,11 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.MaxBodyBytes != 0 {
 			fmt.Fprintf(&sb, "    max_body_bytes: %d\n", cfg.MaxBodyBytes)
 		}
-	case config.MemoryPluginConfig:
+	case "memory":
+		cfg, ok := decodePluginConfig[config.MemoryPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
@@ -426,7 +442,11 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.AutoStore != nil {
 			fmt.Fprintf(&sb, "    auto_store: %v\n", *cfg.AutoStore)
 		}
-	case config.HallucinationPluginConfig:
+	case "hallucination":
+		cfg, ok := decodePluginConfig[config.HallucinationPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
@@ -436,18 +456,30 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.HallucinationAction != "" {
 			fmt.Fprintf(&sb, "    hallucination_action: %q\n", cfg.HallucinationAction)
 		}
-	case config.ImageGenPluginConfig:
+	case "image_gen":
+		cfg, ok := decodePluginConfig[config.ImageGenPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
 		if cfg.Backend != "" {
 			fmt.Fprintf(&sb, "    backend: %q\n", cfg.Backend)
 		}
-	case config.FastResponsePluginConfig:
+	case "fast_response":
+		cfg, ok := decodePluginConfig[config.FastResponsePluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Message != "" {
 			fmt.Fprintf(&sb, "    message: %q\n", cfg.Message)
 		}
-	case config.RAGPluginConfig:
+	case "rag":
+		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
@@ -466,7 +498,11 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.InjectionMode != "" {
 			fmt.Fprintf(&sb, "    injection_mode: %q\n", cfg.InjectionMode)
 		}
-	case config.HeaderMutationPluginConfig:
+	case "header_mutation":
+		cfg, ok := decodePluginConfig[config.HeaderMutationPluginConfig](p)
+		if !ok {
+			break
+		}
 		if len(cfg.Add) > 0 {
 			fmt.Fprintf(&sb, "    add: [")
 			for i, h := range cfg.Add {
@@ -491,11 +527,22 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 			fmt.Fprintf(&sb, "    delete: %s\n", formatStringArray(cfg.Delete))
 		}
 	}
-	// Also handle raw YAML maps from config parsing.
+	// Also handle raw payloads from config parsing.
 	if rawMap, ok := normalizePluginConfigMap(p.Configuration); ok {
 		writePluginConfigMap(&sb, rawMap, "    ")
 	}
 	return sb.String()
+}
+
+func decodePluginConfig[T any](p *config.DecisionPlugin) (*T, bool) {
+	if p == nil || p.Configuration == nil {
+		return nil, false
+	}
+	var result T
+	if err := p.Configuration.DecodeInto(&result); err != nil {
+		return nil, false
+	}
+	return &result, true
 }
 
 func writePluginConfigMap(sb *strings.Builder, raw map[string]interface{}, indent string) {
@@ -509,31 +556,35 @@ func writePluginConfigMap(sb *strings.Builder, raw map[string]interface{}, inden
 	}
 }
 
-func normalizePluginConfigMap(raw interface{}) (map[string]interface{}, bool) {
+func normalizePluginConfigMap(raw *config.StructuredPayload) (map[string]interface{}, bool) {
+	if raw == nil {
+		return nil, false
+	}
+	typed, err := raw.AsStringMap()
+	if err != nil {
+		return nil, false
+	}
+	normalized := make(map[string]interface{}, len(typed))
+	for key, value := range typed {
+		normalized[key] = normalizePluginConfigValue(value)
+	}
+	return normalized, true
+}
+
+func normalizePluginConfigValue(raw interface{}) interface{} {
 	switch typed := raw.(type) {
 	case map[string]interface{}:
 		normalized := make(map[string]interface{}, len(typed))
 		for key, value := range typed {
 			normalized[key] = normalizePluginConfigValue(value)
 		}
-		return normalized, true
+		return normalized
 	case map[interface{}]interface{}:
 		normalized := make(map[string]interface{}, len(typed))
 		for key, value := range typed {
 			normalized[fmt.Sprintf("%v", key)] = normalizePluginConfigValue(value)
 		}
-		return normalized, true
-	default:
-		return nil, false
-	}
-}
-
-func normalizePluginConfigValue(raw interface{}) interface{} {
-	if normalizedMap, ok := normalizePluginConfigMap(raw); ok {
-		return normalizedMap
-	}
-
-	switch typed := raw.(type) {
+		return normalized
 	case []interface{}:
 		normalized := make([]interface{}, len(typed))
 		for index, value := range typed {
@@ -1128,8 +1179,12 @@ func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]
 // a map[string]Value suitable for the AST PluginRef.Fields.
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 	fields := make(map[string]Value)
-	switch cfg := p.Configuration.(type) {
-	case config.SystemPromptPluginConfig:
+	switch p.Type {
+	case "system_prompt":
+		cfg, ok := decodePluginConfig[config.SystemPromptPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled != nil {
 			fields["enabled"] = BoolValue{V: *cfg.Enabled}
 		}
@@ -1139,14 +1194,22 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.Mode != "" {
 			fields["mode"] = StringValue{V: cfg.Mode}
 		}
-	case config.SemanticCachePluginConfig:
+	case "semantic-cache":
+		cfg, ok := decodePluginConfig[config.SemanticCachePluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
 		if cfg.SimilarityThreshold != nil {
 			fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
 		}
-	case config.RouterReplayPluginConfig:
+	case "router_replay":
+		cfg, ok := decodePluginConfig[config.RouterReplayPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
@@ -1162,7 +1225,11 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.MaxBodyBytes != 0 {
 			fields["max_body_bytes"] = IntValue{V: cfg.MaxBodyBytes}
 		}
-	case config.MemoryPluginConfig:
+	case "memory":
+		cfg, ok := decodePluginConfig[config.MemoryPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
@@ -1175,22 +1242,38 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.AutoStore != nil {
 			fields["auto_store"] = BoolValue{V: *cfg.AutoStore}
 		}
-	case config.HallucinationPluginConfig:
+	case "hallucination":
+		cfg, ok := decodePluginConfig[config.HallucinationPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
-	case config.ImageGenPluginConfig:
+	case "image_gen":
+		cfg, ok := decodePluginConfig[config.ImageGenPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
 		if cfg.Backend != "" {
 			fields["backend"] = StringValue{V: cfg.Backend}
 		}
-	case config.FastResponsePluginConfig:
+	case "fast_response":
+		cfg, ok := decodePluginConfig[config.FastResponsePluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Message != "" {
 			fields["message"] = StringValue{V: cfg.Message}
 		}
-	case config.RAGPluginConfig:
+	case "rag":
+		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
@@ -1209,7 +1292,11 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.InjectionMode != "" {
 			fields["injection_mode"] = StringValue{V: cfg.InjectionMode}
 		}
-	case config.HeaderMutationPluginConfig:
+	case "header_mutation":
+		cfg, ok := decodePluginConfig[config.HeaderMutationPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if len(cfg.Add) > 0 {
 			var items []Value
 			for _, h := range cfg.Add {

@@ -108,17 +108,15 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 
 	// Convert plugins
 	for _, plugin := range decision.Plugins {
-		var pluginConfig any
+		var pluginConfig *config.StructuredPayload
 		if plugin.Configuration != nil && plugin.Configuration.Raw != nil {
 			// Validate plugin configuration format
 			if err := validatePluginConfiguration(plugin.Type, plugin.Configuration.Raw); err != nil {
 				return config.Decision{}, fmt.Errorf("invalid configuration for plugin %s in decision %s: %w", plugin.Type, decision.Name, err)
 			}
-			if decoded, err := rawPluginConfiguration(plugin.Configuration.Raw); err == nil {
-				pluginConfig = decoded
-			} else {
-				pluginConfig = plugin.Configuration.Raw
-			}
+			raw := make([]byte, len(plugin.Configuration.Raw))
+			copy(raw, plugin.Configuration.Raw)
+			pluginConfig = &config.StructuredPayload{Raw: raw}
 		}
 		configDecision.Plugins = append(configDecision.Plugins, config.DecisionPlugin{
 			Type:          plugin.Type,
@@ -289,17 +287,6 @@ func cloneCanonicalConfig(base *config.CanonicalConfig) (*config.CanonicalConfig
 		return nil, fmt.Errorf("failed to clone canonical base config: %w", err)
 	}
 	return &cloned, nil
-}
-
-func rawPluginConfiguration(raw []byte) (map[string]interface{}, error) {
-	if len(raw) == 0 {
-		return nil, nil
-	}
-	var decoded map[string]interface{}
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return nil, err
-	}
-	return decoded, nil
 }
 
 // validatePluginConfiguration validates that plugin configuration matches the expected schema

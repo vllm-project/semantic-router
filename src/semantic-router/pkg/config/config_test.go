@@ -2315,9 +2315,9 @@ default_model: "test-model"
 					Plugins: []DecisionPlugin{
 						{
 							Type: "semantic-cache",
-							Configuration: map[string]interface{}{
+							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled": false,
-							},
+							}),
 						},
 					},
 				}
@@ -2341,9 +2341,9 @@ default_model: "test-model"
 					Plugins: []DecisionPlugin{
 						{
 							Type: "semantic-cache",
-							Configuration: map[string]interface{}{
+							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled": true,
-							},
+							}),
 						},
 					},
 				}
@@ -2378,10 +2378,10 @@ default_model: "test-model"
 					Plugins: []DecisionPlugin{
 						{
 							Type: "semantic-cache",
-							Configuration: map[string]interface{}{
+							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled":              true,
 								"similarity_threshold": threshold,
-							},
+							}),
 						},
 					},
 				}
@@ -2409,10 +2409,10 @@ default_model: "test-model"
 					Plugins: []DecisionPlugin{
 						{
 							Type: "semantic-cache",
-							Configuration: map[string]interface{}{
+							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled":     true,
 								"ttl_seconds": ttl,
-							},
+							}),
 						},
 					},
 				}
@@ -3285,7 +3285,7 @@ default_model: "test-model"
 			decision := &Decision{
 				Name: "test_decision",
 				Plugins: []DecisionPlugin{
-					{Type: "pii", Configuration: map[string]interface{}{"enabled": true}},
+					{Type: "pii", Configuration: MustStructuredPayload(map[string]interface{}{"enabled": true})},
 				},
 			}
 
@@ -3298,12 +3298,12 @@ default_model: "test-model"
 				Plugins: []DecisionPlugin{
 					{
 						Type: "memory",
-						Configuration: map[string]interface{}{
+						Configuration: MustStructuredPayload(map[string]interface{}{
 							"enabled":              true,
 							"retrieval_limit":      10,
 							"similarity_threshold": 0.75,
 							"auto_store":           true,
-						},
+						}),
 					},
 				},
 			}
@@ -3322,10 +3322,10 @@ default_model: "test-model"
 				Plugins: []DecisionPlugin{
 					{
 						Type: "memory",
-						Configuration: map[string]interface{}{
+						Configuration: MustStructuredPayload(map[string]interface{}{
 							"enabled": false,
 							// Only enabled is set, other fields are nil
-						},
+						}),
 					},
 				},
 			}

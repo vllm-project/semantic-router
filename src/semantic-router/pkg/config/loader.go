@@ -86,7 +86,13 @@ func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
 			logging.Debugf("[config.Parse] ERROR parsing canonical YAML: %v", unmarshalErr)
 			return nil, fmt.Errorf("failed to parse canonical config file: %w", unmarshalErr)
 		}
-		canonical.globalOverrideRaw = raw["global"]
+		if rawGlobal, ok := raw["global"]; ok {
+			payload, payloadErr := NewStructuredPayload(rawGlobal)
+			if payloadErr != nil {
+				return nil, fmt.Errorf("failed to encode canonical global override: %w", payloadErr)
+			}
+			canonical.globalOverrideRaw = payload
+		}
 		cfg, err = normalizeCanonicalConfig(canonical)
 		if err != nil {
 			logging.Debugf("[config.Parse] ERROR normalizing canonical YAML: %v", err)

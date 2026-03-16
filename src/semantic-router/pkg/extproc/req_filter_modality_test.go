@@ -309,7 +309,7 @@ func TestResolveImageGenConfig_PrefersDecisionPluginConfig(t *testing.T) {
 		Plugins: []config.DecisionPlugin{
 			{
 				Type: config.DecisionPluginImageGen,
-				Configuration: map[string]interface{}{
+				Configuration: config.MustStructuredPayload(map[string]interface{}{
 					"enabled": true,
 					"backend": "vllm_omni",
 					"backend_config": map[string]interface{}{
@@ -321,7 +321,7 @@ func TestResolveImageGenConfig_PrefersDecisionPluginConfig(t *testing.T) {
 						"method":   "keyword",
 						"keywords": []string{"draw"},
 					},
-				},
+				}),
 			},
 		},
 	}

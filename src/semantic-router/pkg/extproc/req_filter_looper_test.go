@@ -137,12 +137,12 @@ func TestBuildHeaderMutationsForLooperIncludesAuthorizationAndPluginHeaders(t *t
 		Plugins: []config.DecisionPlugin{
 			{
 				Type: "header_mutation",
-				Configuration: map[string]interface{}{
+				Configuration: config.MustStructuredPayload(map[string]interface{}{
 					"add": []map[string]interface{}{
 						{"name": "x-extra", "value": "1"},
 					},
 					"delete": []string{"x-remove-me"},
-				},
+				}),
 			},
 		},
 	}

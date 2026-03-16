@@ -26,9 +26,9 @@ type VLLMOmniBackend struct {
 
 // NewVLLMOmniBackend creates a new vLLM-Omni backend
 func NewVLLMOmniBackend(cfg *config.ImageGenPluginConfig) (Backend, error) {
-	vllmConfig, ok := cfg.BackendConfig.(*config.VLLMOmniImageGenConfig)
-	if !ok {
-		return nil, fmt.Errorf("invalid backend_config for vllm_omni, expected VLLMOmniImageGenConfig")
+	vllmConfig, err := cfg.VLLMOmniBackendConfig()
+	if err != nil {
+		return nil, fmt.Errorf("invalid backend_config for vllm_omni: %w", err)
 	}
 
 	if vllmConfig.BaseURL == "" {

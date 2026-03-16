@@ -16,9 +16,9 @@ import (
 // 1. Tool-based (Responses API workflow): Adds file_search tool to request, LLM calls it
 // 2. Direct search: Uses vector store search API for synchronous retrieval
 func (r *OpenAIRouter) retrieveFromOpenAI(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
-	openaiConfig, ok := ragConfig.BackendConfig.(*config.OpenAIRAGConfig)
-	if !ok {
-		return "", fmt.Errorf("invalid OpenAI RAG config")
+	openaiConfig, err := ragConfig.OpenAIBackendConfig()
+	if err != nil {
+		return "", fmt.Errorf("invalid OpenAI RAG config: %w", err)
 	}
 
 	baseURL := openaiConfig.BaseURL
@@ -63,7 +63,11 @@ func (r *OpenAIRouter) retrieveFromOpenAI(traceCtx context.Context, ctx *Request
 	}
 
 	// Perform vector store search
-	searchResp, err := vectorStoreClient.SearchVectorStore(traceCtx, openaiConfig.VectorStoreID, query, limit, openaiConfig.Filter)
+	filterMap, err := openaiConfig.FilterMap()
+	if err != nil {
+		return "", fmt.Errorf("invalid OpenAI filter config: %w", err)
+	}
+	searchResp, err := vectorStoreClient.SearchVectorStore(traceCtx, openaiConfig.VectorStoreID, query, limit, filterMap)
 	if err != nil {
 		return "", fmt.Errorf("vector store search failed: %w", err)
 	}
@@ -107,6 +111,11 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 		return fmt.Errorf("original request body is empty")
 	}
 
+	filterMap, err := openaiConfig.FilterMap()
+	if err != nil {
+		return fmt.Errorf("invalid OpenAI filter config: %w", err)
+	}
+
 	// Parse the request body
 	var requestMap map[string]interface{}
 	if err := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); err != nil {
@@ -139,8 +148,8 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 				if len(openaiConfig.FileIDs) > 0 {
 					toolConfig["file_ids"] = openaiConfig.FileIDs
 				}
-				if openaiConfig.Filter != nil {
-					toolConfig["filter"] = openaiConfig.Filter
+				if filterMap != nil {
+					toolConfig["filter"] = filterMap
 				}
 			}
 			// Update the request body
@@ -165,8 +174,8 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 	if len(openaiConfig.FileIDs) > 0 {
 		fileSearchConfig["file_ids"] = openaiConfig.FileIDs
 	}
-	if openaiConfig.Filter != nil {
-		fileSearchConfig["filter"] = openaiConfig.Filter
+	if filterMap != nil {
+		fileSearchConfig["filter"] = filterMap
 	}
 
 	// Add file_search tool

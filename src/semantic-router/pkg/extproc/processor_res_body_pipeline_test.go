@@ -44,7 +44,7 @@ func TestUpdateResponseCache_SkipsWhenDecisionCacheExplicitlyDisabled(t *testing
 					Plugins: []config.DecisionPlugin{
 						{
 							Type:          "semantic-cache",
-							Configuration: map[string]interface{}{"enabled": false},
+							Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false}),
 						},
 					},
 				},
@@ -73,7 +73,7 @@ func TestUpdateResponseCache_StoresWhenDecisionCacheEnabled(t *testing.T) {
 					Plugins: []config.DecisionPlugin{
 						{
 							Type:          "semantic-cache",
-							Configuration: map[string]interface{}{"enabled": true},
+							Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
 						},
 					},
 				},

@@ -77,8 +77,12 @@ routing:
 		replayFound bool
 	)
 	for _, plugin := range compiled.Decisions[0].Plugins {
-		switch cfg := plugin.Configuration.(type) {
-		case config.SemanticCachePluginConfig:
+		switch plugin.Type {
+		case "semantic-cache":
+			var cfg config.SemanticCachePluginConfig
+			if err := config.UnmarshalPluginConfig(plugin.Configuration, &cfg); err != nil {
+				t.Fatalf("semantic-cache decode error: %v", err)
+			}
 			cacheFound = true
 			if !cfg.Enabled {
 				t.Fatalf("semantic-cache.enabled = false, want true")
@@ -86,7 +90,11 @@ routing:
 			if cfg.SimilarityThreshold == nil || *cfg.SimilarityThreshold != 0.81 {
 				t.Fatalf("semantic-cache.similarity_threshold = %#v", cfg.SimilarityThreshold)
 			}
-		case config.RouterReplayPluginConfig:
+		case "router_replay":
+			var cfg config.RouterReplayPluginConfig
+			if err := config.UnmarshalPluginConfig(plugin.Configuration, &cfg); err != nil {
+				t.Fatalf("router_replay decode error: %v", err)
+			}
 			replayFound = true
 			if !cfg.Enabled {
 				t.Fatalf("router_replay.enabled = false, want true")

@@ -15,7 +15,7 @@ type CanonicalConfig struct {
 	Routing   CanonicalRouting   `yaml:"routing,omitempty"`
 	Global    *CanonicalGlobal   `yaml:"global,omitempty"`
 
-	globalOverrideRaw interface{} `yaml:"-"`
+	globalOverrideRaw *StructuredPayload `yaml:"-"`
 }
 
 // CanonicalRouting contains the DSL-owned routing surface.

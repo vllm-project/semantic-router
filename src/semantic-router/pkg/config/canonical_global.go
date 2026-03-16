@@ -169,7 +169,7 @@ func (m CanonicalHallucinationModule) runtimeConfig() HallucinationMitigationCon
 	}
 }
 
-func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride interface{}) (CanonicalGlobal, error) {
+func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPayload) (CanonicalGlobal, error) {
 	defaults := DefaultCanonicalGlobal()
 	if rawOverride == nil && override == nil {
 		if err := resolveModuleModelRefs(&defaults); err != nil {
@@ -179,7 +179,7 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride interface{}) 
 	}
 
 	resolved := defaults
-	overrideSource := rawOverride
+	var overrideSource interface{} = rawOverride
 	if overrideSource == nil {
 		overrideSource = override
 	}

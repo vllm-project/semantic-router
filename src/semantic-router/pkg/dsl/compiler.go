@@ -712,6 +712,14 @@ func (c *Compiler) compilePluginRef(ref *PluginRef) *config.DecisionPlugin {
 
 func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Value) *config.DecisionPlugin {
 	dp := &config.DecisionPlugin{Type: pluginType}
+	setPluginConfig := func(value interface{}) {
+		payload, err := config.NewStructuredPayload(value)
+		if err != nil {
+			c.addError(Position{}, "failed to encode plugin %q configuration: %v", pluginType, err)
+			return
+		}
+		dp.Configuration = payload
+	}
 
 	switch pluginType {
 	case "system_prompt":
@@ -725,7 +733,7 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getStringField(fields, "mode"); ok {
 			cfg.Mode = v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "semantic_cache", "semantic-cache":
 		dp.Type = "semantic-cache" // normalize to config convention
@@ -736,7 +744,7 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getFloat32Field(fields, "similarity_threshold"); ok {
 			cfg.SimilarityThreshold = &v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "hallucination":
 		cfg := config.HallucinationPluginConfig{}
@@ -749,7 +757,7 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getStringField(fields, "hallucination_action"); ok {
 			cfg.HallucinationAction = v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "memory":
 		cfg := config.MemoryPluginConfig{}
@@ -765,15 +773,15 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getBoolField(fields, "auto_store"); ok {
 			cfg.AutoStore = &v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "rag":
 		cfg := c.compileRAGPlugin(fields)
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "header_mutation":
 		cfg := config.HeaderMutationPluginConfig{}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "router_replay":
 		cfg := config.RouterReplayPluginConfig{}
@@ -792,7 +800,7 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getIntField(fields, "max_body_bytes"); ok {
 			cfg.MaxBodyBytes = v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "image_gen":
 		cfg := config.ImageGenPluginConfig{}
@@ -802,14 +810,14 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getStringField(fields, "backend"); ok {
 			cfg.Backend = v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "fast_response":
 		cfg := config.FastResponsePluginConfig{}
 		if v, ok := getStringField(fields, "message"); ok {
 			cfg.Message = v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	default:
 		c.addError(Position{}, "unknown plugin type %q", pluginType)
@@ -842,7 +850,12 @@ func (c *Compiler) compileRAGPlugin(fields map[string]Value) config.RAGPluginCon
 	// backend_config is a nested object
 	if obj, ok := fields["backend_config"]; ok {
 		if ov, ok := obj.(ObjectValue); ok {
-			cfg.BackendConfig = fieldsToMap(ov.Fields)
+			payload, err := config.NewStructuredPayload(fieldsToMap(ov.Fields))
+			if err != nil {
+				c.addError(Position{}, "failed to encode rag backend_config: %v", err)
+			} else {
+				cfg.BackendConfig = payload
+			}
 		}
 	}
 	return cfg

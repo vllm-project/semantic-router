@@ -18,10 +18,10 @@ type ProgramJSON struct {
 
 // SignalDeclJSON is the JSON form of SignalDecl.
 type SignalDeclJSON struct {
-	SignalType string                 `json:"signalType"`
-	Name       string                 `json:"name"`
-	Fields     map[string]interface{} `json:"fields"`
-	Pos        Position               `json:"pos"`
+	SignalType string     `json:"signalType"`
+	Name       string     `json:"name"`
+	Fields     JSONObject `json:"fields"`
+	Pos        Position   `json:"pos"`
 }
 
 // RouteDeclJSON is the JSON form of RouteDecl.
@@ -29,7 +29,7 @@ type RouteDeclJSON struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description,omitempty"`
 	Priority    int              `json:"priority"`
-	When        interface{}      `json:"when"`
+	When        *BoolExprJSON    `json:"when,omitempty"`
 	Models      []*ModelRefJSON  `json:"models"`
 	Algorithm   *AlgoSpecJSON    `json:"algorithm,omitempty"`
 	Plugins     []*PluginRefJSON `json:"plugins"`
@@ -38,9 +38,9 @@ type RouteDeclJSON struct {
 
 // ModelDeclJSON is the JSON form of ModelDecl.
 type ModelDeclJSON struct {
-	Name   string                 `json:"name"`
-	Fields map[string]interface{} `json:"fields"`
-	Pos    Position               `json:"pos"`
+	Name   string     `json:"name"`
+	Fields JSONObject `json:"fields"`
+	Pos    Position   `json:"pos"`
 }
 
 // ModelRefJSON is the JSON form of ModelRef.
@@ -57,24 +57,70 @@ type ModelRefJSON struct {
 
 // AlgoSpecJSON is the JSON form of AlgoSpec.
 type AlgoSpecJSON struct {
-	AlgoType string                 `json:"algoType"`
-	Fields   map[string]interface{} `json:"fields"`
-	Pos      Position               `json:"pos"`
+	AlgoType string     `json:"algoType"`
+	Fields   JSONObject `json:"fields"`
+	Pos      Position   `json:"pos"`
 }
 
 // PluginDeclJSON is the JSON form of PluginDecl.
 type PluginDeclJSON struct {
-	Name       string                 `json:"name"`
-	PluginType string                 `json:"pluginType"`
-	Fields     map[string]interface{} `json:"fields"`
-	Pos        Position               `json:"pos"`
+	Name       string     `json:"name"`
+	PluginType string     `json:"pluginType"`
+	Fields     JSONObject `json:"fields"`
+	Pos        Position   `json:"pos"`
 }
 
 // PluginRefJSON is the JSON form of PluginRef.
 type PluginRefJSON struct {
-	Name   string                 `json:"name"`
-	Fields map[string]interface{} `json:"fields,omitempty"`
-	Pos    Position               `json:"pos"`
+	Name   string      `json:"name"`
+	Fields *JSONObject `json:"fields,omitempty"`
+	Pos    Position    `json:"pos"`
+}
+
+// JSONObject preserves object-shaped DSL field trees without weak map types.
+type JSONObject struct {
+	Fields []JSONField
+}
+
+// JSONField represents one key/value entry in a JSON object.
+type JSONField struct {
+	Name  string
+	Value JSONValue
+}
+
+// JSONValue is a typed recursive JSON value that still marshals to plain JSON.
+type JSONValue struct {
+	Kind   JSONValueKind
+	String string
+	Int    int
+	Float  float64
+	Bool   bool
+	Array  []JSONValue
+	Object *JSONObject
+}
+
+// JSONValueKind identifies which JSONValue branch is active.
+type JSONValueKind string
+
+const (
+	JSONValueNull   JSONValueKind = "null"
+	JSONValueString JSONValueKind = "string"
+	JSONValueInt    JSONValueKind = "int"
+	JSONValueFloat  JSONValueKind = "float"
+	JSONValueBool   JSONValueKind = "bool"
+	JSONValueArray  JSONValueKind = "array"
+	JSONValueObject JSONValueKind = "object"
+)
+
+// BoolExprJSON is the discriminated JSON form of BoolExpr.
+type BoolExprJSON struct {
+	Type       string        `json:"type"`
+	Left       *BoolExprJSON `json:"left,omitempty"`
+	Right      *BoolExprJSON `json:"right,omitempty"`
+	Expr       *BoolExprJSON `json:"expr,omitempty"`
+	SignalType string        `json:"signalType,omitempty"`
+	SignalName string        `json:"signalName,omitempty"`
+	Pos        Position      `json:"pos"`
 }
 
 // ProgramToJSON converts a resolved AST Program to its JSON-serializable form.
@@ -94,7 +140,7 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 		result.Signals = append(result.Signals, &SignalDeclJSON{
 			SignalType: s.SignalType,
 			Name:       s.Name,
-			Fields:     marshalFields(s.Fields),
+			Fields:     marshalObjectFields(s.Fields),
 			Pos:        s.Pos,
 		})
 	}
@@ -124,7 +170,7 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 		if r.Algorithm != nil {
 			rj.Algorithm = &AlgoSpecJSON{
 				AlgoType: r.Algorithm.AlgoType,
-				Fields:   marshalFields(r.Algorithm.Fields),
+				Fields:   marshalObjectFields(r.Algorithm.Fields),
 				Pos:      r.Algorithm.Pos,
 			}
 		}
@@ -134,7 +180,8 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 				Pos:  p.Pos,
 			}
 			if len(p.Fields) > 0 {
-				pj.Fields = marshalFields(p.Fields)
+				fields := marshalObjectFields(p.Fields)
+				pj.Fields = &fields
 			}
 			rj.Plugins = append(rj.Plugins, pj)
 		}
@@ -144,7 +191,7 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 	for _, m := range prog.Models {
 		result.Models = append(result.Models, &ModelDeclJSON{
 			Name:   m.Name,
-			Fields: marshalFields(m.Fields),
+			Fields: marshalObjectFields(m.Fields),
 			Pos:    m.Pos,
 		})
 	}
@@ -153,7 +200,7 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 		result.Plugins = append(result.Plugins, &PluginDeclJSON{
 			Name:       p.Name,
 			PluginType: p.PluginType,
-			Fields:     marshalFields(p.Fields),
+			Fields:     marshalObjectFields(p.Fields),
 			Pos:        p.Pos,
 		})
 	}
@@ -167,86 +214,115 @@ func MarshalProgramJSON(prog *Program) ([]byte, error) {
 	return json.Marshal(pj)
 }
 
-// ---------- Helper: Value → interface{} ----------
-
-func marshalFields(fields map[string]Value) map[string]interface{} {
-	if fields == nil {
-		return map[string]interface{}{}
+func (o JSONObject) MarshalJSON() ([]byte, error) {
+	raw := make(map[string]json.RawMessage, len(o.Fields))
+	for _, field := range o.Fields {
+		payload, err := json.Marshal(field.Value)
+		if err != nil {
+			return nil, err
+		}
+		raw[field.Name] = payload
 	}
-	result := make(map[string]interface{}, len(fields))
-	for k, v := range fields {
-		result[k] = marshalValue(v)
+	return json.Marshal(raw)
+}
+
+func (v JSONValue) MarshalJSON() ([]byte, error) {
+	switch v.Kind {
+	case JSONValueNull:
+		return []byte("null"), nil
+	case JSONValueString:
+		return json.Marshal(v.String)
+	case JSONValueInt:
+		return json.Marshal(v.Int)
+	case JSONValueFloat:
+		return json.Marshal(v.Float)
+	case JSONValueBool:
+		return json.Marshal(v.Bool)
+	case JSONValueArray:
+		return json.Marshal(v.Array)
+	case JSONValueObject:
+		if v.Object == nil {
+			return []byte("{}"), nil
+		}
+		return json.Marshal(v.Object)
+	default:
+		return []byte("null"), nil
+	}
+}
+
+func marshalObjectFields(fields map[string]Value) JSONObject {
+	if fields == nil {
+		return JSONObject{Fields: []JSONField{}}
+	}
+	result := JSONObject{Fields: make([]JSONField, 0, len(fields))}
+	for key, value := range fields {
+		result.Fields = append(result.Fields, JSONField{
+			Name:  key,
+			Value: marshalValue(value),
+		})
 	}
 	return result
 }
 
-func marshalValue(v Value) interface{} {
+func marshalValue(v Value) JSONValue {
 	if v == nil {
-		return nil
+		return JSONValue{Kind: JSONValueNull}
 	}
 	switch val := v.(type) {
 	case StringValue:
-		return val.V
+		return JSONValue{Kind: JSONValueString, String: val.V}
 	case IntValue:
-		return val.V
+		return JSONValue{Kind: JSONValueInt, Int: val.V}
 	case FloatValue:
-		return val.V
+		return JSONValue{Kind: JSONValueFloat, Float: val.V}
 	case BoolValue:
-		return val.V
+		return JSONValue{Kind: JSONValueBool, Bool: val.V}
 	case ArrayValue:
-		items := make([]interface{}, len(val.Items))
+		items := make([]JSONValue, len(val.Items))
 		for i, item := range val.Items {
 			items[i] = marshalValue(item)
 		}
-		return items
+		return JSONValue{Kind: JSONValueArray, Array: items}
 	case ObjectValue:
-		return marshalFields(val.Fields)
+		obj := marshalObjectFields(val.Fields)
+		return JSONValue{Kind: JSONValueObject, Object: &obj}
 	default:
-		return nil
+		return JSONValue{Kind: JSONValueNull}
 	}
 }
 
-// ---------- Helper: BoolExpr → discriminated JSON ----------
-
-// marshalBoolExpr converts a BoolExpr to a JSON-friendly map with a "type" discriminator.
-//
-// Output shapes:
-//
-//	{ "type": "and", "left": ..., "right": ..., "pos": ... }
-//	{ "type": "or",  "left": ..., "right": ..., "pos": ... }
-//	{ "type": "not", "expr": ..., "pos": ... }
-//	{ "type": "signal_ref", "signalType": "domain", "signalName": "math", "pos": ... }
-func marshalBoolExpr(expr BoolExpr) interface{} {
+// marshalBoolExpr converts a BoolExpr to a discriminated JSON node.
+func marshalBoolExpr(expr BoolExpr) *BoolExprJSON {
 	if expr == nil {
 		return nil
 	}
 	switch e := expr.(type) {
 	case *BoolAnd:
-		return map[string]interface{}{
-			"type":  "and",
-			"left":  marshalBoolExpr(e.Left),
-			"right": marshalBoolExpr(e.Right),
-			"pos":   e.Pos,
+		return &BoolExprJSON{
+			Type:  "and",
+			Left:  marshalBoolExpr(e.Left),
+			Right: marshalBoolExpr(e.Right),
+			Pos:   e.Pos,
 		}
 	case *BoolOr:
-		return map[string]interface{}{
-			"type":  "or",
-			"left":  marshalBoolExpr(e.Left),
-			"right": marshalBoolExpr(e.Right),
-			"pos":   e.Pos,
+		return &BoolExprJSON{
+			Type:  "or",
+			Left:  marshalBoolExpr(e.Left),
+			Right: marshalBoolExpr(e.Right),
+			Pos:   e.Pos,
 		}
 	case *BoolNot:
-		return map[string]interface{}{
-			"type": "not",
-			"expr": marshalBoolExpr(e.Expr),
-			"pos":  e.Pos,
+		return &BoolExprJSON{
+			Type: "not",
+			Expr: marshalBoolExpr(e.Expr),
+			Pos:  e.Pos,
 		}
 	case *SignalRefExpr:
-		return map[string]interface{}{
-			"type":       "signal_ref",
-			"signalType": e.SignalType,
-			"signalName": e.SignalName,
-			"pos":        e.Pos,
+		return &BoolExprJSON{
+			Type:       "signal_ref",
+			SignalType: e.SignalType,
+			SignalName: e.SignalName,
+			Pos:        e.Pos,
 		}
 	default:
 		return nil
