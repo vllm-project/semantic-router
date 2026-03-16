@@ -112,11 +112,11 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 
 	// Generate comparison output
 	comparisonOutput := struct {
-		BaselineDir    string                    `json:"baseline_dir"`
-		CurrentFile    string                    `json:"current_file"`
-		Timestamp      time.Time                 `json:"timestamp"`
+		BaselineDir    string                       `json:"baseline_dir"`
+		CurrentFile    string                       `json:"current_file"`
+		Timestamp      time.Time                    `json:"timestamp"`
 		Results        []benchmark.ComparisonResult `json:"results"`
-		HasRegressions bool                      `json:"has_regressions"`
+		HasRegressions bool                         `json:"has_regressions"`
 	}{
 		BaselineDir:    baselineDir,
 		CurrentFile:    currentResultsFile,

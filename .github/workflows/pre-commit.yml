@@ -119,6 +119,29 @@ jobs:
           fi
           make agent-fast-gate
 
+      - name: Diagnose gofmt state before pre-commit
+        run: |
+          echo "=== Go version ==="
+          go version
+          echo "=== gofmt version ==="
+          gofmt -h 2>&1 | head -3 || true
+          echo "=== Files needing gofmt (gofmt -l) ==="
+          NEEDS_FMT=$(gofmt -l $(find . -name "*.go" -not -path "./.git/*" -not -path "./.venv/*") 2>/dev/null)
+          if [ -n "$NEEDS_FMT" ]; then
+            echo "Files that need formatting:"
+            echo "$NEEDS_FMT"
+            echo ""
+            echo "=== Diffs ==="
+            for f in $NEEDS_FMT; do
+              echo "--- $f ---"
+              gofmt -d "$f" || true
+            done
+          else
+            echo "All Go files are properly formatted"
+          fi
+          echo "=== git status (any working tree changes) ==="
+          git status --short || true
+
       - name: Run pre-commit check
         run: make precommit-check
         env:
@@ -128,6 +151,19 @@ jobs:
         if: failure()
         run: |
           echo "::error::Pre-commit hooks failed. Please fix the issues and commit again."
+          echo ""
+          echo "=== Files with gofmt issues (gofmt -l) ==="
+          gofmt -l $(find . -name "*.go" -not -path "./.git/*") || true
+          echo ""
+          echo "=== gofmt diff for all modified Go files ==="
+          gofmt -d $(find . -name "*.go" -not -path "./.git/*") || true
+          echo ""
+          echo "=== Working tree changes after pre-commit run ==="
+          git diff --name-only || true
+          echo ""
+          echo "=== Full git diff ==="
+          git diff || true
+          echo ""
           echo "To run pre-commit locally:"
           echo "  pip install pre-commit"
           echo "  pre-commit install"

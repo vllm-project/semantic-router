@@ -97,14 +97,14 @@ agent-lint: agent-bootstrap ## Run lint and structure gates for changed files
 	FILE_ARGS="$$(printf '%s\n' "$$RAW_FILES" | paste -sd' ' -)"; \
 	CSV_FILES="$$(printf '%s\n' "$$RAW_FILES" | paste -sd',' -)"; \
 	echo "Running baseline pre-commit checks..."; \
-	pre-commit run --files $$FILE_ARGS; \
-	echo "Running Python lint..."; \
-	python3 tools/agent/scripts/agent_gate.py run-python-lint --changed-files "$$CSV_FILES"; \
-		echo "Running Go structural lint..."; \
-		python3 tools/agent/scripts/agent_gate.py run-go-lint --base-ref "$(AGENT_BASE_REF)" --changed-files "$$CSV_FILES"; \
-	echo "Running Rust lint..."; \
-	python3 tools/agent/scripts/agent_gate.py run-rust-lint --changed-files "$$CSV_FILES"; \
-	echo "Running structure checks..."; \
+	pre-commit run --files $$FILE_ARGS && \
+	echo "Running Python lint..." && \
+	python3 tools/agent/scripts/agent_gate.py run-python-lint --changed-files "$$CSV_FILES" && \
+	echo "Running Go structural lint..." && \
+	python3 tools/agent/scripts/agent_gate.py run-go-lint --base-ref "$(AGENT_BASE_REF)" --changed-files "$$CSV_FILES" && \
+	echo "Running Rust lint..." && \
+	python3 tools/agent/scripts/agent_gate.py run-rust-lint --changed-files "$$CSV_FILES" && \
+	echo "Running structure checks..." && \
 	python3 tools/agent/scripts/structure_check.py --base-ref "$(AGENT_BASE_REF)" $$FILE_ARGS
 
 agent-fast-gate: ## Run the fast gate: manifest validation, lint, and lightweight tests
