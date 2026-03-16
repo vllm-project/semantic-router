@@ -10,7 +10,7 @@ Before v0.3, the repo had several partially overlapping config contracts:
 
 - router runtime consumed a flat Go config
 - Python CLI used its own nested YAML plus merge/default logic
-- dashboard and onboarding imported YAML but still assumed legacy top-level `signals` and `providers.models`
+- dashboard and onboarding imported YAML but still assumed legacy top-level `signals` and `decisions`
 - Helm and operator each translated config differently
 - DSL mixed routing semantics with legacy `BACKEND` and `GLOBAL` expectations
 
@@ -77,7 +77,7 @@ Model semantics and deployment bindings are now separated explicitly:
 - `routing.modelCards[].loras` carries the canonical LoRA adapter catalog for each logical model
 - `providers.defaults` carries provider-wide defaults such as `default_model`, `reasoning_families`, and `default_reasoning_effort`
 - `providers.models` carries per-model access bindings directly
-- each `providers.models[].backend_refs[]` item carries its own endpoint, protocol, weight, and API key reference
+- each `providers.models[].backend_refs[]` item carries its own transport and auth fields such as `endpoint`, `base_url`, `protocol`, `auth_header`, `auth_prefix`, `api_key`, and `api_key_env`
 - `routing.decisions[].modelRefs[].lora_name` resolves against the matching `routing.modelCards[].loras` entry, so `lora_name` is now part of the supported routing contract instead of a runtime-only escape hatch
 
 ## Global defaults
@@ -90,8 +90,8 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global.services` groups shared APIs and runtime services
 - `global.stores` groups storage-backed services
 - `global.integrations` groups helper runtime integrations
-- `global.model_catalog` groups router-owned model assets and the classifier/guardrail modules that resolve through those assets
-- `global.model_catalog.modules` is the home for module-specific runtime settings
+- `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, and `modules`
+- `global.model_catalog.modules` is the home for router-owned module settings such as `prompt_compression`, `prompt_guard`, `classifier`, `hallucination_mitigation`, `feedback_detector`, and `modality_detector`
 - omitted fields keep the built-in default
 
 This makes local, dashboard, Helm, and operator behavior converge on the same baseline.
@@ -148,7 +148,7 @@ The repo now has one public config story:
 - full router configuration lives in canonical YAML
 - DSL is the routing-semantic view of that config
 - deployment bindings live in `providers.defaults` and `providers.models[]`
-- runtime overrides live in `global.router/services/stores/integrations/model_catalog`, with model-backed modules under `global.model_catalog.modules`
+- runtime overrides live in `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog`, with model-backed modules under `global.model_catalog.modules`
 - `global.router.config_source` is the canonical switch between file-backed config and Kubernetes CRD-backed reconciliation
 - built-in defaults live in the router
 - repo-owned sample assets are organized by `signal/decision/algorithm/plugin` fragments instead of parallel full-config examples

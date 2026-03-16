@@ -554,6 +554,11 @@ var latestTutorialSidebarForbidden = []string{
 	"'tutorials/runtime/",
 }
 
+var proposalSidebarRequired = []string{
+	"label: 'Proposals'",
+	"'proposals/unified-config-contract-v0-3'",
+}
+
 var latestTutorialRequiredSections = []string{
 	"## Overview",
 	"## Key Advantages",
@@ -601,6 +606,13 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 	assertTutorialFilesContainRequiredSections(t, root)
 	assertTutorialRootDirectories(t, root)
 	assertPathsDoNotExist(t, root, retiredCurrentTranslationOverrides)
+}
+
+func TestConfigProposalIsReachableFromSidebar(t *testing.T) {
+	root := repoRootFromTestFile(t)
+	sidebarPath := repoRel("website", "sidebars.ts")
+	content := readRepoFile(t, root, sidebarPath)
+	assertStringContainsAll(t, content, sidebarPath, proposalSidebarRequired)
 }
 
 func assertDocsContainAll(t *testing.T, root string, docs []docNeedles) {

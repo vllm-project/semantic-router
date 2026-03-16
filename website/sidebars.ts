@@ -114,6 +114,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Proposals',
       items: [
+        'proposals/unified-config-contract-v0-3',
         'proposals/hallucination-mitigation-milestone',
         'proposals/prompt-classification-routing',
         'proposals/nvidia-dynamo-integration',
