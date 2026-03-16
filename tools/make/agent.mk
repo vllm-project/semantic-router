@@ -34,7 +34,7 @@ agent-bootstrap: ## Install agent validation tooling
 	@python3 -m pip install -r tools/agent/requirements.txt
 	@python3 -m pip install pre-commit
 	@python3 -m pip install yamllint codespell
-	@if command -v npm >/dev/null 2>&1; then \
+	@if ! command -v markdownlint >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then \
 		npm install -g markdownlint-cli@0.43.0 >/dev/null 2>&1 || true; \
 	fi
 	@if ! command -v golangci-lint >/dev/null 2>&1 && command -v go >/dev/null 2>&1; then \
