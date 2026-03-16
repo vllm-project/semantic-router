@@ -296,6 +296,7 @@ export interface ConfigData {
   prompt_guard?: {
     enabled: boolean
     model_id?: string
+    model_ref?: string
     use_modernbert?: boolean
     threshold?: number
     use_vllm?: boolean
@@ -309,6 +310,7 @@ export interface ConfigData {
     pii_model?: {
       enabled?: boolean
       model_id?: string
+      model_ref?: string
       use_modernbert?: boolean
       threshold?: number
     }
@@ -563,6 +565,7 @@ export interface ConfigData {
         prompt_guard?: {
           enabled?: boolean
           model_id?: string
+          model_ref?: string
           threshold?: number
           use_modernbert?: boolean
           use_vllm?: boolean
@@ -570,7 +573,9 @@ export interface ConfigData {
         classifier?: {
           pii?: {
             model_id?: string
+            model_ref?: string
             threshold?: number
+            enabled?: boolean
           }
         }
       }

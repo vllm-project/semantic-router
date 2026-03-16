@@ -37,13 +37,15 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   const promptGuard = config.global?.model_catalog?.modules?.prompt_guard || config.prompt_guard
   const piiModel = config.global?.model_catalog?.modules?.classifier?.pii || config.classifier?.pii_model
   const semanticCache = config.global?.stores?.semantic_cache || config.semantic_cache
+  const promptGuardModel = promptGuard?.model_id || promptGuard?.model_ref
+  const piiModelRef = piiModel?.model_id || piiModel?.model_ref
 
   // 1. Prompt Guard (Jailbreak Detection)
   if (promptGuard) {
     plugins.push({
       type: 'prompt_guard',
-      enabled: promptGuard.enabled ?? false,
-      modelId: promptGuard.model_id || 'vLLM-SR-Jailbreak',
+      enabled: promptGuard.enabled ?? !!promptGuardModel,
+      modelId: promptGuardModel || 'vLLM-SR-Jailbreak',
       threshold: promptGuard.threshold,
       config: {
         use_modernbert: promptGuard.use_modernbert,
@@ -57,8 +59,8 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   if (piiModel) {
     plugins.push({
       type: 'pii_detection',
-      enabled: !!piiModel.model_id,
-      modelId: piiModel.model_id || 'vLLM-SR-PII',
+      enabled: piiModel.enabled ?? !!piiModelRef,
+      modelId: piiModelRef || 'vLLM-SR-PII',
       threshold: piiModel.threshold,
       config: {
         // Mark as "model loaded" not "active detection"
