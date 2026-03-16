@@ -218,7 +218,9 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 		})
 		return
 	}
-	defer watcher.Close()
+	defer func() {
+		_ = watcher.Close()
+	}()
 
 	cfgFile := s.configPath
 	cfgDir := filepath.Dir(cfgFile)
