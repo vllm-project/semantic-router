@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -80,35 +81,23 @@ func TestGenerateConfigYAMLIncludesLoRACatalogFromVLLMEndpoints(t *testing.T) {
 		t.Fatalf("generateConfigYAML failed: %v", err)
 	}
 
-	var parsed map[string]interface{}
+	var parsed routerconfig.CanonicalConfig
 	if err := yaml.Unmarshal([]byte(configYAML), &parsed); err != nil {
 		t.Fatalf("failed to parse generated YAML: %v", err)
 	}
 
-	routing, ok := parsed["routing"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("generated routing block missing: %#v", parsed["routing"])
+	if len(parsed.Routing.ModelCards) != 1 {
+		t.Fatalf("expected one generated modelCard, got %#v", parsed.Routing.ModelCards)
 	}
-	modelCards, ok := routing["modelCards"].([]interface{})
-	if !ok || len(modelCards) != 1 {
-		t.Fatalf("expected one generated modelCard, got %#v", routing["modelCards"])
+	modelCard := parsed.Routing.ModelCards[0]
+	if len(modelCard.LoRAs) != 1 {
+		t.Fatalf("expected one generated LoRA adapter, got %#v", modelCard.LoRAs)
 	}
-	modelCard, ok := modelCards[0].(map[string]interface{})
-	if !ok {
-		t.Fatalf("generated modelCard has wrong shape: %#v", modelCards[0])
-	}
-	loras, ok := modelCard["loras"].([]interface{})
-	if !ok || len(loras) != 1 {
-		t.Fatalf("expected one generated LoRA adapter, got %#v", modelCard["loras"])
-	}
-	lora, ok := loras[0].(map[string]interface{})
-	if !ok {
-		t.Fatalf("generated LoRA adapter has wrong shape: %#v", loras[0])
-	}
-	if lora["name"] != "computer-science-expert" {
+	lora := modelCard.LoRAs[0]
+	if lora.Name != "computer-science-expert" {
 		t.Fatalf("unexpected LoRA name: %#v", lora)
 	}
-	if lora["description"] != "Adapter for advanced computer science prompts" {
+	if lora.Description != "Adapter for advanced computer science prompts" {
 		t.Fatalf("unexpected LoRA description: %#v", lora)
 	}
 }
