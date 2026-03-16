@@ -59,6 +59,85 @@ export default function ConfigPageModelsSection({
     model.reasoning_family?.toLowerCase().includes(modelsSearch.toLowerCase())
   )
 
+  const normalizeBackendRefs = (value: unknown): BackendRefEntry[] => {
+    if (!Array.isArray(value)) {
+      return []
+    }
+
+    return value
+      .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object' && !Array.isArray(entry))
+      .map((entry) => {
+        const normalized: BackendRefEntry = {}
+        if (typeof entry.name === 'string' && entry.name.trim()) normalized.name = entry.name.trim()
+        if (typeof entry.endpoint === 'string' && entry.endpoint.trim()) normalized.endpoint = entry.endpoint.trim()
+        if (entry.protocol === 'https') normalized.protocol = 'https'
+        else if (entry.protocol === 'http') normalized.protocol = 'http'
+        if (typeof entry.weight === 'number' && Number.isFinite(entry.weight)) normalized.weight = entry.weight
+        if (typeof entry.type === 'string' && entry.type.trim()) normalized.type = entry.type.trim()
+        if (typeof entry.base_url === 'string' && entry.base_url.trim()) normalized.base_url = entry.base_url.trim()
+        if (typeof entry.provider === 'string' && entry.provider.trim()) normalized.provider = entry.provider.trim()
+        if (typeof entry.auth_header === 'string' && entry.auth_header.trim()) normalized.auth_header = entry.auth_header.trim()
+        if (typeof entry.auth_prefix === 'string' && entry.auth_prefix.trim()) normalized.auth_prefix = entry.auth_prefix.trim()
+        if (entry.extra_headers && typeof entry.extra_headers === 'object' && !Array.isArray(entry.extra_headers)) {
+          normalized.extra_headers = Object.fromEntries(
+            Object.entries(entry.extra_headers as Record<string, unknown>)
+              .filter(([, nestedValue]) => typeof nestedValue === 'string')
+              .map(([key, nestedValue]) => [key, nestedValue as string]),
+          )
+        }
+        if (typeof entry.api_version === 'string' && entry.api_version.trim()) normalized.api_version = entry.api_version.trim()
+        if (typeof entry.chat_path === 'string' && entry.chat_path.trim()) normalized.chat_path = entry.chat_path.trim()
+        if (typeof entry.api_key === 'string' && entry.api_key.trim()) normalized.api_key = entry.api_key.trim()
+        if (typeof entry.api_key_env === 'string' && entry.api_key_env.trim()) normalized.api_key_env = entry.api_key_env.trim()
+        return normalized
+      })
+  }
+
+  const normalizeStringMap = (value: unknown): Record<string, string> | undefined => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return undefined
+    }
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => typeof item === 'string' && item.trim())
+      .map(([key, item]) => [key, item as string])
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined
+  }
+
+  const normalizePricing = (value: unknown): ModelPricing | undefined => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return undefined
+    }
+    const pricing = value as Record<string, unknown>
+    const normalized: ModelPricing = {}
+    if (typeof pricing.currency === 'string' && pricing.currency.trim()) normalized.currency = pricing.currency.trim()
+    if (typeof pricing.prompt_per_1m === 'number' && Number.isFinite(pricing.prompt_per_1m)) normalized.prompt_per_1m = pricing.prompt_per_1m
+    if (typeof pricing.completion_per_1m === 'number' && Number.isFinite(pricing.completion_per_1m)) normalized.completion_per_1m = pricing.completion_per_1m
+    return Object.keys(normalized).length > 0 ? normalized : undefined
+  }
+
+  const buildProviderModelPayload = (
+    name: string,
+    data: Record<string, unknown>,
+    existingModel?: NonNullable<NonNullable<ConfigData['providers']>['models']>[number],
+  ) => ({
+    name,
+    reasoning_family:
+      typeof data.reasoning_family === 'string' && data.reasoning_family.trim()
+        ? data.reasoning_family.trim()
+        : undefined,
+    provider_model_id:
+      typeof data.provider_model_id === 'string' && data.provider_model_id.trim()
+        ? data.provider_model_id.trim()
+        : existingModel?.provider_model_id || name,
+    api_format:
+      typeof data.api_format === 'string' && data.api_format.trim()
+        ? data.api_format.trim()
+        : undefined,
+    external_model_ids: normalizeStringMap(data.external_model_ids),
+    backend_refs: normalizeBackendRefs(data.backend_refs),
+    pricing: normalizePricing(data.pricing),
+  })
+
   type ModelRow = NormalizedModel
   const modelColumns: Column<ModelRow>[] = [
     {
@@ -186,6 +265,8 @@ export default function ConfigPageModelsSection({
           { label: 'Model Name', value: model.name },
           { label: 'Reasoning Family', value: model.reasoning_family || 'N/A' },
           { label: 'Is Default', value: model.name === defaultModel ? 'Yes' : 'No' },
+          { label: 'Provider Model ID', value: model.provider_model_id || 'N/A' },
+          { label: 'API Format', value: model.api_format || 'N/A' },
           { label: 'Modality', value: model.modality || 'N/A' },
           { label: 'Param Size', value: model.param_size || 'N/A' },
           { label: 'Context Window', value: model.context_window_size ? `${model.context_window_size}` : 'N/A' },
@@ -206,16 +287,35 @@ export default function ConfigPageModelsSection({
       })
     }
 
-    if (model.endpoints && model.endpoints.length > 0) {
+    if (model.external_model_ids && Object.keys(model.external_model_ids).length > 0) {
       sections.push({
-        title: `Endpoints (${model.endpoints.length})`,
+        title: 'External Model IDs',
         fields: [
           {
-            label: 'Configured Endpoints',
+            label: 'Provider IDs',
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
+                {Object.entries(model.external_model_ids).map(([key, value]) => (
+                  <div key={key}>{key}: {value}</div>
+                ))}
+              </div>
+            ),
+            fullWidth: true,
+          },
+        ],
+      })
+    }
+
+    if (model.backend_refs && model.backend_refs.length > 0) {
+      sections.push({
+        title: `Provider Backends (${model.backend_refs.length})`,
+        fields: [
+          {
+            label: 'Configured Backend Refs',
             value: (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {model.endpoints.map((ep, i) => {
-                  const isHttps = ep.protocol === 'https'
+                {model.backend_refs.map((backendRef, i) => {
+                  const displayAddress = backendRef.endpoint || backendRef.base_url || 'N/A'
                   return (
                     <div key={i} style={{
                       border: '1px solid var(--color-border)',
@@ -233,33 +333,33 @@ export default function ConfigPageModelsSection({
                           fontWeight: 600,
                           fontSize: '0.95rem'
                         }}>
-                          {ep.name}
+                          {backendRef.name || `backend-${i + 1}`}
                         </span>
                       </div>
                       <div style={{
                         display: 'flex',
+                        flexWrap: 'wrap',
                         gap: '1rem',
                         fontSize: '0.875rem',
                         color: 'var(--color-text-secondary)'
                       }}>
                         <span style={{ fontFamily: 'var(--font-mono)' }}>
-                          {isReadonly ? '************' : ep.endpoint}
+                          {isReadonly ? '************' : displayAddress}
                         </span>
-                        <span>
-                          <span style={{
-                            padding: '0.125rem 0.5rem',
-                            borderRadius: '3px',
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            background: isHttps ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                            color: isHttps ? 'rgb(34, 197, 94)' : 'rgb(234, 179, 8)'
-                          }}>
-                            {ep.protocol.toUpperCase()}
-                          </span>
-                        </span>
-                        <span>Weight: {ep.weight}</span>
+                        {backendRef.protocol ? <span>Protocol: {backendRef.protocol}</span> : null}
+                        {typeof backendRef.weight === 'number' ? <span>Weight: {backendRef.weight}</span> : null}
+                        {backendRef.provider ? <span>Provider: {backendRef.provider}</span> : null}
+                        {backendRef.type ? <span>Type: {backendRef.type}</span> : null}
+                        {backendRef.api_key_env ? <span>API Key Env: {backendRef.api_key_env}</span> : null}
+                        {backendRef.api_key ? <span>API Key: ••••••••</span> : null}
+                        {backendRef.chat_path ? <span>Chat Path: {backendRef.chat_path}</span> : null}
+                        {backendRef.api_version ? <span>API Version: {backendRef.api_version}</span> : null}
                       </div>
+                      {backendRef.extra_headers && Object.keys(backendRef.extra_headers).length > 0 ? (
+                        <div style={{ marginTop: '0.6rem', fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+                          extra_headers: {JSON.stringify(backendRef.extra_headers)}
+                        </div>
+                      ) : null}
                     </div>
                   )
                 })}
@@ -278,15 +378,6 @@ export default function ConfigPageModelsSection({
           { label: 'Currency', value: model.pricing.currency || 'USD' },
           { label: 'Prompt (per 1M tokens)', value: model.pricing.prompt_per_1m?.toFixed(2) || '0.00' },
           { label: 'Completion (per 1M tokens)', value: model.pricing.completion_per_1m?.toFixed(2) || '0.00' }
-        ]
-      })
-    }
-
-    if (model.access_key) {
-      sections.push({
-        title: 'Authentication',
-        fields: [
-          { label: 'API Key', value: '••••••••' }
         ]
       })
     }
