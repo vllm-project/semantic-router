@@ -58,7 +58,7 @@ To run parallel local stacks from the same machine or multiple worktrees, set `V
 vllm-sr init
 
 # Validate the sample before serving
-vllm-sr validate config.yaml
+vllm-sr validate
 ```
 
 `vllm-sr init` is optional. It generates a lean advanced sample plus `.vllm-sr/router-defaults.yaml` for users who want to hand-author routing config. `router-defaults.yaml` contains advanced runtime defaults; it is not required for first-run dashboard setup.
@@ -217,7 +217,7 @@ plugins:
 vllm-sr init
 
 # Validate configuration (including plugins)
-vllm-sr validate config.yaml
+vllm-sr validate
 
 # Generate router config with plugins
 vllm-sr config router --config config.yaml
