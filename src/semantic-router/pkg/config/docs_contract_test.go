@@ -23,6 +23,8 @@ var configContractRequiredDocs = []docNeedles{
 			"`config/config.yaml`",
 			"exhaustive canonical reference config",
 			"`config/signal/`",
+			"`tutorials/signal/heuristic/`",
+			"`tutorials/signal/learned/`",
 			"`config/decision/`",
 			"`config/algorithm/`",
 			"`config/plugin/`",
@@ -48,6 +50,8 @@ var configContractRequiredDocs = []docNeedles{
 			"`global.model_catalog.modules`",
 			"`config/algorithm/`",
 			"`tutorials/global/`",
+			"`tutorials/signal/heuristic/`",
+			"`tutorials/signal/learned/`",
 			"vllm-sr config migrate --config old-config.yaml",
 			"v0.3. The steady-state file is `config.yaml`",
 			"`lora_name`",
@@ -496,7 +500,10 @@ var latestTutorialOverviewDocs = []docNeedles{
 		path: repoRel("website", "docs", "tutorials", "signal", "overview.md"),
 		needles: []string{
 			"`config/signal/`",
-			"[Routing Signals](./routing)",
+			"### Heuristic Signals",
+			"### Learned Signals",
+			"[Keyword](./heuristic/keyword)",
+			"[Domain](./learned/domain)",
 		},
 	},
 	{
@@ -533,6 +540,8 @@ var latestTutorialOverviewDocs = []docNeedles{
 
 var latestTutorialSidebarRequired = []string{
 	"label: 'Signals'",
+	"label: 'Heuristic'",
+	"label: 'Learned'",
 	"label: 'Decisions'",
 	"label: 'Algorithms'",
 	"label: 'Plugins'",
@@ -545,6 +554,9 @@ var latestTutorialSidebarRequired = []string{
 }
 
 var latestTutorialSidebarForbidden = []string{
+	"'tutorials/signal/routing'",
+	"'tutorials/signal/safety'",
+	"'tutorials/signal/operational'",
 	"'tutorials/intelligent-route/",
 	"'tutorials/content-safety/",
 	"'tutorials/semantic-cache/",
@@ -605,6 +617,7 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 	assertDocsContainAll(t, root, latestTutorialOverviewDocs)
 	assertTutorialFilesContainRequiredSections(t, root)
 	assertTutorialRootDirectories(t, root)
+	assertSignalTutorialDocsMatchConfigHierarchy(t, root)
 	assertPathsDoNotExist(t, root, retiredCurrentTranslationOverrides)
 }
 
@@ -633,7 +646,9 @@ func assertTutorialSidebarTaxonomy(t *testing.T, root string) {
 	t.Helper()
 	sidebarPath := repoRel("website", "sidebars.ts")
 	content := readRepoFile(t, root, sidebarPath)
-	assertStringContainsAll(t, content, sidebarPath, latestTutorialSidebarRequired)
+	required := append([]string(nil), latestTutorialSidebarRequired...)
+	required = append(required, signalTutorialSidebarEntries()...)
+	assertStringContainsAll(t, content, sidebarPath, required)
 	assertStringContainsNone(t, content, sidebarPath, latestTutorialSidebarForbidden)
 }
 

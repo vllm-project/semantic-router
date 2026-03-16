@@ -37,6 +37,8 @@ The repository enforces this fragment catalog, the exhaustive reference config, 
 Latest official tutorials mirror the same top-level taxonomy:
 
 - `tutorials/signal/`
+  - `tutorials/signal/heuristic/` for rule-based and lightweight detector signals
+  - `tutorials/signal/learned/` for embedding- and classifier-driven signals
 - `tutorials/decision/`
 - `tutorials/algorithm/`
 - `tutorials/plugin/`

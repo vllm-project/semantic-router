@@ -129,7 +129,7 @@ The repository enforces this fragment catalog in `go test ./pkg/config/...`, so 
 
 Latest tutorials follow the same taxonomy:
 
-- `tutorials/signal/` for `config/signal/`
+- `tutorials/signal/overview` plus `tutorials/signal/heuristic/` and `tutorials/signal/learned/` for `config/signal/`
 - `tutorials/decision/` for `config/decision/`
 - `tutorials/algorithm/` for `config/algorithm/`
 - `tutorials/plugin/` for `config/plugin/`

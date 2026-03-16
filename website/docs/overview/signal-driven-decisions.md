@@ -324,7 +324,7 @@ signals:
 - `include_history`: Analyse all conversation messages — essential for multi-turn contrastive detection
 - `jailbreak_patterns` / `benign_patterns`: Exemplar phrases for contrastive knowledge bases (contrastive method only)
 
-> Requires `prompt_guard` for BERT method. Contrastive uses the global embedding model. See [Safety Signals](../tutorials/signal/safety).
+> Requires `prompt_guard` for BERT method. Contrastive uses the global embedding model. See [Jailbreak](../tutorials/signal/learned/jailbreak).
 
 ### 13. PII Signals
 
@@ -354,7 +354,7 @@ signals:
 - `pii_types_allowed`: PII types that are **permitted** (not blocked). When empty, ALL detected PII types trigger the signal
 - `include_history`: When `true`, all conversation messages are analysed
 
-> Requires `classifier.pii_model` configuration. See [Safety Signals](../tutorials/signal/safety).
+> Requires the learned PII detector configuration. See [PII](../tutorials/signal/learned/pii).
 
 ## How Signals Combine
 
@@ -537,7 +537,6 @@ selected_model: "qwen-math"
 
 - [Configuration Guide](../installation/configuration) - Configure signals and decisions
 - [Signal Overview](../tutorials/signal/overview) - Learn the signal catalog
-- [Routing Signals](../tutorials/signal/routing) - Learn keyword, embedding, and domain signals
-- [Safety Signals](../tutorials/signal/safety) - Learn jailbreak, PII, and authz signals
-- [Operational Signals](../tutorials/signal/operational) - Learn context, complexity, language, modality, and feedback signals
+- [Heuristic Signals](../tutorials/signal/overview#heuristic-signals) - Start with keyword, authz, context, language, and modality
+- [Learned Signals](../tutorials/signal/overview#learned-signals) - Add domain, embedding, safety, and feedback classifiers
 - [Decision Overview](../tutorials/decision/overview) - Learn how signals map into route decisions

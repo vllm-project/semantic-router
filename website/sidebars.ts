@@ -62,9 +62,31 @@ const sidebars: SidebarsConfig = {
           label: 'Signals',
           items: [
             'tutorials/signal/overview',
-            'tutorials/signal/routing',
-            'tutorials/signal/safety',
-            'tutorials/signal/operational',
+            {
+              type: 'category',
+              label: 'Heuristic',
+              items: [
+                'tutorials/signal/heuristic/authz',
+                'tutorials/signal/heuristic/context',
+                'tutorials/signal/heuristic/keyword',
+                'tutorials/signal/heuristic/language',
+                'tutorials/signal/heuristic/modality',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Learned',
+              items: [
+                'tutorials/signal/learned/complexity',
+                'tutorials/signal/learned/domain',
+                'tutorials/signal/learned/embedding',
+                'tutorials/signal/learned/fact-check',
+                'tutorials/signal/learned/jailbreak',
+                'tutorials/signal/learned/pii',
+                'tutorials/signal/learned/preference',
+                'tutorials/signal/learned/user-feedback',
+              ],
+            },
           ],
         },
         {

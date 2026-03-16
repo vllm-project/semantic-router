@@ -198,6 +198,6 @@ Newer models use ModernBERT for better performance:
 ## Next Steps
 
 - **[Signal-Driven Decisions](./signal-driven-decisions)** - Learn how MoM models power routing decisions
-- **[Routing Signals](../tutorials/signal/routing)** - Use mom-domain-classifier for routing
-- **[Safety Signals](../tutorials/signal/safety)** - Configure mom-pii-classifier
+- **[Domain](../tutorials/signal/learned/domain)** - Use mom-domain-classifier for routing
+- **[PII](../tutorials/signal/learned/pii)** - Configure mom-pii-classifier
 - **[Retrieval and Memory Plugins](../tutorials/plugin/retrieval-and-memory)** - Use MoM embedding models
