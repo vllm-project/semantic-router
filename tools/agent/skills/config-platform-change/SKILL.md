@@ -1,7 +1,7 @@
 ---
 name: config-platform-change
 category: primary
-description: Use when a config representation must stay aligned across router config, CLI schema, dashboard config UI, and platform translation layers.
+description: Synchronizes config representations across router config, Python CLI schema, dashboard config UI, DSL, and Kubernetes translation layers. Use when adding or changing a config concept that spans multiple surfaces, updating config translation logic, or addressing config representation debt across deployment targets.
 ---
 
 # Config Platform Change
@@ -11,6 +11,14 @@ description: Use when a config representation must stay aligned across router co
 - Change a config concept that exists in router config and Python CLI schema
 - Change config translation between router config, dashboard config UI, DSL, or Kubernetes forms
 - Work on config complexity or representation debt across deployment surfaces
+
+## Workflow
+
+1. Read change surfaces and module boundaries to identify all config layers affected
+2. Modify the config concept across all touched surfaces (router, CLI, dashboard, DSL, k8s)
+3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to verify surface consistency
+4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate constraints
+5. Record any intentional remaining mismatches as indexed debt entries
 
 ## Must Read
 

@@ -1,7 +1,7 @@
 ---
 name: maintainer-issue-pr-management
 category: support
-description: Maintainer workflow for GitHub issue and pull-request creation, updates, triage labels, and closeout metadata.
+description: Manages GitHub issue and pull-request lifecycle including creation, updates, triage labelling, and closeout metadata using canonical templates and repository taxonomy. Use when a maintainer asks to create, update, close, or triage GitHub issues or PRs, or when issue creation requires codebase analysis for scope, labels, or acceptance criteria.
 ---
 
 # Maintainer Issue And PR Management

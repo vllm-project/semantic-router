@@ -1,7 +1,7 @@
 ---
 name: dashboard-config-ui
 category: fragment
-description: Dashboard config editor, config display, and mutation-flow details.
+description: Modifies dashboard configuration editor forms, config display components, and mutation-flow logic that connects the UI to the router config contract. Use when editing dashboard config forms, updating how config values are displayed, or changing the mutation flow between the dashboard UI and the router/CLI schema.
 ---
 
 # Dashboard Config UI
@@ -22,6 +22,13 @@ description: Dashboard config editor, config display, and mutation-flow details.
 ## Stop Conditions
 
 - Dashboard serialization conflicts with router or CLI contract
+
+## Workflow
+
+1. Read change surfaces doc to understand config UI dependencies
+2. Modify dashboard config forms, display components, or mutation-flow logic
+3. Run `make dashboard-check` to validate UI consistency
+4. Run `make agent-ci-gate CHANGED_FILES="..."` to verify alignment with router and CLI schema
 
 ## Must Read
 

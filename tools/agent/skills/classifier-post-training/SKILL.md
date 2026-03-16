@@ -1,7 +1,7 @@
 ---
 name: classifier-post-training
 category: primary
-description: Use when changing model-classifier fine-tuning, post-training data flows, or training artifacts that feed runtime behavior.
+description: Modifies model-classifier fine-tuning scripts, post-training data flows, and training artifacts that feed the router runtime. Use when changing training configurations, updating post-training data pipelines, modifying classifier artifact formats, or adjusting how training outputs are consumed by runtime components.
 ---
 
 # Classifier Post Training
@@ -10,6 +10,14 @@ description: Use when changing model-classifier fine-tuning, post-training data 
 
 - Change model-classifier fine-tuning scripts or training docs
 - Change runtime-facing classifier artifacts or post-training workflow expectations
+
+## Workflow
+
+1. Read change surfaces, model classifier README, and tech debt docs for context
+2. Modify fine-tuning scripts, post-training workflows, or artifact expectations
+3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to verify surface alignment
+4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate all constraints
+5. Record any runtime-facing artifact contract mismatches as indexed debt entries
 
 ## Must Read
 

@@ -1,7 +1,7 @@
 ---
 name: local-dev-amd
 category: fragment
-description: Canonical AMD-local image build, serve, and smoke workflow.
+description: Builds Docker images, starts local servers, and runs smoke tests for the AMD/ROCm development environment. Use when validating changes locally on AMD hardware, building AMD container images, or running AMD-specific smoke and E2E tests.
 ---
 
 # Local Dev AMD
@@ -21,6 +21,14 @@ description: Canonical AMD-local image build, serve, and smoke workflow.
 ## Stop Conditions
 
 - AMD-local smoke cannot be run or platform image mapping is unavailable
+
+## Workflow
+
+1. Read AMD-local docs and environment config to understand the AMD build setup
+2. Build the AMD image with `make agent-dev ENV=amd`
+3. Start the local server with `make agent-serve-local ENV=amd`
+4. Run smoke tests with `make agent-smoke-local` to validate the build
+5. Verify the default AMD smoke config starts successfully without unexpected fallbacks
 
 ## Must Read
 

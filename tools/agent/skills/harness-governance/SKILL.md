@@ -1,7 +1,7 @@
 ---
 name: harness-governance
 category: fragment
-description: Human-readable docs, executable manifests, and contributor interfaces that define the repository's shared agent contract.
+description: Maintains the repository's shared agent contract by updating human-readable docs, executable manifests, and contributor-facing harness wrappers. Use when editing AGENTS.md, repo-manifest.yaml, task-matrix.yaml, governance docs, or any contributor-facing harness interface.
 ---
 
 # Harness Governance
@@ -23,6 +23,14 @@ description: Human-readable docs, executable manifests, and contributor interfac
 ## Stop Conditions
 
 - The harness change would leave the indexed docs and executable rules inconsistent
+
+## Workflow
+
+1. Read governance docs and repo manifest to understand current contract state
+2. Edit shared harness docs, manifests, or contributor-facing wrappers
+3. Run `make agent-validate` to check alignment between docs and manifests
+4. Run `make agent-ci-gate CHANGED_FILES="..."` to verify all surfaces pass
+5. Promote any durable gaps into indexed debt entries if not retired in this change
 
 ## Must Read
 
