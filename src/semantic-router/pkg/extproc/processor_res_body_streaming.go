@@ -8,13 +8,10 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 )
 
@@ -148,15 +145,6 @@ func extractStreamingContent(ctx *RequestContext, chunkData map[string]interface
 // cacheStreamingResponse reconstructs a ChatCompletion from accumulated chunks and caches it.
 func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 	if err := validateStreamingCachePreconditions(ctx); err != nil {
-		return nil
-	}
-
-	if ok, reason := ctx.HasPersonalizedContext(); ok {
-		metrics.RecordCacheWriteSkipped(reason)
-		logging.Infof("Skipping cache write for streaming request ID %s: response has personalized context (reason=%s)", ctx.RequestID, reason)
-		if span := trace.SpanFromContext(ctx.TraceContext); span.IsRecording() {
-			span.SetAttributes(attribute.String(tracing.AttrCacheWriteSkippedReason, reason))
-		}
 		return nil
 	}
 
@@ -300,12 +288,6 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 	ctx *RequestContext,
 	reconstructedJSON []byte,
 ) error {
-	// Skip cache store if a decision was selected but doesn't have semantic-cache enabled
-	if ctx.VSRSelectedDecisionName != "" && r.Config != nil &&
-		!r.Config.IsCacheEnabledForDecision(ctx.VSRSelectedDecisionName) {
-		return nil
-	}
-
 	ttlSeconds := -1
 	if r != nil && r.Config != nil {
 		ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(ctx.VSRSelectedDecisionName)
@@ -316,7 +298,7 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 		return nil
 	}
 
-	if ctx.RequestQuery == "" || ctx.RequestModel == "" {
+	if cacheQueryForContext(ctx) == "" || ctx.RequestModel == "" {
 		return r.updateStreamingCacheEntry(ctx.RequestID, reconstructedJSON, ttlSeconds)
 	}
 
@@ -337,7 +319,7 @@ func (r *OpenAIRouter) addStreamingCacheEntry(
 	return r.Cache.AddEntry(
 		ctx.RequestID,
 		ctx.RequestModel,
-		ctx.RequestQuery,
+		cacheQueryForContext(ctx),
 		streamingCacheRequestBody(ctx),
 		reconstructedJSON,
 		ttlSeconds,

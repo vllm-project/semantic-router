@@ -36,6 +36,7 @@ type RequestContext struct {
 	OriginalRequestBody []byte
 	RequestModel        string
 	RequestQuery        string
+	CacheQuery          string
 	StartTime           time.Time
 	ProcessingStartTime time.Time
 
@@ -155,9 +156,8 @@ type RequestContext struct {
 	RateLimitCtx *ratelimit.Context
 }
 
-// HasPersonalizedContext returns true if the request/response is tainted with user-specific
-// context (RAG, memory, PII, injected system prompt) that should prevent caching the response.
-// The second return value is the canonical reason for observability (metrics/tracing).
+// HasPersonalizedContext reports whether the request carries any user-specific
+// context that makes the response unsuitable for shared caching.
 func (ctx *RequestContext) HasPersonalizedContext() (bool, string) {
 	if ctx == nil {
 		return false, ""
