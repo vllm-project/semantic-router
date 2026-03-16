@@ -3,7 +3,9 @@ package modeldownload
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -92,6 +94,7 @@ func isModelDirectory(path string) bool {
 func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	// Extract all model paths from config
 	paths := ExtractModelPaths(cfg)
+	requiredFilesByModel := ExtractRequiredFilesByModel(cfg)
 
 	// Allow empty paths for API-only configurations
 	if len(paths) == 0 {
@@ -112,15 +115,84 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 			return nil, fmt.Errorf("model path %s not found in mom_registry", path)
 		}
 
+		requiredFiles := append([]string{}, DefaultRequiredFiles...)
+		for _, extra := range requiredFilesByModel[path] {
+			if extra != "" && !slices.Contains(requiredFiles, extra) {
+				requiredFiles = append(requiredFiles, extra)
+			}
+		}
+
 		specs = append(specs, ModelSpec{
 			LocalPath:     path,
 			RepoID:        repoID,
 			Revision:      "main",
-			RequiredFiles: DefaultRequiredFiles,
+			RequiredFiles: requiredFiles,
 		})
 	}
 
 	return specs, nil
+}
+
+// ExtractRequiredFilesByModel derives per-model completeness requirements from
+// config-owned companion files such as category/jailbreak/PII mappings.
+func ExtractRequiredFilesByModel(cfg *config.RouterConfig) map[string][]string {
+	requiredFilesByModel := make(map[string][]string)
+	collectRequiredFilesByModel(reflect.ValueOf(cfg), requiredFilesByModel)
+	return requiredFilesByModel
+}
+
+func collectRequiredFilesByModel(v reflect.Value, requiredFilesByModel map[string][]string) {
+	if !v.IsValid() {
+		return
+	}
+
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return
+		}
+		v = v.Elem()
+	}
+
+	switch v.Kind() {
+	case reflect.Struct:
+		t := v.Type()
+		for i := 0; i < v.NumField(); i++ {
+			field := v.Field(i)
+			fieldType := t.Field(i)
+			fieldName := fieldType.Name
+
+			if strings.HasSuffix(fieldName, "MappingPath") && field.Kind() == reflect.String {
+				recordRequiredMappingFile(requiredFilesByModel, field.String())
+			}
+
+			collectRequiredFilesByModel(field, requiredFilesByModel)
+		}
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < v.Len(); i++ {
+			collectRequiredFilesByModel(v.Index(i), requiredFilesByModel)
+		}
+	case reflect.Map:
+		for _, key := range v.MapKeys() {
+			collectRequiredFilesByModel(v.MapIndex(key), requiredFilesByModel)
+		}
+	}
+}
+
+func recordRequiredMappingFile(requiredFilesByModel map[string][]string, mappingPath string) {
+	if !strings.HasPrefix(mappingPath, "models/") {
+		return
+	}
+
+	modelPath := filepath.Dir(mappingPath)
+	fileName := filepath.Base(mappingPath)
+	if modelPath == "." || modelPath == "models" || fileName == "" || fileName == "." {
+		return
+	}
+
+	requiredFiles := requiredFilesByModel[modelPath]
+	if !slices.Contains(requiredFiles, fileName) {
+		requiredFilesByModel[modelPath] = append(requiredFiles, fileName)
+	}
 }
 
 // GetDownloadConfig creates DownloadConfig from environment variables

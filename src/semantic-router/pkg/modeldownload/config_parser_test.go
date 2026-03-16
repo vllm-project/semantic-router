@@ -1,6 +1,7 @@
 package modeldownload
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -121,5 +122,66 @@ func TestIsModelDirectory(t *testing.T) {
 				t.Errorf("isModelDirectory(%s) = %v, expected %v", tt.path, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestExtractRequiredFilesByModel(t *testing.T) {
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			Classifier: config.Classifier{
+				CategoryModel: config.CategoryModel{
+					ModelID:             "models/mmbert32k-intent-classifier-merged",
+					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+				},
+				PIIModel: config.PIIModel{
+					ModelID:        "models/mmbert32k-pii-detector-merged",
+					PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
+				},
+			},
+			PromptGuard: config.PromptGuardConfig{
+				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
+				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
+			},
+		},
+	}
+
+	got := ExtractRequiredFilesByModel(cfg)
+	want := map[string][]string{
+		"models/mmbert32k-intent-classifier-merged":  {"category_mapping.json"},
+		"models/mmbert32k-pii-detector-merged":       {"pii_type_mapping.json"},
+		"models/mmbert32k-jailbreak-detector-merged": {"jailbreak_type_mapping.json"},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ExtractRequiredFilesByModel() = %#v, want %#v", got, want)
+	}
+}
+
+func TestBuildModelSpecsIncludesConfigDerivedRequiredFiles(t *testing.T) {
+	cfg := &config.RouterConfig{
+		MoMRegistry: map[string]string{
+			"models/mmbert32k-intent-classifier-merged": "llm-semantic-router/mmbert32k-intent-classifier-merged",
+		},
+		InlineModels: config.InlineModels{
+			Classifier: config.Classifier{
+				CategoryModel: config.CategoryModel{
+					ModelID:             "models/mmbert32k-intent-classifier-merged",
+					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+				},
+			},
+		},
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want 1", len(specs))
+	}
+
+	wantRequiredFiles := []string{"config.json", "category_mapping.json"}
+	if !reflect.DeepEqual(specs[0].RequiredFiles, wantRequiredFiles) {
+		t.Fatalf("RequiredFiles = %#v, want %#v", specs[0].RequiredFiles, wantRequiredFiles)
 	}
 }

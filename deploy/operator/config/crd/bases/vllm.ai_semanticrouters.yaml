@@ -3158,13 +3158,36 @@ spec:
                       required:
                       - type
                       type: object
+                    loras:
+                      description: LoRAs declares the LoRA adapters exposed for this
+                        logical model in routing.modelCards.
+                      items:
+                        description: LoRAAdapterSpec defines one LoRA adapter exposed
+                          by a VLLMEndpoint model.
+                        properties:
+                          description:
+                            description: Description provides a short human-readable
+                              summary for UI and docs surfaces.
+                            maxLength: 500
+                            type: string
+                          name:
+                            description: Name is the unique adapter identifier referenced
+                              by decision.modelRefs[].lora_name.
+                            maxLength: 100
+                            minLength: 1
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      maxItems: 50
+                      type: array
                     model:
                       description: Model name as reported by vLLM (e.g., "Model-A",
                         "llama3-8b")
                       minLength: 1
                       type: string
                     name:
-                      description: Name of the endpoint (used in model_config.preferred_endpoints)
+                      description: Name of the backend ref generated under config.providers.models[].backend_refs
                       minLength: 1
                       type: string
                     reasoningFamily:
