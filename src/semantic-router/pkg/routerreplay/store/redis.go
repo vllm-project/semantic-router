@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -224,14 +225,9 @@ func (r *RedisStore) List(ctx context.Context) ([]Record, error) {
 		records = append(records, record)
 	}
 
-	// Sort by timestamp descending
-	for i := 0; i < len(records)-1; i++ {
-		for j := i + 1; j < len(records); j++ {
-			if records[i].Timestamp.Before(records[j].Timestamp) {
-				records[i], records[j] = records[j], records[i]
-			}
-		}
-	}
+	sort.Slice(records, func(i, j int) bool {
+		return records[i].Timestamp.After(records[j].Timestamp)
+	})
 
 	return records, nil
 }
