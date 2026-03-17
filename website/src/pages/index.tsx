@@ -5,6 +5,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
+import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
 import CapabilityGlyph, { type CapabilityGlyphKind } from '@site/src/components/site/CapabilityGlyph'
@@ -416,6 +417,7 @@ export default function Home(): JSX.Element {
         </section>
 
         <InstallQuickStartSection />
+        <ResearchPaperCarousel />
         <CapabilitySection />
         <PaperFigureShowcase />
         <EncoderIntelligenceSection />
