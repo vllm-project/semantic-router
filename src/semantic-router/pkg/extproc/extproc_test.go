@@ -4517,7 +4517,7 @@ var _ = Describe("Response API Translation", func() {
 		_ = Describe("ExtProc Model-Specific Reasoning", func() {
 			BeforeEach(func() {
 				cfg = CreateTestConfig()
-				cfg.BackendModels.ModelConfig["gpt-4-oss"] = config.ModelParams{
+				cfg.ModelConfig["gpt-4-oss"] = config.ModelParams{
 					PreferredEndpoints: []string{"test-endpoint1"},
 				}
 				var err error
