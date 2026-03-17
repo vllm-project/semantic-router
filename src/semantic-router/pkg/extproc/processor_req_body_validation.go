@@ -1,9 +1,6 @@
 package extproc
 
 import (
-	"errors"
-	"fmt"
-
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/tidwall/gjson"
 	"google.golang.org/grpc/codes"
@@ -11,8 +8,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
-
-var errModelNotConfigured = errors.New("requested model is not configured in the router")
 
 func (r *OpenAIRouter) validationResponseFromRequestError(err error) *ext_proc.ProcessingResponse {
 	if err == nil {
@@ -52,12 +47,4 @@ func (r *OpenAIRouter) validateRequestBody(requestBody []byte, ctx *RequestConte
 	}
 
 	return nil
-}
-
-func (r *OpenAIRouter) validationResponseFromRoutingError(model string, err error) *ext_proc.ProcessingResponse {
-	if !errors.Is(err, errModelNotConfigured) {
-		return nil
-	}
-
-	return r.createErrorResponse(404, fmt.Sprintf("model %q is not configured in the router", model))
 }

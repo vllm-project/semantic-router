@@ -9,8 +9,6 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestMaybeForceImageGenerationModalitySetsBothWhenUserContentPresent(t *testing.T) {
@@ -121,32 +119,6 @@ func TestHandleRequestBodyReturnsBadRequestForMissingMessages(t *testing.T) {
 	}
 
 	assertBodyImmediateErrorResponse(t, response, typev3.StatusCode_BadRequest, "messages field is required")
-}
-
-func TestHandleRequestBodyReturnsNotFoundForUnknownModel(t *testing.T) {
-	router := &OpenAIRouter{
-		Config: &config.RouterConfig{
-			BackendModels: config.BackendModels{
-				ModelConfig: map[string]config.ModelParams{
-					"model-a": {PreferredEndpoints: []string{"primary"}},
-				},
-				VLLMEndpoints: []config.VLLMEndpoint{
-					{Name: "primary", Address: "127.0.0.1", Port: 8000},
-				},
-			},
-		},
-		Cache: cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false}),
-	}
-	ctx := &RequestContext{Headers: make(map[string]string)}
-
-	response, err := router.HandleRequestBody(&ext_proc.ProcessingRequest_RequestBody{
-		RequestBody: &ext_proc.HttpBody{Body: []byte(`{"model":"unknown-model","messages":[]}`)},
-	}, ctx)
-	if err != nil {
-		t.Fatalf("HandleRequestBody returned error: %v", err)
-	}
-
-	assertBodyImmediateErrorResponse(t, response, typev3.StatusCode_NotFound, `model "unknown-model" is not configured in the router`)
 }
 
 func assertBodyImmediateErrorResponse(

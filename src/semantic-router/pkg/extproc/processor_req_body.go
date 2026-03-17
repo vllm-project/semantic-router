@@ -152,9 +152,6 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	// Select endpoint for the matched model
 	selectedEndpoint, selectedEndpointName, endpointErr := r.selectEndpointForModel(ctx, matchedModel)
 	if endpointErr != nil {
-		if validationResp := r.validationResponseFromRoutingError(matchedModel, endpointErr); validationResp != nil {
-			return validationResp, nil
-		}
 		return nil, fmt.Errorf("auto routing: %w", endpointErr)
 	}
 
@@ -207,9 +204,6 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	// Select endpoint for the specified model
 	selectedEndpoint, selectedEndpointName, endpointErr := r.selectEndpointForModel(ctx, originalModel)
 	if endpointErr != nil {
-		if validationResp := r.validationResponseFromRoutingError(originalModel, endpointErr); validationResp != nil {
-			return validationResp, nil
-		}
 		return nil, fmt.Errorf("specified model routing: %w", endpointErr)
 	}
 

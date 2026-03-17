@@ -30,9 +30,6 @@ func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string)
 	if err != nil {
 		return "", "", fmt.Errorf("endpoint resolution for model %q: %w", model, err)
 	}
-	if !endpointFound {
-		return "", "", fmt.Errorf("%w: %s", errModelNotConfigured, model)
-	}
 	if endpointFound {
 		logging.Infof("Selected endpoint address: %s (name: %s) for model: %s", endpointAddress, endpointName, model)
 	}

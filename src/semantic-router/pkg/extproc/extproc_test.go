@@ -1602,7 +1602,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 
 			response, err := router.HandleRequestBody(bodyRequest, ctx)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response.GetImmediateResponse().GetStatus().GetCode()).To(Equal(typev3.StatusCode_NotFound))
+			Expect(response.GetRequestBody().Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
 		})
 
 		It("should handle malformed OpenAI requests gracefully", func() {
