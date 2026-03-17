@@ -46,6 +46,33 @@ vllm-sr status
 vllm-sr stop
 ```
 
+### Kubernetes Deployment
+
+The same CLI deploys to Kubernetes via Helm:
+
+```bash
+# Deploy to Kubernetes (uses your existing config.yaml)
+HF_TOKEN=hf_xxx vllm-sr serve --target k8s --profile dev --config config.yaml
+
+# Deploy to a specific namespace and context
+HF_TOKEN=hf_xxx vllm-sr serve --target k8s --namespace production --context prod-cluster
+
+# Check status / logs / stop
+vllm-sr status --target k8s
+vllm-sr logs router --target k8s -f
+vllm-sr stop --target k8s
+```
+
+**Credential handling:** Sensitive environment variables (`HF_TOKEN`, `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`) are automatically stored in a Kubernetes Secret
+(`vllm-sr-env-secrets`) and mounted via `envFrom`. They never appear as
+plain-text values in Helm overrides or the Deployment spec. Non-sensitive
+variables (`HF_ENDPOINT`, `HF_HOME`, etc.) are passed as standard `env`
+entries.
+
+The secret is created before `helm upgrade --install` and cleaned up by
+`vllm-sr stop --target k8s`.
+
 If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspace and opens the dashboard in setup mode. Configure your first model there, then activate routing.
 
 Local dashboard state is persisted under `.vllm-sr/dashboard-data/` and bind-mounted into the container at `/app/data`. User accounts, evaluation history, and ML pipeline artifacts survive `vllm-sr stop` followed by a new `vllm-sr serve` as long as that workspace directory is kept.
