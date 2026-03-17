@@ -1,126 +1,113 @@
-# Semantic Router Configuration for Dynamic Config E2E Testing
-# This configuration uses Kubernetes CRDs for dynamic configuration
-# Static parts are defined here, dynamic parts (model_config, decisions, categories) come from CRDs
-
-# Environment variables for the semantic-router container
-env:
-  - name: EMBEDDING_MODEL_OVERRIDE
-    value: "qwen3"  # Force qwen3 for tests (Gemma requires HF_TOKEN)
-
 config:
-  # Set config source to kubernetes to enable CRD-based configuration
-  config_source: kubernetes
-
-  # Static configuration - these are not managed by CRDs
-
-  bert_model:
-    model_id: models/mom-embedding-light
-    threshold: 0.6
-    use_cpu: true
-
-  semantic_cache:
-    enabled: true
-    backend_type: "memory"
-    similarity_threshold: 0.8
-    max_entries: 1000
-    ttl_seconds: 3600
-    eviction_policy: "fifo"
-    use_hnsw: true
-    hnsw_m: 16
-    hnsw_ef_construction: 200
-    embedding_model: "bert"
-
-  tools:
-    enabled: true
-    top_k: 3
-    similarity_threshold: 0.2
-    tools_db_path: "config/tools_db.json"
-    fallback_to_empty: true
-
-  prompt_guard:
-    enabled: true
-    use_modernbert: false  # MoM uses LoRA-based model
-    model_id: "models/mom-jailbreak-classifier"
-    threshold: 0.7
-    use_cpu: true
-    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-
-  classifier:
-    category_model:
-      model_id: "models/mom-domain-classifier"
-      use_modernbert: false  # MoM uses LoRA-based model
-      threshold: 0.6
-      use_cpu: true
-      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
-    pii_model:
-      model_id: "models/mom-pii-classifier"
-      use_modernbert: false  # Use LoRA PII model
-      threshold: 0.9
-      use_cpu: true
-      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
-
-  reasoning_families:
-    deepseek:
-      type: "chat_template_kwargs"
-      parameter: "thinking"
-    qwen3:
-      type: "chat_template_kwargs"
-      parameter: "enable_thinking"
-    gpt-oss:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-    gpt:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-
-  default_reasoning_effort: high
-
-  api:
-    batch_classification:
-      max_batch_size: 100
-      concurrency_threshold: 5
-      max_concurrency: 8
-      metrics:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: base-model
+      reasoning_families:
+        deepseek:
+          type: chat_template_kwargs
+          parameter: thinking
+        qwen3:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+        gpt-oss:
+          type: reasoning_effort
+          parameter: reasoning_effort
+        gpt:
+          type: reasoning_effort
+          parameter: reasoning_effort
+      default_reasoning_effort: high
+    models:
+      - name: base-model
+        reasoning_family: qwen3
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: base-model
+    signals: {}
+  global:
+    router:
+      config_source: kubernetes
+    services:
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+          metrics:
+            enabled: true
+            detailed_goroutine_tracking: true
+            high_resolution_timing: false
+            sample_rate: 1.0
+            duration_buckets:
+              - 0.001
+              - 0.005
+              - 0.01
+              - 0.025
+              - 0.05
+              - 0.1
+              - 0.25
+              - 0.5
+              - 1
+              - 2.5
+              - 5
+              - 10
+              - 30
+            size_buckets:
+              - 1
+              - 2
+              - 5
+              - 10
+              - 20
+              - 50
+              - 100
+              - 200
+    stores:
+      semantic_cache:
         enabled: true
-        detailed_goroutine_tracking: true
-        high_resolution_timing: false
-        sample_rate: 1.0
-        duration_buckets:
-          [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
-        size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
-
-  embedding_models:
-    qwen3_model_path: "models/mom-embedding-pro"
-    gemma_model_path: "models/mom-embedding-flash"  # Gated model - will gracefully skip if HF_TOKEN not available
-    use_cpu: true
-    hnsw_config:
-      preload_embeddings: true
-      model_type: "qwen3"
-      target_dimension: 768
-      enable_soft_matching: true
-      min_score_threshold: 0.5
-
-# Increase memory limits for embedding model support
+        backend_type: memory
+        similarity_threshold: 0.8
+        max_entries: 1000
+        ttl_seconds: 3600
+        eviction_policy: fifo
+        use_hnsw: true
+        hnsw_m: 16
+        hnsw_ef_construction: 200
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations:
+      tools:
+        enabled: true
+        top_k: 3
+        similarity_threshold: 0.2
+        tools_db_path: config/tools_db.json
+        fallback_to_empty: true
 resources:
   limits:
-    memory: "10Gi"  # Increased from default 6Gi to handle Qwen3 + all classification models
-    cpu: "2"
+    memory: 10Gi
+    cpu: '2'
   requests:
-    memory: "6Gi"   # Increased from default 3Gi
-    cpu: "1"
-
+    memory: 6Gi
+    cpu: '1'
   observability:
     tracing:
       enabled: false
-      provider: "opentelemetry"
+      provider: opentelemetry
       exporter:
-        type: "otlp"
-        endpoint: "jaeger:4317"
+        type: otlp
+        endpoint: jaeger:4317
         insecure: true
       sampling:
-        type: "always_on"
+        type: always_on
         rate: 1.0
       resource:
-        service_name: "vllm-semantic-router"
-        service_version: "v0.1.0"
-        deployment_environment: "development"
+        service_name: vllm-semantic-router
+        service_version: v0.1.0
+        deployment_environment: development

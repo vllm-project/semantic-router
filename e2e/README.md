@@ -23,9 +23,7 @@ Standard CI-backed profiles:
 - **llm-d**: LLM-D inference-gateway health plus a minimal router smoke path
 - **istio**: Istio service mesh sidecar, traffic, mTLS, and tracing behavior
 - **production-stack**: HA, load-balancing, failover, and throughput behavior
-- **response-api**: Responses API endpoints with the in-memory store
-- **response-api-redis**: Responses API endpoints with Redis storage backend and TTL coverage
-- **response-api-redis-cluster**: Responses API endpoints with Redis Cluster backend and TTL coverage
+- **response-api**: Responses API coverage across memory, Redis, and Redis Cluster backends under one CI check
 - **ml-model-selection**: ML-based model-selection behavior
 - **multi-endpoint**: Environment-specific routing and safety policy behavior
 - **authz-rbac**: Authz-driven routing and per-user rate limiting
@@ -33,6 +31,8 @@ Standard CI-backed profiles:
 
 Manual-only profiles:
 
+- **response-api-redis**: Responses API endpoints with Redis storage backend and TTL coverage for direct backend debugging
+- **response-api-redis-cluster**: Responses API endpoints with Redis Cluster backend and TTL coverage for direct backend debugging
 - **dynamo**: NVIDIA Dynamo deployment, batching, and GPU-health coverage
 - **rag-hybrid-search**: Llama Stack-backed RAG vector-store and hybrid-search coverage
 
@@ -47,7 +47,7 @@ Manual-only profiles:
 | `llm-d` | `chat-completions-request` | llm-d inference-gateway health |
 | `istio` | `chat-completions-request` | Sidecar, traffic, mTLS, and tracing |
 | `production-stack` | `chat-completions-request` | HA, failover, load-balancing, throughput |
-| `response-api*` | none | Responses API storage/backend behavior |
+| `response-api` | none | Responses API behavior across memory, Redis, and Redis Cluster backends |
 | `ml-model-selection` | `chat-completions-request`, `domain-classify` | ML selector behavior |
 | `multi-endpoint` | `chat-completions-request` | Environment-specific safety policies |
 | `authz-rbac` | `chat-completions-request` | Authz and rate-limiting behavior |
@@ -185,6 +185,7 @@ make e2e-test
 ```bash
 make vllm-sr-test-integration
 make memory-test-integration
+make e2e-test-response-api-suite
 ```
 
 ### Run specific profile

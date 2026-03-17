@@ -766,84 +766,111 @@ The system calculates quality scores based on `ground_truth`:
 ### Example 1: Ollama (Local - No Auth)
 
 ```yaml
-# Used in this example for local testing
-vllm_endpoints:
-  - name: "ollama"
-    address: "localhost"
-    port: 11434
-    type: "ollama"
-    weight: 1
+providers:
+  models:
+    - name: "llama-3.2-1b"
+      provider_model_id: "llama3.2:1b"
+      backend_refs:
+        - name: "ollama"
+          endpoint: "localhost:11434"
+          protocol: "http"
+          type: "ollama"
+          weight: 1
+    - name: "llama-3.2-3b"
+      provider_model_id: "llama3.2:3b"
+      backend_refs:
+        - name: "ollama"
+          endpoint: "localhost:11434"
+          protocol: "http"
+          type: "ollama"
+          weight: 1
 
-model_config:
-  "llama-3.2-1b":
-    preferred_endpoints: ["ollama"]
-    external_model_ids:
-      ollama: "llama3.2:1b"
-
-  "llama-3.2-3b":
-    preferred_endpoints: ["ollama"]
-    external_model_ids:
-      ollama: "llama3.2:3b"
+routing:
+  modelCards:
+    - name: "llama-3.2-1b"
+    - name: "llama-3.2-3b"
 ```
 
 ### Example 2: HuggingFace (Token Auth)
 
 ```yaml
-vllm_endpoints:
-  - name: "huggingface"
-    address: "api-inference.huggingface.co"
-    port: 443
-    type: "huggingface"
-    api_key: "${HF_TOKEN}"  # Environment variable
-    weight: 1
+providers:
+  models:
+    - name: "mistral-7b-hf"
+      provider_model_id: "mistralai/Mistral-7B-Instruct-v0.2"
+      external_model_ids:
+        huggingface: "mistralai/Mistral-7B-Instruct-v0.2"
+      backend_refs:
+        - name: "huggingface"
+          base_url: "https://api-inference.huggingface.co"
+          provider: "huggingface"
+          auth_header: "Authorization"
+          auth_prefix: "Bearer"
+          api_key_env: "HF_TOKEN"
+          weight: 1
 
-model_config:
-  "mistral-7b-hf":
-    preferred_endpoints: ["huggingface"]
-    external_model_ids:
-      huggingface: "mistralai/Mistral-7B-Instruct-v0.2"
-    access_key: "${HF_TOKEN}"  # Model-specific token if needed
+routing:
+  modelCards:
+    - name: "mistral-7b-hf"
 ```
 
 ### Example 3: OpenAI (API Key)
 
 ```yaml
-vllm_endpoints:
-  - name: "openai"
-    address: "api.openai.com"
-    port: 443
-    type: "openai"
-    api_key: "${OPENAI_API_KEY}"
-    weight: 1
+providers:
+  models:
+    - name: "gpt-4"
+      provider_model_id: "gpt-4-turbo"
+      external_model_ids:
+        openai: "gpt-4-turbo"
+      backend_refs:
+        - name: "openai"
+          base_url: "https://api.openai.com/v1"
+          provider: "openai"
+          auth_header: "Authorization"
+          auth_prefix: "Bearer"
+          api_key_env: "OPENAI_API_KEY"
+          weight: 1
+    - name: "gpt-3.5"
+      provider_model_id: "gpt-3.5-turbo"
+      external_model_ids:
+        openai: "gpt-3.5-turbo"
+      backend_refs:
+        - name: "openai"
+          base_url: "https://api.openai.com/v1"
+          provider: "openai"
+          auth_header: "Authorization"
+          auth_prefix: "Bearer"
+          api_key_env: "OPENAI_API_KEY"
+          weight: 1
 
-model_config:
-  "gpt-4":
-    preferred_endpoints: ["openai"]
-    external_model_ids:
-      openai: "gpt-4-turbo"
-
-  "gpt-3.5":
-    preferred_endpoints: ["openai"]
-    external_model_ids:
-      openai: "gpt-3.5-turbo"
+routing:
+  modelCards:
+    - name: "gpt-4"
+    - name: "gpt-3.5"
 ```
 
 ### Example 4: NVIDIA NIM (Enterprise)
 
 ```yaml
-vllm_endpoints:
-  - name: "nvidia-nim"
-    address: "integrate.api.nvidia.com"
-    port: 443
-    type: "nvidia"
-    api_key: "${NVIDIA_API_KEY}"
-    weight: 1
+providers:
+  models:
+    - name: "llama-3.1-70b-nim"
+      provider_model_id: "meta/llama-3.1-70b-instruct"
+      external_model_ids:
+        nvidia: "meta/llama-3.1-70b-instruct"
+      backend_refs:
+        - name: "nvidia-nim"
+          base_url: "https://integrate.api.nvidia.com/v1"
+          provider: "nvidia"
+          auth_header: "Authorization"
+          auth_prefix: "Bearer"
+          api_key_env: "NVIDIA_API_KEY"
+          weight: 1
 
-model_config:
-  "llama-3.1-70b-nim":
-    preferred_endpoints: ["nvidia-nim"]
-    external_model_ids:
-      nvidia: "meta/llama-3.1-70b-instruct"
+routing:
+  modelCards:
+    - name: "llama-3.1-70b-nim"
 ```
 
 ### Example 5: Mixed Providers (Production)
@@ -851,125 +878,144 @@ model_config:
 You can mix multiple providers in a single configuration:
 
 ```yaml
-vllm_endpoints:
-  # Local Ollama for fast/cheap models
-  - name: "ollama-local"
-    address: "localhost"
-    port: 11434
-    type: "ollama"
-    weight: 1
+providers:
+  models:
+    - name: "llama-3.2-1b"
+      provider_model_id: "llama3.2:1b"
+      external_model_ids:
+        ollama: "llama3.2:1b"
+      backend_refs:
+        - name: "ollama-local"
+          endpoint: "localhost:11434"
+          protocol: "http"
+          type: "ollama"
+          weight: 1
+    - name: "gpt-4"
+      provider_model_id: "gpt-4-turbo"
+      external_model_ids:
+        openai: "gpt-4-turbo"
+      backend_refs:
+        - name: "openai"
+          base_url: "https://api.openai.com/v1"
+          provider: "openai"
+          auth_header: "Authorization"
+          auth_prefix: "Bearer"
+          api_key_env: "OPENAI_API_KEY"
+          weight: 1
+    - name: "codellama-34b"
+      provider_model_id: "codellama/CodeLlama-34b-Instruct-hf"
+      external_model_ids:
+        huggingface: "codellama/CodeLlama-34b-Instruct-hf"
+      backend_refs:
+        - name: "huggingface"
+          base_url: "https://api-inference.huggingface.co"
+          provider: "huggingface"
+          auth_header: "Authorization"
+          auth_prefix: "Bearer"
+          api_key_env: "HF_TOKEN"
+          weight: 1
 
-  # OpenAI for premium models
-  - name: "openai"
-    address: "api.openai.com"
-    port: 443
-    type: "openai"
-    api_key: "${OPENAI_API_KEY}"
-    weight: 1
-
-  # HuggingFace for open models
-  - name: "huggingface"
-    address: "api-inference.huggingface.co"
-    port: 443
-    type: "huggingface"
-    api_key: "${HF_TOKEN}"
-    weight: 1
-
-model_config:
-  # Fast local model for simple queries
-  "llama-3.2-1b":
-    preferred_endpoints: ["ollama-local"]
-    external_model_ids:
-      ollama: "llama3.2:1b"
-
-  # Premium model for complex reasoning
-  "gpt-4":
-    preferred_endpoints: ["openai"]
-    external_model_ids:
-      openai: "gpt-4-turbo"
-
-  # Open model for code generation
-  "codellama-34b":
-    preferred_endpoints: ["huggingface"]
-    external_model_ids:
-      huggingface: "codellama/CodeLlama-34b-Instruct-hf"
-    access_key: "${HF_TOKEN}"
+routing:
+  modelCards:
+    - name: "llama-3.2-1b"
+    - name: "gpt-4"
+    - name: "codellama-34b"
 ```
 
 ### Authentication Options
 
 | Method | Config Field | Example |
 |--------|--------------|---------|
-| **Endpoint-level API key** | `api_key` in endpoint | `api_key: "${OPENAI_API_KEY}"` |
-| **Model-level access key** | `access_key` in model_config | `access_key: "${HF_TOKEN}"` |
+| **Backend credential by env** | `api_key_env` in `backend_refs[]` | `api_key_env: "OPENAI_API_KEY"` |
+| **Inline backend credential** | `api_key` in `backend_refs[]` | `api_key: "sk-..."` |
+| **Provider auth header** | `auth_header` + `auth_prefix` | `Authorization` + `Bearer` |
 | **Environment variable** | `${VAR_NAME}` syntax | Auto-resolved at runtime |
 | **Direct value** | Plain string | `api_key: "sk-..."` (not recommended) |
 
 ### Full Example: 4 Models with Ollama (This Documentation)
 
 ```yaml
-# Model Selection Configuration (global settings)
-model_selection:
-  enabled: true
-  models_path: ".cache/ml-models"  # Downloaded from HuggingFace
-  embedding_dim: 1024
+global:
+  router:
+    model_selection:
+      enabled: true
+      ml:
+        models_path: ".cache/ml-models"
+        embedding_dim: 1024
 
-# vLLM/Ollama Endpoints
-vllm_endpoints:
-  - name: "ollama"
-    address: "localhost"
-    port: 11434
-    type: "ollama"
-    weight: 1
+providers:
+  models:
+    - name: "llama-3.2-1b"
+      provider_model_id: "llama3.2:1b"
+      external_model_ids:
+        ollama: "llama3.2:1b"
+      backend_refs:
+        - name: "ollama"
+          endpoint: "localhost:11434"
+          protocol: "http"
+          type: "ollama"
+    - name: "llama-3.2-3b"
+      provider_model_id: "llama3.2:3b"
+      external_model_ids:
+        ollama: "llama3.2:3b"
+      backend_refs:
+        - name: "ollama"
+          endpoint: "localhost:11434"
+          protocol: "http"
+          type: "ollama"
+    - name: "codellama-7b"
+      provider_model_id: "codellama:7b"
+      external_model_ids:
+        ollama: "codellama:7b"
+      backend_refs:
+        - name: "ollama"
+          endpoint: "localhost:11434"
+          protocol: "http"
+          type: "ollama"
+    - name: "mistral-7b"
+      provider_model_id: "mistral:7b"
+      external_model_ids:
+        ollama: "mistral:7b"
+      backend_refs:
+        - name: "ollama"
+          endpoint: "localhost:11434"
+          protocol: "http"
+          type: "ollama"
 
-# Model configurations - define each LLM
-model_config:
-  "llama-3.2-1b":
-    preferred_endpoints: ["ollama"]
-    external_model_ids:
-      ollama: "llama3.2:1b"
-
-  "llama-3.2-3b":
-    preferred_endpoints: ["ollama"]
-    external_model_ids:
-      ollama: "llama3.2:3b"
-
-  "codellama-7b":
-    preferred_endpoints: ["ollama"]
-    external_model_ids:
-      ollama: "codellama:7b"
-
-  "mistral-7b":
-    preferred_endpoints: ["ollama"]
-    external_model_ids:
-      ollama: "mistral:7b"
+routing:
+  modelCards:
+    - name: "llama-3.2-1b"
+    - name: "llama-3.2-3b"
+    - name: "codellama-7b"
+    - name: "mistral-7b"
 ```
 
 ### Per-Decision Algorithm Configuration
 
 ```yaml
-decisions:
-  - name: "math_decision"
-    description: "Mathematics and quantitative reasoning"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "math"
-    algorithm:
-      type: "knn"          # Choose: knn, kmeans, svm
-      knn:
-        k: 5               # Algorithm-specific parameters
-    modelRefs:
-      - model: "llama-3.2-1b"
-        use_reasoning: false
-      - model: "llama-3.2-3b"
-        use_reasoning: false
-      - model: "codellama-7b"
-        use_reasoning: false
-      - model: "mistral-7b"
-        use_reasoning: false
+routing:
+  decisions:
+    - name: "math_decision"
+      description: "Mathematics and quantitative reasoning"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "math"
+      algorithm:
+        type: "knn"
+        knn:
+          k: 5
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
 ```
 
 ---

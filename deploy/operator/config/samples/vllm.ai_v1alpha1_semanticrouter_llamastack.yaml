@@ -13,7 +13,8 @@ spec:
   # Llama Stack Backend Configuration
   # ====================
   # The operator discovers Llama Stack services using label selectors
-  # and automatically generates vllm_endpoints configuration
+  # and automatically generates canonical providers.models[].backend_refs
+  # plus matching routing.modelCards entries
   vllmEndpoints:
     # Example 1: Llama Stack service discovery by labels
     - name: llama-3-3-70b-endpoint

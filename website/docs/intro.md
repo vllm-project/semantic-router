@@ -159,26 +159,26 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
 
 ## Quick Links
 
-- [**Installation**](installation/installation.md) - Setup and installation guide
-- [**Overview**](overview/goals.md) - Project goals and core concepts
-- [**Configuration**](installation/configuration.md) - Configure signals and routing decisions
-- [**Tutorials**](tutorials/intelligent-route/keyword-routing.md) - Step-by-step guides
+- [**Installation**](installation) - Setup and installation guide
+- [**Overview**](overview/goals) - Project goals and core concepts
+- [**Configuration**](installation/configuration) - Configure signals and routing decisions
+- [**Tutorials**](tutorials/signal/overview) - Step-by-step guides for signals, decisions, plugins, algorithms, and global overrides
 
 ## Documentation Structure
 
 This documentation is organized into the following sections:
 
-### [Overview](overview/goals.md)
+### [Overview](overview/goals)
 
 Learn about our goals, semantic routing concepts, collective intelligence, and signal-driven decisions.
 
-### [Installation & Configuration](installation/installation.md)
+### [Installation & Configuration](installation)
 
 Get started with installation and learn how to configure signals, decisions, and plugins.
 
-### [Tutorials](tutorials/intelligent-route/keyword-routing.md)
+### [Tutorials](tutorials/signal/overview)
 
-Step-by-step guides for implementing intelligent routing, semantic caching, content safety, and observability.
+Step-by-step guides organized by `signal`, `decision`, `plugin`, `algorithm`, and `global`.
 
 ## Contributing
 

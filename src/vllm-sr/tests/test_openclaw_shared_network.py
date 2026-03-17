@@ -85,6 +85,92 @@ def test_docker_start_vllm_sr_mounts_dashboard_data_dir(tmp_path, monkeypatch):
     assert f"{dashboard_data_dir}:/app/data:z" in captured["cmd"]
 
 
+def test_docker_start_vllm_sr_uses_state_root_for_mounts(tmp_path, monkeypatch):
+    workspace_dir = tmp_path / "workspace"
+    workspace_dir.mkdir()
+    config_path = tmp_path / "runtime-overrides" / "config-with-platform-overrides.yaml"
+    config_path.parent.mkdir()
+    config_path.write_text(
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+
+    captured = {}
+
+    def fake_run(cmd, capture_output, text, check):
+        captured["cmd"] = cmd
+        return SimpleNamespace(stdout="container-id\n", stderr="")
+
+    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(docker_start, "get_docker_image", lambda **kwargs: "test-image")
+    monkeypatch.setattr(docker_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(docker_start.shutil, "which", lambda name: None)
+
+    rc, _, _ = docker_cli.docker_start_vllm_sr(
+        str(config_path),
+        {},
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        network_name=None,
+        openclaw_network_name="vllm-sr-network",
+        minimal=True,
+        state_root_dir=str(workspace_dir),
+    )
+
+    dashboard_data_dir = workspace_dir / ".vllm-sr" / "dashboard-data"
+    models_dir = workspace_dir / "models"
+
+    assert rc == 0
+    assert dashboard_data_dir.is_dir()
+    assert models_dir.is_dir()
+    assert f"{dashboard_data_dir}:/app/data:z" in captured["cmd"]
+    assert f"{models_dir}:/app/models:z" in captured["cmd"]
+
+
+def test_docker_start_vllm_sr_keeps_source_config_mount_with_runtime_override(
+    tmp_path, monkeypatch
+):
+    workspace_dir = tmp_path / "workspace"
+    runtime_dir = workspace_dir / ".vllm-sr"
+    workspace_dir.mkdir()
+    runtime_dir.mkdir()
+    source_config_path = workspace_dir / "config.yaml"
+    source_config_path.write_text(
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+    runtime_config_path = runtime_dir / "runtime-config.yaml"
+    runtime_config_path.write_text(
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+
+    captured = {}
+
+    def fake_run(cmd, capture_output, text, check):
+        captured["cmd"] = cmd
+        return SimpleNamespace(stdout="container-id\n", stderr="")
+
+    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(docker_start, "get_docker_image", lambda **kwargs: "test-image")
+    monkeypatch.setattr(docker_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(docker_start.shutil, "which", lambda name: None)
+
+    rc, _, _ = docker_cli.docker_start_vllm_sr(
+        str(source_config_path),
+        {},
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        network_name=None,
+        openclaw_network_name="vllm-sr-network",
+        minimal=True,
+        state_root_dir=str(workspace_dir),
+        runtime_config_file=str(runtime_config_path),
+    )
+
+    assert rc == 0
+    assert f"{source_config_path}:/app/config.yaml:z" in captured["cmd"]
+    assert (
+        "VLLM_SR_RUNTIME_CONFIG_PATH=/app/.vllm-sr/runtime-config.yaml"
+        in captured["cmd"]
+    )
+
+
 def test_start_vllm_sr_creates_and_connects_shared_network_without_observability(
     monkeypatch,
 ):
@@ -137,6 +223,7 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
     assert create_calls[0][1] == ("vllm-sr-network",)
     assert start_calls[0][2]["network_name"] is None
     assert start_calls[0][2]["openclaw_network_name"] == "vllm-sr-network"
+    assert start_calls[0][2]["runtime_config_file"] == "/tmp/config.yaml"
     assert connect_calls[0][1] == ("vllm-sr-network", "vllm-sr-container")
 
 

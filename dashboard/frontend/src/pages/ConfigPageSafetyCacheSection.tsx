@@ -1,4 +1,5 @@
 import styles from './ConfigPage.module.css'
+import type { EmbeddingModelsConfig, ModelConfig } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
 import { cloneConfig, type RouterSectionBaseProps } from './configPageRouterSectionSupport'
 
@@ -9,17 +10,22 @@ export default function ConfigPageSafetyCacheSection({
   openEditModal,
   saveConfig,
 }: RouterSectionBaseProps) {
+  const piiModel = routerConfig.classifier?.pii_model
+  const promptGuard = routerConfig.prompt_guard
+  const embeddingModels = routerConfig.embedding_models
+  const semanticCache = routerConfig.semantic_cache
+
   const renderPIIModernBERT = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <h3 className={styles.sectionTitle}>PII Detection (ModernBERT)</h3>
-        {routerConfig.classifier?.pii_model && !isReadonly && (
+        {piiModel && !isReadonly && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
-              openEditModal(
-                'Edit PII Detection Configuration',
-                routerConfig.classifier?.pii_model || {},
+	              openEditModal<ModelConfig>(
+	                'Edit PII Detection Configuration',
+	                piiModel,
                 [
                   { name: 'model_id', label: 'Model ID', type: 'text', required: true, placeholder: 'e.g., answerdotai/ModernBERT-base', description: 'HuggingFace model ID for PII detection' },
                   { name: 'threshold', label: 'Detection Threshold', type: 'percentage', required: true, placeholder: '50', description: 'Confidence threshold for PII detection (0-100%)', step: 1 },
@@ -41,35 +47,35 @@ export default function ConfigPageSafetyCacheSection({
         )}
       </div>
       <div className={styles.sectionContent}>
-        {routerConfig.classifier?.pii_model ? (
+	        {piiModel ? (
           <div className={styles.modelCard}>
             <div className={styles.modelCardHeader}>
               <span className={styles.modelCardTitle}>PII Classifier Model</span>
               <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                {routerConfig.classifier.pii_model.use_cpu ? 'CPU' : 'GPU'}
+	                {piiModel.use_cpu ? 'CPU' : 'GPU'}
               </span>
             </div>
             <div className={styles.modelCardBody}>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Model ID</span>
-                <span className={styles.configValue}>{routerConfig.classifier.pii_model.model_id}</span>
+	                <span className={styles.configValue}>{piiModel.model_id}</span>
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Threshold</span>
-                <span className={styles.configValue}>{formatThreshold(routerConfig.classifier.pii_model.threshold)}</span>
+	                <span className={styles.configValue}>{formatThreshold(piiModel.threshold)}</span>
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>ModernBERT</span>
-                <span className={`${styles.statusBadge} ${routerConfig.classifier.pii_model.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
-                  {routerConfig.classifier.pii_model.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
-                </span>
-              </div>
-              {routerConfig.classifier.pii_model.pii_mapping_path && (
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Mapping Path</span>
-                  <span className={styles.configValue}>{routerConfig.classifier.pii_model.pii_mapping_path}</span>
-                </div>
-              )}
+	                <span className={`${styles.statusBadge} ${piiModel.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
+	                  {piiModel.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
+	                </span>
+	              </div>
+	              {piiModel.pii_mapping_path && (
+	                <div className={styles.configRow}>
+	                  <span className={styles.configLabel}>Mapping Path</span>
+	                  <span className={styles.configValue}>{piiModel.pii_mapping_path}</span>
+	                </div>
+	              )}
             </div>
           </div>
         ) : (
@@ -83,13 +89,13 @@ export default function ConfigPageSafetyCacheSection({
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <h3 className={styles.sectionTitle}>Jailbreak Detection (ModernBERT)</h3>
-        {routerConfig.prompt_guard && !isReadonly && (
+        {promptGuard && !isReadonly && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
-              openEditModal(
-                'Edit Jailbreak Detection Configuration',
-                routerConfig.prompt_guard || {},
+	              openEditModal<ModelConfig & { enabled: boolean }>(
+	                'Edit Jailbreak Detection Configuration',
+	                promptGuard,
                 [
                   { name: 'enabled', label: 'Enable Jailbreak Detection', type: 'boolean', description: 'Enable or disable jailbreak detection' },
                   { name: 'model_id', label: 'Model ID', type: 'text', required: true, placeholder: 'e.g., answerdotai/ModernBERT-base', description: 'HuggingFace model ID for jailbreak detection' },
@@ -111,42 +117,42 @@ export default function ConfigPageSafetyCacheSection({
         )}
       </div>
       <div className={styles.sectionContent}>
-        {routerConfig.prompt_guard ? (
+	        {promptGuard ? (
           <div className={styles.modelCard}>
             <div className={styles.modelCardHeader}>
               <span className={styles.modelCardTitle}>Jailbreak Protection</span>
-              <span className={`${styles.statusBadge} ${routerConfig.prompt_guard.enabled ? styles.statusActive : styles.statusInactive}`}>
-                {routerConfig.prompt_guard.enabled ? '✓ Enabled' : '✗ Disabled'}
-              </span>
-            </div>
-            {routerConfig.prompt_guard.enabled && (
-              <div className={styles.modelCardBody}>
+	              <span className={`${styles.statusBadge} ${promptGuard.enabled ? styles.statusActive : styles.statusInactive}`}>
+	                {promptGuard.enabled ? '✓ Enabled' : '✗ Disabled'}
+	              </span>
+	            </div>
+	            {promptGuard.enabled && (
+	              <div className={styles.modelCardBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Model ID</span>
-                  <span className={styles.configValue}>{routerConfig.prompt_guard.model_id}</span>
+	                  <span className={styles.configValue}>{promptGuard.model_id}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(routerConfig.prompt_guard.threshold)}</span>
+	                  <span className={styles.configValue}>{formatThreshold(promptGuard.threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Use CPU</span>
                   <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                    {routerConfig.prompt_guard.use_cpu ? 'CPU' : 'GPU'}
+	                    {promptGuard.use_cpu ? 'CPU' : 'GPU'}
                   </span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>ModernBERT</span>
-                  <span className={`${styles.statusBadge} ${routerConfig.prompt_guard.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
-                    {routerConfig.prompt_guard.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
-                  </span>
-                </div>
-                {routerConfig.prompt_guard.jailbreak_mapping_path && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Mapping Path</span>
-                    <span className={styles.configValue}>{routerConfig.prompt_guard.jailbreak_mapping_path}</span>
-                  </div>
-                )}
+	                  <span className={`${styles.statusBadge} ${promptGuard.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
+	                    {promptGuard.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
+	                  </span>
+	                </div>
+	                {promptGuard.jailbreak_mapping_path && (
+	                  <div className={styles.configRow}>
+	                    <span className={styles.configLabel}>Mapping Path</span>
+	                    <span className={styles.configValue}>{promptGuard.jailbreak_mapping_path}</span>
+	                  </div>
+	                )}
               </div>
             )}
           </div>
@@ -160,14 +166,18 @@ export default function ConfigPageSafetyCacheSection({
   const renderSimilarityBERT = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <h3 className={styles.sectionTitle}>Similarity BERT Configuration</h3>
-        {routerConfig.bert_model && !isReadonly && (
+        <h3 className={styles.sectionTitle}>Similarity Embedding Configuration</h3>
+        {embeddingModels && !isReadonly && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
-              openEditModal(
-                'Edit Similarity BERT Configuration',
-                routerConfig.bert_model || {},
+	              openEditModal<ModelConfig>(
+	                'Edit Similarity Embedding Configuration',
+	                {
+                    model_id: embeddingModels.bert_model_path || '',
+                    threshold: embeddingModels.embedding_config?.min_score_threshold || 0.5,
+                    use_cpu: embeddingModels.use_cpu ?? true,
+                  },
                 [
                   { name: 'model_id', label: 'Model ID', type: 'text', required: true, placeholder: 'e.g., sentence-transformers/all-MiniLM-L6-v2', description: 'HuggingFace model ID for semantic similarity' },
                   { name: 'threshold', label: 'Similarity Threshold', type: 'percentage', required: true, placeholder: '80', description: 'Minimum similarity score for cache hits (0-100%)', step: 1 },
@@ -175,7 +185,16 @@ export default function ConfigPageSafetyCacheSection({
                 ],
                 async (data) => {
                   const newConfig = cloneConfig(config)
-                  newConfig.bert_model = data
+                  const nextEmbeddingModels: EmbeddingModelsConfig = {
+                    ...(newConfig.embedding_models || {}),
+                    bert_model_path: data.model_id,
+                    use_cpu: Boolean(data.use_cpu),
+                    embedding_config: {
+                      ...(newConfig.embedding_models?.embedding_config || {}),
+                      min_score_threshold: data.threshold,
+                    },
+                  }
+                  newConfig.embedding_models = nextEmbeddingModels
                   await saveConfig(newConfig)
                 }
               )
@@ -186,37 +205,37 @@ export default function ConfigPageSafetyCacheSection({
         )}
       </div>
       <div className={styles.sectionContent}>
-        {routerConfig.bert_model ? (
+	        {embeddingModels?.bert_model_path ? (
           <div className={styles.modelCard}>
             <div className={styles.modelCardHeader}>
-              <span className={styles.modelCardTitle}>BERT Model (Semantic Similarity)</span>
+              <span className={styles.modelCardTitle}>Embedding Model (Semantic Similarity)</span>
               <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                {routerConfig.bert_model.use_cpu ? 'CPU' : 'GPU'}
+	                {embeddingModels.use_cpu ? 'CPU' : 'GPU'}
               </span>
             </div>
             <div className={styles.modelCardBody}>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Model ID</span>
-                <span className={styles.configValue}>{routerConfig.bert_model.model_id}</span>
+	                <span className={styles.configValue}>{embeddingModels.bert_model_path}</span>
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Threshold</span>
-                <span className={styles.configValue}>{formatThreshold(routerConfig.bert_model.threshold)}</span>
+	                <span className={styles.configValue}>{formatThreshold(embeddingModels.embedding_config?.min_score_threshold || 0.5)}</span>
               </div>
             </div>
           </div>
         ) : (
-          <div className={styles.emptyState}>BERT model not configured</div>
+          <div className={styles.emptyState}>Similarity embedding model not configured</div>
         )}
 
-        {routerConfig.semantic_cache && (
+	        {semanticCache && (
           <div className={styles.featureCard}>
             <div className={styles.featureHeader}>
               <span className={styles.featureTitle}>Semantic Cache</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span className={`${styles.statusBadge} ${routerConfig.semantic_cache.enabled ? styles.statusActive : styles.statusInactive}`}>
-                  {routerConfig.semantic_cache.enabled ? '✓ Enabled' : '✗ Disabled'}
-                </span>
+	                <span className={`${styles.statusBadge} ${semanticCache.enabled ? styles.statusActive : styles.statusInactive}`}>
+	                  {semanticCache.enabled ? '✓ Enabled' : '✗ Disabled'}
+	                </span>
                 {!isReadonly && (
                   <button
                     className={styles.sectionEditButton}
@@ -245,30 +264,30 @@ export default function ConfigPageSafetyCacheSection({
                 )}
               </div>
             </div>
-            {routerConfig.semantic_cache.enabled && (
-              <div className={styles.featureBody}>
+	            {semanticCache.enabled && (
+	              <div className={styles.featureBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Backend Type</span>
-                  <span className={styles.configValue}>{routerConfig.semantic_cache.backend_type || 'memory'}</span>
+	                  <span className={styles.configValue}>{semanticCache.backend_type || 'memory'}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Similarity Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(routerConfig.semantic_cache.similarity_threshold ?? 0)}</span>
+	                  <span className={styles.configValue}>{formatThreshold(semanticCache.similarity_threshold ?? 0)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Max Entries</span>
-                  <span className={styles.configValue}>{routerConfig.semantic_cache.max_entries}</span>
+	                  <span className={styles.configValue}>{semanticCache.max_entries}</span>
                 </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>TTL</span>
-                  <span className={styles.configValue}>{routerConfig.semantic_cache.ttl_seconds}s</span>
-                </div>
-                {routerConfig.semantic_cache.eviction_policy && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Eviction Policy</span>
-                    <span className={styles.configValue}>{routerConfig.semantic_cache.eviction_policy}</span>
-                  </div>
-                )}
+	                <div className={styles.configRow}>
+	                  <span className={styles.configLabel}>TTL</span>
+	                  <span className={styles.configValue}>{semanticCache.ttl_seconds}s</span>
+	                </div>
+	                {semanticCache.eviction_policy && (
+	                  <div className={styles.configRow}>
+	                    <span className={styles.configLabel}>Eviction Policy</span>
+	                    <span className={styles.configValue}>{semanticCache.eviction_policy}</span>
+	                  </div>
+	                )}
               </div>
             )}
           </div>

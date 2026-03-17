@@ -23,8 +23,8 @@ export function parseConfigToTopology(config: ConfigData): ParsedTopology {
   const signals = extractSignals(config)
   const decisions = extractDecisions(config)
   const models = extractModels(config)
-  const strategy = 'priority' // Default strategy
-  const defaultModel = config.providers?.default_model
+  const strategy = config.global?.router?.strategy || 'priority'
+  const defaultModel = config.providers?.defaults?.default_model
 
   return { globalPlugins, signals, decisions, models, strategy, defaultModel }
 }
@@ -34,29 +34,34 @@ export function parseConfigToTopology(config: ConfigData): ParsedTopology {
  */
 function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   const plugins: GlobalPluginConfig[] = []
+  const promptGuard = config.global?.model_catalog?.modules?.prompt_guard || config.prompt_guard
+  const piiModel = config.global?.model_catalog?.modules?.classifier?.pii || config.classifier?.pii_model
+  const semanticCache = config.global?.stores?.semantic_cache || config.semantic_cache
+  const promptGuardModel = promptGuard?.model_id || promptGuard?.model_ref
+  const piiModelRef = piiModel?.model_id || piiModel?.model_ref
 
   // 1. Prompt Guard (Jailbreak Detection)
-  if (config.prompt_guard) {
+  if (promptGuard) {
     plugins.push({
       type: 'prompt_guard',
-      enabled: config.prompt_guard.enabled ?? false,
-      modelId: config.prompt_guard.model_id || 'vLLM-SR-Jailbreak',
-      threshold: config.prompt_guard.threshold,
+      enabled: promptGuard.enabled ?? !!promptGuardModel,
+      modelId: promptGuardModel || 'vLLM-SR-Jailbreak',
+      threshold: promptGuard.threshold,
       config: {
-        use_modernbert: config.prompt_guard.use_modernbert,
-        use_vllm: config.prompt_guard.use_vllm,
+        use_modernbert: promptGuard.use_modernbert,
+        use_vllm: promptGuard.use_vllm,
       },
     })
   }
 
   // 2. PII Detection
   // Note: Global PII only loads the model. Actual detection requires decision-level pii plugin.
-  if (config.classifier?.pii_model) {
+  if (piiModel) {
     plugins.push({
       type: 'pii_detection',
-      enabled: !!config.classifier.pii_model.model_id,
-      modelId: config.classifier.pii_model.model_id || 'vLLM-SR-PII',
-      threshold: config.classifier.pii_model.threshold,
+      enabled: piiModel.enabled ?? !!piiModelRef,
+      modelId: piiModelRef || 'vLLM-SR-PII',
+      threshold: piiModel.threshold,
       config: {
         // Mark as "model loaded" not "active detection"
         mode: 'model_loaded',
@@ -66,14 +71,14 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   }
 
   // 3. Semantic Cache (Global)
-  if (config.semantic_cache) {
+  if (semanticCache) {
     plugins.push({
       type: 'semantic_cache',
-      enabled: config.semantic_cache.enabled ?? false,
+      enabled: semanticCache.enabled ?? false,
       config: {
-        backend_type: config.semantic_cache.backend_type,
-        similarity_threshold: config.semantic_cache.similarity_threshold,
-        ttl_seconds: config.semantic_cache.ttl_seconds,
+        backend_type: semanticCache.backend_type,
+        similarity_threshold: semanticCache.similarity_threshold,
+        ttl_seconds: semanticCache.ttl_seconds,
       },
     })
   }
@@ -89,6 +94,7 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
 function extractSignals(config: ConfigData): SignalConfig[] {
   const signals: SignalConfig[] = []
   const addedSignals = new Set<string>() // Track added signals to avoid duplicates
+  const routingSignals = config.routing?.signals ?? config.signals
 
   // Helper to add signal if not already added
   const addSignal = (signal: SignalConfig) => {
@@ -114,7 +120,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.keywords (Python CLI format)
-  config.signals?.keywords?.forEach(rule => {
+  routingSignals?.keywords?.forEach(rule => {
     addSignal({
       type: 'keyword',
       name: rule.name,
@@ -142,7 +148,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.embeddings (Python CLI format)
-  config.signals?.embeddings?.forEach(rule => {
+  routingSignals?.embeddings?.forEach(rule => {
     addSignal({
       type: 'embedding',
       name: rule.name,
@@ -157,7 +163,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
 
   // 3. Categories/Domains → domain signals
   // From signals.domains (Python CLI format)
-  config.signals?.domains?.forEach(domain => {
+  routingSignals?.domains?.forEach(domain => {
     addSignal({
       type: 'domain',
       name: domain.name,
@@ -196,7 +202,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.fact_check (Python CLI format)
-  config.signals?.fact_check?.forEach(rule => {
+  routingSignals?.fact_check?.forEach(rule => {
     addSignal({
       type: 'fact_check',
       name: rule.name,
@@ -218,7 +224,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.user_feedbacks (Python CLI format)
-  config.signals?.user_feedbacks?.forEach(rule => {
+  routingSignals?.user_feedbacks?.forEach(rule => {
     addSignal({
       type: 'user_feedback',
       name: rule.name,
@@ -243,7 +249,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.preferences (Python CLI format)
-  config.signals?.preferences?.forEach(rule => {
+  routingSignals?.preferences?.forEach(rule => {
     addSignal({
       type: 'preference',
       name: rule.name,
@@ -267,7 +273,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.language (Python CLI format)
-  config.signals?.language?.forEach(rule => {
+  routingSignals?.language?.forEach(rule => {
     addSignal({
       type: 'language',
       name: rule.name,
@@ -291,7 +297,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.context (Python CLI format)
-  config.signals?.context?.forEach(rule => {
+  routingSignals?.context?.forEach(rule => {
     addSignal({
       type: 'context',
       name: rule.name,
@@ -319,7 +325,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.complexity (Python CLI format)
-  config.signals?.complexity?.forEach(rule => {
+  routingSignals?.complexity?.forEach(rule => {
     addSignal({
       type: 'complexity',
       name: rule.name,
@@ -345,7 +351,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.modality (Python CLI format)
-  config.signals?.modality?.forEach(rule => {
+  routingSignals?.modality?.forEach(rule => {
     addSignal({
       type: 'modality',
       name: rule.name,
@@ -369,7 +375,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.role_bindings (Python CLI format)
-  config.signals?.role_bindings?.forEach(rule => {
+  routingSignals?.role_bindings?.forEach(rule => {
     addSignal({
       type: 'authz',
       name: rule.name,
@@ -396,7 +402,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.jailbreak (Python CLI format)
-  config.signals?.jailbreak?.forEach(rule => {
+  routingSignals?.jailbreak?.forEach(rule => {
     addSignal({
       type: 'jailbreak',
       name: rule.name,
@@ -425,7 +431,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.pii (Python CLI format)
-  config.signals?.pii?.forEach(rule => {
+  routingSignals?.pii?.forEach(rule => {
     addSignal({
       type: 'pii',
       name: rule.name,
@@ -447,10 +453,11 @@ function extractSignals(config: ConfigData): SignalConfig[] {
  */
 function extractDecisions(config: ConfigData): DecisionConfig[] {
   const decisions: DecisionConfig[] = []
+  const routingDecisions = config.routing?.decisions ?? config.decisions
 
   // Python CLI format: decisions array
-  if (config.decisions && config.decisions.length > 0) {
-    config.decisions.forEach(decision => {
+  if (routingDecisions && routingDecisions.length > 0) {
+    routingDecisions.forEach(decision => {
       const rules: RuleCombination = {
         operator: (decision.rules?.operator as 'AND' | 'OR' | 'NOT') || 'AND',
         conditions: (decision.rules?.conditions || []).map(cond => ({
@@ -474,7 +481,6 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
         configuration: p.configuration,
       }))
 
-      // Find reasoning_family from providers.models
       const modelRefs: ModelRefConfig[] = (decision.modelRefs || []).map(ref => {
         const modelConfig = config.providers?.models?.find(m => m.name === ref.model)
         return {
@@ -548,6 +554,15 @@ function extractModels(config: ConfigData): ModelConfig[] {
       reasoning_family: model.reasoning_family,
     })
   })
+
+  for (const card of config.routing?.modelCards || []) {
+    if (!models.find((model) => model.name === card.name)) {
+      models.push({
+        name: card.name,
+        reasoning_family: undefined,
+      })
+    }
+  }
 
   // From model_config (Legacy)
   if (config.model_config) {

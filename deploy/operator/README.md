@@ -93,7 +93,7 @@ kubectl apply -f config/samples/vllm.ai_v1alpha1_semanticrouter_mmbert.yaml
 kubectl apply -f config/samples/vllm.ai_v1alpha1_semanticrouter_complexity.yaml
 ```
 
-**Note:** All cache backend samples include the required `bert_model` or `embedding_models` configuration and will automatically download embedding models on startup. Update the Redis/Milvus hostnames to match your deployment environment.
+**Note:** All cache backend samples include the required `embedding_models` configuration and will automatically download embedding models on startup. Update the Redis/Milvus hostnames to match your deployment environment.
 
 #### Backend Discovery Types
 
@@ -308,7 +308,7 @@ spec:
       backend_type: milvus
       similarity_threshold: "0.90"
       ttl_seconds: 7200
-      embedding_model: qwen3  # bert, qwen3, or gemma
+      embedding_model: mmbert
 
       milvus:
         connection:
@@ -447,21 +447,17 @@ The operator supports advanced embedding models through the unified `embedding_m
 
 #### Available Models
 
-1. **BERT (Legacy)** - 384 dimensions
-   - Lightweight, fast, good for general use
-   - Legacy configuration via `bert_model` section
-
-2. **Qwen3-Embedding** - 1024 dimensions, 32K context
+1. **Qwen3-Embedding** - 1024 dimensions, 32K context
    - High-quality semantic understanding
    - Best for: Complex queries, research documents, detailed analysis
    - Use case: Production deployments requiring maximum accuracy
 
-3. **EmbeddingGemma** - 768 dimensions, 8K context
+2. **EmbeddingGemma** - 768 dimensions, 8K context
    - Balanced performance and accuracy
    - Best for: Fast performance with good quality
    - Use case: Real-time applications, high-throughput scenarios
 
-4. **mmBERT 2D Matryoshka** - 64-768 dimensions, multilingual
+3. **mmBERT 2D Matryoshka** - 64-768 dimensions, multilingual
    - Adaptive quality/speed trade-offs via layer early exit
    - Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
    - Dimension reduction: 64, 128, 256, 512, 768
@@ -476,10 +472,10 @@ The operator supports advanced embedding models through the unified `embedding_m
 spec:
   config:
     embedding_models:
-      mmbert_model_path: "models/mmbert-embedding"
+      mmbert_model_path: "models/mom-embedding-ultra"
       use_cpu: true
 
-      hnsw_config:
+      embedding_config:
         model_type: "mmbert"
         target_layer: 6      # Balanced speed/quality (3.6x speedup)
         target_dimension: 256  # Reduced dimension for faster search
@@ -499,17 +495,17 @@ spec:
 spec:
   config:
     embedding_models:
-      qwen3_model_path: "models/qwen3-embedding"
+      mmbert_model_path: "models/mom-embedding-ultra"
       use_cpu: true
 
     semantic_cache:
       enabled: true
       backend_type: "redis"
-      embedding_model: "qwen3"
+      embedding_model: "mmbert"
       redis:
         index:
           vector_field:
-            dimension: 1024  # Match Qwen3 dimension
+            dimension: 768  # Match mmBERT dimension
 ```
 
 **Using Gemma with Milvus cache:**
@@ -518,17 +514,17 @@ spec:
 spec:
   config:
     embedding_models:
-      gemma_model_path: "models/gemma-embedding"
+      mmbert_model_path: "models/mom-embedding-ultra"
       use_cpu: true
 
     semantic_cache:
       enabled: true
       backend_type: "milvus"
-      embedding_model: "gemma"
+      embedding_model: "mmbert"
       milvus:
         collection:
           vector_field:
-            dimension: 768  # Match Gemma dimension
+            dimension: 768  # Match mmBERT dimension
 ```
 
 **Dimension Reference:**

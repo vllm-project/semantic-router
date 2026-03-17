@@ -1,5 +1,6 @@
 # Build the operator binary
 # Using RHEL 10 UBI Golang builder image
+# Build context must be the repository root so local replace directives can reach src/semantic-router.
 FROM registry.access.redhat.com/ubi10/go-toolset:latest AS builder
 
 # Target architecture - defaults to amd64
@@ -9,21 +10,26 @@ USER root
 
 WORKDIR /workspace
 
-# Copy go mod and sum files
-COPY go.mod go.mod
-COPY go.sum go.sum
+# Copy the module manifests needed by local replace directives first for better caching
+RUN mkdir -p deploy/operator src/semantic-router candle-binding ml-binding nlp-binding
+COPY deploy/operator/go.mod deploy/operator/go.sum deploy/operator/
+COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
+COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
+COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
+COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go nlp-binding/
+
+WORKDIR /workspace/deploy/operator
 
 # Cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
 
 # Copy the go source
-COPY main.go main.go
-COPY api/ api/
-COPY controllers/ controllers/
+COPY deploy/operator/ /workspace/deploy/operator/
+COPY src/semantic-router/ /workspace/src/semantic-router/
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -o manager main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -o /workspace/manager main.go
 
 # Use RHEL 10 UBI minimal for the final image
 FROM registry.access.redhat.com/ubi10/ubi-minimal:latest
