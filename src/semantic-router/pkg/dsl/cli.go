@@ -5,8 +5,6 @@ import (
 	"io"
 	"os"
 
-	"gopkg.in/yaml.v2"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -29,9 +27,9 @@ func CLICompile(inputPath, outputPath, format, crdName, crdNamespace string) err
 	var output []byte
 	switch format {
 	case "yaml", "":
-		output, err = EmitYAMLFromConfig(cfg)
+		output, err = EmitRoutingYAMLFromConfig(cfg)
 		if err != nil {
-			return fmt.Errorf("YAML emission failed: %w", err)
+			return fmt.Errorf("routing YAML emission failed: %w", err)
 		}
 	case "crd":
 		if crdName == "" {
@@ -53,19 +51,22 @@ func CLICompile(inputPath, outputPath, format, crdName, crdNamespace string) err
 	return writeOutput(output, outputPath)
 }
 
-// CLIDecompile reads a YAML config file and converts it to DSL text.
+// CLIDecompile reads a YAML config file and converts its routing surface to DSL text.
 func CLIDecompile(inputPath, outputPath string) error {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("failed to read input file: %w", err)
 	}
 
-	var cfg config.RouterConfig
-	if unmarshalErr := yaml.Unmarshal(data, &cfg); unmarshalErr != nil {
-		return fmt.Errorf("failed to parse YAML: %w", unmarshalErr)
+	cfg, err := config.ParseYAMLBytes(data)
+	if err != nil {
+		cfg, err = config.ParseRoutingYAMLBytes(data)
+		if err != nil {
+			return fmt.Errorf("failed to parse YAML: %w", err)
+		}
 	}
 
-	dslText, err := Decompile(&cfg)
+	dslText, err := DecompileRouting(cfg)
 	if err != nil {
 		return fmt.Errorf("decompilation failed: %w", err)
 	}

@@ -21,10 +21,10 @@ func TestFactory_Create(t *testing.T) {
 			config: &config.ImageGenPluginConfig{
 				Backend:        "vllm_omni",
 				TimeoutSeconds: 30,
-				BackendConfig: &config.VLLMOmniImageGenConfig{
+				BackendConfig: config.MustStructuredPayload(&config.VLLMOmniImageGenConfig{
 					BaseURL: "http://localhost:8001",
 					Model:   "test-model",
-				},
+				}),
 			},
 			wantBackend: "vllm_omni",
 			wantError:   false,
@@ -34,10 +34,10 @@ func TestFactory_Create(t *testing.T) {
 			config: &config.ImageGenPluginConfig{
 				Backend:        "openai",
 				TimeoutSeconds: 30,
-				BackendConfig: &config.OpenAIImageGenConfig{
+				BackendConfig: config.MustStructuredPayload(&config.OpenAIImageGenConfig{
 					APIKey: "test-api-key",
 					Model:  "gpt-image-1",
-				},
+				}),
 			},
 			wantBackend: "openai",
 			wantError:   false,
@@ -82,9 +82,9 @@ func TestDefaultFactory(t *testing.T) {
 	cfg := &config.ImageGenPluginConfig{
 		Backend:        "vllm_omni",
 		TimeoutSeconds: 10,
-		BackendConfig: &config.VLLMOmniImageGenConfig{
+		BackendConfig: config.MustStructuredPayload(&config.VLLMOmniImageGenConfig{
 			BaseURL: "http://localhost:8001",
-		},
+		}),
 	}
 
 	backend, err := CreateBackend(cfg)

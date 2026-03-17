@@ -243,7 +243,7 @@ func TestCacheReconstructedStreamingResponse_SkipsWhenDecisionCacheExplicitlyDis
 					Plugins: []config.DecisionPlugin{
 						{
 							Type:          "semantic-cache",
-							Configuration: map[string]interface{}{"enabled": false},
+							Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false}),
 						},
 					},
 				},
@@ -276,7 +276,7 @@ func TestCacheReconstructedStreamingResponse_StoresWhenDecisionCacheEnabled(t *t
 					Plugins: []config.DecisionPlugin{
 						{
 							Type:          "semantic-cache",
-							Configuration: map[string]interface{}{"enabled": true},
+							Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
 						},
 					},
 				},

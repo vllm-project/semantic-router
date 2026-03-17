@@ -24,42 +24,6 @@ class TestServeIntegration(CLITestBase):
     # Timeout for waiting for container to be running
     CONTAINER_STARTUP_TIMEOUT = 120
 
-    def _create_minimal_config(self, port: int = 8888) -> str:
-        """Create a lean active config without requiring `vllm-sr init`."""
-        config_path = os.path.join(self.test_dir, "config.yaml")
-        config_content = f"""version: v0.1
-
-listeners:
-  - name: "test-listener"
-    address: "0.0.0.0"
-    port: {port}
-    timeout: "60s"
-
-decisions:
-  - name: "default-route"
-    description: "Default route for integration testing"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions: []
-    modelRefs:
-      - model: "test-model"
-        use_reasoning: false
-
-providers:
-  models:
-    - name: "test-model"
-      endpoints:
-        - name: "primary"
-          weight: 100
-          endpoint: "host.docker.internal:8000/v1"
-          protocol: "http"
-  default_model: "test-model"
-"""
-        with open(config_path, "w") as f:
-            f.write(config_content)
-        return config_path
-
     def _start_serve_background(
         self, env: dict[str, str] | None = None
     ) -> subprocess.Popen:
@@ -112,7 +76,7 @@ providers:
         ensure_models_dir: bool = False,
     ):
         """Start one background serve session and clean it up automatically."""
-        self._create_minimal_config()
+        self.write_minimal_canonical_config()
         if ensure_models_dir:
             os.makedirs(os.path.join(self.test_dir, "models"), exist_ok=True)
 

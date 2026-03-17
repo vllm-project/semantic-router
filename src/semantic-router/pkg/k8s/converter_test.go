@@ -1,8 +1,6 @@
 package k8s
 
 import (
-	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,9 +31,12 @@ func TestConverterWithTestData(t *testing.T) {
 	baseConfigData, err := os.ReadFile(baseConfigPath)
 	require.NoError(t, err, "Failed to read base config file: %s", baseConfigPath)
 
-	var baseConfig config.RouterConfig
-	err = yaml.Unmarshal(baseConfigData, &baseConfig)
-	require.NoError(t, err, "Failed to unmarshal base config")
+	baseRouterConfig, err := config.ParseYAMLBytes(baseConfigData)
+	require.NoError(t, err, "Failed to parse canonical base config")
+
+	var baseCanonical config.CanonicalConfig
+	err = yaml.Unmarshal(baseConfigData, &baseCanonical)
+	require.NoError(t, err, "Failed to unmarshal canonical base config")
 
 	// Read all input files
 	inputFiles, err := os.ReadDir(inputDir)
@@ -63,22 +64,11 @@ func TestConverterWithTestData(t *testing.T) {
 			require.NotNil(t, route, "IntelligentRoute should not be nil")
 
 			// Validate CRDs
-			err = validateCRDs(pool, route, &baseConfig)
+			err = validateCRDs(pool, route, baseRouterConfig)
 			require.NoError(t, err, "CRD validation failed for %s", inputFile.Name())
 
-			// Convert pool to backend models
-			backendModels, err := converter.ConvertIntelligentPool(pool)
-			require.NoError(t, err, "Failed to convert IntelligentPool")
-
-			// Convert route to intelligent routing
-			intelligentRouting, err := converter.ConvertIntelligentRoute(route)
-			require.NoError(t, err, "Failed to convert IntelligentRoute")
-
-			// Merge base config with CRD-derived config
-			outputConfig := mergeConfigs(&baseConfig, backendModels, intelligentRouting)
-
-			// Convert plugin configurations from []byte to map for YAML serialization
-			normalizePluginConfigurations(outputConfig)
+			outputConfig, err := converter.Convert(pool, route, &baseCanonical)
+			require.NoError(t, err, "Failed to convert CRDs to canonical config")
 
 			// Marshal to YAML with 2-space indentation
 			var buf strings.Builder
@@ -94,40 +84,20 @@ func TestConverterWithTestData(t *testing.T) {
 
 			t.Logf("Generated output file: %s", outputPath)
 
-			// Validate the output can be unmarshaled back
-			var validateConfig config.RouterConfig
-			err = yaml.Unmarshal([]byte(buf.String()), &validateConfig)
-			require.NoError(t, err, "Failed to unmarshal generated output")
+			decoder := yaml.NewDecoder(strings.NewReader(buf.String()))
+			decoder.KnownFields(true)
+			var strictCanonical config.CanonicalConfig
+			err = decoder.Decode(&strictCanonical)
+			require.NoError(t, err, "Failed strict canonical decode")
 
-			// Basic validation
-			assert.NotNil(t, validateConfig.BackendModels, "BackendModels should not be nil")
-			assert.NotNil(t, validateConfig.IntelligentRouting, "IntelligentRouting should not be nil")
-			assert.Len(t, validateConfig.BackendModels.ModelConfig, len(backendModels.ModelConfig), "BackendModels count mismatch")
-			assert.Len(t, validateConfig.IntelligentRouting.Decisions, len(intelligentRouting.Decisions), "Decisions count mismatch")
+			validateConfig, err := config.ParseYAMLBytes([]byte(buf.String()))
+			require.NoError(t, err, "Failed runtime parse validation")
+			assert.Equal(t, config.ConfigSourceKubernetes, validateConfig.ConfigSource, "ConfigSource should remain kubernetes")
+			assert.Equal(t, pool.Spec.DefaultModel, validateConfig.DefaultModel, "default model mismatch")
+			assert.Len(t, validateConfig.Decisions, len(route.Spec.Decisions), "Decisions count mismatch")
+			assert.Len(t, validateConfig.ModelConfig, len(pool.Spec.Models), "Model catalog count mismatch")
 		})
 	}
-}
-
-// mergeConfigs merges base config with CRD-derived dynamic parts
-func mergeConfigs(baseConfig *config.RouterConfig, backendModels *config.BackendModels, intelligentRouting *config.IntelligentRouting) *config.RouterConfig {
-	// Start with a copy of base config (contains all static parts)
-	merged := *baseConfig
-
-	// Override config source
-	merged.ConfigSource = config.ConfigSourceKubernetes
-
-	// Override dynamic parts from CRDs
-	merged.BackendModels = *backendModels
-
-	// Merge IntelligentRouting while preserving ReasoningConfig from base
-	merged.IntelligentRouting.KeywordRules = intelligentRouting.KeywordRules
-	merged.IntelligentRouting.EmbeddingRules = intelligentRouting.EmbeddingRules
-	merged.IntelligentRouting.Categories = intelligentRouting.Categories
-	merged.IntelligentRouting.Decisions = intelligentRouting.Decisions
-	merged.IntelligentRouting.Strategy = intelligentRouting.Strategy
-	// Keep ReasoningConfig from base (ReasoningFamilies, DefaultReasoningEffort)
-
-	return &merged
 }
 
 // parseInputYAML parses a multi-document YAML file containing IntelligentPool and IntelligentRoute
@@ -157,21 +127,15 @@ func parseInputYAML(data []byte) (*v1alpha1.IntelligentPool, *v1alpha1.Intellige
 			continue
 		}
 
-		// Re-marshal to JSON (runtime.RawExtension expects JSON)
-		objData, err := json.Marshal(obj)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		switch kind {
 		case "IntelligentPool":
 			pool = &v1alpha1.IntelligentPool{}
-			if err := json.Unmarshal(objData, pool); err != nil {
+			if err := remarshalYAMLObject(obj, pool); err != nil {
 				return nil, nil, err
 			}
 		case "IntelligentRoute":
 			route = &v1alpha1.IntelligentRoute{}
-			if err := json.Unmarshal(objData, route); err != nil {
+			if err := remarshalYAMLObject(obj, route); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -180,125 +144,26 @@ func parseInputYAML(data []byte) (*v1alpha1.IntelligentPool, *v1alpha1.Intellige
 	return pool, route, nil
 }
 
-// normalizePluginConfigurations converts plugin configurations from []byte to map[string]interface{}
-// This is needed for proper YAML serialization
-func normalizePluginConfigurations(cfg *config.RouterConfig) {
-	for i := range cfg.IntelligentRouting.Decisions {
-		decision := &cfg.IntelligentRouting.Decisions[i]
-		for j := range decision.Plugins {
-			plugin := &decision.Plugins[j]
-			if plugin.Configuration != nil {
-				// If configuration is []byte (from Kubernetes RawExtension), convert to map
-				if bytes, ok := plugin.Configuration.([]byte); ok {
-					var configMap map[string]interface{}
-					if err := json.Unmarshal(bytes, &configMap); err == nil {
-						plugin.Configuration = configMap
-					}
-				}
-			}
-		}
+func remarshalYAMLObject(input map[string]interface{}, target interface{}) error {
+	data, err := yaml.Marshal(input)
+	if err != nil {
+		return err
 	}
+	return yaml.Unmarshal(data, target)
 }
 
 // validateCRDs validates IntelligentPool and IntelligentRoute CRDs
 // This mirrors the validation logic in controller.go
 func validateCRDs(pool *v1alpha1.IntelligentPool, route *v1alpha1.IntelligentRoute, staticConfig *config.RouterConfig) error {
-	// Build model map
-	modelMap := make(map[string]*v1alpha1.ModelConfig)
-	for i := range pool.Spec.Models {
-		model := &pool.Spec.Models[i]
-		modelMap[model.Name] = model
+	var reasoningFamilies map[string]config.ReasoningFamilyConfig
+	if staticConfig != nil {
+		reasoningFamilies = staticConfig.ReasoningFamilies
 	}
-
-	// Build signal name sets
-	keywordSignalNames := make(map[string]bool)
-	embeddingSignalNames := make(map[string]bool)
-	domainSignalNames := make(map[string]bool)
-
-	// Check for duplicate keyword signals
-	for _, signal := range route.Spec.Signals.Keywords {
-		if keywordSignalNames[signal.Name] {
-			return fmt.Errorf("duplicate keyword signal name: %s", signal.Name)
-		}
-		keywordSignalNames[signal.Name] = true
-	}
-
-	// Check for duplicate embedding signals
-	for _, signal := range route.Spec.Signals.Embeddings {
-		if embeddingSignalNames[signal.Name] {
-			return fmt.Errorf("duplicate embedding signal name: %s", signal.Name)
-		}
-		embeddingSignalNames[signal.Name] = true
-	}
-
-	// Check for duplicate domain signals
-	for _, domain := range route.Spec.Signals.Domains {
-		if domainSignalNames[domain.Name] {
-			return fmt.Errorf("duplicate domain signal name: %s", domain.Name)
-		}
-		domainSignalNames[domain.Name] = true
-	}
-
-	// Validate decisions
-	for _, decision := range route.Spec.Decisions {
-		// Validate signal references
-		for _, condition := range decision.Signals.Conditions {
-			switch condition.Type {
-			case "keyword":
-				if !keywordSignalNames[condition.Name] {
-					return fmt.Errorf("decision %s references unknown keyword signal: %s", decision.Name, condition.Name)
-				}
-			case "embedding":
-				if !embeddingSignalNames[condition.Name] {
-					return fmt.Errorf("decision %s references unknown embedding signal: %s", decision.Name, condition.Name)
-				}
-			case "domain":
-				if !domainSignalNames[condition.Name] {
-					return fmt.Errorf("decision %s references unknown domain signal: %s", decision.Name, condition.Name)
-				}
-			}
-		}
-
-		// Validate model references
-		for _, ms := range decision.ModelRefs {
-			model, ok := modelMap[ms.Model]
-			if !ok {
-				return fmt.Errorf("decision %s references unknown model: %s", decision.Name, ms.Model)
-			}
-
-			// Validate LoRA reference
-			if ms.LoRAName != "" {
-				found := false
-				for _, lora := range model.LoRAs {
-					if lora.Name == ms.LoRAName {
-						found = true
-						break
-					}
-				}
-				if !found {
-					return fmt.Errorf("decision %s references unknown LoRA %s for model %s", decision.Name, ms.LoRAName, ms.Model)
-				}
-			}
-		}
-	}
-
-	// Validate reasoning families
-	if staticConfig != nil && staticConfig.ReasoningFamilies != nil {
-		for _, model := range pool.Spec.Models {
-			if model.ReasoningFamily != "" {
-				if _, ok := staticConfig.ReasoningFamilies[model.ReasoningFamily]; !ok {
-					return fmt.Errorf("model %s references unknown reasoning family: %s", model.Name, model.ReasoningFamily)
-				}
-			}
-		}
-	}
-
-	return nil
+	return validatePoolRoute(pool, route, reasoningFamilies)
 }
 
-// TestCRDValidationErrors tests that validation catches various error conditions
-func TestCRDValidationErrors(t *testing.T) {
-	baseConfig := &config.RouterConfig{
+func testValidationBaseConfig() *config.RouterConfig {
+	return &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
 			ReasoningConfig: config.ReasoningConfig{
 				ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
@@ -310,156 +175,110 @@ func TestCRDValidationErrors(t *testing.T) {
 			},
 		},
 	}
+}
 
-	t.Run("DuplicateKeywordSignal", func(t *testing.T) {
-		pool := &v1alpha1.IntelligentPool{
-			Spec: v1alpha1.IntelligentPoolSpec{
-				DefaultModel: "test-model",
-				Models: []v1alpha1.ModelConfig{
-					{Name: "test-model"},
+func testPoolWithModels(models ...v1alpha1.ModelConfig) *v1alpha1.IntelligentPool {
+	return &v1alpha1.IntelligentPool{
+		Spec: v1alpha1.IntelligentPoolSpec{
+			DefaultModel: "test-model",
+			Models:       models,
+		},
+	}
+}
+
+func testRouteWithKeywords(
+	keywords []v1alpha1.KeywordSignal,
+	decisions ...v1alpha1.Decision,
+) *v1alpha1.IntelligentRoute {
+	return &v1alpha1.IntelligentRoute{
+		Spec: v1alpha1.IntelligentRouteSpec{
+			Signals:   v1alpha1.Signals{Keywords: keywords},
+			Decisions: decisions,
+		},
+	}
+}
+
+func testDecision(
+	modelRefs []v1alpha1.ModelRef,
+	conditions ...v1alpha1.SignalCondition,
+) v1alpha1.Decision {
+	return v1alpha1.Decision{
+		Name:     "test-decision",
+		Priority: 100,
+		Signals: v1alpha1.SignalCombination{
+			Operator:   "AND",
+			Conditions: conditions,
+		},
+		ModelRefs: modelRefs,
+	}
+}
+
+// TestCRDValidationErrors tests that validation catches various error conditions
+func TestCRDValidationErrors(t *testing.T) {
+	testCases := []struct {
+		name      string
+		pool      *v1alpha1.IntelligentPool
+		route     *v1alpha1.IntelligentRoute
+		wantError string
+	}{
+		{
+			name: "DuplicateKeywordSignal",
+			pool: testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"}),
+			route: testRouteWithKeywords(
+				[]v1alpha1.KeywordSignal{
+					{Name: "urgent", Operator: "OR", Keywords: []string{"urgent"}},
+					{Name: "urgent", Operator: "OR", Keywords: []string{"critical"}},
 				},
-			},
-		}
+			),
+			wantError: "duplicate keyword signal name: urgent",
+		},
+		{
+			name: "UnknownKeywordSignalReference",
+			pool: testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"}),
+			route: testRouteWithKeywords(
+				[]v1alpha1.KeywordSignal{{Name: "urgent", Operator: "OR", Keywords: []string{"urgent"}}},
+				testDecision(
+					[]v1alpha1.ModelRef{{Model: "test-model"}},
+					v1alpha1.SignalCondition{Type: "keyword", Name: "nonexistent"},
+				),
+			),
+			wantError: "references unknown keyword signal: nonexistent",
+		},
+		{
+			name: "UnknownModelReference",
+			pool: testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"}),
+			route: testRouteWithKeywords(
+				[]v1alpha1.KeywordSignal{{Name: "urgent", Operator: "OR", Keywords: []string{"urgent"}}},
+				testDecision(
+					[]v1alpha1.ModelRef{{Model: "nonexistent-model"}},
+					v1alpha1.SignalCondition{Type: "keyword", Name: "urgent"},
+				),
+			),
+			wantError: "references unknown model: nonexistent-model",
+		},
+		{
+			name: "UnknownLoRAReference",
+			pool: testPoolWithModels(v1alpha1.ModelConfig{
+				Name:  "test-model",
+				LoRAs: []v1alpha1.LoRAConfig{{Name: "expert-lora"}},
+			}),
+			route: testRouteWithKeywords(
+				[]v1alpha1.KeywordSignal{{Name: "urgent", Operator: "OR", Keywords: []string{"urgent"}}},
+				testDecision(
+					[]v1alpha1.ModelRef{{Model: "test-model", LoRAName: "nonexistent-lora"}},
+					v1alpha1.SignalCondition{Type: "keyword", Name: "urgent"},
+				),
+			),
+			wantError: "references unknown LoRA nonexistent-lora",
+		},
+	}
 
-		route := &v1alpha1.IntelligentRoute{
-			Spec: v1alpha1.IntelligentRouteSpec{
-				Signals: v1alpha1.Signals{
-					Keywords: []v1alpha1.KeywordSignal{
-						{Name: "urgent", Operator: "OR", Keywords: []string{"urgent"}},
-						{Name: "urgent", Operator: "OR", Keywords: []string{"critical"}}, // Duplicate!
-					},
-				},
-				Decisions: []v1alpha1.Decision{},
-			},
-		}
-
-		err := validateCRDs(pool, route, baseConfig)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "duplicate keyword signal name: urgent")
-	})
-
-	t.Run("UnknownKeywordSignalReference", func(t *testing.T) {
-		pool := &v1alpha1.IntelligentPool{
-			Spec: v1alpha1.IntelligentPoolSpec{
-				DefaultModel: "test-model",
-				Models: []v1alpha1.ModelConfig{
-					{Name: "test-model"},
-				},
-			},
-		}
-
-		route := &v1alpha1.IntelligentRoute{
-			Spec: v1alpha1.IntelligentRouteSpec{
-				Signals: v1alpha1.Signals{
-					Keywords: []v1alpha1.KeywordSignal{
-						{Name: "urgent", Operator: "OR", Keywords: []string{"urgent"}},
-					},
-				},
-				Decisions: []v1alpha1.Decision{
-					{
-						Name:     "test-decision",
-						Priority: 100,
-						Signals: v1alpha1.SignalCombination{
-							Operator: "AND",
-							Conditions: []v1alpha1.SignalCondition{
-								{Type: "keyword", Name: "nonexistent"}, // Unknown signal!
-							},
-						},
-						ModelRefs: []v1alpha1.ModelRef{
-							{Model: "test-model"},
-						},
-					},
-				},
-			},
-		}
-
-		err := validateCRDs(pool, route, baseConfig)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "references unknown keyword signal: nonexistent")
-	})
-
-	t.Run("UnknownModelReference", func(t *testing.T) {
-		pool := &v1alpha1.IntelligentPool{
-			Spec: v1alpha1.IntelligentPoolSpec{
-				DefaultModel: "test-model",
-				Models: []v1alpha1.ModelConfig{
-					{Name: "test-model"},
-				},
-			},
-		}
-
-		route := &v1alpha1.IntelligentRoute{
-			Spec: v1alpha1.IntelligentRouteSpec{
-				Signals: v1alpha1.Signals{
-					Keywords: []v1alpha1.KeywordSignal{
-						{Name: "urgent", Operator: "OR", Keywords: []string{"urgent"}},
-					},
-				},
-				Decisions: []v1alpha1.Decision{
-					{
-						Name:     "test-decision",
-						Priority: 100,
-						Signals: v1alpha1.SignalCombination{
-							Operator: "AND",
-							Conditions: []v1alpha1.SignalCondition{
-								{Type: "keyword", Name: "urgent"},
-							},
-						},
-						ModelRefs: []v1alpha1.ModelRef{
-							{Model: "nonexistent-model"}, // Unknown model!
-						},
-					},
-				},
-			},
-		}
-
-		err := validateCRDs(pool, route, baseConfig)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "references unknown model: nonexistent-model")
-	})
-
-	t.Run("UnknownLoRAReference", func(t *testing.T) {
-		pool := &v1alpha1.IntelligentPool{
-			Spec: v1alpha1.IntelligentPoolSpec{
-				DefaultModel: "test-model",
-				Models: []v1alpha1.ModelConfig{
-					{
-						Name: "test-model",
-						LoRAs: []v1alpha1.LoRAConfig{
-							{Name: "expert-lora"},
-						},
-					},
-				},
-			},
-		}
-
-		route := &v1alpha1.IntelligentRoute{
-			Spec: v1alpha1.IntelligentRouteSpec{
-				Signals: v1alpha1.Signals{
-					Keywords: []v1alpha1.KeywordSignal{
-						{Name: "urgent", Operator: "OR", Keywords: []string{"urgent"}},
-					},
-				},
-				Decisions: []v1alpha1.Decision{
-					{
-						Name:     "test-decision",
-						Priority: 100,
-						Signals: v1alpha1.SignalCombination{
-							Operator: "AND",
-							Conditions: []v1alpha1.SignalCondition{
-								{Type: "keyword", Name: "urgent"},
-							},
-						},
-						ModelRefs: []v1alpha1.ModelRef{
-							{Model: "test-model", LoRAName: "nonexistent-lora"}, // Unknown LoRA!
-						},
-					},
-				},
-			},
-		}
-
-		err := validateCRDs(pool, route, baseConfig)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "references unknown LoRA nonexistent-lora")
-	})
+	baseConfig := testValidationBaseConfig()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateCRDs(tc.pool, tc.route, baseConfig)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantError)
+		})
+	}
 }

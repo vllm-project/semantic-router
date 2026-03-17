@@ -187,12 +187,26 @@ test.describe("Dashboard auth flow", () => {
     test.slow();
     const issuedToken = "bootstrap-dashboard-token";
     let registerPayload: Record<string, unknown> | null = null;
+    let setupStateRequestCount = 0;
 
     await page.route("**/api/setup/state", async (route) => {
+      setupStateRequestCount += 1;
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(baseSetupState),
+        body: JSON.stringify(
+          setupStateRequestCount === 1
+            ? baseSetupState
+            : {
+                ...baseSetupState,
+                setupMode: true,
+                models: 0,
+                decisions: 0,
+                hasModels: false,
+                hasDecisions: false,
+                canActivate: false,
+              },
+        ),
       });
     });
 
@@ -312,9 +326,10 @@ test.describe("Dashboard auth flow", () => {
         password: "future-password",
         name: "Ada Router",
       });
-    await expect(page).toHaveURL(/\/auth\/transition\?to=%2Fdashboard$/);
+    await expect.poll(() => setupStateRequestCount).toBeGreaterThanOrEqual(2);
+    await expect(page).toHaveURL(/\/auth\/transition\?to=%2Fsetup$/);
     await expect(page.getByText(transitionCopyPattern)).toBeVisible();
-    await expect(page).toHaveURL(/\/dashboard$/, { timeout: 12000 });
+    await expect(page).toHaveURL(/\/setup$/, { timeout: 12000 });
   });
 
   test("login preserves the original protected route through the transition page", async ({
@@ -564,7 +579,7 @@ test.describe("Dashboard auth flow", () => {
       });
     });
 
-    await page.route("**/api/router/config/defaults", async (route) => {
+    await page.route("**/api/router/config/global", async (route) => {
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },

@@ -11,6 +11,20 @@ var DefaultRequiredFiles = []string{
 	"config.json",
 }
 
+var modelWeightPatterns = []string{
+	"model.safetensors",
+	"model.safetensors.index.json",
+	"pytorch_model.bin",
+	"pytorch_model.bin.index.json",
+	"pytorch_model-*.bin",
+	"adapter_model.safetensors",
+	"adapter_model.bin",
+	"*.onnx",
+	"*.pt",
+	"*.safetensors",
+	"*.bin",
+}
+
 // IsModelComplete checks if a model is fully downloaded by verifying required files exist
 func IsModelComplete(localPath string, requiredFiles []string) (bool, error) {
 	// Check if directory exists
@@ -42,7 +56,28 @@ func IsModelComplete(localPath string, requiredFiles []string) (bool, error) {
 		}
 	}
 
+	hasWeights, weightErr := hasModelWeights(localPath)
+	if weightErr != nil {
+		return false, weightErr
+	}
+	if !hasWeights {
+		return false, nil
+	}
+
 	return true, nil
+}
+
+func hasModelWeights(localPath string) (bool, error) {
+	for _, pattern := range modelWeightPatterns {
+		matches, err := filepath.Glob(filepath.Join(localPath, pattern))
+		if err != nil {
+			return false, fmt.Errorf("failed to scan weight files in %s: %w", localPath, err)
+		}
+		if len(matches) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // GetMissingModels returns a list of models that are not complete

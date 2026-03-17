@@ -1,0 +1,16 @@
+routing:
+  signals:
+    keywords:
+      - name: code_keywords
+        operator: OR
+        method: bm25
+        keywords: ["code", "function", "debug", "algorithm", "refactor"]
+        bm25_threshold: 0.1
+        case_sensitive: false
+      - name: urgent_keywords
+        operator: OR
+        method: ngram
+        keywords: ["urgent", "immediate", "asap", "emergency"]
+        ngram_threshold: 0.4
+        ngram_arity: 3
+        case_sensitive: false

@@ -23,7 +23,7 @@ The semantic router automatically adds response headers to track VSR decision-ma
 - `math`
 - `business`
 - `biology`
-- `computer_science`
+- `computer science`
 
 **When Added**: When VSR successfully classifies the request into a category.
 

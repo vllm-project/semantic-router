@@ -105,6 +105,9 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 				Categories: []config.Category{
 					{CategoryMetadata: config.CategoryMetadata{Name: "billing"}},
 				},
+				UserFeedbackRules: []config.UserFeedbackRule{
+					{Name: "satisfied"},
+				},
 			},
 		},
 	}

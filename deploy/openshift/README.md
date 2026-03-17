@@ -63,7 +63,7 @@ This deploys only the core components without Dashboard, OpenWebUI, Grafana, and
 
 **GPU Classifier**
 
-Use `--classifier-gpu` to run the semantic-router classifier and prompt guard on a GPU node. This patches the config to set `use_cpu: false` for all classifier models (bert_model, prompt_guard, category_model, pii_model) and patches the semantic-router deployment to request a GPU and schedule onto GPU nodes. Can be combined with `--simulator` (models on CPU, classifier on GPU) or used alone (both models and classifier on GPU).
+Use `--classifier-gpu` to run the semantic-router classifier stack and prompt guard on a GPU node. This patches the config to set `use_cpu: false` for `global.model_catalog.modules.prompt_guard`, `global.model_catalog.modules.classifier.domain`, and `global.model_catalog.modules.classifier.pii`, then patches the semantic-router deployment to request a GPU and schedule onto GPU nodes. Can be combined with `--simulator` (models on CPU, classifier on GPU) or used alone (both models and classifier on GPU).
 
 ### Manual Deployment (Advanced)
 
