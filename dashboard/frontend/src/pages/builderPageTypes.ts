@@ -1,11 +1,11 @@
 import type {
-  ASTBackendDecl,
+  ASTModelDecl,
   ASTPluginDecl,
   ASTRouteDecl,
   ASTSignalDecl,
 } from "@/types/dsl";
 
-export type EntityKind = "signal" | "route" | "plugin" | "backend" | "global";
+export type EntityKind = "model" | "signal" | "route" | "plugin";
 
 export interface Selection {
   kind: EntityKind;
@@ -13,19 +13,17 @@ export interface Selection {
 }
 
 export interface SectionState {
+  models: boolean;
   signals: boolean;
   routes: boolean;
   plugins: boolean;
-  backends: boolean;
-  global: boolean;
 }
 
 export type BuilderSelectedEntity =
+  | ASTModelDecl
   | ASTSignalDecl
   | ASTRouteDecl
   | ASTPluginDecl
-  | ASTBackendDecl
-  | { fields: Record<string, unknown> }
   | null;
 
 export interface AvailableSignal {

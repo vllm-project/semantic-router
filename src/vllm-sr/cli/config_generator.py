@@ -1,16 +1,17 @@
 """Envoy configuration generator for vLLM Semantic Router."""
 
-import os
-import yaml
 import ipaddress
+import os
 from pathlib import Path
-from typing import Dict, Any, Optional
-from jinja2 import Environment, FileSystemLoader
-from cli.utils import getLogger
-from cli.models import UserConfig
-from cli.consts import DEFAULT_LISTENER_PORT, EXTERNAL_API_MODEL_FORMATS
+from urllib.parse import urlparse
 
-log = getLogger(__name__)
+from jinja2 import Environment, FileSystemLoader
+
+from cli.consts import DEFAULT_LISTENER_PORT, EXTERNAL_API_MODEL_FORMATS
+from cli.models import UserConfig
+from cli.utils import get_logger
+
+log = get_logger(__name__)
 
 
 def _is_ip_address(host: str) -> bool:
@@ -33,8 +34,8 @@ def _is_ip_address(host: str) -> bool:
 def generate_envoy_config_from_user_config(
     user_config: UserConfig,
     output_file: str,
-    template_file: str = None,
-    template_root: str = None,
+    template_file: str | None = None,
+    template_root: str | None = None,
 ) -> Path:
     """
     Generate Envoy configuration from user config.
@@ -57,7 +58,7 @@ def generate_envoy_config_from_user_config(
         default_template_root = cli_dir / "templates"
         template_root = os.getenv("TEMPLATE_ROOT", str(default_template_root))
 
-    log.info(f"Generating Envoy config...")
+    log.info("Generating Envoy config...")
 
     # Extract all listeners
     listeners = []
@@ -103,29 +104,43 @@ def generate_envoy_config_from_user_config(
         has_https = False
         uses_dns = False
 
-        for endpoint in model.endpoints:
+        backend_refs = model.backend_refs
+        for index, backend in enumerate(backend_refs):
             # Parse endpoint: can be "host", "host:port", or "host/path" or "host:port/path"
-            endpoint_str = endpoint.endpoint
+            endpoint_str = backend.endpoint or backend.base_url or ""
+            if not endpoint_str:
+                continue
             path = ""
 
-            # Extract path if present (e.g., "host/path" or "host:port/path")
-            if "/" in endpoint_str:
-                # Split by first "/" to separate host[:port] from path
-                parts = endpoint_str.split("/", 1)
-                endpoint_str = parts[0]  # host or host:port
-                path = "/" + parts[1]  # /path
-
-            # Parse host and port
-            if ":" in endpoint_str:
-                host, port = endpoint_str.split(":", 1)
-                port = int(port)
+            if "://" in endpoint_str:
+                parsed = urlparse(endpoint_str)
+                host = parsed.netloc
+                path = parsed.path.rstrip("/")
+                protocol = parsed.scheme or backend.protocol
+                port = parsed.port or (443 if protocol == "https" else 80)
+                if parsed.port is None and ":" in host:
+                    host = parsed.hostname or host
             else:
-                host = endpoint_str
-                # Default port based on protocol
-                port = 443 if endpoint.protocol == "https" else 80
+                protocol = backend.protocol
+
+                # Extract path if present (e.g., "host/path" or "host:port/path")
+                if "/" in endpoint_str:
+                    # Split by first "/" to separate host[:port] from path
+                    parts = endpoint_str.split("/", 1)
+                    endpoint_str = parts[0]  # host or host:port
+                    path = "/" + parts[1]  # /path
+
+                # Parse host and port
+                if ":" in endpoint_str:
+                    host, port = endpoint_str.split(":", 1)
+                    port = int(port)
+                else:
+                    host = endpoint_str
+                    # Default port based on protocol
+                    port = 443 if protocol == "https" else 80
 
             # Check if this is HTTPS (for transport_socket)
-            is_https = endpoint.protocol == "https"
+            is_https = protocol == "https"
             if is_https:
                 has_https = True
 
@@ -137,18 +152,21 @@ def generate_envoy_config_from_user_config(
 
             endpoints.append(
                 {
-                    "name": endpoint.name,
+                    "name": backend.name or f"backend-{index + 1}",
                     "address": host,
                     "port": int(port),
                     "path": path,
-                    "weight": endpoint.weight,
-                    "protocol": endpoint.protocol,
+                    "weight": backend.weight,
+                    "protocol": protocol,
                     "is_https": is_https,
                     "is_domain": is_domain,
                 }
             )
 
         # Sanitize model name for cluster name (replace / with _)
+        if not endpoints:
+            continue
+
         cluster_name = model.name.replace("/", "_").replace("-", "_")
 
         # Determine cluster type based on whether endpoints use domain names
@@ -182,7 +200,7 @@ def generate_envoy_config_from_user_config(
         "use_original_dst": False,  # Use static clusters for now
     }
 
-    log.info(f"  Listeners:")
+    log.info("  Listeners:")
     for listener in listeners:
         log.info(f"    - {listener['name']}: {listener['address']}:{listener['port']}")
     log.info(f"  Found {len(models)} vLLM model(s):")
@@ -230,123 +248,14 @@ def generate_envoy_config_from_user_config(
     return output_path
 
 
-def generate_envoy_config_from_router_config(
-    router_config_file: str,
-    output_file: str,
-    template_file: str = None,
-    template_root: str = None,
-) -> Path:
-    """
-    Generate Envoy configuration from router config file.
-
-    Args:
-        router_config_file: Path to router config YAML
-        output_file: Output file path for Envoy config
-        template_file: Path to Envoy template (optional)
-        template_root: Template root directory (optional)
-
-    Returns:
-        Path: Path to generated Envoy config
-    """
-    # Default template paths - templates are now in cli/templates/
-    if template_file is None:
-        template_file = os.getenv("ENVOY_TEMPLATE_FILE", "envoy.template.yaml")
-    if template_root is None:
-        # Default to templates directory in cli package
-        cli_dir = Path(__file__).parent  # cli/config_generator.py -> cli/
-        default_template_root = cli_dir / "templates"
-        template_root = os.getenv("TEMPLATE_ROOT", str(default_template_root))
-
-    log.info(f"Generating Envoy config from {router_config_file}")
-
-    # Load router config
-    try:
-        with open(router_config_file, "r") as f:
-            router_config = yaml.safe_load(f)
-    except Exception as e:
-        log.error(f"Failed to load router config: {e}")
-        raise
-
-    # Extract configuration
-    vllm_endpoints = router_config.get("vllm_endpoints", [])
-
-    # Extract listeners from router config or use default
-    config_listeners = router_config.get("listeners", [])
-    listeners = []
-    if config_listeners:
-        for listener in config_listeners:
-            listeners.append(
-                {
-                    "name": listener.get("name", "listener_0"),
-                    "address": listener.get("address", "0.0.0.0"),
-                    "port": listener.get("port", DEFAULT_LISTENER_PORT),
-                    "timeout": listener.get("timeout", "300s"),
-                }
-            )
-    else:
-        # Default listener
-        listeners.append(
-            {
-                "name": "listener_0",
-                "address": "0.0.0.0",
-                "port": DEFAULT_LISTENER_PORT,
-                "timeout": "300s",
-            }
-        )
-
-    # Prepare template data
-    template_data = {
-        "listeners": listeners,
-        "extproc_port": 50051,
-        "vllm_endpoints": vllm_endpoints,
-        "use_original_dst": False,  # Use static clusters for now
-    }
-
-    log.info(f"Listeners:")
-    for listener in listeners:
-        log.info(f"  - {listener['name']}: {listener['address']}:{listener['port']}")
-    log.info(f"Found {len(vllm_endpoints)} vLLM endpoints")
-    for endpoint in vllm_endpoints:
-        log.info(f"  - {endpoint['name']}: {endpoint['address']}:{endpoint['port']}")
-
-    # Check if template exists
-    template_path = Path(template_root) / template_file
-    if not template_path.exists():
-        log.warning(f"Template not found: {template_path}")
-        log.warning("Skipping Envoy config generation")
-        return None
-
-    # Render template
-    try:
-        env = Environment(loader=FileSystemLoader(template_root))
-        template = env.get_template(template_file)
-        rendered = template.render(template_data)
-    except Exception as e:
-        log.error(f"Failed to render template: {e}")
-        raise
-
-    # Ensure output directory exists
-    output_path = Path(output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Write output
-    try:
-        with open(output_path, "w") as f:
-            f.write(rendered)
-        log.info(f"Generated Envoy config: {output_path}")
-    except Exception as e:
-        log.error(f"Failed to write Envoy config: {e}")
-        raise
-
-    return output_path
-
-
 if __name__ == "__main__":
     """Entry point when run as: python -m cli.config_generator"""
     import sys
+
     from cli.parser import parse_user_config
 
-    if len(sys.argv) < 3:
+    minimum_args = 3
+    if len(sys.argv) < minimum_args:
         print("Usage: python -m cli.config_generator <config.yaml> <output_envoy.yaml>")
         print("  Generates Envoy configuration from user config.yaml")
         sys.exit(1)
@@ -367,4 +276,4 @@ if __name__ == "__main__":
         import traceback
 
         traceback.print_exc()
-        exit(1)
+        sys.exit(1)

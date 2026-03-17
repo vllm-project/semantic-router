@@ -1,0 +1,440 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: Model-A
+    reasoning_families:
+      deepseek:
+        type: chat_template_kwargs
+        parameter: thinking
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+      gpt-oss:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      gpt:
+        type: reasoning_effort
+        parameter: reasoning_effort
+    default_reasoning_effort: medium
+  models:
+    - name: Model-A
+      reasoning_family: qwen3
+      backend_refs:
+        - name: qwen-endpoint
+          endpoint: 127.0.0.1:8000
+          weight: 1
+    - name: Model-B
+      backend_refs:
+        - name: tinyllama-endpoint
+          endpoint: 127.0.0.1:8001
+          weight: 1
+routing:
+  decisions:
+    - name: business_decision
+      description: Business and management related queries
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+      modelRefs:
+        - model: Model-A
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+    - name: law_decision
+      description: Legal questions and law-related topics
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: law
+      modelRefs:
+        - model: Model-B
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+              - PERSON
+              - GPE
+              - PHONE_NUMBER
+              - US_SSN
+              - CREDIT_CARD
+    - name: psychology_decision
+      description: Psychology and mental health topics
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: psychology
+      modelRefs:
+        - model: Model-A
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+    - name: biology_decision
+      description: Biology and life sciences questions
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: biology
+      modelRefs:
+        - model: Model-A
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+    - name: chemistry_decision
+      description: Chemistry and chemical sciences questions
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: chemistry
+      modelRefs:
+        - model: Model-A
+          use_reasoning: true
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+    - name: history_decision
+      description: Historical questions and cultural topics
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: history
+      modelRefs:
+        - model: Model-A
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+    - name: health_decision
+      description: Health and medical information queries
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: health
+      modelRefs:
+        - model: Model-B
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+              - PERSON
+              - GPE
+              - PHONE_NUMBER
+              - US_SSN
+              - CREDIT_CARD
+    - name: economics_decision
+      description: Economics and financial topics
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: economics
+      modelRefs:
+        - model: Model-B
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+              - PERSON
+              - GPE
+              - PHONE_NUMBER
+              - US_SSN
+              - CREDIT_CARD
+    - name: math_decision
+      description: Mathematics and quantitative reasoning
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: math
+      modelRefs:
+        - model: Model-B
+          use_reasoning: true
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+              - PERSON
+              - GPE
+              - PHONE_NUMBER
+              - US_SSN
+              - CREDIT_CARD
+    - name: physics_decision
+      description: Physics and physical sciences
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: physics
+      modelRefs:
+        - model: Model-B
+          use_reasoning: true
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+              - PERSON
+              - GPE
+              - PHONE_NUMBER
+              - US_SSN
+              - CREDIT_CARD
+    - name: computer_science_decision
+      description: Computer science and programming
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: "computer science"
+      modelRefs:
+        - model: Model-B
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+              - PERSON
+              - GPE
+              - PHONE_NUMBER
+              - US_SSN
+              - CREDIT_CARD
+    - name: philosophy_decision
+      description: Philosophy and ethical questions
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: philosophy
+      modelRefs:
+        - model: Model-A
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+    - name: engineering_decision
+      description: Engineering and technical problem-solving
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: engineering
+      modelRefs:
+        - model: Model-B
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+              - PERSON
+              - GPE
+              - PHONE_NUMBER
+              - US_SSN
+              - CREDIT_CARD
+    - name: general_decision
+      description: General knowledge and miscellaneous topics
+      priority: 50
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: other
+      modelRefs:
+        - model: Model-B
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - EMAIL_ADDRESS
+              - PERSON
+              - GPE
+              - PHONE_NUMBER
+              - US_SSN
+              - CREDIT_CARD
+    - name: default_decision
+      description: Default catch-all decision - blocks all PII for safety
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: always
+      modelRefs:
+        - model: Model-B
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+  signals:
+    domains:
+      - name: business
+        description: Business and management related queries
+        mmlu_categories:
+          - business
+      - name: law
+        description: Legal questions and law-related topics
+        mmlu_categories:
+          - law
+      - name: psychology
+        description: Psychology and mental health topics
+        mmlu_categories:
+          - psychology
+      - name: biology
+        description: Biology and life sciences questions
+        mmlu_categories:
+          - biology
+      - name: chemistry
+        description: Chemistry and chemical sciences questions
+        mmlu_categories:
+          - chemistry
+      - name: history
+        description: Historical questions and cultural topics
+        mmlu_categories:
+          - history
+      - name: other
+        description: General knowledge and miscellaneous topics
+        mmlu_categories:
+          - other
+      - name: health
+        description: Health and medical information queries
+        mmlu_categories:
+          - health
+      - name: economics
+        description: Economics and financial topics
+        mmlu_categories:
+          - economics
+      - name: math
+        description: Mathematics and quantitative reasoning
+        mmlu_categories:
+          - math
+      - name: physics
+        description: Physics and physical sciences
+        mmlu_categories:
+          - physics
+      - name: "computer science"
+        description: Computer science and programming
+        mmlu_categories:
+          - "computer science"
+      - name: philosophy
+        description: Philosophy and ethical questions
+        mmlu_categories:
+          - philosophy
+      - name: engineering
+        description: Engineering and technical problem-solving
+        mmlu_categories:
+          - engineering
+  modelCards:
+    - name: Model-A
+    - name: Model-B
+global:
+  router:
+    strategy: priority
+  services:
+    api:
+      batch_classification:
+        metrics:
+          enabled: true
+          detailed_goroutine_tracking: true
+          high_resolution_timing: false
+          sample_rate: 1.0
+          duration_buckets:
+            - 0.001
+            - 0.005
+            - 0.01
+            - 0.025
+            - 0.05
+            - 0.1
+            - 0.25
+            - 0.5
+            - 1
+            - 2.5
+            - 5
+            - 10
+            - 30
+          size_buckets:
+            - 1
+            - 2
+            - 5
+            - 10
+            - 20
+            - 50
+            - 100
+            - 200
+  stores:
+    semantic_cache:
+      enabled: true
+      backend_type: memory
+      similarity_threshold: 0.8
+      max_entries: 1000
+      ttl_seconds: 3600
+      embedding_model: mmbert
+    memory:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert
+  integrations:
+    tools:
+      enabled: true
+      top_k: 3
+      similarity_threshold: 0.2
+      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      fallback_to_empty: true

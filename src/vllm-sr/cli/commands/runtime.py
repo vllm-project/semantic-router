@@ -15,6 +15,7 @@ from cli.commands.runtime_support import (
     ALGORITHM_TYPES,
     append_passthrough_env_vars,
     apply_runtime_mode_env_vars,
+    configure_runtime_override_env_vars,
     log_bootstrap_result,
     resolve_effective_config_path,
     validate_setup_mode_flags,
@@ -32,9 +33,9 @@ from cli.consts import (
 from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
 from cli.docker_cli import docker_container_status
 from cli.runtime_stack import resolve_runtime_stack
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 inject_algorithm_into_config = _inject_algorithm_into_config
 
 
@@ -155,13 +156,17 @@ def serve(
 
     env_vars: dict[str, str] = {}
     append_passthrough_env_vars(env_vars)
-    apply_runtime_mode_env_vars(env_vars, minimal, readonly, setup_mode, platform)
+    apply_runtime_mode_env_vars(
+        env_vars, minimal, readonly, setup_mode, platform, algorithm
+    )
 
     effective_config_path = resolve_effective_config_path(
-        config_path, algorithm, setup_mode
+        config_path, algorithm, setup_mode, platform
     )
+    configure_runtime_override_env_vars(env_vars, config_path, effective_config_path)
     start_vllm_sr(
-        config_file=str(effective_config_path.absolute()),
+        config_file=str(config_path.absolute()),
+        runtime_config_file=str(effective_config_path.absolute()),
         env_vars=env_vars,
         image=image,
         pull_policy=image_pull_policy,

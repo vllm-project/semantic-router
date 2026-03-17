@@ -26,7 +26,7 @@ const (
 const (
 	// VSRSelectedCategory indicates the category selected by VSR during domain classification.
 	// This comes from the domain classifier (MMLU categories).
-	// Example values: "math", "business", "biology", "computer_science"
+	// Example values: "math", "business", "biology", "computer science"
 	VSRSelectedCategory = "x-vsr-selected-category"
 
 	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
@@ -76,7 +76,7 @@ const (
 	VSRMatchedEmbeddings = "x-vsr-matched-embeddings"
 
 	// VSRMatchedDomains contains comma-separated list of matched domain rule names.
-	// Example: "computer_science,mathematics"
+	// Example: "computer science,mathematics"
 	VSRMatchedDomains = "x-vsr-matched-domains"
 
 	// VSRMatchedFactCheck contains the fact-check signal result.

@@ -6,15 +6,68 @@ from typing import Dict, Any
 from pydantic import ValidationError
 
 from cli.models import UserConfig
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 class ConfigParseError(Exception):
     """Configuration parsing error."""
 
     pass
+
+
+def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
+    fields: list[str] = []
+
+    for field_name in ("signals", "decisions"):
+        if field_name in data:
+            fields.append(field_name)
+
+    routing = data.get("routing")
+    if isinstance(routing, dict) and "models" in routing:
+        fields.append("routing.models")
+
+    providers = data.get("providers")
+    if isinstance(providers, dict):
+        for field_name in (
+            "model_targets",
+            "backends",
+            "auth_profiles",
+            "default_model",
+            "reasoning_families",
+            "default_reasoning_effort",
+        ):
+            if field_name in providers:
+                fields.append(f"providers.{field_name}")
+
+        models = providers.get("models")
+        if isinstance(models, list):
+            for index, model in enumerate(models):
+                if not isinstance(model, dict):
+                    continue
+                if "access" in model:
+                    fields.append(f"providers.models[{index}].access")
+                for field_name in (
+                    "endpoints",
+                    "access_key",
+                    "param_size",
+                    "context_window_size",
+                    "description",
+                    "capabilities",
+                    "loras",
+                    "quality_score",
+                    "modality",
+                    "tags",
+                ):
+                    if field_name in model:
+                        fields.append(f"providers.models[{index}].{field_name}")
+
+    global_config = data.get("global")
+    if isinstance(global_config, dict) and "modules" in global_config:
+        fields.append("global.modules")
+
+    return fields
 
 
 def parse_user_config(config_path: str) -> UserConfig:
@@ -47,6 +100,15 @@ def parse_user_config(config_path: str) -> UserConfig:
 
     if not data:
         raise ConfigParseError("Configuration file is empty")
+
+    deprecated_fields = _deprecated_config_fields(data)
+    if deprecated_fields:
+        joined_fields = ", ".join(deprecated_fields)
+        raise ConfigParseError(
+            "Deprecated config fields are no longer supported: "
+            f"{joined_fields}. Use `vllm-sr config migrate --config {config_path}` "
+            "or rewrite the file to canonical v0.3 `providers/routing/global`."
+        )
 
     # Validate with Pydantic
     try:

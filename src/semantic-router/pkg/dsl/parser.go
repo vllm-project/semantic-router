@@ -67,11 +67,8 @@ func Parse(input string) (*Program, []error) {
 		resolved := rawToProgram(r)
 		prog.Signals = append(prog.Signals, resolved.Signals...)
 		prog.Routes = append(prog.Routes, resolved.Routes...)
+		prog.Models = append(prog.Models, resolved.Models...)
 		prog.Plugins = append(prog.Plugins, resolved.Plugins...)
-		prog.Backends = append(prog.Backends, resolved.Backends...)
-		if resolved.Global != nil {
-			prog.Global = resolved.Global
-		}
 	}
 
 	if !parsedAny {
@@ -81,13 +78,13 @@ func Parse(input string) (*Program, []error) {
 }
 
 // splitTopLevelBlocks splits DSL source into top-level blocks by finding
-// top-level keywords (SIGNAL, ROUTE, PLUGIN, BACKEND, GLOBAL) that appear
+// top-level keywords (SIGNAL, ROUTE, MODEL, PLUGIN) that appear
 // outside of braces.
 func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
 	start := 0
-	keywords := []string{"SIGNAL", "ROUTE", "PLUGIN", "BACKEND", "GLOBAL"}
+	keywords := []string{"SIGNAL", "ROUTE", "MODEL", "PLUGIN"}
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
@@ -153,12 +150,10 @@ func rawToProgram(raw *rawProgram) *Program {
 			prog.Signals = append(prog.Signals, rawToSignal(entry.Signal))
 		case entry.Route != nil:
 			prog.Routes = append(prog.Routes, rawToRoute(entry.Route))
+		case entry.Model != nil:
+			prog.Models = append(prog.Models, rawToModelDecl(entry.Model))
 		case entry.Plugin != nil:
 			prog.Plugins = append(prog.Plugins, rawToPlugin(entry.Plugin))
-		case entry.Backend != nil:
-			prog.Backends = append(prog.Backends, rawToBackend(entry.Backend))
-		case entry.Global != nil:
-			prog.Global = rawToGlobal(entry.Global)
 		}
 	}
 	return prog
@@ -207,6 +202,14 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 	return route
 }
 
+func rawToModelDecl(r *rawModelDecl) *ModelDecl {
+	return &ModelDecl{
+		Name:   unquoteIdent(r.Name),
+		Fields: entriesToMap(r.Fields),
+		Pos:    posFromLexer(r.Pos),
+	}
+}
+
 func rawToPlugin(r *rawPluginDecl) *PluginDecl {
 	return &PluginDecl{
 		Name:       unquoteIdent(r.Name),
@@ -225,22 +228,6 @@ func rawToPluginRef(r *rawPluginRef) *PluginRef {
 		ref.Fields = entriesToMap(r.Fields)
 	}
 	return ref
-}
-
-func rawToBackend(r *rawBackendDecl) *BackendDecl {
-	return &BackendDecl{
-		BackendType: r.BackendType,
-		Name:        unquoteIdent(r.Name),
-		Fields:      entriesToMap(r.Fields),
-		Pos:         posFromLexer(r.Pos),
-	}
-}
-
-func rawToGlobal(r *rawGlobalDecl) *GlobalDecl {
-	return &GlobalDecl{
-		Fields: entriesToMap(r.Fields),
-		Pos:    posFromLexer(r.Pos),
-	}
 }
 
 func rawToAlgo(r *rawAlgoSpec) *AlgoSpec {
@@ -284,10 +271,6 @@ func rawToModelRef(r *rawModelRef) *ModelRef {
 				m.Weight = float64(*v.Int)
 			} else if v.Float != nil {
 				m.Weight = *v.Float
-			}
-		case "reasoning_family":
-			if v.Str != nil {
-				m.ReasoningFamily = unquote(*v.Str)
 			}
 		}
 	}
@@ -414,8 +397,6 @@ const (
 	TOKEN_SIGNAL
 	TOKEN_ROUTE
 	TOKEN_PLUGIN
-	TOKEN_BACKEND
-	TOKEN_GLOBAL
 	TOKEN_PRIORITY
 	TOKEN_WHEN
 	TOKEN_MODEL
@@ -439,10 +420,9 @@ func (t TokenType) String() string {
 		TOKEN_EOF: "EOF", TOKEN_ILLEGAL: "ILLEGAL", TOKEN_IDENT: "IDENT",
 		TOKEN_STRING: "STRING", TOKEN_INT: "INT", TOKEN_FLOAT: "FLOAT",
 		TOKEN_BOOL: "BOOL", TOKEN_COMMENT: "COMMENT", TOKEN_SIGNAL: "SIGNAL",
-		TOKEN_ROUTE: "ROUTE", TOKEN_PLUGIN: "PLUGIN", TOKEN_BACKEND: "BACKEND",
-		TOKEN_GLOBAL: "GLOBAL", TOKEN_PRIORITY: "PRIORITY", TOKEN_WHEN: "WHEN",
-		TOKEN_MODEL: "MODEL", TOKEN_ALGORITHM: "ALGORITHM", TOKEN_AND: "AND",
-		TOKEN_OR: "OR", TOKEN_NOT: "NOT", TOKEN_LBRACE: "{", TOKEN_RBRACE: "}",
+		TOKEN_ROUTE: "ROUTE", TOKEN_PLUGIN: "PLUGIN", TOKEN_PRIORITY: "PRIORITY",
+		TOKEN_WHEN: "WHEN", TOKEN_MODEL: "MODEL", TOKEN_ALGORITHM: "ALGORITHM",
+		TOKEN_AND: "AND", TOKEN_OR: "OR", TOKEN_NOT: "NOT", TOKEN_LBRACE: "{", TOKEN_RBRACE: "}",
 		TOKEN_LPAREN: "(", TOKEN_RPAREN: ")", TOKEN_LBRACKET: "[",
 		TOKEN_RBRACKET: "]", TOKEN_COLON: ":", TOKEN_COMMA: ",", TOKEN_EQUALS: "=",
 	}
@@ -472,10 +452,9 @@ func Lex(input string) ([]Token, []error) {
 
 	keywordMap := map[string]TokenType{
 		"SIGNAL": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE, "PLUGIN": TOKEN_PLUGIN,
-		"BACKEND": TOKEN_BACKEND, "GLOBAL": TOKEN_GLOBAL, "PRIORITY": TOKEN_PRIORITY,
-		"WHEN": TOKEN_WHEN, "MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
-		"AND": TOKEN_AND, "OR": TOKEN_OR, "NOT": TOKEN_NOT,
-		"true": TOKEN_BOOL, "false": TOKEN_BOOL,
+		"PRIORITY": TOKEN_PRIORITY, "WHEN": TOKEN_WHEN, "MODEL": TOKEN_MODEL,
+		"ALGORITHM": TOKEN_ALGORITHM, "AND": TOKEN_AND, "OR": TOKEN_OR,
+		"NOT": TOKEN_NOT, "true": TOKEN_BOOL, "false": TOKEN_BOOL,
 	}
 	punctMap := map[lexer.TokenType]TokenType{}
 
@@ -546,10 +525,9 @@ func Lex(input string) ([]Token, []error) {
 func LookupIdent(ident string) TokenType {
 	keywords := map[string]TokenType{
 		"SIGNAL": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE, "PLUGIN": TOKEN_PLUGIN,
-		"BACKEND": TOKEN_BACKEND, "GLOBAL": TOKEN_GLOBAL, "PRIORITY": TOKEN_PRIORITY,
-		"WHEN": TOKEN_WHEN, "MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
-		"AND": TOKEN_AND, "OR": TOKEN_OR, "NOT": TOKEN_NOT,
-		"true": TOKEN_BOOL, "false": TOKEN_BOOL,
+		"PRIORITY": TOKEN_PRIORITY, "WHEN": TOKEN_WHEN, "MODEL": TOKEN_MODEL,
+		"ALGORITHM": TOKEN_ALGORITHM, "AND": TOKEN_AND, "OR": TOKEN_OR,
+		"NOT": TOKEN_NOT, "true": TOKEN_BOOL, "false": TOKEN_BOOL,
 	}
 	if tok, ok := keywords[ident]; ok {
 		return tok

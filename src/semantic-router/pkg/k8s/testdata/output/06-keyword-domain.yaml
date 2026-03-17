@@ -1,212 +1,249 @@
-config_source: kubernetes
-embedding_models:
-  qwen3_model_path: models/mom-embedding-pro
-  gemma_model_path: models/mom-embedding-flash
-  mmbert_model_path: ""
-  bert_model_path: ""
-  use_cpu: true
-bert_model:
-  model_id: models/mom-embedding-light
-  threshold: 0.6
-  use_cpu: true
-classifier:
-  category_model:
-    model_id: models/mom-domain-classifier
-    threshold: 0.6
-    use_cpu: true
-    use_modernbert: true
-    use_mmbert_32k: false
-    category_mapping_path: models/mom-domain-classifier/category_mapping.json
-  pii_model:
-    model_id: models/pii_classifier_modernbert-base_presidio_token_model
-    threshold: 0.7
-    use_cpu: true
-    use_mmbert_32k: false
-    pii_mapping_path: models/mom-pii-classifier/pii_type_mapping.json
-prompt_compression:
-  enabled: false
-  max_tokens: 0
-prompt_guard:
-  enabled: true
-  model_id: models/mom-jailbreak-classifier
-  threshold: 0.7
-  use_cpu: true
-  use_modernbert: true
-  use_mmbert_32k: false
-  jailbreak_mapping_path: models/mom-jailbreak-classifier/jailbreak_type_mapping.json
-hallucination_mitigation:
-  enabled: false
-  fact_check_model:
-    model_id: ""
-    threshold: 0
-    use_cpu: false
-    use_mmbert_32k: false
-  hallucination_model:
-    model_id: ""
-    threshold: 0
-    use_cpu: false
-  nli_model:
-    model_id: ""
-    threshold: 0
-    use_cpu: false
-feedback_detector:
-  enabled: false
-  model_id: ""
-  threshold: 0
-  use_cpu: false
-  use_modernbert: false
-  use_mmbert_32k: false
-  feedback_mapping_path: ""
-modality_detector:
-  enabled: false
-semantic_cache:
-  backend_type: memory
-  enabled: true
-  similarity_threshold: 0.8
-  max_entries: 1000
-  ttl_seconds: 3600
-  eviction_policy: fifo
-  embedding_model: bert
-memory: {}
-response_api:
-  enabled: false
-router_replay: {}
-observability:
-  tracing:
-    enabled: false
-    provider: opentelemetry
-    exporter:
-      type: otlp
-      endpoint: jaeger:4317
-      insecure: true
-    sampling:
-      type: always_on
-      rate: 1
-    resource:
-      service_name: vllm-semantic-router
-      service_version: v0.1.0
-      deployment_environment: development
-  metrics:
-    windowed_metrics:
-      enabled: false
-      model_metrics: false
-      queue_depth_estimation: false
-api:
-  batch_classification:
-    metrics:
-      sample_rate: 1
-      duration_buckets:
-        - 0.001
-        - 0.005
-        - 0.01
-        - 0.025
-        - 0.05
-        - 0.1
-        - 0.25
-        - 0.5
-        - 1
-        - 2.5
-        - 5
-        - 10
-        - 30
-      size_buckets:
-        - 1
-        - 2
-        - 5
-        - 10
-        - 20
-        - 50
-        - 100
-        - 200
-      enabled: true
-      detailed_goroutine_tracking: true
-clear_route_cache: false
-keyword_rules:
-  - name: homework
-    operator: OR
+version: v0.3
+providers:
+  defaults:
+    default_model: deepseek-v3
+    reasoning_families:
+      deepseek:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      gpt:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+    default_reasoning_effort: high
+  models:
+    - name: deepseek-v3
+      reasoning_family: deepseek
+      pricing:
+        prompt_per_1m: 0.27
+        completion_per_1m: 1.1
+    - name: deepseek-r1
+      reasoning_family: deepseek
+      pricing:
+        prompt_per_1m: 0.55
+        completion_per_1m: 2.2
+routing:
+  modelCards:
+    - name: deepseek-v3
+      loras:
+        - name: homework-helper
+          description: Homework assistance specialist
+    - name: deepseek-r1
+      loras:
+        - name: academic-expert
+          description: Advanced academic problem solver
+  signals:
     keywords:
-      - homework
-      - assignment
-      - exercise
-      - problem set
-    case_sensitive: false
-categories:
-  - name: math
-    description: Mathematics and quantitative reasoning
-    mmlu_categories:
-      - math
-  - name: physics
-    description: Physics and physical sciences
-    mmlu_categories:
-      - physics
-  - name: chemistry
-    description: Chemistry and chemical sciences
-    mmlu_categories:
-      - chemistry
-decisions:
-  - name: math_homework
-    description: Math homework assistance - use reasoning model
-    priority: 100
-    rules:
-      operator: AND
-      conditions:
-        - type: keyword
-          name: homework
-        - type: domain
-          name: math
-    modelRefs:
-      - model: deepseek-r1
-        lora_name: academic-expert
-        use_reasoning: true
-        reasoning_effort: medium
-  - name: science_homework
-    description: Science homework assistance - use fast model
-    priority: 90
-    rules:
-      operator: AND
-      conditions:
-        - type: keyword
-          name: homework
-        - type: domain
-          name: physics
-    modelRefs:
-      - model: deepseek-v3
-        lora_name: homework-helper
-        use_reasoning: false
-strategy: priority
-default_reasoning_effort: high
-reasoning_families:
-  deepseek:
-    type: reasoning_effort
-    parameter: reasoning_effort
-  gpt:
-    type: reasoning_effort
-    parameter: reasoning_effort
-  qwen3:
-    type: chat_template_kwargs
-    parameter: enable_thinking
-model_config:
-  deepseek-r1:
-    pricing:
-      prompt_per_1m: 0.55
-      completion_per_1m: 2.2
-    reasoning_family: deepseek
-    loras:
-      - name: academic-expert
-        description: Advanced academic problem solver
-  deepseek-v3:
-    pricing:
-      prompt_per_1m: 0.27
-      completion_per_1m: 1.1
-    reasoning_family: deepseek
-    loras:
-      - name: homework-helper
-        description: Homework assistance specialist
-default_model: deepseek-v3
-vllm_endpoints: []
-tools:
-  enabled: true
-  top_k: 3
-  similarity_threshold: 0.2
-  tools_db_path: config/tools_db.json
-  fallback_to_empty: true
+      - name: homework
+        operator: OR
+        keywords:
+          - homework
+          - assignment
+          - exercise
+          - problem set
+        case_sensitive: false
+    domains:
+      - name: math
+        description: Mathematics and quantitative reasoning
+        mmlu_categories:
+          - math
+      - name: physics
+        description: Physics and physical sciences
+        mmlu_categories:
+          - physics
+      - name: chemistry
+        description: Chemistry and chemical sciences
+        mmlu_categories:
+          - chemistry
+  decisions:
+    - name: math_homework
+      description: Math homework assistance - use reasoning model
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: homework
+          - type: domain
+            name: math
+      modelRefs:
+        - model: deepseek-r1
+          lora_name: academic-expert
+          use_reasoning: true
+          reasoning_effort: medium
+    - name: science_homework
+      description: Science homework assistance - use fast model
+      priority: 90
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: homework
+          - type: domain
+            name: physics
+      modelRefs:
+        - model: deepseek-v3
+          lora_name: homework-helper
+          use_reasoning: false
+global:
+  router:
+    config_source: kubernetes
+    include_config_models_in_list: false
+    clear_route_cache: false
+    streamed_body:
+      enabled: false
+    model_selection: {}
+  services:
+    api:
+      batch_classification:
+        metrics:
+          sample_rate: 1
+          duration_buckets:
+            - 0.001
+            - 0.005
+            - 0.01
+            - 0.025
+            - 0.05
+            - 0.1
+            - 0.25
+            - 0.5
+            - 1
+            - 2.5
+            - 5
+            - 10
+            - 30
+          size_buckets:
+            - 1
+            - 2
+            - 5
+            - 10
+            - 20
+            - 50
+            - 100
+            - 200
+          enabled: true
+          detailed_goroutine_tracking: true
+    response_api:
+      enabled: false
+    observability:
+      tracing:
+        enabled: false
+        provider: opentelemetry
+        exporter:
+          type: otlp
+          endpoint: jaeger:4317
+          insecure: true
+        sampling:
+          type: always_on
+          rate: 1
+        resource:
+          service_name: vllm-semantic-router
+          service_version: v0.1.0
+          deployment_environment: development
+      metrics:
+        windowed_metrics:
+          enabled: false
+          model_metrics: false
+          queue_depth_estimation: false
+    authz: {}
+    ratelimit: {}
+    router_replay: {}
+  stores:
+    semantic_cache:
+      backend_type: memory
+      enabled: true
+      similarity_threshold: 0.8
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+      embedding_model: mmbert
+    memory: {}
+  integrations:
+    tools:
+      enabled: true
+      top_k: 3
+      similarity_threshold: 0.2
+      tools_db_path: config/tools_db.json
+      fallback_to_empty: true
+    looper:
+      endpoint: ""
+  model_catalog:
+    embeddings:
+      semantic:
+        qwen3_model_path: ""
+        gemma_model_path: ""
+        mmbert_model_path: models/mom-embedding-ultra
+        bert_model_path: ""
+        use_cpu: true
+        embedding_config:
+          model_type: mmbert
+          preload_embeddings: true
+          target_dimension: 768
+          target_layer: 22
+          enable_soft_matching: true
+          min_score_threshold: 0.5
+    system:
+      prompt_guard: models/mmbert32k-jailbreak-detector-merged
+      domain_classifier: models/mmbert32k-intent-classifier-merged
+      pii_classifier: models/mmbert32k-pii-detector-merged
+    modules:
+      prompt_compression:
+        enabled: false
+        max_tokens: 0
+      prompt_guard:
+        enabled: true
+        model_id: ""
+        threshold: 0.7
+        use_cpu: true
+        use_modernbert: false
+        use_mmbert_32k: true
+        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        model_ref: prompt_guard
+      classifier:
+        domain:
+          model_id: ""
+          threshold: 0.5
+          use_cpu: true
+          use_modernbert: false
+          use_mmbert_32k: true
+          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+          model_ref: domain_classifier
+        mcp:
+          enabled: false
+          transport_type: ""
+          threshold: 0
+        pii:
+          model_id: ""
+          threshold: 0.9
+          use_cpu: true
+          use_mmbert_32k: true
+          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
+          model_ref: pii_classifier
+        preference:
+          use_contrastive: false
+      hallucination_mitigation:
+        fact_check:
+          model_id: ""
+          threshold: 0
+          use_cpu: false
+          use_mmbert_32k: false
+        detector:
+          model_id: ""
+          threshold: 0
+          use_cpu: false
+        explainer:
+          model_id: ""
+          threshold: 0
+          use_cpu: false
+      feedback_detector:
+        enabled: false
+        model_id: ""
+        threshold: 0
+        use_cpu: false
+        use_modernbert: false
+        use_mmbert_32k: false
+        feedback_mapping_path: ""
+      modality_detector:
+        enabled: false

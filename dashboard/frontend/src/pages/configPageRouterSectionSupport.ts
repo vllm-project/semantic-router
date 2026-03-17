@@ -1,19 +1,24 @@
 import type { FieldConfig } from '../components/EditModal'
+import type { ViewSection } from '../components/ViewModal'
 import type { ConfigData, Tool } from './configPageSupport'
 
-export type OpenEditModal = (
+export type OpenEditModal = <TForm extends object>(
   title: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any,
-  fields: FieldConfig[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  callback: (data: any) => Promise<void>,
+  data: TForm,
+  fields: FieldConfig<TForm>[],
+  callback: (data: TForm) => Promise<void>,
   mode?: 'edit' | 'add'
+) => void
+
+export type OpenViewModal = (
+  title: string,
+  sections: ViewSection[],
+  onEdit?: () => void
 ) => void
 
 export type RouterConfigSectionData = Pick<
   ConfigData,
-  'bert_model' | 'semantic_cache' | 'tools' | 'prompt_guard' | 'classifier' | 'api' | 'observability'
+  'embedding_models' | 'semantic_cache' | 'tools' | 'prompt_guard' | 'classifier' | 'api' | 'observability'
 >
 
 export interface RouterSectionBaseProps {

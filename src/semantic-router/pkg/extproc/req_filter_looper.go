@@ -27,6 +27,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+func isLooperAlgorithmType(algorithmType string) bool {
+	switch algorithmType {
+	case "confidence", "ratings", "remom":
+		return true
+	default:
+		return false
+	}
+}
+
 // isLooperRequest checks if the incoming request is from looper (internal request)
 // If so, extproc should skip plugin processing to avoid recursion
 func (r *OpenAIRouter) isLooperRequest(ctx *RequestContext) bool {
@@ -39,10 +48,13 @@ func (r *OpenAIRouter) isLooperRequest(ctx *RequestContext) bool {
 // - Decision has at least one ModelRef (ReMoM supports single model) AND
 // - Looper endpoint is configured in router config
 func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
-	if decision == nil {
+	if decision == nil || r.Config == nil {
 		return false
 	}
 	if decision.Algorithm == nil {
+		return false
+	}
+	if !isLooperAlgorithmType(decision.Algorithm.Type) {
 		return false
 	}
 

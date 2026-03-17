@@ -6,9 +6,9 @@ import subprocess
 import sys
 from functools import lru_cache
 
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 def get_container_runtime():
