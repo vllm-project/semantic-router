@@ -11,56 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestHasPersonalizedContext(t *testing.T) {
-	tests := []struct {
-		name string
-		ctx  *RequestContext
-		want bool
-	}{
-		{
-			name: "generic request — no personalized context",
-			ctx:  &RequestContext{},
-			want: false,
-		},
-		{
-			name: "RAG context injected",
-			ctx:  &RequestContext{RAGRetrievedContext: "private document content"},
-			want: true,
-		},
-		{
-			name: "memory context injected",
-			ctx:  &RequestContext{MemoryContext: "user's previous conversation"},
-			want: true,
-		},
-		{
-			name: "PII detected in request",
-			ctx:  &RequestContext{PIIDetected: true},
-			want: true,
-		},
-		{
-			name: "system prompt injected",
-			ctx:  &RequestContext{VSRInjectedSystemPrompt: true},
-			want: true,
-		},
-		{
-			name: "multiple personalized signals",
-			ctx: &RequestContext{
-				RAGRetrievedContext:     "docs",
-				MemoryContext:           "memories",
-				PIIDetected:             true,
-				VSRInjectedSystemPrompt: true,
-			},
-			want: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, hasPersonalizedContext(tt.ctx))
-		})
-	}
-}
-
 func TestDecisionWillPersonalize(t *testing.T) {
 	tests := []struct {
 		name string
@@ -167,11 +117,6 @@ func TestUpdateResponseCacheSkipsPersonalizedContext(t *testing.T) {
 		{
 			name:       "PII response is not cached",
 			ctx:        &RequestContext{RequestID: "req-4", PIIDetected: true},
-			wantUpdate: false,
-		},
-		{
-			name:       "system-prompt-injected response is not cached",
-			ctx:        &RequestContext{RequestID: "req-5", VSRInjectedSystemPrompt: true},
 			wantUpdate: false,
 		},
 	}

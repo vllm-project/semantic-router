@@ -14,18 +14,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
-// hasPersonalizedContext reports whether the request was augmented with
-// user-specific or decision-specific data that makes the response unsafe
-// to serve to other users/contexts. Responses tainted with private context
-// must not be cached — generic responses remain safely shareable, which is
-// the whole point of a semantic cache.
-func hasPersonalizedContext(ctx *RequestContext) bool {
-	return ctx.RAGRetrievedContext != "" ||
-		ctx.MemoryContext != "" ||
-		ctx.PIIDetected ||
-		ctx.VSRInjectedSystemPrompt
-}
-
 // decisionWillPersonalize checks whether the matched decision is configured
 // with plugins (RAG, memory) that inject user-specific context. When true,
 // we skip the entire cache path — both reads and writes — because:

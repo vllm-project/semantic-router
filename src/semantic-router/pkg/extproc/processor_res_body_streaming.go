@@ -147,10 +147,6 @@ func extractStreamingContent(ctx *RequestContext, chunkData map[string]interface
 
 // cacheStreamingResponse reconstructs a ChatCompletion from accumulated chunks and caches it.
 func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
-	if hasPersonalizedContext(ctx) {
-		logging.Infof("Skipping streaming cache write for request %s: response contains personalized context (RAG/memory/PII)", ctx.RequestID)
-		return nil
-	}
 	if err := validateStreamingCachePreconditions(ctx); err != nil {
 		return nil
 	}

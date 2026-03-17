@@ -152,11 +152,6 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if ctx.RequestID == "" || responseBody == nil {
 		return
 	}
-	if hasPersonalizedContext(ctx) {
-		logging.Infof("Skipping cache write for request %s: response contains personalized context (RAG/memory/PII)", ctx.RequestID)
-		return
-	}
-
 	// Skip cache store if a decision was selected but doesn't have semantic-cache enabled
 	if ctx.VSRSelectedDecisionName != "" && r.Config != nil &&
 		!r.Config.IsCacheEnabledForDecision(ctx.VSRSelectedDecisionName) {
