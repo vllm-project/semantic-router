@@ -160,7 +160,6 @@ type RouterOptions struct {
 // InlineModels captures built-in model families and prompt-processing settings.
 type InlineModels struct {
 	EmbeddingModels         `yaml:"embedding_models"`
-	BertModel               `yaml:"bert_model"`
 	Classifier              `yaml:"classifier"`
 	PromptCompression       PromptCompressionConfig       `yaml:"prompt_compression"`
 	PromptGuard             PromptGuardConfig             `yaml:"prompt_guard"`

@@ -216,6 +216,20 @@ def evaluate_file_line_count(
                     f"but did not grow from baseline {baseline_line_count}",
                 )
             )
+        elif relax_file_checks(legacy_hotspot):
+            baseline_suffix = (
+                f" (baseline {baseline_line_count})"
+                if baseline_line_count is not None
+                else ""
+            )
+            findings.append(
+                Finding(
+                    "WARN",
+                    path,
+                    f"legacy hotspot has {line_count} lines (limit {error_limit}); "
+                    f"file-level ratchet is relaxed for this file{baseline_suffix}",
+                )
+            )
         else:
             findings.append(
                 Finding(
@@ -351,6 +365,14 @@ def relax_function_checks(legacy_hotspot: dict | None) -> bool:
     return bool(legacy_hotspot and legacy_hotspot.get("function_checks") == "relaxed")
 
 
+def relax_file_checks(legacy_hotspot: dict | None) -> bool:
+    return bool(legacy_hotspot and legacy_hotspot.get("file_checks") == "relaxed")
+
+
+def relax_interface_checks(legacy_hotspot: dict | None) -> bool:
+    return bool(legacy_hotspot and legacy_hotspot.get("interface_checks") == "relaxed")
+
+
 def function_metric_finding(
     path: str,
     message: str,
@@ -437,14 +459,20 @@ def evaluate_ast_rules(
         if node.type in INTERFACE_NODE_TYPES.get(language_name, set()):
             method_count = count_interface_methods(node, language_name)
             if method_count > rules["limits"]["interface_methods"]["error"]:
-                findings.append(
-                    Finding(
-                        "ERROR",
-                        path,
-                        f"interface/trait starting at line {node.start_point.row + 1} has {method_count} methods "
-                        f"(limit {rules['limits']['interface_methods']['error']})",
-                    )
+                message = (
+                    f"interface/trait starting at line {node.start_point.row + 1} has {method_count} methods "
+                    f"(limit {rules['limits']['interface_methods']['error']})"
                 )
+                if relax_interface_checks(legacy_hotspot):
+                    findings.append(
+                        Finding(
+                            "WARN",
+                            path,
+                            f"legacy hotspot {message}; interface-size ratchet is relaxed for this file",
+                        )
+                    )
+                else:
+                    findings.append(Finding("ERROR", path, message))
 
     return findings
 

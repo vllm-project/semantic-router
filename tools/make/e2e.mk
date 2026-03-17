@@ -81,6 +81,21 @@ e2e-test-specific:
 	fi
 	@$(MAKE) e2e-test E2E_TESTS=$(E2E_TESTS)
 
+# Run the response API CI suite across memory, Redis, and Redis Cluster backends
+e2e-test-response-api-suite: ## Run the response-api CI suite across all storage backends
+e2e-test-response-api-suite: build-e2e
+	@$(LOG_TARGET)
+	@echo "Running response-api E2E suite across memory, Redis, and Redis Cluster backends"
+	@E2E_CLUSTER_NAME="$(E2E_CLUSTER_NAME)" \
+		E2E_IMAGE_TAG="$(E2E_IMAGE_TAG)" \
+		E2E_KEEP_CLUSTER="$(E2E_KEEP_CLUSTER)" \
+		E2E_USE_EXISTING_CLUSTER="$(E2E_USE_EXISTING_CLUSTER)" \
+		E2E_VERBOSE="$(E2E_VERBOSE)" \
+		E2E_PARALLEL="$(E2E_PARALLEL)" \
+		E2E_SETUP_ONLY="$(E2E_SETUP_ONLY)" \
+		E2E_SKIP_SETUP="$(E2E_SKIP_SETUP)" \
+		./e2e/testing/run_response_api_suite.sh
+
 # Clean up E2E test cluster
 e2e-cleanup: ## Clean up E2E test cluster
 	@$(LOG_TARGET)
@@ -128,6 +143,7 @@ e2e-help: ## Show help for E2E testing
 	@echo "Common Commands:"
 	@echo "  make e2e-test                                    # Run all tests with default profile"
 	@echo "  make e2e-test E2E_PROFILE=ai-gateway             # Run AI Gateway tests"
+	@echo "  make e2e-test-response-api-suite                 # Run response-api + Redis + Redis Cluster suite"
 	@echo "  make e2e-test-dynamo                             # Run Dynamo tests (requires GPU)"
 	@echo "  make e2e-test-debug                              # Run tests and keep cluster"
 	@echo "  make e2e-test-specific E2E_TESTS=\"test1,test2\"   # Run specific tests"

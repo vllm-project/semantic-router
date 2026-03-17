@@ -9,7 +9,7 @@ supported_envs:
     serve_command: vllm-sr serve --image-pull-policy never
     description: Default local Docker image workflow.
     local_env: true
-    smoke_config: config/testing/config.agent-smoke.cpu.yaml
+    smoke_config: e2e/config/config.agent-smoke.cpu.yaml
     local_dev_fragment: local-dev-cpu
   amd-local:
     aliases:
@@ -18,7 +18,7 @@ supported_envs:
     serve_command: vllm-sr serve --image-pull-policy never --platform amd
     description: AMD ROCm local workflow.
     local_env: true
-    smoke_config: config/testing/config.agent-smoke.amd.yaml
+    smoke_config: e2e/config/config.agent-smoke.amd.yaml
     local_dev_fragment: local-dev-amd
     deployment_reference: deploy/amd/README.md
     example_config: deploy/amd/config.yaml
@@ -106,8 +106,6 @@ validation:
       - istio
       - production-stack
       - response-api
-      - response-api-redis
-      - response-api-redis-cluster
       - ml-model-selection
       - multi-endpoint
       - authz-rbac
@@ -121,6 +119,7 @@ docs:
   - docs/agent/plans/README.md
   - docs/agent/plans/pl-0001-harness-roadmap.md
   - docs/agent/plans/pl-0002-e2e-rationalization-roadmap.md
+  - docs/agent/plans/pl-0003-v0-3-config-contract-rollout.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
   - docs/agent/tech-debt/td-001-config-surface-fragmentation.md
@@ -134,6 +133,10 @@ docs:
   - docs/agent/tech-debt/td-009-e2e-profile-inventory-and-documentation-drift.md
   - docs/agent/tech-debt/td-010-e2e-framework-extension-paths.md
   - docs/agent/tech-debt/td-011-apiserver-runtime-state-split.md
+  - docs/agent/tech-debt/td-012-canonical-lora-catalog-gap.md
+  - docs/agent/tech-debt/td-013-legacy-k8s-controller-bypasses-canonical-v0-3.md
+  - docs/agent/tech-debt/td-014-candle-binding-crate-wide-clippy-gate.md
+  - docs/agent/tech-debt/td-015-weakly-typed-config-and-dsl-contracts.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
@@ -200,6 +203,9 @@ doc_governance:
     - path: docs/agent/plans/pl-0002-e2e-rationalization-roadmap.md
       steward: e2e
       freshness: update at the start and end of each E2E rationalization loop and after each completed loop task
+    - path: docs/agent/plans/pl-0003-v0-3-config-contract-rollout.md
+      steward: agent-contract
+      freshness: update at the start and end of each v0.3 config rollout loop and after each completed loop task
     - path: docs/agent/tech-debt-register.md
       steward: agent-contract
       freshness: update when debt workflow or landing-page guidance changes
@@ -239,6 +245,18 @@ doc_governance:
     - path: docs/agent/tech-debt/td-011-apiserver-runtime-state-split.md
       steward: agent-contract
       freshness: update when the TD011 debt record changes materially
+    - path: docs/agent/tech-debt/td-012-canonical-lora-catalog-gap.md
+      steward: agent-contract
+      freshness: update when the TD012 debt record changes materially
+    - path: docs/agent/tech-debt/td-013-legacy-k8s-controller-bypasses-canonical-v0-3.md
+      steward: agent-contract
+      freshness: update when the TD013 debt record changes materially
+    - path: docs/agent/tech-debt/td-014-candle-binding-crate-wide-clippy-gate.md
+      steward: rust-bindings
+      freshness: update when the TD014 debt record changes materially
+    - path: docs/agent/tech-debt/td-015-weakly-typed-config-and-dsl-contracts.md
+      steward: agent-contract
+      freshness: update when the TD015 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change

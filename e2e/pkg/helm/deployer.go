@@ -2,6 +2,7 @@ package helm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,6 +28,12 @@ func NewDeployer(kubeConfig string, verbose bool) *Deployer {
 // Install installs a Helm chart
 func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 	d.log("Installing Helm chart: %s/%s", opts.Namespace, opts.ReleaseName)
+
+	timeout, err := installTimeoutForRelease(opts.ReleaseName, opts.Timeout)
+	if err != nil {
+		return err
+	}
+	opts.Timeout = timeout
 
 	chart, cleanup, err := d.prepareLocalChartWithDeps(ctx, opts.Chart)
 	if err != nil {
@@ -141,23 +148,31 @@ func copyDir(src, dst string) error {
 			return err
 		}
 
-		in, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-
-		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
-		if err != nil {
-			return err
-		}
-		defer out.Close()
-
-		if _, err := out.ReadFrom(in); err != nil {
-			return err
-		}
-		return nil
+		return copyFile(path, target, info.Mode())
 	})
+}
+
+func copyFile(src, dst string, mode os.FileMode) (err error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, in.Close())
+	}()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, out.Close())
+	}()
+
+	if _, err = out.ReadFrom(in); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Uninstall uninstalls a Helm release

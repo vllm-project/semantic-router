@@ -12,8 +12,6 @@ full_ci_profiles:
   - istio
   - production-stack
   - response-api
-  - response-api-redis
-  - response-api-redis-cluster
   - ml-model-selection
   - multi-endpoint
   - authz-rbac
@@ -33,7 +31,7 @@ full_ci_triggers:
   - e2e/testcases/**
   - e2e/go.mod
   - e2e/go.sum
-  - config/testing/**
+  - e2e/config/**
 
 profile_rules:
   ai-gateway:
@@ -90,29 +88,18 @@ profile_rules:
     summary: HA, load-balancing, failover, and performance checks for the production stack.
     paths:
       - e2e/profiles/production-stack/**
+      - deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
+      - deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
   response-api:
     owner: e2e
-    coverage_role: responses-api-memory-backend
+    coverage_role: responses-api-backend-matrix
     selection_mode: full-ci
-    summary: Core Responses API functional, error, and edge-case behavior using the in-memory store.
+    summary: Responses API coverage across memory, Redis, and Redis Cluster backends under one CI check.
     paths:
       - e2e/profiles/response-api/**
-  response-api-redis:
-    owner: e2e
-    coverage_role: responses-api-redis-ttl
-    selection_mode: full-ci
-    summary: Responses API coverage for Redis-backed persistence and TTL expiry.
-    paths:
       - e2e/profiles/response-api-redis/**
-      - deploy/kubernetes/response-api/**
-  response-api-redis-cluster:
-    owner: e2e
-    coverage_role: responses-api-redis-cluster-ttl
-    selection_mode: full-ci
-    summary: Responses API coverage for Redis Cluster-backed persistence and TTL expiry.
-    paths:
       - e2e/profiles/response-api-redis-cluster/**
-      - deploy/kubernetes/response-api/redis-cluster.yaml
+      - deploy/kubernetes/response-api/**
   ml-model-selection:
     owner: e2e
     coverage_role: ml-model-selection-contracts
@@ -130,7 +117,7 @@ profile_rules:
     summary: Environment-specific routing and safety policy enforcement across multiple backends.
     paths:
       - e2e/profiles/multi-endpoint/**
-      - config/testing/config.multi-endpoint.yaml
+      - e2e/config/config.multi-endpoint.yaml
       - scripts/multi-endpoint/**
   authz-rbac:
     owner: e2e
@@ -139,8 +126,8 @@ profile_rules:
     summary: Authz-driven routing and per-user rate-limiting behavior.
     paths:
       - e2e/profiles/authz-rbac/**
-      - config/testing/config.authz-rbac.yaml
-      - config/testing/authz-profile-*.yaml
+      - e2e/config/config.authz-rbac.yaml
+      - e2e/config/authz-profile-*.yaml
       - src/semantic-router/pkg/classification/authz*.go
       - src/semantic-router/pkg/authz/**
   streaming:
@@ -154,6 +141,22 @@ profile_rules:
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
 
 manual_profile_rules:
+  response-api-redis:
+    owner: e2e
+    coverage_role: responses-api-redis-ttl
+    selection_mode: manual-only
+    summary: Responses API coverage for Redis-backed persistence and TTL expiry when debugging that backend directly.
+    paths:
+      - e2e/profiles/response-api-redis/**
+      - deploy/kubernetes/response-api/redis.yaml
+  response-api-redis-cluster:
+    owner: e2e
+    coverage_role: responses-api-redis-cluster-ttl
+    selection_mode: manual-only
+    summary: Responses API coverage for Redis Cluster-backed persistence and TTL expiry when debugging that backend directly.
+    paths:
+      - e2e/profiles/response-api-redis-cluster/**
+      - deploy/kubernetes/response-api/redis-cluster.yaml
   dynamo:
     owner: e2e
     coverage_role: dynamo-gpu-and-batching
@@ -199,5 +202,5 @@ workflow_suite_rules:
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/run_memory_integration.sh
       - e2e/testing/llm-katan/**
-      - config/testing/config.memory*.yaml
+      - e2e/config/config.memory*.yaml
       - .github/workflows/integration-test-memory.yml

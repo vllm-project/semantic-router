@@ -6,6 +6,38 @@
   margin-bottom: 1rem;
 }
 
+.modeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(7, 11, 10, 0.82);
+}
+
+.modeButton {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.5rem 0.9rem;
+  color: var(--color-text-secondary);
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.modeButton:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.modeButtonActive {
+  color: #081000;
+  background: var(--color-primary);
+}
+
 .blockTitle {
   margin: 0;
   color: var(--color-text);
@@ -66,6 +98,34 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
   gap: 1rem;
+}
+
+.sectionGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.groupTitle {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.96rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.groupDescription {
+  margin: 0.4rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
 .systemCard {
@@ -170,9 +230,9 @@
 }
 
 .summaryRow {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(90px, 120px) minmax(0, 1fr);
+  align-items: start;
   gap: 0.9rem;
 }
 
@@ -184,12 +244,14 @@
 
 .summaryValue {
   min-width: 0;
-  text-align: right;
+  text-align: left;
   color: var(--color-text);
   font-size: 0.82rem;
   font-weight: 600;
   font-family: var(--font-mono);
+  line-height: 1.55;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .tagRow {
@@ -200,17 +262,115 @@
 
 .cardFooter {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.9rem;
   margin-top: auto;
   padding-top: 0.1rem;
 }
 
+.cardActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .sectionKey {
+  display: block;
+  max-width: 100%;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(3, 6, 6, 0.42);
   color: var(--color-text-secondary);
   font-size: 0.78rem;
   font-family: var(--font-mono);
+  line-height: 1.45;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.rawToolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.rawToolbarButton {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.85rem;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rawToolbarButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.rawToolbarButtonPrimary {
+  border-color: rgba(118, 185, 0, 0.2);
+  background: rgba(118, 185, 0, 0.16);
+  color: var(--color-primary-light);
+}
+
+.rawEditorPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.rawEditor {
+  min-height: 420px;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  background: rgba(4, 8, 8, 0.92);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.rawEditor:focus {
+  outline: 1px solid rgba(118, 185, 0, 0.4);
+  border-color: rgba(118, 185, 0, 0.28);
+}
+
+.rawHintRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.rawHint {
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.rawDirtyState {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rawError {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(255, 105, 97, 0.2);
+  border-radius: var(--radius-md);
+  background: rgba(255, 105, 97, 0.08);
+  color: #ffb4ad;
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
 @media (max-width: 960px) {
@@ -224,10 +384,18 @@
     padding: 0.9rem;
   }
 
-  .summaryRow,
+  .blockHeader,
+  .rawHintRow {
+    flex-direction: column;
+  }
+
   .cardFooter {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .summaryRow {
+    grid-template-columns: 1fr;
   }
 
   .summaryValue {

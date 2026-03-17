@@ -1,5 +1,6 @@
 export {
   AddBackendForm,
+  AddModelForm,
   AddPluginForm,
   AddSignalForm,
 } from "./builderPageAddEntityForms";
@@ -9,6 +10,7 @@ export {
   DslPreviewPanel,
   ExtraFieldsEditor,
   generateGlobalDslPreview,
+  generateGlobalOverridePreview,
   generateSignalDslPreview,
   PluginSchemaEditor,
   SignalEditorForm,
