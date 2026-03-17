@@ -108,7 +108,7 @@ kubectl get pods -n istio-system
 
 ## Step 4: Update vsr config
 
-The file deploy/kubernetes/istio/config.yaml will get used to configure vsr when it is installed in the next step. Ensure that the models in the config file match the models you are using and that the vllm_endpoints in the file match the ip/ port of the llm kubernetes services you are running. It is usually good to start with basic features of vsr such as prompt classification and model routing before experimenting with other features such as PromptGuard or ToolCalling.
+The file `deploy/kubernetes/istio/config.yaml` now uses the canonical v0.3 contract. Ensure that `providers.models[].backend_refs[].endpoint` matches the service IP:port or DNS:port of the LLM services you are running, and that `routing.modelCards` / `providers.defaults.default_model` match the model aliases you want the router to expose. It is usually good to start with basic signal and decision routing before enabling additional modules such as PromptGuard or tool calling.
 
 ## Step 5: Deploy vLLM Semantic Router
 

@@ -22,9 +22,10 @@ ARG TARGETARCH
 ARG TARGETOS=linux
 
 # Copy src/semantic-router first (required by dashboard/backend/go.mod replace directive)
-# Only copy the packages we actually need (config, observability, startupstatus) - NOT pkg/cli which has extra deps
+# Only copy the packages we actually need (config, modelinventory, observability, startupstatus) - NOT pkg/cli which has extra deps
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
+COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
 

@@ -910,7 +910,7 @@ wheels = [
 
 [[package]]
 name = "vllm-sr"
-version = "0.1.0b2"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

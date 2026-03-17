@@ -153,8 +153,8 @@ func (h *OpenClawHandler) WorkerByIDHandler() http.HandlerFunc {
 				log.Printf("openclaw: worker encode error: %v", err)
 			}
 		case http.MethodPut, http.MethodPatch:
-			if h.readOnly {
-				http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+			if !h.canManageOpenClaw() {
+				h.writeReadOnlyError(w)
 				return
 			}
 
@@ -306,8 +306,8 @@ func (h *OpenClawHandler) WorkerByIDHandler() http.HandlerFunc {
 				log.Printf("openclaw: update worker encode error: %v", err)
 			}
 		case http.MethodDelete:
-			if h.readOnly {
-				http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+			if !h.canManageOpenClaw() {
+				h.writeReadOnlyError(w)
 				return
 			}
 			if err := h.deleteContainerByName(name); err != nil {

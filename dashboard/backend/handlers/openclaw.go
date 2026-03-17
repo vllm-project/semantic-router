@@ -273,6 +273,22 @@ func defaultOpenClawModelBaseURL() string {
 	return "http://127.0.0.1:8801/v1"
 }
 
+func defaultOpenClawModelContextWindow() int {
+	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_MODEL_CONTEXT_WINDOW")); candidate != "" {
+		if parsed, err := strconv.Atoi(candidate); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return 262144
+}
+
+func normalizeOpenClawModelContextWindow(requested int) int {
+	if requested > 0 {
+		return requested
+	}
+	return defaultOpenClawModelContextWindow()
+}
+
 func (h *OpenClawHandler) resolveOpenClawModelBaseURL() string {
 	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_MODEL_BASE_URL")); candidate != "" {
 		return candidate
@@ -417,67 +433,16 @@ func (h *OpenClawHandler) imageExists(image string) bool {
 	return err == nil
 }
 
-func (h *OpenClawHandler) discoverLocalOpenClawImage() string {
-	out, err := h.containerOutput("image", "ls", "--format", "{{.Repository}}:{{.Tag}}")
-	if err != nil {
-		return ""
-	}
-
-	seen := make(map[string]bool)
-	latestCandidates := make([]string, 0)
-	otherCandidates := make([]string, 0)
-	for _, raw := range strings.Split(string(out), "\n") {
-		image := strings.TrimSpace(raw)
-		if image == "" || seen[image] {
-			continue
-		}
-		seen[image] = true
-
-		lower := strings.ToLower(image)
-		if strings.Contains(lower, "<none>") {
-			continue
-		}
-		if !strings.Contains(lower, "openclaw") {
-			continue
-		}
-		if strings.HasSuffix(lower, ":latest") {
-			latestCandidates = append(latestCandidates, image)
-		} else {
-			otherCandidates = append(otherCandidates, image)
-		}
-	}
-
-	if len(latestCandidates) > 0 {
-		return latestCandidates[0]
-	}
-	if len(otherCandidates) > 0 {
-		return otherCandidates[0]
-	}
-	return ""
+func isLocalOnlyOpenClawImage(image string) bool {
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(image)), ":local")
 }
 
 func (h *OpenClawHandler) resolveBaseImage(requested string) string {
 	requested = strings.TrimSpace(requested)
-	if requested != "" && requested != "ghcr.io/openclaw/openclaw:latest" {
+	if requested != "" {
 		return requested
 	}
-
-	configured := defaultOpenClawBaseImage()
-	if configured != "ghcr.io/openclaw/openclaw:latest" {
-		return configured
-	}
-
-	if h.imageExists("ghcr.io/openclaw/openclaw:latest") {
-		return "ghcr.io/openclaw/openclaw:latest"
-	}
-
-	discovered := h.discoverLocalOpenClawImage()
-	if discovered != "" {
-		log.Printf("openclaw: auto-selected local image %q (ghcr.io/openclaw/openclaw:latest missing)", discovered)
-		return discovered
-	}
-
-	return "ghcr.io/openclaw/openclaw:latest"
+	return defaultOpenClawBaseImage()
 }
 
 func (h *OpenClawHandler) ensureImageAvailable(image string) error {
@@ -485,23 +450,23 @@ func (h *OpenClawHandler) ensureImageAvailable(image string) error {
 	if image == "" {
 		return fmt.Errorf("OpenClaw image is empty")
 	}
-	if h.imageExists(image) {
-		return nil
-	}
-
-	out, err := h.containerCombinedOutput("pull", image)
-	if err == nil {
-		log.Printf("openclaw: pulled missing image %q", image)
-		return nil
-	}
-
-	trimmed := strings.TrimSpace(string(out))
-	if strings.HasSuffix(strings.ToLower(image), ":local") {
+	if isLocalOnlyOpenClawImage(image) {
+		if h.imageExists(image) {
+			return nil
+		}
 		return fmt.Errorf(
 			"OpenClaw image %q is missing locally and cannot be auto-pulled. Build/tag this image locally or set OPENCLAW_BASE_IMAGE to a pullable image",
 			image,
 		)
 	}
+
+	out, err := h.containerCombinedOutput("pull", image)
+	if err == nil {
+		log.Printf("openclaw: refreshed image %q before provision", image)
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(string(out))
 	if trimmed == "" {
 		return fmt.Errorf("failed to pull OpenClaw image %q", image)
 	}
@@ -570,18 +535,19 @@ type IdentityConfig struct {
 }
 
 type ContainerConfig struct {
-	ContainerName  string `json:"containerName"`
-	GatewayPort    int    `json:"gatewayPort"`
-	AuthToken      string `json:"authToken"`
-	ModelBaseURL   string `json:"modelBaseUrl"`
-	ModelAPIKey    string `json:"modelApiKey"`
-	ModelName      string `json:"modelName"`
-	MemoryBackend  string `json:"memoryBackend"`
-	MemoryBaseURL  string `json:"memoryBaseUrl"`
-	VectorStore    string `json:"vectorStore"`
-	BrowserEnabled bool   `json:"browserEnabled"`
-	BaseImage      string `json:"baseImage"`
-	NetworkMode    string `json:"networkMode"`
+	ContainerName      string `json:"containerName"`
+	GatewayPort        int    `json:"gatewayPort"`
+	AuthToken          string `json:"authToken"`
+	ModelBaseURL       string `json:"modelBaseUrl"`
+	ModelAPIKey        string `json:"modelApiKey"`
+	ModelName          string `json:"modelName"`
+	ModelContextWindow int    `json:"modelContextWindow,omitempty"`
+	MemoryBackend      string `json:"memoryBackend"`
+	MemoryBaseURL      string `json:"memoryBaseUrl"`
+	VectorStore        string `json:"vectorStore"`
+	BrowserEnabled     bool   `json:"browserEnabled"`
+	BaseImage          string `json:"baseImage"`
+	NetworkMode        string `json:"networkMode"`
 }
 
 type ProvisionRequest struct {

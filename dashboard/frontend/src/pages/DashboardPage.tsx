@@ -1,27 +1,16 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getModelStatusSummary, type RouterRuntimeStatus } from '../utils/routerRuntime'
+import RouterModelInventory from '../components/RouterModelInventory'
+import { useAuth } from '../contexts/AuthContext'
+import { canAccessMLSetup } from '../utils/accessControl'
+import {
+  getLoadedModelCount,
+  getModelStatusSummary,
+  getRouterModelAnchor,
+  getTotalKnownModelCount,
+  type SystemStatus,
+} from '../utils/routerRuntime'
 import styles from './DashboardPage.module.css'
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-
-interface ServiceStatus {
-  name: string
-  status: string
-  healthy: boolean
-  message?: string
-  component?: string
-}
-
-interface SystemStatus {
-  overall: string
-  deployment_type: string
-  services: ServiceStatus[]
-  version?: string
-  router_runtime?: RouterRuntimeStatus
-}
 
 interface SignalConfig {
   name?: string
@@ -35,6 +24,7 @@ interface DecisionRule {
   priority?: number
   rules?: unknown[]
   modelRefs?: unknown[]
+  plugins?: unknown[]
   [key: string]: unknown
 }
 
@@ -42,15 +32,22 @@ interface RouterConfig {
   signals?: Record<string, SignalConfig[]>
   decisions?: DecisionRule[]
   providers?: {
-    default_model?: string
+    defaults?: {
+      default_model?: string
+    }
     models?: Array<{
       name?: string
+      backend_refs?: Array<{ name?: string }>
       endpoints?: Array<{ name?: string }>
       preferred_endpoints?: string[]
       [key: string]: unknown
     }>
     vllm_endpoints?: unknown[]
     [key: string]: unknown
+  }
+  routing?: {
+    signals?: Record<string, SignalConfig[]>
+    decisions?: DecisionRule[]
   }
   vllm_endpoints?: Array<{ name?: string }>
   plugins?: Record<string, unknown>
@@ -65,8 +62,9 @@ interface RouterConfig {
 function countSignals(cfg: RouterConfig): { total: number; byType: Record<string, number> } {
   const byType: Record<string, number> = {}
   let total = 0
-  if (cfg.signals) {
-    for (const [type, arr] of Object.entries(cfg.signals)) {
+  const signals = cfg.routing?.signals ?? cfg.signals
+  if (signals) {
+    for (const [type, arr] of Object.entries(signals)) {
       if (Array.isArray(arr)) {
         byType[type] = arr.length
         total += arr.length
@@ -77,7 +75,8 @@ function countSignals(cfg: RouterConfig): { total: number; byType: Record<string
 }
 
 function countDecisions(cfg: RouterConfig): number {
-  return Array.isArray(cfg.decisions) ? cfg.decisions.length : 0
+  const decisions = cfg.routing?.decisions ?? cfg.decisions
+  return Array.isArray(decisions) ? decisions.length : 0
 }
 
 function countModels(cfg: RouterConfig): number {
@@ -94,6 +93,10 @@ function countModels(cfg: RouterConfig): number {
 }
 
 function countPlugins(cfg: RouterConfig): number {
+  const decisions = cfg.routing?.decisions ?? cfg.decisions
+  if (Array.isArray(decisions)) {
+    return decisions.reduce((count, decision) => count + (Array.isArray(decision.plugins) ? decision.plugins.length : 0), 0)
+  }
   if (!cfg.plugins || typeof cfg.plugins !== 'object') return 0
   return Object.keys(cfg.plugins).length
 }
@@ -236,6 +239,7 @@ MiniFlowDiagram.displayName = 'MiniFlowDiagram'
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const [config, setConfig] = useState<RouterConfig | null>(null)
   const [status, setStatus] = useState<SystemStatus | null>(null)
@@ -305,17 +309,23 @@ const DashboardPage: React.FC = () => {
   const decisionCount = useMemo(() => config ? countDecisions(config) : 0, [config])
   const modelCount = useMemo(() => config ? countModels(config) : 0, [config])
   const pluginCount = useMemo(() => config ? countPlugins(config) : 0, [config])
+  const currentDecisions = useMemo(() => config?.routing?.decisions ?? config?.decisions ?? [], [config])
   const healthyServices = useMemo(() => status?.services.filter(s => s.healthy).length ?? 0, [status])
+  const showMLSetupQuickLink = canAccessMLSetup(user)
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
   const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
+  const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
+  const knownModels = useMemo(() => getTotalKnownModelCount(status?.models), [status])
+  const previewModelLimit = 6
 
   // Categorize decisions for the table
   const categorizedDecisions = useMemo(() => {
-    if (!config?.decisions) return { guardrails: [], routing: [], fallbacks: [] }
+    const decisions = config?.routing?.decisions ?? config?.decisions
+    if (!decisions) return { guardrails: [], routing: [], fallbacks: [] }
     const guardrails: DecisionRule[] = []
     const routing: DecisionRule[] = []
     const fallbacks: DecisionRule[] = []
-    for (const d of config.decisions) {
+    for (const d of decisions) {
       const cat = getDecisionCategory(d.priority)
       if (cat === 'guardrail') guardrails.push(d)
       else if (cat === 'fallback') fallbacks.push(d)
@@ -554,6 +564,14 @@ const DashboardPage: React.FC = () => {
                 </svg>
                 Run Evaluation
               </button>
+              {showMLSetupQuickLink ? (
+                <button className={styles.quickLink} onClick={() => navigate('/ml-setup')}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
+                  </svg>
+                  ML Setup
+                </button>
+              ) : null}
               <button className={styles.quickLink} onClick={() => navigate('/config/models')}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <rect x="2" y="3" width="20" height="18" rx="3" /><path d="M8 7v10M16 7v10" />
@@ -575,6 +593,27 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <div>
+            <h2 className={styles.cardTitle}>Loaded Models</h2>
+            {knownModels > 0 && (
+              <span className={styles.cardSubtitle}>{loadedModels}/{knownModels} ready</span>
+            )}
+          </div>
+          <button className={styles.cardAction} onClick={() => navigate('/status')}>
+            Status &rsaquo;
+          </button>
+        </div>
+        <RouterModelInventory
+          mode="preview"
+          previewLimit={previewModelLimit > 0 ? previewModelLimit : undefined}
+          modelsInfo={status?.models}
+          emptyMessage="Router model inventory will appear here after the router reports its active models."
+          onSelectModel={(model) => navigate(`/status#${encodeURIComponent(getRouterModelAnchor(model))}`)}
+        />
       </div>
 
       {/* Signal Breakdown + Decisions Overview — 2 column layout */}
@@ -609,7 +648,7 @@ const DashboardPage: React.FC = () => {
         )}
 
         {/* Decisions Overview Table */}
-        {config?.decisions && config.decisions.length > 0 && (
+        {currentDecisions.length > 0 && (
           <div className={styles.card}>
             <div className={styles.cardHeader}>
               <h2 className={styles.cardTitle}>Decisions Overview</h2>
@@ -650,9 +689,9 @@ const DashboardPage: React.FC = () => {
                     </div>
                   )
                 })}
-              {config.decisions.length > 10 && (
+              {currentDecisions.length > 10 && (
                 <button className={styles.decisionTableMore} onClick={() => navigate('/config/decisions')}>
-                  +{config.decisions.length - 10} more decisions &rsaquo;
+                  +{currentDecisions.length - 10} more decisions &rsaquo;
                 </button>
               )}
             </div>

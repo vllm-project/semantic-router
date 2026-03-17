@@ -1,0 +1,11 @@
+plugin:
+  type: header_mutation
+  configuration:
+    add:
+      - name: X-Tenant-Tier
+        value: premium
+    update:
+      - name: X-Route-Source
+        value: semantic-router
+    delete:
+      - X-Debug-Trace

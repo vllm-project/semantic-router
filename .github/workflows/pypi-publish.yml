@@ -22,7 +22,7 @@ jobs:
     if: github.repository == 'vllm-project/semantic-router'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write  # Required for trusted publishing to PyPI
 
     steps:
@@ -121,7 +121,6 @@ jobs:
           REQUIRED_FILES=(
             "cli/templates/config.template.yaml"
             "cli/templates/envoy.template.yaml"
-            "cli/templates/router-defaults.yaml"
             "cli/templates/tools_db.json"
             "cli/templates/grafana.serve.ini"
             "cli/templates/grafana-datasource.serve.yaml"
@@ -174,7 +173,7 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           echo "Publishing to PyPI..."
-          twine upload dist/* --verbose
+          twine upload dist/* --skip-existing --verbose
 
       - name: Create GitHub Release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -235,4 +234,3 @@ jobs:
           if [ "${{ steps.extract_version.outputs.is_dev }}" = "false" ]; then
             echo "- [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.extract_version.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
           fi
-

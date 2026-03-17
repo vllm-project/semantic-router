@@ -32,9 +32,9 @@ import (
 // It uses the global embedder and vector store manager set via apiserver.
 func (r *OpenAIRouter) retrieveFromVectorStore(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
 	// Extract vectorstore-specific config.
-	vsConfig, ok := ragConfig.BackendConfig.(*config.VectorStoreRAGConfig)
-	if !ok || vsConfig == nil {
-		return "", fmt.Errorf("invalid vectorstore RAG config: BackendConfig must be *VectorStoreRAGConfig")
+	vsConfig, err := ragConfig.VectorStoreBackendConfig()
+	if err != nil || vsConfig == nil {
+		return "", fmt.Errorf("invalid vectorstore RAG config: %w", err)
 	}
 
 	if vsConfig.VectorStoreID == "" {

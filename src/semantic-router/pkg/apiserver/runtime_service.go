@@ -25,6 +25,13 @@ type auxiliaryClassificationService interface {
 	HasClassifier() bool
 }
 
+type classificationReadinessService interface {
+	HasFactCheckClassifier() bool
+	HasHallucinationDetector() bool
+	HasHallucinationExplainer() bool
+	HasFeedbackDetector() bool
+}
+
 type configUpdateService interface {
 	UpdateConfig(newConfig *config.RouterConfig)
 }
@@ -33,6 +40,7 @@ type classificationService interface {
 	intentClassificationService
 	batchClassificationService
 	auxiliaryClassificationService
+	classificationReadinessService
 	configUpdateService
 }
 
@@ -102,6 +110,22 @@ func (s *liveClassificationService) HasUnifiedClassifier() bool {
 
 func (s *liveClassificationService) HasClassifier() bool {
 	return s.current().HasClassifier()
+}
+
+func (s *liveClassificationService) HasFactCheckClassifier() bool {
+	return s.current().HasFactCheckClassifier()
+}
+
+func (s *liveClassificationService) HasHallucinationDetector() bool {
+	return s.current().HasHallucinationDetector()
+}
+
+func (s *liveClassificationService) HasHallucinationExplainer() bool {
+	return s.current().HasHallucinationExplainer()
+}
+
+func (s *liveClassificationService) HasFeedbackDetector() bool {
+	return s.current().HasFeedbackDetector()
 }
 
 func (s *liveClassificationService) UpdateConfig(newConfig *config.RouterConfig) {

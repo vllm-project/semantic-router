@@ -1,192 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import styles from './OpenClawPage.module.css'
-
-// --- Types ---
-
-interface SkillTemplate {
-  id: string
-  name: string
-  description: string
-  emoji: string
-  category: string
-  builtin: boolean
-}
-
-interface IdentityConfig {
-  name: string
-  emoji: string
-  role: string
-  vibe: string
-  principles: string
-  boundaries: string
-}
-
-interface ContainerConfig {
-  containerName: string
-  gatewayPort: number
-  authToken: string
-  modelBaseUrl: string
-  modelName: string
-  memoryBackend: string
-  memoryBaseUrl: string
-  vectorStore: string
-  browserEnabled: boolean
-  baseImage: string
-  networkMode: string
-}
-
-interface OpenClawStatus {
-  running: boolean
-  containerName: string
-  gatewayUrl: string
-  port: number
-  healthy: boolean
-  error: string
-  image?: string
-  createdAt?: string
-  teamId?: string
-  teamName?: string
-  agentName?: string
-  agentEmoji?: string
-  agentRole?: string
-  agentVibe?: string
-  agentPrinciples?: string
-}
-
-interface TeamProfile {
-  id: string
-  name: string
-  vibe?: string
-  role?: string
-  principal?: string
-  description?: string
-  createdAt?: string
-  updatedAt?: string
-}
-
-interface ProvisionResponse {
-  success: boolean
-  message: string
-  workspaceDir: string
-  configPath: string
-  containerId: string
-  dockerCmd: string
-  composeYaml: string
-}
-
-// --- Provision Steps ---
-
-const PROVISION_STEPS = [
-  { key: 'identity', label: 'Identity & Team' },
-  { key: 'skills', label: 'Skills' },
-  { key: 'config', label: 'Configuration' },
-  { key: 'deploy', label: 'Deploy' },
-]
-
-interface KernelFeature {
-  title: string
-  module: string
-  description: string
-  icon: string
-}
-
-const OPENCLAW_FEATURES: KernelFeature[] = [
-  {
-    title: 'Intelligent Routing',
-    module: 'Routing Orchestrator',
-    description: 'Model selection with cost-accuracy balance driven by vLLM SR routing intelligence.',
-    icon: '\u{1F9ED}',
-  },
-  {
-    title: 'Safety Guardrails',
-    module: 'Policy & Safety Manager',
-    description: 'Protect agents from jailbreak attacks, PII leakage, and hallucination risk.',
-    icon: '\u{1F6E1}\uFE0F',
-  },
-  {
-    title: 'Hierarchical Memory Storage',
-    module: 'Memory Context Manager',
-    description: 'Persistent context and memory management for long-horizon, multi-step execution.',
-    icon: '\u{1F9E0}',
-  },
-  {
-    title: 'Knowledge Sharing',
-    module: 'Knowledge Exchanger',
-    description: 'Cross-agent experience and knowledge sharing for faster team learning loops.',
-    icon: '\u{1F501}',
-  },
-  {
-    title: 'Isolation & Team Management',
-    module: 'Tenant & Isolation Manager',
-    description: 'Multi-agent isolation with centralized team operations in one control plane.',
-    icon: '\u{1F9E9}',
-  },
-]
-
-const FALLBACK_MODEL_BASE_URL = 'http://127.0.0.1:8801/v1'
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object'
-
-const toPort = (value: unknown): number | null => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    const normalized = Math.trunc(value)
-    if (normalized >= 1 && normalized <= 65535) return normalized
-    return null
-  }
-  if (typeof value === 'string') {
-    const normalized = Number.parseInt(value.trim(), 10)
-    if (Number.isFinite(normalized) && normalized >= 1 && normalized <= 65535) {
-      return normalized
-    }
-  }
-  return null
-}
-
-const normalizeListenerHost = (value: unknown): string => {
-  const raw = typeof value === 'string' ? value.trim() : ''
-  if (!raw || raw === '0.0.0.0' || raw === '::' || raw === '[::]') {
-    return '127.0.0.1'
-  }
-  return raw
-}
-
-const formatHostForUrl = (host: string): string => {
-  if (host.includes(':') && !host.startsWith('[') && !host.endsWith(']')) {
-    return `[${host}]`
-  }
-  return host
-}
-
-const extractListenerCandidates = (config: unknown): Record<string, unknown>[] => {
-  if (!isRecord(config)) return []
-
-  const listeners = Array.isArray(config.listeners) ? config.listeners : []
-  const apiServer = isRecord(config.api_server) ? config.api_server : null
-  const apiServerListeners = apiServer && Array.isArray(apiServer.listeners) ? apiServer.listeners : []
-
-  return [...listeners, ...apiServerListeners].filter(isRecord)
-}
-
-const deriveModelBaseUrlFromRouterConfig = (config: unknown): string | null => {
-  const listeners = extractListenerCandidates(config)
-  for (const listener of listeners) {
-    const port = toPort(listener.port)
-    if (!port) continue
-    const host = formatHostForUrl(normalizeListenerHost(listener.address))
-    return `http://${host}:${port}/v1`
-  }
-  return null
-}
-
-const getInitialModelBaseUrl = (): string => {
-  return FALLBACK_MODEL_BASE_URL
-}
+import { useReadonly } from '../contexts/ReadonlyContext'
+import {
+  deriveModelBaseUrlFromRouterConfig,
+  getInitialModelBaseUrl,
+  OPENCLAW_FEATURES,
+  PROVISION_STEPS,
+  type ContainerConfig,
+  type IdentityConfig,
+  type OpenClawStatus,
+  type ProvisionResponse,
+  type SkillTemplate,
+  type TeamProfile,
+} from './OpenClawPageSupport'
 
 // --- Component ---
 
 const OpenClawPage: React.FC = () => {
+  const { isReadonly, isLoading: readonlyLoading } = useReadonly()
+  const managementDisabled = readonlyLoading || isReadonly
   const [activeTab, setActiveTab] = useState<'architecture' | 'dashboard' | 'team' | 'provision' | 'status'>('architecture')
   const [containers, setContainers] = useState<OpenClawStatus[]>([])
   const [teams, setTeams] = useState<TeamProfile[]>([])
@@ -353,6 +186,7 @@ const OpenClawPage: React.FC = () => {
             teamsLoading={teamsLoading}
             containers={containers}
             onTeamsUpdated={fetchTeams}
+            readOnly={managementDisabled}
           />
         </div>
       )}
@@ -364,6 +198,7 @@ const OpenClawPage: React.FC = () => {
             onProvisioned={refreshAll}
             onSwitchToTeam={() => setActiveTab('team')}
             onSwitchToStatus={() => setActiveTab('status')}
+            readOnly={managementDisabled}
           />
         </div>
       )}
@@ -373,6 +208,7 @@ const OpenClawPage: React.FC = () => {
             containers={containers}
             statusLoading={statusLoading}
             onRefresh={refreshAll}
+            readOnly={managementDisabled}
           />
         </div>
       )}
@@ -909,7 +745,8 @@ const TeamTab: React.FC<{
   teamsLoading: boolean
   containers: OpenClawStatus[]
   onTeamsUpdated: () => void
-}> = ({ teams, teamsLoading, containers, onTeamsUpdated }) => {
+  readOnly: boolean
+}> = ({ teams, teamsLoading, containers, onTeamsUpdated, readOnly }) => {
   const [searchQuery, setSearchQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null)
@@ -952,12 +789,14 @@ const TeamTab: React.FC<{
   }
 
   const openCreateModal = () => {
+    if (readOnly) return
     resetForm()
     setError('')
     setIsModalOpen(true)
   }
 
   const handleSave = async () => {
+    if (readOnly) return
     const name = form.name.trim()
     if (!name) {
       setError('Team name is required')
@@ -999,6 +838,7 @@ const TeamTab: React.FC<{
   }
 
   const handleEdit = (team: TeamProfile) => {
+    if (readOnly) return
     setEditingTeamId(team.id)
     setForm({
       id: team.id,
@@ -1013,6 +853,7 @@ const TeamTab: React.FC<{
   }
 
   const handleDelete = async (team: TeamProfile) => {
+    if (readOnly) return
     if (!confirm(`Delete team "${team.name}"? Assigned agents must be removed or reassigned first.`)) return
     setSaving(true)
     setError('')
@@ -1052,6 +893,14 @@ const TeamTab: React.FC<{
     })
   }, [teams, searchQuery])
 
+  useEffect(() => {
+    if (!readOnly) {
+      return
+    }
+    setIsModalOpen(false)
+    setSaving(false)
+  }, [readOnly])
+
   return (
     <div className={styles.teamManager}>
       <div className={styles.entityToolbar}>
@@ -1064,7 +913,7 @@ const TeamTab: React.FC<{
           />
         </div>
         <div className={styles.entityToolbarActions}>
-          <button className={styles.btnPrimary} onClick={openCreateModal}>
+          <button className={styles.btnPrimary} onClick={openCreateModal} disabled={readOnly}>
             New Team
           </button>
         </div>
@@ -1094,8 +943,8 @@ const TeamTab: React.FC<{
                     <div className={styles.teamEntityId}>{team.id}</div>
                   </div>
                   <div className={styles.teamEntityActions}>
-                    <button className={styles.btnSmall} onClick={() => handleEdit(team)}>Edit</button>
-                    <button className={`${styles.btnSmall} ${styles.btnSmallDanger}`} onClick={() => handleDelete(team)} disabled={saving}>Delete</button>
+                    <button className={styles.btnSmall} onClick={() => handleEdit(team)} disabled={readOnly}>Edit</button>
+                    <button className={`${styles.btnSmall} ${styles.btnSmallDanger}`} onClick={() => handleDelete(team)} disabled={readOnly || saving}>Delete</button>
                   </div>
                 </div>
                 <div className={styles.teamEntityMeta}>
@@ -1185,7 +1034,8 @@ const StatusTab: React.FC<{
   containers: OpenClawStatus[]
   statusLoading: boolean
   onRefresh: () => void
-}> = ({ containers, statusLoading, onRefresh }) => {
+  readOnly: boolean
+}> = ({ containers, statusLoading, onRefresh, readOnly }) => {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionError, setActionError] = useState('')
   const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
@@ -1213,7 +1063,14 @@ const StatusTab: React.FC<{
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
   }, [])
 
+  useEffect(() => {
+    if (readOnly && selectedContainer) {
+      setSelectedContainer(null)
+    }
+  }, [readOnly, selectedContainer])
+
   const handleAction = async (action: 'start' | 'stop', name: string) => {
+    if (readOnly) return
     setActionLoading(name)
     setActionError('')
     try {
@@ -1235,6 +1092,7 @@ const StatusTab: React.FC<{
   }
 
   const handleDelete = async (name: string) => {
+    if (readOnly) return
     if (!confirm(`Remove container "${name}"? This will stop and remove the Docker container.`)) return
     setActionLoading(name)
     setActionError('')
@@ -1263,7 +1121,7 @@ const StatusTab: React.FC<{
   }
 
   // Gateway UI sub-view
-  if (selectedContainer && selected?.healthy) {
+  if (!readOnly && selectedContainer && selected?.healthy) {
     if (!gatewayToken) {
       return (
         <div className={styles.loading}>
@@ -1396,6 +1254,7 @@ const StatusTab: React.FC<{
                         <button
                           className={`${styles.btnSmall} ${styles.btnSmallPrimary}`}
                           onClick={() => setSelectedContainer(c.containerName)}
+                          disabled={readOnly}
                         >
                           Dashboard
                         </button>
@@ -1404,7 +1263,7 @@ const StatusTab: React.FC<{
                         <button
                           className={styles.btnSmall}
                           onClick={() => handleAction('stop', c.containerName)}
-                          disabled={actionLoading === c.containerName}
+                          disabled={readOnly || actionLoading === c.containerName}
                         >
                           Stop
                         </button>
@@ -1412,7 +1271,7 @@ const StatusTab: React.FC<{
                         <button
                           className={styles.btnSmall}
                           onClick={() => handleAction('start', c.containerName)}
-                          disabled={actionLoading === c.containerName}
+                          disabled={readOnly || actionLoading === c.containerName}
                         >
                           Start
                         </button>
@@ -1420,7 +1279,7 @@ const StatusTab: React.FC<{
                       <button
                         className={`${styles.btnSmall} ${styles.btnSmallDanger}`}
                         onClick={() => handleDelete(c.containerName)}
-                        disabled={actionLoading === c.containerName}
+                        disabled={readOnly || actionLoading === c.containerName}
                       >
                         Remove
                       </button>
@@ -1451,7 +1310,8 @@ const WorkerTab: React.FC<{
   onProvisioned: () => void
   onSwitchToTeam: () => void
   onSwitchToStatus: () => void
-}> = ({ containers, teams, onProvisioned, onSwitchToTeam, onSwitchToStatus }) => {
+  readOnly: boolean
+}> = ({ containers, teams, onProvisioned, onSwitchToTeam, onSwitchToStatus, readOnly }) => {
   const [searchQuery, setSearchQuery] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -1489,6 +1349,7 @@ const WorkerTab: React.FC<{
   }, [containers, searchQuery])
 
   const openEditModal = (worker: OpenClawStatus) => {
+    if (readOnly) return
     setEditingWorker(worker)
     setEditForm({
       teamId: worker.teamId || '',
@@ -1507,6 +1368,7 @@ const WorkerTab: React.FC<{
   }
 
   const handleUpdateWorker = async () => {
+    if (readOnly) return
     if (!editingWorker) return
     if (!editForm.teamId.trim()) {
       setError('Worker team is required')
@@ -1545,6 +1407,7 @@ const WorkerTab: React.FC<{
   }
 
   const handleDeleteWorker = async (worker: OpenClawStatus) => {
+    if (readOnly) return
     if (!confirm(`Delete worker "${worker.agentName || worker.containerName}"?`)) return
     setSaving(true)
     setError('')
@@ -1563,6 +1426,15 @@ const WorkerTab: React.FC<{
     }
   }
 
+  useEffect(() => {
+    if (!readOnly) {
+      return
+    }
+    setIsCreateModalOpen(false)
+    setIsEditModalOpen(false)
+    setSaving(false)
+  }, [readOnly])
+
   return (
     <div className={styles.teamManager}>
       <div className={styles.entityToolbar}>
@@ -1575,7 +1447,7 @@ const WorkerTab: React.FC<{
           />
         </div>
         <div className={styles.entityToolbarActions}>
-          <button className={styles.btnPrimary} onClick={() => setIsCreateModalOpen(true)}>
+          <button className={styles.btnPrimary} onClick={() => setIsCreateModalOpen(true)} disabled={readOnly}>
             New Worker
           </button>
         </div>
@@ -1638,9 +1510,9 @@ const WorkerTab: React.FC<{
 
                 <div className={styles.agentFooter}>
                   <div className={styles.entityRowActions}>
-                    <button className={styles.btnSmall} onClick={() => openEditModal(worker)}>Edit</button>
+                    <button className={styles.btnSmall} onClick={() => openEditModal(worker)} disabled={readOnly}>Edit</button>
                     <button className={styles.btnSmall} onClick={onSwitchToStatus}>Status</button>
-                    <button className={`${styles.btnSmall} ${styles.btnSmallDanger}`} onClick={() => handleDeleteWorker(worker)} disabled={saving}>
+                    <button className={`${styles.btnSmall} ${styles.btnSmallDanger}`} onClick={() => handleDeleteWorker(worker)} disabled={readOnly || saving}>
                       Delete
                     </button>
                   </div>
@@ -1797,7 +1669,7 @@ const WorkerProvisionWizard: React.FC<{
         const discoveredModelBaseUrl = deriveModelBaseUrlFromRouterConfig(data)
         if (!discoveredModelBaseUrl) return
         setContainer(prev => {
-          if (prev.modelBaseUrl.trim() && prev.modelBaseUrl !== FALLBACK_MODEL_BASE_URL) {
+          if (prev.modelBaseUrl.trim() && prev.modelBaseUrl !== getInitialModelBaseUrl()) {
             return prev
           }
           return { ...prev, modelBaseUrl: discoveredModelBaseUrl }

@@ -11,6 +11,7 @@ This document defines the harness-side validation ladder for repository changes.
   - shows the current harness inventory and whether validation is passing
 - `make agent-lint CHANGED_FILES="..."`
   - runs pre-commit, language lint, and structure checks for changed files
+  - Go changed-file lint reuses stricter module configs when the repository defines them; `dashboard/backend` uses the same `golangci-lint` config as `make dashboard-lint`
 - `make agent-ci-gate CHANGED_FILES="..."`
   - runs `agent-report`, `agent-fast-gate`, and rule-driven fast tests
 - `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."`

@@ -213,7 +213,8 @@ func (r *OpenAIRouter) buildRouteHeaderState(
 
 	profile, profileErr := r.Config.GetProviderProfileForEndpoint(endpointName)
 	if profileErr != nil {
-		return nil, r.createErrorResponse(500, fmt.Sprintf("Provider profile resolution failed for endpoint %s: %v", endpointName, profileErr))
+		logging.Errorf("Provider profile resolution failed for endpoint %s: %v", endpointName, profileErr)
+		return nil, r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 	state.profile = profile
 
@@ -235,12 +236,14 @@ func (r *OpenAIRouter) appendCredentialHeaders(
 ) *ext_proc.ProcessingResponse {
 	llmProvider, authHeader, authPrefix, authErr := resolveProviderAuth(state.profile)
 	if authErr != nil {
-		return r.createErrorResponse(500, fmt.Sprintf("Provider auth resolution failed for endpoint %s: %v", endpointName, authErr))
+		logging.Errorf("Provider auth resolution failed for endpoint %s: %v", endpointName, authErr)
+		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 
 	accessKey, credErr := r.CredentialResolver.KeyForProvider(llmProvider, model, ctx.Headers)
 	if credErr != nil {
-		return r.createErrorResponse(401, fmt.Sprintf("Credential resolution failed for model %s: %v", model, credErr))
+		logging.Errorf("Credential resolution failed for model %s: %v", model, credErr)
+		return r.createErrorResponse(401, "Authentication failed. Check your API key configuration.")
 	}
 	if accessKey == "" {
 		logging.Debugf("No API key for %s model %q (fail_open=true) — preserving original auth header", llmProvider, model)
@@ -326,7 +329,8 @@ func (r *OpenAIRouter) applyRoutingPathHeader(
 
 	chatPath, pathErr := state.profile.ResolveChatPath()
 	if pathErr != nil {
-		return false, r.createErrorResponse(500, fmt.Sprintf("Chat path resolution failed for endpoint %s: %v", endpointName, pathErr))
+		logging.Errorf("Chat path resolution failed for endpoint %s: %v", endpointName, pathErr)
+		return false, r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 	if chatPath != "" {
 		state.setHeaders = append(state.setHeaders, &core.HeaderValueOption{

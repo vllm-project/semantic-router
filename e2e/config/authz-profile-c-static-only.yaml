@@ -1,0 +1,26 @@
+# Profile C: Static keys only (no ext_authz)
+#
+# Skips header-injection entirely. Useful for:
+#   - Local development without Authorino / ext_authz
+#   - Simple deployments where a single API key per model is sufficient
+#   - Testing without running an authorization service
+#
+# FAIL-CLOSED: if a model backend ref has no api_key, the request is rejected.
+
+global:
+  services:
+    authz:
+      fail_open: false
+      providers:
+        - type: static-config
+
+providers:
+  models:
+    - name: gpt-4o-mini
+      backend_refs:
+        - name: static-openai
+          api_key: "sk-proj-my-openai-key"
+    - name: claude-sonnet-4-5-20250929
+      backend_refs:
+        - name: static-anthropic
+          api_key: "sk-ant-my-anthropic-key"

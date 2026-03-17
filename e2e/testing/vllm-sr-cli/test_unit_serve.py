@@ -34,7 +34,7 @@ class TestVllmSRServe(CLITestBase):
 
     def _create_minimal_config(self, port: int = 8888) -> str:
         """Create a lean active config.yaml for testing."""
-        config_content = f"""version: v0.1
+        config_content = f"""version: v0.3
 
 listeners:
   - name: "test-listener"
@@ -42,26 +42,30 @@ listeners:
     port: {port}
     timeout: "60s"
 
-decisions:
-  - name: "default_route"
-    description: "Default test route"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions: []
-    modelRefs:
-      - model: "test-model"
-        use_reasoning: false
-
 providers:
+  default_model: "test-model"
   models:
     - name: "test-model"
-      endpoints:
+      provider_model_id: "test-model"
+      backend_refs:
         - name: "test_endpoint"
           weight: 1
           endpoint: "host.docker.internal:8000"
           protocol: "http"
-  default_model: "test-model"
+
+routing:
+  modelCards:
+    - name: "test-model"
+  decisions:
+    - name: "default_route"
+      description: "Default test route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "test-model"
+          use_reasoning: false
 """
         config_path = os.path.join(self.test_dir, "config.yaml")
         with open(config_path, "w") as f:
@@ -100,9 +104,9 @@ providers:
             "serve should create a bootstrap .vllm-sr directory",
         )
         self.assertNotIn(
-            "run 'vllm-sr init' to create a config file",
+            "create a config file before running serve",
             output,
-            "serve should no longer require init before startup",
+            "serve should no longer require manual pre-bootstrap setup before startup",
         )
         self.assertIn(
             "bootstrap",
@@ -129,12 +133,34 @@ providers:
         os.makedirs(subdir)
         config_path = os.path.join(subdir, "custom-config.yaml")
 
-        config_content = """version: v0.1
+        config_content = """version: v0.3
 listeners:
   - name: "test"
     address: "0.0.0.0"
     port: 8888
     timeout: "60s"
+providers:
+  default_model: "test-model"
+  models:
+    - name: "test-model"
+      provider_model_id: "test-model"
+      backend_refs:
+        - name: "primary"
+          endpoint: "host.docker.internal:8000"
+          protocol: "http"
+routing:
+  modelCards:
+    - name: "test-model"
+  decisions:
+    - name: "default-route"
+      description: "Catch-all route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "test-model"
+          use_reasoning: false
 """
         with open(config_path, "w") as f:
             f.write(config_content)
@@ -341,29 +367,35 @@ listeners:
 
         self.print_test_result(True, "Port mapping behavior validated")
 
-    def test_serve_readonly_dashboard_flag(self):
-        """Test that serve accepts --readonly-dashboard flag."""
+    def test_serve_readonly_flag(self):
+        """Test that serve accepts --readonly."""
         self.print_test_header(
             "Readonly Dashboard Flag",
-            "Validates that --readonly-dashboard flag is recognized",
+            "Validates that --readonly flag is recognized",
         )
 
         # Create config
         self._create_minimal_config()
 
-        # Run serve with --readonly-dashboard flag
+        # Run serve with --readonly flag
         _, stdout, stderr = self.run_cli(
-            ["serve", "--readonly-dashboard", "--image-pull-policy", "never"],
+            ["serve", "--readonly", "--image-pull-policy", "never"],
             timeout=30,
         )
 
         output = (stdout + stderr).lower()
 
         # The flag should be recognized (not "unknown flag" error)
-        unknown_flag = "unknown" in output and "readonly" in output
-        self.assertFalse(unknown_flag, "--readonly-dashboard flag should be recognized")
+        self.assertNotIn(
+            "no such option: --readonly", output, "--readonly flag should be recognized"
+        )
+        self.assertNotIn(
+            "did you mean --readonly",
+            output,
+            "--readonly should be the canonical serve flag",
+        )
 
-        self.print_test_result(True, "--readonly-dashboard flag is recognized")
+        self.print_test_result(True, "--readonly flag is recognized")
 
     def test_serve_mounts_config_file(self):
         """Test that config file is mounted into container."""

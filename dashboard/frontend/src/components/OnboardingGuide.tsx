@@ -4,6 +4,7 @@ import {
   getOnboardingStatus,
   markOnboardingPending,
   setOnboardingStatus,
+  type OnboardingStatus,
 } from '../utils/onboarding'
 import styles from './OnboardingGuide.module.css'
 
@@ -39,7 +40,7 @@ const GUIDE_STEPS: GuideStep[] = [
     description:
       'This is where signals become decisions, priorities, and plugins that shape how requests move through the router.',
     highlights: [
-      'Apply a preset or build rules manually',
+      'Compose decisions manually from signals, priorities, and plugins',
       'Use priorities to decide which route wins first',
       'Review plugin effects before promoting changes',
     ],
@@ -54,7 +55,7 @@ const GUIDE_STEPS: GuideStep[] = [
       'Use Playground as the shortest loop for checking whether the router is behaving the way you expect after setup.',
     highlights: [
       'Send prompts through the live routing pipeline',
-      'Check whether the chosen preset behaves as expected',
+      'Check whether the active routing graph behaves as expected',
       'Iterate here before changing real traffic',
     ],
     route: '/playground',
@@ -65,10 +66,10 @@ const GUIDE_STEPS: GuideStep[] = [
     pageLabel: 'DSL Builder',
     title: 'Author router behavior directly in DSL',
     description:
-      'Use Builder when presets stop being expressive enough.',
+      'Use Builder when the manager UI is no longer expressive enough.',
     highlights: [
       'Open the Guide drawer for DSL snippets',
-      'Author signals, routes, plugins, and backends',
+      'Author model cards, signals, routes, and plugins',
       'Compile and deploy deeper routing changes',
     ],
     route: '/builder',
@@ -96,9 +97,11 @@ const OnboardingGuide: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
   const [isReady, setIsReady] = useState(false)
+  const [status, setStatus] = useState<OnboardingStatus>('idle')
 
   useEffect(() => {
     const status = getOnboardingStatus()
+    setStatus(status)
     setIsOpen(status === 'pending')
     setIsReady(true)
   }, [])
@@ -112,18 +115,21 @@ const OnboardingGuide: React.FC = () => {
 
   const handleReplay = () => {
     markOnboardingPending()
+    setStatus('pending')
     setStepIndex(0)
     setIsOpen(true)
   }
 
   const handleSkip = () => {
     setOnboardingStatus('dismissed')
+    setStatus('dismissed')
     setIsOpen(false)
   }
 
   const handleNext = () => {
     if (stepIndex === GUIDE_STEPS.length - 1) {
       setOnboardingStatus('completed')
+      setStatus('completed')
       setIsOpen(false)
       return
     }
@@ -140,6 +146,10 @@ const OnboardingGuide: React.FC = () => {
   }
 
   if (!isOpen) {
+    if (status === 'completed') {
+      return null
+    }
+
     return (
       <button className={styles.replayButton} onClick={handleReplay}>
         Guide

@@ -80,10 +80,10 @@ echo "Predictor service ClusterIP: $PREDICTOR_SERVICE_IP"
 
 Edit `configmap-router-config.yaml`:
 
-1. Update `vllm_endpoints` with your predictor service ClusterIP
-2. Configure `model_config` with your model name and PII policies
-3. Update `categories` with model scores for routing
-4. Set `default_model` to your model name
+1. Update `providers.models[].backend_refs[].endpoint` with your predictor service ClusterIP and port
+2. Set `providers.defaults.default_model` and the matching `routing.modelCards[].name` entry for your served model
+3. Update `routing.signals.domains` and `routing.decisions` for your routing logic
+4. Keep runtime overrides under `global.*`
 
 Edit `configmap-envoy-config.yaml`:
 
@@ -240,7 +240,7 @@ oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE --previous
 **Common causes:**
 
 - Configuration error - validate YAML syntax
-- Invalid IP address - use ClusterIP not DNS in `vllm_endpoints.address`
+- Invalid backend endpoint - use ClusterIP or IP:port in `providers.models[].backend_refs[].endpoint`
 - Missing models - verify init container completed
 
 ### Cannot Connect to LLMInferenceService
