@@ -1,12 +1,15 @@
 .container {
   width: 100%;
   max-width: 1440px;
-  min-height: calc(100vh - 80px);
+  flex: 1;
+  min-height: 0;
   margin: 0 auto;
   padding: 1.75rem 2rem 2.5rem;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .loading {
@@ -40,6 +43,13 @@
   justify-content: space-between;
   gap: 1.25rem;
   padding: 0;
+}
+
+.header,
+.error,
+.summaryGrid,
+.servicesSection {
+  flex-shrink: 0;
 }
 
 .headerLeft {
@@ -141,6 +151,73 @@
 .summaryCard {
   min-height: 230px;
   overflow: hidden;
+}
+
+.modelCard {
+  background: color-mix(in srgb, var(--color-surface) 96%, #111111 4%);
+}
+
+.modelCard .cardHeader {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.modelCard .modelFacts,
+.modelCard .modelReadyPanel {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.modelCardOk {
+  border-color: rgba(118, 185, 0, 0.16);
+  background:
+    radial-gradient(circle at top right, rgba(118, 185, 0, 0.09), transparent 44%),
+    linear-gradient(180deg, rgba(118, 185, 0, 0.04), rgba(17, 28, 20, 0.02)),
+    color-mix(in srgb, var(--color-surface) 95%, #101912 5%);
+}
+
+.modelCardOk .cardHeader {
+  border-bottom-color: rgba(118, 185, 0, 0.1);
+}
+
+.modelCardOk .modelFacts,
+.modelCardOk .modelReadyPanel {
+  border-color: rgba(118, 185, 0, 0.12);
+  background: rgba(118, 185, 0, 0.04);
+}
+
+.modelCardWarn {
+  border-color: rgba(245, 158, 11, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.08), transparent 44%),
+    linear-gradient(180deg, rgba(245, 158, 11, 0.04), rgba(28, 22, 12, 0.02)),
+    color-mix(in srgb, var(--color-surface) 95%, #19140d 5%);
+}
+
+.modelCardWarn .cardHeader {
+  border-bottom-color: rgba(245, 158, 11, 0.1);
+}
+
+.modelCardWarn .modelFacts,
+.modelCardWarn .modelReadyPanel {
+  border-color: rgba(245, 158, 11, 0.12);
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.modelCardDown {
+  border-color: rgba(239, 68, 68, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(239, 68, 68, 0.08), transparent 44%),
+    linear-gradient(180deg, rgba(239, 68, 68, 0.04), rgba(28, 15, 15, 0.02)),
+    color-mix(in srgb, var(--color-surface) 95%, #1a1111 5%);
+}
+
+.modelCardDown .cardHeader {
+  border-bottom-color: rgba(239, 68, 68, 0.1);
+}
+
+.modelCardDown .modelFacts,
+.modelCardDown .modelReadyPanel {
+  border-color: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.04);
 }
 
 .cardHeader {

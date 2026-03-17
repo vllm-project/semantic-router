@@ -7,10 +7,10 @@ import styles from "./BuilderPage.module.css";
 interface BuilderStatusBarProps {
   isValid: boolean;
   errorCount: number;
+  modelCount: number;
   signalCount: number;
   routeCount: number;
   pluginCount: number;
-  backendCount: number;
   lineCount: number;
   mode: EditorMode;
 }
@@ -18,10 +18,10 @@ interface BuilderStatusBarProps {
 const BuilderStatusBar: React.FC<BuilderStatusBarProps> = ({
   isValid,
   errorCount,
+  modelCount,
   signalCount,
   routeCount,
   pluginCount,
-  backendCount,
   lineCount,
   mode,
 }) => {
@@ -61,10 +61,10 @@ const BuilderStatusBar: React.FC<BuilderStatusBarProps> = ({
         )}
         {isValid ? "Valid" : `${errorCount} error${errorCount !== 1 ? "s" : ""}`}
       </div>
+      <div className={styles.statusItem}>Models: {modelCount}</div>
       <div className={styles.statusItem}>Signals: {signalCount}</div>
       <div className={styles.statusItem}>Routes: {routeCount}</div>
       <div className={styles.statusItem}>Plugins: {pluginCount}</div>
-      <div className={styles.statusItem}>Backends: {backendCount}</div>
       {mode === "dsl" && <div className={styles.statusItem}>Lines: {lineCount}</div>}
       <div className={styles.statusItem}>
         Mode: {mode === "visual" ? "Visual" : mode === "dsl" ? "DSL" : "NL"}

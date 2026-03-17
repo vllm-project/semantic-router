@@ -12,6 +12,19 @@ export const SignalIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+export const ModelIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg
+    className={className}
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+  >
+    <path d="M8 2l5 2.5v7L8 14 3 11.5v-7L8 2Z" strokeLinejoin="round" />
+    <path d="M3 4.5 8 7l5-2.5M8 7v7" strokeLinecap="round" />
+  </svg>
+);
+
 export const RouteIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg
     className={className}

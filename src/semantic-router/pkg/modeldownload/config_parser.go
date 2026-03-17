@@ -3,7 +3,9 @@ package modeldownload
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -41,28 +43,7 @@ func extractFromValue(v reflect.Value, paths *[]string, seen map[string]bool) {
 		t := v.Type()
 		for i := 0; i < v.NumField(); i++ {
 			field := v.Field(i)
-			fieldType := t.Field(i)
-			fieldName := fieldType.Name
-
-			// Check if this is a model path field
-			// Matches: ModelID, Qwen3ModelPath, GemmaModelPath, or any field ending with "ModelPath"
-			isModelField := fieldName == "ModelID" ||
-				fieldName == "Qwen3ModelPath" ||
-				fieldName == "GemmaModelPath" ||
-				strings.HasSuffix(fieldName, "ModelPath")
-
-			if isModelField && field.Kind() == reflect.String {
-				path := field.String()
-				if path != "" && strings.HasPrefix(path, "models/") && !seen[path] {
-					// Only add if it looks like a model directory (not a file path)
-					if !strings.Contains(path[7:], "/") || isModelDirectory(path) {
-						*paths = append(*paths, path)
-						seen[path] = true
-					}
-				}
-			}
-
-			// Recursively process nested structs
+			recordModelPath(t.Field(i).Name, field, paths, seen)
 			extractFromValue(field, paths, seen)
 		}
 
@@ -78,11 +59,35 @@ func extractFromValue(v reflect.Value, paths *[]string, seen map[string]bool) {
 	}
 }
 
+func recordModelPath(fieldName string, field reflect.Value, paths *[]string, seen map[string]bool) {
+	if !isModelPathField(fieldName) || field.Kind() != reflect.String {
+		return
+	}
+
+	path := field.String()
+	if path == "" || !strings.HasPrefix(path, "models/") || seen[path] {
+		return
+	}
+
+	if !isModelDirectory(path) {
+		return
+	}
+
+	*paths = append(*paths, path)
+	seen[path] = true
+}
+
+func isModelPathField(fieldName string) bool {
+	return fieldName == "ModelID" ||
+		fieldName == "Qwen3ModelPath" ||
+		fieldName == "GemmaModelPath" ||
+		strings.HasSuffix(fieldName, "ModelPath")
+}
+
 // isModelDirectory checks if a path looks like a model directory (not a file)
 func isModelDirectory(path string) bool {
-	// If path ends with a file extension, it's not a model directory
-	if strings.HasSuffix(path, ".json") || strings.HasSuffix(path, ".txt") ||
-		strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
+	// If the basename has a file extension, treat it as a file rather than a model directory.
+	if filepath.Ext(filepath.Base(path)) != "" {
 		return false
 	}
 	return true
@@ -91,7 +96,8 @@ func isModelDirectory(path string) bool {
 // BuildModelSpecs builds ModelSpec list from config and registry
 func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	// Extract all model paths from config
-	paths := ExtractModelPaths(cfg)
+	paths := filterDisabledOptionalModelPaths(cfg, ExtractModelPaths(cfg))
+	requiredFilesByModel := ExtractRequiredFilesByModel(cfg)
 
 	// Allow empty paths for API-only configurations
 	if len(paths) == 0 {
@@ -112,15 +118,84 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 			return nil, fmt.Errorf("model path %s not found in mom_registry", path)
 		}
 
+		requiredFiles := append([]string{}, DefaultRequiredFiles...)
+		for _, extra := range requiredFilesByModel[path] {
+			if extra != "" && !slices.Contains(requiredFiles, extra) {
+				requiredFiles = append(requiredFiles, extra)
+			}
+		}
+
 		specs = append(specs, ModelSpec{
 			LocalPath:     path,
 			RepoID:        repoID,
 			Revision:      "main",
-			RequiredFiles: DefaultRequiredFiles,
+			RequiredFiles: requiredFiles,
 		})
 	}
 
 	return specs, nil
+}
+
+// ExtractRequiredFilesByModel derives per-model completeness requirements from
+// config-owned companion files such as category/jailbreak/PII mappings.
+func ExtractRequiredFilesByModel(cfg *config.RouterConfig) map[string][]string {
+	requiredFilesByModel := make(map[string][]string)
+	collectRequiredFilesByModel(reflect.ValueOf(cfg), requiredFilesByModel)
+	return requiredFilesByModel
+}
+
+func collectRequiredFilesByModel(v reflect.Value, requiredFilesByModel map[string][]string) {
+	if !v.IsValid() {
+		return
+	}
+
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return
+		}
+		v = v.Elem()
+	}
+
+	switch v.Kind() {
+	case reflect.Struct:
+		t := v.Type()
+		for i := 0; i < v.NumField(); i++ {
+			field := v.Field(i)
+			fieldType := t.Field(i)
+			fieldName := fieldType.Name
+
+			if strings.HasSuffix(fieldName, "MappingPath") && field.Kind() == reflect.String {
+				recordRequiredMappingFile(requiredFilesByModel, field.String())
+			}
+
+			collectRequiredFilesByModel(field, requiredFilesByModel)
+		}
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < v.Len(); i++ {
+			collectRequiredFilesByModel(v.Index(i), requiredFilesByModel)
+		}
+	case reflect.Map:
+		for _, key := range v.MapKeys() {
+			collectRequiredFilesByModel(v.MapIndex(key), requiredFilesByModel)
+		}
+	}
+}
+
+func recordRequiredMappingFile(requiredFilesByModel map[string][]string, mappingPath string) {
+	if !strings.HasPrefix(mappingPath, "models/") {
+		return
+	}
+
+	modelPath := filepath.Dir(mappingPath)
+	fileName := filepath.Base(mappingPath)
+	if modelPath == "." || modelPath == "models" || fileName == "" || fileName == "." {
+		return
+	}
+
+	requiredFiles := requiredFilesByModel[modelPath]
+	if !slices.Contains(requiredFiles, fileName) {
+		requiredFilesByModel[modelPath] = append(requiredFiles, fileName)
+	}
 }
 
 // GetDownloadConfig creates DownloadConfig from environment variables

@@ -16,8 +16,11 @@ import tempfile
 import time
 import unittest
 from contextlib import suppress
+from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
+
+import yaml
 
 HTTP_STATUS_OK = 200
 SUPPORTED_CONTAINER_RUNTIMES = ("docker", "podman")
@@ -129,7 +132,7 @@ class CLITestBase(unittest.TestCase):
         Run a vllm-sr CLI command.
 
         Args:
-            args: CLI arguments (e.g., ["init", "--force"])
+            args: CLI arguments (e.g., ["serve", "--config", "config.yaml"])
             timeout: Command timeout in seconds
             env: Additional environment variables
             capture_output: Whether to capture stdout/stderr
@@ -177,6 +180,64 @@ class CLITestBase(unittest.TestCase):
         except Exception as e:
             print(f"Command failed with exception: {e}")
             return -1, "", str(e)
+
+    def write_minimal_canonical_config(
+        self,
+        *,
+        port: int = 8888,
+        model_name: str = "test-model",
+        endpoint: str = "host.docker.internal:8000",
+    ) -> str:
+        """Write a minimal runnable canonical v0.3 config into the temp workspace."""
+        config_path = Path(self.test_dir) / "config.yaml"
+        config = {
+            "version": "v0.3",
+            "listeners": [
+                {
+                    "name": "test-listener",
+                    "address": "0.0.0.0",
+                    "port": port,
+                    "timeout": "60s",
+                }
+            ],
+            "providers": {
+                "defaults": {
+                    "default_model": model_name,
+                    "default_reasoning_effort": "medium",
+                },
+                "models": [
+                    {
+                        "name": model_name,
+                        "provider_model_id": model_name,
+                        "backend_refs": [
+                            {
+                                "name": "primary",
+                                "weight": 100,
+                                "endpoint": endpoint,
+                                "protocol": "http",
+                            }
+                        ],
+                    }
+                ],
+            },
+            "routing": {
+                "modelCards": [{"name": model_name}],
+                "decisions": [
+                    {
+                        "name": "default-route",
+                        "description": "Default route for CLI test coverage",
+                        "priority": 100,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [{"model": model_name, "use_reasoning": False}],
+                    }
+                ],
+            },
+        }
+        config_path.write_text(
+            yaml.safe_dump(config, sort_keys=False),
+            encoding="utf-8",
+        )
+        return str(config_path)
 
     def container_status(self) -> str:
         """

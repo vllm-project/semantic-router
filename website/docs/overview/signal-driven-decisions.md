@@ -324,7 +324,7 @@ signals:
 - `include_history`: Analyse all conversation messages — essential for multi-turn contrastive detection
 - `jailbreak_patterns` / `benign_patterns`: Exemplar phrases for contrastive knowledge bases (contrastive method only)
 
-> Requires `prompt_guard` for BERT method. Contrastive uses the global embedding model. See [Jailbreak Protection Tutorial](../tutorials/content-safety/jailbreak-protection.md).
+> Requires `prompt_guard` for BERT method. Contrastive uses the global embedding model. See [Jailbreak](../tutorials/signal/learned/jailbreak).
 
 ### 13. PII Signals
 
@@ -354,7 +354,7 @@ signals:
 - `pii_types_allowed`: PII types that are **permitted** (not blocked). When empty, ALL detected PII types trigger the signal
 - `include_history`: When `true`, all conversation messages are analysed
 
-> Requires `classifier.pii_model` configuration. See [PII Detection Tutorial](../tutorials/content-safety/pii-detection.md).
+> Requires the learned PII detector configuration. See [PII](../tutorials/signal/learned/pii).
 
 ## How Signals Combine
 
@@ -429,7 +429,7 @@ rules:
     - operator: "OR"
       conditions:
         - type: "domain"
-          name: "computer_science"
+          name: "computer science"
         - type: "domain"
           name: "math"
 ```
@@ -486,7 +486,7 @@ decisions:
         - operator: "OR"                    # composite child
           conditions:
             - type: "domain"
-              name: "computer_science"
+              name: "computer science"
             - type: "keyword"
               name: "math_request"
         - type: "language"                  # leaf child
@@ -535,11 +535,8 @@ selected_model: "qwen-math"
 
 ## Next Steps
 
-- [Configuration Guide](../installation/configuration.md) - Configure signals and decisions
-- [Keyword Routing Tutorial](../tutorials/intelligent-route/keyword-routing.md) - Learn keyword signals
-- [Embedding Routing Tutorial](../tutorials/intelligent-route/embedding-routing.md) - Learn embedding signals
-- [Domain Routing Tutorial](../tutorials/intelligent-route/domain-routing.md) - Learn domain signals
-- [Context Routing Tutorial](../tutorials/intelligent-route/context-routing.md) - Learn context signals
-- [Complexity Routing Tutorial](../tutorials/intelligent-route/complexity-routing.md) - Learn complexity signals
-- [Jailbreak Protection Tutorial](../tutorials/content-safety/jailbreak-protection.md) - Learn jailbreak signals
-- [PII Detection Tutorial](../tutorials/content-safety/pii-detection.md) - Learn PII signals
+- [Configuration Guide](../installation/configuration) - Configure signals and decisions
+- [Signal Overview](../tutorials/signal/overview) - Learn the signal catalog
+- [Heuristic Signals](../tutorials/signal/overview#heuristic-signals) - Start with keyword, authz, context, language, and modality
+- [Learned Signals](../tutorials/signal/overview#learned-signals) - Add domain, embedding, safety, and feedback classifiers
+- [Decision Overview](../tutorials/decision/overview) - Learn how signals map into route decisions

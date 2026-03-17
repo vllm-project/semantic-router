@@ -410,6 +410,7 @@ button.navLink {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   background-color: var(--color-bg);
 }
 
@@ -417,6 +418,7 @@ button.navLink {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 /* Responsive */

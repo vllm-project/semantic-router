@@ -21,7 +21,7 @@
   },
   "link.item.label.Tutorials": {
     "message": "教程",
-    "description": "The label of footer link with label=Tutorials linking to /docs/tutorials/intelligent-route/embedding-routing"
+    "description": "The label of footer link with label=Tutorials linking to /docs/tutorials/signal/overview"
   },
   "link.item.label.API Reference": {
     "message": "API 参考",
@@ -80,4 +80,3 @@
     "description": "The footer copyright"
   }
 }
-

@@ -15,6 +15,7 @@ from cli.commands.runtime_support import (
     ALGORITHM_TYPES,
     append_passthrough_env_vars,
     apply_runtime_mode_env_vars,
+    configure_runtime_override_env_vars,
     log_bootstrap_result,
     resolve_effective_config_path,
     validate_setup_mode_flags,
@@ -28,13 +29,13 @@ from cli.consts import (
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
     VLLM_SR_DOCKER_IMAGE_DEFAULT,
-    VLLM_SR_DOCKER_NAME,
 )
 from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
 from cli.docker_cli import docker_container_status
-from cli.utils import getLogger
+from cli.runtime_stack import resolve_runtime_stack
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 inject_algorithm_into_config = _inject_algorithm_into_config
 
 
@@ -155,13 +156,17 @@ def serve(
 
     env_vars: dict[str, str] = {}
     append_passthrough_env_vars(env_vars)
-    apply_runtime_mode_env_vars(env_vars, minimal, readonly, setup_mode, platform)
+    apply_runtime_mode_env_vars(
+        env_vars, minimal, readonly, setup_mode, platform, algorithm
+    )
 
     effective_config_path = resolve_effective_config_path(
-        config_path, algorithm, setup_mode
+        config_path, algorithm, setup_mode, platform
     )
+    configure_runtime_override_env_vars(env_vars, config_path, effective_config_path)
     start_vllm_sr(
-        config_file=str(effective_config_path.absolute()),
+        config_file=str(config_path.absolute()),
+        runtime_config_file=str(effective_config_path.absolute()),
         env_vars=env_vars,
         image=image,
         pull_policy=image_pull_policy,
@@ -229,11 +234,12 @@ def dashboard(no_open: bool) -> None:
         vllm-sr dashboard
         vllm-sr dashboard --no-open
     """
-    status = docker_container_status(VLLM_SR_DOCKER_NAME)
+    stack_layout = resolve_runtime_stack()
+    status = docker_container_status(stack_layout.container_name)
     if status != "running":
         raise ValueError("vLLM Semantic Router is not running")
 
-    dashboard_url = "http://localhost:8700"
+    dashboard_url = stack_layout.dashboard_url
     if no_open:
         log.info(f"Dashboard URL: {dashboard_url}")
         return

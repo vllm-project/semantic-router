@@ -14,6 +14,8 @@ This playbook documents the reference AMD profile for a single real ROCm vLLM ba
   - `GLM-4.7`
   - `DeepSeek-V3.2`
 - Reference routing profile: [config.yaml](./config.yaml)
+  - Canonical layout: `version/listeners/providers/routing/global`
+  - This profile uses `providers.defaults` for provider-wide defaults, `providers.models[].backend_refs[]` for access bindings, and `routing.modelCards` for semantic model metadata
 
 The active AMD profile contains 20 routing decisions. Each decision has exactly one `modelRef`. Guardrail and PII examples remain in the YAML as commented templates, but they are not active in this reference profile.
 
@@ -56,55 +58,34 @@ sudo docker run -d \
     --served-model-name openai/gpt-oss-120b Qwen/Qwen3.5-122B-A10B Qwen/Qwen3.5-9B Kimi-K2-Thinking GLM-4.7 DeepSeek-V3.2 \
     --trust-remote-code \
     --reasoning-parser qwen3 \
-    --max-model-len 32768 \
-    --gpu-memory-utilization 0.90
+    --max-model-len 262144 \
+    --language-model-only \
+    --max-num-seqs 128 \
+    --kv-cache-dtype fp8 \
+    --gpu-memory-utilization 0.85
 ```
-
-If the backend fails its startup memory check on a single MI300X, reduce `--gpu-memory-utilization` first. If it still does not fit, reduce `--max-model-len`.
-
-Verify that the container is up and that all aliases are visible:
-
-```bash
-sudo docker ps --filter name=vllm
-curl -s "http://localhost:${VLLM_PORT_122B:-8090}/v1/models"
-```
-
-The `/v1/models` response should include all six alias IDs listed above.
 
 ### Step 2: Install vLLM Semantic Router
 
-```bash
-sudo apt-get install python3.12-venv
-python3 -m venv vsr
-source vsr/bin/activate
-pip3 install vllm-sr
-```
-
-### Step 3: Prepare the AMD routing profile
-
-If you are running from this repository, use [config.yaml](./config.yaml) directly as the reference AMD profile. If you want a standalone copy, download it:
+Install vllm-sr with one command:
 
 ```bash
-wget -O config.yaml https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/amd/config.yaml
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 ```
 
-### Step 4: Start vLLM Semantic Router
+### Step 3: Access the dashboard
 
-Use the canonical AMD local serve path:
-
-```bash
-vllm-sr serve --image-pull-policy never --platform amd
-```
-
-If you are using a local `config.yaml` in the current directory, the router will load it automatically on startup.
-
-### Step 5: Access the dashboard
+If everything is working, you should be able to access the dashboard at:
 
 ```text
 http://<your-server-ip>:8700
 ```
 
-You should see routing metrics, selected decision metadata, and selected model aliases for each request.
+Complete the user registration, onboarding process, and import the reference profile (from remote).
+
+> Import the profile from: https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/amd/config.yaml
+
+Onboarding remote import can apply this full YAML directly. If you import the same file into the DSL editor, only `routing.modelCards`, `routing.signals`, and `routing.decisions` are decompiled into DSL; `providers` and `global` remain in YAML.
 
 ## Architecture
 
@@ -142,7 +123,7 @@ Single ROCm vLLM backend on vllm:8000
 Qwen/Qwen3.5-122B-A10B-FP8
 ```
 
-The router does not use `external_model_ids` in this profile. The selected alias is sent directly to the backend, and the backend accepts it because the container was started with matching `--served-model-name` entries.
+The router does not use `external_model_ids` in this profile. Every provider model entry points at the shared inline `backend_refs` target, and the selected alias is forwarded unchanged because the backend was started with matching `--served-model-name` entries.
 
 ## Alias Catalog
 
@@ -169,12 +150,12 @@ The router does not use `external_model_ids` in this profile. The selected alias
 | 144 | `engineering_problems` | `domain:engineering` | `DeepSeek-V3.2` | `medium` |
 | 143 | `law_legal` | `domain:law` | `openai/gpt-oss-120b` | `medium` |
 | 142 | `business_economics` | `domain:business` or `domain:economics` | `openai/gpt-oss-120b` | `medium` |
-| 141 | `complex_engineering` | `domain:computer science` + `embedding:deep_thinking_en` + `complexity:computer_science:hard` | `DeepSeek-V3.2` | `high` |
+| 141 | `complex_engineering` | `domain:computer science` + `embedding:deep_thinking_en` + `complexity:computer science:hard` | `DeepSeek-V3.2` | `high` |
 | 138 | `psychology_queries` | `domain:psychology` | `openai/gpt-oss-120b` | `medium` |
 | 137 | `philosophy_queries` | `domain:philosophy` | `Kimi-K2-Thinking` | `high` |
 | 136 | `history_queries` | `domain:history` | `GLM-4.7` | `medium` |
 | 131 | `complex_reasoning` | `embedding:deep_thinking_zh` or `keyword:thinking_zh` | `Kimi-K2-Thinking` | `high` |
-| 131 | `fast_coding` | `domain:computer science` or `complexity:computer_science:easy/medium` | `DeepSeek-V3.2` | `low` |
+| 131 | `fast_coding` | `domain:computer science` or `complexity:computer science:easy/medium` | `DeepSeek-V3.2` | `low` |
 | 130 | `quick_question` | `embedding:fast_qa_zh` + `language:zh` + `context:short_context` | `GLM-4.7` | `off` |
 | 120 | `fast_qa` | `embedding:fast_qa_en` + `language:en` + `context:short_context` | `GLM-4.7` | `off` |
 | 110 | `deep_thinking` | `embedding:deep_thinking_en` or `keyword:thinking_en` or `context:long_context` | `Kimi-K2-Thinking` | `high` |
