@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // deployMu ensures only one deploy operation at a time
@@ -27,6 +27,9 @@ type DeployRequest struct {
 	YAML string `json:"yaml"`
 	// DSL is the original DSL source (archived for audit trail)
 	DSL string `json:"dsl,omitempty"`
+	// BaseYAML is the full canonical config imported into the builder, if any.
+	// Routing-only fragments are ignored as merge bases.
+	BaseYAML string `json:"baseYaml,omitempty"`
 }
 
 // DeployResponse is the JSON response for a deploy operation
@@ -71,10 +74,7 @@ func DeployPreviewHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		// Validate the incoming YAML
-		yamlBytes := []byte(req.YAML)
-		var yamlMap interface{}
-		if err := yaml.Unmarshal(yamlBytes, &yamlMap); err != nil {
+		if _, err := decodeYAMLTaggedBytes[routingFragmentDocument]([]byte(req.YAML)); err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]string{
@@ -84,28 +84,24 @@ func DeployPreviewHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		// Read current config
 		currentData, err := os.ReadFile(configPath)
+		currentForDiffBytes := currentData
 		if err != nil {
-			currentData = []byte("# No existing config\n")
+			currentForDiffBytes = []byte("# No existing config\n")
 		}
 
-		// Compute merged preview (same logic as deployDirectWrite)
-		previewBytes := yamlBytes
-		if len(currentData) > 0 {
-			existingMap := make(map[string]interface{})
-			if err := yaml.Unmarshal(currentData, &existingMap); err == nil {
-				newMap := make(map[string]interface{})
-				if err := yaml.Unmarshal(yamlBytes, &newMap); err == nil {
-					merged := deepMerge(existingMap, newMap)
-					if mergedYAML, err := yaml.Marshal(merged); err == nil {
-						previewBytes = mergedYAML
-					}
-				}
-			}
+		previewBytes, err := mergeDeployPayload(currentData, req)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error":   "deploy_preview_error",
+				"message": err.Error(),
+			})
+			return
 		}
 
-		currentForDiff := canonicalizeYAMLForDiff(currentData)
+		currentForDiff := canonicalizeYAMLForDiff(currentForDiffBytes)
 		previewForDiff := canonicalizeYAMLForDiff(previewBytes)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -204,7 +200,7 @@ func ConfigVersionsHandler(configPath string) http.HandlerFunc {
 	}
 }
 
-// ==================== Deploy: write config.yaml + regenerate router-config.yaml ====================
+// ==================== Deploy: write canonical config.yaml ====================
 
 func deployDirectWrite(w http.ResponseWriter, configPath string, configDir string, req DeployRequest) {
 	// Acquire deploy lock (only one deploy at a time)
@@ -219,10 +215,8 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	}
 	defer deployMu.Unlock()
 
-	// Step 1: Validate the YAML parses correctly
-	yamlBytes := []byte(req.YAML)
-	var yamlMap interface{}
-	if err := yaml.Unmarshal(yamlBytes, &yamlMap); err != nil {
+	fragmentBytes := []byte(req.YAML)
+	if _, err := decodeYAMLTaggedBytes[routingFragmentDocument](fragmentBytes); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -232,19 +226,31 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 		return
 	}
 
-	// Step 2: Deep merge with existing config (same as UpdateConfigHandler)
 	existingData, err := os.ReadFile(configPath)
-	if err == nil && len(existingData) > 0 {
-		existingMap := make(map[string]interface{})
-		if err := yaml.Unmarshal(existingData, &existingMap); err == nil {
-			newMap := make(map[string]interface{})
-			if err := yaml.Unmarshal(yamlBytes, &newMap); err == nil {
-				merged := deepMerge(existingMap, newMap)
-				if mergedYAML, err := yaml.Marshal(merged); err == nil {
-					yamlBytes = mergedYAML
-				}
-			}
-		}
+	if err != nil {
+		existingData = nil
+	}
+
+	// Step 2: Deep merge the routing fragment into the deploy base.
+	yamlBytes, err := mergeDeployPayload(existingData, req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_merge_error",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	if _, err := routerconfig.ParseYAMLBytes(yamlBytes); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_validation_error",
+			"message": fmt.Sprintf("Merged config validation failed: %v", err),
+		})
+		return
 	}
 
 	// Step 3: Create backup of current config
@@ -302,6 +308,130 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	})
 }
 
+func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
+	fragmentBytes := []byte(req.YAML)
+	baseData, err := resolveDeployBaseYAML(currentData, req.BaseYAML)
+	if err != nil {
+		return nil, err
+	}
+	if len(baseData) == 0 {
+		return fragmentBytes, nil
+	}
+
+	baseConfig, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](baseData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse deploy base config: %w", err)
+	}
+
+	fragmentConfig, err := decodeYAMLTaggedBytes[routingFragmentDocument](fragmentBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse compiled routing fragment: %w", err)
+	}
+
+	baseConfig.Routing = mergeCanonicalRouting(baseConfig.Routing, fragmentConfig.Routing)
+	mergedYAML, err := marshalYAMLBytes(baseConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal merged config: %w", err)
+	}
+	return mergedYAML, nil
+}
+
+func mergeCanonicalRouting(base, patch routerconfig.CanonicalRouting) routerconfig.CanonicalRouting {
+	merged := base
+	if len(patch.ModelCards) > 0 {
+		merged.ModelCards = patch.ModelCards
+	}
+	merged.Signals = mergeCanonicalSignals(base.Signals, patch.Signals)
+	if len(patch.Decisions) > 0 {
+		merged.Decisions = patch.Decisions
+	}
+	return merged
+}
+
+func mergeCanonicalSignals(base, patch routerconfig.CanonicalSignals) routerconfig.CanonicalSignals {
+	merged := base
+	if len(patch.Keywords) > 0 {
+		merged.Keywords = patch.Keywords
+	}
+	if len(patch.Embeddings) > 0 {
+		merged.Embeddings = patch.Embeddings
+	}
+	if len(patch.Domains) > 0 {
+		merged.Domains = patch.Domains
+	}
+	if len(patch.FactCheck) > 0 {
+		merged.FactCheck = patch.FactCheck
+	}
+	if len(patch.UserFeedbacks) > 0 {
+		merged.UserFeedbacks = patch.UserFeedbacks
+	}
+	if len(patch.Preferences) > 0 {
+		merged.Preferences = patch.Preferences
+	}
+	if len(patch.Language) > 0 {
+		merged.Language = patch.Language
+	}
+	if len(patch.Context) > 0 {
+		merged.Context = patch.Context
+	}
+	if len(patch.Complexity) > 0 {
+		merged.Complexity = patch.Complexity
+	}
+	if len(patch.Modality) > 0 {
+		merged.Modality = patch.Modality
+	}
+	if len(patch.RoleBindings) > 0 {
+		merged.RoleBindings = patch.RoleBindings
+	}
+	if len(patch.Jailbreak) > 0 {
+		merged.Jailbreak = patch.Jailbreak
+	}
+	if len(patch.PII) > 0 {
+		merged.PII = patch.PII
+	}
+	return merged
+}
+
+func resolveDeployBaseYAML(currentData []byte, providedBase string) ([]byte, error) {
+	if strings.TrimSpace(providedBase) == "" {
+		return currentData, nil
+	}
+
+	providedBaseBytes := []byte(providedBase)
+	if _, err := parseYAMLDocument(providedBaseBytes); err != nil {
+		return nil, fmt.Errorf("invalid imported base config: %w", err)
+	}
+	looksLikeFullBase, err := looksLikeFullCanonicalDeployBase(providedBaseBytes)
+	if err != nil {
+		return nil, fmt.Errorf("invalid imported base config: %w", err)
+	}
+	if !looksLikeFullBase {
+		return currentData, nil
+	}
+	return providedBaseBytes, nil
+}
+
+func looksLikeFullCanonicalDeployBase(raw []byte) (bool, error) {
+	doc, err := parseYAMLDocument(raw)
+	if err != nil {
+		return false, err
+	}
+	root, err := documentMappingNode(doc)
+	if err != nil {
+		return false, err
+	}
+	if mappingValueNode(root, "routing") == nil {
+		return false, nil
+	}
+
+	for _, key := range []string{"version", "listeners", "providers", "global"} {
+		if mappingValueNode(root, key) != nil {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir string, version string) {
 	// Acquire deploy lock
 	if !deployMu.TryLock() {
@@ -331,8 +461,7 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 	}
 
 	// Validate backup YAML syntax
-	var yamlCheck interface{}
-	if unmarshalErr := yaml.Unmarshal(backupData, &yamlCheck); unmarshalErr != nil {
+	if _, unmarshalErr := parseYAMLDocument(backupData); unmarshalErr != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -423,47 +552,6 @@ func versionsLocalList(w http.ResponseWriter, configPath string) {
 	_ = json.NewEncoder(w).Encode(versions)
 }
 
-// deepMerge recursively merges src into dst. For map values, it recurses;
-// for slices and scalars, src overwrites dst. dst is modified in place.
-func deepMerge(dst, src map[string]interface{}) map[string]interface{} {
-	for key, srcVal := range src {
-		if dstVal, exists := dst[key]; exists {
-			// Both sides are maps → recurse
-			if dstMap, ok := dstVal.(map[string]interface{}); ok {
-				if srcMap, ok := srcVal.(map[string]interface{}); ok {
-					dst[key] = deepMerge(dstMap, srcMap)
-					continue
-				}
-			}
-			// Also handle map[interface{}]interface{} from yaml.v2
-			if dstMap, ok := toStringKeyMap(dstVal); ok {
-				if srcMap, ok := toStringKeyMap(srcVal); ok {
-					dst[key] = deepMerge(dstMap, srcMap)
-					continue
-				}
-			}
-		}
-		// Non-map or new key → overwrite
-		dst[key] = srcVal
-	}
-	return dst
-}
-
-// toStringKeyMap converts map[interface{}]interface{} (yaml.v2) to map[string]interface{}
-func toStringKeyMap(v interface{}) (map[string]interface{}, bool) {
-	switch m := v.(type) {
-	case map[string]interface{}:
-		return m, true
-	case map[interface{}]interface{}:
-		result := make(map[string]interface{}, len(m))
-		for k, val := range m {
-			result[fmt.Sprintf("%v", k)] = val
-		}
-		return result, true
-	}
-	return nil, false
-}
-
 // canonicalizeYAMLForDiff converts YAML into a normalized representation so
 // order-only key changes do not produce noisy diffs in the preview modal.
 func canonicalizeYAMLForDiff(raw []byte) string {
@@ -475,42 +563,19 @@ func canonicalizeYAMLForDiff(raw []byte) string {
 		return text
 	}
 
-	var parsed interface{}
-	if err := yaml.Unmarshal(raw, &parsed); err != nil {
-		return text
-	}
-
-	normalized := normalizeYAMLValue(parsed)
-	canonical, err := yaml.Marshal(normalized)
-	if err != nil {
-		return text
-	}
-	return string(canonical)
-}
-
-func normalizeYAMLValue(v interface{}) interface{} {
-	switch value := v.(type) {
-	case map[string]interface{}:
-		normalized := make(map[string]interface{}, len(value))
-		for key, item := range value {
-			normalized[key] = normalizeYAMLValue(item)
+	if looksLikeFullBase, err := looksLikeFullCanonicalDeployBase(raw); err == nil && looksLikeFullBase {
+		if configData, decodeErr := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](raw); decodeErr == nil {
+			if canonical, marshalErr := marshalYAMLBytes(configData); marshalErr == nil {
+				return string(canonical)
+			}
 		}
-		return normalized
-	case map[interface{}]interface{}:
-		normalized := make(map[string]interface{}, len(value))
-		for key, item := range value {
-			normalized[fmt.Sprintf("%v", key)] = normalizeYAMLValue(item)
-		}
-		return normalized
-	case []interface{}:
-		normalized := make([]interface{}, len(value))
-		for i, item := range value {
-			normalized[i] = normalizeYAMLValue(item)
-		}
-		return normalized
-	default:
-		return value
 	}
+	if fragment, err := decodeYAMLTaggedBytes[routingFragmentDocument](raw); err == nil {
+		if canonical, marshalErr := marshalYAMLBytes(fragment); marshalErr == nil {
+			return string(canonical)
+		}
+	}
+	return text
 }
 
 // cleanupBackups removes old backups beyond maxBackups

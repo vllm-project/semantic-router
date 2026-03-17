@@ -1,0 +1,109 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: openai/gpt-oss-20b
+    reasoning_families:
+      deepseek:
+        type: chat_template_kwargs
+        parameter: thinking
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+      gpt-oss:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      gpt:
+        type: reasoning_effort
+        parameter: reasoning_effort
+    default_reasoning_effort: high
+  models:
+    - name: openai/gpt-oss-20b
+      reasoning_family: gpt-oss
+      backend_refs:
+        - name: mock
+          endpoint: 172.28.0.10:8000
+          weight: 1
+routing:
+  decisions:
+    - name: general_decision
+      description: General knowledge and miscellaneous topics
+      priority: 50
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: other
+      modelRefs:
+        - model: openai/gpt-oss-20b
+          use_reasoning: false
+      plugins:
+        - type: pii
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+  signals:
+    domains:
+      - name: other
+        description: General knowledge and miscellaneous topics
+        mmlu_categories:
+          - other
+  modelCards:
+    - name: openai/gpt-oss-20b
+global:
+  router:
+    strategy: priority
+  services:
+    api:
+      batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
+        metrics:
+          enabled: true
+          detailed_goroutine_tracking: true
+          high_resolution_timing: false
+          sample_rate: 1.0
+          duration_buckets:
+            - 0.001
+            - 0.005
+            - 0.01
+            - 0.025
+            - 0.05
+            - 0.1
+            - 0.25
+            - 0.5
+            - 1
+            - 2.5
+            - 5
+            - 10
+            - 30
+          size_buckets:
+            - 1
+            - 2
+            - 5
+            - 10
+            - 20
+            - 50
+            - 100
+            - 200
+  stores:
+    semantic_cache:
+      enabled: true
+      backend_type: memory
+      similarity_threshold: 0.8
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+      embedding_model: mmbert
+    memory:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert
+  integrations:
+    tools:
+      enabled: true
+      top_k: 3
+      similarity_threshold: 0.2
+      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      fallback_to_empty: true

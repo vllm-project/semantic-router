@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -107,6 +106,9 @@ type HybridCacheOptions struct {
 	// Milvus settings
 	Milvus *config.MilvusConfig
 
+	// Embedding settings
+	EmbeddingModel string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+
 	// (Deprecated) Milvus settings configuration path
 	MilvusConfigPath string
 
@@ -127,24 +129,7 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 	}
 
 	// Initialize Milvus backend
-	var milvusOptions MilvusCacheOptions
-	if options.Milvus != nil {
-		milvusOptions = MilvusCacheOptions{
-			Enabled:             true,
-			SimilarityThreshold: options.SimilarityThreshold,
-			TTLSeconds:          options.TTLSeconds,
-			Config:              options.Milvus,
-		}
-	} else {
-		milvusOptions = MilvusCacheOptions{
-			Enabled:             true,
-			SimilarityThreshold: options.SimilarityThreshold,
-			TTLSeconds:          options.TTLSeconds,
-			ConfigPath:          options.MilvusConfigPath,
-		}
-	}
-
-	milvusCache, err := NewMilvusCache(milvusOptions)
+	milvusCache, err := NewMilvusCache(milvusCacheOptionsFromHybridOptions(options))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Milvus backend: %w", err)
 	}
@@ -198,6 +183,31 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 	}
 
 	return cache, nil
+}
+
+func milvusCacheOptionsFromHybridOptions(options HybridCacheOptions) MilvusCacheOptions {
+	milvusOptions := MilvusCacheOptions{
+		Enabled:             true,
+		SimilarityThreshold: options.SimilarityThreshold,
+		TTLSeconds:          options.TTLSeconds,
+		EmbeddingModel:      options.EmbeddingModel,
+	}
+
+	if options.Milvus != nil {
+		milvusOptions.Config = options.Milvus
+		return milvusOptions
+	}
+
+	milvusOptions.ConfigPath = options.MilvusConfigPath
+	return milvusOptions
+}
+
+func (h *HybridCache) generateEmbedding(text string) ([]float32, error) {
+	if h.milvusCache == nil {
+		return nil, fmt.Errorf("milvus cache is not initialized")
+	}
+
+	return h.milvusCache.getEmbedding(text)
 }
 
 // IsEnabled returns whether the cache is active
@@ -312,7 +322,7 @@ func (h *HybridCache) AddPendingRequest(requestID string, model string, query st
 	}
 
 	// Generate embedding
-	embedding, err := candle_binding.GetEmbedding(query, 0)
+	embedding, err := h.generateEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("hybrid", "add_pending", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
@@ -385,7 +395,7 @@ func (h *HybridCache) AddEntry(requestID string, model string, query string, req
 	}
 
 	// Generate embedding
-	embedding, err := candle_binding.GetEmbedding(query, 0)
+	embedding, err := h.generateEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("hybrid", "add_entry", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
@@ -444,7 +454,7 @@ func (h *HybridCache) AddEntriesBatch(entries []CacheEntry) error {
 	// Generate all embeddings first
 	embeddings := make([][]float32, len(entries))
 	for i, entry := range entries {
-		embedding, err := candle_binding.GetEmbedding(entry.Query, 0)
+		embedding, err := h.generateEmbedding(entry.Query)
 		if err != nil {
 			metrics.RecordCacheOperation("hybrid", "add_entries_batch", "error", time.Since(start).Seconds())
 			return fmt.Errorf("failed to generate embedding for entry %d: %w", i, err)
@@ -497,247 +507,6 @@ func (h *HybridCache) Flush() error {
 	}
 
 	return h.milvusCache.Flush()
-}
-
-// FindSimilar searches for semantically similar cached requests
-func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	start := time.Now()
-
-	if !h.enabled {
-		return nil, false, nil
-	}
-
-	queryPreview := query
-	if len(query) > 50 {
-		queryPreview = query[:50] + "..."
-	}
-	logging.Debugf("HybridCache.FindSimilar: searching for model='%s', query='%s'",
-		model, queryPreview)
-
-	// Generate query embedding
-	queryEmbedding, err := candle_binding.GetEmbedding(query, 0)
-	if err != nil {
-		metrics.RecordCacheOperation("hybrid", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
-	}
-
-	// Search HNSW index for candidates above similarity threshold
-	// For semantic cache, we only need the first match, so search with k=1
-	// and stop early when finding a match above threshold
-	h.mu.RLock()
-	candidates := h.searchKNNHybridWithThreshold(queryEmbedding, 1, 20, h.similarityThreshold)
-	threshold := h.similarityThreshold
-	h.mu.RUnlock()
-
-	// Filter by similarity threshold before fetching from Milvus
-	var qualifiedCandidates []searchResult
-	for _, candidate := range candidates {
-		if candidate.similarity >= threshold {
-			qualifiedCandidates = append(qualifiedCandidates, candidate)
-		}
-	}
-
-	// Map qualified candidates to Milvus IDs (need lock for idMap access)
-	type candidateWithID struct {
-		milvusID   string
-		similarity float32
-		index      int
-	}
-
-	h.mu.RLock()
-	candidatesWithIDs := make([]candidateWithID, 0, len(qualifiedCandidates))
-	for _, candidate := range qualifiedCandidates {
-		if milvusID, ok := h.idMap[candidate.index]; ok {
-			candidatesWithIDs = append(candidatesWithIDs, candidateWithID{
-				milvusID:   milvusID,
-				similarity: candidate.similarity,
-				index:      candidate.index,
-			})
-		}
-	}
-	h.mu.RUnlock()
-
-	if len(candidatesWithIDs) == 0 {
-		atomic.AddInt64(&h.missCount, 1)
-		if len(candidates) > 0 {
-			logging.Debugf("HybridCache.FindSimilar: %d candidates found but none above threshold %.3f",
-				len(candidates), h.similarityThreshold)
-		} else {
-			logging.Debugf("HybridCache.FindSimilar: no candidates found in HNSW")
-		}
-		metrics.RecordCacheOperation("hybrid", "find_similar", "miss", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	logging.Debugf("HybridCache.FindSimilar: HNSW returned %d candidates, %d above threshold",
-		len(candidates), len(candidatesWithIDs))
-
-	// Fetch document from Milvus for qualified candidates
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Try candidates in order (already sorted by similarity from HNSW)
-	for _, candidate := range candidatesWithIDs {
-		// Fetch document from Milvus by ID (direct lookup by primary key)
-		fetchCtx, fetchCancel := context.WithTimeout(ctx, 2*time.Second)
-		responseBody, err := h.milvusCache.GetByID(fetchCtx, candidate.milvusID)
-		fetchCancel()
-
-		if err != nil {
-			logging.Debugf("HybridCache.FindSimilar: Milvus GetByID failed for %s: %v",
-				candidate.milvusID, err)
-			continue
-		}
-
-		if responseBody != nil {
-			atomic.AddInt64(&h.hitCount, 1)
-			logging.Debugf("HybridCache.FindSimilar: MILVUS HIT - similarity=%.4f (threshold=%.3f)",
-				candidate.similarity, h.similarityThreshold)
-			logging.LogEvent("hybrid_cache_hit", map[string]interface{}{
-				"backend":    "hybrid",
-				"source":     "milvus",
-				"similarity": candidate.similarity,
-				"threshold":  h.similarityThreshold,
-				"model":      model,
-				"latency_ms": time.Since(start).Milliseconds(),
-			})
-			metrics.RecordCacheOperation("hybrid", "find_similar", "hit_milvus", time.Since(start).Seconds())
-			return responseBody, true, nil
-		}
-	}
-
-	// No match found above threshold
-	atomic.AddInt64(&h.missCount, 1)
-	logging.Debugf("HybridCache.FindSimilar: CACHE MISS - no match above threshold")
-	logging.LogEvent("hybrid_cache_miss", map[string]interface{}{
-		"backend":    "hybrid",
-		"threshold":  h.similarityThreshold,
-		"model":      model,
-		"candidates": len(candidatesWithIDs),
-	})
-	metrics.RecordCacheOperation("hybrid", "find_similar", "miss", time.Since(start).Seconds())
-
-	return nil, false, nil
-}
-
-// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (h *HybridCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
-	start := time.Now()
-
-	if !h.enabled {
-		return nil, false, nil
-	}
-
-	queryPreview := query
-	if len(query) > 50 {
-		queryPreview = query[:50] + "..."
-	}
-	logging.Debugf("HybridCache.FindSimilarWithThreshold: searching for model='%s', query='%s', threshold=%.3f",
-		model, queryPreview, threshold)
-
-	// Generate query embedding
-	queryEmbedding, err := candle_binding.GetEmbedding(query, 0)
-	if err != nil {
-		metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "error", time.Since(start).Seconds())
-		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
-	}
-
-	// Search HNSW index for candidates above similarity threshold
-	// For semantic cache, we only need the first match, so search with k=1
-	// and stop early when finding a match above threshold
-	h.mu.RLock()
-	candidates := h.searchKNNHybridWithThreshold(queryEmbedding, 1, 20, threshold)
-	h.mu.RUnlock()
-
-	// Filter by similarity threshold before fetching from Milvus
-	var qualifiedCandidates []searchResult
-	for _, candidate := range candidates {
-		if candidate.similarity >= threshold {
-			qualifiedCandidates = append(qualifiedCandidates, candidate)
-		}
-	}
-
-	// Map qualified candidates to Milvus IDs (need lock for idMap access)
-	type candidateWithID struct {
-		milvusID   string
-		similarity float32
-		index      int
-	}
-
-	h.mu.RLock()
-	candidatesWithIDs := make([]candidateWithID, 0, len(qualifiedCandidates))
-	for _, candidate := range qualifiedCandidates {
-		if milvusID, ok := h.idMap[candidate.index]; ok {
-			candidatesWithIDs = append(candidatesWithIDs, candidateWithID{
-				milvusID:   milvusID,
-				similarity: candidate.similarity,
-				index:      candidate.index,
-			})
-		}
-	}
-	h.mu.RUnlock()
-
-	if len(candidatesWithIDs) == 0 {
-		atomic.AddInt64(&h.missCount, 1)
-		if len(candidates) > 0 {
-			logging.Debugf("HybridCache.FindSimilarWithThreshold: %d candidates found but none above threshold %.3f",
-				len(candidates), threshold)
-		} else {
-			logging.Debugf("HybridCache.FindSimilarWithThreshold: no candidates found in HNSW")
-		}
-		metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "miss", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	logging.Debugf("HybridCache.FindSimilarWithThreshold: HNSW returned %d candidates, %d above threshold",
-		len(candidates), len(candidatesWithIDs))
-
-	// Fetch document from Milvus for qualified candidates
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Try candidates in order (already sorted by similarity from HNSW)
-	for _, candidate := range candidatesWithIDs {
-		// Fetch document from Milvus by ID (direct lookup by primary key)
-		fetchCtx, fetchCancel := context.WithTimeout(ctx, 2*time.Second)
-		responseBody, err := h.milvusCache.GetByID(fetchCtx, candidate.milvusID)
-		fetchCancel()
-
-		if err != nil {
-			logging.Debugf("HybridCache.FindSimilarWithThreshold: Milvus GetByID failed for %s: %v",
-				candidate.milvusID, err)
-			continue
-		}
-
-		if responseBody != nil {
-			atomic.AddInt64(&h.hitCount, 1)
-			logging.Debugf("HybridCache.FindSimilarWithThreshold: MILVUS HIT - similarity=%.4f (threshold=%.3f)",
-				candidate.similarity, threshold)
-			logging.LogEvent("hybrid_cache_hit", map[string]interface{}{
-				"backend":    "hybrid",
-				"source":     "milvus",
-				"similarity": candidate.similarity,
-				"threshold":  threshold,
-				"model":      model,
-				"latency_ms": time.Since(start).Milliseconds(),
-			})
-			metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "hit_milvus", time.Since(start).Seconds())
-			return responseBody, true, nil
-		}
-	}
-
-	// No match found above threshold
-	atomic.AddInt64(&h.missCount, 1)
-	logging.Debugf("HybridCache.FindSimilarWithThreshold: CACHE MISS - no match above threshold")
-	logging.LogEvent("hybrid_cache_miss", map[string]interface{}{
-		"backend":    "hybrid",
-		"threshold":  threshold,
-		"model":      model,
-		"candidates": len(candidatesWithIDs),
-	})
-	metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "miss", time.Since(start).Seconds())
-
-	return nil, false, nil
 }
 
 // Close releases all resources
@@ -829,341 +598,4 @@ func (h *HybridCache) evictOneUnsafe() {
 		"new_size":    len(h.embeddings),
 		"max_entries": h.maxMemoryEntries,
 	})
-}
-
-// searchResult holds a candidate with its similarity score
-type searchResult struct {
-	index      int
-	similarity float32
-}
-
-// dotProduct calculates the dot product between two vectors
-// Uses SIMD instructions (AVX2/AVX-512) when available for performance
-// Falls back to scalar implementation on non-x86 platforms
-func dotProduct(a, b []float32) float32 {
-	return dotProductSIMD(a, b)
-}
-
-// hybridHNSWAdapter adapts the HNSW index to work with [][]float32 instead of []CacheEntry
-type hybridHNSWAdapter struct {
-	embeddings [][]float32
-}
-
-func (h *hybridHNSWAdapter) getEmbedding(idx int) []float32 {
-	if idx < 0 || idx >= len(h.embeddings) {
-		return nil
-	}
-	return h.embeddings[idx]
-}
-
-func (h *hybridHNSWAdapter) distance(idx1, idx2 int) float32 {
-	emb1 := h.getEmbedding(idx1)
-	emb2 := h.getEmbedding(idx2)
-	if emb1 == nil || emb2 == nil {
-		return 0
-	}
-	return dotProduct(emb1, emb2)
-}
-
-// addNodeHybrid adds a node to the HNSW index (hybrid version)
-func (h *HybridCache) addNodeHybrid(entryIndex int, embedding []float32) {
-	// Lock is already held by caller (mu.Lock())
-
-	level := h.selectLevelHybrid()
-	node := &HNSWNode{
-		entryIndex: entryIndex,
-		neighbors:  make(map[int][]int),
-		maxLayer:   level,
-	}
-
-	for i := 0; i <= level; i++ {
-		node.neighbors[i] = make([]int, 0)
-	}
-
-	h.hnswIndex.nodes = append(h.hnswIndex.nodes, node)
-	h.hnswIndex.nodeIndex[entryIndex] = node // Add to O(1) lookup map
-
-	if h.hnswIndex.entryPoint == -1 {
-		h.hnswIndex.entryPoint = entryIndex
-		h.hnswIndex.maxLayer = level
-		return
-	}
-
-	// Find nearest neighbors at each layer
-	adapter := &hybridHNSWAdapter{embeddings: h.embeddings}
-
-	// Start from top layer
-	currNearest := h.hnswIndex.entryPoint
-	for lc := h.hnswIndex.maxLayer; lc > level; lc-- {
-		// Search for nearest at this layer - Fast O(1) lookup
-		candidates := []int{currNearest}
-		if hn := h.hnswIndex.nodeIndex[currNearest]; hn != nil && hn.neighbors[lc] != nil {
-			for _, neighbor := range hn.neighbors[lc] {
-				if neighbor >= 0 && neighbor < len(h.embeddings) {
-					candidates = append(candidates, neighbor)
-				}
-			}
-		}
-
-		// Find closest
-		bestDist := adapter.distance(entryIndex, currNearest)
-		for _, candidate := range candidates {
-			dist := adapter.distance(entryIndex, candidate)
-			if dist > bestDist {
-				bestDist = dist
-				currNearest = candidate
-			}
-		}
-	}
-
-	// Insert at appropriate layers
-	for lc := level; lc >= 0; lc-- {
-		// Find neighbors at this layer
-		neighbors := h.searchLayerHybrid(embedding, h.hnswIndex.efConstruction, lc, []int{currNearest})
-
-		m := h.hnswIndex.M
-		if lc == 0 {
-			m = h.hnswIndex.Mmax0
-		}
-
-		selectedNeighbors := h.selectNeighborsHybrid(neighbors, m)
-
-		// Add bidirectional links
-		for _, neighborID := range selectedNeighbors {
-			node.neighbors[lc] = append(node.neighbors[lc], neighborID)
-
-			// Add reverse link - Fast O(1) lookup
-			if neighborNode := h.hnswIndex.nodeIndex[neighborID]; neighborNode != nil {
-				if neighborNode.neighbors[lc] == nil {
-					neighborNode.neighbors[lc] = make([]int, 0)
-				}
-				neighborNode.neighbors[lc] = append(neighborNode.neighbors[lc], entryIndex)
-			}
-		}
-	}
-
-	if level > h.hnswIndex.maxLayer {
-		h.hnswIndex.maxLayer = level
-		h.hnswIndex.entryPoint = entryIndex
-	}
-}
-
-// selectLevelHybrid randomly selects a level for a new node
-func (h *HybridCache) selectLevelHybrid() int {
-	// Use exponential decay to select level
-	// Most nodes at layer 0, fewer at higher layers
-	level := 0
-	for level < maxHNSWLayers {
-		if randFloat() > h.hnswIndex.ml {
-			break
-		}
-		level++
-	}
-	return level
-}
-
-// randFloat returns a random float between 0 and 1
-func randFloat() float64 {
-	// Simple random using time-based seed
-	return float64(time.Now().UnixNano()%1000) / 1000.0
-}
-
-// searchLayerHybrid searches for nearest neighbors at a specific layer
-func (h *HybridCache) searchLayerHybrid(query []float32, ef int, layer int, entryPoints []int) []int {
-	// Reuse buffers from pool to reduce allocations
-	buf := getSearchBuffers()
-	defer putSearchBuffers(buf)
-
-	visited := buf.visited
-	candidates := buf.candidates
-	results := buf.results
-
-	for _, ep := range entryPoints {
-		if ep < 0 || ep >= len(h.embeddings) {
-			continue
-		}
-		dist := -dotProduct(query, h.embeddings[ep]) // Negative product so that higher similarity = lower distance
-		candidates.push(ep, dist)
-		results.push(ep, dist)
-		visited[ep] = true
-	}
-
-	for len(candidates.data) > 0 {
-		currentIdx, currentDist := candidates.pop()
-		if len(results.data) > 0 && currentDist > results.data[0].dist {
-			break
-		}
-
-		// Fast O(1) lookup using nodeIndex map
-		currentNode := h.hnswIndex.nodeIndex[currentIdx]
-		if currentNode == nil || currentNode.neighbors[layer] == nil {
-			continue
-		}
-
-		for _, neighborID := range currentNode.neighbors[layer] {
-			if visited[neighborID] || neighborID < 0 || neighborID >= len(h.embeddings) {
-				continue
-			}
-			visited[neighborID] = true
-
-			dist := -dotProduct(query, h.embeddings[neighborID])
-
-			if len(results.data) < ef || dist < results.data[0].dist {
-				candidates.push(neighborID, dist)
-				results.push(neighborID, dist)
-
-				if len(results.data) > ef {
-					results.pop()
-				}
-			}
-		}
-	}
-
-	// Extract IDs from heap and reverse to get correct order
-	resultIDs := make([]int, 0, len(results.data))
-	for len(results.data) > 0 {
-		idx, _ := results.pop()
-		resultIDs = append(resultIDs, idx)
-	}
-
-	// Reverse in place to match similarity order
-	for i, j := 0, len(resultIDs)-1; i < j; i, j = i+1, j-1 {
-		resultIDs[i], resultIDs[j] = resultIDs[j], resultIDs[i]
-	}
-
-	return resultIDs
-}
-
-// selectNeighborsHybrid selects the best neighbors from candidates (hybrid version)
-func (h *HybridCache) selectNeighborsHybrid(candidates []int, m int) []int {
-	if len(candidates) <= m {
-		return candidates
-	}
-
-	// Simple selection: take first M candidates
-	return candidates[:m]
-}
-
-// searchKNNHybridWithThreshold searches for k nearest neighbors with early stopping
-// Stops immediately when finding a match above the similarity threshold
-// This is optimal for semantic cache where we only need the first good match
-func (h *HybridCache) searchKNNHybridWithThreshold(query []float32, k int, ef int, threshold float32) []searchResult {
-	// Lock is already held by caller (mu.RLock())
-
-	if h.hnswIndex.entryPoint == -1 || len(h.embeddings) == 0 {
-		return nil
-	}
-
-	// Search from top layer down to layer 1 for navigation
-	currNearest := []int{h.hnswIndex.entryPoint}
-
-	for lc := h.hnswIndex.maxLayer; lc > 0; lc-- {
-		currNearest = h.searchLayerHybrid(query, 1, lc, currNearest)
-	}
-
-	// Search at layer 0 with early stopping at threshold
-	candidateIndices := h.searchLayerHybridWithEarlyStop(query, ef, 0, currNearest, threshold)
-
-	// Convert to searchResults with similarity scores
-	results := make([]searchResult, 0, len(candidateIndices))
-	for _, idx := range candidateIndices {
-		if idx >= 0 && idx < len(h.embeddings) {
-			similarity := dotProductSIMD(query, h.embeddings[idx])
-
-			// Return immediately if we found a match above threshold
-			if similarity >= threshold {
-				results = append(results, searchResult{
-					index:      idx,
-					similarity: similarity,
-				})
-				return results
-			}
-
-			results = append(results, searchResult{
-				index:      idx,
-				similarity: similarity,
-			})
-		}
-	}
-
-	// Return top k (or fewer if early stopped)
-	if len(results) > k {
-		return results[:k]
-	}
-	return results
-}
-
-// searchLayerHybridWithEarlyStop searches a layer and stops when finding a match above threshold
-func (h *HybridCache) searchLayerHybridWithEarlyStop(query []float32, ef int, layer int, entryPoints []int, threshold float32) []int {
-	buf := getSearchBuffers()
-	defer putSearchBuffers(buf)
-
-	visited := buf.visited
-	candidates := buf.candidates
-	results := buf.results
-
-	for _, ep := range entryPoints {
-		if ep < 0 || ep >= len(h.embeddings) {
-			continue
-		}
-		dist := -dotProductSIMD(query, h.embeddings[ep]) // Negative product so that higher similarity = lower distance
-		candidates.push(ep, dist)
-		results.push(ep, dist)
-		visited[ep] = true
-
-		// Check if this entry point already meets the threshold
-		if -dist >= threshold {
-			return []int{ep}
-		}
-	}
-
-	for len(candidates.data) > 0 {
-		currentIdx, currentDist := candidates.pop()
-		if len(results.data) > 0 && currentDist > results.data[0].dist {
-			break
-		}
-
-		currentNode := h.hnswIndex.nodeIndex[currentIdx]
-		if currentNode == nil || currentNode.neighbors[layer] == nil {
-			continue
-		}
-
-		for _, neighborID := range currentNode.neighbors[layer] {
-			if visited[neighborID] || neighborID < 0 || neighborID >= len(h.embeddings) {
-				continue
-			}
-			visited[neighborID] = true
-
-			similarity := dotProductSIMD(query, h.embeddings[neighborID])
-			dist := -similarity
-
-			// Stop if this neighbor meets the threshold
-			if similarity >= threshold {
-				return []int{neighborID}
-			}
-
-			if len(results.data) < ef || dist < results.data[0].dist {
-				candidates.push(neighborID, dist)
-				results.push(neighborID, dist)
-
-				if len(results.data) > ef {
-					results.pop()
-				}
-			}
-		}
-	}
-
-	// Extract IDs (sorted by similarity)
-	resultIDs := make([]int, 0, len(results.data))
-	for len(results.data) > 0 {
-		idx, _ := results.pop()
-		resultIDs = append(resultIDs, idx)
-	}
-
-	// Reverse in place
-	for i, j := 0, len(resultIDs)-1; i < j; i, j = i+1, j-1 {
-		resultIDs[i], resultIDs[j] = resultIDs[j], resultIDs[i]
-	}
-
-	return resultIDs
 }

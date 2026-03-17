@@ -104,7 +104,7 @@ COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_r
 
 ENV CGO_ENABLED=1
 ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
-RUN mkdir -p bin && cd src/semantic-router && go build -o ../../bin/router cmd/main.go
+RUN mkdir -p bin && cd src/semantic-router && go build -o ../../bin/router ./cmd
 
 FROM quay.io/centos/centos:stream10
 WORKDIR /app

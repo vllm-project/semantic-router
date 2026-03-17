@@ -1,0 +1,66 @@
+version: v0.3
+listeners:
+  - name: http-8888
+    address: 0.0.0.0
+    port: 8888
+    timeout: 300s
+providers:
+  defaults:
+    default_model: qwen3
+  models:
+    - name: qwen3
+      provider_model_id: qwen3
+      backend_refs:
+        - name: llm_katan
+          weight: 1
+          endpoint: 172.17.0.1:8000
+          protocol: http
+routing:
+  modelCards:
+    - name: qwen3
+      modality: text
+  signals:
+    domains:
+      - name: general
+        description: General queries for memory testing
+        mmlu_categories: [other]
+    keywords: []
+  decisions:
+    - name: default_route
+      description: Default route for memory testing
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: general
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
+            mode: insert
+        - type: memory
+          configuration:
+            enabled: true
+            retrieval_limit: 5
+            similarity_threshold: 0.45
+            auto_store: true
+global:
+  stores:
+    memory:
+      enabled: true
+      auto_store: true
+      milvus:
+        address: 172.17.0.1:19530
+        collection: memory_test_ci
+        dimension: 384
+      embedding_model: mmbert
+      default_retrieval_limit: 5
+      default_similarity_threshold: 0.45
+    semantic_cache:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert

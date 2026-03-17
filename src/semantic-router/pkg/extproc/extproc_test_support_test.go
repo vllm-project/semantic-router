@@ -101,7 +101,7 @@ func loadTestPIIMapping(cfg *config.RouterConfig) (*classification.PIIMapping, e
 }
 
 func initTestBERTModel(cfg *config.RouterConfig) error {
-	if err := candle_binding.InitModel(cfg.ModelID, cfg.BertModel.UseCPU); err != nil {
+	if err := candle_binding.InitModel(cfg.BertModelPath, cfg.UseCPU); err != nil {
 		return fmt.Errorf("failed to initialize BERT model: %w", err)
 	}
 	return nil
@@ -129,8 +129,8 @@ func newTestToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error
 	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 		SimilarityThreshold: toolsSimilarityThreshold,
 		Enabled:             toolCfg.Enabled,
-		ModelType:           cfg.HNSWConfig.ModelType,
-		TargetDimension:     cfg.HNSWConfig.TargetDimension,
+		ModelType:           cfg.EmbeddingConfig.ModelType,
+		TargetDimension:     cfg.EmbeddingConfig.TargetDimension,
 	})
 	if !toolCfg.Enabled || toolCfg.ToolsDBPath == "" {
 		return toolsDatabase, nil

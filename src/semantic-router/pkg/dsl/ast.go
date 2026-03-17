@@ -31,12 +31,11 @@ type rawProgram struct {
 
 // rawTopLevel is a union for top-level declarations.
 type rawTopLevel struct {
-	Pos     lexer.Position
-	Signal  *rawSignalDecl  `parser:"  @@"`
-	Route   *rawRouteDecl   `parser:"| @@"`
-	Plugin  *rawPluginDecl  `parser:"| @@"`
-	Backend *rawBackendDecl `parser:"| @@"`
-	Global  *rawGlobalDecl  `parser:"| @@"`
+	Pos    lexer.Position
+	Signal *rawSignalDecl `parser:"  @@"`
+	Route  *rawRouteDecl  `parser:"| @@"`
+	Model  *rawModelDecl  `parser:"| @@"`
+	Plugin *rawPluginDecl `parser:"| @@"`
 }
 
 // rawSignalDecl: SIGNAL <type> <name> { fields... }
@@ -53,6 +52,13 @@ type rawRouteDecl struct {
 	Name string          `parser:"'ROUTE' @(Ident | String)"`
 	Opts []*RouteOpt     `parser:"( '(' @@* ')' )?"`
 	Body []*rawRouteItem `parser:"'{' @@* '}'"`
+}
+
+// rawModelDecl: MODEL <name> { fields... }
+type rawModelDecl struct {
+	Pos    lexer.Position
+	Name   string        `parser:"'MODEL' @(Ident | String)"`
+	Fields []*FieldEntry `parser:"'{' @@* '}'"`
 }
 
 // RouteOpt: key = value inside route header parens
@@ -85,20 +91,6 @@ type rawPluginRef struct {
 	Pos    lexer.Position
 	Name   string        `parser:"@(Ident | String)"`
 	Fields []*FieldEntry `parser:"( '{' @@* '}' )?"`
-}
-
-// rawBackendDecl: BACKEND <type> <name> { fields... }
-type rawBackendDecl struct {
-	Pos         lexer.Position
-	BackendType string        `parser:"'BACKEND' @Ident"`
-	Name        string        `parser:"@(Ident | String)"`
-	Fields      []*FieldEntry `parser:"'{' @@* '}'"`
-}
-
-// rawGlobalDecl: GLOBAL { fields... }
-type rawGlobalDecl struct {
-	Pos    lexer.Position
-	Fields []*FieldEntry `parser:"'GLOBAL' '{' @@* '}'"`
 }
 
 // rawModelList: comma-separated model refs
@@ -187,11 +179,10 @@ type ArrayVal struct {
 
 // Program is the root AST node, representing a complete DSL file.
 type Program struct {
-	Signals  []*SignalDecl
-	Routes   []*RouteDecl
-	Plugins  []*PluginDecl
-	Backends []*BackendDecl
-	Global   *GlobalDecl
+	Signals []*SignalDecl
+	Routes  []*RouteDecl
+	Models  []*ModelDecl
+	Plugins []*PluginDecl
 }
 
 // SignalDecl represents a SIGNAL declaration.
@@ -214,6 +205,13 @@ type RouteDecl struct {
 	Pos         Position
 }
 
+// ModelDecl represents a top-level model catalog entry.
+type ModelDecl struct {
+	Name   string
+	Fields map[string]Value
+	Pos    Position
+}
+
 // PluginDecl represents a top-level PLUGIN template declaration.
 type PluginDecl struct {
 	Name       string
@@ -225,20 +223,6 @@ type PluginDecl struct {
 // PluginRef represents a plugin reference inside a ROUTE.
 type PluginRef struct {
 	Name   string
-	Fields map[string]Value
-	Pos    Position
-}
-
-// BackendDecl represents a BACKEND declaration.
-type BackendDecl struct {
-	BackendType string
-	Name        string
-	Fields      map[string]Value
-	Pos         Position
-}
-
-// GlobalDecl represents the GLOBAL settings block.
-type GlobalDecl struct {
 	Fields map[string]Value
 	Pos    Position
 }
@@ -294,14 +278,13 @@ func (s *SignalRefExpr) GetPos() Position { return s.Pos }
 
 // ModelRef represents a model reference in a ROUTE.
 type ModelRef struct {
-	Model           string
-	Reasoning       *bool
-	Effort          string
-	LoRA            string
-	ParamSize       string
-	Weight          float64
-	ReasoningFamily string
-	Pos             Position
+	Model     string
+	Reasoning *bool
+	Effort    string
+	LoRA      string
+	ParamSize string
+	Weight    float64
+	Pos       Position
 }
 
 // ---------- Algorithm Specification ----------

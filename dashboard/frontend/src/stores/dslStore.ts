@@ -7,26 +7,25 @@
  * - Editor mode switching (DSL / Visual / NL)
  * - Debounced validation on keystroke
  * - Full compile on demand
- * - Decompile (YAML → DSL) for import workflows
+ * - Decompile router YAML → routing-only DSL for import workflows
  * - Format (canonical pretty-print)
  */
 
 import { create } from 'zustand'
 import { wasmBridge } from '@/lib/wasm'
 import {
+  updateModel,
+  addModel as addModelMut,
+  deleteModel as deleteModelMut,
   updateSignal,
   addSignal as addSignalMut,
   deleteSignal as deleteSignalMut,
   updatePlugin,
   addPlugin as addPluginMut,
   deletePlugin as deletePluginMut,
-  updateBackend,
-  addBackend as addBackendMut,
-  deleteBackend as deleteBackendMut,
   deleteRoute as deleteRouteMut,
   updateRoute as updateRouteMut,
   addRoute as addRouteMut,
-  updateGlobal as updateGlobalMut,
 } from '@/lib/dslMutations'
 import type { RouteInput } from '@/lib/dslMutations'
 import type {
@@ -39,6 +38,7 @@ import type {
   DeployStep,
   DeployResult,
   ConfigVersion,
+  DSLFieldObject,
 } from '@/types/dsl'
 
 interface DeployStatusService {
@@ -62,6 +62,7 @@ interface DSLState {
   symbols: SymbolTable | null
   /** Parsed AST from last successful parse (for Visual Builder) */
   ast: ASTProgram | null
+  baseConfigYaml: string
 
   // --- Runtime ---
   wasmReady: boolean
@@ -106,7 +107,7 @@ interface DSLActions {
   /** Parse DSL → AST + diagnostics + symbols (for Visual Builder). */
   parseAST(): void
 
-  /** Decompile YAML → DSL (for import from existing config). */
+  /** Decompile YAML → routing-only DSL (for import from existing config). */
   decompile(yaml: string): string | null
 
   /** Format the current DSL source. */
@@ -118,43 +119,43 @@ interface DSLActions {
   /** Reset editor state to initial values. */
   reset(): void
 
-  /** Load DSL source from external input (e.g., file import). */
+  /** Load DSL source without preserving an imported full-config deploy base. */
   loadDsl(source: string): void
 
-  /** Load YAML and decompile to DSL. */
+  /** Load YAML and decompile only its routing section to DSL. */
   importYaml(yaml: string): void
 
-  /** Fetch current router config YAML and decompile to DSL. */
+  /** Fetch current router config YAML and decompile only its routing section to DSL. */
   loadFromRouter(): Promise<void>
 
   // --- Visual Builder mutations (Phase 2) ---
 
+  /** Update a model's fields in DSL source text, then re-parse AST. */
+  mutateModel(name: string, fields: DSLFieldObject): void
+
+  /** Add a new model to DSL source text, then re-parse AST. */
+  addModel(name: string, fields: DSLFieldObject): void
+
+  /** Delete a model from DSL source text, then re-parse AST. */
+  deleteModel(name: string): void
+
   /** Update a signal's fields in DSL source text, then re-parse AST. */
-  mutateSignal(signalType: string, name: string, fields: Record<string, unknown>): void
+  mutateSignal(signalType: string, name: string, fields: DSLFieldObject): void
 
   /** Add a new signal to DSL source text, then re-parse AST. */
-  addSignal(signalType: string, name: string, fields: Record<string, unknown>): void
+  addSignal(signalType: string, name: string, fields: DSLFieldObject): void
 
   /** Delete a signal from DSL source text, then re-parse AST. */
   deleteSignal(signalType: string, name: string): void
 
   /** Update a plugin declaration's fields, then re-parse AST. */
-  mutatePlugin(name: string, pluginType: string, fields: Record<string, unknown>): void
+  mutatePlugin(name: string, pluginType: string, fields: DSLFieldObject): void
 
   /** Add a new plugin declaration, then re-parse AST. */
-  addPlugin(name: string, pluginType: string, fields: Record<string, unknown>): void
+  addPlugin(name: string, pluginType: string, fields: DSLFieldObject): void
 
   /** Delete a plugin declaration, then re-parse AST. */
   deletePlugin(name: string, pluginType: string): void
-
-  /** Update a backend declaration's fields, then re-parse AST. */
-  mutateBackend(backendType: string, name: string, fields: Record<string, unknown>): void
-
-  /** Add a new backend declaration, then re-parse AST. */
-  addBackend(backendType: string, name: string, fields: Record<string, unknown>): void
-
-  /** Delete a backend declaration, then re-parse AST. */
-  deleteBackend(backendType: string, name: string): void
 
   /** Delete a route declaration, then re-parse AST. */
   deleteRoute(name: string): void
@@ -164,9 +165,6 @@ interface DSLActions {
 
   /** Add a new route, then re-parse AST. */
   addRoute(name: string, input: RouteInput): void
-
-  /** Update the GLOBAL block's fields, then re-parse AST. */
-  mutateGlobal(fields: Record<string, unknown>): void
 
   // --- Deploy actions ---
 
@@ -202,6 +200,7 @@ const initialState: DSLState = {
   diagnostics: [],
   symbols: null,
   ast: null,
+  baseConfigYaml: '',
   wasmReady: false,
   wasmError: null,
   loading: false,
@@ -377,7 +376,13 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 
   loadDsl(source: string) {
-    set({ dslSource: source, dirty: false, diagnostics: [], compileError: null })
+    set({
+      dslSource: source,
+      dirty: false,
+      diagnostics: [],
+      compileError: null,
+      baseConfigYaml: '',
+    })
     // Trigger validation after load
     const state = get()
     if (state.wasmReady && source.trim()) {
@@ -390,7 +395,17 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (!dsl) {
       throw new Error('Failed to decompile YAML')
     }
-    get().loadDsl(dsl)
+    set({
+      dslSource: dsl,
+      dirty: false,
+      diagnostics: [],
+      compileError: null,
+      baseConfigYaml: yaml,
+    })
+    const state = get()
+    if (state.wasmReady && dsl.trim()) {
+      state.validate()
+    }
   },
 
   async loadFromRouter() {
@@ -410,7 +425,30 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
 
   // --- Visual Builder mutations (Phase 2) ---
 
-  mutateSignal(signalType: string, name: string, fields: Record<string, unknown>) {
+  mutateModel(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = updateModel(dslSource, name, fields)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  addModel(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = addModelMut(dslSource, name, fields)
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  deleteModel(name: string) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = deleteModelMut(dslSource, name)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  mutateSignal(signalType: string, name: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
     const newSrc = updateSignal(dslSource, signalType, name, fields)
     if (newSrc === dslSource) return
@@ -418,7 +456,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (wasmReady) get().parseAST()
   },
 
-  addSignal(signalType: string, name: string, fields: Record<string, unknown>) {
+  addSignal(signalType: string, name: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
     const newSrc = addSignalMut(dslSource, signalType, name, fields)
     set({ dslSource: newSrc, dirty: true })
@@ -433,7 +471,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (wasmReady) get().parseAST()
   },
 
-  mutatePlugin(name: string, pluginType: string, fields: Record<string, unknown>) {
+  mutatePlugin(name: string, pluginType: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
     const newSrc = updatePlugin(dslSource, name, pluginType, fields)
     if (newSrc === dslSource) return
@@ -441,7 +479,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (wasmReady) get().parseAST()
   },
 
-  addPlugin(name: string, pluginType: string, fields: Record<string, unknown>) {
+  addPlugin(name: string, pluginType: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
     const newSrc = addPluginMut(dslSource, name, pluginType, fields)
     set({ dslSource: newSrc, dirty: true })
@@ -451,29 +489,6 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   deletePlugin(name: string, pluginType: string) {
     const { dslSource, wasmReady } = get()
     const newSrc = deletePluginMut(dslSource, name, pluginType)
-    if (newSrc === dslSource) return
-    set({ dslSource: newSrc, dirty: true })
-    if (wasmReady) get().parseAST()
-  },
-
-  mutateBackend(backendType: string, name: string, fields: Record<string, unknown>) {
-    const { dslSource, wasmReady } = get()
-    const newSrc = updateBackend(dslSource, backendType, name, fields)
-    if (newSrc === dslSource) return
-    set({ dslSource: newSrc, dirty: true })
-    if (wasmReady) get().parseAST()
-  },
-
-  addBackend(backendType: string, name: string, fields: Record<string, unknown>) {
-    const { dslSource, wasmReady } = get()
-    const newSrc = addBackendMut(dslSource, backendType, name, fields)
-    set({ dslSource: newSrc, dirty: true })
-    if (wasmReady) get().parseAST()
-  },
-
-  deleteBackend(backendType: string, name: string) {
-    const { dslSource, wasmReady } = get()
-    const newSrc = deleteBackendMut(dslSource, backendType, name)
     if (newSrc === dslSource) return
     set({ dslSource: newSrc, dirty: true })
     if (wasmReady) get().parseAST()
@@ -502,18 +517,10 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (wasmReady) get().parseAST()
   },
 
-  mutateGlobal(fields: Record<string, unknown>) {
-    const { dslSource, wasmReady } = get()
-    const newSrc = updateGlobalMut(dslSource, fields)
-    if (newSrc === dslSource) return
-    set({ dslSource: newSrc, dirty: true })
-    if (wasmReady) get().parseAST()
-  },
-
   // --- Deploy actions ---
 
   requestDeploy() {
-    const { yamlOutput, dslSource, wasmReady, dirty } = get()
+    const { yamlOutput, dslSource, wasmReady, dirty, baseConfigYaml } = get()
     if (!wasmReady || !dslSource.trim()) return
 
     // Re-compile if DSL was modified since last compile, or never compiled
@@ -549,7 +556,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     fetch('/api/router/config/deploy/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ yaml }),
+      body: JSON.stringify({ yaml, baseYaml: baseConfigYaml }),
     })
       .then(async (resp) => {
         if (!resp.ok) {
@@ -574,7 +581,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 
   async executeDeploy() {
-    const { yamlOutput, dslSource } = get()
+    const { yamlOutput, dslSource, baseConfigYaml } = get()
     if (!yamlOutput) return
 
     console.log('[dslStore.executeDeploy] Sending deploy: YAML size=%d, DSL size=%d', yamlOutput.length, dslSource.length)
@@ -590,7 +597,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       const resp = await fetch('/api/router/config/deploy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ yaml: yamlOutput, dsl: dslSource }),
+        body: JSON.stringify({ yaml: yamlOutput, dsl: dslSource, baseYaml: baseConfigYaml }),
       })
 
       const responseText = await resp.text()
