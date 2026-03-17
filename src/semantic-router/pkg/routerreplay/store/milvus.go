@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -106,25 +107,7 @@ func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) e
 	}
 
 	if has {
-		// Ensure required vector index exists (Milvus needs one before insert)
-		idxes, idxErr := m.client.DescribeIndex(ctx, m.collectionName, "vector")
-		if idxErr != nil {
-			return fmt.Errorf("failed to describe vector index: %w", idxErr)
-		}
-
-		if len(idxes) == 0 {
-			vectorIdx, idxErr := entity.NewIndexAUTOINDEX(entity.L2)
-			if idxErr != nil {
-				return fmt.Errorf("failed to build vector index: %w", idxErr)
-			}
-
-			if idxErr := m.client.CreateIndex(ctx, m.collectionName, "vector", vectorIdx, false); idxErr != nil {
-				return fmt.Errorf("failed to create vector index: %w", idxErr)
-			}
-		}
-
-		// Load collection into memory
-		return m.client.LoadCollection(ctx, m.collectionName, false)
+		return m.loadExistingCollection(ctx)
 	}
 
 	// Create schema
@@ -201,6 +184,27 @@ func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) e
 	}
 
 	// Load collection
+	return m.client.LoadCollection(ctx, m.collectionName, false)
+}
+
+func (m *MilvusStore) loadExistingCollection(ctx context.Context) error {
+	// Ensure required vector index exists (Milvus needs one before insert)
+	idxes, err := m.client.DescribeIndex(ctx, m.collectionName, "vector")
+	if err != nil {
+		return fmt.Errorf("failed to describe vector index: %w", err)
+	}
+
+	if len(idxes) == 0 {
+		vectorIdx, err := entity.NewIndexAUTOINDEX(entity.L2)
+		if err != nil {
+			return fmt.Errorf("failed to build vector index: %w", err)
+		}
+
+		if err := m.client.CreateIndex(ctx, m.collectionName, "vector", vectorIdx, false); err != nil {
+			return fmt.Errorf("failed to create vector index: %w", err)
+		}
+	}
+
 	return m.client.LoadCollection(ctx, m.collectionName, false)
 }
 
@@ -370,14 +374,9 @@ func (m *MilvusStore) List(ctx context.Context) ([]Record, error) {
 		records = append(records, record)
 	}
 
-	// Sort by timestamp descending
-	for i := 0; i < len(records)-1; i++ {
-		for j := i + 1; j < len(records); j++ {
-			if records[i].Timestamp.Before(records[j].Timestamp) {
-				records[i], records[j] = records[j], records[i]
-			}
-		}
-	}
+	sort.Slice(records, func(i, j int) bool {
+		return records[i].Timestamp.After(records[j].Timestamp)
+	})
 
 	return records, nil
 }
