@@ -77,7 +77,7 @@ const Layout: React.FC<LayoutProps> = ({
   const handleMenuItemSelect = (item: LayoutMenuItem) => {
     if (item.kind === 'config') {
       onConfigSectionChange?.(item.configSection)
-      navigate('/config')
+      navigate(`/config/${item.configSection}`)
     } else {
       navigate(item.to)
     }

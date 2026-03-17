@@ -102,6 +102,8 @@ agent-lint: agent-bootstrap ## Run lint and structure gates for changed files
 	python3 tools/agent/scripts/agent_gate.py run-python-lint --changed-files "$$CSV_FILES" && \
 	echo "Running Go structural lint..." && \
 	python3 tools/agent/scripts/agent_gate.py run-go-lint --base-ref "$(AGENT_BASE_REF)" --changed-files "$$CSV_FILES" && \
+	echo "Running reference config contract lint..." && \
+	python3 tools/agent/scripts/agent_gate.py run-config-contract-lint --changed-files "$$CSV_FILES" && \
 	echo "Running Rust lint..." && \
 	python3 tools/agent/scripts/agent_gate.py run-rust-lint --changed-files "$$CSV_FILES" && \
 	echo "Running structure checks..." && \

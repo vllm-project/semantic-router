@@ -91,7 +91,7 @@ fi
 echo -e "${YELLOW}[3/5]${NC} Starting Semantic Router (ExtProc port 50051)..."
 cd "$ROOT_DIR"
 export LD_LIBRARY_PATH=${ROOT_DIR}/candle-binding/target/release
-nohup ./bin/router -config=config/testing/config.hallucination.yaml > /tmp/router_demo.log 2>&1 &
+nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_demo.log 2>&1 &
 echo $! > /tmp/router_demo.pid
 
 echo "   Waiting for router to initialize models (15s)..."
@@ -111,7 +111,7 @@ if ! command -v func-e >/dev/null 2>&1; then
     echo "   Installing func-e..."
     curl -sL https://func-e.io/install.sh | bash -s -- -b /usr/local/bin
 fi
-nohup func-e run --config-path config/envoy.yaml > /tmp/envoy_demo.log 2>&1 &
+nohup func-e run --config-path deploy/local/envoy.yaml > /tmp/envoy_demo.log 2>&1 &
 echo $! > /tmp/envoy_demo.pid
 sleep 3
 if curl -sf http://127.0.0.1:$ROUTER_PORT/v1/models > /dev/null 2>&1; then

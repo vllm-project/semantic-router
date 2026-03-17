@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useState } from "react";
 
+import type { DSLFieldObject, DSLFieldValue } from "@/types/dsl";
+
 import styles from "./BuilderPage.module.css";
 import { tryParseValue } from "./builderPageFieldControls";
 
 export const GenericFieldsEditor: React.FC<{
-  fields: Record<string, unknown>;
-  onUpdate: (fields: Record<string, unknown>) => void;
+  fields: DSLFieldObject;
+  onUpdate: (fields: DSLFieldObject) => void;
 }> = ({ fields, onUpdate }) => {
-  const [localFields, setLocalFields] = useState<Record<string, unknown>>(
+  const [localFields, setLocalFields] = useState<DSLFieldObject>(
     () => ({ ...fields }),
   );
   const [newKey, setNewKey] = useState("");
@@ -22,7 +24,7 @@ export const GenericFieldsEditor: React.FC<{
 
   const updateField = useCallback((key: string, rawValue: string) => {
     setLocalFields((prev) => {
-      const parsed = tryParseValue(rawValue);
+      const parsed = tryParseValue(rawValue) as DSLFieldValue;
       return { ...prev, [key]: parsed };
     });
   }, []);

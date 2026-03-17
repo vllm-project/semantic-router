@@ -13,27 +13,60 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// createValidTestConfig creates a minimal valid config file for testing
+// createValidTestConfig creates a minimal canonical v0.3 config file for testing.
 func createValidTestConfig(t *testing.T, dir string) string {
 	configPath := filepath.Join(dir, "config.yaml")
 	validConfig := `
-bert_model:
-  model_id: models/all-MiniLM-L12-v2
-  threshold: 0.6
-  use_cpu: true
+version: v0.3
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8801
+providers:
+  defaults:
+    default_model: test-model
+    reasoning_families:
+      qwen3:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+    - name: test-model
+      reasoning_family: qwen3
+      provider_model_id: test-model
+      backend_refs:
+        - name: endpoint1
+          endpoint: 127.0.0.1:8000
+          protocol: http
+          weight: 1
+routing:
+  modelCards:
+    - name: test-model
+  signals:
+    domains:
+      - name: business
+        description: Business and management related queries
+  decisions:
+    - name: default-business
+      description: Route business requests to the default model
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: business
+      modelRefs:
+        - model: test-model
+          use_reasoning: false
+`
+	if err := os.WriteFile(configPath, []byte(validConfig), 0o644); err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
+	}
+	return configPath
+}
 
-classifier:
-  category_model:
-    model_id: models/lora_intent_classifier_bert-base-uncased_model
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json
-  pii_model:
-    model_id: models/lora_pii_detector_bert-base-uncased_model
-    threshold: 0.9
-    use_cpu: true
-    pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
-
+func createLegacyTestConfig(t *testing.T, dir string) string {
+	configPath := filepath.Join(dir, "config.yaml")
+	legacyConfig := `
 categories:
   - name: business
     description: Business and management related queries
@@ -50,10 +83,86 @@ model_config:
   test-model:
     reasoning_family: qwen3
 `
-	if err := os.WriteFile(configPath, []byte(validConfig), 0o644); err != nil {
-		t.Fatalf("Failed to create test config file: %v", err)
+	if err := os.WriteFile(configPath, []byte(legacyConfig), 0o644); err != nil {
+		t.Fatalf("Failed to create legacy test config file: %v", err)
 	}
 	return configPath
+}
+
+func canonicalConfigBody(endpoint string) map[string]interface{} {
+	return map[string]interface{}{
+		"version": "v0.3",
+		"listeners": []map[string]interface{}{
+			{
+				"name":    "public",
+				"address": "0.0.0.0",
+				"port":    8801,
+			},
+		},
+		"providers": map[string]interface{}{
+			"defaults": map[string]interface{}{
+				"default_model": "test-model",
+				"reasoning_families": map[string]interface{}{
+					"qwen3": map[string]interface{}{
+						"type":      "reasoning_effort",
+						"parameter": "reasoning_effort",
+					},
+				},
+			},
+			"models": []map[string]interface{}{
+				{
+					"name":              "test-model",
+					"reasoning_family":  "qwen3",
+					"provider_model_id": "test-model",
+					"backend_refs": []map[string]interface{}{
+						{
+							"name":     "endpoint1",
+							"endpoint": endpoint,
+							"protocol": "http",
+							"weight":   1,
+						},
+					},
+				},
+			},
+		},
+		"routing": map[string]interface{}{
+			"modelCards": []map[string]interface{}{
+				{
+					"name": "test-model",
+				},
+			},
+			"signals": map[string]interface{}{
+				"domains": []map[string]interface{}{
+					{
+						"name":        "business",
+						"description": "Business and management related queries",
+					},
+				},
+			},
+			"decisions": []map[string]interface{}{
+				{
+					"name":        "default-business",
+					"description": "Route business requests to the default model",
+					"priority":    1,
+					"rules": map[string]interface{}{
+						"operator": "OR",
+						"conditions": []map[string]interface{}{
+							{
+								"type": "domain",
+								"name": "business",
+							},
+						},
+					},
+					"modelRefs": []map[string]interface{}{
+						{
+							"model":         "test-model",
+							"use_reasoning": false,
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 func TestConfigHandler(t *testing.T) {
@@ -117,81 +226,34 @@ func TestUpdateConfigHandler(t *testing.T) {
 		expectedError  string
 	}{
 		{
-			name:   "Valid config update with valid IP address",
-			method: http.MethodPost,
-			requestBody: map[string]interface{}{
-				"vllm_endpoints": []map[string]interface{}{
-					{
-						"name":    "endpoint1",
-						"address": "192.168.1.1",
-						"port":    8000,
-						"weight":  1,
-					},
-				},
-				"default_model": "test-model",
-				"model_config": map[string]interface{}{
-					"test-model": map[string]interface{}{
-						"reasoning_family": "qwen3",
-					},
-				},
-			},
+			name:           "Valid canonical config update with valid IP address",
+			method:         http.MethodPost,
+			requestBody:    canonicalConfigBody("192.168.1.1:8000"),
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:   "Valid config - localhost (DNS name now allowed)",
-			method: http.MethodPost,
-			requestBody: map[string]interface{}{
-				"vllm_endpoints": []map[string]interface{}{
-					{
-						"name":    "test",
-						"address": "localhost",
-						"port":    8000,
-					},
-				},
-			},
+			name:           "Valid config - localhost (DNS name now allowed)",
+			method:         http.MethodPost,
+			requestBody:    canonicalConfigBody("localhost:8000"),
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:   "Valid config - domain name (DNS names now allowed)",
-			method: http.MethodPost,
-			requestBody: map[string]interface{}{
-				"vllm_endpoints": []map[string]interface{}{
-					{
-						"name":    "test",
-						"address": "example.com",
-						"port":    8000,
-					},
-				},
-			},
+			name:           "Valid config - domain name (DNS names now allowed)",
+			method:         http.MethodPost,
+			requestBody:    canonicalConfigBody("example.com:8000"),
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:   "Invalid config - protocol prefix in address",
-			method: http.MethodPost,
-			requestBody: map[string]interface{}{
-				"vllm_endpoints": []map[string]interface{}{
-					{
-						"name":    "test",
-						"address": "http://127.0.0.1",
-						"port":    8000,
-					},
-				},
-			},
+			name:           "Invalid config - protocol prefix in address",
+			method:         http.MethodPost,
+			requestBody:    canonicalConfigBody("http://127.0.0.1:8000"),
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "Config validation failed",
 		},
 		{
-			name:   "Invalid config - port in address field",
-			method: http.MethodPost,
-			requestBody: map[string]interface{}{
-				"vllm_endpoints": []map[string]interface{}{
-					{
-						"name":    "test",
-						"address": "127.0.0.1:8000",
-						"port":    8000,
-					},
-				},
-			},
+			name:           "Invalid config - path in backend ref endpoint",
+			method:         http.MethodPost,
+			requestBody:    canonicalConfigBody("127.0.0.1:8000/v1"),
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "Config validation failed",
 		},
@@ -209,24 +271,9 @@ func TestUpdateConfigHandler(t *testing.T) {
 			expectedStatus: http.StatusMethodNotAllowed,
 		},
 		{
-			name:   "PUT request should work",
-			method: http.MethodPut,
-			requestBody: map[string]interface{}{
-				"vllm_endpoints": []map[string]interface{}{
-					{
-						"name":    "endpoint1",
-						"address": "10.0.0.1",
-						"port":    8000,
-						"weight":  1,
-					},
-				},
-				"default_model": "test-model",
-				"model_config": map[string]interface{}{
-					"test-model": map[string]interface{}{
-						"reasoning_family": "qwen3",
-					},
-				},
-			},
+			name:           "PUT request should work",
+			method:         http.MethodPut,
+			requestBody:    canonicalConfigBody("10.0.0.1:8000"),
 			expectedStatus: http.StatusOK,
 		},
 	}
@@ -297,13 +344,11 @@ func TestUpdateConfigHandler_FilePersistence(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
-	// Test 1: Add new top-level key
-	t.Run("Add new top-level key", func(t *testing.T) {
-		createValidTestConfig(t, tempDir) // Reset
+	// Test 1: canonical write should replace any legacy on-disk layout
+	t.Run("Canonical update replaces legacy runtime fields", func(t *testing.T) {
+		createLegacyTestConfig(t, tempDir)
 
-		updateBody := map[string]interface{}{
-			"test_new_key": "test_new_value",
-		}
+		updateBody := canonicalConfigBody("192.168.1.1:8000")
 
 		bodyBytes, _ := json.Marshal(updateBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
@@ -329,33 +374,25 @@ func TestUpdateConfigHandler_FilePersistence(t *testing.T) {
 			t.Fatalf("Failed to parse updated config: %v", err)
 		}
 
-		// Verify new key exists
-		if val, ok := updatedConfig["test_new_key"]; !ok {
-			t.Error("New key 'test_new_key' was not added to config file")
-		} else if val != "test_new_value" {
-			t.Errorf("Expected 'test_new_key' to be 'test_new_value', got '%v'", val)
+		if _, ok := updatedConfig["providers"]; !ok {
+			t.Fatal("Expected canonical providers block to be present")
 		}
-
-		// Verify original values are preserved
-		if val, ok := updatedConfig["default_model"]; !ok || val != "test-model" {
-			t.Errorf("Original 'default_model' was not preserved. Got: %v", val)
+		if _, ok := updatedConfig["routing"]; !ok {
+			t.Fatal("Expected canonical routing block to be present")
+		}
+		if _, ok := updatedConfig["model_config"]; ok {
+			t.Error("Legacy model_config should not be preserved after canonical save")
+		}
+		if _, ok := updatedConfig["vllm_endpoints"]; ok {
+			t.Error("Legacy vllm_endpoints should not be preserved after canonical save")
 		}
 	})
 
-	// Test 2: Update existing nested value
-	t.Run("Update existing nested value", func(t *testing.T) {
+	// Test 2: verify canonical payload is written as sent
+	t.Run("Canonical update writes backend endpoint", func(t *testing.T) {
 		createValidTestConfig(t, tempDir) // Reset
 
-		updateBody := map[string]interface{}{
-			"vllm_endpoints": []map[string]interface{}{
-				{
-					"name":    "endpoint1",
-					"address": "192.168.1.100", // Changed from 127.0.0.1
-					"port":    8000,
-					"weight":  1,
-				},
-			},
-		}
+		updateBody := canonicalConfigBody("192.168.1.100:8000")
 
 		bodyBytes, _ := json.Marshal(updateBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
@@ -381,24 +418,28 @@ func TestUpdateConfigHandler_FilePersistence(t *testing.T) {
 			t.Fatalf("Failed to parse updated config: %v", err)
 		}
 
-		// Verify endpoint was updated
-		endpoints, ok := updatedConfig["vllm_endpoints"].([]interface{})
-		if !ok || len(endpoints) == 0 {
-			t.Fatal("vllm_endpoints not found or empty in updated config")
-		}
-
-		endpoint, ok := endpoints[0].(map[string]interface{})
+		providers, ok := updatedConfig["providers"].(map[string]interface{})
 		if !ok {
-			t.Fatal("First endpoint is not a map")
+			t.Fatal("providers block not found in updated config")
 		}
-
-		if address, ok := endpoint["address"].(string); !ok || address != "192.168.1.100" {
-			t.Errorf("Expected address to be '192.168.1.100', got '%v'", address)
+		models, ok := providers["models"].([]interface{})
+		if !ok || len(models) == 0 {
+			t.Fatal("providers.models not found or empty in updated config")
 		}
-
-		// Verify other values are preserved
-		if val, ok := updatedConfig["default_model"]; !ok || val != "test-model" {
-			t.Errorf("Original 'default_model' was not preserved. Got: %v", val)
+		model, ok := models[0].(map[string]interface{})
+		if !ok {
+			t.Fatal("First provider model is not a map")
+		}
+		backendRefs, ok := model["backend_refs"].([]interface{})
+		if !ok || len(backendRefs) == 0 {
+			t.Fatal("backend_refs not found or empty in updated config")
+		}
+		backend, ok := backendRefs[0].(map[string]interface{})
+		if !ok {
+			t.Fatal("First backend ref is not a map")
+		}
+		if endpoint, ok := backend["endpoint"].(string); !ok || endpoint != "192.168.1.100:8000" {
+			t.Errorf("Expected endpoint to be '192.168.1.100:8000', got '%v'", endpoint)
 		}
 	})
 
@@ -416,9 +457,7 @@ func TestUpdateConfigHandler_FilePersistence(t *testing.T) {
 		// Wait a bit to ensure timestamp difference
 		time.Sleep(100 * time.Millisecond)
 
-		updateBody := map[string]interface{}{
-			"test_timestamp_key": "test_timestamp_value",
-		}
+		updateBody := canonicalConfigBody("127.0.0.1:8001")
 
 		bodyBytes, _ := json.Marshal(updateBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
@@ -449,15 +488,7 @@ func TestUpdateConfigHandler_ValidationIntegration(t *testing.T) {
 	configPath := createValidTestConfig(t, tempDir)
 
 	// Test that validation prevents saving invalid config
-	invalidConfig := map[string]interface{}{
-		"vllm_endpoints": []map[string]interface{}{
-			{
-				"name":    "invalid-endpoint",
-				"address": "http://127.0.0.1", // Invalid: protocol prefix not allowed
-				"port":    8000,
-			},
-		},
-	}
+	invalidConfig := canonicalConfigBody("http://127.0.0.1:8000")
 
 	bodyBytes, _ := json.Marshal(invalidConfig)
 	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
@@ -515,7 +546,7 @@ func TestUpdateConfigHandler_ReadonlyMode(t *testing.T) {
 	}
 }
 
-// TestUpdateRouterDefaultsHandler_ReadonlyMode verifies that readonly mode blocks router defaults updates
+// TestUpdateRouterDefaultsHandler_ReadonlyMode verifies that readonly mode blocks global runtime updates.
 func TestUpdateRouterDefaultsHandler_ReadonlyMode(t *testing.T) {
 	tempDir := t.TempDir()
 
@@ -524,7 +555,7 @@ func TestUpdateRouterDefaultsHandler_ReadonlyMode(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(updateBody)
-	req := httptest.NewRequest(http.MethodPost, "/api/router/config/defaults/update", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/global/update", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -542,12 +573,12 @@ func TestUpdateRouterDefaultsHandler_ReadonlyMode(t *testing.T) {
 		t.Errorf("Expected 'read-only mode' in error message, got: %s", body)
 	}
 
-	// Ensure router-defaults file was not created
-	routerDefaultsPath := filepath.Join(tempDir, ".vllm-sr", "router-defaults.yaml")
-	if _, err := os.Stat(routerDefaultsPath); err == nil {
-		t.Errorf("Expected router-defaults.yaml not to be created in read-only mode")
+	// Ensure no defaults reference file was created as a side effect.
+	defaultsPath := filepath.Join(tempDir, ".vllm-sr", "global-defaults.yaml")
+	if _, err := os.Stat(defaultsPath); err == nil {
+		t.Errorf("Expected global-defaults.yaml not to be created in read-only mode")
 	} else if !os.IsNotExist(err) {
-		t.Errorf("Unexpected error checking router-defaults.yaml: %v", err)
+		t.Errorf("Unexpected error checking global-defaults.yaml: %v", err)
 	}
 }
 

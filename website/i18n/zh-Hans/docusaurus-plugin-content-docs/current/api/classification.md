@@ -576,63 +576,65 @@ API 自动扫描 `./models/` 目录并选择最佳可用模型：
 
 ```yaml
 # config/config.yaml（摘录）
-classifier:
-  category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+global:
+  model_catalog:
+    modules:
+      classifier:
+        domain:
+          model_id: "models/category_classifier_modernbert-base_model"
+          use_modernbert: true
+          threshold: 0.6
+          use_cpu: true
+          category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
 
-categories:
-  - name: tech
-    # 将通用 "tech" 映射到多个 MMLU-Pro 类别
-    mmlu_categories: ["computer science", "engineering"]
-  - name: finance
-    # 将通用 "finance" 映射到 MMLU economics
-    mmlu_categories: ["economics"]
-  - name: politics
-    # 如果省略 mmlu_categories 且名称与 MMLU 类别匹配，
-    # 路由器会自动回退到恒等映射。
-
-decisions:
-  - name: tech
-    description: "路由技术查询"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "tech"
-    modelRefs:
-      - model: phi4
-        use_reasoning: false
-      - model: mistral-small3.1
-        use_reasoning: false
-
-  - name: finance
-    description: "路由财务查询"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "finance"
-    modelRefs:
-      - model: gemma3:27b
-        use_reasoning: false
-
-  - name: politics
-    description: "路由政治查询"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "politics"
-    modelRefs:
-      - model: gemma3:27b
-        use_reasoning: false
+routing:
+  signals:
+    domains:
+      - name: tech
+        # 将通用 "tech" 映射到多个 MMLU-Pro 类别
+        mmlu_categories: ["computer science", "engineering"]
+      - name: finance
+        # 将通用 "finance" 映射到 MMLU economics
+        mmlu_categories: ["economics"]
+      - name: politics
+        # 如果省略 mmlu_categories 且名称与 MMLU 类别匹配，
+        # 路由器会自动回退到恒等映射。
+  decisions:
+    - name: tech
+      description: "路由技术查询"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "tech"
+      modelRefs:
+        - model: phi4
+          use_reasoning: false
+        - model: mistral-small3.1
+          use_reasoning: false
+    - name: finance
+      description: "路由财务查询"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "finance"
+      modelRefs:
+        - model: gemma3:27b
+          use_reasoning: false
+    - name: politics
+      description: "路由政治查询"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "politics"
+      modelRefs:
+        - model: gemma3:27b
+          use_reasoning: false
 ```
 
 注意：

@@ -1,0 +1,10 @@
+routing:
+  signals:
+    preferences:
+      - name: terse_answers
+        description: Users who prefer short, direct responses.
+        examples:
+          - keep it concise
+          - bullet points only
+          - answer in one paragraph
+        threshold: 0.7

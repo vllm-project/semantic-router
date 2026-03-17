@@ -1092,130 +1092,119 @@ flowchart TD
 ### 6.1 全局配置
 
 ```yaml
-# 全局幻觉检测设置
-hallucination:
-  enabled: true
-
-  # 检测模型 (基于 ModernBERT)
-  model_id: "models/lettucedetect-large-modernbert-en-v1"
-  use_cpu: false
-
-  # 默认操作模式
-  default_mode: "standard"  # lightweight | standard | premium
-
-  # 检测阈值 (0.0 - 1.0)
-  # 越低 = 越严格, 越高 = 越宽松
-  threshold: 0.6
-
-  # Lightweight Mode 的警告模板
-  warning_template: |
-    ⚠️ **注意**: 此响应可能包含无法根据提供的上下文完全验证的信息。
-    在采取行动之前，请验证关键事实。
-
-  # Standard Mode 设置
-  standard:
-    max_iterations: 3
-    convergence_threshold: 0.4  # 如果分数低于此值则停止
-
-  # Premium Mode 设置
-  premium:
-    verification_models:
-      - "claude-3-sonnet"
-      - "gpt-4-turbo"
-    judge_model: "llama-3.1-70b"
-    max_iterations: 5
-    require_consensus: true
+global:
+  model_catalog:
+    modules:
+      hallucination_mitigation:
+        enabled: true
+        on_hallucination_detected: annotate
+        fact_check:
+          model_id: "models/mmbert32k-factcheck-classifier-merged"
+          threshold: 0.65
+          use_cpu: false
+          use_mmbert_32k: true
+        detector:
+          model_id: "models/lettucedetect-large-modernbert-en-v1"
+          threshold: 0.6
+          use_cpu: false
+          min_span_length: 2
+          min_span_confidence: 0.6
+          context_window_size: 50
+          enable_nli_filtering: true
+          nli_entailment_threshold: 0.75
+        explainer:
+          model_id: "models/mom-halugate-explainer"
+          threshold: 0.9
+          use_cpu: false
 ```
 
 ### 6.2 每次决策的插件配置
 
 ```yaml
-decisions:
-  # 医疗领域 - 需要最大准确率
-  - name: "medical_assistant"
-    description: "医疗信息查询"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "healthcare"
-        - type: "keyword"
-          name: "medical_terms"
-    modelRefs:
-      - model: "gpt-4-turbo"
-    plugins:
-      - type: "hallucination"
-        configuration:
-          enabled: true
-          mode: "premium"
-          threshold: 0.3           # 非常严格
-          max_iterations: 5
-          require_disclaimer: true
+routing:
+  decisions:
+    # 医疗领域 - 需要最大准确率
+    - name: "medical_assistant"
+      description: "医疗信息查询"
+      priority: 100
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "healthcare"
+          - type: "keyword"
+            name: "medical_terms"
+      modelRefs:
+        - model: "gpt-4-turbo"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: true
+            use_nli: true
+            hallucination_action: "header"
+            unverified_factual_action: "warn"
+            include_hallucination_details: true
 
-  # 金融服务 - 高准确率
-  - name: "financial_advisor"
-    description: "金融分析和建议"
-    priority: 90
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "finance"
-    plugins:
-      - type: "hallucination"
-        configuration:
-          enabled: true
-          mode: "standard"
-          threshold: 0.5
-          max_iterations: 4
+    # 金融服务 - 高准确率
+    - name: "financial_advisor"
+      description: "金融分析和建议"
+      priority: 90
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "finance"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: true
+            use_nli: true
+            hallucination_action: "body"
+            unverified_factual_action: "warn"
 
-  # 一般客户支持 - 平衡
-  - name: "customer_support"
-    description: "一般客户咨询"
-    priority: 50
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "support"
-    plugins:
-      - type: "hallucination"
-        configuration:
-          enabled: true
-          mode: "standard"
-          threshold: 0.6
-          max_iterations: 2
+    # 一般客户支持 - 平衡
+    - name: "customer_support"
+      description: "一般客户咨询"
+      priority: 50
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "support"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: true
+            hallucination_action: "header"
 
-  # 内部工具 - 成本优化
-  - name: "internal_assistant"
-    description: "内部知识库查询"
-    priority: 30
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "internal"
-    plugins:
-      - type: "hallucination"
-        configuration:
-          enabled: true
-          mode: "lightweight"
-          threshold: 0.7
+    # 内部工具 - 成本优化
+    - name: "internal_assistant"
+      description: "内部知识库查询"
+      priority: 30
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "internal"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: true
+            hallucination_action: "warn"
 
-  # 创意写作 - 禁用检测
-  - name: "creative_writing"
-    description: "创意内容生成"
-    priority: 20
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "creative"
-    plugins:
-      - type: "hallucination"
-        configuration:
-          enabled: false  # 这里“幻觉”是一个特性
+    # 创意写作 - 禁用检测
+    - name: "creative_writing"
+      description: "创意内容生成"
+      priority: 20
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "creative"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: false  # 这里“幻觉”是一个特性
 ```
 
 ### 6.3 响应 Header

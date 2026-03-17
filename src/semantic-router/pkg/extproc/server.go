@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -148,6 +149,31 @@ func (s *Server) Stop() {
 	}
 }
 
+func shouldReloadForConfigEvent(cfgFile, cfgDir, eventPath string) bool {
+	if eventPath == "" {
+		return false
+	}
+
+	cleanEventPath := filepath.Clean(eventPath)
+	if cleanEventPath == filepath.Clean(cfgFile) {
+		return true
+	}
+
+	if filepath.Dir(cleanEventPath) != filepath.Clean(cfgDir) {
+		return false
+	}
+
+	base := filepath.Base(cleanEventPath)
+	if base == filepath.Base(cfgFile) {
+		return true
+	}
+	if strings.HasPrefix(base, ".vllm-sr-write-check-") {
+		return false
+	}
+
+	return strings.HasPrefix(base, "..data")
+}
+
 // RouterService is a delegating gRPC service that forwards to the current router implementation.
 type RouterService struct {
 	current atomic.Pointer[OpenAIRouter]
@@ -192,7 +218,9 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 		})
 		return
 	}
-	defer watcher.Close()
+	defer func() {
+		_ = watcher.Close()
+	}()
 
 	cfgFile := s.configPath
 	cfgDir := filepath.Dir(cfgFile)
@@ -260,8 +288,7 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 			}
 			logging.Debugf("[ConfigWatcher] fsnotify event: name=%s, op=%s", ev.Name, ev.Op.String())
 			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove|fsnotify.Chmod) != 0 {
-				// If the event pertains to the config file or directory, trigger debounce
-				if filepath.Base(ev.Name) == filepath.Base(cfgFile) || filepath.Dir(ev.Name) == cfgDir {
+				if shouldReloadForConfigEvent(cfgFile, cfgDir, ev.Name) {
 					if !pending || time.Since(last) > 250*time.Millisecond {
 						pending = true
 						last = time.Now()

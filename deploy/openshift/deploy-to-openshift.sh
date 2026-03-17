@@ -437,10 +437,9 @@ sed -e "s/DYNAMIC_MODEL_A_IP/$MODEL_A_IP/g" \
 
 if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
     yq eval \
-      '.bert_model.use_cpu = false |
-       .prompt_guard.use_cpu = false |
-       .classifier.category_model.use_cpu = false |
-       .classifier.pii_model.use_cpu = false' \
+      '.global.model_catalog.modules.prompt_guard.use_cpu = false |
+       .global.model_catalog.modules.classifier.domain.use_cpu = false |
+       .global.model_catalog.modules.classifier.pii.use_cpu = false' \
       -i "$TEMP_CONFIG"
     log "Patched config for GPU classifier (use_cpu=false)"
 fi

@@ -26,9 +26,9 @@ type VLLMOmniBackend struct {
 
 // NewVLLMOmniBackend creates a new vLLM-Omni backend
 func NewVLLMOmniBackend(cfg *config.ImageGenPluginConfig) (Backend, error) {
-	vllmConfig, ok := cfg.BackendConfig.(*config.VLLMOmniImageGenConfig)
-	if !ok {
-		return nil, fmt.Errorf("invalid backend_config for vllm_omni, expected VLLMOmniImageGenConfig")
+	vllmConfig, err := cfg.VLLMOmniBackendConfig()
+	if err != nil {
+		return nil, fmt.Errorf("invalid backend_config for vllm_omni: %w", err)
 	}
 
 	if vllmConfig.BaseURL == "" {
@@ -97,7 +97,9 @@ func (b *VLLMOmniBackend) GenerateImage(ctx context.Context, req *GenerateReques
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
@@ -140,7 +142,9 @@ func (b *VLLMOmniBackend) HealthCheck(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("health check request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("health check failed with status %d", resp.StatusCode)

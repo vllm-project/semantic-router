@@ -89,7 +89,7 @@ class ComplexityRule(BaseModel):
     """Complexity-based signal configuration using embedding similarity.
 
     The composer field allows filtering based on other signals (e.g., only apply
-    code_complexity when domain is "computer_science"). This is evaluated after
+    code_complexity when domain is "computer science"). This is evaluated after
     all signals are computed in parallel, enabling signal dependencies.
     """
 
@@ -250,10 +250,12 @@ class ModelRef(BaseModel):
 
     model: str
     use_reasoning: Optional[bool] = False
+    reasoning_description: Optional[str] = None
     reasoning_effort: Optional[str] = (
         None  # Model-specific reasoning effort level (low, medium, high)
     )
     lora_name: Optional[str] = None  # LoRA adapter name (if using LoRA)
+    weight: Optional[float] = None
 
 
 class HybridWeightsConfig(BaseModel):
@@ -841,15 +843,6 @@ class Decision(BaseModel):
         populate_by_name = True
 
 
-class Endpoint(BaseModel):
-    """Backend endpoint configuration."""
-
-    name: str
-    weight: int
-    endpoint: str
-    protocol: str = "http"
-
-
 class ModelPricing(BaseModel):
     """Model pricing configuration."""
 
@@ -859,27 +852,36 @@ class ModelPricing(BaseModel):
 
 
 class Model(BaseModel):
-    """Model configuration."""
+    """Provider model binding for canonical providers.models entries."""
 
     name: str
-    endpoints: List[Endpoint]
-    access_key: Optional[str] = None
     reasoning_family: Optional[str] = None
+    provider_model_id: Optional[str] = None
+    backend_refs: List["BackendRef"] = Field(default_factory=list)
     pricing: Optional[ModelPricing] = None
-    # Model parameter size (e.g., "1b", "7b", "70b", "100m")
-    # Used by confidence algorithm to determine model order (smallest first)
-    param_size: Optional[str] = None
-    # API format: "openai" (default) or "anthropic"
-    # When set to "anthropic", the router translates requests to Anthropic Messages API
     api_format: Optional[str] = None
+    external_model_ids: Optional[Dict[str, str]] = None
 
-    # Model selection fields (for RouterDC and quality-based selection)
-    # Description of model capabilities for RouterDC embedding matching
+
+class LoRAAdapter(BaseModel):
+    """LoRA adapter metadata exposed under routing.modelCards[].loras."""
+
+    name: str
     description: Optional[str] = None
-    # Structured capability tags (e.g., ["coding", "math", "reasoning"])
+
+
+class RoutingModel(BaseModel):
+    """Semantic model catalog entry exposed to routing/DSL."""
+
+    name: str
+    param_size: Optional[str] = None
+    context_window_size: Optional[int] = Field(default=None, ge=1)
+    description: Optional[str] = None
     capabilities: Optional[List[str]] = None
-    # Quality score for AutoMix selection (0.0-1.0, default: 0.8)
+    loras: Optional[List[LoRAAdapter]] = None
+    tags: Optional[List[str]] = None
     quality_score: Optional[float] = Field(default=None, ge=0, le=1)
+    modality: Optional[str] = None
 
 
 class ReasoningFamily(BaseModel):
@@ -889,26 +891,72 @@ class ReasoningFamily(BaseModel):
     parameter: str
 
 
-class ExternalModel(BaseModel):
-    """External model configuration."""
+class BackendRef(BaseModel):
+    """Inline backend access details carried under providers.models[].backend_refs."""
 
-    role: str  # "preference", "guardrail", etc.
-    provider: str  # "vllm"
-    endpoint: str  # "host:port"
-    model_name: str
-    timeout_seconds: Optional[int] = 30
-    parser_type: Optional[str] = "json"
-    access_key: Optional[str] = None  # Optional access key for Authorization header
+    name: Optional[str] = None
+    endpoint: Optional[str] = None
+    protocol: str = "http"
+    weight: int = 1
+    type: Optional[str] = None
+    base_url: Optional[str] = None
+    provider: Optional[str] = None
+    auth_header: Optional[str] = None
+    auth_prefix: Optional[str] = None
+    extra_headers: Optional[Dict[str, str]] = None
+    api_version: Optional[str] = None
+    chat_path: Optional[str] = None
+    api_key: Optional[str] = None
+    api_key_env: Optional[str] = None
+
+    def resolve_api_key(self) -> Optional[str]:
+        if self.api_key:
+            return self.api_key
+        if self.api_key_env:
+            import os
+
+            return os.getenv(self.api_key_env)
+        return None
+
+
+class ProviderDefaults(BaseModel):
+    """Provider-wide defaults that should not be mixed into per-model access bindings."""
+
+    default_model: Optional[str] = None
+    reasoning_families: Optional[Dict[str, "ReasoningFamily"]] = Field(
+        default_factory=dict
+    )
+    default_reasoning_effort: Optional[str] = "high"
 
 
 class Providers(BaseModel):
     """Provider configuration."""
 
-    models: List[Model]
-    default_model: Optional[str] = None
-    reasoning_families: Optional[Dict[str, ReasoningFamily]] = {}
-    default_reasoning_effort: Optional[str] = "high"
-    external_models: Optional[List[ExternalModel]] = []
+    defaults: ProviderDefaults = Field(default_factory=ProviderDefaults)
+    models: List[Model] = Field(default_factory=list)
+
+    @property
+    def default_model(self) -> Optional[str]:
+        return self.defaults.default_model
+
+    @property
+    def reasoning_families(self) -> Dict[str, "ReasoningFamily"]:
+        return self.defaults.reasoning_families or {}
+
+    @property
+    def default_reasoning_effort(self) -> Optional[str]:
+        return self.defaults.default_reasoning_effort
+
+
+class Routing(BaseModel):
+    """Canonical routing block."""
+
+    model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
+    signals: Signals = Field(default_factory=Signals)
+    decisions: List[Decision] = Field(default_factory=list)
+
+    class Config:
+        populate_by_name = True
 
 
 class MemoryMilvusConfig(BaseModel):
@@ -924,10 +972,10 @@ class MemoryConfig(BaseModel):
 
     Query rewriting and fact extraction are enabled by adding external_models
     with role="memory_rewrite" or role="memory_extraction".
-    See external_models configuration in providers section for details.
+    See global.model_catalog.external configuration for details.
 
-    The embedding_model is auto-detected from embedding_models if not specified.
-    Priority: bert > mmbert > multimodal > qwen3 > gemma
+    The embedding_model is auto-detected from global.model_catalog.embeddings.semantic if not specified.
+    Priority: mmbert > bert > multimodal > qwen3 > gemma
     """
 
     enabled: bool = True
@@ -935,7 +983,7 @@ class MemoryConfig(BaseModel):
     milvus: Optional[MemoryMilvusConfig] = None
     # Embedding model to use for memory vectors
     # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
-    # If not set, auto-detected from embedding_models section (bert preferred)
+    # If not set, auto-detected from global.model_catalog.embeddings.semantic (mmbert preferred)
     embedding_model: Optional[str] = None
     default_retrieval_limit: int = 5
     default_similarity_threshold: float = 0.70
@@ -962,7 +1010,7 @@ class EmbeddingModelsConfig(BaseModel):
         None,
         description="Path to BERT/MiniLM model (recommended for memory retrieval)",
     )
-    hnsw_config: Optional[Dict[str, Any]] = Field(
+    embedding_config: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Embedding classifier tuning (model_type/target_dimension/etc.)",
     )
@@ -974,24 +1022,28 @@ class EmbeddingModelsConfig(BaseModel):
 
 
 class UserConfig(BaseModel):
-    """Complete user configuration."""
+    """Canonical v0.3 user configuration."""
 
     version: str
-    listeners: List[Listener]
-    signals: Optional[Signals] = None
-    decisions: List[Decision]
-    providers: Providers
-    memory: Optional[MemoryConfig] = None  # Agentic Memory config
-    embedding_models: Optional[EmbeddingModelsConfig] = (
-        None  # Embedding models for memory
-    )
+    listeners: List[Listener] = Field(default_factory=list)
+    providers: Providers = Field(default_factory=Providers)
+    routing: Routing = Field(default_factory=Routing)
+    global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
+    setup: Optional[Dict[str, Any]] = None
+
+    @property
+    def signals(self) -> Signals:
+        return self.routing.signals
+
+    @property
+    def decisions(self) -> List[Decision]:
+        return self.routing.decisions
 
     class Config:
         populate_by_name = True
-        # Allow advanced top-level blocks not yet modeled in the typed CLI schema
-        # (e.g., classifier/prompt_guard overrides) so merger can pass them through.
-        extra = "allow"
+        extra = "forbid"
 
 
 # Resolve forward references for recursive condition trees.
 Condition.model_rebuild()
+Model.model_rebuild()

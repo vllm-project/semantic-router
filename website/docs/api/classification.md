@@ -403,56 +403,41 @@ Process multiple texts in a single request using **high-confidence LoRA models**
 
 **Supported Model Directory Structures:**
 
-**High-Confidence LoRA Models (Recommended):**
+**Current Merged mmBERT Models:**
 
 ```
 ./models/
-├── lora_intent_classifier_bert-base-uncased_model/     # BERT Intent
-├── lora_intent_classifier_roberta-base_model/          # RoBERTa Intent
-├── lora_intent_classifier_modernbert-base_model/       # ModernBERT Intent
-├── lora_pii_detector_bert-base-uncased_model/          # BERT PII Detection
-├── lora_pii_detector_roberta-base_model/               # RoBERTa PII Detection
-├── lora_pii_detector_modernbert-base_model/            # ModernBERT PII Detection
-├── lora_jailbreak_classifier_bert-base-uncased_model/  # BERT Security Detection
-├── lora_jailbreak_classifier_roberta-base_model/       # RoBERTa Security Detection
-└── lora_jailbreak_classifier_modernbert-base_model/    # ModernBERT Security Detection
+├── mmbert32k-intent-classifier-merged/  # Intent classification head
+├── mmbert32k-pii-detector-merged/       # PII classification head
+├── mmbert32k-jailbreak-detector-merged/ # Security classification head
+└── mom-embedding-ultra/                 # Shared similarity model
 ```
 
-**Legacy ModernBERT Models (Fallback):**
-
-```
-./models/
-├── modernbert-base/                                     # Shared encoder (auto-discovered)
-├── category_classifier_modernbert-base_model/           # Intent classification head
-├── pii_classifier_modernbert-base_presidio_token_model/ # PII classification head
-└── jailbreak_classifier_modernbert-base_model/          # Security classification head
-```
-
-> **Auto-Discovery**: The API automatically detects and prioritizes LoRA models for superior performance. BERT and RoBERTa LoRA models deliver 0.99+ confidence scores, significantly outperforming legacy ModernBERT models.
+> **Auto-Discovery**: The API automatically resolves the current merged mmBERT models first and only falls back to older local assets when the canonical models are absent.
 
 ### Model Selection & Performance
 
 **Automatic Model Discovery:**
 The API automatically scans the `./models/` directory and selects the best available models:
 
-1. **Priority Order**: LoRA models > Legacy ModernBERT models
-2. **Architecture Selection**: BERT ≥ RoBERTa > ModernBERT (based on confidence scores)
-3. **Task Optimization**: Each task uses its specialized model for optimal performance
+1. **Priority Order**: Canonical merged mmBERT models > older local assets
+2. **Architecture Selection**: mmBERT-32K first for routing, safety, and PII tasks
+3. **Task Optimization**: Each task uses its specialized merged model for optimal performance
 
 **Performance Characteristics:**
 
 - **Latency**: ~200-400ms per batch (4 texts)
 - **Throughput**: Supports concurrent requests
 - **Memory**: CPU-only inference supported
-- **Accuracy**: 0.99+ confidence for in-domain texts with LoRA models
+- **Accuracy**: High-confidence in-domain predictions with merged mmBERT classifiers
 
 **Model Loading:**
 
 ```
 [INFO] Auto-discovery successful, using unified classifier service
-[INFO] Using LoRA models for batch classification, batch size: 4
-[INFO] Initializing LoRA models: Intent=models/lora_intent_classifier_bert-base-uncased_model, ...
-[INFO] LoRA C bindings initialized successfully
+[INFO] Using merged mmBERT models for batch classification, batch size: 4
+[INFO] Initializing merged models: Intent=models/mmbert32k-intent-classifier-merged, ...
+[INFO] Unified classifier bindings initialized successfully
 ```
 
 ### Error Handling
@@ -512,37 +497,37 @@ Get information about loaded classification models.
       "name": "category_classifier",
       "type": "intent_classification",
       "loaded": true,
-      "model_path": "models/category_classifier_modernbert-base_model",
+      "model_path": "models/mmbert32k-intent-classifier-merged",
       "categories": [
         "business", "law", "psychology", "biology", "chemistry",
         "history", "other", "health", "economics", "math",
         "physics", "computer science", "philosophy", "engineering"
       ],
       "metadata": {
-        "mapping_path": "models/category_classifier_modernbert-base_model/category_mapping.json",
-        "model_type": "modernbert",
-        "threshold": "0.60"
+        "mapping_path": "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+        "model_type": "mmbert_32k",
+        "threshold": "0.50"
       }
     },
     {
       "name": "pii_classifier",
       "type": "pii_detection",
       "loaded": true,
-      "model_path": "models/pii_classifier_modernbert-base_presidio_token_model",
+      "model_path": "models/mmbert32k-pii-detector-merged",
       "metadata": {
-        "mapping_path": "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
-        "model_type": "modernbert_token",
-        "threshold": "0.70"
+        "mapping_path": "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
+        "model_type": "mmbert_32k",
+        "threshold": "0.90"
       }
     },
     {
       "name": "bert_similarity_model",
       "type": "similarity",
       "loaded": true,
-      "model_path": "sentence-transformers/all-MiniLM-L12-v2",
+      "model_path": "models/mom-embedding-ultra",
       "metadata": {
-        "model_type": "sentence_transformer",
-        "threshold": "0.60",
+        "model_type": "mmbert",
+        "threshold": "0.50",
         "use_cpu": "true"
       }
     }
@@ -576,63 +561,65 @@ Example configuration:
 
 ```yaml
 # config/config.yaml (excerpt)
-classifier:
-  category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+global:
+  model_catalog:
+    modules:
+      classifier:
+        domain:
+          model_ref: "domain_classifier"
+          use_mmbert_32k: true
+          threshold: 0.5
+          use_cpu: true
+          category_mapping_path: "models/mmbert32k-intent-classifier-merged/category_mapping.json"
 
-categories:
-  - name: tech
-    # Map generic "tech" to multiple MMLU-Pro categories
-    mmlu_categories: ["computer science", "engineering"]
-  - name: finance
-    # Map generic "finance" to MMLU economics
-    mmlu_categories: ["economics"]
-  - name: politics
-    # If mmlu_categories is omitted and the name matches an MMLU category,
-    # the router falls back to identity mapping automatically.
-
-decisions:
-  - name: tech
-    description: "Route technical queries"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "tech"
-    modelRefs:
-      - model: phi4
-        use_reasoning: false
-      - model: mistral-small3.1
-        use_reasoning: false
-
-  - name: finance
-    description: "Route finance queries"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "finance"
-    modelRefs:
-      - model: gemma3:27b
-        use_reasoning: false
-
-  - name: politics
-    description: "Route politics queries"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "politics"
-    modelRefs:
-      - model: gemma3:27b
-        use_reasoning: false
+routing:
+  signals:
+    domains:
+      - name: tech
+        # Map generic "tech" to multiple MMLU-Pro categories
+        mmlu_categories: ["computer science", "engineering"]
+      - name: finance
+        # Map generic "finance" to MMLU economics
+        mmlu_categories: ["economics"]
+      - name: politics
+        # If mmlu_categories is omitted and the name matches an MMLU category,
+        # the router falls back to identity mapping automatically.
+  decisions:
+    - name: tech
+      description: "Route technical queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "tech"
+      modelRefs:
+        - model: phi4
+          use_reasoning: false
+        - model: mistral-small3.1
+          use_reasoning: false
+    - name: finance
+      description: "Route finance queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "finance"
+      modelRefs:
+        - model: gemma3:27b
+          use_reasoning: false
+    - name: politics
+      description: "Route politics queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "politics"
+      modelRefs:
+        - model: gemma3:27b
+          use_reasoning: false
 ```
 
 Notes:
@@ -776,9 +763,9 @@ Get real-time classification performance metrics.
     "jailbreak_detection": 0.3
   },
   "model_paths": {
-    "intent_classifier": "./models/category_classifier_modernbert-base_model",
-    "pii_detector": "./models/pii_classifier_modernbert-base_model",
-    "jailbreak_guard": "./models/jailbreak_classifier_modernbert-base_model"
+    "intent_classifier": "./models/mmbert32k-intent-classifier-merged",
+    "pii_detector": "./models/mmbert32k-pii-detector-merged",
+    "jailbreak_guard": "./models/mmbert32k-jailbreak-detector-merged"
   },
   "performance_settings": {
     "batch_size": 10,

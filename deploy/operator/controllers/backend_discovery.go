@@ -29,20 +29,24 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // BackendEndpoint represents a discovered backend endpoint
 type BackendEndpoint struct {
-	Name    string
-	Address string
-	Port    int32
-	Weight  int
+	Name     string
+	Address  string
+	Port     int32
+	Protocol string
+	Weight   int
 }
 
-// ModelConfig represents model configuration for vllm
-type ModelConfig struct {
-	ReasoningFamily    string   `yaml:"reasoning_family,omitempty"`
-	PreferredEndpoints []string `yaml:"preferred_endpoints,omitempty"`
+// DiscoveredProviderModel represents one logical model plus its discovered
+// backend bindings and routing metadata.
+type DiscoveredProviderModel struct {
+	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
+	BackendRefs     []routerconfig.CanonicalBackendRef
+	LoRAs           []vllmv1alpha1.LoRAAdapterSpec `yaml:"loras,omitempty"`
 }
 
 // discoverKServeBackend discovers backend from KServe InferenceService
@@ -91,8 +95,9 @@ func discoverKServeBackend(ctx context.Context, c client.Client, namespace strin
 	address := fmt.Sprintf("%s.%s.svc.cluster.local", predictorServiceName, namespace)
 
 	endpoint := &BackendEndpoint{
-		Address: address,
-		Port:    port,
+		Address:  address,
+		Port:     port,
+		Protocol: "https",
 	}
 
 	logger.Info("Discovered KServe backend", "address", address, "port", port)
@@ -136,8 +141,9 @@ func discoverLlamaStackBackend(ctx context.Context, c client.Client, namespace s
 	address := fmt.Sprintf("%s.%s.svc.cluster.local", service.Name, namespace)
 
 	endpoint := &BackendEndpoint{
-		Address: address,
-		Port:    port,
+		Address:  address,
+		Port:     port,
+		Protocol: "http",
 	}
 
 	logger.Info("Discovered Llama Stack backend", "address", address, "port", port, "service", service.Name)
@@ -156,8 +162,9 @@ func discoverServiceBackend(ctx context.Context, serviceBackend *vllmv1alpha1.Se
 	address := fmt.Sprintf("%s.%s.svc.cluster.local", serviceBackend.Name, namespace)
 
 	endpoint := &BackendEndpoint{
-		Address: address,
-		Port:    serviceBackend.Port,
+		Address:  address,
+		Port:     serviceBackend.Port,
+		Protocol: "http",
 	}
 
 	logger.Info("Configured service backend", "address", address, "port", serviceBackend.Port)
@@ -209,16 +216,17 @@ func discoverBackendEndpoint(ctx context.Context, c client.Client, vllmEndpoint 
 	return endpoint, nil
 }
 
-// generateVLLMEndpointsConfig generates YAML configuration for vllm_endpoints and model_config
-func generateVLLMEndpointsConfig(ctx context.Context, c client.Client, vllmEndpoints []vllmv1alpha1.VLLMEndpointSpec, namespace string) (map[string]interface{}, map[string]ModelConfig, error) {
+// discoverVLLMBackends discovers Kubernetes backends and returns the backend
+// refs plus model metadata used to render canonical providers.models[].backend_refs
+// and routing.modelCards.
+func discoverVLLMBackends(ctx context.Context, c client.Client, vllmEndpoints []vllmv1alpha1.VLLMEndpointSpec, namespace string) (map[string]DiscoveredProviderModel, error) {
 	logger := log.FromContext(ctx)
 
 	if len(vllmEndpoints) == 0 {
-		return nil, nil, nil
+		return nil, nil
 	}
 
-	endpoints := make([]map[string]interface{}, 0)
-	modelConfigs := make(map[string]ModelConfig)
+	models := make(map[string]DiscoveredProviderModel)
 
 	for _, vllmEndpoint := range vllmEndpoints {
 		// Discover backend endpoint
@@ -229,34 +237,47 @@ func generateVLLMEndpointsConfig(ctx context.Context, c client.Client, vllmEndpo
 			continue
 		}
 
-		// Add to endpoints list
-		endpointConfig := map[string]interface{}{
-			"name":    endpoint.Name,
-			"address": endpoint.Address,
-			"port":    endpoint.Port,
-			"weight":  endpoint.Weight,
-		}
-		endpoints = append(endpoints, endpointConfig)
-
-		// Add to model configs
 		if vllmEndpoint.Model != "" {
-			modelConfig := ModelConfig{
-				ReasoningFamily:    vllmEndpoint.ReasoningFamily,
-				PreferredEndpoints: []string{endpoint.Name},
+			modelConfig := models[vllmEndpoint.Model]
+			if modelConfig.ReasoningFamily == "" {
+				modelConfig.ReasoningFamily = vllmEndpoint.ReasoningFamily
 			}
-			modelConfigs[vllmEndpoint.Model] = modelConfig
+			modelConfig.BackendRefs = append(modelConfig.BackendRefs, routerconfig.CanonicalBackendRef{
+				Name:     endpoint.Name,
+				Endpoint: fmt.Sprintf("%s:%d", endpoint.Address, endpoint.Port),
+				Protocol: endpoint.Protocol,
+				Weight:   endpoint.Weight,
+			})
+			modelConfig.LoRAs = mergeDiscoveredLoRAs(modelConfig.LoRAs, vllmEndpoint.LoRAs)
+			models[vllmEndpoint.Model] = modelConfig
 		}
 	}
 
-	if len(endpoints) == 0 {
+	if len(models) == 0 {
 		logger.Info("No backend endpoints discovered")
-		return nil, nil, nil
+		return nil, nil
 	}
 
-	vllmEndpointsConfig := map[string]interface{}{
-		"vllm_endpoints": endpoints,
+	logger.Info("Generated discovered backend refs", "count", len(models))
+	return models, nil
+}
+
+func mergeDiscoveredLoRAs(existing []vllmv1alpha1.LoRAAdapterSpec, incoming []vllmv1alpha1.LoRAAdapterSpec) []vllmv1alpha1.LoRAAdapterSpec {
+	if len(incoming) == 0 {
+		return existing
 	}
 
-	logger.Info("Generated vLLM endpoints configuration", "count", len(endpoints))
-	return vllmEndpointsConfig, modelConfigs, nil
+	merged := append([]vllmv1alpha1.LoRAAdapterSpec(nil), existing...)
+	seen := make(map[string]struct{}, len(merged))
+	for _, adapter := range merged {
+		seen[adapter.Name] = struct{}{}
+	}
+	for _, adapter := range incoming {
+		if _, ok := seen[adapter.Name]; ok {
+			continue
+		}
+		merged = append(merged, adapter)
+		seen[adapter.Name] = struct{}{}
+	}
+	return merged
 }
