@@ -290,7 +290,7 @@ class TestServeIntegration(CLITestBase):
         )
 
         # Step 1: Create a lean active config
-        self._create_minimal_config()
+        self.write_minimal_canonical_config()
 
         # Step 2: Try to serve with fake image and never policy
         fake_image = "fake-nonexistent-image:doesnotexist12345"
@@ -323,7 +323,7 @@ class TestServeIntegration(CLITestBase):
 
         try:
             # Step 1: Create a lean active config
-            self._create_minimal_config()
+            self.write_minimal_canonical_config()
 
             # Step 2: Run serve briefly with always policy
             # We use run_cli with a short timeout - if it accepts the flag, test passes
