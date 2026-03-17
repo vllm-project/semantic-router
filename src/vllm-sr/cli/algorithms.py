@@ -1,7 +1,5 @@
 """Algorithm configuration models for multi-model orchestration."""
 
-from typing import Optional
-
 from pydantic import BaseModel, Field
 
 
@@ -9,20 +7,20 @@ class ModelRef(BaseModel):
     """Model reference in decision."""
 
     model: str
-    use_reasoning: Optional[bool] = False
-    reasoning_description: Optional[str] = None
-    reasoning_effort: Optional[str] = (
+    use_reasoning: bool | None = False
+    reasoning_description: str | None = None
+    reasoning_effort: str | None = (
         None  # Model-specific reasoning effort level (low, medium, high)
     )
-    lora_name: Optional[str] = None  # LoRA adapter name (if using LoRA)
-    weight: Optional[float] = None
+    lora_name: str | None = None  # LoRA adapter name (if using LoRA)
+    weight: float | None = None
 
 
 class HybridWeightsConfig(BaseModel):
     """Weights configuration for hybrid confidence method."""
 
-    logprob_weight: Optional[float] = 0.5  # Weight for avg_logprob (default: 0.5)
-    margin_weight: Optional[float] = 0.5  # Weight for margin (default: 0.5)
+    logprob_weight: float | None = 0.5  # Weight for avg_logprob (default: 0.5)
+    margin_weight: float | None = 0.5  # Weight for margin (default: 0.5)
 
 
 class ConfidenceAlgorithmConfig(BaseModel):
@@ -35,19 +33,19 @@ class ConfidenceAlgorithmConfig(BaseModel):
     # - "avg_logprob": Use average logprob across all tokens (default)
     # - "margin": Use average margin between top-1 and top-2 logprobs (more accurate)
     # - "hybrid": Use weighted combination of both methods
-    confidence_method: Optional[str] = "avg_logprob"
+    confidence_method: str | None = "avg_logprob"
 
     # Threshold for escalation (meaning depends on confidence_method)
     # For avg_logprob: negative, closer to 0 = more confident (default: -1.0)
     # For margin: positive, higher = more confident (default: 0.5)
     # For hybrid: 0-1 normalized score (default: 0.5)
-    threshold: Optional[float] = None
+    threshold: float | None = None
 
     # Hybrid weights (only used when confidence_method="hybrid")
-    hybrid_weights: Optional[HybridWeightsConfig] = None
+    hybrid_weights: HybridWeightsConfig | None = None
 
     # Behavior on model call failure: "skip" or "fail"
-    on_error: Optional[str] = "skip"
+    on_error: str | None = "skip"
 
 
 class ConcurrentAlgorithmConfig(BaseModel):
@@ -57,10 +55,10 @@ class ConcurrentAlgorithmConfig(BaseModel):
     """
 
     # Maximum number of concurrent model calls (default: no limit)
-    max_concurrent: Optional[int] = None
+    max_concurrent: int | None = None
 
     # Behavior on model call failure: "skip" or "fail"
-    on_error: Optional[str] = "skip"
+    on_error: str | None = "skip"
 
 
 class ReMoMAlgorithmConfig(BaseModel):
@@ -75,45 +73,45 @@ class ReMoMAlgorithmConfig(BaseModel):
     breadth_schedule: list[int]
 
     # Model distribution strategy: "weighted", "equal", or "first_only"
-    model_distribution: Optional[str] = "weighted"
+    model_distribution: str | None = "weighted"
 
     # Temperature for model calls (default: 1.0 for diverse exploration)
-    temperature: Optional[float] = 1.0
+    temperature: float | None = 1.0
 
     # Whether to include reasoning content in synthesis prompts
-    include_reasoning: Optional[bool] = False
+    include_reasoning: bool | None = False
 
     # Compaction strategy: "full" or "last_n_tokens"
-    compaction_strategy: Optional[str] = "full"
+    compaction_strategy: str | None = "full"
 
     # Number of tokens to keep when using last_n_tokens compaction
-    compaction_tokens: Optional[int] = 1000
+    compaction_tokens: int | None = 1000
 
     # Custom synthesis template (uses default if not provided)
-    synthesis_template: Optional[str] = None
+    synthesis_template: str | None = None
 
     # Maximum concurrent model calls per round
-    max_concurrent: Optional[int] = None
+    max_concurrent: int | None = None
 
     # Behavior on model call failure: "skip" or "fail"
-    on_error: Optional[str] = "skip"
+    on_error: str | None = "skip"
 
     # Random seed for shuffling responses (for reproducibility)
-    shuffle_seed: Optional[int] = 42
+    shuffle_seed: int | None = 42
 
     # Whether to include intermediate responses in the response body
-    include_intermediate_responses: Optional[bool] = True
+    include_intermediate_responses: bool | None = True
 
     # Maximum number of responses to keep per round (for memory efficiency)
-    max_responses_per_round: Optional[int] = None
+    max_responses_per_round: int | None = None
 
 
 class LatencyAwareAlgorithmConfig(BaseModel):
     """Configuration for latency_aware algorithm."""
 
-    tpot_percentile: Optional[int] = None
-    ttft_percentile: Optional[int] = None
-    description: Optional[str] = None
+    tpot_percentile: int | None = None
+    ttft_percentile: int | None = None
+    description: str | None = None
 
 
 # =============================================================================
@@ -133,28 +131,28 @@ class EloSelectionConfig(BaseModel):
     """
 
     # Starting Elo rating for new models (default: 1500)
-    initial_rating: Optional[float] = Field(default=1500.0, ge=0)
+    initial_rating: float | None = Field(default=1500.0, ge=0)
 
     # Controls rating volatility - higher = faster adaptation (default: 32)
-    k_factor: Optional[float] = Field(default=32.0, ge=1, le=100)
+    k_factor: float | None = Field(default=32.0, ge=1, le=100)
 
     # Enable per-category Elo ratings (default: true)
-    category_weighted: Optional[bool] = True
+    category_weighted: bool | None = True
 
     # Time decay for old comparisons (0-1, 0 = no decay)
-    decay_factor: Optional[float] = Field(default=0.0, ge=0, le=1)
+    decay_factor: float | None = Field(default=0.0, ge=0, le=1)
 
     # Minimum comparisons before rating is stable
-    min_comparisons: Optional[int] = Field(default=5, ge=0)
+    min_comparisons: int | None = Field(default=5, ge=0)
 
     # Cost consideration factor (0 = ignore cost)
-    cost_scaling_factor: Optional[float] = Field(default=0.0, ge=0)
+    cost_scaling_factor: float | None = Field(default=0.0, ge=0)
 
     # File path for persisting Elo ratings (optional)
-    storage_path: Optional[str] = None
+    storage_path: str | None = None
 
     # Auto-save interval (e.g., "5m", "30s")
-    auto_save_interval: Optional[str] = "1m"
+    auto_save_interval: str | None = "1m"
 
 
 class RouterDCSelectionConfig(BaseModel):
@@ -164,25 +162,25 @@ class RouterDCSelectionConfig(BaseModel):
     """
 
     # Temperature for softmax scaling (default: 0.07)
-    temperature: Optional[float] = Field(default=0.07, gt=0)
+    temperature: float | None = Field(default=0.07, gt=0)
 
     # Embedding dimension size (default: 768)
-    dimension_size: Optional[int] = Field(default=768, gt=0)
+    dimension_size: int | None = Field(default=768, gt=0)
 
     # Minimum similarity threshold for valid matches
-    min_similarity: Optional[float] = Field(default=0.3, ge=0, le=1)
+    min_similarity: float | None = Field(default=0.3, ge=0, le=1)
 
     # Enable query-side contrastive learning
-    use_query_contrastive: Optional[bool] = False
+    use_query_contrastive: bool | None = False
 
     # Enable model-side contrastive learning
-    use_model_contrastive: Optional[bool] = False
+    use_model_contrastive: bool | None = False
 
     # Require all models to have descriptions
-    require_descriptions: Optional[bool] = False
+    require_descriptions: bool | None = False
 
     # Include capability tags in embeddings
-    use_capabilities: Optional[bool] = False
+    use_capabilities: bool | None = False
 
 
 class AutoMixSelectionConfig(BaseModel):
@@ -192,22 +190,22 @@ class AutoMixSelectionConfig(BaseModel):
     """
 
     # Self-verification confidence threshold (default: 0.7)
-    verification_threshold: Optional[float] = Field(default=0.7, ge=0, le=1)
+    verification_threshold: float | None = Field(default=0.7, ge=0, le=1)
 
     # Maximum escalation attempts (default: 2)
-    max_escalations: Optional[int] = Field(default=2, ge=0)
+    max_escalations: int | None = Field(default=2, ge=0)
 
     # Enable cost-quality tradeoff optimization
-    cost_aware_routing: Optional[bool] = True
+    cost_aware_routing: bool | None = True
 
     # Balance between cost (1.0) and quality (0.0) (default: 0.3)
-    cost_quality_tradeoff: Optional[float] = Field(default=0.3, ge=0, le=1)
+    cost_quality_tradeoff: float | None = Field(default=0.3, ge=0, le=1)
 
     # POMDP discount factor (default: 0.95)
-    discount_factor: Optional[float] = Field(default=0.95, ge=0, le=1)
+    discount_factor: float | None = Field(default=0.95, ge=0, le=1)
 
     # Use logprobs for confidence verification
-    use_logprob_verification: Optional[bool] = True
+    use_logprob_verification: bool | None = True
 
 
 class HybridSelectionConfig(BaseModel):
@@ -217,22 +215,22 @@ class HybridSelectionConfig(BaseModel):
     """
 
     # Weight for Elo rating contribution (0-1)
-    elo_weight: Optional[float] = Field(default=0.3, ge=0, le=1)
+    elo_weight: float | None = Field(default=0.3, ge=0, le=1)
 
     # Weight for RouterDC embedding similarity (0-1)
-    router_dc_weight: Optional[float] = Field(default=0.3, ge=0, le=1)
+    router_dc_weight: float | None = Field(default=0.3, ge=0, le=1)
 
     # Weight for AutoMix POMDP value (0-1)
-    automix_weight: Optional[float] = Field(default=0.2, ge=0, le=1)
+    automix_weight: float | None = Field(default=0.2, ge=0, le=1)
 
     # Weight for cost consideration (0-1)
-    cost_weight: Optional[float] = Field(default=0.2, ge=0, le=1)
+    cost_weight: float | None = Field(default=0.2, ge=0, le=1)
 
     # Quality gap threshold for escalation
-    quality_gap_threshold: Optional[float] = Field(default=0.1, ge=0, le=1)
+    quality_gap_threshold: float | None = Field(default=0.1, ge=0, le=1)
 
     # Normalize scores before combination
-    normalize_scores: Optional[bool] = True
+    normalize_scores: bool | None = True
 
 
 # =============================================================================
@@ -251,19 +249,19 @@ class ThompsonSamplingConfig(BaseModel):
     """
 
     # Prior alpha for Beta distribution (default: 1.0)
-    prior_alpha: Optional[float] = Field(default=1.0, gt=0)
+    prior_alpha: float | None = Field(default=1.0, gt=0)
 
     # Prior beta for Beta distribution (default: 1.0)
-    prior_beta: Optional[float] = Field(default=1.0, gt=0)
+    prior_beta: float | None = Field(default=1.0, gt=0)
 
     # Enable per-user personalization
-    per_user: Optional[bool] = False
+    per_user: bool | None = False
 
     # Decay factor for old observations (0 = no decay)
-    decay_factor: Optional[float] = Field(default=0.0, ge=0, le=1)
+    decay_factor: float | None = Field(default=0.0, ge=0, le=1)
 
     # Minimum samples before exploitation (default: 10)
-    min_samples: Optional[int] = Field(default=10, ge=0)
+    min_samples: int | None = Field(default=10, ge=0)
 
 
 class GMTRouterConfig(BaseModel):
@@ -273,19 +271,19 @@ class GMTRouterConfig(BaseModel):
     """
 
     # Number of GNN layers (default: 2)
-    num_layers: Optional[int] = Field(default=2, ge=1, le=5)
+    num_layers: int | None = Field(default=2, ge=1, le=5)
 
     # Hidden dimension size (default: 64)
-    hidden_dim: Optional[int] = Field(default=64, gt=0)
+    hidden_dim: int | None = Field(default=64, gt=0)
 
     # Attention heads (default: 4)
-    num_heads: Optional[int] = Field(default=4, ge=1)
+    num_heads: int | None = Field(default=4, ge=1)
 
     # Enable user preference learning
-    learn_preferences: Optional[bool] = True
+    learn_preferences: bool | None = True
 
     # Path to pre-trained model weights (optional)
-    model_path: Optional[str] = None
+    model_path: str | None = None
 
 
 class RouterR1Config(BaseModel):
@@ -295,19 +293,19 @@ class RouterR1Config(BaseModel):
     """
 
     # Router LLM endpoint (required for full functionality)
-    router_endpoint: Optional[str] = None
+    router_endpoint: str | None = None
 
     # Maximum think iterations (default: 3)
-    max_iterations: Optional[int] = Field(default=3, ge=1, le=10)
+    max_iterations: int | None = Field(default=3, ge=1, le=10)
 
     # Temperature for router LLM (default: 0.7)
-    temperature: Optional[float] = Field(default=0.7, ge=0, le=2)
+    temperature: float | None = Field(default=0.7, ge=0, le=2)
 
     # Enable chain-of-thought reasoning
-    use_cot: Optional[bool] = True
+    use_cot: bool | None = True
 
     # Fallback to static if router unavailable
-    fallback_to_static: Optional[bool] = True
+    fallback_to_static: bool | None = True
 
 
 class AlgorithmConfig(BaseModel):
@@ -341,21 +339,21 @@ class AlgorithmConfig(BaseModel):
     type: str
 
     # Looper algorithm configurations
-    confidence: Optional[ConfidenceAlgorithmConfig] = None
-    concurrent: Optional[ConcurrentAlgorithmConfig] = None
-    remom: Optional[ReMoMAlgorithmConfig] = None
-    latency_aware: Optional[LatencyAwareAlgorithmConfig] = None
+    confidence: ConfidenceAlgorithmConfig | None = None
+    concurrent: ConcurrentAlgorithmConfig | None = None
+    remom: ReMoMAlgorithmConfig | None = None
+    latency_aware: LatencyAwareAlgorithmConfig | None = None
 
     # Selection algorithm configurations (from PR #1089, #1104)
-    elo: Optional[EloSelectionConfig] = None
-    router_dc: Optional[RouterDCSelectionConfig] = None
-    automix: Optional[AutoMixSelectionConfig] = None
-    hybrid: Optional[HybridSelectionConfig] = None
+    elo: EloSelectionConfig | None = None
+    router_dc: RouterDCSelectionConfig | None = None
+    automix: AutoMixSelectionConfig | None = None
+    hybrid: HybridSelectionConfig | None = None
 
     # RL-driven selection algorithms (from PR #1196, issue #994)
-    thompson: Optional[ThompsonSamplingConfig] = None
-    gmtrouter: Optional[GMTRouterConfig] = None
-    router_r1: Optional[RouterR1Config] = None
+    thompson: ThompsonSamplingConfig | None = None
+    gmtrouter: GMTRouterConfig | None = None
+    router_r1: RouterR1Config | None = None
 
     # Behavior on algorithm failure: "skip" or "fail"
-    on_error: Optional[str] = "skip"
+    on_error: str | None = "skip"

@@ -65,16 +65,16 @@ class TestEloSelectionConfig:
     def test_default_values(self):
         """Test Elo config default values."""
         config = EloSelectionConfig()
-        assert config.initial_rating == 1500.0  # noqa: PLR2004
-        assert config.k_factor == 32.0  # noqa: PLR2004
+        assert config.initial_rating == 1500.0
+        assert config.k_factor == 32.0
         assert config.category_weighted is True
         assert config.decay_factor == 0.0
-        assert config.min_comparisons == 5  # noqa: PLR2004
+        assert config.min_comparisons == 5
 
     def test_custom_k_factor(self):
         """Test Elo config with custom K-factor."""
         config = EloSelectionConfig(k_factor=64.0)
-        assert config.k_factor == 64.0  # noqa: PLR2004
+        assert config.k_factor == 64.0
 
     def test_k_factor_validation(self):
         """Test that K-factor must be within valid range."""
@@ -96,9 +96,9 @@ class TestRouterDCSelectionConfig:
     def test_default_values(self):
         """Test RouterDC config default values."""
         config = RouterDCSelectionConfig()
-        assert config.temperature == 0.07  # noqa: PLR2004
-        assert config.dimension_size == 768  # noqa: PLR2004
-        assert config.min_similarity == 0.3  # noqa: PLR2004
+        assert config.temperature == 0.07
+        assert config.dimension_size == 768
+        assert config.min_similarity == 0.3
 
     def test_temperature_validation(self):
         """Test that temperature must be positive."""
@@ -108,7 +108,7 @@ class TestRouterDCSelectionConfig:
     def test_similarity_threshold(self):
         """Test min_similarity range validation."""
         config = RouterDCSelectionConfig(min_similarity=0.5)
-        assert config.min_similarity == 0.5  # noqa: PLR2004
+        assert config.min_similarity == 0.5
 
         with pytest.raises(PydanticValidationError):
             RouterDCSelectionConfig(min_similarity=1.5)  # Above 1.0
@@ -120,16 +120,16 @@ class TestAutoMixSelectionConfig:
     def test_default_values(self):
         """Test AutoMix config default values."""
         config = AutoMixSelectionConfig()
-        assert config.verification_threshold == 0.7  # noqa: PLR2004
-        assert config.max_escalations == 2  # noqa: PLR2004
+        assert config.verification_threshold == 0.7
+        assert config.max_escalations == 2
         assert config.cost_aware_routing is True
-        assert config.cost_quality_tradeoff == 0.3  # noqa: PLR2004
-        assert config.discount_factor == 0.95  # noqa: PLR2004
+        assert config.cost_quality_tradeoff == 0.3
+        assert config.discount_factor == 0.95
 
     def test_verification_threshold_range(self):
         """Test that verification threshold is within 0-1."""
         config = AutoMixSelectionConfig(verification_threshold=0.9)
-        assert config.verification_threshold == 0.9  # noqa: PLR2004
+        assert config.verification_threshold == 0.9
 
         with pytest.raises(PydanticValidationError):
             AutoMixSelectionConfig(verification_threshold=1.5)
@@ -141,10 +141,10 @@ class TestHybridSelectionConfig:
     def test_default_weights(self):
         """Test Hybrid config default weights."""
         config = HybridSelectionConfig()
-        assert config.elo_weight == 0.3  # noqa: PLR2004
-        assert config.router_dc_weight == 0.3  # noqa: PLR2004
-        assert config.automix_weight == 0.2  # noqa: PLR2004
-        assert config.cost_weight == 0.2  # noqa: PLR2004
+        assert config.elo_weight == 0.3
+        assert config.router_dc_weight == 0.3
+        assert config.automix_weight == 0.2
+        assert config.cost_weight == 0.2
 
     def test_custom_weights(self):
         """Test Hybrid config with custom weights."""
@@ -161,7 +161,7 @@ class TestHybridSelectionConfig:
             + config.automix_weight
             + config.cost_weight
         )
-        assert abs(total - 1.0) < 0.01  # noqa: PLR2004
+        assert abs(total - 1.0) < 0.01
 
 
 class TestThompsonSamplingConfig:
@@ -174,7 +174,7 @@ class TestThompsonSamplingConfig:
         assert config.prior_beta == 1.0
         assert config.per_user is False
         assert config.decay_factor == 0.0
-        assert config.min_samples == 10  # noqa: PLR2004
+        assert config.min_samples == 10
 
     def test_prior_validation(self):
         """Test that priors must be positive."""
@@ -193,9 +193,9 @@ class TestGMTRouterConfig:
     def test_default_values(self):
         """Test GMTRouter config default values."""
         config = GMTRouterConfig()
-        assert config.num_layers == 2  # noqa: PLR2004
-        assert config.hidden_dim == 64  # noqa: PLR2004
-        assert config.num_heads == 4  # noqa: PLR2004
+        assert config.num_layers == 2
+        assert config.hidden_dim == 64
+        assert config.num_heads == 4
         assert config.learn_preferences is True
 
     def test_num_layers_validation(self):
@@ -219,8 +219,8 @@ class TestRouterR1Config:
         """Test Router-R1 config default values."""
         config = RouterR1Config()
         assert config.router_endpoint is None
-        assert config.max_iterations == 3  # noqa: PLR2004
-        assert config.temperature == 0.7  # noqa: PLR2004
+        assert config.max_iterations == 3
+        assert config.temperature == 0.7
         assert config.use_cot is True
         assert config.fallback_to_static is True
 
@@ -272,8 +272,8 @@ class TestAlgorithmConfigIntegration:
             elo=EloSelectionConfig(k_factor=48.0, min_comparisons=10),
         )
         assert config.type == "elo"
-        assert config.elo.k_factor == 48.0  # noqa: PLR2004
-        assert config.elo.min_comparisons == 10  # noqa: PLR2004
+        assert config.elo.k_factor == 48.0
+        assert config.elo.min_comparisons == 10
 
     def test_rl_driven_algorithm_config(self):
         """Test AlgorithmConfig with Thompson Sampling (RL-driven)."""
@@ -283,7 +283,7 @@ class TestAlgorithmConfigIntegration:
         )
         assert config.type == "thompson"
         assert config.thompson.per_user is True
-        assert config.thompson.min_samples == 20  # noqa: PLR2004
+        assert config.thompson.min_samples == 20
 
     def test_gmtrouter_algorithm_config(self):
         """Test AlgorithmConfig with GMTRouter."""
@@ -292,8 +292,8 @@ class TestAlgorithmConfigIntegration:
             gmtrouter=GMTRouterConfig(num_layers=3, hidden_dim=128),
         )
         assert config.type == "gmtrouter"
-        assert config.gmtrouter.num_layers == 3  # noqa: PLR2004
-        assert config.gmtrouter.hidden_dim == 128  # noqa: PLR2004
+        assert config.gmtrouter.num_layers == 3
+        assert config.gmtrouter.hidden_dim == 128
 
     def test_router_r1_algorithm_config(self):
         """Test AlgorithmConfig with Router-R1."""
@@ -306,7 +306,7 @@ class TestAlgorithmConfigIntegration:
         )
         assert config.type == "router_r1"
         assert config.router_r1.router_endpoint == "http://localhost:8080"
-        assert config.router_r1.max_iterations == 5  # noqa: PLR2004
+        assert config.router_r1.max_iterations == 5
 
     def test_remom_algorithm_config(self):
         """Test AlgorithmConfig with ReMoM looper."""
@@ -339,4 +339,4 @@ class TestAlgorithmConfigIntegration:
             + config.hybrid.automix_weight
             + config.hybrid.cost_weight
         )
-        assert abs(total - 1.0) < 0.01  # noqa: PLR2004
+        assert abs(total - 1.0) < 0.01
