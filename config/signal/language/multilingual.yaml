@@ -1,0 +1,7 @@
+routing:
+  signals:
+    language:
+      - name: zh
+        description: Chinese-language requests.
+      - name: es
+        description: Spanish-language requests.

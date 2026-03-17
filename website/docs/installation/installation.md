@@ -145,14 +145,11 @@ vllm-sr stop
 If you prefer to edit YAML directly instead of using the dashboard setup flow:
 
 ```bash
-# Generate a lean advanced sample in the current directory
-vllm-sr init
-
-# Validate it before serving
-vllm-sr validate
+# Validate your canonical config before serving
+vllm-sr validate config.yaml
 ```
 
-`vllm-sr init` is optional. It generates an advanced sample and `.vllm-sr/router-defaults.yaml` for YAML-first users. `router-defaults.yaml` contains advanced runtime defaults and is not required for first-run dashboard setup.
+`vllm-sr init` was removed in v0.3. Create `config.yaml` directly with the canonical `version/listeners/providers/routing/global` layout, or migrate an older file with `vllm-sr config migrate --config old-config.yaml`.
 
 ### HuggingFace Settings
 
@@ -210,23 +207,23 @@ See the **[Kubernetes Operator Guide](k8s/operator)** for complete documentation
 
 ### Other Kubernetes Deployment Options
 
-- **[Istio Integration](k8s/istio.md)** - Service mesh deployment
-- **[AI Gateway](k8s/ai-gateway.md)** - Gateway API integration
-- **[Production Stack](k8s/production-stack.md)** - Complete production setup
-- **[Dynamo](k8s/dynamo.md)** - Dynamic configuration management
+- **[Istio Integration](k8s/istio)** - Service mesh deployment
+- **[AI Gateway](k8s/ai-gateway)** - Gateway API integration
+- **[Production Stack](k8s/production-stack)** - Complete production setup
+- **[Dynamo](k8s/dynamo)** - Dynamic configuration management
 
 ## Docker Compose
 
 For local development and testing:
 
-- **[Docker Compose](docker-compose.md)** - Quick local deployment
+- **[Docker Compose](docker-compose)** - Quick local deployment
 
 ## Next Steps
 
-- **[Configuration Guide](configuration.md)** - Advanced routing and signal configuration
+- **[Configuration Guide](configuration)** - Advanced routing and signal configuration
 - **[Kubernetes Operator](k8s/operator)** - Production Kubernetes deployment
-- **[API Documentation](../api/router.md)** - Complete API reference
-- **[Tutorials](../tutorials/intelligent-route/keyword-routing.md)** - Learn by example
+- **[API Documentation](../api/router)** - Complete API reference
+- **[Tutorials](../tutorials/signal/overview)** - Learn by example
 
 ## Getting Help
 

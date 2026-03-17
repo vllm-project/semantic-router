@@ -7,9 +7,9 @@ from pathlib import Path
 
 from cli.docker_runtime import get_container_runtime
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 def docker_container_status(container_name):

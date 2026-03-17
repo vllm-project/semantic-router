@@ -653,7 +653,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	// Add keyword embedding classifier if configured
 	if len(cfg.EmbeddingRules) > 0 {
 		// Get optimization config from embedding models configuration
-		optConfig := cfg.EmbeddingModels.HNSWConfig
+		optConfig := cfg.EmbeddingConfig
 		if strings.EqualFold(strings.TrimSpace(optConfig.ModelType), "multimodal") {
 			if err := initMultiModalIfNeeded("embedding_rules with model_type=multimodal"); err != nil {
 				return nil, err
@@ -678,7 +678,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	// Add complexity classifier if configured
 	if len(cfg.ComplexityRules) > 0 {
 		// Get model type from embedding models configuration (reuse same model as embedding classifier)
-		modelType := cfg.EmbeddingModels.HNSWConfig.ModelType
+		modelType := cfg.EmbeddingConfig.ModelType
 		if modelType == "" {
 			modelType = "qwen3" // Default to qwen3
 		}
@@ -707,7 +707,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	// Add contrastive jailbreak classifiers for rules with method == "contrastive"
 	{
 		contrastiveClassifiers := make(map[string]*ContrastiveJailbreakClassifier)
-		defaultModelType := cfg.EmbeddingModels.HNSWConfig.ModelType
+		defaultModelType := cfg.EmbeddingConfig.ModelType
 		for _, rule := range cfg.JailbreakRules {
 			if rule.Method != "contrastive" {
 				continue

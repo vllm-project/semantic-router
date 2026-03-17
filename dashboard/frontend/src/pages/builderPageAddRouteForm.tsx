@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 
 import ExpressionBuilder from "@/components/ExpressionBuilder";
+import type { DSLFieldObject } from "@/types/dsl";
 import {
   ALGORITHM_DESCRIPTIONS,
   ALGORITHM_TYPES,
@@ -128,7 +129,7 @@ const AddRouteForm: React.FC<{
   }, []);
 
   const updatePluginFields = useCallback(
-    (pluginName: string, fields: Record<string, unknown>) => {
+    (pluginName: string, fields: DSLFieldObject) => {
       setPlugins((prev) =>
         prev.map((p) => (p.name === pluginName ? { ...p, fields } : p)),
       );

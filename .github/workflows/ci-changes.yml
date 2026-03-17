@@ -178,11 +178,16 @@ jobs:
               - 'deploy/kubernetes/routing-strategies/**'
             e2e_production_stack:
               - 'e2e/profiles/production-stack/**'
+              - 'deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml'
+              - 'deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml'
             e2e_response_api:
               - 'e2e/profiles/response-api/**'
+              - 'e2e/profiles/response-api-redis/**'
+              - 'e2e/profiles/response-api-redis-cluster/**'
+              - 'deploy/kubernetes/response-api/**'
             e2e_response_api_redis:
               - 'e2e/profiles/response-api-redis/**'
-              - 'deploy/kubernetes/response-api/**'
+              - 'deploy/kubernetes/response-api/redis.yaml'
             e2e_response_api_redis_cluster:
               - 'e2e/profiles/response-api-redis-cluster/**'
               - 'deploy/kubernetes/response-api/redis-cluster.yaml'
@@ -193,12 +198,12 @@ jobs:
               - 'ml-binding/**'
             e2e_multi_endpoint:
               - 'e2e/profiles/multi-endpoint/**'
-              - 'config/testing/config.multi-endpoint.yaml'
+              - 'e2e/config/config.multi-endpoint.yaml'
               - 'scripts/multi-endpoint/**'
             e2e_authz_rbac:
               - 'e2e/profiles/authz-rbac/**'
-              - 'config/testing/config.authz-rbac.yaml'
-              - 'config/testing/authz-profile-*.yaml'
+              - 'e2e/config/config.authz-rbac.yaml'
+              - 'e2e/config/authz-profile-*.yaml'
               - 'src/semantic-router/pkg/classification/authz*.go'
               - 'src/semantic-router/pkg/authz/**'
             e2e_streaming:

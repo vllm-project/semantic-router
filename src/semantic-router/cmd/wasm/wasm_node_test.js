@@ -67,15 +67,18 @@ async function main() {
 
   // Test: Compile valid DSL
   console.log("\n=== Test: signalCompile (valid DSL) ===");
-  const dslSource = `SIGNAL keyword intent { operator: "any" keywords: ["hello", "world"] threshold: 0.8 }
+  const dslSource = `MODEL qwen {
+  modality: "text"
+  capabilities: ["chat"]
+}
+
+SIGNAL keyword intent { operator: "any" keywords: ["hello", "world"] threshold: 0.8 }
 
 ROUTE r1 {
   PRIORITY 1
   WHEN keyword("intent")
   MODEL "qwen"
-}
-
-BACKEND vllm_endpoint b1 { address: "127.0.0.1" port: 8000 }`;
+}`;
 
   const t0 = performance.now();
   const compileRaw = globalThis.signalCompile(dslSource);
@@ -111,8 +114,7 @@ ROUTE r1 {
   PRIORITY 1
   WHEN keyword("undefined_ref")
   MODEL "m1"
-}
-BACKEND vllm_endpoint b1 { address: "127.0.0.1" port: 8000 }`;
+}`;
   const badValidate = JSON.parse(globalThis.signalValidate(badDsl));
   assert(badValidate.diagnostics.length > 0, "Should have diagnostics for bad input");
 
@@ -122,6 +124,7 @@ BACKEND vllm_endpoint b1 { address: "127.0.0.1" port: 8000 }`;
   const decompileResult = JSON.parse(decompileRaw);
   assert(decompileResult.dsl !== "", "Decompiled DSL should not be empty");
   assert(!decompileResult.error, "Decompile should not error: " + decompileResult.error);
+  assert(decompileResult.dsl.includes("MODEL qwen"), "Decompiled DSL should contain MODEL keyword");
   assert(decompileResult.dsl.includes("SIGNAL"), "Decompiled DSL should contain SIGNAL keyword");
   assert(decompileResult.dsl.includes("ROUTE"), "Decompiled DSL should contain ROUTE keyword");
 

@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -74,7 +75,7 @@ func TestSampleCRValidation(t *testing.T) {
 			}
 
 			// Validate the CR using webhook validation
-			_, err = sr.ValidateCreate()
+			_, err = sr.ValidateCreate(context.Background(), &sr)
 			if err != nil {
 				t.Errorf("Sample CR validation failed: %v", err)
 			}
@@ -87,16 +88,16 @@ func TestSampleCRValidation(t *testing.T) {
 					if sr.Spec.Config.EmbeddingModels.MmBertModelPath == "" {
 						t.Error("mmbert sample should have mmbert_model_path set")
 					}
-					if sr.Spec.Config.EmbeddingModels.HNSWConfig == nil {
-						t.Error("mmbert sample should have hnsw_config")
+					if sr.Spec.Config.EmbeddingModels.EmbeddingConfig == nil {
+						t.Error("mmbert sample should have embedding_config")
 					} else {
-						if sr.Spec.Config.EmbeddingModels.HNSWConfig.ModelType != "mmbert" {
-							t.Errorf("mmbert sample hnsw_config model_type = %v, want mmbert", sr.Spec.Config.EmbeddingModels.HNSWConfig.ModelType)
+						if sr.Spec.Config.EmbeddingModels.EmbeddingConfig.ModelType != "mmbert" {
+							t.Errorf("mmbert sample embedding_config model_type = %v, want mmbert", sr.Spec.Config.EmbeddingModels.EmbeddingConfig.ModelType)
 						}
 						// Verify target_layer is one of the valid values
 						validLayers := map[int]bool{3: true, 6: true, 11: true, 22: true}
-						if !validLayers[sr.Spec.Config.EmbeddingModels.HNSWConfig.TargetLayer] {
-							t.Errorf("mmbert sample target_layer = %v, want one of 3, 6, 11, 22", sr.Spec.Config.EmbeddingModels.HNSWConfig.TargetLayer)
+						if !validLayers[sr.Spec.Config.EmbeddingModels.EmbeddingConfig.TargetLayer] {
+							t.Errorf("mmbert sample target_layer = %v, want one of 3, 6, 11, 22", sr.Spec.Config.EmbeddingModels.EmbeddingConfig.TargetLayer)
 						}
 					}
 				}
