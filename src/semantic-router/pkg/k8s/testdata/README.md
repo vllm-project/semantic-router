@@ -1,18 +1,18 @@
 # Test Data for CRD Converter
 
-This directory contains test data for the Kubernetes CRD to RouterConfig converter.
+This directory contains test data for the Kubernetes CRD to canonical v0.3 config converter.
 
 ## Directory Structure
 
 ```
 testdata/
-├── base-config.yaml          # Static base configuration (shared across all tests)
+├── base-config.yaml          # Static canonical base configuration (shared across all tests)
 ├── input/                    # Input CRD YAML files (IntelligentPool + IntelligentRoute)
 │   ├── 01-basic.yaml
 │   ├── 02-keyword-only.yaml
 │   ├── ...
 │   └── 15-keyword-embedding-domain-no-plugin.yaml
-└── output/                   # Generated RouterConfig YAML files
+└── output/                   # Generated canonical v0.3 YAML files
     ├── 01-basic.yaml
     ├── 02-keyword-only.yaml
     ├── ...
@@ -21,19 +21,18 @@ testdata/
 
 ## Base Configuration
 
-`base-config.yaml` contains static configuration that doesn't come from CRDs:
+`base-config.yaml` contains the static canonical configuration that doesn't come from CRDs:
 
-- Reasoning families (deepseek, qwen3, gpt)
-- Default reasoning effort level
-- BERT model configuration
-- Semantic cache settings
-- Tools configuration
-- Prompt guard settings
-- Classifier configuration
-- Router options
-- Embedding models paths
-- API configuration
-- Observability settings
+- `providers.defaults.reasoning_families`
+- `providers.defaults.default_reasoning_effort`
+- `global.router.config_source`
+- `global.services.api`
+- `global.services.observability`
+- `global.stores.semantic_cache`
+- `global.integrations.tools`
+- `global.model_catalog.embeddings.semantic`
+- `global.model_catalog.modules.prompt_guard`
+- `global.model_catalog.modules.classifier`
 
 ## Test Scenarios Overview
 
@@ -70,7 +69,7 @@ testdata/
 
 3. **04-domain-only.yaml** - Only domain signals
    - Use case: STEM queries, subject-specific routing
-   - Signals: math, physics, computer_science, chemistry domains
+   - Signals: math, physics, computer science, chemistry domains
 
 4. **05-keyword-embedding.yaml** - Keyword + Embedding
    - Use case: Urgent support requests with semantic matching
@@ -144,24 +143,30 @@ This will:
 
 1. Load `base-config.yaml` as the static configuration base
 2. Parse each input YAML file (IntelligentPool + IntelligentRoute)
-3. Convert CRDs to RouterConfig format
-4. Merge static base config with dynamic CRD-derived config
+3. Convert CRDs to canonical `providers/routing` config
+4. Merge the static canonical base with the dynamic CRD-derived sections
 5. Generate output YAML files in `testdata/output/`
-6. Validate that output can be unmarshaled correctly
+6. Validate that output stays on the canonical v0.3 contract and can be parsed back into runtime config
 
 ## Output Structure
 
-Each generated output file contains:
+Each generated output file contains canonical v0.3 sections:
 
 - **Static parts** (from base-config.yaml):
-  - embedding_models, bert_model, classifier, prompt_guard
-  - semantic_cache, observability, api, tools
-  - reasoning_families, default_reasoning_effort
+  - `providers.defaults.reasoning_families`
+  - `providers.defaults.default_reasoning_effort`
+  - `global.router`
+  - `global.services`
+  - `global.stores`
+  - `global.integrations`
+- `global.model_catalog`
   
 - **Dynamic parts** (from CRDs):
-  - keyword_rules (from signals.keywords)
-  - embedding_rules (from signals.embeddings)
-  - categories (from signals.domains)
-  - decisions (from decisions)
-  - model_config (from IntelligentPool.models)
-  - default_model (from IntelligentPool.defaultModel)
+  - `routing.signals.keywords` (from `signals.keywords`)
+  - `routing.signals.embeddings` (from `signals.embeddings`)
+  - `routing.signals.domains` (from `signals.domains`)
+  - `routing.signals.context` and `routing.signals.fact_check`
+  - `routing.decisions` (from `decisions`)
+  - `routing.modelCards` (from `IntelligentPool.models`)
+  - `providers.defaults.default_model` (from `IntelligentPool.defaultModel`)
+  - `providers.models[*].pricing` when the pool supplies pricing metadata

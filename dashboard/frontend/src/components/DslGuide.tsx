@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react'
 import {
   SIGNAL_TYPES,
   PLUGIN_TYPES,
-  BACKEND_TYPES,
   ALGORITHM_TYPES,
   PLUGIN_DESCRIPTIONS,
   ALGORITHM_DESCRIPTIONS,
@@ -110,6 +109,15 @@ const TypeDetail: React.FC<{
 // ---------- Snippet templates ----------
 
 const QUICK_START_SNIPPET = `# ============================================
+# MODELS
+# ============================================
+
+MODEL "qwen2.5:3b" {
+  modality: "text"
+  capabilities: ["general", "reasoning"]
+}
+
+# ============================================
 # SIGNALS
 # ============================================
 
@@ -161,24 +169,12 @@ ROUTE ai_route (description = "AI-related requests") {
 }
 
 # ============================================
-# BACKENDS
-# ============================================
+}`
 
-BACKEND vllm_endpoint ollama {
-  address: "127.0.0.1"
-  port: 11434
-  weight: 1
-  type: "ollama"
-}
-
-# ============================================
-# GLOBAL
-# ============================================
-
-GLOBAL {
-  default_model: "qwen2.5:3b"
-  strategy: "priority"
-  default_reasoning_effort: "low"
+const MODEL_SNIPPET = `MODEL "qwen2.5:3b" {
+  param_size: "3b"
+  modality: "text"
+  capabilities: ["general", "reasoning"]
 }`
 
 const SIGNAL_SNIPPET = `SIGNAL keyword my_signal {
@@ -206,19 +202,6 @@ const PLUGIN_SNIPPET = `PLUGIN my_plugin pii {
   pii_types_allowed: []
 }`
 
-const BACKEND_SNIPPET = `BACKEND vllm_endpoint my_backend {
-  address: "127.0.0.1"
-  port: 11434
-  weight: 1
-  type: "ollama"
-}`
-
-const GLOBAL_SNIPPET = `GLOBAL {
-  default_model: "qwen2.5:3b"
-  strategy: "priority"
-  default_reasoning_effort: "low"
-}`
-
 // Signal type descriptions
 const SIGNAL_DESCRIPTIONS: Record<string, string> = {
   keyword: 'Match queries by keyword lists (regex, BM25, n-gram)',
@@ -232,18 +215,6 @@ const SIGNAL_DESCRIPTIONS: Record<string, string> = {
   complexity: 'Estimate query difficulty via embedding similarity',
   modality: 'Detect multi-modal input (text, image, audio)',
   authz: 'Authorization-based routing (RBAC)',
-}
-
-// Backend type descriptions
-const BACKEND_DESCRIPTIONS: Record<string, string> = {
-  vllm_endpoint: 'vLLM or Ollama inference endpoint',
-  provider_profile: 'Cloud provider API profile (OpenAI, Azure, etc.)',
-  embedding_model: 'Embedding model endpoint for signal detection',
-  semantic_cache: 'Semantic cache backend storage',
-  memory: 'Persistent memory/vector storage',
-  response_api: 'OpenAI Responses API endpoint',
-  vector_store: 'Vector store for RAG retrieval',
-  image_gen_backend: 'Image generation backend (DALL-E, SD, etc.)',
 }
 
 const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
@@ -286,18 +257,37 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
           <p className={styles.hint}>
             A DSL file defines <strong>signals</strong> (what to detect),{' '}
             <strong>routes</strong> (how to decide),{' '}
-            <strong>plugins</strong> (pre/post processing),{' '}
-            <strong>backends</strong> (infrastructure), and{' '}
-            <strong>global</strong> settings.
+            <strong>models</strong> (semantic catalog), and{' '}
+            <strong>plugins</strong> (reusable route helpers).
           </p>
           <CodeBlock code={QUICK_START_SNIPPET} label="Full Example" onInsert={handleInsert} />
           <div className={styles.snippetGrid}>
+            <CodeBlock code={MODEL_SNIPPET} label="Model" onInsert={handleInsert} />
             <CodeBlock code={SIGNAL_SNIPPET} label="Signal" onInsert={handleInsert} />
             <CodeBlock code={ROUTE_SNIPPET} label="Route" onInsert={handleInsert} />
             <CodeBlock code={PLUGIN_SNIPPET} label="Plugin" onInsert={handleInsert} />
-            <CodeBlock code={BACKEND_SNIPPET} label="Backend" onInsert={handleInsert} />
-            <CodeBlock code={GLOBAL_SNIPPET} label="Global" onInsert={handleInsert} />
           </div>
+        </Section>
+      )}
+
+      {/* Models */}
+      {matchesSearch('model catalog reasoning family capability modality') && (
+        <Section title="Model Catalog" icon="📦">
+          <p className={styles.hint}>
+            Top-level models define the semantic routing catalog. Syntax:{' '}
+            <code>MODEL &lt;name&gt; {'{ fields }'}</code>
+          </p>
+          <table className={styles.fieldTable}>
+            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>param_size</code></td><td>string</td><td>Logical size hint such as <code>3b</code> or <code>70b</code></td></tr>
+              <tr><td><code>description</code></td><td>string</td><td>Human-readable routing summary</td></tr>
+              <tr><td><code>capabilities</code></td><td>string[]</td><td>Semantic tags used by selection or tooling</td></tr>
+              <tr><td><code>quality_score</code></td><td>number</td><td>Optional quality hint for selection logic</td></tr>
+              <tr><td><code>modality</code></td><td>string</td><td>Expected modality such as <code>text</code> or <code>image</code></td></tr>
+            </tbody>
+          </table>
+          <CodeBlock code={MODEL_SNIPPET} label="Model catalog example" onInsert={handleInsert} />
         </Section>
       )}
 
@@ -417,73 +407,14 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
         </Section>
       )}
 
-      {/* Backends */}
-      {matchesSearch('backend vllm endpoint provider embedding') && (
-        <Section title={`Backends (${BACKEND_TYPES.length} types)`} icon="🖥️">
-          <p className={styles.hint}>
-            Backends define infrastructure. Syntax:{' '}
-            <code>BACKEND &lt;type&gt; &lt;name&gt; {'{ fields }'}</code>
-          </p>
-          {BACKEND_TYPES.filter((t) => matchesSearch(`backend ${t} ${BACKEND_DESCRIPTIONS[t] || ''}`)).map((t) => (
-            <div key={t} className={styles.typeItem}>
-              <div className={styles.typeHeader} style={{ cursor: 'default' }}>
-                <code className={styles.typeName}>{t}</code>
-                <span className={styles.typeDesc}>{BACKEND_DESCRIPTIONS[t] || ''}</span>
-              </div>
-            </div>
-          ))}
-          <CodeBlock
-            code={`BACKEND vllm_endpoint ollama {
-  address: "127.0.0.1"
-  port: 11434
-  weight: 1
-  type: "ollama"
-}
-
-BACKEND provider_profile openai {
-  provider: "openai"
-  api_key_env: "OPENAI_API_KEY"
-}
-
-BACKEND embedding_model my_embed {
-  model: "all-MiniLM-L6-v2"
-  backend: "ollama"
-}`}
-            label="Backend examples"
-            onInsert={handleInsert}
-          />
-        </Section>
-      )}
-
-      {/* Global */}
-      {matchesSearch('global settings default strategy reasoning') && (
-        <Section title="Global Settings" icon="⚙️">
-          <p className={styles.hint}>
-            One <code>GLOBAL {'{ ... }'}</code> block per file. Sets defaults for the entire router.
-          </p>
-          <table className={styles.fieldTable}>
-            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
-            <tbody>
-              <tr><td><code>default_model</code></td><td>string</td><td>Fallback model when no route matches</td></tr>
-              <tr><td><code>strategy</code></td><td>string</td><td><code>priority</code> | <code>first_match</code> | <code>weighted</code></td></tr>
-              <tr><td><code>default_reasoning_effort</code></td><td>string</td><td><code>low</code> | <code>medium</code> | <code>high</code></td></tr>
-              <tr><td><code>reasoning_families</code></td><td>object</td><td>Per-family reasoning config</td></tr>
-              <tr><td><code>max_routing_time_ms</code></td><td>number</td><td>Timeout for signal evaluation</td></tr>
-              <tr><td><code>enable_parallel_signals</code></td><td>boolean</td><td>Evaluate signals in parallel</td></tr>
-            </tbody>
-          </table>
-          <CodeBlock
-            code={GLOBAL_SNIPPET}
-            label="Global example"
-            onInsert={handleInsert}
-          />
-        </Section>
-      )}
-
       {/* Cheat Sheet */}
       {matchesSearch('cheat sheet syntax grammar reference') && (
         <Section title="Cheat Sheet" icon="📋">
           <div className={styles.cheatSheet}>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>MODEL &lt;name&gt; {'{ ... }'}</code>
+              <span>Declare a routing model catalog entry</span>
+            </div>
             <div className={styles.cheatItem}>
               <code className={styles.cheatSyntax}>SIGNAL &lt;type&gt; &lt;name&gt; {'{ ... }'}</code>
               <span>Declare a signal</span>
@@ -495,14 +426,6 @@ BACKEND embedding_model my_embed {
             <div className={styles.cheatItem}>
               <code className={styles.cheatSyntax}>PLUGIN &lt;name&gt; &lt;type&gt; {'{ ... }'}</code>
               <span>Declare a plugin template</span>
-            </div>
-            <div className={styles.cheatItem}>
-              <code className={styles.cheatSyntax}>BACKEND &lt;type&gt; &lt;name&gt; {'{ ... }'}</code>
-              <span>Declare a backend</span>
-            </div>
-            <div className={styles.cheatItem}>
-              <code className={styles.cheatSyntax}>GLOBAL {'{ ... }'}</code>
-              <span>Global settings (one per file)</span>
             </div>
             <div className={styles.cheatItem}>
               <code className={styles.cheatSyntax}>PRIORITY &lt;number&gt;</code>
@@ -519,6 +442,10 @@ BACKEND embedding_model my_embed {
             <div className={styles.cheatItem}>
               <code className={styles.cheatSyntax}>ALGORITHM &lt;type&gt; {'{ ... }'}</code>
               <span>Algorithm (inside ROUTE)</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>providers / global live in config.yaml</code>
+              <span>Deployment bindings and runtime defaults are outside the DSL</span>
             </div>
             <div className={styles.cheatItem}>
               <code className={styles.cheatSyntax}># comment</code>

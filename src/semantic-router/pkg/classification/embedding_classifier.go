@@ -259,13 +259,13 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 		return fmt.Errorf("keyword embedding similarity match is not properly configured")
 	}
 
-	modelType := strings.ToLower(strings.TrimSpace(c.Config.EmbeddingModels.HNSWConfig.ModelType))
+	modelType := strings.ToLower(strings.TrimSpace(c.Config.EmbeddingConfig.ModelType))
 	if modelType == "multimodal" {
-		mmPath := config.ResolveModelPath(c.Config.EmbeddingModels.MultiModalModelPath)
+		mmPath := config.ResolveModelPath(c.Config.MultiModalModelPath)
 		if mmPath == "" {
 			return fmt.Errorf("embedding_rules with model_type=multimodal requires embedding_models.multimodal_model_path")
 		}
-		if err := initMultiModalModel(mmPath, c.Config.EmbeddingModels.UseCPU); err != nil {
+		if err := initMultiModalModel(mmPath, c.Config.UseCPU); err != nil {
 			return fmt.Errorf("failed to initialize multimodal model for embedding_rules: %w", err)
 		}
 		logging.Infof("Initialized KeywordEmbedding classifier with multimodal model: %s", mmPath)
@@ -277,8 +277,8 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 	return c.keywordEmbeddingInitializer.Init(
 		c.Config.Qwen3ModelPath,
 		c.Config.GemmaModelPath,
-		c.Config.EmbeddingModels.MmBertModelPath,
-		c.Config.EmbeddingModels.UseCPU,
+		c.Config.MmBertModelPath,
+		c.Config.UseCPU,
 	)
 }
 

@@ -46,8 +46,13 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 	@echo "All go mod tidy checks passed"
 
 install-controller-gen: ## Install controller-gen for code generation
-	@echo "Installing controller-gen..."
-	@cd src/semantic-router && go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+	@echo "Ensuring controller-gen is available..."
+	@if command -v controller-gen >/dev/null 2>&1; then \
+		echo "Using existing controller-gen at $$(command -v controller-gen)"; \
+	else \
+		echo "Installing controller-gen..."; \
+		cd src/semantic-router && go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest; \
+	fi
 
 generate-crd: install-controller-gen ## Generate CRD manifests using controller-gen
 	@echo "Generating CRD manifests..."

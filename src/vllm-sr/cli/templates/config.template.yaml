@@ -2,7 +2,7 @@
 # Most users should start with `vllm-sr serve` and finish setup in the dashboard.
 # Use this template when you want to hand-author routing config directly.
 
-version: v0.1
+version: v0.3
 
 listeners:
   - name: "http-8899"
@@ -11,23 +11,27 @@ listeners:
     timeout: "300s"
 
 providers:
+  defaults:
+    default_model: "replace-with-your-model"
   models:
     - name: "replace-with-your-model"
-      endpoints:
+      backend_refs:
         - name: "primary"
-          weight: 100
-          endpoint: "host.docker.internal:8000/v1"
+          endpoint: "host.docker.internal:8000"
           protocol: "http"
-      # access_key: "optional-api-key"
-  default_model: "replace-with-your-model"
+          weight: 100
 
-decisions:
-  - name: "default-route"
-    description: "Catch-all route for every request while you build out more specific signals and decisions."
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions: []
-    modelRefs:
-      - model: "replace-with-your-model"
-        use_reasoning: false
+routing:
+  modelCards:
+    - name: "replace-with-your-model"
+
+  decisions:
+    - name: "default-route"
+      description: "Catch-all route for every request while you build out more specific signals and decisions."
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "replace-with-your-model"
+          use_reasoning: false

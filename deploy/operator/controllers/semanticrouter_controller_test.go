@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +34,73 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+func TestGenerateConfigYAMLIncludesLoRACatalogFromVLLMEndpoints(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = vllmv1alpha1.AddToScheme(s)
+
+	sr := &vllmv1alpha1.SemanticRouter{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-router",
+			Namespace: "default",
+		},
+		Spec: vllmv1alpha1.SemanticRouterSpec{
+			VLLMEndpoints: []vllmv1alpha1.VLLMEndpointSpec{
+				{
+					Name:            "qwen3-primary",
+					Model:           "qwen3-32b",
+					ReasoningFamily: "qwen3",
+					LoRAs: []vllmv1alpha1.LoRAAdapterSpec{
+						{
+							Name:        "computer-science-expert",
+							Description: "Adapter for advanced computer science prompts",
+						},
+					},
+					Backend: vllmv1alpha1.VLLMBackend{
+						Type: "service",
+						Service: &vllmv1alpha1.ServiceBackend{
+							Name: "qwen3-svc",
+							Port: 8000,
+						},
+					},
+					Weight: 100,
+				},
+			},
+		},
+	}
+
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr).Build()
+	r := &SemanticRouterReconciler{
+		Client: cl,
+		Scheme: s,
+	}
+
+	configYAML, err := r.generateConfigYAML(context.Background(), sr)
+	if err != nil {
+		t.Fatalf("generateConfigYAML failed: %v", err)
+	}
+
+	var parsed routerconfig.CanonicalConfig
+	if err := yaml.Unmarshal([]byte(configYAML), &parsed); err != nil {
+		t.Fatalf("failed to parse generated YAML: %v", err)
+	}
+
+	if len(parsed.Routing.ModelCards) != 1 {
+		t.Fatalf("expected one generated modelCard, got %#v", parsed.Routing.ModelCards)
+	}
+	modelCard := parsed.Routing.ModelCards[0]
+	if len(modelCard.LoRAs) != 1 {
+		t.Fatalf("expected one generated LoRA adapter, got %#v", modelCard.LoRAs)
+	}
+	lora := modelCard.LoRAs[0]
+	if lora.Name != "computer-science-expert" {
+		t.Fatalf("unexpected LoRA name: %#v", lora)
+	}
+	if lora.Description != "Adapter for advanced computer science prompts" {
+		t.Fatalf("unexpected LoRA description: %#v", lora)
+	}
+}
 
 func TestReconcileSemanticRouter(t *testing.T) {
 	// Register the vllm scheme

@@ -25,8 +25,9 @@ spec:
   # ====================
   # NEW: vLLM Backend Endpoints Configuration
   # ====================
-  # Configure model backends that semantic router routes to after classification
-  # Generates vllm_endpoints and model_config sections in ConfigMap
+  # Configure model backends that semantic router routes to after classification.
+  # The operator renders these into canonical providers.models[].backend_refs
+  # and routing.modelCards entries in config.yaml.
   vllmEndpoints:
     # Example 1: KServe InferenceService (RHOAI 3)
     - name: kserve-llama3-8b
@@ -131,10 +132,8 @@ spec:
   # Semantic Router Configuration
   # ====================
   config:
-    # BERT model for embeddings
-    bert_model:
-      model_id: models/mom-embedding-light
-      threshold: "0.6"
+    embedding_models:
+      mmbert_model_path: "models/mom-embedding-ultra"
       use_cpu: true
 
     # Semantic cache for latency/token optimization
@@ -145,6 +144,7 @@ spec:
       max_entries: 10000
       ttl_seconds: 3600  # 1 hour
       eviction_policy: lru  # fifo, lru, or lfu
+      embedding_model: mmbert
 
     # Tools auto-selection based on semantic similarity
     tools:
@@ -170,10 +170,12 @@ spec:
         threshold: "0.5"
         use_cpu: true
       pii_model:
-        model_id: models/mom-pii-classifier
+        model_id: models/mmbert32k-pii-detector-merged
         use_modernbert: false
+        use_mmbert_32k: true
         threshold: "0.7"
         use_cpu: true
+        pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
 
     # Reasoning families configuration
     reasoning_families:

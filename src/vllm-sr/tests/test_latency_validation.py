@@ -2,14 +2,26 @@
 
 import os
 import tempfile
+import yaml
 
+from cli.config_migration import migrate_config_data
 from cli.parser import parse_user_config
 from cli.validator import validate_user_config
 
 
 def _parse_config(config_yaml: str):
+    data = yaml.safe_load(config_yaml)
+    providers = data.get("providers") if isinstance(data, dict) else None
+    models = providers.get("models", []) if isinstance(providers, dict) else []
+    if isinstance(data, dict) and (
+        "signals" in data
+        or "decisions" in data
+        or any(isinstance(model, dict) and "endpoints" in model for model in models)
+    ):
+        data = migrate_config_data(data)
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        f.write(config_yaml)
+        yaml.safe_dump(data, f, sort_keys=False)
         temp_path = f.name
 
     try:

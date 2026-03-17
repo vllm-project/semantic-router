@@ -1,0 +1,7 @@
+algorithm:
+  type: gmtrouter
+  gmtrouter:
+    enable_personalization: true
+    history_sample_size: 50
+    model_path: models/gmtrouter.pt
+

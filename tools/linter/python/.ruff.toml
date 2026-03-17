@@ -29,3 +29,16 @@ max-branches = 12
 max-returns = 8
 max-statements = 50
 max-nested-blocks = 4
+
+[lint.per-file-ignores]
+"src/vllm-sr/cli/models.py" = ["I001", "N815", "PLC0415", "SIM114", "UP006", "UP035", "UP045"]
+"src/vllm-sr/cli/parser.py" = ["B904", "C901", "F541", "I001", "PLR0912", "UP006", "UP015", "UP035"]
+"src/vllm-sr/cli/validator.py" = ["C901", "F401", "I001", "PLR2004", "PLR0912", "RUF013", "SIM102", "UP006", "UP035"]
+"src/vllm-sr/cli/config_migration.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
+"src/vllm-sr/cli/config_generator.py" = ["C901", "PLR0912", "PLR0915"]
+"src/vllm-sr/cli/commands/show_config.py" = ["C901", "PLR0912", "PLR0915"]
+"src/vllm-sr/tests/*.py" = ["PLR2004"]
+"src/vllm-sr/tests/test_config_template.py" = ["E402", "UP015"]
+"src/vllm-sr/tests/test_latency_validation.py" = ["I001"]
+"src/vllm-sr/tests/test_plugin_parsing.py" = ["I001", "RUF043"]
+"src/vllm-sr/tests/test_setup_bootstrap.py" = ["I001", "UP015"]

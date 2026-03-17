@@ -1,0 +1,14 @@
+routing:
+  decisions:
+    - name: safe_only_route
+      description: Match only when the known prompt-injection signal is absent.
+      priority: 70
+      rules:
+        operator: NOT
+        conditions:
+          - type: jailbreak
+            name: prompt_injection
+      modelRefs:
+        - model: qwen2.5:3b
+          use_reasoning: false
+

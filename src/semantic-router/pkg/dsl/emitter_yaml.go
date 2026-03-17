@@ -95,8 +95,8 @@ func denormalizeProviders(raw map[string]interface{}) {
 		if len(models) > 0 {
 			providers["models"] = models
 		}
-		delete(raw, "vllm_endpoints")
 	}
+	delete(raw, "vllm_endpoints")
 	delete(raw, "model_config")
 
 	// Hoist simple keys into providers
@@ -263,10 +263,10 @@ func splitEndpointName(fullName string) (string, string) {
 }
 
 // pruneZeroValueInfra removes infrastructure config sections that are all zero values.
-// These are config sections not representable in DSL (embedding_models, bert_model, etc.)
+// These are config sections not representable in DSL (embedding_models, classifiers, etc.)
 func pruneZeroValueInfra(raw map[string]interface{}) {
 	infraKeys := []string{
-		"embedding_models", "bert_model", "classifier",
+		"embedding_models", "classifier",
 		"prompt_guard", "hallucination_mitigation",
 		"feedback_detector", "modality_detector",
 		"semantic_cache", "memory", "response_api",
@@ -496,7 +496,7 @@ func EmitCRD(cfg *config.RouterConfig, name, namespace string) ([]byte, error) {
 // buildCRDConfigSpec constructs the CRD spec.config map from RouterConfig.
 // It mirrors the Operator's ConfigSpec structure:
 //   - decisions, strategy, complexity_rules, reasoning_families, default_reasoning_effort
-//   - bert_model, classifier, prompt_guard, semantic_cache, tools, observability, api
+//   - embedding_models, classifier, prompt_guard, semantic_cache, tools, observability, api
 //   - Signal rules not in ConfigSpec are included as extra keys for completeness
 func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	// Marshal the full RouterConfig to a flat map first
@@ -517,7 +517,6 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	moveKey(flat, configSpec, "default_model")
 
 	// Infrastructure configs that ConfigSpec supports
-	moveKey(flat, configSpec, "bert_model")
 	moveKey(flat, configSpec, "embedding_models")
 	moveKey(flat, configSpec, "classifier")
 	moveKey(flat, configSpec, "prompt_guard")
@@ -603,38 +602,21 @@ func moveKey(src, dst map[string]interface{}, key string) {
 	}
 }
 
-// EmitHelm wraps a RouterConfig into a Helm values.yaml structure compatible
-// with the semantic-router Helm chart (deploy/helm/semantic-router/).
-//
-// The chart's ConfigMap template renders `.Values.config` as the routing config
-// (config.yaml), so we nest the RouterConfig under a `config:` key and prune
-// infrastructure zero values just like EmitUserYAML does for clean output.
+// EmitHelm emits a Helm values fragment that only carries the DSL-owned routing
+// surface under the chart's canonical `config:` key.
 func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
-	flatBytes, err := yaml.Marshal(cfg)
-	if err != nil {
-		return nil, err
-	}
-	var raw map[string]interface{}
-	if err := yaml.Unmarshal(flatBytes, &raw); err != nil {
-		return nil, err
+	type helmValuesConfig struct {
+		Version string                  `yaml:"version"`
+		Routing config.CanonicalRouting `yaml:"routing"`
 	}
 
-	// Remove zero-value infrastructure sections
-	pruneZeroValueInfra(raw)
-
-	// Remove strategy if empty
-	if v, ok := raw["strategy"]; ok {
-		if s, ok := v.(string); ok && s == "" {
-			delete(raw, "strategy")
-		}
-	}
-
-	// Wrap in Helm values structure
 	values := map[string]interface{}{
-		"config": raw,
+		"config": helmValuesConfig{
+			Version: "v0.3",
+			Routing: config.CanonicalRoutingFromRouterConfig(cfg),
+		},
 	}
 
-	// Build ordered output
 	doc := &yaml.Node{Kind: yaml.DocumentNode}
 	mapNode := &yaml.Node{Kind: yaml.MappingNode}
 	addKeyValue(mapNode, "config", values["config"])

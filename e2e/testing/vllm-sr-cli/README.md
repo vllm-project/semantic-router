@@ -21,7 +21,6 @@ make vllm-sr-test-integration  # Unit + Integration tests
 
 | File | Type | Description |
 |------|------|-------------|
-| `test_unit_init.py` | Unit | Tests `init` command |
 | `test_unit_serve.py` | Unit | Tests `serve` flags |
 | `test_unit_lifecycle.py` | Unit | Tests `status/logs/stop/dashboard/config` flags |
 | `test_integration.py` | **Integration** | Real container tests (strong validation) |
@@ -34,7 +33,7 @@ These tests start real containers and verify with `docker inspect`:
 
 | Test | What it verifies |
 |------|------------------|
-| `test_serve_full_startup` | init → serve → container running → health |
+| `test_running_container_contracts` | canonical config → serve → container running → health |
 | `test_env_var_passed_to_container` | HF_TOKEN inside container |
 | `test_volume_mounting` | config.yaml + models/ mounted |
 | `test_status_shows_running_container` | `status` reports running |
@@ -47,7 +46,6 @@ These tests start real containers and verify with `docker inspect`:
 
 | Command | Options Tested |
 |---------|----------------|
-| `init` | default, `--force` |
 | `serve` | `--config`, `--image`, `--image-pull-policy`, `--readonly-dashboard` |
 | `status` | `all`, `envoy`, `router`, `dashboard` |
 | `logs` | `envoy`, `router`, `dashboard`, `-f/--follow` |
@@ -67,7 +65,7 @@ python run_cli_tests.py --verbose
 python run_cli_tests.py --verbose --integration
 
 # Filter by pattern
-python run_cli_tests.py --pattern init
+python run_cli_tests.py --pattern lifecycle
 ```
 
 ## Environment Variables

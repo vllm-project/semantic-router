@@ -17,9 +17,9 @@ build-router: $(if $(CI),rust-ci,rust)
 	@$(LOG_TARGET)
 	@mkdir -p bin
 ifdef DEV
-	@cd src/semantic-router && go build -tags=dev,milvus -o ../../bin/router cmd/main.go
+	@cd src/semantic-router && go build -tags=dev,milvus -o ../../bin/router ./cmd
 else
-	@cd src/semantic-router && go build -tags=milvus -o ../../bin/router cmd/main.go
+	@cd src/semantic-router && go build -tags=milvus -o ../../bin/router ./cmd
 endif
 
 # Run the router
@@ -32,9 +32,9 @@ run-router: build-router
 # Run the router with e2e config for testing
 run-router-e2e: ## Run the router with e2e config for testing
 run-router-e2e: build-router download-models
-	@echo "Running router with e2e config: config/testing/config.e2e.yaml"
+	@echo "Running router with e2e config: e2e/config/config.e2e.yaml"
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-		./bin/router -config=config/testing/config.e2e.yaml
+		./bin/router -config=e2e/config/config.e2e.yaml
 
 # Build the ONNX binding Rust library
 build-onnx-binding: ## Build the ONNX Runtime binding (mmBERT 32K support)
@@ -57,16 +57,16 @@ build-router-onnx: build-onnx-binding build-ml-binding
 	@mkdir -p bin
 	@cd src/semantic-router && \
 		CGO_LDFLAGS="-L../../onnx-binding/target/release" \
-		go build -modfile=go.onnx.mod -tags=onnx,milvus -o ../../bin/router-onnx cmd/main.go
+		go build -modfile=go.onnx.mod -tags=onnx,milvus -o ../../bin/router-onnx ./cmd
 	@echo "Router built with ONNX binding support"
 
 # Run the router with ONNX binding (uses mmBERT 32K via ONNX Runtime)
 run-router-onnx: ## Run the router with ONNX binding (mmBERT embedding model)
 run-router-onnx: build-router-onnx
 	@echo "Running router with ONNX binding..."
-	@echo "Config: $${ONNX_CONFIG_FILE:-config/onnx-binding/config.onnx-binding-test.yaml}"
+	@echo "Config: $${ONNX_CONFIG_FILE:-e2e/config/onnx-binding/config.onnx-binding-test.yaml}"
 	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/ml-binding/target/release && \
-		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-config/onnx-binding/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
+		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-e2e/config/onnx-binding/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
 
 # Unit test semantic-router
 # By default, Milvus, Redis, and Llama Stack tests are skipped. To enable them, set the relevant env var to false.
@@ -218,7 +218,7 @@ run-router-hallucination: ## Run the router with hallucination detection enabled
 run-router-hallucination: build-router download-models
 	@echo "Running router with hallucination detection config..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-		./bin/router -config=config/testing/config.hallucination.yaml
+		./bin/router -config=e2e/config/config.hallucination.yaml
 
 # Test hallucination detection models by verifying router startup and model loading
 test-hallucination-detection: ## Test hallucination detection pipeline (fact-check, hallucination detector, NLI)
@@ -234,7 +234,7 @@ test-hallucination-detection: build-router download-models
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-		nohup ./bin/router -config=config/testing/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
+		nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
 	@echo "   Waiting for router to initialize models (15s)..."
 	@sleep 15
 	@echo ""
@@ -246,7 +246,7 @@ test-hallucination-detection: build-router download-models
 		echo "   Installing func-e..."; \
 		curl -sL https://func-e.io/install.sh | sudo bash -s -- -b /usr/local/bin; \
 	fi
-	@nohup func-e run --config-path config/envoy.yaml > /tmp/envoy_hal.log 2>&1 & echo $$! > /tmp/envoy_hal_pid.txt
+	@nohup func-e run --config-path deploy/local/envoy.yaml > /tmp/envoy_hal.log 2>&1 & echo $$! > /tmp/envoy_hal_pid.txt
 	@sleep 3
 	@curl -sf http://localhost:19000/ready > /dev/null && echo "   Envoy is ready" || echo "   ⚠ Envoy may not be ready"
 	@echo ""
@@ -321,7 +321,7 @@ test-hallucination-detection-manual: build-router download-models
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-		nohup ./bin/router -config=config/testing/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
+		nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
 	@echo "   Waiting for router to initialize models (15s)..."
 	@sleep 15
 	@grep "Fact-check classifier initialized" /tmp/router_hal.log && echo "   Models initialized" || echo "   ⚠ Check /tmp/router_hal.log"
@@ -331,7 +331,7 @@ test-hallucination-detection-manual: build-router download-models
 		echo "   Installing func-e..."; \
 		curl -sL https://func-e.io/install.sh | sudo bash -s -- -b /usr/local/bin; \
 	fi
-	@nohup func-e run --config-path config/envoy.yaml > /tmp/envoy_hal.log 2>&1 & echo $$! > /tmp/envoy_hal_pid.txt
+	@nohup func-e run --config-path deploy/local/envoy.yaml > /tmp/envoy_hal.log 2>&1 & echo $$! > /tmp/envoy_hal_pid.txt
 	@sleep 3
 	@curl -sf http://localhost:8801/health > /dev/null 2>&1 && echo "   Envoy is ready" || echo "   Envoy started (no /health endpoint)"
 	@echo ""
@@ -416,7 +416,7 @@ run-router-image-gen: ## Run router with image generation config
 run-router-image-gen: build-router
 	@echo "Running router with image generation config..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-		./bin/router -config=config/testing/config.image-gen.yaml
+		./bin/router -config=e2e/config/config.image-gen.yaml
 
 # ============== Modality Routing Tests ==============
 
@@ -425,7 +425,7 @@ run-router-modality: ## Run router with modality routing config (AR + Diffusion 
 run-router-modality: build-router
 	@echo "Running router with modality routing config..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-		./bin/router -config=config/testing/config.modality-routing.yaml --enable-system-prompt-api=true
+		./bin/router -config=e2e/config/config.modality-routing.yaml --enable-system-prompt-api=true
 
 # Test modality routing — sends prompts for AR, DIFFUSION, and BOTH through Envoy
 # Requires: router running with modality-routing config, Envoy proxy, AR vLLM (port 8000), Diffusion vLLM (port 8001)

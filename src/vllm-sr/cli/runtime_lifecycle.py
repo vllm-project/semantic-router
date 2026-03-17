@@ -28,9 +28,9 @@ from cli.docker_cli import (
     load_openclaw_registry,
 )
 from cli.runtime_stack import RuntimeStackLayout
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 ServiceStarter = Callable[[], tuple[int, str, str]]
 

@@ -12,7 +12,7 @@
 - If the task is about deploying a real AMD backend with alias-based routing instead of smoke validation, prefer:
   - `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=deploy/amd/config.yaml`
   - plus the backend/network setup from `deploy/amd/README.md`
-- Feature-gate smoke defaults to the env-specific manifest config under `config/testing/config.agent-smoke.*.yaml`
+- Feature-gate smoke defaults to the env-specific manifest config under `e2e/config/config.agent-smoke.*.yaml`
 - Use `AGENT_SERVE_CONFIG` only when you need to override that default
 - Treat `src/vllm-sr/**`, `tools/make/docker.mk`, and `src/vllm-sr/Dockerfile*` as startup-chain changes
 - For these changes, run:

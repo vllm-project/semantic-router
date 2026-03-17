@@ -1077,131 +1077,119 @@ flowchart TD
 ### 6.1 Global Configuration
 
 ```yaml
-# Global hallucination detection settings
-hallucination:
-  enabled: true
-
-  # Detection model (ModernBERT-based)
-  model_id: "models/lettucedetect-large-modernbert-en-v1"
-  use_cpu: false
-
-  # Default operational mode
-  default_mode: "standard"  # lightweight | standard | premium
-
-  # Detection threshold (0.0 - 1.0)
-  # Lower = more strict, Higher = more lenient
-  threshold: 0.6
-
-  # Warning template for lightweight mode
-  warning_template: |
-    ⚠️ **Notice**: This response may contain information that could not be
-    fully verified against the provided context. Please verify critical facts
-    before taking action.
-
-  # Standard mode settings
-  standard:
-    max_iterations: 3
-    convergence_threshold: 0.4  # Stop if score drops below this
-
-  # Premium mode settings
-  premium:
-    verification_models:
-      - "claude-3-sonnet"
-      - "gpt-4-turbo"
-    judge_model: "llama-3.1-70b"
-    max_iterations: 5
-    require_consensus: true
+global:
+  model_catalog:
+    modules:
+      hallucination_mitigation:
+        enabled: true
+        on_hallucination_detected: annotate
+        fact_check:
+          model_id: "models/mmbert32k-factcheck-classifier-merged"
+          threshold: 0.65
+          use_cpu: false
+          use_mmbert_32k: true
+        detector:
+          model_id: "models/lettucedetect-large-modernbert-en-v1"
+          threshold: 0.6
+          use_cpu: false
+          min_span_length: 2
+          min_span_confidence: 0.6
+          context_window_size: 50
+          enable_nli_filtering: true
+          nli_entailment_threshold: 0.75
+        explainer:
+          model_id: "models/mom-halugate-explainer"
+          threshold: 0.9
+          use_cpu: false
 ```
 
 ### 6.2 Per-Decision Plugin Configuration
 
 ```yaml
-decisions:
-  # Healthcare domain - Maximum accuracy required
-  - name: "medical_assistant"
-    description: "Medical information queries"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "healthcare"
-        - type: "keyword"
-          name: "medical_terms"
-    modelRefs:
-      - model: "gpt-4-turbo"
-    plugins:
-      - type: "hallucination"
-        configuration:
-          enabled: true
-          mode: "premium"
-          threshold: 0.3           # Very strict
-          max_iterations: 5
-          require_disclaimer: true
+routing:
+  decisions:
+    # Healthcare domain - Maximum accuracy required
+    - name: "medical_assistant"
+      description: "Medical information queries"
+      priority: 100
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "healthcare"
+          - type: "keyword"
+            name: "medical_terms"
+      modelRefs:
+        - model: "gpt-4-turbo"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: true
+            use_nli: true
+            hallucination_action: "header"
+            unverified_factual_action: "warn"
+            include_hallucination_details: true
 
-  # Financial services - High accuracy
-  - name: "financial_advisor"
-    description: "Financial analysis and advice"
-    priority: 90
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "finance"
-    plugins:
-      - type: "hallucination"
-        configuration:
-          enabled: true
-          mode: "standard"
-          threshold: 0.5
-          max_iterations: 4
+    # Financial services - High accuracy
+    - name: "financial_advisor"
+      description: "Financial analysis and advice"
+      priority: 90
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "finance"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: true
+            use_nli: true
+            hallucination_action: "body"
+            unverified_factual_action: "warn"
 
-  # General customer support - Balanced
-  - name: "customer_support"
-    description: "General customer inquiries"
-    priority: 50
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "support"
-    plugins:
-      - type: "hallucination"
-        configuration:
-          enabled: true
-          mode: "standard"
-          threshold: 0.6
-          max_iterations: 2
+    # General customer support - Balanced
+    - name: "customer_support"
+      description: "General customer inquiries"
+      priority: 50
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "support"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: true
+            hallucination_action: "header"
 
-  # Internal tools - Cost optimized
-  - name: "internal_assistant"
-    description: "Internal knowledge base queries"
-    priority: 30
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "internal"
-    plugins:
-      - type: "hallucination"
-        configuration:
-          enabled: true
-          mode: "lightweight"
-          threshold: 0.7
+    # Internal tools - Cost optimized
+    - name: "internal_assistant"
+      description: "Internal knowledge base queries"
+      priority: 30
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "internal"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: true
+            hallucination_action: "warn"
 
-  # Creative writing - Detection disabled
-  - name: "creative_writing"
-    description: "Creative content generation"
-    priority: 20
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "creative"
-    plugins:
-      - type: "hallucination"
-        configuration:
-          enabled: false  # "Hallucination" is a feature here
+    # Creative writing - Detection disabled
+    - name: "creative_writing"
+      description: "Creative content generation"
+      priority: 20
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "creative"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: false  # "Hallucination" is a feature here
 ```
 
 ### 6.3 Response Headers

@@ -1,106 +1,108 @@
-# Base configuration shared across all test cases
-# This simulates the static parts of config.yaml that don't come from CRDs
+version: v0.3
 
-# Reasoning family configurations
-reasoning_families:
-  deepseek:
-    type: "reasoning_effort"
-    parameter: "reasoning_effort"
-  qwen3:
-    type: "chat_template_kwargs"
-    parameter: "enable_thinking"
-  gpt:
-    type: "reasoning_effort"
-    parameter: "reasoning_effort"
+listeners: []
 
-# Global default reasoning effort level
-default_reasoning_effort: high
+providers:
+  defaults:
+    default_reasoning_effort: high
+    reasoning_families:
+      deepseek:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+      gpt:
+        type: reasoning_effort
+        parameter: reasoning_effort
 
-# BERT model configuration
-bert_model:
-  model_id: models/mom-embedding-light
-  threshold: 0.6
-  use_cpu: true
+routing:
+  signals: {}
 
-# Semantic cache configuration
-semantic_cache:
-  enabled: true
-  backend_type: "memory"
-  similarity_threshold: 0.8
-  max_entries: 1000
-  ttl_seconds: 3600
-  eviction_policy: "fifo"
-  use_hnsw: true
-  hnsw_m: 16
-  hnsw_ef_construction: 200
-  embedding_model: "bert"
-
-# Tools configuration
-tools:
-  enabled: true
-  top_k: 3
-  similarity_threshold: 0.2
-  tools_db_path: "config/tools_db.json"
-  fallback_to_empty: true
-
-# Prompt guard configuration
-prompt_guard:
-  enabled: true
-  use_modernbert: true
-  model_id: "models/mom-jailbreak-classifier"
-  threshold: 0.7
-  use_cpu: true
-  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-
-# Classifier configuration
-classifier:
-  category_model:
-    model_id: "models/mom-domain-classifier"
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
-  pii_model:
-    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
-    use_modernbert: true
-    threshold: 0.7
-    use_cpu: true
-    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
-
-# Embedding models configuration
-embedding_models:
-  qwen3_model_path: "models/mom-embedding-pro"
-  gemma_model_path: "models/mom-embedding-flash"
-  use_cpu: true
-
-# API configuration
-api:
-  batch_classification:
-    max_batch_size: 100
-    concurrency_threshold: 5
-    max_concurrency: 8
-    metrics:
+global:
+  router:
+    config_source: kubernetes
+  services:
+    api:
+      batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
+        metrics:
+          enabled: true
+          detailed_goroutine_tracking: true
+          high_resolution_timing: false
+          sample_rate: 1.0
+          duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+          size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+    observability:
+      tracing:
+        enabled: false
+        provider: opentelemetry
+        exporter:
+          type: otlp
+          endpoint: jaeger:4317
+          insecure: true
+        sampling:
+          type: always_on
+          rate: 1.0
+        resource:
+          service_name: vllm-semantic-router
+          service_version: v0.1.0
+          deployment_environment: development
+  stores:
+    semantic_cache:
       enabled: true
-      detailed_goroutine_tracking: true
-      high_resolution_timing: false
-      sample_rate: 1.0
-      duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
-      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
-
-# Observability configuration
-observability:
-  tracing:
-    enabled: false
-    provider: "opentelemetry"
-    exporter:
-      type: "otlp"
-      endpoint: "jaeger:4317"
-      insecure: true
-    sampling:
-      type: "always_on"
-      rate: 1.0
-    resource:
-      service_name: "vllm-semantic-router"
-      service_version: "v0.1.0"
-      deployment_environment: "development"
-
+      backend_type: memory
+      similarity_threshold: 0.8
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+      use_hnsw: true
+      hnsw_m: 16
+      hnsw_ef_construction: 200
+      embedding_model: mmbert
+  integrations:
+    tools:
+      enabled: true
+      top_k: 3
+      similarity_threshold: 0.2
+      tools_db_path: config/tools_db.json
+      fallback_to_empty: true
+  model_catalog:
+    embeddings:
+      semantic:
+        mmbert_model_path: models/mom-embedding-ultra
+        use_cpu: true
+        embedding_config:
+          model_type: mmbert
+          preload_embeddings: true
+          target_dimension: 768
+          target_layer: 22
+          enable_soft_matching: true
+          min_score_threshold: 0.5
+    system:
+      prompt_guard: models/mmbert32k-jailbreak-detector-merged
+      domain_classifier: models/mmbert32k-intent-classifier-merged
+      pii_classifier: models/mmbert32k-pii-detector-merged
+    modules:
+      prompt_guard:
+        enabled: true
+        model_ref: prompt_guard
+        threshold: 0.7
+        use_cpu: true
+        use_mmbert_32k: true
+        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+      classifier:
+        domain:
+          model_ref: domain_classifier
+          threshold: 0.5
+          use_cpu: true
+          use_mmbert_32k: true
+          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+        pii:
+          model_ref: pii_classifier
+          use_mmbert_32k: true
+          threshold: 0.9
+          use_cpu: true
+          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json

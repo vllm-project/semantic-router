@@ -141,7 +141,7 @@ func shouldInitMemoryStore(cfg *config.RouterConfig) bool {
 		return true
 	}
 	for _, decision := range cfg.Decisions {
-		if decision.GetPluginConfig("memory") != nil {
+		if decision.HasPlugin("memory") {
 			return true
 		}
 	}

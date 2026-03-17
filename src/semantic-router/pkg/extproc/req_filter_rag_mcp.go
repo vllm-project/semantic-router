@@ -14,13 +14,17 @@ import (
 
 // retrieveFromMCP retrieves context using MCP tools
 func (r *OpenAIRouter) retrieveFromMCP(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
-	mcpConfig, ok := ragConfig.BackendConfig.(*config.MCPRAGConfig)
-	if !ok {
-		return "", fmt.Errorf("invalid MCP RAG config")
+	mcpConfig, err := ragConfig.MCPBackendConfig()
+	if err != nil {
+		return "", fmt.Errorf("invalid MCP RAG config: %w", err)
 	}
 
 	// Build tool arguments with variable substitution
-	toolArgs := r.substituteVariables(mcpConfig.ToolArguments, ctx)
+	toolArgsTemplate, err := mcpConfig.ToolArgumentMap()
+	if err != nil {
+		return "", fmt.Errorf("invalid MCP tool arguments: %w", err)
+	}
+	toolArgs := r.substituteVariables(toolArgsTemplate, ctx)
 
 	// Set timeout
 	timeout := 10 * time.Second

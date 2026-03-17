@@ -14,9 +14,9 @@ import (
 
 // retrieveFromMilvus retrieves context from Milvus backend
 func (r *OpenAIRouter) retrieveFromMilvus(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
-	milvusConfig, ok := ragConfig.BackendConfig.(*config.MilvusRAGConfig)
-	if !ok {
-		return "", fmt.Errorf("invalid Milvus RAG config")
+	milvusConfig, err := ragConfig.MilvusBackendConfig()
+	if err != nil {
+		return "", fmt.Errorf("invalid Milvus RAG config: %w", err)
 	}
 
 	// Get Milvus cache instance

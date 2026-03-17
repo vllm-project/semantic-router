@@ -1,0 +1,18 @@
+routing:
+  signals:
+    domains:
+      - name: business
+        description: Business and management related queries.
+        mmlu_categories: [business]
+      - name: law
+        description: Legal questions and law-related topics.
+        mmlu_categories: [law]
+      - name: psychology
+        description: Psychology and mental health topics.
+        mmlu_categories: [psychology]
+      - name: health
+        description: Health and medical information queries.
+        mmlu_categories: [health]
+      - name: other
+        description: General fallback traffic.
+        mmlu_categories: [other]

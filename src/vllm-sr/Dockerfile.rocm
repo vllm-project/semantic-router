@@ -332,7 +332,7 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
     CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
     CGO_CFLAGS="-I/build/../onnx-binding" \
     CGO_LDFLAGS="-L/build/../onnx-binding/target/release -L/build/../ml-binding/target/release -L/build/../nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
-    go build -buildvcs=false -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o router cmd/main.go
+    go build -buildvcs=false -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o router ./cmd
 
 # Stage 3: Get Envoy binary
 FROM envoyproxy/envoy:v1.34-latest AS envoy

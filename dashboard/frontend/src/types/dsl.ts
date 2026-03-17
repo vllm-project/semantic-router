@@ -32,7 +32,6 @@ export interface SymbolTable {
   signals: SymbolInfo[]
   models: string[]
   plugins: string[]
-  backends: SymbolInfo[]
   routes: string[]
 }
 
@@ -41,6 +40,12 @@ export interface SymbolTable {
 export interface ASTPosition {
   Line: number
   Column: number
+}
+
+export type DSLFieldScalar = string | number | boolean | null
+export type DSLFieldValue = DSLFieldScalar | DSLFieldObject | DSLFieldValue[]
+export interface DSLFieldObject {
+  [key: string]: DSLFieldValue | undefined
 }
 
 /** Boolean expression node — discriminated union via "type" field */
@@ -53,7 +58,7 @@ export type BoolExprNode =
 export interface ASTSignalDecl {
   signalType: string
   name: string
-  fields: Record<string, unknown>
+  fields: DSLFieldObject
   pos: ASTPosition
 }
 
@@ -70,13 +75,13 @@ export interface ASTModelRef {
 
 export interface ASTAlgoSpec {
   algoType: string
-  fields: Record<string, unknown>
+  fields: DSLFieldObject
   pos: ASTPosition
 }
 
 export interface ASTPluginRef {
   name: string
-  fields?: Record<string, unknown>
+  fields?: DSLFieldObject
   pos: ASTPosition
 }
 
@@ -91,31 +96,24 @@ export interface ASTRouteDecl {
   pos: ASTPosition
 }
 
+export interface ASTModelDecl {
+  name: string
+  fields: DSLFieldObject
+  pos: ASTPosition
+}
+
 export interface ASTPluginDecl {
   name: string
   pluginType: string
-  fields: Record<string, unknown>
-  pos: ASTPosition
-}
-
-export interface ASTBackendDecl {
-  backendType: string
-  name: string
-  fields: Record<string, unknown>
-  pos: ASTPosition
-}
-
-export interface ASTGlobalDecl {
-  fields: Record<string, unknown>
+  fields: DSLFieldObject
   pos: ASTPosition
 }
 
 export interface ASTProgram {
   signals: ASTSignalDecl[]
   routes: ASTRouteDecl[]
+  models?: ASTModelDecl[]
   plugins: ASTPluginDecl[]
-  backends: ASTBackendDecl[]
-  global?: ASTGlobalDecl
 }
 
 // ---------- WASM Result Types ----------

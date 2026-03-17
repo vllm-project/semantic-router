@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -14,10 +13,8 @@ type DecisionPlugin struct {
 	// "response_jailbreak", "router_replay", "memory", "fast_response".
 	Type string `yaml:"type" json:"type"`
 
-	// Configuration is the raw configuration for this plugin.
-	// When loaded from YAML, this will be a map[string]interface{}.
-	// When loaded from Kubernetes CRD, this will be []byte (from runtime.RawExtension).
-	Configuration interface{} `yaml:"configuration,omitempty" json:"configuration,omitempty"`
+	// Configuration stores the plugin payload as normalized structured bytes.
+	Configuration *StructuredPayload `yaml:"configuration,omitempty" json:"configuration,omitempty"`
 }
 
 // SemanticCachePluginConfig represents configuration for semantic-cache plugin.
@@ -88,80 +85,27 @@ type RouterReplayPluginConfig struct {
 	MaxBodyBytes        int  `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
 }
 
-// GetPluginConfig returns the configuration for a specific plugin type.
-func (d *Decision) GetPluginConfig(pluginType string) interface{} {
-	for _, plugin := range d.Plugins {
-		if plugin.Type == pluginType {
-			return plugin.Configuration
+// GetPlugin returns the plugin entry for a specific plugin type.
+func (d *Decision) GetPlugin(pluginType string) *DecisionPlugin {
+	for i := range d.Plugins {
+		if d.Plugins[i].Type == pluginType {
+			return &d.Plugins[i]
 		}
 	}
 	return nil
 }
 
-// UnmarshalPluginConfig converts a plugin configuration into the given target struct.
-func UnmarshalPluginConfig(config interface{}, target interface{}) error {
-	return unmarshalPluginConfig(config, target)
+// HasPlugin reports whether the decision includes a plugin of the given type.
+func (d *Decision) HasPlugin(pluginType string) bool {
+	return d.GetPlugin(pluginType) != nil
 }
 
-func unmarshalPluginConfig(config interface{}, target interface{}) error {
+// UnmarshalPluginConfig converts a plugin payload into the given target struct.
+func UnmarshalPluginConfig(config *StructuredPayload, target interface{}) error {
 	if config == nil {
 		return fmt.Errorf("plugin configuration is nil")
 	}
-
-	switch v := config.(type) {
-	case map[string]interface{}:
-		data, err := json.Marshal(v)
-		if err != nil {
-			return fmt.Errorf("failed to marshal config: %w", err)
-		}
-		return json.Unmarshal(data, target)
-	case map[interface{}]interface{}:
-		converted := convertMapToStringKeys(v)
-		data, err := json.Marshal(converted)
-		if err != nil {
-			return fmt.Errorf("failed to marshal config: %w", err)
-		}
-		return json.Unmarshal(data, target)
-	case []byte:
-		return json.Unmarshal(v, target)
-	default:
-		return fmt.Errorf("unsupported configuration type: %T", config)
-	}
-}
-
-func convertMapToStringKeys(m map[interface{}]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
-	for k, v := range m {
-		key, ok := k.(string)
-		if !ok {
-			key = fmt.Sprintf("%v", k)
-		}
-
-		switch val := v.(type) {
-		case map[interface{}]interface{}:
-			result[key] = convertMapToStringKeys(val)
-		case []interface{}:
-			result[key] = convertSliceValues(val)
-		default:
-			result[key] = v
-		}
-	}
-	return result
-}
-
-func convertSliceValues(s []interface{}) []interface{} {
-	result := make([]interface{}, len(s))
-	for i, v := range s {
-		switch val := v.(type) {
-		case map[interface{}]interface{}:
-			result[i] = convertMapToStringKeys(val)
-		case []interface{}:
-			result[i] = convertSliceValues(val)
-		default:
-			result[i] = v
-		}
-	}
-	return result
+	return config.DecodeInto(target)
 }
 
 // GetSemanticCacheConfig returns the semantic-cache plugin configuration.
@@ -213,12 +157,12 @@ func (d *Decision) GetFastResponseConfig() *FastResponsePluginConfig {
 }
 
 func decodeDecisionPlugin[T any](d *Decision, pluginType string, result *T) *T {
-	config := d.GetPluginConfig(pluginType)
-	if config == nil {
+	plugin := d.GetPlugin(pluginType)
+	if plugin == nil || plugin.Configuration == nil {
 		return nil
 	}
 
-	if err := unmarshalPluginConfig(config, result); err != nil {
+	if err := UnmarshalPluginConfig(plugin.Configuration, result); err != nil {
 		logging.Errorf("Failed to unmarshal %s config: %v", pluginType, err)
 		return nil
 	}

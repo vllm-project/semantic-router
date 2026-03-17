@@ -17,7 +17,11 @@ func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFami
 	// Look up the model in model_config
 	modelParams, exists := rc.ModelConfig[modelName]
 	if !exists || modelParams.ReasoningFamily == "" {
-		return nil
+		_, baseParams, fallback := rc.resolveLoRABaseModel(modelName)
+		if !fallback || baseParams.ReasoningFamily == "" {
+			return nil
+		}
+		modelParams = baseParams
 	}
 
 	// Look up the reasoning family configuration
@@ -102,6 +106,9 @@ func (c *RouterConfig) GetModelAPIFormat(modelName string) string {
 	if modelConfig, ok := c.ModelConfig[modelName]; ok && modelConfig.APIFormat != "" {
 		return modelConfig.APIFormat
 	}
+	if _, baseConfig, ok := c.resolveLoRABaseModel(modelName); ok && baseConfig.APIFormat != "" {
+		return baseConfig.APIFormat
+	}
 	return APIFormatOpenAI
 }
 
@@ -112,8 +119,13 @@ func (c *RouterConfig) GetModelAccessKey(modelName string) string {
 	}
 	if modelConfig, ok := c.ModelConfig[modelName]; ok {
 		rawKey := modelConfig.AccessKey
-		expandedKey := os.ExpandEnv(rawKey)
-		return expandedKey
+		if rawKey != "" {
+			expandedKey := os.ExpandEnv(rawKey)
+			return expandedKey
+		}
+	}
+	if _, baseConfig, ok := c.resolveLoRABaseModel(modelName); ok && baseConfig.AccessKey != "" {
+		return os.ExpandEnv(baseConfig.AccessKey)
 	}
 	return ""
 }
@@ -239,19 +251,17 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 // GetEndpointsForModel returns all endpoints that can serve the specified model
 // Returns endpoints based on the model's preferred_endpoints configuration in model_config
 func (c *RouterConfig) GetEndpointsForModel(modelName string) []VLLMEndpoint {
-	var endpoints []VLLMEndpoint
-
-	// Check if model has preferred endpoints configured
-	if modelConfig, ok := c.ModelConfig[modelName]; ok && len(modelConfig.PreferredEndpoints) > 0 {
-		// Return only the preferred endpoints
-		for _, endpointName := range modelConfig.PreferredEndpoints {
-			if endpoint, found := c.GetEndpointByName(endpointName); found {
-				endpoints = append(endpoints, *endpoint)
-			}
-		}
+	if c == nil || c.ModelConfig == nil {
+		return nil
 	}
 
-	return endpoints
+	if modelConfig, ok := c.ModelConfig[modelName]; ok && len(modelConfig.PreferredEndpoints) > 0 {
+		return c.collectPreferredEndpoints(modelConfig.PreferredEndpoints)
+	}
+	if _, baseConfig, ok := c.resolveLoRABaseModel(modelName); ok && len(baseConfig.PreferredEndpoints) > 0 {
+		return c.collectPreferredEndpoints(baseConfig.PreferredEndpoints)
+	}
+	return nil
 }
 
 // GetEndpointByName returns the endpoint with the specified name
@@ -463,96 +473,6 @@ func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
 	return -1
 }
 
-// GetCacheSimilarityThreshold returns the effective threshold for the semantic cache
-func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
-	if c.SimilarityThreshold != nil {
-		return *c.SimilarityThreshold
-	}
-	return c.Threshold
-}
-
-// IsHallucinationMitigationEnabled checks if hallucination mitigation is enabled and properly configured
-func (c *RouterConfig) IsHallucinationMitigationEnabled() bool {
-	return c.HallucinationMitigation.Enabled
-}
-
-// IsFactCheckClassifierEnabled checks if the fact-check classifier is enabled and properly configured
-// Enabled when fact_check_rules are configured, or legacy HallucinationMitigation is enabled
-func (c *RouterConfig) IsFactCheckClassifierEnabled() bool {
-	// Check new fact_check_rules config first
-	if len(c.FactCheckRules) > 0 {
-		// For new signal config, still need the model from HallucinationMitigation
-		return c.HallucinationMitigation.FactCheckModel.ModelID != ""
-	}
-
-	// Fall back to legacy HallucinationMitigation config
-	if !c.HallucinationMitigation.Enabled {
-		return false
-	}
-	return c.HallucinationMitigation.FactCheckModel.ModelID != ""
-}
-
-// GetFactCheckRules returns all configured fact_check_rules
-func (c *RouterConfig) GetFactCheckRules() []FactCheckRule {
-	return c.FactCheckRules
-}
-
-// IsHallucinationModelEnabled checks if hallucination detection is enabled and properly configured
-// Returns true if either:
-// 1. hallucination_mitigation.enabled is true (legacy global config)
-// 2. Any decision has a hallucination plugin enabled (new per-decision config)
-// AND the hallucination model is properly configured
-func (c *RouterConfig) IsHallucinationModelEnabled() bool {
-	// Must have hallucination model configured
-	if c.HallucinationMitigation.HallucinationModel.ModelID == "" {
-		return false
-	}
-
-	// Check legacy global config
-	if c.HallucinationMitigation.Enabled {
-		return true
-	}
-
-	// Check if any decision has hallucination plugin enabled
-	for _, decision := range c.Decisions {
-		halConfig := decision.GetHallucinationConfig()
-		if halConfig != nil && halConfig.Enabled {
-			return true
-		}
-	}
-
-	return false
-}
-
-// GetFactCheckThreshold returns the threshold for fact-check classification
-// Returns default of 0.7 if not specified
-func (c *RouterConfig) GetFactCheckThreshold() float32 {
-	if c.HallucinationMitigation.FactCheckModel.Threshold > 0 {
-		return c.HallucinationMitigation.FactCheckModel.Threshold
-	}
-	return 0.7 // Default threshold
-}
-
-// GetHallucinationModelThreshold returns the threshold for hallucination detection
-// Returns default of 0.5 if not specified
-func (c *RouterConfig) GetHallucinationModelThreshold() float32 {
-	if c.HallucinationMitigation.HallucinationModel.Threshold > 0 {
-		return c.HallucinationMitigation.HallucinationModel.Threshold
-	}
-	return 0.5 // Default threshold
-}
-
-// GetHallucinationAction returns the action to take when hallucination is detected
-// Returns "warn" as default if not specified
-func (c *RouterConfig) GetHallucinationAction() string {
-	action := c.HallucinationMitigation.OnHallucinationDetected
-	if action == "" {
-		return "warn"
-	}
-	// Only "warn" is supported now
-	return "warn"
-}
-
 // ResolveExternalModelID resolves the external model ID for a given model name and endpoint.
 // When a model alias (e.g., "qwen14b-rack1") is configured with external_model_ids,
 // this returns the real model name that the backend expects (e.g., "Qwen/Qwen2.5-14B-Instruct").
@@ -606,12 +526,6 @@ func (c *RouterConfig) SelectBestEndpointWithDetailsForModel(modelName string) (
 		return "", "", false, fmt.Errorf("endpoint %q for model %q: %w", bestEndpoint.Name, modelName, err)
 	}
 	return addr, bestEndpoint.Name, true, nil
-}
-
-// IsFeedbackDetectorEnabled checks if feedback detection is enabled
-func (c *RouterConfig) IsFeedbackDetectorEnabled() bool {
-	return c.InlineModels.FeedbackDetector.Enabled &&
-		c.InlineModels.FeedbackDetector.ModelID != ""
 }
 
 // ---------------------------------------------------------------------------

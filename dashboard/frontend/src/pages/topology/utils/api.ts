@@ -1,6 +1,6 @@
 // topology/utils/api.ts - API calls for topology
 
-import { TestQueryResult, MatchedSignal, SignalType, EvaluatedRule } from '../types'
+import { TestQueryResult, MatchedSignal, SignalType, EvaluatedRule, ConfigData } from '../types'
 
 /**
  * Backend API response format for test-query
@@ -140,9 +140,24 @@ function convertEvaluatedRules(rules?: TestQueryResponse['evaluatedRules']): Eva
  * Fetch topology configuration
  */
 export async function fetchTopologyConfig() {
-  const response = await fetch('/api/router/config/all')
-  if (!response.ok) {
-    throw new Error(`Failed to fetch config: ${response.statusText}`)
+  const [configResponse, globalResponse] = await Promise.all([
+    fetch('/api/router/config/all'),
+    fetch('/api/router/config/global'),
+  ])
+
+  if (!configResponse.ok) {
+    throw new Error(`Failed to fetch config: ${configResponse.statusText}`)
   }
-  return response.json()
+
+  const config = await configResponse.json() as ConfigData
+
+  if (!globalResponse.ok) {
+    return config
+  }
+
+  const effectiveGlobal = await globalResponse.json() as ConfigData['global']
+  return {
+    ...config,
+    global: effectiveGlobal,
+  }
 }

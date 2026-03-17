@@ -27,13 +27,15 @@ MODEL_NAME_B="Model-B"
 STORAGE_CLASS=""
 MODELS_PVC_SIZE="10Gi"
 CACHE_PVC_SIZE="5Gi"
-# Embedding model for semantic caching and tools similarity
-# Common options from sentence-transformers:
-#   - all-MiniLM-L12-v2 (default, balanced speed/quality)
-#   - all-mpnet-base-v2 (higher quality, slower)
-#   - all-MiniLM-L6-v2 (faster, lower quality)
-#   - paraphrase-multilingual-MiniLM-L12-v2 (multilingual)
-EMBEDDING_MODEL="all-MiniLM-L12-v2"
+# Embedding model directory for semantic caching and tools similarity.
+# Supported canonical options:
+#   - mom-embedding-ultra (default mmBERT 32K)
+#   - mom-embedding-pro   (Qwen3 embedding)
+#   - mom-embedding-flash (EmbeddingGemma)
+EMBEDDING_MODEL="mom-embedding-ultra"
+EMBEDDING_MODEL_REPO=""
+EMBEDDING_MODEL_TYPE="mmbert"
+EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
 DRY_RUN=false
 SKIP_VALIDATION=false
 CLASSIFIER_GPU=false
@@ -62,7 +64,7 @@ Optional:
   -s, --storage-class CLASS          StorageClass for PVCs (default: cluster default)
   --models-pvc-size SIZE             Size for models PVC (default: 10Gi)
   --cache-pvc-size SIZE              Size for cache PVC (default: 5Gi)
-  --embedding-model MODEL            BERT embedding model (default: all-MiniLM-L12-v2)
+  --embedding-model MODEL            Embedding model directory (default: mom-embedding-ultra)
   --dry-run                          Generate manifests without applying
   --skip-validation                  Skip pre-deployment validation
   -h, --help                         Show this help message
@@ -77,8 +79,8 @@ Examples:
   # Deploy simulator with GPU-backed classifier
   $0 -n semantic --simulator --classifier-gpu
 
-  # Deploy with custom storage class and embedding model
-  $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi --embedding-model all-mpnet-base-v2
+  # Deploy with custom storage class and a canonical embedding model
+  $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi --embedding-model mom-embedding-flash
 
   # Dry run to see what will be deployed
   $0 -n semantic -i granite32-8b -m granite32-8b --dry-run
@@ -107,6 +109,7 @@ substitute_vars() {
         -e "s|{{MODEL_NAME_A}}|$MODEL_NAME_A|g" \
         -e "s|{{MODEL_NAME_B}}|$MODEL_NAME_B|g" \
         -e "s|{{EMBEDDING_MODEL}}|$EMBEDDING_MODEL|g" \
+        -e "s|{{EMBEDDING_MODEL_REPO}}|$EMBEDDING_MODEL_REPO|g" \
         -e "s|{{PREDICTOR_SERVICE_IP}}|${PREDICTOR_SERVICE_IP:-10.0.0.1}|g" \
         -e "s|{{PREDICTOR_SERVICE_IP_A}}|${PREDICTOR_SERVICE_IP_A:-10.0.0.1}|g" \
         -e "s|{{PREDICTOR_SERVICE_IP_B}}|${PREDICTOR_SERVICE_IP_B:-10.0.0.1}|g" \
@@ -119,6 +122,49 @@ substitute_vars() {
         sed -i.bak "s/# storageClassName:.*/storageClassName: $STORAGE_CLASS/g" "$output_file"
         rm -f "${output_file}.bak"
     fi
+}
+
+resolve_embedding_settings() {
+    case "$1" in
+        mom-embedding-ultra|mmbert|mmbert-embedding|mmbert-embed-32k-2d-matryoshka)
+            EMBEDDING_MODEL="mom-embedding-ultra"
+            EMBEDDING_MODEL_REPO="llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
+            EMBEDDING_MODEL_TYPE="mmbert"
+            EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
+            ;;
+        mom-embedding-pro|qwen3|qwen3-embedding)
+            EMBEDDING_MODEL="mom-embedding-pro"
+            EMBEDDING_MODEL_REPO="Qwen/Qwen3-Embedding-0.6B"
+            EMBEDDING_MODEL_TYPE="qwen3"
+            EMBEDDING_MODEL_PATH_KEY="qwen3_model_path"
+            ;;
+        mom-embedding-flash|gemma|embeddinggemma-300m)
+            EMBEDDING_MODEL="mom-embedding-flash"
+            EMBEDDING_MODEL_REPO="google/embeddinggemma-300m"
+            EMBEDDING_MODEL_TYPE="gemma"
+            EMBEDDING_MODEL_PATH_KEY="gemma_model_path"
+            ;;
+        *)
+            echo -e "${RED}Unsupported embedding model: $1${NC}"
+            echo "Use one of: mom-embedding-ultra, mom-embedding-pro, mom-embedding-flash"
+            exit 1
+            ;;
+    esac
+}
+
+patch_generated_router_config() {
+    local configmap_file="$1"
+    local patch_expr="$2"
+    local embedded_config="$TEMP_DIR/router-config.generated.yaml"
+
+    yq eval -r '.data["config.yaml"]' "$configmap_file" > "$embedded_config"
+    yq eval "$patch_expr" -i "$embedded_config"
+
+    {
+        awk '1 { print } /^  config.yaml: \|$/ { exit }' "$configmap_file"
+        sed 's/^/    /' "$embedded_config"
+    } > "$configmap_file.tmp"
+    mv "$configmap_file.tmp" "$configmap_file"
 }
 
 # Parse arguments
@@ -193,6 +239,8 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+resolve_embedding_settings "$EMBEDDING_MODEL"
 
 # Validate required arguments
 if [ -z "$NAMESPACE" ]; then
@@ -463,15 +511,19 @@ else
     echo -e "${YELLOW}⚠ Missing configmap source: $CONFIGMAP_SRC${NC}"
 fi
 
+if [ "$EMBEDDING_MODEL" != "mom-embedding-ultra" ]; then
+    patch_generated_router_config "$TEMP_DIR/configmap-router-config.yaml" \
+      ".global.stores.semantic_cache.embedding_model = \"$EMBEDDING_MODEL_TYPE\" |
+       .global.model_catalog.embeddings.semantic.$EMBEDDING_MODEL_PATH_KEY = \"models/$EMBEDDING_MODEL\" |
+       .global.model_catalog.embeddings.semantic.embedding_config.model_type = \"$EMBEDDING_MODEL_TYPE\""
+    echo -e "${GREEN}✓${NC} Patched configmap-router-config.yaml for custom embedding model"
+fi
+
 if [ "$CLASSIFIER_GPU" = true ]; then
-    # Patch use_cpu settings for GPU classifier (bert_model, prompt_guard, category_model, pii_model)
-    sed -i.bak \
-      -e '/bert_model:/,/^[^ ]/ s/use_cpu: true/use_cpu: false/' \
-      -e '/prompt_guard:/,/^[^ ]/ s/use_cpu: true/use_cpu: false/' \
-      -e '/category_model:/,/^[^ ]/ s/use_cpu: true/use_cpu: false/' \
-      -e '/pii_model:/,/^[^ ]/ s/use_cpu: true/use_cpu: false/' \
-      "$TEMP_DIR/configmap-router-config.yaml"
-    rm -f "$TEMP_DIR/configmap-router-config.yaml.bak"
+    patch_generated_router_config "$TEMP_DIR/configmap-router-config.yaml" \
+      ".global.model_catalog.modules.prompt_guard.use_cpu = false |
+       .global.model_catalog.modules.classifier.domain.use_cpu = false |
+       .global.model_catalog.modules.classifier.pii.use_cpu = false"
     echo -e "${GREEN}✓${NC} Patched configmap-router-config.yaml for GPU classifier"
 fi
 

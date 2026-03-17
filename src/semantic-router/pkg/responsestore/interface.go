@@ -233,7 +233,7 @@ type RedisStoreConfig struct {
 	// ConfigPath is the path to an external Redis configuration file.
 	// If provided, settings from the external file take precedence over inline settings.
 	// This is useful for complex configurations or sharing config across environments.
-	// Example: "config/response-api/redis-cluster.yaml"
+	// Example: "deploy/examples/runtime/response-api/redis-cluster.yaml"
 	ConfigPath string `yaml:"config_path,omitempty" json:"config_path,omitempty"`
 }
 

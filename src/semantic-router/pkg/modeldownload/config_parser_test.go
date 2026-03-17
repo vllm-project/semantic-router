@@ -1,6 +1,11 @@
 package modeldownload
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -107,6 +112,7 @@ func TestIsModelDirectory(t *testing.T) {
 		expected bool
 	}{
 		{"models/bert-base-uncased", true},
+		{"models/gmtrouter.pt", false},
 		{"models/lora_model/adapter_config.json", false},
 		{"models/mapping.json", false},
 		{"config/tools_db.json", false},
@@ -121,5 +127,400 @@ func TestIsModelDirectory(t *testing.T) {
 				t.Errorf("isModelDirectory(%s) = %v, expected %v", tt.path, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestExtractModelPathsSkipsRootLevelModelFiles(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.3
+listeners:
+  - name: http-8888
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: openai/gpt-oss-120b
+  models:
+    - name: openai/gpt-oss-120b
+      provider_model_id: openai/gpt-oss-120b
+      backend_refs:
+        - name: primary
+          endpoint: localhost:8000
+          protocol: http
+routing:
+  modelCards:
+    - name: openai/gpt-oss-120b
+      modality: text
+  decisions:
+    - name: default-route
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      algorithm:
+        type: gmtrouter
+        gmtrouter:
+          model_path: models/gmtrouter.pt
+      modelRefs:
+        - model: openai/gpt-oss-120b
+          use_reasoning: false
+`))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+
+	if got := ExtractModelPaths(cfg); slices.Contains(got, "models/gmtrouter.pt") {
+		t.Fatalf("ExtractModelPaths() unexpectedly included root-level model file: %v", got)
+	}
+}
+
+func TestExtractRequiredFilesByModel(t *testing.T) {
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			Classifier: config.Classifier{
+				CategoryModel: config.CategoryModel{
+					ModelID:             "models/mmbert32k-intent-classifier-merged",
+					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+				},
+				PIIModel: config.PIIModel{
+					ModelID:        "models/mmbert32k-pii-detector-merged",
+					PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
+				},
+			},
+			PromptGuard: config.PromptGuardConfig{
+				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
+				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
+			},
+		},
+	}
+
+	got := ExtractRequiredFilesByModel(cfg)
+	want := map[string][]string{
+		"models/mmbert32k-intent-classifier-merged":  {"category_mapping.json"},
+		"models/mmbert32k-pii-detector-merged":       {"pii_type_mapping.json"},
+		"models/mmbert32k-jailbreak-detector-merged": {"jailbreak_type_mapping.json"},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ExtractRequiredFilesByModel() = %#v, want %#v", got, want)
+	}
+}
+
+func TestBuildModelSpecsIncludesConfigDerivedRequiredFiles(t *testing.T) {
+	cfg := &config.RouterConfig{
+		MoMRegistry: map[string]string{
+			"models/mmbert32k-intent-classifier-merged": "llm-semantic-router/mmbert32k-intent-classifier-merged",
+		},
+		InlineModels: config.InlineModels{
+			Classifier: config.Classifier{
+				CategoryModel: config.CategoryModel{
+					ModelID:             "models/mmbert32k-intent-classifier-merged",
+					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+				},
+			},
+		},
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want 1", len(specs))
+	}
+
+	wantRequiredFiles := []string{"config.json", "category_mapping.json"}
+	if !reflect.DeepEqual(specs[0].RequiredFiles, wantRequiredFiles) {
+		t.Fatalf("RequiredFiles = %#v, want %#v", specs[0].RequiredFiles, wantRequiredFiles)
+	}
+}
+
+func TestBuildModelSpecsSkipsDisabledHallucinationFeatureModels(t *testing.T) {
+	cfg := &config.RouterConfig{
+		MoMRegistry: map[string]string{
+			"models/mmbert32k-factcheck-classifier-merged": "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
+			"models/mom-halugate-detector":                 "llm-semantic-router/mom-halugate-detector",
+			"models/mom-halugate-explainer":                "llm-semantic-router/mom-halugate-explainer",
+		},
+		InlineModels: config.InlineModels{
+			HallucinationMitigation: config.HallucinationMitigationConfig{
+				Enabled: false,
+				FactCheckModel: config.FactCheckModelConfig{
+					ModelID: "models/mmbert32k-factcheck-classifier-merged",
+				},
+				HallucinationModel: config.HallucinationModelConfig{
+					ModelID: "models/mom-halugate-detector",
+				},
+				NLIModel: config.NLIModelConfig{
+					ModelID: "models/mom-halugate-explainer",
+				},
+			},
+		},
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 0 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want 0", len(specs))
+	}
+}
+
+func TestBuildModelSpecsIncludesFactCheckClassifierWhenSignalConfigured(t *testing.T) {
+	cfg := &config.RouterConfig{
+		MoMRegistry: map[string]string{
+			"models/mmbert32k-factcheck-classifier-merged": "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{
+				FactCheckRules: []config.FactCheckRule{
+					{Name: "needs_fact_check"},
+				},
+			},
+		},
+		InlineModels: config.InlineModels{
+			HallucinationMitigation: config.HallucinationMitigationConfig{
+				FactCheckModel: config.FactCheckModelConfig{
+					ModelID: "models/mmbert32k-factcheck-classifier-merged",
+				},
+			},
+		},
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want 1", len(specs))
+	}
+	if specs[0].LocalPath != "models/mmbert32k-factcheck-classifier-merged" {
+		t.Fatalf("LocalPath = %q, want fact-check classifier", specs[0].LocalPath)
+	}
+}
+
+func TestBuildModelSpecsIncludesRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.3
+listeners:
+  - name: http-8888
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: openai/gpt-oss-120b
+  models:
+    - name: openai/gpt-oss-120b
+      provider_model_id: openai/gpt-oss-120b
+      backend_refs:
+        - name: primary
+          endpoint: localhost:8000
+          protocol: http
+          weight: 100
+routing:
+  modelCards:
+    - name: openai/gpt-oss-120b
+      modality: text
+  decisions:
+    - name: default-route
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: openai/gpt-oss-120b
+          use_reasoning: false
+`))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+
+	assertContainsAllModelSpecs(t, specs,
+		"models/mom-embedding-ultra",
+		"models/mmbert32k-intent-classifier-merged",
+		"models/mmbert32k-pii-detector-merged",
+		"models/mmbert32k-jailbreak-detector-merged",
+	)
+}
+
+func TestBuildModelSpecsIncludesRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.3
+listeners:
+  - name: http-8888
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: openai/gpt-oss-120b
+  models:
+    - name: openai/gpt-oss-120b
+      provider_model_id: openai/gpt-oss-120b
+      backend_refs:
+        - name: primary
+          endpoint: localhost:8000
+          protocol: http
+          weight: 100
+routing:
+  modelCards:
+    - name: openai/gpt-oss-120b
+      modality: text
+  decisions:
+    - name: default-route
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: openai/gpt-oss-120b
+          use_reasoning: false
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        use_cpu: false
+      bert:
+        use_cpu: false
+    modules:
+      prompt_guard:
+        use_cpu: false
+      classifier:
+        domain:
+          use_cpu: false
+        pii:
+          use_cpu: false
+      hallucination_mitigation:
+        fact_check:
+          use_cpu: false
+        detector:
+          use_cpu: false
+        explainer:
+          use_cpu: false
+      feedback_detector:
+        use_cpu: false
+`))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+
+	assertContainsAllModelSpecs(t, specs,
+		"models/mom-embedding-ultra",
+		"models/mmbert32k-intent-classifier-merged",
+		"models/mmbert32k-pii-detector-merged",
+		"models/mmbert32k-jailbreak-detector-merged",
+	)
+}
+
+func TestBuildModelSpecsSkipsUnusedFeedbackDetectorDefaults(t *testing.T) {
+	cfg := &config.RouterConfig{
+		MoMRegistry: map[string]string{
+			"models/mmbert32k-feedback-detector-merged": "llm-semantic-router/mmbert32k-feedback-detector-merged",
+		},
+		InlineModels: config.InlineModels{
+			FeedbackDetector: config.FeedbackDetectorConfig{
+				Enabled: true,
+				ModelID: "models/mmbert32k-feedback-detector-merged",
+			},
+		},
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 0 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want 0", len(specs))
+	}
+}
+
+func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to resolve reference config path")
+	}
+
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../config/config.yaml"))
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", configPath, err)
+	}
+
+	cfg, err := config.ParseYAMLBytes(data)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+
+	assertContainsAllModelSpecs(t, specs,
+		"models/mom-embedding-pro",
+		"models/mom-embedding-flash",
+		"models/mom-embedding-ultra",
+		"models/mom-embedding-light",
+		"models/mmbert32k-modality-router-merged",
+	)
+}
+
+func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to resolve amd config path")
+	}
+
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../deploy/amd/config.yaml"))
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", configPath, err)
+	}
+
+	cfg, err := config.ParseYAMLBytes(data)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+
+	assertContainsAllModelSpecs(t, specs,
+		"models/mom-embedding-ultra",
+		"models/mmbert32k-intent-classifier-merged",
+		"models/mmbert32k-pii-detector-merged",
+		"models/mmbert32k-jailbreak-detector-merged",
+		"models/mmbert32k-factcheck-classifier-merged",
+		"models/mmbert32k-feedback-detector-merged",
+	)
+	if len(specs) != 6 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want 6", len(specs))
+	}
+}
+
+func assertContainsAllModelSpecs(t *testing.T, specs []ModelSpec, wantPaths ...string) {
+	t.Helper()
+
+	gotPaths := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		gotPaths = append(gotPaths, spec.LocalPath)
+	}
+
+	for _, want := range wantPaths {
+		if !slices.Contains(gotPaths, want) {
+			t.Fatalf("BuildModelSpecs() missing %q; got %v", want, gotPaths)
+		}
 	}
 }

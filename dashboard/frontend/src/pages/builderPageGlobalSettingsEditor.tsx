@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { ASTBackendDecl } from "@/types/dsl";
-
+import type { DSLFieldObject, DSLFieldValue } from "@/types/dsl";
 import styles from "./BuilderPage.module.css";
 import {
   GlobalSettingsEndpointsSection,
@@ -17,16 +16,20 @@ import {
 import { GlobalSettingsRoutingSection } from "./builderPageGlobalSettingsRoutingSection";
 import {
   DslPreviewPanel,
-  generateGlobalDslPreview,
+  generateGlobalOverridePreview,
 } from "./builderPageSharedDslEditors";
 
 const GlobalSettingsEditor: React.FC<{
-  fields: Record<string, unknown>;
-  onUpdate: (fields: Record<string, unknown>) => void;
-  endpoints: ASTBackendDecl[];
+  fields: DSLFieldObject;
+  onUpdate: (fields: DSLFieldObject) => void;
+  endpoints: Array<{
+    backendType: string;
+    name: string;
+    fields: DSLFieldObject;
+  }>;
   onSelectEndpoint: () => void;
 }> = ({ fields, onUpdate, endpoints: allEndpoints }) => {
-  const [local, setLocal] = useState<Record<string, unknown>>(() =>
+  const [local, setLocal] = useState<DSLFieldObject>(() =>
     structuredClone(fields),
   );
   const [collapsedSections, setCollapsedSections] = useState<
@@ -41,12 +44,12 @@ const GlobalSettingsEditor: React.FC<{
     setCollapsedSections((previous) => ({ ...previous, [key]: !previous[key] }));
   }, []);
 
-  const setField = useCallback((key: string, value: unknown) => {
+  const setField = useCallback((key: string, value: DSLFieldValue) => {
     setLocal((previous) => ({ ...previous, [key]: value }));
   }, []);
 
   const setNestedField = useCallback(
-    (parentKey: string, childKey: string, value: unknown) => {
+    (parentKey: string, childKey: string, value: DSLFieldValue) => {
       setLocal((previous) => {
         const parent = getObj(previous, parentKey);
         return {
@@ -59,7 +62,7 @@ const GlobalSettingsEditor: React.FC<{
   );
 
   const setDeepField = useCallback(
-    (p1: string, p2: string, p3: string, value: unknown) => {
+    (p1: string, p2: string, p3: string, value: DSLFieldValue) => {
       setLocal((previous) => {
         const parent = getObj(previous, p1);
         const child = getObj(parent, p2);
@@ -76,7 +79,10 @@ const GlobalSettingsEditor: React.FC<{
     onUpdate(local);
   }, [local, onUpdate]);
 
-  const dslPreview = useMemo(() => generateGlobalDslPreview(local), [local]);
+  const globalPreview = useMemo(
+    () => generateGlobalOverridePreview(local),
+    [local],
+  );
 
   const promptGuard = getObj(local, "prompt_guard");
   const hallucination = getObj(local, "hallucination_mitigation");
@@ -86,10 +92,7 @@ const GlobalSettingsEditor: React.FC<{
   const authz = getObj(local, "authz");
   const ratelimit = getObj(local, "ratelimit");
   const modelSelection = getObj(local, "model_selection");
-  const reasoningFamilies = getObj(local, "reasoning_families") as Record<
-    string,
-    unknown
-  >;
+  const reasoningFamilies = getObj(local, "reasoning_families");
   const looper = getObj(local, "looper");
   const listeners = getListeners(local, "listeners");
 
@@ -100,6 +103,17 @@ const GlobalSettingsEditor: React.FC<{
     (endpoint) => endpoint.backendType === "provider_profile",
   );
 
+  const serializeListeners = useCallback(
+    (listeners: EditableListener[]): DSLFieldValue[] =>
+      listeners.map((listener) => ({
+        name: listener.name,
+        address: listener.address,
+        port: listener.port,
+        timeout: listener.timeout,
+      })),
+    [],
+  );
+
   const updateListener = useCallback(
     (index: number, field: keyof EditableListener, value: string | number) => {
       setLocal((previous) => {
@@ -107,10 +121,10 @@ const GlobalSettingsEditor: React.FC<{
         const next = current.map((listener, listenerIndex) =>
           listenerIndex === index ? { ...listener, [field]: value } : listener,
         );
-        return { ...previous, listeners: next };
+        return { ...previous, listeners: serializeListeners(next) };
       });
     },
-    [],
+    [serializeListeners],
   );
 
   const addListener = useCallback(() => {
@@ -123,7 +137,7 @@ const GlobalSettingsEditor: React.FC<{
         ) + 1;
       return {
         ...previous,
-        listeners: [
+        listeners: serializeListeners([
           ...current,
           {
             name: `http-${nextPort}`,
@@ -131,10 +145,10 @@ const GlobalSettingsEditor: React.FC<{
             port: nextPort,
             timeout: "300s",
           },
-        ],
+        ]),
       };
     });
-  }, []);
+  }, [serializeListeners]);
 
   const removeListener = useCallback((index: number) => {
     setLocal((previous) => {
@@ -142,12 +156,12 @@ const GlobalSettingsEditor: React.FC<{
       if (current.length <= 1) return previous;
       return {
         ...previous,
-        listeners: current.filter(
-          (_, listenerIndex) => listenerIndex !== index,
+        listeners: serializeListeners(
+          current.filter((_, listenerIndex) => listenerIndex !== index),
         ),
       };
     });
-  }, []);
+  }, [serializeListeners]);
 
   return (
     <div className={styles.globalEditor}>
@@ -208,7 +222,10 @@ const GlobalSettingsEditor: React.FC<{
         onToggleSection={toggleCollapse}
       />
 
-      <DslPreviewPanel dslText={dslPreview} />
+      <DslPreviewPanel
+        title="Canonical global override"
+        dslText={globalPreview}
+      />
     </div>
   );
 };

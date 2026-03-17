@@ -3,6 +3,7 @@ package startupstatus
 import (
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"path/filepath"
 	"sync"
@@ -27,14 +28,60 @@ type Writer struct {
 	mu   sync.Mutex
 }
 
+var statusDirCache sync.Map
+
 // NewWriter creates a writer using a router config path.
 func NewWriter(configPath string) *Writer {
 	return &Writer{path: StatusPathFromConfigPath(configPath)}
 }
 
-// StatusPathFromConfigPath returns the runtime status file path next to router-config.yaml.
+// StatusPathFromConfigPath returns the runtime status path, preferring the config
+// directory when it is writable and otherwise falling back to a temp-owned path.
 func StatusPathFromConfigPath(configPath string) string {
-	return filepath.Join(filepath.Dir(configPath), "router-runtime.json")
+	statusDir := runtimeStatusDirFromConfigPath(configPath)
+	return filepath.Join(statusDir, "router-runtime.json")
+}
+
+func runtimeStatusDirFromConfigPath(configPath string) string {
+	if overrideDir := os.Getenv("VLLM_SR_RUNTIME_STATUS_DIR"); overrideDir != "" {
+		return overrideDir
+	}
+
+	configDir := filepath.Dir(configPath)
+	cacheKey := filepath.Clean(configDir)
+	if cached, ok := statusDirCache.Load(cacheKey); ok {
+		return cached.(string)
+	}
+
+	statusDir := filepath.Join(os.TempDir(), "vllm-sr", "runtime-status", stablePathToken(configDir))
+	if dirWritable(configDir) {
+		statusDir = configDir
+	}
+	statusDirCache.Store(cacheKey, statusDir)
+	return statusDir
+}
+
+func dirWritable(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	probe, err := os.CreateTemp(path, ".vllm-sr-write-check-*")
+	if err != nil {
+		return false
+	}
+	probePath := probe.Name()
+	if closeErr := probe.Close(); closeErr != nil {
+		_ = os.Remove(probePath)
+		return false
+	}
+	return os.Remove(probePath) == nil
+}
+
+func stablePathToken(path string) string {
+	hasher := fnv.New64a()
+	_, _ = hasher.Write([]byte(filepath.Clean(path)))
+	return fmt.Sprintf("%016x", hasher.Sum64())
 }
 
 // Write persists the provided state atomically.

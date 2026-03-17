@@ -1,11 +1,8 @@
 package testcases
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"sync/atomic"
 	"time"
 
@@ -16,30 +13,37 @@ import (
 
 func init() {
 	pkgtestcases.Register("failover-during-traffic", pkgtestcases.TestCase{
-		Description: "While sending requests, delete one vLLM pod and verify high availability and recovery",
+		Description: "While sending benign backend-routed requests, delete one vLLM pod and verify failover and recovery",
 		Tags:        []string{"ha", "failover"},
 		Fn:          testFailoverDuringTraffic,
 	})
 }
 
 func testFailoverDuringTraffic(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	localPort, stopPF, err := setupServiceConnection(ctx, client, opts)
+	session, chatClient, err := openProductionStackChatSession(ctx, client, opts, 20*time.Second)
 	if err != nil {
 		return err
 	}
-	defer stopPF()
-
-	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-	httpClient := &http.Client{Timeout: 15 * time.Second}
+	defer session.Close()
 
 	// Start sending requests in background
 	total := 100
-	var errs int32 // Use atomic for thread-safe access
+	var requestErrors int32
+	var fastResponses int32
+	var backendSuccessCount int32
 	done := make(chan struct{})
+	fastResponseDecisions := map[string]int{}
 	go func() {
 		for i := 0; i < total; i++ {
-			if err := sendChat(ctx, httpClient, url, i); err != nil {
-				atomic.AddInt32(&errs, 1)
+			result, err := sendProductionStackChatRequest(ctx, chatClient, i+1)
+			switch {
+			case err != nil:
+				atomic.AddInt32(&requestErrors, 1)
+			case result.FastResponse:
+				atomic.AddInt32(&fastResponses, 1)
+				recordDecisionCount(fastResponseDecisions, result.SelectedDecision)
+			default:
+				atomic.AddInt32(&backendSuccessCount, 1)
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -60,47 +64,39 @@ func testFailoverDuringTraffic(ctx context.Context, client *kubernetes.Clientset
 
 	<-done
 
-	errCount := int(atomic.LoadInt32(&errs))
-	successRate := float64(total-errCount) / float64(total)
+	errCount := int(atomic.LoadInt32(&requestErrors))
+	fastResponseCount := int(atomic.LoadInt32(&fastResponses))
+	successCount := int(atomic.LoadInt32(&backendSuccessCount))
+	backendSuccessRate := float64(successCount) / float64(total)
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"total":        total,
-			"errors":       errCount,
-			"success_rate": successRate,
+			"total":                   total,
+			"errors":                  errCount,
+			"fast_responses":          fastResponseCount,
+			"success_count":           successCount,
+			"backend_success_rate":    backendSuccessRate,
+			"backend_success_count":   successCount,
+			"fast_response_decisions": fastResponseDecisions,
 		})
 	}
-	// Expect >= 0.95 success rate despite disruption
-	if successRate < 0.95 {
-		return fmt.Errorf("success rate too low during failover: %.2f", successRate)
+
+	if fastResponseCount > 0 {
+		return fmt.Errorf(
+			"unexpected fast_response during failover traffic: %d/%d requests were short-circuited before reaching upstream backends (%s)",
+			fastResponseCount,
+			total,
+			formatDecisionCounts(fastResponseDecisions),
+		)
+	}
+
+	// Expect >= 0.95 backend success rate despite disruption.
+	if backendSuccessRate < 0.95 {
+		return fmt.Errorf("backend success rate too low during failover: %.2f", backendSuccessRate)
 	}
 
 	// Ensure deployment recovers to 2 ready replicas
 	if err := waitDeploymentReadyReplicas(ctx, client, "default", "vllm-llama3-8b-instruct", 2, 5*time.Minute, opts.Verbose); err != nil {
 		return fmt.Errorf("vllm demo did not recover: %w", err)
-	}
-	return nil
-}
-
-func sendChat(ctx context.Context, httpClient *http.Client, url string, id int) error {
-	reqBody := map[string]interface{}{
-		"model": "MoM",
-		"messages": []map[string]string{
-			{"role": "user", "content": fmt.Sprintf("check %d", id)},
-		},
-	}
-	b, _ := json.Marshal(reqBody)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(b))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("status %d", resp.StatusCode)
 	}
 	return nil
 }

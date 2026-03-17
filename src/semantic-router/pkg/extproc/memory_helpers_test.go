@@ -77,10 +77,10 @@ func TestExtractAutoStore_PerDecisionPlugin_Enabled(t *testing.T) {
 			Plugins: []config.DecisionPlugin{
 				{
 					Type: "memory",
-					Configuration: map[string]interface{}{
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
 						"enabled":    true,
 						"auto_store": true,
-					},
+					}),
 				},
 			},
 		},
@@ -103,10 +103,10 @@ func TestExtractAutoStore_PerDecisionPlugin_Disabled(t *testing.T) {
 			Plugins: []config.DecisionPlugin{
 				{
 					Type: "memory",
-					Configuration: map[string]interface{}{
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
 						"enabled":    true,
 						"auto_store": false, // Explicitly disabled
-					},
+					}),
 				},
 			},
 		},
@@ -129,10 +129,10 @@ func TestExtractAutoStore_PerDecisionPlugin_NotSet_DefaultsFalse(t *testing.T) {
 			Plugins: []config.DecisionPlugin{
 				{
 					Type: "memory",
-					Configuration: map[string]interface{}{
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
 						"enabled": true,
 						// auto_store NOT set - defaults to false
-					},
+					}),
 				},
 			},
 		},
@@ -153,7 +153,7 @@ func TestExtractAutoStore_NoMemoryPlugin_ReturnsFalse(t *testing.T) {
 		VSRSelectedDecision: &config.Decision{
 			Name: "no_memory_decision",
 			Plugins: []config.DecisionPlugin{
-				{Type: "pii", Configuration: map[string]interface{}{"enabled": true}},
+				{Type: "pii", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true})},
 				// No memory plugin
 			},
 		},

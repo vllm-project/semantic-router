@@ -118,6 +118,9 @@ spec:
     - name: llama3-8b-endpoint
       model: llama3-8b
       reasoningFamily: qwen3
+      loras:
+        - name: computer-science-expert
+          description: Adapter for advanced computer science prompts
       backend:
         type: kserve
         inferenceServiceName: llama-3-8b
@@ -137,25 +140,58 @@ spec:
     storageClassName: "standard"
 
   config:
-    bert_model:
-      model_id: "models/mom-embedding-light"
-      threshold: "0.6"
-      use_cpu: true
+    providers:
+      defaults:
+        default_model: llama3-8b
+        default_reasoning_effort: medium
+        reasoning_families:
+          qwen3:
+            type: chat_template_kwargs
+            parameter: enable_thinking
+      models:
+        - name: llama3-8b
+          provider_model_id: llama3-8b
+          backend_refs:
+            - name: llama3-8b-endpoint
+              endpoint: llama-3-8b-predictor.default.svc.cluster.local:80
+              protocol: http
 
-    semantic_cache:
-      enabled: true
-      backend_type: "memory"
-      max_entries: 1000
-      ttl_seconds: 3600
+    routing:
+      modelCards:
+        - name: llama3-8b
+          modality: text
+          capabilities: ["chat", "reasoning"]
+      decisions:
+        - name: default-route
+          description: Catch-all route
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: llama3-8b
+              use_reasoning: false
 
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: "0.2"
-
-    prompt_guard:
-      enabled: true
-      threshold: "0.7"
+    global:
+      stores:
+        semantic_cache:
+          enabled: true
+          backend_type: memory
+          max_entries: 1000
+          ttl_seconds: 3600
+      integrations:
+        tools:
+          enabled: true
+          top_k: 3
+          similarity_threshold: 0.2
+      model_catalog:
+        system:
+          prompt_guard: models/mmbert32k-jailbreak-detector-merged
+        modules:
+          prompt_guard:
+            enabled: true
+            model_ref: prompt_guard
+            threshold: 0.7
 
   toolsDb:
     - tool:
@@ -180,6 +216,8 @@ Apply the configuration:
 ```bash
 kubectl apply -f my-router.yaml
 ```
+
+`spec.config` should use the same canonical `providers/routing/global` layout as local `config.yaml`. `spec.vllmEndpoints` remains the Kubernetes adapter for discovering backends and served-model aliases; the operator translates it into canonical `providers.models[].backend_refs[]` and `routing.modelCards` entries, including optional `loras`, when rendering the runtime config.
 
 ## Advanced Features
 
@@ -206,38 +244,34 @@ The operator supports three high-performance embedding models for semantic under
 ```yaml
 spec:
   config:
-    # Configure mmBERT 2D Matryoshka embeddings
-    embedding_models:
-      mmbert_model_path: "models/mmbert-embedding"
-      use_cpu: true
-
-      # HNSW configuration for embedding-based classification
-      hnsw_config:
-        model_type: "mmbert"
-
-        # Layer early exit: balance speed vs accuracy
-        # Layer 3: ~7x speedup (fast, good for high-volume queries)
-        # Layer 6: ~3.6x speedup (balanced - recommended)
-        # Layer 11: ~2x speedup (higher accuracy)
-        # Layer 22: full model (maximum accuracy)
-        target_layer: 6
-
-        # Dimension reduction for faster similarity search
-        # Options: 64, 128, 256, 512, 768
-        target_dimension: 256
-
-        preload_embeddings: true
-        enable_soft_matching: true
-        min_score_threshold: "0.5"
-
-    # Use mmBERT in semantic cache
-    semantic_cache:
-      enabled: true
-      backend_type: "memory"
-      embedding_model: "mmbert"
-      similarity_threshold: "0.85"
-      max_entries: 5000
-      ttl_seconds: 7200
+    global:
+      model_catalog:
+        embeddings:
+          semantic:
+            mmbert_model_path: "models/mom-embedding-ultra"
+            use_cpu: true
+            embedding_config:
+              model_type: "mmbert"
+              # Layer early exit: balance speed vs accuracy
+              # Layer 3: ~7x speedup (fast, good for high-volume queries)
+              # Layer 6: ~3.6x speedup (balanced - recommended)
+              # Layer 11: ~2x speedup (higher accuracy)
+              # Layer 22: full model (maximum accuracy)
+              target_layer: 6
+              # Dimension reduction for faster similarity search
+              # Options: 64, 128, 256, 512, 768
+              target_dimension: 256
+              preload_embeddings: true
+              enable_soft_matching: true
+              min_score_threshold: "0.5"
+      stores:
+        semantic_cache:
+          enabled: true
+          backend_type: "memory"
+          embedding_model: "mmbert"
+          similarity_threshold: "0.85"
+          max_entries: 5000
+          ttl_seconds: 7200
 ```
 
 See [mmbert sample configuration](https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_mmbert.yaml) for a complete example.
@@ -247,18 +281,21 @@ See [mmbert sample configuration](https://raw.githubusercontent.com/vllm-project
 ```yaml
 spec:
   config:
-    embedding_models:
-      qwen3_model_path: "models/qwen3-embedding"
-      use_cpu: true
-
-    semantic_cache:
-      enabled: true
-      backend_type: "redis"
-      embedding_model: "qwen3"
-      redis:
-        connection:
-          host: redis.cache-backends.svc.cluster.local
-          port: 6379
+    global:
+      model_catalog:
+        embeddings:
+          semantic:
+            qwen3_model_path: "models/qwen3-embedding"
+            use_cpu: true
+      stores:
+        semantic_cache:
+          enabled: true
+          backend_type: "redis"
+          embedding_model: "qwen3"
+          redis:
+            connection:
+              host: redis.cache-backends.svc.cluster.local
+              port: 6379
         index:
           vector_field:
             dimension: 1024  # Qwen3 dimension
@@ -866,18 +903,15 @@ Simple in-memory cache suitable for development and small deployments.
 ```yaml
 spec:
   config:
-    bert_model:
-      model_id: models/mom-embedding-light
-      threshold: "0.6"
-      use_cpu: true
-
-    semantic_cache:
-      enabled: true
-      backend_type: memory
-      similarity_threshold: "0.8"
-      max_entries: 1000
-      ttl_seconds: 3600
-      eviction_policy: fifo  # fifo, lru, or lfu
+    global:
+      stores:
+        semantic_cache:
+          enabled: true
+          backend_type: memory
+          similarity_threshold: "0.8"
+          max_entries: 1000
+          ttl_seconds: 3600
+          eviction_policy: fifo  # fifo, lru, or lfu
 ```
 
 **When to use:**
@@ -912,48 +946,41 @@ kubectl create secret generic redis-credentials \
 ```yaml
 spec:
   config:
-    bert_model:
-      model_id: models/mom-embedding-light
-      threshold: "0.6"
-      use_cpu: true
-
-    semantic_cache:
-      enabled: true
-      backend_type: redis
-      similarity_threshold: "0.85"
-      ttl_seconds: 3600
-      embedding_model: bert
-
-      redis:
-        connection:
-          host: redis.default.svc.cluster.local
-          port: 6379
-          database: 0
-          password_secret_ref:
-            name: redis-credentials
-            key: password
-          timeout: 30
-          tls:
-            enabled: false
-
-        index:
-          name: semantic_cache_idx
-          prefix: "cache:"
-          vector_field:
-            name: embedding
-            dimension: 384  # Match your embedding model
-            metric_type: COSINE
-          index_type: HNSW
-          params:
-            M: 16
-            efConstruction: 64
-
-        search:
-          topk: 1
-
-        development:
-          auto_create_index: true
-          verbose_errors: true
+    global:
+      stores:
+        semantic_cache:
+          enabled: true
+          backend_type: redis
+          similarity_threshold: "0.85"
+          ttl_seconds: 3600
+          embedding_model: mmbert
+          redis:
+            connection:
+              host: redis.default.svc.cluster.local
+              port: 6379
+              database: 0
+              password_secret_ref:
+                name: redis-credentials
+                key: password
+              timeout: 30
+              tls:
+                enabled: false
+            index:
+              name: semantic_cache_idx
+              prefix: "cache:"
+              vector_field:
+                name: embedding
+                dimension: 768  # Match the default mmBERT ultra embedding model
+                metric_type: COSINE
+              index_type: HNSW
+              params:
+                M: 16
+                efConstruction: 64
+            search:
+              topk: 1
+            development:
+              auto_create_index: true
+              verbose_errors: true
 ```
 
 **When to use:**
@@ -991,65 +1018,56 @@ kubectl create secret generic milvus-credentials \
 ```yaml
 spec:
   config:
-    bert_model:
-      model_id: models/mom-embedding-light
-      threshold: "0.6"
-      use_cpu: true
-
-    semantic_cache:
-      enabled: true
-      backend_type: milvus
-      similarity_threshold: "0.90"
-      ttl_seconds: 7200
-      embedding_model: bert
-
-      milvus:
-        connection:
-          host: milvus-standalone.default.svc.cluster.local
-          port: 19530
-          database: semantic_router_cache
-          timeout: 30
-          auth:
-            enabled: true
-            username: root
-            password_secret_ref:
-              name: milvus-credentials
-              key: password
-
-        collection:
-          name: semantic_cache
-          description: "Semantic cache for LLM responses"
-          vector_field:
-            name: embedding
-            dimension: 384  # Match your embedding model
-            metric_type: IP
-          index:
-            type: HNSW
-            params:
-              M: 16
-              efConstruction: 64
-
-        search:
-          params:
-            ef: 64
-          topk: 10
-          consistency_level: Session
-
-        performance:
-          connection_pool:
-            max_connections: 10
-            max_idle_connections: 5
-          batch:
-            insert_batch_size: 100
-
-        data_management:
-          ttl:
-            enabled: true
-            timestamp_field: created_at
-            cleanup_interval: 3600
-
-        development:
-          auto_create_collection: true
+    global:
+      stores:
+        semantic_cache:
+          enabled: true
+          backend_type: milvus
+          similarity_threshold: "0.90"
+          ttl_seconds: 7200
+          embedding_model: mmbert
+          milvus:
+            connection:
+              host: milvus-standalone.default.svc.cluster.local
+              port: 19530
+              database: semantic_router_cache
+              timeout: 30
+              auth:
+                enabled: true
+                username: root
+                password_secret_ref:
+                  name: milvus-credentials
+                  key: password
+            collection:
+              name: semantic_cache
+              description: "Semantic cache for LLM responses"
+              vector_field:
+                name: embedding
+                dimension: 768  # Match the default mmBERT ultra embedding model
+                metric_type: IP
+              index:
+                type: HNSW
+                params:
+                  M: 16
+                  efConstruction: 64
+            search:
+              params:
+                ef: 64
+              topk: 10
+              consistency_level: Session
+            performance:
+              connection_pool:
+                max_connections: 10
+                max_idle_connections: 5
+              batch:
+                insert_batch_size: 100
+            data_management:
+              ttl:
+                enabled: true
+                timestamp_field: created_at
+                cleanup_interval: 3600
+            development:
+              auto_create_collection: true
 ```
 
 **When to use:**
@@ -1077,22 +1095,18 @@ Combines in-memory HNSW index with persistent Milvus storage for optimal perform
 ```yaml
 spec:
   config:
-    bert_model:
-      model_id: models/mom-embedding-light
-      threshold: "0.6"
-      use_cpu: true
-
-    semantic_cache:
-      enabled: true
-      backend_type: hybrid
-      similarity_threshold: "0.85"
-      ttl_seconds: 3600
-      max_entries: 5000
-      eviction_policy: lru
-      embedding_model: bert
-
-      # HNSW in-memory configuration
-      hnsw:
+    global:
+      stores:
+        semantic_cache:
+          enabled: true
+          backend_type: hybrid
+          similarity_threshold: "0.85"
+          ttl_seconds: 3600
+          max_entries: 5000
+          eviction_policy: lru
+          embedding_model: mmbert
+          # HNSW in-memory configuration
+          hnsw:
         use_hnsw: true
         hnsw_m: 32
         hnsw_ef_construction: 128
@@ -1294,8 +1308,10 @@ Configure via:
 ```yaml
 spec:
   config:
-    semantic_cache:
-      embedding_model: bert  # or qwen3, gemma
+    global:
+      stores:
+        semantic_cache:
+          embedding_model: mmbert  # or qwen3, gemma with explicit model_catalog override
 ```
 
 **Note:** Ensure the `dimension` in cache config matches your chosen embedding model.
@@ -1317,13 +1333,13 @@ For detailed configuration options, use `kubectl explain`:
 
 ```bash
 # Redis cache configuration
-kubectl explain semanticrouter.spec.config.semantic_cache.redis
+kubectl explain semanticrouter.spec.config.global.stores.semantic_cache.redis
 
 # Milvus cache configuration
-kubectl explain semanticrouter.spec.config.semantic_cache.milvus
+kubectl explain semanticrouter.spec.config.global.stores.semantic_cache.milvus
 
 # HNSW configuration
-kubectl explain semanticrouter.spec.config.semantic_cache.hnsw
+kubectl explain semanticrouter.spec.config.global.stores.semantic_cache.hnsw
 ```
 
 ### Semantic Router Configuration
@@ -1335,78 +1351,88 @@ Key configuration sections:
 ```yaml
 spec:
   config:
-    # BERT model for embeddings (required for semantic cache)
-    bert_model:
-      model_id: "models/mom-embedding-light"
-      threshold: 0.6
-      use_cpu: true
+    providers:
+      defaults:
+        reasoning_families:
+          deepseek:
+            type: "chat_template_kwargs"
+            parameter: "thinking"
+          qwen3:
+            type: "chat_template_kwargs"
+            parameter: "enable_thinking"
+          gpt:
+            type: "reasoning_effort"
+            parameter: "reasoning_effort"
 
-    # Semantic cache (see Semantic Cache Backends section above)
-    semantic_cache:
-      enabled: true
-      backend_type: "memory"  # or redis, milvus, hybrid
-      similarity_threshold: 0.8
-      max_entries: 1000
-      ttl_seconds: 3600
-      eviction_policy: "fifo"
+    global:
+      model_catalog:
+        embeddings:
+          semantic:
+            mmbert_model_path: "models/mom-embedding-ultra"
+            use_cpu: true
+            embedding_config:
+              model_type: "mmbert"
+              preload_embeddings: true
+              target_dimension: 768
+              target_layer: 22
+              min_score_threshold: 0.5
+        system:
+          prompt_guard: "models/mmbert32k-jailbreak-detector-merged"
+          domain_classifier: "models/mmbert32k-intent-classifier-merged"
+          pii_classifier: "models/mmbert32k-pii-detector-merged"
+        modules:
+          prompt_guard:
+            enabled: true
+            model_id: "models/mmbert32k-jailbreak-detector-merged"
+            threshold: 0.7
+            use_cpu: true
+            use_mmbert_32k: true
+          classifier:
+            domain:
+              model_id: "models/mmbert32k-intent-classifier-merged"
+              threshold: 0.5
+              use_cpu: true
+              use_mmbert_32k: true
+            pii:
+              model_id: "models/mmbert32k-pii-detector-merged"
+              threshold: 0.9
+              use_cpu: true
+              use_mmbert_32k: true
 
-    # Tools auto-selection
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: 0.2
-      tools_db_path: "config/tools_db.json"
-      fallback_to_empty: true
-
-    # Prompt guard (jailbreak detection)
-    prompt_guard:
-      enabled: true
-      model_id: "models/mom-jailbreak-classifier"
-      threshold: 0.7
-      use_cpu: true
-
-    # Classifiers
-    classifier:
-      category_model:
-        model_id: "models/lora_intent_classifier_bert-base-uncased_model"
-        threshold: 0.6
-        use_cpu: true
-      pii_model:
-        model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
-        threshold: 0.7
-        use_cpu: true
-
-    # Reasoning configuration per model family
-    reasoning_families:
-      deepseek:
-        type: "chat_template_kwargs"
-        parameter: "thinking"
-      qwen3:
-        type: "chat_template_kwargs"
-        parameter: "enable_thinking"
-      gpt:
-        type: "reasoning_effort"
-        parameter: "reasoning_effort"
-
-    # API batch classification
-    api:
-      batch_classification:
-        max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
-        metrics:
+      stores:
+        semantic_cache:
           enabled: true
-          detailed_goroutine_tracking: true
-          sample_rate: 1.0
+          backend_type: "memory"  # or redis, milvus, hybrid
+          similarity_threshold: 0.8
+          max_entries: 1000
+          ttl_seconds: 3600
+          eviction_policy: "fifo"
 
-    # Observability
-    observability:
-      tracing:
-        enabled: false
-        provider: "opentelemetry"
-        exporter:
-          type: "otlp"
-          endpoint: "jaeger:4317"
+      integrations:
+        tools:
+          enabled: true
+          top_k: 3
+          similarity_threshold: 0.2
+          tools_db_path: "config/tools_db.json"
+          fallback_to_empty: true
+
+      services:
+        api:
+          batch_classification:
+            max_batch_size: 100
+            concurrency_threshold: 5
+            max_concurrency: 8
+            metrics:
+              enabled: true
+              detailed_goroutine_tracking: true
+              sample_rate: 1.0
+        observability:
+          tracing:
+            enabled: false
+            provider: "opentelemetry"
+            exporter:
+              type: "otlp"
+              endpoint: "jaeger:4317"
 ```
 
 ### Tools Database
@@ -1803,6 +1829,6 @@ kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
 ## Next Steps
 
 - [Configure semantic router features](../configuration)
-- [Set up monitoring and observability](../../tutorials/observability/dashboard)
+- [Set up monitoring and observability](../../tutorials/global/api-and-observability)
 - [Explore other deployment options](../installation.md)
 - [Join the community](../../community/overview)

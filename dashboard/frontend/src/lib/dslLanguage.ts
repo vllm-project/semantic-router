@@ -57,7 +57,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
   ignoreCase: false,
 
   keywords: [
-    'SIGNAL', 'ROUTE', 'PLUGIN', 'BACKEND', 'GLOBAL',
+    'SIGNAL', 'ROUTE', 'PLUGIN',
     'PRIORITY', 'WHEN', 'MODEL', 'ALGORITHM',
   ],
 
@@ -79,11 +79,6 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
     'knn', 'kmeans', 'svm',
   ],
 
-  backendTypes: [
-    'vllm_endpoint', 'provider_profile', 'embedding_model',
-    'semantic_cache', 'memory', 'response_api',
-  ],
-
   booleans: ['true', 'false'],
 
   tokenizer: {
@@ -102,7 +97,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
       [/\b(true|false)\b/, 'constant.language'],
 
       // Top-level keywords (SIGNAL, ROUTE, etc.)
-      [/\b(SIGNAL|ROUTE|PLUGIN|BACKEND|GLOBAL)\b/, 'keyword'],
+      [/\b(SIGNAL|ROUTE|PLUGIN)\b/, 'keyword'],
 
       // Route sub-keywords
       [/\b(PRIORITY|WHEN|MODEL|ALGORITHM)\b/, 'keyword'],
@@ -126,12 +121,6 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
       [
         /\b(confidence|ratings|remom|static|elo|router_dc|automix|hybrid|rl_driven|gmtrouter|latency_aware|knn|kmeans|svm)\b/,
         'type.algorithm',
-      ],
-
-      // Backend types
-      [
-        /\b(vllm_endpoint|provider_profile|embedding_model|response_api)\b/,
-        'type.backend',
       ],
 
       // Field names (identifier followed by colon)
@@ -169,7 +158,6 @@ export function defineTheme(monaco: typeof monacoNs): void {
       { token: 'type', foreground: '4EC9B0' },
       { token: 'type.plugin', foreground: 'DCDCAA' },
       { token: 'type.algorithm', foreground: '9CDCFE' },
-      { token: 'type.backend', foreground: '4FC1FF' },
       { token: 'string', foreground: 'CE9178' },
       { token: 'string.escape', foreground: 'D7BA7D' },
       { token: 'number', foreground: 'B5CEA8' },
@@ -196,11 +184,10 @@ export function defineTheme(monaco: typeof monacoNs): void {
 // ---------- Completion Provider ----------
 
 const KEYWORD_SUGGESTIONS = [
+  { label: 'MODEL block', insertText: 'MODEL ${1:name} {\n\t$0\n}', detail: 'Top-level routing model declaration' },
   { label: 'SIGNAL', insertText: 'SIGNAL ${1:keyword} ${2:name} {\n\t$0\n}', detail: 'Signal declaration' },
   { label: 'ROUTE', insertText: 'ROUTE ${1:name} (description = "${2:desc}") {\n\tPRIORITY ${3:10}\n\tWHEN ${4:condition}\n\tMODEL "${5:model}"\n\t$0\n}', detail: 'Route declaration' },
   { label: 'PLUGIN', insertText: 'PLUGIN ${1:name} ${2:type} {\n\t$0\n}', detail: 'Plugin template' },
-  { label: 'BACKEND', insertText: 'BACKEND ${1:vllm_endpoint} ${2:name} {\n\taddress: "${3:localhost}"\n\tport: ${4:8000}\n\t$0\n}', detail: 'Backend declaration' },
-  { label: 'GLOBAL', insertText: 'GLOBAL {\n\t$0\n}', detail: 'Global settings' },
   { label: 'PRIORITY', insertText: 'PRIORITY ${1:10}', detail: 'Route priority (1-100)' },
   { label: 'WHEN', insertText: 'WHEN ${1:condition}', detail: 'Route condition' },
   { label: 'MODEL', insertText: 'MODEL "${1:model-name}"', detail: 'Model reference' },

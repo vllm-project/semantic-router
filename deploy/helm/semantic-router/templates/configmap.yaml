@@ -1,7 +1,10 @@
 {{- $config := deepCopy .Values.config -}}
-{{- $semanticCache := (get $config "semantic_cache") | default (dict) -}}
-{{- $responseAPI := (get $config "response_api") | default (dict) -}}
-{{- $observability := (get $config "observability") | default (dict) -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $stores := (get $global "stores") | default (dict) -}}
+{{- $services := (get $global "services") | default (dict) -}}
+{{- $semanticCache := (get $stores "semantic_cache") | default (dict) -}}
+{{- $responseAPI := (get $services "response_api") | default (dict) -}}
+{{- $observability := (get $services "observability") | default (dict) -}}
 {{- $tracing := (get $observability "tracing") | default (dict) -}}
 {{- $tracingExporter := (get $tracing "exporter") | default (dict) -}}
 {{- $tracingResource := (get $tracing "resource") | default (dict) -}}
@@ -11,10 +14,20 @@
 {{- $tracingEnabled := (get $tracing "enabled") | default false -}}
 
 {{- if and .Values.dependencies.semanticCache.redis.enabled (eq $semanticBackend "redis") -}}
-{{- $_ := set $semanticCache "backend_config_path" "config/semantic-cache.redis.yaml" -}}
+{{- $semanticRedis := dict -}}
+{{- $_ := set $semanticRedis "connection" (dict "host" (include "semantic-router.semanticCache.redisHost" .) "port" .Values.dependencies.semanticCache.redis.port "database" .Values.dependencies.semanticCache.redis.database "password" .Values.dependencies.semanticCache.redis.password "timeout" .Values.dependencies.semanticCache.redis.timeout "tls" (dict "enabled" .Values.dependencies.semanticCache.redis.tls.enabled)) -}}
+{{- $_ := set $semanticRedis "index" (dict "name" .Values.dependencies.semanticCache.redis.index.name "prefix" .Values.dependencies.semanticCache.redis.index.prefix "vector_field" (dict "name" .Values.dependencies.semanticCache.redis.index.vectorFieldName "dimension" 384 "metric_type" .Values.dependencies.semanticCache.redis.index.metricType) "index_type" .Values.dependencies.semanticCache.redis.index.indexType "params" (dict "M" .Values.dependencies.semanticCache.redis.index.params.m "efConstruction" .Values.dependencies.semanticCache.redis.index.params.efConstruction)) -}}
+{{- $_ := set $semanticRedis "search" (dict "topk" .Values.dependencies.semanticCache.redis.search.topk) -}}
+{{- $_ := set $semanticRedis "development" (dict "drop_index_on_startup" .Values.dependencies.semanticCache.redis.development.dropIndexOnStartup "auto_create_index" .Values.dependencies.semanticCache.redis.development.autoCreateIndex "verbose_errors" .Values.dependencies.semanticCache.redis.development.verboseErrors) -}}
+{{- $_ := set $semanticCache "redis" $semanticRedis -}}
 {{- end -}}
-{{- if and .Values.dependencies.semanticCache.milvus.enabled (eq $semanticBackend "milvus") -}}
-{{- $_ := set $semanticCache "backend_config_path" "config/semantic-cache.milvus.yaml" -}}
+{{- if and .Values.dependencies.semanticCache.milvus.enabled (or (eq $semanticBackend "milvus") (eq $semanticBackend "hybrid")) -}}
+{{- $semanticMilvus := dict -}}
+{{- $_ := set $semanticMilvus "connection" (dict "host" (include "semantic-router.semanticCache.milvusHost" .) "port" .Values.dependencies.semanticCache.milvus.port "database" .Values.dependencies.semanticCache.milvus.database "timeout" .Values.dependencies.semanticCache.milvus.timeout "auth" (dict "enabled" .Values.dependencies.semanticCache.milvus.auth.enabled "username" .Values.dependencies.semanticCache.milvus.auth.username "password" .Values.dependencies.semanticCache.milvus.auth.password) "tls" (dict "enabled" .Values.dependencies.semanticCache.milvus.tls.enabled)) -}}
+{{- $_ := set $semanticMilvus "collection" (dict "name" .Values.dependencies.semanticCache.milvus.collection.name "description" .Values.dependencies.semanticCache.milvus.collection.description "vector_field" (dict "name" .Values.dependencies.semanticCache.milvus.collection.vectorFieldName "dimension" 384 "metric_type" .Values.dependencies.semanticCache.milvus.collection.metricType) "index" (dict "type" .Values.dependencies.semanticCache.milvus.collection.index.type "params" (dict "M" .Values.dependencies.semanticCache.milvus.collection.index.params.m "efConstruction" .Values.dependencies.semanticCache.milvus.collection.index.params.efConstruction))) -}}
+{{- $_ := set $semanticMilvus "search" (dict "params" (dict "ef" .Values.dependencies.semanticCache.milvus.search.params.ef) "topk" .Values.dependencies.semanticCache.milvus.search.topk) -}}
+{{- $_ := set $semanticMilvus "development" (dict "drop_collection_on_startup" .Values.dependencies.semanticCache.milvus.development.dropCollectionOnStartup "auto_create_collection" .Values.dependencies.semanticCache.milvus.development.autoCreateCollection "verbose_errors" .Values.dependencies.semanticCache.milvus.development.verboseErrors) -}}
+{{- $_ := set $semanticCache "milvus" $semanticMilvus -}}
 {{- end -}}
 
 {{- if and $responseEnabled .Values.dependencies.responseApi.milvus.enabled (eq $responseBackend "milvus") -}}
@@ -39,9 +52,15 @@
 {{- end -}}
 {{- $_ := set $observability "tracing" $tracing -}}
 
-{{- $_ := set $config "semantic_cache" $semanticCache -}}
-{{- $_ := set $config "response_api" $responseAPI -}}
-{{- $_ := set $config "observability" $observability -}}
+{{- $_ := set $stores "semantic_cache" $semanticCache -}}
+{{- $_ := set $services "response_api" $responseAPI -}}
+{{- $_ := set $services "observability" $observability -}}
+{{- $_ := set $global "stores" $stores -}}
+{{- $_ := set $global "services" $services -}}
+{{- $_ := set $config "global" $global -}}
+{{- if not (get $config "version") -}}
+{{- $_ := set $config "version" "v0.3" -}}
+{{- end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -54,65 +73,3 @@ data:
     {{- toYaml $config | nindent 4 }}
   tools_db.json: |
     {{- toJson .Values.toolsDb | nindent 4 }}
-  {{- if .Values.dependencies.semanticCache.redis.enabled }}
-  semantic-cache.redis.yaml: |
-    connection:
-      host: "{{ include "semantic-router.semanticCache.redisHost" . }}"
-      port: {{ .Values.dependencies.semanticCache.redis.port }}
-      database: {{ .Values.dependencies.semanticCache.redis.database }}
-      password: "{{ .Values.dependencies.semanticCache.redis.password }}"
-      timeout: {{ .Values.dependencies.semanticCache.redis.timeout }}
-      tls:
-        enabled: {{ .Values.dependencies.semanticCache.redis.tls.enabled }}
-    index:
-      name: "{{ .Values.dependencies.semanticCache.redis.index.name }}"
-      prefix: "{{ .Values.dependencies.semanticCache.redis.index.prefix }}"
-      vector_field:
-        name: "{{ .Values.dependencies.semanticCache.redis.index.vectorFieldName }}"
-        dimension: 384
-        metric_type: "{{ .Values.dependencies.semanticCache.redis.index.metricType }}"
-      index_type: "{{ .Values.dependencies.semanticCache.redis.index.indexType }}"
-      params:
-        M: {{ .Values.dependencies.semanticCache.redis.index.params.m }}
-        efConstruction: {{ .Values.dependencies.semanticCache.redis.index.params.efConstruction }}
-    search:
-      topk: {{ .Values.dependencies.semanticCache.redis.search.topk }}
-    development:
-      drop_index_on_startup: {{ .Values.dependencies.semanticCache.redis.development.dropIndexOnStartup }}
-      auto_create_index: {{ .Values.dependencies.semanticCache.redis.development.autoCreateIndex }}
-      verbose_errors: {{ .Values.dependencies.semanticCache.redis.development.verboseErrors }}
-  {{- end }}
-  {{- if .Values.dependencies.semanticCache.milvus.enabled }}
-  semantic-cache.milvus.yaml: |
-    connection:
-      host: "{{ include "semantic-router.semanticCache.milvusHost" . }}"
-      port: {{ .Values.dependencies.semanticCache.milvus.port }}
-      database: "{{ .Values.dependencies.semanticCache.milvus.database }}"
-      timeout: {{ .Values.dependencies.semanticCache.milvus.timeout }}
-      auth:
-        enabled: {{ .Values.dependencies.semanticCache.milvus.auth.enabled }}
-        username: "{{ .Values.dependencies.semanticCache.milvus.auth.username }}"
-        password: "{{ .Values.dependencies.semanticCache.milvus.auth.password }}"
-      tls:
-        enabled: {{ .Values.dependencies.semanticCache.milvus.tls.enabled }}
-    collection:
-      name: "{{ .Values.dependencies.semanticCache.milvus.collection.name }}"
-      description: "{{ .Values.dependencies.semanticCache.milvus.collection.description }}"
-      vector_field:
-        name: "{{ .Values.dependencies.semanticCache.milvus.collection.vectorFieldName }}"
-        dimension: 384
-        metric_type: "{{ .Values.dependencies.semanticCache.milvus.collection.metricType }}"
-      index:
-        type: "{{ .Values.dependencies.semanticCache.milvus.collection.index.type }}"
-        params:
-          M: {{ .Values.dependencies.semanticCache.milvus.collection.index.params.m }}
-          efConstruction: {{ .Values.dependencies.semanticCache.milvus.collection.index.params.efConstruction }}
-    search:
-      params:
-        ef: {{ .Values.dependencies.semanticCache.milvus.search.params.ef }}
-      topk: {{ .Values.dependencies.semanticCache.milvus.search.topk }}
-    development:
-      drop_collection_on_startup: {{ .Values.dependencies.semanticCache.milvus.development.dropCollectionOnStartup }}
-      auto_create_collection: {{ .Values.dependencies.semanticCache.milvus.development.autoCreateCollection }}
-      verbose_errors: {{ .Values.dependencies.semanticCache.milvus.development.verboseErrors }}
-  {{- end }}

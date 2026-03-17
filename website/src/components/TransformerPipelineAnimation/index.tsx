@@ -27,7 +27,7 @@ const BRANCH_DATA: Record<BranchMode, {
     icon: 'CLS',
     tabLabel: 'Sequence',
     title: 'Sentence-Level (CLS Token)',
-    detail: '[CLS] → Linear Head → "computer_science"',
+    detail: '[CLS] → Linear Head → "computer science"',
     signals: ['Domain', 'Jailbreak', 'Fact-check', 'Feedback', 'Modality'],
     cls: styles.branchCLS,
     tagCls: styles.signalTagCLS,

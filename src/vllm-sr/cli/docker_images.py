@@ -17,9 +17,9 @@ from cli.docker_runtime import (
     docker_pull_image,
     get_container_runtime,
 )
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 def _normalize_platform(platform):

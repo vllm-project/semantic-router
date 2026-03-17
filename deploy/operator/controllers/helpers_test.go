@@ -876,6 +876,50 @@ func TestConvertToConfigMapWithMilvus(t *testing.T) {
 	}
 }
 
+func TestConvertToConfigMapWithSliceRoot(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+
+	rules := []vllmv1alpha1.ComplexityRulesConfig{
+		{
+			Name:        "code-complexity",
+			Description: "Classify coding tasks by complexity",
+			Threshold:   "0.3",
+			Hard: vllmv1alpha1.ComplexityCandidates{
+				Candidates: []string{"Implement a distributed lock manager"},
+			},
+			Easy: vllmv1alpha1.ComplexityCandidates{
+				Candidates: []string{"Reverse a string"},
+			},
+		},
+	}
+
+	result := r.convertToConfigMap(rules)
+	items, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("convertToConfigMap() did not return []interface{}, got %T", result)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 converted rule, got %d", len(items))
+	}
+
+	rule, ok := items[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("converted rule is not a map, got %T", items[0])
+	}
+	if rule["threshold"] != float64(0.3) {
+		t.Fatalf("threshold = %v (type %T), want 0.3 (float64)", rule["threshold"], rule["threshold"])
+	}
+
+	hard, ok := rule["hard"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("hard block is not a map, got %T", rule["hard"])
+	}
+	candidates, ok := hard["candidates"].([]interface{})
+	if !ok || len(candidates) != 1 || candidates[0] != "Implement a distributed lock manager" {
+		t.Fatalf("unexpected hard candidates: %#v", hard["candidates"])
+	}
+}
+
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||

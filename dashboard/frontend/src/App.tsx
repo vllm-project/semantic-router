@@ -34,6 +34,7 @@ import SetupWizardPage from './pages/SetupWizardPage'
 import OnboardingGuide from './components/OnboardingGuide'
 import LoginPage from './pages/LoginPage'
 import AuthTransitionPage from './pages/AuthTransitionPage'
+import { canAccessMLSetup } from './utils/accessControl'
 
 const ConfigSectionRoute: React.FC<{
   configSection: ConfigSection
@@ -42,15 +43,24 @@ const ConfigSectionRoute: React.FC<{
   const { section } = useParams<{ section: string }>()
 
   useEffect(() => {
-    if (!section) return
+    if (!section) {
+      if (configSection !== 'global-config') {
+        setConfigSection('global-config')
+      }
+      return
+    }
 
     const normalized = section.toLowerCase()
     const sectionMap: Record<string, ConfigSection> = {
+      global: 'global-config',
+      'global-config': 'global-config',
+      'router-config': 'global-config',
       signals: 'signals',
       routes: 'decisions',
       decisions: 'decisions',
       endpoints: 'models',
       models: 'models',
+      mcp: 'mcp',
     }
 
     const mapped = sectionMap[normalized]
@@ -164,7 +174,9 @@ const AuthenticatedShell: React.FC = () => {
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
-  const [configSection, setConfigSection] = useState<ConfigSection>('models')
+  const { user } = useAuth()
+  const [configSection, setConfigSection] = useState<ConfigSection>('global-config')
+  const canUseMLSetup = canAccessMLSetup(user)
 
   if (isLoading) {
     return (
@@ -327,12 +339,16 @@ const AppRouter: React.FC = () => {
             <Route
               path="/ml-setup"
               element={
-                <Layout
-                  configSection={configSection}
-                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-                >
-                  <MLSetupPage />
-                </Layout>
+                canUseMLSetup ? (
+                  <Layout
+                    configSection={configSection}
+                    onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                  >
+                    <MLSetupPage />
+                  </Layout>
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
               }
             />
             <Route

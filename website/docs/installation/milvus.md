@@ -211,12 +211,20 @@ EOF
 
 ### Update Router Config
 
-Ensure these settings in your router configuration:
+Ensure these settings in your canonical router configuration:
 
 ```yaml
-semantic_cache:
-  backend_type: "milvus"
-  backend_config_path: "config/semantic-cache/milvus.yaml"
+global:
+  stores:
+    semantic_cache:
+      enabled: true
+      backend_type: "milvus"
+      milvus:
+        connection:
+          host: "milvus"
+          port: 19530
+        collection:
+          name: "semantic_cache"
 ```
 
 ## Networking and Security
@@ -714,7 +722,7 @@ kubectl exec -it milvus-cluster-minio-0 -n vllm-semantic-router-system -- mc adm
 ## Next Steps
 
 - [Configuration Guide](configuration.md) - Semantic cache configuration options
-- [Observability](../tutorials/observability/metrics.md) - Monitoring and metrics
+- [Global Observability](../tutorials/global/api-and-observability) - Monitoring and metrics
 
 ## References
 

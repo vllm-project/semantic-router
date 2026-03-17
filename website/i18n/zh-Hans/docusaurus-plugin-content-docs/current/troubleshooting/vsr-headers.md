@@ -32,7 +32,7 @@ translation:
 - `math`
 - `business`
 - `biology`
-- `computer_science`
+- `computer science`
 
 **添加时机**：当 VSR 成功将请求分类到某个类别时。
 

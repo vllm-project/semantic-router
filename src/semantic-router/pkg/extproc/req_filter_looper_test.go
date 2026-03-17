@@ -27,6 +27,26 @@ func TestShouldUseLooper(t *testing.T) {
 		assert.False(t, router.shouldUseLooper(decision))
 	})
 
+	t.Run("ignores selection algorithms", func(t *testing.T) {
+		router := &OpenAIRouter{
+			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
+		}
+		selectionAlgorithms := []string{"static", "elo", "router_dc", "automix", "hybrid", "knn", "kmeans", "svm", "mlp", "gmtrouter", "latency_aware"}
+
+		for _, algorithmType := range selectionAlgorithms {
+			decision := &config.Decision{
+				Name: "routing",
+				ModelRefs: []config.ModelRef{
+					{Model: "model-a"},
+					{Model: "model-b"},
+				},
+				Algorithm: &config.AlgorithmConfig{Type: algorithmType},
+			}
+
+			assert.False(t, router.shouldUseLooper(decision), "algorithm %s should use selector routing, not looper", algorithmType)
+		}
+	})
+
 	t.Run("allows remom with single model", func(t *testing.T) {
 		router := &OpenAIRouter{
 			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
@@ -51,6 +71,26 @@ func TestShouldUseLooper(t *testing.T) {
 		}
 
 		assert.False(t, router.shouldUseLooper(decision))
+	})
+
+	t.Run("allows looper-only algorithms with multiple models", func(t *testing.T) {
+		router := &OpenAIRouter{
+			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
+		}
+		looperAlgorithms := []string{"confidence", "ratings"}
+
+		for _, algorithmType := range looperAlgorithms {
+			decision := &config.Decision{
+				Name: "routing",
+				ModelRefs: []config.ModelRef{
+					{Model: "model-a"},
+					{Model: "model-b"},
+				},
+				Algorithm: &config.AlgorithmConfig{Type: algorithmType},
+			}
+
+			assert.True(t, router.shouldUseLooper(decision), "algorithm %s should use looper routing", algorithmType)
+		}
 	})
 }
 
@@ -137,12 +177,12 @@ func TestBuildHeaderMutationsForLooperIncludesAuthorizationAndPluginHeaders(t *t
 		Plugins: []config.DecisionPlugin{
 			{
 				Type: "header_mutation",
-				Configuration: map[string]interface{}{
+				Configuration: config.MustStructuredPayload(map[string]interface{}{
 					"add": []map[string]interface{}{
 						{"name": "x-extra", "value": "1"},
 					},
 					"delete": []string{"x-remove-me"},
-				},
+				}),
 			},
 		},
 	}

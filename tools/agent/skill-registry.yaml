@@ -61,12 +61,12 @@ surfaces:
       - router-core
       - dashboard
   python_cli_schema:
-    description: Python CLI typed schema, parser, validator, merger, and config translation contracts.
+    description: Python CLI typed schema, parser, validator, migration, and config translation contracts.
     paths:
       - src/vllm-sr/cli/models.py
       - src/vllm-sr/cli/parser.py
       - src/vllm-sr/cli/validator.py
-      - src/vllm-sr/cli/merger.py
+      - src/vllm-sr/cli/config_migration.py
     task_rules:
       - vllm-sr-cli
   python_cli_runtime:
@@ -146,6 +146,7 @@ surfaces:
       - docs/**
       - website/**
       - deploy/amd/**
+      - deploy/examples/**
       - config/**/*.yaml
     task_rules:
       - repo-docs
@@ -190,7 +191,7 @@ surfaces:
       - tools/make/agent.mk
       - tools/make/docker.mk
       - src/vllm-sr/cli/**
-      - config/testing/config.agent-smoke.*.yaml
+      - e2e/config/config.agent-smoke.*.yaml
     task_rules:
       - vllm-sr-cli
   local_e2e:
@@ -198,7 +199,7 @@ surfaces:
     paths:
       - tools/agent/e2e-profile-map.yaml
       - e2e/profiles/**
-      - config/testing/**
+      - e2e/config/**
       - deploy/kubernetes/**
     task_rules:
       - e2e-framework
@@ -276,7 +277,7 @@ skills:
         - src/vllm-sr/cli/models.py
         - src/vllm-sr/cli/parser.py
         - src/vllm-sr/cli/validator.py
-        - src/vllm-sr/cli/merger.py
+        - src/vllm-sr/cli/config_migration.py
         - candle-binding/**
         - ml-binding/**
         - nlp-binding/**
@@ -402,7 +403,7 @@ skills:
         - src/vllm-sr/cli/models.py
         - src/vllm-sr/cli/parser.py
         - src/vllm-sr/cli/validator.py
-        - src/vllm-sr/cli/merger.py
+        - src/vllm-sr/cli/config_migration.py
         - dashboard/frontend/src/pages/ConfigPage*.tsx
         - dashboard/frontend/src/pages/BuilderPage*.tsx
         - src/semantic-router/pkg/dsl/**
@@ -497,8 +498,8 @@ skills:
         - src/vllm-sr/Dockerfile*
         - tools/make/docker.mk
         - e2e/testing/vllm-sr-cli/**
-        - config/testing/config.agent-smoke.cpu.yaml
-        - config/testing/config.agent-smoke.amd.yaml
+        - e2e/config/config.agent-smoke.cpu.yaml
+        - e2e/config/config.agent-smoke.amd.yaml
       fragments:
         - python-cli-runtime
         - python-cli-schema

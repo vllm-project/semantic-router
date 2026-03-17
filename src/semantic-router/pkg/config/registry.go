@@ -13,6 +13,7 @@ const (
 	PurposeHallucinationDetector  ModelPurpose = "hallucination-detector"  // Verify factual accuracy
 	PurposeHallucinationExplainer ModelPurpose = "hallucination-explainer" // Explain hallucination reasoning
 	PurposeFeedbackDetection      ModelPurpose = "feedback-detection"      // Detect user feedback type
+	PurposeModalityDetection      ModelPurpose = "modality-detection"      // Classify prompts into text/image/both modalities
 	PurposeEmbedding              ModelPurpose = "embedding"               // Generate text embeddings
 	PurposeSemanticSimilarity     ModelPurpose = "semantic-similarity"     // Compute semantic similarity
 )
@@ -173,6 +174,19 @@ var DefaultModelRegistry = []ModelSpec{
 		NumClasses:       4, // satisfied/need_clarification/wrong_answer/want_different
 		MaxContextLength: 8192,
 		Tags:             []string{"feedback", "classification", "modernbert", "user-intent"},
+	},
+
+	// Modality Detection - mmBERT-32K Router Classifier
+	{
+		LocalPath:        "models/mmbert32k-modality-router-merged",
+		RepoID:           "llm-semantic-router/mmbert32k-modality-router-merged",
+		Aliases:          []string{"modality-classifier", "modality-router", "mmbert32k-modality-router"},
+		Purpose:          PurposeModalityDetection,
+		Description:      "mmBERT-32K classifier for AR, DIFFUSION, and BOTH modality routing decisions",
+		ParameterSize:    "307M",
+		NumClasses:       3, // AR / DIFFUSION / BOTH
+		MaxContextLength: 32768,
+		Tags:             []string{"modality", "classification", "mmbert-32k", "multimodal", "routing"},
 	},
 
 	// Embedding Models - Pro (High Quality)

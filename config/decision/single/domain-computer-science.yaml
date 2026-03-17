@@ -1,0 +1,14 @@
+routing:
+  decisions:
+    - name: computer-science-route
+      description: Route computer science requests to the higher-reasoning model tier.
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: "computer science"
+      modelRefs:
+        - model: qwen3-32b
+          use_reasoning: true
+          lora_name: computer-science-expert

@@ -293,9 +293,9 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
       CC=aarch64-linux-gnu-gcc \
       CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
       CGO_LDFLAGS="-L/usr/lib/aarch64-linux-gnu -lssl -lcrypto" \
-      go build -buildvcs=false -ldflags="-w -s" -o router cmd/main.go; \
+      go build -buildvcs=false -ldflags="-w -s" -o router ./cmd; \
     else \
-      CGO_ENABLED=1 go build -buildvcs=false -ldflags="-w -s" -o router cmd/main.go; \
+      CGO_ENABLED=1 go build -buildvcs=false -ldflags="-w -s" -o router ./cmd; \
     fi
 
 # Stage 3: Get Envoy binary

@@ -1,0 +1,7 @@
+routing:
+  signals:
+    user_feedbacks:
+      - name: wrong_answer
+        description: User indicates the current answer is incorrect.
+      - name: need_clarification
+        description: User asks for a clearer or more detailed follow-up.

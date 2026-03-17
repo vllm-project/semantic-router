@@ -91,21 +91,23 @@ func (e *ImageGenBackendEntry) ToPluginConfig() *ImageGenPluginConfig {
 
 	switch e.Type {
 	case "vllm_omni":
-		cfg.BackendConfig = &VLLMOmniImageGenConfig{
+		payload, _ := NewStructuredPayload(&VLLMOmniImageGenConfig{
 			BaseURL:           e.BaseURL,
 			Model:             e.Model,
 			NumInferenceSteps: e.NumInferenceSteps,
 			CFGScale:          e.CFGScale,
 			Seed:              e.Seed,
-		}
+		})
+		cfg.BackendConfig = payload
 	case "openai":
-		cfg.BackendConfig = &OpenAIImageGenConfig{
+		payload, _ := NewStructuredPayload(&OpenAIImageGenConfig{
 			APIKey:  e.APIKey,
 			BaseURL: e.BaseURL,
 			Model:   e.Model,
 			Quality: e.Quality,
 			Style:   e.Style,
-		}
+		})
+		cfg.BackendConfig = payload
 	}
 
 	return cfg
@@ -148,7 +150,7 @@ type ImageGenBackendConfig struct {
 	Backend string `yaml:"backend" json:"backend"`
 
 	// BackendConfig is backend-specific configuration (base_url, model, etc.)
-	BackendConfig interface{} `yaml:"backend_config,omitempty" json:"backend_config,omitempty"`
+	BackendConfig *StructuredPayload `yaml:"backend_config,omitempty" json:"backend_config,omitempty"`
 
 	// Default image dimensions (required)
 	DefaultWidth  int `yaml:"default_width" json:"default_width"`
@@ -289,7 +291,7 @@ type ImageGenPluginConfig struct {
 	Backend string `json:"backend" yaml:"backend"`
 
 	// Backend-specific configuration
-	BackendConfig interface{} `json:"backend_config,omitempty" yaml:"backend_config,omitempty"`
+	BackendConfig *StructuredPayload `json:"backend_config,omitempty" yaml:"backend_config,omitempty"`
 
 	// ModalityDetection configures how prompts are classified into AR/DIFFUSION/BOTH.
 	// If not specified, defaults to hybrid (classifier + keyword fallback).
@@ -342,62 +344,48 @@ type OpenAIImageGenConfig struct {
 	Style string `json:"style,omitempty" yaml:"style,omitempty"`
 }
 
-// UnmarshalBackendConfig converts the raw BackendConfig (map from YAML) into the
-// properly typed struct based on the Backend field. This must be called before
-// passing the config to imagegen.CreateBackend.
-func (c *ImageGenPluginConfig) UnmarshalBackendConfig() error {
-	if c.BackendConfig == nil || c.Backend == "" {
-		return nil
+func (c *ImageGenPluginConfig) VLLMOmniBackendConfig() (*VLLMOmniImageGenConfig, error) {
+	return decodeImageGenBackendConfig[VLLMOmniImageGenConfig](c.Backend, c.BackendConfig, "vllm_omni")
+}
+
+func (c *ImageGenPluginConfig) OpenAIBackendConfig() (*OpenAIImageGenConfig, error) {
+	return decodeImageGenBackendConfig[OpenAIImageGenConfig](c.Backend, c.BackendConfig, "openai")
+}
+
+func (c *ImageGenBackendConfig) VLLMOmniBackendConfig() (*VLLMOmniImageGenConfig, error) {
+	return decodeImageGenBackendConfig[VLLMOmniImageGenConfig](c.Backend, c.BackendConfig, "vllm_omni")
+}
+
+func (c *ImageGenBackendConfig) OpenAIBackendConfig() (*OpenAIImageGenConfig, error) {
+	return decodeImageGenBackendConfig[OpenAIImageGenConfig](c.Backend, c.BackendConfig, "openai")
+}
+
+func decodeImageGenBackendConfig[T any](backend string, payload *StructuredPayload, expectedBackend string) (*T, error) {
+	if backend != expectedBackend {
+		return nil, fmt.Errorf("expected image_gen backend %q, got %q", expectedBackend, backend)
 	}
-	var typedConfig interface{}
-	switch c.Backend {
-	case "vllm_omni":
-		typedConfig = &VLLMOmniImageGenConfig{}
-	case "openai":
-		typedConfig = &OpenAIImageGenConfig{}
-	default:
-		return fmt.Errorf("unknown image_gen backend: %s", c.Backend)
+	if payload == nil {
+		return nil, fmt.Errorf("backend_config is required for %s", expectedBackend)
 	}
-	if err := unmarshalPluginConfig(c.BackendConfig, typedConfig); err != nil {
-		return fmt.Errorf("failed to unmarshal backend config for %s: %w", c.Backend, err)
+	result := new(T)
+	if err := payload.DecodeInto(result); err != nil {
+		return nil, fmt.Errorf("decode image_gen backend %s: %w", expectedBackend, err)
 	}
-	c.BackendConfig = typedConfig
-	return nil
+	return result, nil
 }
 
 // GetImageGenConfig returns the image generation plugin configuration for a decision
 func (d *Decision) GetImageGenConfig() *ImageGenPluginConfig {
-	pluginConfig := d.GetPluginConfig("image_gen")
-	if pluginConfig == nil {
+	plugin := d.GetPlugin("image_gen")
+	if plugin == nil || plugin.Configuration == nil {
 		return nil
 	}
 
 	result := &ImageGenPluginConfig{}
-	if err := unmarshalPluginConfig(pluginConfig, result); err != nil {
+	if err := UnmarshalPluginConfig(plugin.Configuration, result); err != nil {
 		logging.Errorf("Failed to unmarshal image_gen config: %v", err)
 		return nil
 	}
-
-	// Unmarshal backend-specific config based on Backend type
-	if result.BackendConfig != nil && result.Backend != "" {
-		var backendConfig interface{}
-		switch result.Backend {
-		case "vllm_omni":
-			backendConfig = &VLLMOmniImageGenConfig{}
-		case "openai":
-			backendConfig = &OpenAIImageGenConfig{}
-		default:
-			logging.Warnf("Unknown image_gen backend type: %s", result.Backend)
-			return result
-		}
-
-		if err := unmarshalPluginConfig(result.BackendConfig, backendConfig); err != nil {
-			logging.Errorf("Failed to unmarshal image_gen backend config for %s: %v", result.Backend, err)
-		} else {
-			result.BackendConfig = backendConfig
-		}
-	}
-
 	return result
 }
 
@@ -487,23 +475,17 @@ func (c *ImageGenPluginConfig) Validate() error {
 
 	switch c.Backend {
 	case "vllm_omni":
-		if c.BackendConfig == nil {
-			return fmt.Errorf("backend_config is required for vllm_omni backend")
-		}
-		vllmConfig, ok := c.BackendConfig.(*VLLMOmniImageGenConfig)
-		if !ok {
-			return fmt.Errorf("backend_config must be VLLMOmniImageGenConfig for vllm_omni backend")
+		vllmConfig, err := c.VLLMOmniBackendConfig()
+		if err != nil {
+			return err
 		}
 		if vllmConfig.BaseURL == "" {
 			return fmt.Errorf("base_url is required for vllm_omni backend")
 		}
 	case "openai":
-		if c.BackendConfig == nil {
-			return fmt.Errorf("backend_config is required for openai backend")
-		}
-		openaiConfig, ok := c.BackendConfig.(*OpenAIImageGenConfig)
-		if !ok {
-			return fmt.Errorf("backend_config must be OpenAIImageGenConfig for openai backend")
+		openaiConfig, err := c.OpenAIBackendConfig()
+		if err != nil {
+			return err
 		}
 		if openaiConfig.APIKey == "" {
 			return fmt.Errorf("api_key is required for openai backend")

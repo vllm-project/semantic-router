@@ -176,12 +176,12 @@ func TestHandleClassifierInfoNormalizesYAMLStylePluginConfig(t *testing.T) {
 					Plugins: []config.DecisionPlugin{
 						{
 							Type: "system_prompt",
-							Configuration: map[interface{}]interface{}{
+							Configuration: config.MustStructuredPayload(map[interface{}]interface{}{
 								"enabled": true,
 								"nested": map[interface{}]interface{}{
 									"mode": "replace",
 								},
-							},
+							}),
 						},
 					},
 				},
@@ -216,6 +216,9 @@ func TestHandleClassifierInfoNormalizesYAMLStylePluginConfig(t *testing.T) {
 	nested := requireJSONObject(t, configuration, "nested")
 	if nested["mode"] != "replace" {
 		t.Fatalf("expected nested plugin config to be normalized, got %#v", nested)
+	}
+	if configuration["enabled"] != true {
+		t.Fatalf("expected enabled=true in normalized plugin config, got %#v", configuration)
 	}
 }
 
@@ -390,11 +393,11 @@ func testSystemPromptConfig(category string, prompt string, enabled bool, mode s
 					Plugins: []config.DecisionPlugin{
 						{
 							Type: "system_prompt",
-							Configuration: map[string]interface{}{
+							Configuration: config.MustStructuredPayload(map[string]interface{}{
 								"system_prompt": prompt,
 								"enabled":       enabled,
 								"mode":          mode,
-							},
+							}),
 						},
 					},
 				},

@@ -6,7 +6,7 @@ export type ConfigSection =
   | 'signals'        // config.yaml: signals (keywords, embeddings, domains, etc.)
   | 'decisions'      // config.yaml: decisions (routing rules)
   | 'models'         // config.yaml: providers.models
-  | 'router-config'  // .vllm-sr/router-defaults.yaml (cache, prompt guard, tools, etc.)
+  | 'global-config'  // config.yaml: global runtime overrides (cache, prompt guard, tools, etc.)
   | 'mcp'            // MCP servers configuration
   | 'topology'       // Separate page for visualization
 
@@ -17,6 +17,12 @@ interface ConfigNavProps {
 
 const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange }) => {
   const sections = [
+    {
+      id: 'global-config' as ConfigSection,
+      icon: '⚙️',
+      title: 'Global Config',
+      description: 'Global runtime overrides, services, stores & model catalog'
+    },
     {
       id: 'models' as ConfigSection,
       icon: '🤖',
@@ -34,12 +40,6 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       icon: '📡',
       title: 'Signals',
       description: 'Keywords, embeddings, domains & preferences'
-    },
-    {
-      id: 'router-config' as ConfigSection,
-      icon: '⚙️',
-      title: 'Router Configuration',
-      description: 'Cache, prompt guard, tools & observability'
     },
     {
       id: 'mcp' as ConfigSection,

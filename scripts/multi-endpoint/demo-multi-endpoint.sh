@@ -303,7 +303,7 @@ echo -e "    ${GREEN}✓${RESET} Keyword routing steers traffic to correct envir
 echo -e "    ${GREEN}✓${RESET} Model name rewriting: aliases → actual vLLM model name"
 echo -e "    ${GREEN}✓${RESET} Per-environment metrics prove traffic distribution"
 echo ""
-echo -e "  ${DIM}Config: config/testing/config.multi-endpoint.yaml${RESET}"
+echo -e "  ${DIM}Config: e2e/config/config.multi-endpoint.yaml${RESET}"
 echo ""
 separator
 echo ""

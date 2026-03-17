@@ -86,12 +86,15 @@ Based on the decision, the router selects the best model:
 Before and after model execution, plugins process the request/response:
 
 ```yaml
-plugins:
-  - type: "semantic-cache"    # Check cache first
-  - type: "jailbreak"         # Detect adversarial prompts
-  - type: "pii"               # Filter sensitive data
-  - type: "system_prompt"     # Add context
-  - type: "hallucination"     # Verify facts
+routing:
+  decisions:
+    - name: "guarded-route"
+      plugins:
+        - type: "semantic-cache"    # Check cache first
+        - type: "jailbreak"         # Detect adversarial prompts
+        - type: "pii"               # Filter sensitive data
+        - type: "system_prompt"     # Add context
+        - type: "hallucination"     # Verify facts
 ```
 
 ## Key Concepts
@@ -156,6 +159,6 @@ if (has_math_keywords AND is_math_domain) OR has_high_math_embedding:
 
 ## Next Steps
 
-- [What is Collective Intelligence?](collective-intelligence.md) - How signals create system intelligence
-- [What is Signal-Driven Decision?](signal-driven-decisions.md) - Deep dive into the decision engine
-- [Configuration Guide](../installation/configuration.md) - Set up your semantic router
+- [What is Collective Intelligence?](collective-intelligence) - How signals create system intelligence
+- [What is Signal-Driven Decision?](signal-driven-decisions) - Deep dive into the decision engine
+- [Configuration Guide](../installation/configuration) - Set up your semantic router

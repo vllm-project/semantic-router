@@ -1,4 +1,4 @@
-.PHONY: help build install test clean docker-build docker-run docker-stop dev-setup dev-serve dev-test rebuild-and-test
+.PHONY: help build install test clean docker-build docker-run docker-stop dev-setup dev-serve dev-test rebuild-and-test config-router config-envoy
 
 # Configuration
 IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/vllm-sr
@@ -24,9 +24,9 @@ help:
 	@echo "  make dev-setup    - Complete setup (build + install)"
 	@echo ""
 	@echo "Configuration:"
-	@echo "  make generate     - Generate configurations from $(CONFIG_FILE)"
-	@echo "  make validate     - Validate $(CONFIG_FILE)"
-	@echo "  make show-config  - Show all configurations"
+	@echo "  make validate      - Validate $(CONFIG_FILE)"
+	@echo "  make config-router - Print canonical router config for $(CONFIG_FILE)"
+	@echo "  make config-envoy  - Print generated Envoy config for $(CONFIG_FILE)"
 	@echo ""
 	@echo "Docker Operations:"
 	@echo "  make docker-build       - Build Docker image (local)"
@@ -39,7 +39,7 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev-serve       - Start service (builds image if needed)"
-	@echo "  make dev-test        - Test config generation"
+	@echo "  make dev-test        - Validate config and render router/envoy output"
 	@echo "  make rebuild-and-test - Full rebuild and test workflow"
 	@echo "  make test            - Run tests"
 	@echo "  make clean           - Clean up build artifacts"
@@ -78,14 +78,15 @@ dev-serve:
 	@echo ""
 	python -m cli.main serve --config $(CONFIG_FILE) --image $(FULL_IMAGE)
 
-# Development test - just generate configs
+# Development test - validate config and render router/envoy outputs
 dev-test: install
-	@echo "Testing configuration generation..."
-	python -m cli.main generate $(CONFIG_FILE) --output-dir $(OUTPUT_DIR) --force
+	@echo "Testing canonical configuration rendering..."
+	python -m cli.main validate --config $(CONFIG_FILE)
+	python -m cli.main config router --config $(CONFIG_FILE) >/dev/null
+	python -m cli.main config envoy --config $(CONFIG_FILE) >/dev/null
 	@echo ""
-	@echo "Configuration generated successfully!"
-	@echo "  Output directory: $(OUTPUT_DIR)"
-	@ls -la $(OUTPUT_DIR)/
+	@echo "Configuration validated and rendered successfully!"
+	@echo "  Router and Envoy config render path succeeded for: $(CONFIG_FILE)"
 	@echo ""
 
 build: docker-build
@@ -153,17 +154,17 @@ install:
 	@echo "CLI installed. Try: vllm-sr --version"
 
 # Configuration commands
-generate: install
-	@echo "Generating configurations..."
-	python -m cli.main generate $(CONFIG_FILE) --output-dir $(OUTPUT_DIR) --force
-
 validate: install
 	@echo "Validating configuration..."
-	python -m cli.main validate $(CONFIG_FILE)
+	python -m cli.main validate --config $(CONFIG_FILE)
 
-show-config: install
-	@echo "Showing configurations..."
-	python -m cli.main show-config $(CONFIG_FILE) --output-dir $(OUTPUT_DIR)
+config-router: install
+	@echo "Printing canonical router configuration..."
+	python -m cli.main config router --config $(CONFIG_FILE)
+
+config-envoy: install
+	@echo "Printing generated Envoy configuration..."
+	python -m cli.main config envoy --config $(CONFIG_FILE)
 
 # Docker operations
 docker-run: docker-build
@@ -280,4 +281,3 @@ with open('$(CONFIG_FILE)', 'r') as f: \
 	@echo "Stop service:"
 	@echo "  make docker-stop"
 	@echo ""
-

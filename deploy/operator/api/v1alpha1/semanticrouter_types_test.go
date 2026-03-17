@@ -50,13 +50,13 @@ func TestEmbeddingModelsConfig(t *testing.T) {
 			config: EmbeddingModelsConfig{
 				MmBertModelPath: "models/mmbert-embedding",
 				UseCPU:          true,
-				HNSWConfig: &HNSWEmbeddingConfig{
+				EmbeddingConfig: &HNSWEmbeddingConfig{
 					ModelType:       "mmbert",
 					TargetLayer:     6,
 					TargetDimension: 256,
 				},
 			},
-			want: `{"mmbert_model_path":"models/mmbert-embedding","use_cpu":true,"hnsw_config":{"model_type":"mmbert","target_dimension":256,"target_layer":6}}`,
+			want: `{"mmbert_model_path":"models/mmbert-embedding","use_cpu":true,"embedding_config":{"model_type":"mmbert","target_dimension":256,"target_layer":6}}`,
 		},
 		{
 			name: "all models configured",
@@ -406,7 +406,7 @@ func TestConfigSpecWithNewFields(t *testing.T) {
 				EmbeddingModels: &EmbeddingModelsConfig{
 					MmBertModelPath: "models/mmbert-embedding",
 					UseCPU:          true,
-					HNSWConfig: &HNSWEmbeddingConfig{
+					EmbeddingConfig: &HNSWEmbeddingConfig{
 						ModelType:       "mmbert",
 						TargetLayer:     6,
 						TargetDimension: 256,
@@ -495,7 +495,7 @@ func TestSemanticRouterWithNewFeatures(t *testing.T) {
 						EmbeddingModels: &EmbeddingModelsConfig{
 							MmBertModelPath: "models/mmbert-embedding",
 							UseCPU:          true,
-							HNSWConfig: &HNSWEmbeddingConfig{
+							EmbeddingConfig: &HNSWEmbeddingConfig{
 								ModelType:       "mmbert",
 								TargetLayer:     6,
 								TargetDimension: 256,

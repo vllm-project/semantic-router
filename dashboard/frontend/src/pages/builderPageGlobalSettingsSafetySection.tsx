@@ -1,27 +1,28 @@
 import React from "react";
 
+import type { DSLFieldObject, DSLFieldValue } from "@/types/dsl";
 import styles from "./BuilderPage.module.css";
 import { getBool, getNum, getObj, getStr } from "./builderPageGlobalSettingsSupport";
 
 interface GlobalSettingsSafetySectionProps {
-  local: Record<string, unknown>;
+  local: DSLFieldObject;
   collapsedSections: Record<string, boolean>;
-  promptGuard: Record<string, unknown>;
-  hallucination: Record<string, unknown>;
-  authz: Record<string, unknown>;
-  ratelimit: Record<string, unknown>;
+  promptGuard: DSLFieldObject;
+  hallucination: DSLFieldObject;
+  authz: DSLFieldObject;
+  ratelimit: DSLFieldObject;
   onToggleSection: (key: string) => void;
-  onSetField: (key: string, value: unknown) => void;
+  onSetField: (key: string, value: DSLFieldValue) => void;
   onSetNestedField: (
     parentKey: string,
     childKey: string,
-    value: unknown,
+    value: DSLFieldValue,
   ) => void;
   onSetDeepField: (
     p1: string,
     p2: string,
     p3: string,
-    value: unknown,
+    value: DSLFieldValue,
   ) => void;
 }
 

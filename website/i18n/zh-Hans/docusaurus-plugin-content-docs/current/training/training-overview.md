@@ -229,7 +229,7 @@ mmlu_categories = {
         "subcategories": ["mechanics", "thermodynamics", "electromagnetism"],
         "example": "计算使 10kg 质量以 5m/s^2 加速所需的力"
     },
-    "computer_science": {
+    "computer science": {
         "samples": 1156,
         "subcategories": ["algorithms", "data_structures", "programming"],
         "example": "用 Python 实现二分搜索算法"
@@ -251,21 +251,21 @@ mmlu_categories = {
 #### 训练配置
 
 ```yaml
-model_config:
+model_training:
   base_model: "modernbert-base"
-  task_type: "sequence_classification" 
+  task_type: "sequence_classification"
   num_labels: 10
-  
-training_config:
+
+training_recipe:
   epochs: 3
   batch_size: 8
   learning_rate: 2e-5
   weight_decay: 0.1
-  
-evaluation_metrics:
-  - accuracy: 94.2%
-  - f1_weighted: 93.8%
-  - per_category_precision: "所有类别 >90%"
+
+evaluation_targets:
+  accuracy: "94.2%"
+  f1_weighted: "93.8%"
+  per_category_precision: "所有类别 >90%"
 ```
 
 #### 模型性能
@@ -276,13 +276,13 @@ category_performance = {
     "per_category_results": {
         "mathematics": {"precision": 0.956, "recall": 0.943, "f1": 0.949},
         "physics": {"precision": 0.934, "recall": 0.928, "f1": 0.931},
-        "computer_science": {"precision": 0.948, "recall": 0.952, "f1": 0.950},
+        "computer science": {"precision": 0.948, "recall": 0.952, "f1": 0.950},
         "biology": {"precision": 0.925, "recall": 0.918, "f1": 0.921},
         "chemistry": {"precision": 0.941, "recall": 0.935, "f1": 0.938}
     },
     "confusion_matrix_insights": {
         "most_confused": "physics <-> mathematics (12% 交叉分类)",
-        "best_separated": "biology <-> computer_science (2% 交叉分类)"
+        "best_separated": "biology <-> computer science (2% 交叉分类)"
     }
 }
 ```

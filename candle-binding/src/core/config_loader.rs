@@ -515,9 +515,7 @@ pub fn load_labels_from_model_config(model_path: &str) -> Result<Vec<String>, Un
 }
 
 /// Load token config (replaces token_lora.rs logic)
-pub fn load_token_config(
-    model_path: &str,
-) -> Result<(HashMap<usize, String>, HashMap<String, usize>, usize, usize), UnifiedError> {
+pub fn load_token_config(model_path: &str) -> Result<TokenConfig, UnifiedError> {
     let config_json = UnifiedConfigLoader::load_json_config(model_path)?;
     let id2label = UnifiedConfigLoader::extract_id2label_map(&config_json)?;
     let label2id: HashMap<String, usize> = id2label
@@ -527,7 +525,12 @@ pub fn load_token_config(
     let num_labels = id2label.len();
     let hidden_size = UnifiedConfigLoader::extract_hidden_size(&config_json);
 
-    Ok((id2label, label2id, num_labels, hidden_size))
+    Ok(TokenConfig {
+        id2label,
+        label2id,
+        num_labels,
+        hidden_size,
+    })
 }
 
 /// Load ModernBERT number of classes (replaces modernbert.rs logic)
@@ -546,12 +549,27 @@ impl GlobalConfigLoader {
         let config_str = std::fs::read_to_string(config_path)
             .map_err(|_| config_errors::file_not_found(config_path))?;
 
-        // Parse YAML to find classifier.category_model.threshold
-        Self::extract_yaml_threshold(&config_str, &["classifier", "category_model", "threshold"])
-            .or_else(|| Self::extract_yaml_threshold(&config_str, &["bert_model", "threshold"]))
-            .ok_or_else(|| {
-                config_errors::missing_field("classifier.category_model.threshold", config_path)
-            })
+        Self::extract_first_yaml_threshold(
+            &config_str,
+            &[
+                &[
+                    "global",
+                    "model_catalog",
+                    "modules",
+                    "classifier",
+                    "domain",
+                    "threshold",
+                ],
+                &["classifier", "category_model", "threshold"],
+                &["bert_model", "threshold"],
+            ],
+        )
+        .ok_or_else(|| {
+            config_errors::missing_field(
+                "global.model_catalog.modules.classifier.domain.threshold",
+                config_path,
+            )
+        })
     }
 
     /// Load threshold for security classifier from config/config.yaml
@@ -560,9 +578,25 @@ impl GlobalConfigLoader {
         let config_str = std::fs::read_to_string(config_path)
             .map_err(|_| config_errors::file_not_found(config_path))?;
 
-        // Parse YAML to find prompt_guard.threshold
-        Self::extract_yaml_threshold(&config_str, &["prompt_guard", "threshold"])
-            .ok_or_else(|| config_errors::missing_field("prompt_guard.threshold", config_path))
+        Self::extract_first_yaml_threshold(
+            &config_str,
+            &[
+                &[
+                    "global",
+                    "model_catalog",
+                    "modules",
+                    "prompt_guard",
+                    "threshold",
+                ],
+                &["prompt_guard", "threshold"],
+            ],
+        )
+        .ok_or_else(|| {
+            config_errors::missing_field(
+                "global.model_catalog.modules.prompt_guard.threshold",
+                config_path,
+            )
+        })
     }
 
     /// Load threshold for PII classifier from config/config.yaml
@@ -571,17 +605,32 @@ impl GlobalConfigLoader {
         let config_str = std::fs::read_to_string(config_path)
             .map_err(|_| config_errors::file_not_found(config_path))?;
 
-        // Parse YAML to find classifier.pii_model.threshold
-        Self::extract_yaml_threshold(&config_str, &["classifier", "pii_model", "threshold"])
-            .ok_or_else(|| {
-                config_errors::missing_field("classifier.pii_model.threshold", config_path)
-            })
+        Self::extract_first_yaml_threshold(
+            &config_str,
+            &[
+                &[
+                    "global",
+                    "model_catalog",
+                    "modules",
+                    "classifier",
+                    "pii",
+                    "threshold",
+                ],
+                &["classifier", "pii_model", "threshold"],
+            ],
+        )
+        .ok_or_else(|| {
+            config_errors::missing_field(
+                "global.model_catalog.modules.classifier.pii.threshold",
+                config_path,
+            )
+        })
     }
 
     /// Extract threshold value from YAML content using hierarchical path
     fn extract_yaml_threshold(yaml_content: &str, path: &[&str]) -> Option<f32> {
         let lines: Vec<&str> = yaml_content.lines().collect();
-        let mut current_level = 0;
+        let mut current_indent = 0;
         let mut found_sections = vec![false; path.len()];
 
         for line in lines {
@@ -590,21 +639,21 @@ impl GlobalConfigLoader {
                 continue;
             }
 
-            let indent_level = (line.len() - line.trim_start().len()) / 2;
+            let indent_level = line.len() - line.trim_start().len();
+            let section_level = indent_level / 2;
 
             // Reset found sections if we're at a higher level
-            if indent_level <= current_level {
-                for i in (indent_level / 2 + 1)..found_sections.len() {
-                    found_sections[i] = false;
+            if indent_level <= current_indent {
+                for found in found_sections.iter_mut().skip(section_level + 1) {
+                    *found = false;
                 }
             }
 
-            current_level = indent_level;
+            current_indent = indent_level;
 
             // Check if this line matches our current section
             if let Some(section_end) = trimmed.find(':') {
                 let section_name = trimmed[..section_end].trim();
-                let section_level = indent_level / 2;
 
                 if section_level < path.len() && section_name == path[section_level] {
                     found_sections[section_level] = true;
@@ -626,6 +675,12 @@ impl GlobalConfigLoader {
         }
 
         None
+    }
+
+    fn extract_first_yaml_threshold(yaml_content: &str, paths: &[&[&str]]) -> Option<f32> {
+        paths
+            .iter()
+            .find_map(|path| Self::extract_yaml_threshold(yaml_content, path))
     }
 }
 
@@ -723,50 +778,74 @@ impl GlobalConfigLoader {
         let mut router_config = RouterConfig::default();
 
         // Load router-specific configurations from YAML
-        if let Some(value) =
-            Self::extract_yaml_value(&config_str, &["router", "high_confidence_threshold"])
-        {
+        if let Some(value) = Self::extract_first_yaml_value(
+            &config_str,
+            &[
+                &["global", "router", "high_confidence_threshold"],
+                &["router", "high_confidence_threshold"],
+            ],
+        ) {
             if let Ok(threshold) = value.parse::<f32>() {
                 router_config.high_confidence_threshold = threshold;
             }
         }
 
-        if let Some(value) =
-            Self::extract_yaml_value(&config_str, &["router", "low_latency_threshold_ms"])
-        {
+        if let Some(value) = Self::extract_first_yaml_value(
+            &config_str,
+            &[
+                &["global", "router", "low_latency_threshold_ms"],
+                &["router", "low_latency_threshold_ms"],
+            ],
+        ) {
             if let Ok(threshold) = value.parse::<u64>() {
                 router_config.low_latency_threshold_ms = threshold;
             }
         }
 
-        if let Some(value) =
-            Self::extract_yaml_value(&config_str, &["router", "lora_baseline_score"])
-        {
+        if let Some(value) = Self::extract_first_yaml_value(
+            &config_str,
+            &[
+                &["global", "router", "lora_baseline_score"],
+                &["router", "lora_baseline_score"],
+            ],
+        ) {
             if let Ok(score) = value.parse::<f32>() {
                 router_config.lora_baseline_score = score;
             }
         }
 
-        if let Some(value) =
-            Self::extract_yaml_value(&config_str, &["router", "traditional_baseline_score"])
-        {
+        if let Some(value) = Self::extract_first_yaml_value(
+            &config_str,
+            &[
+                &["global", "router", "traditional_baseline_score"],
+                &["router", "traditional_baseline_score"],
+            ],
+        ) {
             if let Ok(score) = value.parse::<f32>() {
                 router_config.traditional_baseline_score = score;
             }
         }
 
-        if let Some(value) =
-            Self::extract_yaml_value(&config_str, &["router", "embedding_baseline_score"])
-        {
+        if let Some(value) = Self::extract_first_yaml_value(
+            &config_str,
+            &[
+                &["global", "router", "embedding_baseline_score"],
+                &["router", "embedding_baseline_score"],
+            ],
+        ) {
             if let Ok(score) = value.parse::<f32>() {
                 router_config.embedding_baseline_score = score;
             }
         }
 
         // Load success threshold
-        if let Some(value) =
-            Self::extract_yaml_value(&config_str, &["router", "success_confidence_threshold"])
-        {
+        if let Some(value) = Self::extract_first_yaml_value(
+            &config_str,
+            &[
+                &["global", "router", "success_confidence_threshold"],
+                &["router", "success_confidence_threshold"],
+            ],
+        ) {
             if let Ok(threshold) = value.parse::<f32>() {
                 router_config.success_confidence_threshold = threshold;
             }
@@ -783,7 +862,7 @@ impl GlobalConfigLoader {
     /// Extract YAML value as string from hierarchical path
     fn extract_yaml_value(yaml_content: &str, path: &[&str]) -> Option<String> {
         let lines: Vec<&str> = yaml_content.lines().collect();
-        let mut current_level = 0;
+        let mut current_indent = 0;
         let mut found_sections = vec![false; path.len()];
 
         for line in lines {
@@ -792,21 +871,21 @@ impl GlobalConfigLoader {
                 continue;
             }
 
-            let indent_level = (line.len() - line.trim_start().len()) / 2;
+            let indent_level = line.len() - line.trim_start().len();
+            let section_level = indent_level / 2;
 
             // Reset found sections if we're at a higher level
-            if indent_level <= current_level {
-                for i in (indent_level / 2 + 1)..found_sections.len() {
-                    found_sections[i] = false;
+            if indent_level <= current_indent {
+                for found in found_sections.iter_mut().skip(section_level + 1) {
+                    *found = false;
                 }
             }
 
-            current_level = indent_level;
+            current_indent = indent_level;
 
             // Check if this line matches our current section
             if let Some(section_end) = trimmed.find(':') {
                 let section_name = trimmed[..section_end].trim();
-                let section_level = indent_level / 2;
 
                 if section_level < path.len() && section_name == path[section_level] {
                     found_sections[section_level] = true;
@@ -824,5 +903,110 @@ impl GlobalConfigLoader {
         }
 
         None
+    }
+
+    fn extract_first_yaml_value(yaml_content: &str, paths: &[&[&str]]) -> Option<String> {
+        paths
+            .iter()
+            .find_map(|path| Self::extract_yaml_value(yaml_content, path))
+    }
+}
+
+#[cfg(test)]
+mod global_config_loader_tests {
+    use super::GlobalConfigLoader;
+
+    #[test]
+    fn extracts_classifier_thresholds_from_canonical_paths() {
+        let yaml = r#"
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        threshold: 0.71
+      classifier:
+        domain:
+          threshold: 0.55
+        pii:
+          threshold: 0.91
+"#;
+
+        assert_eq!(
+            GlobalConfigLoader::extract_first_yaml_threshold(
+                yaml,
+                &[&[
+                    "global",
+                    "model_catalog",
+                    "modules",
+                    "classifier",
+                    "domain",
+                    "threshold"
+                ]]
+            ),
+            Some(0.55)
+        );
+        assert_eq!(
+            GlobalConfigLoader::extract_first_yaml_threshold(
+                yaml,
+                &[&[
+                    "global",
+                    "model_catalog",
+                    "modules",
+                    "prompt_guard",
+                    "threshold"
+                ]]
+            ),
+            Some(0.71)
+        );
+        assert_eq!(
+            GlobalConfigLoader::extract_first_yaml_threshold(
+                yaml,
+                &[&[
+                    "global",
+                    "model_catalog",
+                    "modules",
+                    "classifier",
+                    "pii",
+                    "threshold"
+                ]]
+            ),
+            Some(0.91)
+        );
+    }
+
+    #[test]
+    fn prefers_canonical_router_root_for_hidden_thresholds() {
+        let yaml = r#"
+global:
+  router:
+    high_confidence_threshold: 0.97
+    low_latency_threshold_ms: 1500
+    lora_baseline_score: 0.82
+"#;
+
+        assert_eq!(
+            GlobalConfigLoader::extract_first_yaml_value(
+                yaml,
+                &[&["global", "router", "high_confidence_threshold"]]
+            )
+            .as_deref(),
+            Some("0.97")
+        );
+        assert_eq!(
+            GlobalConfigLoader::extract_first_yaml_value(
+                yaml,
+                &[&["global", "router", "low_latency_threshold_ms"]]
+            )
+            .as_deref(),
+            Some("1500")
+        );
+        assert_eq!(
+            GlobalConfigLoader::extract_first_yaml_value(
+                yaml,
+                &[&["global", "router", "lora_baseline_score"]]
+            )
+            .as_deref(),
+            Some("0.82")
+        );
     }
 }

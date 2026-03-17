@@ -11,14 +11,14 @@ import (
 const usage = `Usage: sr-dsl <command> [options]
 
 Commands:
-  compile    Compile DSL to YAML/CRD
-  decompile  Convert YAML config to DSL
+  compile    Compile routing DSL to YAML/CRD
+  decompile  Convert YAML config to routing-only DSL
   validate   Validate a DSL file
   fmt        Format a DSL file
 
 Examples:
   sr-dsl compile config.dsl -o config.yaml
-  sr-dsl compile config.dsl --format crd -o router-config.yaml
+  sr-dsl compile config.dsl --format crd -o semanticrouter.yaml
   sr-dsl decompile config.yaml -o config.dsl
   sr-dsl validate config.dsl
   sr-dsl fmt config.dsl

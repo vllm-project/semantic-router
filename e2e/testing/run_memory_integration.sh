@@ -85,7 +85,7 @@ HF_HUB_ENABLE_HF_TRANSFER=1 \
 python3 -c "from huggingface_hub import snapshot_download; snapshot_download('sentence-transformers/all-MiniLM-L12-v2', local_dir='${TEST_DIR}/models/mom-embedding-light', local_dir_use_symlinks=False)"
 
 make -C "${REPO_ROOT}" start-milvus
-cp "${REPO_ROOT}/config/testing/config.memory-user.yaml" "${CONFIG_FILE}"
+cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
 
 "${CONTAINER_RUNTIME}" run -d --name llm-katan --network host \
     "${DOCKER_REGISTRY}/llm-katan:${DOCKER_TAG}" \

@@ -121,7 +121,6 @@ jobs:
           REQUIRED_FILES=(
             "cli/templates/config.template.yaml"
             "cli/templates/envoy.template.yaml"
-            "cli/templates/router-defaults.yaml"
             "cli/templates/tools_db.json"
             "cli/templates/grafana.serve.ini"
             "cli/templates/grafana-datasource.serve.yaml"

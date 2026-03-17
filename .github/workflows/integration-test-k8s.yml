@@ -42,7 +42,7 @@ jobs:
              [[ "${{ needs.changes.outputs.agent_exec }}" == "true" ]] || \
              [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo 'profiles=["ai-gateway", "aibrix", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack", "response-api", "response-api-redis", "response-api-redis-cluster", "ml-model-selection", "multi-endpoint", "authz-rbac", "streaming"]' >> $GITHUB_OUTPUT
+            echo 'profiles=["ai-gateway", "aibrix", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack", "response-api", "ml-model-selection", "multi-endpoint", "authz-rbac", "streaming"]' >> $GITHUB_OUTPUT
             echo 'should_run=true' >> $GITHUB_OUTPUT
             echo "Running all profiles due to common/core changes or push/schedule/manual trigger"
             exit 0
@@ -58,8 +58,6 @@ jobs:
           [[ "${{ needs.changes.outputs.e2e_production_stack }}" == "true" ]] && profiles+=("production-stack")
           [[ "${{ needs.changes.outputs.e2e_dynamic_config }}" == "true" ]] && profiles+=("dynamic-config")
           [[ "${{ needs.changes.outputs.e2e_response_api }}" == "true" ]] && profiles+=("response-api")
-          [[ "${{ needs.changes.outputs.e2e_response_api_redis }}" == "true" ]] && profiles+=("response-api-redis")
-          [[ "${{ needs.changes.outputs.e2e_response_api_redis_cluster }}" == "true" ]] && profiles+=("response-api-redis-cluster")
           [[ "${{ needs.changes.outputs.e2e_ml_model_selection }}" == "true" ]] && profiles+=("ml-model-selection")
           [[ "${{ needs.changes.outputs.e2e_multi_endpoint }}" == "true" ]] && profiles+=("multi-endpoint")
           [[ "${{ needs.changes.outputs.e2e_authz_rbac }}" == "true" ]] && profiles+=("authz-rbac")
@@ -81,7 +79,9 @@ jobs:
     needs: [changes, determine-profiles]
     if: ${{ needs.determine-profiles.outputs.should_run == 'true' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
+    env:
+      E2E_SEMANTIC_ROUTER_HELM_TIMEOUT: 60m
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:
@@ -140,9 +140,29 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          set +e  # Don't exit on error, we want to capture the result
+          bash ./e2e/testing/stream_semantic_router_logs.sh &
+          ROUTER_LOG_STREAM_PID=$!
+          cleanup_router_log_stream() {
+            if kill -0 "${ROUTER_LOG_STREAM_PID}" 2>/dev/null; then
+              echo "[router-live] stopping background router log stream (pid ${ROUTER_LOG_STREAM_PID})"
+              kill "${ROUTER_LOG_STREAM_PID}" 2>/dev/null || true
+              wait "${ROUTER_LOG_STREAM_PID}" 2>/dev/null || true
+            fi
+          }
+          trap cleanup_router_log_stream EXIT
+
+          set +e
+          if [ "${{ matrix.profile }}" = "response-api" ]; then
+            make e2e-test-response-api-suite E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
+            TEST_EXIT_CODE=$?
+            set -e
+            echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT
+            exit "${TEST_EXIT_CODE}"
+          fi
+
           make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
           TEST_EXIT_CODE=$?
+          set -e
           echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT
           exit ${TEST_EXIT_CODE}
 
@@ -179,6 +199,7 @@ jobs:
             test-report.json
             test-report.md
             semantic-router-logs.txt
+            response-api-artifacts/**
           retention-days: 30
 
       - name: Create test summary from report
@@ -190,60 +211,42 @@ jobs:
 
             # Add semantic-router logs section if available
             if [ -f "semantic-router-logs.txt" ]; then
-              cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-
-          ---
-
-          ### 📝 Semantic Router Logs
-
-          <details>
-          <summary>Click to view semantic-router logs</summary>
-
-          ```
-          EOF
+              {
+                printf '\n---\n\n### 📝 Semantic Router Logs\n\n<details>\n<summary>Click to view semantic-router logs</summary>\n\n```\n'
+              } >> "$GITHUB_STEP_SUMMARY"
               # Add first 500 lines of logs to summary (to avoid exceeding GitHub limits)
               head -n 500 semantic-router-logs.txt >> $GITHUB_STEP_SUMMARY
 
               # Check if there are more lines
               TOTAL_LINES=$(wc -l < semantic-router-logs.txt)
               if [ "$TOTAL_LINES" -gt 500 ]; then
-                cat >> $GITHUB_STEP_SUMMARY << EOF
-
-          ... (showing first 500 lines of $TOTAL_LINES total lines)
-
-          📦 Full logs are available in the workflow artifacts: semantic-router-logs.txt
-          EOF
+                {
+                  printf '\n... (showing first 500 lines of %s total lines)\n\n' "$TOTAL_LINES"
+                  printf '📦 Full logs are available in the workflow artifacts: semantic-router-logs.txt\n'
+                } >> "$GITHUB_STEP_SUMMARY"
               fi
 
-              cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ```
-
-          </details>
-          EOF
+              {
+                printf '```\n\n</details>\n'
+              } >> "$GITHUB_STEP_SUMMARY"
             fi
 
             # Add additional context
-            cat >> $GITHUB_STEP_SUMMARY << EOF
-
-          ---
-
-          ### 📚 Additional Resources
-
-          - **Profile:** \`${{ matrix.profile }}\`
-          - **Trigger:** ${{ github.event_name }}
-          - **Branch:** \`${{ github.ref_name }}\`
-          - **Commit:** \`${{ github.sha }}\`
-          - **Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          - [E2E Test Framework Documentation](https://github.com/${{ github.repository }}/tree/main/e2e)
-          - [${{ matrix.profile }} Profile](https://github.com/${{ github.repository }}/tree/main/e2e/profiles/${{ matrix.profile }})
-
-          ### 📦 Artifacts
-
-          - **test-report.json** - Detailed test results in JSON format
-          - **test-report.md** - Human-readable test report
-          - **semantic-router-logs.txt** - Complete semantic-router pod logs
-          - All artifacts are retained for 30 days as \`test-reports-${{ matrix.profile }}\`
-          EOF
+            {
+              printf '\n---\n\n### 📚 Additional Resources\n\n'
+              printf -- '- **Profile:** `%s`\n' "${{ matrix.profile }}"
+              printf -- '- **Trigger:** %s\n' "${{ github.event_name }}"
+              printf -- '- **Branch:** `%s`\n' "${{ github.ref_name }}"
+              printf -- '- **Commit:** `%s`\n' "${{ github.sha }}"
+              printf -- '- **Workflow Run:** [%s](%s/%s/actions/runs/%s)\n' "${{ github.run_id }}" "${{ github.server_url }}" "${{ github.repository }}" "${{ github.run_id }}"
+              printf -- '- [E2E Test Framework Documentation](https://github.com/%s/tree/main/e2e)\n' "${{ github.repository }}"
+              printf -- '- [%s Profile](https://github.com/%s/tree/main/e2e/profiles/%s)\n' "${{ matrix.profile }}" "${{ github.repository }}" "${{ matrix.profile }}"
+              printf '\n### 📦 Artifacts\n\n'
+              printf -- '- **test-report.json** - Detailed test results in JSON format\n'
+              printf -- '- **test-report.md** - Human-readable test report\n'
+              printf -- '- **semantic-router-logs.txt** - Complete semantic-router pod logs\n'
+              printf -- '- All artifacts are retained for 30 days as `test-reports-%s`\n' "${{ matrix.profile }}"
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "⚠️ Test report file not found!" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY

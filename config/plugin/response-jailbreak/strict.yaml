@@ -1,0 +1,6 @@
+plugin:
+  type: response_jailbreak
+  configuration:
+    enabled: true
+    threshold: 0.85
+    action: block

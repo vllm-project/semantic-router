@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { DSLFieldObject } from "@/types/dsl";
 import styles from "./BuilderPage.module.css";
 
 // ===================================================================
@@ -140,7 +141,7 @@ const ModelNameInput: React.FC<{
 
 const ManualPluginAdder: React.FC<{
   existingNames: Set<string>;
-  onAdd: (name: string, fields?: Record<string, unknown>) => void;
+  onAdd: (name: string, fields?: DSLFieldObject) => void;
 }> = ({ existingNames, onAdd }) => {
   const [name, setName] = useState("");
 

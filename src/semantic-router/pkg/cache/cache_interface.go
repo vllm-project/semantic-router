@@ -122,9 +122,6 @@ type CacheConfig struct {
 	// Milvus specific settings
 	Milvus *config.MilvusConfig `yaml:"milvus,omitempty"`
 
-	// BackendConfigPath points to backend-specific configuration files (Deprecated)
-	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
-
 	// UseHNSW enables HNSW index for faster search in memory backend
 	UseHNSW bool `yaml:"use_hnsw,omitempty"`
 

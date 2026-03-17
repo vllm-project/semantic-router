@@ -38,7 +38,7 @@ type RAGPluginConfig struct {
 	// - "mcp": MCPRAGConfig
 	// - "openai": OpenAIRAGConfig
 	// - "hybrid": HybridRAGConfig
-	BackendConfig interface{} `json:"backend_config,omitempty" yaml:"backend_config,omitempty"`
+	BackendConfig *StructuredPayload `json:"backend_config,omitempty" yaml:"backend_config,omitempty"`
 
 	// Fallback behavior when retrieval fails
 	// - "skip" (default): Continue without context, log warning
@@ -115,7 +115,7 @@ type MCPRAGConfig struct {
 
 	// Tool arguments template
 	// Supports variable substitution: ${user_content}, ${matched_domains}, ${top_k}
-	ToolArguments map[string]interface{} `json:"tool_arguments,omitempty" yaml:"tool_arguments,omitempty"`
+	ToolArguments *StructuredPayload `json:"tool_arguments,omitempty" yaml:"tool_arguments,omitempty"`
 
 	// Timeout in seconds
 	TimeoutSeconds *int `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
@@ -143,7 +143,7 @@ type OpenAIRAGConfig struct {
 
 	// Metadata filter (optional)
 	// Format: OpenAI metadata filter expression
-	Filter map[string]interface{} `json:"filter,omitempty" yaml:"filter,omitempty"`
+	Filter *StructuredPayload `json:"filter,omitempty" yaml:"filter,omitempty"`
 
 	// Timeout in seconds for API calls
 	TimeoutSeconds *int `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
@@ -164,10 +164,10 @@ type HybridRAGConfig struct {
 	Fallback string `json:"fallback,omitempty" yaml:"fallback,omitempty"`
 
 	// Primary backend configuration
-	PrimaryConfig interface{} `json:"primary_config,omitempty" yaml:"primary_config,omitempty"`
+	PrimaryConfig *StructuredPayload `json:"primary_config,omitempty" yaml:"primary_config,omitempty"`
 
 	// Fallback backend configuration
-	FallbackConfig interface{} `json:"fallback_config,omitempty" yaml:"fallback_config,omitempty"`
+	FallbackConfig *StructuredPayload `json:"fallback_config,omitempty" yaml:"fallback_config,omitempty"`
 
 	// Strategy: "sequential" (try primary, then fallback) or "parallel" (try both, use best)
 	Strategy string `json:"strategy,omitempty" yaml:"strategy,omitempty"`
@@ -185,59 +185,72 @@ type VectorStoreRAGConfig struct {
 
 // GetRAGConfig returns the RAG plugin configuration for a decision
 func (d *Decision) GetRAGConfig() *RAGPluginConfig {
-	pluginConfig := d.GetPluginConfig("rag")
-	if pluginConfig == nil {
+	plugin := d.GetPlugin("rag")
+	if plugin == nil || plugin.Configuration == nil {
 		return nil
 	}
 
 	result := &RAGPluginConfig{}
-	if err := unmarshalPluginConfig(pluginConfig, result); err != nil {
+	if err := UnmarshalPluginConfig(plugin.Configuration, result); err != nil {
 		logging.Errorf("Failed to unmarshal RAG config: %v", err)
 		return nil
 	}
-
-	if err := hydrateRAGBackendConfig(result); err != nil {
-		logging.Errorf("Failed to unmarshal RAG backend config for %s: %v", result.Backend, err)
-	}
-
 	return result
 }
 
-func hydrateRAGBackendConfig(result *RAGPluginConfig) error {
-	if result.BackendConfig == nil || result.Backend == "" {
-		return nil
-	}
-
-	backendConfig, knownBackend := newRAGBackendConfig(result.Backend)
-	if !knownBackend {
-		logging.Warnf("Unknown RAG backend type: %s", result.Backend)
-		return nil
-	}
-
-	if err := unmarshalPluginConfig(result.BackendConfig, backendConfig); err != nil {
-		return err
-	}
-	result.BackendConfig = backendConfig
-	return nil
+func (c *RAGPluginConfig) MilvusBackendConfig() (*MilvusRAGConfig, error) {
+	return decodeRAGBackendConfig[MilvusRAGConfig](c, "milvus")
 }
 
-func newRAGBackendConfig(backend string) (interface{}, bool) {
-	switch backend {
-	case "milvus":
-		return &MilvusRAGConfig{}, true
-	case "external_api":
-		return &ExternalAPIRAGConfig{}, true
-	case "mcp":
-		return &MCPRAGConfig{}, true
-	case "openai":
-		return &OpenAIRAGConfig{}, true
-	case "vectorstore":
-		return &VectorStoreRAGConfig{}, true
-	case "hybrid":
-		return &HybridRAGConfig{}, true
-	default:
-		return nil, false
+func (c *RAGPluginConfig) ExternalAPIBackendConfig() (*ExternalAPIRAGConfig, error) {
+	return decodeRAGBackendConfig[ExternalAPIRAGConfig](c, "external_api")
+}
+
+func (c *RAGPluginConfig) MCPBackendConfig() (*MCPRAGConfig, error) {
+	return decodeRAGBackendConfig[MCPRAGConfig](c, "mcp")
+}
+
+func (c *RAGPluginConfig) OpenAIBackendConfig() (*OpenAIRAGConfig, error) {
+	return decodeRAGBackendConfig[OpenAIRAGConfig](c, "openai")
+}
+
+func (c *RAGPluginConfig) VectorStoreBackendConfig() (*VectorStoreRAGConfig, error) {
+	return decodeRAGBackendConfig[VectorStoreRAGConfig](c, "vectorstore")
+}
+
+func (c *RAGPluginConfig) HybridBackendConfig() (*HybridRAGConfig, error) {
+	return decodeRAGBackendConfig[HybridRAGConfig](c, "hybrid")
+}
+
+func (c *MCPRAGConfig) ToolArgumentMap() (map[string]interface{}, error) {
+	if c == nil || c.ToolArguments == nil {
+		return map[string]interface{}{}, nil
 	}
+	return c.ToolArguments.AsStringMap()
+}
+
+func (c *OpenAIRAGConfig) FilterMap() (map[string]interface{}, error) {
+	if c == nil || c.Filter == nil {
+		return nil, nil
+	}
+	return c.Filter.AsStringMap()
+}
+
+func decodeRAGBackendConfig[T any](cfg *RAGPluginConfig, expectedBackend string) (*T, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("RAG config is nil")
+	}
+	if cfg.Backend != expectedBackend {
+		return nil, fmt.Errorf("expected RAG backend %q, got %q", expectedBackend, cfg.Backend)
+	}
+	if cfg.BackendConfig == nil {
+		return nil, fmt.Errorf("BackendConfig is required for backend %q", expectedBackend)
+	}
+	result := new(T)
+	if err := cfg.BackendConfig.DecodeInto(result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // Validate validates the RAG plugin configuration
@@ -253,23 +266,17 @@ func (c *RAGPluginConfig) Validate() error {
 	// Validate backend-specific config
 	switch c.Backend {
 	case "milvus":
-		if c.BackendConfig == nil {
-			return fmt.Errorf("BackendConfig is required for backend 'milvus'")
-		}
-		milvusConfig, ok := c.BackendConfig.(*MilvusRAGConfig)
-		if !ok {
-			return fmt.Errorf("BackendConfig must be of type *MilvusRAGConfig for backend 'milvus'")
+		milvusConfig, err := c.MilvusBackendConfig()
+		if err != nil {
+			return err
 		}
 		if milvusConfig.Collection == "" {
 			return fmt.Errorf("milvus collection name is required")
 		}
 	case "external_api":
-		if c.BackendConfig == nil {
-			return fmt.Errorf("BackendConfig is required for backend 'external_api'")
-		}
-		apiConfig, ok := c.BackendConfig.(*ExternalAPIRAGConfig)
-		if !ok {
-			return fmt.Errorf("BackendConfig must be of type *ExternalAPIRAGConfig for backend 'external_api'")
+		apiConfig, err := c.ExternalAPIBackendConfig()
+		if err != nil {
+			return err
 		}
 		if apiConfig.Endpoint == "" {
 			return fmt.Errorf("external API endpoint is required")
@@ -278,12 +285,9 @@ func (c *RAGPluginConfig) Validate() error {
 			return fmt.Errorf("request format is required for external API")
 		}
 	case "mcp":
-		if c.BackendConfig == nil {
-			return fmt.Errorf("BackendConfig is required for backend 'mcp'")
-		}
-		mcpConfig, ok := c.BackendConfig.(*MCPRAGConfig)
-		if !ok {
-			return fmt.Errorf("BackendConfig must be of type *MCPRAGConfig for backend 'mcp'")
+		mcpConfig, err := c.MCPBackendConfig()
+		if err != nil {
+			return err
 		}
 		if mcpConfig.ServerName == "" {
 			return fmt.Errorf("MCP server name is required")
@@ -292,12 +296,9 @@ func (c *RAGPluginConfig) Validate() error {
 			return fmt.Errorf("MCP tool name is required")
 		}
 	case "openai":
-		if c.BackendConfig == nil {
-			return fmt.Errorf("BackendConfig is required for backend 'openai'")
-		}
-		openaiConfig, ok := c.BackendConfig.(*OpenAIRAGConfig)
-		if !ok {
-			return fmt.Errorf("BackendConfig must be of type *OpenAIRAGConfig for backend 'openai'")
+		openaiConfig, err := c.OpenAIBackendConfig()
+		if err != nil {
+			return err
 		}
 		if openaiConfig.VectorStoreID == "" {
 			return fmt.Errorf("vector store ID is required for OpenAI backend")
@@ -306,12 +307,9 @@ func (c *RAGPluginConfig) Validate() error {
 			return fmt.Errorf("API key is required for OpenAI backend")
 		}
 	case "hybrid":
-		if c.BackendConfig == nil {
-			return fmt.Errorf("BackendConfig is required for backend 'hybrid'")
-		}
-		hybridConfig, ok := c.BackendConfig.(*HybridRAGConfig)
-		if !ok {
-			return fmt.Errorf("BackendConfig must be of type *HybridRAGConfig for backend 'hybrid'")
+		hybridConfig, err := c.HybridBackendConfig()
+		if err != nil {
+			return err
 		}
 		if hybridConfig.Primary == "" {
 			return fmt.Errorf("primary backend is required for hybrid RAG")

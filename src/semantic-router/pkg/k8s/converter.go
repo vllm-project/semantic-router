@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	yamlv3 "gopkg.in/yaml.v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apis/vllm.ai/v1alpha1"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -29,114 +31,42 @@ import (
 type CRDConverter struct{}
 
 // NewCRDConverter creates a new CRD converter
-func NewCRDConverter() *CRDConverter {
-	return &CRDConverter{}
-}
+func NewCRDConverter() *CRDConverter { return &CRDConverter{} }
 
-// ConvertIntelligentPool converts IntelligentPool CRD to BackendModels config
-func (c *CRDConverter) ConvertIntelligentPool(pool *v1alpha1.IntelligentPool) (*config.BackendModels, error) {
+// Convert builds a canonical v0.3 config from IntelligentPool/IntelligentRoute
+// CRDs plus a static canonical base.
+func (c *CRDConverter) Convert(
+	pool *v1alpha1.IntelligentPool,
+	route *v1alpha1.IntelligentRoute,
+	staticBase *config.CanonicalConfig,
+) (*config.CanonicalConfig, error) {
 	if pool == nil {
 		return nil, fmt.Errorf("pool cannot be nil")
 	}
-
-	backendModels := &config.BackendModels{
-		DefaultModel: pool.Spec.DefaultModel,
-		ModelConfig:  make(map[string]config.ModelParams),
-		// VLLMEndpoints is not managed by CRD, will be loaded from static config
-		VLLMEndpoints: nil,
-	}
-
-	// Convert models
-	for _, model := range pool.Spec.Models {
-		modelParams := config.ModelParams{
-			ReasoningFamily: model.ReasoningFamily,
-		}
-
-		// Convert pricing
-		if model.Pricing != nil {
-			modelParams.Pricing = config.ModelPricing{
-				PromptPer1M:     model.Pricing.InputTokenPrice * 1000000,  // Convert per-token to per-1M
-				CompletionPer1M: model.Pricing.OutputTokenPrice * 1000000, // Convert per-token to per-1M
-			}
-		}
-
-		// Convert LoRAs
-		if len(model.LoRAs) > 0 {
-			modelParams.LoRAs = make([]config.LoRAAdapter, len(model.LoRAs))
-			for i, lora := range model.LoRAs {
-				modelParams.LoRAs[i] = config.LoRAAdapter{
-					Name:        lora.Name,
-					Description: lora.Description,
-				}
-			}
-		}
-
-		backendModels.ModelConfig[model.Name] = modelParams
-	}
-
-	return backendModels, nil
-}
-
-// ConvertIntelligentRoute converts IntelligentRoute CRD to IntelligentRouting config
-func (c *CRDConverter) ConvertIntelligentRoute(route *v1alpha1.IntelligentRoute) (*config.IntelligentRouting, error) {
 	if route == nil {
 		return nil, fmt.Errorf("route cannot be nil")
 	}
 
-	intelligentRouting := &config.IntelligentRouting{
-		Signals: config.Signals{
-			KeywordRules:   make([]config.KeywordRule, 0),
-			EmbeddingRules: make([]config.EmbeddingRule, 0),
-			Categories:     make([]config.Category, 0),
-		},
-		Decisions: make([]config.Decision, 0),
-		Strategy:  "priority", // Always use priority strategy
+	canonical, err := cloneCanonicalConfig(staticBase)
+	if err != nil {
+		return nil, err
 	}
+	canonical.Version = "v0.3"
 
-	// Convert keyword signals
-	for _, signal := range route.Spec.Signals.Keywords {
-		intelligentRouting.KeywordRules = append(intelligentRouting.KeywordRules, config.KeywordRule{
-			Name:          signal.Name,
-			Operator:      signal.Operator,
-			Keywords:      signal.Keywords,
-			CaseSensitive: signal.CaseSensitive,
-		})
-	}
-
-	// Convert embedding signals
-	for _, signal := range route.Spec.Signals.Embeddings {
-		embeddingRule := config.EmbeddingRule{
-			Name:                      signal.Name,
-			SimilarityThreshold:       signal.Threshold,
-			Candidates:                signal.Candidates,
-			AggregationMethodConfiged: config.AggregationMethod(signal.AggregationMethod),
-		}
-		intelligentRouting.EmbeddingRules = append(intelligentRouting.EmbeddingRules, embeddingRule)
-	}
-
-	// Convert domain signals to categories (only metadata)
-	// Domains is now an array of DomainSignal with name and description
-	for _, domain := range route.Spec.Signals.Domains {
-		category := config.Category{
-			CategoryMetadata: config.CategoryMetadata{
-				Name:           domain.Name,
-				Description:    domain.Description,
-				MMLUCategories: []string{domain.Name}, // Single MMLU category
-			},
-		}
-		intelligentRouting.Categories = append(intelligentRouting.Categories, category)
-	}
-
-	// Convert decisions
+	canonical.Providers.Defaults.DefaultModel = pool.Spec.DefaultModel
+	canonical.Routing.ModelCards = convertRoutingModelCards(pool.Spec.Models)
+	canonical.Routing.Signals = convertSignals(route.Spec.Signals)
+	canonical.Routing.Decisions = make([]config.Decision, 0, len(route.Spec.Decisions))
 	for _, decision := range route.Spec.Decisions {
 		configDecision, err := c.convertDecision(decision)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert decision %s: %w", decision.Name, err)
 		}
-		intelligentRouting.Decisions = append(intelligentRouting.Decisions, configDecision)
+		canonical.Routing.Decisions = append(canonical.Routing.Decisions, configDecision)
 	}
 
-	return intelligentRouting, nil
+	canonical.Providers.Models = mergeProviderMetadata(canonical.Providers.Models, convertProviderMetadata(pool.Spec.Models))
+	return canonical, nil
 }
 
 // convertDecision converts a CRD Decision to config Decision
@@ -178,15 +108,15 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 
 	// Convert plugins
 	for _, plugin := range decision.Plugins {
-		var pluginConfig any
+		var pluginConfig *config.StructuredPayload
 		if plugin.Configuration != nil && plugin.Configuration.Raw != nil {
 			// Validate plugin configuration format
 			if err := validatePluginConfiguration(plugin.Type, plugin.Configuration.Raw); err != nil {
 				return config.Decision{}, fmt.Errorf("invalid configuration for plugin %s in decision %s: %w", plugin.Type, decision.Name, err)
 			}
-			// Store the raw bytes from RawExtension
-			// The Get*Config methods will unmarshal this to the appropriate type
-			pluginConfig = plugin.Configuration.Raw
+			raw := make([]byte, len(plugin.Configuration.Raw))
+			copy(raw, plugin.Configuration.Raw)
+			pluginConfig = &config.StructuredPayload{Raw: raw}
 		}
 		configDecision.Plugins = append(configDecision.Plugins, config.DecisionPlugin{
 			Type:          plugin.Type,
@@ -195,6 +125,174 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 	}
 
 	return configDecision, nil
+}
+
+func convertRoutingModelCards(models []v1alpha1.ModelConfig) []config.RoutingModel {
+	if len(models) == 0 {
+		return nil
+	}
+
+	cards := make([]config.RoutingModel, 0, len(models))
+	for _, model := range models {
+		card := config.RoutingModel{
+			Name: model.Name,
+		}
+		if len(model.LoRAs) > 0 {
+			card.LoRAs = make([]config.LoRAAdapter, len(model.LoRAs))
+			for i, lora := range model.LoRAs {
+				card.LoRAs[i] = config.LoRAAdapter{
+					Name:        lora.Name,
+					Description: lora.Description,
+				}
+			}
+		}
+		cards = append(cards, card)
+	}
+	return cards
+}
+
+func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
+	converted := config.CanonicalSignals{
+		Keywords:   make([]config.KeywordRule, 0, len(signals.Keywords)),
+		Embeddings: make([]config.EmbeddingRule, 0, len(signals.Embeddings)),
+		Domains:    make([]config.Category, 0, len(signals.Domains)),
+		Context:    make([]config.ContextRule, 0, len(signals.ContextRules)),
+		FactCheck:  make([]config.FactCheckRule, 0, len(signals.FactCheckRules)),
+	}
+
+	for _, signal := range signals.Keywords {
+		converted.Keywords = append(converted.Keywords, config.KeywordRule{
+			Name:          signal.Name,
+			Operator:      signal.Operator,
+			Keywords:      signal.Keywords,
+			CaseSensitive: signal.CaseSensitive,
+		})
+	}
+
+	for _, signal := range signals.Embeddings {
+		converted.Embeddings = append(converted.Embeddings, config.EmbeddingRule{
+			Name:                      signal.Name,
+			SimilarityThreshold:       signal.Threshold,
+			Candidates:                signal.Candidates,
+			AggregationMethodConfiged: config.AggregationMethod(signal.AggregationMethod),
+		})
+	}
+
+	for _, domain := range signals.Domains {
+		converted.Domains = append(converted.Domains, config.Category{
+			CategoryMetadata: config.CategoryMetadata{
+				Name:           domain.Name,
+				Description:    domain.Description,
+				MMLUCategories: []string{domain.Name},
+			},
+		})
+	}
+
+	for _, rule := range signals.ContextRules {
+		converted.Context = append(converted.Context, config.ContextRule{
+			Name:        rule.Name,
+			MinTokens:   config.TokenCount(rule.MinTokens),
+			MaxTokens:   config.TokenCount(rule.MaxTokens),
+			Description: rule.Description,
+		})
+	}
+
+	for _, rule := range signals.FactCheckRules {
+		converted.FactCheck = append(converted.FactCheck, config.FactCheckRule{
+			Name:        rule.Name,
+			Description: rule.Description,
+		})
+	}
+
+	return converted
+}
+
+func convertProviderMetadata(models []v1alpha1.ModelConfig) []config.CanonicalProviderModel {
+	converted := make([]config.CanonicalProviderModel, 0, len(models))
+	for _, model := range models {
+		providerModel := config.CanonicalProviderModel{
+			Name:            model.Name,
+			ReasoningFamily: model.ReasoningFamily,
+		}
+		if model.Pricing == nil && providerModel.ReasoningFamily == "" {
+			continue
+		}
+		if model.Pricing != nil {
+			providerModel.Pricing = config.ModelPricing{
+				PromptPer1M:     model.Pricing.InputTokenPrice * 1000000,
+				CompletionPer1M: model.Pricing.OutputTokenPrice * 1000000,
+			}
+		}
+		converted = append(converted, providerModel)
+	}
+	return converted
+}
+
+func mergeProviderMetadata(
+	base []config.CanonicalProviderModel,
+	overlay []config.CanonicalProviderModel,
+) []config.CanonicalProviderModel {
+	if len(overlay) == 0 {
+		return base
+	}
+
+	merged := make([]config.CanonicalProviderModel, 0, len(base)+len(overlay))
+	index := make(map[string]int, len(base)+len(overlay))
+	for _, providerModel := range base {
+		index[providerModel.Name] = len(merged)
+		merged = append(merged, providerModel)
+	}
+	for _, providerModel := range overlay {
+		existingIndex, ok := index[providerModel.Name]
+		if !ok {
+			index[providerModel.Name] = len(merged)
+			merged = append(merged, providerModel)
+			continue
+		}
+		merged[existingIndex] = mergeCanonicalProviderMetadata(
+			merged[existingIndex],
+			providerModel,
+		)
+	}
+	return merged
+}
+
+func mergeCanonicalProviderMetadata(
+	existing config.CanonicalProviderModel,
+	overlay config.CanonicalProviderModel,
+) config.CanonicalProviderModel {
+	if overlay.Pricing != (config.ModelPricing{}) {
+		existing.Pricing = overlay.Pricing
+	}
+	if overlay.ReasoningFamily != "" {
+		existing.ReasoningFamily = overlay.ReasoningFamily
+	}
+	if overlay.ProviderModelID != "" {
+		existing.ProviderModelID = overlay.ProviderModelID
+	}
+	if overlay.APIFormat != "" {
+		existing.APIFormat = overlay.APIFormat
+	}
+	if len(overlay.ExternalModelIDs) > 0 {
+		existing.ExternalModelIDs = overlay.ExternalModelIDs
+	}
+	return existing
+}
+
+func cloneCanonicalConfig(base *config.CanonicalConfig) (*config.CanonicalConfig, error) {
+	if base == nil {
+		return &config.CanonicalConfig{Version: "v0.3"}, nil
+	}
+
+	data, err := yamlv3.Marshal(base)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal canonical base config: %w", err)
+	}
+	var cloned config.CanonicalConfig
+	if err := yamlv3.Unmarshal(data, &cloned); err != nil {
+		return nil, fmt.Errorf("failed to clone canonical base config: %w", err)
+	}
+	return &cloned, nil
 }
 
 // validatePluginConfiguration validates that plugin configuration matches the expected schema

@@ -1,0 +1,6 @@
+plugin:
+  type: system_prompt
+  configuration:
+    enabled: true
+    mode: insert
+    system_prompt: You are a domain expert. Answer precisely, state tradeoffs, and keep the response actionable.

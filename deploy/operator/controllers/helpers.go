@@ -42,7 +42,8 @@ func (r *SemanticRouterReconciler) parseQuantity(s string) (resource.Quantity, e
 	return resource.ParseQuantity(s)
 }
 
-// convertToConfigMap converts structs to maps, converting string threshold values to floats
+// convertToConfigMap converts JSON-tagged config structs into YAML-ready maps or
+// slices, coercing numeric-looking strings into numbers for the router runtime.
 func (r *SemanticRouterReconciler) convertToConfigMap(v interface{}) interface{} {
 	// Marshal to JSON first (which respects json struct tags), then unmarshal to map[string]interface{}
 	// This preserves the JSON tag field names (snake_case) and structure
@@ -51,14 +52,12 @@ func (r *SemanticRouterReconciler) convertToConfigMap(v interface{}) interface{}
 		return v
 	}
 
-	var result map[string]interface{}
+	var result interface{}
 	if err := json.Unmarshal(data, &result); err != nil {
 		return v
 	}
 
-	// Recursively convert string values that look like floats to actual floats
-	r.convertStringsToFloats(result)
-	return result
+	return r.normalizeConfigValue(result)
 }
 
 // convertStringsToFloats recursively converts string values to appropriate types
@@ -66,23 +65,24 @@ func (r *SemanticRouterReconciler) convertToConfigMap(v interface{}) interface{}
 // and the semantic router app's expectation of actual numeric types in YAML
 func (r *SemanticRouterReconciler) convertStringsToFloats(m map[string]interface{}) {
 	for k, v := range m {
-		switch val := v.(type) {
-		case string:
-			// Try to convert string to appropriate type
-			m[k] = r.convertStringValue(val)
-		case map[string]interface{}:
-			// Recursively process nested maps
-			r.convertStringsToFloats(val)
-		case []interface{}:
-			// Process arrays
-			for i, item := range val {
-				if nestedMap, ok := item.(map[string]interface{}); ok {
-					r.convertStringsToFloats(nestedMap)
-				} else if str, ok := item.(string); ok {
-					val[i] = r.convertStringValue(str)
-				}
-			}
+		m[k] = r.normalizeConfigValue(v)
+	}
+}
+
+func (r *SemanticRouterReconciler) normalizeConfigValue(v interface{}) interface{} {
+	switch val := v.(type) {
+	case string:
+		return r.convertStringValue(val)
+	case map[string]interface{}:
+		r.convertStringsToFloats(val)
+		return val
+	case []interface{}:
+		for i, item := range val {
+			val[i] = r.normalizeConfigValue(item)
 		}
+		return val
+	default:
+		return v
 	}
 }
 

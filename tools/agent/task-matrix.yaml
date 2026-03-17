@@ -63,7 +63,7 @@ rules:
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/run_memory_integration.sh
       - e2e/testing/llm-katan/**
-      - config/testing/config.memory*.yaml
+      - e2e/config/config.memory*.yaml
       - .github/workflows/integration-test-memory.yml
       - tools/make/milvus.mk
     fast_tests: []

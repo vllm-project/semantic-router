@@ -76,3 +76,4 @@ Keep the numeric index unique within `docs/agent/plans/`.
 
 - [pl-0001-harness-roadmap.md](pl-0001-harness-roadmap.md)
 - [pl-0002-e2e-rationalization-roadmap.md](pl-0002-e2e-rationalization-roadmap.md)
+- [pl-0003-v0-3-config-contract-rollout.md](pl-0003-v0-3-config-contract-rollout.md)

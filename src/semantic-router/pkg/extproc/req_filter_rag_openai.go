@@ -16,9 +16,9 @@ import (
 // 1. Tool-based (Responses API workflow): Adds file_search tool to request, LLM calls it
 // 2. Direct search: Uses vector store search API for synchronous retrieval
 func (r *OpenAIRouter) retrieveFromOpenAI(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
-	openaiConfig, ok := ragConfig.BackendConfig.(*config.OpenAIRAGConfig)
-	if !ok {
-		return "", fmt.Errorf("invalid OpenAI RAG config")
+	openaiConfig, err := ragConfig.OpenAIBackendConfig()
+	if err != nil {
+		return "", fmt.Errorf("invalid OpenAI RAG config: %w", err)
 	}
 
 	baseURL := openaiConfig.BaseURL
@@ -41,8 +41,8 @@ func (r *OpenAIRouter) retrieveFromOpenAI(traceCtx context.Context, ctx *Request
 	// The LLM will call it and results will be in response annotations
 	if workflowMode == "tool_based" {
 		logging.Infof("OpenAI RAG: Using tool-based workflow (Responses API), adding file_search tool")
-		if err := r.addFileSearchToolToRequest(ctx, openaiConfig); err != nil {
-			return "", fmt.Errorf("failed to add file_search tool: %w", err)
+		if toolErr := r.addFileSearchToolToRequest(ctx, openaiConfig); toolErr != nil {
+			return "", fmt.Errorf("failed to add file_search tool: %w", toolErr)
 		}
 		// Return empty - context will be retrieved from tool response annotations
 		// This requires response handling to extract context from annotations
@@ -63,7 +63,11 @@ func (r *OpenAIRouter) retrieveFromOpenAI(traceCtx context.Context, ctx *Request
 	}
 
 	// Perform vector store search
-	searchResp, err := vectorStoreClient.SearchVectorStore(traceCtx, openaiConfig.VectorStoreID, query, limit, openaiConfig.Filter)
+	filterMap, err := openaiConfig.FilterMap()
+	if err != nil {
+		return "", fmt.Errorf("invalid OpenAI filter config: %w", err)
+	}
+	searchResp, err := vectorStoreClient.SearchVectorStore(traceCtx, openaiConfig.VectorStoreID, query, limit, filterMap)
 	if err != nil {
 		return "", fmt.Errorf("vector store search failed: %w", err)
 	}
@@ -107,10 +111,15 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 		return fmt.Errorf("original request body is empty")
 	}
 
+	filterMap, err := openaiConfig.FilterMap()
+	if err != nil {
+		return fmt.Errorf("invalid OpenAI filter config: %w", err)
+	}
+
 	// Parse the request body
 	var requestMap map[string]interface{}
-	if err := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); err != nil {
-		return fmt.Errorf("failed to parse request body: %w", err)
+	if unmarshalErr := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); unmarshalErr != nil {
+		return fmt.Errorf("failed to parse request body: %w", unmarshalErr)
 	}
 
 	// Get or create tools array
@@ -139,15 +148,15 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 				if len(openaiConfig.FileIDs) > 0 {
 					toolConfig["file_ids"] = openaiConfig.FileIDs
 				}
-				if openaiConfig.Filter != nil {
-					toolConfig["filter"] = openaiConfig.Filter
+				if filterMap != nil {
+					toolConfig["filter"] = filterMap
 				}
 			}
 			// Update the request body
 			requestMap["tools"] = tools
-			updatedBody, err := json.Marshal(requestMap)
-			if err != nil {
-				return fmt.Errorf("failed to marshal updated request: %w", err)
+			updatedBody, marshalErr := json.Marshal(requestMap)
+			if marshalErr != nil {
+				return fmt.Errorf("failed to marshal updated request: %w", marshalErr)
 			}
 			ctx.OriginalRequestBody = updatedBody
 			return nil
@@ -165,8 +174,8 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 	if len(openaiConfig.FileIDs) > 0 {
 		fileSearchConfig["file_ids"] = openaiConfig.FileIDs
 	}
-	if openaiConfig.Filter != nil {
-		fileSearchConfig["filter"] = openaiConfig.Filter
+	if filterMap != nil {
+		fileSearchConfig["filter"] = filterMap
 	}
 
 	// Add file_search tool
@@ -179,9 +188,9 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 	requestMap["tools"] = tools
 
 	// Update the request body
-	updatedBody, err := json.Marshal(requestMap)
-	if err != nil {
-		return fmt.Errorf("failed to marshal updated request: %w", err)
+	updatedBody, marshalErr := json.Marshal(requestMap)
+	if marshalErr != nil {
+		return fmt.Errorf("failed to marshal updated request: %w", marshalErr)
 	}
 
 	ctx.OriginalRequestBody = updatedBody

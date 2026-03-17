@@ -46,8 +46,8 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 ## `python_cli_schema`
 
-- Python CLI typed schema, parser, validator, merger, and config translation contracts.
-- Typical paths: `src/vllm-sr/cli/models.py`, `parser.py`, `validator.py`, `merger.py`
+- Python CLI typed schema, parser, validator, migration, and config translation contracts.
+- Typical paths: `src/vllm-sr/cli/models.py`, `parser.py`, `validator.py`, `config_migration.py`
 - Task rules: `vllm-sr-cli`
 
 ## `python_cli_runtime`
@@ -101,7 +101,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `docs_examples`
 
 - User-facing docs, examples, presets, and reference configs.
-- Typical paths: `docs/**`, `website/**`, `deploy/amd/**`, `config/**/*.yaml`
+- Typical paths: `docs/**`, `website/**`, `deploy/amd/**`, `deploy/examples/**`, `config/**/*.yaml`
 - Task rules: `repo-docs`, `training-stack`
 
 ## `harness_docs`
@@ -125,13 +125,13 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `local_smoke`
 
 - Canonical local image build, serve, dashboard/router smoke validation, and environment-specific smoke configs.
-- Typical paths: `tools/make/agent.mk`, `tools/make/docker.mk`, `src/vllm-sr/cli/**`, `config/testing/config.agent-smoke.*.yaml`
+- Typical paths: `tools/make/agent.mk`, `tools/make/docker.mk`, `src/vllm-sr/cli/**`, `e2e/config/config.agent-smoke.*.yaml`
 - Task rules: `vllm-sr-cli`
 
 ## `local_e2e`
 
 - Affected local E2E profile selection and local profile execution.
-- Typical paths: `tools/agent/e2e-profile-map.yaml`, `e2e/profiles/**`, `config/testing/**`, `deploy/kubernetes/**`
+- Typical paths: `tools/agent/e2e-profile-map.yaml`, `e2e/profiles/**`, `e2e/config/**`, `deploy/kubernetes/**`
 - Task rules: `e2e-framework`
 
 ## `ci_e2e`

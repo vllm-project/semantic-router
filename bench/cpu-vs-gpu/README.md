@@ -56,6 +56,16 @@ Compares standard attention vs CK Flash Attention on GPU:
 BENCH_IMAGE=semantic-router:rocm NUM_REQUESTS=20 ./bench-sdpa-vs-fa.sh
 ```
 
+### ONNX GPU vs ONNX CPU vs Candle CPU
+
+Compares the same `jailbreak`, `pii`, and `domain` signals across ONNX GPU, ONNX CPU, and Candle CPU execution:
+
+```bash
+BENCH_IMAGE=semantic-router:rocm \
+CANDLE_IMAGE=semantic-router:candle-bench \
+REQUESTS_PER_SIZE=10 ./bench-3way.sh
+```
+
 ### BUFFERED vs STREAMED (E2E body mode comparison)
 
 Compares the original Envoy `BUFFERED` body mode (full `json.Unmarshal`/`Marshal`) against the new `STREAMED` mode with gjson/sjson fast-path JSON processing, semi-streaming chunked body delivery, and prompt compression.
@@ -74,8 +84,8 @@ BASE_IMAGE=semantic-router:rocm USE_GPU=false \
 
 The script:
 
-1. Runs the **BUFFERED** variant using the stock base image with `request_body_mode: BUFFERED` and `streamed_body_mode: false`
-2. Runs the **STREAMED** variant by building the patched binary inside the container, using `request_body_mode: STREAMED` and `streamed_body_mode: true`
+1. Runs the **BUFFERED** variant using the stock base image with `request_body_mode: BUFFERED` and `global.router.streamed_body.enabled` set to `false`
+2. Runs the **STREAMED** variant by building the patched binary inside the container, using `request_body_mode: STREAMED` and `global.router.streamed_body.enabled` set to `true`
 3. Collects E2E latency (curl timing) and signal extraction latency (Prometheus histograms) at 500/2K/8K/16K token sizes
 4. Generates a markdown comparison report in `results/`
 
@@ -96,9 +106,11 @@ Reports are written to `results/`.
 
 | File | Description |
 |------|-------------|
+| `bench-3way.sh` | ONNX GPU vs ONNX CPU vs Candle CPU latency comparison |
 | `bench-long-context.sh` | CPU vs GPU, multi token-size, Prometheus metrics |
 | `bench-sdpa-vs-fa.sh` | SDPA vs FA on GPU, Prometheus metrics |
 | `bench-buffered-vs-streamed.sh` | BUFFERED vs STREAMED body mode, builds patched binary inside container |
-| `config-bench.yaml` | Router config template (`USE_CPU_PLACEHOLDER` sed-replaced) |
+| `config-bench.yaml` | Canonical v0.3 router config template for ONNX benchmarks |
+| `config-bench-candle.yaml` | Canonical v0.3 router config template for Candle CPU benchmarks |
 | `envoy-bench.yaml` | Envoy ext_proc proxy config (STREAMED mode) |
 | `envoy-bench-fa.yaml` | Envoy ext_proc proxy config for FA benchmarks |

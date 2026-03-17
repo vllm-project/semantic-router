@@ -292,6 +292,89 @@ func TestResolveDiffusionBackend_Success(t *testing.T) {
 	assert.Equal(t, "Qwen/Qwen-Image", entry.Model)
 }
 
+func TestResolveImageGenConfig_PrefersDecisionPluginConfig(t *testing.T) {
+	cfg := newRouterConfigWithBackend(
+		map[string]config.ModelParams{
+			"Qwen/Qwen-Image": {Modality: "diffusion"},
+		},
+		nil,
+		nil,
+	)
+	cfg.ModalityDetector = config.ModalityDetectorConfig{
+		PromptPrefixes: []string{"generate an image of "},
+	}
+
+	decision := &config.Decision{
+		Name: "image_generation",
+		Plugins: []config.DecisionPlugin{
+			{
+				Type: config.DecisionPluginImageGen,
+				Configuration: config.MustStructuredPayload(map[string]interface{}{
+					"enabled": true,
+					"backend": "vllm_omni",
+					"backend_config": map[string]interface{}{
+						"base_url":            "http://localhost:8001",
+						"model":               "Qwen/Qwen-Image",
+						"num_inference_steps": 4,
+					},
+					"modality_detection": map[string]interface{}{
+						"method":   "keyword",
+						"keywords": []string{"draw"},
+					},
+				}),
+			},
+		},
+	}
+
+	pluginCfg, promptPrefixes, err := resolveImageGenConfig(cfg, decision, "Qwen/Qwen-Image")
+	require.NoError(t, err)
+	require.NotNil(t, pluginCfg)
+	assert.Equal(t, "vllm_omni", pluginCfg.Backend)
+	assert.Equal(t, []string{"generate an image of "}, promptPrefixes)
+}
+
+func TestResolveImageGenConfig_FallsBackToLegacyBackendCatalog(t *testing.T) {
+	cfg := newRouterConfigWithBackend(
+		map[string]config.ModelParams{
+			"Qwen/Qwen-Image": {
+				Modality:        "diffusion",
+				ImageGenBackend: "vllm_omni_local",
+			},
+		},
+		nil,
+		map[string]config.ImageGenBackendEntry{
+			"vllm_omni_local": {
+				Type:    "vllm_omni",
+				BaseURL: "http://localhost:8001",
+				Model:   "Qwen/Qwen-Image",
+			},
+		},
+	)
+	cfg.ModalityDetector = config.ModalityDetectorConfig{
+		PromptPrefixes: []string{"generate an image of "},
+	}
+
+	pluginCfg, promptPrefixes, err := resolveImageGenConfig(cfg, nil, "Qwen/Qwen-Image")
+	require.NoError(t, err)
+	require.NotNil(t, pluginCfg)
+	assert.Equal(t, "vllm_omni", pluginCfg.Backend)
+	assert.Equal(t, []string{"generate an image of "}, promptPrefixes)
+}
+
+func TestResolveImageGenConfig_ReturnsErrorWithoutPluginOrLegacyBackend(t *testing.T) {
+	cfg := newRouterConfigWithBackend(
+		map[string]config.ModelParams{
+			"Qwen/Qwen-Image": {Modality: "diffusion"},
+		},
+		nil,
+		nil,
+	)
+
+	_, _, err := resolveImageGenConfig(cfg, nil, "Qwen/Qwen-Image")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to resolve diffusion backend")
+}
+
 func TestResolveDiffusionBackend_EmptyModelName(t *testing.T) {
 	cfg := newRouterConfigWithBackend(nil, nil, nil)
 	_, err := resolveDiffusionBackend(cfg, "")

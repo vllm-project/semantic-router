@@ -1,326 +1,316 @@
-# Semantic Router Configuration for Routing Strategies E2E Tests
 config:
-  bert_model:
-    model_id: models/mom-embedding-light
-    threshold: 0.6
-    use_cpu: true
-
-  semantic_cache:
-    enabled: true
-    backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
-    similarity_threshold: 0.8
-    max_entries: 1000  # Only applies to memory backend
-    ttl_seconds: 3600
-    eviction_policy: "fifo"
-    # HNSW index configuration (for memory backend only)
-    use_hnsw: true  # Enable HNSW index for faster similarity search
-    hnsw_m: 16  # Number of bi-directional links (higher = better recall, more memory)
-    hnsw_ef_construction: 200  # Construction parameter (higher = better quality, slower build)
-
-    # Embedding model for semantic similarity matching
-    # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
-    # Default: "bert" (fastest, lowest memory)
-    embedding_model: "bert"
-
-  tools:
-    enabled: true
-    top_k: 3
-    similarity_threshold: 0.2
-    tools_db_path: "config/tools_db.json"
-    fallback_to_empty: true
-
-  # --- Prompt Guard (global defaults) ---
-  prompt_guard:
-    enabled: true
-    use_modernbert: false
-    model_id: "models/mom-jailbreak-classifier"
-    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-    threshold: 0.7
-    use_cpu: true
-
-  # Classifier configuration
-  classifier:
-    category_model:
-      model_id: "models/mom-domain-classifier"
-      use_modernbert: false  # MoM uses LoRA-based model
-      threshold: 0.6
-      use_cpu: true
-      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
-    pii_model:
-      model_id: "models/mom-pii-classifier"
-      use_modernbert: false  # Use LoRA PII model
-      threshold: 0.7
-      use_cpu: true
-      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
-
-  # Jailbreak and PII detection (signal layer, inline into IntelligentRouting)
-  jailbreak:
-    - name: "jailbreak_standard"
-      threshold: 0.6
-      include_history: false
-      description: "Standard jailbreak detection for routing-strategies tests"
-
-  pii:
-    - name: "pii_deny_all"
-      threshold: 0.7
-      include_history: false
-      description: "Block all PII"
-
-  keyword_rules:
-    # --- BM25 method: topic detection with natural TF-IDF scoring ---
-    - name: "code_keywords"
-      operator: "OR"
-      method: "bm25"
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: base-model
+      reasoning_families:
+        deepseek:
+          type: chat_template_kwargs
+          parameter: thinking
+        qwen3:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+        gpt-oss:
+          type: reasoning_effort
+          parameter: reasoning_effort
+        gpt:
+          type: reasoning_effort
+          parameter: reasoning_effort
+      default_reasoning_effort: high
+    models:
+      - name: base-model
+        reasoning_family: qwen3
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      - name: code_keywords_decision
+        description: Code and programming queries (BM25 classified)
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: code_keywords
+        modelRefs:
+          - model: base-model
+            use_reasoning: true
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are an expert software engineer. Provide clear, well-structured code examples with explanations. Follow best practices and consider edge cases.
+      - name: urgent_request_decision
+        description: Urgent and time-sensitive requests (N-gram classified with typo tolerance)
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_request
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy. Provide concise, actionable responses and focus on immediate solutions.
+      - name: sensitive_data_decision
+        description: Requests involving sensitive personal data
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: sensitive_data
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information, follow data protection best practices, and remind users about privacy considerations.
+      - name: regex_pattern_match_decision
+        description: Structured data and pattern-based requests
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: regex_pattern_match
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
+      - name: business_decision
+        description: Business and management related queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices.
+      - name: general_decision
+        description: General knowledge and miscellaneous topics
+        priority: 50
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
+          - type: semantic-cache
+            configuration:
+              enabled: true
+              similarity_threshold: 0.75
+    signals:
       keywords:
-        - "code"
-        - "function"
-        - "implement"
-        - "debug"
-        - "algorithm"
-        - "compile"
-        - "syntax"
-        - "variable"
-        - "loop"
-        - "refactor"
-      bm25_threshold: 0.1
-      case_sensitive: false
-
-    # --- N-gram method: typo-tolerant fuzzy matching ---
-    - name: "urgent_request"
-      operator: "OR"
-      method: "ngram"
-      keywords: ["urgent", "immediate", "asap", "emergency"]
-      ngram_threshold: 0.4
-      ngram_arity: 3
-      case_sensitive: false
-
-    # --- Regex method (default): exact / pattern matching ---
-    - name: "sensitive_data"
-      operator: "AND"
-      keywords: ["SSN", "credit card"]
-      case_sensitive: false
-    - name: "regex_pattern_match"
-      operator: "OR"
-      keywords: ["user.name@domain.com", "C:\\Program Files\\"]
-      case_sensitive: false
-
-  # Categories define domain metadata only (no routing logic)
-  categories:
-    - name: code_keywords
-      description: "Programming and software development queries"
-      mmlu_categories: ["computer_science"]
-    - name: urgent_request
-      description: "Urgent and time-sensitive requests"
-      mmlu_categories: ["urgent_request"]
-    - name: sensitive_data
-      description: "Requests involving sensitive personal data"
-      mmlu_categories: ["sensitive_data"]
-    - name: business
-      description: "Business and management related queries"
-      mmlu_categories: ["business"]
-    - name: law
-      description: "Legal questions and law-related topics"
-      mmlu_categories: ["law"]
-    - name: psychology
-      description: "Psychology and mental health topics"
-      mmlu_categories: ["psychology"]
-    - name: biology
-      description: "Biology and life sciences questions"
-      mmlu_categories: ["biology"]
-    - name: chemistry
-      description: "Chemistry and chemical sciences questions"
-      mmlu_categories: ["chemistry"]
-    - name: history
-      description: "Historical questions and cultural topics"
-      mmlu_categories: ["history"]
-    - name: other
-      description: "General knowledge and miscellaneous topics"
-      mmlu_categories: ["other"]
-    - name: health
-      description: "Health and medical information queries"
-      mmlu_categories: ["health"]
-    - name: economics
-      description: "Economics and financial topics"
-      mmlu_categories: ["economics"]
-    - name: math
-      description: "Mathematics and quantitative reasoning"
-      mmlu_categories: ["math"]
-    - name: physics
-      description: "Physics and physical sciences"
-      mmlu_categories: ["physics"]
-    - name: computer_science
-      description: "Computer science and programming"
-      mmlu_categories: ["computer_science"]
-    - name: philosophy
-      description: "Philosophy and ethical questions"
-      mmlu_categories: ["philosophy"]
-    - name: engineering
-      description: "Engineering and technical problem-solving"
-      mmlu_categories: ["engineering"]
-
-  strategy: "priority"
-
-  # NOTE: vLLM endpoints will be set via environment variables in the container
-  # For E2E tests, we don't need to configure them in the Helm values
-  vllm_endpoints: []
-
-  model_config: {}
-
-  decisions:
-    - name: "code_keywords_decision"
-      description: "Code and programming queries (BM25 classified)"
-      priority: 150
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "keyword"
-            name: "code_keywords"
-      modelRefs:
-        - model: "base-model"
-          use_reasoning: true
-      plugins:
-        - type: "system_prompt"
-          configuration:
-            system_prompt: "You are an expert software engineer. Provide clear, well-structured code examples with explanations. Follow best practices and consider edge cases."
-
-    - name: "urgent_request_decision"
-      description: "Urgent and time-sensitive requests (N-gram classified with typo tolerance)"
-      priority: 150
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "keyword"
-            name: "urgent_request"
-      modelRefs:
-        - model: "base-model"
-          use_reasoning: false
-      plugins:
-        - type: "system_prompt"
-          configuration:
-            system_prompt: "You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy. Provide concise, actionable responses and focus on immediate solutions."
-
-
-    - name: "sensitive_data_decision"
-      description: "Requests involving sensitive personal data"
-      priority: 150
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "keyword"
-            name: "sensitive_data"
-      modelRefs:
-        - model: "base-model"
-          use_reasoning: false
-      plugins:
-        - type: "system_prompt"
-          configuration:
-            system_prompt: "You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information, follow data protection best practices, and remind users about privacy considerations."
-
-
-    - name: "regex_pattern_match_decision"
-      description: "Structured data and pattern-based requests"
-      priority: 150
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "keyword"
-            name: "regex_pattern_match"
-      modelRefs:
-        - model: "base-model"
-          use_reasoning: false
-
-    # Standard category decisions
-    - name: "business_decision"
-      description: "Business and management related queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "business"
-      modelRefs:
-        - model: "base-model"
-          use_reasoning: false
-      plugins:
-        - type: "system_prompt"
-          configuration:
-            system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices."
-
-
-    - name: "general_decision"
-      description: "General knowledge and miscellaneous topics"
-      priority: 50
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "other"
-      modelRefs:
-        - model: "base-model"
-          use_reasoning: false
-      plugins:
-        - type: "system_prompt"
-          configuration:
-            system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
-        - type: "semantic-cache"
-          configuration:
+        - name: code_keywords
+          operator: OR
+          method: bm25
+          keywords:
+            - code
+            - function
+            - implement
+            - debug
+            - algorithm
+            - compile
+            - syntax
+            - variable
+            - loop
+            - refactor
+          bm25_threshold: 0.1
+          case_sensitive: false
+        - name: urgent_request
+          operator: OR
+          method: ngram
+          keywords:
+            - urgent
+            - immediate
+            - asap
+            - emergency
+          ngram_threshold: 0.4
+          ngram_arity: 3
+          case_sensitive: false
+        - name: sensitive_data
+          operator: AND
+          keywords:
+            - SSN
+            - credit card
+          case_sensitive: false
+        - name: regex_pattern_match
+          operator: OR
+          keywords:
+            - user.name@domain.com
+            - C:\Program Files\
+          case_sensitive: false
+      domains:
+        - name: code_keywords
+          description: Programming and software development queries
+          mmlu_categories:
+            - "computer science"
+        - name: urgent_request
+          description: Urgent and time-sensitive requests
+          mmlu_categories:
+            - urgent_request
+        - name: sensitive_data
+          description: Requests involving sensitive personal data
+          mmlu_categories:
+            - sensitive_data
+        - name: business
+          description: Business and management related queries
+          mmlu_categories:
+            - business
+        - name: law
+          description: Legal questions and law-related topics
+          mmlu_categories:
+            - law
+        - name: psychology
+          description: Psychology and mental health topics
+          mmlu_categories:
+            - psychology
+        - name: biology
+          description: Biology and life sciences questions
+          mmlu_categories:
+            - biology
+        - name: chemistry
+          description: Chemistry and chemical sciences questions
+          mmlu_categories:
+            - chemistry
+        - name: history
+          description: Historical questions and cultural topics
+          mmlu_categories:
+            - history
+        - name: other
+          description: General knowledge and miscellaneous topics
+          mmlu_categories:
+            - other
+        - name: health
+          description: Health and medical information queries
+          mmlu_categories:
+            - health
+        - name: economics
+          description: Economics and financial topics
+          mmlu_categories:
+            - economics
+        - name: math
+          description: Mathematics and quantitative reasoning
+          mmlu_categories:
+            - math
+        - name: physics
+          description: Physics and physical sciences
+          mmlu_categories:
+            - physics
+        - name: "computer science"
+          description: Computer science and programming
+          mmlu_categories:
+            - "computer science"
+        - name: philosophy
+          description: Philosophy and ethical questions
+          mmlu_categories:
+            - philosophy
+        - name: engineering
+          description: Engineering and technical problem-solving
+          mmlu_categories:
+            - engineering
+      jailbreak:
+        - name: jailbreak_standard
+          threshold: 0.6
+          include_history: false
+          description: Standard jailbreak detection for routing-strategies tests
+      pii:
+        - name: pii_deny_all
+          threshold: 0.7
+          include_history: false
+          description: Block all PII
+    modelCards:
+      - name: base-model
+  global:
+    router:
+      strategy: priority
+    services:
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+          metrics:
             enabled: true
-            similarity_threshold: 0.75
-
-
-  default_model: base-model
-
-  # Reasoning family configurations
-  reasoning_families:
-    deepseek:
-      type: "chat_template_kwargs"
-      parameter: "thinking"
-    qwen3:
-      type: "chat_template_kwargs"
-      parameter: "enable_thinking"
-    gpt-oss:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-    gpt:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-
-  default_reasoning_effort: high
-
-  # API Configuration
-  api:
-    batch_classification:
-      max_batch_size: 100
-      concurrency_threshold: 5
-      max_concurrency: 8
-      metrics:
+            detailed_goroutine_tracking: true
+            high_resolution_timing: false
+            sample_rate: 1.0
+            duration_buckets:
+              - 0.001
+              - 0.005
+              - 0.01
+              - 0.025
+              - 0.05
+              - 0.1
+              - 0.25
+              - 0.5
+              - 1
+              - 2.5
+              - 5
+              - 10
+              - 30
+            size_buckets:
+              - 1
+              - 2
+              - 5
+              - 10
+              - 20
+              - 50
+              - 100
+              - 200
+      observability:
+        tracing:
+          enabled: true
+          provider: opentelemetry
+          exporter:
+            type: otlp
+            endpoint: jaeger:4317
+            insecure: true
+          sampling:
+            type: always_on
+            rate: 1.0
+          resource:
+            service_name: vllm-semantic-router
+            service_version: v0.1.0
+            deployment_environment: development
+    stores:
+      semantic_cache:
         enabled: true
-        detailed_goroutine_tracking: true
-        high_resolution_timing: false
-        sample_rate: 1.0
-        duration_buckets:
-          [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
-        size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
-
-  # Embedding Models Configuration
-  embedding_models:
-    qwen3_model_path: "models/mom-embedding-pro"
-    # gemma_model_path: "models/mom-embedding-flash"
-    use_cpu: true
-
-  # Observability Configuration
-  observability:
-    tracing:
-      enabled: true
-      provider: "opentelemetry"
-      exporter:
-        type: "otlp"
-        endpoint: "jaeger:4317"
-        insecure: true
-      sampling:
-        type: "always_on"
-        rate: 1.0
-      resource:
-        service_name: "vllm-semantic-router"
-        service_version: "v0.1.0"
-        deployment_environment: "development"
+        backend_type: memory
+        similarity_threshold: 0.8
+        max_entries: 1000
+        ttl_seconds: 3600
+        eviction_policy: fifo
+        use_hnsw: true
+        hnsw_m: 16
+        hnsw_ef_construction: 200
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations:
+      tools:
+        enabled: true
+        top_k: 3
+        similarity_threshold: 0.2
+        tools_db_path: config/tools_db.json
+        fallback_to_empty: true

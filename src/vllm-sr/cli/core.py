@@ -29,9 +29,9 @@ from cli.runtime_lifecycle import (
     wait_for_router_health,
 )
 from cli.runtime_stack import resolve_runtime_stack
-from cli.utils import getLogger, load_config
+from cli.utils import get_logger, load_config
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 SERVICE_LOG_PATTERNS = {
     "router": r'"caller"|spawned: \'router\'|success: router|cli\.commands',
@@ -44,7 +44,13 @@ SERVICE_LOG_PATTERNS = {
 
 
 def start_vllm_sr(
-    config_file, env_vars=None, image=None, pull_policy=None, enable_observability=True
+    config_file,
+    env_vars=None,
+    image=None,
+    pull_policy=None,
+    enable_observability=True,
+    source_config_file=None,
+    runtime_config_file=None,
 ):
     """Start vLLM Semantic Router."""
     if env_vars is None:
@@ -52,16 +58,18 @@ def start_vllm_sr(
     stack_layout = resolve_runtime_stack()
 
     print_vllm_logo()
-    listeners = load_config(config_file).get("listeners", [])
+    source_config_file = source_config_file or config_file
+    runtime_config_file = runtime_config_file or config_file
+    listeners = load_config(source_config_file).get("listeners", [])
     if not listeners:
         log.error("No listeners configured in config.yaml")
         raise SystemExit(1)
 
-    log_startup_banner(config_file, listeners, stack_layout)
+    log_startup_banner(source_config_file, listeners, stack_layout)
     ensure_clean_runtime_container(stack_layout.container_name)
 
     shared_network_name = stack_layout.network_name
-    config_dir = os.path.dirname(os.path.abspath(config_file))
+    config_dir = os.path.dirname(os.path.abspath(source_config_file))
     ensure_shared_network(shared_network_name)
     network_name = start_observability_stack(
         enable_observability,
@@ -74,7 +82,7 @@ def start_vllm_sr(
     dashboard_disabled = env_vars.get("DISABLE_DASHBOARD") == "true"
     setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
     return_code, _stdout, stderr = docker_start_vllm_sr(
-        config_file,
+        source_config_file,
         env_vars,
         listeners,
         image=image,
@@ -83,6 +91,8 @@ def start_vllm_sr(
         openclaw_network_name=shared_network_name,
         minimal=dashboard_disabled,
         stack_layout=stack_layout,
+        state_root_dir=config_dir,
+        runtime_config_file=runtime_config_file,
     )
     if return_code != 0:
         log.error(f"Failed to start container: {stderr}")

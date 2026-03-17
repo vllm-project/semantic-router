@@ -847,9 +847,9 @@ func TestShouldInitMemoryStore(t *testing.T) {
 							Plugins: []config.DecisionPlugin{
 								{
 									Type: "memory",
-									Configuration: map[string]interface{}{
+									Configuration: config.MustStructuredPayload(map[string]interface{}{
 										"enabled": true,
-									},
+									}),
 								},
 							},
 						},
@@ -869,9 +869,9 @@ func TestShouldInitMemoryStore(t *testing.T) {
 							Plugins: []config.DecisionPlugin{
 								{
 									Type: "pii",
-									Configuration: map[string]interface{}{
+									Configuration: config.MustStructuredPayload(map[string]interface{}{
 										"enabled": true,
-									},
+									}),
 								},
 							},
 						},

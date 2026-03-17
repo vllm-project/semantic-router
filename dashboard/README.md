@@ -79,7 +79,7 @@ Read-only dashboard mode:
   - Frontend hides add/edit/delete actions and shows a read-only banner
   - Backend rejects write APIs with `403 Forbidden` for:
     - `POST /api/router/config/update`
-    - `POST /api/router/config/defaults/update`
+    - `POST /api/router/config/global/update`
 
 ### Backend (Go HTTP Server)
 

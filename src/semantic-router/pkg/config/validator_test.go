@@ -75,14 +75,14 @@ var _ = Describe("validateLoRAName", func() {
 		cfg := &RouterConfig{BackendModels: BackendModels{ModelConfig: map[string]ModelParams{}}}
 		err := validateLoRAName(cfg, "ghost", "adapter")
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("is not defined in model_config"))
+		Expect(err.Error()).To(ContainSubstring("is not declared in routing.modelCards"))
 	})
 
 	It("rejects model with no loras", func() {
 		cfg := loraConfig("qwen3") // zero adapters
 		err := validateLoRAName(cfg, "qwen3", "adapter")
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("has no loras defined"))
+		Expect(err.Error()).To(ContainSubstring("declares no routing.modelCards[].loras"))
 	})
 
 	It("rejects unknown name and lists available", func() {
@@ -94,7 +94,7 @@ var _ = Describe("validateLoRAName", func() {
 	})
 })
 
-var _ = Describe("validateConfigStructure", func() {
+func registerValidateConfigStructureCoreSpecs() {
 	It("skips everything in k8s mode", func() {
 		cfg := &RouterConfig{
 			ConfigSource: ConfigSourceKubernetes,
@@ -163,7 +163,9 @@ var _ = Describe("validateConfigStructure", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("missing required field 'use_reasoning'"))
 	})
+}
 
+func registerValidateConfigStructureLoRASpecs() {
 	It("validates lora ref in decision", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
@@ -205,9 +207,17 @@ var _ = Describe("validateConfigStructure", func() {
 		}
 		err := validateConfigStructure(cfg)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("is not defined in model"))
+		Expect(err.Error()).To(ContainSubstring("is not declared in routing.modelCards"))
 	})
+}
 
+func registerValidateConfigStructureAlgorithmSpecs() {
+	registerValidateConfigStructureAlgorithmSchemaSpecs()
+	registerValidateConfigStructureAlgorithmTypeMismatchSpecs()
+	registerValidateConfigStructureLegacyLatencySpecs()
+}
+
+func registerValidateConfigStructureAlgorithmSchemaSpecs() {
 	It("rejects latency_aware without algorithm.latency_aware", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
@@ -270,7 +280,9 @@ var _ = Describe("validateConfigStructure", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("cannot be combined with multiple algorithm config blocks"))
 	})
+}
 
+func registerValidateConfigStructureAlgorithmTypeMismatchSpecs() {
 	It("rejects algorithm type and config block mismatch", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
@@ -314,7 +326,9 @@ var _ = Describe("validateConfigStructure", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("algorithm.type=static cannot be used with algorithm.automix configuration"))
 	})
+}
 
+func registerValidateConfigStructureLegacyLatencySpecs() {
 	It("rejects legacy latency conditions", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
@@ -377,4 +391,10 @@ var _ = Describe("validateConfigStructure", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("legacy latency config is no longer supported"))
 	})
+}
+
+var _ = Describe("validateConfigStructure", func() {
+	registerValidateConfigStructureCoreSpecs()
+	registerValidateConfigStructureLoRASpecs()
+	registerValidateConfigStructureAlgorithmSpecs()
 })

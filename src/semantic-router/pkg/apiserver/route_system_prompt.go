@@ -166,16 +166,21 @@ func applySystemPromptUpdate(decision *config.Decision, req SystemPromptUpdateRe
 		if req.Mode != "" {
 			configMap["mode"] = req.Mode
 		}
-		decision.Plugins[i].Configuration = configMap
+		payload, err := config.NewStructuredPayload(configMap)
+		if err != nil {
+			return false
+		}
+		decision.Plugins[i].Configuration = payload
 		return true
 	}
 	return false
 }
 
-func systemPromptPluginConfigMap(rawConfig interface{}) map[string]interface{} {
-	configMap, ok := rawConfig.(map[string]interface{})
-	if ok {
-		return configMap
+func systemPromptPluginConfigMap(rawConfig *config.StructuredPayload) map[string]interface{} {
+	if rawConfig != nil {
+		if configMap, err := rawConfig.AsStringMap(); err == nil {
+			return configMap
+		}
 	}
 	return make(map[string]interface{})
 }

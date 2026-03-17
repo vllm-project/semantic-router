@@ -92,13 +92,13 @@ SIGNAL keyword test {
 }
 
 func TestLexKeywords(t *testing.T) {
-	input := `SIGNAL ROUTE PLUGIN BACKEND GLOBAL PRIORITY WHEN MODEL ALGORITHM AND OR NOT`
+	input := `SIGNAL ROUTE PLUGIN PRIORITY WHEN MODEL ALGORITHM AND OR NOT`
 	tokens, errs := Lex(input)
 	if len(errs) > 0 {
 		t.Fatalf("lex errors: %v", errs)
 	}
 	expected := []TokenType{
-		TOKEN_SIGNAL, TOKEN_ROUTE, TOKEN_PLUGIN, TOKEN_BACKEND, TOKEN_GLOBAL,
+		TOKEN_SIGNAL, TOKEN_ROUTE, TOKEN_PLUGIN,
 		TOKEN_PRIORITY, TOKEN_WHEN, TOKEN_MODEL, TOKEN_ALGORITHM,
 		TOKEN_AND, TOKEN_OR, TOKEN_NOT, TOKEN_EOF,
 	}
@@ -331,52 +331,6 @@ ROUTE test {
 	}
 }
 
-func TestParseBackend(t *testing.T) {
-	input := `BACKEND vllm_endpoint ollama {
-  address: "127.0.0.1"
-  port: 11434
-  weight: 1
-  type: "ollama"
-}`
-	prog, errs := Parse(input)
-	if len(errs) > 0 {
-		t.Fatalf("parse errors: %v", errs)
-	}
-	if len(prog.Backends) != 1 {
-		t.Fatalf("expected 1 backend, got %d", len(prog.Backends))
-	}
-	b := prog.Backends[0]
-	if b.BackendType != "vllm_endpoint" || b.Name != "ollama" {
-		t.Errorf("expected vllm_endpoint/ollama, got %s/%s", b.BackendType, b.Name)
-	}
-}
-
-func TestParseGlobal(t *testing.T) {
-	input := `GLOBAL {
-  default_model: "qwen2.5:3b"
-  strategy: "priority"
-  observability: {
-    metrics: { enabled: true }
-    tracing: {
-      enabled: true
-      provider: "opentelemetry"
-    }
-  }
-}`
-	prog, errs := Parse(input)
-	if len(errs) > 0 {
-		t.Fatalf("parse errors: %v", errs)
-	}
-	if prog.Global == nil {
-		t.Fatal("expected GLOBAL block")
-	}
-	if dm, ok := prog.Global.Fields["default_model"]; ok {
-		if sv, ok := dm.(StringValue); !ok || sv.V != "qwen2.5:3b" {
-			t.Errorf("unexpected default_model: %v", dm)
-		}
-	}
-}
-
 func TestParseErrorRecovery(t *testing.T) {
 	input := `SIGNAL domain math {
   description "missing colon"
@@ -399,7 +353,12 @@ SIGNAL domain physics {
 // ---------- Compiler Tests ----------
 
 func TestCompileMinimal(t *testing.T) {
-	input := `SIGNAL domain math {
+	input := `MODEL "qwen2.5:3b" {
+  param_size: "3b"
+  modality: "text"
+}
+
+SIGNAL domain math {
   description: "Mathematics"
   mmlu_categories: ["math"]
 }
@@ -411,17 +370,6 @@ ROUTE math_route {
   PLUGIN system_prompt {
     system_prompt: "You are a math expert."
   }
-}
-
-BACKEND vllm_endpoint ollama {
-  address: "127.0.0.1"
-  port: 11434
-  weight: 1
-}
-
-GLOBAL {
-  default_model: "qwen2.5:3b"
-  strategy: "priority"
 }`
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -472,21 +420,15 @@ GLOBAL {
 		t.Errorf("expected 1 system_prompt plugin, got %v", d.Plugins)
 	}
 
-	// Check backend
-	if len(cfg.VLLMEndpoints) != 1 {
-		t.Fatalf("expected 1 endpoint, got %d", len(cfg.VLLMEndpoints))
+	params, ok := cfg.ModelConfig["qwen2.5:3b"]
+	if !ok {
+		t.Fatal("expected routing model catalog entry for qwen2.5:3b")
 	}
-	ep := cfg.VLLMEndpoints[0]
-	if ep.Name != "ollama" || ep.Address != "127.0.0.1" || ep.Port != 11434 {
-		t.Errorf("unexpected endpoint: %+v", ep)
+	if params.ParamSize != "3b" {
+		t.Errorf("expected param_size 3b, got %q", params.ParamSize)
 	}
-
-	// Check global
-	if cfg.DefaultModel != "qwen2.5:3b" {
-		t.Errorf("expected default_model qwen2.5:3b, got %s", cfg.DefaultModel)
-	}
-	if cfg.Strategy != "priority" {
-		t.Errorf("expected strategy priority, got %s", cfg.Strategy)
+	if params.Modality != "text" {
+		t.Errorf("expected modality text, got %q", params.Modality)
 	}
 }
 
@@ -709,7 +651,12 @@ SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 }
 
 func TestCompileEmitYAML(t *testing.T) {
-	input := `SIGNAL domain math {
+	input := `MODEL "qwen2.5:3b" {
+  description: "Math-capable model"
+  modality: "text"
+}
+
+SIGNAL domain math {
   description: "Mathematics"
   mmlu_categories: ["math"]
 }
@@ -718,11 +665,6 @@ ROUTE math_route {
   PRIORITY 100
   WHEN domain("math")
   MODEL "qwen2.5:3b" (reasoning = true)
-}
-
-GLOBAL {
-  default_model: "qwen2.5:3b"
-  strategy: "priority"
 }`
 
 	yamlBytes, errs := EmitYAML(input)
@@ -732,20 +674,39 @@ GLOBAL {
 
 	yamlStr := string(yamlBytes)
 	// Basic sanity checks on the YAML output
-	if !strings.Contains(yamlStr, "default_model: qwen2.5:3b") {
-		t.Error("YAML should contain default_model")
-	}
-	if !strings.Contains(yamlStr, "strategy: priority") {
-		t.Error("YAML should contain strategy")
+	if !strings.Contains(yamlStr, "model_config:") {
+		t.Error("YAML should contain model_config")
 	}
 	if !strings.Contains(yamlStr, "name: math") {
 		t.Error("YAML should contain category name")
+	}
+	if !strings.Contains(yamlStr, "description: Math-capable model") {
+		t.Error("YAML should contain routing model metadata")
 	}
 }
 
 // ---------- Full Example Test ----------
 
 const fullDSLExample = `
+# Models
+MODEL "qwen2.5:3b" {
+  param_size: "3b"
+  context_window_size: 32768
+  description: "Compact reasoning model for general and STEM traffic"
+  capabilities: ["general", "reasoning", "math"]
+  quality_score: 0.82
+  modality: "text"
+}
+
+MODEL "qwen3:70b" {
+  param_size: "70b"
+  context_window_size: 131072
+  description: "Large reasoning model for urgent and difficult AI queries"
+  capabilities: ["general", "reasoning", "coding", "long_context"]
+  quality_score: 0.94
+  modality: "text"
+}
+
 # Signals
 SIGNAL domain math {
   description: "Mathematics and quantitative reasoning"
@@ -828,64 +789,6 @@ ROUTE general_decision {
   MODEL "qwen2.5:3b" (reasoning = false)
   PLUGIN default_cache
 }
-
-# Backends
-BACKEND vllm_endpoint ollama {
-  address: "127.0.0.1"
-  port: 11434
-  weight: 1
-  type: "ollama"
-}
-
-BACKEND provider_profile openai_prod {
-  type: "openai"
-  base_url: "https://api.openai.com/v1"
-}
-
-BACKEND embedding_model ultra {
-  mmbert_model_path: "models/mom-embedding-ultra"
-  use_cpu: true
-  hnsw_config: {
-    model_type: "mmbert"
-    preload_embeddings: true
-    target_dimension: 768
-  }
-}
-
-BACKEND semantic_cache main_cache {
-  enabled: true
-  backend_type: "memory"
-  similarity_threshold: 0.8
-  max_entries: 1000
-  ttl_seconds: 3600
-  use_hnsw: true
-}
-
-# Global
-GLOBAL {
-  default_model: "qwen2.5:3b"
-  strategy: "priority"
-  default_reasoning_effort: "low"
-
-  prompt_guard: {
-    enabled: true
-    threshold: 0.7
-  }
-
-  observability: {
-    metrics: { enabled: true }
-    tracing: {
-      enabled: true
-      provider: "opentelemetry"
-      exporter: {
-        type: "otlp"
-        endpoint: "jaeger:4317"
-        insecure: true
-      }
-      sampling: { type: "always_on", rate: 1.0 }
-    }
-  }
-}
 `
 
 func TestCompileFullExample(t *testing.T) {
@@ -915,6 +818,12 @@ func TestCompileFullExample(t *testing.T) {
 	if len(cfg.Decisions) != 4 {
 		t.Errorf("expected 4 decisions, got %d", len(cfg.Decisions))
 	}
+	if len(cfg.ModelConfig) != 2 {
+		t.Fatalf("expected 2 routing model entries, got %d", len(cfg.ModelConfig))
+	}
+	if params := cfg.ModelConfig["qwen3:70b"]; params.ParamSize != "70b" {
+		t.Errorf("expected qwen3:70b param_size 70b, got %q", params.ParamSize)
+	}
 
 	// Check urgent_ai_route has complex bool expr
 	var urgentRoute *struct {
@@ -937,49 +846,14 @@ func TestCompileFullExample(t *testing.T) {
 	}
 	_ = urgentRoute
 
-	// Backends
-	if len(cfg.VLLMEndpoints) != 1 {
-		t.Errorf("expected 1 vllm endpoint, got %d", len(cfg.VLLMEndpoints))
-	}
-	if len(cfg.ProviderProfiles) != 1 {
-		t.Errorf("expected 1 provider profile, got %d", len(cfg.ProviderProfiles))
-	}
-
-	// Global
-	if cfg.DefaultModel != "qwen2.5:3b" {
-		t.Errorf("expected default_model qwen2.5:3b, got %s", cfg.DefaultModel)
-	}
-	if cfg.Strategy != "priority" {
-		t.Errorf("expected strategy priority, got %s", cfg.Strategy)
-	}
-	if cfg.DefaultReasoningEffort != "low" {
-		t.Errorf("expected default_reasoning_effort low, got %s", cfg.DefaultReasoningEffort)
-	}
-
-	// Semantic cache backend
-	if !cfg.SemanticCache.Enabled {
-		t.Error("expected semantic cache enabled")
-	}
-	if cfg.SemanticCache.MaxEntries != 1000 {
-		t.Errorf("expected max_entries 1000, got %d", cfg.SemanticCache.MaxEntries)
-	}
-
-	// Observability
-	if !cfg.Observability.Tracing.Enabled {
-		t.Error("expected tracing enabled")
-	}
-	if cfg.Observability.Tracing.Exporter.Endpoint != "jaeger:4317" {
-		t.Errorf("expected exporter endpoint jaeger:4317, got %s", cfg.Observability.Tracing.Exporter.Endpoint)
-	}
-
 	// Emit YAML to verify it works
 	yamlBytes, err := EmitYAMLFromConfig(cfg)
 	if err != nil {
 		t.Fatalf("YAML emit error: %v", err)
 	}
 	yamlStr := string(yamlBytes)
-	if !strings.Contains(yamlStr, "default_model: qwen2.5:3b") {
-		t.Error("YAML missing default_model")
+	if !strings.Contains(yamlStr, "model_config:") {
+		t.Error("YAML missing model_config")
 	}
 	if !strings.Contains(yamlStr, "name: math") {
 		t.Error("YAML missing math category")
@@ -993,6 +867,20 @@ func TestCompileFullExample(t *testing.T) {
 
 func TestYAMLRoundTrip(t *testing.T) {
 	input := `
+MODEL "qwen2.5:3b" {
+  param_size: "3b"
+  description: "Math model"
+  capabilities: ["math", "reasoning"]
+  modality: "text"
+}
+
+MODEL "qwen3:70b" {
+  param_size: "70b"
+  description: "Urgent AI model"
+  capabilities: ["ai", "reasoning"]
+  modality: "text"
+}
+
 SIGNAL domain math {
   description: "Mathematics"
   mmlu_categories: ["math"]
@@ -1031,31 +919,6 @@ ROUTE urgent_ai_route {
     on_error: "skip"
   }
 }
-
-BACKEND vllm_endpoint ollama {
-  address: "127.0.0.1"
-  port: 11434
-  weight: 1
-  type: "ollama"
-}
-
-GLOBAL {
-  default_model: "qwen2.5:3b"
-  strategy: "priority"
-  default_reasoning_effort: "low"
-  observability: {
-    metrics: { enabled: true }
-    tracing: {
-      enabled: true
-      provider: "opentelemetry"
-      exporter: {
-        type: "otlp"
-        endpoint: "jaeger:4317"
-        insecure: true
-      }
-    }
-  }
-}
 `
 
 	// Step 1: DSL → RouterConfig
@@ -1076,19 +939,7 @@ GLOBAL {
 		t.Fatalf("yaml.Unmarshal failed: %v\nYAML content:\n%s", err, string(yamlBytes))
 	}
 
-	// Step 4: Verify key fields survived the round trip
-	// -- Global settings
-	if roundTripped.DefaultModel != "qwen2.5:3b" {
-		t.Errorf("round-trip: default_model = %q, want %q", roundTripped.DefaultModel, "qwen2.5:3b")
-	}
-	if roundTripped.Strategy != "priority" {
-		t.Errorf("round-trip: strategy = %q, want %q", roundTripped.Strategy, "priority")
-	}
-	if roundTripped.DefaultReasoningEffort != "low" {
-		t.Errorf("round-trip: default_reasoning_effort = %q, want %q", roundTripped.DefaultReasoningEffort, "low")
-	}
-
-	// -- Categories
+	// Step 4: Verify key routing fields survived the round trip
 	if len(roundTripped.Categories) != 1 {
 		t.Fatalf("round-trip: expected 1 category, got %d", len(roundTripped.Categories))
 	}
@@ -1129,6 +980,12 @@ GLOBAL {
 	// -- Decisions
 	if len(roundTripped.Decisions) != 2 {
 		t.Fatalf("round-trip: expected 2 decisions, got %d", len(roundTripped.Decisions))
+	}
+	if len(roundTripped.ModelConfig) != 2 {
+		t.Fatalf("round-trip: expected 2 routing model entries, got %d", len(roundTripped.ModelConfig))
+	}
+	if roundTripped.ModelConfig["qwen2.5:3b"].Description != "Math model" {
+		t.Errorf("round-trip: model description = %q", roundTripped.ModelConfig["qwen2.5:3b"].Description)
 	}
 
 	// Find math_route decision
@@ -1213,27 +1070,8 @@ GLOBAL {
 		t.Errorf("round-trip: logprob_weight = %v, want 0.6", urgentDec.Algorithm.Confidence.HybridWeights.LogprobWeight)
 	}
 
-	// -- Backend
-	if len(roundTripped.VLLMEndpoints) != 1 {
-		t.Fatalf("round-trip: expected 1 vllm endpoint, got %d", len(roundTripped.VLLMEndpoints))
-	}
-	ep := roundTripped.VLLMEndpoints[0]
-	if ep.Name != "ollama" {
-		t.Errorf("round-trip: endpoint name = %q, want %q", ep.Name, "ollama")
-	}
-	if ep.Address != "127.0.0.1" || ep.Port != 11434 {
-		t.Errorf("round-trip: endpoint = %s:%d, want 127.0.0.1:11434", ep.Address, ep.Port)
-	}
-
-	// -- Observability
-	if !roundTripped.Observability.Tracing.Enabled {
-		t.Error("round-trip: tracing should be enabled")
-	}
-	if roundTripped.Observability.Tracing.Provider != "opentelemetry" {
-		t.Errorf("round-trip: tracing provider = %q, want %q", roundTripped.Observability.Tracing.Provider, "opentelemetry")
-	}
-	if roundTripped.Observability.Tracing.Exporter.Endpoint != "jaeger:4317" {
-		t.Errorf("round-trip: exporter endpoint = %q, want %q", roundTripped.Observability.Tracing.Exporter.Endpoint, "jaeger:4317")
+	if roundTripped.ModelConfig["qwen3:70b"].Modality != "text" {
+		t.Errorf("round-trip: qwen3:70b modality = %q", roundTripped.ModelConfig["qwen3:70b"].Modality)
 	}
 }
 
@@ -1374,10 +1212,6 @@ func TestNegativeInvalidDSLDoesNotPanic(t *testing.T) {
 			name:  "missing colon in field",
 			input: `SIGNAL domain math { description "no colon" }`,
 		},
-		{
-			name:  "duplicate GLOBAL blocks",
-			input: `GLOBAL { strategy: "priority" } GLOBAL { strategy: "confidence" }`,
-		},
 	}
 
 	for _, tc := range invalidInputs {
@@ -1454,18 +1288,6 @@ ROUTE test {
 	_, errs := Compile(input)
 	if len(errs) == 0 {
 		t.Error("expected compile error for unknown algorithm type, got none")
-	}
-}
-
-func TestNegativeCompileUnknownBackendType(t *testing.T) {
-	input := `
-BACKEND unknown_backend_type myname {
-  address: "127.0.0.1"
-}
-`
-	_, errs := Compile(input)
-	if len(errs) == 0 {
-		t.Error("expected compile error for unknown backend type, got none")
 	}
 }
 
@@ -1828,75 +1650,24 @@ ROUTE test {
 	}
 }
 
-// ---------- P1-3: All Backend Types ----------
-
-func TestCompileAllBackendTypes(t *testing.T) {
-	t.Run("memory_backend", func(t *testing.T) {
-		input := `
-BACKEND memory mem_store {
-  enabled: true
-  auto_store: true
-  default_retrieval_limit: 20
-  default_similarity_threshold: 0.75
-}`
-		cfg, errs := Compile(input)
-		if len(errs) > 0 {
-			t.Fatalf("compile errors: %v", errs)
-		}
-		if !cfg.Memory.Enabled {
-			t.Error("expected memory enabled")
-		}
-		if !cfg.Memory.AutoStore {
-			t.Error("expected memory auto_store")
-		}
-		if cfg.Memory.DefaultRetrievalLimit != 20 {
-			t.Errorf("retrieval_limit = %d, want 20", cfg.Memory.DefaultRetrievalLimit)
-		}
-	})
-
-	t.Run("response_api_backend", func(t *testing.T) {
-		input := `
-BACKEND response_api resp {
-  enabled: true
-  store_backend: "redis"
-  ttl_seconds: 7200
-  max_responses: 500
-}`
-		cfg, errs := Compile(input)
-		if len(errs) > 0 {
-			t.Fatalf("compile errors: %v", errs)
-		}
-		if !cfg.ResponseAPI.Enabled {
-			t.Error("expected response_api enabled")
-		}
-		if cfg.ResponseAPI.StoreBackend != "redis" {
-			t.Errorf("store_backend = %q, want redis", cfg.ResponseAPI.StoreBackend)
-		}
-		if cfg.ResponseAPI.TTLSeconds != 7200 {
-			t.Errorf("ttl_seconds = %d, want 7200", cfg.ResponseAPI.TTLSeconds)
-		}
-		if cfg.ResponseAPI.MaxResponses != 500 {
-			t.Errorf("max_responses = %d, want 500", cfg.ResponseAPI.MaxResponses)
-		}
-	})
-}
-
 // ---------- P1-4: EmitCRD Test ----------
 
 func TestEmitCRD(t *testing.T) {
 	input := `
+MODEL "qwen2.5:3b" { param_size: "3b" modality: "text" }
 SIGNAL domain math { description: "Math" mmlu_categories: ["math"] }
 ROUTE math_route {
   PRIORITY 100
   WHEN domain("math")
   MODEL "qwen2.5:3b" (reasoning = true)
-}
-GLOBAL { default_model: "qwen2.5:3b" strategy: "priority" }`
+}`
 
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
+	cfg.DefaultModel = "qwen2.5:3b"
+	cfg.Strategy = "priority"
 
 	t.Run("with_namespace", func(t *testing.T) {
 		crdBytes, err := EmitCRD(cfg, "my-router", "production")
@@ -1941,22 +1712,20 @@ GLOBAL { default_model: "qwen2.5:3b" strategy: "priority" }`
 	})
 
 	t.Run("vllm_endpoints_as_k8s_service", func(t *testing.T) {
-		inputWithBackend := `
-SIGNAL domain math { description: "Math" }
-BACKEND vllm_endpoint vllm_qwen {
-  address: "vllm-qwen-svc"
-  port: 8000
-}
-ROUTE test {
-  PRIORITY 100
-  WHEN domain("math")
-  MODEL "qwen2.5:3b" (reasoning = true)
-}
-GLOBAL { default_model: "qwen2.5:3b" strategy: "priority" }`
-
-		cfgP, errs := Compile(inputWithBackend)
+		cfgP, errs := Compile(input)
 		if len(errs) > 0 {
 			t.Fatalf("compile errors: %v", errs)
+		}
+		cfgP.DefaultModel = "qwen2.5:3b"
+		cfgP.Strategy = "priority"
+		cfgP.VLLMEndpoints = []config.VLLMEndpoint{
+			{
+				Name:    "vllm_qwen",
+				Address: "vllm-qwen-svc",
+				Port:    8000,
+				Weight:  1,
+				Model:   "qwen2.5:3b",
+			},
 		}
 		crdBytes, err := EmitCRD(cfgP, "test", "ns")
 		if err != nil {
@@ -2054,175 +1823,6 @@ ROUTE test {
 	// Right = OR(NOT(c), d)
 	if rules.Conditions[1].Operator != "OR" {
 		t.Errorf("right expected OR, got %q", rules.Conditions[1].Operator)
-	}
-}
-
-// ---------- P1-6: Global Settings Full Coverage ----------
-
-func TestCompileGlobalFullCoverage(t *testing.T) {
-	input := `
-GLOBAL {
-  listeners: [
-    {
-      name: "http-8899"
-      address: "0.0.0.0"
-      port: 8899
-      timeout: "300s"
-    }
-  ]
-  default_model: "qwen2.5:3b"
-  strategy: "priority"
-  default_reasoning_effort: "medium"
-  prompt_guard: {
-    enabled: true
-    threshold: 0.85
-  }
-  model_selection: {
-    enabled: true
-    method: "elo"
-  }
-  looper: {
-    endpoint: "http://looper:8080"
-    timeout_seconds: 30
-  }
-  authz: {
-    fail_open: true
-  }
-  ratelimit: {
-    fail_open: false
-  }
-  hallucination_mitigation: {
-    enabled: true
-    on_hallucination_detected: "warn"
-    fact_check_model: { threshold: 0.7 }
-    hallucination_model: { threshold: 0.5 }
-    nli_model: { threshold: 0.65 }
-  }
-  reasoning_families: {
-    deepseek: { type: "chat_template_kwargs", parameter: "thinking" }
-    qwen3: { type: "chat_template_kwargs", parameter: "enable_thinking" }
-  }
-  observability: {
-    metrics: { enabled: true }
-    tracing: {
-      enabled: true
-      provider: "opentelemetry"
-      exporter: {
-        type: "otlp"
-        endpoint: "otel:4317"
-        insecure: false
-      }
-      sampling: { type: "ratio", rate: 0.5 }
-      resource: {
-        service_name: "my-router"
-        service_version: "1.0.0"
-        deployment_environment: "prod"
-      }
-    }
-  }
-}`
-
-	cfg, errs := Compile(input)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-
-	if cfg.DefaultModel != "qwen2.5:3b" {
-		t.Errorf("default_model = %q", cfg.DefaultModel)
-	}
-	if len(cfg.Listeners) != 1 {
-		t.Fatalf("listeners count = %d, want 1", len(cfg.Listeners))
-	}
-	if cfg.Listeners[0].Name != "http-8899" {
-		t.Errorf("listener name = %q, want http-8899", cfg.Listeners[0].Name)
-	}
-	if cfg.Listeners[0].Address != "0.0.0.0" {
-		t.Errorf("listener address = %q, want 0.0.0.0", cfg.Listeners[0].Address)
-	}
-	if cfg.Listeners[0].Port != 8899 {
-		t.Errorf("listener port = %d, want 8899", cfg.Listeners[0].Port)
-	}
-	if cfg.Listeners[0].Timeout != "300s" {
-		t.Errorf("listener timeout = %q, want 300s", cfg.Listeners[0].Timeout)
-	}
-	if cfg.DefaultReasoningEffort != "medium" {
-		t.Errorf("default_reasoning_effort = %q", cfg.DefaultReasoningEffort)
-	}
-	if !cfg.PromptGuard.Enabled {
-		t.Error("prompt_guard should be enabled")
-	}
-	if cfg.PromptGuard.Threshold != 0.85 {
-		t.Errorf("prompt_guard threshold = %v, want 0.85", cfg.PromptGuard.Threshold)
-	}
-	if !cfg.ModelSelection.Enabled {
-		t.Error("model_selection should be enabled")
-	}
-	if cfg.ModelSelection.Method != "elo" {
-		t.Errorf("model_selection method = %q, want elo", cfg.ModelSelection.Method)
-	}
-	if cfg.Looper.Endpoint != "http://looper:8080" {
-		t.Errorf("looper endpoint = %q", cfg.Looper.Endpoint)
-	}
-	if cfg.Looper.TimeoutSeconds != 30 {
-		t.Errorf("looper timeout = %d, want 30", cfg.Looper.TimeoutSeconds)
-	}
-	if !cfg.Authz.FailOpen {
-		t.Error("authz fail_open should be true")
-	}
-	if cfg.RateLimit.FailOpen {
-		t.Error("ratelimit fail_open should be false")
-	}
-
-	// Hallucination mitigation
-	if !cfg.HallucinationMitigation.Enabled {
-		t.Error("hallucination_mitigation should be enabled")
-	}
-	if cfg.HallucinationMitigation.OnHallucinationDetected != "warn" {
-		t.Errorf("on_hallucination_detected = %q, want warn", cfg.HallucinationMitigation.OnHallucinationDetected)
-	}
-	if cfg.HallucinationMitigation.FactCheckModel.Threshold != 0.7 {
-		t.Errorf("fact_check threshold = %v, want 0.7", cfg.HallucinationMitigation.FactCheckModel.Threshold)
-	}
-	if cfg.HallucinationMitigation.HallucinationModel.Threshold != 0.5 {
-		t.Errorf("hallucination threshold = %v, want 0.5", cfg.HallucinationMitigation.HallucinationModel.Threshold)
-	}
-	if cfg.HallucinationMitigation.NLIModel.Threshold != 0.65 {
-		t.Errorf("nli threshold = %v, want 0.65", cfg.HallucinationMitigation.NLIModel.Threshold)
-	}
-
-	// Reasoning families
-	if len(cfg.ReasoningFamilies) != 2 {
-		t.Errorf("reasoning_families count = %d, want 2", len(cfg.ReasoningFamilies))
-	}
-	if ds, ok := cfg.ReasoningFamilies["deepseek"]; !ok {
-		t.Error("missing reasoning_family deepseek")
-	} else {
-		if ds.Type != "chat_template_kwargs" {
-			t.Errorf("deepseek type = %q", ds.Type)
-		}
-		if ds.Parameter != "thinking" {
-			t.Errorf("deepseek parameter = %q", ds.Parameter)
-		}
-	}
-
-	// Observability deep fields
-	if cfg.Observability.Tracing.Sampling.Type != "ratio" {
-		t.Errorf("sampling type = %q, want ratio", cfg.Observability.Tracing.Sampling.Type)
-	}
-	if cfg.Observability.Tracing.Sampling.Rate != 0.5 {
-		t.Errorf("sampling rate = %v, want 0.5", cfg.Observability.Tracing.Sampling.Rate)
-	}
-	if cfg.Observability.Tracing.Resource.ServiceName != "my-router" {
-		t.Errorf("service_name = %q", cfg.Observability.Tracing.Resource.ServiceName)
-	}
-	if cfg.Observability.Tracing.Resource.ServiceVersion != "1.0.0" {
-		t.Errorf("service_version = %q", cfg.Observability.Tracing.Resource.ServiceVersion)
-	}
-	if cfg.Observability.Tracing.Resource.DeploymentEnvironment != "prod" {
-		t.Errorf("deployment_environment = %q", cfg.Observability.Tracing.Resource.DeploymentEnvironment)
-	}
-	if cfg.Observability.Tracing.Exporter.Insecure {
-		t.Error("exporter insecure should be false")
 	}
 }
 
@@ -2339,7 +1939,7 @@ func TestParseEmptyArray(t *testing.T) {
 }
 
 func TestParseNestedObjects(t *testing.T) {
-	input := `GLOBAL {
+	input := `MODEL "deep-model" {
   outer: {
     inner: {
       value: "deep"
@@ -2350,7 +1950,7 @@ func TestParseNestedObjects(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("parse errors: %v", errs)
 	}
-	outer, ok := prog.Global.Fields["outer"].(ObjectValue)
+	outer, ok := prog.Models[0].Fields["outer"].(ObjectValue)
 	if !ok {
 		t.Fatal("expected outer ObjectValue")
 	}
@@ -2453,127 +2053,6 @@ func TestCompileASTDirect(t *testing.T) {
 	}
 }
 
-// ---------- P1-10: Provider Profile Full Fields ----------
-
-func TestCompileProviderProfileFullFields(t *testing.T) {
-	input := `
-BACKEND provider_profile azure_prod {
-  type: "azure"
-  base_url: "https://my-azure.openai.azure.com"
-  auth_header: "api-key"
-  auth_prefix: ""
-  api_version: "2024-02-01"
-  chat_path: "/openai/deployments/gpt-4/chat/completions"
-  extra_headers: {
-    x-custom: "value1"
-    x-trace: "trace123"
-  }
-}`
-	cfg, errs := Compile(input)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	pp, ok := cfg.ProviderProfiles["azure_prod"]
-	if !ok {
-		t.Fatal("azure_prod provider profile not found")
-	}
-	if pp.Type != "azure" {
-		t.Errorf("type = %q, want azure", pp.Type)
-	}
-	if pp.AuthHeader != "api-key" {
-		t.Errorf("auth_header = %q", pp.AuthHeader)
-	}
-	if pp.APIVersion != "2024-02-01" {
-		t.Errorf("api_version = %q", pp.APIVersion)
-	}
-	if len(pp.ExtraHeaders) != 2 {
-		t.Errorf("extra_headers count = %d, want 2", len(pp.ExtraHeaders))
-	}
-	if pp.ExtraHeaders["x-custom"] != "value1" {
-		t.Errorf("x-custom = %q", pp.ExtraHeaders["x-custom"])
-	}
-}
-
-// ---------- P1-11: Embedding Model with HNSW Config ----------
-
-func TestCompileEmbeddingModelHNSW(t *testing.T) {
-	input := `
-BACKEND embedding_model ultra {
-  mmbert_model_path: "models/mmbert-ultra"
-  bert_model_path: "models/bert-base"
-  use_cpu: true
-  hnsw_config: {
-    model_type: "mmbert"
-    preload_embeddings: true
-    target_dimension: 768
-    min_score_threshold: 0.5
-    enable_soft_matching: true
-  }
-}`
-	cfg, errs := Compile(input)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	if cfg.EmbeddingModels.MmBertModelPath != "models/mmbert-ultra" {
-		t.Errorf("mmbert path = %q", cfg.EmbeddingModels.MmBertModelPath)
-	}
-	if cfg.EmbeddingModels.BertModelPath != "models/bert-base" {
-		t.Errorf("bert path = %q", cfg.EmbeddingModels.BertModelPath)
-	}
-	if !cfg.EmbeddingModels.UseCPU {
-		t.Error("expected use_cpu = true")
-	}
-	hnsw := cfg.EmbeddingModels.HNSWConfig
-	if hnsw.ModelType != "mmbert" {
-		t.Errorf("hnsw model_type = %q", hnsw.ModelType)
-	}
-	if !hnsw.PreloadEmbeddings {
-		t.Error("expected preload_embeddings = true")
-	}
-	if hnsw.TargetDimension != 768 {
-		t.Errorf("target_dimension = %d", hnsw.TargetDimension)
-	}
-	if hnsw.MinScoreThreshold != 0.5 {
-		t.Errorf("min_score_threshold = %v", hnsw.MinScoreThreshold)
-	}
-	if hnsw.EnableSoftMatching == nil || !*hnsw.EnableSoftMatching {
-		t.Error("expected enable_soft_matching = true")
-	}
-}
-
-// ---------- P1-12: Semantic Cache Backend ----------
-
-func TestCompileSemanticCacheBackendFull(t *testing.T) {
-	input := `
-BACKEND semantic_cache main {
-  enabled: true
-  backend_type: "redis"
-  similarity_threshold: 0.85
-  max_entries: 5000
-  ttl_seconds: 1800
-  eviction_policy: "lru"
-}`
-	cfg, errs := Compile(input)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	if !cfg.SemanticCache.Enabled {
-		t.Error("expected enabled")
-	}
-	if cfg.SemanticCache.BackendType != "redis" {
-		t.Errorf("backend_type = %q", cfg.SemanticCache.BackendType)
-	}
-	if cfg.SemanticCache.MaxEntries != 5000 {
-		t.Errorf("max_entries = %d", cfg.SemanticCache.MaxEntries)
-	}
-	if cfg.SemanticCache.TTLSeconds != 1800 {
-		t.Errorf("ttl_seconds = %d", cfg.SemanticCache.TTLSeconds)
-	}
-	if cfg.SemanticCache.EvictionPolicy != "lru" {
-		t.Errorf("eviction_policy = %q", cfg.SemanticCache.EvictionPolicy)
-	}
-}
-
 // ---------- P1-13: Keyword Signal Full Fields ----------
 
 func TestCompileKeywordSignalFullFields(t *testing.T) {
@@ -2620,40 +2099,6 @@ SIGNAL keyword advanced_kw {
 	}
 	if kw.NgramArity != 4 {
 		t.Errorf("ngram_arity = %d", kw.NgramArity)
-	}
-}
-
-// ---------- P1-14: VLLM Endpoint Full Fields ----------
-
-func TestCompileVLLMEndpointFullFields(t *testing.T) {
-	input := `
-BACKEND vllm_endpoint prod {
-  address: "10.0.0.1"
-  port: 8000
-  weight: 3
-  type: "vllm"
-  api_key: "sk-secret"
-  provider_profile: "openai_prod"
-}`
-	cfg, errs := Compile(input)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	ep := cfg.VLLMEndpoints[0]
-	if ep.Name != "prod" {
-		t.Errorf("name = %q", ep.Name)
-	}
-	if ep.Weight != 3 {
-		t.Errorf("weight = %d", ep.Weight)
-	}
-	if ep.Type != "vllm" {
-		t.Errorf("type = %q", ep.Type)
-	}
-	if ep.APIKey != "sk-secret" {
-		t.Errorf("api_key = %q", ep.APIKey)
-	}
-	if ep.ProviderProfileName != "openai_prod" {
-		t.Errorf("provider_profile = %q", ep.ProviderProfileName)
 	}
 }
 
@@ -2840,7 +2285,6 @@ func TestLargeScaleInput(t *testing.T) {
 }
 `, i, i+1, i%numSignals)
 	}
-	sb.WriteString(`GLOBAL { default_model: "model:1b" strategy: "priority" }`)
 
 	cfg, errs := Compile(sb.String())
 	if len(errs) > 0 {
@@ -2884,8 +2328,6 @@ ROUTE test_route {
   WHEN domain("dom")
   MODEL "m:1b" (reasoning = false)
 }
-
-GLOBAL { default_model: "m:1b" strategy: "priority" }
 `
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -2948,8 +2390,6 @@ SIGNAL domain bio { description: "Bio" }
 ROUTE route_a { PRIORITY 100 WHEN domain("math") MODEL "m:1b" (reasoning = false) }
 ROUTE route_b { PRIORITY 100 WHEN domain("physics") MODEL "m:1b" (reasoning = false) }
 ROUTE route_c { PRIORITY 50 WHEN domain("bio") MODEL "m:1b" (reasoning = false) }
-
-GLOBAL { default_model: "m:1b" }
 `
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -2976,7 +2416,7 @@ GLOBAL { default_model: "m:1b" }
 
 func TestWhitespaceAndCommentVariants(t *testing.T) {
 	// Minimal whitespace
-	compact := `SIGNAL domain m{description:"Math"}ROUTE r{PRIORITY 1 WHEN domain("m")MODEL "m:1b"}GLOBAL{default_model:"m:1b"}`
+	compact := `MODEL "m:1b"{modality:"text"}SIGNAL domain m{description:"Math"}ROUTE r{PRIORITY 1 WHEN domain("m")MODEL "m:1b"}`
 
 	cfg1, errs1 := Compile(compact)
 	if len(errs1) > 0 {
@@ -3000,7 +2440,6 @@ ROUTE r {
   MODEL "m:1b" # after MODEL
 }
 # Final comment
-GLOBAL { default_model: "m:1b" }
 `
 	cfg2, errs2 := Compile(commented)
 	if len(errs2) > 0 {
@@ -3075,15 +2514,6 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 	}
 
 	// Comprehensive field check
-	if rt.DefaultModel != "qwen2.5:3b" {
-		t.Errorf("default_model = %q", rt.DefaultModel)
-	}
-	if rt.Strategy != "priority" {
-		t.Errorf("strategy = %q", rt.Strategy)
-	}
-	if rt.DefaultReasoningEffort != "low" {
-		t.Errorf("default_reasoning_effort = %q", rt.DefaultReasoningEffort)
-	}
 	if len(rt.Categories) != 3 {
 		t.Errorf("categories = %d, want 3", len(rt.Categories))
 	}
@@ -3096,14 +2526,11 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 	if len(rt.Decisions) != 4 {
 		t.Errorf("decisions = %d, want 4", len(rt.Decisions))
 	}
-	if len(rt.VLLMEndpoints) != 1 {
-		t.Errorf("vllm_endpoints = %d", len(rt.VLLMEndpoints))
+	if len(rt.ModelConfig) != 2 {
+		t.Errorf("model_config = %d, want 2", len(rt.ModelConfig))
 	}
-	if !rt.Observability.Tracing.Enabled {
-		t.Error("tracing should be enabled")
-	}
-	if !rt.PromptGuard.Enabled {
-		t.Error("prompt_guard should be enabled")
+	if rt.ModelConfig["qwen3:70b"].ParamSize != "70b" {
+		t.Errorf("qwen3:70b param_size = %q", rt.ModelConfig["qwen3:70b"].ParamSize)
 	}
 
 	// Check urgent_ai_route specifically
@@ -3213,7 +2640,7 @@ func TestFuzzLikeInputsDoNotPanic(t *testing.T) {
 		// Many commas
 		`SIGNAL keyword a { keywords: ["a", "b", "c", "d", "e", "f", "g", "h"] }`,
 		// Mixed valid and invalid
-		`SIGNAL domain a {} ROUTE {} GLOBAL {}`,
+		`MODEL "m:1b" {} SIGNAL domain a {} ROUTE r { PRIORITY 1 WHEN domain("a") MODEL "m:1b" }`,
 		// Only whitespace and comments
 		`   # comment only   `,
 		// Nested arrays (unusual but shouldn't crash)
@@ -3283,7 +2710,6 @@ ROUTE test {
   WHEN domain("test")
   MODEL "qwen2.5:3b" (reasoning = true, effort = "high", lora = "math-lora-v2")
 }
-GLOBAL { default_model: "qwen2.5:3b" }
 `
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -3476,23 +2902,6 @@ SIGNAL embedding test { threshold: 1.5 candidates: ["test"] }
 	}
 }
 
-func TestValidatePortOutOfRange(t *testing.T) {
-	input := `
-BACKEND vllm_endpoint test { address: "127.0.0.1" port: 99999 }
-`
-	diags, _ := Validate(input)
-	found := false
-	for _, d := range diags {
-		if d.Level == DiagConstraint && strings.Contains(d.Message, "port") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected constraint violation for port > 65535")
-	}
-}
-
 func TestValidateNegativePriority(t *testing.T) {
 	input := `
 SIGNAL domain test { description: "test" }
@@ -3604,28 +3013,6 @@ func TestValidateASTDirect(t *testing.T) {
 	}
 }
 
-func TestValidateNestedConstraints(t *testing.T) {
-	input := `
-GLOBAL {
-  prompt_guard: {
-    enabled: true
-    threshold: 1.5
-  }
-}
-`
-	diags, _ := Validate(input)
-	found := false
-	for _, d := range diags {
-		if d.Level == DiagConstraint && strings.Contains(d.Message, "threshold") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected constraint violation for nested prompt_guard threshold")
-	}
-}
-
 func TestValidateSyntaxError(t *testing.T) {
 	input := `SIGNAL domain test description: "missing braces"`
 	diags, errs := Validate(input)
@@ -3661,14 +3048,14 @@ func TestDecompileBasic(t *testing.T) {
 	if !strings.Contains(dslText, "# SIGNALS") {
 		t.Error("missing SIGNALS section")
 	}
+	if !strings.Contains(dslText, "# MODELS") {
+		t.Error("missing MODELS section")
+	}
 	if !strings.Contains(dslText, "# ROUTES") {
 		t.Error("missing ROUTES section")
 	}
-	if !strings.Contains(dslText, "# BACKENDS") {
-		t.Error("missing BACKENDS section")
-	}
-	if !strings.Contains(dslText, "# GLOBAL") {
-		t.Error("missing GLOBAL section")
+	if strings.Contains(dslText, "# BACKENDS") || strings.Contains(dslText, "# GLOBAL") {
+		t.Errorf("routing-only decompile leaked static sections:\n%s", dslText)
 	}
 
 	// Should contain key elements
@@ -3678,8 +3065,8 @@ func TestDecompileBasic(t *testing.T) {
 	if !strings.Contains(dslText, "ROUTE math_decision") {
 		t.Error("missing math_decision route")
 	}
-	if !strings.Contains(dslText, "default_model:") {
-		t.Error("missing default_model in GLOBAL")
+	if !strings.Contains(dslText, "MODEL \"qwen2.5:3b\"") {
+		t.Error("missing routing model catalog entry")
 	}
 }
 
@@ -3702,21 +3089,21 @@ func TestDecompileRoundTrip(t *testing.T) {
 		t.Fatalf("recompile errors: %v\nDSL:\n%s", errs, dslText)
 	}
 
-	// Compare key fields
-	if cfg1.DefaultModel != cfg2.DefaultModel {
-		t.Errorf("default_model: %q vs %q", cfg1.DefaultModel, cfg2.DefaultModel)
+	if strings.Contains(dslText, "BACKEND ") || strings.Contains(dslText, "GLOBAL {") {
+		t.Fatalf("routing-only decompile leaked static sections:\n%s", dslText)
 	}
-	if cfg1.Strategy != cfg2.Strategy {
-		t.Errorf("strategy: %q vs %q", cfg1.Strategy, cfg2.Strategy)
+
+	// Compare routing-owned fields. Routing-only decompile synthesizes a model
+	// catalog from decision model refs even when the source DSL did not declare
+	// top-level MODEL blocks.
+	if len(cfg2.ModelConfig) != 2 {
+		t.Errorf("model catalog: got %d, want 2 synthesized models", len(cfg2.ModelConfig))
 	}
 	if len(cfg1.Categories) != len(cfg2.Categories) {
 		t.Errorf("categories: %d vs %d", len(cfg1.Categories), len(cfg2.Categories))
 	}
 	if len(cfg1.Decisions) != len(cfg2.Decisions) {
 		t.Errorf("decisions: %d vs %d", len(cfg1.Decisions), len(cfg2.Decisions))
-	}
-	if len(cfg1.VLLMEndpoints) != len(cfg2.VLLMEndpoints) {
-		t.Errorf("vllm_endpoints: %d vs %d", len(cfg1.VLLMEndpoints), len(cfg2.VLLMEndpoints))
 	}
 
 	// Compare each decision
@@ -3796,7 +3183,6 @@ ROUTE test {
   WHEN domain("test")
   MODEL "qwen2.5:3b" (reasoning = true, effort = "high", lora = "math-v2")
 }
-GLOBAL { default_model: "qwen2.5:3b" }
 `
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -3864,11 +3250,11 @@ func TestDecompileToAST(t *testing.T) {
 	if len(ast.Signals) != 7 { // 3 domain + 1 embedding + 1 keyword + 1 context + 1 complexity
 		t.Errorf("expected 7 signals, got %d", len(ast.Signals))
 	}
+	if len(ast.Models) == 0 {
+		t.Error("expected routing model catalog")
+	}
 	if len(ast.Routes) != 4 {
 		t.Errorf("expected 4 routes, got %d", len(ast.Routes))
-	}
-	if ast.Global == nil {
-		t.Error("expected global block")
 	}
 }
 
@@ -3886,7 +3272,6 @@ SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard"] } easy: { c
 SIGNAL modality mod { description: "image" }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
-GLOBAL { default_model: "m:1b" }
 `
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -3912,19 +3297,26 @@ GLOBAL { default_model: "m:1b" }
 	}
 }
 
-func TestDecompileBackendTypes(t *testing.T) {
-	input := `
-BACKEND vllm_endpoint ep1 { address: "10.0.0.1" port: 8000 }
-BACKEND provider_profile pp1 { type: "openai" base_url: "https://api.openai.com/v1" }
-BACKEND embedding_model em1 { mmbert_model_path: "models/mmbert" use_cpu: true }
-BACKEND semantic_cache sc1 { enabled: true backend_type: "redis" }
-BACKEND memory mem1 { enabled: true auto_store: true }
-BACKEND response_api resp1 { enabled: true store_backend: "redis" }
-GLOBAL { default_model: "m:1b" }
-`
-	cfg, errs := Compile(input)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
+func TestDecompileOmitsLegacyStaticSections(t *testing.T) {
+	cfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			DefaultModel: "m:1b",
+			VLLMEndpoints: []config.VLLMEndpoint{
+				{Name: "ep1", Address: "10.0.0.1", Port: 8000, Model: "m:1b"},
+			},
+			ProviderProfiles: map[string]config.ProviderProfile{
+				"pp1": {Type: "openai", BaseURL: "https://api.openai.com/v1"},
+			},
+		},
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				MmBertModelPath: "models/mmbert",
+				UseCPU:          true,
+			},
+		},
+		SemanticCache: config.SemanticCache{Enabled: true, BackendType: "redis"},
+		Memory:        config.MemoryConfig{Enabled: true, AutoStore: true},
+		ResponseAPI:   config.ResponseAPIConfig{Enabled: true, StoreBackend: "redis"},
 	}
 
 	dslText, err := Decompile(cfg)
@@ -3932,15 +3324,8 @@ GLOBAL { default_model: "m:1b" }
 		t.Fatalf("decompile error: %v", err)
 	}
 
-	expectedBackends := []string{
-		"BACKEND vllm_endpoint", "BACKEND provider_profile",
-		"BACKEND embedding_model", "BACKEND semantic_cache",
-		"BACKEND memory", "BACKEND response_api",
-	}
-	for _, be := range expectedBackends {
-		if !strings.Contains(dslText, be) {
-			t.Errorf("missing %q in decompiled output", be)
-		}
+	if strings.Contains(dslText, "BACKEND ") || strings.Contains(dslText, "GLOBAL {") {
+		t.Fatalf("expected routing-only decompile to omit static sections, got:\n%s", dslText)
 	}
 }
 
@@ -3952,7 +3337,6 @@ ROUTE my_route (description = "A detailed description") {
   WHEN domain("test")
   MODEL "m:1b"
 }
-GLOBAL { default_model: "m:1b" }
 `
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -3973,9 +3357,9 @@ GLOBAL { default_model: "m:1b" }
 
 func TestFormatProducesValidDSL(t *testing.T) {
 	// Messy input with inconsistent formatting
-	input := `SIGNAL domain math{description:"Math" mmlu_categories:["math"]}
-ROUTE r{PRIORITY 100 WHEN domain("math") MODEL "m:1b"(reasoning=true)}
-GLOBAL{default_model:"m:1b" strategy:"priority"}`
+	input := `MODEL "m:1b"{modality:"text"}
+SIGNAL domain math{description:"Math" mmlu_categories:["math"]}
+ROUTE r{PRIORITY 100 WHEN domain("math") MODEL "m:1b"(reasoning=true)}`
 
 	formatted, err := Format(input)
 	if err != nil {
@@ -3988,8 +3372,11 @@ GLOBAL{default_model:"m:1b" strategy:"priority"}`
 		t.Fatalf("formatted output is not valid DSL: %v\nFormatted:\n%s", errs, formatted)
 	}
 
-	if cfg.DefaultModel != "m:1b" {
-		t.Errorf("default_model = %q after format round-trip", cfg.DefaultModel)
+	if strings.Contains(formatted, "GLOBAL {") || strings.Contains(formatted, "authz") {
+		t.Fatalf("format should emit routing-only DSL, got:\n%s", formatted)
+	}
+	if _, ok := cfg.ModelConfig["m:1b"]; !ok {
+		t.Fatalf("formatted routing DSL should preserve model catalog, got %#v", cfg.ModelConfig)
 	}
 }
 
@@ -4010,6 +3397,10 @@ func TestFormatIdempotency(t *testing.T) {
 	formatted3, err := Format(formatted2)
 	if err != nil {
 		t.Fatalf("third format error: %v", err)
+	}
+
+	if strings.Contains(formatted1, "BACKEND ") || strings.Contains(formatted1, "GLOBAL {") {
+		t.Fatalf("format should drop legacy static sections on first pass, got:\n%s", formatted1)
 	}
 
 	// After the second pass, output should stabilize
@@ -4141,13 +3532,20 @@ func TestCLICompileAndDecompile(t *testing.T) {
 		t.Fatal("DSL output is empty")
 	}
 
+	if strings.Contains(string(yamlData), "global:") || strings.Contains(string(yamlData), "providers:") {
+		t.Fatalf("CLICompile should emit a routing fragment, got:\n%s", string(yamlData))
+	}
+
 	// The decompiled DSL should be valid — compile it again
 	cfg, errs := Compile(string(dslData))
 	if len(errs) > 0 {
 		t.Fatalf("recompile errors: %v\nDSL:\n%s", errs, string(dslData))
 	}
-	if cfg.DefaultModel != "qwen2.5:3b" {
-		t.Errorf("round-trip default_model = %q", cfg.DefaultModel)
+	if len(cfg.Decisions) == 0 {
+		t.Fatalf("round-trip decisions = %d", len(cfg.Decisions))
+	}
+	if len(cfg.ModelConfig) == 0 {
+		t.Fatal("round-trip model catalog should not be empty")
 	}
 }
 
@@ -4223,6 +3621,18 @@ func TestEmitUserYAML(t *testing.T) {
 	cfg, errs := Compile(fullDSLExample)
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
+	}
+	cfg.DefaultModel = "qwen2.5:3b"
+	cfg.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{
+		"qwen3": {Type: "chat_template_kwargs", Parameter: "enable_thinking"},
+	}
+	cfg.VLLMEndpoints = []config.VLLMEndpoint{
+		{
+			Name:    "qwen2.5:3b_primary",
+			Address: "router-model.local",
+			Port:    8000,
+			Model:   "qwen2.5:3b",
+		},
 	}
 
 	userYAML, err := EmitUserYAML(cfg)
@@ -4320,13 +3730,20 @@ func TestEmitHelm(t *testing.T) {
 	if !strings.Contains(yamlStr, "config:") {
 		t.Error("expected top-level 'config:' key in Helm values")
 	}
-	// Should contain decisions under config
-	if !strings.Contains(yamlStr, "decisions:") {
-		t.Error("expected 'decisions:' under config")
+	// Should contain canonical version
+	if !strings.Contains(yamlStr, "version: v0.3") {
+		t.Error("expected canonical config version in Helm values")
 	}
-	// Should contain default_model
-	if !strings.Contains(yamlStr, "default_model:") {
-		t.Error("expected 'default_model:' in Helm values")
+	// Should contain routing under config
+	if !strings.Contains(yamlStr, "routing:") {
+		t.Error("expected 'routing:' under config")
+	}
+	if !strings.Contains(yamlStr, "decisions:") {
+		t.Error("expected routing decisions in Helm values")
+	}
+	// Helm emission should stay routing-only
+	if strings.Contains(yamlStr, "default_model:") {
+		t.Error("did not expect provider defaults in routing-only Helm values")
 	}
 	// Should NOT have apiVersion (that's CRD format)
 	if strings.Contains(yamlStr, "apiVersion:") {
@@ -4371,22 +3788,12 @@ func TestCLICompileHelm(t *testing.T) {
 	}
 }
 
-// TestDecompileGlobalAuthzRatelimit verifies authz and ratelimit round-trip through decompile.
-func TestDecompileGlobalAuthzRatelimit(t *testing.T) {
-	input := `
-SIGNAL domain test { description: "test" }
-ROUTE test_route { PRIORITY 1 WHEN domain("test") MODEL "m:1b" }
-GLOBAL {
-  default_model: "m:1b"
-  authz: { fail_open: true }
-  ratelimit: { fail_open: true }
-}
-`
-	cfg, errs := Compile(input)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
+// TestDecompileDropsGlobalAuthzRatelimit verifies global-only fields are not exported back into routing DSL.
+func TestDecompileDropsGlobalAuthzRatelimit(t *testing.T) {
+	cfg := &config.RouterConfig{
+		Authz:     config.AuthzConfig{FailOpen: true},
+		RateLimit: config.RateLimitConfig{FailOpen: true},
 	}
-
 	if !cfg.Authz.FailOpen {
 		t.Fatal("authz.fail_open should be true after compile")
 	}
@@ -4394,54 +3801,29 @@ GLOBAL {
 		t.Fatal("ratelimit.fail_open should be true after compile")
 	}
 
-	// Decompile and verify the text output includes authz/ratelimit
+	// Decompile and verify the routing-only output omits authz/ratelimit.
 	dslText, err := Decompile(cfg)
 	if err != nil {
 		t.Fatalf("decompile error: %v", err)
 	}
 
-	if !strings.Contains(dslText, "authz") {
-		t.Error("decompiled DSL missing 'authz'")
-	}
-	if !strings.Contains(dslText, "ratelimit") {
-		t.Error("decompiled DSL missing 'ratelimit'")
-	}
-	if !strings.Contains(dslText, "fail_open") {
-		t.Error("decompiled DSL missing 'fail_open'")
-	}
-
-	// Re-compile from decompiled text — should preserve authz/ratelimit
-	cfg2, errs2 := Compile(dslText)
-	if len(errs2) > 0 {
-		t.Fatalf("re-compile errors: %v", errs2)
-	}
-	if !cfg2.Authz.FailOpen {
-		t.Error("authz.fail_open lost during round-trip")
-	}
-	if !cfg2.RateLimit.FailOpen {
-		t.Error("ratelimit.fail_open lost during round-trip")
+	if strings.Contains(dslText, "authz") || strings.Contains(dslText, "ratelimit") || strings.Contains(dslText, "fail_open") {
+		t.Fatalf("routing-only decompile leaked global-only settings:\n%s", dslText)
 	}
 }
 
-func TestDecompileGlobalListenersRoundTrip(t *testing.T) {
-	input := `
-SIGNAL domain test { description: "test" }
-ROUTE test_route { PRIORITY 1 WHEN domain("test") MODEL "m:1b" }
-GLOBAL {
-  listeners: [
-    {
-      name: "http-8899"
-      address: "0.0.0.0"
-      port: 8899
-      timeout: "300s"
-    }
-  ]
-  default_model: "m:1b"
-}
-`
-	cfg, errs := Compile(input)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
+func TestDecompileDropsGlobalListeners(t *testing.T) {
+	cfg := &config.RouterConfig{
+		APIServer: config.APIServer{
+			Listeners: []config.Listener{
+				{
+					Name:    "http-8899",
+					Address: "0.0.0.0",
+					Port:    8899,
+					Timeout: "300s",
+				},
+			},
+		},
 	}
 	if len(cfg.Listeners) != 1 || cfg.Listeners[0].Port != 8899 {
 		t.Fatalf("compiled listeners = %#v", cfg.Listeners)
@@ -4451,22 +3833,8 @@ GLOBAL {
 	if err != nil {
 		t.Fatalf("decompile error: %v", err)
 	}
-	if !strings.Contains(dslText, "listeners") {
-		t.Fatal("decompiled DSL missing listeners block")
-	}
-	if !strings.Contains(dslText, "port: 8899") {
-		t.Fatal("decompiled DSL missing listener port")
-	}
-
-	cfg2, errs2 := Compile(dslText)
-	if len(errs2) > 0 {
-		t.Fatalf("re-compile errors: %v", errs2)
-	}
-	if len(cfg2.Listeners) != 1 {
-		t.Fatalf("re-compiled listeners count = %d, want 1", len(cfg2.Listeners))
-	}
-	if cfg2.Listeners[0].Name != "http-8899" || cfg2.Listeners[0].Port != 8899 {
-		t.Fatalf("listener lost during round-trip: %#v", cfg2.Listeners[0])
+	if strings.Contains(dslText, "listeners") || strings.Contains(dslText, "port: 8899") {
+		t.Fatalf("routing-only decompile leaked listeners:\n%s", dslText)
 	}
 }
 
@@ -4488,7 +3856,6 @@ ROUTE rag_route (description = "RAG route") {
     injection_mode: "tool_role"
   }
 }
-GLOBAL { default_model: "m:1b" }
 `
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
