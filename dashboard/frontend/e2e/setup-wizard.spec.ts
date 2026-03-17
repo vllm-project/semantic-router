@@ -2,57 +2,64 @@ import { expect, test } from "@playwright/test";
 import { mockAuthenticatedAppShell } from "./support/auth";
 
 const importedConfig = {
+  version: "v0.3",
   providers: {
+    default_model: "remote-model-primary",
     models: [
       {
         name: "remote-model-primary",
-        endpoints: [
+        backend_refs: [
           {
             name: "primary",
-            weight: 100,
             endpoint: "remote-primary.example.com",
             protocol: "https",
+            weight: 100,
           },
         ],
       },
       {
         name: "remote-model-backup",
-        endpoints: [
+        backend_refs: [
           {
             name: "backup",
-            weight: 100,
             endpoint: "remote-backup.example.com",
             protocol: "https",
+            weight: 100,
           },
         ],
       },
     ],
-    default_model: "remote-model-primary",
   },
-  signals: {
-    domains: [{ name: "remote-domain-a" }, { name: "remote-domain-b" }],
-    keywords: [{ name: "remote-keyword-a" }, { name: "remote-keyword-b" }],
+  routing: {
+    modelCards: [
+      { name: "remote-model-primary", modality: "text" },
+      { name: "remote-model-backup", modality: "text" },
+    ],
+    signals: {
+      domains: [{ name: "remote-domain-a" }, { name: "remote-domain-b" }],
+      keywords: [{ name: "remote-keyword-a" }, { name: "remote-keyword-b" }],
+    },
+    decisions: [
+      {
+        name: "remote-route-primary",
+        priority: 900,
+        rules: { operator: "AND", conditions: [] },
+        modelRefs: [{ model: "remote-model-primary", use_reasoning: false }],
+      },
+      {
+        name: "remote-route-secondary",
+        priority: 800,
+        rules: { operator: "AND", conditions: [] },
+        modelRefs: [{ model: "remote-model-backup", use_reasoning: false }],
+      },
+      {
+        name: "remote-default",
+        priority: 100,
+        rules: { operator: "AND", conditions: [] },
+        modelRefs: [{ model: "remote-model-primary", use_reasoning: false }],
+      },
+    ],
   },
-  decisions: [
-    {
-      name: "remote-route-primary",
-      priority: 900,
-      rules: { operator: "AND", conditions: [] },
-      modelRefs: [{ model: "remote-model-primary", use_reasoning: false }],
-    },
-    {
-      name: "remote-route-secondary",
-      priority: 800,
-      rules: { operator: "AND", conditions: [] },
-      modelRefs: [{ model: "remote-model-backup", use_reasoning: false }],
-    },
-    {
-      name: "remote-default",
-      priority: 100,
-      rules: { operator: "AND", conditions: [] },
-      modelRefs: [{ model: "remote-model-primary", use_reasoning: false }],
-    },
-  ],
 };
 
 test.describe("Setup wizard routing import", () => {
@@ -123,11 +130,12 @@ test.describe("Setup wizard routing import", () => {
             models: [
               {
                 name: "openai/gpt-oss-120b",
-                endpoints: [
+                provider_model_id: "openai/gpt-oss-120b",
+                backend_refs: [
                   {
                     name: "primary",
                     weight: 100,
-                    endpoint: "vllm-gpt-oss-120b:8000",
+                    endpoint: "vllm:8000",
                     protocol: "http",
                   },
                 ],
@@ -135,18 +143,26 @@ test.describe("Setup wizard routing import", () => {
             ],
             default_model: "openai/gpt-oss-120b",
           },
-          decisions: [
-            {
-              name: "default-route",
-              description:
-                "Generated during setup to route all requests to the default model.",
-              priority: 100,
-              rules: { operator: "AND", conditions: [] },
-              modelRefs: [
-                { model: "openai/gpt-oss-120b", use_reasoning: false },
-              ],
-            },
-          ],
+          routing: {
+            modelCards: [
+              {
+                name: "openai/gpt-oss-120b",
+                modality: "text",
+              },
+            ],
+            decisions: [
+              {
+                name: "default-route",
+                description:
+                  "Generated during setup to route all requests to the default model.",
+                priority: 100,
+                rules: { operator: "AND", conditions: [] },
+                modelRefs: [
+                  { model: "openai/gpt-oss-120b", use_reasoning: false },
+                ],
+              },
+            ],
+          },
         },
       });
     await expect(page.getByText("Ready")).toBeVisible();

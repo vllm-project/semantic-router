@@ -52,10 +52,9 @@ fi
 exec /usr/local/bin/dashboard-backend \
     -port=8700 \
     -static=/app/frontend \
-    -config=/app/config.yaml \
+    -config="$CONFIG_FILE" \
     -router_api=http://localhost:8080 \
     -router_metrics=http://localhost:9190/metrics \
     -envoy="http://localhost:${ENVOY_PORT}" \
     ${READONLY_ARG} \
     "${OBSERVABILITY_ARGS}"
-

@@ -61,7 +61,11 @@ type SemanticRouterSpec struct {
 	// +optional
 	Persistence PersistenceSpec `json:"persistence,omitempty"`
 
-	// Configuration for the semantic router
+	// Configuration overrides merged into the canonical v0.3 config.yaml.
+	// Router-wide runtime overrides land under config.global.router/services/stores/
+	// integrations/model_catalog, with model-backed modules nested under
+	// config.global.model_catalog.modules. Provider defaults land under
+	// config.providers.defaults.
 	// +optional
 	Config ConfigSpec `json:"config,omitempty"`
 
@@ -69,7 +73,9 @@ type SemanticRouterSpec struct {
 	// +optional
 	ToolsDb []ToolEntry `json:"toolsDb,omitempty"`
 
-	// VLLMEndpoints configuration - generates vllm_endpoints and model_config in config.yaml
+	// VLLMEndpoints is a Kubernetes-native backend discovery adapter.
+	// It generates canonical config.providers.models[].backend_refs
+	// and config.routing.modelCards entries.
 	// +optional
 	VLLMEndpoints []VLLMEndpointSpec `json:"vllmEndpoints,omitempty"`
 
@@ -253,10 +259,6 @@ type PersistenceSpec struct {
 
 // ConfigSpec defines the semantic router configuration
 type ConfigSpec struct {
-	// BERT model configuration
-	// +optional
-	BertModel *BertModelConfig `json:"bert_model,omitempty"`
-
 	// Embedding models configuration (qwen3, gemma, mmbert)
 	// +optional
 	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
@@ -308,21 +310,6 @@ type ConfigSpec struct {
 	Observability *ObservabilityConfig `json:"observability,omitempty"`
 }
 
-// BertModelConfig defines BERT model configuration
-type BertModelConfig struct {
-	// +kubebuilder:default="models/mom-embedding-light"
-	// +optional
-	ModelID string `json:"model_id,omitempty"`
-	// Threshold for embedding similarity (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.6"
-	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
-	// +optional
-	Threshold string `json:"threshold,omitempty"`
-	// +kubebuilder:default=true
-	// +optional
-	UseCPU bool `json:"use_cpu,omitempty"`
-}
-
 // SemanticCacheConfig defines semantic cache configuration
 type SemanticCacheConfig struct {
 	// Enabled controls whether semantic caching is active
@@ -368,8 +355,8 @@ type SemanticCacheConfig struct {
 	Milvus *MilvusCacheConfig `json:"milvus,omitempty"`
 
 	// EmbeddingModel specifies which embedding model to use for semantic similarity
-	// Options: "bert" (default), "qwen3", "gemma", "mmbert"
-	// +kubebuilder:default="bert"
+	// Options: "mmbert" (default), "bert", "qwen3", "gemma"
+	// +kubebuilder:default="mmbert"
 	// +kubebuilder:validation:Enum=bert;qwen3;gemma;mmbert
 	// +optional
 	EmbeddingModel string `json:"embedding_model,omitempty"`
@@ -909,9 +896,9 @@ type EmbeddingModelsConfig struct {
 	// +optional
 	UseCPU bool `json:"use_cpu,omitempty"`
 
-	// HNSW configuration for embedding-based classification
+	// Embedding configuration for embedding-based classification
 	// +optional
-	HNSWConfig *HNSWEmbeddingConfig `json:"hnsw_config,omitempty"`
+	EmbeddingConfig *HNSWEmbeddingConfig `json:"embedding_config,omitempty"`
 }
 
 // HNSWEmbeddingConfig contains settings for embedding classification with HNSW indexing
@@ -1100,7 +1087,7 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=false
 	// +optional
 	UseModernBERT bool `json:"use_modernbert,omitempty"`
-	// +kubebuilder:default="models/mom-jailbreak-classifier"
+	// +kubebuilder:default="models/mmbert32k-jailbreak-detector-merged"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
 	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues.
@@ -1414,7 +1401,7 @@ type IngressTLS struct {
 
 // VLLMEndpointSpec defines a vLLM model backend endpoint
 type VLLMEndpointSpec struct {
-	// Name of the endpoint (used in model_config.preferred_endpoints)
+	// Name of the backend ref generated under config.providers.models[].backend_refs
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
@@ -1426,6 +1413,11 @@ type VLLMEndpointSpec struct {
 	// +optional
 	ReasoningFamily string `json:"reasoningFamily,omitempty"`
 
+	// LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards.
+	// +optional
+	// +kubebuilder:validation:MaxItems=50
+	LoRAs []LoRAAdapterSpec `json:"loras,omitempty"`
+
 	// Backend configuration
 	Backend VLLMBackend `json:"backend"`
 
@@ -1433,6 +1425,19 @@ type VLLMEndpointSpec struct {
 	// +optional
 	// +kubebuilder:default=1
 	Weight int `json:"weight,omitempty"`
+}
+
+// LoRAAdapterSpec defines one LoRA adapter exposed by a VLLMEndpoint model.
+type LoRAAdapterSpec struct {
+	// Name is the unique adapter identifier referenced by decision.modelRefs[].lora_name.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=100
+	Name string `json:"name"`
+
+	// Description provides a short human-readable summary for UI and docs surfaces.
+	// +optional
+	// +kubebuilder:validation:MaxLength=500
+	Description string `json:"description,omitempty"`
 }
 
 // VLLMBackend specifies how to reach the vLLM service

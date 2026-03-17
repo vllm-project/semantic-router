@@ -378,16 +378,28 @@ main() {
 
     docker rm -f "$SR_CONTAINER" "$ENVOY_CONTAINER" 2>/dev/null || true
 
+    local pc_enabled="${PROMPT_COMPRESSION:-false}"
+    local pc_max_tokens="${PROMPT_COMPRESSION_MAX_TOKENS:-512}"
+
     # ONNX GPU config (use_cpu: false)
     local onnx_gpu_cfg="$RESULTS_DIR/config-onnx-gpu.yaml"
-    sed 's/USE_CPU_PLACEHOLDER/false/g' "$SCRIPT_DIR/config-bench.yaml" > "$onnx_gpu_cfg"
+    sed -e 's/USE_CPU_PLACEHOLDER/false/g' \
+        -e "s/PROMPT_COMPRESSION_PLACEHOLDER/${pc_enabled}/g" \
+        -e "s/PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER/${pc_max_tokens}/g" \
+        "$SCRIPT_DIR/config-bench.yaml" > "$onnx_gpu_cfg"
 
     # ONNX CPU config (use_cpu: true)
     local onnx_cpu_cfg="$RESULTS_DIR/config-onnx-cpu.yaml"
-    sed 's/USE_CPU_PLACEHOLDER/true/g' "$SCRIPT_DIR/config-bench.yaml" > "$onnx_cpu_cfg"
+    sed -e 's/USE_CPU_PLACEHOLDER/true/g' \
+        -e "s/PROMPT_COMPRESSION_PLACEHOLDER/${pc_enabled}/g" \
+        -e "s/PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER/${pc_max_tokens}/g" \
+        "$SCRIPT_DIR/config-bench.yaml" > "$onnx_cpu_cfg"
 
-    # Candle CPU config (already has use_cpu: true)
-    local candle_cfg="$SCRIPT_DIR/config-bench-candle.yaml"
+    # Candle CPU config
+    local candle_cfg="$RESULTS_DIR/config-candle-cpu.yaml"
+    sed -e "s/PROMPT_COMPRESSION_PLACEHOLDER/${pc_enabled}/g" \
+        -e "s/PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER/${pc_max_tokens}/g" \
+        "$SCRIPT_DIR/config-bench-candle.yaml" > "$candle_cfg"
 
     run_phase "onnx-gpu" "$onnx_gpu_cfg"
     run_phase "onnx-cpu" "$onnx_cpu_cfg"

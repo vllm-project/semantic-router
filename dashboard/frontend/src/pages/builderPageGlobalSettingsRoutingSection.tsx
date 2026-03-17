@@ -1,22 +1,23 @@
 import React from "react";
 
+import type { DSLFieldObject, DSLFieldValue } from "@/types/dsl";
 import styles from "./BuilderPage.module.css";
 import type { EditableListener } from "./builderPageGlobalSettingsSupport";
 import { getBool, getNum, getStr } from "./builderPageGlobalSettingsSupport";
 
 interface GlobalSettingsRoutingSectionProps {
-  local: Record<string, unknown>;
+  local: DSLFieldObject;
   collapsedSections: Record<string, boolean>;
-  modelSelection: Record<string, unknown>;
-  reasoningFamilies: Record<string, unknown>;
-  looper: Record<string, unknown>;
+  modelSelection: DSLFieldObject;
+  reasoningFamilies: DSLFieldObject;
+  looper: DSLFieldObject;
   listeners: EditableListener[];
   onToggleSection: (key: string) => void;
-  onSetField: (key: string, value: unknown) => void;
+  onSetField: (key: string, value: DSLFieldValue) => void;
   onSetNestedField: (
     parentKey: string,
     childKey: string,
-    value: unknown,
+    value: DSLFieldValue,
   ) => void;
   onUpdateListener: (
     index: number,
@@ -279,9 +280,10 @@ const GlobalSettingsRoutingSection: React.FC<
               }}
             >
               {Object.entries(reasoningFamilies).map(([name, value]) => {
-                const entry = (
-                  value && typeof value === "object" ? value : {}
-                ) as Record<string, unknown>;
+                const entry =
+                  value && typeof value === "object" && !Array.isArray(value)
+                    ? (value as DSLFieldObject)
+                    : {};
                 return (
                   <div
                     key={name}

@@ -1,7 +1,7 @@
 ---
 name: decision-logic-change
 category: primary
-description: Use when changing boolean control logic that combines signals and route conditions into decisions.
+description: Modifies boolean decision predicates, thresholds, gates, and priority-driven routing branches that combine signals into routing decisions. Use when changing how signals are evaluated into boolean logic, adding or removing decision gates, or adjusting threshold-based routing behavior.
 ---
 
 # Decision Logic Change
@@ -10,6 +10,14 @@ description: Use when changing boolean control logic that combines signals and r
 
 - Change decision predicates, thresholds, gates, or priority-driven routing branches
 - Change how signals are combined into boolean control logic
+
+## Workflow
+
+1. Read change surfaces, module boundaries, and Go router playbook for decision logic context
+2. Modify decision predicates, thresholds, gates, or priority-driven routing branches
+3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to identify impacted surfaces
+4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate all constraints
+5. Verify boolean decision behavior is covered by targeted tests and affected E2E profiles
 
 ## Must Read
 

@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
 )
 
 // ============================================================
@@ -268,17 +271,37 @@ func TestToStringKeyMap(t *testing.T) {
 }
 
 func TestCanonicalizeYAMLForDiff_EquivalentMapOrder(t *testing.T) {
-	yamlA := []byte(`router:
-  default_model: gpt-4o
-  settings:
-    timeout: 30
-    retries: 3
+	yamlA := []byte(`version: v0.3
+providers:
+  defaults:
+    default_model: test-model
+routing:
+  modelCards:
+    - name: test-model
+  decisions:
+    - name: default-route
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: test-model
 `)
-	yamlB := []byte(`router:
-  settings:
-    retries: 3
-    timeout: 30
-  default_model: gpt-4o
+	yamlB := []byte(`routing:
+  decisions:
+    - rules:
+        conditions: []
+        operator: AND
+      modelRefs:
+        - model: test-model
+      priority: 1
+      name: default-route
+  modelCards:
+    - name: test-model
+providers:
+  defaults:
+    default_model: test-model
+version: v0.3
 `)
 
 	canonicalA := canonicalizeYAMLForDiff(yamlA)
@@ -305,19 +328,31 @@ func TestDeployPreviewHandler_IgnoresOrderOnlyDiff(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.yaml")
 
-	current := `alpha:
-  first: 1
-  second: 2
-beta: true
-`
-	if err := os.WriteFile(configPath, []byte(current), 0o644); err != nil {
-		t.Fatalf("failed to write config: %v", err)
+	currentPath := createValidTestConfig(t, tempDir)
+	current, err := os.ReadFile(currentPath)
+	if err != nil {
+		t.Fatalf("failed to read current config: %v", err)
 	}
 
-	previewRequest := `beta: true
-alpha:
-  second: 2
-  first: 1
+	previewRequest := `routing:
+  decisions:
+    - name: default-business
+      description: Route business requests to the default model
+      priority: 1
+      modelRefs:
+        - use_reasoning: false
+          model: test-model
+      rules:
+        conditions:
+          - name: business
+            type: domain
+        operator: OR
+  signals:
+    domains:
+      - description: Business and management related queries
+        name: business
+  modelCards:
+    - name: test-model
 `
 	body, _ := json.Marshal(DeployRequest{YAML: previewRequest})
 	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", bytes.NewReader(body))
@@ -335,6 +370,9 @@ alpha:
 		t.Fatalf("failed to decode preview response: %v", err)
 	}
 
+	if canonicalizeYAMLForDiff(current) != resp.Current {
+		t.Fatalf("expected current preview to match canonicalized current config\nwant:\n%s\n\ngot:\n%s", canonicalizeYAMLForDiff(current), resp.Current)
+	}
 	if resp.Current != resp.Preview {
 		t.Fatalf("expected no diff after canonicalization, but responses differ\ncurrent:\n%s\npreview:\n%s", resp.Current, resp.Preview)
 	}
@@ -452,8 +490,19 @@ func TestDeployHandler_SuccessfulDeploy(t *testing.T) {
 	// Read original config to verify preservation after merge
 	originalData, _ := os.ReadFile(configPath)
 
-	// Deploy a minimal valid config (just adds a new key)
-	deployYAML := `default_model: deployed-model
+	deployYAML := `routing:
+  decisions:
+    - name: deployed-default
+      description: Deployed route
+      priority: 5
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+      modelRefs:
+        - model: test-model
+          use_reasoning: false
 `
 	body := DeployRequest{
 		YAML: deployYAML,
@@ -524,12 +573,16 @@ func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
-	// Deploy config with only keyword_rules (simulating DSL output that only has signals)
-	deployYAML := `keyword_rules:
-  - name: test-signal
+	// Deploy a routing-only fragment (simulating current DSL output).
+	deployYAML := `routing:
+  signals:
     keywords:
-      - hello
-      - world
+      - name: test-signal
+        operator: OR
+        keywords:
+          - hello
+          - world
+        case_sensitive: false
 `
 	body := DeployRequest{YAML: deployYAML}
 	bodyBytes, _ := json.Marshal(body)
@@ -545,21 +598,243 @@ func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
 		t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())
 	}
 
-	// Read deployed config and verify deep merge preserved existing fields
+	// Read deployed config and verify deep merge preserved existing canonical fields.
 	data, _ := os.ReadFile(configPath)
 	configStr := string(data)
 
-	// These fields from the original config should be preserved
-	if !contains(configStr, "default_model") {
-		t.Error("default_model should be preserved after deploy")
+	if !contains(configStr, "providers:") {
+		t.Error("providers block should be preserved after deploy")
 	}
-	if !contains(configStr, "vllm_endpoints") {
-		t.Error("vllm_endpoints should be preserved after deploy")
+	if !contains(configStr, "backend_refs:") {
+		t.Error("providers.models[].backend_refs should be preserved after deploy")
 	}
 
-	// The deployed keyword_rules should be present
-	if !contains(configStr, "keyword_rules") {
-		t.Error("keyword_rules from deploy should be present")
+	if !contains(configStr, "default_model: test-model") {
+		t.Error("providers.defaults.default_model should be preserved after deploy")
+	}
+	if !contains(configStr, "routing:") || !contains(configStr, "keywords:") {
+		t.Error("routing signals from deploy should be present")
+	}
+}
+
+func TestDeployHandler_UsesImportedCanonicalBaseConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	importedBase := `version: v0.3
+listeners:
+  - name: imported
+    address: 0.0.0.0
+    port: 9901
+providers:
+  defaults:
+    default_model: imported-model
+    reasoning_families:
+      qwen3:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+    - name: imported-model
+      reasoning_family: qwen3
+      provider_model_id: imported-model
+      backend_refs:
+        - name: imported-endpoint
+          endpoint: 192.168.1.10:9000
+          protocol: http
+routing:
+  modelCards:
+    - name: imported-model
+  signals:
+    domains:
+      - name: imported
+        description: Imported domain
+  decisions:
+    - name: imported-route
+      priority: 10
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: imported
+      modelRefs:
+        - model: imported-model
+global:
+  router:
+    strategy: priority
+`
+
+	deployYAML := `routing:
+  signals:
+    domains:
+      - name: imported
+        description: Imported domain
+      - name: deployed
+        description: Deployed domain
+  decisions:
+    - name: deployed-route
+      priority: 20
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: deployed
+      modelRefs:
+        - model: imported-model
+`
+	body := DeployRequest{
+		YAML:     deployYAML,
+		BaseYAML: importedBase,
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeployHandler(configPath, false, tempDir)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	data, _ := os.ReadFile(configPath)
+	configStr := string(data)
+	if !contains(configStr, "default_model: imported-model") {
+		t.Fatalf("expected imported base providers.defaults.default_model to be preserved:\n%s", configStr)
+	}
+	if !contains(configStr, "endpoint: 192.168.1.10:9000") {
+		t.Fatalf("expected imported backend_refs to be preserved:\n%s", configStr)
+	}
+	if !contains(configStr, "name: deployed-route") || !contains(configStr, "name: deployed") {
+		t.Fatalf("expected deployed routing fragment to be merged onto imported base:\n%s", configStr)
+	}
+	if contains(configStr, "default_model: test-model") || contains(configStr, "endpoint: 127.0.0.1:8000") {
+		t.Fatalf("expected current on-disk config to be replaced as merge base when imported base is provided:\n%s", configStr)
+	}
+}
+
+func TestDeployPreviewHandler_UsesImportedCanonicalBaseConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	importedBase := `version: v0.3
+providers:
+  defaults:
+    default_model: imported-model
+  models:
+    - name: imported-model
+      provider_model_id: imported-model
+      backend_refs:
+        - name: imported-endpoint
+          endpoint: 10.0.0.1:9000
+          protocol: http
+routing:
+  modelCards:
+    - name: imported-model
+  signals:
+    domains:
+      - name: imported
+        description: Imported domain
+  decisions:
+    - name: imported-route
+      priority: 10
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: imported
+      modelRefs:
+        - model: imported-model
+`
+
+	deployYAML := `routing:
+  signals:
+    domains:
+      - name: previewed
+        description: Preview domain
+`
+
+	bodyBytes, _ := json.Marshal(DeployRequest{
+		YAML:     deployYAML,
+		BaseYAML: importedBase,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeployPreviewHandler(configPath)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp DeployPreviewResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode preview response: %v", err)
+	}
+	if !contains(resp.Current, "default_model: test-model") {
+		t.Fatalf("expected current preview to show on-disk config, got:\n%s", resp.Current)
+	}
+	if !contains(resp.Preview, "default_model: imported-model") || !contains(resp.Preview, "endpoint: 10.0.0.1:9000") {
+		t.Fatalf("expected preview to use imported base config, got:\n%s", resp.Preview)
+	}
+	if !contains(resp.Preview, "name: previewed") {
+		t.Fatalf("expected preview to include compiled routing fragment, got:\n%s", resp.Preview)
+	}
+}
+
+func TestMergeDeployPayload_RoundTripsMaintainedAMDConfig(t *testing.T) {
+	assetPath := filepath.Join("..", "..", "..", "deploy", "amd", "config.yaml")
+	originalYAML, err := os.ReadFile(assetPath)
+	if err != nil {
+		t.Fatalf("failed to read maintained AMD config: %v", err)
+	}
+
+	originalCfg, err := routerconfig.ParseYAMLBytes(originalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes(original) error: %v", err)
+	}
+
+	dslText, err := dsl.DecompileRouting(originalCfg)
+	if err != nil {
+		t.Fatalf("DecompileRouting error: %v", err)
+	}
+
+	compiledCfg, errs := dsl.Compile(dslText)
+	if len(errs) > 0 {
+		t.Fatalf("Compile errors: %v", errs)
+	}
+
+	routingFragment, err := dsl.EmitRoutingYAMLFromConfig(compiledCfg)
+	if err != nil {
+		t.Fatalf("EmitRoutingYAMLFromConfig error: %v", err)
+	}
+
+	mergedYAML, err := mergeDeployPayload(originalYAML, DeployRequest{
+		YAML:     string(routingFragment),
+		BaseYAML: string(originalYAML),
+	})
+	if err != nil {
+		t.Fatalf("mergeDeployPayload error: %v", err)
+	}
+
+	mergedCfg, err := routerconfig.ParseYAMLBytes(mergedYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes(merged) error: %v", err)
+	}
+
+	originalCanonical, err := yaml.Marshal(routerconfig.CanonicalConfigFromRouterConfig(originalCfg))
+	if err != nil {
+		t.Fatalf("marshal original canonical config: %v", err)
+	}
+
+	mergedCanonical, err := yaml.Marshal(routerconfig.CanonicalConfigFromRouterConfig(mergedCfg))
+	if err != nil {
+		t.Fatalf("marshal merged canonical config: %v", err)
+	}
+
+	if got, want := canonicalizeYAMLForDiff(mergedCanonical), canonicalizeYAMLForDiff(originalCanonical); got != want {
+		t.Fatalf("import/decompile/compile/merge should preserve maintained AMD config\nwant:\n%s\n\ngot:\n%s", want, got)
 	}
 }
 
@@ -568,7 +843,19 @@ func TestDeployHandler_NoDSLSource(t *testing.T) {
 	configPath := createValidTestConfig(t, tempDir)
 
 	// Deploy without DSL source
-	body := DeployRequest{YAML: "default_model: new-model\n"}
+	body := DeployRequest{YAML: `routing:
+  decisions:
+    - name: no-dsl-route
+      priority: 9
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+      modelRefs:
+        - model: test-model
+          use_reasoning: false
+`}
 	bodyBytes, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy", bytes.NewReader(bodyBytes))
@@ -689,7 +976,31 @@ func TestRollbackHandler_SuccessfulRollback(t *testing.T) {
 	}
 
 	// Modify current config so we can verify rollback restores it
-	modifiedConfig := `default_model: modified-model
+	modifiedConfig := `version: v0.3
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8801
+providers:
+  defaults:
+    default_model: test-model
+  models:
+    - name: test-model
+      backend_refs:
+        - name: endpoint1
+          endpoint: 127.0.0.1:8000
+          protocol: http
+routing:
+  modelCards:
+    - name: test-model
+  decisions:
+    - name: modified-route
+      priority: 9
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: test-model
 `
 	if err := os.WriteFile(configPath, []byte(modifiedConfig), 0o644); err != nil {
 		t.Fatalf("Failed to modify config: %v", err)
@@ -920,7 +1231,19 @@ func TestDeployAndRollback_Integration(t *testing.T) {
 	originalData, _ := os.ReadFile(configPath)
 
 	// Deploy
-	deployYAML := "default_model: integrated-deploy\n"
+	deployYAML := `routing:
+  decisions:
+    - name: integrated-deploy
+      priority: 11
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+      modelRefs:
+        - model: test-model
+          use_reasoning: false
+`
 	body := DeployRequest{YAML: deployYAML}
 	bodyBytes, _ := json.Marshal(body)
 
@@ -979,23 +1302,10 @@ func TestDeployAndRollback_Integration(t *testing.T) {
 	}
 }
 
-// ============================================================
-// UpdateConfigHandler deep merge upgrade test
-// ============================================================
-
-func TestUpdateConfigHandler_DeepMergeNested(t *testing.T) {
+func TestUpdateConfigHandler_ReplacesLegacyConfigWithCanonicalPayload(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := createValidTestConfig(t, tempDir)
-
-	// Update only a deeply nested field — classifier.category_model.threshold
-	// The rest of classifier should be preserved
-	updateBody := map[string]interface{}{
-		"classifier": map[string]interface{}{
-			"category_model": map[string]interface{}{
-				"threshold": 0.9,
-			},
-		},
-	}
+	configPath := createLegacyTestConfig(t, tempDir)
+	updateBody := canonicalConfigBody("127.0.0.1:8000")
 
 	bodyBytes, _ := json.Marshal(updateBody)
 	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
@@ -1009,22 +1319,17 @@ func TestUpdateConfigHandler_DeepMergeNested(t *testing.T) {
 		t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())
 	}
 
-	// Read back and verify deep merge
+	// Read back and verify the full canonical payload replaced the legacy file.
 	data, _ := os.ReadFile(configPath)
 	configStr := string(data)
 
-	// The pii_model should be preserved (not in the update, but was in original)
-	if !contains(configStr, "pii_model") {
-		t.Error("pii_model should be preserved by deep merge")
+	if contains(configStr, "model_config:") {
+		t.Error("legacy model_config should be removed after canonical replace")
 	}
-
-	// The category_model.model_id should be preserved
-	if !contains(configStr, "all-MiniLM-L12-v2") || !contains(configStr, "bert_model") {
-		t.Error("bert_model should be preserved")
+	if contains(configStr, "vllm_endpoints:") {
+		t.Error("legacy vllm_endpoints should be removed after canonical replace")
 	}
-
-	// default_model should be preserved
-	if !contains(configStr, "test-model") {
-		t.Error("default_model should be preserved")
+	if !contains(configStr, "providers:") || !contains(configStr, "routing:") {
+		t.Error("canonical providers/routing blocks should be written")
 	}
 }

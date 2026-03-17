@@ -1,0 +1,8 @@
+algorithm:
+  type: router_dc
+  router_dc:
+    temperature: 0.2
+    dimension_size: 384
+    min_similarity: 0.7
+    use_query_contrastive: true
+

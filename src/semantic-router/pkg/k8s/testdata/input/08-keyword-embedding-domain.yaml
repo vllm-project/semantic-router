@@ -49,7 +49,7 @@ spec:
         aggregationMethod: "max"
 
     domains:
-      - name: "computer_science"
+      - name: "computer science"
         description: "Computer science and programming"
       - name: "engineering"
         description: "Engineering and technical problem-solving"
@@ -68,7 +68,7 @@ spec:
           - type: "embedding"
             name: "technical_help"
           - type: "domain"
-            name: "computer_science"
+            name: "computer science"
       modelRefs:
         - model: "qwen-2.5-72b"
           use_reasoning: true
