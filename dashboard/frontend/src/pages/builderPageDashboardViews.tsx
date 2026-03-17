@@ -5,8 +5,7 @@ import { useDSLStore } from "@/stores/dslStore";
 
 import styles from "./BuilderPage.module.css";
 import {
-  BackendIcon,
-  GlobalIcon,
+  ModelIcon,
   PluginIcon,
   RouteIcon,
   SignalIcon,
@@ -71,11 +70,10 @@ const SidebarSection: React.FC<SidebarSectionProps> = ({
 
 interface DashboardViewProps {
   ast: ReturnType<typeof useDSLStore.getState>["ast"];
+  modelCount: number;
   signalCount: number;
   routeCount: number;
   pluginCount: number;
-  backendCount: number;
-  hasGlobal: boolean;
   isValid: boolean;
   errorCount: number;
   onSelect: (sel: Selection) => void;
@@ -110,11 +108,10 @@ function boolExprToText(node: BoolExprNode | null, maxLen = 60): string {
 
 const DashboardView: React.FC<DashboardViewProps> = ({
   ast,
+  modelCount,
   signalCount,
   routeCount,
   pluginCount,
-  backendCount,
-  hasGlobal,
   isValid,
   errorCount,
   onSelect,
@@ -160,6 +157,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       <div className={styles.statsGrid}>
         {[
           {
+            label: "Models",
+            count: modelCount,
+            kind: "model" as const,
+            icon: <ModelIcon className={styles.statIcon} />,
+          },
+          {
             label: "Signals",
             count: signalCount,
             kind: "signal" as const,
@@ -177,18 +180,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             kind: "plugin" as const,
             icon: <PluginIcon className={styles.statIcon} />,
           },
-          {
-            label: "Backends",
-            count: backendCount,
-            kind: "backend" as const,
-            icon: <BackendIcon className={styles.statIcon} />,
-          },
-          {
-            label: "Global",
-            count: hasGlobal ? 1 : 0,
-            kind: "global" as const,
-            icon: <GlobalIcon className={styles.statIcon} />,
-          },
         ].map((card) => (
           <div
             key={card.label}
@@ -197,7 +188,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               card.count > 0 &&
               onSelect({
                 kind: card.kind,
-                name: card.kind === "global" ? "global" : "__list__",
+                name: "__list__",
               })
             }
           >
@@ -219,6 +210,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         <div className={styles.quickActions}>
           <button
             className={styles.quickActionBtn}
+            onClick={() => onAddEntity("model")}
+          >
+            <span className={styles.quickActionIcon}>+</span> New Model
+          </button>
+          <button
+            className={styles.quickActionBtn}
             onClick={() => onAddEntity("signal")}
           >
             <span className={styles.quickActionIcon}>+</span> New Signal
@@ -228,12 +225,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             onClick={() => onAddEntity("route")}
           >
             <span className={styles.quickActionIcon}>+</span> New Route
-          </button>
-          <button
-            className={styles.quickActionBtn}
-            onClick={() => onAddEntity("backend")}
-          >
-            <span className={styles.quickActionIcon}>+</span> New Backend
           </button>
           <button
             className={styles.quickActionBtn}
@@ -375,14 +366,10 @@ const EntityListView: React.FC<EntityListViewProps> = ({
     string,
     { title: string; icon: React.FC<{ className?: string }>; color: string }
   > = {
+    model: { title: "Models", icon: ModelIcon, color: "rgb(251, 191, 36)" },
     signal: { title: "Signals", icon: SignalIcon, color: "rgb(118, 185, 0)" },
     route: { title: "Routes", icon: RouteIcon, color: "rgb(96, 165, 250)" },
     plugin: { title: "Plugins", icon: PluginIcon, color: "rgb(168, 130, 255)" },
-    backend: {
-      title: "Backends",
-      icon: BackendIcon,
-      color: "rgb(251, 191, 36)",
-    },
   };
   const meta = META[kind];
   if (!meta) return null;
@@ -390,6 +377,15 @@ const EntityListView: React.FC<EntityListViewProps> = ({
 
   const items: { name: string; type: string; desc?: string }[] = (() => {
     switch (kind) {
+      case "model":
+        return (ast?.models ?? []).map((model) => ({
+          name: model.name,
+          type: "catalog",
+          desc:
+            Object.keys(model.fields).length > 0
+              ? `${Object.keys(model.fields).length} field(s)`
+              : undefined,
+        }));
       case "signal":
         return (ast?.signals ?? []).map((s) => ({
           name: s.name,
@@ -415,15 +411,6 @@ const EntityListView: React.FC<EntityListViewProps> = ({
           desc:
             Object.keys(p.fields).length > 0
               ? `${Object.keys(p.fields).length} field(s)`
-              : undefined,
-        }));
-      case "backend":
-        return (ast?.backends ?? []).map((b) => ({
-          name: b.name,
-          type: b.backendType,
-          desc:
-            Object.keys(b.fields).length > 0
-              ? `${Object.keys(b.fields).length} field(s)`
               : undefined,
         }));
       default:

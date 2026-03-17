@@ -1,562 +1,451 @@
-# Semantic Router Configuration for AI Gateway
 config:
-  # Response API Configuration
-  # Enables OpenAI Response API support with conversation chaining
-  response_api:
-    enabled: true
-    store_backend: "memory"  # Options: "memory", "milvus", "redis"
-    ttl_seconds: 86400       # 24 hours
-    max_responses: 1000
-
-  # Router Replay Configuration (System-Level)
-  # Provides storage backend configuration for router_replay plugin
-  # Per-decision settings (max_records, capture settings) are configured via router_replay plugin
-  router_replay:
-    store_backend: "memory"  # Options: "memory", "redis", "postgres", "milvus"
-    ttl_seconds: 2592000     # 30 days retention (for persistent backends)
-    async_writes: false      # Enable async writes for better performance
-
-  model_config:
-    "base-model":
-      reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
-      # Define available LoRA adapters for this base model
-      # These names must match the LoRA modules registered with vLLM at startup
-      loras:
-        - name: "science-expert"
-          description: "Specialized for science domains: biology, chemistry, physics, health, engineering"
-        - name: "social-expert"
-          description: "Optimized for social sciences: business, economics"
-        - name: "math-expert"
-          description: "Fine-tuned for mathematics and quantitative reasoning"
-        - name: "law-expert"
-          description: "Specialized for legal questions and law-related topics"
-        - name: "humanities-expert"
-          description: "Optimized for humanities: psychology, history, philosophy"
-        - name: "general-expert"
-          description: "General-purpose adapter for diverse topics"
-
-  # Categories for domain classification (used by domain rules)
-  # Category names are MMLU category names used by the classifier
-  categories:
-    - name: business
-      description: "Business, corporate strategy, management, finance, marketing"
-    - name: law
-      description: "Legal principles, case law, statutory interpretation, legal procedures"
-    - name: psychology
-      description: "Cognitive processes, behavioral patterns, mental health, developmental psychology"
-    - name: biology
-      description: "Molecular biology, genetics, cell biology, ecology, evolution, anatomy"
-    - name: chemistry
-      description: "Chemical reactions, molecular structures, laboratory techniques"
-    - name: history
-      description: "Historical events, time periods, cultures, civilizations"
-    - name: health
-      description: "Anatomy, physiology, diseases, treatments, preventive care, nutrition"
-    - name: economics
-      description: "Microeconomics, macroeconomics, financial markets, monetary policy, trade"
-    - name: math
-      description: "Mathematics, algebra, calculus, geometry, statistics"
-    - name: physics
-      description: "Physical laws, mechanics, thermodynamics, electromagnetism, quantum physics"
-    - name: computer science
-      description: "Algorithms, data structures, programming, software engineering"
-    - name: philosophy
-      description: "Philosophical traditions, ethics, logic, metaphysics, epistemology"
-    - name: engineering
-      description: "Engineering disciplines, design, problem-solving, systems"
-    - name: other
-      description: "General knowledge and miscellaneous topics"
-
-  # Decisions with rule-based routing and plugins
-  decisions:
-    - name: business_decision
-      description: "Business and management related queries"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "business"
-      modelRefs:
-        - model: base-model
-          lora_name: social-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
-            mode: "replace"
-
-    - name: law_decision
-      description: "Legal questions and law-related topics"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "law"
-      modelRefs:
-        - model: base-model
-          lora_name: law-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
-            mode: "replace"
-
-    - name: psychology_decision
-      description: "Psychology and mental health topics"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "psychology"
-      modelRefs:
-        - model: base-model
-          lora_name: humanities-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "semantic-cache"
-          configuration:
-            enabled: true
-            similarity_threshold: 0.92
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
-            mode: "replace"
-
-    - name: biology_decision
-      description: "Biology and life sciences questions"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "biology"
-      modelRefs:
-        - model: base-model
-          lora_name: science-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems."
-            mode: "replace"
-
-    - name: chemistry_decision
-      description: "Chemistry and chemical sciences questions"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "chemistry"
-      modelRefs:
-        - model: base-model
-          lora_name: science-expert
-          use_reasoning: true
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."
-            mode: "replace"
-
-    - name: history_decision
-      description: "Historical questions and cultural topics"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "history"
-      modelRefs:
-        - model: base-model
-          lora_name: humanities-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
-            mode: "replace"
-
-    - name: health_decision
-      description: "Health and medical information queries"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "health"
-      modelRefs:
-        - model: base-model
-          lora_name: science-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "semantic-cache"
-          configuration:
-            enabled: true
-            similarity_threshold: 0.95
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
-            mode: "replace"
-
-    - name: economics_decision
-      description: "Economics and financial topics"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "economics"
-      modelRefs:
-        - model: base-model
-          lora_name: social-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses."
-            mode: "replace"
-
-    - name: math_decision
-      description: "Mathematics and quantitative reasoning"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "math"
-      modelRefs:
-        - model: base-model
-          lora_name: math-expert
-          use_reasoning: true
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
-            mode: "replace"
-
-    - name: physics_decision
-      description: "Physics and physical sciences"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "physics"
-      modelRefs:
-        - model: base-model
-          lora_name: science-expert
-          use_reasoning: true
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
-            mode: "replace"
-
-    - name: computer_science_decision
-      description: "Computer science and programming"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "computer science"
-      modelRefs:
-        - model: base-model
-          lora_name: science-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
-            mode: "replace"
-
-    - name: philosophy_decision
-      description: "Philosophy and ethical questions"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "philosophy"
-      modelRefs:
-        - model: base-model
-          lora_name: humanities-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates."
-            mode: "replace"
-
-    - name: engineering_decision
-      description: "Engineering and technical problem-solving"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "engineering"
-      modelRefs:
-        - model: base-model
-          lora_name: science-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
-            mode: "replace"
-
-    - name: thinking_decision
-      description: "Complex reasoning and multi-step thinking"
-      priority: 20
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "keyword"
-            rule_name: "thinking"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: true
-      plugins:
-
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a thinking expert, should think multiple steps before answering. Please answer the question step by step."
-            mode: "replace"
-
-    - name: general_decision
-      description: "General knowledge and miscellaneous topics"
-      priority: 1
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "other"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "semantic-cache"
-          configuration:
-            enabled: true
-            similarity_threshold: 0.75
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
-            mode: "replace"
-
-  # Strategy for selecting between multiple matching decisions
-  # Options: "priority" (use decision with highest priority) or "confidence" (use decision with highest confidence)
-  strategy: "priority"
-
-  default_model: general-expert
-
-  semantic_cache:
-    enabled: true
-    backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
-    similarity_threshold: 0.8
-    max_entries: 1000  # Only applies to memory backend
-    ttl_seconds: 3600
-    eviction_policy: "fifo"
-    # HNSW index configuration (for memory backend only)
-    use_hnsw: true  # Enable HNSW index for faster similarity search
-    hnsw_m: 16  # Number of bi-directional links (higher = better recall, more memory)
-    hnsw_ef_construction: 200  # Construction parameter (higher = better quality, slower build)
-
-    # Hybrid cache configuration (when backend_type: "hybrid")
-    # Combines in-memory HNSW for fast search with Milvus for scalable storage
-    # max_memory_entries: 100000 # Max entries in HNSW index (default: 100,000)
-    # backend_config_path: "config/milvus.yaml" # Path to Milvus config
-
-    # Embedding model for semantic similarity matching
-    # If not specified, automatically uses the model configured in embedding_models section
-    # Options: "mmbert" (multilingual, 768-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
-    # embedding_model: "mmbert"  # Optional: explicitly set if you want to override auto-detection
-
-  tools:
-    enabled: true
-    top_k: 3
-    similarity_threshold: 0.2
-    tools_db_path: "config/tools_db.json"
-    fallback_to_empty: true
-
-  prompt_guard:
-    enabled: true  # Global default - can be overridden per category with jailbreak_enabled
-    use_mmbert_32k: true
-    model_id: "models/mmbert32k-jailbreak-detector-merged"
-    jailbreak_mapping_path: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"
-    threshold: 0.7
-    use_cpu: true
-
-  # Classifier configuration
-  classifier:
-    category_model:
-      model_id: "models/mmbert32k-intent-classifier-merged"
-      use_mmbert_32k: true
-      threshold: 0.5
-      use_cpu: true
-      category_mapping_path: "models/mmbert32k-intent-classifier-merged/category_mapping.json"
-    pii_model:
-      model_id: "models/mmbert32k-pii-detector-merged"
-      use_mmbert_32k: true
-      threshold: 0.9
-      use_cpu: true
-      pii_mapping_path: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json"
-
-  # Hallucination mitigation configuration
-  # Disabled by default - enable in decisions via hallucination plugin
-  hallucination_mitigation:
-    enabled: false
-    # Fact-check classifier: determines if a prompt needs fact verification
-    fact_check_model:
-      model_id: "models/mmbert32k-factcheck-classifier-merged"
-      threshold: 0.6
-      use_cpu: true
-      use_mmbert_32k: true
-    # Hallucination detector: verifies if LLM response is grounded in context
-    hallucination_model:
-      model_id: "models/mom-halugate-detector"
-      threshold: 0.8
-      use_cpu: true
-      # False positive reduction settings
-      min_span_length: 2  # Minimum tokens in a span to report (filters single-token false positives)
-      min_span_confidence: 0.6  # Minimum confidence for a span to be reported
-      context_window_size: 50  # Characters of context around flagged spans
-      enable_nli_filtering: true  # Use NLI to filter false positives
-      nli_entailment_threshold: 0.75  # Filter spans with high entailment scores
-    # NLI model: provides explanations for hallucinated spans
-    nli_model:
-      model_id: "models/mom-halugate-explainer"
-      threshold: 0.9
-      use_cpu: true
-
-  # Feedback detector configuration
-  # Classifies user feedback into 4 types: satisfied, need_clarification, wrong_answer, want_different
-  feedback_detector:
-    enabled: true
-    model_id: "models/mmbert32k-feedback-detector-merged"
-    threshold: 0.7
-    use_cpu: true
-    use_mmbert_32k: true
-
-  keyword_rules:
-    - category: "thinking"
-      operator: "OR"
-      keywords: ["urgent", "immediate", "asap", "think", "careful"]
-      case_sensitive: false
-
-  # Reasoning family configurations
-  reasoning_families:
-    deepseek:
-      type: "chat_template_kwargs"
-      parameter: "thinking"
-
-    qwen3:
-      type: "chat_template_kwargs"
-      parameter: "enable_thinking"
-
-    gpt-oss:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-    gpt:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-
-  # Global default reasoning effort level
-  default_reasoning_effort: high
-
-  # API Configuration
-  api:
-    batch_classification:
-      max_batch_size: 100
-      concurrency_threshold: 5
-      max_concurrency: 8
-      metrics:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: general-expert
+      reasoning_families:
+        deepseek:
+          type: chat_template_kwargs
+          parameter: thinking
+        qwen3:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+        gpt-oss:
+          type: reasoning_effort
+          parameter: reasoning_effort
+        gpt:
+          type: reasoning_effort
+          parameter: reasoning_effort
+      default_reasoning_effort: high
+    models:
+      - name: base-model
+        reasoning_family: qwen3
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      - name: business_decision
+        description: Business and management related queries
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: base-model
+            lora_name: social-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations.
+              mode: replace
+      - name: law_decision
+        description: Legal questions and law-related topics
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: law
+        modelRefs:
+          - model: base-model
+            lora_name: law-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters.
+              mode: replace
+      - name: psychology_decision
+        description: Psychology and mental health topics
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: psychology
+        modelRefs:
+          - model: base-model
+            lora_name: humanities-expert
+            use_reasoning: false
+        plugins:
+          - type: semantic-cache
+            configuration:
+              enabled: true
+              similarity_threshold: 0.92
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice.
+              mode: replace
+      - name: biology_decision
+        description: Biology and life sciences questions
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: biology
+        modelRefs:
+          - model: base-model
+            lora_name: science-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems.
+              mode: replace
+      - name: chemistry_decision
+        description: Chemistry and chemical sciences questions
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: chemistry
+        modelRefs:
+          - model: base-model
+            lora_name: science-expert
+            use_reasoning: true
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations.
+              mode: replace
+      - name: history_decision
+        description: Historical questions and cultural topics
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: history
+        modelRefs:
+          - model: base-model
+            lora_name: humanities-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis.
+              mode: replace
+      - name: health_decision
+        description: Health and medical information queries
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: health
+        modelRefs:
+          - model: base-model
+            lora_name: science-expert
+            use_reasoning: false
+        plugins:
+          - type: semantic-cache
+            configuration:
+              enabled: true
+              similarity_threshold: 0.95
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies.
+              mode: replace
+      - name: economics_decision
+        description: Economics and financial topics
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: economics
+        modelRefs:
+          - model: base-model
+            lora_name: social-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses.
+              mode: replace
+      - name: math_decision
+        description: Mathematics and quantitative reasoning
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: base-model
+            lora_name: math-expert
+            use_reasoning: true
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way.
+              mode: replace
+      - name: physics_decision
+        description: Physics and physical sciences
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: physics
+        modelRefs:
+          - model: base-model
+            lora_name: science-expert
+            use_reasoning: true
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate.
+              mode: replace
+      - name: computer_science_decision
+        description: Computer science and programming
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: computer science
+        modelRefs:
+          - model: base-model
+            lora_name: science-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful.
+              mode: replace
+      - name: philosophy_decision
+        description: Philosophy and ethical questions
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: philosophy
+        modelRefs:
+          - model: base-model
+            lora_name: humanities-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates.
+              mode: replace
+      - name: engineering_decision
+        description: Engineering and technical problem-solving
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: engineering
+        modelRefs:
+          - model: base-model
+            lora_name: science-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards.
+              mode: replace
+      - name: thinking_decision
+        description: Complex reasoning and multi-step thinking
+        priority: 20
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              rule_name: thinking
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: true
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a thinking expert, should think multiple steps before answering. Please answer the question step by step.
+              mode: replace
+      - name: general_decision
+        description: General knowledge and miscellaneous topics
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: semantic-cache
+            configuration:
+              enabled: true
+              similarity_threshold: 0.75
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
+              mode: replace
+    signals:
+      keywords:
+        - category: thinking
+          operator: OR
+          keywords:
+            - urgent
+            - immediate
+            - asap
+            - think
+            - careful
+          case_sensitive: false
+      domains:
+        - name: business
+          description: Business, corporate strategy, management, finance, marketing
+        - name: law
+          description: Legal principles, case law, statutory interpretation, legal procedures
+        - name: psychology
+          description: Cognitive processes, behavioral patterns, mental health, developmental psychology
+        - name: biology
+          description: Molecular biology, genetics, cell biology, ecology, evolution, anatomy
+        - name: chemistry
+          description: Chemical reactions, molecular structures, laboratory techniques
+        - name: history
+          description: Historical events, time periods, cultures, civilizations
+        - name: health
+          description: Anatomy, physiology, diseases, treatments, preventive care, nutrition
+        - name: economics
+          description: Microeconomics, macroeconomics, financial markets, monetary policy, trade
+        - name: math
+          description: Mathematics, algebra, calculus, geometry, statistics
+        - name: physics
+          description: Physical laws, mechanics, thermodynamics, electromagnetism, quantum physics
+        - name: computer science
+          description: Algorithms, data structures, programming, software engineering
+        - name: philosophy
+          description: Philosophical traditions, ethics, logic, metaphysics, epistemology
+        - name: engineering
+          description: Engineering disciplines, design, problem-solving, systems
+        - name: other
+          description: General knowledge and miscellaneous topics
+    modelCards:
+      - name: base-model
+        loras:
+          - name: science-expert
+            description: 'Specialized for science domains: biology, chemistry, physics, health, engineering'
+          - name: social-expert
+            description: 'Optimized for social sciences: business, economics'
+          - name: math-expert
+            description: Fine-tuned for mathematics and quantitative reasoning
+          - name: law-expert
+            description: Specialized for legal questions and law-related topics
+          - name: humanities-expert
+            description: 'Optimized for humanities: psychology, history, philosophy'
+          - name: general-expert
+            description: General-purpose adapter for diverse topics
+      - name: general-expert
+  global:
+    router:
+      strategy: priority
+    services:
+      response_api:
         enabled: true
-        detailed_goroutine_tracking: true
-        high_resolution_timing: false
-        sample_rate: 1.0
-        duration_buckets:
-          [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
-        size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
-
-  # Embedding Models Configuration
-  # This is the UNIFIED configuration for all embedding-related features:
-  # - Semantic Cache: Automatically uses the configured model
-  # - Tool Selection: Uses the configured model for tool matching
-  # - Embedding Signal: Uses the model specified in hnsw_config.model_type
-  # - Complexity Signal: Uses the model specified in hnsw_config.model_type
-  #
-  # Available models:
-  # - Qwen3-Embedding-0.6B (Pro): Up to 32K context, high quality, 1024-dim
-  # - EmbeddingGemma-300M (Flash): Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
-  # - mmBERT-Embed-32K-2D-Matryoshka (Ultra): Up to 32K context, 1800+ languages, 2D Matryoshka (layer early exit + dimension reduction)
-  embedding_models:
-    # qwen3_model_path: "models/mom-embedding-pro"
-    # gemma_model_path: "models/mom-embedding-flash"
-    mmbert_model_path: "models/mom-embedding-ultra"
-    use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
-    # HNSW Configuration
-    # Improves performance by preloading candidate embeddings at startup
-    # and using HNSW index for O(log n) similarity search
-    hnsw_config:
-      model_type: "mmbert"         # Which model to use: "qwen3" (high quality), "gemma" (fast), or "mmbert" (multilingual)
-      preload_embeddings: true    # Precompute candidate embeddings at startup
-      target_dimension: 768        # Embedding dimension (1024 for qwen3, 768 for gemma/mmbert)
-      # For mmbert only: target_layer (3/6/11/22) for layer early exit
-      enable_soft_matching: true
-      min_score_threshold: 0.5
-
-  # Observability Configuration
-  observability:
-    tracing:
-      enabled: false  # Enable distributed tracing
-      provider: "opentelemetry"  # Provider: opentelemetry, openinference, openllmetry
-      exporter:
-        type: "otlp"  # Export spans to Jaeger (via OTLP gRPC)
-        endpoint: "jaeger:4317"  # Jaeger collector inside compose network
-        insecure: true  # Use insecure connection (no TLS)
-      sampling:
-        type: "always_on"  # Sampling: always_on, always_off, probabilistic
-        rate: 1.0  # Sampling rate for probabilistic (0.0-1.0)
-      resource:
-        service_name: "vllm-semantic-router"
-        service_version: "v0.1.0"
-        deployment_environment: "development"
-
+        store_backend: memory
+        ttl_seconds: 86400
+        max_responses: 1000
+      router_replay:
+        store_backend: memory
+        ttl_seconds: 2592000
+        async_writes: false
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+          metrics:
+            enabled: true
+            detailed_goroutine_tracking: true
+            high_resolution_timing: false
+            sample_rate: 1.0
+            duration_buckets:
+              - 0.001
+              - 0.005
+              - 0.01
+              - 0.025
+              - 0.05
+              - 0.1
+              - 0.25
+              - 0.5
+              - 1
+              - 2.5
+              - 5
+              - 10
+              - 30
+            size_buckets:
+              - 1
+              - 2
+              - 5
+              - 10
+              - 20
+              - 50
+              - 100
+              - 200
+      observability:
+        tracing:
+          enabled: false
+          provider: opentelemetry
+          exporter:
+            type: otlp
+            endpoint: jaeger:4317
+            insecure: true
+          sampling:
+            type: always_on
+            rate: 1.0
+          resource:
+            service_name: vllm-semantic-router
+            service_version: v0.1.0
+            deployment_environment: development
+    stores:
+      semantic_cache:
+        enabled: true
+        backend_type: memory
+        similarity_threshold: 0.8
+        max_entries: 1000
+        ttl_seconds: 3600
+        eviction_policy: fifo
+        use_hnsw: true
+        hnsw_m: 16
+        hnsw_ef_construction: 200
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations:
+      tools:
+        enabled: true
+        top_k: 3
+        similarity_threshold: 0.2
+        tools_db_path: config/tools_db.json
+        fallback_to_empty: true

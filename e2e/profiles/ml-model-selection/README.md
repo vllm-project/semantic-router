@@ -359,7 +359,7 @@ selected=mistral-7b  (fallback)
 # ❌ WRONG - uses underscore
 conditions:
   - type: "domain"
-    name: "computer_science"
+    name: "computer science"
 
 # ✅ CORRECT - uses space
 conditions:

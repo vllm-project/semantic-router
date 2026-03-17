@@ -1,7 +1,7 @@
 ---
 name: architecture-guardrails
 category: fragment
-description: Structural limits, dependency boundaries, interface placement, and preferred composition-oriented design patterns.
+description: Enforces structural rules, dependency boundaries, interface placement, and composition-oriented design patterns across the codebase. Use when making non-trivial code changes to verify module boundaries, check dependency direction, or validate that new code follows the project's architecture conventions.
 ---
 
 # Architecture Guardrails
@@ -9,6 +9,13 @@ description: Structural limits, dependency boundaries, interface placement, and 
 ## Trigger
 
 - Load this fragment for any non-trivial code change
+
+## Workflow
+
+1. Read architecture guardrails, module boundaries, and structure rules for applicable constraints
+2. Make code changes while respecting dependency boundaries and interface placement
+3. Run `make agent-lint CHANGED_FILES="..."` to validate structure rules
+4. Verify changed code passes all structure rules and stays modular
 
 ## Must Read
 

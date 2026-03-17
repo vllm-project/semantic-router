@@ -1,0 +1,11 @@
+routing:
+  signals:
+    keywords:
+      - name: urgent_keywords
+        operator: OR
+        keywords: ["urgent", "immediate", "asap", "emergency"]
+        case_sensitive: false
+      - name: sensitive_data_keywords
+        operator: OR
+        keywords: ["ssn", "social security", "credit card", "password"]
+        case_sensitive: false

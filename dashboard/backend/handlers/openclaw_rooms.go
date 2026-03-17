@@ -441,22 +441,6 @@ func resolveMentionTargetsWithFallback(
 	return out
 }
 
-func buildRoomTranscript(messages []ClawRoomMessage, limit int) string {
-	if limit <= 0 {
-		limit = 16
-	}
-	start := 0
-	if len(messages) > limit {
-		start = len(messages) - limit
-	}
-	lines := make([]string, 0, len(messages)-start)
-	for i := start; i < len(messages); i++ {
-		line := fmt.Sprintf("[%s] %s", strings.TrimSpace(messages[i].SenderName), strings.TrimSpace(messages[i].Content))
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, "\n")
-}
-
 func stripLeadingMentions(content string) string {
 	rawRunes := []rune(strings.TrimSpace(content))
 	if len(rawRunes) == 0 {
@@ -592,13 +576,10 @@ type openAIChatResponse struct {
 	} `json:"error,omitempty"`
 }
 
-const openClawPrimaryAgentModel = "openclaw:main"
-
-var workerChatEndpointCandidates = []string{
-	"/v1/chat/completions",
-	"/api/openai/v1/chat/completions",
-	"/api/router/v1/chat/completions",
-}
+const (
+	openClawPrimaryAgentID    = "vllm-sr"
+	openClawPrimaryAgentModel = "openclaw:main"
+)
 
 func nestedObject(parent map[string]any, key string) map[string]any {
 	if existing, ok := parent[key].(map[string]any); ok {
@@ -664,12 +645,12 @@ func (h *OpenClawHandler) ensureWorkerChatEndpoint(worker ContainerEntry) (bool,
 		return false, fmt.Errorf("worker restart failed during endpoint recovery: %w", err)
 	}
 
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(openClawWorkerEndpointRecoveryTimeout)
 	for time.Now().Before(deadline) {
 		if h.gatewayReachable(worker.Name, worker.Port) {
 			return true, nil
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(openClawWorkerEndpointRecoveryPollPeriod)
 	}
 	return true, nil
 }
@@ -692,13 +673,13 @@ func (h *OpenClawHandler) queryWorkerChatEndpoint(
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-OpenClaw-Agent-Id", "main")
+	req.Header.Set("X-OpenClaw-Agent-Id", openClawPrimaryAgentID)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("X-OpenClaw-Token", token)
 	}
 
-	client := &http.Client{Timeout: 300 * time.Second}
+	client := newOpenClawWorkerChatHTTPClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", 0, "", err
@@ -732,43 +713,39 @@ func (h *OpenClawHandler) queryWorkerChatEndpoint(
 }
 
 func (h *OpenClawHandler) queryWorkerChat(worker ContainerEntry, systemPrompt, userPrompt string) (string, error) {
+	return h.queryWorkerChatWithMessages(
+		worker,
+		"team-room:"+sanitizeContainerName(worker.Name),
+		[]openAIChatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userPrompt},
+		},
+	)
+}
+
+func (h *OpenClawHandler) queryWorkerChatWithMessages(
+	worker ContainerEntry,
+	sessionUser string,
+	messages []openAIChatMessage,
+) (string, error) {
 	targetBase, ok := h.TargetBaseForContainer(worker.Name)
 	if !ok {
 		return "", fmt.Errorf("worker %q is not registered", worker.Name)
 	}
 	token := strings.TrimSpace(h.GatewayTokenForContainer(worker.Name))
 
-	payload := openAIChatRequest{
-		Model:  openClawPrimaryAgentModel,
-		Stream: false,
-		User:   "team-room:" + sanitizeContainerName(worker.Name),
-		Messages: []openAIChatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userPrompt},
-		},
-	}
+	payload := buildWorkerChatRequest(messages, sessionUser, false)
 
 	attempt := func() (string, bool, error) {
-		allEndpointMissing := true
-		var lastErr error
+		failures := make([]workerChatAttemptFailure, 0, len(workerChatEndpointCandidates))
 		for _, endpoint := range workerChatEndpointCandidates {
 			content, statusCode, body, err := h.queryWorkerChatEndpoint(targetBase, endpoint, token, payload)
 			if err == nil {
 				return content, false, nil
 			}
-			// 404/405 both indicate the chat API endpoint is not active/available on the gateway.
-			allEndpointMissing = allEndpointMissing && (statusCode == http.StatusNotFound || statusCode == http.StatusMethodNotAllowed)
-
-			detail := strings.TrimSpace(body)
-			if detail == "" {
-				detail = err.Error()
-			}
-			lastErr = fmt.Errorf("worker chat via %s failed: %s", endpoint, detail)
+			failures = append(failures, buildWorkerChatAttemptFailure(endpoint, statusCode, body, err))
 		}
-		if lastErr == nil {
-			lastErr = fmt.Errorf("worker chat request failed for all candidate endpoints")
-		}
-		return "", allEndpointMissing, lastErr
+		return "", workerChatAllEndpointsMissing(failures), formatWorkerChatAttemptError("worker chat", failures)
 	}
 
 	content, allEndpointMissing, err := attempt()
@@ -926,7 +903,7 @@ func (h *OpenClawHandler) processRoomUserMessage(roomID string, triggerMessageID
 		}
 
 		workers := teamWorkers(entries, team.ID)
-		targets := resolveMentionTargetsWithFallback(trigger.Mentions, *team, workers, senderType == "user")
+		targets := resolveMentionTargetsWithFallback(trigger.Mentions, *team, workers, false)
 		if senderType != "user" {
 			leader := resolveTeamLeader(*team, workers)
 			filteredTargets := make([]ContainerEntry, 0, len(targets))

@@ -5,15 +5,22 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 )
 
 // Config holds all application configuration
 type Config struct {
-	Port          string
-	StaticDir     string
-	ConfigFile    string
-	AbsConfigPath string
-	ConfigDir     string
+	Port                   string
+	AuthDBPath             string
+	JWTSecret              string
+	JWTExpiryHours         int
+	BootstrapAdminEmail    string
+	BootstrapAdminPassword string
+	BootstrapAdminName     string
+	StaticDir              string
+	ConfigFile             string
+	AbsConfigPath          string
+	ConfigDir              string
 
 	// Upstream targets
 	GrafanaURL    string
@@ -60,6 +67,134 @@ func env(key, def string) string {
 	return def
 }
 
+type authFlags struct {
+	dbPath            *string
+	jwtSecret         *string
+	jwtTTL            *string
+	bootstrapEmail    *string
+	bootstrapPassword *string
+	bootstrapName     *string
+}
+
+func bindAuthFlags() authFlags {
+	return authFlags{
+		dbPath:            flag.String("auth-db", env("DASHBOARD_AUTH_DB_PATH", "./data/auth.db"), "auth database path"),
+		jwtSecret:         flag.String("auth-jwt-secret", env("DASHBOARD_JWT_SECRET", ""), "JWT signing secret"),
+		jwtTTL:            flag.String("auth-jwt-expiry-hours", env("DASHBOARD_JWT_EXPIRY_HOURS", "12"), "JWT expiry in hours"),
+		bootstrapEmail:    flag.String("bootstrap-admin-email", env("DASHBOARD_ADMIN_EMAIL", ""), "bootstrap admin email"),
+		bootstrapPassword: flag.String("bootstrap-admin-password", env("DASHBOARD_ADMIN_PASSWORD", ""), "bootstrap admin password"),
+		bootstrapName:     flag.String("bootstrap-admin-name", env("DASHBOARD_ADMIN_NAME", ""), "bootstrap admin name"),
+	}
+}
+
+type openClawFlags struct {
+	enabled *bool
+	url     *string
+	dataDir *string
+	token   *string
+}
+
+func bindOpenClawFlags() openClawFlags {
+	return openClawFlags{
+		enabled: flag.Bool("openclaw", env("OPENCLAW_ENABLED", "true") == "true", "enable OpenClaw agent provisioning"),
+		url:     flag.String("openclaw-url", env("OPENCLAW_URL", "http://localhost:18788"), "OpenClaw gateway URL"),
+		dataDir: flag.String("openclaw-data", env("OPENCLAW_DATA_DIR", "./data/openclaw"), "OpenClaw workspace directory"),
+		token:   flag.String("openclaw-token", env("OPENCLAW_TOKEN", ""), "OpenClaw gateway auth token"),
+	}
+}
+
+func defaultPythonBinary() string {
+	if runtime.GOOS == "windows" {
+		return "python"
+	}
+	return "python3"
+}
+
+type parsedFlags struct {
+	port                 *string
+	staticDir            *string
+	configFile           *string
+	grafanaURL           *string
+	promURL              *string
+	routerAPI            *string
+	routerMetrics        *string
+	jaegerURL            *string
+	envoyURL             *string
+	readonlyMode         *bool
+	setupMode            *bool
+	platform             *string
+	evaluationEnabled    *bool
+	evaluationDBPath     *string
+	evaluationResultsDir *string
+	pythonPath           *string
+	mcpEnabled           *bool
+	mlPipelineEnabled    *bool
+	mlPipelineDataDir    *string
+	mlTrainingDir        *string
+	mlServiceURL         *string
+	auth                 authFlags
+	openClaw             openClawFlags
+}
+
+func applyCoreConfig(cfg *Config, flags parsedFlags) {
+	cfg.Port = *flags.port
+	cfg.StaticDir = *flags.staticDir
+	cfg.ConfigFile = *flags.configFile
+	cfg.GrafanaURL = *flags.grafanaURL
+	cfg.PrometheusURL = *flags.promURL
+	cfg.RouterAPIURL = *flags.routerAPI
+	cfg.RouterMetrics = *flags.routerMetrics
+	cfg.JaegerURL = *flags.jaegerURL
+	cfg.EnvoyURL = *flags.envoyURL
+	cfg.ReadonlyMode = *flags.readonlyMode
+	cfg.SetupMode = *flags.setupMode
+	cfg.Platform = *flags.platform
+}
+
+func applyFeatureConfig(cfg *Config, flags parsedFlags) {
+	cfg.EvaluationEnabled = *flags.evaluationEnabled
+	cfg.EvaluationDBPath = *flags.evaluationDBPath
+	cfg.EvaluationResultsDir = *flags.evaluationResultsDir
+	cfg.PythonPath = *flags.pythonPath
+	cfg.MCPEnabled = *flags.mcpEnabled
+	cfg.MLPipelineEnabled = *flags.mlPipelineEnabled
+	cfg.MLPipelineDataDir = *flags.mlPipelineDataDir
+	cfg.MLTrainingDir = *flags.mlTrainingDir
+	cfg.MLServiceURL = *flags.mlServiceURL
+}
+
+func applyAuthConfig(cfg *Config, flags authFlags) error {
+	cfg.AuthDBPath = *flags.dbPath
+	cfg.JWTSecret = *flags.jwtSecret
+	cfg.BootstrapAdminEmail = *flags.bootstrapEmail
+	cfg.BootstrapAdminPassword = *flags.bootstrapPassword
+	cfg.BootstrapAdminName = *flags.bootstrapName
+
+	ttl, err := strconv.Atoi(*flags.jwtTTL)
+	if err != nil {
+		return err
+	}
+	cfg.JWTExpiryHours = ttl
+	return nil
+}
+
+func applyOpenClawConfig(cfg *Config, flags openClawFlags) {
+	cfg.OpenClawEnabled = *flags.enabled
+	cfg.OpenClawURL = *flags.url
+	cfg.OpenClawDataDir = *flags.dataDir
+	cfg.OpenClawToken = *flags.token
+}
+
+func resolveConfigPaths(cfg *Config) error {
+	absConfigPath, err := filepath.Abs(cfg.ConfigFile)
+	if err != nil {
+		return err
+	}
+	cfg.AbsConfigPath = absConfigPath
+	cfg.ConfigDir = filepath.Dir(absConfigPath)
+	return nil
+}
+
 // LoadConfig loads configuration from flags and environment variables
 func LoadConfig() (*Config, error) {
 	cfg := &Config{}
@@ -88,11 +223,7 @@ func LoadConfig() (*Config, error) {
 	evaluationEnabled := flag.Bool("evaluation", env("EVALUATION_ENABLED", "true") == "true", "enable evaluation feature")
 	evaluationDBPath := flag.String("evaluation-db", env("EVALUATION_DB_PATH", "./data/evaluations.db"), "evaluation database path")
 	evaluationResultsDir := flag.String("evaluation-results", env("EVALUATION_RESULTS_DIR", "./data/results"), "evaluation results directory")
-	defaultPython := "python3"
-	if runtime.GOOS == "windows" {
-		defaultPython = "python"
-	}
-	pythonPath := flag.String("python", env("PYTHON_PATH", defaultPython), "path to Python interpreter")
+	pythonPath := flag.String("python", env("PYTHON_PATH", defaultPythonBinary()), "path to Python interpreter")
 
 	// MCP configuration
 	mcpEnabled := flag.Bool("mcp", env("MCP_ENABLED", "true") == "true", "enable MCP (Model Context Protocol) feature")
@@ -103,47 +234,49 @@ func LoadConfig() (*Config, error) {
 	mlTrainingDir := flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/model_selection/ml_model_selection")
 	mlServiceURL := flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
 
+	// Authentication configuration
+	auth := bindAuthFlags()
+
 	// OpenClaw configuration
-	openclawEnabled := flag.Bool("openclaw", env("OPENCLAW_ENABLED", "true") == "true", "enable OpenClaw agent provisioning")
-	openclawURL := flag.String("openclaw-url", env("OPENCLAW_URL", "http://localhost:18788"), "OpenClaw gateway URL")
-	openclawDataDir := flag.String("openclaw-data", env("OPENCLAW_DATA_DIR", "./data/openclaw"), "OpenClaw workspace directory")
-	openclawToken := flag.String("openclaw-token", env("OPENCLAW_TOKEN", ""), "OpenClaw gateway auth token")
+	openClaw := bindOpenClawFlags()
+
+	flags := parsedFlags{
+		port:                 port,
+		staticDir:            staticDir,
+		configFile:           configFile,
+		grafanaURL:           grafanaURL,
+		promURL:              promURL,
+		routerAPI:            routerAPI,
+		routerMetrics:        routerMetrics,
+		jaegerURL:            jaegerURL,
+		envoyURL:             envoyURL,
+		readonlyMode:         readonlyMode,
+		setupMode:            setupMode,
+		platform:             platform,
+		evaluationEnabled:    evaluationEnabled,
+		evaluationDBPath:     evaluationDBPath,
+		evaluationResultsDir: evaluationResultsDir,
+		pythonPath:           pythonPath,
+		mcpEnabled:           mcpEnabled,
+		mlPipelineEnabled:    mlPipelineEnabled,
+		mlPipelineDataDir:    mlPipelineDataDir,
+		mlTrainingDir:        mlTrainingDir,
+		mlServiceURL:         mlServiceURL,
+		auth:                 auth,
+		openClaw:             openClaw,
+	}
 
 	flag.Parse()
 
-	cfg.Port = *port
-	cfg.StaticDir = *staticDir
-	cfg.ConfigFile = *configFile
-	cfg.GrafanaURL = *grafanaURL
-	cfg.PrometheusURL = *promURL
-	cfg.RouterAPIURL = *routerAPI
-	cfg.RouterMetrics = *routerMetrics
-	cfg.JaegerURL = *jaegerURL
-	cfg.EnvoyURL = *envoyURL
-	cfg.ReadonlyMode = *readonlyMode
-	cfg.SetupMode = *setupMode
-	cfg.Platform = *platform
-	cfg.EvaluationEnabled = *evaluationEnabled
-	cfg.EvaluationDBPath = *evaluationDBPath
-	cfg.EvaluationResultsDir = *evaluationResultsDir
-	cfg.PythonPath = *pythonPath
-	cfg.MCPEnabled = *mcpEnabled
-	cfg.MLPipelineEnabled = *mlPipelineEnabled
-	cfg.MLPipelineDataDir = *mlPipelineDataDir
-	cfg.MLTrainingDir = *mlTrainingDir
-	cfg.MLServiceURL = *mlServiceURL
-	cfg.OpenClawEnabled = *openclawEnabled
-	cfg.OpenClawURL = *openclawURL
-	cfg.OpenClawDataDir = *openclawDataDir
-	cfg.OpenClawToken = *openclawToken
-
-	// Resolve config file path to absolute path
-	absConfigPath, err := filepath.Abs(cfg.ConfigFile)
-	if err != nil {
+	applyCoreConfig(cfg, flags)
+	applyFeatureConfig(cfg, flags)
+	if err := applyAuthConfig(cfg, flags.auth); err != nil {
 		return nil, err
 	}
-	cfg.AbsConfigPath = absConfigPath
-	cfg.ConfigDir = filepath.Dir(absConfigPath)
+	applyOpenClawConfig(cfg, flags.openClaw)
+	if err := resolveConfigPaths(cfg); err != nil {
+		return nil, err
+	}
 
 	return cfg, nil
 }

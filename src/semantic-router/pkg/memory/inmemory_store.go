@@ -235,7 +235,16 @@ func (s *InMemoryStore) Update(ctx context.Context, id string, memory *Memory) e
 		return fmt.Errorf("memory not found: %s", id)
 	}
 
-	// Update fields
+	// Regenerate embedding before overwriting Content so the comparison is valid.
+	if existing.Content != memory.Content {
+		embedding, err := GenerateEmbedding(memory.Content, s.embeddingConfig)
+		if err != nil {
+			return err
+		}
+		existing.Embedding = embedding
+	}
+
+	// Update fields.
 	existing.Content = memory.Content
 	existing.Type = memory.Type
 	existing.UpdatedAt = time.Now()
@@ -244,15 +253,6 @@ func (s *InMemoryStore) Update(ctx context.Context, id string, memory *Memory) e
 	}
 	if memory.Source != "" {
 		existing.Source = memory.Source
-	}
-
-	// Regenerate embedding if content changed
-	if existing.Content != memory.Content {
-		embedding, err := GenerateEmbedding(memory.Content, s.embeddingConfig)
-		if err != nil {
-			return err
-		}
-		existing.Embedding = embedding
 	}
 
 	logging.Debugf("InMemoryStore: updated memory id=%s", id)

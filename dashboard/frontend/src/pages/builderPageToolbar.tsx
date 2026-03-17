@@ -12,6 +12,8 @@ interface BuilderToolbarProps {
   dslSource: string;
   loading: boolean;
   deploying: boolean;
+  deployDisabled: boolean;
+  deployDisabledReason?: string;
   guideOpen: boolean;
   outputPanelOpen: boolean;
   onModeSwitch: (mode: EditorMode) => void;
@@ -33,6 +35,8 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
   dslSource,
   loading,
   deploying,
+  deployDisabled,
+  deployDisabledReason,
   guideOpen,
   outputPanelOpen,
   onModeSwitch,
@@ -195,8 +199,8 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
         <button
           className={styles.toolbarBtnDeploy}
           onClick={onRequestDeploy}
-          disabled={!wasmReady || !dslSource.trim() || loading || deploying}
-          title="Deploy config to router"
+          disabled={!wasmReady || !dslSource.trim() || loading || deploying || deployDisabled}
+          title={deployDisabledReason || "Deploy config to router"}
         >
           <svg
             width="12"

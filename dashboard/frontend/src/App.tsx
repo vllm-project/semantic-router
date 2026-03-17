@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+} from 'react-router-dom'
 import Layout from './components/Layout'
 import LandingPage from './pages/LandingPage'
 import MonitoringPage from './pages/MonitoringPage'
@@ -17,11 +25,16 @@ import RatingsPage from './pages/RatingsPage'
 import BuilderPage from './pages/BuilderPage'
 import DashboardPage from './pages/DashboardPage'
 import OpenClawPage from './pages/OpenClawPage'
+import UsersPage from './pages/UsersPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { SetupProvider, useSetup } from './contexts/SetupContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import SetupWizardPage from './pages/SetupWizardPage'
 import OnboardingGuide from './components/OnboardingGuide'
+import LoginPage from './pages/LoginPage'
+import AuthTransitionPage from './pages/AuthTransitionPage'
+import { canAccessMLSetup } from './utils/accessControl'
 
 const ConfigSectionRoute: React.FC<{
   configSection: ConfigSection
@@ -30,15 +43,24 @@ const ConfigSectionRoute: React.FC<{
   const { section } = useParams<{ section: string }>()
 
   useEffect(() => {
-    if (!section) return
+    if (!section) {
+      if (configSection !== 'global-config') {
+        setConfigSection('global-config')
+      }
+      return
+    }
 
     const normalized = section.toLowerCase()
     const sectionMap: Record<string, ConfigSection> = {
+      global: 'global-config',
+      'global-config': 'global-config',
+      'router-config': 'global-config',
       signals: 'signals',
       routes: 'decisions',
       decisions: 'decisions',
       endpoints: 'models',
       models: 'models',
+      mcp: 'mcp',
     }
 
     const mapped = sectionMap[normalized]
@@ -104,9 +126,57 @@ const SetupStatusPage: React.FC<{
   </div>
 )
 
+const AuthGate: React.FC = () => {
+  const { isAuthenticated, isLoading } = useAuth()
+  const location = useLocation()
+
+  if (isLoading) {
+    return (
+      <SetupStatusPage
+        title="Authenticating"
+        description="Checking session state..."
+        actionLabel="Retry"
+        onAction={() => {
+          window.location.reload()
+        }}
+      />
+    )
+  }
+
+  if (!isAuthenticated) {
+    const from = `${location.pathname}${location.search}${location.hash}`
+    return <Navigate to="/login" state={{ from }} replace />
+  }
+
+  return <Outlet />
+}
+
+const AuthenticatedShell: React.FC = () => {
+  const { setupState } = useSetup()
+  const location = useLocation()
+  const isSetupMode = setupState?.setupMode ?? false
+
+  if (isSetupMode && location.pathname !== '/setup') {
+    return <Navigate to="/setup" replace />
+  }
+
+  if (!isSetupMode && location.pathname === '/setup') {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return (
+    <>
+      <Outlet />
+      {!isSetupMode && location.pathname !== '/setup' && <OnboardingGuide />}
+    </>
+  )
+}
+
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
-  const [configSection, setConfigSection] = useState<ConfigSection>('models')
+  const { user } = useAuth()
+  const [configSection, setConfigSection] = useState<ConfigSection>('global-config')
+  const canUseMLSetup = canAccessMLSetup(user)
 
   if (isLoading) {
     return (
@@ -140,13 +210,12 @@ const AppRouter: React.FC = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        {setupMode ? (
-          <>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/auth/transition" element={<AuthTransitionPage />} />
+
+        <Route element={<AuthGate />}>
+          <Route element={<AuthenticatedShell />}>
             <Route path="/setup" element={<SetupWizardPage />} />
-            <Route path="*" element={<Navigate to="/setup" replace />} />
-          </>
-        ) : (
-          <>
             <Route
               path="/dashboard"
               element={
@@ -194,6 +263,7 @@ const AppRouter: React.FC = () => {
                   configSection={configSection}
                   onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
                   hideHeaderOnMobile={true}
+                  hideAccountControl={true}
                 >
                   <PlaygroundPage />
                 </Layout>
@@ -269,12 +339,16 @@ const AppRouter: React.FC = () => {
             <Route
               path="/ml-setup"
               element={
-                <Layout
-                  configSection={configSection}
-                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-                >
-                  <MLSetupPage />
-                </Layout>
+                canUseMLSetup ? (
+                  <Layout
+                    configSection={configSection}
+                    onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                  >
+                    <MLSetupPage />
+                  </Layout>
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
               }
             />
             <Route
@@ -310,12 +384,22 @@ const AppRouter: React.FC = () => {
                 </Layout>
               }
             />
+            <Route
+              path="/users"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <UsersPage />
+                </Layout>
+              }
+            />
             <Route path="/openclaw" element={<Navigate to="/clawos" replace />} />
-            <Route path="/setup" element={<Navigate to="/dashboard" replace />} />
-          </>
-        )}
+            <Route path="*" element={<Navigate to={setupMode ? '/setup' : '/dashboard'} replace />} />
+          </Route>
+        </Route>
       </Routes>
-      {!setupMode && <OnboardingGuide />}
     </BrowserRouter>
   )
 }
@@ -381,11 +465,13 @@ const App: React.FC = () => {
   }
 
   return (
-    <ReadonlyProvider>
-      <SetupProvider>
-        <AppRouter />
-      </SetupProvider>
-    </ReadonlyProvider>
+    <AuthProvider>
+      <ReadonlyProvider>
+        <SetupProvider>
+          <AppRouter />
+        </SetupProvider>
+      </ReadonlyProvider>
+    </AuthProvider>
   )
 }
 
