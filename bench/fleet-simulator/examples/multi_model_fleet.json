@@ -1,0 +1,32 @@
+{
+  "_comment": "Example: three-pool fleet running different models. No prompt-length routing.",
+  "pools": [
+    {
+      "id": "llama70b",
+      "gpu": "a100",
+      "n_gpus": 20,
+      "max_ctx": 8192,
+      "_comment": "General-purpose Llama-3-70B, short to medium context"
+    },
+    {
+      "id": "llama8b",
+      "gpu": "a10g",
+      "n_gpus": 8,
+      "max_ctx": 4096,
+      "_comment": "Cost-efficient Llama-3-8B for low-complexity requests"
+    },
+    {
+      "id": "codellama",
+      "gpu": "a100",
+      "n_gpus": 6,
+      "max_ctx": 16384,
+      "_comment": "Code-specialist pool, larger context for repo-level tasks"
+    }
+  ],
+  "router": "model",
+  "workloads": {
+    "llama70b":  {"cdf": "data/azure_cdf.json",           "lam_frac": 0.60},
+    "llama8b":   {"cdf": "data/lmsys_cdf.json",            "lam_frac": 0.25},
+    "codellama": {"cdf": "data/agent_heavy_cdf.json",      "lam_frac": 0.15}
+  }
+}
