@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import RouterModelInventory from '../components/RouterModelInventory'
+import { useAuth } from '../contexts/AuthContext'
+import { canAccessMLSetup } from '../utils/accessControl'
 import {
   getLoadedModelCount,
   getModelStatusSummary,
@@ -237,6 +239,7 @@ MiniFlowDiagram.displayName = 'MiniFlowDiagram'
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const [config, setConfig] = useState<RouterConfig | null>(null)
   const [status, setStatus] = useState<SystemStatus | null>(null)
@@ -308,6 +311,7 @@ const DashboardPage: React.FC = () => {
   const pluginCount = useMemo(() => config ? countPlugins(config) : 0, [config])
   const currentDecisions = useMemo(() => config?.routing?.decisions ?? config?.decisions ?? [], [config])
   const healthyServices = useMemo(() => status?.services.filter(s => s.healthy).length ?? 0, [status])
+  const showMLSetupQuickLink = canAccessMLSetup(user)
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
   const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
   const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
@@ -560,12 +564,14 @@ const DashboardPage: React.FC = () => {
                 </svg>
                 Run Evaluation
               </button>
-              <button className={styles.quickLink} onClick={() => navigate('/ml-setup')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-                </svg>
-                ML Setup
-              </button>
+              {showMLSetupQuickLink ? (
+                <button className={styles.quickLink} onClick={() => navigate('/ml-setup')}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
+                  </svg>
+                  ML Setup
+                </button>
+              ) : null}
               <button className={styles.quickLink} onClick={() => navigate('/config/models')}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <rect x="2" y="3" width="20" height="18" rx="3" /><path d="M8 7v10M16 7v10" />

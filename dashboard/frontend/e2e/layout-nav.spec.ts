@@ -18,6 +18,22 @@ const settingsResponse = {
   envoyUrl: '',
 };
 
+const readUser = {
+  id: 'user-read-1',
+  email: 'viewer@example.com',
+  name: 'Viewer User',
+  role: 'read',
+  permissions: [
+    'config.read',
+    'evaluation.read',
+    'logs.read',
+    'mcp.read',
+    'openclaw.read',
+    'tools.use',
+    'topology.read',
+  ],
+};
+
 const configResponse = {
   version: 'v0.3',
   listeners: [{ name: 'public', address: '0.0.0.0', port: 8801 }],
@@ -202,6 +218,27 @@ test.describe('Layout top navigation', () => {
     await expect(menu.getByRole('menuitem', { name: 'Logs' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Grafana' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Tracing' })).toBeVisible();
+  });
+
+  test('hides ML Setup for read users and redirects direct access back to the dashboard', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockCommon(page, { user: readUser });
+
+    await page.goto('/dashboard');
+
+    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0);
+
+    const secondaryGroup = page.getByRole('group', { name: 'Secondary navigation' });
+    await secondaryGroup.getByRole('button', { name: 'System' }).click();
+
+    const menu = page.getByRole('menu', { name: 'System' });
+    await expect(menu.getByRole('menuitem', { name: 'ML Setup' })).toHaveCount(0);
+    await expect(menu.getByRole('menuitem', { name: 'MCP Servers' })).toBeVisible();
+
+    await page.goto('/ml-setup');
+
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0);
   });
 
   test('opens a centered account dialog and allows logging out from the header', async ({ page }) => {

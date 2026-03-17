@@ -475,6 +475,41 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 	)
 }
 
+func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to resolve amd config path")
+	}
+
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../deploy/amd/config.yaml"))
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", configPath, err)
+	}
+
+	cfg, err := config.ParseYAMLBytes(data)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+
+	assertContainsAllModelSpecs(t, specs,
+		"models/mom-embedding-ultra",
+		"models/mmbert32k-intent-classifier-merged",
+		"models/mmbert32k-pii-detector-merged",
+		"models/mmbert32k-jailbreak-detector-merged",
+		"models/mmbert32k-factcheck-classifier-merged",
+		"models/mmbert32k-feedback-detector-merged",
+	)
+	if len(specs) != 6 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want 6", len(specs))
+	}
+}
+
 func assertContainsAllModelSpecs(t *testing.T, specs []ModelSpec, wantPaths ...string) {
 	t.Helper()
 

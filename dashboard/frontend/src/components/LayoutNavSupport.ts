@@ -94,3 +94,15 @@ export function hasActiveLayoutMenuSection(
     section.items.some(item => isLayoutMenuItemActive(item, pathname, isConfigPage, configSection))
   )
 }
+
+export function filterLayoutMenuSections(
+  sections: LayoutMenuSection[],
+  predicate: (item: LayoutMenuItem) => boolean
+): LayoutMenuSection[] {
+  return sections
+    .map(section => ({
+      ...section,
+      items: section.items.filter(predicate),
+    }))
+    .filter(section => section.items.length > 0)
+}

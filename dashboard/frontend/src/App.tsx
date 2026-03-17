@@ -34,6 +34,7 @@ import SetupWizardPage from './pages/SetupWizardPage'
 import OnboardingGuide from './components/OnboardingGuide'
 import LoginPage from './pages/LoginPage'
 import AuthTransitionPage from './pages/AuthTransitionPage'
+import { canAccessMLSetup } from './utils/accessControl'
 
 const ConfigSectionRoute: React.FC<{
   configSection: ConfigSection
@@ -173,7 +174,9 @@ const AuthenticatedShell: React.FC = () => {
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
+  const { user } = useAuth()
   const [configSection, setConfigSection] = useState<ConfigSection>('global-config')
+  const canUseMLSetup = canAccessMLSetup(user)
 
   if (isLoading) {
     return (
@@ -336,12 +339,16 @@ const AppRouter: React.FC = () => {
             <Route
               path="/ml-setup"
               element={
-                <Layout
-                  configSection={configSection}
-                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-                >
-                  <MLSetupPage />
-                </Layout>
+                canUseMLSetup ? (
+                  <Layout
+                    configSection={configSection}
+                    onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                  >
+                    <MLSetupPage />
+                  </Layout>
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
               }
             />
             <Route
