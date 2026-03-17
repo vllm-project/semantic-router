@@ -1602,7 +1602,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 
 			response, err := router.HandleRequestBody(bodyRequest, ctx)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response.GetRequestBody().Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
+			Expect(response.GetImmediateResponse().GetStatus().GetCode()).To(Equal(typev3.StatusCode_NotFound))
 		})
 
 		It("should handle malformed OpenAI requests gracefully", func() {
@@ -4140,7 +4140,7 @@ var _ = Describe("Response API Translation", func() {
 		Context("Request Body Handling", func() {
 			It("should parse and validate OpenAI request format", func() {
 				validRequest := &cache.OpenAIRequest{
-					Model: "gpt-4",
+					Model: "model-b",
 					Messages: []cache.ChatMessage{
 						{Role: "user", Content: json.RawMessage(`"What is AI?"`)},
 					},
@@ -4473,7 +4473,7 @@ var _ = Describe("Response API Translation", func() {
 				{
 					Request: &ext_proc.ProcessingRequest_RequestBody{
 						RequestBody: &ext_proc.HttpBody{
-							Body: []byte(`{"model": "gpt-4", "input": "Hello", "instructions": "Be helpful"}`),
+							Body: []byte(`{"model": "model-b", "input": "Hello", "instructions": "Be helpful"}`),
 						},
 					},
 				},
@@ -4499,7 +4499,7 @@ var _ = Describe("Response API Translation", func() {
 			var chatReq map[string]interface{}
 			err = json.Unmarshal(translatedBody, &chatReq)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(chatReq["model"]).To(Equal("gpt-4"))
+			Expect(chatReq["model"]).To(Equal("model-b"))
 
 			// Messages should be present (from instructions + input)
 			messages, ok := chatReq["messages"].([]interface{})
@@ -4515,8 +4515,8 @@ var _ = Describe("Response API Translation", func() {
 		_ = Describe("ExtProc Model-Specific Reasoning", func() {
 			BeforeEach(func() {
 				cfg = CreateTestConfig()
-				var err error
-				router, err = CreateTestRouter(cfg)
+				cfg.ModelConfig["gpt-4-oss"] = config.ModelParams{PreferredEndpoints: []string{"test-endpoint1"}}
+				router, err := CreateTestRouter(cfg)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
