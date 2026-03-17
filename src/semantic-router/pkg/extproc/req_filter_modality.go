@@ -148,7 +148,8 @@ func resolveAllModalityModels(decision *config.Decision, modelConfig map[string]
 //
 //   - Models: decision.ModelRefs -> model_config[model].modality to classify AR vs diffusion
 //
-//   - Image gen backend: model_config[model].image_gen_backend -> image_gen_backends[name]
+//   - Image generation: decision.plugins[type=image_gen] is authoritative; legacy
+//     model_config[model].image_gen_backend -> image_gen_backends[name] remains as fallback
 //
 //   - AR endpoint: model_config[model].preferred_endpoints -> vllm_endpoints
 //
@@ -399,71 +400,18 @@ func (r *OpenAIRouter) executeOmni(ctx *RequestContext, cfg *config.RouterConfig
 // Chat Completions response. It extracts text and image content parts and formats them
 // as output items, including image_generation_call items for any generated images.
 func (r *OpenAIRouter) buildOmniResponsesAPIResponse(omniResp map[string]interface{}, ctx *RequestContext) ([]byte, error) {
-	var outputItems []map[string]interface{}
-	model := ""
-	if m, ok := omniResp["model"].(string); ok {
-		model = m
-	}
-
-	// Extract content from choices
-	if choices, ok := omniResp["choices"].([]interface{}); ok && len(choices) > 0 {
-		if choice, ok := choices[0].(map[string]interface{}); ok {
-			if msg, ok := choice["message"].(map[string]interface{}); ok {
-				textParts, imageParts := extractOmniContentParts(msg["content"])
-
-				// Add image_generation_call items for each image
-				for _, imgURL := range imageParts {
-					outputItems = append(outputItems, map[string]interface{}{
-						"type":   "image_generation_call",
-						"id":     fmt.Sprintf("ig_%d", time.Now().UnixNano()),
-						"status": "completed",
-						"result": imgURL,
-					})
-				}
-
-				// Add message item with text content
-				if len(textParts) > 0 {
-					var contentParts []map[string]interface{}
-					for _, text := range textParts {
-						contentParts = append(contentParts, map[string]interface{}{
-							"type":        "output_text",
-							"text":        text,
-							"annotations": []interface{}{},
-						})
-					}
-					outputItems = append(outputItems, map[string]interface{}{
-						"type":    "message",
-						"id":      fmt.Sprintf("msg_%d", time.Now().UnixNano()),
-						"role":    "assistant",
-						"status":  "completed",
-						"content": contentParts,
-					})
-				}
-			}
-		}
-	}
+	outputItems := buildOmniResponseOutputItems(extractPrimaryChoiceMessage(omniResp))
 
 	// If no output items were extracted, add a fallback message
 	if len(outputItems) == 0 {
-		outputItems = append(outputItems, map[string]interface{}{
-			"type": "message",
-			"id":   fmt.Sprintf("msg_%d", time.Now().UnixNano()),
-			"role": "assistant",
-			"content": []map[string]interface{}{
-				{
-					"type":        "output_text",
-					"text":        defaultImageResponseText,
-					"annotations": []interface{}{},
-				},
-			},
-		})
+		outputItems = append(outputItems, defaultGeneratedImageOutputItem())
 	}
 
 	response := map[string]interface{}{
 		"id":         fmt.Sprintf("resp_%d", time.Now().UnixNano()),
 		"object":     "response",
 		"created_at": time.Now().Unix(),
-		"model":      model,
+		"model":      extractResponseModelName(omniResp),
 		"status":     "completed",
 		"output":     outputItems,
 	}
@@ -488,17 +436,12 @@ func extractOmniContentParts(content interface{}) ([]string, []string) {
 			if !ok {
 				continue
 			}
-			switch partMap["type"] {
-			case "text":
-				if text, ok := partMap["text"].(string); ok && text != "" {
-					texts = append(texts, text)
-				}
-			case "image_url":
-				if imageURL, ok := partMap["image_url"].(map[string]interface{}); ok {
-					if url, ok := imageURL["url"].(string); ok && url != "" {
-						imageURLs = append(imageURLs, url)
-					}
-				}
+			text, imageURL := extractOmniContentPart(partMap)
+			if text != "" {
+				texts = append(texts, text)
+			}
+			if imageURL != "" {
+				imageURLs = append(imageURLs, imageURL)
 			}
 		}
 	}
@@ -589,28 +532,23 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, cfg *config.RouterConfig
 }
 
 // generateImage creates the diffusion backend, sends the prompt, and returns the result.
-// diffusionModel is the model name from the decision's ModelRefs; its backend config
-// is resolved from model_config -> image_gen_backends.
-// Prompt prefixes are read from modality_detector config.
+// diffusionModel is the model name from the decision's ModelRefs.
+// Canonical decision.plugins[type=image_gen] config is used when present; legacy
+// model_config -> image_gen_backends remains as fallback.
+// Prompt prefixes come from the decision plugin modality_detection override when
+// present, otherwise the router-level modality_detector config.
 // If the Responses API request included image_generation tool params, those are used
 // to override default width/height/quality.
 func (r *OpenAIRouter) generateImage(ctx *RequestContext, cfg *config.RouterConfig, diffusionModel string) (*ImageGenResult, error) {
-	// Find the diffusion model's image_gen_backend using the decision-selected model
-	backendEntry, err := resolveDiffusionBackend(cfg, diffusionModel)
+	pluginCfg, promptPrefixes, err := resolveImageGenConfig(cfg, ctx.VSRSelectedDecision, diffusionModel)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve diffusion backend: %w", err)
+		return nil, err
 	}
-
-	// Convert ImageGenBackendEntry -> ImageGenPluginConfig for the imagegen factory
-	pluginCfg := backendEntry.ToPluginConfig()
 
 	backend, err := imagegen.CreateBackend(pluginCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create image generation backend: %w", err)
 	}
-
-	// Get prompt prefixes from modality_detector config
-	promptPrefixes := cfg.ModalityDetector.PromptPrefixes
 
 	genReq := &imagegen.GenerateRequest{
 		Prompt: ExtractImagePrompt(ctx.UserContent, promptPrefixes),
@@ -666,49 +604,8 @@ func (r *OpenAIRouter) generateImage(ctx *RequestContext, cfg *config.RouterConf
 // buildBothResponse combines the AR text response with the diffusion image into
 // a single Chat Completions response containing multi-part content (text + image_url).
 func (r *OpenAIRouter) buildBothResponse(textResp map[string]interface{}, imgResult *ImageGenResult, ctx *RequestContext) ([]byte, error) {
-	textContent := ""
-	arModel := ""
-	if textResp != nil {
-		if choices, ok := textResp["choices"].([]interface{}); ok && len(choices) > 0 {
-			if choice, ok := choices[0].(map[string]interface{}); ok {
-				if msg, ok := choice["message"].(map[string]interface{}); ok {
-					if c, ok := msg["content"].(string); ok {
-						textContent = c
-					}
-				}
-			}
-		}
-		if m, ok := textResp["model"].(string); ok {
-			arModel = m
-		}
-	}
-
-	var contentParts []map[string]interface{}
-
-	if textContent != "" {
-		contentParts = append(contentParts, map[string]interface{}{
-			"type": "text",
-			"text": textContent,
-		})
-	}
-
-	if imgResult != nil && imgResult.ImageURL != "" {
-		contentParts = append(contentParts, map[string]interface{}{
-			"type": "image_url",
-			"image_url": map[string]string{
-				"url": imgResult.ImageURL,
-			},
-		})
-	}
-
-	if len(contentParts) == 0 {
-		contentParts = append(contentParts, map[string]interface{}{
-			"type": "text",
-			"text": "Failed to generate both text and image responses.",
-		})
-	}
-
-	model := arModel
+	textContent := extractPrimaryChoiceTextContent(textResp)
+	model := extractResponseModelName(textResp)
 	if model == "" && imgResult != nil {
 		model = imgResult.Model
 	}
@@ -723,7 +620,7 @@ func (r *OpenAIRouter) buildBothResponse(textResp map[string]interface{}, imgRes
 				"index": 0,
 				"message": map[string]interface{}{
 					"role":    "assistant",
-					"content": contentParts,
+					"content": buildBothResponseContentParts(textContent, imgResult),
 				},
 				"finish_reason": "stop",
 			},

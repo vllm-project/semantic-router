@@ -133,11 +133,29 @@ resources:
     cpu: "2"
 
 config:
-  vllm_endpoints:
-    - name: "my-endpoint"
-      address: "10.0.1.100"
-      port: 8000
-      weight: 1
+  providers:
+    defaults:
+      default_model: "my-model"
+    models:
+      - name: "my-model"
+        provider_model_id: "my-model"
+        backend_refs:
+          - name: "primary"
+            endpoint: "my-vllm.default.svc.cluster.local:8000"
+            protocol: "http"
+            weight: 1
+  routing:
+    modelCards:
+      - name: "my-model"
+    decisions:
+      - name: "default-route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "my-model"
+            use_reasoning: false
 
 ingress:
   enabled: true
@@ -258,15 +276,33 @@ helm rollback semantic-router 1 --namespace vllm-semantic-router-system
 
 ```yaml
 config:
-  vllm_endpoints:
-    - name: "endpoint-1"
-      address: "10.0.1.10"
-      port: 8000
-      weight: 2
-    - name: "endpoint-2"
-      address: "10.0.1.11"
-      port: 8000
-      weight: 1
+  providers:
+    defaults:
+      default_model: "my-model"
+    models:
+      - name: "my-model"
+        provider_model_id: "my-model"
+        backend_refs:
+          - name: "endpoint-1"
+            endpoint: "10.0.1.10:8000"
+            protocol: "http"
+            weight: 2
+          - name: "endpoint-2"
+            endpoint: "10.0.1.11:8000"
+            protocol: "http"
+            weight: 1
+  routing:
+    modelCards:
+      - name: "my-model"
+    decisions:
+      - name: "default-route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "my-model"
+            use_reasoning: false
 ```
 
 ### Example 2: Enable Ingress

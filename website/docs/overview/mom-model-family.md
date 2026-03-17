@@ -24,34 +24,34 @@ All MoM models are:
 
 #### Domain/Intent Classifier
 
-- **Model ID**: `models/mom-domain-classifier`
-- **HuggingFace**: `LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model`
+- **Model ID**: `models/mmbert32k-intent-classifier-merged`
+- **HuggingFace**: `llm-semantic-router/mmbert32k-intent-classifier-merged`
 - **Purpose**: Classify user queries into 14 MMLU categories (math, science, history, etc.)
-- **Architecture**: BERT-base (110M) + LoRA adapters
+- **Architecture**: mmBERT-32K merged classifier (307M)
 - **Use Case**: Route queries to domain-specific models or experts
 
 #### PII Detector
 
-- **Model ID**: `models/mom-pii-classifier`
-- **HuggingFace**: `LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model`
-- **Purpose**: Detect 35 types of personally identifiable information
-- **Architecture**: BERT-base (110M) + LoRA adapters
+- **Model ID**: `models/mmbert32k-pii-detector-merged`
+- **HuggingFace**: `llm-semantic-router/mmbert32k-pii-detector-merged`
+- **Purpose**: Detect 17 PII entity types across 35 BIO labels
+- **Architecture**: mmBERT-32K merged token classifier (307M)
 - **Use Case**: Privacy protection, compliance, data masking
 
 #### Jailbreak Detector
 
-- **Model ID**: `models/mom-jailbreak-classifier`
-- **HuggingFace**: `LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model`
+- **Model ID**: `models/mmbert32k-jailbreak-detector-merged`
+- **HuggingFace**: `llm-semantic-router/mmbert32k-jailbreak-detector-merged`
 - **Purpose**: Detect prompt injection and jailbreak attempts
-- **Architecture**: BERT-base (110M) + LoRA adapters
+- **Architecture**: mmBERT-32K merged classifier (307M)
 - **Use Case**: Content safety, prompt security
 
 #### Feedback Detector
 
-- **Model ID**: `models/mom-feedback-detector`
-- **HuggingFace**: `llm-semantic-router/feedback-detector`
+- **Model ID**: `models/mmbert32k-feedback-detector-merged`
+- **HuggingFace**: `llm-semantic-router/mmbert32k-feedback-detector-merged`
 - **Purpose**: Classify user feedback into 4 types (satisfied, need clarification, wrong answer, want different)
-- **Architecture**: ModernBERT-base (149M)
+- **Architecture**: mmBERT-32K merged classifier (307M)
 - **Use Case**: Adaptive routing, conversation improvement
 
 ### 2. Embedding Models
@@ -74,14 +74,14 @@ All MoM models are:
 - **Embedding Dimension**: 768 (supports 512/256/128 via Matryoshka)
 - **Use Case**: Balanced speed/quality, multilingual support
 
-#### Embedding Light (Fast)
+#### Embedding Ultra (Default)
 
-- **Model ID**: `models/mom-embedding-light`
-- **HuggingFace**: `sentence-transformers/all-MiniLM-L12-v2`
-- **Purpose**: Lightweight semantic similarity
-- **Architecture**: MiniLM (33M parameters)
-- **Embedding Dimension**: 384
-- **Use Case**: Fast semantic caching, low-latency retrieval
+- **Model ID**: `models/mom-embedding-ultra`
+- **HuggingFace**: `llm-semantic-router/mmbert-embed-32k-2d-matryoshka`
+- **Purpose**: Long-context multilingual semantic similarity with 2D Matryoshka support
+- **Architecture**: mmBERT 2D Matryoshka (307M parameters)
+- **Embedding Dimension**: 768 (supports lower dimensions via Matryoshka)
+- **Use Case**: Default semantic caching, retrieval, and tools similarity
 
 ### 3. Hallucination Detection Models
 
@@ -117,59 +117,62 @@ All MoM models are:
 
 | Use Case | Recommended Model | Why |
 |----------|------------------|-----|
-| Domain routing | mom-domain-classifier | 14 MMLU categories, LoRA efficient |
-| Privacy protection | mom-pii-classifier | 35 PII types, token-level detection |
-| Content safety | mom-jailbreak-classifier | Prompt injection detection |
-| Semantic caching | mom-embedding-light | Fast, 384-dim, low latency |
+| Domain routing | mmbert32k-intent-classifier-merged | 14 MMLU categories, 32K context |
+| Privacy protection | mmbert32k-pii-detector-merged | 17 entity types, 35 BIO labels, 32K context |
+| Content safety | mmbert32k-jailbreak-detector-merged | Prompt injection detection with merged mmBERT |
+| Semantic caching | mom-embedding-ultra | Default 32K multilingual embeddings |
 | Long-context search | mom-embedding-pro | 32K context, 1024-dim |
 | Hallucination check | mom-halugate-detector | ModernBERT, 8K context |
-| User feedback | mom-feedback-detector | 4 feedback types, ModernBERT |
+| User feedback | mmbert32k-feedback-detector-merged | 4 feedback types, merged mmBERT |
 
 ### By Performance Requirements
 
 | Requirement | Model Tier | Examples |
 |-------------|-----------|----------|
-| Ultra-fast (&lt;10ms) | Light | mom-embedding-light, mom-jailbreak-classifier |
-| Balanced (10-50ms) | Flash | mom-embedding-flash, mom-domain-classifier |
+| Ultra-fast (&lt;10ms) | Light | mom-embedding-flash, mmbert32k-jailbreak-detector-merged |
+| Balanced (10-50ms) | Default | mom-embedding-ultra, mmbert32k-intent-classifier-merged |
 | High-quality (50-200ms) | Pro | mom-embedding-pro, mom-halugate-detector |
 
 ## Configuration
 
 ### Using MoM Models in Router
 
-MoM models are pre-configured in `router-defaults.yaml`:
+MoM models are configured through the canonical `global.model_catalog` block, with module-level settings living under `global.model_catalog.modules`:
 
 ```yaml
-# Domain classification
-classifier:
-  category_model:
-    model_id: "models/mom-domain-classifier"
-    threshold: 0.6
-    use_cpu: true
-
-# PII detection
-classifier:
-  pii_model:
-    model_id: "models/mom-pii-classifier"
-    threshold: 0.9
-    use_cpu: true
-
-# Jailbreak protection
-prompt_guard:
-  model_id: "models/mom-jailbreak-classifier"
-  threshold: 0.7
-  use_cpu: true
+global:
+  model_catalog:
+    system:
+      domain_classifier: "models/mmbert32k-intent-classifier-merged"
+      pii_classifier: "models/mmbert32k-pii-detector-merged"
+      prompt_guard: "models/mmbert32k-jailbreak-detector-merged"
+    modules:
+      classifier:
+        domain:
+          model_ref: "domain_classifier"
+          threshold: 0.6
+          use_cpu: true
+        pii:
+          model_ref: "pii_classifier"
+          threshold: 0.9
+          use_cpu: true
+      prompt_guard:
+        model_ref: "prompt_guard"
+        threshold: 0.7
+        use_cpu: true
 ```
 
-### Custom Model Registry
+### Custom System Bindings
 
-Override the default registry in your `config.yaml`:
+Override the built-in system-model bindings in your `config.yaml`:
 
 ```yaml
-mom_registry:
-  "models/mom-domain-classifier": "your-org/custom-domain-classifier"
-  "models/mom-pii-classifier": "your-org/custom-pii-detector"
-  "models/mom-embedding-pro": "your-org/custom-embeddings"
+global:
+  model_catalog:
+    system:
+      domain_classifier: "models/your-domain-classifier"
+      pii_classifier: "models/your-pii-classifier"
+      prompt_guard: "models/your-prompt-guard"
 ```
 
 ## Model Architecture
@@ -194,7 +197,7 @@ Newer models use ModernBERT for better performance:
 
 ## Next Steps
 
-- **[Signal-Driven Decisions](./signal-driven-decisions.md)** - Learn how MoM models power routing decisions
-- **[Domain Routing](../tutorials/intelligent-route/domain-routing.md)** - Use mom-domain-classifier for routing
-- **[PII Detection](../tutorials/content-safety/pii-detection.md)** - Configure mom-pii-classifier
-- **[Semantic Cache](../tutorials/semantic-cache/in-memory-cache.md)** - Use MoM embedding models
+- **[Signal-Driven Decisions](./signal-driven-decisions)** - Learn how MoM models power routing decisions
+- **[Domain](../tutorials/signal/learned/domain)** - Use mmbert32k-intent-classifier-merged for routing
+- **[PII](../tutorials/signal/learned/pii)** - Configure mmbert32k-pii-detector-merged
+- **[RAG](../tutorials/plugin/rag)** - Use MoM embedding models for route-local retrieval

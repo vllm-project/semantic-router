@@ -474,15 +474,13 @@ func CreateTestConfig() *config.RouterConfig {
 
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
-			BertModel: config.BertModel{
-				ModelID:   "sentence-transformers/all-MiniLM-L6-v2",
-				Threshold: 0.8,
-				UseCPU:    true,
-			},
 			EmbeddingModels: config.EmbeddingModels{
-				HNSWConfig: config.HNSWConfig{
-					ModelType:       "qwen3",
-					TargetDimension: 768,
+				BertModelPath: "sentence-transformers/all-MiniLM-L6-v2",
+				UseCPU:        true,
+				EmbeddingConfig: config.HNSWConfig{
+					ModelType:         "qwen3",
+					TargetDimension:   768,
+					MinScoreThreshold: 0.8,
 				},
 			},
 			Classifier: config.Classifier{
@@ -1059,7 +1057,7 @@ var _ = Describe("ExtProc Package", func() {
 		It("should create test configuration successfully", func() {
 			cfg := CreateTestConfig()
 			Expect(cfg).NotTo(BeNil())
-			Expect(cfg.InlineModels.BertModel.ModelID).To(Equal("sentence-transformers/all-MiniLM-L6-v2"))
+			Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).To(Equal("sentence-transformers/all-MiniLM-L6-v2"))
 			Expect(cfg.BackendModels.DefaultModel).To(Equal("model-b"))
 			Expect(len(cfg.IntelligentRouting.Categories)).To(Equal(1))
 			Expect(cfg.IntelligentRouting.Categories[0].CategoryMetadata.Name).To(Equal("coding"))
@@ -1095,7 +1093,7 @@ var _ = Describe("ExtProc Package", func() {
 			cfg := CreateTestConfig()
 
 			// Test essential fields are present
-			Expect(cfg.InlineModels.BertModel.ModelID).NotTo(BeEmpty())
+			Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.DefaultModel).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.ModelConfig).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.ModelConfig).To(HaveKey("model-a"))
@@ -4744,7 +4742,7 @@ var _ = Describe("Response API Translation", func() {
 
 			Context("Model Path Validation", func() {
 				It("should validate required model paths are properly configured", func() {
-					Expect(cfg.InlineModels.BertModel.ModelID).NotTo(BeEmpty())
+					Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).NotTo(BeEmpty())
 					Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).NotTo(BeEmpty())
 					// PIIModel.ModelID is optional - do not require it
 				})
@@ -4780,8 +4778,8 @@ var _ = Describe("Response API Translation", func() {
 				})
 
 				It("should have valid classification thresholds", func() {
-					Expect(cfg.InlineModels.BertModel.Threshold).To(BeNumerically(">=", 0))
-					Expect(cfg.InlineModels.BertModel.Threshold).To(BeNumerically("<=", 1.0))
+					Expect(cfg.InlineModels.EmbeddingModels.MinSimilarityThreshold()).To(BeNumerically(">=", 0))
+					Expect(cfg.InlineModels.EmbeddingModels.MinSimilarityThreshold()).To(BeNumerically("<=", 1.0))
 
 					if cfg.InlineModels.Classifier.PIIModel.Threshold > 0 {
 						Expect(cfg.InlineModels.Classifier.PIIModel.Threshold).To(BeNumerically("<=", 1.0))

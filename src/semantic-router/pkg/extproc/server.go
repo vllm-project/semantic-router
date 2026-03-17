@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -19,8 +20,16 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
+)
+
+var (
+	parseReloadConfig        = config.Parse
+	ensureReloadConfigModels = modeldownload.EnsureModelsForConfig
+	buildReloadRouter        = buildOpenAIRouterFromConfig
+	replaceReloadConfig      = config.Replace
 )
 
 // Server represents a gRPC server for the Envoy ExtProc
@@ -148,6 +157,31 @@ func (s *Server) Stop() {
 	}
 }
 
+func shouldReloadForConfigEvent(cfgFile, cfgDir, eventPath string) bool {
+	if eventPath == "" {
+		return false
+	}
+
+	cleanEventPath := filepath.Clean(eventPath)
+	if cleanEventPath == filepath.Clean(cfgFile) {
+		return true
+	}
+
+	if filepath.Dir(cleanEventPath) != filepath.Clean(cfgDir) {
+		return false
+	}
+
+	base := filepath.Base(cleanEventPath)
+	if base == filepath.Base(cfgFile) {
+		return true
+	}
+	if strings.HasPrefix(base, ".vllm-sr-write-check-") {
+		return false
+	}
+
+	return strings.HasPrefix(base, "..data")
+}
+
 // RouterService is a delegating gRPC service that forwards to the current router implementation.
 type RouterService struct {
 	current atomic.Pointer[OpenAIRouter]
@@ -173,6 +207,42 @@ func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer
 	return r.Process(stream)
 }
 
+func (s *Server) reloadRouterFromFile(configPath string) error {
+	candidateCfg, err := parseReloadConfig(configPath)
+	if err != nil {
+		return err
+	}
+
+	return s.reloadRouterFromConfig("file", configPath, candidateCfg)
+}
+
+func (s *Server) reloadRouterFromConfig(
+	source string,
+	configPath string,
+	candidateCfg *config.RouterConfig,
+) error {
+	if source == "file" {
+		if err := ensureReloadConfigModels(candidateCfg); err != nil {
+			return fmt.Errorf("model download preflight failed: %w", err)
+		}
+	}
+
+	newRouter, err := buildReloadRouter(candidateCfg)
+	if err != nil {
+		return err
+	}
+
+	// Kubernetes updates are already published through config.Replace in the
+	// controller callback. Replacing again here would re-enqueue the same config
+	// update and can cause duplicate reload notifications.
+	if source != "kubernetes" {
+		replaceReloadConfig(candidateCfg)
+	}
+	logLoadedRouterConfig(configPath, candidateCfg)
+	s.service.Swap(newRouter)
+	return nil
+}
+
 // watchConfigAndReload watches the config file and reloads router on changes.
 func (s *Server) watchConfigAndReload(ctx context.Context) {
 	// Check if we're using Kubernetes config source
@@ -192,7 +262,9 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 		})
 		return
 	}
-	defer watcher.Close()
+	defer func() {
+		_ = watcher.Close()
+	}()
 
 	cfgFile := s.configPath
 	cfgDir := filepath.Dir(cfgFile)
@@ -224,17 +296,21 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 			logging.Errorf("[ConfigReload] Cannot stat config file: %v", err)
 		}
 
-		// Parse and build a new router
-		newRouter, err := NewOpenAIRouter(cfgFile)
+		err := s.reloadRouterFromFile(cfgFile)
 		if err != nil {
-			logging.LogEvent("config_reload_failed", map[string]interface{}{
+			event := map[string]interface{}{
 				"file":  cfgFile,
 				"error": err.Error(),
-			})
+			}
+			if strings.Contains(err.Error(), "model download preflight failed") {
+				event["stage"] = "model_download"
+			}
+			logging.LogEvent("config_reload_failed", event)
 			logging.Errorf("[ConfigReload] FAILED to build new router: %v", err)
 			return
 		}
 
+		newRouter := s.service.GetRouter()
 		// Log decisions in the newly loaded config
 		if newRouter.Config != nil {
 			logging.Infof("[ConfigReload] New router built successfully: decisions=%d", len(newRouter.Config.Decisions))
@@ -243,7 +319,6 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 			}
 		}
 
-		s.service.Swap(newRouter)
 		logging.LogEvent("config_reloaded", map[string]interface{}{
 			"file": cfgFile,
 		})
@@ -260,8 +335,7 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 			}
 			logging.Debugf("[ConfigWatcher] fsnotify event: name=%s, op=%s", ev.Name, ev.Op.String())
 			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove|fsnotify.Chmod) != 0 {
-				// If the event pertains to the config file or directory, trigger debounce
-				if filepath.Base(ev.Name) == filepath.Base(cfgFile) || filepath.Dir(ev.Name) == cfgDir {
+				if shouldReloadForConfigEvent(cfgFile, cfgDir, ev.Name) {
 					if !pending || time.Since(last) > 250*time.Millisecond {
 						pending = true
 						last = time.Now()
@@ -298,9 +372,7 @@ func (s *Server) watchKubernetesConfigUpdates(ctx context.Context) {
 				continue
 			}
 
-			// Build a new router with the updated config
-			// Note: We pass the configPath but NewOpenAIRouter will use the global config
-			newRouter, err := NewOpenAIRouter(s.configPath)
+			err := s.reloadRouterFromConfig("kubernetes", s.configPath, newCfg)
 			if err != nil {
 				logging.LogEvent("config_reload_failed", map[string]interface{}{
 					"source": "kubernetes",
@@ -309,7 +381,6 @@ func (s *Server) watchKubernetesConfigUpdates(ctx context.Context) {
 				continue
 			}
 
-			s.service.Swap(newRouter)
 			logging.LogEvent("config_reloaded", map[string]interface{}{
 				"source": "kubernetes",
 			})
