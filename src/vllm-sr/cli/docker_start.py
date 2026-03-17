@@ -14,9 +14,9 @@ from cli.consts import (
 from cli.docker_images import _normalize_platform, get_docker_image
 from cli.docker_runtime import get_container_runtime
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 def docker_start_vllm_sr(
@@ -29,6 +29,8 @@ def docker_start_vllm_sr(
     openclaw_network_name=None,
     minimal=False,
     stack_layout: RuntimeStackLayout | None = None,
+    state_root_dir: str | None = None,
+    runtime_config_file: str | None = None,
 ):
     """
     Start vLLM Semantic Router container.
@@ -51,7 +53,14 @@ def docker_start_vllm_sr(
     _append_host_gateway(cmd, runtime)
     _append_listener_and_service_ports(cmd, listeners, minimal, stack_layout)
 
-    config_dir = _mount_config_and_state_dirs(cmd, config_file)
+    config_dir, runtime_container_config = _mount_config_and_state_dirs(
+        cmd,
+        config_file,
+        runtime_config_file=runtime_config_file,
+        state_root_dir=state_root_dir,
+    )
+    if runtime_container_config:
+        env_vars.setdefault("VLLM_SR_RUNTIME_CONFIG_PATH", runtime_container_config)
     _configure_openclaw_support(
         cmd,
         env_vars,
@@ -178,11 +187,21 @@ def _append_listener_and_service_ports(cmd, listeners, minimal, stack_layout):
     cmd.extend(["-p", f"{stack_layout.api_port}:8080"])
 
 
-def _mount_config_and_state_dirs(cmd, config_file):
-    config_path = os.path.abspath(config_file)
-    config_dir = os.path.dirname(config_path)
+def _mount_config_and_state_dirs(
+    cmd,
+    config_file,
+    runtime_config_file=None,
+    state_root_dir=None,
+):
+    source_config_path = os.path.abspath(config_file)
+    runtime_config_path = os.path.abspath(runtime_config_file or config_file)
+    config_dir = (
+        os.path.abspath(state_root_dir)
+        if state_root_dir
+        else os.path.dirname(source_config_path)
+    )
 
-    cmd.extend(["-v", f"{config_path}:/app/config.yaml:z"])
+    cmd.extend(["-v", f"{source_config_path}:/app/config.yaml:z"])
 
     vllm_sr_dir = os.path.join(config_dir, ".vllm-sr")
     if os.path.exists(vllm_sr_dir):
@@ -197,7 +216,19 @@ def _mount_config_and_state_dirs(cmd, config_file):
     os.makedirs(dashboard_data_dir, exist_ok=True)
     cmd.extend(["-v", f"{dashboard_data_dir}:/app/data:z"])
     log.info(f"Mounting dashboard data directory: {dashboard_data_dir}")
-    return config_dir
+
+    runtime_container_config = None
+    if runtime_config_path != source_config_path:
+        runtime_container_config = (
+            f"/app/.vllm-sr/{os.path.basename(runtime_config_path)}"
+        )
+        log.info(
+            "Using source config %s with runtime override %s",
+            source_config_path,
+            runtime_container_config,
+        )
+
+    return config_dir, runtime_container_config
 
 
 def _configure_openclaw_support(

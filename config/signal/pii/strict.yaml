@@ -1,0 +1,9 @@
+routing:
+  signals:
+    pii:
+      - name: restricted_pii
+        threshold: 0.85
+        include_history: true
+        pii_types_allowed:
+          - EMAIL_ADDRESS
+        description: Sensitive prompts where only low-risk identifiers may pass through.

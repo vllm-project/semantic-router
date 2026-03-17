@@ -432,7 +432,7 @@ var _ = Describe("ImageGenPluginConfig.Validate", func() {
 			cfg := &ImageGenPluginConfig{
 				Enabled:       true,
 				Backend:       "vllm_omni",
-				BackendConfig: &VLLMOmniImageGenConfig{BaseURL: "http://localhost:8001"},
+				BackendConfig: MustStructuredPayload(&VLLMOmniImageGenConfig{BaseURL: "http://localhost:8001"}),
 				ModalityDetection: &ModalityDetectionConfig{
 					Method:   ModalityDetectionKeyword,
 					Keywords: []string{"generate an image"},
@@ -445,7 +445,7 @@ var _ = Describe("ImageGenPluginConfig.Validate", func() {
 			cfg := &ImageGenPluginConfig{
 				Enabled:       true,
 				Backend:       "vllm_omni",
-				BackendConfig: &VLLMOmniImageGenConfig{BaseURL: "http://localhost:8001"},
+				BackendConfig: MustStructuredPayload(&VLLMOmniImageGenConfig{BaseURL: "http://localhost:8001"}),
 				ModalityDetection: &ModalityDetectionConfig{
 					Method: ModalityDetectionClassifier,
 					// Missing classifier config
@@ -462,7 +462,7 @@ var _ = Describe("ImageGenPluginConfig.Validate", func() {
 		cfg := &ImageGenPluginConfig{
 			Enabled:       true,
 			Backend:       "vllm_omni",
-			BackendConfig: &VLLMOmniImageGenConfig{BaseURL: "http://localhost:8001"},
+			BackendConfig: MustStructuredPayload(&VLLMOmniImageGenConfig{BaseURL: "http://localhost:8001"}),
 			// ModalityDetection intentionally nil
 		}
 		Expect(cfg.Validate()).To(Succeed())

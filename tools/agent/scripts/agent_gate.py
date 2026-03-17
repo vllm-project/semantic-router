@@ -18,6 +18,7 @@ from agent_scorecard import build_harness_scorecard
 from agent_support import (
     run_go_lint,
     run_python_lint,
+    run_reference_config_lint,
     run_rust_lint,
     run_test_commands,
 )
@@ -171,6 +172,10 @@ def build_parser() -> argparse.ArgumentParser:
     py_lint.add_argument("--base-ref", default=None)
     py_lint.add_argument("--changed-files", default=None)
 
+    config_lint = subparsers.add_parser("run-config-contract-lint")
+    config_lint.add_argument("--base-ref", default=None)
+    config_lint.add_argument("--changed-files", default=None)
+
     subparsers.add_parser("validate")
     return parser
 
@@ -202,6 +207,7 @@ def main() -> int:
         ),
         "run-rust-lint": lambda _args, files: run_rust_lint(files),
         "run-python-lint": lambda _args, files: run_python_lint(files),
+        "run-config-contract-lint": lambda _args, _files: run_reference_config_lint(),
     }
     handler = handlers.get(args.command)
     if handler is None:

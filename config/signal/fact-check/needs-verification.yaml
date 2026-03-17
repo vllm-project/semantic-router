@@ -1,0 +1,7 @@
+routing:
+  signals:
+    fact_check:
+      - name: needs_fact_check
+        description: Queries with factual claims that should be verified against evidence.
+      - name: no_fact_check_needed
+        description: Creative or opinion-heavy prompts that do not need factual verification.

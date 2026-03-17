@@ -39,10 +39,14 @@ type EmbeddingModels struct {
 	MultiModalModelPath string     `yaml:"multimodal_model_path,omitempty"`
 	BertModelPath       string     `yaml:"bert_model_path"`
 	UseCPU              bool       `yaml:"use_cpu"`
-	HNSWConfig          HNSWConfig `yaml:"hnsw_config,omitempty"`
+	EmbeddingConfig     HNSWConfig `yaml:"embedding_config,omitempty"`
 }
 
-// HNSWConfig contains settings for optimizing the embedding classifier.
+func (e EmbeddingModels) MinSimilarityThreshold() float32 {
+	return e.EmbeddingConfig.WithDefaults().MinScoreThreshold
+}
+
+// HNSWConfig contains settings for optimizing embedding-backed classification.
 type HNSWConfig struct {
 	ModelType          string  `yaml:"model_type,omitempty"`
 	PreloadEmbeddings  bool    `yaml:"preload_embeddings"`
@@ -250,9 +254,11 @@ type ModelParams struct {
 	LoRAs              []LoRAAdapter     `yaml:"loras,omitempty"`
 	AccessKey          string            `yaml:"access_key,omitempty"`
 	ParamSize          string            `yaml:"param_size,omitempty"`
+	ContextWindowSize  int               `yaml:"context_window_size,omitempty"`
 	APIFormat          string            `yaml:"api_format,omitempty"`
 	Description        string            `yaml:"description,omitempty"`
 	Capabilities       []string          `yaml:"capabilities,omitempty"`
+	Tags               []string          `yaml:"tags,omitempty"`
 	QualityScore       float64           `yaml:"quality_score,omitempty"`
 	ExternalModelIDs   map[string]string `yaml:"external_model_ids,omitempty"`
 	Modality           string            `yaml:"modality,omitempty"`
