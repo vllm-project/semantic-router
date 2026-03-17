@@ -103,6 +103,11 @@ func TestValkeyCacheGetStats(t *testing.T) {
 //   HGETALL doc:<some_id>
 
 func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
+	// Skip if SKIP_VALKEY_TESTS is set
+	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
+		t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
+	}
+
 	// Initialize BERT model for embeddings
 	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
 		t.Skipf("Failed to initialize BERT model: %v", err)
@@ -151,7 +156,7 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 		Config:              valkeyConfig,
 		EmbeddingModel:      "bert",
 	})
-	
+
 	// Skip test if Valkey is not available
 	if err != nil {
 		t.Skipf("Valkey server not available (skipping integration test): %v", err)
