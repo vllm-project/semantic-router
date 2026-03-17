@@ -1296,7 +1296,7 @@ global:
       enabled: true
       top_k: 5
       similarity_threshold: 0.35
-      tools_db_path: examples/runtime/tools/tools_db.json
+      tools_db_path: deploy/examples/runtime/tools/tools_db.json
       fallback_to_empty: true
       advanced_filtering:
         enabled: true

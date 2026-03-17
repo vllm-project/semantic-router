@@ -201,7 +201,7 @@ global:
   integrations:
     tools:
       enabled: true
-      tools_db_path: examples/runtime/tools/tools_db.json
+      tools_db_path: deploy/examples/runtime/tools/tools_db.json
       model_type: mmbert
       target_dim: 0
       similarity_threshold: 0.7

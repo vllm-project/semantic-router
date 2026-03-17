@@ -138,15 +138,15 @@ Latest tutorials follow the same taxonomy:
 
 Repo-owned runtime and harness assets now live outside `config/`:
 
-- `examples/runtime/semantic-cache/`
-- `examples/runtime/response-api/`
-- `examples/runtime/tools/`
+- `deploy/examples/runtime/semantic-cache/`
+- `deploy/examples/runtime/response-api/`
+- `deploy/examples/runtime/tools/`
 - `e2e/config/`
 - `deploy/local/envoy.yaml`
 
 Test-only ONNX binding assets now live under `e2e/config/onnx-binding/`.
 
-Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the exhaustive reference config points `global.integrations.tools.tools_db_path` at `examples/runtime/tools/tools_db.json` for local development.
+Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the exhaustive reference config points `global.integrations.tools.tools_db_path` at `deploy/examples/runtime/tools/tools_db.json` for local development.
 
 `config/config.yaml` is not just a sample anymore. The repository enforces it as the exhaustive public-contract reference:
 

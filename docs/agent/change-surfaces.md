@@ -101,7 +101,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `docs_examples`
 
 - User-facing docs, examples, presets, and reference configs.
-- Typical paths: `docs/**`, `website/**`, `deploy/amd/**`, `config/**/*.yaml`
+- Typical paths: `docs/**`, `website/**`, `deploy/amd/**`, `deploy/examples/**`, `config/**/*.yaml`
 - Task rules: `repo-docs`, `training-stack`
 
 ## `harness_docs`

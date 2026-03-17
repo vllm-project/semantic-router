@@ -55,7 +55,7 @@ Latest official tutorials mirror the same top-level taxonomy:
 
 `config/` no longer carries runtime support files or test manifests.
 
-- Runtime support examples moved to `examples/runtime/`
+- Runtime support examples moved to `deploy/examples/runtime/`
 - Local Envoy moved to `deploy/local/envoy.yaml`
 - Harness and smoke manifests moved to `e2e/config/`
 

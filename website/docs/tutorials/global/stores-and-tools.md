@@ -66,5 +66,5 @@ global:
     tools:
       enabled: true
       top_k: 3
-      tools_db_path: examples/runtime/tools/tools_db.json
+      tools_db_path: deploy/examples/runtime/tools/tools_db.json
 ```

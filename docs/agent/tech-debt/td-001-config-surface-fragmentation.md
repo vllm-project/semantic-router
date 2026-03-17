@@ -35,7 +35,7 @@ The repo-wide rollout to the canonical v0.3 contract is now closed for the activ
 - [dashboard/backend/router/core_routes.go](../../../dashboard/backend/router/core_routes.go)
 - [config/config.yaml](../../../config/config.yaml)
 - [config/README.md](../../../config/README.md)
-- [examples/runtime/README.md](../../../examples/runtime/README.md)
+- [deploy/examples/runtime/README.md](../../../deploy/examples/runtime/README.md)
 - [e2e/config/README.md](../../../e2e/config/README.md)
 - [deploy/operator/api/v1alpha1/semanticrouter_types.go](../../../deploy/operator/api/v1alpha1/semanticrouter_types.go)
 - [deploy/operator/controllers/semanticrouter_controller.go](../../../deploy/operator/controllers/semanticrouter_controller.go)

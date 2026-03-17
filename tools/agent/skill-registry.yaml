@@ -146,6 +146,7 @@ surfaces:
       - docs/**
       - website/**
       - deploy/amd/**
+      - deploy/examples/**
       - config/**/*.yaml
     task_rules:
       - repo-docs
