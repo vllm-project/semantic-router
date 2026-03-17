@@ -1,7 +1,7 @@
 ---
 name: feature-complete-checklist
 category: support
-description: Repository-standard completion checklist and reporting shape before closing a task.
+description: Runs the repository-standard completion checklist before closing a task, verifying all surfaces are validated, E2E profiles pass, and any remaining gaps are documented as tech debt. Use when a primary skill is nearly done and the close-out report needs to be generated.
 ---
 
 # Feature Complete Checklist
@@ -22,6 +22,13 @@ description: Repository-standard completion checklist and reporting shape before
 ## Stop Conditions
 
 - Validation gaps are still unresolved or intentionally skipped without explanation
+
+## Workflow
+
+1. Read the feature-complete checklist to understand required close-out steps
+2. Run `make agent-ci-gate CHANGED_FILES="..."` to validate CI constraints
+3. Run `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."` to verify feature readiness
+4. Generate the final report with primary skill, impacted surfaces, validation results, and any debt entries
 
 ## Must Read
 

@@ -53,10 +53,8 @@ spec:
 
   # Semantic router configuration
   config:
-    # BERT model for embeddings (required for semantic cache)
-    bert_model:
-      model_id: models/mom-embedding-light
-      threshold: "0.6"
+    embedding_models:
+      mmbert_model_path: models/mom-embedding-ultra
       use_cpu: true
 
     # Semantic cache with Hybrid backend (HNSW + Milvus)
@@ -67,7 +65,7 @@ spec:
       ttl_seconds: 3600
       max_entries: 5000
       eviction_policy: lru
-      embedding_model: bert
+      embedding_model: mmbert
 
       # HNSW configuration for hybrid backend
       hnsw:

@@ -1,0 +1,7 @@
+plugin:
+  type: memory
+  configuration:
+    enabled: true
+    retrieval_limit: 5
+    similarity_threshold: 0.72
+    auto_store: true

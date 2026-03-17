@@ -57,9 +57,9 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
         </div>
         <div className={styles.modalBody}>
           <p className={styles.modalHint}>
-            Paste a router config YAML below, load from a file, fetch from a
-            URL, or load the current router config directly. It will be
-            decompiled into DSL.
+            Paste a full router config YAML or routing fragment below, load
+            from a file, fetch from a URL, or load the current router config
+            directly. Only the routing section will be decompiled into DSL.
           </p>
           <div className={styles.importUrlRow}>
             <input
@@ -134,7 +134,7 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
               className={styles.toolbarBtnPrimary}
               onClick={onLoadFromRouter}
               disabled={loadingFromRouter}
-              title="Load the current running router config and decompile to DSL"
+              title="Load the current router config and import only its routing section into DSL"
             >
               <svg
                 width="12"
