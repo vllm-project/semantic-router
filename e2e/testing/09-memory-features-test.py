@@ -14,6 +14,8 @@ Test classes live in the memory_tests package:
   - StaleMemoryTest: Contradicting facts baseline (soft-insert, no contradiction detection)
   - PluginCombinationTest: Memory + system_prompt coexistence
   - MemoryStorageTest: Conversation turns stored in Milvus
+  - PerDecisionMemoryDisabledTest: Decision with memory.enabled=false skips retrieval
+  - PerDecisionThresholdOverrideTest: Decision-level threshold overrides global default
 
 Prerequisites:
   - Milvus running
@@ -39,6 +41,8 @@ from memory_tests import (
     MemoryContentIntegrityTest,
     MemoryInjectionPipelineTest,
     MemoryStorageTest,
+    PerDecisionMemoryDisabledTest,
+    PerDecisionThresholdOverrideTest,
     PluginCombinationTest,
     SimilarityThresholdTest,
     StaleMemoryTest,
@@ -81,6 +85,9 @@ def run_tests():
         StaleMemoryTest,
         PluginCombinationTest,
         MemoryStorageTest,
+        # P1: Per-decision plugin behavior
+        PerDecisionMemoryDisabledTest,
+        PerDecisionThresholdOverrideTest,
     ]
 
     for test_class in test_classes:
