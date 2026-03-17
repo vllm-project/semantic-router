@@ -84,8 +84,8 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 
 	// Add timeout if configured (in milliseconds)
 	if valkeyConfig.Connection.Timeout > 0 {
-		timeoutMs := time.Duration(valkeyConfig.Connection.Timeout) * time.Second
-		clientConfig = clientConfig.WithRequestTimeout(timeoutMs)
+		timeout := time.Duration(valkeyConfig.Connection.Timeout) * time.Second
+		clientConfig = clientConfig.WithRequestTimeout(timeout)
 	}
 
 	// Create the Valkey client
@@ -556,7 +556,7 @@ func (c *ValkeyCache) addEntry(id string, requestID string, model string, query 
 	// Set TTL if configured (Valkey native TTL)
 	if effectiveTTL > 0 {
 		expireCmd := []string{"EXPIRE", docKey, fmt.Sprintf("%d", effectiveTTL)}
-		c.client.CustomCommand(ctx, expireCmd)
+		_, _ = c.client.CustomCommand(ctx, expireCmd)
 	}
 
 	logging.Debugf("ValkeyCache.addEntry: successfully added entry to Valkey (key: %s, embedding_dim: %d, request_size: %d, response_size: %d, ttl=%d)",
@@ -612,9 +612,9 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 	}
 
 	// Append the embedding bytes as a separate argument
-	searchCmdWithBytes := append(searchCmd, string(embeddingBytes))
+	searchCmd = append(searchCmd, string(embeddingBytes))
 
-	searchResult, err := c.client.CustomCommand(ctx, searchCmdWithBytes)
+	searchResult, err := c.client.CustomCommand(ctx, searchCmd)
 	if err != nil {
 		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)

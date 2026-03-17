@@ -71,6 +71,7 @@ type RedisConfig struct {
 		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
 	} `json:"logging" yaml:"logging"`
 }
+
 // ValkeyConfig defines the complete configuration structure for Valkey cache backend.
 type ValkeyConfig struct {
 	Connection struct {

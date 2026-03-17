@@ -58,7 +58,7 @@ func TestValkeyCacheEmbeddingModel(t *testing.T) {
 		TTLSeconds:          3600,
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, "", cache.embeddingModel)
+	assert.Empty(t, cache.embeddingModel)
 
 	// Test disabled cache with explicit embedding model - still empty since disabled
 	cache, err = NewValkeyCache(ValkeyCacheOptions{
@@ -69,7 +69,7 @@ func TestValkeyCacheEmbeddingModel(t *testing.T) {
 		EmbeddingModel:      "qwen3",
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, "", cache.embeddingModel)
+	assert.Empty(t, cache.embeddingModel)
 }
 
 func TestValkeyCacheGetStats(t *testing.T) {
@@ -157,11 +157,9 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 		EmbeddingModel:      "bert",
 	})
 
-	// Skip test if Valkey is not available
 	if err != nil {
 		t.Skipf("Valkey server not available (skipping integration test): %v", err)
 	}
-
 	return cache
 }
 
@@ -746,7 +744,7 @@ func TestValkeyCacheIntegration_LargeResponseBody(t *testing.T) {
 	assert.NoError(t, err, "FindSimilar should work with large response")
 	if hit {
 		assert.NotNil(t, response, "Large response should be retrievable")
-		assert.Equal(t, len(largeResponse), len(response), "Response size should match")
+		assert.Len(t, response, len(largeResponse), "Response size should match")
 	}
 }
 
@@ -792,9 +790,9 @@ func TestValkeyCacheIntegration_StatsAccuracy(t *testing.T) {
 
 	time.Sleep(300 * time.Millisecond)
 
-	cache.FindSimilar("gpt-4", "stats test query 0")
-	cache.FindSimilar("gpt-4", "stats test query 1")
-	cache.FindSimilar("gpt-4", "completely different query xyz")
+	_, _, _ = cache.FindSimilar("gpt-4", "stats test query 0")
+	_, _, _ = cache.FindSimilar("gpt-4", "stats test query 1")
+	_, _, _ = cache.FindSimilar("gpt-4", "completely different query xyz")
 
 	time.Sleep(100 * time.Millisecond)
 
