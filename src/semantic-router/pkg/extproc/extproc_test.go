@@ -3359,10 +3359,10 @@ func TestHandleRequestHeadersWithModelsEndpoint(t *testing.T) {
 			expectImmediate: false,
 		},
 		{
-			name:            "POST /v1/models - should continue processing",
+			name:            "POST /v1/models - immediate response",
 			method:          "POST",
 			path:            "/v1/models",
-			expectImmediate: false,
+			expectImmediate: true,
 		},
 	}
 
@@ -4507,7 +4507,6 @@ var _ = Describe("Response API Translation", func() {
 			Expect(len(messages)).To(Equal(2)) // system + user
 		})
 	})
-
 	_ = Describe("Response API Content-Length Recalculation", func() {
 		var router *OpenAIRouter
 		var cfg *config.RouterConfig
@@ -4516,7 +4515,8 @@ var _ = Describe("Response API Translation", func() {
 			BeforeEach(func() {
 				cfg = CreateTestConfig()
 				cfg.ModelConfig["gpt-4-oss"] = config.ModelParams{PreferredEndpoints: []string{"test-endpoint1"}}
-				router, err := CreateTestRouter(cfg)
+				var err error
+				router, err = CreateTestRouter(cfg)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
