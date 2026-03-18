@@ -138,6 +138,10 @@ type RequestContext struct {
 	// Empty string means standard OpenAI-compatible backend (no transformation needed)
 	APIFormat string
 
+	// ClientProtocol identifies the inbound wire format (e.g., "anthropic" for /v1/messages).
+	// Empty string means OpenAI-compatible (the default).
+	ClientProtocol string
+
 	// RAG (Retrieval-Augmented Generation) tracking
 	RAGRetrievedContext string  // Retrieved context from RAG plugin
 	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")
