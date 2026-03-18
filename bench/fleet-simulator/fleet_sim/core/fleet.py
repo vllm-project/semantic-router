@@ -4,18 +4,17 @@ FleetConfig defines the static configuration; Fleet executes the simulation
 event loop, dispatching requests through the router and advancing instance
 time.
 """
+
 from __future__ import annotations
 
-import heapq
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
 
+from ..gpu_profiles.profiles import GpuProfile
 from .pool import Pool
 from .request import Request, RequestState
-from ..gpu_profiles.profiles import GpuProfile, A100_80GB
-
 
 # ── Configuration dataclasses ─────────────────────────────────────────────────
+
 
 @dataclass
 class PoolConfig:
@@ -30,6 +29,7 @@ class PoolConfig:
     chunk_mode   : "independent" (default, matches M/G/c model) or "shared"
     lb_strategy  : load-balancing ("least_queue", "round_robin", "least_loaded")
     """
+
     pool_id: str
     gpu: GpuProfile
     n_gpus: int
@@ -48,7 +48,8 @@ class FleetConfig:
     router_type  : routing algorithm class name (registered in routing module)
     router_kwargs: extra kwargs passed to router constructor
     """
-    pools: List[PoolConfig]
+
+    pools: list[PoolConfig]
     router_type: str = "LengthRouter"
     router_kwargs: dict = field(default_factory=dict)
 
@@ -63,6 +64,7 @@ class FleetConfig:
 
 
 # ── Fleet simulation engine ───────────────────────────────────────────────────
+
 
 class Fleet:
     """Event-driven fleet simulation.
@@ -80,9 +82,9 @@ class Fleet:
 
     def __init__(self, config: FleetConfig):
         self.config = config
-        self._pools: Dict[str, Pool] = {}
+        self._pools: dict[str, Pool] = {}
         self._completed: list[Request] = []
-        self._router = None   # set in run()
+        self._router = None  # set in run()
 
     def _build(self) -> None:
         self._pools = {}
@@ -107,6 +109,7 @@ class Fleet:
 
         # Build router
         from .. import routing as _routing
+
         router_cls = getattr(_routing, self.config.router_type)
         self._router = router_cls(
             pools={pc.pool_id: pc for pc in self.config.pools},
@@ -120,7 +123,7 @@ class Fleet:
         self,
         arrivals: list[tuple[float, Request]],
         verbose: bool = False,
-    ) -> "FleetSimResult":
+    ) -> FleetSimResult:
         """Simulate the fleet processing a list of requests.
 
         Parameters
@@ -134,12 +137,13 @@ class Fleet:
         arrivals = sorted(arrivals, key=lambda x: x[0])
 
         now = 0.0
-        idx = 0           # next arrival index
+        idx = 0  # next arrival index
         n_total = len(arrivals)
 
         while idx < n_total or any(
-            p.total_completed() + sum(i.active_count + i.queue_depth
-                                      for i in p.instances) > 0
+            p.total_completed()
+            + sum(i.active_count + i.queue_depth for i in p.instances)
+            > 0
             for p in self._pools.values()
         ):
             # Determine next event time
@@ -173,11 +177,13 @@ class Fleet:
                 if verbose and idx % 10_000 == 0:
                     pct = idx / n_total * 100
                     done = len(self._completed)
-                    print(f"  [{pct:5.1f}%]  arrivals={idx:,}  "
-                          f"completed={done:,}  t={now:.2f}s")
+                    print(
+                        f"  [{pct:5.1f}%]  arrivals={idx:,}  "
+                        f"completed={done:,}  t={now:.2f}s"
+                    )
 
         # Final drain
-        drain_time = now + 600.0   # give up to 10 min to flush
+        drain_time = now + 600.0  # give up to 10 min to flush
         for pool in self._pools.values():
             pool.advance_to(drain_time)
 
@@ -187,7 +193,7 @@ class Fleet:
             pools=self._pools,
         )
 
-    def collect_metrics(self) -> "FleetSimResult":
+    def collect_metrics(self) -> FleetSimResult:
         """Return result object (valid after run())."""
         return FleetSimResult(
             config=self.config,
@@ -198,43 +204,42 @@ class Fleet:
 
 # ── Result object ─────────────────────────────────────────────────────────────
 
+
 class FleetSimResult:
     """Aggregated metrics from a completed fleet simulation."""
 
-    def __init__(self, config: FleetConfig, completed: list[Request],
-                 pools: Dict[str, Pool]):
+    def __init__(
+        self, config: FleetConfig, completed: list[Request], pools: dict[str, Pool]
+    ):
         self.config = config
         self.completed = completed
         self.pools = pools
 
     # ── fleet-level ───────────────────────────────────────────────────────────
 
-    def percentile(self, metric: str, p: float,
-                   pool_id: Optional[str] = None) -> float:
+    def percentile(self, metric: str, p: float, pool_id: str | None = None) -> float:
         """Compute a percentile of a metric across completed requests.
 
         metric : "ttft" | "e2e" | "queue_wait"
         p      : percentile in [0, 100]
         pool_id: filter to a specific pool (None = all)
         """
-        import statistics
-        reqs = [r for r in self.completed
-                if pool_id is None or r.pool_id == pool_id]
-        vals = [getattr(r, metric) for r in reqs
-                if getattr(r, metric) is not None]
+
+        reqs = [r for r in self.completed if pool_id is None or r.pool_id == pool_id]
+        vals = [getattr(r, metric) for r in reqs if getattr(r, metric) is not None]
         if not vals:
             return float("nan")
         vals.sort()
         idx = max(0, int(len(vals) * p / 100) - 1)
         return vals[idx]
 
-    def p99_ttft_ms(self, pool_id: Optional[str] = None) -> float:
+    def p99_ttft_ms(self, pool_id: str | None = None) -> float:
         return self.percentile("ttft", 99, pool_id) * 1000
 
-    def p50_ttft_ms(self, pool_id: Optional[str] = None) -> float:
+    def p50_ttft_ms(self, pool_id: str | None = None) -> float:
         return self.percentile("ttft", 50, pool_id) * 1000
 
-    def p99_queue_wait_ms(self, pool_id: Optional[str] = None) -> float:
+    def p99_queue_wait_ms(self, pool_id: str | None = None) -> float:
         return self.percentile("queue_wait", 99, pool_id) * 1000
 
     def throughput(self) -> float:
@@ -253,16 +258,14 @@ class FleetSimResult:
     def annualised_cost_usd(self) -> float:
         return self.cost_per_hr() * 8760
 
-    def mean_utilisation(self, pool_id: Optional[str] = None) -> float:
+    def mean_utilisation(self, pool_id: str | None = None) -> float:
         ps = [self.pools[pool_id]] if pool_id else list(self.pools.values())
         utils = [p.mean_utilisation() for p in ps]
         return sum(utils) / len(utils) if utils else 0.0
 
-    def slo_compliance(self, t_slo_ms: float,
-                       pool_id: Optional[str] = None) -> float:
+    def slo_compliance(self, t_slo_ms: float, pool_id: str | None = None) -> float:
         """Fraction of requests with TTFT ≤ t_slo_ms."""
-        reqs = [r for r in self.completed
-                if pool_id is None or r.pool_id == pool_id]
+        reqs = [r for r in self.completed if pool_id is None or r.pool_id == pool_id]
         ttfts = [r.ttft for r in reqs if r.ttft is not None]
         if not ttfts:
             return float("nan")
@@ -283,13 +286,12 @@ class FleetSimResult:
         }
         for pool_id, pool in self.pools.items():
             result[f"{pool_id}_n_gpus"] = pool.n_gpus
-            result[f"{pool_id}_p99_ttft_ms"] = round(
-                self.p99_ttft_ms(pool_id), 1)
+            result[f"{pool_id}_p99_ttft_ms"] = round(self.p99_ttft_ms(pool_id), 1)
             result[f"{pool_id}_p99_qwait_ms"] = round(
-                self.p99_queue_wait_ms(pool_id), 1)
+                self.p99_queue_wait_ms(pool_id), 1
+            )
             result[f"{pool_id}_util"] = round(pool.mean_utilisation(), 4)
-            result[f"{pool_id}_slo"] = round(
-                self.slo_compliance(t_slo_ms, pool_id), 4)
+            result[f"{pool_id}_slo"] = round(self.slo_compliance(t_slo_ms, pool_id), 4)
         return result
 
     def print_summary(self, t_slo_ms: float = 500.0) -> None:

@@ -43,11 +43,11 @@ Validation (H100-SXM5 + Llama-3.1-70B, TP=8, fp16):
   n=128: model predicts ≈ P_active (600 W); ML.ENERGY reports 600 W  ✓
   n=32 : model predicts  ~450 W;  ML.ENERGY ~480 W  (6 % error)
 """
+
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Optional
 
 from ..hardware.spec import HardwareSpec
 from ..models.spec import ModelSpec
@@ -66,8 +66,8 @@ from .builder import ServingConfig
 # These fractions transfer to other GPUs *in the same HBM-bandwidth-bound
 # regime* (Ampere, Hopper, Blackwell dense-decode workloads).  Confidence
 # degrades for GPUs or workloads outside this regime.
-_POWER_IDLE_FRAC:   float = 0.43   # P at batch=1  / TDP
-_POWER_ACTIVE_FRAC: float = 0.86   # P at batch≫1 / TDP
+_POWER_IDLE_FRAC: float = 0.43  # P at batch=1  / TDP
+_POWER_ACTIVE_FRAC: float = 0.86  # P at batch≫1 / TDP
 
 
 @dataclass
@@ -102,6 +102,7 @@ class DecodeEfficiencyPoint:
     power_w             : estimated GPU power (W) at this concurrency
     tokens_per_watt     : output tokens per Joule  [tok/J]
     """
+
     n_active: int
     iter_latency_s: float
     tokens_per_s: float
@@ -127,7 +128,7 @@ class DecodeEfficiencyPoint:
             f"  arith. intensity     = {self.arithmetic_intensity:.1f} fl/byte  "
             f"({self.roofline_bound}-bound)",
             f"  power                = {self.power_w:.0f} W",
-            f"  ──────────────────────────────",
+            "  ──────────────────────────────",
             f"  tok/W                = {self.tokens_per_watt:.4f}  tok/J",
         ]
         return "\n".join(lines)
@@ -148,6 +149,7 @@ class ComputedProfile:
     calibration_ctx  : context length at which H was derived (tokens).
     total_kv_blks    : computed KV-cache block budget
     """
+
     hw: HardwareSpec
     model: ModelSpec
     cfg: ServingConfig
@@ -185,8 +187,7 @@ class ComputedProfile:
         """Cost of one full instance (tp GPUs) per hour."""
         return self.hw.cost_per_hr * self.cfg.tp
 
-    def iter_latency(self, n_active: int,
-                     mean_seq_len: Optional[float] = None) -> float:
+    def iter_latency(self, n_active: int, mean_seq_len: float | None = None) -> float:
         """Iteration wall-clock time: W + H_eff × n_active (seconds).
 
         When ``mean_seq_len`` is provided, H is scaled by
@@ -214,10 +215,13 @@ class ComputedProfile:
             return min(self.cfg.max_slots, kv_limit)
         return kv_limit
 
-    def prefill_iter_latency(self, chunk_tokens: int,
-                              kv_history_tokens: float,
-                              n_active: int,
-                              mean_seq_len: Optional[float] = None) -> float:
+    def prefill_iter_latency(
+        self,
+        chunk_tokens: int,
+        kv_history_tokens: float,
+        n_active: int,
+        mean_seq_len: float | None = None,
+    ) -> float:
         """Prefill-chunk iteration time using a full roofline compute/memory check.
 
         Total prefill FLOPs for one chunk (``c`` tokens, ``q`` KV history)::
@@ -261,30 +265,48 @@ class ComputedProfile:
         #    O:  chunk × (n_heads × head_dim) × hidden
         #    All are weight-stationary matmuls; factor 2 for multiply-accumulate.
         proj_flops = (
-            2 * chunk_tokens * self.model.hidden_size
+            2
+            * chunk_tokens
+            * self.model.hidden_size
             * (2 * self.model.n_heads + 2 * self.model.n_kv_heads)
-            * self.model.head_dim * self.model.n_layers / self.cfg.tp
+            * self.model.head_dim
+            * self.model.n_layers
+            / self.cfg.tp
         )
 
         # 2. Flash-attention scores: QK^T (within chunk) + AV (full KV history)
         #    Factor 4 = 2 (QK) + 2 (AV), averaged over the growing KV context.
         attn_flops = (
-            4 * self.model.n_heads * self.model.head_dim
-            * chunk_tokens * (chunk_tokens / 2 + kv_history_tokens)
-            * self.model.n_layers / self.cfg.tp
+            4
+            * self.model.n_heads
+            * self.model.head_dim
+            * chunk_tokens
+            * (chunk_tokens / 2 + kv_history_tokens)
+            * self.model.n_layers
+            / self.cfg.tp
         )
 
         # 3. FFN / MoE FLOPs (gate + up + down, SwiGLU structure)
         if self.model.is_moe:
             ffn_flops = (
-                6 * (self.model.n_experts_topk * self.model.moe_intermediate_size
-                     + self.model.n_shared_experts * self.model.intermediate_size)
-                * self.model.hidden_size * chunk_tokens * self.model.n_layers / self.cfg.tp
+                6
+                * (
+                    self.model.n_experts_topk * self.model.moe_intermediate_size
+                    + self.model.n_shared_experts * self.model.intermediate_size
+                )
+                * self.model.hidden_size
+                * chunk_tokens
+                * self.model.n_layers
+                / self.cfg.tp
             )
         else:
             ffn_flops = (
-                6 * self.model.hidden_size * self.model.intermediate_size
-                * chunk_tokens * self.model.n_layers / self.cfg.tp
+                6
+                * self.model.hidden_size
+                * self.model.intermediate_size
+                * chunk_tokens
+                * self.model.n_layers
+                / self.cfg.tp
             )
 
         compute_time = (proj_flops + attn_flops + ffn_flops) / tc_flops
@@ -307,7 +329,8 @@ class ComputedProfile:
         n_prefill_iters = math.ceil(l_in / self.cfg.chunk)
         kv_history_avg = l_in / 2.0
         prefill_iter_t = self.prefill_iter_latency(
-            self.cfg.chunk, kv_history_avg, ns, mean_seq_len)
+            self.cfg.chunk, kv_history_avg, ns, mean_seq_len
+        )
         prefill_time = n_prefill_iters * prefill_iter_t
 
         # Decode: memory-bandwidth-bound
@@ -316,8 +339,7 @@ class ComputedProfile:
 
         return prefill_time + decode_time
 
-    def throughput(self, max_ctx: int, mean_l_in: float,
-                   mean_l_out: float) -> float:
+    def throughput(self, max_ctx: int, mean_l_in: float, mean_l_out: float) -> float:
         """Steady-state request throughput (req/s) at full concurrency."""
         ns = self.n_slots(max_ctx)
         es = self.service_time(int(mean_l_in), int(mean_l_out), max_ctx)
@@ -325,8 +347,7 @@ class ComputedProfile:
 
     # ── Power and efficiency ──────────────────────────────────────────────────
 
-    def power_at_concurrency(self, n_active: int,
-                              mean_ctx: Optional[int] = None) -> float:
+    def power_at_concurrency(self, n_active: int, mean_ctx: int | None = None) -> float:
         """Estimated GPU power (W) at *n_active* in-flight sequences.
 
         Derived entirely from W, H, model architecture, and hw.power (TDP).
@@ -367,8 +388,11 @@ class ComputedProfile:
                    ``cfg.mean_ctx_tokens`` used to calibrate H.
         """
         ctx = mean_ctx if mean_ctx is not None else self.cfg.mean_ctx_tokens
-        H_eff = (self.H * (ctx / self.calibration_ctx)
-                 if self.calibration_ctx > 0 else self.H)
+        H_eff = (
+            self.H * (ctx / self.calibration_ctx)
+            if self.calibration_ctx > 0
+            else self.H
+        )
         iter_t = self.W + H_eff * n_active
 
         # Component 1: KV-cache fraction of HBM traffic
@@ -382,12 +406,13 @@ class ComputedProfile:
             compute_frac = flops_n / (iter_t * self.hw.fp16_tc_flops)
 
         activity = min(1.0, kv_frac + compute_frac)
-        p_idle  = self.hw.power * _POWER_IDLE_FRAC
+        p_idle = self.hw.power * _POWER_IDLE_FRAC
         p_range = self.hw.power * (_POWER_ACTIVE_FRAC - _POWER_IDLE_FRAC)
         return p_idle + p_range * activity
 
-    def decode_efficiency(self, n_active: int,
-                           mean_ctx: Optional[int] = None) -> "DecodeEfficiencyPoint":
+    def decode_efficiency(
+        self, n_active: int, mean_ctx: int | None = None
+    ) -> DecodeEfficiencyPoint:
         """Full derivation chain from hardware + model → tok/W.
 
         Exposes every intermediate quantity so the computation is fully
@@ -433,15 +458,23 @@ class ComputedProfile:
         #   4 × n_kv_heads × head_dim × mean_ctx  (QK: 2×n_kv×d×ctx + AV: 2×n_kv×ctx×d)
         # For n_active sequences across n_layers, TP-sharded:
         flops_attn = (
-            4.0 * self.model.n_kv_heads * self.model.head_dim
-            * ctx * n_active * self.model.n_layers / self.cfg.tp
+            4.0
+            * self.model.n_kv_heads
+            * self.model.head_dim
+            * ctx
+            * n_active
+            * self.model.n_layers
+            / self.cfg.tp
         )
         flops = flops_weights + flops_attn
 
         # ── Step 6: arithmetic intensity ─────────────────────────────────
         ai = flops / mem_bytes if mem_bytes > 0 else 0.0
-        ridge = (self.hw.fp16_tc_flops / self.hw.mem_bw
-                 if self.hw.mem_bw > 0 else float("inf"))
+        ridge = (
+            self.hw.fp16_tc_flops / self.hw.mem_bw
+            if self.hw.mem_bw > 0
+            else float("inf")
+        )
         bound = "compute" if ai > ridge else "memory"
 
         # ── Steps 7–9: power and tok/W ────────────────────────────────────

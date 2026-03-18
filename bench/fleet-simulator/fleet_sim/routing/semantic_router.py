@@ -48,12 +48,14 @@ Example
         router_kwargs={"classify_fn": my_classifier},
     )
 """
+
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
 
-from fleet_sim.routing.base import BaseRouter
 from fleet_sim.core.request import Request
+from fleet_sim.routing.base import BaseRouter
 
 
 class SemanticRouter(BaseRouter):
@@ -76,20 +78,23 @@ class SemanticRouter(BaseRouter):
     SLO before calling ``FleetOptimizer``.
     """
 
-    def __init__(self,
-                 pools: Dict[str, Any],
-                 classify_fn: Optional[Callable[[Request], Optional[str]]] = None,
-                 default_pool: Optional[str] = None,
-                 **kwargs):
+    def __init__(
+        self,
+        pools: dict[str, Any],
+        classify_fn: Callable[[Request], str | None] | None = None,
+        default_pool: str | None = None,
+        **kwargs,
+    ):
         super().__init__(pools, **kwargs)
         if classify_fn is None:
             # Default: fall through to model_id if set, else first pool
-            def classify_fn(req: Request) -> Optional[str]:
+            def classify_fn(req: Request) -> str | None:
                 return req.model_id
+
         self._classify = classify_fn
         self._default = default_pool or self.pool_ids[0]
 
-    def route(self, req: Request) -> Optional[str]:
+    def route(self, req: Request) -> str | None:
         pool_id = self._classify(req)
         if pool_id and pool_id in self.pools:
             return pool_id

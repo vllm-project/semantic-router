@@ -1,14 +1,15 @@
 """Pydantic models for the fleet-sim REST API."""
+
 from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ── GPU Profiles ──────────────────────────────────────────────────────────────
+
 
 class GpuProfileOut(BaseModel):
     name: str
@@ -22,6 +23,7 @@ class GpuProfileOut(BaseModel):
 
 
 # ── Traces ────────────────────────────────────────────────────────────────────
+
 
 class TraceFormat(str, Enum):
     semantic_router = "semantic_router"
@@ -46,9 +48,9 @@ class TraceStats(BaseModel):
     p99_output_tokens: int
     p50_total_tokens: int
     p99_total_tokens: int
-    routing_distribution: Dict[str, float] = Field(default_factory=dict)
-    prompt_histogram: List[HistogramBucket] = Field(default_factory=list)
-    output_histogram: List[HistogramBucket] = Field(default_factory=list)
+    routing_distribution: dict[str, float] = Field(default_factory=dict)
+    prompt_histogram: list[HistogramBucket] = Field(default_factory=list)
+    output_histogram: list[HistogramBucket] = Field(default_factory=list)
 
 
 class TraceInfo(BaseModel):
@@ -57,21 +59,22 @@ class TraceInfo(BaseModel):
     format: TraceFormat
     upload_time: datetime
     n_requests: int
-    stats: Optional[TraceStats] = None
+    stats: TraceStats | None = None
 
 
 class TraceSample(BaseModel):
-    records: List[Dict[str, Any]]
+    records: list[dict[str, Any]]
     total: int
 
 
 # ── Workloads (built-in CDFs) ─────────────────────────────────────────────────
 
+
 class BuiltinWorkload(BaseModel):
     name: str
     description: str
     path: str
-    stats: Optional[TraceStats] = None
+    stats: TraceStats | None = None
 
 
 class CdfPoint(BaseModel):
@@ -81,18 +84,24 @@ class CdfPoint(BaseModel):
 
 # ── Fleets ────────────────────────────────────────────────────────────────────
 
+
 class PoolConfigIn(BaseModel):
     pool_id: str = Field(..., description="Unique pool name, e.g. 'short' or 'llama8b'")
     gpu: str = Field(..., description="GPU profile key: 'a100', 'h100', 'a10g'")
     n_gpus: int = Field(..., ge=1)
-    max_ctx: int = Field(..., ge=512, description="Max context tokens this pool handles")
+    max_ctx: int = Field(
+        ..., ge=512, description="Max context tokens this pool handles"
+    )
 
 
 class FleetConfigIn(BaseModel):
     name: str
-    pools: List[PoolConfigIn]
-    router: str = Field("length", description="Router type: 'length', 'model', 'random', 'least_loaded', 'compress_route'")
-    compress_gamma: Optional[float] = Field(None, ge=1.0, le=3.0)
+    pools: list[PoolConfigIn]
+    router: str = Field(
+        "length",
+        description="Router type: 'length', 'model', 'random', 'least_loaded', 'compress_route'",
+    )
+    compress_gamma: float | None = Field(None, ge=1.0, le=3.0)
 
 
 class FleetConfigOut(FleetConfigIn):
@@ -105,6 +114,7 @@ class FleetConfigOut(FleetConfigIn):
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
 
+
 class JobType(str, Enum):
     optimize = "optimize"
     simulate = "simulate"
@@ -113,8 +123,8 @@ class JobType(str, Enum):
 
 class WorkloadRef(BaseModel):
     type: str = Field(..., description="'builtin' or 'trace'")
-    name: Optional[str] = None        # for builtin: 'azure', 'lmsys', etc.
-    trace_id: Optional[str] = None    # for trace uploads
+    name: str | None = None  # for builtin: 'azure', 'lmsys', etc.
+    trace_id: str | None = None  # for trace uploads
 
 
 class OptimizeParams(BaseModel):
@@ -131,7 +141,8 @@ class OptimizeParams(BaseModel):
     n_sim_requests: int = Field(20000, ge=1000)
     p_c: float = Field(
         0.75,
-        ge=0.0, le=1.0,
+        ge=0.0,
+        le=1.0,
         description=(
             "Effective compression success probability for the C&R analytical model. "
             "The greedy compressor has p_c=1.0 per safe request; multiply by the "
@@ -141,7 +152,8 @@ class OptimizeParams(BaseModel):
     )
     node_avail: float = Field(
         1.0,
-        gt=0.0, le=1.0,
+        gt=0.0,
+        le=1.0,
         description=(
             "Steady-state fraction of GPU nodes that are healthy (availability). "
             "The optimizer inflates the raw SLO-sized GPU count by 1/node_avail "
@@ -157,8 +169,8 @@ class OptimizeParams(BaseModel):
 
 class SimulateParams(BaseModel):
     workload: WorkloadRef
-    fleet_id: Optional[str] = None   # use saved fleet
-    fleet: Optional[FleetConfigIn] = None  # or inline fleet
+    fleet_id: str | None = None  # use saved fleet
+    fleet: FleetConfigIn | None = None  # or inline fleet
     lam: float = Field(..., gt=0)
     slo_ms: float = Field(500.0, gt=0)
     n_requests: int = Field(20000, ge=100)
@@ -166,18 +178,18 @@ class SimulateParams(BaseModel):
 
 class WhatifParams(BaseModel):
     workload: WorkloadRef
-    fleet_id: Optional[str] = None
-    fleet: Optional[FleetConfigIn] = None
-    lam_range: List[float] = Field(..., min_length=2)
+    fleet_id: str | None = None
+    fleet: FleetConfigIn | None = None
+    lam_range: list[float] = Field(..., min_length=2)
     slo_ms: float = Field(500.0, gt=0)
     n_requests: int = Field(10000, ge=100)
 
 
 class JobRequest(BaseModel):
     type: JobType
-    optimize: Optional[OptimizeParams] = None
-    simulate: Optional[SimulateParams] = None
-    whatif: Optional[WhatifParams] = None
+    optimize: OptimizeParams | None = None
+    simulate: SimulateParams | None = None
+    whatif: WhatifParams | None = None
 
 
 class JobStatus(str, Enum):
@@ -188,6 +200,7 @@ class JobStatus(str, Enum):
 
 
 # ── Simulation result sub-models ──────────────────────────────────────────────
+
 
 class PoolResult(BaseModel):
     pool_id: str
@@ -208,8 +221,8 @@ class SimResult(BaseModel):
     fleet_p50_ttft_ms: float
     fleet_slo_compliance: float
     fleet_mean_utilisation: float
-    pools: List[PoolResult]
-    ttft_histogram: List[HistogramBucket] = Field(default_factory=list)
+    pools: list[PoolResult]
+    ttft_histogram: list[HistogramBucket] = Field(default_factory=list)
     arrival_rate_actual: float
 
 
@@ -227,10 +240,10 @@ class SweepPoint(BaseModel):
 
 class OptResult(BaseModel):
     best: SweepPoint
-    sweep: List[SweepPoint]
+    sweep: list[SweepPoint]
     baseline_annual_cost_kusd: float
     savings_pct: float
-    sim_validation: Optional[SimResult] = None
+    sim_validation: SimResult | None = None
 
 
 class WhatifPoint(BaseModel):
@@ -242,8 +255,8 @@ class WhatifPoint(BaseModel):
 
 
 class WhatifResult(BaseModel):
-    points: List[WhatifPoint]
-    slo_break_lam: Optional[float] = None
+    points: list[WhatifPoint]
+    slo_break_lam: float | None = None
 
 
 class JobOut(BaseModel):
@@ -251,10 +264,10 @@ class JobOut(BaseModel):
     type: JobType
     status: JobStatus
     created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
     request: JobRequest
-    result_optimize: Optional[OptResult] = None
-    result_simulate: Optional[SimResult] = None
-    result_whatif: Optional[WhatifResult] = None
+    result_optimize: OptResult | None = None
+    result_simulate: SimResult | None = None
+    result_whatif: WhatifResult | None = None

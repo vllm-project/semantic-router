@@ -1,16 +1,25 @@
 """Unit tests for fleet_sim.hardware — HardwareSpec and catalog."""
+
 import pytest
 from fleet_sim.hardware import (
+    A100_SXM,
+    B200_SXM,
+    GB200,
+    GB300,
+    H100_SXM,
+    H200_SXM,
     HardwareSpec,
-    A100_SXM, H100_SXM, H200_SXM, B200_SXM, GB200, GB300, L40S, B60,
-    get_hardware, list_hardware,
+    get_hardware,
+    list_hardware,
 )
-from fleet_sim.hardware.spec import MEM_BW_SCALE, MEM_CONST_LAT, NCCL_MEM
+from fleet_sim.hardware.spec import MEM_BW_SCALE, NCCL_MEM
 
 
 class TestHardwareSpec:
     def test_effective_mem_bw_is_scaled(self):
-        assert H100_SXM.effective_mem_bw == pytest.approx(H100_SXM.mem_bw * MEM_BW_SCALE)
+        assert H100_SXM.effective_mem_bw == pytest.approx(
+            H100_SXM.mem_bw * MEM_BW_SCALE
+        )
 
     def test_effective_mem_bw_h100(self):
         # H100: 3.35 TB/s × 0.80 ≈ 2.68 TB/s

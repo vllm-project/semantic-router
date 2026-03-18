@@ -11,15 +11,15 @@ Load balancing strategies
   round_robin   : cycle through instances
   least_loaded  : route to instance with lowest (active + queued) count
 """
+
 from __future__ import annotations
 
 import itertools
-from dataclasses import dataclass
-from typing import Callable, List, Optional
+from collections.abc import Callable
 
-from .instance import Instance
-from .request import Request, RequestState
 from ..gpu_profiles.profiles import GpuProfile
+from .instance import Instance
+from .request import Request
 
 
 class Pool:
@@ -45,8 +45,8 @@ class Pool:
         chunk_mode: str = "independent",
         lb_strategy: str = "least_queue",
         max_queue: int = 512,
-        on_ttft: Optional[Callable[[Request], None]] = None,
-        on_complete: Optional[Callable[[Request], None]] = None,
+        on_ttft: Callable[[Request], None] | None = None,
+        on_complete: Callable[[Request], None] | None = None,
     ):
         self.pool_id = pool_id
         self.gpu = gpu
@@ -68,7 +68,7 @@ class Pool:
             for i in range(n_gpus)
         ]
         self._rr_counter = itertools.cycle(range(n_gpus))
-        self.rejected: int = 0   # requests rejected due to queue overflow
+        self.rejected: int = 0  # requests rejected due to queue overflow
 
     # ── routing ───────────────────────────────────────────────────────────────
 
@@ -80,7 +80,7 @@ class Pool:
             return False
         return inst.accept(req)
 
-    def _pick_instance(self) -> Optional[Instance]:
+    def _pick_instance(self) -> Instance | None:
         if not self.instances:
             return None
 
@@ -95,8 +95,7 @@ class Pool:
             return min(self.instances, key=lambda i: i.queue_depth)
 
         if self.lb_strategy == "least_loaded":
-            return min(self.instances,
-                       key=lambda i: i.active_count + i.queue_depth)
+            return min(self.instances, key=lambda i: i.active_count + i.queue_depth)
 
         return self.instances[0]
 
@@ -111,8 +110,7 @@ class Pool:
 
     def next_event_time(self) -> float:
         """Earliest event time across all instances."""
-        return min((i.next_event_time() for i in self.instances),
-                   default=float("inf"))
+        return min((i.next_event_time() for i in self.instances), default=float("inf"))
 
     # ── metrics ───────────────────────────────────────────────────────────────
 

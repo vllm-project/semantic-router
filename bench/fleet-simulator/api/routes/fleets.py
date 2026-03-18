@@ -1,26 +1,45 @@
 """Fleet configuration management routes."""
-from __future__ import annotations
 
-from datetime import datetime
-from typing import List
+from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from ..models import FleetConfigIn, FleetConfigOut, GpuProfileOut
 from .. import storage
+from ..models import FleetConfigIn, FleetConfigOut, GpuProfileOut
 
 router = APIRouter(tags=["Fleets"])
 
 _GPU_PROFILES = {
-    "a100": {"name": "A100-80GB", "W_ms": 4.0, "H_ms_per_slot": 0.32,
-              "chunk": 512, "blk_size": 16, "total_kv_blks": 4000,
-              "max_slots": 256, "cost_per_hr": 2.21},
-    "h100": {"name": "H100-80GB", "W_ms": 2.8, "H_ms_per_slot": 0.22,
-              "chunk": 512, "blk_size": 16, "total_kv_blks": 4000,
-              "max_slots": 256, "cost_per_hr": 3.89},
-    "a10g": {"name": "A10G-24GB", "W_ms": 12.0, "H_ms_per_slot": 0.90,
-              "chunk": 512, "blk_size": 16, "total_kv_blks": 1440,
-              "max_slots": 128, "cost_per_hr": 1.01},
+    "a100": {
+        "name": "A100-80GB",
+        "W_ms": 4.0,
+        "H_ms_per_slot": 0.32,
+        "chunk": 512,
+        "blk_size": 16,
+        "total_kv_blks": 4000,
+        "max_slots": 256,
+        "cost_per_hr": 2.21,
+    },
+    "h100": {
+        "name": "H100-80GB",
+        "W_ms": 2.8,
+        "H_ms_per_slot": 0.22,
+        "chunk": 512,
+        "blk_size": 16,
+        "total_kv_blks": 4000,
+        "max_slots": 256,
+        "cost_per_hr": 3.89,
+    },
+    "a10g": {
+        "name": "A10G-24GB",
+        "W_ms": 12.0,
+        "H_ms_per_slot": 0.90,
+        "chunk": 512,
+        "blk_size": 16,
+        "total_kv_blks": 1440,
+        "max_slots": 128,
+        "cost_per_hr": 1.01,
+    },
 }
 
 
@@ -32,18 +51,24 @@ def _cost_per_hr(pools: list) -> float:
     return total
 
 
-@router.get("/gpu-profiles", response_model=List[GpuProfileOut], tags=["Fleets"],
-            summary="List available GPU profiles")
+@router.get(
+    "/gpu-profiles",
+    response_model=list[GpuProfileOut],
+    tags=["Fleets"],
+    summary="List available GPU profiles",
+)
 async def list_gpu_profiles():
     return [GpuProfileOut(**v) for v in _GPU_PROFILES.values()]
 
 
-@router.get("/fleets", response_model=List[FleetConfigOut], summary="List saved fleets")
+@router.get("/fleets", response_model=list[FleetConfigOut], summary="List saved fleets")
 async def list_fleets():
     return [FleetConfigOut(**f) for f in storage.list_fleets()]
 
 
-@router.post("/fleets", response_model=FleetConfigOut, summary="Save a fleet configuration")
+@router.post(
+    "/fleets", response_model=FleetConfigOut, summary="Save a fleet configuration"
+)
 async def create_fleet(body: FleetConfigIn):
     fleet_id = storage.new_id()
     pools_data = [p.model_dump() for p in body.pools]

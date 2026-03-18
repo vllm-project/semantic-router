@@ -1,11 +1,17 @@
 """Unit tests for fleet_sim.models — ModelSpec and catalog."""
+
 import pytest
 from fleet_sim.models import (
-    ModelSpec,
-    LLAMA_3_1_8B, LLAMA_3_1_70B, LLAMA_3_1_405B,
-    QWEN3_8B, QWEN3_32B, QWEN3_235B_A22B, QWEN3_30B_A3B,
     DEEPSEEK_V3,
-    get_model, list_models,
+    LLAMA_3_1_8B,
+    LLAMA_3_1_70B,
+    LLAMA_3_1_405B,
+    QWEN3_30B_A3B,
+    QWEN3_32B,
+    QWEN3_235B_A22B,
+    ModelSpec,
+    get_model,
+    list_models,
 )
 
 
@@ -25,7 +31,7 @@ class TestModelSpec:
 
     def test_kv_bytes_fp8_is_half_fp16(self):
         kv_fp16 = LLAMA_3_1_70B.kv_bytes_per_token_dtype(dtype_bytes=2)
-        kv_fp8  = LLAMA_3_1_70B.kv_bytes_per_token_dtype(dtype_bytes=1)
+        kv_fp8 = LLAMA_3_1_70B.kv_bytes_per_token_dtype(dtype_bytes=1)
         assert kv_fp8 == kv_fp16 // 2
 
     def test_param_count_llama_70b_approx(self):
@@ -42,7 +48,9 @@ class TestModelSpec:
         assert 390e9 <= params <= 420e9
 
     def test_param_bytes_fp16_is_2x_param_count(self):
-        assert LLAMA_3_1_70B.param_bytes(dtype_bytes=2) == LLAMA_3_1_70B.param_count() * 2
+        assert (
+            LLAMA_3_1_70B.param_bytes(dtype_bytes=2) == LLAMA_3_1_70B.param_count() * 2
+        )
 
     def test_param_bytes_per_gpu_scales_with_tp(self):
         tp1 = LLAMA_3_1_70B.param_bytes_per_gpu(tp=1)
@@ -82,17 +90,20 @@ class TestModelSpec:
         """Each MoE expert has gate + up + down projections (SwiGLU); total FFN
         params must equal n_experts × 3 × moe_intermediate × hidden × n_layers."""
         m = DEEPSEEK_V3
-        expected_ffn = (m.n_experts * 3 * m.moe_intermediate_size * m.hidden_size
-                        * m.n_layers)
+        expected_ffn = (
+            m.n_experts * 3 * m.moe_intermediate_size * m.hidden_size * m.n_layers
+        )
         # shared experts (if any) use intermediate_size
-        expected_ffn += m.n_shared_experts * 3 * m.intermediate_size * m.hidden_size * m.n_layers
+        expected_ffn += (
+            m.n_shared_experts * 3 * m.intermediate_size * m.hidden_size * m.n_layers
+        )
         # Total params also include attention and embeddings; FFN should dominate
         actual_params = m.param_count()
         assert actual_params >= expected_ffn  # FFN is a lower bound on total
 
     def test_int4_kv_bytes_half_of_fp8(self):
         """int4 (dtype=0.5) KV bytes should be half of fp8 (dtype=1.0)."""
-        kv_fp8  = LLAMA_3_1_70B.kv_bytes_per_token_dtype(dtype_bytes=1.0)
+        kv_fp8 = LLAMA_3_1_70B.kv_bytes_per_token_dtype(dtype_bytes=1.0)
         kv_int4 = LLAMA_3_1_70B.kv_bytes_per_token_dtype(dtype_bytes=0.5)
         assert kv_int4 == pytest.approx(kv_fp8 / 2, rel=1e-9)
         assert kv_int4 > 0

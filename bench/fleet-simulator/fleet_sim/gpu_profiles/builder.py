@@ -35,17 +35,20 @@ Reference
 AIConfigurator: Enabling GPU Configuration Analysis for AI Models
 NVIDIA, arxiv:2601.06288 (2025).
 """
+
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import TYPE_CHECKING
 
 from ..hardware.spec import HardwareSpec
 from ..models.spec import ModelSpec
 
+if TYPE_CHECKING:
+    from .computed import ComputedProfile
 
 # ── Serving configuration ─────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class ServingConfig:
@@ -67,15 +70,18 @@ class ServingConfig:
                             Remaining 10% covers activation memory, CUDA graphs, and
                             other runtime allocations not captured by the roofline model.
     """
+
     tp: int = 1
     ep: int = 1
-    dtype_bytes: float = 2.0         # float to allow 0.5 for int4
+    dtype_bytes: float = 2.0  # float to allow 0.5 for int4
     chunk: int = 512
     blk_size: int = 16
-    max_slots: int = 0               # 0 = no hard cap, derive from KV budget
-    phase: str = "aggregated"        # "aggregated" | "prefill" | "decode"
-    mean_ctx_tokens: int = 2048      # representative KV sequence length for H calc
-    gpu_memory_utilization: float = 0.90  # fraction of GPU memory usable (matches vLLM default)
+    max_slots: int = 0  # 0 = no hard cap, derive from KV budget
+    phase: str = "aggregated"  # "aggregated" | "prefill" | "decode"
+    mean_ctx_tokens: int = 2048  # representative KV sequence length for H calc
+    gpu_memory_utilization: float = (
+        0.90  # fraction of GPU memory usable (matches vLLM default)
+    )
 
 
 # ── MoE kernel latency table (H100 SXM, TRT-LLM 1.0.0rc3) ───────────────────
@@ -90,7 +96,7 @@ class ServingConfig:
 # Source: silicon-measured on NVIDIA H100 SXM 80 GB, TRT-LLM v1.0.0rc3.
 # Reference GPU memory bandwidth: 3.35 TB/s.
 
-_H100_MEM_BW = 3_350_000_000_000   # bytes/s, used as scaling reference
+_H100_MEM_BW = 3_350_000_000_000  # bytes/s, used as scaling reference
 
 _MOE_TABLE: dict = {
     # DeepSeek-V3 / DeepSeek-V3.1 style  (256 experts, top-8)
@@ -119,8 +125,10 @@ _MOE_DECODE_REF_BATCH = 8
 
 
 def _moe_latency_per_layer(
-    n_experts: int, topk: int,
-    hidden: int, inter: int,
+    n_experts: int,
+    topk: int,
+    hidden: int,
+    inter: int,
     dtype_bytes: float,
     n_tokens: int,
     hw: HardwareSpec,
@@ -138,20 +146,20 @@ def _moe_latency_per_layer(
         return active_bytes / hw.effective_mem_bw
 
     dtype_key = min(_MOE_TABLE[key].keys(), key=lambda d: abs(d - dtype_bytes))
-    points: List[Tuple[int, float]] = _MOE_TABLE[key][dtype_key]
+    points: list[tuple[int, float]] = _MOE_TABLE[key][dtype_key]
 
     # Piecewise linear interpolation over measured (n_tokens, lat_ms) points
     lat_ms = _interp(points, n_tokens)
 
     # Scale from H100 reference to target hardware via bandwidth ratio
     # Exponent 0.7 reflects partial memory-boundedness of MoE dispatch kernel
-    bw_ratio = _H100_MEM_BW / hw.mem_bw   # > 1 means hw is faster than H100
-    lat_ms_scaled = lat_ms * (bw_ratio ** 0.7)
+    bw_ratio = _H100_MEM_BW / hw.mem_bw  # > 1 means hw is faster than H100
+    lat_ms_scaled = lat_ms * (bw_ratio**0.7)
 
-    return lat_ms_scaled / 1000.0   # ms → s
+    return lat_ms_scaled / 1000.0  # ms → s
 
 
-def _interp(points: List[Tuple[int, float]], x: float) -> float:
+def _interp(points: list[tuple[int, float]], x: float) -> float:
     """Piecewise linear interpolation over (x_i, y_i) sorted by x_i."""
     if x <= points[0][0]:
         return points[0][1]
@@ -167,6 +175,7 @@ def _interp(points: List[Tuple[int, float]], x: float) -> float:
 
 
 # ── ProfileBuilder ────────────────────────────────────────────────────────────
+
 
 class ProfileBuilder:
     """Compute W, H, and KV-cache capacity from hardware + model + serving config.
@@ -189,7 +198,7 @@ class ProfileBuilder:
         hw: HardwareSpec,
         model: ModelSpec,
         cfg: ServingConfig,
-    ) -> "ComputedProfile":
+    ) -> ComputedProfile:
         """Derive a GpuProfile-compatible object from first principles."""
         from .computed import ComputedProfile
 
@@ -200,30 +209,37 @@ class ProfileBuilder:
         # calibration_ctx must match the context length at which H was derived
         # so that iter_latency(n, mean_seq_len=ctx) applies the scaling correctly.
         return ComputedProfile(
-            hw=hw, model=model, cfg=cfg,
-            W=W, H=H, total_kv_blks=kv_blks,
+            hw=hw,
+            model=model,
+            cfg=cfg,
+            W=W,
+            H=H,
+            total_kv_blks=kv_blks,
             calibration_ctx=cfg.mean_ctx_tokens,
         )
 
     # ── W: base iteration latency ─────────────────────────────────────────────
 
-    def _compute_W(self, hw: HardwareSpec, model: ModelSpec,
-                   cfg: ServingConfig) -> float:
+    def _compute_W(
+        self, hw: HardwareSpec, model: ModelSpec, cfg: ServingConfig
+    ) -> float:
         if model.is_moe:
             return self._compute_W_moe(hw, model, cfg)
         else:
             return self._compute_W_dense(hw, model, cfg)
 
-    def _compute_W_dense(self, hw: HardwareSpec, model: ModelSpec,
-                         cfg: ServingConfig) -> float:
+    def _compute_W_dense(
+        self, hw: HardwareSpec, model: ModelSpec, cfg: ServingConfig
+    ) -> float:
         """Decode W for dense model: weight-streaming bound + per-layer overhead."""
         bytes_per_gpu = model.param_bytes_per_gpu(cfg.tp, cfg.dtype_bytes)
         streaming_time = bytes_per_gpu / hw.effective_mem_bw
         layer_overhead = hw.mem_const_lat * model.n_layers
         return streaming_time + layer_overhead
 
-    def _compute_W_moe(self, hw: HardwareSpec, model: ModelSpec,
-                       cfg: ServingConfig) -> float:
+    def _compute_W_moe(
+        self, hw: HardwareSpec, model: ModelSpec, cfg: ServingConfig
+    ) -> float:
         """Decode W for MoE model: sum of per-layer MoE kernel latencies.
 
         At decode time, each layer dispatches ~batch_size tokens across experts.
@@ -242,17 +258,29 @@ class ProfileBuilder:
         )
         # Add attention weight streaming (not covered by MoE table)
         attn_bytes = (
-            (model.n_heads + 2 * model.n_kv_heads) * model.head_dim * model.hidden_size
-            + model.hidden_size ** 2
-        ) * cfg.dtype_bytes * model.n_layers / cfg.tp
+            (
+                (model.n_heads + 2 * model.n_kv_heads)
+                * model.head_dim
+                * model.hidden_size
+                + model.hidden_size**2
+            )
+            * cfg.dtype_bytes
+            * model.n_layers
+            / cfg.tp
+        )
         attn_time = attn_bytes / hw.effective_mem_bw
 
-        return lat_per_layer * model.n_layers + attn_time + hw.mem_const_lat * model.n_layers
+        return (
+            lat_per_layer * model.n_layers
+            + attn_time
+            + hw.mem_const_lat * model.n_layers
+        )
 
     # ── H: per-sequence KV attention scan overhead ────────────────────────────
 
-    def _compute_H(self, hw: HardwareSpec, model: ModelSpec,
-                   cfg: ServingConfig) -> float:
+    def _compute_H(
+        self, hw: HardwareSpec, model: ModelSpec, cfg: ServingConfig
+    ) -> float:
         """Marginal latency of adding one more sequence to the batch.
 
         Each additional in-flight sequence adds a KV-cache read proportional
@@ -266,8 +294,9 @@ class ProfileBuilder:
 
     # ── KV-cache block budget ─────────────────────────────────────────────────
 
-    def _compute_kv_blks(self, hw: HardwareSpec, model: ModelSpec,
-                          cfg: ServingConfig) -> int:
+    def _compute_kv_blks(
+        self, hw: HardwareSpec, model: ModelSpec, cfg: ServingConfig
+    ) -> int:
         """KV-cache block count from usable VRAM after weights + system overheads.
 
         ``cfg.gpu_memory_utilization`` (default 0.90) caps the total GPU memory

@@ -1,17 +1,18 @@
 """Simple JSON-backed persistent storage for traces, fleets, and jobs."""
+
 from __future__ import annotations
 
+import contextlib
 import json
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
 
 _BASE = Path(__file__).parent.parent / "data" / "api_store"
-_TRACES_DIR   = _BASE / "traces"
-_TRACE_META   = _BASE / "traces_meta.json"
-_FLEETS_FILE  = _BASE / "fleets.json"
-_JOBS_DIR     = _BASE / "jobs"
+_TRACES_DIR = _BASE / "traces"
+_TRACE_META = _BASE / "traces_meta.json"
+_FLEETS_FILE = _BASE / "fleets.json"
+_JOBS_DIR = _BASE / "jobs"
 
 
 def _ensure_dirs() -> None:
@@ -36,6 +37,7 @@ def now_iso() -> str:
 
 # ── Traces ────────────────────────────────────────────────────────────────────
 
+
 def trace_upload_path(trace_id: str) -> Path:
     return _TRACES_DIR / trace_id
 
@@ -46,7 +48,7 @@ def save_trace_meta(trace_id: str, meta: dict) -> None:
     _TRACE_META.write_text(json.dumps(all_meta, indent=2))
 
 
-def get_trace_meta(trace_id: str) -> Optional[dict]:
+def get_trace_meta(trace_id: str) -> dict | None:
     all_meta = json.loads(_TRACE_META.read_text())
     return all_meta.get(trace_id)
 
@@ -69,11 +71,12 @@ def delete_trace(trace_id: str) -> bool:
 
 # ── Fleets ────────────────────────────────────────────────────────────────────
 
+
 def list_fleets() -> list[dict]:
     return list(json.loads(_FLEETS_FILE.read_text()).values())
 
 
-def get_fleet(fleet_id: str) -> Optional[dict]:
+def get_fleet(fleet_id: str) -> dict | None:
     return json.loads(_FLEETS_FILE.read_text()).get(fleet_id)
 
 
@@ -94,6 +97,7 @@ def delete_fleet(fleet_id: str) -> bool:
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
 
+
 def job_path(job_id: str) -> Path:
     return _JOBS_DIR / f"{job_id}.json"
 
@@ -102,7 +106,7 @@ def save_job(job_id: str, data: dict) -> None:
     job_path(job_id).write_text(json.dumps(data, indent=2))
 
 
-def get_job(job_id: str) -> Optional[dict]:
+def get_job(job_id: str) -> dict | None:
     p = job_path(job_id)
     if not p.exists():
         return None
@@ -111,11 +115,11 @@ def get_job(job_id: str) -> Optional[dict]:
 
 def list_jobs() -> list[dict]:
     jobs = []
-    for p in sorted(_JOBS_DIR.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
-        try:
+    for p in sorted(
+        _JOBS_DIR.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True
+    ):
+        with contextlib.suppress(Exception):
             jobs.append(json.loads(p.read_text()))
-        except Exception:
-            pass
     return jobs
 
 

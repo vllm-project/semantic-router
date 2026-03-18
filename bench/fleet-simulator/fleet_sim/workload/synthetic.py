@@ -4,13 +4,12 @@ CdfWorkload  : generate requests by sampling from an empirical CDF
                (compatible with the JSON CDFs produced by preprocess.py)
 PoissonWorkload : Poisson arrival process wrapping any length distribution
 """
+
 from __future__ import annotations
 
 import json
-import math
 import random
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
 
 from ..core.request import Request
 
@@ -34,10 +33,10 @@ class CdfWorkload:
 
     def __init__(
         self,
-        cdf_source: Union[str, Path, list],
+        cdf_source: str | Path | list,
         l_out_frac: float = 0.20,
         l_in_frac: float = 0.80,
-        category_mix: Optional[dict] = None,
+        category_mix: dict | None = None,
         seed: int = 42,
     ):
         if isinstance(cdf_source, (str, Path)):
@@ -45,13 +44,13 @@ class CdfWorkload:
             cdf = raw["cdf"] if isinstance(raw, dict) else raw
         else:
             cdf = cdf_source
-        self._cdf: list[tuple[int, float]] = [
-            (int(t), float(f)) for t, f in cdf
-        ]
+        self._cdf: list[tuple[int, float]] = [(int(t), float(f)) for t, f in cdf]
         self.l_out_frac = l_out_frac
         self.l_in_frac = l_in_frac
         self.category_mix = category_mix or {
-            "prose": 0.60, "code": 0.25, "rag": 0.15,
+            "prose": 0.60,
+            "code": 0.25,
+            "rag": 0.15,
         }
         self._rng = random.Random(seed)
         self._categories = list(self.category_mix.keys())
@@ -71,7 +70,7 @@ class CdfWorkload:
 
     def sample_request(self, req_id: int, arrival: float) -> Request:
         total = self.sample_length()
-        l_in  = max(1, int(total * self.l_in_frac))
+        l_in = max(1, int(total * self.l_in_frac))
         l_out = max(1, total - l_in)
         cat = self._rng.choices(self._categories, self._cat_weights)[0]
         return Request(
@@ -116,7 +115,7 @@ class PoissonWorkload:
         self.warm_up = warm_up
         self._rng = random.Random(seed)
 
-    def generate(self) -> List[Tuple[float, Request]]:
+    def generate(self) -> list[tuple[float, Request]]:
         """Return list of (arrival_time, Request) sorted by arrival time."""
         arrivals: list[tuple[float, Request]] = []
         t = 0.0

@@ -7,27 +7,29 @@ Usage
     python server.py --port 8080
     python server.py --host 0.0.0.0 --port 8000 --reload
 """
+
 import argparse
-import sys
 
 import uvicorn
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="inference-fleet-sim dashboard server"
+    parser = argparse.ArgumentParser(description="inference-fleet-sim dashboard server")
+    parser.add_argument(
+        "--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)"
     )
-    parser.add_argument("--host", default="127.0.0.1",
-                        help="Bind host (default: 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=8000,
-                        help="Bind port (default: 8000)")
-    parser.add_argument("--reload", action="store_true",
-                        help="Enable auto-reload (development)")
-    parser.add_argument("--workers", type=int, default=1,
-                        help="Number of worker processes")
+    parser.add_argument(
+        "--port", type=int, default=8000, help="Bind port (default: 8000)"
+    )
+    parser.add_argument(
+        "--reload", action="store_true", help="Enable auto-reload (development)"
+    )
+    parser.add_argument(
+        "--workers", type=int, default=1, help="Number of worker processes"
+    )
     args = parser.parse_args()
 
-    print(f"\n  inference-fleet-sim dashboard")
+    print("\n  inference-fleet-sim dashboard")
     print(f"  {'─'*36}")
     print(f"  Dashboard : http://{args.host}:{args.port}/")
     print(f"  API docs  : http://{args.host}:{args.port}/api/docs")

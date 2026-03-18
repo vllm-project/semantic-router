@@ -19,12 +19,13 @@ Fallback behaviour
 If a request has ``model_id=None`` or names an unknown pool, ModelRouter falls
 back to ``default_pool`` (first pool in the fleet if not specified).
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
-from fleet_sim.routing.base import BaseRouter
 from fleet_sim.core.request import Request
+from fleet_sim.routing.base import BaseRouter
 
 
 class ModelRouter(BaseRouter):
@@ -37,8 +38,9 @@ class ModelRouter(BaseRouter):
                    unknown one.  Defaults to the first pool in the fleet.
     """
 
-    def __init__(self, pools: Dict[str, Any],
-                 default_pool: Optional[str] = None, **kwargs):
+    def __init__(
+        self, pools: dict[str, Any], default_pool: str | None = None, **kwargs
+    ):
         super().__init__(pools, **kwargs)
         if default_pool is not None and default_pool not in pools:
             raise ValueError(
@@ -47,7 +49,7 @@ class ModelRouter(BaseRouter):
             )
         self._default = default_pool or self.pool_ids[0]
 
-    def route(self, req: Request) -> Optional[str]:
+    def route(self, req: Request) -> str | None:
         if req.model_id and req.model_id in self.pools:
             return req.model_id
         return self._default

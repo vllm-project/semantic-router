@@ -33,25 +33,27 @@ KV-cache accounting:
     When a new request would overflow the block budget, the longest active
     sequence is preempted (re-queued at its head position).
 """
+
 from __future__ import annotations
 
 import heapq
 import math
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Callable, Optional
+from collections.abc import Callable
+from dataclasses import dataclass
 
-from .request import Request, RequestState
 from ..gpu_profiles.profiles import GpuProfile
+from .request import Request, RequestState
 
 
 @dataclass
 class _Event:
     """A scheduled service completion event."""
+
     time: float
     req: Request
 
-    def __lt__(self, other: "_Event") -> bool:
+    def __lt__(self, other: _Event) -> bool:
         return self.time < other.time
 
 
@@ -82,8 +84,8 @@ class Instance:
         max_ctx: int,
         chunk_mode: str = "independent",
         max_queue: int = 1024,
-        on_ttft: Optional[Callable[[Request], None]] = None,
-        on_complete: Optional[Callable[[Request], None]] = None,
+        on_ttft: Callable[[Request], None] | None = None,
+        on_complete: Callable[[Request], None] | None = None,
     ):
         self.instance_id = instance_id
         self.pool_id = pool_id
@@ -102,9 +104,9 @@ class Instance:
 
         # simulation state
         self._queue: deque[Request] = deque()
-        self._active_slots: int = 0          # currently occupied server slots
+        self._active_slots: int = 0  # currently occupied server slots
         self._active_reqs: list[Request] = []  # for preemption (longest-first)
-        self._events: list[_Event] = []      # min-heap of completion events
+        self._events: list[_Event] = []  # min-heap of completion events
         self._now: float = 0.0
 
         # metrics
@@ -194,8 +196,7 @@ class Instance:
                     req.end_time = self._now
                     req.state = RequestState.DONE
                     self._active_slots -= 1
-                    req_blocks = math.ceil(
-                        (req.l_in + req.l_out) / self.gpu.blk_size)
+                    req_blocks = math.ceil((req.l_in + req.l_out) / self.gpu.blk_size)
                     self._used_kv_blocks -= req_blocks
                     if req in self._active_reqs:
                         self._active_reqs.remove(req)
@@ -224,12 +225,12 @@ class Instance:
         req_blocks = math.ceil((req.l_in + req.l_out) / self.gpu.blk_size)
 
         # ── Preempt longest active request if KV budget is tight ──────────
-        while (self._used_kv_blocks + req_blocks > self._total_kv_blocks
-               and self._active_reqs):
-            victim = max(self._active_reqs,
-                         key=lambda r: r.l_in + r.l_out)
-            victim_blocks = math.ceil(
-                (victim.l_in + victim.l_out) / self.gpu.blk_size)
+        while (
+            self._used_kv_blocks + req_blocks > self._total_kv_blocks
+            and self._active_reqs
+        ):
+            victim = max(self._active_reqs, key=lambda r: r.l_in + r.l_out)
+            victim_blocks = math.ceil((victim.l_in + victim.l_out) / self.gpu.blk_size)
             # Invalidate the victim's pending completion event via the preempted flag
             victim.preempted = True
             self._active_reqs.remove(victim)
@@ -246,7 +247,7 @@ class Instance:
         self._queue.popleft()
         req.start_time = now
         req.state = RequestState.PREFILLING
-        req.preempted = False   # reset preemption flag on re-admission
+        req.preempted = False  # reset preemption flag on re-admission
         self._active_slots += 1
         self._used_kv_blocks += req_blocks
         self._active_reqs.append(req)
@@ -256,8 +257,9 @@ class Instance:
         # This correctly models pools serving short requests as faster than
         # pools serving long requests, even at the same n_slots.
         if self._active_reqs:
-            mean_seq_len = (sum(r.l_in + r.l_out for r in self._active_reqs)
-                            / len(self._active_reqs))
+            mean_seq_len = sum(r.l_in + r.l_out for r in self._active_reqs) / len(
+                self._active_reqs
+            )
         else:
             mean_seq_len = float(req.l_in + req.l_out)
 
@@ -271,7 +273,8 @@ class Instance:
         # Average KV history during prefill ≈ l_in / 2 (linearly grows from 0).
         kv_history_avg = l_in / 2.0
         prefill_iter_t = self.gpu.prefill_iter_latency(
-            self.gpu.chunk, kv_history_avg, self._active_slots, mean_seq_len)
+            self.gpu.chunk, kv_history_avg, self._active_slots, mean_seq_len
+        )
         prefill_time = prefill_iters * prefill_iter_t
         req.first_token_time = now + prefill_time
         req.state = RequestState.DECODING
@@ -287,10 +290,10 @@ class Instance:
         # consistency with the M/G/c analytical model, but with the actual
         # mean sequence length so throughput estimates are accurate.
         prefill_iter_t_full = self.gpu.prefill_iter_latency(
-            self.gpu.chunk, kv_history_avg, self.n_slots, mean_seq_len)
+            self.gpu.chunk, kv_history_avg, self.n_slots, mean_seq_len
+        )
         decode_iter_t_full = self.gpu.iter_latency(self.n_slots, mean_seq_len)
-        s_raw_full = (prefill_iters * prefill_iter_t_full
-                      + l_out * decode_iter_t_full)
+        s_raw_full = prefill_iters * prefill_iter_t_full + l_out * decode_iter_t_full
         s_eff = s_raw_full / self.n_slots
 
         completion_time = now + s_eff
@@ -299,7 +302,7 @@ class Instance:
     def next_event_time(self) -> float:
         """Time of the next completion event (or now if queue can be served)."""
         if self._queue and self._active_slots < self.n_slots:
-            return self._now   # can immediately start a request
+            return self._now  # can immediately start a request
         if self._events:
             return self._events[0].time
         return float("inf")

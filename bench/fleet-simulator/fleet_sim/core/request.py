@@ -1,16 +1,17 @@
 """Request dataclass and lifecycle states."""
+
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Optional
 
 
 class RequestState(Enum):
-    PENDING    = auto()   # arrived, waiting in global queue
-    QUEUED     = auto()   # assigned to a pool instance queue
-    PREFILLING = auto()   # actively being prefilled
-    DECODING   = auto()   # prefill done, generating tokens
-    DONE       = auto()   # all output tokens generated
+    PENDING = auto()  # arrived, waiting in global queue
+    QUEUED = auto()  # assigned to a pool instance queue
+    PREFILLING = auto()  # actively being prefilled
+    DECODING = auto()  # prefill done, generating tokens
+    DONE = auto()  # all output tokens generated
 
 
 @dataclass
@@ -36,25 +37,26 @@ class Request:
     first_token  : time first output token was generated (TTFT)
     end_time     : time last output token was generated
     """
+
     req_id: int
     arrival_time: float
     l_in: int
     l_out: int
     category: str = "prose"
-    model_id: Optional[str] = None  # desired model/pool; used by ModelRouter
+    model_id: str | None = None  # desired model/pool; used by ModelRouter
 
     # routing metadata (filled by router)
-    pool_id: Optional[str] = None
-    instance_id: Optional[int] = None
+    pool_id: str | None = None
+    instance_id: int | None = None
     compressed: bool = False
-    orig_l_in: Optional[int] = None
+    orig_l_in: int | None = None
 
     # timing (filled by simulation engine)
-    queue_time: Optional[float] = None
-    start_time: Optional[float] = None
-    first_token_time: Optional[float] = None
-    end_time: Optional[float] = None          # slot freed (= start + s_eff)
-    physical_end_time: Optional[float] = None # last token generated (= start + s_raw)
+    queue_time: float | None = None
+    start_time: float | None = None
+    first_token_time: float | None = None
+    end_time: float | None = None  # slot freed (= start + s_eff)
+    physical_end_time: float | None = None  # last token generated (= start + s_raw)
 
     # reliability
     preempted: bool = False
@@ -63,14 +65,14 @@ class Request:
     state: RequestState = field(default=RequestState.PENDING, init=False)
 
     @property
-    def ttft(self) -> Optional[float]:
+    def ttft(self) -> float | None:
         """Time-to-first-token (s). None if not yet done."""
         if self.first_token_time is not None and self.arrival_time is not None:
             return self.first_token_time - self.arrival_time
         return None
 
     @property
-    def e2e_latency(self) -> Optional[float]:
+    def e2e_latency(self) -> float | None:
         """End-to-end latency (s). None if not yet done."""
         t = self.physical_end_time or self.end_time
         if t is not None:
@@ -78,7 +80,7 @@ class Request:
         return None
 
     @property
-    def tpot(self) -> Optional[float]:
+    def tpot(self) -> float | None:
         """Time-per-output-token (s/tok). Requires l_out > 1."""
         t = self.physical_end_time or self.end_time
         if t is not None and self.first_token_time is not None and self.l_out > 1:
@@ -86,7 +88,7 @@ class Request:
         return None
 
     @property
-    def queue_wait(self) -> Optional[float]:
+    def queue_wait(self) -> float | None:
         """Time spent waiting in queue before service started (s)."""
         if self.start_time is not None and self.queue_time is not None:
             return self.start_time - self.queue_time

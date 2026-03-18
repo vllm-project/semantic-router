@@ -14,20 +14,20 @@ Source: AIConfigurator Algorithm 3 (arXiv 2601.06288), NVIDIA 2025.
 Constants validated on DeepSeek-V3 disaggregated serving across 2 nodes
 and Qwen3-32B-FP8 on 8× H200 (production SLA case study).
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List, Optional
-
+from dataclasses import dataclass
 
 # ── Published empirical constants ─────────────────────────────────────────────
 
-ALPHA_PRE: float = 0.90    # prefill throughput degradation
-ALPHA_DEC: float = 0.92    # decode throughput degradation
-BETA_TTFT: float = 1.80    # TTFT multiplier for KV-transfer overhead
+ALPHA_PRE: float = 0.90  # prefill throughput degradation
+ALPHA_DEC: float = 0.92  # decode throughput degradation
+BETA_TTFT: float = 1.80  # TTFT multiplier for KV-transfer overhead
 
 
 # ── Result dataclass ──────────────────────────────────────────────────────────
+
 
 @dataclass
 class DisaggResult:
@@ -48,6 +48,7 @@ class DisaggResult:
     prefill_name    : profile name for prefill instances
     decode_name     : profile name for decode instances
     """
+
     n_prefill: int
     n_decode: int
     prefill_gpus: int
@@ -82,6 +83,7 @@ class DisaggResult:
 @dataclass
 class DisaggSweepPoint:
     """One point in a disaggregated fleet sweep."""
+
     n_prefill: int
     n_decode: int
     total_gpus: int
@@ -94,6 +96,7 @@ class DisaggSweepPoint:
 
 
 # ── Optimizer ─────────────────────────────────────────────────────────────────
+
 
 class DisaggFleetOptimizer:
     """Find the optimal xP + yD disaggregated fleet configuration.
@@ -158,8 +161,12 @@ class DisaggFleetOptimizer:
     def _prefill_ttft_ms(self) -> float:
         """Base TTFT (ms) for one prefill instance processing mean_isl tokens."""
         import math
-        chunk = getattr(self.prefill_profile, "chunk",
-                        getattr(getattr(self.prefill_profile, "cfg", None), "chunk", 512))
+
+        chunk = getattr(
+            self.prefill_profile,
+            "chunk",
+            getattr(getattr(self.prefill_profile, "cfg", None), "chunk", 512),
+        )
         n_slots = self.prefill_profile.n_slots(self.max_ctx)
         iter_t = self.prefill_profile.iter_latency(n_slots)
         prefill_iters = math.ceil(self.mean_isl / chunk)
@@ -184,8 +191,8 @@ class DisaggFleetOptimizer:
         self,
         max_prefill: int = 32,
         max_decode: int = 64,
-        valid_total_gpus: Optional[List[int]] = None,
-    ) -> Optional[DisaggResult]:
+        valid_total_gpus: list[int] | None = None,
+    ) -> DisaggResult | None:
         """Find (n_prefill, n_decode) that maximises per-GPU throughput.
 
         Parameters
@@ -197,15 +204,15 @@ class DisaggFleetOptimizer:
         """
         thru_pre_single = self._prefill_thru()
         thru_dec_single = self._decode_thru()
-        ttft_base_ms    = self._prefill_ttft_ms()
-        tpot_ms         = self._decode_tpot_ms()
+        ttft_base_ms = self._prefill_ttft_ms()
+        tpot_ms = self._decode_tpot_ms()
 
-        effective_ttft  = ttft_base_ms * self.beta_ttft
+        effective_ttft = ttft_base_ms * self.beta_ttft
         if effective_ttft > self.slo_ttft_ms or tpot_ms > self.slo_tpot_ms:
             # Single-instance already violates SLO — cannot build valid fleet
             return None
 
-        best: Optional[DisaggResult] = None
+        best: DisaggResult | None = None
         best_thru_gpu = 0.0
 
         for n_pre in range(1, max_prefill + 1):
@@ -220,8 +227,10 @@ class DisaggFleetOptimizer:
                 r_sys = min(r_pre, r_dec)
 
                 thru_gpu = r_sys / g_total
-                cost = (n_pre * self.prefill_profile.cost_per_hr
-                        + n_dec * self.decode_profile.cost_per_hr)
+                cost = (
+                    n_pre * self.prefill_profile.cost_per_hr
+                    + n_dec * self.decode_profile.cost_per_hr
+                )
 
                 if thru_gpu > best_thru_gpu:
                     best_thru_gpu = thru_gpu
@@ -246,18 +255,18 @@ class DisaggFleetOptimizer:
         self,
         max_prefill: int = 16,
         max_decode: int = 32,
-        valid_total_gpus: Optional[List[int]] = None,
-    ) -> List[DisaggSweepPoint]:
+        valid_total_gpus: list[int] | None = None,
+    ) -> list[DisaggSweepPoint]:
         """Return all SLO-feasible (n_prefill, n_decode) configurations.
 
         Useful for plotting Pareto frontiers of throughput vs. cost.
         """
         thru_pre_single = self._prefill_thru()
         thru_dec_single = self._decode_thru()
-        effective_ttft  = self._prefill_ttft_ms() * self.beta_ttft
-        tpot_ms         = self._decode_tpot_ms()
+        effective_ttft = self._prefill_ttft_ms() * self.beta_ttft
+        tpot_ms = self._decode_tpot_ms()
 
-        points: List[DisaggSweepPoint] = []
+        points: list[DisaggSweepPoint] = []
 
         for n_pre in range(1, max_prefill + 1):
             for n_dec in range(1, max_decode + 1):
@@ -271,22 +280,26 @@ class DisaggFleetOptimizer:
                     thru_dec_single * n_dec * self.alpha_dec,
                 )
                 thru_gpu = r_sys / g_total
-                cost = (n_pre * self.prefill_profile.cost_per_hr
-                        + n_dec * self.decode_profile.cost_per_hr)
+                cost = (
+                    n_pre * self.prefill_profile.cost_per_hr
+                    + n_dec * self.decode_profile.cost_per_hr
+                )
                 slo_met = (
-                    effective_ttft <= self.slo_ttft_ms
-                    and tpot_ms <= self.slo_tpot_ms
+                    effective_ttft <= self.slo_ttft_ms and tpot_ms <= self.slo_tpot_ms
                 )
 
-                points.append(DisaggSweepPoint(
-                    n_prefill=n_pre, n_decode=n_dec,
-                    total_gpus=g_total,
-                    system_rate=r_sys,
-                    thru_per_gpu=thru_gpu,
-                    ttft_ms=effective_ttft,
-                    tpot_ms=tpot_ms,
-                    cost_per_hr=cost,
-                    slo_met=slo_met,
-                ))
+                points.append(
+                    DisaggSweepPoint(
+                        n_prefill=n_pre,
+                        n_decode=n_dec,
+                        total_gpus=g_total,
+                        system_rate=r_sys,
+                        thru_per_gpu=thru_gpu,
+                        ttft_ms=effective_ttft,
+                        tpot_ms=tpot_ms,
+                        cost_per_hr=cost,
+                        slo_met=slo_met,
+                    )
+                )
 
         return points

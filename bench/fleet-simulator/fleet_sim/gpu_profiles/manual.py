@@ -4,11 +4,11 @@ Use this when you have measured or estimated W, H, and KV-cache budget
 for a specific GPU + model combination and want to supply them directly
 rather than computing them from hardware/model specs.
 """
+
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,7 @@ class ManualProfile:
                        shorter context lengths (same memory-bandwidth pressure).
     cost_per_hr      : on-demand $/GPU-hr
     """
+
     name: str
     W: float
     H: float
@@ -73,8 +74,8 @@ class ManualProfile:
     #   Source: https://ml.energy/leaderboard (NeurIPS 2025 D&B track).
     #
     # Set power_logistic_k = 0 (default) to use the linear model.
-    power_logistic_k: float = 0.0    # steepness parameter k_p  (0 = linear)
-    power_logistic_x0: float = 0.0   # log2-batch midpoint x_0
+    power_logistic_k: float = 0.0  # steepness parameter k_p  (0 = linear)
+    power_logistic_x0: float = 0.0  # log2-batch midpoint x_0
 
     def power_at_concurrency(self, n_active: int) -> float:
         """Estimated GPU power draw (W) at *n_active* concurrent requests.
@@ -107,9 +108,12 @@ class ManualProfile:
         p_range = self.power_nominal_w - self.power_idle_w
         if self.power_logistic_k > 0.0:
             import math
+
             # Logistic: P(b) = P_range / (1 + exp(-k*(log2(b) - x0))) + P_idle
             x = math.log2(max(1, n_active))
-            p = p_range / (1.0 + math.exp(-self.power_logistic_k * (x - self.power_logistic_x0)))
+            p = p_range / (
+                1.0 + math.exp(-self.power_logistic_k * (x - self.power_logistic_x0))
+            )
             return self.power_idle_w + p
         else:
             frac = max(0.0, min(1.0, n_active / self.max_slots))
@@ -125,9 +129,7 @@ class ManualProfile:
         Returns 1 at minimum (at least one request must be in-flight).
         """
         if self.power_idle_w <= 0.0 or self.power_nominal_w <= 0.0:
-            raise ValueError(
-                f"Power model not configured for profile '{self.name}'."
-            )
+            raise ValueError(f"Power model not configured for profile '{self.name}'.")
         target_w = max(self.power_idle_w, min(target_w, self.power_nominal_w))
         lo, hi = 1, self.max_slots
         for _ in range(20):
@@ -140,8 +142,7 @@ class ManualProfile:
                 break
         return max(1, lo)
 
-    def iter_latency(self, n_active: int,
-                     mean_seq_len: Optional[float] = None) -> float:
+    def iter_latency(self, n_active: int, mean_seq_len: float | None = None) -> float:
         """Iteration wall-clock time: W + H_eff × n_active.
 
         Parameters
@@ -177,10 +178,13 @@ class ManualProfile:
         compute_cap = self.max_slots * self.calibration_ctx // max(max_ctx, 1)
         return min(compute_cap, kv_limit)
 
-    def prefill_iter_latency(self, chunk_tokens: int,
-                              kv_history_tokens: float,
-                              n_active: int,
-                              mean_seq_len: Optional[float] = None) -> float:
+    def prefill_iter_latency(
+        self,
+        chunk_tokens: int,
+        kv_history_tokens: float,
+        n_active: int,
+        mean_seq_len: float | None = None,
+    ) -> float:
         """Prefill-chunk iteration time (seconds).
 
         ManualProfile has no compute-throughput spec, so it cannot determine
@@ -205,8 +209,7 @@ class ManualProfile:
         iter_t = self.iter_latency(ns, mean_seq_len)
         return (math.ceil(l_in / self.chunk) + l_out) * iter_t
 
-    def throughput(self, max_ctx: int, mean_l_in: float,
-                   mean_l_out: float) -> float:
+    def throughput(self, max_ctx: int, mean_l_in: float, mean_l_out: float) -> float:
         """Steady-state throughput (req/s) at full load: n_slots / E[S]."""
         ns = self.n_slots(max_ctx)
         es = self.service_time(int(mean_l_in), int(mean_l_out), max_ctx)

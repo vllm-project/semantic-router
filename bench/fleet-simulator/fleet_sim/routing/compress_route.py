@@ -33,13 +33,14 @@ safe_cats    : set of categories treated as compressible
 compress_lat : extra gateway latency added to compressed requests (s)
                (default 0.003 = 3ms; measured on modern CPU for TextRank extraction)
 """
+
 from __future__ import annotations
+
 import random
-import math
-from typing import Dict, Optional, Set
-from .base import BaseRouter
-from ..core.request import Request, RequestState
+
 from ..core.fleet import PoolConfig
+from ..core.request import Request
+from .base import BaseRouter
 
 
 class CompressAndRouteRouter(BaseRouter):
@@ -51,11 +52,11 @@ class CompressAndRouteRouter(BaseRouter):
 
     def __init__(
         self,
-        pools: Dict[str, PoolConfig],
+        pools: dict[str, PoolConfig],
         B_short: int,
         gamma: float = 1.5,
         p_compress: float = 1.0,
-        safe_cats: Optional[Set[str]] = None,
+        safe_cats: set[str] | None = None,
         compress_lat: float = 0.003,
         seed: int = 0,
         **kwargs,
@@ -70,7 +71,7 @@ class CompressAndRouteRouter(BaseRouter):
 
         sorted_pools = sorted(pools.values(), key=lambda p: p.max_ctx)
         self._short_id = sorted_pools[0].pool_id
-        self._long_id  = sorted_pools[-1].pool_id
+        self._long_id = sorted_pools[-1].pool_id
 
         # Counters for analysis
         self.n_short = 0
@@ -78,7 +79,7 @@ class CompressAndRouteRouter(BaseRouter):
         self.n_compressed = 0
         self.n_borderline_unsafe = 0
 
-    def route(self, req: Request) -> Optional[str]:
+    def route(self, req: Request) -> str | None:
         total = req.l_in + req.l_out
 
         if total <= self.B_short:
@@ -90,9 +91,9 @@ class CompressAndRouteRouter(BaseRouter):
             # Borderline: attempt greedy compression for safe categories.
             # p_compress defaults to 1.0 (greedy always succeeds); set < 1.0
             # only to model partial-failure / code-heavy workload scenarios.
-            if (req.category in self.safe_cats
-                    and (self.p_compress >= 1.0
-                         or self._rng.random() < self.p_compress)):
+            if req.category in self.safe_cats and (
+                self.p_compress >= 1.0 or self._rng.random() < self.p_compress
+            ):
                 # Greedy compressor fills exactly B_short - l_out input tokens.
                 target_l_in = self.B_short - req.l_out
                 if target_l_in <= 0:

@@ -155,6 +155,13 @@ legacy_hotspots:
       - dashboard/backend/handlers/openclaw_teams.go
       - dashboard/backend/handlers/openclaw_test.go
       - dashboard/backend/handlers/openclaw_workers.go
+  - paths:
+      - bench/fleet-simulator/api/routes/traces.py
+      - bench/fleet-simulator/fleet_sim/optimizer/base.py
+      - bench/fleet-simulator/run_sim.py
+      - bench/fleet-simulator/tests/test_api.py
+    file_checks: relaxed
+    function_checks: relaxed
 
 dependency_rules:
   - name: prod-code-must-not-reference-e2e-docs-or-agent-tools

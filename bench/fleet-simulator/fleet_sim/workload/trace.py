@@ -42,24 +42,23 @@ semantic_router    : Pre-labeled trace produced by a semantic router
                        ``model_id_field="routed_to"``
                        ``model_id_field="selected_model"``    (default)
 """
+
 from __future__ import annotations
 
 import csv
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from ..core.request import Request
 
-
 # Default column names for the semantic_router format
-_SR_DEFAULTS: Dict[str, str] = {
-    "timestamp":  "timestamp",
-    "l_in":       "prompt_tokens",
-    "l_out":      "generated_tokens",
-    "model_id":   "selected_model",
+_SR_DEFAULTS: dict[str, str] = {
+    "timestamp": "timestamp",
+    "l_in": "prompt_tokens",
+    "l_out": "generated_tokens",
+    "model_id": "selected_model",
     "complexity": "complexity",
-    "category":   "category",
+    "category": "category",
 }
 
 
@@ -88,12 +87,12 @@ class TraceWorkload:
         self,
         path: str,
         fmt: str = "azure_csv",
-        scale_lam: Optional[float] = None,
-        max_reqs: Optional[int] = None,
+        scale_lam: float | None = None,
+        max_reqs: int | None = None,
         seed: int = 42,
-        field_map: Optional[Dict[str, str]] = None,
-        model_id_field: Optional[str] = None,
-        default_model_id: Optional[str] = None,
+        field_map: dict[str, str] | None = None,
+        model_id_field: str | None = None,
+        default_model_id: str | None = None,
     ):
         self.path = Path(path)
         self.fmt = fmt
@@ -109,7 +108,7 @@ class TraceWorkload:
         if model_id_field:
             self._fmap["model_id"] = model_id_field
 
-    def generate(self) -> List[Tuple[float, Request]]:
+    def generate(self) -> list[tuple[float, Request]]:
         if self.fmt == "azure_csv":
             raw = self._load_azure_csv()
         elif self.fmt == "splitwise":
@@ -127,6 +126,7 @@ class TraceWorkload:
 
         if self.scale_lam is not None:
             import random
+
             rng = random.Random(self.seed)
             t = 0.0
             arrivals: list = []
@@ -146,14 +146,16 @@ class TraceWorkload:
             reader = csv.DictReader(f)
             for i, row in enumerate(reader):
                 try:
-                    ts  = float(row.get("TIMESTAMP", i))
-                    l_in  = int(float(row.get("ContextTokens",  512)))
+                    ts = float(row.get("TIMESTAMP", i))
+                    l_in = int(float(row.get("ContextTokens", 512)))
                     l_out = int(float(row.get("GeneratedTokens", 128)))
                 except (ValueError, KeyError):
                     continue
                 req = Request(
-                    req_id=i, arrival_time=ts,
-                    l_in=max(1, l_in), l_out=max(1, l_out),
+                    req_id=i,
+                    arrival_time=ts,
+                    l_in=max(1, l_in),
+                    l_out=max(1, l_out),
                     category="prose",
                 )
                 arrivals.append((ts, req))
@@ -166,14 +168,16 @@ class TraceWorkload:
             reader = csv.DictReader(f)
             for i, row in enumerate(reader):
                 try:
-                    ts    = float(row.get("timestamp", i))
-                    l_in  = int(float(row.get("num_prefill_tokens", 512)))
-                    l_out = int(float(row.get("num_decode_tokens",  128)))
+                    ts = float(row.get("timestamp", i))
+                    l_in = int(float(row.get("num_prefill_tokens", 512)))
+                    l_out = int(float(row.get("num_decode_tokens", 128)))
                 except (ValueError, KeyError):
                     continue
                 req = Request(
-                    req_id=i, arrival_time=ts,
-                    l_in=max(1, l_in), l_out=max(1, l_out),
+                    req_id=i,
+                    arrival_time=ts,
+                    l_in=max(1, l_in),
+                    l_out=max(1, l_out),
                     category="prose",
                 )
                 arrivals.append((ts, req))
@@ -194,37 +198,36 @@ class TraceWorkload:
         else:
             # Auto-detect: peek at first non-empty line
             with open(self.path) as f:
-                first = next((l.strip() for l in f if l.strip()), "")
+                first = next((ln.strip() for ln in f if ln.strip()), "")
             rows = self._parse_jsonl() if first.startswith("{") else self._parse_csv()
 
         fm = self._fmap
-        ts_key   = fm["timestamp"]
-        lin_key  = fm["l_in"]
+        ts_key = fm["timestamp"]
+        lin_key = fm["l_in"]
         lout_key = fm["l_out"]
-        mid_key  = fm["model_id"]
-        cat_key  = fm.get("category", "category")
-        cpx_key  = fm.get("complexity", "complexity")
+        mid_key = fm["model_id"]
+        cat_key = fm.get("category", "category")
+        cpx_key = fm.get("complexity", "complexity")
 
         arrivals = []
         for i, row in enumerate(rows):
             try:
-                ts    = float(row.get(ts_key, i))
-                l_in  = int(float(row.get(lin_key, 512)))
+                ts = float(row.get(ts_key, i))
+                l_in = int(float(row.get(lin_key, 512)))
                 l_out = int(float(row.get(lout_key, 128)))
             except (ValueError, KeyError, TypeError):
                 continue
 
-            model_id = (
-                row.get(mid_key)
-                or self.default_model_id
-            ) or None
+            model_id = (row.get(mid_key) or self.default_model_id) or None
 
             # Use semantic router's category as request category if present
             category = row.get(cat_key, "prose") or "prose"
 
             req = Request(
-                req_id=i, arrival_time=ts,
-                l_in=max(1, l_in), l_out=max(1, l_out),
+                req_id=i,
+                arrival_time=ts,
+                l_in=max(1, l_in),
+                l_out=max(1, l_out),
                 category=str(category),
                 model_id=str(model_id) if model_id else None,
             )
@@ -239,11 +242,11 @@ class TraceWorkload:
         arrivals.sort(key=lambda x: x[0])
         return arrivals
 
-    def _parse_jsonl(self) -> List[dict]:
+    def _parse_jsonl(self) -> list[dict]:
         rows = []
         with open(self.path) as f:
-            for line in f:
-                line = line.strip()
+            for raw_line in f:
+                line = raw_line.strip()
                 if not line:
                     continue
                 try:
@@ -252,7 +255,7 @@ class TraceWorkload:
                     continue
         return rows
 
-    def _parse_csv(self, delimiter: str = ",") -> List[dict]:
+    def _parse_csv(self, delimiter: str = ",") -> list[dict]:
         rows = []
         with open(self.path, newline="") as f:
             reader = csv.DictReader(f, delimiter=delimiter)

@@ -3,11 +3,12 @@ current utilisation (active + queued requests as a fraction of capacity).
 
 Useful as a baseline for homogeneous fleets or for benchmarking.
 """
+
 from __future__ import annotations
-from typing import Dict, Optional
-from .base import BaseRouter
-from ..core.request import Request
+
 from ..core.fleet import PoolConfig
+from ..core.request import Request
+from .base import BaseRouter
 
 
 class LeastLoadedRouter(BaseRouter):
@@ -17,22 +18,21 @@ class LeastLoadedRouter(BaseRouter):
     the Fleet is constructed.
     """
 
-    def __init__(self, pools: Dict[str, PoolConfig], **kwargs):
+    def __init__(self, pools: dict[str, PoolConfig], **kwargs):
         super().__init__(pools, **kwargs)
         self._live_pools = None  # injected by Fleet after pool construction
 
     def set_pools(self, live_pools) -> None:
         self._live_pools = live_pools
 
-    def route(self, req: Request) -> Optional[str]:
+    def route(self, req: Request) -> str | None:
         if self._live_pools is None:
             # Fall back to first pool if live state not available
             return self.pool_ids[0]
         # Pick pool with lowest (queued + active) / capacity ratio
         best_id, best_load = None, float("inf")
         for pid, pool in self._live_pools.items():
-            total = sum(i.active_count + i.queue_depth
-                        for i in pool.instances)
+            total = sum(i.active_count + i.queue_depth for i in pool.instances)
             cap = sum(i.n_slots for i in pool.instances)
             load = total / max(1, cap)
             if load < best_load:

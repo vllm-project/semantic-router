@@ -3,24 +3,30 @@
 All heavy computation is executed via asyncio.to_thread so the FastAPI
 event loop stays responsive.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
-import math
-import statistics
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from .models import (
-    FleetConfigIn, HistogramBucket, JobRequest, JobType,
-    OptResult, PoolResult, SimResult, SweepPoint,
-    WhatifPoint, WhatifResult, WorkloadRef,
-)
 from . import storage
+from .models import (
+    HistogramBucket,
+    JobRequest,
+    JobType,
+    OptResult,
+    PoolResult,
+    SimResult,
+    SweepPoint,
+    WhatifPoint,
+    WhatifResult,
+    WorkloadRef,
+)
 
 _DATA_DIR = Path(__file__).parent.parent / "data"
-_GPU_MAP: Dict[str, Any] = {}   # populated lazily
+_GPU_MAP: dict[str, Any] = {}  # populated lazily
 
 
 def _gpu(key: str):
@@ -32,14 +38,16 @@ def _gpu(key: str):
     the representative model — callers that need a different model should call
     ProfileBuilder directly.
     """
-    from fleet_sim.gpu_profiles.profiles import A100_80GB, H100_80GB, A10G
     from fleet_sim.gpu_profiles import ProfileBuilder, ServingConfig
+    from fleet_sim.gpu_profiles.profiles import A10G, A100_80GB, H100_80GB
     from fleet_sim.hardware import get_hardware
     from fleet_sim.models import LLAMA_3_1_70B
 
     _LEGACY = {
-        "a100": A100_80GB, "a100_80gb": A100_80GB,
-        "h100": H100_80GB, "h100_80gb": H100_80GB,
+        "a100": A100_80GB,
+        "a100_80gb": A100_80GB,
+        "h100": H100_80GB,
+        "h100_80gb": H100_80GB,
         "a10g": A10G,
     }
 
@@ -58,7 +66,7 @@ def _gpu(key: str):
     except KeyError:
         pass
 
-    all_keys = list(_LEGACY.keys()) + ["h200", "b200", "gb200", "gb300", "l40s", "b60"]
+    all_keys = [*list(_LEGACY.keys()), "h200", "b200", "gb200", "gb300", "l40s", "b60"]
     raise ValueError(f"Unknown GPU profile '{key}'. Available: {all_keys}")
 
 
@@ -78,14 +86,17 @@ def _load_cdf(workload_ref: WorkloadRef) -> list:
         if not meta:
             raise ValueError(f"Trace '{workload_ref.trace_id}' not found")
         # For trace workloads, build a CDF from the uploaded file's token lengths
-        return _cdf_from_trace(storage.trace_upload_path(workload_ref.trace_id),
-                                meta.get("format", "jsonl"))
+        return _cdf_from_trace(
+            storage.trace_upload_path(workload_ref.trace_id),
+            meta.get("format", "jsonl"),
+        )
     raise ValueError(f"Unknown workload type '{workload_ref.type}'")
 
 
 def _cdf_from_trace(path: Path, fmt: str) -> list:
     """Build a [[threshold, frac], ...] CDF from a trace file."""
     import csv
+
     totals = []
     if fmt == "csv":
         with open(path) as f:
@@ -96,8 +107,8 @@ def _cdf_from_trace(path: Path, fmt: str) -> list:
                 totals.append(pt + ot)
     else:  # jsonl / semantic_router
         with open(path) as f:
-            for line in f:
-                line = line.strip()
+            for raw_line in f:
+                line = raw_line.strip()
                 if not line:
                     continue
                 r = json.loads(line)
@@ -121,14 +132,14 @@ def _cdf_from_trace(path: Path, fmt: str) -> list:
     return cdf
 
 
-def _make_histogram(values: List[float], n_bins: int = 20) -> List[HistogramBucket]:
+def _make_histogram(values: list[float], n_bins: int = 20) -> list[HistogramBucket]:
     if not values:
         return []
     lo, hi = min(values), max(values)
     if lo == hi:
         return [HistogramBucket(lo=int(lo), hi=int(hi) + 1, count=len(values))]
     width = (hi - lo) / n_bins
-    buckets: List[HistogramBucket] = []
+    buckets: list[HistogramBucket] = []
     for i in range(n_bins):
         b_lo = lo + i * width
         b_hi = lo + (i + 1) * width
@@ -138,6 +149,7 @@ def _make_histogram(values: List[float], n_bins: int = 20) -> List[HistogramBuck
 
 
 # ── Synchronous worker functions (run in thread pool) ─────────────────────────
+
 
 def _run_optimize(params) -> OptResult:
     from fleet_sim.optimizer import FleetOptimizer
@@ -156,8 +168,10 @@ def _run_optimize(params) -> OptResult:
         node_avail=params.node_avail,
     )
     step = params.gamma_step
-    gammas = [round(params.gamma_min + i * step, 2)
-              for i in range(int((params.gamma_max - params.gamma_min) / step) + 1)]
+    gammas = [
+        round(params.gamma_min + i * step, 2)
+        for i in range(int((params.gamma_max - params.gamma_min) / step) + 1)
+    ]
 
     result = opt.optimize(
         cdf=cdf,
@@ -171,7 +185,9 @@ def _run_optimize(params) -> OptResult:
     all_results = result.analytical + result.simulated
     sweep_pts = [
         SweepPoint(
-            gamma=r.gamma, n_s=r.n_s, n_l=r.n_l,
+            gamma=r.gamma,
+            n_s=r.n_s,
+            n_l=r.n_l,
             total_gpus=r.total_gpus,
             annual_cost_kusd=r.annualised_cost_kusd,
             p99_short_ms=r.p99_ttft_short_ms,
@@ -185,13 +201,19 @@ def _run_optimize(params) -> OptResult:
     best_r = result.best_simulated or result.best_analytical
     # Baseline = cheapest γ=1.0 analytical result (no C+R compression)
     baseline_r = next((r for r in result.analytical if r.gamma == 1.0), None)
-    baseline_cost = baseline_r.annualised_cost_kusd if baseline_r else best_r.annualised_cost_kusd
+    baseline_cost = (
+        baseline_r.annualised_cost_kusd if baseline_r else best_r.annualised_cost_kusd
+    )
     savings = 0.0
     if baseline_cost > 0:
-        savings = round((baseline_cost - best_r.annualised_cost_kusd) / baseline_cost * 100, 1)
+        savings = round(
+            (baseline_cost - best_r.annualised_cost_kusd) / baseline_cost * 100, 1
+        )
 
     best_pt = SweepPoint(
-        gamma=best_r.gamma, n_s=best_r.n_s, n_l=best_r.n_l,
+        gamma=best_r.gamma,
+        n_s=best_r.n_s,
+        n_l=best_r.n_l,
         total_gpus=best_r.total_gpus,
         annual_cost_kusd=best_r.annualised_cost_kusd,
         p99_short_ms=best_r.p99_ttft_short_ms,
@@ -218,19 +240,22 @@ def _run_simulate(params) -> SimResult:
     fleet_cfg = _resolve_fleet(params.fleet, params.fleet_id)
     cdf = _load_cdf(params.workload)
     workload = CdfWorkload(cdf)
-    arrivals = PoissonWorkload(lam=params.lam, length_gen=workload,
-                               n_requests=params.n_requests).generate()
+    arrivals = PoissonWorkload(
+        lam=params.lam, length_gen=workload, n_requests=params.n_requests
+    ).generate()
 
-    pools = [PoolConfig(pool_id=p.pool_id, gpu=_gpu(p.gpu),
-                        n_gpus=p.n_gpus, max_ctx=p.max_ctx)
-             for p in fleet_cfg.pools]
+    pools = [
+        PoolConfig(
+            pool_id=p.pool_id, gpu=_gpu(p.gpu), n_gpus=p.n_gpus, max_ctx=p.max_ctx
+        )
+        for p in fleet_cfg.pools
+    ]
     router_type = _router_name(fleet_cfg.router, fleet_cfg.compress_gamma)
     router_kwargs = {}
     if fleet_cfg.router == "compress_route" and fleet_cfg.compress_gamma:
         router_kwargs = {"gamma": fleet_cfg.compress_gamma}
 
-    fc = FleetConfig(pools=pools, router_type=router_type,
-                     router_kwargs=router_kwargs)
+    fc = FleetConfig(pools=pools, router_type=router_type, router_kwargs=router_kwargs)
     result = Fleet(fc).run(arrivals)
     return _fleet_sim_result_to_model(result, params.slo_ms)
 
@@ -242,21 +267,24 @@ def _run_whatif(params) -> WhatifResult:
     fleet_cfg = _resolve_fleet(params.fleet, params.fleet_id)
     cdf = _load_cdf(params.workload)
     workload = CdfWorkload(cdf)
-    pools = [PoolConfig(pool_id=p.pool_id, gpu=_gpu(p.gpu),
-                        n_gpus=p.n_gpus, max_ctx=p.max_ctx)
-             for p in fleet_cfg.pools]
+    pools = [
+        PoolConfig(
+            pool_id=p.pool_id, gpu=_gpu(p.gpu), n_gpus=p.n_gpus, max_ctx=p.max_ctx
+        )
+        for p in fleet_cfg.pools
+    ]
     router_type = _router_name(fleet_cfg.router, fleet_cfg.compress_gamma)
     router_kwargs = {}
     if fleet_cfg.router == "compress_route" and fleet_cfg.compress_gamma:
         router_kwargs = {"gamma": fleet_cfg.compress_gamma}
-    fc = FleetConfig(pools=pools, router_type=router_type,
-                     router_kwargs=router_kwargs)
+    fc = FleetConfig(pools=pools, router_type=router_type, router_kwargs=router_kwargs)
 
     points = []
     slo_break = None
     for lam in sorted(params.lam_range):
-        arrivals = PoissonWorkload(lam=lam, length_gen=workload,
-                                   n_requests=params.n_requests).generate()
+        arrivals = PoissonWorkload(
+            lam=lam, length_gen=workload, n_requests=params.n_requests
+        ).generate()
         result = Fleet(fc).run(arrivals)
         slo_c = result.slo_compliance(params.slo_ms)
         p = WhatifPoint(
@@ -275,6 +303,7 @@ def _run_whatif(params) -> WhatifResult:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _resolve_fleet(inline, fleet_id):
     if inline:
         return inline
@@ -283,6 +312,7 @@ def _resolve_fleet(inline, fleet_id):
         if not data:
             raise ValueError(f"Fleet '{fleet_id}' not found")
         from .models import FleetConfigIn, PoolConfigIn
+
         return FleetConfigIn(
             name=data["name"],
             pools=[PoolConfigIn(**p) for p in data["pools"]],
@@ -292,7 +322,7 @@ def _resolve_fleet(inline, fleet_id):
     raise ValueError("Either fleet_id or inline fleet config required")
 
 
-def _router_name(router: str, gamma: Optional[float]) -> str:
+def _router_name(router: str, gamma: float | None) -> str:
     mapping = {
         "length": "LengthRouter",
         "model": "ModelRouter",
@@ -306,17 +336,19 @@ def _router_name(router: str, gamma: Optional[float]) -> str:
 def _fleet_sim_result_to_model(result, slo_ms: float) -> SimResult:
     pool_results = []
     for pid, pool in result.pools.items():
-        pool_results.append(PoolResult(
-            pool_id=pid,
-            gpu=pool.gpu.name,
-            n_gpus=pool.n_gpus,
-            p50_ttft_ms=result.p50_ttft_ms(pid),
-            p99_ttft_ms=result.p99_ttft_ms(pid),
-            p99_queue_wait_ms=result.p99_queue_wait_ms(pid),
-            slo_compliance=result.slo_compliance(slo_ms, pid),
-            mean_utilisation=result.mean_utilisation(pid),
-            cost_per_hr=pool.cost_per_hr(),
-        ))
+        pool_results.append(
+            PoolResult(
+                pool_id=pid,
+                gpu=pool.gpu.name,
+                n_gpus=pool.n_gpus,
+                p50_ttft_ms=result.p50_ttft_ms(pid),
+                p99_ttft_ms=result.p99_ttft_ms(pid),
+                p99_queue_wait_ms=result.p99_queue_wait_ms(pid),
+                slo_compliance=result.slo_compliance(slo_ms, pid),
+                mean_utilisation=result.mean_utilisation(pid),
+                cost_per_hr=pool.cost_per_hr(),
+            )
+        )
 
     ttfts_ms = [r.ttft * 1000 for r in result.completed if r.ttft is not None]
     hist = _make_histogram(ttfts_ms, n_bins=30)
@@ -340,6 +372,7 @@ def _fleet_sim_result_to_model(result, slo_ms: float) -> SimResult:
 
 
 # ── Async dispatch ────────────────────────────────────────────────────────────
+
 
 async def run_job(job_id: str, request: JobRequest) -> None:
     """Execute a job in a thread pool and write results to storage."""

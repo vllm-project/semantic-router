@@ -1,13 +1,13 @@
 """Simulation job management routes."""
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
-from ..models import JobOut, JobRequest, JobStatus, JobType
 from .. import storage
+from ..models import JobOut, JobRequest, JobType
 from ..runner import run_job
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
@@ -46,7 +46,7 @@ async def create_job(body: JobRequest, background_tasks: BackgroundTasks):
     return _job_out(data)
 
 
-@router.get("", response_model=List[JobOut], summary="List all jobs")
+@router.get("", response_model=list[JobOut], summary="List all jobs")
 async def list_jobs():
     return [_job_out(d) for d in storage.list_jobs()]
 

@@ -42,3 +42,26 @@ max-nested-blocks = 4
 "src/vllm-sr/tests/test_latency_validation.py" = ["I001"]
 "src/vllm-sr/tests/test_plugin_parsing.py" = ["I001", "RUF043"]
 "src/vllm-sr/tests/test_setup_bootstrap.py" = ["I001", "UP015"]
+# bench/fleet-simulator is scientific simulation code that intentionally uses:
+# - Greek/Unicode characters for mathematical notation (γ, λ, α, ×, –)
+# - Scientific constants that are not "magic values" (PLR2004)
+# - Conditional/lazy imports for optional heavy dependencies (PLC0415)
+# - Mathematical naming conventions for variables and functions (N802/N803/N806)
+# - FastAPI idiomatic Query()/File() defaults (B008)
+# - Complex optimizer functions that exceed default thresholds (C901/PLR0912/PLR0915)
+"bench/fleet-simulator/**/*.py" = [
+  "B008",
+  "C901",
+  "E402",
+  "N802",
+  "N803",
+  "N806",
+  "PLC0415",
+  "PLR0912",
+  "PLR0915",
+  "PLR2004",
+  "RUF001",
+  "RUF002",
+  "RUF003",
+  "SIM115",
+]

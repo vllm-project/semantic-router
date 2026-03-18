@@ -4,24 +4,23 @@ All values are self-contained — no external dependencies required.
 Empirical correction factors are derived from production observations
 across Ampere, Hopper, and Blackwell generation hardware.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict
-
 
 # Empirical constants (hardware-generation-agnostic)
-MEM_BW_SCALE: float = 0.80        # effective fraction of peak memory bandwidth
-MEM_CONST_LAT: float = 3e-6       # per-layer constant overhead (seconds)
-P2P_LATENCY: float = 10e-6        # GPU-to-GPU P2P transfer base latency (s)
-OTHER_MEM: int = 3_758_096_384    # 3.5 GiB safety buffer (CUDA context, etc.)
+MEM_BW_SCALE: float = 0.80  # effective fraction of peak memory bandwidth
+MEM_CONST_LAT: float = 3e-6  # per-layer constant overhead (seconds)
+P2P_LATENCY: float = 10e-6  # GPU-to-GPU P2P transfer base latency (s)
+OTHER_MEM: int = 3_758_096_384  # 3.5 GiB safety buffer (CUDA context, etc.)
 
 # NVLink/NVSwitch NCCL workspace memory by TP degree (bytes)
-NCCL_MEM: Dict[int, int] = {
+NCCL_MEM: dict[int, int] = {
     1: 0,
-    2: 358_612_992,   # ~342 MiB
-    4: 411_041_792,   # ~392 MiB
-    8: 411_041_792,   # ~392 MiB
+    2: 358_612_992,  # ~342 MiB
+    4: 411_041_792,  # ~392 MiB
+    8: 411_041_792,  # ~392 MiB
 }
 
 
@@ -52,6 +51,7 @@ class HardwareSpec:
     nccl_mem        : NCCL workspace bytes by TP size
     other_mem       : misc. GPU memory overhead, bytes
     """
+
     name: str
     mem_bw: float
     mem_capacity: int
@@ -66,7 +66,7 @@ class HardwareSpec:
     mem_bw_scale: float = MEM_BW_SCALE
     mem_const_lat: float = MEM_CONST_LAT
     p2p_latency: float = P2P_LATENCY
-    nccl_mem: Dict[int, int] = field(default_factory=lambda: dict(NCCL_MEM))
+    nccl_mem: dict[int, int] = field(default_factory=lambda: dict(NCCL_MEM))
     other_mem: int = OTHER_MEM
 
     @property

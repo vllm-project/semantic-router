@@ -63,28 +63,24 @@ Usage
   #   }
   # }
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import os
 import sys
-from pathlib import Path
-from typing import List, Optional
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from fleet_sim.gpu_profiles.profiles import A100_80GB, H100_80GB, A10G
-from fleet_sim.optimizer import (
-    FleetOptimizer, threshold_pareto, print_threshold_pareto,
-)
 from fleet_sim.core.fleet import Fleet, FleetConfig, PoolConfig
+from fleet_sim.gpu_profiles.profiles import A10G, A100_80GB, H100_80GB
+from fleet_sim.optimizer import (
+    FleetOptimizer,
+    print_threshold_pareto,
+    threshold_pareto,
+)
 from fleet_sim.workload.synthetic import CdfWorkload, PoissonWorkload
-from fleet_sim.routing.length_based import LengthRouter
-from fleet_sim.routing.compress_route import CompressAndRouteRouter
-from fleet_sim.routing.model_router import ModelRouter
-from fleet_sim.routing.semantic_router import SemanticRouter
-
 
 GPU_REGISTRY = {"a100": A100_80GB, "h100": H100_80GB, "a10g": A10G}
 
@@ -96,6 +92,7 @@ def load_cdf(path: str) -> list:
 
 
 # ── subcommands ───────────────────────────────────────────────────────────────
+
 
 def cmd_optimize(args):
     cdf = load_cdf(args.cdf)
@@ -109,7 +106,9 @@ def cmd_optimize(args):
         t_slo_ms=args.slo,
         long_max_ctx=args.long_max_ctx,
     )
-    gammas = [round(1.0 + 0.1 * k, 1) for k in range(int((args.gamma_max - 1.0) / 0.1) + 1)]
+    gammas = [
+        round(1.0 + 0.1 * k, 1) for k in range(int((args.gamma_max - 1.0) / 0.1) + 1)
+    ]
     report = opt.optimize(
         cdf=cdf,
         lam=args.lam,
@@ -123,7 +122,9 @@ def cmd_optimize(args):
     if args.out:
         rows = [
             {
-                "gamma": r.gamma, "n_s": r.n_s, "n_l": r.n_l,
+                "gamma": r.gamma,
+                "n_s": r.n_s,
+                "n_l": r.n_l,
                 "total_gpus": r.total_gpus,
                 "annualised_cost_kusd": round(r.annualised_cost_kusd, 1),
                 "p99_ttft_short_ms": round(r.p99_ttft_short_ms, 1),
@@ -144,7 +145,7 @@ def cmd_simulate(args):
 
     pool_configs = [
         PoolConfig("short", gpu_s, args.n_s, args.b_short),
-        PoolConfig("long",  gpu_l, args.n_l, args.long_max_ctx),
+        PoolConfig("long", gpu_l, args.n_l, args.long_max_ctx),
     ]
     fc = FleetConfig(
         pools=pool_configs,
@@ -173,15 +174,18 @@ def cmd_simulate(args):
 def _whatif_single(cdf, lam_range, gpu_s, gpu_l, b_short, slo, long_max_ctx):
     """Return list of best SweepResult per arrival rate for one GPU type pair."""
     opt = FleetOptimizer(
-        gpu_short=gpu_s, gpu_long=gpu_l,
-        B_short=b_short, t_slo_ms=slo,
+        gpu_short=gpu_s,
+        gpu_long=gpu_l,
+        B_short=b_short,
+        t_slo_ms=slo,
         long_max_ctx=long_max_ctx,
     )
     rows = []
     for lam in lam_range:
         res = opt.sweep_analytical(cdf, lam, verbose=False)
-        best = min((r for r in res if r.slo_met), key=lambda r: r.cost_per_hr,
-                   default=res[0])
+        best = min(
+            (r for r in res if r.slo_met), key=lambda r: r.cost_per_hr, default=res[0]
+        )
         rows.append((lam, best))
     return rows
 
@@ -193,24 +197,33 @@ def cmd_whatif(args):
     gpu_names = getattr(args, "gpu_compare", None) or []
     if gpu_names:
         gpus = [(name, GPU_REGISTRY.get(name, A100_80GB)) for name in gpu_names]
-        print(f"\nWhat-if: GPU type comparison")
-        print(f"  CDF: {args.cdf}  B_short={args.b_short:,}  SLO={args.slo}ms"
-              f"  long_max_ctx={args.long_max_ctx:,}")
+        print("\nWhat-if: GPU type comparison")
+        print(
+            f"  CDF: {args.cdf}  B_short={args.b_short:,}  SLO={args.slo}ms"
+            f"  long_max_ctx={args.long_max_ctx:,}"
+        )
 
         # Build results per GPU
         all_results = {}
         for name, gpu in gpus:
             all_results[name] = _whatif_single(
-                cdf, args.lam_range, gpu, gpu,
-                args.b_short, args.slo, args.long_max_ctx,
+                cdf,
+                args.lam_range,
+                gpu,
+                gpu,
+                args.b_short,
+                args.slo,
+                args.long_max_ctx,
             )
 
         # Print side-by-side for each λ
         col_w = 28
         header_gpu = "".join(f"  {n.upper():^{col_w}}" for n, _ in gpus)
         print(f"\n  {'λ':>8}  {header_gpu}")
-        sub_hdr = "".join(f"  {'GPUs':>5} {'$K/yr':>8} {'$/hr':>7} {'P99':>7} {'SLO':>4}"
-                          for _ in gpus)
+        sub_hdr = "".join(
+            f"  {'GPUs':>5} {'$K/yr':>8} {'$/hr':>7} {'P99':>7} {'SLO':>4}"
+            for _ in gpus
+        )
         print(f"  {' ':>8}  {sub_hdr}")
         print(f"  {'-' * (10 + len(gpus) * (col_w + 2))}")
 
@@ -218,15 +231,17 @@ def cmd_whatif(args):
         for lam in args.lam_range:
             line = f"  {lam:>8.0f}  "
             row = {"lam": lam}
-            for name, gpu in gpus:
+            for name, _gpu in gpus:
                 lam_rows = {r[0]: r[1] for r in all_results[name]}
                 best = lam_rows.get(lam)
                 if best:
                     ok = "✓" if best.slo_met else "✗"
                     cost_hr = best.cost_per_hr
-                    line += (f"  {best.total_gpus:>5} ${best.annualised_cost_kusd:>6.0f}K"
-                             f" ${cost_hr:>5.0f}/hr"
-                             f" {best.p99_ttft_short_ms:>5.0f}ms {ok:>4}")
+                    line += (
+                        f"  {best.total_gpus:>5} ${best.annualised_cost_kusd:>6.0f}K"
+                        f" ${cost_hr:>5.0f}/hr"
+                        f" {best.p99_ttft_short_ms:>5.0f}ms {ok:>4}"
+                    )
                     row[name] = {
                         "total_gpus": best.total_gpus,
                         "cost_per_hr": round(cost_hr, 2),
@@ -249,7 +264,7 @@ def cmd_whatif(args):
                 if not base:
                     continue
                 line = f"  {lam:>8.0f}  "
-                for name, gpu in gpus:
+                for name, _gpu in gpus:
                     if name == base_name:
                         line += f"  {'1.00×':>10}"
                         continue
@@ -258,8 +273,7 @@ def cmd_whatif(args):
                     if other:
                         ratio = other.annualised_cost_kusd / base.annualised_cost_kusd
                         gpu_ratio = other.total_gpus / base.total_gpus
-                        line += (f"  {ratio:>5.2f}× cost"
-                                 f" ({gpu_ratio:+.0%} GPUs)")
+                        line += f"  {ratio:>5.2f}× cost" f" ({gpu_ratio:+.0%} GPUs)"
                     else:
                         line += f"  {'N/A':>10}"
                 print(line)
@@ -274,21 +288,34 @@ def cmd_whatif(args):
     gpu_l = GPU_REGISTRY.get(args.gpu_long, A100_80GB)
 
     print(f"\nWhat-if analysis: sweep λ over {args.lam_range}")
-    print(f"  B_short={args.b_short:,}  SLO={args.slo}ms  GPU: {gpu_s.name}/{gpu_l.name}")
-    print(f"\n  {'λ':>8} {'n_s':>5} {'n_l':>5} {'total':>7} {'$K/yr':>10}"
-          f" {'γ*':>6} {'P99_s':>8} {'P99_l':>8}")
+    print(
+        f"  B_short={args.b_short:,}  SLO={args.slo}ms  GPU: {gpu_s.name}/{gpu_l.name}"
+    )
+    print(
+        f"\n  {'λ':>8} {'n_s':>5} {'n_l':>5} {'total':>7} {'$K/yr':>10}"
+        f" {'γ*':>6} {'P99_s':>8} {'P99_l':>8}"
+    )
     print(f"  {'-'*60}")
 
     rows = []
-    for lam, best in _whatif_single(cdf, args.lam_range, gpu_s, gpu_l,
-                                     args.b_short, args.slo, args.long_max_ctx):
-        print(f"  {lam:>8.0f} {best.n_s:>5} {best.n_l:>5} {best.total_gpus:>7}"
-              f" ${best.annualised_cost_kusd:>8.1f}K {best.gamma:>5.1f}"
-              f" {best.p99_ttft_short_ms:>7.1f}ms {best.p99_ttft_long_ms:>7.1f}ms")
-        rows.append({"lam": lam, "n_s": best.n_s, "n_l": best.n_l,
-                     "total_gpus": best.total_gpus,
-                     "annualised_cost_kusd": round(best.annualised_cost_kusd, 1),
-                     "gamma_opt": best.gamma})
+    for lam, best in _whatif_single(
+        cdf, args.lam_range, gpu_s, gpu_l, args.b_short, args.slo, args.long_max_ctx
+    ):
+        print(
+            f"  {lam:>8.0f} {best.n_s:>5} {best.n_l:>5} {best.total_gpus:>7}"
+            f" ${best.annualised_cost_kusd:>8.1f}K {best.gamma:>5.1f}"
+            f" {best.p99_ttft_short_ms:>7.1f}ms {best.p99_ttft_long_ms:>7.1f}ms"
+        )
+        rows.append(
+            {
+                "lam": lam,
+                "n_s": best.n_s,
+                "n_l": best.n_l,
+                "total_gpus": best.total_gpus,
+                "annualised_cost_kusd": round(best.annualised_cost_kusd, 1),
+                "gamma_opt": best.gamma,
+            }
+        )
 
     if args.out:
         json.dump(rows, open(args.out, "w"), indent=2)
@@ -309,20 +336,29 @@ def cmd_pareto(args):
     gpu_l = GPU_REGISTRY.get(args.gpu_long, A100_80GB)
 
     # Homo baseline cost for savings computation
-    from fleet_sim.optimizer import FleetOptimizer as _FO
-    homo_opt = _FO(gpu_short=gpu_s, gpu_long=gpu_l,
-                   B_short=args.long_max_ctx, t_slo_ms=args.slo,
-                   long_max_ctx=args.long_max_ctx)
+    from fleet_sim.optimizer import FleetOptimizer as _FleetOptimizer
+
+    homo_opt = _FleetOptimizer(
+        gpu_short=gpu_s,
+        gpu_long=gpu_l,
+        B_short=args.long_max_ctx,
+        t_slo_ms=args.slo,
+        long_max_ctx=args.long_max_ctx,
+    )
     homo_sweep = homo_opt.sweep_analytical(cdf, args.lam, gammas=[1.0], verbose=False)
     homo_cost = homo_sweep[0].annualised_cost_kusd if homo_sweep else None
 
-    print(f"\nPareto frontier: threshold sweep")
-    print(f"  CDF: {args.cdf}  λ={args.lam:.0f} req/s  SLO={args.slo}ms"
-          f"  GPU: {gpu_s.name}/{gpu_l.name}")
+    print("\nPareto frontier: threshold sweep")
+    print(
+        f"  CDF: {args.cdf}  λ={args.lam:.0f} req/s  SLO={args.slo}ms"
+        f"  GPU: {gpu_s.name}/{gpu_l.name}"
+    )
     if homo_cost:
-        print(f"  Homo baseline (B_short={args.long_max_ctx:,}): "
-              f"${homo_cost:.0f}K/yr  "
-              f"({homo_sweep[0].total_gpus} GPUs)")
+        print(
+            f"  Homo baseline (B_short={args.long_max_ctx:,}): "
+            f"${homo_cost:.0f}K/yr  "
+            f"({homo_sweep[0].total_gpus} GPUs)"
+        )
 
     results = threshold_pareto(
         cdf=cdf,
@@ -337,11 +373,11 @@ def cmd_pareto(args):
         print("  No valid threshold candidates found.")
         return
 
-    print_threshold_pareto(results, t_slo_ms=args.slo,
-                           homo_cost_kusd=homo_cost or 0.0)
+    print_threshold_pareto(results, t_slo_ms=args.slo, homo_cost_kusd=homo_cost or 0.0)
 
     if args.out:
         import dataclasses
+
         rows = [dataclasses.asdict(r) for r in results]
         json.dump(rows, open(args.out, "w"), indent=2)
         print(f"\nResults saved to {args.out}")
@@ -354,7 +390,7 @@ def cmd_compare_routers(args):
 
     pool_configs = [
         PoolConfig("short", gpu, args.n_s, args.b_short),
-        PoolConfig("long",  gpu, args.n_l, args.long_max_ctx),
+        PoolConfig("long", gpu, args.n_l, args.long_max_ctx),
     ]
 
     wl_gen = CdfWorkload(cdf, seed=args.seed)
@@ -362,13 +398,15 @@ def cmd_compare_routers(args):
     arrivals = workload.generate()
 
     routers = [
-        ("LengthRouter",       {"threshold": args.b_short}),
+        ("LengthRouter", {"threshold": args.b_short}),
         ("CompressAndRouteRouter", {"B_short": args.b_short, "gamma": 1.5}),
-        ("RandomRouter",       {}),
+        ("RandomRouter", {}),
     ]
 
-    print(f"\n  Router comparison  λ={args.lam:.0f} req/s  "
-          f"n_s={args.n_s} n_l={args.n_l}  SLO={args.slo}ms")
+    print(
+        f"\n  Router comparison  λ={args.lam:.0f} req/s  "
+        f"n_s={args.n_s} n_l={args.n_l}  SLO={args.slo}ms"
+    )
     print(f"  {'Router':30s} {'P99 TTFT':>10} {'SLO%':>8} {'Util':>8}")
     print(f"  {'-'*60}")
 
@@ -409,7 +447,7 @@ def cmd_disagg(args):
     mean_isl = int(args.mean_isl) if args.mean_isl else int(mean_total * 0.75)
     mean_osl = int(args.mean_osl) if args.mean_osl else int(mean_total * 0.25)
 
-    print(f"\nDisaggregated prefill/decode fleet optimizer")
+    print("\nDisaggregated prefill/decode fleet optimizer")
     print(f"  CDF: {args.cdf}  λ={args.lam:.0f} req/s")
     print(f"  Prefill GPU: {gpu_pre.name}  Decode GPU: {gpu_dec.name}")
     print(f"  mean ISL={mean_isl} tok  mean OSL={mean_osl} tok  max_ctx={args.max_ctx}")
@@ -436,17 +474,21 @@ def cmd_disagg(args):
         if not slo_ok:
             eff = opt._prefill_ttft_ms() * opt.beta_ttft
             tpot = opt._decode_tpot_ms()
-            print(f"  Single-instance TTFT={eff:.0f}ms  TPOT={tpot:.0f}ms  "
-                  f"(SLOs: {args.slo_ttft}ms / {args.slo_tpot}ms)")
+            print(
+                f"  Single-instance TTFT={eff:.0f}ms  TPOT={tpot:.0f}ms  "
+                f"(SLOs: {args.slo_ttft}ms / {args.slo_tpot}ms)"
+            )
         return
 
     best = min(feasible, key=lambda p: p.cost_per_hr)
 
     # Pareto-efficient subset: non-dominated on (cost, total_gpus)
     pareto = [
-        pt for pt in feasible
+        pt
+        for pt in feasible
         if not any(
-            o.cost_per_hr <= pt.cost_per_hr and o.total_gpus <= pt.total_gpus
+            o.cost_per_hr <= pt.cost_per_hr
+            and o.total_gpus <= pt.total_gpus
             and (o.cost_per_hr < pt.cost_per_hr or o.total_gpus < pt.total_gpus)
             for o in feasible
         )
@@ -454,17 +496,23 @@ def cmd_disagg(args):
     pareto.sort(key=lambda p: p.total_gpus)
 
     print(f"\n  Pareto-efficient configs (SLO ✓, λ ≥ {args.lam:.0f} req/s):")
-    print(f"  {'nP':>4} {'nD':>4} {'GPUs':>6} {'rate':>8} {'TTFT':>8} {'TPOT':>8} "
-          f"{'$/hr':>7} {'$K/yr':>7}")
+    print(
+        f"  {'nP':>4} {'nD':>4} {'GPUs':>6} {'rate':>8} {'TTFT':>8} {'TPOT':>8} "
+        f"{'$/hr':>7} {'$K/yr':>7}"
+    )
     print(f"  {'-'*60}")
     for pt in pareto:
         marker = " ★" if pt is best else ""
-        print(f"  {pt.n_prefill:>4} {pt.n_decode:>4} {pt.total_gpus:>6}"
-              f" {pt.system_rate:>7.1f}/s {pt.ttft_ms:>7.0f}ms {pt.tpot_ms:>7.0f}ms"
-              f" ${pt.cost_per_hr:>5.2f}/hr ${pt.cost_per_hr * 8760 / 1000:>5.0f}K{marker}")
+        print(
+            f"  {pt.n_prefill:>4} {pt.n_decode:>4} {pt.total_gpus:>6}"
+            f" {pt.system_rate:>7.1f}/s {pt.ttft_ms:>7.0f}ms {pt.tpot_ms:>7.0f}ms"
+            f" ${pt.cost_per_hr:>5.2f}/hr ${pt.cost_per_hr * 8760 / 1000:>5.0f}K{marker}"
+        )
 
     # Aggregated comparison
-    print(f"\n  Comparison vs aggregated (homogeneous) fleets at λ={args.lam:.0f} req/s:")
+    print(
+        f"\n  Comparison vs aggregated (homogeneous) fleets at λ={args.lam:.0f} req/s:"
+    )
     seen = set()
     for gname in [args.gpu_prefill, args.gpu_decode]:
         if gname in seen:
@@ -472,34 +520,44 @@ def cmd_disagg(args):
         seen.add(gname)
         g = GPU_REGISTRY[gname]
         agg_opt = FleetOptimizer(
-            gpu_short=g, gpu_long=g,
-            B_short=args.max_ctx, t_slo_ms=args.slo_ttft,
+            gpu_short=g,
+            gpu_long=g,
+            B_short=args.max_ctx,
+            t_slo_ms=args.slo_ttft,
             long_max_ctx=args.max_ctx,
         )
-        agg_results = agg_opt.sweep_analytical(cdf, args.lam, gammas=[1.0], verbose=False)
+        agg_results = agg_opt.sweep_analytical(
+            cdf, args.lam, gammas=[1.0], verbose=False
+        )
         agg_ok = [r for r in agg_results if r.slo_met]
         if agg_ok:
             agg = min(agg_ok, key=lambda r: r.annualised_cost_kusd)
-            print(f"  All-{gname.upper():6s}  {agg.total_gpus:>4} GPUs  "
-                  f"${agg.annualised_cost_kusd:>5.0f}K/yr  "
-                  f"P99 TTFT={agg.p99_ttft_short_ms:.0f}ms")
+            print(
+                f"  All-{gname.upper():6s}  {agg.total_gpus:>4} GPUs  "
+                f"${agg.annualised_cost_kusd:>5.0f}K/yr  "
+                f"P99 TTFT={agg.p99_ttft_short_ms:.0f}ms"
+            )
         else:
             print(f"  All-{gname.upper():6s}  No SLO-feasible config found")
 
     disagg_yr = best.cost_per_hr * 8760 / 1000
-    print(f"  Disagg {gpu_pre.name}P+{gpu_dec.name}D  "
-          f"{best.total_gpus:>4} GPUs ({best.n_prefill}P+{best.n_decode}D)  "
-          f"${disagg_yr:>5.0f}K/yr  "
-          f"TTFT={best.ttft_ms:.0f}ms  TPOT={best.tpot_ms:.0f}ms")
+    print(
+        f"  Disagg {gpu_pre.name}P+{gpu_dec.name}D  "
+        f"{best.total_gpus:>4} GPUs ({best.n_prefill}P+{best.n_decode}D)  "
+        f"${disagg_yr:>5.0f}K/yr  "
+        f"TTFT={best.ttft_ms:.0f}ms  TPOT={best.tpot_ms:.0f}ms"
+    )
 
     if args.out:
         import dataclasses
+
         json.dump(
             {
                 "best": dataclasses.asdict(best),
                 "pareto": [dataclasses.asdict(p) for p in pareto],
             },
-            open(args.out, "w"), indent=2,
+            open(args.out, "w"),
+            indent=2,
         )
         print(f"\nResults saved to {args.out}")
 
@@ -539,10 +597,10 @@ def cmd_simulate_fleet(args):
 
     router_name = cfg.get("router", "length")
     router_map = {
-        "length":       "LengthRouter",
-        "model":        "ModelRouter",
-        "semantic":     "SemanticRouter",
-        "random":       "RandomRouter",
+        "length": "LengthRouter",
+        "model": "ModelRouter",
+        "semantic": "SemanticRouter",
+        "random": "RandomRouter",
         "least_loaded": "LeastLoadedRouter",
     }
     router_type = router_map.get(router_name, "LengthRouter")
@@ -554,7 +612,9 @@ def cmd_simulate_fleet(args):
         # Single CDF for all pools (ignores workloads section)
         cdf = load_cdf(args.cdf)
         wl_gen = CdfWorkload(cdf, seed=args.seed)
-        workload = PoissonWorkload(args.lam, wl_gen, n_requests=args.n_req, seed=args.seed)
+        workload = PoissonWorkload(
+            args.lam, wl_gen, n_requests=args.n_req, seed=args.seed
+        )
         arrivals = workload.generate()
     elif "workloads" in cfg and router_name == "model":
         # Per-pool workloads: merge streams and tag each request with model_id
@@ -564,8 +624,10 @@ def cmd_simulate_fleet(args):
             lam_p = args.lam * wspec.get("lam_frac", 1.0 / len(cfg["workloads"]))
             n_p = max(1, int(args.n_req * wspec.get("lam_frac", 1.0)))
             wl_gen = CdfWorkload(pool_cdf, seed=args.seed)
-            pairs = PoissonWorkload(lam_p, wl_gen, n_requests=n_p, seed=args.seed).generate()
-            for t, req in pairs:
+            pairs = PoissonWorkload(
+                lam_p, wl_gen, n_requests=n_p, seed=args.seed
+            ).generate()
+            for _t, req in pairs:
                 req.model_id = pool_id
             all_pairs.extend(pairs)
         # Sort merged stream by arrival time and reassign req_ids
@@ -573,18 +635,27 @@ def cmd_simulate_fleet(args):
         arrivals = [(t, req) for t, req in all_pairs]
     else:
         p = pool_configs[0]
-        print(f"[warn] No --cdf provided and no workloads in config; "
-              f"using Poisson arrivals at λ={args.lam} req/s")
+        print(
+            f"[warn] No --cdf provided and no workloads in config; "
+            f"using Poisson arrivals at λ={args.lam} req/s"
+        )
         workload = PoissonWorkload(
-            args.lam, CdfWorkload([(p.max_ctx, 1.0)], seed=args.seed),
-            n_requests=args.n_req, seed=args.seed)
+            args.lam,
+            CdfWorkload([(p.max_ctx, 1.0)], seed=args.seed),
+            n_requests=args.n_req,
+            seed=args.seed,
+        )
         arrivals = workload.generate()
 
     n_arrivals = len(arrivals)
     print(f"Simulating {n_arrivals:,} requests across {len(pool_configs)} pools ...")
-    print("  Pools: " + ", ".join(
-        f"{pc.pool_id}({pc.n_gpus}×{pc.gpu.name},ctx={pc.max_ctx})"
-        for pc in pool_configs))
+    print(
+        "  Pools: "
+        + ", ".join(
+            f"{pc.pool_id}({pc.n_gpus}×{pc.gpu.name},ctx={pc.max_ctx})"
+            for pc in pool_configs
+        )
+    )
     print(f"  Router: {router_type}")
 
     fleet = Fleet(fc)
@@ -618,9 +689,11 @@ def cmd_tok_per_watt(args):
     cases but must be flagged when reporting results.
     """
     from fleet_sim.optimizer import (
-        tpw_analysis, fleet_tpw_analysis,
-        print_tpw_table, print_fleet_tpw,
         _split_cdf,
+        fleet_tpw_analysis,
+        print_fleet_tpw,
+        print_tpw_table,
+        tpw_analysis,
     )
 
     cdf = load_cdf(args.cdf)
@@ -641,13 +714,22 @@ def cmd_tok_per_watt(args):
         print(f"  Short pool ({gpu_s.name}): α={alpha:.3f}, λ_s={lam_s:.1f} req/s")
         print(f"  Long  pool ({gpu_l.name}): 1-α={1-alpha:.3f}, λ_l={lam_l:.1f} req/s")
         if gpu_s.name != gpu_l.name:
-            print(f"\n  NOTE: different GPU types likely represent different model sizes.")
-            print(f"  A10G is calibrated for 7B-class models; H100/A100 for 70B.")
-            print(f"  Fleet tok/W reflects combined model+hardware efficiency.")
+            print(
+                "\n  NOTE: different GPU types likely represent different model sizes."
+            )
+            print("  A10G is calibrated for 7B-class models; H100/A100 for 70B.")
+            print("  Fleet tok/W reflects combined model+hardware efficiency.")
 
         homo_result = fleet_tpw_analysis(
-            pools=[{"gpu": gpu_l, "cdf": cdf, "lam": args.lam,
-                    "max_ctx": args.max_ctx, "label": f"homo-{gpu_l.name}"}],
+            pools=[
+                {
+                    "gpu": gpu_l,
+                    "cdf": cdf,
+                    "lam": args.lam,
+                    "max_ctx": args.max_ctx,
+                    "label": f"homo-{gpu_l.name}",
+                }
+            ],
             lam_total=args.lam,
             t_slo_ms=args.slo,
             topology=f"homo {gpu_l.name} (baseline)",
@@ -655,36 +737,55 @@ def cmd_tok_per_watt(args):
 
         routed_result = fleet_tpw_analysis(
             pools=[
-                {"gpu": gpu_s, "cdf": short_cdf, "lam": lam_s,
-                 "max_ctx": args.max_ctx, "label": f"short({b_short}T)-{gpu_s.name}"},
-                {"gpu": gpu_l, "cdf": long_cdf,  "lam": lam_l,
-                 "max_ctx": args.max_ctx, "label": f"long-{gpu_l.name}"},
+                {
+                    "gpu": gpu_s,
+                    "cdf": short_cdf,
+                    "lam": lam_s,
+                    "max_ctx": args.max_ctx,
+                    "label": f"short({b_short}T)-{gpu_s.name}",
+                },
+                {
+                    "gpu": gpu_l,
+                    "cdf": long_cdf,
+                    "lam": lam_l,
+                    "max_ctx": args.max_ctx,
+                    "label": f"long-{gpu_l.name}",
+                },
             ],
             lam_total=args.lam,
             t_slo_ms=args.slo,
             topology=f"two-pool {gpu_s.name}(short) + {gpu_l.name}(long)",
         )
 
-        print(f"\nTokens-per-Watt fleet comparison  "
-              f"(CDF: {args.cdf},  λ={args.lam} req/s,  SLO={args.slo}ms)")
-        print_fleet_tpw(homo_result,   title="── Baseline: homo pool ──")
+        print(
+            f"\nTokens-per-Watt fleet comparison  "
+            f"(CDF: {args.cdf},  λ={args.lam} req/s,  SLO={args.slo}ms)"
+        )
+        print_fleet_tpw(homo_result, title="── Baseline: homo pool ──")
         print_fleet_tpw(routed_result, title="── Routed:  two-pool ──")
 
-        delta_tpw  = (routed_result.fleet_tpw / homo_result.fleet_tpw - 1) * 100
-        delta_cost = (routed_result.fleet_cost_per_mil / homo_result.fleet_cost_per_mil - 1) * 100
+        delta_tpw = (routed_result.fleet_tpw / homo_result.fleet_tpw - 1) * 100
+        delta_cost = (
+            routed_result.fleet_cost_per_mil / homo_result.fleet_cost_per_mil - 1
+        ) * 100
         delta_gpus = routed_result.total_gpus - homo_result.total_gpus
-        print(f"\n  Routing benefit vs homo baseline:")
+        print("\n  Routing benefit vs homo baseline:")
         sign = "+" if delta_tpw >= 0 else ""
-        print(f"    Fleet tok/W    : {sign}{delta_tpw:+.1f}%  "
-              f"({'better' if delta_tpw > 0 else 'worse'} energy efficiency)")
+        print(
+            f"    Fleet tok/W    : {sign}{delta_tpw:+.1f}%  "
+            f"({'better' if delta_tpw > 0 else 'worse'} energy efficiency)"
+        )
         sign = "+" if delta_cost >= 0 else ""
         print(f"    Fleet $/1M tok : {sign}{delta_cost:+.1f}%")
-        print(f"    Total GPUs     : {delta_gpus:+d}  "
-              f"({homo_result.total_gpus} → {routed_result.total_gpus})")
+        print(
+            f"    Total GPUs     : {delta_gpus:+d}  "
+            f"({homo_result.total_gpus} → {routed_result.total_gpus})"
+        )
         print()
 
         if args.out:
             import json
+
             out_data = {
                 "homo": {
                     "fleet_tpw": homo_result.fleet_tpw,
@@ -716,36 +817,55 @@ def cmd_tok_per_watt(args):
             rho_sweep=rho_sweep,
         )
 
-        print(f"\nTokens-per-Watt comparison  "
-              f"(CDF: {args.cdf},  λ={args.lam} req/s,  SLO={args.slo}ms)")
-        print(f"  NOTE: all GPUs compared with the same CDF and arrival rate.")
-        print(f"  Pre-built profiles mix models (H100/A100=70B, A10G=7B).")
-        print(f"  Use --b-short/--gpu-short/--gpu-long for routing comparison.")
+        print(
+            f"\nTokens-per-Watt comparison  "
+            f"(CDF: {args.cdf},  λ={args.lam} req/s,  SLO={args.slo}ms)"
+        )
+        print("  NOTE: all GPUs compared with the same CDF and arrival rate.")
+        print("  Pre-built profiles mix models (H100/A100=70B, A10G=7B).")
+        print("  Use --b-short/--gpu-short/--gpu-long for routing comparison.")
         print_tpw_table(points)
 
         if args.rho_sweep:
             print("Tokens/Watt vs Utilisation sweep (SLO-optimal row marked ★):")
-            hdr = (f"  {'Pool / GPU':22s}  {'ρ':>5}  {'n_act':>6}  "
-                   f"{'Tok/W':>6}  {'P/GPU':>6}  {'$/1M':>7}  {'P99ms':>7}  {'PwrQ':>4}")
+            hdr = (
+                f"  {'Pool / GPU':22s}  {'ρ':>5}  {'n_act':>6}  "
+                f"{'Tok/W':>6}  {'P/GPU':>6}  {'$/1M':>7}  {'P99ms':>7}  {'PwrQ':>4}"
+            )
             print("  " + "-" * (len(hdr) - 2))
             print(hdr)
             print("  " + "-" * (len(hdr) - 2))
             for pt in points:
                 flag = " ★" if pt.slo_optimal else "  "
                 label = pt.pool_label or pt.gpu_name
-                print(f"  {label:22s}  {pt.rho:>5.2f}  {pt.n_active:>6.1f}  "
-                      f"{pt.tokens_per_watt:>6.2f}  {pt.power_per_gpu_w:>6.0f}W  "
-                      f"${pt.cost_per_mil:>6.2f}  {pt.p99_ttft_ms:>7.1f}  "
-                      f"{pt.power_model_qual:>4}{flag}")
+                print(
+                    f"  {label:22s}  {pt.rho:>5.2f}  {pt.n_active:>6.1f}  "
+                    f"{pt.tokens_per_watt:>6.2f}  {pt.power_per_gpu_w:>6.0f}W  "
+                    f"${pt.cost_per_mil:>6.2f}  {pt.p99_ttft_ms:>7.1f}  "
+                    f"{pt.power_model_qual:>4}{flag}"
+                )
             print()
 
         if args.out:
             import json
+
             data = [
-                {k: getattr(pt, k) for k in
-                 ("gpu_name", "pool_label", "n_gpus", "rho", "n_active",
-                  "power_per_gpu_w", "tokens_per_watt", "cost_per_mil",
-                  "p99_ttft_ms", "power_model_qual", "slo_optimal")}
+                {
+                    k: getattr(pt, k)
+                    for k in (
+                        "gpu_name",
+                        "pool_label",
+                        "n_gpus",
+                        "rho",
+                        "n_active",
+                        "power_per_gpu_w",
+                        "tokens_per_watt",
+                        "cost_per_mil",
+                        "p99_ttft_ms",
+                        "power_model_qual",
+                        "slo_optimal",
+                    )
+                }
                 for pt in points
             ]
             json.dump(data, open(args.out, "w"), indent=2)
@@ -788,7 +908,9 @@ def cmd_grid_flex(args):
     flex_pcts = [float(x) for x in args.flex_pcts] if args.flex_pcts else None
 
     if args.verify_des and args.verify_des > 0:
-        print(f"[DES verification enabled: {args.verify_des:,} requests per flex level]")
+        print(
+            f"[DES verification enabled: {args.verify_des:,} requests per flex level]"
+        )
 
     results = grid_flex_analysis(
         cdf=cdf,
@@ -822,6 +944,7 @@ def cmd_grid_flex(args):
 
 # ── CLI setup ─────────────────────────────────────────────────────────────────
 
+
 def main():
     p = argparse.ArgumentParser(
         prog="run_sim.py",
@@ -833,18 +956,24 @@ def main():
     # ── common args ───────────────────────────────────────────────────────────
     def add_common(sp):
         sp.add_argument("--cdf", required=True, help="Path to CDF JSON file")
-        sp.add_argument("--lam", type=float, default=200,
-                        help="Arrival rate (req/s)")
-        sp.add_argument("--slo", type=float, default=500,
-                        help="P99 TTFT SLO (ms)")
-        sp.add_argument("--b-short", type=int, default=4096,
-                        help="Short-pool context threshold (tokens)")
-        sp.add_argument("--long-max-ctx", type=int, default=65536,
-                        help="Long-pool max context (tokens)")
-        sp.add_argument("--gpu-short", default="a100",
-                        choices=list(GPU_REGISTRY.keys()))
-        sp.add_argument("--gpu-long", default="a100",
-                        choices=list(GPU_REGISTRY.keys()))
+        sp.add_argument("--lam", type=float, default=200, help="Arrival rate (req/s)")
+        sp.add_argument("--slo", type=float, default=500, help="P99 TTFT SLO (ms)")
+        sp.add_argument(
+            "--b-short",
+            type=int,
+            default=4096,
+            help="Short-pool context threshold (tokens)",
+        )
+        sp.add_argument(
+            "--long-max-ctx",
+            type=int,
+            default=65536,
+            help="Long-pool max context (tokens)",
+        )
+        sp.add_argument(
+            "--gpu-short", default="a100", choices=list(GPU_REGISTRY.keys())
+        )
+        sp.add_argument("--gpu-long", default="a100", choices=list(GPU_REGISTRY.keys()))
         sp.add_argument("--out", default=None, help="Save results to JSON file")
 
     # ── optimize ──────────────────────────────────────────────────────────────
@@ -860,23 +989,34 @@ def main():
     add_common(sp_sim)
     sp_sim.add_argument("--n-s", type=int, required=True, help="Short pool GPUs")
     sp_sim.add_argument("--n-l", type=int, required=True, help="Long pool GPUs")
-    sp_sim.add_argument("--gamma", type=float, default=1.0,
-                        help="C&R gamma (1.0 = pool routing only)")
+    sp_sim.add_argument(
+        "--gamma", type=float, default=1.0, help="C&R gamma (1.0 = pool routing only)"
+    )
     sp_sim.add_argument("--n-req", type=int, default=50000)
     sp_sim.add_argument("--seed", type=int, default=42)
     sp_sim.set_defaults(func=cmd_simulate)
 
     # ── whatif ────────────────────────────────────────────────────────────────
-    sp_wi = sub.add_parser("whatif", help="Sweep arrival rate and/or GPU types (what-if analysis)")
+    sp_wi = sub.add_parser(
+        "whatif", help="Sweep arrival rate and/or GPU types (what-if analysis)"
+    )
     add_common(sp_wi)
-    sp_wi.add_argument("--lam-range", type=float, nargs="+",
-                       default=[50, 100, 200, 500, 1000],
-                       help="List of arrival rates to sweep")
-    sp_wi.add_argument("--gpu-compare", type=str, nargs="+",
-                       metavar="GPU",
-                       help="Compare multiple GPU types side-by-side "
-                            "(e.g. --gpu-compare a100 h100 a10g). "
-                            "When set, --gpu-short/--gpu-long are ignored.")
+    sp_wi.add_argument(
+        "--lam-range",
+        type=float,
+        nargs="+",
+        default=[50, 100, 200, 500, 1000],
+        help="List of arrival rates to sweep",
+    )
+    sp_wi.add_argument(
+        "--gpu-compare",
+        type=str,
+        nargs="+",
+        metavar="GPU",
+        help="Compare multiple GPU types side-by-side "
+        "(e.g. --gpu-compare a100 h100 a10g). "
+        "When set, --gpu-short/--gpu-long are ignored.",
+    )
     sp_wi.set_defaults(func=cmd_whatif)
 
     # ── pareto ────────────────────────────────────────────────────────────────
@@ -888,8 +1028,9 @@ def main():
     sp_pa.set_defaults(func=cmd_pareto)
 
     # ── compare-routers ───────────────────────────────────────────────────────
-    sp_cr = sub.add_parser("compare-routers",
-                            help="Compare routing algorithms on same fleet")
+    sp_cr = sub.add_parser(
+        "compare-routers", help="Compare routing algorithms on same fleet"
+    )
     add_common(sp_cr)
     sp_cr.add_argument("--n-s", type=int, required=True)
     sp_cr.add_argument("--n-l", type=int, required=True)
@@ -903,28 +1044,57 @@ def main():
         help="Disaggregated prefill/decode fleet optimizer (separate P and D pools)",
     )
     sp_dis.add_argument("--cdf", required=True, help="Workload CDF JSON")
-    sp_dis.add_argument("--lam", type=float, default=200,
-                        help="Target arrival rate (req/s)")
-    sp_dis.add_argument("--slo-ttft", type=float, default=500,
-                        help="TTFT SLO (ms, default 500)")
-    sp_dis.add_argument("--slo-tpot", type=float, default=100,
-                        help="TPOT SLO (ms, default 100)")
-    sp_dis.add_argument("--gpu-prefill", default="h100",
-                        choices=list(GPU_REGISTRY.keys()),
-                        help="GPU for prefill (context-ingestion) workers")
-    sp_dis.add_argument("--gpu-decode", default="a100",
-                        choices=list(GPU_REGISTRY.keys()),
-                        help="GPU for decode (token-generation) workers")
-    sp_dis.add_argument("--max-ctx", type=int, default=8192,
-                        help="Max context length (tokens, default 8192)")
-    sp_dis.add_argument("--mean-isl", type=float, default=0,
-                        help="Mean input sequence length (0 = derive from CDF)")
-    sp_dis.add_argument("--mean-osl", type=float, default=0,
-                        help="Mean output sequence length (0 = derive from CDF)")
-    sp_dis.add_argument("--max-prefill", type=int, default=32,
-                        help="Max prefill workers to sweep (default 32)")
-    sp_dis.add_argument("--max-decode", type=int, default=64,
-                        help="Max decode workers to sweep (default 64)")
+    sp_dis.add_argument(
+        "--lam", type=float, default=200, help="Target arrival rate (req/s)"
+    )
+    sp_dis.add_argument(
+        "--slo-ttft", type=float, default=500, help="TTFT SLO (ms, default 500)"
+    )
+    sp_dis.add_argument(
+        "--slo-tpot", type=float, default=100, help="TPOT SLO (ms, default 100)"
+    )
+    sp_dis.add_argument(
+        "--gpu-prefill",
+        default="h100",
+        choices=list(GPU_REGISTRY.keys()),
+        help="GPU for prefill (context-ingestion) workers",
+    )
+    sp_dis.add_argument(
+        "--gpu-decode",
+        default="a100",
+        choices=list(GPU_REGISTRY.keys()),
+        help="GPU for decode (token-generation) workers",
+    )
+    sp_dis.add_argument(
+        "--max-ctx",
+        type=int,
+        default=8192,
+        help="Max context length (tokens, default 8192)",
+    )
+    sp_dis.add_argument(
+        "--mean-isl",
+        type=float,
+        default=0,
+        help="Mean input sequence length (0 = derive from CDF)",
+    )
+    sp_dis.add_argument(
+        "--mean-osl",
+        type=float,
+        default=0,
+        help="Mean output sequence length (0 = derive from CDF)",
+    )
+    sp_dis.add_argument(
+        "--max-prefill",
+        type=int,
+        default=32,
+        help="Max prefill workers to sweep (default 32)",
+    )
+    sp_dis.add_argument(
+        "--max-decode",
+        type=int,
+        default=64,
+        help="Max decode workers to sweep (default 64)",
+    )
     sp_dis.add_argument("--out", default=None, help="Save results to JSON")
     sp_dis.set_defaults(func=cmd_disagg)
 
@@ -940,25 +1110,40 @@ def main():
         ),
     )
     sp_gf.add_argument("--cdf", required=True, help="Workload CDF JSON")
-    sp_gf.add_argument("--lam", type=float, default=200,
-                       help="Arrival rate (req/s)")
-    sp_gf.add_argument("--n-gpus", type=int, required=True,
-                       help="Fixed fleet size (GPUs) to evaluate")
-    sp_gf.add_argument("--gpu", default="h100",
-                       choices=list(GPU_REGISTRY.keys()),
-                       help="GPU type (default: h100)")
-    sp_gf.add_argument("--slo", type=float, default=500,
-                       help="P99 TTFT SLO (ms)")
-    sp_gf.add_argument("--max-ctx", type=int, default=8192,
-                       help="Max context window (tokens, default 8192)")
-    sp_gf.add_argument("--flex-pcts", type=float, nargs="+", default=None,
-                       metavar="PCT",
-                       help="Power-reduction percentages to sweep "
-                            "(default: 0 5 10 15 20 25 30 40 50)")
-    sp_gf.add_argument("--verify-des", type=int, default=0,
-                       metavar="N",
-                       help="DES-verify each flex level with N simulated requests "
-                            "(0 = analytical only; 10000–20000 recommended)")
+    sp_gf.add_argument("--lam", type=float, default=200, help="Arrival rate (req/s)")
+    sp_gf.add_argument(
+        "--n-gpus", type=int, required=True, help="Fixed fleet size (GPUs) to evaluate"
+    )
+    sp_gf.add_argument(
+        "--gpu",
+        default="h100",
+        choices=list(GPU_REGISTRY.keys()),
+        help="GPU type (default: h100)",
+    )
+    sp_gf.add_argument("--slo", type=float, default=500, help="P99 TTFT SLO (ms)")
+    sp_gf.add_argument(
+        "--max-ctx",
+        type=int,
+        default=8192,
+        help="Max context window (tokens, default 8192)",
+    )
+    sp_gf.add_argument(
+        "--flex-pcts",
+        type=float,
+        nargs="+",
+        default=None,
+        metavar="PCT",
+        help="Power-reduction percentages to sweep "
+        "(default: 0 5 10 15 20 25 30 40 50)",
+    )
+    sp_gf.add_argument(
+        "--verify-des",
+        type=int,
+        default=0,
+        metavar="N",
+        help="DES-verify each flex level with N simulated requests "
+        "(0 = analytical only; 10000–20000 recommended)",
+    )
     sp_gf.add_argument("--out", default=None, help="Save results to JSON")
     sp_gf.set_defaults(func=cmd_grid_flex)
 
@@ -982,28 +1167,51 @@ def main():
         ),
     )
     sp_tpw.add_argument("--cdf", required=True, help="Workload CDF JSON")
-    sp_tpw.add_argument("--lam", type=float, default=100,
-                        help="Arrival rate (req/s, default: 100)")
-    sp_tpw.add_argument("--slo", type=float, default=500,
-                        help="P99 TTFT SLO (ms, default: 500)")
-    sp_tpw.add_argument("--gpus", nargs="+", default=["h100", "a100", "a10g"],
-                        choices=list(GPU_REGISTRY.keys()),
-                        help="GPU types to compare in single-pool mode (default: h100 a100 a10g)")
-    sp_tpw.add_argument("--max-ctx", type=int, default=8192,
-                        help="Max context window (tokens, default: 8192)")
-    sp_tpw.add_argument("--rho-sweep", action="store_true",
-                        help="Also show tok/W at ρ=0.2,0.4,0.6,0.8 (single-pool mode only)")
+    sp_tpw.add_argument(
+        "--lam", type=float, default=100, help="Arrival rate (req/s, default: 100)"
+    )
+    sp_tpw.add_argument(
+        "--slo", type=float, default=500, help="P99 TTFT SLO (ms, default: 500)"
+    )
+    sp_tpw.add_argument(
+        "--gpus",
+        nargs="+",
+        default=["h100", "a100", "a10g"],
+        choices=list(GPU_REGISTRY.keys()),
+        help="GPU types to compare in single-pool mode (default: h100 a100 a10g)",
+    )
+    sp_tpw.add_argument(
+        "--max-ctx",
+        type=int,
+        default=8192,
+        help="Max context window (tokens, default: 8192)",
+    )
+    sp_tpw.add_argument(
+        "--rho-sweep",
+        action="store_true",
+        help="Also show tok/W at ρ=0.2,0.4,0.6,0.8 (single-pool mode only)",
+    )
     # Two-pool routing flags
-    sp_tpw.add_argument("--b-short", type=int, default=None,
-                        metavar="TOKENS",
-                        help="[two-pool mode] Token-count threshold: requests ≤ B_short go to "
-                             "the short pool, rest go to the long pool")
-    sp_tpw.add_argument("--gpu-short", default=None,
-                        choices=list(GPU_REGISTRY.keys()),
-                        help="[two-pool mode] GPU type for the short pool")
-    sp_tpw.add_argument("--gpu-long", default=None,
-                        choices=list(GPU_REGISTRY.keys()),
-                        help="[two-pool mode] GPU type for the long pool")
+    sp_tpw.add_argument(
+        "--b-short",
+        type=int,
+        default=None,
+        metavar="TOKENS",
+        help="[two-pool mode] Token-count threshold: requests ≤ B_short go to "
+        "the short pool, rest go to the long pool",
+    )
+    sp_tpw.add_argument(
+        "--gpu-short",
+        default=None,
+        choices=list(GPU_REGISTRY.keys()),
+        help="[two-pool mode] GPU type for the short pool",
+    )
+    sp_tpw.add_argument(
+        "--gpu-long",
+        default=None,
+        choices=list(GPU_REGISTRY.keys()),
+        help="[two-pool mode] GPU type for the long pool",
+    )
     sp_tpw.add_argument("--out", default=None, help="Save results to JSON")
     sp_tpw.set_defaults(func=cmd_tok_per_watt)
 
@@ -1019,14 +1227,24 @@ def main():
         ),
     )
     sp_sf.add_argument("fleet_config", help="Path to fleet JSON config file")
-    sp_sf.add_argument("--cdf", default=None,
-                       help="Workload CDF JSON (overrides config workloads)")
-    sp_sf.add_argument("--lam", type=float, default=200,
-                       help="Total arrival rate req/s (default: 200)")
-    sp_sf.add_argument("--slo", type=float, default=500,
-                       help="P99 TTFT SLO ms for reporting (default: 500)")
-    sp_sf.add_argument("--n-req", type=int, default=30000,
-                       help="Total requests to simulate (default: 30000)")
+    sp_sf.add_argument(
+        "--cdf", default=None, help="Workload CDF JSON (overrides config workloads)"
+    )
+    sp_sf.add_argument(
+        "--lam", type=float, default=200, help="Total arrival rate req/s (default: 200)"
+    )
+    sp_sf.add_argument(
+        "--slo",
+        type=float,
+        default=500,
+        help="P99 TTFT SLO ms for reporting (default: 500)",
+    )
+    sp_sf.add_argument(
+        "--n-req",
+        type=int,
+        default=30000,
+        help="Total requests to simulate (default: 30000)",
+    )
     sp_sf.add_argument("--seed", type=int, default=42)
     sp_sf.add_argument("--out", default=None, help="Save results to JSON file")
     sp_sf.set_defaults(func=cmd_simulate_fleet)

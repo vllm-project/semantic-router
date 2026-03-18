@@ -1,21 +1,22 @@
 """Trace management routes: upload, list, view, stats, delete."""
+
 from __future__ import annotations
 
+import contextlib
 import csv
 import json
-import math
-import statistics
-from datetime import datetime
 from pathlib import Path
-from typing import List
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
-from ..models import (
-    HistogramBucket, TraceFormat, TraceInfo, TraceSample, TraceStats,
-)
 from .. import storage
+from ..models import (
+    HistogramBucket,
+    TraceFormat,
+    TraceInfo,
+    TraceSample,
+    TraceStats,
+)
 
 router = APIRouter(prefix="/traces", tags=["Traces"])
 
@@ -27,7 +28,7 @@ def _percentile(sorted_vals: list, p: float) -> float:
     return sorted_vals[idx]
 
 
-def _histogram(values: List[int], n_bins: int = 20) -> List[HistogramBucket]:
+def _histogram(values: list[int], n_bins: int = 20) -> list[HistogramBucket]:
     if not values:
         return []
     lo, hi = min(values), max(values)
@@ -53,13 +54,11 @@ def _parse_records(path: Path, fmt: str) -> list[dict]:
                 records.append(dict(row))
     else:
         with open(path) as f:
-            for line in f:
-                line = line.strip()
+            for raw_line in f:
+                line = raw_line.strip()
                 if line:
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError):
                         records.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        pass
     return records
 
 
@@ -71,8 +70,13 @@ def _compute_stats(records: list[dict], fmt: str) -> TraceStats:
         pt = int(r.get("prompt_tokens", r.get("l_in", 0)) or 0)
         ot = int(r.get("generated_tokens", r.get("l_out", 0)) or 0)
         ts = float(r.get("timestamp", r.get("time", 0)) or 0)
-        model = r.get("selected_model") or r.get("x_vsr_selected_model") \
-                or r.get("model") or r.get("routed_to") or r.get("model_id")
+        model = (
+            r.get("selected_model")
+            or r.get("x_vsr_selected_model")
+            or r.get("model")
+            or r.get("routed_to")
+            or r.get("model_id")
+        )
         prompts.append(pt)
         outputs.append(ot)
         totals.append(pt + ot)
@@ -80,7 +84,10 @@ def _compute_stats(records: list[dict], fmt: str) -> TraceStats:
         if model:
             routing[str(model)] = routing.get(str(model), 0) + 1
 
-    prompts.sort(); outputs.sort(); totals.sort(); timestamps.sort()
+    prompts.sort()
+    outputs.sort()
+    totals.sort()
+    timestamps.sort()
     n = len(records)
     duration = (timestamps[-1] - timestamps[0]) if len(timestamps) > 1 else 1.0
     arr_rate = n / duration if duration > 0 else 0.0
@@ -120,7 +127,7 @@ async def upload_trace(
         stats = _compute_stats(records, fmt.value)
     except Exception as exc:
         dest.unlink(missing_ok=True)
-        raise HTTPException(422, f"Could not parse trace: {exc}")
+        raise HTTPException(422, f"Could not parse trace: {exc}") from exc
 
     meta = {
         "id": trace_id,
@@ -131,15 +138,18 @@ async def upload_trace(
         "stats": stats.model_dump(),
     }
     storage.save_trace_meta(trace_id, meta)
-    return TraceInfo(**{k: v for k, v in meta.items() if k != "stats"},
-                     stats=stats)
+    return TraceInfo(**{k: v for k, v in meta.items() if k != "stats"}, stats=stats)
 
 
-@router.get("", response_model=List[TraceInfo], summary="List all traces")
+@router.get("", response_model=list[TraceInfo], summary="List all traces")
 async def list_traces():
-    return [TraceInfo(**{k: v for k, v in m.items() if k != "stats"},
-                      stats=TraceStats(**m["stats"]) if m.get("stats") else None)
-            for m in storage.list_traces()]
+    return [
+        TraceInfo(
+            **{k: v for k, v in m.items() if k != "stats"},
+            stats=TraceStats(**m["stats"]) if m.get("stats") else None,
+        )
+        for m in storage.list_traces()
+    ]
 
 
 @router.get("/{trace_id}", response_model=TraceInfo, summary="Get trace metadata")
@@ -147,11 +157,15 @@ async def get_trace(trace_id: str):
     m = storage.get_trace_meta(trace_id)
     if not m:
         raise HTTPException(404, "Trace not found")
-    return TraceInfo(**{k: v for k, v in m.items() if k != "stats"},
-                     stats=TraceStats(**m["stats"]) if m.get("stats") else None)
+    return TraceInfo(
+        **{k: v for k, v in m.items() if k != "stats"},
+        stats=TraceStats(**m["stats"]) if m.get("stats") else None,
+    )
 
 
-@router.get("/{trace_id}/sample", response_model=TraceSample, summary="Get sample records")
+@router.get(
+    "/{trace_id}/sample", response_model=TraceSample, summary="Get sample records"
+)
 async def sample_trace(trace_id: str, limit: int = Query(50, ge=1, le=500)):
     m = storage.get_trace_meta(trace_id)
     if not m:

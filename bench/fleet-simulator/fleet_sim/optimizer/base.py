@@ -28,20 +28,19 @@ Usage
     )
     result.print_report()
 """
+
 from __future__ import annotations
 
 import math
-import sys
-import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 from ..core.fleet import Fleet, FleetConfig, PoolConfig
-from ..gpu_profiles.profiles import GpuProfile, A100_80GB
+from ..gpu_profiles.manual import ManualProfile
+from ..gpu_profiles.profiles import A100_80GB, GpuProfile
 from ..workload.synthetic import CdfWorkload, PoissonWorkload
 
-
 # ── CDF utilities ─────────────────────────────────────────────────────────────
+
 
 def _cdf_eval(cdf: list, t: int) -> float:
     """Evaluate CDF at token length t using linear interpolation."""
@@ -60,6 +59,7 @@ def _cdf_eval(cdf: list, t: int) -> float:
 
 # ── Analytical sizing (Erlang-C / Kimura) ────────────────────────────────────
 
+
 def _erlang_c(c: int, a: float) -> float:
     """Numerically stable Erlang-C P(W_q > 0)."""
     if c <= 0 or a <= 0:
@@ -68,6 +68,7 @@ def _erlang_c(c: int, a: float) -> float:
     if rho >= 1.0:
         return 1.0
     import math
+
     log_sum = 0.0
     for k in range(c):
         log_sum_k = k * math.log(a) - math.lgamma(k + 1)
@@ -75,8 +76,7 @@ def _erlang_c(c: int, a: float) -> float:
             log_sum = log_sum_k
         else:
             mx = max(log_sum, log_sum_k)
-            log_sum = mx + math.log(math.exp(log_sum - mx) +
-                                    math.exp(log_sum_k - mx))
+            log_sum = mx + math.log(math.exp(log_sum - mx) + math.exp(log_sum_k - mx))
     log_last = c * math.log(a) - math.lgamma(c + 1) - math.log(1 - rho)
     mx = max(log_sum, log_last)
     log_denom = mx + math.log(math.exp(log_sum - mx) + math.exp(log_last - mx))
@@ -93,15 +93,16 @@ def _p99_wait(c: int, lam: float, mu: float, cv2: float = 1.0) -> float:
         return float("inf")
     C = _erlang_c(c, a)
     if C <= 0.01:
-        return 0.0    # P(wait > 0) so small P99 wait ≈ 0
+        return 0.0  # P(wait > 0) so small P99 wait ≈ 0
     decay = 2 * (c * mu - lam) / max(1e-9, 1 + cv2)
     if decay <= 0:
         return math.inf
     return math.log(C / 0.01) / decay
 
 
-def _calibrate(cdf: list, pool_max: int, gpu: GpuProfile,
-               lo_clamp: int = 1) -> tuple[float, float, int, float]:
+def _calibrate(
+    cdf: list, pool_max: int, gpu: GpuProfile, lo_clamp: int = 1
+) -> tuple[float, float, int, float]:
     """Estimate (mu_gpu, cv2, n_slots) from CDF for a pool handled by gpu.
 
     Samples requests from the CDF slice, computes the raw service time
@@ -117,6 +118,7 @@ def _calibrate(cdf: list, pool_max: int, gpu: GpuProfile,
                long pool so short-side lengths are excluded from calibration).
     """
     import random
+
     rng = random.Random(42)
     n_slots = gpu.n_slots(pool_max)
     raw_samples = []
@@ -145,14 +147,20 @@ def _calibrate(cdf: list, pool_max: int, gpu: GpuProfile,
     e2 = sum(s * s for s in raw_samples) / n
     cv2 = max(0.01, e2 / (e1 * e1) - 1.0)
     mu_gpu = n_slots / e1  # GPU-level throughput (n_slots parallel requests)
-    mean_prefill_s = sum(prefill_samples) / len(prefill_samples) if prefill_samples else 0.0
+    mean_prefill_s = (
+        sum(prefill_samples) / len(prefill_samples) if prefill_samples else 0.0
+    )
     return mu_gpu, cv2, n_slots, mean_prefill_s
 
 
-def _min_gpus_analytical(lam: float, mu: float, t_slo: float,
-                          cv2: float = 1.0,
-                          rho_max: float = 0.85,
-                          n_slots: int = 1) -> int:
+def _min_gpus_analytical(
+    lam: float,
+    mu: float,
+    t_slo: float,
+    cv2: float = 1.0,
+    rho_max: float = 0.85,
+    n_slots: int = 1,
+) -> int:
     """Minimum GPU count such that P99 wait ≤ t_slo AND utilisation ≤ rho_max.
 
     Each GPU provides n_slots concurrent KV-cache slots. The Erlang-C model
@@ -165,8 +173,8 @@ def _min_gpus_analytical(lam: float, mu: float, t_slo: float,
     """
     if lam <= 0:
         return 1
-    mu_slot = mu / n_slots        # per-slot service rate
-    a = lam * (1.0 / mu_slot)    # Erlang load in slot-units (= n_slots * lam/mu)
+    mu_slot = mu / n_slots  # per-slot service rate
+    lam * (1.0 / mu_slot)  # Erlang load in slot-units (= n_slots * lam/mu)
     # Minimum from P99 SLO constraint — iterate over GPU counts
     c_slo = max(1, math.ceil(lam / mu) + 1)
     while _p99_wait(c_slo * n_slots, lam, mu_slot, cv2) > t_slo:
@@ -180,21 +188,25 @@ def _min_gpus_analytical(lam: float, mu: float, t_slo: float,
 
 # ── ThresholdResult (Pareto sweep over B_short candidates) ────────────────────
 
+
 @dataclass
 class ThresholdResult:
     """One point on the threshold–cost–latency Pareto frontier."""
-    b_short: int          # candidate short/long split (tokens)
-    alpha: float          # fraction of requests routed to short pool
-    n_s: int              # short-pool GPUs
-    n_l: int              # long-pool GPUs
+
+    b_short: int  # candidate short/long split (tokens)
+    alpha: float  # fraction of requests routed to short pool
+    n_s: int  # short-pool GPUs
+    n_l: int  # long-pool GPUs
     total_gpus: int
     cost_kusd_yr: float
-    savings_vs_homo_pct: float  # positive = cheaper than homo; negative = more expensive
+    savings_vs_homo_pct: (
+        float  # positive = cheaper than homo; negative = more expensive
+    )
     p99_short_ms: float
     p99_long_ms: float
-    worst_p99_ms: float         # max(p99_short, p99_long) — single latency objective
+    worst_p99_ms: float  # max(p99_short, p99_long) — single latency objective
     slo_met: bool
-    pareto: bool = False        # True if no other threshold dominates on (cost, worst_p99)
+    pareto: bool = False  # True if no other threshold dominates on (cost, worst_p99)
 
 
 def threshold_pareto(
@@ -205,7 +217,7 @@ def threshold_pareto(
     t_slo_ms: float = 500.0,
     long_max_ctx: int = 8192,
     gamma: float = 1.0,
-) -> List["ThresholdResult"]:
+) -> list[ThresholdResult]:
     """Sweep all CDF breakpoints as candidate B_short thresholds.
 
     For each candidate, sizes the fleet analytically at gamma=1 (pure length
@@ -227,21 +239,28 @@ def threshold_pareto(
     cdf_toks = [t for t, _ in cdf]
     # Exclude breakpoints where virtually all traffic is already in the short pool
     # (alpha > 0.999) or where the short pool would receive < 1% of traffic.
-    candidates = [t for t in cdf_toks[:-1]
-                  if 0.01 <= _cdf_eval(cdf, t) <= 0.999]
+    candidates = [t for t in cdf_toks[:-1] if 0.01 <= _cdf_eval(cdf, t) <= 0.999]
 
     # Homo baseline: B_short = long_max_ctx (single pool, no split)
-    homo_opt = FleetOptimizer(gpu_short=gpu_short, gpu_long=gpu_long,
-                               B_short=long_max_ctx, t_slo_ms=t_slo_ms,
-                               long_max_ctx=long_max_ctx)
+    homo_opt = FleetOptimizer(
+        gpu_short=gpu_short,
+        gpu_long=gpu_long,
+        B_short=long_max_ctx,
+        t_slo_ms=t_slo_ms,
+        long_max_ctx=long_max_ctx,
+    )
     homo_sweep = homo_opt.sweep_analytical(cdf, lam, gammas=[gamma], verbose=False)
     homo_cost = homo_sweep[0].cost_per_hr * 8760 / 1000 if homo_sweep else 1e9
 
-    results: List[ThresholdResult] = []
+    results: list[ThresholdResult] = []
     for b in candidates:
-        opt = FleetOptimizer(gpu_short=gpu_short, gpu_long=gpu_long,
-                             B_short=b, t_slo_ms=t_slo_ms,
-                             long_max_ctx=long_max_ctx)
+        opt = FleetOptimizer(
+            gpu_short=gpu_short,
+            gpu_long=gpu_long,
+            B_short=b,
+            t_slo_ms=t_slo_ms,
+            long_max_ctx=long_max_ctx,
+        )
         sweep = opt.sweep_analytical(cdf, lam, gammas=[gamma], verbose=False)
         if not sweep:
             continue
@@ -250,25 +269,28 @@ def threshold_pareto(
         cost = sr.cost_per_hr * 8760 / 1000
         saving = (homo_cost - cost) / homo_cost * 100 if homo_cost > 0 else 0.0
         worst = max(sr.p99_ttft_short_ms, sr.p99_ttft_long_ms)
-        results.append(ThresholdResult(
-            b_short=b,
-            alpha=alpha,
-            n_s=sr.n_s,
-            n_l=sr.n_l,
-            total_gpus=sr.total_gpus,
-            cost_kusd_yr=cost,
-            savings_vs_homo_pct=saving,
-            p99_short_ms=sr.p99_ttft_short_ms,
-            p99_long_ms=sr.p99_ttft_long_ms,
-            worst_p99_ms=worst,
-            slo_met=sr.slo_met,
-        ))
+        results.append(
+            ThresholdResult(
+                b_short=b,
+                alpha=alpha,
+                n_s=sr.n_s,
+                n_l=sr.n_l,
+                total_gpus=sr.total_gpus,
+                cost_kusd_yr=cost,
+                savings_vs_homo_pct=saving,
+                p99_short_ms=sr.p99_ttft_short_ms,
+                p99_long_ms=sr.p99_ttft_long_ms,
+                worst_p99_ms=worst,
+                slo_met=sr.slo_met,
+            )
+        )
 
     # Mark Pareto-optimal points: lower cost AND lower worst_p99
     for r in results:
         dominated = any(
             other.cost_kusd_yr < r.cost_kusd_yr and other.worst_p99_ms < r.worst_p99_ms
-            for other in results if other is not r
+            for other in results
+            if other is not r
         )
         r.pareto = not dominated
 
@@ -276,42 +298,50 @@ def threshold_pareto(
     return results
 
 
-def print_threshold_pareto(results: List["ThresholdResult"],
-                            t_slo_ms: float,
-                            homo_cost_kusd: float) -> None:
+def print_threshold_pareto(
+    results: list[ThresholdResult], t_slo_ms: float, homo_cost_kusd: float
+) -> None:
     """Print a formatted Pareto frontier table."""
-    print(f"\n  {'B_short':>8}  {'α-short':>8}  {'n_s':>4} {'n_l':>4}"
-          f"  {'GPUs':>5}  {'$/yr':>8}  {'saving':>7}"
-          f"  {'P99-s':>7}  {'P99-l':>7}  {'SLO':>4}  {'Pareto':>6}")
+    print(
+        f"\n  {'B_short':>8}  {'α-short':>8}  {'n_s':>4} {'n_l':>4}"
+        f"  {'GPUs':>5}  {'$/yr':>8}  {'saving':>7}"
+        f"  {'P99-s':>7}  {'P99-l':>7}  {'SLO':>4}  {'Pareto':>6}"
+    )
     print(f"  {'-'*87}")
     for r in results:
         ok = "✓" if r.slo_met else "✗"
         star = "★" if r.pareto else " "
-        print(f"  {r.b_short:>8,}  {r.alpha:>7.1%}  {r.n_s:>4} {r.n_l:>4}"
-              f"  {r.total_gpus:>5}  ${r.cost_kusd_yr:>6.0f}K"
-              f"  {r.savings_vs_homo_pct:>+6.1f}%"
-              f"  {r.p99_short_ms:>6.0f}ms  {r.p99_long_ms:>6.0f}ms"
-              f"  {ok:>4}  {star:>6}")
+        print(
+            f"  {r.b_short:>8,}  {r.alpha:>7.1%}  {r.n_s:>4} {r.n_l:>4}"
+            f"  {r.total_gpus:>5}  ${r.cost_kusd_yr:>6.0f}K"
+            f"  {r.savings_vs_homo_pct:>+6.1f}%"
+            f"  {r.p99_short_ms:>6.0f}ms  {r.p99_long_ms:>6.0f}ms"
+            f"  {ok:>4}  {star:>6}"
+        )
     pareto_slo = [r for r in results if r.pareto and r.slo_met]
     if pareto_slo:
         best = min(pareto_slo, key=lambda r: r.cost_kusd_yr)
-        print(f"\n  Recommended B_short = {best.b_short:,} tokens"
-              f"  (α={best.alpha:.1%} short, saving={best.savings_vs_homo_pct:+.1f}%,"
-              f"  P99-short={best.p99_short_ms:.0f}ms, P99-long={best.p99_long_ms:.0f}ms)")
+        print(
+            f"\n  Recommended B_short = {best.b_short:,} tokens"
+            f"  (α={best.alpha:.1%} short, saving={best.savings_vs_homo_pct:+.1f}%,"
+            f"  P99-short={best.p99_short_ms:.0f}ms, P99-long={best.p99_long_ms:.0f}ms)"
+        )
 
 
 # ── SweepResult ───────────────────────────────────────────────────────────────
 
+
 @dataclass
 class SweepResult:
     """One data point from the optimizer sweep."""
+
     gamma: float
     n_s: int
     n_l: int
     total_gpus: int
     cost_per_hr: float
     annualised_cost_kusd: float
-    p99_ttft_short_ms: float   # analytical or simulated
+    p99_ttft_short_ms: float  # analytical or simulated
     p99_ttft_long_ms: float
     slo_met: bool
     source: str = "analytical"  # "analytical" or "simulated"
@@ -322,6 +352,7 @@ class SweepResult:
 
 
 # ── FleetOptimizer ────────────────────────────────────────────────────────────
+
 
 def node_availability(r_f_per_node_day: float, mttr_hours: float) -> float:
     """Steady-state availability of a single GPU node.
@@ -389,9 +420,9 @@ def node_availability(r_f_per_node_day: float, mttr_hours: float) -> float:
 # A100_AVAIL_RSC1_FAST  : Meta RSC-1 A100, r_f=0.0065, MTTR=4h  (soft failures)
 # A100_AVAIL_RSC1_SLOW  : Meta RSC-1 A100, r_f=0.0065, MTTR=48h (hardware swap)
 # H100_AVAIL_5PCT       : H100 at scale, 5% overprovisioning rule (Cui 2025)
-A100_AVAIL_RSC1_FAST = node_availability(0.0065, 4)     # ≈ 0.9989
-A100_AVAIL_RSC1_SLOW = node_availability(0.0065, 48)    # ≈ 0.9871
-H100_AVAIL_5PCT      = 0.95                             # Cui et al. 2025
+A100_AVAIL_RSC1_FAST = node_availability(0.0065, 4)  # ≈ 0.9989
+A100_AVAIL_RSC1_SLOW = node_availability(0.0065, 48)  # ≈ 0.9871
+H100_AVAIL_5PCT = 0.95  # Cui et al. 2025
 
 
 class FleetOptimizer:
@@ -445,9 +476,9 @@ class FleetOptimizer:
         self,
         cdf: list,
         lam: float,
-        gammas: Optional[List[float]] = None,
+        gammas: list[float] | None = None,
         verbose: bool = False,
-    ) -> List[SweepResult]:
+    ) -> list[SweepResult]:
         """Sweep gamma values using the analytical M/G/c model.
 
         Returns a list of SweepResult sorted by total cost.
@@ -466,13 +497,20 @@ class FleetOptimizer:
         else:
             short_cdf_norm = [(self.B_short, 1.0)]
 
-        mu_s, cv2_s, ns_s, pref_s = _calibrate(short_cdf_norm, self.B_short, self.gpu_short)
+        mu_s, cv2_s, ns_s, pref_s = _calibrate(
+            short_cdf_norm, self.B_short, self.gpu_short
+        )
 
         if verbose:
-            print(f"\n  Analytical sweep  (λ={lam:.0f} req/s, SLO={self.t_slo_ms:.0f}ms)")
+            print(
+                f"\n  Analytical sweep  (λ={lam:.0f} req/s, SLO={self.t_slo_ms:.0f}ms)"
+            )
             print(f"  B_short={self.B_short:,}  alpha_base={alpha_base:.4f}")
-            print(f"  {'γ':>5} {'α\'':>8} {'n_s':>5} {'n_l':>5} {'total':>7}"
-                  f" {'$/yr':>10} {'P99_s':>8} {'P99_l':>8} {'OK':>4}")
+            alpha_prime = "α'"
+            print(
+                f"  {'γ':>5} {alpha_prime:>8} {'n_s':>5} {'n_l':>5} {'total':>7}"
+                f" {'$/yr':>10} {'P99_s':>8} {'P99_l':>8} {'OK':>4}"
+            )
             print(f"  {'-'*68}")
 
         for gamma in gammas:
@@ -514,28 +552,41 @@ class FleetOptimizer:
                 if long_cdf_norm:
                     long_cdf_norm[-1] = (long_cdf_norm[-1][0], 1.0)
                 mu_l, cv2_l, ns_l, pref_l = _calibrate(
-                    long_cdf_norm, self.long_max_ctx, self.gpu_long,
-                    lo_clamp=max(1, gamma_bs))
+                    long_cdf_norm,
+                    self.long_max_ctx,
+                    self.gpu_long,
+                    lo_clamp=max(1, gamma_bs),
+                )
             else:
                 mu_l, cv2_l, ns_l, pref_l = 0.01, 1.0, 1, 0.0
 
-            n_l_raw = (_min_gpus_analytical(lam_l, mu_l, self.t_slo, cv2_l, n_slots=ns_l)
-                       if lam_l > 0.01 else 0)
+            n_l_raw = (
+                _min_gpus_analytical(lam_l, mu_l, self.t_slo, cv2_l, n_slots=ns_l)
+                if lam_l > 0.01
+                else 0
+            )
             n_l = math.ceil(n_l_raw / self.node_avail)
 
             # P99 TTFT = P99 slot wait + mean prefill time
             p99_s = (_p99_wait(n_s * ns_s, lam_s, mu_s / ns_s, cv2_s) + pref_s) * 1000
-            p99_l = ((_p99_wait(n_l * ns_l, lam_l, mu_l / ns_l, cv2_l) + pref_l) * 1000
-                     if lam_l > 0.01 else 0.0)
+            p99_l = (
+                (_p99_wait(n_l * ns_l, lam_l, mu_l / ns_l, cv2_l) + pref_l) * 1000
+                if lam_l > 0.01
+                else 0.0
+            )
             total = n_s + n_l
-            cost_hr = (n_s * self.gpu_short.cost_per_hr
-                       + n_l * self.gpu_long.cost_per_hr)
+            cost_hr = n_s * self.gpu_short.cost_per_hr + n_l * self.gpu_long.cost_per_hr
             ann_k = cost_hr * 8760 / 1000
 
             sr = SweepResult(
-                gamma=gamma, n_s=n_s, n_l=n_l, total_gpus=total,
-                cost_per_hr=cost_hr, annualised_cost_kusd=ann_k,
-                p99_ttft_short_ms=p99_s, p99_ttft_long_ms=p99_l,
+                gamma=gamma,
+                n_s=n_s,
+                n_l=n_l,
+                total_gpus=total,
+                cost_per_hr=cost_hr,
+                annualised_cost_kusd=ann_k,
+                p99_ttft_short_ms=p99_s,
+                p99_ttft_long_ms=p99_l,
                 slo_met=(p99_s <= self.t_slo_ms and p99_l <= self.t_slo_ms),
                 source="analytical",
             )
@@ -543,9 +594,11 @@ class FleetOptimizer:
 
             if verbose:
                 ok = "✓" if sr.slo_met else "✗"
-                print(f"  {gamma:>5.1f} {alpha_prime:>8.4f} {n_s:>5} {n_l:>5}"
-                      f" {total:>7} ${ann_k:>8.1f}K {p99_s:>7.1f}ms"
-                      f" {p99_l:>7.1f}ms {ok:>4}")
+                print(
+                    f"  {gamma:>5.1f} {alpha_prime:>8.4f} {n_s:>5} {n_l:>5}"
+                    f" {total:>7} ${ann_k:>8.1f}K {p99_s:>7.1f}ms"
+                    f" {p99_l:>7.1f}ms {ok:>4}"
+                )
 
         results.sort(key=lambda r: r.cost_per_hr)
         return results
@@ -554,11 +607,11 @@ class FleetOptimizer:
         self,
         cdf: list,
         lam: float,
-        gammas: Optional[List[float]] = None,
+        gammas: list[float] | None = None,
         n_sim_requests: int = 40_000,
         verify_top_n: int = 3,
         verbose: bool = True,
-    ) -> "OptimizationReport":
+    ) -> OptimizationReport:
         """Full two-phase optimization: analytical sweep + DES verification.
 
         Parameters
@@ -580,29 +633,40 @@ class FleetOptimizer:
         if verify_top_n > 0 and n_sim_requests > 0:
             if verbose:
                 print(f"\n[2/2] DES verification of top-{verify_top_n} candidates...")
-            wl_gen = CdfWorkload(cdf)
+            CdfWorkload(cdf)
             for sr in candidates[:verify_top_n]:
                 if verbose:
                     print(f"  Verifying γ={sr.gamma} (n_s={sr.n_s}, n_l={sr.n_l})...")
                 sim_result = self._run_des(
-                    cdf=cdf, lam=lam, gamma=sr.gamma,
-                    n_s=sr.n_s, n_l=sr.n_l, n_req=n_sim_requests)
+                    cdf=cdf,
+                    lam=lam,
+                    gamma=sr.gamma,
+                    n_s=sr.n_s,
+                    n_l=sr.n_l,
+                    n_req=n_sim_requests,
+                )
                 sr_v = SweepResult(
-                    gamma=sr.gamma, n_s=sr.n_s, n_l=sr.n_l,
+                    gamma=sr.gamma,
+                    n_s=sr.n_s,
+                    n_l=sr.n_l,
                     total_gpus=sr.total_gpus,
                     cost_per_hr=sr.cost_per_hr,
                     annualised_cost_kusd=sr.annualised_cost_kusd,
                     p99_ttft_short_ms=sim_result.get("p99_short_ms", 0.0),
                     p99_ttft_long_ms=sim_result.get("p99_long_ms", 0.0),
-                    slo_met=(sim_result.get("p99_short_ms", 999) <= self.t_slo_ms
-                             and sim_result.get("p99_long_ms", 999) <= self.t_slo_ms),
+                    slo_met=(
+                        sim_result.get("p99_short_ms", 999) <= self.t_slo_ms
+                        and sim_result.get("p99_long_ms", 999) <= self.t_slo_ms
+                    ),
                     source="simulated",
                 )
                 verified.append(sr_v)
                 if verbose:
                     ok = "✓" if sr_v.slo_met else "✗"
-                    print(f"    P99 short={sr_v.p99_ttft_short_ms:.1f}ms  "
-                          f"long={sr_v.p99_ttft_long_ms:.1f}ms  SLO:{ok}")
+                    print(
+                        f"    P99 short={sr_v.p99_ttft_short_ms:.1f}ms  "
+                        f"long={sr_v.p99_ttft_long_ms:.1f}ms  SLO:{ok}"
+                    )
 
         return OptimizationReport(
             B_short=self.B_short,
@@ -612,10 +676,10 @@ class FleetOptimizer:
             simulated=verified,
         )
 
-    def _run_des(self, cdf: list, lam: float, gamma: float,
-                 n_s: int, n_l: int, n_req: int) -> dict:
+    def _run_des(
+        self, cdf: list, lam: float, gamma: float, n_s: int, n_l: int, n_req: int
+    ) -> dict:
         """Run DES for one (gamma, n_s, n_l) configuration."""
-        from ..core.fleet import Fleet, FleetConfig, PoolConfig
 
         alpha_base = _cdf_eval(cdf, self.B_short)
         gamma_bs = int(gamma * self.B_short)
@@ -646,8 +710,10 @@ class FleetOptimizer:
             # Entries strictly above gamma_bs, plus virtual start point
             long_cdf_raw = [(t, f) for t, f in cdf if t > gamma_bs]
             # Normalize: subtract f_at_gbs and divide by long_frac
-            long_cdf = [(t, max(0.0, min(1.0, (f - f_at_gbs) / long_frac)))
-                        for t, f in long_cdf_raw]
+            long_cdf = [
+                (t, max(0.0, min(1.0, (f - f_at_gbs) / long_frac)))
+                for t, f in long_cdf_raw
+            ]
             if long_cdf:
                 long_cdf[-1] = (long_cdf[-1][0], 1.0)  # clip to 1.0
             else:
@@ -659,7 +725,10 @@ class FleetOptimizer:
         # Each KV-cache slot is modelled as a separate server holding one request
         # for the full physical service_time.  This gives the correct slot-wait
         # distribution regardless of per-GPU concurrency (n_slots).
-        import random, heapq, math as _math
+        import heapq
+        import math as _math
+        import random
+
         rng = random.Random(42)
         n_slots_s = self.gpu_short.n_slots(self.B_short)
         gpu_s = self.gpu_short
@@ -739,6 +808,7 @@ class FleetOptimizer:
 
 # ── Grid-flexibility analysis ─────────────────────────────────────────────────
 
+
 @dataclass
 class GridFlexPoint:
     """One operating point on the power-vs-latency trade-off curve.
@@ -759,13 +829,14 @@ class GridFlexPoint:
     slo_met           : True if p99 ≤ t_slo_ms (uses DES P99 when available)
     power_model       : "logistic" or "linear" — which GPU power model was used
     """
+
     flex_pct: float
     n_max_cap: int
     power_per_gpu_w: float
     power_fleet_kw: float
     p99_ttft_ms: float
     slo_met: bool
-    p99_ttft_des_ms: Optional[float] = None
+    p99_ttft_des_ms: float | None = None
     power_model: str = "linear"
 
 
@@ -775,28 +846,28 @@ def _throttled_profile(gpu, n_max_cap: int, max_ctx: int):
     Used by grid_flex_analysis() DES verification to simulate a fleet with
     a batch-size cap applied (the G2G max_num_seqs curtailment mechanism).
     """
-    import dataclasses, math
+    import dataclasses
+    import math
+
     blks_per_seq = math.ceil(max_ctx / gpu.blk_size)
     # Force both KV-memory limit and compute limit to equal n_max_cap
     new_kv = n_max_cap * blks_per_seq
     # compute_cap = max_slots * calibration_ctx // max_ctx; we want this = n_max_cap
     new_max_slots = math.ceil(n_max_cap * max_ctx / max(1, gpu.calibration_ctx))
-    return dataclasses.replace(gpu,
-                               max_slots=new_max_slots,
-                               total_kv_blks=new_kv)
+    return dataclasses.replace(gpu, max_slots=new_max_slots, total_kv_blks=new_kv)
 
 
 def grid_flex_analysis(
     cdf: list,
     lam: float,
     n_gpus: int,
-    gpu: "ManualProfile",
+    gpu: ManualProfile,
     t_slo_ms: float,
     max_ctx: int = 8192,
-    flex_pcts: Optional[List[float]] = None,
+    flex_pcts: list[float] | None = None,
     n_sim_requests: int = 0,
     verbose: bool = False,
-) -> List[GridFlexPoint]:
+) -> list[GridFlexPoint]:
     """Compute the power–latency trade-off curve for a fleet under demand response.
 
     Models the GPU-to-Grid (G2G) batch-size control mechanism proposed by
@@ -888,11 +959,12 @@ def grid_flex_analysis(
     power_model_type = "logistic" if gpu.power_logistic_k > 0.0 else "linear"
     n_slots_full = gpu.n_slots(max_ctx)
 
-    results: List[GridFlexPoint] = []
+    results: list[GridFlexPoint] = []
     for flex_pct in flex_pcts:
         # Target power per GPU after flex commitment (clamped to idle floor)
-        target_power = max(gpu.power_idle_w,
-                           gpu.power_nominal_w * (1.0 - flex_pct / 100.0))
+        target_power = max(
+            gpu.power_idle_w, gpu.power_nominal_w * (1.0 - flex_pct / 100.0)
+        )
 
         # Invert power model to find n_max_cap, then cap at the actual
         # KV-cache-limited slot count for this max_ctx window.
@@ -922,31 +994,39 @@ def grid_flex_analysis(
         if n_sim_requests > 0:
             try:
                 des_p99 = _run_grid_flex_des(
-                    cdf=cdf, lam=lam, n_gpus=n_gpus,
-                    gpu=gpu, n_max_cap=n_max_cap,
-                    max_ctx=max_ctx, n_req=n_sim_requests,
+                    cdf=cdf,
+                    lam=lam,
+                    n_gpus=n_gpus,
+                    gpu=gpu,
+                    n_max_cap=n_max_cap,
+                    max_ctx=max_ctx,
+                    n_req=n_sim_requests,
                 )
                 p99_ttft_des_ms = des_p99
                 if verbose:
-                    print(f"  flex={flex_pct:.0f}%  n_max={n_max_cap}"
-                          f"  analytical={p99_ttft_ms:.1f}ms"
-                          f"  DES={p99_ttft_des_ms:.1f}ms")
+                    print(
+                        f"  flex={flex_pct:.0f}%  n_max={n_max_cap}"
+                        f"  analytical={p99_ttft_ms:.1f}ms"
+                        f"  DES={p99_ttft_des_ms:.1f}ms"
+                    )
             except Exception as e:
                 if verbose:
                     print(f"  [DES error at flex={flex_pct}%]: {e}")
 
         # slo_met uses DES P99 when available (more accurate)
         effective_p99 = p99_ttft_des_ms if p99_ttft_des_ms is not None else p99_ttft_ms
-        results.append(GridFlexPoint(
-            flex_pct=flex_pct,
-            n_max_cap=n_max_cap,
-            power_per_gpu_w=actual_power,
-            power_fleet_kw=fleet_kw,
-            p99_ttft_ms=p99_ttft_ms,
-            p99_ttft_des_ms=p99_ttft_des_ms,
-            slo_met=effective_p99 <= t_slo_ms,
-            power_model=power_model_type,
-        ))
+        results.append(
+            GridFlexPoint(
+                flex_pct=flex_pct,
+                n_max_cap=n_max_cap,
+                power_per_gpu_w=actual_power,
+                power_fleet_kw=fleet_kw,
+                p99_ttft_ms=p99_ttft_ms,
+                p99_ttft_des_ms=p99_ttft_des_ms,
+                slo_met=effective_p99 <= t_slo_ms,
+                power_model=power_model_type,
+            )
+        )
 
     return results
 
@@ -966,8 +1046,7 @@ def _run_grid_flex_des(
     Returns P99 TTFT in milliseconds.  Raises if the queue is severely
     overloaded (>95% of requests never complete).
     """
-    from ..core.fleet import Fleet, FleetConfig, PoolConfig
-    from ..workload.synthetic import CdfWorkload, PoissonWorkload
+    from ..workload.synthetic import CdfWorkload
 
     # Build a profile with n_max_cap slots (simulates max_num_seqs cap)
     capped = _throttled_profile(gpu, n_max_cap, max_ctx)
@@ -987,7 +1066,7 @@ def _run_grid_flex_des(
 
 
 def print_grid_flex_table(
-    results: List[GridFlexPoint],
+    results: list[GridFlexPoint],
     t_slo_ms: float,
     n_gpus: int,
     lam: float,
@@ -1001,29 +1080,43 @@ def print_grid_flex_table(
     print(f"  Grid Flexibility Analysis  [{power_model} power model]")
     print(f"  Fleet: {n_gpus} GPUs  λ={lam:.0f} req/s  SLO={t_slo_ms:.0f} ms")
     if baseline:
-        print(f"  Baseline: {baseline.power_fleet_kw:.1f} kW fleet power"
-              f"  ({baseline.power_per_gpu_w:.0f} W/GPU)")
+        print(
+            f"  Baseline: {baseline.power_fleet_kw:.1f} kW fleet power"
+            f"  ({baseline.power_per_gpu_w:.0f} W/GPU)"
+        )
     print(f"{'='*70}")
 
     if has_des:
-        print(f"  {'Flex':>6} {'n_max':>6} {'W/GPU':>7} {'Fleet kW':>9}"
-              f" {'P99 analyt':>11} {'P99 DES':>9} {'SLO':>5}")
+        print(
+            f"  {'Flex':>6} {'n_max':>6} {'W/GPU':>7} {'Fleet kW':>9}"
+            f" {'P99 analyt':>11} {'P99 DES':>9} {'SLO':>5}"
+        )
         print(f"  {'-'*6} {'-'*6} {'-'*7} {'-'*9} {'-'*11} {'-'*9} {'-'*5}")
         for pt in results:
             ok = "  OK" if pt.slo_met else "BREACH"
-            des_str = f"{pt.p99_ttft_des_ms:>8.1f}ms" if pt.p99_ttft_des_ms is not None else "        —"
-            print(f"  {pt.flex_pct:>5.0f}% {pt.n_max_cap:>6d}"
-                  f" {pt.power_per_gpu_w:>6.0f}W {pt.power_fleet_kw:>8.1f}kW"
-                  f" {pt.p99_ttft_ms:>10.1f}ms {des_str} {ok}")
+            des_str = (
+                f"{pt.p99_ttft_des_ms:>8.1f}ms"
+                if pt.p99_ttft_des_ms is not None
+                else "        —"
+            )
+            print(
+                f"  {pt.flex_pct:>5.0f}% {pt.n_max_cap:>6d}"
+                f" {pt.power_per_gpu_w:>6.0f}W {pt.power_fleet_kw:>8.1f}kW"
+                f" {pt.p99_ttft_ms:>10.1f}ms {des_str} {ok}"
+            )
     else:
-        print(f"  {'Flex':>6} {'n_max':>6} {'W/GPU':>7} {'Fleet kW':>9}"
-              f" {'P99 TTFT':>9} {'SLO':>5}")
+        print(
+            f"  {'Flex':>6} {'n_max':>6} {'W/GPU':>7} {'Fleet kW':>9}"
+            f" {'P99 TTFT':>9} {'SLO':>5}"
+        )
         print(f"  {'-'*6} {'-'*6} {'-'*7} {'-'*9} {'-'*9} {'-'*5}")
         for pt in results:
             ok = "  OK" if pt.slo_met else "BREACH"
-            print(f"  {pt.flex_pct:>5.0f}% {pt.n_max_cap:>6d}"
-                  f" {pt.power_per_gpu_w:>6.0f}W {pt.power_fleet_kw:>8.1f}kW"
-                  f" {pt.p99_ttft_ms:>8.1f}ms {ok}")
+            print(
+                f"  {pt.flex_pct:>5.0f}% {pt.n_max_cap:>6d}"
+                f" {pt.power_per_gpu_w:>6.0f}W {pt.power_fleet_kw:>8.1f}kW"
+                f" {pt.p99_ttft_ms:>8.1f}ms {ok}"
+            )
 
     # Find max safe flex depth
     safe = [pt for pt in results if pt.slo_met]
@@ -1032,12 +1125,16 @@ def print_grid_flex_table(
         max_safe_pt = max(safe, key=lambda p: p.flex_pct)
         baseline_kw = baseline.power_fleet_kw if baseline else 0.0
         saved_kw = baseline_kw - max_safe_pt.power_fleet_kw
-        p99_disp = (f"{max_safe_pt.p99_ttft_des_ms:.1f}ms (DES)"
-                    if max_safe_pt.p99_ttft_des_ms is not None
-                    else f"{max_safe_pt.p99_ttft_ms:.1f}ms (analytical)")
-        print(f"\n  Max safe flex depth: {max_safe:.0f}%"
-              f"  (saves {saved_kw:.1f} kW fleet-wide,"
-              f" P99={p99_disp})")
+        p99_disp = (
+            f"{max_safe_pt.p99_ttft_des_ms:.1f}ms (DES)"
+            if max_safe_pt.p99_ttft_des_ms is not None
+            else f"{max_safe_pt.p99_ttft_ms:.1f}ms (analytical)"
+        )
+        print(
+            f"\n  Max safe flex depth: {max_safe:.0f}%"
+            f"  (saves {saved_kw:.1f} kW fleet-wide,"
+            f" P99={p99_disp})"
+        )
     else:
         print("\n  No flex depth meets SLO — consider adding GPUs first.")
 
@@ -1045,9 +1142,14 @@ def print_grid_flex_table(
 class OptimizationReport:
     """Results of a full FleetOptimizer run."""
 
-    def __init__(self, B_short: int, t_slo_ms: float, lam: float,
-                 analytical: List[SweepResult],
-                 simulated: List[SweepResult]):
+    def __init__(
+        self,
+        B_short: int,
+        t_slo_ms: float,
+        lam: float,
+        analytical: list[SweepResult],
+        simulated: list[SweepResult],
+    ):
         self.B_short = B_short
         self.t_slo_ms = t_slo_ms
         self.lam = lam
@@ -1055,36 +1157,50 @@ class OptimizationReport:
         self.simulated = simulated
 
     @property
-    def best_analytical(self) -> Optional[SweepResult]:
+    def best_analytical(self) -> SweepResult | None:
         valid = [r for r in self.analytical if r.slo_met]
-        return min(valid, key=lambda r: r.cost_per_hr) if valid else (
-            self.analytical[0] if self.analytical else None)
+        return (
+            min(valid, key=lambda r: r.cost_per_hr)
+            if valid
+            else (self.analytical[0] if self.analytical else None)
+        )
 
     @property
-    def best_simulated(self) -> Optional[SweepResult]:
+    def best_simulated(self) -> SweepResult | None:
         valid = [r for r in self.simulated if r.slo_met]
-        return min(valid, key=lambda r: r.cost_per_hr) if valid else (
-            self.simulated[0] if self.simulated else None)
+        return (
+            min(valid, key=lambda r: r.cost_per_hr)
+            if valid
+            else (self.simulated[0] if self.simulated else None)
+        )
 
     def print_report(self) -> None:
         ba = self.best_analytical
         bs = self.best_simulated
         print(f"\n{'='*60}")
-        print(f"  Fleet Optimization Report")
-        print(f"  B_short={self.B_short:,}  λ={self.lam:.0f} req/s"
-              f"  SLO={self.t_slo_ms:.0f}ms")
+        print("  Fleet Optimization Report")
+        print(
+            f"  B_short={self.B_short:,}  λ={self.lam:.0f} req/s"
+            f"  SLO={self.t_slo_ms:.0f}ms"
+        )
         print(f"{'='*60}")
         if ba:
-            print(f"\n  Best (analytical): γ={ba.gamma}  "
-                  f"n_s={ba.n_s}  n_l={ba.n_l}  total={ba.total_gpus}  "
-                  f"${ba.annualised_cost_kusd:.1f}K/yr")
+            print(
+                f"\n  Best (analytical): γ={ba.gamma}  "
+                f"n_s={ba.n_s}  n_l={ba.n_l}  total={ba.total_gpus}  "
+                f"${ba.annualised_cost_kusd:.1f}K/yr"
+            )
         if bs:
-            print(f"  Best (simulated):  γ={bs.gamma}  "
-                  f"n_s={bs.n_s}  n_l={bs.n_l}  total={bs.total_gpus}  "
-                  f"${bs.annualised_cost_kusd:.1f}K/yr")
-            print(f"    P99 TTFT: short={bs.p99_ttft_short_ms:.1f}ms  "
-                  f"long={bs.p99_ttft_long_ms:.1f}ms  "
-                  f"SLO:{'✓' if bs.slo_met else '✗'}")
+            print(
+                f"  Best (simulated):  γ={bs.gamma}  "
+                f"n_s={bs.n_s}  n_l={bs.n_l}  total={bs.total_gpus}  "
+                f"${bs.annualised_cost_kusd:.1f}K/yr"
+            )
+            print(
+                f"    P99 TTFT: short={bs.p99_ttft_short_ms:.1f}ms  "
+                f"long={bs.p99_ttft_long_ms:.1f}ms  "
+                f"SLO:{'✓' if bs.slo_met else '✗'}"
+            )
 
         # Comparison table
         if len(self.analytical) > 1:
@@ -1093,19 +1209,28 @@ class OptimizationReport:
                 if sr.gamma == 1.0:
                     baseline = sr
                     break
-            print(f"\n  γ sweep (analytical, baseline=γ=1.0 with {baseline.total_gpus} GPUs):")
-            print(f"  {'γ':>5} {'n_s':>5} {'n_l':>5} {'total':>7}"
-                  f" {'$K/yr':>9} {'saving':>8} {'P99_s':>8} {'P99_l':>8}")
+            print(
+                f"\n  γ sweep (analytical, baseline=γ=1.0 with {baseline.total_gpus} GPUs):"
+            )
+            print(
+                f"  {'γ':>5} {'n_s':>5} {'n_l':>5} {'total':>7}"
+                f" {'$K/yr':>9} {'saving':>8} {'P99_s':>8} {'P99_l':>8}"
+            )
             for sr in sorted(self.analytical, key=lambda r: r.gamma):
-                sav = (baseline.cost_per_hr - sr.cost_per_hr) / baseline.cost_per_hr * 100
+                sav = (
+                    (baseline.cost_per_hr - sr.cost_per_hr) / baseline.cost_per_hr * 100
+                )
                 ok = "✓" if sr.slo_met else "✗"
-                print(f"  {sr.gamma:>5.1f} {sr.n_s:>5} {sr.n_l:>5}"
-                      f" {sr.total_gpus:>7} ${sr.annualised_cost_kusd:>7.1f}K"
-                      f" {sav:>+7.1f}% {sr.p99_ttft_short_ms:>7.1f}ms"
-                      f" {sr.p99_ttft_long_ms:>7.1f}ms {ok}")
+                print(
+                    f"  {sr.gamma:>5.1f} {sr.n_s:>5} {sr.n_l:>5}"
+                    f" {sr.total_gpus:>7} ${sr.annualised_cost_kusd:>7.1f}K"
+                    f" {sav:>+7.1f}% {sr.p99_ttft_short_ms:>7.1f}ms"
+                    f" {sr.p99_ttft_long_ms:>7.1f}ms {ok}"
+                )
 
 
 # ── Tokens-per-Watt analysis ──────────────────────────────────────────────────
+
 
 @dataclass
 class TpwPoint:
@@ -1144,6 +1269,7 @@ class TpwPoint:
     power_model_qual  : "HIGH" / "FAIR" / "LOW" — confidence in P(n_active)
     slo_optimal       : True when N_gpus is the SLO-optimal (minimum) fleet
     """
+
     gpu_name: str
     n_gpus: int
     rho: float
@@ -1184,14 +1310,15 @@ class FleetTpwResult:
     worst_p99_ms      : max(p99_ttft per pool)
     power_model_notes : list of caveat strings for LOW-quality power models
     """
+
     topology: str
-    pools: List[TpwPoint]
+    pools: list[TpwPoint]
     fleet_tpw: float
     fleet_cost_per_mil: float
     fleet_power_kw: float
     total_gpus: int
     worst_p99_ms: float
-    power_model_notes: List[str]
+    power_model_notes: list[str]
 
 
 def _power_model_quality(gpu) -> str:
@@ -1218,7 +1345,7 @@ def _cdf_mean_l_out(cdf: list) -> int:
     prev_t, prev_f = 0, 0.0
     for thresh, frac in cdf:
         width = thresh - prev_t
-        prob  = frac - prev_f
+        prob = frac - prev_f
         mean_total += (prev_t + width / 2.0) * prob
         total_prob += prob
         prev_t, prev_f = thresh, frac
@@ -1256,10 +1383,7 @@ def _split_cdf(full_cdf: list, b_short: int) -> tuple:
                 alpha = f * (b_short / max(1, t))
             else:
                 t0, f0 = full_cdf[i - 1]
-                if t == t0:
-                    alpha = f
-                else:
-                    alpha = f0 + (f - f0) * (b_short - t0) / (t - t0)
+                alpha = f if t == t0 else f0 + (f - f0) * (b_short - t0) / (t - t0)
             break
     else:
         alpha = full_cdf[-1][1]  # b_short > max threshold
@@ -1297,7 +1421,7 @@ def _tpw_one_pool(
     t_slo_ms: float,
     max_ctx: int,
     pool_label: str = "",
-    rho_override: Optional[float] = None,
+    rho_override: float | None = None,
 ) -> TpwPoint:
     """Compute a single TpwPoint for one pool.
 
@@ -1321,13 +1445,14 @@ def _tpw_one_pool(
         slo_optimal = True
     else:
         rho_c = max(0.05, min(0.95, rho_override))
-        n_gpus = max(1, int(math.ceil(lam / (mu_gpu * rho_c))))
+        n_gpus = max(1, math.ceil(lam / (mu_gpu * rho_c)))
         slo_optimal = False
 
     rho = lam / (n_gpus * mu_gpu)
     n_active = rho * n_slots
-    p99_ms = (_p99_wait(n_gpus * n_slots, lam, mu_gpu / n_slots, cv2)
-              + mean_pref) * 1000.0
+    p99_ms = (
+        _p99_wait(n_gpus * n_slots, lam, mu_gpu / n_slots, cv2) + mean_pref
+    ) * 1000.0
 
     try:
         pw = gpu.power_at_concurrency(max(1, int(n_active)))
@@ -1335,8 +1460,7 @@ def _tpw_one_pool(
         pw = float("nan")
 
     # per-pool tok/W (N cancels within the pool)
-    tpw = (mu_gpu * rho * mean_l_out / pw
-           if (pw and pw > 0) else float("nan"))
+    tpw = mu_gpu * rho * mean_l_out / pw if (pw and pw > 0) else float("nan")
     cost = (n_gpus * gpu.cost_per_hr / 3600.0) / (lam * mean_l_out) * 1e6
 
     return TpwPoint(
@@ -1360,8 +1484,8 @@ def tpw_analysis(
     gpus: list,
     t_slo_ms: float = 500.0,
     max_ctx: int = 8192,
-    rho_sweep: Optional[List[float]] = None,
-) -> List[TpwPoint]:
+    rho_sweep: list[float] | None = None,
+) -> list[TpwPoint]:
     """Compute tokens-per-watt for a list of GPU profiles (single-pool each).
 
     All GPUs receive the **same** full CDF and arrival rate, so this function
@@ -1404,7 +1528,7 @@ def tpw_analysis(
       - A100: FAIR (one measured anchor + FLOPS-scaling projection).
       - A10G: LOW  (projection only; no published batch-vs-power data).
     """
-    points: List[TpwPoint] = []
+    points: list[TpwPoint] = []
 
     for gpu in gpus:
         pt = _tpw_one_pool(cdf, lam, gpu, t_slo_ms, max_ctx)
@@ -1412,8 +1536,7 @@ def tpw_analysis(
 
         if rho_sweep:
             for rho in rho_sweep:
-                pt_s = _tpw_one_pool(cdf, lam, gpu, t_slo_ms, max_ctx,
-                                     rho_override=rho)
+                pt_s = _tpw_one_pool(cdf, lam, gpu, t_slo_ms, max_ctx, rho_override=rho)
                 points.append(pt_s)
 
     return points
@@ -1470,7 +1593,7 @@ def fleet_tpw_analysis(
     Power model accuracy caveats propagate: if any pool uses a LOW-quality
     power model, the fleet-level tok/W estimate inherits that uncertainty.
     """
-    pool_points: List[TpwPoint] = []
+    pool_points: list[TpwPoint] = []
     for spec in pools:
         pt = _tpw_one_pool(
             cdf=spec["cdf"],
@@ -1488,18 +1611,18 @@ def fleet_tpw_analysis(
     total_cost_per_s = 0.0
     total_gpus = 0
     worst_p99 = 0.0
-    notes: List[str] = []
+    notes: list[str] = []
 
-    for spec, pt in zip(pools, pool_points):
+    for spec, pt in zip(pools, pool_points, strict=False):
         mean_l_out = _cdf_mean_l_out(spec["cdf"])
-        output_tps_pool = spec["lam"] * mean_l_out          # output tok/s from this pool
-        pool_power_w    = pt.n_gpus * pt.power_per_gpu_w    # W for whole pool
+        output_tps_pool = spec["lam"] * mean_l_out  # output tok/s from this pool
+        pool_power_w = pt.n_gpus * pt.power_per_gpu_w  # W for whole pool
 
-        total_output_tps   += output_tps_pool
+        total_output_tps += output_tps_pool
         total_fleet_power_w += pool_power_w
-        total_cost_per_s    += pt.n_gpus * spec["gpu"].cost_per_hr / 3600.0
-        total_gpus          += pt.n_gpus
-        worst_p99           = max(worst_p99, pt.p99_ttft_ms)
+        total_cost_per_s += pt.n_gpus * spec["gpu"].cost_per_hr / 3600.0
+        total_gpus += pt.n_gpus
+        worst_p99 = max(worst_p99, pt.p99_ttft_ms)
 
         if pt.power_model_qual == "LOW":
             notes.append(
@@ -1507,12 +1630,18 @@ def fleet_tpw_analysis(
                 f"— projection only, no published batch-vs-power measurements."
             )
 
-    fleet_tpw = (total_output_tps / total_fleet_power_w
-                 if total_fleet_power_w > 0 else float("nan"))
-    fleet_cost = (total_cost_per_s / (lam_total * 1.0)) * 1e6
+    fleet_tpw = (
+        total_output_tps / total_fleet_power_w
+        if total_fleet_power_w > 0
+        else float("nan")
+    )
+    (total_cost_per_s / (lam_total * 1.0)) * 1e6
     # cost per 1M output tokens: total $/s / total output tok/s × 1e6
-    fleet_cost_per_mil = (total_cost_per_s / total_output_tps * 1e6
-                          if total_output_tps > 0 else float("nan"))
+    fleet_cost_per_mil = (
+        total_cost_per_s / total_output_tps * 1e6
+        if total_output_tps > 0
+        else float("nan")
+    )
 
     if not topology:
         topology = " + ".join(p.pool_label for p in pool_points)
@@ -1529,13 +1658,15 @@ def fleet_tpw_analysis(
     )
 
 
-def print_tpw_table(points: List[TpwPoint], title: str = "") -> None:
+def print_tpw_table(points: list[TpwPoint], title: str = "") -> None:
     """Print a formatted tokens-per-watt comparison table (single-pool entries)."""
     if title:
         print(f"\n{title}")
-    hdr = (f"  {'Pool / GPU':22s}  {'GPUs':>5}  {'ρ':>5}  {'n_act':>6}  "
-           f"{'Tok/W':>6}  {'P/GPU (W)':>9}  {'$/1M tok':>9}  "
-           f"{'P99 (ms)':>9}  {'PwrQ':>4}  {'SLO':>3}")
+    hdr = (
+        f"  {'Pool / GPU':22s}  {'GPUs':>5}  {'ρ':>5}  {'n_act':>6}  "
+        f"{'Tok/W':>6}  {'P/GPU (W)':>9}  {'$/1M tok':>9}  "
+        f"{'P99 (ms)':>9}  {'PwrQ':>4}  {'SLO':>3}"
+    )
     sep = "  " + "-" * (len(hdr) - 2)
     print(sep)
     print(hdr)
@@ -1548,13 +1679,17 @@ def print_tpw_table(points: List[TpwPoint], title: str = "") -> None:
         qual_tag = p.power_model_qual
         if p.power_model_qual == "LOW":
             qual_tag += "*"
-        print(f"  {label:22s}  {p.n_gpus:>5}  {p.rho:>5.2f}  "
-              f"{p.n_active:>6.1f}  {p.tokens_per_watt:>6.2f}  "
-              f"{p.power_per_gpu_w:>9.1f}  ${p.cost_per_mil:>8.2f}  "
-              f"{p.p99_ttft_ms:>9.1f}  {qual_tag:>4}  {flag:>3}")
+        print(
+            f"  {label:22s}  {p.n_gpus:>5}  {p.rho:>5.2f}  "
+            f"{p.n_active:>6.1f}  {p.tokens_per_watt:>6.2f}  "
+            f"{p.power_per_gpu_w:>9.1f}  ${p.cost_per_mil:>8.2f}  "
+            f"{p.p99_ttft_ms:>9.1f}  {qual_tag:>4}  {flag:>3}"
+        )
     print(sep)
     if any(p.power_model_qual == "LOW" for p in points if p.slo_optimal):
-        print("  * LOW quality power model: projection only, no published measurements.")
+        print(
+            "  * LOW quality power model: projection only, no published measurements."
+        )
         print("    Tok/W estimate for this GPU has high uncertainty.")
     print()
 
@@ -1567,18 +1702,24 @@ def print_fleet_tpw(result: FleetTpwResult, title: str = "") -> None:
     print(f"  Total GPUs     : {result.total_gpus}")
     print(f"  Fleet power    : {result.fleet_power_kw:.1f} kW")
     print(f"  Worst P99 TTFT : {result.worst_p99_ms:.1f} ms")
-    print(f"  Fleet tok/W    : {result.fleet_tpw:.3f}  tok/J  ← correct multi-pool aggregate")
+    print(
+        f"  Fleet tok/W    : {result.fleet_tpw:.3f}  tok/J  ← correct multi-pool aggregate"
+    )
     print(f"  Fleet $/1M tok : ${result.fleet_cost_per_mil:.2f}")
 
-    hdr = (f"\n  {'Pool':22s}  {'GPU':18s}  {'GPUs':>5}  {'ρ':>5}  "
-           f"{'Tok/W(pool)':>12}  {'P99(ms)':>9}  {'PwrQ':>4}")
+    hdr = (
+        f"\n  {'Pool':22s}  {'GPU':18s}  {'GPUs':>5}  {'ρ':>5}  "
+        f"{'Tok/W(pool)':>12}  {'P99(ms)':>9}  {'PwrQ':>4}"
+    )
     print(hdr)
     print("  " + "-" * (len(hdr) - 3))
     for p in result.pools:
         label = p.pool_label or p.gpu_name
         qual_tag = p.power_model_qual + ("*" if p.power_model_qual == "LOW" else "")
-        print(f"  {label:22s}  {p.gpu_name:18s}  {p.n_gpus:>5}  {p.rho:>5.2f}  "
-              f"{p.tokens_per_watt:>12.3f}  {p.p99_ttft_ms:>9.1f}  {qual_tag:>4}")
+        print(
+            f"  {label:22s}  {p.gpu_name:18s}  {p.n_gpus:>5}  {p.rho:>5.2f}  "
+            f"{p.tokens_per_watt:>12.3f}  {p.p99_ttft_ms:>9.1f}  {qual_tag:>4}"
+        )
     print()
     if result.power_model_notes:
         print("  Power model caveats:")

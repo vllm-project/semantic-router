@@ -1,5 +1,6 @@
 """Workload generators for fleet simulation."""
-from .synthetic import PoissonWorkload, CdfWorkload
+
+from .synthetic import CdfWorkload, PoissonWorkload
 from .trace import TraceWorkload
 
-__all__ = ["PoissonWorkload", "CdfWorkload", "TraceWorkload"]
+__all__ = ["CdfWorkload", "PoissonWorkload", "TraceWorkload"]

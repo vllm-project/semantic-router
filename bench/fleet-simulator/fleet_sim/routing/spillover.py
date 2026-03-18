@@ -9,11 +9,12 @@ This models the common deployment pattern where the long pool acts as a
 general-purpose fallback while the short pool is optimised for low-latency
 serving of the majority traffic.
 """
+
 from __future__ import annotations
-from typing import Dict, Optional
-from .base import BaseRouter
-from ..core.request import Request
+
 from ..core.fleet import PoolConfig
+from ..core.request import Request
+from .base import BaseRouter
 
 
 class SpilloverRouter(BaseRouter):
@@ -26,14 +27,18 @@ class SpilloverRouter(BaseRouter):
                            spill to the long pool (default 0.85)
     """
 
-    def __init__(self, pools: Dict[str, PoolConfig],
-                 threshold: Optional[int] = None,
-                 spill_threshold: float = 0.85, **kwargs):
+    def __init__(
+        self,
+        pools: dict[str, PoolConfig],
+        threshold: int | None = None,
+        spill_threshold: float = 0.85,
+        **kwargs,
+    ):
         super().__init__(pools, **kwargs)
         self._sorted = sorted(pools.values(), key=lambda p: p.max_ctx)
         self.threshold = threshold or self._sorted[0].max_ctx
         self.spill_threshold = spill_threshold
-        self._live_pools = None   # injected by Fleet
+        self._live_pools = None  # injected by Fleet
 
     def set_pools(self, live_pools) -> None:
         self._live_pools = live_pools
@@ -51,13 +56,13 @@ class SpilloverRouter(BaseRouter):
         if pool is None:
             return 0.0
         total_reqs = sum(i.active_count + i.queue_depth for i in pool.instances)
-        n_gpus     = len(pool.instances)
+        n_gpus = len(pool.instances)
         return total_reqs / max(1, n_gpus)
 
-    def route(self, req: Request) -> Optional[str]:
+    def route(self, req: Request) -> str | None:
         total = req.l_in + req.l_out
         short_id = self._sorted[0].pool_id
-        long_id  = self._sorted[-1].pool_id
+        long_id = self._sorted[-1].pool_id
 
         if total > self.threshold:
             # Long request — only the long pool has enough context capacity

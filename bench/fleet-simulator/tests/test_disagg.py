@@ -1,14 +1,20 @@
 """Unit tests for DisaggFleetOptimizer."""
+
 import pytest
 from fleet_sim import (
-    DisaggFleetOptimizer, DisaggResult, DisaggSweepPoint,
-    ALPHA_PRE, ALPHA_DEC, BETA_TTFT,
-    H100_SXM, LLAMA_3_1_70B, LLAMA_3_1_8B, DEEPSEEK_V3,
+    ALPHA_DEC,
+    ALPHA_PRE,
+    BETA_TTFT,
+    H100_SXM,
+    LLAMA_3_1_70B,
+    DisaggFleetOptimizer,
+    DisaggResult,
+    DisaggSweepPoint,
 )
-from fleet_sim.gpu_profiles import ProfileBuilder, ServingConfig, A100_80GB, H100_80GB
-
+from fleet_sim.gpu_profiles import H100_80GB, ProfileBuilder, ServingConfig
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def builder():
@@ -17,16 +23,20 @@ def builder():
 
 @pytest.fixture
 def llama_prefill(builder):
-    return builder.build(H100_SXM, LLAMA_3_1_70B,
-                         ServingConfig(tp=4, dtype_bytes=2, mean_ctx_tokens=1024,
-                                       phase="prefill"))
+    return builder.build(
+        H100_SXM,
+        LLAMA_3_1_70B,
+        ServingConfig(tp=4, dtype_bytes=2, mean_ctx_tokens=1024, phase="prefill"),
+    )
 
 
 @pytest.fixture
 def llama_decode(builder):
-    return builder.build(H100_SXM, LLAMA_3_1_70B,
-                         ServingConfig(tp=8, dtype_bytes=2, mean_ctx_tokens=1024,
-                                       phase="decode"))
+    return builder.build(
+        H100_SXM,
+        LLAMA_3_1_70B,
+        ServingConfig(tp=8, dtype_bytes=2, mean_ctx_tokens=1024, phase="decode"),
+    )
 
 
 @pytest.fixture
@@ -34,34 +44,40 @@ def disagg_llama(llama_prefill, llama_decode):
     return DisaggFleetOptimizer(
         prefill_profile=llama_prefill,
         decode_profile=llama_decode,
-        mean_isl=1024, mean_osl=256,
-        slo_ttft_ms=2000, slo_tpot_ms=100,
+        mean_isl=1024,
+        mean_osl=256,
+        slo_ttft_ms=2000,
+        slo_tpot_ms=100,
         max_ctx=4096,
     )
 
 
 # ── Published constants ───────────────────────────────────────────────────────
 
+
 class TestPublishedConstants:
     def test_alpha_pre_value(self):
-        assert ALPHA_PRE == pytest.approx(0.90)
+        assert pytest.approx(0.90) == ALPHA_PRE
 
     def test_alpha_dec_value(self):
-        assert ALPHA_DEC == pytest.approx(0.92)
+        assert pytest.approx(0.92) == ALPHA_DEC
 
     def test_beta_ttft_value(self):
-        assert BETA_TTFT == pytest.approx(1.80)
+        assert pytest.approx(1.80) == BETA_TTFT
 
 
 # ── Optimizer construction ────────────────────────────────────────────────────
+
 
 class TestDisaggFleetOptimizer:
     def test_accepts_manual_profiles(self):
         opt = DisaggFleetOptimizer(
             prefill_profile=H100_80GB,
             decode_profile=H100_80GB,
-            mean_isl=512, mean_osl=128,
-            slo_ttft_ms=5000, slo_tpot_ms=200,
+            mean_isl=512,
+            mean_osl=128,
+            slo_ttft_ms=5000,
+            slo_tpot_ms=200,
             max_ctx=4096,
         )
         assert opt is not None
@@ -80,7 +96,9 @@ class TestDisaggFleetOptimizer:
         assert r.n_prefill >= 1
         assert r.n_decode >= 1
 
-    def test_result_total_gpus_consistent(self, disagg_llama, llama_prefill, llama_decode):
+    def test_result_total_gpus_consistent(
+        self, disagg_llama, llama_prefill, llama_decode
+    ):
         r = disagg_llama.optimize(max_prefill=4, max_decode=4)
         expected = r.n_prefill * r.prefill_gpus + r.n_decode * r.decode_gpus
         assert r.total_gpus == expected
@@ -107,8 +125,9 @@ class TestDisaggFleetOptimizer:
         opt = DisaggFleetOptimizer(
             prefill_profile=llama_prefill,
             decode_profile=llama_decode,
-            mean_isl=1024, mean_osl=256,
-            slo_ttft_ms=1,    # 1ms — impossible
+            mean_isl=1024,
+            mean_osl=256,
+            slo_ttft_ms=1,  # 1ms — impossible
             slo_tpot_ms=0.1,  # 0.1ms — impossible
             max_ctx=4096,
         )
@@ -122,19 +141,27 @@ class TestDisaggFleetOptimizer:
 
     def test_custom_alpha_beta(self, llama_prefill, llama_decode):
         opt_default = DisaggFleetOptimizer(
-            llama_prefill, llama_decode,
-            mean_isl=1024, mean_osl=256,
-            slo_ttft_ms=2000, slo_tpot_ms=100,
+            llama_prefill,
+            llama_decode,
+            mean_isl=1024,
+            mean_osl=256,
+            slo_ttft_ms=2000,
+            slo_tpot_ms=100,
             max_ctx=4096,
         )
         opt_optimistic = DisaggFleetOptimizer(
-            llama_prefill, llama_decode,
-            mean_isl=1024, mean_osl=256,
-            slo_ttft_ms=2000, slo_tpot_ms=100,
+            llama_prefill,
+            llama_decode,
+            mean_isl=1024,
+            mean_osl=256,
+            slo_ttft_ms=2000,
+            slo_tpot_ms=100,
             max_ctx=4096,
-            alpha_pre=1.0, alpha_dec=1.0, beta_ttft=1.0,
+            alpha_pre=1.0,
+            alpha_dec=1.0,
+            beta_ttft=1.0,
         )
-        r_default   = opt_default.optimize(max_prefill=4, max_decode=4)
+        r_default = opt_default.optimize(max_prefill=4, max_decode=4)
         r_optimistic = opt_optimistic.optimize(max_prefill=4, max_decode=4)
         # With no degradation, system rate should be higher
         assert r_optimistic.system_rate >= r_default.system_rate
@@ -153,9 +180,12 @@ class TestDisaggSweep:
 
     def test_sweep_respects_valid_gpu_counts(self, llama_prefill, llama_decode):
         opt = DisaggFleetOptimizer(
-            llama_prefill, llama_decode,
-            mean_isl=1024, mean_osl=256,
-            slo_ttft_ms=2000, slo_tpot_ms=100,
+            llama_prefill,
+            llama_decode,
+            mean_isl=1024,
+            mean_osl=256,
+            slo_ttft_ms=2000,
+            slo_tpot_ms=100,
             max_ctx=4096,
         )
         valid = [32, 64]

@@ -4,13 +4,12 @@ The from_hf_config() tests use local config dicts (no network).
 The from_hf_repo() tests are skipped unless --hf-online is passed,
 since they require network access.
 """
+
 import json
-import tempfile
 import urllib.error
-from pathlib import Path
+
 import pytest
 from fleet_sim.models.spec import ModelSpec
-
 
 # ── Sample config dicts (matching real HF config.json structure) ──────────────
 
@@ -86,6 +85,7 @@ _DEEPSEEK_CONFIG = {
 
 # ── from_hf_config(dict) ──────────────────────────────────────────────────────
 
+
 class TestFromHfConfigDict:
     def test_dense_basic_fields(self):
         spec = ModelSpec.from_hf_config(_LLAMA_CONFIG)
@@ -157,6 +157,7 @@ class TestFromHfConfigDict:
 
 # ── from_hf_config(path) ──────────────────────────────────────────────────────
 
+
 class TestFromHfConfigPath:
     def test_load_from_file_path(self, tmp_path):
         cfg_path = tmp_path / "config.json"
@@ -192,6 +193,7 @@ class TestFromHfConfigPath:
 
 # ── from_hf_config with model_id string (mocked, no real network) ─────────────
 
+
 class TestFromHfConfigModelId:
     def test_nonexistent_path_triggers_download_attempt(self, monkeypatch):
         from fleet_sim.models import spec as spec_module
@@ -209,6 +211,7 @@ class TestFromHfConfigModelId:
 
 
 # ── from_hf_repo (mocked network) ────────────────────────────────────────────
+
 
 class TestFromHfRepo:
     def test_downloads_and_parses_config(self, monkeypatch):
@@ -249,8 +252,11 @@ class TestFromHfRepo:
     def test_name_override(self, monkeypatch):
         from fleet_sim.models import spec as spec_module
 
-        monkeypatch.setattr(spec_module, "_fetch_hf_config",
-                            lambda model_id, token=None: dict(_LLAMA_CONFIG))
+        monkeypatch.setattr(
+            spec_module,
+            "_fetch_hf_config",
+            lambda model_id, token=None: dict(_LLAMA_CONFIG),
+        )
         spec = ModelSpec.from_hf_repo("meta-llama/Meta-Llama-3.1-8B", name="llama8b")
         assert spec.name == "llama8b"
 
@@ -258,9 +264,7 @@ class TestFromHfRepo:
         from fleet_sim.models import spec as spec_module
 
         def raise_404(model_id, token=None):
-            raise urllib.error.HTTPError(
-                "url", 404, "Not Found", {}, None
-            )
+            raise urllib.error.HTTPError("url", 404, "Not Found", {}, None)
 
         monkeypatch.setattr(spec_module, "_fetch_hf_config", raise_404)
         with pytest.raises(urllib.error.HTTPError):
@@ -268,6 +272,7 @@ class TestFromHfRepo:
 
 
 # ── Compatibility with ProfileBuilder ────────────────────────────────────────
+
 
 class TestHfSpecWithProfileBuilder:
     def test_profile_builder_accepts_hf_spec(self):

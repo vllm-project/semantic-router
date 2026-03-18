@@ -1,16 +1,21 @@
 """Unit tests for ProfileBuilder, ComputedProfile, ManualProfile, and Protocol."""
-import math
-import pytest
-from fleet_sim.hardware import A100_SXM, H100_SXM, H200_SXM, B200_SXM, L40S
-from fleet_sim.models import LLAMA_3_1_70B, LLAMA_3_1_8B, DEEPSEEK_V3, QWEN3_235B_A22B
-from fleet_sim.gpu_profiles import (
-    GpuProfile, ManualProfile, ComputedProfile,
-    ProfileBuilder, ServingConfig,
-    A100_80GB, H100_80GB, A10G,
-)
 
+import math
+
+import pytest
+from fleet_sim.gpu_profiles import (
+    A10G,
+    A100_80GB,
+    H100_80GB,
+    GpuProfile,
+    ProfileBuilder,
+    ServingConfig,
+)
+from fleet_sim.hardware import A100_SXM, B200_SXM, H100_SXM, H200_SXM
+from fleet_sim.models import DEEPSEEK_V3, LLAMA_3_1_8B, LLAMA_3_1_70B, QWEN3_235B_A22B
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def builder():
@@ -35,6 +40,7 @@ def h100_deepseek_fp8(builder):
 
 # ── Protocol compliance ───────────────────────────────────────────────────────
 
+
 class TestGpuProfileProtocol:
     def test_manual_profile_satisfies_protocol(self):
         assert isinstance(A100_80GB, GpuProfile)
@@ -54,6 +60,7 @@ class TestGpuProfileProtocol:
 
 
 # ── ManualProfile ─────────────────────────────────────────────────────────────
+
 
 class TestManualProfile:
     def test_iter_latency_linear(self):
@@ -92,12 +99,12 @@ class TestManualProfile:
         """At max_ctx = calibration_ctx/2, n_slots should be 2× the calibration value."""
         p = A100_80GB
         slots_calib = p.n_slots(p.calibration_ctx)
-        slots_half  = p.n_slots(p.calibration_ctx // 2)
+        slots_half = p.n_slots(p.calibration_ctx // 2)
         # Both limits double when max_ctx halves
         assert slots_half == pytest.approx(slots_calib * 2, abs=1)
 
     def test_n_slots_decreases_with_larger_ctx(self):
-        s8k  = A100_80GB.n_slots(8192)
+        s8k = A100_80GB.n_slots(8192)
         s32k = A100_80GB.n_slots(32768)
         assert s8k > s32k
 
@@ -105,8 +112,10 @@ class TestManualProfile:
         """A GPU configured for short ctx should serve more req/s than homo ctx."""
         p = A100_80GB
         # 500-token request
-        tput_short = p.throughput(max_ctx=2048,                  mean_l_in=400.0, mean_l_out=100.0)
-        tput_homo  = p.throughput(max_ctx=p.calibration_ctx,     mean_l_in=400.0, mean_l_out=100.0)
+        tput_short = p.throughput(max_ctx=2048, mean_l_in=400.0, mean_l_out=100.0)
+        tput_homo = p.throughput(
+            max_ctx=p.calibration_ctx, mean_l_in=400.0, mean_l_out=100.0
+        )
         assert tput_short > tput_homo
 
     def test_service_time_positive(self):
@@ -119,6 +128,7 @@ class TestManualProfile:
 
 
 # ── ProfileBuilder — dense models ────────────────────────────────────────────
+
 
 class TestProfileBuilderDense:
     def test_W_faster_on_h100_than_a100(self, builder, cfg_tp8_fp16):
@@ -133,19 +143,19 @@ class TestProfileBuilderDense:
         assert h200.W < h100.W
 
     def test_W_scales_with_model_size(self, builder, cfg_tp8_fp16):
-        p8b  = builder.build(H100_SXM, LLAMA_3_1_8B,  cfg_tp8_fp16)
+        p8b = builder.build(H100_SXM, LLAMA_3_1_8B, cfg_tp8_fp16)
         p70b = builder.build(H100_SXM, LLAMA_3_1_70B, cfg_tp8_fp16)
         # 70B has ~8.75× more params → W should be proportionally larger
         assert p70b.W > p8b.W
 
     def test_W_fp8_lower_than_fp16(self, builder):
         cfg_fp16 = ServingConfig(tp=8, dtype_bytes=2, mean_ctx_tokens=2048)
-        cfg_fp8  = ServingConfig(tp=8, dtype_bytes=1, mean_ctx_tokens=2048)
+        cfg_fp8 = ServingConfig(tp=8, dtype_bytes=1, mean_ctx_tokens=2048)
         fp16 = builder.build(H100_SXM, LLAMA_3_1_70B, cfg_fp16)
-        fp8  = builder.build(H100_SXM, LLAMA_3_1_70B, cfg_fp8)
+        fp8 = builder.build(H100_SXM, LLAMA_3_1_70B, cfg_fp8)
         assert fp8.W < fp16.W
         # Should be roughly half (fp8 weights are half the size)
-        assert fp8.W / fp16.W == pytest.approx(0.5, rel=0.05)
+        assert pytest.approx(0.5, rel=0.05) == fp8.W / fp16.W
 
     def test_H_positive(self, h100_llama70b):
         assert h100_llama70b.H > 0
@@ -185,11 +195,12 @@ class TestProfileBuilderDense:
 
 # ── ProfileBuilder — MoE models ──────────────────────────────────────────────
 
+
 class TestProfileBuilderMoE:
     def test_moe_W_larger_than_comparable_dense(self, builder):
         cfg = ServingConfig(tp=8, ep=8, dtype_bytes=1, mean_ctx_tokens=2048)
         # DeepSeek-V3 fp8 vs Llama-70B fp8 — MoE has more weight to dispatch
-        moe   = builder.build(H100_SXM, DEEPSEEK_V3, cfg)
+        moe = builder.build(H100_SXM, DEEPSEEK_V3, cfg)
         dense = builder.build(H100_SXM, LLAMA_3_1_70B, cfg)
         assert moe.W > dense.W
 
@@ -199,9 +210,9 @@ class TestProfileBuilderMoE:
 
     def test_moe_fp8_faster_than_fp16(self, builder):
         cfg_fp16 = ServingConfig(tp=8, ep=8, dtype_bytes=2, mean_ctx_tokens=2048)
-        cfg_fp8  = ServingConfig(tp=8, ep=8, dtype_bytes=1, mean_ctx_tokens=2048)
+        cfg_fp8 = ServingConfig(tp=8, ep=8, dtype_bytes=1, mean_ctx_tokens=2048)
         fp16 = builder.build(H100_SXM, DEEPSEEK_V3, cfg_fp16)
-        fp8  = builder.build(H100_SXM, DEEPSEEK_V3, cfg_fp8)
+        fp8 = builder.build(H100_SXM, DEEPSEEK_V3, cfg_fp8)
         assert fp8.W < fp16.W
 
     def test_moe_b200_faster_than_h100(self, builder):
@@ -213,8 +224,8 @@ class TestProfileBuilderMoE:
     def test_qwen3_235b_moe_faster_than_deepseek_v3(self, builder):
         # Qwen3-235B has fewer layers and smaller hidden → faster per step
         cfg = ServingConfig(tp=8, ep=8, dtype_bytes=1, mean_ctx_tokens=2048)
-        qwen  = builder.build(H100_SXM, QWEN3_235B_A22B, cfg)
-        dsv3  = builder.build(H100_SXM, DEEPSEEK_V3, cfg)
+        qwen = builder.build(H100_SXM, QWEN3_235B_A22B, cfg)
+        dsv3 = builder.build(H100_SXM, DEEPSEEK_V3, cfg)
         assert qwen.W < dsv3.W
 
     def test_moe_protocol_compliance(self, h100_deepseek_fp8):
@@ -223,14 +234,15 @@ class TestProfileBuilderMoE:
 
 # ── ComputedProfile methods ───────────────────────────────────────────────────
 
+
 class TestComputedProfileMethods:
     def test_iter_latency_increases_with_batch(self, h100_llama70b):
-        lat1  = h100_llama70b.iter_latency(1)
+        lat1 = h100_llama70b.iter_latency(1)
         lat64 = h100_llama70b.iter_latency(64)
         assert lat64 > lat1
 
     def test_n_slots_decreases_with_ctx(self, h100_llama70b):
-        s4k  = h100_llama70b.n_slots(4096)
+        s4k = h100_llama70b.n_slots(4096)
         s32k = h100_llama70b.n_slots(32768)
         assert s4k > s32k
 
@@ -242,8 +254,8 @@ class TestComputedProfileMethods:
         assert st > 0
 
     def test_service_time_longer_output_takes_longer(self, h100_llama70b):
-        st_short = h100_llama70b.service_time(512, 64,  4096)
-        st_long  = h100_llama70b.service_time(512, 512, 4096)
+        st_short = h100_llama70b.service_time(512, 64, 4096)
+        st_long = h100_llama70b.service_time(512, 512, 4096)
         assert st_long > st_short
 
     def test_throughput_positive(self, h100_llama70b):
@@ -278,7 +290,7 @@ class TestComputedProfileMethods:
         """
         a100 = builder.build(A100_SXM, LLAMA_3_1_70B, cfg_tp8_fp16)
         n = a100.n_slots(8192)
-        decode_t  = a100.iter_latency(n)
+        decode_t = a100.iter_latency(n)
         prefill_t = a100.prefill_iter_latency(
             chunk_tokens=512, kv_history_tokens=1024, n_active=n
         )
@@ -292,7 +304,7 @@ class TestComputedProfileMethods:
         """H100 is closer to the compute/memory boundary than A100."""
         h100 = builder.build(H100_SXM, LLAMA_3_1_70B, cfg_tp8_fp16)
         n = h100.n_slots(8192)
-        decode_t  = h100.iter_latency(n)
+        decode_t = h100.iter_latency(n)
         prefill_t = h100.prefill_iter_latency(
             chunk_tokens=512, kv_history_tokens=1024, n_active=n
         )

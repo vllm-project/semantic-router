@@ -5,9 +5,10 @@ throughout the fleet simulator. Both ManualProfile (hand-calibrated constants)
 and ComputedProfile (derived from HardwareSpec + ModelSpec) satisfy this
 protocol.
 """
+
 from __future__ import annotations
 
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -23,8 +24,7 @@ class GpuProfile(Protocol):
     name: str
     cost_per_hr: float
 
-    def iter_latency(self, n_active: int,
-                     mean_seq_len: Optional[float] = None) -> float:
+    def iter_latency(self, n_active: int, mean_seq_len: float | None = None) -> float:
         """Wall-clock time for one decode iteration (seconds).
 
         Parameters
@@ -37,10 +37,13 @@ class GpuProfile(Protocol):
         """
         ...
 
-    def prefill_iter_latency(self, chunk_tokens: int,
-                              kv_history_tokens: float,
-                              n_active: int,
-                              mean_seq_len: Optional[float] = None) -> float:
+    def prefill_iter_latency(
+        self,
+        chunk_tokens: int,
+        kv_history_tokens: float,
+        n_active: int,
+        mean_seq_len: float | None = None,
+    ) -> float:
         """Wall-clock time for one prefill-chunk iteration (seconds).
 
         Prefill attention is potentially compute-bound (FlashAttention FLOPs
@@ -82,8 +85,7 @@ class GpuProfile(Protocol):
         """
         ...
 
-    def throughput(self, max_ctx: int, mean_l_in: float,
-                   mean_l_out: float) -> float:
+    def throughput(self, max_ctx: int, mean_l_in: float, mean_l_out: float) -> float:
         """Steady-state request throughput (req/s) at full concurrency.
 
         Parameters

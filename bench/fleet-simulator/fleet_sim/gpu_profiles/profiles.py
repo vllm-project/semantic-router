@@ -32,17 +32,18 @@ where b = concurrent in-flight requests (≈ vLLM max_num_seqs).
 
 Full derivation with sources: docs/POWER_MODEL_METHODOLOGY.md
 """
+
 from __future__ import annotations
 
-from .protocol import GpuProfile
 from .manual import ManualProfile
+from .protocol import GpuProfile
 
 # ── Pre-built profiles (Llama-3-70B calibration, 8-GPU TP) ───────────────────
 
 A100_80GB = ManualProfile(
     name="A100-80GB",
     W=0.0080,
-    H=0.00065,      # per-seq overhead at calibration_ctx=8192 (attention BW saturation)
+    H=0.00065,  # per-seq overhead at calibration_ctx=8192 (attention BW saturation)
     calibration_ctx=8192,
     chunk=512,
     blk_size=16,
@@ -80,7 +81,7 @@ A100_80GB = ManualProfile(
 H100_80GB = ManualProfile(
     name="H100-80GB",
     W=0.0040,
-    H=0.00032,      # per-seq overhead at calibration_ctx=8192
+    H=0.00032,  # per-seq overhead at calibration_ctx=8192
     calibration_ctx=8192,
     chunk=1024,
     blk_size=16,
@@ -107,12 +108,12 @@ H100_80GB = ManualProfile(
 A10G = ManualProfile(
     name="A10G",
     W=0.012,
-    H=0.00090,      # per-seq overhead at calibration_ctx=8192
+    H=0.00090,  # per-seq overhead at calibration_ctx=8192
     calibration_ctx=8192,
     chunk=256,
     blk_size=16,
     total_kv_blks=32768,
-    max_slots=64,   # saturates at 64 seqs × 8192 tokens; scales as 64×8192/max_ctx
+    max_slots=64,  # saturates at 64 seqs × 8192 tokens; scales as 64×8192/max_ctx
     cost_per_hr=1.01,
     # Power — source quality: LOW (projection only; NO published measurement data found)
     # ML.ENERGY v3.0 covers H100+B200 only; no arXiv papers measure A10G batch-vs-power.
@@ -150,15 +151,27 @@ A10G = ManualProfile(
 )
 
 
-def CUSTOM(name: str, W: float, H: float, chunk: int = 512,
-           blk_size: int = 16, total_kv_blks: int = 65536,
-           max_slots: int = 128, cost_per_hr: float = 2.21,
-           calibration_ctx: int = 8192) -> ManualProfile:
+def CUSTOM(
+    name: str,
+    W: float,
+    H: float,
+    chunk: int = 512,
+    blk_size: int = 16,
+    total_kv_blks: int = 65536,
+    max_slots: int = 128,
+    cost_per_hr: float = 2.21,
+    calibration_ctx: int = 8192,
+) -> ManualProfile:
     """Factory for user-defined hand-calibrated GPU profiles."""
     return ManualProfile(
-        name=name, W=W, H=H, calibration_ctx=calibration_ctx,
-        chunk=chunk, blk_size=blk_size,
-        total_kv_blks=total_kv_blks, max_slots=max_slots,
+        name=name,
+        W=W,
+        H=H,
+        calibration_ctx=calibration_ctx,
+        chunk=chunk,
+        blk_size=blk_size,
+        total_kv_blks=total_kv_blks,
+        max_slots=max_slots,
         cost_per_hr=cost_per_hr,
     )
 
@@ -169,7 +182,13 @@ from .builder import ProfileBuilder, ServingConfig
 from .computed import ComputedProfile
 
 __all__ = [
+    "A10G",
+    "A100_80GB",
+    "CUSTOM",
+    "H100_80GB",
+    "ComputedProfile",
     "GpuProfile",
-    "ManualProfile", "ComputedProfile", "ProfileBuilder", "ServingConfig",
-    "A100_80GB", "H100_80GB", "A10G", "CUSTOM",
+    "ManualProfile",
+    "ProfileBuilder",
+    "ServingConfig",
 ]

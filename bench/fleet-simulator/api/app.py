@@ -1,4 +1,5 @@
 """FastAPI application for the inference-fleet-sim dashboard API."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .routes import traces, fleets, workloads, jobs
+from .routes import fleets, jobs, traces, workloads
 
 DASHBOARD_DIR = Path(__file__).parent.parent / "dashboard"
 
@@ -33,10 +34,10 @@ app.add_middleware(
 )
 
 # ── API routes ────────────────────────────────────────────────────────────────
-app.include_router(traces.router,    prefix="/api")
+app.include_router(traces.router, prefix="/api")
 app.include_router(workloads.router, prefix="/api")
-app.include_router(fleets.router,    prefix="/api")
-app.include_router(jobs.router,      prefix="/api")
+app.include_router(fleets.router, prefix="/api")
+app.include_router(jobs.router, prefix="/api")
 
 
 # ── Dashboard static files ───────────────────────────────────────────────────

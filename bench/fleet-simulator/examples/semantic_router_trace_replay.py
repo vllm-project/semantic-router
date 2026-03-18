@@ -32,6 +32,7 @@ Usage::
     python3 examples/semantic_router_trace_replay.py my_trace.jsonl  # real trace
 
 """
+
 from __future__ import annotations
 
 import json
@@ -42,21 +43,25 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fleet_sim import A100_80GB, A10G
+from fleet_sim import A10G, A100_80GB
 from fleet_sim.core.fleet import Fleet, FleetConfig, PoolConfig
 from fleet_sim.workload.trace import TraceWorkload
-from fleet_sim.routing.model_router import ModelRouter
 
 SLO_MS = 500
 
 POOLS = [
     PoolConfig("llama70b", A100_80GB, 20, 8192),
-    PoolConfig("llama8b",  A10G,      8, 4096),
+    PoolConfig("llama8b", A10G, 8, 4096),
 ]
 
 
-def make_synthetic_trace(path: str, n: int = 10_000, lam: float = 200,
-                          frac_large: float = 0.35, seed: int = 42):
+def make_synthetic_trace(
+    path: str,
+    n: int = 10_000,
+    lam: float = 200,
+    frac_large: float = 0.35,
+    seed: int = 42,
+):
     """Generate a synthetic semantic-router trace for demo purposes.
 
     Simulates a complexity classifier that routes ~35% of requests to the
@@ -65,32 +70,34 @@ def make_synthetic_trace(path: str, n: int = 10_000, lam: float = 200,
     rng = random.Random(seed)
     t = 0.0
     records = []
-    for i in range(n):
+    for _i in range(n):
         t += rng.expovariate(lam)
         is_complex = rng.random() < frac_large
 
         # Complex requests: longer prompts, longer replies
         if is_complex:
-            l_in  = rng.randint(1024, 6144)
+            l_in = rng.randint(1024, 6144)
             l_out = rng.randint(256, 1024)
             model = "llama70b"
             complexity = "high"
-            category   = rng.choice(["reasoning", "coding", "analysis"])
+            category = rng.choice(["reasoning", "coding", "analysis"])
         else:
-            l_in  = rng.randint(64, 1024)
+            l_in = rng.randint(64, 1024)
             l_out = rng.randint(32, 256)
             model = "llama8b"
             complexity = "low"
-            category   = rng.choice(["factual", "summarization", "translation"])
+            category = rng.choice(["factual", "summarization", "translation"])
 
-        records.append({
-            "timestamp":       round(t, 6),
-            "prompt_tokens":   l_in,
-            "generated_tokens": l_out,
-            "selected_model":  model,   # <-- router's decision
-            "complexity":      complexity,
-            "category":        category,
-        })
+        records.append(
+            {
+                "timestamp": round(t, 6),
+                "prompt_tokens": l_in,
+                "generated_tokens": l_out,
+                "selected_model": model,  # <-- router's decision
+                "complexity": complexity,
+                "category": category,
+            }
+        )
 
     with open(path, "w") as f:
         for r in records:
@@ -107,7 +114,7 @@ def run_replay(trace_path: str, model_id_field: str = "selected_model"):
     wl = TraceWorkload(
         path=trace_path,
         fmt="semantic_router",
-        model_id_field=model_id_field,   # match your router's log field
+        model_id_field=model_id_field,  # match your router's log field
     )
     arrivals = wl.generate()
 
@@ -118,28 +125,35 @@ def run_replay(trace_path: str, model_id_field: str = "selected_model"):
 
     fc = FleetConfig(
         pools=list(POOLS),
-        router_type="ModelRouter",   # respects request.model_id
+        router_type="ModelRouter",  # respects request.model_id
     )
     fleet = Fleet(fc)
     result = fleet.run(arrivals)
 
     total_gpus = sum(p.n_gpus for p in POOLS)
     cost = result.annualised_cost_usd() / 1000
-    p99  = result.p99_ttft_ms()
-    slo  = result.slo_compliance(SLO_MS) * 100
+    p99 = result.p99_ttft_ms()
+    slo = result.slo_compliance(SLO_MS) * 100
 
     print(f"\n  Trace: {trace_path}  ({len(arrivals):,} requests)")
-    print(f"  Routing split: " +
-          " | ".join(f"{m}={n}" for m, n in sorted(split.items())))
-    print(f"  Fleet: {' + '.join(f'{p.n_gpus}× {p.gpu.name} ({p.pool_id})' for p in POOLS)}")
-    print(f"  Total GPUs={total_gpus}  Cost=${cost:.0f}K/yr  "
-          f"P99={p99:.1f}ms  SLO={slo:.1f}%")
+    print(
+        "  Routing split: " + " | ".join(f"{m}={n}" for m, n in sorted(split.items()))
+    )
+    print(
+        f"  Fleet: {' + '.join(f'{p.n_gpus}× {p.gpu.name} ({p.pool_id})' for p in POOLS)}"
+    )
+    print(
+        f"  Total GPUs={total_gpus}  Cost=${cost:.0f}K/yr  "
+        f"P99={p99:.1f}ms  SLO={slo:.1f}%"
+    )
 
     for pool_id in [p.pool_id for p in POOLS]:
-        pp99  = result.p99_ttft_ms(pool_id)
-        pslo  = result.slo_compliance(SLO_MS, pool_id) * 100
+        pp99 = result.p99_ttft_ms(pool_id)
+        pslo = result.slo_compliance(SLO_MS, pool_id) * 100
         putil = result.mean_utilisation(pool_id) * 100
-        print(f"    {pool_id:12s}  P99={pp99:>7.1f}ms  SLO={pslo:>5.1f}%  Util={putil:>4.1f}%")
+        print(
+            f"    {pool_id:12s}  P99={pp99:>7.1f}ms  SLO={pslo:>5.1f}%  Util={putil:>4.1f}%"
+        )
 
 
 def main():
@@ -153,21 +167,24 @@ def main():
     else:
         # Generate and replay a synthetic demo trace
         print("\nNo trace file provided — generating synthetic demo trace.")
-        print("Usage: python3 semantic_router_trace_replay.py <trace.jsonl> [model_id_field]")
+        print(
+            "Usage: python3 semantic_router_trace_replay.py <trace.jsonl> [model_id_field]"
+        )
         print("\nField name aliases for common routers:")
         print("  vLLM semantic router header : 'x_vsr_selected_model'")
         print("  OpenAI-style body           : 'model'")
         print("  Generic                     : 'selected_model' (default), 'routed_to'")
 
-        with tempfile.NamedTemporaryFile(suffix=".jsonl", mode="w",
-                                         delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(
+            suffix=".jsonl", mode="w", delete=False
+        ) as tmp:
             tmp_path = tmp.name
 
-        print(f"\n--- Demo: complexity-based routing (35% large / 65% small) ---")
+        print("\n--- Demo: complexity-based routing (35% large / 65% small) ---")
         make_synthetic_trace(tmp_path, n=20_000, frac_large=0.35)
         run_replay(tmp_path)
 
-        print(f"\n--- Demo: aggressive routing (70% large / 30% small) ---")
+        print("\n--- Demo: aggressive routing (70% large / 30% small) ---")
         make_synthetic_trace(tmp_path, n=20_000, frac_large=0.70)
         run_replay(tmp_path)
 

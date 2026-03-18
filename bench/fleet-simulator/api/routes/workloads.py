@@ -1,9 +1,9 @@
 """Routes for built-in CDF workloads bundled with the simulator."""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import List
 
 from fastapi import APIRouter, HTTPException
 
@@ -14,10 +14,10 @@ router = APIRouter(prefix="/workloads", tags=["Workloads"])
 _DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
 _BUILTIN: dict[str, str] = {
-    "azure":           "Azure production traces (~78% requests ≤2K tokens)",
-    "lmsys":           "LMSYS-Chat-1M single-turn conversations",
+    "azure": "Azure production traces (~78% requests ≤2K tokens)",
+    "lmsys": "LMSYS-Chat-1M single-turn conversations",
     "lmsys_multiturn": "LMSYS-Chat-1M multi-turn conversations",
-    "agent_heavy":     "Agent-heavy workload (tool calls, long context)",
+    "agent_heavy": "Agent-heavy workload (tool calls, long context)",
 }
 
 
@@ -78,33 +78,37 @@ def _cdf_stats(cdf: list, name: str) -> TraceStats:
     )
 
 
-@router.get("", response_model=List[BuiltinWorkload], summary="List built-in workloads")
+@router.get("", response_model=list[BuiltinWorkload], summary="List built-in workloads")
 async def list_workloads():
     result = []
     for name, desc in _BUILTIN.items():
         path = _DATA_DIR / f"{name}_cdf.json"
-        result.append(BuiltinWorkload(
-            name=name,
-            description=desc,
-            path=str(path),
-            stats=None,
-        ))
+        result.append(
+            BuiltinWorkload(
+                name=name,
+                description=desc,
+                path=str(path),
+                stats=None,
+            )
+        )
     return result
 
 
-@router.get("/{name}/cdf", response_model=List[CdfPoint], summary="Get raw CDF points")
+@router.get("/{name}/cdf", response_model=list[CdfPoint], summary="Get raw CDF points")
 async def get_cdf(name: str):
     try:
         cdf = _load_cdf(name)
-    except FileNotFoundError:
-        raise HTTPException(404, f"Workload '{name}' not found")
+    except FileNotFoundError as exc:
+        raise HTTPException(404, f"Workload '{name}' not found") from exc
     return [CdfPoint(threshold=int(t), cumulative_frac=float(f)) for t, f in cdf]
 
 
-@router.get("/{name}/stats", response_model=TraceStats, summary="Get workload statistics")
+@router.get(
+    "/{name}/stats", response_model=TraceStats, summary="Get workload statistics"
+)
 async def get_workload_stats(name: str):
     try:
         cdf = _load_cdf(name)
-    except FileNotFoundError:
-        raise HTTPException(404, f"Workload '{name}' not found")
+    except FileNotFoundError as exc:
+        raise HTTPException(404, f"Workload '{name}' not found") from exc
     return _cdf_stats(cdf, name)
