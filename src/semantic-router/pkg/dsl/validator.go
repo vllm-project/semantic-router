@@ -661,4 +661,3 @@ func (v *Validator) addDiag(level DiagLevel, pos Position, message string, fix *
 		Fix:     fix,
 	})
 }
-
