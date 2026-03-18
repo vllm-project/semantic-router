@@ -24,6 +24,26 @@ _DEFAULT_SEED_TRACE_SPECS = (
 )
 
 
+def _default_seed_trace_dir_candidates() -> list[Path]:
+    """Return runtime locations that commonly contain bundled trace samples."""
+
+    module_path = Path(__file__).resolve()
+    candidates = [
+        Path.cwd() / "examples" / "trace_samples",
+        Path.cwd() / "src" / "fleet-sim" / "examples" / "trace_samples",
+        Path.cwd().parent / "fleet-sim" / "examples" / "trace_samples",
+        module_path.parents[2] / "examples" / "trace_samples",
+    ]
+    deduped: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        deduped.append(candidate)
+    return deduped
+
+
 def _percentile(sorted_vals: list, p: float) -> float:
     if not sorted_vals:
         return 0.0
@@ -97,7 +117,9 @@ def compute_trace_stats(records: list[dict]) -> TraceStats:
     duration = (timestamps[-1] - timestamps[0]) if len(timestamps) > 1 else 1.0
     arrival_rate = n_requests / duration if duration > 0 else 0.0
     total_count = sum(routing.values()) or 1
-    routing_dist = {key: round(value / total_count, 4) for key, value in routing.items()}
+    routing_dist = {
+        key: round(value / total_count, 4) for key, value in routing.items()
+    }
 
     return TraceStats(
         n_requests=n_requests,
@@ -147,7 +169,10 @@ def resolve_seed_trace_dir() -> Path:
     override = os.environ.get("VLLM_SR_SIM_SEED_TRACE_DIR")
     if override:
         return Path(override)
-    return Path(__file__).resolve().parents[2] / "examples" / "trace_samples"
+    for candidate in _default_seed_trace_dir_candidates():
+        if candidate.exists():
+            return candidate
+    return _default_seed_trace_dir_candidates()[0]
 
 
 def seed_example_traces_if_enabled() -> int:
@@ -162,7 +187,14 @@ def seed_example_traces_if_enabled() -> int:
 
     seed_dir = resolve_seed_trace_dir()
     if not seed_dir.exists():
-        LOG.warning("Fleet Sim trace seed directory not found: %s", seed_dir)
+        checked = ", ".join(
+            str(candidate) for candidate in _default_seed_trace_dir_candidates()
+        )
+        LOG.warning(
+            "Fleet Sim trace seed directory not found: %s (checked: %s)",
+            seed_dir,
+            checked,
+        )
         return 0
 
     seeded = 0

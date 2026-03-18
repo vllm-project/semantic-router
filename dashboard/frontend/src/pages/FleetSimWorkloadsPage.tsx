@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import FleetSimSurfaceLayout from './FleetSimSurfaceLayout'
+import FleetSimTracePreviewDialog from './FleetSimTracePreviewDialog'
 import styles from './FleetSimPage.module.css'
 import {
   deleteTrace,
@@ -112,6 +113,11 @@ export default function FleetSimWorkloadsPage() {
     }
   }
 
+  const handleClosePreview = () => {
+    setSelectedTrace(null)
+    setSelectedSample(null)
+  }
+
   const traceColumns: Column<TraceInfo>[] = [
     {
       key: 'name',
@@ -141,7 +147,6 @@ export default function FleetSimWorkloadsPage() {
   const filteredTraces = traces.filter((trace) =>
     trace.name.toLowerCase().includes(search.toLowerCase()) || trace.format.includes(search.toLowerCase())
   )
-  const selectedTraceCount = selectedSample ? Math.min(selectedSample.records.length, selectedSample.total) : 0
 
   return (
     <FleetSimSurfaceLayout
@@ -151,78 +156,54 @@ export default function FleetSimWorkloadsPage() {
       meta={[
         { label: 'Library profiles', value: formatNumber(workloads.length) },
         { label: 'Uploaded traces', value: formatNumber(traces.length) },
-        { label: 'Preview rows', value: selectedSample ? formatNumber(selectedTraceCount) : 'Idle' },
+        { label: 'Ingest formats', value: 'JSONL · Router JSONL · CSV' },
       ]}
     >
-      <div className={styles.composerSplit}>
-        <section className={styles.sectionCard}>
-          <div className={styles.sectionHeader}>
+      <section className={styles.sectionCard}>
+        <div className={styles.sectionHeader}>
+          <div>
+            <span className={styles.sectionKicker}>Upload</span>
+            <h2 className={styles.sectionTitle}>Trace Intake</h2>
+            <p className={styles.sectionDescription}>Add replayable traces for traffic you want to compare against the built-in planning library.</p>
+          </div>
+        </div>
+        <div className={styles.formStack}>
+          <div className={styles.fieldSection}>
             <div>
-              <span className={styles.sectionKicker}>Upload</span>
-              <h2 className={styles.sectionTitle}>Trace Intake</h2>
-              <p className={styles.sectionDescription}>Add replayable traces for traffic you want to compare against the built-in planning library.</p>
+              <span className={styles.sectionKicker}>Trace source</span>
+              <p className={styles.sectionDescription}>Use the same intake formats the simulator already understands and keep them searchable from the dashboard.</p>
+            </div>
+            <div className={styles.formGrid}>
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>Format</span>
+                <select
+                  className={styles.select}
+                  value={uploadFormat}
+                  onChange={(event) => setUploadFormat(event.target.value as FleetSimTraceFormat)}
+                >
+                  <option value="jsonl">JSONL</option>
+                  <option value="semantic_router">Router JSONL</option>
+                  <option value="csv">CSV</option>
+                </select>
+              </label>
             </div>
           </div>
-          <div className={styles.formStack}>
-            <div className={styles.fieldSection}>
-              <div>
-                <span className={styles.sectionKicker}>Trace source</span>
-                <p className={styles.sectionDescription}>Use the same intake formats the simulator already understands and keep them searchable from the dashboard.</p>
-              </div>
-              <div className={styles.formGrid}>
-                <label className={styles.field}>
-                  <span className={styles.fieldLabel}>Format</span>
-                  <select
-                    className={styles.select}
-                    value={uploadFormat}
-                    onChange={(event) => setUploadFormat(event.target.value as FleetSimTraceFormat)}
-                  >
-                    <option value="jsonl">JSONL</option>
-                    <option value="semantic_router">Router JSONL</option>
-                    <option value="csv">CSV</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-          </div>
-          <div className={styles.buttonRow} style={{ marginTop: '0.9rem' }}>
-            <input
-              ref={fileInputRef}
-              className={styles.hiddenFileInput}
-              type="file"
-              onChange={(event) => void handleUploadSelection(event)}
-            />
-            <button type="button" className={styles.primaryButton} onClick={handleUploadButtonClick}>
-              Upload Trace
-            </button>
-            <span className={styles.inlineHint}>Pick the format first, then choose the trace file from the system upload dialog.</span>
-          </div>
-          {message ? <p className={`${styles.message} ${styles.messageSuccess}`}>{message}</p> : null}
-          {error ? <p className={`${styles.message} ${styles.messageError}`}>{error}</p> : null}
-        </section>
-
-        <aside className={styles.summaryCard}>
-          <div className={styles.summaryHeader}>
-            <span className={styles.summaryEyebrow}>Preview</span>
-            <h2 className={styles.summaryTitle}>Trace sample</h2>
-            <p className={styles.summaryText}>Use a quick sample to confirm the uploaded traffic looks right before you plan against it.</p>
-          </div>
-          <div className={styles.summaryPillRow}>
-            <span className={styles.summaryPill}>Built-ins: {formatNumber(workloads.length)}</span>
-            <span className={styles.summaryPill}>Uploads: {formatNumber(traces.length)}</span>
-          </div>
-          {selectedTrace && selectedSample ? (
-            <>
-              <p className={styles.message}>
-                {selectedTrace.name} · showing {formatNumber(selectedTraceCount)} of {formatNumber(selectedSample.total)} rows
-              </p>
-              <pre className={styles.jsonPreview}>{JSON.stringify(selectedSample.records, null, 2)}</pre>
-            </>
-          ) : (
-            <div className={styles.emptyState}>Select “View” on a trace row to inspect a small sample.</div>
-          )}
-        </aside>
-      </div>
+        </div>
+        <div className={styles.buttonRow} style={{ marginTop: '0.9rem' }}>
+          <input
+            ref={fileInputRef}
+            className={styles.hiddenFileInput}
+            type="file"
+            onChange={(event) => void handleUploadSelection(event)}
+          />
+          <button type="button" className={styles.primaryButton} onClick={handleUploadButtonClick}>
+            Upload Trace
+          </button>
+          <span className={styles.inlineHint}>Pick the format first, then choose the trace file from the system upload dialog.</span>
+        </div>
+        {message ? <p className={`${styles.message} ${styles.messageSuccess}`}>{message}</p> : null}
+        {error ? <p className={`${styles.message} ${styles.messageError}`}>{error}</p> : null}
+      </section>
 
       <section className={styles.sectionCard}>
         <div className={styles.sectionHeader}>
@@ -273,7 +254,15 @@ export default function FleetSimWorkloadsPage() {
           onDelete={(row) => void handleDeleteTrace(row)}
           emptyMessage="No uploaded traces yet."
         />
+        <p className={styles.inlineHint} style={{ marginTop: '0.9rem' }}>
+          Open “View” to inspect a replay sample in a focused preview dialog.
+        </p>
       </section>
+      <FleetSimTracePreviewDialog
+        trace={selectedTrace}
+        sample={selectedSample}
+        onClose={handleClosePreview}
+      />
     </FleetSimSurfaceLayout>
   )
 }

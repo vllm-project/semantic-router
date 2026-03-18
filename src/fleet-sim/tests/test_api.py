@@ -433,6 +433,26 @@ class TestTraceRoutes:
             "Batch spike requests",
         }
 
+    def test_seed_example_traces_uses_runtime_workdir_candidates(
+        self, isolated_storage, monkeypatch, tmp_path
+    ):
+        runtime_root = tmp_path / "runtime"
+        seed_dir = runtime_root / "examples" / "trace_samples"
+        seed_dir.mkdir(parents=True)
+        (seed_dir / "router_decisions.semantic_router.jsonl").write_text(_MINIMAL_JSONL)
+        (seed_dir / "generic_chat_mix.jsonl").write_text(_MINIMAL_JSONL)
+        (seed_dir / "batch_spike_requests.csv").write_text(_MINIMAL_CSV)
+
+        monkeypatch.chdir(runtime_root)
+        monkeypatch.setenv("VLLM_SR_SIM_SEED_EXAMPLE_TRACES", "true")
+        monkeypatch.delenv("VLLM_SR_SIM_SEED_TRACE_DIR", raising=False)
+
+        from fleet_sim.api import storage, trace_ingest
+
+        assert trace_ingest.resolve_seed_trace_dir() == seed_dir
+        assert trace_ingest.seed_example_traces_if_enabled() == 3
+        assert len(storage.list_traces()) == 3
+
 
 # ── Job routes (status / CRUD, no heavy computation) ─────────────────────────
 
