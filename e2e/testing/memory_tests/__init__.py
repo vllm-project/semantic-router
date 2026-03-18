@@ -5,6 +5,10 @@ Re-exports all test classes so the runner can import them from one place.
 
 from memory_tests.base import MemoryFeaturesTest, MilvusVerifier
 from memory_tests.test_isolation import UserIsolationTest
+from memory_tests.test_per_decision import (
+    PerDecisionMemoryDisabledTest,
+    PerDecisionThresholdOverrideTest,
+)
 from memory_tests.test_pipeline import (
     MemoryContentIntegrityTest,
     MemoryInjectionPipelineTest,
@@ -19,6 +23,8 @@ __all__ = [
     "MemoryInjectionPipelineTest",
     "MemoryStorageTest",
     "MilvusVerifier",
+    "PerDecisionMemoryDisabledTest",
+    "PerDecisionThresholdOverrideTest",
     "PluginCombinationTest",
     "SimilarityThresholdTest",
     "StaleMemoryTest",

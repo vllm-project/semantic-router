@@ -76,15 +76,23 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 		return nil, applyErr
 	}
 
+	applyCanonicalRoutingState(&cfg, canonical)
+	if err := applyCanonicalProviderState(&cfg, canonical.Providers); err != nil {
+		return nil, err
+	}
+
+	if cfg.VectorStore != nil {
+		cfg.VectorStore.ApplyDefaults()
+	}
+
+	return &cfg, nil
+}
+
+func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
 	cfg.Decisions = copyDecisions(canonical.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
-
-	providerDefaults := canonicalProviderDefaults(canonical.Providers)
-	cfg.DefaultModel = providerDefaults.DefaultModel
-	cfg.DefaultReasoningEffort = providerDefaults.DefaultReasoningEffort
-	cfg.ReasoningFamilies = copyReasoningFamilies(providerDefaults.ReasoningFamilies)
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {
@@ -99,15 +107,30 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 			Modality:          model.Modality,
 		}
 	}
+}
 
-	profiles, endpoints, modelParams, err := normalizeCanonicalProviderModels(canonical.Providers.Models)
+func applyCanonicalProviderState(cfg *RouterConfig, providers CanonicalProviders) error {
+	providerDefaults := canonicalProviderDefaults(providers)
+	cfg.DefaultModel = providerDefaults.DefaultModel
+	cfg.DefaultReasoningEffort = providerDefaults.DefaultReasoningEffort
+	cfg.ReasoningFamilies = copyReasoningFamilies(providerDefaults.ReasoningFamilies)
+
+	profiles, endpoints, modelParams, err := normalizeCanonicalProviderModels(providers.Models)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	cfg.ProviderProfiles = profiles
 	cfg.VLLMEndpoints = endpoints
+	mergeCanonicalProviderModelParams(cfg.ModelConfig, modelParams)
+	return nil
+}
+
+func mergeCanonicalProviderModelParams(modelConfig map[string]ModelParams, modelParams map[string]ModelParams) {
 	for modelName, providerParams := range modelParams {
-		params := cfg.ModelConfig[modelName]
+		params := modelConfig[modelName]
+		if params.Pricing == (ModelPricing{}) {
+			params.Pricing = providerParams.Pricing
+		}
 		if params.ReasoningFamily == "" {
 			params.ReasoningFamily = providerParams.ReasoningFamily
 		}
@@ -123,14 +146,8 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 		if params.APIFormat == "" {
 			params.APIFormat = providerParams.APIFormat
 		}
-		cfg.ModelConfig[modelName] = params
+		modelConfig[modelName] = params
 	}
-
-	if cfg.VectorStore != nil {
-		cfg.VectorStore.ApplyDefaults()
-	}
-
-	return &cfg, nil
 }
 
 func validateCanonicalContract(canonical *CanonicalConfig) error {

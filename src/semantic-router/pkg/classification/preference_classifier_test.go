@@ -8,6 +8,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+func prefBoolPtr(value bool) *bool {
+	return &value
+}
+
 func TestPreferenceClassifier_ContrastiveFewShot(t *testing.T) {
 	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
 		lower := strings.ToLower(text)
@@ -28,7 +32,7 @@ func TestPreferenceClassifier_ContrastiveFewShot(t *testing.T) {
 	}
 
 	localCfg := &config.PreferenceModelConfig{
-		UseContrastive: true,
+		UseContrastive: prefBoolPtr(true),
 		EmbeddingModel: "qwen3",
 	}
 
@@ -73,7 +77,7 @@ func TestContrastivePreferenceClassifier_UsesDescriptionsWhenNoExamples(t *testi
 	}
 
 	localCfg := &config.PreferenceModelConfig{
-		UseContrastive: true,
+		UseContrastive: prefBoolPtr(true),
 	}
 
 	classifier, err := NewPreferenceClassifier(nil, rules, localCfg)
@@ -94,7 +98,7 @@ func TestContrastivePreferenceClassifier_UsesDescriptionsWhenNoExamples(t *testi
 
 func TestContrastivePreferenceClassifier_NoExamplesError(t *testing.T) {
 	rules := []config.PreferenceRule{{Name: "code_generation"}}
-	localCfg := &config.PreferenceModelConfig{UseContrastive: true}
+	localCfg := &config.PreferenceModelConfig{UseContrastive: prefBoolPtr(true)}
 
 	if _, err := NewPreferenceClassifier(nil, rules, localCfg); err == nil {
 		t.Fatalf("expected error when no descriptions or examples are provided")
@@ -108,7 +112,7 @@ func TestContrastivePreferenceClassifier_EmptyText(t *testing.T) {
 	defer reset()
 
 	rules := []config.PreferenceRule{{Name: "code_generation", Description: "Writes code"}}
-	localCfg := &config.PreferenceModelConfig{UseContrastive: true}
+	localCfg := &config.PreferenceModelConfig{UseContrastive: prefBoolPtr(true)}
 
 	classifier, err := NewPreferenceClassifier(nil, rules, localCfg)
 	if err != nil {
@@ -117,5 +121,35 @@ func TestContrastivePreferenceClassifier_EmptyText(t *testing.T) {
 
 	if _, err := classifier.Classify(""); err == nil {
 		t.Fatalf("expected error for empty text")
+	}
+}
+
+func TestPreferenceClassifier_DefaultsToContrastiveWhenConfigOmitted(t *testing.T) {
+	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+		switch text {
+		case "Writes code":
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+		case "please write code":
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+		default:
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+		}
+	})
+	defer reset()
+
+	rules := []config.PreferenceRule{{Name: "code_generation", Description: "Writes code"}}
+
+	classifier, err := NewPreferenceClassifier(nil, rules, nil)
+	if err != nil {
+		t.Fatalf("failed to create default contrastive preference classifier: %v", err)
+	}
+
+	result, err := classifier.Classify(`[{"role":"user","content":"please write code"}]`)
+	if err != nil {
+		t.Fatalf("classification failed: %v", err)
+	}
+
+	if result.Preference != "code_generation" {
+		t.Fatalf("expected code_generation, got %s", result.Preference)
 	}
 }

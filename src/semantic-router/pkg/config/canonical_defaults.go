@@ -122,6 +122,7 @@ func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 				PreloadEmbeddings: true,
 				TargetDimension:   768,
 				TargetLayer:       22,
+				TopK:              canonicalIntPtr(1),
 				MinScoreThreshold: 0.5,
 			},
 		},
@@ -169,6 +170,9 @@ func defaultClassifierModule() CanonicalClassifierModule {
 				UseMmBERT32K:   true,
 				PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
 			},
+		},
+		Preference: PreferenceModelConfig{
+			UseContrastive: canonicalBoolPtr(true),
 		},
 	}
 }
@@ -244,5 +248,9 @@ func DefaultGlobalConfig() RouterConfig {
 }
 
 func canonicalBoolPtr(value bool) *bool {
+	return &value
+}
+
+func canonicalIntPtr(value int) *int {
 	return &value
 }

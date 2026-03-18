@@ -9,11 +9,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestMaintainedAMDConfigHasNoUndefinedComplexitySignals(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "amd", "config.yaml")
+func TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals(t *testing.T) {
+	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml")
 	data, err := os.ReadFile(assetPath)
 	if err != nil {
-		t.Fatalf("failed to read deploy/amd/config.yaml: %v", err)
+		t.Fatalf("failed to read deploy/recipes/balance.yaml: %v", err)
 	}
 
 	cfg, err := config.ParseYAMLBytes(data)

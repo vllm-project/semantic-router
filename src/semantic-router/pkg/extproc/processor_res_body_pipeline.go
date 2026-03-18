@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 type responseUsageMetrics struct {
@@ -108,15 +109,17 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 		false,
 		false,
 	)
-	r.recordResponseCost(ctx, completionLatency, usage)
+	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)
+	r.updateRouterReplayUsageCost(ctx, replayUsage)
 }
 
 func (r *OpenAIRouter) recordResponseCost(
 	ctx *RequestContext,
 	completionLatency time.Duration,
 	usage responseUsageMetrics,
-) {
+) routerreplay.UsageCost {
 	totalTokens := usage.promptTokens + usage.completionTokens
+	replayUsage := r.buildReplayUsageCost(ctx, usage)
 	eventFields := map[string]interface{}{
 		"request_id":            ctx.RequestID,
 		"model":                 ctx.RequestModel,
@@ -138,7 +141,7 @@ func (r *OpenAIRouter) recordResponseCost(
 			eventFields["cost"] = costAmount
 			eventFields["currency"] = currency
 			logging.LogEvent("llm_usage", eventFields)
-			return
+			return replayUsage
 		}
 	}
 
@@ -146,6 +149,7 @@ func (r *OpenAIRouter) recordResponseCost(
 	eventFields["currency"] = "unknown"
 	eventFields["pricing"] = "not_configured"
 	logging.LogEvent("llm_usage", eventFields)
+	return replayUsage
 }
 
 func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []byte) {
