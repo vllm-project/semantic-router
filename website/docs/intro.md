@@ -4,19 +4,27 @@ sidebar_position: 1
 
 # vLLM Semantic Router
 
-**System-Level Intelligence for Mixture-of-Models (MoM)** - An intelligent routing layer that brings collective intelligence to LLM systems. Acting as an Envoy External Processor (ExtProc), it uses a **signal-driven decision engine** and **plugin chain architecture** to capture missing signals, make better routing decisions, and secure your LLM infrastructure.
+vLLM Semantic Router is a research-driven project focused on frontier problems in
+**LLMRouting** and **Token economy**. We build system-level intelligence for
+Mixture-of-Models (MoM): deciding how to capture the right signals, select the
+right model path, enforce the right policy, and spend the right token budget for
+each request.
 
-## Project Goals
+The project sits between clients and model backends as an Envoy External
+Processor (`ext_proc`), turning routing from ad hoc application logic into an
+observable, configurable control plane for multi-model systems.
 
-We are building the **System Level Intelligence** for Mixture-of-Models (MoM), bringing **Collective Intelligence** into **LLM systems**, answering:
+## Research Focus
 
-1. **How to capture the missing signals** in request, response and context?
-2. **How to combine the signals** to make better decisions?
-3. **How to collaborate more efficiently** between different models?
-4. **How to secure** the real world and LLM system from jailbreaks, PII leaks, hallucinations?
-5. **How to collect valuable signals** and build a self-learning system?
+We use the project to answer a small set of hard systems questions:
 
-## Core Architecture
+1. **How do we capture missing signals** from requests, responses, users, and runtime context?
+2. **How do we compose those signals** into robust routing and policy decisions?
+3. **How do multiple models collaborate** as a system instead of serving as isolated endpoints?
+4. **How do we optimize latency, spend, and tool usage** as part of a practical token economy?
+5. **How do we add safety, feedback, and observability** without fragmenting the serving stack?
+
+## Core System
 
 ### Signal-Driven Decision Engine
 
@@ -51,134 +59,42 @@ Extensible plugin system for request/response processing:
 
 **How it works**: Plugins form a processing chain, each plugin can inspect/modify requests and responses, with configurable enable/disable per decision.
 
-## Architecture Overview
-
-import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
-
-<ZoomableMermaid title="Signal-Driven Decision + Plugin Chain Architecture" defaultZoom={3.5}>
-{`graph TB
-    Client[Client Request] --> Envoy[Envoy Proxy]
-    Envoy --> Router[Semantic Router ExtProc]
-
-    subgraph "Signal Extraction Layer"
-        direction TB
-        Keyword[Keyword Signals<br/>Pattern Matching]
-        Embedding[Embedding Signals<br/>Semantic Similarity]
-        Domain[Domain Signals<br/>MMLU Classification]
-        FactCheck[Fact Check Signals<br/>Verification Need]
-        Feedback[User Feedback Signals<br/>Satisfaction Analysis]
-        Preference[Preference Signals<br/>LLM-based Matching]
-        Language[Language Signals<br/>Multi-language Detection]
-        Context[Context Signals<br/>Token Count]
-        Complexity[Complexity Signals<br/>Difficulty Classification]
-    end
-
-    subgraph "Decision Engine"
-        Rules[Decision Rules<br/>AND/OR Operators]
-        ModelSelect[Model Selection<br/>Priority/Confidence/Algorithms]
-    end
-
-    subgraph "Plugin Chain"
-        direction LR
-        Cache[Semantic Cache]
-        Jailbreak[Jailbreak Guard]
-        PII[PII Detector]
-        SysPrompt[System Prompt]
-        HeaderMut[Header Mutation]
-        Hallucination[Hallucination Detection]
-    end
-
-    Router --> Keyword
-    Router --> Embedding
-    Router --> Domain
-    Router --> FactCheck
-    Router --> Feedback
-    Router --> Preference
-    Router --> Language
-    Router --> Context
-    Router --> Complexity
-
-    Keyword --> Rules
-    Embedding --> Rules
-    Domain --> Rules
-    FactCheck --> Rules
-    Feedback --> Rules
-    Preference --> Rules
-    Language --> Rules
-    Context --> Rules
-    Complexity --> Rules
-
-    Rules --> ModelSelect
-    ModelSelect --> Cache
-    Cache --> Jailbreak
-    Jailbreak --> PII
-    PII --> SysPrompt
-    SysPrompt --> HeaderMut
-    HeaderMut --> Hallucination
-
-    Hallucination --> Backend[Backend Models]
-    Backend --> Math[Math Model]
-    Backend --> Creative[Creative Model]
-    Backend --> Code[Code Model]
-    Backend --> General[General Model]`}
-</ZoomableMermaid>
-
 ## Key Benefits
 
-### Intelligent Routing
+### A Control Plane for LLMRouting
 
-- **Signal Fusion**: Combine multiple signals (keyword + embedding + domain) for accurate routing
-- **Adaptive Decisions**: Use AND/OR operators to create complex routing logic
-- **Model Specialization**: Route math to math models, code to code models, etc.
+- **Policy instead of hard-coded branches**: Move routing logic out of application code into reusable signals, decisions, and configuration.
+- **Capability-aware selection**: Route by task shape, risk, and quality requirements instead of defaulting every request to one model.
 
-### Security & Compliance
+### A Practical Token Economy Layer
 
-- **Multi-layer Protection**: PII detection, jailbreak prevention, hallucination detection
-- **Policy Enforcement**: Model-specific PII policies and security rules
-- **Audit Trail**: Complete logging of all security decisions
+- **Spend budget where it matters**: Reserve premium models, long context, and tool calls for the requests that need them.
+- **Reduce waste without collapsing quality**: Use semantic caching, context-aware routing, and explicit policy to control latency and token spend.
 
-### Performance & Cost
+### Governance in the Request Path
 
-- **Semantic Caching**: 10-100x latency reduction for similar queries
-- **Smart Model Selection**: Use smaller models for simple tasks, larger for complex
-- **Tool Optimization**: Auto-select relevant tools to reduce token usage
+- **Built-in safety and compliance**: Apply jailbreak, PII, hallucination, prompt, and header controls at the same layer that makes routing decisions.
+- **Observable decisions**: Keep routing and policy outcomes auditable so teams can tune behavior with data instead of guesswork.
 
-### Flexibility & Extensibility
+### A Research Surface That Can Ship
 
-- **Plugin Architecture**: Add custom processing logic without modifying core
-- **Signal Extensibility**: Define new signal types for your use cases
-- **Configuration-Driven**: Change routing behavior without code changes
+- **Fast experimentation**: Add new signals, algorithms, and plugins without rewriting the serving path.
+- **Production alignment**: Connect experimentation, observability, and deployment in one maintained system.
 
 ## Use Cases
 
-- **Enterprise API Gateways**: Intelligent routing with security and compliance
-- **Multi-tenant Platforms**: Per-tenant routing policies and model selection
-- **Development Environments**: Cost optimization through smart model selection
-- **Production Services**: High-performance routing with comprehensive monitoring
-- **Regulated Industries**: Compliance-ready with PII detection and audit trails
+- **Multi-model inference gateways**: Route to specialized models based on capability, context, and policy.
+- **Cost-aware copilots**: Balance quality, latency, and spend for internal assistants and developer tooling.
+- **Safety-sensitive assistants**: Enforce PII, jailbreak, and hallucination controls in the live request path.
+- **Research platforms**: Evaluate routing policies, collect feedback signals, and iterate on model collaboration strategies.
 
-## Quick Links
+## Start Here
 
-- [**Installation**](installation) - Setup and installation guide
-- [**Overview**](overview/goals) - Project goals and core concepts
-- [**Configuration**](installation/configuration) - Configure signals and routing decisions
-- [**Tutorials**](tutorials/signal/overview) - Step-by-step guides for signals, decisions, plugins, algorithms, and global overrides
-
-## Documentation Structure
-
-This documentation is organized into the following sections:
-
-### [Overview](overview/goals)
-
-Learn about our goals, semantic routing concepts, collective intelligence, and signal-driven decisions.
-
-### [Installation & Configuration](installation)
-
-Get started with installation and learn how to configure signals, decisions, and plugins.
-
-### [Tutorials](tutorials/signal/overview)
-
-Step-by-step guides organized by `signal`, `decision`, `plugin`, `algorithm`, and `global`.
+- [**Overview**](overview/goals) for project goals, semantic routing concepts, and collective intelligence.
+- [**Installation**](installation) for setup, deployment options, and configuration.
+- [**Fleet Simulator**](fleet-sim/overview) for planning GPU fleets, evaluating routing strategies, and reading the guide PDF.
+- [**Capacities**](tutorials/signal/overview) for signals, decisions, plugins, algorithms, and global controls.
+- [**Proposals**](proposals/unified-config-contract-v0-3) for design work that has not yet been folded into the stable docs set.
 
 ## Contributing
 

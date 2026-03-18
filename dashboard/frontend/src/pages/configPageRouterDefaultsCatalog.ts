@@ -201,6 +201,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       target_dimension: 768,
       target_layer: 22,
       enable_soft_matching: true,
+      top_k: 1,
       min_score_threshold: 0.5,
     },
   } satisfies EmbeddingModelsConfig,

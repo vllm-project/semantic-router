@@ -18,14 +18,18 @@ import TopologyPage from './pages/TopologyPage'
 import TracingPage from './pages/TracingPage'
 import StatusPage from './pages/StatusPage'
 import LogsPage from './pages/LogsPage'
-import ReplayPage from './pages/ReplayPage'
 import EvaluationPage from './pages/EvaluationPage'
 import MLSetupPage from './pages/MLSetupPage'
 import RatingsPage from './pages/RatingsPage'
 import BuilderPage from './pages/BuilderPage'
 import DashboardPage from './pages/DashboardPage'
+import FleetSimOverviewPage from './pages/FleetSimOverviewPage'
+import FleetSimWorkloadsPage from './pages/FleetSimWorkloadsPage'
+import FleetSimFleetsPage from './pages/FleetSimFleetsPage'
+import FleetSimRunsPage from './pages/FleetSimRunsPage'
 import OpenClawPage from './pages/OpenClawPage'
 import UsersPage from './pages/UsersPage'
+import InsightsPage from './pages/InsightsPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { SetupProvider, useSetup } from './contexts/SetupContext'
@@ -315,13 +319,13 @@ const AppRouter: React.FC = () => {
               }
             />
             <Route
-              path="/replay"
+              path="/insights"
               element={
                 <Layout
                   configSection={configSection}
                   onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
                 >
-                  <ReplayPage />
+                  <InsightsPage />
                 </Layout>
               }
             />
@@ -359,6 +363,50 @@ const AppRouter: React.FC = () => {
                   onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
                 >
                   <RatingsPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/fleet-sim"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <FleetSimOverviewPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/fleet-sim/workloads"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <FleetSimWorkloadsPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/fleet-sim/fleets"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <FleetSimFleetsPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/fleet-sim/runs"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <FleetSimRunsPage />
                 </Layout>
               }
             />

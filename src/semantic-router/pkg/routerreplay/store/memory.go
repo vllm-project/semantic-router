@@ -160,6 +160,28 @@ func (m *MemoryStore) UpdateHallucinationStatus(ctx context.Context, id string, 
 	return nil
 }
 
+// UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
+func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.PromptTokens = cloneIntPtr(usage.PromptTokens)
+	rec.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
+	rec.TotalTokens = cloneIntPtr(usage.TotalTokens)
+	rec.ActualCost = cloneFloat64Ptr(usage.ActualCost)
+	rec.BaselineCost = cloneFloat64Ptr(usage.BaselineCost)
+	rec.CostSavings = cloneFloat64Ptr(usage.CostSavings)
+	rec.Currency = cloneStringPtr(usage.Currency)
+	rec.BaselineModel = cloneStringPtr(usage.BaselineModel)
+
+	return nil
+}
+
 // Close is a no-op for memory storage.
 func (m *MemoryStore) Close() error {
 	return nil

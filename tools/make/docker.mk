@@ -12,7 +12,7 @@ DOCKER_TAG ?= latest
 # Note: extproc-rocm is excluded because it requires x86_64 + ROCm hardware.
 # Build it explicitly with: make docker-build-extproc-rocm
 docker-build-all: ## Build all Docker images
-docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-dashboard docker-build-precommit
+docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-dashboard docker-build-precommit docker-build-vllm-sr-sim
 
 # Build extproc Docker image
 docker-build-extproc: ## Build extproc Docker image
@@ -41,6 +41,13 @@ docker-build-dashboard:
 	@$(LOG_TARGET)
 	@echo "Building dashboard Docker image..."
 	@$(CONTAINER_RUNTIME) build -f dashboard/backend/Dockerfile -t $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG) .
+
+# Build vllm-sr-sim Docker image
+docker-build-vllm-sr-sim: ## Build vllm-sr-sim Docker image
+docker-build-vllm-sr-sim:
+	@$(LOG_TARGET)
+	@echo "Building vllm-sr-sim Docker image..."
+	@$(CONTAINER_RUNTIME) build -f src/fleet-sim/Dockerfile -t $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG) .
 
 # Build precommit Docker image
 docker-build-precommit: ## Build precommit Docker image
@@ -91,7 +98,7 @@ docker-clean:
 # Push Docker images (for CI/CD)
 # Note: extproc-rocm is excluded; push it explicitly with: make docker-push-extproc-rocm
 docker-push-all: ## Push all Docker images
-docker-push-all: docker-push-extproc docker-push-llm-katan
+docker-push-all: docker-push-extproc docker-push-llm-katan docker-push-vllm-sr-sim
 	@$(LOG_TARGET)
 	@echo "All Docker images pushed successfully"
 
@@ -113,6 +120,12 @@ docker-push-llm-katan:
 	@echo "Pushing llm-katan Docker image..."
 	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
 
+docker-push-vllm-sr-sim: ## Push vllm-sr-sim Docker image
+docker-push-vllm-sr-sim:
+	@$(LOG_TARGET)
+	@echo "Pushing vllm-sr-sim Docker image..."
+	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG)
+
 # Help target for Docker commands
 docker-help:
 docker-help: ## Show help for Docker-related make targets and environment variables
@@ -125,6 +138,7 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
 	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm)"
 	@echo "  VLLM_SR_DOCKERFILE_AMD - Dockerfile used when VLLM_SR_PLATFORM=amd"
+	@echo "  VLLM_SR_SIM_PORT  - host port for the vllm-sr-sim service container"
 
 ##@ vLLM-SR (Semantic Router CLI)
 
@@ -136,6 +150,11 @@ VLLM_SR_PLATFORM ?=
 VLLM_SR_PLATFORM_NORMALIZED := $(shell echo "$(VLLM_SR_PLATFORM)" | tr '[:upper:]' '[:lower:]')
 VLLM_SR_DOCKERFILE ?= src/vllm-sr/Dockerfile
 VLLM_SR_DOCKERFILE_AMD ?= src/vllm-sr/Dockerfile.rocm
+VLLM_SR_SIM_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest
+VLLM_SR_SIM_CONTAINER ?= vllm-sr-sim-container
+VLLM_SR_SIM_DOCKERFILE ?= src/fleet-sim/Dockerfile
+VLLM_SR_SIM_DIR ?= src/fleet-sim
+VLLM_SR_SIM_PORT ?= 8810
 VLLM_SR_HOST_ARCH_RAW := $(shell uname -m)
 ifeq ($(VLLM_SR_HOST_ARCH_RAW),arm64)
 VLLM_SR_TARGETARCH ?= arm64
@@ -180,13 +199,15 @@ vllm-sr-dev:
 	@echo ""
 	@echo "This will:"
 	@echo "  1. Clean up old containers"
-	@echo "  2. Rebuild Docker image with all dependencies"
-	@echo "  3. Install vLLM-SR CLI in development mode"
+	@echo "  2. Rebuild the vLLM-SR Docker image"
+	@echo "  3. Build the vLLM-SR-Sim service image"
+	@echo "  4. Install vLLM-SR and vLLM-SR-Sim CLIs in development mode"
 	@echo ""
 	@echo "1. Cleaning up old containers..."
 	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_CONTAINER) 2>/dev/null || echo "  No container to remove"
+	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_SIM_CONTAINER) 2>/dev/null || echo "  No simulator container to remove"
 	@echo ""
-	@echo "2. Rebuilding Docker image..."
+	@echo "2. Rebuilding vLLM-SR Docker image..."
 	@echo "  Building from: $(PWD)"
 	@echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"
 	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
@@ -198,9 +219,14 @@ vllm-sr-dev:
 	@echo ""
 	@echo "Image built: $(VLLM_SR_IMAGE)"
 	@echo ""
-	@echo "3. Installing vLLM-SR CLI in development mode..."
-	@pip install -e src/vllm-sr
-	@echo "vLLM-SR CLI installed"
+	@echo "3. Building vLLM-SR-Sim service image..."
+	@$(CONTAINER_RUNTIME) build -t $(VLLM_SR_SIM_IMAGE) -f $(VLLM_SR_SIM_DOCKERFILE) .
+	@echo ""
+	@echo "Simulator image built: $(VLLM_SR_SIM_IMAGE)"
+	@echo ""
+	@echo "4. Installing vLLM-SR and vLLM-SR-Sim CLIs in development mode..."
+	@python3 -m pip install -e src/vllm-sr -e "$(VLLM_SR_SIM_DIR)[dev]"
+	@echo "vLLM-SR CLI and vLLM-SR-Sim installed"
 	@echo ""
 	@echo "=========================================="
 	@echo "Development Setup Complete"
@@ -236,21 +262,43 @@ vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test exec
 vllm-sr-install-cli:
 	@python3 -m pip install -e src/vllm-sr
 
+vllm-sr-sim-install-cli: ## Install vLLM-SR-Sim with dev extras for local execution
+vllm-sr-sim-install-cli:
+	@python3 -m pip install -e "$(VLLM_SR_SIM_DIR)[dev]"
+
+vllm-sr-sim-test: ## Run vLLM-SR-Sim tests
+vllm-sr-sim-test: vllm-sr-sim-install-cli
+	@$(LOG_TARGET)
+	@cd $(VLLM_SR_SIM_DIR) && python3 -m pytest tests -v
+
+vllm-sr-sim-build: ## Build the vLLM-SR-Sim service image
+vllm-sr-sim-build:
+	@$(LOG_TARGET)
+	@$(CONTAINER_RUNTIME) build -t $(VLLM_SR_SIM_IMAGE) -f $(VLLM_SR_SIM_DOCKERFILE) .
+
+vllm-sr-sim-start: ## Start the vLLM-SR-Sim service container
+vllm-sr-sim-start: vllm-sr-sim-build
+	@$(LOG_TARGET)
+	@echo "Starting vLLM-SR-Sim service on http://localhost:$(VLLM_SR_SIM_PORT)"
+	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_SIM_CONTAINER) 2>/dev/null || true
+	@$(CONTAINER_RUNTIME) run -d --name $(VLLM_SR_SIM_CONTAINER) -p $(VLLM_SR_SIM_PORT):8000 $(VLLM_SR_SIM_IMAGE)
+
 vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
 vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && python run_cli_tests.py --verbose
 
-vllm-sr-test-integration: ## Run CLI unit + integration tests (requires Docker image)
-vllm-sr-test-integration: vllm-sr-build vllm-sr-install-cli
+vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local router + simulator images)
+vllm-sr-test-integration: vllm-sr-build vllm-sr-sim-build vllm-sr-install-cli
 	@$(LOG_TARGET)
-	@cd e2e/testing/vllm-sr-cli && RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration
+	@cd e2e/testing/vllm-sr-cli && CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration
 
 memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
-memory-test-integration: vllm-sr-build vllm-sr-install-cli docker-build-llm-katan
+memory-test-integration: vllm-sr-build vllm-sr-sim-build vllm-sr-install-cli docker-build-llm-katan
 	@$(LOG_TARGET)
 	@CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) \
 	DOCKER_REGISTRY=$(DOCKER_REGISTRY) \
 	DOCKER_TAG=$(DOCKER_TAG) \
 	VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) \
+	VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) \
 	bash e2e/testing/run_memory_integration.sh

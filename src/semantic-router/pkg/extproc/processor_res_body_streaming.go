@@ -254,6 +254,16 @@ func (r *OpenAIRouter) reportStreamingUsageMetrics(
 		logging.Infof("Recorded TPOT for streaming response: model=%s, TPOT=%.4f", ctx.RequestModel, timePerToken)
 		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 	}
+
+	completionLatency := time.Duration(0)
+	if !ctx.StartTime.IsZero() {
+		completionLatency = time.Since(ctx.StartTime)
+	}
+	replayUsage := r.recordResponseCost(ctx, completionLatency, responseUsageMetrics{
+		promptTokens:     int(usage.PromptTokens),
+		completionTokens: int(usage.CompletionTokens),
+	})
+	r.updateRouterReplayUsageCost(ctx, replayUsage)
 }
 
 func buildReconstructedStreamingResponse(

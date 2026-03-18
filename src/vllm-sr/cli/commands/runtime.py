@@ -176,7 +176,9 @@ def serve(
 
 @click.command()
 @click.argument(
-    "service", type=click.Choice(["envoy", "router", "dashboard", "all"]), default="all"
+    "service",
+    type=click.Choice(["envoy", "router", "dashboard", "simulator", "all"]),
+    default="all",
 )
 @exit_with_logged_error(log)
 def status(service: str) -> None:
@@ -189,12 +191,15 @@ def status(service: str) -> None:
         vllm-sr status envoy        # Show envoy status
         vllm-sr status router       # Show router status
         vllm-sr status dashboard    # Show dashboard status
+        vllm-sr status simulator    # Show simulator status
     """
     show_status(service)
 
 
 @click.command()
-@click.argument("service", type=click.Choice(["envoy", "router", "dashboard"]))
+@click.argument(
+    "service", type=click.Choice(["envoy", "router", "dashboard", "simulator"])
+)
 @click.option("--follow", "-f", is_flag=True, help="Follow log output")
 @exit_with_logged_error(log, interrupt_message="\nLog streaming stopped")
 def logs(service: str, follow: bool) -> None:
@@ -205,6 +210,7 @@ def logs(service: str, follow: bool) -> None:
         vllm-sr logs envoy
         vllm-sr logs router
         vllm-sr logs dashboard
+        vllm-sr logs simulator
         vllm-sr logs envoy --follow
         vllm-sr logs router -f
     """

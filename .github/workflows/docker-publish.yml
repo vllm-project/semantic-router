@@ -61,7 +61,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [dashboard, extproc, extproc-rocm, llm-katan, vllm-sr, vllm-sr-rocm]
+        image: [dashboard, extproc, extproc-rocm, llm-katan, vllm-sr, vllm-sr-rocm, vllm-sr-sim]
       fail-fast: false
 
     steps:
@@ -112,6 +112,9 @@ jobs:
           elif [ "${{ matrix.image }}" = "vllm-sr" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./src/vllm-sr/Dockerfile" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.image }}" = "vllm-sr-sim" ]; then
+            echo "context=." >> $GITHUB_OUTPUT
+            echo "dockerfile=./src/fleet-sim/Dockerfile" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "vllm-sr-rocm" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./src/vllm-sr/Dockerfile.rocm" >> $GITHUB_OUTPUT
@@ -182,7 +185,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [dashboard, extproc, llm-katan, vllm-sr]
+        image: [dashboard, extproc, llm-katan, vllm-sr, vllm-sr-sim]
         platform: [linux/amd64, linux/arm64]
       fail-fast: false
 
@@ -248,6 +251,9 @@ jobs:
           elif [ "${{ matrix.image }}" = "vllm-sr" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./src/vllm-sr/Dockerfile" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.image }}" = "vllm-sr-sim" ]; then
+            echo "context=." >> $GITHUB_OUTPUT
+            echo "dockerfile=./src/fleet-sim/Dockerfile" >> $GITHUB_OUTPUT
           fi
 
       - name: Generate per-platform tag
@@ -548,7 +554,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [dashboard, extproc, llm-katan, vllm-sr]
+        image: [dashboard, extproc, llm-katan, vllm-sr, vllm-sr-sim]
       fail-fast: false
 
     steps:

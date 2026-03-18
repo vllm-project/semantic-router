@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,6 +23,16 @@ import (
 type DeploymentRef struct {
 	Namespace string
 	Name      string
+}
+
+var deploymentFailFastReasons = []string{
+	"CrashLoopBackOff",
+	"CreateContainerConfigError",
+	"CreateContainerError",
+	"ErrImagePull",
+	"ImagePullBackOff",
+	"InvalidImageName",
+	"RunContainerError",
 }
 
 // NewKubeClient builds a clientset from a kubeconfig path.
@@ -61,6 +72,9 @@ func WaitForDeploymentReady(ctx context.Context, client *kubernetes.Clientset, n
 	deadline := time.Now().Add(timeout)
 	var lastErr error
 	for time.Now().Before(deadline) {
+		if failErr := DetectDeploymentFailFastError(ctx, client, namespace, name); failErr != nil {
+			return failErr
+		}
 		lastErr = CheckDeployment(ctx, client, namespace, name, verbose)
 		if lastErr == nil {
 			return nil
@@ -76,6 +90,79 @@ func WaitForDeploymentReady(ctx context.Context, client *kubernetes.Clientset, n
 		lastErr = fmt.Errorf("timed out waiting for deployment")
 	}
 	return fmt.Errorf("deployment %s/%s not healthy after %v: %w", namespace, name, timeout, lastErr)
+}
+
+// DetectDeploymentFailFastError returns an error when a deployment's pods hit a
+// non-recoverable startup state that should fail setup immediately.
+func DetectDeploymentFailFastError(ctx context.Context, client *kubernetes.Clientset, namespace, name string) error {
+	deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get deployment for fail-fast check: %w", err)
+	}
+
+	selector := metav1.FormatLabelSelector(deployment.Spec.Selector)
+	if selector == "" {
+		return nil
+	}
+
+	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+	if err != nil {
+		return fmt.Errorf("failed to list deployment pods for fail-fast check: %w", err)
+	}
+
+	for _, pod := range pods.Items {
+		if failErr := failFastErrorForPod(pod); failErr != nil {
+			return fmt.Errorf("deployment %s/%s failed early: %w", namespace, name, failErr)
+		}
+	}
+
+	return nil
+}
+
+func failFastErrorForPod(pod corev1.Pod) error {
+	for _, status := range pod.Status.InitContainerStatuses {
+		if err := failFastErrorForContainerStatus(pod.Name, status); err != nil {
+			return err
+		}
+	}
+
+	for _, status := range pod.Status.ContainerStatuses {
+		if err := failFastErrorForContainerStatus(pod.Name, status); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func failFastErrorForContainerStatus(podName string, status corev1.ContainerStatus) error {
+	if waiting := status.State.Waiting; waiting != nil && slices.Contains(deploymentFailFastReasons, waiting.Reason) {
+		return fmt.Errorf(
+			"pod %s container %s waiting: %s (%s)",
+			podName,
+			status.Name,
+			waiting.Reason,
+			strings.TrimSpace(waiting.Message),
+		)
+	}
+
+	terminated := status.State.Terminated
+	if terminated == nil {
+		return nil
+	}
+
+	if terminated.ExitCode == 0 {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"pod %s container %s restarted after termination: reason=%s exit_code=%d message=%s",
+		podName,
+		status.Name,
+		terminated.Reason,
+		terminated.ExitCode,
+		strings.TrimSpace(terminated.Message),
+	)
 }
 
 // VerifyDeployments checks a set of deployments for readiness.
