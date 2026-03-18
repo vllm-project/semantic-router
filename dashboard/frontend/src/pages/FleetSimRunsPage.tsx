@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import FleetSimSurfaceLayout from './FleetSimSurfaceLayout'
@@ -66,6 +66,58 @@ function resolveFleetLabel(fleetID: string, fleets: FleetConfig[]): string {
   return fleets.find((fleet) => fleet.id === fleetID)?.name || fleetID
 }
 
+async function fetchRunsPageData() {
+  const [workloadsData, tracesData, fleetsData, jobsData] = await Promise.all([
+    listWorkloads(),
+    listTraces(),
+    listFleets(),
+    listJobs(),
+  ])
+  return {
+    workloadsData,
+    tracesData,
+    fleetsData,
+    jobsData: jobsData.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
+  }
+}
+
+function applyRunsPageData(
+  data: Awaited<ReturnType<typeof fetchRunsPageData>>,
+  state: {
+    fleetID: string
+    traceID: string
+    setWorkloads: Dispatch<SetStateAction<BuiltinWorkload[]>>
+    setTraces: Dispatch<SetStateAction<TraceInfo[]>>
+    setFleets: Dispatch<SetStateAction<FleetConfig[]>>
+    setJobs: Dispatch<SetStateAction<FleetSimJob[]>>
+    setFleetID: Dispatch<SetStateAction<string>>
+    setTraceID: Dispatch<SetStateAction<string>>
+  }
+) {
+  const { workloadsData, tracesData, fleetsData, jobsData } = data
+  const {
+    fleetID,
+    traceID,
+    setWorkloads,
+    setTraces,
+    setFleets,
+    setJobs,
+    setFleetID,
+    setTraceID,
+  } = state
+
+  setWorkloads(workloadsData)
+  setTraces(tracesData)
+  setFleets(fleetsData)
+  setJobs(jobsData)
+  if (!fleetID && fleetsData[0]) {
+    setFleetID(fleetsData[0].id)
+  }
+  if (!traceID && tracesData[0]) {
+    setTraceID(tracesData[0].id)
+  }
+}
+
 export default function FleetSimRunsPage() {
   const [jobType, setJobType] = useState<FleetSimJobType>('optimize')
   const [workloads, setWorkloads] = useState<BuiltinWorkload[]>([])
@@ -91,31 +143,23 @@ export default function FleetSimRunsPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
-  const load = async () => {
-    const [workloadsData, tracesData, fleetsData, jobsData] = await Promise.all([
-      listWorkloads(),
-      listTraces(),
-      listFleets(),
-      listJobs(),
-    ])
-    setWorkloads(workloadsData)
-    setTraces(tracesData)
-    setFleets(fleetsData)
-    setJobs(jobsData.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)))
-    if (!fleetID && fleetsData[0]) {
-      setFleetID(fleetsData[0].id)
-    }
-    if (!traceID && tracesData[0]) {
-      setTraceID(tracesData[0].id)
-    }
-  }
-
   useEffect(() => {
     let cancelled = false
 
     const loadWithErrors = async () => {
       try {
-        await load()
+        const data = await fetchRunsPageData()
+        if (cancelled) return
+        applyRunsPageData(data, {
+          fleetID,
+          traceID,
+          setWorkloads,
+          setTraces,
+          setFleets,
+          setJobs,
+          setFleetID,
+          setTraceID,
+        })
         if (!cancelled) setError('')
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Failed to load simulator runs')
@@ -202,7 +246,16 @@ export default function FleetSimRunsPage() {
       const created = await createJob(payload)
       setMessage(`Submitted ${created.type} job ${created.id}`)
       setError('')
-      await load()
+      applyRunsPageData(await fetchRunsPageData(), {
+        fleetID,
+        traceID,
+        setWorkloads,
+        setTraces,
+        setFleets,
+        setJobs,
+        setFleetID,
+        setTraceID,
+      })
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Failed to submit job')
     }
@@ -213,7 +266,16 @@ export default function FleetSimRunsPage() {
       await deleteJob(job.id)
       setMessage(`Deleted job ${job.id}`)
       setError('')
-      await load()
+      applyRunsPageData(await fetchRunsPageData(), {
+        fleetID,
+        traceID,
+        setWorkloads,
+        setTraces,
+        setFleets,
+        setJobs,
+        setFleetID,
+        setTraceID,
+      })
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete job')
     }
