@@ -19,13 +19,16 @@ start-valkey: ## Start Valkey bundle container with search module
 			--name valkey-semantic-cache \
 			-p 6380:6379 \
 			-v /tmp/valkey-data:/data \
-			valkey/valkey-bundle:latest; \
+			valkey/valkey-bundle:unstable; \
 		echo "Waiting for Valkey to be ready..."; \
 		sleep 5; \
 	fi
 	@echo "Valkey with search module available at localhost:6380"
 	@echo ""
-	@echo "Note: valkey-bundle includes valkey-search module"
+	@echo "Note: valkey-bundle:unstable is required because valkey-search 1.2.0-rc3"
+	@echo "      (included in this bundle) adds text search support needed by this project."
+	@echo "      The search module is GA; the bundle tag will move to :latest once a stable"
+	@echo "      release includes valkey-search >= 1.2.0."
 
 stop-valkey: ## Stop and remove Valkey container
 	@$(LOG_TARGET)
