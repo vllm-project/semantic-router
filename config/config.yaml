@@ -1168,6 +1168,39 @@ global:
         performance:
           connection_pool:
             max_connections: 20
+      valkey:
+        connection:
+          host: valkey
+          port: 6379
+          database: 0
+          password: valkey-secret
+          timeout: 5
+          tls:
+            enabled: false
+            cert_file: certs/valkey.crt
+            key_file: certs/valkey.key
+            ca_file: certs/ca.crt
+        index:
+          name: semantic_cache_idx
+          prefix: "vsr:cache:"
+          vector_field:
+            name: embedding
+            dimension: 768
+            metric_type: cosine
+          index_type: HNSW
+          params:
+            M: 16
+            efConstruction: 200
+        search:
+          topk: 10
+        development:
+          drop_index_on_startup: false
+          auto_create_index: true
+          verbose_errors: true
+        logging:
+          level: info
+          enable_query_log: true
+          enable_metrics: true
             max_idle_connections: 10
             acquire_timeout: 10
           batch:
