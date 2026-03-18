@@ -360,6 +360,33 @@ type pendingEntry struct {
 
 // parsePendingSearchResult extracts a pendingEntry from a Valkey FT.SEARCH result.
 // Returns the entry or an error describing the parse failure.
+// extractPendingFields extracts a pendingEntry from a Valkey GLIDE doc map (the second element of FT.SEARCH results).
+func extractPendingFields(docMap map[string]interface{}) (*pendingEntry, error) {
+	entry := &pendingEntry{}
+	for docKey, docValue := range docMap {
+		entry.docID = docKey
+
+		fieldsMap, mapOk := docValue.(map[string]interface{})
+		if !mapOk {
+			logging.Warnf("UpdateWithResponse: document fields is not a map, type=%T", docValue)
+			return nil, fmt.Errorf("invalid search result: expected fields map")
+		}
+
+		if v, exists := fieldsMap["model"]; exists {
+			entry.model = fmt.Sprint(v)
+		}
+		if v, exists := fieldsMap["query"]; exists {
+			entry.query = fmt.Sprint(v)
+		}
+		if v, exists := fieldsMap["request_body"]; exists {
+			entry.requestBodyStr = fmt.Sprint(v)
+		}
+
+		break // Only process the first document
+	}
+	return entry, nil
+}
+
 func parsePendingSearchResult(results interface{}, requestID string, prefix string) (*pendingEntry, error) {
 	resultsArray, ok := results.([]interface{})
 	if !ok || len(resultsArray) < 1 {
@@ -391,27 +418,9 @@ func parsePendingSearchResult(results interface{}, requestID string, prefix stri
 		return nil, fmt.Errorf("invalid search result: expected map at index 1")
 	}
 
-	entry := &pendingEntry{}
-	for docKey, docValue := range docMap {
-		entry.docID = docKey
-
-		fieldsMap, mapOk := docValue.(map[string]interface{})
-		if !mapOk {
-			logging.Warnf("UpdateWithResponse: document fields is not a map, type=%T", docValue)
-			return nil, fmt.Errorf("invalid search result: expected fields map")
-		}
-
-		if v, exists := fieldsMap["model"]; exists {
-			entry.model = fmt.Sprint(v)
-		}
-		if v, exists := fieldsMap["query"]; exists {
-			entry.query = fmt.Sprint(v)
-		}
-		if v, exists := fieldsMap["request_body"]; exists {
-			entry.requestBodyStr = fmt.Sprint(v)
-		}
-
-		break // Only process the first document
+	entry, err := extractPendingFields(docMap)
+	if err != nil {
+		return nil, err
 	}
 
 	if !strings.HasPrefix(entry.docID, prefix) {
@@ -650,6 +659,38 @@ func distanceToSimilarity(metricType string, distance float64) float32 {
 	}
 }
 
+// buildKNNSearchCmd constructs the FT.SEARCH command for a KNN vector similarity query.
+func (c *ValkeyCache) buildKNNSearchCmd(embeddingBytes []byte) []string {
+	knnQuery := fmt.Sprintf("*=>[KNN %d @%s $vec AS vector_distance]",
+		c.config.Search.TopK, c.config.Index.VectorField.Name)
+
+	cmd := []string{
+		"FT.SEARCH", c.indexName, knnQuery,
+		"RETURN", "2", "vector_distance", "response_body",
+		"DIALECT", "2",
+		"PARAMS", "2", "vec",
+	}
+	return append(cmd, string(embeddingBytes))
+}
+
+// recordCacheMiss increments the miss counter and records the metric.
+func (c *ValkeyCache) recordCacheMiss(status string, elapsed time.Duration) {
+	atomic.AddInt64(&c.missCount, 1)
+	metrics.RecordCacheOperation("valkey", "find_similar", status, elapsed.Seconds())
+}
+
+// extractResponseBody returns the response bytes from a search match, or nil if missing/empty.
+func extractResponseBody(match *searchMatch) []byte {
+	if match.responseBody == nil {
+		return nil
+	}
+	s := fmt.Sprint(match.responseBody)
+	if s == "" {
+		return nil
+	}
+	return []byte(s)
+}
+
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
 func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
 	start := time.Now()
@@ -667,45 +708,25 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 
 	ctx := context.Background()
 
-	// Convert embedding to bytes for Valkey query
 	embeddingBytes := floatsToBytes(queryEmbedding)
-
-	// Build KNN query without model filter (model filtering removed for cross-model cache sharing)
-	// Valkey uses the syntax: *=>[KNN topK @field $param AS alias]
-	// The *=> prefix is required for vector search in Valkey
-	knnQuery := fmt.Sprintf("*=>[KNN %d @%s $vec AS vector_distance]",
-		c.config.Search.TopK, c.config.Index.VectorField.Name)
-
-	// Execute vector search using FT.SEARCH with PARAMS
-	searchCmd := []string{
-		"FT.SEARCH", c.indexName, knnQuery,
-		"RETURN", "2", "vector_distance", "response_body",
-		"DIALECT", "2",
-		"PARAMS", "2", "vec",
-	}
-
-	// Append the embedding bytes as a separate argument
-	searchCmd = append(searchCmd, string(embeddingBytes))
+	searchCmd := c.buildKNNSearchCmd(embeddingBytes)
 
 	searchResult, err := c.client.CustomCommand(ctx, searchCmd)
 	if err != nil {
 		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: search failed: %v", err)
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
+		c.recordCacheMiss("error", time.Since(start))
 		return nil, false, nil
 	}
 
 	match := parseBestMatch(searchResult)
 	if match == nil {
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("valkey", "find_similar", "miss", time.Since(start).Seconds())
+		c.recordCacheMiss("miss", time.Since(start))
 		return nil, false, nil
 	}
 
 	similarity := distanceToSimilarity(c.config.Index.VectorField.MetricType, match.distance)
 
 	if similarity < threshold {
-		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: cache miss - similarity %.4f below threshold %.4f",
 			similarity, threshold)
 		logging.LogEvent("cache_miss", map[string]interface{}{
@@ -715,25 +736,15 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 			"model":           model,
 			"index":           c.indexName,
 		})
-		metrics.RecordCacheOperation("valkey", "find_similar", "miss", time.Since(start).Seconds())
+		c.recordCacheMiss("miss", time.Since(start))
 		return nil, false, nil
 	}
 
-	// Extract response body from cache hit
-	if match.responseBody == nil {
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
+	responseBody := extractResponseBody(match)
+	if responseBody == nil {
+		c.recordCacheMiss("error", time.Since(start))
 		return nil, false, nil
 	}
-
-	responseBodyStr := fmt.Sprint(match.responseBody)
-	if responseBodyStr == "" {
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	responseBody := []byte(responseBodyStr)
 
 	atomic.AddInt64(&c.hitCount, 1)
 	logging.Debugf("ValkeyCache.FindSimilarWithThreshold: cache hit - similarity=%.4f, response_size=%d bytes",
