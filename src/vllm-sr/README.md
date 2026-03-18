@@ -20,7 +20,7 @@ pip install -e .
 ### Usage
 
 ```bash
-# Start the router (includes dashboard and first-run setup)
+# Start the router (includes dashboard, simulator sidecar, and first-run setup)
 HF_TOKEN=hf_xxx vllm-sr serve
 
 # Start an isolated second local stack on offset host ports
@@ -37,6 +37,7 @@ vllm-sr dashboard
 vllm-sr logs router
 vllm-sr logs envoy
 vllm-sr logs dashboard
+vllm-sr logs simulator
 
 # Check status
 vllm-sr status
@@ -48,6 +49,8 @@ vllm-sr stop
 If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspace and opens the dashboard in setup mode. Configure your first model there, then activate routing.
 
 Local dashboard state is persisted under `.vllm-sr/dashboard-data/` and bind-mounted into the container at `/app/data`. User accounts, evaluation history, and ML pipeline artifacts survive `vllm-sr stop` followed by a new `vllm-sr serve` as long as that workspace directory is kept.
+
+The fleet simulator sidecar is started on the same runtime network by default. The dashboard backend proxies it at `/api/fleet-sim/*`, and the dashboard exposes its workflows under the `Fleet Sim` top-bar dropdown.
 
 To run parallel local stacks from the same machine or multiple worktrees, set `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET` before `vllm-sr serve`, `vllm-sr status`, `vllm-sr dashboard`, and `vllm-sr stop`. The stack name isolates container and network names, and the port offset shifts the published host ports while keeping internal container ports unchanged.
 

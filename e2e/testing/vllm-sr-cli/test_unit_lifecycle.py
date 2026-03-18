@@ -78,7 +78,7 @@ class TestVllmSRStatus(CLITestBase):
             "Validates that status can query envoy, router, or dashboard individually",
         )
 
-        services = ["envoy", "router", "dashboard"]
+        services = ["envoy", "router", "dashboard", "simulator"]
 
         for service in services:
             return_code, _stdout, stderr = self.run_cli(["status", service])
@@ -109,7 +109,7 @@ class TestVllmSRLogs(CLITestBase):
         output = (stdout + stderr).lower()
 
         # Should mention valid service options or show error
-        service_options = ["envoy", "router", "dashboard"]
+        service_options = ["envoy", "router", "dashboard", "simulator"]
         mentioned = any(svc in output for svc in service_options)
 
         print(f"  Return code: {return_code}")
@@ -151,7 +151,7 @@ class TestVllmSRLogs(CLITestBase):
             "Validates that logs accepts envoy, router, and dashboard",
         )
 
-        services = ["envoy", "router", "dashboard"]
+        services = ["envoy", "router", "dashboard", "simulator"]
 
         for service in services:
             _return_code, stdout, stderr = self.run_cli(["logs", service])

@@ -29,6 +29,7 @@ type Config struct {
 	RouterMetrics string
 	JaegerURL     string
 	EnvoyURL      string // Envoy proxy for chat completions
+	FleetSimURL   string // Fleet simulator base URL
 
 	// Read-only mode for public beta deployments
 	ReadonlyMode bool
@@ -120,6 +121,7 @@ type parsedFlags struct {
 	routerMetrics        *string
 	jaegerURL            *string
 	envoyURL             *string
+	fleetSimURL          *string
 	readonlyMode         *bool
 	setupMode            *bool
 	platform             *string
@@ -146,6 +148,7 @@ func applyCoreConfig(cfg *Config, flags parsedFlags) {
 	cfg.RouterMetrics = *flags.routerMetrics
 	cfg.JaegerURL = *flags.jaegerURL
 	cfg.EnvoyURL = *flags.envoyURL
+	cfg.FleetSimURL = *flags.fleetSimURL
 	cfg.ReadonlyMode = *flags.readonlyMode
 	cfg.SetupMode = *flags.setupMode
 	cfg.Platform = *flags.platform
@@ -211,6 +214,7 @@ func LoadConfig() (*Config, error) {
 	routerMetrics := flag.String("router_metrics", env("TARGET_ROUTER_METRICS_URL", "http://localhost:9190/metrics"), "Router metrics URL")
 	jaegerURL := flag.String("jaeger", env("TARGET_JAEGER_URL", ""), "Jaeger base URL")
 	envoyURL := flag.String("envoy", env("TARGET_ENVOY_URL", ""), "Envoy proxy URL for chat completions")
+	fleetSimURL := flag.String("fleet-sim", env("TARGET_FLEET_SIM_URL", ""), "Fleet simulator base URL")
 
 	// Read-only mode for public beta deployments
 	readonlyMode := flag.Bool("readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)")
@@ -250,6 +254,7 @@ func LoadConfig() (*Config, error) {
 		routerMetrics:        routerMetrics,
 		jaegerURL:            jaegerURL,
 		envoyURL:             envoyURL,
+		fleetSimURL:          fleetSimURL,
 		readonlyMode:         readonlyMode,
 		setupMode:            setupMode,
 		platform:             platform,

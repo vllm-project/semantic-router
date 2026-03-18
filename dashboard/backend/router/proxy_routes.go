@@ -26,6 +26,7 @@ func registerProxyRoutes(mux *http.ServeMux, cfg *config.Config) {
 	proxies.routerAPI = registerRouterAPIProxy(mux, cfg, proxies.envoy)
 	proxies.grafanaStatic = registerGrafanaRoutes(mux, cfg)
 	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(mux, cfg)
+	registerFleetSimRoutes(mux, cfg)
 
 	registerSmartAPIRouter(mux, proxies)
 	registerMetricsRoutes(mux, cfg)
@@ -294,4 +295,39 @@ func registerPrometheusRoutes(mux *http.ServeMux, cfg *config.Config) {
 		prometheusProxy.ServeHTTP(w, r)
 	})
 	log.Printf("Prometheus proxy configured: %s", cfg.PrometheusURL)
+}
+
+func registerFleetSimRoutes(mux *http.ServeMux, cfg *config.Config) {
+	if cfg.FleetSimURL == "" {
+		mux.HandleFunc("/api/fleet-sim/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(
+				w,
+				`{"error":"Service not available","message":"Fleet simulator is not configured"}`,
+				http.StatusBadGateway,
+			)
+		})
+		log.Printf("Info: Fleet simulator URL not configured (optional)")
+		return
+	}
+
+	fleetSimProxy, err := proxy.NewReverseProxy(cfg.FleetSimURL, "/api/fleet-sim", false)
+	if err != nil {
+		log.Fatalf("fleet simulator proxy error: %v", err)
+	}
+	originalDirector := fleetSimProxy.Director
+	fleetSimProxy.Director = func(r *http.Request) {
+		originalDirector(r)
+		r.Header.Set("X-Forwarded-Prefix", "/api/fleet-sim")
+	}
+	mux.HandleFunc("/api/fleet-sim/", func(w http.ResponseWriter, r *http.Request) {
+		if middleware.HandleCORSPreflight(w, r) {
+			return
+		}
+		fleetSimProxy.ServeHTTP(w, r)
+	})
+	log.Printf("Fleet simulator proxy configured: %s → /api/fleet-sim/*", cfg.FleetSimURL)
 }

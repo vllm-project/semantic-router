@@ -17,6 +17,7 @@ rules:
       - AGENTS.md
       - docs/agent/**
       - tools/agent/skills/**
+      - src/fleet-sim/AGENTS.md
       - src/vllm-sr/cli/AGENTS.md
       - src/semantic-router/pkg/config/AGENTS.md
       - src/semantic-router/pkg/extproc/AGENTS.md
@@ -57,6 +58,14 @@ rules:
     feature_tests:
       - make vllm-sr-test-integration
     requires_local_smoke: true
+  - name: fleet-sim
+    doc_only: false
+    paths:
+      - src/fleet-sim/**
+    fast_tests:
+      - make vllm-sr-sim-test
+    feature_tests: []
+    requires_local_smoke: false
   - name: memory-integration
     doc_only: false
     paths:
