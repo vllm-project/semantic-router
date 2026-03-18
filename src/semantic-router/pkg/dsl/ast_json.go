@@ -10,10 +10,36 @@ import "encoding/json"
 
 // ProgramJSON is the JSON-serializable form of Program.
 type ProgramJSON struct {
-	Signals []*SignalDeclJSON `json:"signals"`
-	Routes  []*RouteDeclJSON  `json:"routes"`
-	Models  []*ModelDeclJSON  `json:"models"`
-	Plugins []*PluginDeclJSON `json:"plugins"`
+	Signals      []*SignalDeclJSON      `json:"signals"`
+	SignalGroups []*SignalGroupDeclJSON `json:"signalGroups,omitempty"`
+	Routes       []*RouteDeclJSON       `json:"routes"`
+	Models       []*ModelDeclJSON       `json:"models"`
+	Plugins      []*PluginDeclJSON      `json:"plugins"`
+	TestBlocks   []*TestBlockDeclJSON   `json:"testBlocks,omitempty"`
+}
+
+// SignalGroupDeclJSON is the JSON form of SignalGroupDecl.
+type SignalGroupDeclJSON struct {
+	Name        string   `json:"name"`
+	Semantics   string   `json:"semantics,omitempty"`
+	Temperature float64  `json:"temperature,omitempty"`
+	Members     []string `json:"members"`
+	Default     string   `json:"default,omitempty"`
+	Pos         Position `json:"pos"`
+}
+
+// TestBlockDeclJSON is the JSON form of TestBlockDecl.
+type TestBlockDeclJSON struct {
+	Name    string               `json:"name"`
+	Entries []*TestEntryDeclJSON `json:"entries"`
+	Pos     Position             `json:"pos"`
+}
+
+// TestEntryDeclJSON is the JSON form of TestEntry.
+type TestEntryDeclJSON struct {
+	Query     string   `json:"query"`
+	RouteName string   `json:"routeName"`
+	Pos       Position `json:"pos"`
 }
 
 // SignalDeclJSON is the JSON form of SignalDecl.
@@ -29,6 +55,7 @@ type RouteDeclJSON struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description,omitempty"`
 	Priority    int              `json:"priority"`
+	Tier        int              `json:"tier,omitempty"`
 	When        *BoolExprJSON    `json:"when,omitempty"`
 	Models      []*ModelRefJSON  `json:"models"`
 	Algorithm   *AlgoSpecJSON    `json:"algorithm,omitempty"`
@@ -144,11 +171,23 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 		})
 	}
 
+	for _, sg := range prog.SignalGroups {
+		result.SignalGroups = append(result.SignalGroups, &SignalGroupDeclJSON{
+			Name:        sg.Name,
+			Semantics:   sg.Semantics,
+			Temperature: sg.Temperature,
+			Members:     sg.Members,
+			Default:     sg.Default,
+			Pos:         sg.Pos,
+		})
+	}
+
 	for _, r := range prog.Routes {
 		rj := &RouteDeclJSON{
 			Name:        r.Name,
 			Description: r.Description,
 			Priority:    r.Priority,
+			Tier:        r.Tier,
 			When:        marshalBoolExpr(r.When),
 			Models:      make([]*ModelRefJSON, 0, len(r.Models)),
 			Plugins:     make([]*PluginRefJSON, 0, len(r.Plugins)),
@@ -201,6 +240,22 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 			Fields:     marshalObjectFields(p.Fields),
 			Pos:        p.Pos,
 		})
+	}
+
+	for _, tb := range prog.TestBlocks {
+		tbj := &TestBlockDeclJSON{
+			Name:    tb.Name,
+			Entries: make([]*TestEntryDeclJSON, 0, len(tb.Entries)),
+			Pos:     tb.Pos,
+		}
+		for _, e := range tb.Entries {
+			tbj.Entries = append(tbj.Entries, &TestEntryDeclJSON{
+				Query:     e.Query,
+				RouteName: e.RouteName,
+				Pos:       e.Pos,
+			})
+		}
+		result.TestBlocks = append(result.TestBlocks, tbj)
 	}
 
 	return result
