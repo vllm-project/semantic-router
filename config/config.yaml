@@ -1168,6 +1168,27 @@ global:
         performance:
           connection_pool:
             max_connections: 20
+            max_idle_connections: 10
+            acquire_timeout: 10
+          batch:
+            insert_batch_size: 128
+            timeout: 30
+        data_management:
+          ttl:
+            enabled: true
+            timestamp_field: created_at
+            cleanup_interval: 3600
+          compaction:
+            enabled: true
+            interval: 86400
+        logging:
+          level: info
+          enable_query_log: true
+          enable_metrics: true
+        development:
+          drop_collection_on_startup: false
+          auto_create_collection: true
+          verbose_errors: true
       valkey:
         connection:
           host: valkey
@@ -1201,27 +1222,6 @@ global:
           level: info
           enable_query_log: true
           enable_metrics: true
-            max_idle_connections: 10
-            acquire_timeout: 10
-          batch:
-            insert_batch_size: 128
-            timeout: 30
-        data_management:
-          ttl:
-            enabled: true
-            timestamp_field: created_at
-            cleanup_interval: 3600
-          compaction:
-            enabled: true
-            interval: 86400
-        logging:
-          level: info
-          enable_query_log: true
-          enable_metrics: true
-        development:
-          drop_collection_on_startup: false
-          auto_create_collection: true
-          verbose_errors: true
     memory:
       enabled: true
       auto_store: true
