@@ -68,6 +68,20 @@ def _histogram(values: list[int], n_bins: int = 20) -> list[HistogramBucket]:
     return buckets
 
 
+def _parse_json_lines(path: Path) -> list[dict]:
+    records = []
+    with open(path) as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    return records
+
+
 def parse_records(path: Path, fmt: str) -> list[dict]:
     records = []
     if fmt == TraceFormat.csv.value:
@@ -75,16 +89,8 @@ def parse_records(path: Path, fmt: str) -> list[dict]:
             reader = csv.DictReader(f)
             for row in reader:
                 records.append(dict(row))
-    else:
-        with open(path) as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        records.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        pass
-    return records
+        return records
+    return _parse_json_lines(path)
 
 
 def compute_trace_stats(records: list[dict]) -> TraceStats:

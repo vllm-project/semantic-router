@@ -18,6 +18,29 @@ import {
   renderJobResultSummary,
 } from './fleetSimPageSupport'
 
+type PlanningAssetItem =
+  | {
+      key: string
+      kind: 'workload'
+      title: string
+      detail: string
+      meta: string
+    }
+  | {
+      key: string
+      kind: 'fleet'
+      title: string
+      detail: string
+      meta: string
+    }
+  | {
+      key: string
+      kind: 'trace'
+      title: string
+      detail: string
+      meta: string
+    }
+
 export default function FleetSimOverviewPage() {
   const [workloads, setWorkloads] = useState<BuiltinWorkload[]>([])
   const [fleets, setFleets] = useState<FleetConfig[]>([])
@@ -69,6 +92,37 @@ export default function FleetSimOverviewPage() {
     ? fleets.find((fleet) => fleet.id === extractJobFleetID(latestJob))
     : null
   const planningAssets = workloads.length + traces.length
+  const workloadAssets: PlanningAssetItem[] = workloads.slice(0, 2).map((workload) => ({
+    key: `workload-${workload.name}`,
+    kind: 'workload',
+    title: formatBuiltinWorkloadName(workload.name),
+    detail: describeBuiltinWorkload(workload.name, workload.description),
+    meta: 'Library',
+  }))
+  const traceAssets: PlanningAssetItem[] = traces.slice(0, 2).map((trace) => ({
+    key: `trace-${trace.id}`,
+    kind: 'trace',
+    title: trace.name,
+    detail: `${formatTraceFormat(trace.format)} · ${formatNumber(trace.n_requests)} requests`,
+    meta: formatDateTime(trace.upload_time),
+  }))
+  const fleetAssets: PlanningAssetItem[] = fleets.slice(0, 2).map((fleet) => ({
+    key: `fleet-${fleet.id}`,
+    kind: 'fleet',
+    title: fleet.name,
+    detail: `${formatNumber(fleet.total_gpus)} GPUs · ${formatRouterType(fleet.router)}`,
+    meta: formatMoneyKusd(fleet.estimated_annual_cost_kusd),
+  }))
+  const planningAssetItems: PlanningAssetItem[] = []
+  const assetColumns = [workloadAssets, traceAssets, fleetAssets]
+  for (let index = 0; index < 2 && planningAssetItems.length < 3; index += 1) {
+    assetColumns.forEach((assets) => {
+      const asset = assets[index]
+      if (asset && planningAssetItems.length < 3) {
+        planningAssetItems.push(asset)
+      }
+    })
+  }
 
   return (
     <FleetSimSurfaceLayout
@@ -161,38 +215,16 @@ export default function FleetSimOverviewPage() {
             </div>
           </div>
           <ul className={styles.compactList}>
-            {workloads.slice(0, 2).map((workload) => (
-              <li key={workload.name} className={styles.compactListItem}>
+            {planningAssetItems.map((asset) => (
+              <li key={asset.key} className={styles.compactListItem}>
                 <div className={styles.compactListMeta}>
-                  <span className={styles.compactListTitle}>{formatBuiltinWorkloadName(workload.name)}</span>
-                  <span className={styles.compactListText}>{describeBuiltinWorkload(workload.name, workload.description)}</span>
+                  <span className={styles.compactListTitle}>{asset.title}</span>
+                  <span className={styles.compactListText}>{asset.detail}</span>
                 </div>
-                <span className={styles.compactListText}>Library</span>
+                <span className={styles.compactListText}>{asset.meta}</span>
               </li>
             ))}
-            {fleets.slice(0, 2).map((fleet) => (
-              <li key={fleet.id} className={styles.compactListItem}>
-                <div className={styles.compactListMeta}>
-                  <span className={styles.compactListTitle}>{fleet.name}</span>
-                  <span className={styles.compactListText}>
-                    {formatNumber(fleet.total_gpus)} GPUs · {formatRouterType(fleet.router)}
-                  </span>
-                </div>
-                <span className={styles.compactListText}>{formatMoneyKusd(fleet.estimated_annual_cost_kusd)}</span>
-              </li>
-            ))}
-            {traces.slice(0, 2).map((trace) => (
-              <li key={trace.id} className={styles.compactListItem}>
-                <div className={styles.compactListMeta}>
-                  <span className={styles.compactListTitle}>{trace.name}</span>
-                  <span className={styles.compactListText}>
-                    {formatTraceFormat(trace.format)} · {formatNumber(trace.n_requests)} requests
-                  </span>
-                </div>
-                <span className={styles.compactListText}>{formatDateTime(trace.upload_time)}</span>
-              </li>
-            ))}
-            {fleets.length === 0 && traces.length === 0 ? (
+            {planningAssetItems.length === 0 ? (
               <li className={styles.emptyState}>Upload a trace or save a fleet to build out the planning library.</li>
             ) : null}
           </ul>

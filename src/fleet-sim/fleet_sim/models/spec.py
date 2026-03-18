@@ -20,14 +20,14 @@ def _fetch_hf_config(model_id: str, token: str | None = None) -> dict[str, Any]:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req) as resp:  # noqa: S310 - intentional trusted fetch
+    with urllib.request.urlopen(req) as resp:
         return json.load(resp)
 
 
 def _humanize_name(name: str) -> str:
     """Turn a catalog slug or HF repo id into a human-readable display name."""
 
-    base = name.split("/")[-1]
+    base = name.rsplit("/", maxsplit=1)[-1]
     if any(ch.isupper() for ch in base):
         return base
 
@@ -85,13 +85,7 @@ class ModelSpec:
         return int(self.kv_bytes_per_token_dtype(dtype_bytes=2.0))
 
     def kv_bytes_per_token_dtype(self, dtype_bytes: float = 2.0) -> float:
-        return (
-            2.0
-            * self.n_layers
-            * self.n_kv_heads
-            * self.head_dim
-            * dtype_bytes
-        )
+        return 2.0 * self.n_layers * self.n_kv_heads * self.head_dim * dtype_bytes
 
     def _attention_param_count(self) -> int:
         return self.n_layers * (
@@ -125,9 +119,7 @@ class ModelSpec:
             + self.n_shared_experts * 3 * self.hidden_size * self.intermediate_size
         )
         return (
-            self._embedding_param_count()
-            + self._attention_param_count()
-            + active_ffn
+            self._embedding_param_count() + self._attention_param_count() + active_ffn
         )
 
     def param_bytes(self, dtype_bytes: float = 2.0) -> float:

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi import Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from .trace_ingest import seed_example_traces_if_enabled
 from .routes import fleets, jobs, traces, workloads
+from .trace_ingest import seed_example_traces_if_enabled
 
 
 @asynccontextmanager
@@ -48,6 +47,7 @@ async def apply_forwarded_prefix_root_path(request: Request, call_next):
     if forwarded_prefix:
         request.scope["root_path"] = forwarded_prefix
     return await call_next(request)
+
 
 # ── API routes ────────────────────────────────────────────────────────────────
 app.include_router(traces.router, prefix="/api")
