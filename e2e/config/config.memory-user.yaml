@@ -24,8 +24,61 @@ routing:
       - name: general
         description: General queries for memory testing
         mmlu_categories: [other]
-    keywords: []
+    keywords:
+      - name: no_memory_trigger
+        operator: OR
+        keywords: [NOMEM_MARKER]
+      - name: custom_threshold_trigger
+        operator: OR
+        keywords: [THRESHOLD_MARKER]
   decisions:
+    # Triggered by NOMEM_MARKER keyword. Memory explicitly disabled so retrieval
+    # is skipped even though global memory.enabled=true.
+    - name: no_memory_route
+      description: Route with memory explicitly disabled for per-decision testing
+      priority: 200
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: no_memory_trigger
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a helpful assistant. Memory access is disabled for this route.
+            mode: insert
+        - type: memory
+          configuration:
+            enabled: false
+
+    # Triggered by THRESHOLD_MARKER keyword. Memory enabled with similarity_threshold=0.99
+    # (near-impossible to match), overriding the global default of 0.45.
+    - name: custom_threshold_route
+      description: Route with high similarity threshold for per-decision testing
+      priority: 150
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: custom_threshold_trigger
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a helpful assistant with strict memory matching.
+            mode: insert
+        - type: memory
+          configuration:
+            enabled: true
+            retrieval_limit: 5
+            similarity_threshold: 0.99
+            auto_store: true
+
     - name: default_route
       description: Default route for memory testing
       priority: 1

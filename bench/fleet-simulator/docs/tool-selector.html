@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Fleet Tool Selector</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0e14;
+    --surface: #13151f;
+    --border: #1e2130;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --accent: #7c6af7;
+    --green: #4ade80;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+    --pink: #f472b6;
+    --cyan: #22d3ee;
+    --blue: #60a5fa;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 16px 64px;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: #2d3045;
+    margin-bottom: 40px;
+  }
+
+  #wizard { width: 100%; max-width: 620px; }
+
+  /* ---- question card ---- */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 30px 34px;
+    animation: up 0.22s ease;
+  }
+  @keyframes up { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+  .step-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--muted);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .question {
+    font-size: 1.15rem;
+    font-weight: 600;
+    line-height: 1.5;
+    margin-bottom: 24px;
+  }
+  .options { display: flex; flex-direction: column; gap: 10px; }
+  .opt {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 18px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    cursor: pointer;
+    background: var(--bg);
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  }
+  .opt:hover { border-color: var(--accent); background: #14162a; transform: translateX(2px); }
+  .opt:active { transform: translateX(4px); }
+  .opt-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 1px; }
+  .opt-title { font-weight: 600; font-size: 0.92rem; margin-bottom: 3px; }
+  .opt-desc { font-size: 0.77rem; color: var(--muted); line-height: 1.5; }
+
+  /* ---- result card ---- */
+  .result-card {
+    border-radius: 14px;
+    padding: 30px 34px;
+    animation: up 0.22s ease;
+    border: 1px solid var(--border);
+  }
+  .tool-badge {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 3px 10px 3px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+    letter-spacing: 0.06em;
+  }
+  .tool-name { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
+  .tool-arxiv {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .tool-why {
+    font-size: 0.88rem;
+    color: #c5c8d8;
+    line-height: 1.7;
+    margin-bottom: 20px;
+    border-left: 2px solid var(--border);
+    padding-left: 16px;
+  }
+  .next-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 0.79rem;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 22px;
+  }
+  .next-box strong { color: var(--text); }
+
+  /* workflow */
+  .workflow { margin-bottom: 20px; }
+  .wf-step {
+    display: flex;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .wf-step:last-child { border-bottom: none; }
+  .wf-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    flex-shrink: 0;
+    width: 20px;
+    margin-top: 3px;
+  }
+  .wf-tool { font-weight: 600; font-size: 0.87rem; margin-bottom: 4px; }
+  .wf-desc { font-size: 0.77rem; color: var(--muted); line-height: 1.5; }
+
+  /* buttons */
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.69rem;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* breadcrumb */
+  #breadcrumb {
+    width: 100%;
+    max-width: 620px;
+    margin-bottom: 14px;
+    font-size: 0.68rem;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 18px;
+  }
+  .crumb-sep { color: #2a2d40; margin: 0 5px; }
+
+  /* color per tool */
+  .c-fleet  { --tc: #7c6af7; }
+  .c-melange{ --tc: #4ade80; }
+  .c-sage   { --tc: #fbbf24; }
+  .c-aiconf { --tc: #22d3ee; }
+  .c-dist   { --tc: #f472b6; }
+  .c-split  { --tc: #fb923c; }
+  .c-token  { --tc: #fbbf24; }
+  .c-vidur  { --tc: #60a5fa; }
+  .c-flow   { --tc: #a78bfa; }
+
+  .result-card { border-color: color-mix(in srgb, var(--tc, #444) 35%, #1e2130); background: color-mix(in srgb, var(--tc, #444) 4%, #13151f); }
+  .tool-badge  { background: color-mix(in srgb, var(--tc, #444) 12%, transparent); color: var(--tc, #999); border: 1px solid color-mix(in srgb, var(--tc, #444) 28%, transparent); }
+  .tool-name   { color: var(--tc, #e8eaf0); }
+</style>
+</head>
+<body>
+
+<h1>LLM Fleet Tool Selector</h1>
+<p class="subtitle">// inference-fleet-sim · related work navigator</p>
+
+<div id="breadcrumb"></div>
+<div id="wizard"></div>
+
+<script>
+/* ---- decision tree data ---- */
+const NODES = {
+  start: {
+    q: 'What is your primary goal?',
+    opts: [
+      { icon:'📐', title:'Plan a new fleet', desc:'Size GPUs and routing topology before deployment', next:'plan_gpu' },
+      { icon:'⚙️', title:'Manage an existing fleet', desc:'Optimise or auto-scale a deployed system', next:'manage' }
+    ]
+  },
+
+  plan_gpu: {
+    q: 'Do you know which GPU type(s) to use?',
+    opts: [
+      { icon:'✅', title:'Yes — GPU type already decided', desc:'e.g. all H100, or H100 + A100 mix already chosen', next:'plan_config' },
+      { icon:'🤔', title:'No — need to find the optimal GPU mix', desc:'Want to compare A10G vs A100 vs H100 by cost + SLO', next:'r_melange' }
+    ]
+  },
+
+  plan_config: {
+    q: 'Is the per-engine config already tuned (TP degree, batch size, engine flags)?',
+    opts: [
+      { icon:'✅', title:'Yes — TP/PP, scheduler, chunk size decided', desc:'I know the serving configuration', next:'plan_disagg' },
+      { icon:'🔍', title:'No — need to find optimal TP/PP/engine flags', desc:"Haven't benchmarked the serving config yet", next:'plan_config_how' }
+    ]
+  },
+
+  plan_config_how: {
+    q: 'Are you planning to use disaggregated (PD-split) serving?',
+    opts: [
+      { icon:'🔀', title:'Yes — prefill and decode on separate GPU pools', desc:'DistServe / Splitwise / NVIDIA Dynamo style', next:'r_aiconf' },
+      { icon:'🧱', title:'No — monolithic / aggregated serving', desc:'Standard continuous batching on one pool type', next:'r_vidur' }
+    ]
+  },
+
+  plan_disagg: {
+    q: 'Are you using disaggregated (prefill/decode split) serving?',
+    opts: [
+      { icon:'🔀', title:'Yes — separate prefill and decode pools', desc:'PD disaggregation already decided', next:'plan_hw' },
+      { icon:'🧱', title:'No — monolithic serving', desc:'All phases in the same pool', next:'r_fleet' }
+    ]
+  },
+
+  plan_hw: {
+    q: 'Do you want heterogeneous hardware for each phase (H100 prefillers + A100 decoders)?',
+    opts: [
+      { icon:'🛠', title:'Yes — different GPU types for prefill vs decode', desc:'Decode is memory-bound; latest FLOPs are overkill', next:'r_splitwise_flow' },
+      { icon:'📦', title:'No — same GPU type for both phases', desc:'Homogeneous hardware, just sizing the pools', next:'r_disagg_flow' }
+    ]
+  },
+
+  manage: {
+    q: 'What is the management challenge?',
+    opts: [
+      { icon:'📈', title:'Scale VM instances through diurnal demand', desc:'Morning ramp-up, overnight ramp-down, multi-region', next:'r_sageserve' },
+      { icon:'⚡', title:'Handle sudden traffic bursts in a PD-disaggregated fleet', desc:'Short spikes that exceed steady-state capacity', next:'r_tokenscale' },
+      { icon:'🔄', title:'Re-evaluate fleet sizing after traffic growth', desc:'Traffic grew 2× — how many more GPUs needed?', next:'r_fleet' }
+    ]
+  },
+
+  /* ---- leaf results ---- */
+  r_fleet: {
+    result: true, color:'c-fleet',
+    badge:'inference-fleet-sim',
+    name:'FleetOptimizer',
+    arxiv:'This repository',
+    why:'Finds the minimum-cost fleet (n_short, n_long pools, routing policy) that keeps P99 TTFT ≤ your SLO at arrival rate λ. Uses Erlang-C queuing theory for the analytical candidate, then cross-validates each candidate with discrete-event M/G/c simulation.',
+    nextBox:'<strong>Command:</strong> python run_sim.py optimize --cdf data/azure_cdf.json --lam 200 --slo 500 --b-short 6144 --verify-top 3'
+  },
+
+  r_melange: {
+    result: true, color:'c-melange',
+    badge:'Mélange',
+    name:'Mélange — GPU Type Selection',
+    arxiv:'arXiv:2404.14527 · Griggs et al., UC Berkeley 2024',
+    why:'Profiles each GPU type\'s throughput per request-size bucket, then uses an ILP to find the minimum-cost mix (e.g. 2× A100 + 3× A10G) that meets your SLO. Shows up to 77% cost reduction vs. a single GPU type for chat workloads.',
+    nextBox:'<strong>After Mélange:</strong> Feed the chosen GPU type into inference-fleet-sim\'s hardware catalog (<code>--gpu-short</code>, <code>--gpu-long</code>) to size pools and evaluate routing policies.'
+  },
+
+  r_aiconf: {
+    result: true, color:'c-aiconf',
+    badge:'AIConfigurator',
+    name:'AIConfigurator — Engine Config Search',
+    arxiv:'arXiv:2601.06288 · Xu et al., NVIDIA 2025',
+    why:'Maintains a kernel-level performance DB (GEMM, attention, MoE, NCCL across Ampere/Hopper/Blackwell). Searches TP × EP × batch size × engine flags in <30 seconds, returning Pareto-optimal configs for vLLM, SGLang, TRT-LLM. Up to 50% improvement for MoE models.',
+    nextBox:'<strong>After AIConfigurator:</strong> Use the recommended TP degree as <code>ServingConfig(tp=…)</code> in ProfileBuilder, then run DisaggFleetOptimizer to size the full fleet.'
+  },
+
+  r_vidur: {
+    result: true, color:'c-vidur',
+    badge:'Vidur-Search',
+    name:'Vidur-Search — Single-Engine Config Optimizer',
+    arxiv:'arXiv:2405.05465 · Agrawal et al., Microsoft Research 2024',
+    why:'Profiles LLM operators once, then simulates hundreds of (TP, PP, scheduler, chunk-size) combinations with <9% latency error. Finds the best config in ~1 CPU-hour vs ~42 000 GPU-hours empirically.',
+    nextBox:'<strong>After Vidur-Search:</strong> Feed the optimised throughput into <code>ManualProfile(W=…, H=…)</code> and pass it to FleetOptimizer to size the full fleet of replicas.'
+  },
+
+  r_sageserve: {
+    result: true, color:'c-sage',
+    badge:'SageServe',
+    name:'SageServe — Forecast-Aware VM Auto-Scaling',
+    arxiv:'arXiv:2502.14617 · Jaiswal et al., Microsoft 2025',
+    why:'Uses ARIMA to forecast hourly TPS, then solves an ILP every 60 minutes to compute optimal instance count changes (δ), minimising cold-start overhead. A reactive heuristic handles sub-hourly fluctuations via memory-utilisation thresholds. Saves 25% GPU-hours at Microsoft O365.',
+    nextBox:'<strong>Tip:</strong> Use inference-fleet-sim to set the peak-hour fleet size first. Then apply SageServe-style scaling to ramp down 20–30% during off-peak hours.'
+  },
+
+  r_tokenscale: {
+    result: true, color:'c-token',
+    badge:'TokenScale',
+    name:'TokenScale — Burst Autoscaling for PD Fleets',
+    arxiv:'arXiv:2512.03416 · Lai et al. 2024',
+    why:'Introduces Token Velocity (maximum tokens/s a stage can process) as a leading indicator that fires before SLO violations occur. Convertible Decoders absorb prefill bursts by temporarily acting as prefillers. Improves SLO attainment from 50–88% to 80–96% with 4–14% cost reduction.',
+    nextBox:'<strong>Tip:</strong> inference-fleet-sim gives you the steady-state fleet size. TokenScale operates as the burst management layer on top of that.'
+  },
+
+  r_disagg_flow: {
+    result: true, color:'c-flow',
+    badge:'Two-tool workflow',
+    name:'DistServe → DisaggFleetOptimizer',
+    arxiv:'arXiv:2401.09670 + this repo',
+    why:'DistServe derives the optimal prefill/decode GPU ratio for one replica (per-GPU goodput, M/D/1 queuing). DisaggFleetOptimizer then scales that to the full fleet and validates P99 TTFT via simulation.',
+    workflow:[
+      { tool:'DistServe', desc:'Find optimal TP/PP config for prefill and decode instances. Measure per-GPU goodput per phase.' },
+      { tool:'DisaggFleetOptimizer', desc:'Given prefill/decode profiles, find n_prefill + n_decode meeting P99 TTFT SLO at λ req/s. Validates with DES.' }
+    ],
+    nextBox:'<strong>Code:</strong> DisaggFleetOptimizer(prefill_profile=…, decode_profile=…).optimize(lam=200, slo_ms=500)'
+  },
+
+  r_splitwise_flow: {
+    result: true, color:'c-flow',
+    badge:'Three-tool workflow',
+    name:'Splitwise → DistServe → DisaggFleetOptimizer',
+    arxiv:'arXiv:2311.18677 + 2401.09670 + this repo',
+    why:'Splitwise selects the best GPU generations per phase (H100 prefill, A100 decode). DistServe tunes the per-replica ratio and parallelism. DisaggFleetOptimizer sizes the full fleet and verifies SLO.',
+    workflow:[
+      { tool:'Splitwise', desc:'Choose GPU types: H100 for compute-bound prefill, A100 for memory-bound decode. Design cluster topology.' },
+      { tool:'DistServe', desc:'Tune TP/PP config and find the optimal prefill:decode GPU ratio for one replica.' },
+      { tool:'DisaggFleetOptimizer', desc:'Scale to fleet level: find n_prefill + n_decode to meet P99 TTFT SLO at λ req/s.' }
+    ],
+    nextBox:'<strong>Note:</strong> ProfileBuilder in inference-fleet-sim supports phase="prefill"/"decode" to model each GPU pool\'s W and H separately.'
+  }
+};
+
+/* ---- state ---- */
+let path = ['start'];
+let labels = [];
+
+function render() {
+  const nodeId = path[path.length - 1];
+  const node = NODES[nodeId];
+
+  // breadcrumb
+  const bc = document.getElementById('breadcrumb');
+  bc.innerHTML = labels.map((l, i) =>
+    `<span>${l}</span>${i < labels.length - 1 ? '<span class="crumb-sep">›</span>' : ''}`
+  ).join('');
+
+  const wiz = document.getElementById('wizard');
+
+  if (node.result) {
+    let wfHtml = '';
+    if (node.workflow) {
+      wfHtml = `<div class="workflow">${node.workflow.map((s, i) => `
+        <div class="wf-step">
+          <div class="wf-num">${i + 1}.</div>
+          <div><div class="wf-tool">${s.tool}</div><div class="wf-desc">${s.desc}</div></div>
+        </div>`).join('')}</div>`;
+    }
+
+    wiz.innerHTML = `
+      <div class="result-card ${node.color}">
+        <div class="tool-badge">${node.badge}</div>
+        <div class="tool-name">${node.name}</div>
+        <div class="tool-arxiv">${node.arxiv}</div>
+        <div class="tool-why">${node.why}</div>
+        ${wfHtml}
+        <div class="next-box">${node.nextBox}</div>
+        <div class="btn-row">
+          ${path.length > 1 ? '<button class="btn" onclick="goBack()">← Back</button>' : ''}
+          <button class="btn" onclick="restart()">↺ Start over</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const opts = node.opts.map(o => `
+    <div class="opt" onclick="choose('${o.next}', \`${o.title.replace(/`/g,"'")}\`)">
+      <div class="opt-icon">${o.icon}</div>
+      <div class="opt-body">
+        <div class="opt-title">${o.title}</div>
+        <div class="opt-desc">${o.desc}</div>
+      </div>
+    </div>`).join('');
+
+  wiz.innerHTML = `
+    <div class="card">
+      <div class="step-label">Step ${path.length} of ~4</div>
+      <div class="question">${node.q}</div>
+      <div class="options">${opts}</div>
+      ${path.length > 1 ? '<div class="btn-row" style="margin-top:20px"><button class="btn" onclick="goBack()">← Back</button></div>' : ''}
+    </div>`;
+}
+
+function choose(nextId, label) {
+  path.push(nextId);
+  labels.push(label);
+  render();
+}
+
+function goBack() {
+  path.pop();
+  labels.pop();
+  render();
+}
+
+function restart() {
+  path = ['start'];
+  labels = [];
+  render();
+}
+
+render();
+</script>
+</body>
+</html>

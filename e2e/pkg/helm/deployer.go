@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 )
 
 // Deployer handles Helm chart deployments
@@ -200,24 +202,20 @@ func (d *Deployer) Uninstall(ctx context.Context, releaseName, namespace string)
 func (d *Deployer) WaitForDeployment(ctx context.Context, namespace, deploymentName string, timeout time.Duration) error {
 	d.log("Waiting for deployment %s/%s to be ready", namespace, deploymentName)
 
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	// Convert timeout to seconds for kubectl
-	timeoutSeconds := int(timeout.Seconds())
-	cmd := exec.CommandContext(ctx, "kubectl", "wait",
-		"--for=condition=Available",
-		fmt.Sprintf("deployment/%s", deploymentName),
-		"-n", namespace,
-		fmt.Sprintf("--timeout=%ds", timeoutSeconds),
-		"--kubeconfig", d.KubeConfig)
-
-	if d.Verbose {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+	client, err := helpers.NewKubeClient(d.KubeConfig)
+	if err != nil {
+		return fmt.Errorf("create kube client for deployment wait: %w", err)
 	}
 
-	if err := cmd.Run(); err != nil {
+	if err := helpers.WaitForDeploymentReady(
+		ctx,
+		client,
+		namespace,
+		deploymentName,
+		timeout,
+		5*time.Second,
+		d.Verbose,
+	); err != nil {
 		return fmt.Errorf("deployment failed to become ready: %w", err)
 	}
 

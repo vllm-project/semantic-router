@@ -219,6 +219,14 @@ routing:
             max_body_bytes: 4096  # Optional: max bytes to capture (default: 4096)
 ```
 
+Router replay records are exposed through:
+
+- `GET /v1/router_replay?limit=20&offset=0&search=req-123&decision=foo&model=bar&cache_status=cached` - List recent records with pagination metadata. Default page size is `20`; larger `limit` values are capped at `100`.
+- `GET /v1/router_replay/aggregate?search=req-123&decision=foo&model=bar&cache_status=cached` - Return summary and chart aggregates for the filtered replay set.
+- `GET /v1/router_replay/{id}` - Fetch a single replay record.
+
+If a replay page would exceed the ext-proc gRPC message budget, the router returns `413 Payload Too Large` instead of failing the stream.
+
 **Validation Rules:**
 
 - **Plugin Type**: Must be one of: `semantic-cache`, `jailbreak`, `pii`, `system_prompt`, `header_mutation`, `hallucination`, `router_replay`
