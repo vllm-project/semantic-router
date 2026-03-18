@@ -179,6 +179,9 @@ func TestHandleRouterReplayAPIListReturnsPayloadTooLargeForOversizedPage(t *test
 	if !ok {
 		t.Fatalf("expected error payload, got %#v", body)
 	}
+	if got := int(errorBody["code"].(float64)); got != 413 {
+		t.Fatalf("expected error code 413, got %d", got)
+	}
 	if got := errorBody["message"]; got == nil || !strings.Contains(got.(string), "ext-proc message size limit") {
 		t.Fatalf("expected oversized response guidance, got %#v", got)
 	}

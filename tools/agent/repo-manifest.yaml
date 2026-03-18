@@ -41,6 +41,18 @@ subsystems:
       - src/vllm-sr/cli/core.py
       - src/vllm-sr/cli/docker_cli.py
       - tools/make/docker.mk
+  - name: fleet-sim
+    paths:
+      - src/fleet-sim/**
+      - website/docs/fleet-sim/**
+      - website/static/files/fleet-sim/**
+      - website/static/img/fleet-sim/**
+      - .github/workflows/pypi-publish-vllm-sr-sim.yml
+    entrypoints:
+      - src/fleet-sim/run_sim.py
+      - src/fleet-sim/fleet_sim/api/app.py
+      - src/fleet-sim/Dockerfile
+      - tools/make/docker.mk
   - name: router-core
     paths:
       - src/semantic-router/**
@@ -120,6 +132,7 @@ docs:
   - docs/agent/plans/pl-0001-harness-roadmap.md
   - docs/agent/plans/pl-0002-e2e-rationalization-roadmap.md
   - docs/agent/plans/pl-0003-v0-3-config-contract-rollout.md
+  - docs/agent/plans/pl-0004-fleet-sim-migration.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
   - docs/agent/tech-debt/td-001-config-surface-fragmentation.md
@@ -137,6 +150,8 @@ docs:
   - docs/agent/tech-debt/td-013-legacy-k8s-controller-bypasses-canonical-v0-3.md
   - docs/agent/tech-debt/td-014-candle-binding-crate-wide-clippy-gate.md
   - docs/agent/tech-debt/td-015-weakly-typed-config-and-dsl-contracts.md
+  - docs/agent/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
+  - docs/agent/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
@@ -162,6 +177,10 @@ local_agent_rules:
     scope: src/vllm-sr/cli/**
     steward: vllm-sr-cli
     freshness: update when CLI orchestration or hotspot boundaries change
+  - path: src/fleet-sim/AGENTS.md
+    scope: src/fleet-sim/**
+    steward: fleet-sim
+    freshness: update when simulator package boundaries or public exports change
   - path: src/semantic-router/pkg/config/AGENTS.md
     scope: src/semantic-router/pkg/config/**
     steward: router-core
@@ -206,6 +225,9 @@ doc_governance:
     - path: docs/agent/plans/pl-0003-v0-3-config-contract-rollout.md
       steward: agent-contract
       freshness: update at the start and end of each v0.3 config rollout loop and after each completed loop task
+    - path: docs/agent/plans/pl-0004-fleet-sim-migration.md
+      steward: fleet-sim
+      freshness: update at the start and end of each simulator migration loop and after each completed loop task
     - path: docs/agent/tech-debt-register.md
       steward: agent-contract
       freshness: update when debt workflow or landing-page guidance changes
@@ -257,6 +279,12 @@ doc_governance:
     - path: docs/agent/tech-debt/td-015-weakly-typed-config-and-dsl-contracts.md
       steward: agent-contract
       freshness: update when the TD015 debt record changes materially
+    - path: docs/agent/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
+      steward: fleet-sim
+      freshness: update when the TD016 debt record changes materially
+    - path: docs/agent/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
+      steward: fleet-sim
+      freshness: update when the TD017 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change

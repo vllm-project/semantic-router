@@ -79,9 +79,12 @@ make agent-bootstrap
 make agent-validate
 make agent-scorecard
 make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+make agent-ci-lint CHANGED_FILES="path/one,path/two"
 make agent-ci-gate CHANGED_FILES="path/one,path/two"
 make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
 ```
+
+Use `make agent-ci-lint` when you want to reproduce the same changed-file lint path that the CI pre-commit workflow runs, including the shared agent bootstrap toolchain and tracked-file codespell check.
 
 `ENV=amd` is required when platform-specific behavior changed.
 

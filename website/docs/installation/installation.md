@@ -88,6 +88,7 @@ The router will:
 
 - Automatically download required ML models (~1.5GB, one-time)
 - Start the dashboard on port 8700
+- Start the `vllm-sr-sim` sidecar on port 8810
 - Start Envoy proxy on port 8888 after activation
 - Start the semantic router service after activation
 - Enable metrics on port 9190
@@ -129,10 +130,11 @@ vllm-sr dashboard
 # View logs
 vllm-sr logs router        # Router logs
 vllm-sr logs envoy         # Envoy logs
+vllm-sr logs simulator     # Fleet simulator sidecar logs
 vllm-sr logs router -f     # Follow logs
 
 # Check status
-vllm-sr status
+vllm-sr status             # Includes simulator sidecar state
 
 # Stop the router
 vllm-sr stop

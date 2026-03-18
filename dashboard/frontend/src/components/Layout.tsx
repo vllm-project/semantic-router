@@ -4,6 +4,7 @@ import styles from './Layout.module.css'
 import LayoutAccountControl from './LayoutAccountControl'
 import {
   ANALYSIS_OPERATIONS_MENU_SECTIONS,
+  FLEET_SIM_MENU_SECTIONS,
   filterLayoutMenuSections,
   hasActiveLayoutMenuSection,
   isLayoutMenuItemActive,
@@ -16,6 +17,7 @@ import {
   type LayoutNavLink,
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
+import { useReadonly } from '../contexts/ReadonlyContext'
 import { canAccessMLSetup } from '../utils/accessControl'
 
 interface LayoutProps {
@@ -37,11 +39,16 @@ const Layout: React.FC<LayoutProps> = ({
   const [openDropdown, setOpenDropdown] = useState<LayoutDropdownKey | null>(null)
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false)
   const { user, logout } = useAuth()
+  const { fleetSimEnabled } = useReadonly()
   const location = useLocation()
   const navigate = useNavigate()
   const canManageUsers = user?.role === 'admin'
   const canUseMLSetup = canAccessMLSetup(user)
   const secondaryNavLinks = SECONDARY_NAV_LINKS.filter((link) => link.to !== '/users' || canManageUsers)
+  const managerMenuSections = filterLayoutMenuSections(
+    MANAGER_MENU_SECTIONS,
+    item => canManageUsers || item.kind !== 'route' || item.to !== '/users'
+  )
   const analysisOperationsMenuSections = filterLayoutMenuSections(
     ANALYSIS_OPERATIONS_MENU_SECTIONS,
     item => canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'
@@ -52,7 +59,7 @@ const Layout: React.FC<LayoutProps> = ({
 
   const isConfigPage = location.pathname === '/config' || location.pathname.startsWith('/config/')
   const isManagerActive = hasActiveLayoutMenuSection(
-    MANAGER_MENU_SECTIONS,
+    managerMenuSections,
     location.pathname,
     isConfigPage,
     configSection
@@ -63,6 +70,14 @@ const Layout: React.FC<LayoutProps> = ({
     isConfigPage,
     configSection
   )
+  const isFleetSimActive = fleetSimEnabled
+    ? hasActiveLayoutMenuSection(
+        FLEET_SIM_MENU_SECTIONS,
+        location.pathname,
+        isConfigPage,
+        configSection
+      )
+    : false
 
   const closeMenus = () => {
     setOpenDropdown(null)
@@ -244,9 +259,43 @@ const Layout: React.FC<LayoutProps> = ({
                   </svg>
                 </button>
                 {openDropdown === 'manager'
-                  ? renderDropdownMenu(MANAGER_MENU_SECTIONS, styles.dropdownMenu, 'Manager')
+                  ? renderDropdownMenu(managerMenuSections, styles.dropdownMenu, 'Manager')
                   : null}
               </div>
+              {fleetSimEnabled ? (
+                <div className={styles.navDropdown}>
+                  <button
+                    type="button"
+                    aria-expanded={openDropdown === 'fleetSim'}
+                    aria-haspopup="menu"
+                    className={`${styles.navLink} ${isFleetSimActive ? styles.navLinkActive : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleDropdown('fleetSim')
+                  }}
+                >
+                  Simulator
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      className={`${styles.dropdownArrow} ${openDropdown === 'fleetSim' ? styles.dropdownArrowOpen : ''}`}
+                    >
+                      <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {openDropdown === 'fleetSim'
+                    ? renderDropdownMenu(
+                        FLEET_SIM_MENU_SECTIONS,
+                        styles.dropdownMenu,
+                        'Simulator'
+                      )
+                    : null}
+                </div>
+              ) : null}
               <div className={styles.navDropdown}>
                 <button
                   type="button"
@@ -369,7 +418,8 @@ const Layout: React.FC<LayoutProps> = ({
                 {link.label}
               </NavLink>
             ))}
-            {renderMobileMenuSection('Manager', MANAGER_MENU_SECTIONS)}
+            {renderMobileMenuSection('Manager', managerMenuSections)}
+            {fleetSimEnabled ? renderMobileMenuSection('Simulator', FLEET_SIM_MENU_SECTIONS) : null}
             {renderMobileMenuSection('System', analysisOperationsMenuSections)}
           </div>
         ) : null}

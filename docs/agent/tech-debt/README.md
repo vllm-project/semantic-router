@@ -70,6 +70,8 @@ Keep the numeric index unique within `docs/agent/tech-debt/`.
 - [TD010 E2E Framework Extension Paths Still Rely on Script-Style Stack Composition and Low-Level Test Fixtures](td-010-e2e-framework-extension-paths.md)
 - [TD011 API Server Runtime State Is Split Between a Live Service Handle and a Stale Config Snapshot](td-011-apiserver-runtime-state-split.md)
 - [TD015 Weak Typing Still Leaks Through Dashboard Editor Models and DSL Serialization Helpers](td-015-weakly-typed-config-and-dsl-contracts.md)
+- [TD016 Fleet Sim Subtree Still Diverges from the Shared Ruff Contract](td-016-fleet-sim-shared-ruff-contract-gap.md)
+- [TD017 Fleet Sim Migration Still Depends on Relaxed Structure Gates](td-017-fleet-sim-structure-gate-migration-gap.md)
 
 ## Retired Debt Entries
 

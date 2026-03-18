@@ -17,6 +17,8 @@ func TestStatusCodeToEnumIncludesClientAndUpstreamErrors(t *testing.T) {
 		{statusCode: 403, want: typev3.StatusCode_Forbidden},
 		{statusCode: 404, want: typev3.StatusCode_NotFound},
 		{statusCode: 405, want: typev3.StatusCode_MethodNotAllowed},
+		{statusCode: 413, want: typev3.StatusCode_PayloadTooLarge},
+		{statusCode: 422, want: typev3.StatusCode_UnprocessableEntity},
 		{statusCode: 429, want: typev3.StatusCode_TooManyRequests},
 		{statusCode: 500, want: typev3.StatusCode_InternalServerError},
 		{statusCode: 502, want: typev3.StatusCode_BadGateway},

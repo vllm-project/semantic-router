@@ -157,6 +157,7 @@ surfaces:
       - AGENTS.md
       - docs/agent/**
       - tools/agent/skills/**
+      - src/fleet-sim/AGENTS.md
       - src/vllm-sr/cli/AGENTS.md
       - src/semantic-router/pkg/config/AGENTS.md
       - src/semantic-router/pkg/extproc/AGENTS.md
@@ -190,10 +191,12 @@ surfaces:
     paths:
       - tools/make/agent.mk
       - tools/make/docker.mk
+      - src/fleet-sim/**
       - src/vllm-sr/cli/**
       - e2e/config/config.agent-smoke.*.yaml
     task_rules:
       - vllm-sr-cli
+      - fleet-sim
   local_e2e:
     description: Affected local E2E profile selection and local profile execution.
     paths:
@@ -233,6 +236,7 @@ skills:
         - CONTRIBUTING.md
         - docs/agent/**
         - tools/agent/skills/**
+        - src/fleet-sim/AGENTS.md
         - src/vllm-sr/cli/AGENTS.md
         - src/semantic-router/pkg/config/AGENTS.md
         - src/semantic-router/pkg/extproc/AGENTS.md

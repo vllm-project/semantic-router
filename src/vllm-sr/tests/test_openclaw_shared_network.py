@@ -4,6 +4,7 @@ from cli import core, docker_cli, docker_services, docker_start, runtime_lifecyc
 from cli.consts import (
     DEFAULT_API_PORT,
     DEFAULT_DASHBOARD_PORT,
+    DEFAULT_FLEET_SIM_PORT,
     DEFAULT_METRICS_PORT,
     DEFAULT_ROUTER_PORT,
 )
@@ -199,6 +200,9 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
     monkeypatch.setattr(
         runtime_lifecycle, "docker_create_network", record("docker_create_network")
     )
+    monkeypatch.setattr(
+        core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", True)
+    )
     monkeypatch.setattr(core, "docker_start_vllm_sr", record("docker_start_vllm_sr"))
     monkeypatch.setattr(
         runtime_lifecycle, "docker_network_connect", record("docker_network_connect")
@@ -217,13 +221,20 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
     core.start_vllm_sr("/tmp/config.yaml", env_vars={}, enable_observability=False)
 
     create_calls = [c for c in calls if c[0] == "docker_create_network"]
+    fleet_sim_calls = [c for c in calls if c[0] == "start_fleet_sim_sidecar"]
     start_calls = [c for c in calls if c[0] == "docker_start_vllm_sr"]
     connect_calls = [c for c in calls if c[0] == "docker_network_connect"]
 
     assert create_calls[0][1] == ("vllm-sr-network",)
+    assert fleet_sim_calls[0][1][0] == "/tmp"
+    assert fleet_sim_calls[0][1][2].fleet_sim_container_name == "vllm-sr-sim-container"
     assert start_calls[0][2]["network_name"] is None
     assert start_calls[0][2]["openclaw_network_name"] == "vllm-sr-network"
     assert start_calls[0][2]["runtime_config_file"] == "/tmp/config.yaml"
+    assert (
+        start_calls[0][2]["env_vars"]["TARGET_FLEET_SIM_URL"]
+        == "http://vllm-sr-sim-container:8000"
+    )
     assert connect_calls[0][1] == ("vllm-sr-network", "vllm-sr-container")
 
 
@@ -231,6 +242,7 @@ def test_resolve_runtime_stack_supports_custom_stack_name_and_port_offset():
     stack_layout = resolve_runtime_stack(stack_name="audit-a", port_offset=200)
 
     assert stack_layout.container_name == "audit-a-vllm-sr-container"
+    assert stack_layout.fleet_sim_container_name == "audit-a-vllm-sr-sim"
     assert stack_layout.network_name == "audit-a-vllm-sr-network"
     assert stack_layout.jaeger_container_name == "audit-a-vllm-sr-jaeger"
     assert stack_layout.prometheus_container_name == "audit-a-vllm-sr-prometheus"
@@ -239,6 +251,7 @@ def test_resolve_runtime_stack_supports_custom_stack_name_and_port_offset():
     assert stack_layout.metrics_port == DEFAULT_METRICS_PORT + 200
     assert stack_layout.dashboard_port == DEFAULT_DASHBOARD_PORT + 200
     assert stack_layout.api_port == DEFAULT_API_PORT + 200
+    assert stack_layout.fleet_sim_port == DEFAULT_FLEET_SIM_PORT + 200
 
 
 def test_docker_start_vllm_sr_applies_custom_stack_name_and_port_offset(
@@ -325,6 +338,9 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
     monkeypatch.setattr(
         runtime_lifecycle, "docker_create_network", record("docker_create_network")
     )
+    monkeypatch.setattr(
+        core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", True)
+    )
     monkeypatch.setattr(core, "docker_start_vllm_sr", record("docker_start_vllm_sr"))
     monkeypatch.setattr(
         runtime_lifecycle, "docker_network_connect", record("docker_network_connect")
@@ -343,15 +359,95 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
     core.start_vllm_sr("/tmp/config.yaml", env_vars={}, enable_observability=False)
 
     create_calls = [c for c in calls if c[0] == "docker_create_network"]
+    fleet_sim_calls = [c for c in calls if c[0] == "start_fleet_sim_sidecar"]
     start_calls = [c for c in calls if c[0] == "docker_start_vllm_sr"]
     connect_calls = [c for c in calls if c[0] == "docker_network_connect"]
 
     assert create_calls[0][1] == ("audit-a-vllm-sr-network",)
+    assert fleet_sim_calls[0][1][2].fleet_sim_container_name == "audit-a-vllm-sr-sim"
     assert start_calls[0][2]["openclaw_network_name"] == "audit-a-vllm-sr-network"
     assert (
         start_calls[0][2]["stack_layout"].container_name == "audit-a-vllm-sr-container"
+    )
+    assert (
+        start_calls[0][2]["env_vars"]["TARGET_FLEET_SIM_URL"]
+        == "http://audit-a-vllm-sr-sim:8000"
     )
     assert connect_calls[0][1] == (
         "audit-a-vllm-sr-network",
         "audit-a-vllm-sr-container",
     )
+
+
+def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
+    calls = []
+    stack_layout = resolve_runtime_stack(stack_name="audit-a")
+    status_map = {
+        stack_layout.container_name: "not found",
+        stack_layout.fleet_sim_container_name: "not found",
+        stack_layout.grafana_container_name: "running",
+        stack_layout.prometheus_container_name: "exited",
+        stack_layout.jaeger_container_name: "not found",
+        "openclaw-a": "running",
+        "openclaw-b": "exited",
+    }
+
+    def record(name, ret=(0, "", "")):
+        def _fn(*args, **kwargs):
+            calls.append((name, args, kwargs))
+            return ret
+
+        return _fn
+
+    monkeypatch.setattr(core, "resolve_runtime_stack", lambda: stack_layout)
+    monkeypatch.setattr(
+        core,
+        "docker_container_status",
+        lambda name: status_map.get(name, "not found"),
+    )
+    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda cwd: "/tmp/openclaw")
+    monkeypatch.setattr(
+        core,
+        "load_openclaw_registry",
+        lambda _path: [{"name": "openclaw-a"}, {"containerName": "openclaw-b"}, {}],
+    )
+    monkeypatch.setattr(core, "docker_stop_container", record("docker_stop_container"))
+    monkeypatch.setattr(
+        core,
+        "docker_remove_container",
+        record("docker_remove_container"),
+    )
+    monkeypatch.setattr(
+        core,
+        "docker_network_disconnect",
+        record("docker_network_disconnect"),
+    )
+    monkeypatch.setattr(
+        core,
+        "docker_remove_network",
+        record("docker_remove_network"),
+    )
+
+    core.stop_vllm_sr()
+
+    stop_calls = [args[0] for name, args, _ in calls if name == "docker_stop_container"]
+    remove_calls = [
+        args[0] for name, args, _ in calls if name == "docker_remove_container"
+    ]
+    disconnect_calls = [
+        args for name, args, _ in calls if name == "docker_network_disconnect"
+    ]
+    remove_network_calls = [
+        args for name, args, _ in calls if name == "docker_remove_network"
+    ]
+
+    assert stop_calls == ["openclaw-a", stack_layout.grafana_container_name]
+    assert remove_calls == [
+        stack_layout.grafana_container_name,
+        stack_layout.prometheus_container_name,
+    ]
+    assert disconnect_calls == [
+        (stack_layout.network_name, "openclaw-a"),
+        (stack_layout.network_name, "openclaw-b"),
+    ]
+    assert remove_network_calls == [(stack_layout.network_name,)]

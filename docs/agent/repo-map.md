@@ -6,6 +6,8 @@
   - Go router, Envoy extproc server, config loading, Kubernetes controller, routing logic
 - `src/vllm-sr/`
   - Python CLI, config generation, Docker orchestration, local bootstrap flow
+- `src/fleet-sim/`
+  - Fleet simulator package, HTTP service, data sets, examples, and service image used by the dashboard sidecar
 - `candle-binding/`, `ml-binding/`, `nlp-binding/`
   - Rust-backed inference and ML bindings used by the router
 - `dashboard/`
@@ -51,6 +53,8 @@
 
 - `src/vllm-sr/**`
   - affects local developer experience and local image startup
+- `src/fleet-sim/**`
+  - affects simulator packaging, dashboard fleet-planning workflows, and local sidecar startup
 - `src/semantic-router/**`
   - affects router behavior and broad E2E coverage
 - `tools/make/**`

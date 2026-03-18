@@ -186,6 +186,23 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Fleet Simulator',
+      items: [
+        'fleet-sim/overview',
+        'fleet-sim/getting-started',
+        'fleet-sim/dashboard-integration',
+        'fleet-sim/use-cases',
+        'fleet-sim/sim-algorithms',
+        'fleet-sim/power-model',
+        {
+          type: 'link',
+          label: 'Fleet Simulator PDF',
+          href: 'pathname:///files/fleet-sim/fleet-sim.pdf',
+        },
+      ],
+    },
+    {
+      type: 'category',
       label: 'Proposals',
       items: [
         'proposals/unified-config-contract-v0-3',

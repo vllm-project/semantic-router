@@ -6,6 +6,8 @@ These local `AGENTS.md` files are first-class supplements to the shared harness.
 
 - [../../src/vllm-sr/cli/AGENTS.md](../../src/vllm-sr/cli/AGENTS.md)
   - CLI orchestration and `docker_cli.py` hotspot rules
+- [../../src/fleet-sim/AGENTS.md](../../src/fleet-sim/AGENTS.md)
+  - simulator package boundaries, service surface, and public export rules
 - [../../src/semantic-router/pkg/config/AGENTS.md](../../src/semantic-router/pkg/config/AGENTS.md)
   - config schema and `config.go` hotspot rules
 - [../../src/semantic-router/pkg/extproc/AGENTS.md](../../src/semantic-router/pkg/extproc/AGENTS.md)

@@ -11,6 +11,7 @@ from cli.consts import (
     PLATFORM_AMD,
     VLLM_SR_DOCKER_IMAGE_DEFAULT,
     VLLM_SR_DOCKER_IMAGE_ROCM,
+    VLLM_SR_SIM_DOCKER_IMAGE_DEFAULT,
 )
 from cli.docker_runtime import (
     docker_image_exists,
@@ -170,6 +171,24 @@ def get_docker_image(image=None, pull_policy=None, platform=None):
         pull_policy = DEFAULT_IMAGE_PULL_POLICY
     normalized_platform = _resolve_platform_hint(platform)
     selected_image = _resolve_selected_image(image, normalized_platform)
+    _ensure_image_available(selected_image, pull_policy)
+    return selected_image
+
+
+def get_fleet_sim_docker_image(image=None, pull_policy=None):
+    """Resolve the simulator image and ensure it is available locally."""
+    if pull_policy is None:
+        pull_policy = DEFAULT_IMAGE_PULL_POLICY
+
+    if image:
+        selected_image = image
+        log.info(f"Using specified simulator image: {selected_image}")
+    else:
+        selected_image = os.getenv(
+            "VLLM_SR_SIM_IMAGE", VLLM_SR_SIM_DOCKER_IMAGE_DEFAULT
+        ).strip()
+        log.info(f"Using simulator image: {selected_image}")
+
     _ensure_image_available(selected_image, pull_policy)
     return selected_image
 

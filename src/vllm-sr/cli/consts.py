@@ -7,7 +7,11 @@ VLLM_SR_DOCKER_IMAGE_DEFAULT = "ghcr.io/vllm-project/semantic-router/vllm-sr:lat
 VLLM_SR_DOCKER_IMAGE_ROCM = "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest"
 VLLM_SR_DOCKER_IMAGE_DEV = "vllm-sr:dev"
 VLLM_SR_DOCKER_IMAGE_RELEASE = f"vllm-sr:{__version__}"
+VLLM_SR_SIM_DOCKER_IMAGE_DEFAULT = (
+    "ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest"
+)
 VLLM_SR_DOCKER_NAME = "vllm-sr-container"
+VLLM_SR_SIM_DOCKER_NAME = "vllm-sr-sim-container"
 DEFAULT_STACK_NAME = "vllm-sr"
 PLATFORM_AMD = "amd"
 
@@ -28,6 +32,7 @@ DEFAULT_API_PORT = 8080
 DEFAULT_LISTENER_PORT = 8899
 DEFAULT_DASHBOARD_PORT = 8700
 DEFAULT_METRICS_PORT = 9190
+DEFAULT_FLEET_SIM_PORT = 8810
 
 # Health check
 HEALTH_CHECK_TIMEOUT = 1800  # 5 minutes (increased for model loading)

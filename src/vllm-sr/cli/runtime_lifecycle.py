@@ -21,6 +21,7 @@ from cli.docker_cli import (
     docker_network_connect,
     docker_remove_container,
     docker_start_container,
+    docker_start_fleet_sim,
     docker_start_grafana,
     docker_start_jaeger,
     docker_start_prometheus,
@@ -110,6 +111,42 @@ def start_observability_stack(
     return shared_network_name
 
 
+def start_fleet_sim_sidecar(
+    config_dir: str,
+    env_vars: dict[str, str],
+    stack_layout: RuntimeStackLayout,
+    pull_policy: str | None = None,
+) -> bool:
+    """Start the local simulator sidecar unless an external URL is configured."""
+    external_url = env_vars.get("TARGET_FLEET_SIM_URL") or os.getenv(
+        "TARGET_FLEET_SIM_URL"
+    )
+    if external_url:
+        env_vars["TARGET_FLEET_SIM_URL"] = external_url
+        log.info(f"Using external vllm-sr-sim service: {external_url}")
+        return False
+
+    raw_enabled = env_vars.get(
+        "VLLM_SR_SIM_ENABLED", os.getenv("VLLM_SR_SIM_ENABLED", "true")
+    )
+    if str(raw_enabled).lower() == "false":
+        log.info("vllm-sr-sim sidecar disabled via VLLM_SR_SIM_ENABLED=false")
+        return False
+
+    log.info("Starting vllm-sr-sim sidecar...")
+    _start_named_service(
+        "vllm-sr-sim",
+        lambda: docker_start_fleet_sim(
+            network_name=stack_layout.network_name,
+            config_dir=config_dir,
+            stack_layout=stack_layout,
+            pull_policy=pull_policy,
+        ),
+    )
+    env_vars["TARGET_FLEET_SIM_URL"] = stack_layout.fleet_sim_service_url
+    return True
+
+
 def connect_runtime_container(
     shared_network_name: str, stack_layout: RuntimeStackLayout
 ) -> None:
@@ -154,7 +191,7 @@ def maybe_finish_setup_mode(
     log.info(f"  - Open {stack_layout.dashboard_url}")
     log.info("  - Configure your first model in the dashboard")
     log.info("  - Activate a runnable config to enable routing")
-    _log_runtime_commands(dashboard_disabled=False)
+    _log_runtime_commands(dashboard_disabled=False, fleet_sim_enabled=False)
     log.info("=" * 60)
     return True
 
@@ -267,6 +304,7 @@ def log_runtime_summary(
     stack_layout: RuntimeStackLayout,
     dashboard_disabled: bool,
     enable_observability: bool,
+    fleet_sim_enabled: bool,
 ) -> None:
     """Print the local endpoints and common follow-up commands."""
     log.info("=" * 60)
@@ -282,6 +320,8 @@ def log_runtime_summary(
             port += stack_layout.port_offset
         log.info(f"  - {name}: http://localhost:{port}")
     log.info(f"  - Metrics: {stack_layout.metrics_url}")
+    if fleet_sim_enabled:
+        log.info(f"  - Fleet Sim: {stack_layout.fleet_sim_url}")
 
     if enable_observability:
         log.info("")
@@ -290,7 +330,7 @@ def log_runtime_summary(
         log.info(f"  - Grafana: {stack_layout.grafana_url} (admin/admin)")
         log.info(f"  - Prometheus: {stack_layout.prometheus_url}")
 
-    _log_runtime_commands(dashboard_disabled)
+    _log_runtime_commands(dashboard_disabled, fleet_sim_enabled)
     _print_curl_example(listeners, stack_layout)
 
 
@@ -334,13 +374,17 @@ def _print_matching_lines(text: str) -> None:
             print(f"  {line}")
 
 
-def _log_runtime_commands(dashboard_disabled: bool) -> None:
+def _log_runtime_commands(dashboard_disabled: bool, fleet_sim_enabled: bool) -> None:
     log.info("")
     log.info("Commands:")
     if not dashboard_disabled:
         log.info("  - vllm-sr dashboard              Open dashboard in browser")
-    log.info("  - vllm-sr logs <envoy|router|dashboard> [-f]")
-    log.info("  - vllm-sr status [envoy|router|dashboard|all]")
+    if fleet_sim_enabled:
+        log.info("  - vllm-sr logs <envoy|router|dashboard|simulator> [-f]")
+        log.info("  - vllm-sr status [envoy|router|dashboard|simulator|all]")
+    else:
+        log.info("  - vllm-sr logs <envoy|router|dashboard> [-f]")
+        log.info("  - vllm-sr status [envoy|router|dashboard|all]")
     log.info("  - vllm-sr stop")
 
 

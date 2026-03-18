@@ -12,6 +12,9 @@ This document defines the harness-side validation ladder for repository changes.
 - `make agent-lint CHANGED_FILES="..."`
   - runs pre-commit, language lint, and structure checks for changed files
   - Go changed-file lint reuses stricter module configs when the repository defines them; `dashboard/backend` uses the same `golangci-lint` config as `make dashboard-lint`
+- `make agent-ci-lint CHANGED_FILES="..."`
+  - reproduces the CI changed-file lint path locally
+  - runs `make codespell-tracked` and `make agent-fast-gate` with the same agent bootstrap toolchain used by CI
 - `make agent-ci-gate CHANGED_FILES="..."`
   - runs `agent-report`, `agent-fast-gate`, and rule-driven fast tests
 - `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."`
@@ -22,6 +25,7 @@ This document defines the harness-side validation ladder for repository changes.
 - Harness-only prose or manifest changes start with `make agent-validate`.
 - Code changes start with `make agent-report` to resolve primary skill, impacted surfaces, and validation commands.
 - Use the smallest gate that matches the change.
+- Use `make agent-ci-lint CHANGED_FILES="..."` when you want the same changed-file lint path that the pre-commit workflow runs in CI.
 - Use `ENV=amd` when platform behavior, AMD defaults, or ROCm image selection are affected.
 
 ## Environment Expectations
