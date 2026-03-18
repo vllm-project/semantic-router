@@ -15,23 +15,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// Integration Tests (require running Valkey server)
-
 // These tests require:
 // 1. A running Valkey instance with search module on localhost:6379
 // 2. BERT model initialized for embeddings
-//
-// Run with: go test -v ./pkg/cache/... -run ValkeyCacheIntegration
-//
-// To start Valkey with search:
-//   docker run -d -p 6379:6379 valkey/valkey:latest
-//
-// To inspect Valkey data after tests:
-//   valkey-cli
-//   FT.INFO test_valkey_idx
-//   KEYS doc:*
-//   HGETALL doc:<some_id>
-
 func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 	// Skip if SKIP_VALKEY_TESTS is set
 	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
