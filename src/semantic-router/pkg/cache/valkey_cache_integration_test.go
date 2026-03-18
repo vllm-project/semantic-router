@@ -156,7 +156,6 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 		Config:              valkeyConfig,
 		EmbeddingModel:      "bert",
 	})
-
 	if err != nil {
 		t.Skipf("Valkey server not available (skipping integration test): %v", err)
 	}
