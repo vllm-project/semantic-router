@@ -1,0 +1,412 @@
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  min-height: 50vh;
+  color: var(--color-text-secondary);
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.toolbarActions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.sectionSubtitle {
+  margin: 0.35rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.toggle input {
+  accent-color: var(--color-primary);
+}
+
+.refreshButton,
+.paginationButton {
+  padding: 0.55rem 0.95rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(118, 185, 0, 0.14);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+
+.refreshButton:hover,
+.paginationButton:hover:not(:disabled) {
+  border-color: rgba(0, 212, 255, 0.3);
+  background: rgba(0, 212, 255, 0.12);
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-danger);
+}
+
+.filterRow {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.filterSelect {
+  min-width: 180px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(2, 5, 5, 0.62);
+  color: var(--color-text);
+  font-size: 0.875rem;
+}
+
+.filterSelect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.emptyState {
+  display: flex;
+  justify-content: center;
+  padding: 3rem 1rem 1rem;
+  text-align: center;
+}
+
+.emptyHint {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+  max-width: 640px;
+}
+
+.configHint {
+  margin: 0;
+  padding: 1rem;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--color-primary-light);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  text-align: left;
+  white-space: pre;
+}
+
+.emptySubtext {
+  margin: 0;
+  color: var(--color-text-secondary);
+  opacity: 0.84;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(6, 10, 9, 0.84);
+}
+
+.paginationButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.paginationInfo {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  padding: 0 0.5rem;
+}
+
+.requestId,
+.timestamp {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.decision {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.signalList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.signalPillCompact,
+.modalSignalPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--color-text);
+}
+
+.signalOverflow {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  padding: 0.18rem 0.2rem;
+}
+
+.reasoningBadge {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 42px;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.reasoningOn {
+  background: rgba(118, 185, 0, 0.15);
+  color: var(--color-primary-light);
+}
+
+.reasoningOff {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-secondary);
+}
+
+.modelChange {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.modelName {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0.22rem 0.55rem;
+  border-radius: var(--radius-sm);
+  background: rgba(118, 185, 0, 0.08);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.modelArrow {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.costCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.costValue,
+.costValuePositive {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.costValue {
+  color: var(--color-text);
+}
+
+.costValuePositive {
+  color: var(--color-primary-light);
+}
+
+.costValueMuted,
+.costSubtle {
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+}
+
+.statusBadge {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 52px;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.statusSuccess {
+  background: rgba(118, 185, 0, 0.15);
+  color: var(--color-primary-light);
+}
+
+.statusError {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-danger);
+}
+
+.indicators {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-secondary);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.indicatorActive {
+  background: rgba(118, 185, 0, 0.14);
+  color: var(--color-primary-light);
+}
+
+.modalSignalList,
+.alertList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.pluginStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.alertDanger,
+.alertWarn,
+.alertSuccess,
+.alertInfo {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.alertDanger {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ffd0ca;
+}
+
+.alertWarn {
+  background: rgba(245, 158, 11, 0.18);
+  color: #ffe1a3;
+}
+
+.alertSuccess {
+  background: rgba(118, 185, 0, 0.15);
+  color: var(--color-primary-light);
+}
+
+.alertInfo {
+  background: rgba(0, 212, 255, 0.14);
+  color: var(--color-accent-cyan);
+}
+
+.bodyPreview {
+  margin: 0;
+  padding: 0.75rem;
+  max-height: 400px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.readonlyLock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 900px) {
+  .toolbar,
+  .pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbarActions {
+    justify-content: flex-start;
+  }
+
+  .filterRow {
+    flex-direction: column;
+  }
+}

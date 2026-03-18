@@ -20,6 +20,15 @@ func init() {
 }
 
 func testChatCompletionsRequest(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	return runChatCompletionsRequest(ctx, client, opts, nil)
+}
+
+func runChatCompletionsRequest(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+	headers map[string]string,
+) error {
 	if opts.Verbose {
 		fmt.Println("[Test] Testing chat completions endpoint")
 	}
@@ -36,7 +45,7 @@ func testChatCompletionsRequest(ctx context.Context, client *kubernetes.Clientse
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "Hello, how are you?"},
 		},
-	}, nil)
+	}, headers)
 	if err != nil {
 		return err
 	}

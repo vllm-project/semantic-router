@@ -9,6 +9,9 @@ import {
   ModelConfig,
   SignalType,
   RuleCombination,
+  RuleNode,
+  RawRuleNode,
+  RawRuleCombination,
   AlgorithmConfig,
   PluginConfig,
   ModelRefConfig,
@@ -458,13 +461,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
   // Python CLI format: decisions array
   if (routingDecisions && routingDecisions.length > 0) {
     routingDecisions.forEach(decision => {
-      const rules: RuleCombination = {
-        operator: (decision.rules?.operator as 'AND' | 'OR' | 'NOT') || 'AND',
-        conditions: (decision.rules?.conditions || []).map(cond => ({
-          type: cond.type as SignalType,
-          name: cond.name,
-        })),
-      }
+      const rules = parseRuleCombination(decision.rules)
 
       const algorithm: AlgorithmConfig | undefined = decision.algorithm
         ? {
@@ -539,6 +536,45 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
 
   // Sort by priority (descending)
   return decisions.sort((a, b) => b.priority - a.priority)
+}
+
+function normalizeRuleOperator(operator?: string): RuleCombination['operator'] {
+  if (operator === 'OR' || operator === 'NOT') {
+    return operator
+  }
+
+  return 'AND'
+}
+
+function parseRuleNode(node: RawRuleNode): RuleNode | null {
+  if (Array.isArray(node.conditions)) {
+    return {
+      operator: normalizeRuleOperator(node.operator),
+      conditions: node.conditions
+        .map((condition) => parseRuleNode(condition))
+        .filter((condition): condition is RuleNode => condition !== null),
+    }
+  }
+
+  if (node.type && node.name) {
+    return {
+      type: node.type as SignalType,
+      name: node.name,
+    }
+  }
+
+  return null
+}
+
+function parseRuleCombination(rules?: RawRuleCombination): RuleCombination {
+  const conditions = (rules?.conditions || [])
+    .map((condition: RawRuleNode) => parseRuleNode(condition))
+    .filter((condition: RuleNode | null): condition is RuleNode => condition !== null)
+
+  return {
+    operator: normalizeRuleOperator(rules?.operator),
+    conditions,
+  }
 }
 
 /**

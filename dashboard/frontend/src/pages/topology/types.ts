@@ -88,12 +88,26 @@ export interface DecisionConfig {
 
 export interface RuleCombination {
   operator: 'AND' | 'OR' | 'NOT'
-  conditions: RuleCondition[]
+  conditions: RuleNode[]
 }
 
 export interface RuleCondition {
   type: SignalType
   name: string
+}
+
+export type RuleNode = RuleCombination | RuleCondition
+
+export interface RawRuleNode {
+  type?: string
+  name?: string
+  operator?: string
+  conditions?: RawRuleNode[]
+}
+
+export interface RawRuleCombination {
+  operator?: string
+  conditions?: RawRuleNode[]
 }
 
 // ============== Algorithm Types ==============
@@ -293,6 +307,7 @@ export interface ConfigData {
     mmbert_model_path?: string
     use_cpu?: boolean
     embedding_config?: {
+      top_k?: number
       min_score_threshold?: number
     }
   }
@@ -501,13 +516,7 @@ export interface ConfigData {
     name: string
     description?: string
     priority?: number
-    rules?: {
-      operator?: string
-      conditions?: Array<{
-        type: string
-        name: string
-      }>
-    }
+    rules?: RawRuleCombination
     algorithm?: {
       type: string
       confidence?: {

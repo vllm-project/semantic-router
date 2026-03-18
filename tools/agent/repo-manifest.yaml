@@ -21,7 +21,7 @@ supported_envs:
     smoke_config: e2e/config/config.agent-smoke.amd.yaml
     local_dev_fragment: local-dev-amd
     deployment_reference: deploy/amd/README.md
-    example_config: deploy/amd/config.yaml
+    example_config: deploy/recipes/balance.yaml
   ci-k8s:
     aliases:
       - ci-k8s
