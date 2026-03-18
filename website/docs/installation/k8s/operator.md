@@ -263,6 +263,7 @@ spec:
               target_dimension: 256
               preload_embeddings: true
               enable_soft_matching: true
+              top_k: 1
               min_score_threshold: "0.5"
       stores:
         semantic_cache:
@@ -1375,6 +1376,7 @@ spec:
               preload_embeddings: true
               target_dimension: 768
               target_layer: 22
+              top_k: 1
               min_score_threshold: 0.5
         system:
           prompt_guard: "models/mmbert32k-jailbreak-detector-merged"

@@ -14,6 +14,7 @@ Inside canonical `config.yaml`:
 - `providers.models[]` holds concrete backend access details directly
 - `routing.modelCards[]` holds semantic model metadata, including optional `loras[]` catalogs for decision-level `lora_name` references
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
+- embedding fallback tuning such as `global.model_catalog.embeddings.semantic.embedding_config.top_k` lives under the router-owned model catalog, not under individual signal rules
 - `global.router.config_source` selects the router's steady-state config source; the exhaustive reference uses `file`, while Kubernetes CRD reconciliation uses `kubernetes`
 - router-owned model-backed module config lives under `global.model_catalog.modules`
 
