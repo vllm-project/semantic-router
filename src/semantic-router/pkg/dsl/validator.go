@@ -738,6 +738,15 @@ type routeSignalInfo struct {
 }
 
 func (v *Validator) checkSameSignalTypeGuard() {
+	infos := v.collectRouteSignalInfos()
+	for i := 0; i < len(infos); i++ {
+		for j := i + 1; j < len(infos); j++ {
+			v.checkSignalTypeGuardPair(infos[i], infos[j])
+		}
+	}
+}
+
+func (v *Validator) collectRouteSignalInfos() []routeSignalInfo {
 	var infos []routeSignalInfo
 	for _, r := range v.prog.Routes {
 		if r.When == nil {
@@ -751,54 +760,56 @@ func (v *Validator) checkSameSignalTypeGuard() {
 		collectSignalRefs(r.When, false, &info)
 		infos = append(infos, info)
 	}
+	return infos
+}
 
-	for i := 0; i < len(infos); i++ {
-		for j := i + 1; j < len(infos); j++ {
-			a, b := infos[i], infos[j]
-			for sigType, aNamesPos := range a.positiveRefs {
-				bNamesPos, ok := b.positiveRefs[sigType]
-				if !ok {
+func (v *Validator) checkSignalTypeGuardPair(a, b routeSignalInfo) {
+	for sigType, aNamesPos := range a.positiveRefs {
+		bNamesPos, ok := b.positiveRefs[sigType]
+		if !ok {
+			continue
+		}
+		for _, aName := range aNamesPos {
+			for _, bName := range bNamesPos {
+				if aName == bName {
 					continue
 				}
-				for _, aName := range aNamesPos {
-					for _, bName := range bNamesPos {
-						if aName == bName {
-							continue
-						}
-						hiRoute, loRoute, hiName, loName := a.route, b.route, aName, bName
-						if b.route.Priority > a.route.Priority ||
-							(b.route.Priority == a.route.Priority && b.route.Tier > a.route.Tier) {
-							hiRoute, loRoute, hiName, loName = b.route, a.route, bName, aName
-						}
-						loInfo := infos[j]
-						if hiRoute == b.route {
-							loInfo = infos[i]
-						}
-						if containsString(loInfo.negatedRefs[sigType], hiName) {
-							continue
-						}
-
-						v.addDiag(DiagWarning, loRoute.Pos,
-							fmt.Sprintf(
-								"ROUTE %q and ROUTE %q both reference %s signals "+
-									"(%s(%q) and %s(%q)) with no mutual exclusion guard — "+
-									"both can fire on the same query",
-								hiRoute.Name, loRoute.Name,
-								sigType, sigType, hiName, sigType, loName),
-							&QuickFix{
-								Description: fmt.Sprintf(
-									"Add guard: WHEN %s(%q) AND NOT %s(%q)",
-									sigType, loName, sigType, hiName),
-								NewText: fmt.Sprintf(
-									"%s(\"%s\") AND NOT %s(\"%s\")",
-									sigType, loName, sigType, hiName),
-							},
-						)
-					}
-				}
+				v.emitGuardDiagIfNeeded(sigType, a, b, aName, bName)
 			}
 		}
 	}
+}
+
+func (v *Validator) emitGuardDiagIfNeeded(sigType string, a, b routeSignalInfo, aName, bName string) {
+	hiRoute, loRoute, hiName, loName := a.route, b.route, aName, bName
+	if b.route.Priority > a.route.Priority ||
+		(b.route.Priority == a.route.Priority && b.route.Tier > a.route.Tier) {
+		hiRoute, loRoute, hiName, loName = b.route, a.route, bName, aName
+	}
+	loInfo := b
+	if hiRoute == b.route {
+		loInfo = a
+	}
+	if containsString(loInfo.negatedRefs[sigType], hiName) {
+		return
+	}
+
+	v.addDiag(DiagWarning, loRoute.Pos,
+		fmt.Sprintf(
+			"ROUTE %q and ROUTE %q both reference %s signals "+
+				"(%s(%q) and %s(%q)) with no mutual exclusion guard — "+
+				"both can fire on the same query",
+			hiRoute.Name, loRoute.Name,
+			sigType, sigType, hiName, sigType, loName),
+		&QuickFix{
+			Description: fmt.Sprintf(
+				"Add guard: WHEN %s(%q) AND NOT %s(%q)",
+				sigType, loName, sigType, hiName),
+			NewText: fmt.Sprintf(
+				"%s(\"%s\") AND NOT %s(\"%s\")",
+				sigType, loName, sigType, hiName),
+		},
+	)
 }
 
 // collectSignalRefs walks a boolean expression tree and classifies signal
@@ -836,76 +847,86 @@ func containsString(ss []string, target string) bool {
 // valid semantics value, and temperature range.
 func (v *Validator) checkSignalGroups() {
 	for _, sg := range v.prog.SignalGroups {
-		context := fmt.Sprintf("SIGNAL_GROUP %s", sg.Name)
+		v.checkSignalGroup(sg)
+	}
+}
 
-		validSemantics := []string{"exclusive", "softmax_exclusive"}
-		if sg.Semantics != "" && !containsString(validSemantics, sg.Semantics) {
-			v.addDiag(DiagConstraint, sg.Pos,
-				fmt.Sprintf("%s: unknown semantics %q (supported: exclusive, softmax_exclusive)", context, sg.Semantics),
-				nil,
+func (v *Validator) checkSignalGroup(sg *SignalGroupDecl) {
+	context := fmt.Sprintf("SIGNAL_GROUP %s", sg.Name)
+
+	v.checkSignalGroupSemantics(sg, context)
+	v.checkSignalGroupMembers(sg, context)
+	v.checkSignalGroupDefault(sg, context)
+	v.checkSignalGroupCategoryDisjointness(sg, context)
+}
+
+func (v *Validator) checkSignalGroupSemantics(sg *SignalGroupDecl, context string) {
+	validSemantics := []string{"exclusive", "softmax_exclusive"}
+	if sg.Semantics != "" && !containsString(validSemantics, sg.Semantics) {
+		v.addDiag(DiagConstraint, sg.Pos,
+			fmt.Sprintf("%s: unknown semantics %q (supported: exclusive, softmax_exclusive)", context, sg.Semantics),
+			nil,
+		)
+	}
+	if sg.Semantics == "softmax_exclusive" && sg.Temperature <= 0 {
+		v.addDiag(DiagConstraint, sg.Pos,
+			fmt.Sprintf("%s: softmax_exclusive requires temperature > 0", context),
+			&QuickFix{Description: "Set temperature to 0.1", NewText: "0.1"},
+		)
+	}
+}
+
+func (v *Validator) checkSignalGroupMembers(sg *SignalGroupDecl, context string) {
+	if len(sg.Members) == 0 {
+		v.addDiag(DiagConstraint, sg.Pos,
+			fmt.Sprintf("%s: members list is empty", context),
+			nil,
+		)
+	}
+	for _, member := range sg.Members {
+		if !v.isSignalDeclaredByName(member) {
+			v.addDiag(DiagWarning, sg.Pos,
+				fmt.Sprintf("%s: member %q is not defined as a signal", context, member),
+				v.suggestSignalByName(member),
 			)
 		}
+	}
+}
 
-		if sg.Semantics == "softmax_exclusive" && sg.Temperature <= 0 {
-			v.addDiag(DiagConstraint, sg.Pos,
-				fmt.Sprintf("%s: softmax_exclusive requires temperature > 0", context),
-				&QuickFix{Description: "Set temperature to 0.1", NewText: "0.1"},
-			)
+func (v *Validator) checkSignalGroupDefault(sg *SignalGroupDecl, context string) {
+	if sg.Default == "" {
+		v.addDiag(DiagConstraint, sg.Pos,
+			fmt.Sprintf("%s: a default member is required for coverage — every query must route somewhere", context),
+			nil,
+		)
+		return
+	}
+	if !containsString(sg.Members, sg.Default) {
+		v.addDiag(DiagWarning, sg.Pos,
+			fmt.Sprintf("%s: default %q is not listed in members", context, sg.Default),
+			nil,
+		)
+	}
+}
+
+func (v *Validator) checkSignalGroupCategoryDisjointness(sg *SignalGroupDecl, context string) {
+	catOwner := make(map[string]string)
+	for _, member := range sg.Members {
+		sig := v.findSignalByName(member)
+		if sig == nil {
+			continue
 		}
-
-		if len(sg.Members) == 0 {
-			v.addDiag(DiagConstraint, sg.Pos,
-				fmt.Sprintf("%s: members list is empty", context),
-				nil,
-			)
-		}
-
-		defaultFound := false
-		for _, member := range sg.Members {
-			if member == sg.Default {
-				defaultFound = true
-			}
-			if !v.isSignalDeclaredByName(member) {
+		for _, cat := range getMMLUCategories(sig) {
+			if existing, clash := catOwner[cat]; clash {
 				v.addDiag(DiagWarning, sg.Pos,
-					fmt.Sprintf("%s: member %q is not defined as a signal", context, member),
-					v.suggestSignalByName(member),
+					fmt.Sprintf(
+						"%s: members %q and %q share MMLU category %q — "+
+							"violates group disjointness",
+						context, member, existing, cat),
+					nil,
 				)
 			}
-		}
-
-		if sg.Default != "" && !defaultFound {
-			v.addDiag(DiagWarning, sg.Pos,
-				fmt.Sprintf("%s: default %q is not listed in members", context, sg.Default),
-				nil,
-			)
-		}
-		if sg.Default == "" {
-			v.addDiag(DiagConstraint, sg.Pos,
-				fmt.Sprintf("%s: a default member is required for coverage — every query must route somewhere", context),
-				nil,
-			)
-		}
-
-		// Check MMLU category disjointness within the group
-		catOwner := make(map[string]string) // category → member name
-		for _, member := range sg.Members {
-			sig := v.findSignalByName(member)
-			if sig == nil {
-				continue
-			}
-			cats := getMMLUCategories(sig)
-			for _, cat := range cats {
-				if existing, clash := catOwner[cat]; clash {
-					v.addDiag(DiagWarning, sg.Pos,
-						fmt.Sprintf(
-							"%s: members %q and %q share MMLU category %q — "+
-								"violates group disjointness",
-							context, member, existing, cat),
-						nil,
-					)
-				}
-				catOwner[cat] = member
-			}
+			catOwner[cat] = member
 		}
 	}
 }
