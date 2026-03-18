@@ -350,6 +350,84 @@ func (c *ValkeyCache) AddPendingRequest(requestID string, model string, query st
 }
 
 // UpdateWithResponse completes a pending request by adding the response
+// pendingEntry holds the parsed fields from a pending cache entry search result.
+type pendingEntry struct {
+	docID          string
+	model          string
+	query          string
+	requestBodyStr string
+}
+
+// parsePendingSearchResult extracts a pendingEntry from a Valkey FT.SEARCH result.
+// Returns the entry or an error describing the parse failure.
+func parsePendingSearchResult(results interface{}, requestID string, prefix string) (*pendingEntry, error) {
+	resultsArray, ok := results.([]interface{})
+	if !ok || len(resultsArray) < 1 {
+		logging.Infof("ValkeyCache.UpdateWithResponse: invalid result format for request_id=%s", requestID)
+		return nil, fmt.Errorf("invalid search result format")
+	}
+
+	totalResults, ok := resultsArray[0].(int64)
+	if !ok {
+		logging.Infof("ValkeyCache.UpdateWithResponse: invalid count type for request_id=%s (got %T)", requestID, resultsArray[0])
+		return nil, fmt.Errorf("invalid search result count type")
+	}
+
+	if totalResults == 0 {
+		logging.Infof("ValkeyCache.UpdateWithResponse: no pending entry found with request_id=%s (count=0, may still be indexing)", requestID)
+		return nil, fmt.Errorf("no pending entry found (indexing may still be in progress)")
+	}
+
+	logging.Infof("UpdateWithResponse: found %d result(s) for request_id=%s", totalResults, requestID)
+
+	if len(resultsArray) < 2 {
+		logging.Warnf("UpdateWithResponse: resultsArray only has %d elements", len(resultsArray))
+		return nil, fmt.Errorf("invalid search result: expected at least 2 elements")
+	}
+
+	docMap, ok := resultsArray[1].(map[string]interface{})
+	if !ok {
+		logging.Warnf("UpdateWithResponse: resultsArray[1] is not a map, type=%T", resultsArray[1])
+		return nil, fmt.Errorf("invalid search result: expected map at index 1")
+	}
+
+	entry := &pendingEntry{}
+	for docKey, docValue := range docMap {
+		entry.docID = docKey
+
+		fieldsMap, mapOk := docValue.(map[string]interface{})
+		if !mapOk {
+			logging.Warnf("UpdateWithResponse: document fields is not a map, type=%T", docValue)
+			return nil, fmt.Errorf("invalid search result: expected fields map")
+		}
+
+		if v, exists := fieldsMap["model"]; exists {
+			entry.model = fmt.Sprint(v)
+		}
+		if v, exists := fieldsMap["query"]; exists {
+			entry.query = fmt.Sprint(v)
+		}
+		if v, exists := fieldsMap["request_body"]; exists {
+			entry.requestBodyStr = fmt.Sprint(v)
+		}
+
+		break // Only process the first document
+	}
+
+	if !strings.HasPrefix(entry.docID, prefix) {
+		logging.Warnf("UpdateWithResponse: docID '%s' doesn't have expected prefix '%s'", entry.docID, prefix)
+	}
+
+	logging.Debugf("UpdateWithResponse: extracted docID='%s', model='%s', query='%s'", entry.docID, entry.model, entry.query)
+
+	if entry.model == "" || entry.query == "" {
+		logging.Warnf("UpdateWithResponse: missing required fields (model='%s', query='%s')", entry.model, entry.query)
+		return nil, fmt.Errorf("missing required fields in pending entry")
+	}
+
+	return entry, nil
+}
+
 func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
@@ -383,89 +461,16 @@ func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, 
 
 	logging.Debugf("UpdateWithResponse: search results type=%T, value=%v", results, results)
 
-	// Parse search results
-	resultsArray, ok := results.([]interface{})
-	if !ok || len(resultsArray) < 1 {
-		logging.Infof("ValkeyCache.UpdateWithResponse: invalid result format for request_id=%s", requestID)
+	entry, err := parsePendingSearchResult(results, requestID, c.config.Index.Prefix)
+	if err != nil {
 		metrics.RecordCacheOperation("valkey", "update_response", "error", time.Since(start).Seconds())
-		return fmt.Errorf("invalid search result format")
+		return err
 	}
 
-	// Check the count (first element) to see if any results were found
-	totalResults, ok := resultsArray[0].(int64)
-	if !ok {
-		logging.Infof("ValkeyCache.UpdateWithResponse: invalid count type for request_id=%s (got %T)", requestID, resultsArray[0])
-		metrics.RecordCacheOperation("valkey", "update_response", "error", time.Since(start).Seconds())
-		return fmt.Errorf("invalid search result count type")
-	}
-
-	if totalResults == 0 {
-		logging.Infof("ValkeyCache.UpdateWithResponse: no pending entry found with request_id=%s (count=0, may still be indexing)", requestID)
-		metrics.RecordCacheOperation("valkey", "update_response", "error", time.Since(start).Seconds())
-		return fmt.Errorf("no pending entry found (indexing may still be in progress)")
-	}
-
-	logging.Infof("UpdateWithResponse: found %d result(s) for request_id=%s", totalResults, requestID)
-
-	// Extract document ID and fields from result
-	// Valkey GLIDE returns: [count, map[docID]map[field]value]
-	// This is different from redis-cli which returns: [count, docID, [field, value, ...]]
-	if len(resultsArray) < 2 {
-		logging.Warnf("UpdateWithResponse: resultsArray only has %d elements", len(resultsArray))
-		return fmt.Errorf("invalid search result: expected at least 2 elements")
-	}
-
-	// resultsArray[1] should be a map with docID as key
-	var docID string
-	var model, queryStr, requestBodyStr string
-
-	docMap, ok := resultsArray[1].(map[string]interface{})
-	if !ok {
-		logging.Warnf("UpdateWithResponse: resultsArray[1] is not a map, type=%T", resultsArray[1])
-		return fmt.Errorf("invalid search result: expected map at index 1")
-	}
-
-	// Extract the first (and should be only) entry from the map
-	for docKey, docValue := range docMap {
-		docID = docKey
-
-		// docValue should be a map of fields
-		fieldsMap, mapOk := docValue.(map[string]interface{})
-		if !mapOk {
-			logging.Warnf("UpdateWithResponse: document fields is not a map, type=%T", docValue)
-			return fmt.Errorf("invalid search result: expected fields map")
-		}
-
-		// Extract the fields we need
-		if v, exists := fieldsMap["model"]; exists {
-			model = fmt.Sprint(v)
-		}
-		if v, exists := fieldsMap["query"]; exists {
-			queryStr = fmt.Sprint(v)
-		}
-		if v, exists := fieldsMap["request_body"]; exists {
-			requestBodyStr = fmt.Sprint(v)
-		}
-
-		break // Only process the first document
-	}
-
-	// Validate docID format
-	if !strings.HasPrefix(docID, c.config.Index.Prefix) {
-		logging.Warnf("UpdateWithResponse: docID '%s' doesn't have expected prefix '%s'", docID, c.config.Index.Prefix)
-	}
-
-	logging.Debugf("UpdateWithResponse: extracted docID='%s', model='%s', query='%s'", docID, model, queryStr)
-
-	if model == "" || queryStr == "" {
-		logging.Warnf("UpdateWithResponse: missing required fields (model='%s', query='%s')", model, queryStr)
-		return fmt.Errorf("missing required fields in pending entry")
-	}
-
-	logging.Debugf("ValkeyCache.UpdateWithResponse: found pending entry, updating (id: %s, model: %s)", docID, model)
+	logging.Debugf("ValkeyCache.UpdateWithResponse: found pending entry, updating (id: %s, model: %s)", entry.docID, entry.model)
 
 	// Update the document with response body and TTL
-	err = c.addEntry(docID, requestID, model, queryStr, []byte(requestBodyStr), responseBody, ttlSeconds)
+	err = c.addEntry(entry.docID, requestID, entry.model, entry.query, []byte(entry.requestBodyStr), responseBody, ttlSeconds)
 	if err != nil {
 		metrics.RecordCacheOperation("valkey", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to update entry: %w", err)
@@ -577,6 +582,74 @@ func (c *ValkeyCache) FindSimilar(model string, query string) ([]byte, bool, err
 	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
 }
 
+// searchMatch holds the parsed fields from a vector search result.
+type searchMatch struct {
+	distance     float64
+	responseBody interface{}
+}
+
+// parseBestMatch extracts the best-match distance and response body from a Valkey FT.SEARCH vector result.
+// Returns nil when no valid match is found.
+func parseBestMatch(searchResult interface{}) *searchMatch {
+	resultsArray, ok := searchResult.([]interface{})
+	if !ok || len(resultsArray) < 1 {
+		return nil
+	}
+
+	totalResults, ok := resultsArray[0].(int64)
+	if !ok || totalResults == 0 {
+		return nil
+	}
+
+	if len(resultsArray) < 2 {
+		return nil
+	}
+
+	docMap, ok := resultsArray[1].(map[string]interface{})
+	if !ok {
+		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: invalid result format, expected map at index 1, got %T", resultsArray[1])
+		return nil
+	}
+
+	for _, docValue := range docMap {
+		fieldsMap, mapOk := docValue.(map[string]interface{})
+		if !mapOk {
+			logging.Debugf("ValkeyCache.FindSimilarWithThreshold: invalid fields format, expected map, got %T", docValue)
+			return nil
+		}
+
+		match := &searchMatch{}
+		distanceVal, exists := fieldsMap["vector_distance"]
+		if !exists {
+			return nil
+		}
+
+		if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &match.distance); err != nil {
+			logging.Debugf("ValkeyCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
+			return nil
+		}
+
+		match.responseBody = fieldsMap["response_body"]
+		return match // Only process the first (best) document
+	}
+
+	return nil
+}
+
+// distanceToSimilarity converts a vector distance to a similarity score based on the metric type.
+func distanceToSimilarity(metricType string, distance float64) float32 {
+	switch metricType {
+	case "COSINE":
+		return 1.0 - float32(distance)/2.0
+	case "IP":
+		return float32(distance)
+	case "L2":
+		return 1.0 / (1.0 + float32(distance))
+	default:
+		return 1.0 - float32(distance)
+	}
+}
+
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
 func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
 	start := time.Now()
@@ -622,91 +695,14 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 		return nil, false, nil
 	}
 
-	// Parse search results
-	resultsArray, ok := searchResult.([]interface{})
-	if !ok || len(resultsArray) < 1 {
+	match := parseBestMatch(searchResult)
+	if match == nil {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("valkey", "find_similar", "miss", time.Since(start).Seconds())
 		return nil, false, nil
 	}
 
-	totalResults, ok := resultsArray[0].(int64)
-	if !ok || totalResults == 0 {
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("valkey", "find_similar", "miss", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	// Extract best match fields
-	// Valkey GLIDE returns: [count, map[docID]map[field]value]
-	if len(resultsArray) < 2 {
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	// Parse fields from result map (Valkey GLIDE format)
-	docMap, ok := resultsArray[1].(map[string]interface{})
-	if !ok {
-		atomic.AddInt64(&c.missCount, 1)
-		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: invalid result format, expected map at index 1, got %T", resultsArray[1])
-		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	// Extract the first (best match) document from the map
-	var distanceVal, responseBodyVal interface{}
-	for _, docValue := range docMap {
-		// docValue should be a map of fields
-		fieldsMap, mapOk := docValue.(map[string]interface{})
-		if !mapOk {
-			atomic.AddInt64(&c.missCount, 1)
-			logging.Debugf("ValkeyCache.FindSimilarWithThreshold: invalid fields format, expected map, got %T", docValue)
-			metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
-			return nil, false, nil
-		}
-
-		// Extract the fields we need
-		if v, exists := fieldsMap["vector_distance"]; exists {
-			distanceVal = v
-		}
-		if v, exists := fieldsMap["response_body"]; exists {
-			responseBodyVal = v
-		}
-
-		break // Only process the first (best) document
-	}
-
-	if distanceVal == nil {
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	var distance float64
-	if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); err != nil {
-		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	// Convert distance to similarity score based on metric type
-	var similarity float32
-	switch c.config.Index.VectorField.MetricType {
-	case "COSINE":
-		// COSINE distance in range [0, 2], convert to similarity [0, 1]
-		similarity = 1.0 - float32(distance)/2.0
-	case "IP":
-		// Inner product: higher is more similar, convert appropriately
-		similarity = float32(distance)
-	case "L2":
-		// L2 distance: lower is more similar, convert to similarity
-		// Assume max distance for normalization (this is dataset dependent)
-		similarity = 1.0 / (1.0 + float32(distance))
-	default:
-		similarity = 1.0 - float32(distance)
-	}
+	similarity := distanceToSimilarity(c.config.Index.VectorField.MetricType, match.distance)
 
 	if similarity < threshold {
 		atomic.AddInt64(&c.missCount, 1)
@@ -724,13 +720,13 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 	}
 
 	// Extract response body from cache hit
-	if responseBodyVal == nil {
+	if match.responseBody == nil {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, nil
 	}
 
-	responseBodyStr := fmt.Sprint(responseBodyVal)
+	responseBodyStr := fmt.Sprint(match.responseBody)
 	if responseBodyStr == "" {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
@@ -761,6 +757,36 @@ func (c *ValkeyCache) Close() error {
 	return nil
 }
 
+// getIndexEntryCount retrieves the number of indexed documents from Valkey FT.INFO.
+func (c *ValkeyCache) getIndexEntryCount() int {
+	if !c.enabled || c.client == nil {
+		return 0
+	}
+
+	ctx := context.Background()
+	info, err := c.client.CustomCommand(ctx, []string{"FT.INFO", c.indexName})
+	if err != nil {
+		return 0
+	}
+
+	infoMap, ok := info.(map[string]interface{})
+	if !ok {
+		return 0
+	}
+
+	numDocs, exists := infoMap["num_docs"]
+	if !exists {
+		return 0
+	}
+
+	count, ok := numDocs.(int64)
+	if !ok {
+		return 0
+	}
+
+	return int(count)
+}
+
 // GetStats provides current cache performance metrics
 func (c *ValkeyCache) GetStats() CacheStats {
 	c.mu.RLock()
@@ -775,26 +801,8 @@ func (c *ValkeyCache) GetStats() CacheStats {
 		hitRatio = float64(hits) / float64(total)
 	}
 
-	// Retrieve index statistics from Valkey
-	totalEntries := 0
-	if c.enabled && c.client != nil {
-		ctx := context.Background()
-		infoCmd := []string{"FT.INFO", c.indexName}
-		info, err := c.client.CustomCommand(ctx, infoCmd)
-		if err == nil {
-			// Valkey GLIDE returns FT.INFO as a map[string]interface{}
-			if infoMap, ok := info.(map[string]interface{}); ok {
-				if numDocs, exists := infoMap["num_docs"]; exists {
-					if count, ok := numDocs.(int64); ok {
-						totalEntries = int(count)
-					}
-				}
-			}
-		}
-	}
-
 	cacheStats := CacheStats{
-		TotalEntries: totalEntries,
+		TotalEntries: c.getIndexEntryCount(),
 		HitCount:     hits,
 		MissCount:    misses,
 		HitRatio:     hitRatio,

@@ -164,7 +164,7 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 
 func TestValkeyCacheIntegration_ConnectionCheck(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	err := cache.CheckConnection()
 	assert.NoError(t, err, "Connection check should succeed")
@@ -172,7 +172,7 @@ func TestValkeyCacheIntegration_ConnectionCheck(t *testing.T) {
 
 func TestValkeyCacheIntegration_IndexCreation(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -184,7 +184,7 @@ func TestValkeyCacheIntegration_IndexCreation(t *testing.T) {
 
 func TestValkeyCacheIntegration_AddEntry(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -210,7 +210,7 @@ func TestValkeyCacheIntegration_AddEntry(t *testing.T) {
 
 func TestValkeyCacheIntegration_FindSimilar(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	requestID := "req_find_test"
 	model := "gpt-4"
@@ -249,7 +249,7 @@ func TestValkeyCacheIntegration_FindSimilar(t *testing.T) {
 
 func TestValkeyCacheIntegration_FindSimilarWithThreshold(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	requestID := "req_threshold_test"
 	model := "gpt-4"
@@ -285,7 +285,7 @@ func TestValkeyCacheIntegration_FindSimilarWithThreshold(t *testing.T) {
 
 func TestValkeyCacheIntegration_AddPendingRequest(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	requestID := "req_pending_123"
 	model := "gpt-4"
@@ -302,7 +302,7 @@ func TestValkeyCacheIntegration_AddPendingRequest(t *testing.T) {
 
 func TestValkeyCacheIntegration_UpdateWithResponse(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	requestID := "req_update_456"
 	model := "gpt-4"
@@ -362,7 +362,7 @@ func TestValkeyCacheIntegration_UpdateWithResponse(t *testing.T) {
 
 func TestValkeyCacheIntegration_TTLExpiration(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -395,7 +395,7 @@ func TestValkeyCacheIntegration_TTLExpiration(t *testing.T) {
 
 func TestValkeyCacheIntegration_GetStats(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Add some entries
 	for i := 0; i < 3; i++ {
@@ -427,7 +427,7 @@ func TestValkeyCacheIntegration_Close(t *testing.T) {
 
 func TestValkeyCacheIntegration_IsEnabled(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	assert.True(t, cache.IsEnabled(), "Cache should be enabled")
 
@@ -441,7 +441,7 @@ func TestValkeyCacheIntegration_IsEnabled(t *testing.T) {
 		Config:  valkeyConfig,
 	})
 	require.NoError(t, err)
-	defer disabledCache.Close()
+	defer func() { _ = disabledCache.Close() }()
 
 	assert.False(t, disabledCache.IsEnabled(), "Cache should be disabled")
 }
@@ -456,7 +456,7 @@ func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 		Config:  valkeyConfig,
 	})
 	require.NoError(t, err)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// All operations should return nil/false when disabled
 	err = cache.AddEntry("req_1", "gpt-4", "test", []byte("{}"), []byte("{}"), 300)
@@ -475,7 +475,7 @@ func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 
 func TestValkeyCacheIntegration_TTLZeroSkipsCaching(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Test AddEntry with TTL=0 (should skip caching)
 	requestID := "req_ttl_zero_1"
@@ -517,7 +517,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 		EmbeddingModel:      "bert",
 	})
 	require.NoError(t, err, "Failed to create cache with FLAT index")
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -541,7 +541,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 
 func TestValkeyCacheIntegration_ConcurrentOperations(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	const numGoroutines = 20
 	const operationsPerGoroutine = 5
@@ -584,7 +584,7 @@ func TestValkeyCacheIntegration_ConcurrentOperations(t *testing.T) {
 
 func TestValkeyCacheIntegration_MultipleEntries(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	// Add multiple entries with different queries
 	entries := []struct {
@@ -654,7 +654,7 @@ func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
 		EmbeddingModel:      "bert",
 	})
 	require.NoError(t, err, "Failed to create cache with L2 metric")
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	err = cache.AddEntry("req_l2_1", "gpt-4", "test L2 metric", []byte("{}"), []byte(`{"result":"L2"}`), 300)
 	assert.NoError(t, err, "AddEntry should work with L2 metric")
@@ -699,7 +699,7 @@ func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
 		EmbeddingModel:      "bert",
 	})
 	require.NoError(t, err, "Failed to create cache with IP metric")
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	err = cache.AddEntry("req_ip_1", "gpt-4", "test IP metric", []byte("{}"), []byte(`{"result":"IP"}`), 300)
 	assert.NoError(t, err, "AddEntry should work with IP metric")
@@ -715,7 +715,7 @@ func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
 
 func TestValkeyCacheIntegration_EmptyQuery(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	err := cache.AddEntry("req_empty", "gpt-4", "", []byte("{}"), []byte("{}"), 300)
 	assert.NoError(t, err, "AddEntry with empty query should not error")
@@ -727,7 +727,7 @@ func TestValkeyCacheIntegration_EmptyQuery(t *testing.T) {
 
 func TestValkeyCacheIntegration_LargeResponseBody(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	largeResponse := make([]byte, 1024*1024)
 	for i := range largeResponse {
@@ -749,7 +749,7 @@ func TestValkeyCacheIntegration_LargeResponseBody(t *testing.T) {
 
 func TestValkeyCacheIntegration_SpecialCharactersInQuery(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	specialQueries := []string{
 		`query with "quotes"`,
@@ -778,7 +778,7 @@ func TestValkeyCacheIntegration_SpecialCharactersInQuery(t *testing.T) {
 
 func TestValkeyCacheIntegration_StatsAccuracy(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	for i := 0; i < 5; i++ {
 		requestID := fmt.Sprintf("req_stats_acc_%d", i)
