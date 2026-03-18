@@ -35,6 +35,11 @@ codespell: ## Check for common misspellings in code and docs
 	@$(LOG_TARGET)
 	codespell --skip $(CODESPELL_SKIP) --ignore-words tools/linter/codespell/.codespell.ignorewords --check-filenames
 
+codespell-tracked: CODESPELL_SKIP := $(shell cat tools/linter/codespell/.codespell.skip | tr \\n ',')
+codespell-tracked: ## Check for common misspellings in tracked code and docs
+	@$(LOG_TARGET)
+	git ls-files -z | xargs -0 codespell --skip $(CODESPELL_SKIP) --ignore-words tools/linter/codespell/.codespell.ignorewords --check-filenames
+
 shellcheck: ## Lint all shell scripts in the project
 	@$(LOG_TARGET)
 	@if ! command -v shellcheck >/dev/null 2>&1; then \
