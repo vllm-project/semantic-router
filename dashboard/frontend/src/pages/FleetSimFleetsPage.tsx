@@ -79,13 +79,16 @@ export default function FleetSimFleetsPage() {
 
   const handleCreateFleet = async () => {
     try {
+      if (!fleetName.trim()) {
+        throw new Error('Give the fleet a name before saving it.')
+      }
       await createFleet({
-        name: fleetName,
+        name: fleetName.trim(),
         pools,
         router: routerType,
         compress_gamma: routerType === 'compress_route' ? Number(compressGamma) : null,
       })
-      setMessage(`Saved fleet ${fleetName}`)
+      setMessage(`Saved fleet ${fleetName.trim()}`)
       setError('')
       await load()
     } catch (createError) {

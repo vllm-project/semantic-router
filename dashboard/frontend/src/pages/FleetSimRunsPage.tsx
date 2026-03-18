@@ -193,6 +193,9 @@ export default function FleetSimRunsPage() {
 
   const handleSubmit = async () => {
     try {
+      if (workloadMode === 'trace' && !traceID) {
+        throw new Error('Select an uploaded trace before submitting this run.')
+      }
       const workload = buildWorkloadRef(workloadMode, builtinName, traceID)
       let payload: Record<string, unknown>
 
@@ -231,12 +234,15 @@ export default function FleetSimRunsPage() {
         if (!fleetID) {
           throw new Error('Save or select a fleet before running a what-if sweep.')
         }
+        if (lambdaValues.length === 0) {
+          throw new Error('Add at least one arrival-rate checkpoint for the what-if sweep.')
+        }
         payload = {
           type: 'whatif',
           whatif: {
             workload,
             fleet_id: fleetID,
-            lam_range: lamRange.split(',').map((value) => Number(value.trim())).filter((value) => !Number.isNaN(value)),
+            lam_range: lambdaValues,
             slo_ms: Number(sloMs),
             n_requests: Number(nRequests),
           },
