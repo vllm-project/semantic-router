@@ -142,7 +142,7 @@ func (r *OpenAIRouter) createJSONResponseWithBody(statusCode int, jsonBody []byt
 		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
 			ImmediateResponse: &ext_proc.ImmediateResponse{
 				Status: &typev3.HttpStatus{
-					Code: statusCodeToEnum(statusCode),
+					Code: statusCodeToImmediateResponseCode(statusCode),
 				},
 				Headers: &ext_proc.HeaderMutation{
 					SetHeaders: []*core.HeaderValueOption{
