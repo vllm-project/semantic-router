@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Two-Pool Fleet: Pareto Frontier</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0D0F1A;
+    color: #C5CAE9;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 28px 20px 40px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #E8EAF6;
+    letter-spacing: 0.02em;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 0.82rem;
+    color: #7986CB;
+    margin-bottom: 28px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 22px;
+    max-width: 1380px;
+    margin: 0 auto 32px;
+  }
+  .card {
+    background: #131626;
+    border: 1px solid #1E2237;
+    border-radius: 10px;
+    padding: 18px 18px 14px;
+  }
+  .card h2 {
+    font-size: 0.93rem;
+    color: #E8EAF6;
+    margin-bottom: 3px;
+  }
+  .card .meta {
+    font-size: 0.74rem;
+    color: #5C6BC0;
+    margin-bottom: 14px;
+  }
+  canvas { width: 100% !important; }
+
+  /* Tooltip override */
+  .tooltip-box {
+    background: #1A1D30;
+    border: 1px solid #3949AB;
+    border-radius: 7px;
+    padding: 10px 14px;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    pointer-events: none;
+    min-width: 210px;
+  }
+  .tooltip-box .tt-title {
+    font-weight: 700;
+    color: #E8EAF6;
+    margin-bottom: 5px;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #2E3250;
+    padding-bottom: 4px;
+  }
+  .tooltip-box .tt-row { display: flex; justify-content: space-between; gap: 16px; }
+  .tooltip-box .tt-label { color: #7986CB; }
+  .tooltip-box .tt-val { color: #E8EAF6; font-family: monospace; }
+  .tooltip-box .pareto-badge {
+    display: inline-block;
+    background: #283593;
+    color: #90CAF9;
+    font-size: 0.7rem;
+    padding: 1px 7px;
+    border-radius: 10px;
+    margin-top: 4px;
+  }
+  .tooltip-box .slo-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 1px 7px;
+    border-radius: 10px;
+    margin-top: 2px;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    justify-content: center;
+    margin-top: 10px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.8rem;
+    color: #9FA8DA;
+  }
+  .legend-dot {
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .legend-star { font-size: 1.1rem; line-height: 1; }
+  .legend-diamond { font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<h1>Two-Pool Fleet: Threshold–Cost–Latency Pareto Frontier</h1>
+<p class="subtitle">Each point is a candidate B_short split threshold. ★ = Pareto-optimal (no other threshold dominates on both cost and worst-case P99). A100-80GB, γ=1.0</p>
+
+<div class="grid" id="charts"></div>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-star" style="color:#4DB6FF">★</span> Pareto-optimal (LMSYS)</div>
+  <div class="legend-item"><span class="legend-star" style="color:#FF7043">★</span> Pareto-optimal (Azure)</div>
+  <div class="legend-item"><span class="legend-star" style="color:#66BB6A">★</span> Pareto-optimal (Agent)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3A3E5A;border:1px solid #5A5E7A"></div> Dominated (SLO ✓)</div>
+  <div class="legend-item"><span class="legend-diamond" style="color:white">◆</span> Homogeneous baseline</div>
+  <div class="legend-item"><div style="width:22px;height:2px;background:#FFD54F;opacity:.75"></div> SLO 500 ms</div>
+</div>
+
+<script>
+const ALL_DATA = [
+  {
+    "title": "LMSYS (chat)",
+    "color": "#4DB6FF",
+    "lam": 100,
+    "homo_cost": 271.0,
+    "homo_p99": 22.0,
+    "homo_gpus": 14,
+    "points": [
+      {"b_short": 64, "alpha": 13.1, "n_s": 2, "n_l": 14, "total_gpus": 16, "cost": 309.8, "saving": -14.3, "p99s": 9, "p99l": 15, "worst_p99": 15, "slo_met": true, "pareto": true},
+      {"b_short": 128, "alpha": 23.6, "n_s": 2, "n_l": 14, "total_gpus": 16, "cost": 309.8, "saving": -14.3, "p99s": 9, "p99l": 16, "worst_p99": 16, "slo_met": true, "pareto": true},
+      {"b_short": 256, "alpha": 38.2, "n_s": 2, "n_l": 13, "total_gpus": 15, "cost": 290.4, "saving": -7.1, "p99s": 9, "p99l": 18, "worst_p99": 18, "slo_met": true, "pareto": true},
+      {"b_short": 512, "alpha": 63.8, "n_s": 2, "n_l": 13, "total_gpus": 15, "cost": 290.4, "saving": -7.1, "p99s": 9, "p99l": 25, "worst_p99": 25, "slo_met": true, "pareto": true},
+      {"b_short": 768, "alpha": 75.8, "n_s": 2, "n_l": 11, "total_gpus": 13, "cost": 251.7, "saving": 7.1, "p99s": 9, "p99l": 30, "worst_p99": 30, "slo_met": true, "pareto": true},
+      {"b_short": 1024, "alpha": 83.1, "n_s": 2, "n_l": 10, "total_gpus": 12, "cost": 232.3, "saving": 14.3, "p99s": 10, "p99l": 36, "worst_p99": 36, "slo_met": true, "pareto": true},
+      {"b_short": 1536, "alpha": 90.9, "n_s": 2, "n_l": 8, "total_gpus": 10, "cost": 193.6, "saving": 28.6, "p99s": 11, "p99l": 48, "worst_p99": 48, "slo_met": true, "pareto": true},
+      {"b_short": 2048, "alpha": 94.8, "n_s": 2, "n_l": 7, "total_gpus": 9, "cost": 174.2, "saving": 35.7, "p99s": 12, "p99l": 63, "worst_p99": 63, "slo_met": true, "pareto": true},
+      {"b_short": 3072, "alpha": 97.3, "n_s": 3, "n_l": 6, "total_gpus": 9, "cost": 174.2, "saving": 35.7, "p99s": 12, "p99l": 86, "worst_p99": 86, "slo_met": true, "pareto": true},
+      {"b_short": 4096, "alpha": 98.4, "n_s": 3, "n_l": 5, "total_gpus": 8, "cost": 154.9, "saving": 42.9, "p99s": 13, "p99l": 108, "worst_p99": 108, "slo_met": true, "pareto": true},
+      {"b_short": 6144, "alpha": 99.3, "n_s": 4, "n_l": 5, "total_gpus": 9, "cost": 174.2, "saving": 35.7, "p99s": 13, "p99l": 153, "worst_p99": 153, "slo_met": true, "pareto": false},
+      {"b_short": 8192, "alpha": 99.7, "n_s": 4, "n_l": 4, "total_gpus": 8, "cost": 154.9, "saving": 42.9, "p99s": 14, "p99l": 212, "worst_p99": 212, "slo_met": true, "pareto": true},
+      {"b_short": 12288, "alpha": 99.9, "n_s": 5, "n_l": 3, "total_gpus": 8, "cost": 154.9, "saving": 42.9, "p99s": 14, "p99l": 319, "worst_p99": 319, "slo_met": true, "pareto": true}
+    ]
+  },
+  {
+    "title": "Azure (chat)",
+    "color": "#FF7043",
+    "lam": 200,
+    "homo_cost": 465.0,
+    "homo_p99": 26.0,
+    "homo_gpus": 24,
+    "points": [
+      {"b_short": 128, "alpha": 2.8, "n_s": 2, "n_l": 24, "total_gpus": 26, "cost": 503.3, "saving": -8.3, "p99s": 9, "p99l": 26, "worst_p99": 26, "slo_met": true, "pareto": true},
+      {"b_short": 256, "alpha": 6.8, "n_s": 2, "n_l": 24, "total_gpus": 26, "cost": 503.3, "saving": -8.3, "p99s": 9, "p99l": 27, "worst_p99": 27, "slo_met": true, "pareto": true},
+      {"b_short": 512, "alpha": 28.9, "n_s": 2, "n_l": 24, "total_gpus": 26, "cost": 503.3, "saving": -8.3, "p99s": 9, "p99l": 33, "worst_p99": 33, "slo_met": true, "pareto": true},
+      {"b_short": 768, "alpha": 36.4, "n_s": 2, "n_l": 24, "total_gpus": 26, "cost": 503.3, "saving": -8.3, "p99s": 10, "p99l": 36, "worst_p99": 36, "slo_met": true, "pareto": true},
+      {"b_short": 1024, "alpha": 40.4, "n_s": 2, "n_l": 24, "total_gpus": 26, "cost": 503.3, "saving": -8.3, "p99s": 10, "p99l": 37, "worst_p99": 37, "slo_met": true, "pareto": true},
+      {"b_short": 1536, "alpha": 65.7, "n_s": 3, "n_l": 21, "total_gpus": 24, "cost": 464.6, "saving": 0.0, "p99s": 15, "p99l": 48, "worst_p99": 48, "slo_met": true, "pareto": true},
+      {"b_short": 2048, "alpha": 78.0, "n_s": 5, "n_l": 19, "total_gpus": 24, "cost": 464.6, "saving": -0.0, "p99s": 17, "p99l": 60, "worst_p99": 60, "slo_met": true, "pareto": false},
+      {"b_short": 3072, "alpha": 86.9, "n_s": 7, "n_l": 16, "total_gpus": 23, "cost": 445.3, "saving": 4.2, "p99s": 19, "p99l": 74, "worst_p99": 74, "slo_met": true, "pareto": true},
+      {"b_short": 4096, "alpha": 89.8, "n_s": 9, "n_l": 15, "total_gpus": 24, "cost": 464.6, "saving": 0.0, "p99s": 20, "p99l": 80, "worst_p99": 80, "slo_met": true, "pareto": false},
+      {"b_short": 6144, "alpha": 97.6, "n_s": 18, "n_l": 6, "total_gpus": 24, "cost": 464.6, "saving": 0.0, "p99s": 24, "p99l": 101, "worst_p99": 101, "slo_met": true, "pareto": false}
+    ]
+  },
+  {
+    "title": "Agent-heavy",
+    "color": "#66BB6A",
+    "lam": 200,
+    "homo_cost": 9293.0,
+    "homo_p99": 0.0,
+    "homo_gpus": 480,
+    "points": [
+      {"b_short": 768, "alpha": 2.2, "n_s": 2, "n_l": 480, "total_gpus": 482, "cost": 9331.3, "saving": -0.4, "p99s": 12, "p99l": 92, "worst_p99": 92, "slo_met": true, "pareto": true},
+      {"b_short": 1024, "alpha": 5.8, "n_s": 2, "n_l": 481, "total_gpus": 483, "cost": 9350.7, "saving": -0.6, "p99s": 15, "p99l": 95, "worst_p99": 95, "slo_met": true, "pareto": false},
+      {"b_short": 1536, "alpha": 15.9, "n_s": 2, "n_l": 482, "total_gpus": 484, "cost": 9370.0, "saving": -0.8, "p99s": 19, "p99l": 105, "worst_p99": 105, "slo_met": true, "pareto": false},
+      {"b_short": 2048, "alpha": 26.5, "n_s": 3, "n_l": 480, "total_gpus": 483, "cost": 9350.7, "saving": -0.6, "p99s": 23, "p99l": 116, "worst_p99": 116, "slo_met": true, "pareto": false},
+      {"b_short": 3072, "alpha": 43.2, "n_s": 8, "n_l": 466, "total_gpus": 474, "cost": 9176.5, "saving": 1.3, "p99s": 29, "p99l": 139, "worst_p99": 139, "slo_met": true, "pareto": true},
+      {"b_short": 4096, "alpha": 53.8, "n_s": 14, "n_l": 459, "total_gpus": 473, "cost": 9157.1, "saving": 1.5, "p99s": 34, "p99l": 160, "worst_p99": 160, "slo_met": true, "pareto": true},
+      {"b_short": 6144, "alpha": 66.0, "n_s": 28, "n_l": 431, "total_gpus": 459, "cost": 8886.1, "saving": 4.4, "p99s": 41, "p99l": 190, "worst_p99": 190, "slo_met": true, "pareto": true},
+      {"b_short": 8192, "alpha": 74.0, "n_s": 46, "n_l": 408, "total_gpus": 454, "cost": 8789.3, "saving": 5.4, "p99s": 47, "p99l": 220, "worst_p99": 220, "slo_met": true, "pareto": true},
+      {"b_short": 12288, "alpha": 85.2, "n_s": 98, "n_l": 334, "total_gpus": 432, "cost": 8363.3, "saving": 10.0, "p99s": 60, "p99l": 278, "worst_p99": 278, "slo_met": true, "pareto": true},
+      {"b_short": 16384, "alpha": 91.7, "n_s": 157, "n_l": 259, "total_gpus": 416, "cost": 8053.6, "saving": 13.3, "p99s": 69, "p99l": 339, "worst_p99": 339, "slo_met": true, "pareto": true},
+      {"b_short": 24576, "alpha": 97.3, "n_s": 273, "n_l": 147, "total_gpus": 420, "cost": 8131.0, "saving": 12.5, "p99s": 82, "p99l": 462, "worst_p99": 462, "slo_met": true, "pareto": false},
+      {"b_short": 32768, "alpha": 99.0, "n_s": 337, "n_l": 81, "total_gpus": 418, "cost": 8092.3, "saving": 12.9, "p99s": 86, "p99l": 593, "worst_p99": 593, "slo_met": false, "pareto": false},
+      {"b_short": 49152, "alpha": 99.8, "n_s": 424, "n_l": 21, "total_gpus": 445, "cost": 8615.0, "saving": 7.3, "p99s": 89, "p99l": 781, "worst_p99": 781, "slo_met": false, "pareto": false}
+    ]
+  }
+];
+
+// ── Build tooltip HTML ───────────────────────────────────────────────────────
+function tooltipHtml(pt, homoCost) {
+  const tok = pt.b_short >= 1024 ? (pt.b_short/1024).toFixed(pt.b_short%1024===0?0:1)+'K' : pt.b_short;
+  const sloColor = pt.slo_met ? '#A5D6A7' : '#EF9A9A';
+  const savColor = pt.saving >= 0 ? '#A5D6A7' : '#EF9A9A';
+  return `<div class="tooltip-box">
+    <div class="tt-title">B_short = ${tok} tokens</div>
+    <div class="tt-row"><span class="tt-label">α-short</span><span class="tt-val">${pt.alpha}%</span></div>
+    <div class="tt-row"><span class="tt-label">GPUs</span><span class="tt-val">${pt.n_s} short + ${pt.n_l} long = ${pt.total_gpus}</span></div>
+    <div class="tt-row"><span class="tt-label">Cost</span><span class="tt-val">$${pt.cost.toFixed(0)}K/yr</span></div>
+    <div class="tt-row"><span class="tt-label">vs homo</span><span class="tt-val" style="color:${savColor}">${pt.saving>0?'+':''}${pt.saving.toFixed(1)}%</span></div>
+    <div class="tt-row"><span class="tt-label">P99 short</span><span class="tt-val">${pt.p99s} ms</span></div>
+    <div class="tt-row"><span class="tt-label">P99 long</span><span class="tt-val">${pt.p99l} ms</span></div>
+    <div class="tt-row"><span class="tt-label">Worst P99</span><span class="tt-val">${pt.worst_p99} ms</span></div>
+    ${pt.pareto ? '<span class="pareto-badge">★ Pareto-optimal</span>' : ''}
+    <span class="slo-badge" style="background:${pt.slo_met?'#1B5E20':'#B71C1C'};color:${sloColor}">${pt.slo_met?'SLO ✓':'SLO ✗'}</span>
+  </div>`;
+}
+
+// ── Shared tooltip element ───────────────────────────────────────────────────
+const ttEl = document.createElement('div');
+ttEl.className = 'tooltip-box';
+ttEl.style.cssText = 'position:fixed;display:none;z-index:9999;pointer-events:none;';
+document.body.appendChild(ttEl);
+
+function showTooltip(e, html) {
+  ttEl.innerHTML = html;
+  ttEl.style.display = 'block';
+  const margin = 12;
+  let left = e.clientX + margin;
+  let top  = e.clientY + margin;
+  if (left + 240 > window.innerWidth)  left = e.clientX - 240 - margin;
+  if (top  + 220 > window.innerHeight) top  = e.clientY - 220 - margin;
+  ttEl.style.left = left + 'px';
+  ttEl.style.top  = top  + 'px';
+}
+document.addEventListener('mousemove', e => {
+  ttEl.style.left = (e.clientX + 12) + 'px';
+  ttEl.style.top  = (e.clientY + 12) + 'px';
+});
+
+// ── Build charts ─────────────────────────────────────────────────────────────
+ALL_DATA.forEach(wl => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `<h2>${wl.title}</h2>
+    <div class="meta">λ=${wl.lam} req/s  ·  A100-80GB  ·  SLO=500ms  ·  Homo: ${wl.homo_gpus} GPUs / $${wl.homo_cost.toFixed(0)}K/yr</div>`;
+  const canvasWrap = document.createElement('div');
+  const canvas = document.createElement('canvas');
+  canvas.height = 280;
+  canvasWrap.appendChild(canvas);
+  card.appendChild(canvasWrap);
+  document.getElementById('charts').appendChild(card);
+
+  const parPts  = wl.points.filter(p => p.pareto);
+  const domPts  = wl.points.filter(p => !p.pareto && p.slo_met);
+  const sloFail = wl.points.filter(p => !p.slo_met);
+
+  // Build dataset for SLO reference line (horizontal)
+  const allCosts = wl.points.map(p => p.cost);
+  const xMin = Math.min(...allCosts) * 0.985;
+  const xMax = Math.max(...allCosts, wl.homo_cost) * 1.015;
+
+  const chart = new Chart(canvas, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        // Pareto frontier connecting line (dashed)
+        {
+          label: '_pareto_line',
+          type: 'line',
+          data: [...parPts].sort((a,b)=>a.cost-b.cost).map(p=>({x:p.cost,y:p.worst_p99})),
+          borderColor: wl.color + '55',
+          borderWidth: 1.5,
+          borderDash: [5,4],
+          pointRadius: 0,
+          fill: false,
+          tension: 0,
+          order: 10,
+        },
+        // Dominated SLO-ok
+        {
+          label: 'Dominated (SLO ✓)',
+          data: domPts.map(p=>({x:p.cost,y:p.worst_p99,_pt:p})),
+          backgroundColor: '#3A3E5A',
+          borderColor: '#5A5E7A',
+          borderWidth: 1,
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          order: 5,
+        },
+        // SLO violated
+        {
+          label: 'SLO violated',
+          data: sloFail.map(p=>({x:p.cost,y:p.worst_p99,_pt:p})),
+          backgroundColor: '#EF5350',
+          pointRadius: 6,
+          pointStyle: 'crossRot',
+          pointHoverRadius: 8,
+          order: 5,
+        },
+        // Pareto-optimal stars
+        {
+          label: `Pareto-optimal ★`,
+          data: parPts.map(p=>({x:p.cost,y:p.worst_p99,_pt:p})),
+          backgroundColor: wl.color,
+          borderColor: 'rgba(255,255,255,0.6)',
+          borderWidth: 1,
+          pointRadius: 9,
+          pointHoverRadius: 12,
+          pointStyle: 'star',
+          order: 3,
+        },
+        // Homo baseline diamond
+        {
+          label: 'Homo baseline',
+          data: [{x: wl.homo_cost, y: wl.homo_p99, _homo: true}],
+          backgroundColor: '#ECEFF1',
+          borderColor: '#9E9E9E',
+          borderWidth: 1.2,
+          pointRadius: 10,
+          pointHoverRadius: 13,
+          pointStyle: 'rectRot',
+          order: 2,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false },
+        annotation: {},
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          min: xMin, max: xMax,
+          grid: { color: '#1E2237' },
+          ticks: { color: '#9096B0', font: { size: 10 },
+            callback: v => `$${v.toFixed(0)}K` },
+          title: { display: true, text: 'Fleet cost ($K / yr)',
+            color: '#7986CB', font: { size: 10 } }
+        },
+        y: {
+          type: 'linear',
+          min: -20,
+          grid: { color: '#1E2237' },
+          ticks: { color: '#9096B0', font: { size: 10 },
+            callback: v => v < 0 ? '' : `${v}ms` },
+          title: { display: true, text: 'Worst-case P99 TTFT (ms)',
+            color: '#7986CB', font: { size: 10 } }
+        }
+      },
+      onHover: (evt, elements) => {
+        if (elements.length > 0) {
+          const el = elements[0];
+          const ds = chart.data.datasets[el.datasetIndex];
+          const pt = ds.data[el.index];
+          if (pt._homo) {
+            ttEl.innerHTML = `<div class="tooltip-box">
+              <div class="tt-title">Homogeneous baseline</div>
+              <div class="tt-row"><span class="tt-label">GPUs</span><span class="tt-val">${wl.homo_gpus}</span></div>
+              <div class="tt-row"><span class="tt-label">Cost</span><span class="tt-val">$${wl.homo_cost.toFixed(0)}K/yr</span></div>
+              <div class="tt-row"><span class="tt-label">P99 TTFT</span><span class="tt-val">${wl.homo_p99} ms</span></div>
+              <div class="tt-row"><span class="tt-label">B_short</span><span class="tt-val">= max_ctx (single pool)</span></div>
+            </div>`;
+            ttEl.style.display = 'block';
+          } else if (pt._pt) {
+            ttEl.innerHTML = tooltipHtml(pt._pt, wl.homo_cost);
+            ttEl.style.display = 'block';
+          }
+          canvas.style.cursor = 'pointer';
+        } else {
+          ttEl.style.display = 'none';
+          canvas.style.cursor = 'default';
+        }
+      }
+    },
+    plugins: [{
+      id: 'sloLine',
+      afterDraw(chart) {
+        const {ctx, scales: {x, y}} = chart;
+        if (y.getPixelForValue(500) < y.top || y.getPixelForValue(500) > y.bottom) return;
+        const yPx = y.getPixelForValue(500);
+        ctx.save();
+        ctx.strokeStyle = '#FFD54F';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 4]);
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(x.left, yPx);
+        ctx.lineTo(x.right, yPx);
+        ctx.stroke();
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = '#FFD54F';
+        ctx.font = '9.5px monospace';
+        ctx.fillText('SLO 500ms', x.right - 62, yPx - 4);
+        ctx.restore();
+      }
+    }, {
+      id: 'savingsAxis',
+      afterDraw(chart) {
+        const {ctx, scales: {x}, chartArea: {top}} = chart;
+        ctx.save();
+        ctx.fillStyle = '#7986CB';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'center';
+        const homoCost = wl.homo_cost;
+        [-30,-20,-10,0,10,20,30].forEach(pct => {
+          const cost = homoCost * (1 + pct/100);
+          if (cost < x.min || cost > x.max) return;
+          const px = x.getPixelForValue(cost);
+          const label = (pct >= 0 ? '+' : '') + pct + '%';
+          ctx.fillStyle = pct === 0 ? '#5C6BC0' : '#7986CB';
+          ctx.fillText(label, px, top - 5);
+        });
+        ctx.fillStyle = '#5C6BC0';
+        ctx.font = '8.5px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('saving vs homo →', x.left, top - 15);
+        ctx.restore();
+      }
+    }]
+  });
+});
+</script>
+</body>
+</html>

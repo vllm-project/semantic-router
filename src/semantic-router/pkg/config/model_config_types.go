@@ -53,6 +53,7 @@ type HNSWConfig struct {
 	TargetDimension    int     `yaml:"target_dimension,omitempty"`
 	TargetLayer        int     `yaml:"target_layer,omitempty"`
 	EnableSoftMatching *bool   `yaml:"enable_soft_matching,omitempty"`
+	TopK               *int    `yaml:"top_k,omitempty"`
 	MinScoreThreshold  float32 `yaml:"min_score_threshold,omitempty"`
 }
 
@@ -67,6 +68,13 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 	if result.EnableSoftMatching == nil {
 		defaultEnabled := true
 		result.EnableSoftMatching = &defaultEnabled
+	}
+	if result.TopK == nil {
+		defaultTopK := 1
+		result.TopK = &defaultTopK
+	} else if *result.TopK < 0 {
+		defaultTopK := 1
+		result.TopK = &defaultTopK
 	}
 	if result.MinScoreThreshold <= 0 {
 		result.MinScoreThreshold = 0.5
@@ -132,8 +140,21 @@ type FeedbackDetectorConfig struct {
 }
 
 type PreferenceModelConfig struct {
-	UseContrastive bool   `yaml:"use_contrastive"`
+	UseContrastive *bool  `yaml:"use_contrastive,omitempty"`
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+}
+
+func (c PreferenceModelConfig) WithDefaults() PreferenceModelConfig {
+	result := c
+	if result.UseContrastive == nil {
+		defaultEnabled := true
+		result.UseContrastive = &defaultEnabled
+	}
+	return result
+}
+
+func (c PreferenceModelConfig) ContrastiveEnabled() bool {
+	return *c.WithDefaults().UseContrastive
 }
 
 type ExternalModelConfig struct {

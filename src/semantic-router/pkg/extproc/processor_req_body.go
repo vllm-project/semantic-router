@@ -34,8 +34,14 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
+	if validationResp := r.validateRequestBody(requestBody, ctx); validationResp != nil {
+		return validationResp, nil
+	}
 
 	fast, err := r.extractFastRequestState(requestBody, ctx)
+	if validationResp := r.validationResponseFromRequestError(err); validationResp != nil {
+		return validationResp, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -58,8 +64,14 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	}
 
 	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, fast.UserContent, ctx)
-	if earlyResponse != nil || err != nil {
-		return earlyResponse, err
+	if earlyResponse != nil {
+		return earlyResponse, nil
+	}
+	if validationResp := r.validationResponseFromRequestError(err); validationResp != nil {
+		return validationResp, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return r.handleModelRouting(

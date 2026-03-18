@@ -41,9 +41,10 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)
   - `global.services` groups shared APIs and control-plane services such as `response_api`, `router_replay`, `observability`, `authz`, and `ratelimit`
   - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`
-  - `global.integrations` groups helper runtime integrations such as `tools` and `looper`
-  - `global.model_catalog` groups router-owned model assets such as embeddings, system models, external models, and model-backed modules
-  - `global.model_catalog.modules` groups capability modules such as `prompt_guard`, `classifier`, and `hallucination_mitigation`
+- `global.integrations` groups helper runtime integrations such as `tools` and `looper`
+- `global.model_catalog` groups router-owned model assets such as embeddings, system models, external models, and model-backed modules
+- `global.model_catalog.embeddings.semantic.embedding_config.top_k` limits how many ranked embedding rules are emitted for routing after scoring; the built-in default is `1`
+- `global.model_catalog.modules` groups capability modules such as `prompt_guard`, `classifier`, and `hallucination_mitigation`
 
 ## Canonical example
 

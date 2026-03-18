@@ -379,6 +379,7 @@ global:
           preload_embeddings: true
           target_dimension: 768
           target_layer: 22
+          top_k: 1
           min_score_threshold: 0.5
     modules:
       prompt_guard:
