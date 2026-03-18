@@ -51,7 +51,6 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		}, nil
 	}
 
-	// Validate that config is provided
 	if options.Config == nil {
 		return nil, fmt.Errorf("valkey config is required")
 	}
@@ -60,42 +59,35 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 	logging.Debugf("ValkeyCache: config loaded - host=%s:%d, index=%s, dimension=auto-detect",
 		valkeyConfig.Connection.Host, valkeyConfig.Connection.Port, valkeyConfig.Index.Name)
 
-	// Establish connection to Valkey server
 	logging.Debugf("ValkeyCache: connecting to Valkey at %s:%d", valkeyConfig.Connection.Host, valkeyConfig.Connection.Port)
 
-	// Create Valkey client configuration
 	clientConfig := config.NewClientConfiguration().
 		WithAddress(&config.NodeAddress{
 			Host: valkeyConfig.Connection.Host,
 			Port: valkeyConfig.Connection.Port,
 		})
 
-	// Add credentials if password is configured
 	if valkeyConfig.Connection.Password != "" {
 		clientConfig = clientConfig.WithCredentials(
 			config.NewServerCredentials("", valkeyConfig.Connection.Password),
 		)
 	}
 
-	// Add database selection if not default
 	if valkeyConfig.Connection.Database != 0 {
 		clientConfig = clientConfig.WithDatabaseId(valkeyConfig.Connection.Database)
 	}
 
-	// Add timeout if configured (in milliseconds)
 	if valkeyConfig.Connection.Timeout > 0 {
 		timeout := time.Duration(valkeyConfig.Connection.Timeout) * time.Second
 		clientConfig = clientConfig.WithRequestTimeout(timeout)
 	}
 
-	// Create the Valkey client
 	valkeyClient, err := glide.NewClient(clientConfig)
 	if err != nil {
 		logging.Debugf("ValkeyCache: failed to create client: %v", err)
 		return nil, fmt.Errorf("failed to create Valkey client: %w", err)
 	}
 
-	// Default to "bert" if no embedding model specified
 	embeddingModel := options.EmbeddingModel
 	if embeddingModel == "" {
 		embeddingModel = "bert"
@@ -111,14 +103,12 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		embeddingModel:      embeddingModel,
 	}
 
-	// Test connection using the new CheckConnection method
 	if err := cache.CheckConnection(); err != nil {
 		logging.Debugf("ValkeyCache: failed to connect: %v", err)
 		return nil, err
 	}
 	logging.Debugf("ValkeyCache: successfully connected to Valkey")
 
-	// Set up the index for vector search
 	logging.Debugf("ValkeyCache: initializing index '%s'", valkeyConfig.Index.Name)
 	if err := cache.initializeIndex(); err != nil {
 		logging.Debugf("ValkeyCache: failed to initialize index: %v", err)
@@ -134,11 +124,9 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 func (c *ValkeyCache) initializeIndex() error {
 	ctx := context.Background()
 
-	// Check if index exists using FT.INFO
 	_, err := c.client.CustomCommand(ctx, []string{"FT.INFO", c.indexName})
 	indexExists := err == nil
 
-	// Handle development mode index reset
 	if c.config.Development.DropIndexOnStartup && indexExists {
 		_, err := c.client.CustomCommand(ctx, []string{"FT.DROPINDEX", c.indexName})
 		if err != nil {
@@ -154,7 +142,6 @@ func (c *ValkeyCache) initializeIndex() error {
 		})
 	}
 
-	// Create index if it doesn't exist
 	if !indexExists {
 		if !c.config.Development.AutoCreateIndex {
 			return fmt.Errorf("index %s does not exist and auto-creation is disabled", c.indexName)
@@ -221,7 +208,6 @@ func (c *ValkeyCache) getEmbedding(text string) ([]float32, error) {
 func (c *ValkeyCache) createIndex() error {
 	ctx := context.Background()
 
-	// Determine embedding dimension automatically
 	testEmbedding, err := c.getEmbedding("test")
 	if err != nil {
 		return fmt.Errorf("failed to detect embedding dimension: %w", err)
@@ -230,7 +216,6 @@ func (c *ValkeyCache) createIndex() error {
 
 	logging.Debugf("ValkeyCache.createIndex: auto-detected embedding dimension: %d", actualDimension)
 
-	// Determine distance metric for Valkey
 	var distanceMetric string
 	switch c.config.Index.VectorField.MetricType {
 	case "L2":
@@ -244,7 +229,6 @@ func (c *ValkeyCache) createIndex() error {
 		distanceMetric = "COSINE"
 	}
 
-	// Build FT.CREATE command using executeCommand
 	var createCmd []string
 	if c.config.Index.IndexType == "HNSW" {
 		createCmd = []string{
@@ -331,13 +315,11 @@ func (c *ValkeyCache) AddPendingRequest(requestID string, model string, query st
 		return nil
 	}
 
-	// Handle TTL=0: skip caching entirely
 	if ttlSeconds == 0 {
 		logging.Debugf("ValkeyCache.AddPendingRequest: skipping cache (ttl_seconds=0)")
 		return nil
 	}
 
-	// Store incomplete entry for later completion with response
 	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
 
 	if err != nil {
@@ -447,11 +429,8 @@ func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	logging.Debugf("ValkeyCache.UpdateWithResponse: updating pending entry (request_id: %s, response_size: %d, ttl_seconds=%d)",
 		requestID, len(responseBody), ttlSeconds)
 
-	// Find the pending entry by request_id
 	ctx := context.Background()
 
-	// Search for documents with matching request_id
-	// TAG field syntax: @field:{value}
 	query := fmt.Sprintf("@request_id:{%s}", requestID)
 	logging.Debugf("UpdateWithResponse: searching with TAG query: %s", query)
 
@@ -499,7 +478,6 @@ func (c *ValkeyCache) AddEntry(requestID string, model string, query string, req
 		return nil
 	}
 
-	// Handle TTL=0: skip caching entirely
 	if ttlSeconds == 0 {
 		logging.Debugf("ValkeyCache.AddEntry: skipping cache (ttl_seconds=0)")
 		return nil
@@ -518,29 +496,24 @@ func (c *ValkeyCache) AddEntry(requestID string, model string, query string, req
 
 // addEntry handles the internal logic for storing entries in Valkey
 func (c *ValkeyCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
-	// Determine effective TTL: use provided value or fall back to cache default
 	effectiveTTL := ttlSeconds
 	if ttlSeconds == -1 {
 		effectiveTTL = c.ttlSeconds
 	}
 
-	// Generate semantic embedding for the query
 	embedding, err := c.getEmbedding(query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	// Generate unique ID if not provided
 	if id == "" {
 		id = fmt.Sprintf("%x", md5.Sum(fmt.Appendf(nil, "%s_%s_%d", model, query, time.Now().UnixNano())))
 	}
 
 	ctx := context.Background()
 
-	// Convert embedding to bytes
 	embeddingBytes := floatsToBytes(embedding)
 
-	// Prepare document key with prefix (check if already prefixed to avoid double prefix)
 	var docKey string
 	if strings.HasPrefix(id, c.config.Index.Prefix) {
 		docKey = id // Already has prefix, use as-is
@@ -548,7 +521,6 @@ func (c *ValkeyCache) addEntry(id string, requestID string, model string, query 
 		docKey = c.config.Index.Prefix + id // Add prefix
 	}
 
-	// Store as Valkey hash using HSET
 	hsetCmd := []string{
 		"HSET", docKey,
 		"request_id", requestID,
@@ -567,7 +539,6 @@ func (c *ValkeyCache) addEntry(id string, requestID string, model string, query 
 		return fmt.Errorf("failed to store cache entry: %w", err)
 	}
 
-	// Set TTL if configured (Valkey native TTL)
 	if effectiveTTL > 0 {
 		expireCmd := []string{"EXPIRE", docKey, fmt.Sprintf("%d", effectiveTTL)}
 		_, _ = c.client.CustomCommand(ctx, expireCmd)
@@ -699,7 +670,6 @@ func (c *ValkeyCache) FindSimilarWithThreshold(model string, query string, thres
 		return nil, false, nil
 	}
 
-	// Generate semantic embedding for similarity comparison
 	queryEmbedding, err := c.getEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("valkey", "find_similar", "error", time.Since(start).Seconds())
