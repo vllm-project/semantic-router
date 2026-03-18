@@ -1,6 +1,6 @@
 """Docker CLI operations for vLLM Semantic Router."""
 
-from cli.docker_images import get_docker_image
+from cli.docker_images import get_docker_image, get_fleet_sim_docker_image
 from cli.docker_runtime import (
     docker_image_exists,
     docker_pull_image,
@@ -17,6 +17,7 @@ from cli.docker_services import (
     docker_remove_container,
     docker_remove_network,
     docker_start_container,
+    docker_start_fleet_sim,
     docker_start_grafana,
     docker_start_jaeger,
     docker_start_prometheus,
@@ -38,6 +39,7 @@ __all__ = [
     "docker_remove_container",
     "docker_remove_network",
     "docker_start_container",
+    "docker_start_fleet_sim",
     "docker_start_grafana",
     "docker_start_jaeger",
     "docker_start_prometheus",
@@ -45,5 +47,6 @@ __all__ = [
     "docker_stop_container",
     "get_container_runtime",
     "get_docker_image",
+    "get_fleet_sim_docker_image",
     "load_openclaw_registry",
 ]

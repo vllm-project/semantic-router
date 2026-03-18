@@ -16,6 +16,7 @@ const settingsResponse = {
   setupMode: false,
   platform: '',
   envoyUrl: '',
+  fleetSimEnabled: true,
 };
 
 const readUser = {
@@ -363,7 +364,7 @@ async function mockCommon(
 }
 
 test.describe('Layout top navigation', () => {
-  test('keeps Insight in primary nav and moves Manager beside System on the right', async ({ page }) => {
+  test('keeps Insight in primary nav and groups manager routes under Manager beside Simulator and System', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await mockCommon(page);
 
@@ -382,15 +383,26 @@ test.describe('Layout top navigation', () => {
     await expect(primaryGroup.getByRole('link', { name: 'ClawOS' })).toHaveCount(0);
     await expect(primaryGroup.getByRole('link', { name: 'Users' })).toHaveCount(0);
 
-    await expect(secondaryGroup.getByRole('link', { name: 'Users' })).toBeVisible();
-    await expect(secondaryGroup.getByRole('link', { name: 'ClawOS' })).toBeVisible();
+    await expect(secondaryGroup.getByRole('link', { name: 'Users' })).toHaveCount(0);
+    await expect(secondaryGroup.getByRole('link', { name: 'ClawOS' })).toHaveCount(0);
     await expect(secondaryGroup.getByRole('button', { name: 'Manager' })).toBeVisible();
+    await expect(secondaryGroup.getByRole('button', { name: 'Simulator' })).toBeVisible();
     await expect(secondaryGroup.getByRole('button', { name: 'System' })).toBeVisible();
     const secondaryButtons = secondaryGroup.getByRole('button');
     await expect(secondaryButtons.nth(0)).toHaveText(/Manager/);
-    await expect(secondaryButtons.nth(1)).toHaveText(/System/);
+    await expect(secondaryButtons.nth(1)).toHaveText(/Simulator/);
+    await expect(secondaryButtons.nth(2)).toHaveText(/System/);
     await expect(globalNav.getByRole('button', { name: 'Analysis', exact: true })).toHaveCount(0);
     await expect(globalNav.getByRole('button', { name: 'Operations', exact: true })).toHaveCount(0);
+
+    await secondaryGroup.getByRole('button', { name: 'Manager' }).click();
+
+    const managerMenu = page.getByRole('menu', { name: 'Manager' });
+    await expect(managerMenu.getByRole('menuitem', { name: 'Users' })).toBeVisible();
+    await expect(managerMenu.getByRole('menuitem', { name: 'ClawOS' })).toBeVisible();
+    await expect(managerMenu.getByRole('menuitem', { name: 'Models' })).toBeVisible();
+    await expect(managerMenu.getByRole('menuitem', { name: 'Decisions' })).toBeVisible();
+    await expect(managerMenu.getByRole('menuitem', { name: 'Signals' })).toBeVisible();
 
     await secondaryGroup.getByRole('button', { name: 'System' }).click();
 
@@ -481,6 +493,12 @@ test.describe('Layout top navigation', () => {
     await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0);
 
     const secondaryGroup = page.getByRole('group', { name: 'Secondary navigation' });
+    await secondaryGroup.getByRole('button', { name: 'Manager' }).click();
+
+    const managerMenu = page.getByRole('menu', { name: 'Manager' });
+    await expect(managerMenu.getByRole('menuitem', { name: 'Users' })).toHaveCount(0);
+    await expect(managerMenu.getByRole('menuitem', { name: 'ClawOS' })).toBeVisible();
+
     await secondaryGroup.getByRole('button', { name: 'System' }).click();
 
     const menu = page.getByRole('menu', { name: 'System' });

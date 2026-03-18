@@ -1,4 +1,6 @@
-export type LayoutDropdownKey = 'manager' | 'analysisOps'
+import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
+
+export type LayoutDropdownKey = 'manager' | 'analysisOps' | 'fleetSim'
 
 export type LayoutConfigSection = 'models' | 'signals' | 'decisions' | 'global-config' | 'mcp'
 
@@ -34,12 +36,15 @@ export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
   { label: 'Insight', to: '/insights' },
 ]
 
-export const SECONDARY_NAV_LINKS: LayoutNavLink[] = [
-  { label: 'Users', to: '/users' },
-  { label: 'ClawOS', to: '/clawos' },
-]
+export const SECONDARY_NAV_LINKS: LayoutNavLink[] = []
 
 export const MANAGER_MENU_SECTIONS: LayoutMenuSection[] = [
+  {
+    items: [
+      { kind: 'route', label: 'Users', to: '/users' },
+      { kind: 'route', label: 'ClawOS', to: '/clawos' },
+    ],
+  },
   {
     items: [
       { kind: 'config', label: 'Models', configSection: 'models' },
@@ -68,6 +73,17 @@ export const ANALYSIS_OPERATIONS_MENU_SECTIONS: LayoutMenuSection[] = [
       { kind: 'route', label: 'Grafana', to: '/monitoring' },
       { kind: 'route', label: 'Tracing', to: '/tracing' },
     ],
+  },
+]
+
+export const FLEET_SIM_MENU_SECTIONS: LayoutMenuSection[] = [
+  {
+    title: 'Simulator',
+    items: FLEET_SIM_NAV_ITEMS.map((item) => ({
+      kind: 'route' as const,
+      label: item.label,
+      to: item.to,
+    })),
   },
 ]
 
