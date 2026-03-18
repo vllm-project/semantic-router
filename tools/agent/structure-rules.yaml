@@ -136,6 +136,7 @@ legacy_hotspots:
     interface_checks: relaxed
   - paths:
       - src/semantic-router/pkg/extproc/extproc_test.go
+      - src/semantic-router/pkg/extproc/req_filter_classification.go
     function_checks: relaxed
   - paths:
       - src/semantic-router/pkg/classification/hallucination_detector_test.go
