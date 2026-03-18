@@ -75,9 +75,9 @@ complexity_rules:
         - "deploy it"
 
 categories:
-  - name: computer_science
+  - name: "computer science"
     description: "Computer science and programming"
-    mmlu_categories: ["computer_science"]
+    mmlu_categories: ["other"]
   - name: other
     description: "General topics"
     mmlu_categories: ["other"]
