@@ -92,20 +92,23 @@ func ComputeRoutingMomentum(signals []float64, attack, release float64) float64 
 //
 // The mapping is a simple piecewise linear function:
 //
-//	len < 30   → 0.1  (trivial: "yes", "ok", "thanks")
-//	len 30-100 → 0.3  (short: "can you explain that?")
-//	len 100-300 → 0.6 (medium: brief technical questions)
-//	len > 300  → 0.8  (long: detailed technical prompts)
+//	len < 20   → 0.1  (trivial: "yes", "ok", "thanks")
+//	len 20-40  → 0.3  (short: "can you explain that?")
+//	len 40-100 → 0.6  (medium: "implement a queue in Go")
+//	len 100-300 → 0.8 (detailed: technical questions with context)
+//	len > 300  → 0.9  (long: detailed technical prompts)
 func EstimateComplexityFromLength(messageLen int) float64 {
 	switch {
-	case messageLen < 30:
+	case messageLen < 20:
 		return 0.1
-	case messageLen < 100:
+	case messageLen < 40:
 		return 0.3
-	case messageLen < 300:
+	case messageLen < 100:
 		return 0.6
-	default:
+	case messageLen < 300:
 		return 0.8
+	default:
+		return 0.9
 	}
 }
 
@@ -158,20 +161,56 @@ func complexityScoreFromRules(rules []string) float64 {
 	return 0.5 // neutral if no rules matched
 }
 
+// findEnabledMomentumConfig returns the first enabled momentum config from any decision.
+// Returns nil if no decision has momentum enabled.
+// Called on every request — O(n) over decisions, but decisions are typically < 10
+// and the loop exits on first match.
+func findEnabledMomentumConfig(cfg *config.RouterConfig) *config.RoutingMomentumConfig {
+	if cfg == nil {
+		return nil
+	}
+	for i := range cfg.Decisions {
+		if m := cfg.Decisions[i].GetMomentumConfig(); m != nil && m.Enabled {
+			return m
+		}
+	}
+	return nil
+}
+
+// isMomentumDecision checks if the named decision has momentum enabled.
+func isMomentumDecision(cfg *config.RouterConfig, decisionName string) bool {
+	if cfg == nil || decisionName == "" {
+		return false
+	}
+	for i := range cfg.Decisions {
+		if cfg.Decisions[i].Name == decisionName {
+			m := cfg.Decisions[i].GetMomentumConfig()
+			return m != nil && m.Enabled
+		}
+	}
+	return false
+}
+
 // applyCRMOverride checks if conversational routing momentum disagrees with
 // the current routing decision and returns an override if needed.
 // Returns empty strings if no override is needed.
-func (r *OpenAIRouter) applyCRMOverride(ctx *RequestContext, currentDecision string, currentModel string) (string, string) {
+func (r *OpenAIRouter) applyCRMOverride(ctx *RequestContext, currentDecision string, currentModel string, cfg *config.RoutingMomentumConfig) (string, string) {
 	allMsgs := ctx.AllUserMessages
-	cfg := r.Config.RoutingMomentum
 	attack := cfg.GetAttack()
 	release := cfg.GetRelease()
 	threshold := cfg.GetThreshold()
 
-	// Cache the current message's complexity score for future turns
+	// Determine the current message's complexity score.
+	// If the classifier matched the momentum-enabled decision for this turn,
+	// the message is genuinely complex regardless of length — score it high.
+	// Otherwise fall back to complexity rules or length estimation.
 	currentScore := complexityScoreFromRules(ctx.VSRMatchedComplexity)
 	if len(ctx.VSRMatchedComplexity) == 0 {
-		currentScore = EstimateComplexityFromLength(len(allMsgs[len(allMsgs)-1]))
+		if isMomentumDecision(r.Config, currentDecision) {
+			currentScore = 0.85
+		} else {
+			currentScore = EstimateComplexityFromLength(len(allMsgs[len(allMsgs)-1]))
+		}
 	}
 	cacheComplexityScore(allMsgs[len(allMsgs)-1], currentScore)
 
@@ -198,36 +237,26 @@ func (r *OpenAIRouter) applyCRMOverride(ctx *RequestContext, currentDecision str
 	logging.Infof("[CRM] Routing momentum: %.3f (threshold=%.2f, attack=%.2f, release=%.2f, turns=%d, current_signal=%.3f)",
 		momentum, threshold, attack, release, len(allMsgs), currentScore)
 
-	// If momentum says "complex" but current message classified as "simple",
-	// override with the complex decision to prevent mid-conversation model switch.
+	// If momentum is high but the current message scored low, the conversation
+	// is still in a "complex" flow — override to the momentum-enabled decision
+	// to prevent mid-conversation model downgrade.
 	if momentum > threshold && currentScore < threshold {
-		return r.findComplexDecisionOverride(currentDecision, momentum, threshold)
+		return r.findMomentumDecisionOverride(currentDecision, momentum, threshold)
 	}
 
 	return "", ""
 }
 
-// findComplexDecisionOverride searches for a decision that handles complex
-// queries and returns its name and model as an override.
-func (r *OpenAIRouter) findComplexDecisionOverride(currentDecision string, momentum, threshold float64) (string, string) {
+// findMomentumDecisionOverride finds the decision that has momentum enabled
+// and returns it as an override target. This works regardless of what signal
+// types the decision uses (domain, complexity, keyword, etc.).
+func (r *OpenAIRouter) findMomentumDecisionOverride(currentDecision string, momentum, threshold float64) (string, string) {
 	for _, d := range r.Config.Decisions {
 		if d.Name == currentDecision {
 			continue
 		}
-		if name, model := matchComplexDecision(d, currentDecision, momentum, threshold); name != "" {
-			return name, model
-		}
-	}
-	return "", ""
-}
-
-// matchComplexDecision checks if a decision handles complexity:hard and returns its model.
-func matchComplexDecision(d config.Decision, currentDecision string, momentum, threshold float64) (string, string) {
-	for _, rule := range d.Rules.Conditions {
-		if rule.Type != "complexity" || !strings.HasSuffix(rule.Name, ":hard") {
-			continue
-		}
-		if len(d.ModelRefs) == 0 {
+		m := d.GetMomentumConfig()
+		if m == nil || !m.Enabled || len(d.ModelRefs) == 0 {
 			continue
 		}
 		logging.Infof("[CRM] Overriding decision %s→%s (momentum=%.3f > threshold=%.2f)",

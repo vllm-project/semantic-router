@@ -186,6 +186,89 @@ func TestCRM_ConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestFindEnabledMomentumConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     *config.RouterConfig
+		wantNil bool
+	}{
+		{name: "nil config", cfg: nil, wantNil: true},
+		{name: "no decisions", cfg: &config.RouterConfig{}, wantNil: true},
+		{
+			name: "decision without momentum",
+			cfg: &config.RouterConfig{
+				IntelligentRouting: config.IntelligentRouting{
+					Decisions: []config.Decision{{
+						Name:      "simple",
+						Algorithm: &config.AlgorithmConfig{Type: "confidence"},
+					}},
+				},
+			},
+			wantNil: true,
+		},
+		{
+			name: "decision with momentum enabled",
+			cfg: &config.RouterConfig{
+				IntelligentRouting: config.IntelligentRouting{
+					Decisions: []config.Decision{{
+						Name: "complex",
+						Algorithm: &config.AlgorithmConfig{
+							Type:     "confidence",
+							Momentum: &config.RoutingMomentumConfig{Enabled: true, Attack: 0.2},
+						},
+					}},
+				},
+			},
+			wantNil: false,
+		},
+		{
+			name: "decision with momentum disabled",
+			cfg: &config.RouterConfig{
+				IntelligentRouting: config.IntelligentRouting{
+					Decisions: []config.Decision{{
+						Name: "complex",
+						Algorithm: &config.AlgorithmConfig{
+							Type:     "confidence",
+							Momentum: &config.RoutingMomentumConfig{Enabled: false},
+						},
+					}},
+				},
+			},
+			wantNil: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := findEnabledMomentumConfig(tt.cfg)
+			if tt.wantNil && got != nil {
+				t.Error("expected nil")
+			}
+			if !tt.wantNil && got == nil {
+				t.Error("expected non-nil")
+			}
+		})
+	}
+}
+
+func TestDecision_GetMomentumConfig(t *testing.T) {
+	d := config.Decision{Name: "test"}
+	if d.GetMomentumConfig() != nil {
+		t.Error("expected nil when no algorithm")
+	}
+
+	d.Algorithm = &config.AlgorithmConfig{Type: "confidence"}
+	if d.GetMomentumConfig() != nil {
+		t.Error("expected nil when no momentum")
+	}
+
+	m := &config.RoutingMomentumConfig{Enabled: true}
+	d.Algorithm.Momentum = m
+	if d.GetMomentumConfig() != m {
+		t.Error("expected momentum config")
+	}
+}
+
 func TestEstimateComplexityFromLength(t *testing.T) {
 	tests := []struct {
 		length   int
@@ -193,9 +276,9 @@ func TestEstimateComplexityFromLength(t *testing.T) {
 	}{
 		{5, 0.1},   // "yes"
 		{10, 0.1},  // "ok thanks"
-		{50, 0.3},  // short question
-		{150, 0.6}, // medium question
-		{500, 0.8}, // detailed prompt
+		{25, 0.3},  // "can you explain that?"
+		{60, 0.6},  // "implement a queue in Go"
+		{150, 0.8}, // detailed technical question
 	}
 
 	for _, tt := range tests {
