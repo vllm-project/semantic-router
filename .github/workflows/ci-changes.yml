@@ -140,6 +140,7 @@ jobs:
               - 'AGENTS.md'
               - 'docs/agent/**'
               - 'tools/agent/skills/**'
+              - 'src/fleet-sim/AGENTS.md'
               - 'src/vllm-sr/cli/AGENTS.md'
               - 'src/semantic-router/pkg/config/AGENTS.md'
               - 'src/semantic-router/pkg/extproc/AGENTS.md'

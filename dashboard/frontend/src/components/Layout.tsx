@@ -4,6 +4,7 @@ import styles from './Layout.module.css'
 import LayoutAccountControl from './LayoutAccountControl'
 import {
   ANALYSIS_OPERATIONS_MENU_SECTIONS,
+  FLEET_SIM_MENU_SECTIONS,
   filterLayoutMenuSections,
   hasActiveLayoutMenuSection,
   isLayoutMenuItemActive,
@@ -16,6 +17,7 @@ import {
   type LayoutNavLink,
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
+import { useReadonly } from '../contexts/ReadonlyContext'
 import { canAccessMLSetup } from '../utils/accessControl'
 
 interface LayoutProps {
@@ -37,6 +39,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [openDropdown, setOpenDropdown] = useState<LayoutDropdownKey | null>(null)
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false)
   const { user, logout } = useAuth()
+  const { fleetSimEnabled } = useReadonly()
   const location = useLocation()
   const navigate = useNavigate()
   const canManageUsers = user?.role === 'admin'
@@ -63,6 +66,14 @@ const Layout: React.FC<LayoutProps> = ({
     isConfigPage,
     configSection
   )
+  const isFleetSimActive = fleetSimEnabled
+    ? hasActiveLayoutMenuSection(
+        FLEET_SIM_MENU_SECTIONS,
+        location.pathname,
+        isConfigPage,
+        configSection
+      )
+    : false
 
   const closeMenus = () => {
     setOpenDropdown(null)
@@ -247,6 +258,40 @@ const Layout: React.FC<LayoutProps> = ({
                   ? renderDropdownMenu(MANAGER_MENU_SECTIONS, styles.dropdownMenu, 'Manager')
                   : null}
               </div>
+              {fleetSimEnabled ? (
+                <div className={styles.navDropdown}>
+                  <button
+                    type="button"
+                    aria-expanded={openDropdown === 'fleetSim'}
+                    aria-haspopup="menu"
+                    className={`${styles.navLink} ${isFleetSimActive ? styles.navLinkActive : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleDropdown('fleetSim')
+                    }}
+                  >
+                    Fleet Sim
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      className={`${styles.dropdownArrow} ${openDropdown === 'fleetSim' ? styles.dropdownArrowOpen : ''}`}
+                    >
+                      <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {openDropdown === 'fleetSim'
+                    ? renderDropdownMenu(
+                        FLEET_SIM_MENU_SECTIONS,
+                        styles.dropdownMenu,
+                        'Fleet Sim'
+                      )
+                    : null}
+                </div>
+              ) : null}
               <div className={styles.navDropdown}>
                 <button
                   type="button"
@@ -370,6 +415,7 @@ const Layout: React.FC<LayoutProps> = ({
               </NavLink>
             ))}
             {renderMobileMenuSection('Manager', MANAGER_MENU_SECTIONS)}
+            {fleetSimEnabled ? renderMobileMenuSection('Fleet Sim', FLEET_SIM_MENU_SECTIONS) : null}
             {renderMobileMenuSection('System', analysisOperationsMenuSections)}
           </div>
         ) : null}
