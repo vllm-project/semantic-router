@@ -88,7 +88,7 @@ func captureRequestHeaders(
 // is false, preventing clients from spoofing user identity for role-based routing,
 // per-user rate limits, and memory isolation.
 func (r *OpenAIRouter) stripUntrustedIdentityHeaders(ctx *RequestContext) {
-	if r.Config.Authz.ShouldTrustIdentityHeaders() {
+	if r.Config == nil || r.Config.Authz.ShouldTrustIdentityHeaders() {
 		return
 	}
 	userIDHeader := r.Config.Authz.Identity.GetUserIDHeader()
