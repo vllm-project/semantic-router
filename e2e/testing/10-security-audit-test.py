@@ -17,6 +17,7 @@ Run:
 """
 
 import concurrent.futures
+import contextlib
 import socket
 import sys
 import threading
@@ -24,8 +25,10 @@ import time
 import unittest
 
 import requests
-
 from test_base import SemanticRouterTestBase
+
+HTTP_OK = 200
+HTTP_SERVICE_UNAVAILABLE = 503
 
 CLASSIFICATION_API_URL = "http://localhost:8080"
 ENVOY_URL = "http://localhost:8801"
@@ -155,21 +158,19 @@ class TestDestinationEndpointInjection(SemanticRouterTestBase):
                 hijacked["received"] = True
                 conn.close()
                 s.close()
-            except socket.timeout:
+            except TimeoutError:
                 s.close()
 
         t = threading.Thread(target=listener, daemon=True)
         t.start()
         time.sleep(0.3)
 
-        try:
+        with contextlib.suppress(Exception):
             chat_completion(
                 messages=[{"role": "user", "content": "hello"}],
                 headers={"x-vsr-destination-endpoint": "127.0.0.1:19876"},
                 timeout=12,
             )
-        except Exception:
-            pass
 
         t.join(timeout=11)
         self.assertFalse(
@@ -208,10 +209,8 @@ class TestGiantPromptDoS(SemanticRouterTestBase):
             "Health endpoint must respond after processing a 10K char prompt",
         )
 
-        try:
+        with contextlib.suppress(requests.Timeout):
             eval_text("a" * 10000, timeout=60)
-        except requests.Timeout:
-            pass
 
         r = requests.get(f"{CLASSIFICATION_API_URL}/health", timeout=10)
         self.assertEqual(
@@ -231,10 +230,8 @@ class TestConcurrentFlood(SemanticRouterTestBase):
         )
 
         def send_eval():
-            try:
+            with contextlib.suppress(Exception):
                 eval_text("hello", timeout=15)
-            except Exception:
-                pass
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
             futures = [pool.submit(send_eval) for _ in range(20)]
@@ -269,7 +266,7 @@ class TestEmbeddingExhaustion(SemanticRouterTestBase):
         def eval_prompt(prompt):
             try:
                 r = eval_text(prompt, timeout=20)
-                return r.status_code == 200
+                return r.status_code == HTTP_OK
             except Exception:
                 return False
 
@@ -289,10 +286,8 @@ class TestEmbeddingExhaustion(SemanticRouterTestBase):
         )
 
         def heavy_eval():
-            try:
+            with contextlib.suppress(Exception):
                 eval_text("a" * 8000, timeout=60)
-            except Exception:
-                pass
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             future = pool.submit(heavy_eval)
@@ -300,14 +295,12 @@ class TestEmbeddingExhaustion(SemanticRouterTestBase):
 
             try:
                 r = requests.get(f"{CLASSIFICATION_API_URL}/health", timeout=5)
-                health_ok = r.status_code == 200
+                health_ok = r.status_code == HTTP_OK
             except Exception:
                 health_ok = False
 
-            try:
+            with contextlib.suppress(Exception):
                 future.result(timeout=60)
-            except Exception:
-                pass
 
         self.assertTrue(
             health_ok, "Health endpoint blocked during embedding computation"
@@ -383,7 +376,7 @@ class TestMemoryIsolation(SemanticRouterTestBase):
 
         try:
             r = requests.get(f"{CLASSIFICATION_API_URL}/v1/memory", timeout=5)
-            if r.status_code == 503:
+            if r.status_code == HTTP_SERVICE_UNAVAILABLE:
                 self.print_test_result(
                     True, "Memory store not configured (503) — no exposure"
                 )
