@@ -382,6 +382,7 @@ export interface EmbeddingOptimizationConfig {
   target_dimension?: number
   target_layer?: number
   enable_soft_matching?: boolean
+  top_k?: number
   min_score_threshold?: number
 }
 

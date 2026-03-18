@@ -35,17 +35,17 @@ description: Builds Docker images, starts local servers, and runs smoke tests fo
 - [docs/agent/amd-local.md](../../../../docs/agent/amd-local.md)
 - [docs/agent/environments.md](../../../../docs/agent/environments.md)
 - [deploy/amd/README.md](../../../../deploy/amd/README.md)
-- [deploy/amd/config.yaml](../../../../deploy/amd/config.yaml)
+- [deploy/recipes/balance.yaml](../../../../deploy/recipes/balance.yaml)
 
 ## Standard Commands
 
 - `make agent-dev ENV=amd`
 - `make agent-serve-local ENV=amd`
 - `make agent-smoke-local`
-- `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=deploy/amd/config.yaml`
+- `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=deploy/recipes/balance.yaml`
 
 ## Acceptance
 
 - The default AMD smoke config starts successfully
 - AMD image/platform behavior does not fall back unexpectedly
-- When real AMD model deployment is in scope, the agent uses `deploy/amd/README.md` and `deploy/amd/config.yaml` as the primary reference instead of inventing a new ROCm setup path
+- When real AMD model deployment is in scope, the agent uses `deploy/amd/README.md` and `deploy/recipes/balance.yaml` as the primary reference instead of inventing a new ROCm setup path

@@ -1012,7 +1012,7 @@ class EmbeddingModelsConfig(BaseModel):
     )
     embedding_config: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Embedding classifier tuning (model_type/target_dimension/etc.)",
+        description="Embedding classifier tuning (model_type/target_dimension/top_k/etc.)",
     )
     use_cpu: bool = Field(True, description="Use CPU for inference")
 

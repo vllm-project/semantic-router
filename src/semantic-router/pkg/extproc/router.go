@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"encoding/json"
-	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -49,92 +48,6 @@ type OpenAIRouter struct {
 var _ ext_proc.ExternalProcessorServer = (*OpenAIRouter)(nil)
 
 const routerReplayAPIBasePath = "/v1/router_replay"
-
-// handleRouterReplayAPI serves read-only endpoints for router replay records.
-func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_proc.ProcessingResponse {
-	if !r.hasRouterReplayRecorders() {
-		return nil
-	}
-
-	path = normalizeRouterReplayAPIPath(path)
-
-	switch {
-	case isRouterReplayListPath(path):
-		return r.handleRouterReplayListAPI(method)
-	case strings.HasPrefix(path, routerReplayAPIBasePath+"/"):
-		replayID := strings.TrimPrefix(path, routerReplayAPIBasePath+"/")
-		return r.handleRouterReplayRecordAPI(method, replayID)
-	default:
-		return nil
-	}
-}
-
-func (r *OpenAIRouter) hasRouterReplayRecorders() bool {
-	return len(r.ReplayRecorders) > 0 || r.ReplayRecorder != nil
-}
-
-func normalizeRouterReplayAPIPath(path string) string {
-	if idx := strings.Index(path, "?"); idx != -1 {
-		return path[:idx]
-	}
-	return path
-}
-
-func isRouterReplayListPath(path string) bool {
-	return path == routerReplayAPIBasePath || path == routerReplayAPIBasePath+"/"
-}
-
-func (r *OpenAIRouter) handleRouterReplayListAPI(method string) *ext_proc.ProcessingResponse {
-	if method != "GET" {
-		return r.createErrorResponse(405, "method not allowed")
-	}
-
-	records := r.collectRouterReplayRecords()
-	payload := map[string]interface{}{
-		"object": "router_replay.list",
-		"count":  len(records),
-		"data":   records,
-	}
-	return r.createJSONResponse(200, payload)
-}
-
-func (r *OpenAIRouter) collectRouterReplayRecords() []routerreplay.RoutingRecord {
-	var records []routerreplay.RoutingRecord
-	for _, recorder := range r.ReplayRecorders {
-		records = append(records, recorder.ListAllRecords()...)
-	}
-	if len(records) == 0 && r.ReplayRecorder != nil {
-		return r.ReplayRecorder.ListAllRecords()
-	}
-	return records
-}
-
-func (r *OpenAIRouter) handleRouterReplayRecordAPI(method string, replayID string) *ext_proc.ProcessingResponse {
-	if method != "GET" {
-		return r.createErrorResponse(405, "method not allowed")
-	}
-	if replayID == "" {
-		return r.createErrorResponse(400, "replay id is required")
-	}
-
-	record, ok := r.findRouterReplayRecord(replayID)
-	if !ok {
-		return r.createErrorResponse(404, "replay record not found")
-	}
-	return r.createJSONResponse(200, record)
-}
-
-func (r *OpenAIRouter) findRouterReplayRecord(replayID string) (routerreplay.RoutingRecord, bool) {
-	for _, recorder := range r.ReplayRecorders {
-		if record, ok := recorder.GetRecord(replayID); ok {
-			return record, true
-		}
-	}
-	if r.ReplayRecorder != nil {
-		return r.ReplayRecorder.GetRecord(replayID)
-	}
-	return routerreplay.RoutingRecord{}, false
-}
 
 // createJSONResponseWithBody creates a direct response with pre-marshaled JSON body.
 func (r *OpenAIRouter) createJSONResponseWithBody(statusCode int, jsonBody []byte) *ext_proc.ProcessingResponse {

@@ -345,6 +345,97 @@ global:
 	if !cfg.PromptGuard.UseMmBERT32K {
 		t.Fatal("expected sparse prompt-guard override to keep mmBERT-32K enabled")
 	}
+	if !cfg.Classifier.PreferenceModel.ContrastiveEnabled() {
+		t.Fatal("expected sparse classifier override to preserve default preference contrastive mode")
+	}
+}
+
+func TestParseYAMLBytesPreservesProviderModelPricing(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: qwen3
+  models:
+    - name: qwen3
+      provider_model_id: qwen3
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.24
+        completion_per_1m: 0.96
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: qwen3
+      modality: text
+  decisions:
+    - name: default_route
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: general
+      modelRefs:
+        - model: qwen3
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	pricing := cfg.ModelConfig["qwen3"].Pricing
+	if pricing.PromptPer1M != 0.24 || pricing.CompletionPer1M != 0.96 || pricing.Currency != "USD" {
+		t.Fatalf("expected provider pricing to be preserved in model config, got %#v", pricing)
+	}
+
+	promptPer1M, completionPer1M, currency, ok := cfg.GetModelPricing("qwen3")
+	if !ok {
+		t.Fatal("expected GetModelPricing to resolve provider pricing")
+	}
+	if promptPer1M != 0.24 || completionPer1M != 0.96 || currency != "USD" {
+		t.Fatalf(
+			"expected GetModelPricing to return provider pricing, got prompt=%v completion=%v currency=%q",
+			promptPer1M,
+			completionPer1M,
+			currency,
+		)
+	}
+}
+
+func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
+	cfg := &RouterConfig{
+		BackendModels: BackendModels{
+			ModelConfig: map[string]ModelParams{
+				"qwen-rocm": {
+					Pricing: ModelPricing{
+						Currency:        "USD",
+						PromptPer1M:     0,
+						CompletionPer1M: 0,
+					},
+				},
+			},
+		},
+	}
+
+	promptPer1M, completionPer1M, currency, ok := cfg.GetModelPricing("qwen-rocm")
+	if !ok {
+		t.Fatal("expected explicit zero pricing to be treated as configured")
+	}
+	if promptPer1M != 0 || completionPer1M != 0 || currency != "USD" {
+		t.Fatalf(
+			"expected zero pricing with USD currency, got prompt=%v completion=%v currency=%q",
+			promptPer1M,
+			completionPer1M,
+			currency,
+		)
+	}
 }
 
 func TestParseYAMLBytesAppliesCanonicalRouterConfigSource(t *testing.T) {

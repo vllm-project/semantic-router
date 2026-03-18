@@ -179,7 +179,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 						PIIModel: cfg.PIIModel,
 						ModelRef: "pii_classifier",
 					},
-					Preference: cfg.PreferenceModel,
+					Preference: cfg.PreferenceModel.WithDefaults(),
 				},
 				HallucinationMitigation: CanonicalHallucinationModule{
 					Enabled:                 cfg.HallucinationMitigation.Enabled,

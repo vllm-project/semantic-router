@@ -34,6 +34,13 @@ func testLoadBalancingVerification(ctx context.Context, client *kubernetes.Clien
 	}
 	defer session.Close()
 
+	requestID := 1
+	var warmup productionStackWarmupSummary
+	requestID, warmup, err = warmProductionStackBackend(ctx, chatClient, requestID, 5, 12)
+	if err != nil {
+		return fmt.Errorf("backend warmup failed before load-balancing verification: %w", err)
+	}
+
 	total := 100
 	concurrency := 10
 	requestErrors := 0
@@ -47,7 +54,7 @@ func testLoadBalancingVerification(ctx context.Context, client *kubernetes.Clien
 
 	work := make(chan int, total)
 	for i := 0; i < total; i++ {
-		work <- i + 1
+		work <- requestID + i
 	}
 	close(work)
 
@@ -76,6 +83,10 @@ func testLoadBalancingVerification(ctx context.Context, client *kubernetes.Clien
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"total":                   total,
+			"warmup_attempts":         warmup.Attempts,
+			"warmup_successes":        warmup.Successes,
+			"warmup_fast_responses":   warmup.FastResponses,
+			"warmup_request_errors":   warmup.RequestErrors,
 			"errors":                  requestErrors,
 			"fast_responses":          fastResponses,
 			"success_count":           backendSuccessCount,

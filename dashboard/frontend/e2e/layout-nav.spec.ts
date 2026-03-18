@@ -64,9 +64,57 @@ const configResponse = {
   routing: {
     modelCards: [{ name: 'test-model' }],
     signals: {
-      domains: [{ name: 'business', description: 'Business' }],
+      domains: [
+        { name: 'business', description: 'Business' },
+        { name: 'economics', description: 'Economics' },
+      ],
+      embeddings: [
+        {
+          name: 'business_analysis',
+          threshold: 0.72,
+          candidates: ['business'],
+          aggregation_method: 'max',
+        },
+      ],
+      preferences: [
+        {
+          name: 'structured_delivery',
+          threshold: 0.55,
+          examples: ['Use a structured answer'],
+        },
+      ],
+      complexity: [
+        { name: 'general_reasoning:easy', threshold: 0.25 },
+        { name: 'general_reasoning:medium', threshold: 0.5 },
+      ],
     },
     decisions: [
+      {
+        name: 'medium_business',
+        priority: 215,
+        rules: {
+          operator: 'AND',
+          conditions: [
+            {
+              operator: 'OR',
+              conditions: [
+                { type: 'domain', name: 'business' },
+                { type: 'domain', name: 'economics' },
+              ],
+            },
+            {
+              operator: 'OR',
+              conditions: [
+                { type: 'embedding', name: 'business_analysis' },
+                { type: 'complexity', name: 'general_reasoning:easy' },
+                { type: 'complexity', name: 'general_reasoning:medium' },
+                { type: 'preference', name: 'structured_delivery' },
+              ],
+            },
+          ],
+        },
+        modelRefs: [{ model: 'test-model', use_reasoning: true, reasoning_effort: 'medium' }],
+      },
       {
         name: 'business-route',
         priority: 1,
@@ -110,6 +158,109 @@ const statusResponse = {
       total_models: 0,
     },
   },
+};
+
+const replayRecordsResponse = {
+  object: 'router_replay.list',
+  count: 2,
+  total: 2,
+  limit: 100,
+  offset: 0,
+  has_more: false,
+  data: [
+    {
+      id: 'replay-1',
+      timestamp: '2026-03-17T10:00:00Z',
+      request_id: 'req-1',
+      decision: 'business-route',
+      original_model: 'test-model',
+      selected_model: 'test-model',
+      reasoning_mode: 'off',
+      selection_method: 'static',
+      signals: {
+        domain: ['business'],
+        keyword: ['finance'],
+      },
+      response_status: 200,
+      from_cache: false,
+      streaming: false,
+      prompt_tokens: 1000,
+      completion_tokens: 500,
+      total_tokens: 1500,
+      actual_cost: 0.002,
+      baseline_cost: 0.008,
+      cost_savings: 0.006,
+      currency: 'USD',
+      baseline_model: 'premium-model',
+    },
+    {
+      id: 'replay-2',
+      timestamp: '2026-03-17T10:05:00Z',
+      request_id: 'req-2',
+      decision: 'business-route',
+      original_model: 'test-model',
+      selected_model: 'test-model',
+      reasoning_mode: 'on',
+      selection_method: 'static',
+      signals: {
+        domain: ['business'],
+        preference: ['low-latency'],
+      },
+      response_status: 200,
+      from_cache: true,
+      streaming: true,
+    },
+  ],
+};
+
+const replayAggregateResponse = {
+  object: 'router_replay.aggregate',
+  record_count: 2,
+  summary: {
+    total_saved: 0.006,
+    baseline_spend: 0.008,
+    actual_spend: 0.002,
+    currency: 'USD',
+    cost_record_count: 1,
+    excluded_record_count: 1,
+  },
+  model_selection: [
+    { name: 'test-model', value: 2 },
+  ],
+  decision_distribution: [
+    { name: 'business-route', value: 2 },
+  ],
+  signal_distribution: [
+    { name: 'domain', value: 2 },
+    { name: 'keyword', value: 1 },
+    { name: 'preference', value: 1 },
+  ],
+  token_volume: {
+    input_tokens: 1000,
+    output_tokens: 500,
+    total_tokens: 1500,
+    excluded_record_count: 1,
+  },
+  token_breakdown: {
+    by_decision: [
+      {
+        name: 'business-route',
+        input_tokens: 1000,
+        output_tokens: 500,
+        total_tokens: 1500,
+      },
+    ],
+    by_selected_model: [
+      {
+        name: 'test-model',
+        input_tokens: 1000,
+        output_tokens: 500,
+        total_tokens: 1500,
+      },
+    ],
+  },
+  available_decisions: ['business-route'],
+  available_models: ['test-model'],
 };
 
 async function mockCommon(
@@ -173,10 +324,46 @@ async function mockCommon(
       body: JSON.stringify({ canRegister: false }),
     });
   });
+
+  await page.route(/\/api\/router\/v1\/router_replay(?:\?.*)?$/, async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(replayRecordsResponse),
+    });
+  });
+
+  await page.route(/\/api\/router\/v1\/router_replay\/aggregate(?:\?.*)?$/, async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(replayAggregateResponse),
+    });
+  });
+
+  await page.route('**/api/router/v1/router_replay/*', async route => {
+    const requestURL = new URL(route.request().url());
+    const replayID = requestURL.pathname.split('/').pop();
+    if (replayID === 'aggregate') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(replayAggregateResponse),
+      });
+      return;
+    }
+    const record = replayRecordsResponse.data.find(item => item.id === replayID);
+
+    await route.fulfill({
+      status: record ? 200 : 404,
+      contentType: 'application/json',
+      body: JSON.stringify(record ?? { error: { message: 'not found' } }),
+    });
+  });
 }
 
 test.describe('Layout top navigation', () => {
-  test('moves ClawOS into the secondary group and merges analysis and operations', async ({ page }) => {
+  test('keeps Insight in primary nav and moves Manager beside System on the right', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await mockCommon(page);
 
@@ -190,13 +377,18 @@ test.describe('Layout top navigation', () => {
     await expect(primaryGroup.getByRole('link', { name: 'Playground' })).toBeVisible();
     await expect(primaryGroup.getByRole('link', { name: 'Brain' })).toBeVisible();
     await expect(primaryGroup.getByRole('link', { name: 'DSL' })).toBeVisible();
-    await expect(primaryGroup.getByRole('button', { name: 'Manager' })).toBeVisible();
+    await expect(primaryGroup.getByRole('link', { name: 'Insight' })).toBeVisible();
+    await expect(primaryGroup.getByRole('button', { name: 'Manager' })).toHaveCount(0);
     await expect(primaryGroup.getByRole('link', { name: 'ClawOS' })).toHaveCount(0);
     await expect(primaryGroup.getByRole('link', { name: 'Users' })).toHaveCount(0);
 
     await expect(secondaryGroup.getByRole('link', { name: 'Users' })).toBeVisible();
     await expect(secondaryGroup.getByRole('link', { name: 'ClawOS' })).toBeVisible();
+    await expect(secondaryGroup.getByRole('button', { name: 'Manager' })).toBeVisible();
     await expect(secondaryGroup.getByRole('button', { name: 'System' })).toBeVisible();
+    const secondaryButtons = secondaryGroup.getByRole('button');
+    await expect(secondaryButtons.nth(0)).toHaveText(/Manager/);
+    await expect(secondaryButtons.nth(1)).toHaveText(/System/);
     await expect(globalNav.getByRole('button', { name: 'Analysis', exact: true })).toHaveCount(0);
     await expect(globalNav.getByRole('button', { name: 'Operations', exact: true })).toHaveCount(0);
 
@@ -207,9 +399,10 @@ test.describe('Layout top navigation', () => {
     const menuItems = menu.getByRole('menuitem');
     await expect(menuItems.nth(0)).toHaveText('Global Config');
     await expect(menuItems.nth(1)).toHaveText('Evaluation');
+    await expect(menuItems.nth(2)).toHaveText('Ratings');
     await expect(menu.getByRole('menuitem', { name: 'Global Config' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Evaluation' })).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'Replay' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Replay' })).toHaveCount(0);
     await expect(menu.getByRole('menuitem', { name: 'Ratings' })).toBeVisible();
     await expect(menu.getByText('Operations')).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'ML Setup' })).toBeVisible();
@@ -218,6 +411,65 @@ test.describe('Layout top navigation', () => {
     await expect(menu.getByRole('menuitem', { name: 'Logs' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Grafana' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Tracing' })).toBeVisible();
+  });
+
+  test('loads Insights charts and does not preserve the legacy replay route', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockCommon(page);
+
+    await page.goto('/dashboard');
+    await page.getByRole('link', { name: 'Insight' }).click();
+
+    await expect(page).toHaveURL(/\/insights$/);
+    await expect(page.getByRole('heading', { name: 'Insights', exact: true })).toBeVisible();
+    await expect(page.getByText('Total Saved')).toBeVisible();
+    await expect(page.getByText('Saved %')).toBeVisible();
+    await expect(page.getByText('Baseline Spend')).toBeVisible();
+    await expect(page.getByText('Actual Spend')).toBeVisible();
+    await expect(page.getByText('See what the router picked, what signals fired, and how much it saved.')).toBeVisible();
+    await expect(page.getByText('Decisions, model picks, token usage, and savings in one view.')).toBeVisible();
+    await expect(page.getByText('Replay-backed routing records with spend, savings, and token details per request.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Model Selection', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Decision Distribution', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Signal Distribution', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Token Volume', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Tokens by Decision', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Tokens by Selected Model', exact: true })).toBeVisible();
+    await expect(page.getByText('Input Tokens').first()).toBeVisible();
+    await expect(page.getByText('Output Tokens').first()).toBeVisible();
+    await expect(page.getByText('Total Tokens').first()).toBeVisible();
+    await expect(page.getByText('1 filtered record excluded from cost totals because usage or pricing data is incomplete.')).toBeVisible();
+    await expect(page.getByText('1 filtered record excluded from token totals because usage data is incomplete.')).toBeVisible();
+    await expect(
+      page.getByRole('article').filter({ hasText: 'Total Saved' }).getByRole('strong'),
+    ).toHaveText('$0.0060');
+    await expect(
+      page.getByRole('article').filter({ hasText: 'Saved %' }).getByRole('strong'),
+    ).toHaveText('75.0%');
+    await expect(page.getByRole('columnheader', { name: 'Actual Cost' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Saved vs Baseline' })).toBeVisible();
+
+    await page.goto('/replay');
+    await expect(page).toHaveURL(/\/dashboard$/);
+  });
+
+  test('renders nested canonical decision groups in Brain topology', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockCommon(page);
+
+    await page.goto('/topology');
+
+    const decisionNode = page
+      .locator('[class*="decisionNode"]')
+      .filter({ has: page.getByText('medium_business', { exact: true }) })
+      .first();
+
+    await expect(decisionNode).toBeVisible();
+    await expect(decisionNode).toContainText('AND');
+    await expect(decisionNode).toContainText('OR: domain: business | domain: economics');
+    await expect(decisionNode).toContainText('OR: embedding: business_analysis');
+    await expect(decisionNode).toContainText('preference: structured_delivery');
+    await expect(decisionNode.getByText('Referenced signals not configured')).toHaveCount(0);
   });
 
   test('hides ML Setup for read users and redirects direct access back to the dashboard', async ({ page }) => {

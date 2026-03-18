@@ -154,7 +154,7 @@ func (m CanonicalClassifierModule) runtimeConfig() Classifier {
 		CategoryModel:    m.Domain.CategoryModel,
 		MCPCategoryModel: m.MCP,
 		PIIModel:         m.PII.PIIModel,
-		PreferenceModel:  m.Preference,
+		PreferenceModel:  m.Preference.WithDefaults(),
 	}
 }
 

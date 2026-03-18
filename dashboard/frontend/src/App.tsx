@@ -18,7 +18,6 @@ import TopologyPage from './pages/TopologyPage'
 import TracingPage from './pages/TracingPage'
 import StatusPage from './pages/StatusPage'
 import LogsPage from './pages/LogsPage'
-import ReplayPage from './pages/ReplayPage'
 import EvaluationPage from './pages/EvaluationPage'
 import MLSetupPage from './pages/MLSetupPage'
 import RatingsPage from './pages/RatingsPage'
@@ -26,6 +25,7 @@ import BuilderPage from './pages/BuilderPage'
 import DashboardPage from './pages/DashboardPage'
 import OpenClawPage from './pages/OpenClawPage'
 import UsersPage from './pages/UsersPage'
+import InsightsPage from './pages/InsightsPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { SetupProvider, useSetup } from './contexts/SetupContext'
@@ -315,13 +315,13 @@ const AppRouter: React.FC = () => {
               }
             />
             <Route
-              path="/replay"
+              path="/insights"
               element={
                 <Layout
                   configSection={configSection}
                   onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
                 >
-                  <ReplayPage />
+                  <InsightsPage />
                 </Layout>
               }
             />

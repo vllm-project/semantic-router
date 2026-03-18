@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -301,9 +302,10 @@ func (c *EmbeddingClassifier) Classify(text string) (string, float64, error) {
 	return best.RuleName, best.Score, nil
 }
 
-// ClassifyAll performs Embedding similarity classification on the given text.
-// Returns ALL rules that matched their threshold (not just the single best).
-// Enables AND conditions in the Decision Engine (e.g., embedding:"ai" AND embedding:"programming").
+// ClassifyAll performs embedding similarity classification on the given text.
+// Returns the highest-ranking matched rules, limited by embedding_config.top_k
+// (default 1, 0 disables truncation). When top_k is increased, the decision
+// engine can compose multiple embedding matches together.
 func (c *EmbeddingClassifier) ClassifyAll(text string) ([]MatchedRule, error) {
 	if len(c.rules) == 0 {
 		return nil, nil
@@ -392,47 +394,32 @@ type MatchedRule struct {
 	Method   string // "hard" or "soft"
 }
 
-// findAllMatchedRules aggregates candidate similarities per rule and returns ALL that passed
+type scoredEmbeddingRule struct {
+	Name      string
+	Score     float32
+	Threshold float32
+}
+
+// findAllMatchedRules aggregates candidate similarities per rule and returns the
+// top-ranked matches subject to the configured top_k limit.
 func (c *EmbeddingClassifier) findAllMatchedRules(candidateSimilarities map[string]float32) []MatchedRule {
-	var matched []MatchedRule
+	scoredRules := c.scoreRules(candidateSimilarities)
+	hardMatches := make([]MatchedRule, 0, len(scoredRules))
 
-	// Phase 1: Collect all hard matches (score >= rule threshold)
-	for _, rule := range c.rules {
-		if len(rule.Candidates) == 0 {
-			continue
-		}
-
-		// Collect similarities for this rule's candidates
-		similarities := make([]float32, 0, len(rule.Candidates))
-		for _, candidate := range rule.Candidates {
-			if sim, ok := candidateSimilarities[candidate]; ok {
-				similarities = append(similarities, sim)
-			}
-		}
-		if len(similarities) == 0 {
-			continue
-		}
-
-		// Aggregate based on method
-		aggregatedScore := c.aggregateScoresForRule(similarities, rule.AggregationMethodConfiged)
-
-		logging.Infof("Rule %q: aggregated_score=%.4f, threshold=%.3f, matched=%v (method=%s, candidates=%d)",
-			rule.Name, aggregatedScore, rule.SimilarityThreshold,
-			aggregatedScore >= rule.SimilarityThreshold,
-			rule.AggregationMethodConfiged, len(similarities))
-
-		if aggregatedScore >= rule.SimilarityThreshold {
-			logging.Infof("Hard match found: rule=%q, score=%.4f", rule.Name, aggregatedScore)
-			matched = append(matched, MatchedRule{
+	// Phase 1: collect all hard matches (score >= rule threshold).
+	for _, rule := range scoredRules {
+		if rule.Score >= rule.Threshold {
+			logging.Infof("Hard match found: rule=%q, score=%.4f", rule.Name, rule.Score)
+			hardMatches = append(hardMatches, MatchedRule{
 				RuleName: rule.Name,
-				Score:    float64(aggregatedScore),
+				Score:    float64(rule.Score),
 				Method:   "hard",
 			})
 		}
 	}
 
-	if len(matched) > 0 {
-		return matched
+	if len(hardMatches) > 0 {
+		return c.sortAndLimitMatches(hardMatches)
 	}
 
 	// Phase 2: No hard matches — check if soft matching is enabled
@@ -441,13 +428,34 @@ func (c *EmbeddingClassifier) findAllMatchedRules(candidateSimilarities map[stri
 		return nil
 	}
 
-	// Find soft matches (score >= global min threshold)
+	softMatches := make([]MatchedRule, 0, len(scoredRules))
+	for _, rule := range scoredRules {
+		if rule.Score >= c.optimizationConfig.MinScoreThreshold {
+			logging.Infof("Soft match found: rule=%q, score=%.4f (min_threshold=%.3f)",
+				rule.Name, rule.Score, c.optimizationConfig.MinScoreThreshold)
+			softMatches = append(softMatches, MatchedRule{
+				RuleName: rule.Name,
+				Score:    float64(rule.Score),
+				Method:   "soft",
+			})
+		}
+	}
+
+	if len(softMatches) == 0 {
+		logging.Infof("No match found (best score below min_threshold=%.3f)", c.optimizationConfig.MinScoreThreshold)
+		return nil
+	}
+
+	return c.sortAndLimitMatches(softMatches)
+}
+
+func (c *EmbeddingClassifier) scoreRules(candidateSimilarities map[string]float32) []scoredEmbeddingRule {
+	scoredRules := make([]scoredEmbeddingRule, 0, len(c.rules))
 	for _, rule := range c.rules {
 		if len(rule.Candidates) == 0 {
 			continue
 		}
 
-		// Collect similarities for this rule's candidates
 		similarities := make([]float32, 0, len(rule.Candidates))
 		for _, candidate := range rule.Candidates {
 			if sim, ok := candidateSimilarities[candidate]; ok {
@@ -459,22 +467,38 @@ func (c *EmbeddingClassifier) findAllMatchedRules(candidateSimilarities map[stri
 		}
 
 		aggregatedScore := c.aggregateScoresForRule(similarities, rule.AggregationMethodConfiged)
-		if aggregatedScore >= c.optimizationConfig.MinScoreThreshold {
-			logging.Infof("Soft match found: rule=%q, score=%.4f (min_threshold=%.3f)",
-				rule.Name, aggregatedScore, c.optimizationConfig.MinScoreThreshold)
-			matched = append(matched, MatchedRule{
-				RuleName: rule.Name,
-				Score:    float64(aggregatedScore),
-				Method:   "soft",
-			})
+		logging.Infof("Rule %q: aggregated_score=%.4f, threshold=%.3f, matched=%v (method=%s, candidates=%d)",
+			rule.Name, aggregatedScore, rule.SimilarityThreshold,
+			aggregatedScore >= rule.SimilarityThreshold,
+			rule.AggregationMethodConfiged, len(similarities))
+
+		scoredRules = append(scoredRules, scoredEmbeddingRule{
+			Name:      rule.Name,
+			Score:     aggregatedScore,
+			Threshold: rule.SimilarityThreshold,
+		})
+	}
+	return scoredRules
+}
+
+func (c *EmbeddingClassifier) sortAndLimitMatches(matches []MatchedRule) []MatchedRule {
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].Score == matches[j].Score {
+			return matches[i].RuleName < matches[j].RuleName
 		}
+		return matches[i].Score > matches[j].Score
+	})
+
+	topK := 1
+	if c.optimizationConfig.TopK != nil {
+		topK = *c.optimizationConfig.TopK
+	}
+	if topK == 0 || len(matches) <= topK {
+		return matches
 	}
 
-	if len(matched) == 0 {
-		logging.Infof("No match found (best score below min_threshold=%.3f)", c.optimizationConfig.MinScoreThreshold)
-	}
-
-	return matched
+	logging.Infof("Embedding matches limited to top_k=%d (available=%d)", topK, len(matches))
+	return matches[:topK]
 }
 
 // aggregateScoresForRule applies the aggregation method to compute the final score

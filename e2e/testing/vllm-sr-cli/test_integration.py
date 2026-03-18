@@ -24,6 +24,9 @@ class TestServeIntegration(CLITestBase):
     # Timeout for waiting for container to be running
     CONTAINER_STARTUP_TIMEOUT = 120
 
+    def _create_minimal_config(self, port: int = 8888) -> str:
+        return self.write_minimal_canonical_config(port=port)
+
     def _start_serve_background(
         self, env: dict[str, str] | None = None
     ) -> subprocess.Popen:

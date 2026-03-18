@@ -16,7 +16,7 @@ This file is the short entrypoint for coding agents. The detailed human-readable
 - Full task routing, primary-skill resolution, local-rule surfacing, and validation planning still come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
 - `tools/agent/**` remains the canonical harness source; `.agents/skills/**` is only a discovery bridge.
 
-If you need real AMD model deployment details instead of the minimal smoke path, also read [deploy/amd/README.md](deploy/amd/README.md) and [deploy/amd/config.yaml](deploy/amd/config.yaml).
+If you need real AMD model deployment details instead of the minimal smoke path, also read [deploy/amd/README.md](deploy/amd/README.md) and [deploy/recipes/balance.yaml](deploy/recipes/balance.yaml).
 
 ## Supported Environments
 

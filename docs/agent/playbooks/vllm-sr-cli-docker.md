@@ -8,9 +8,9 @@
   - `vllm-sr serve --image-pull-policy never --platform amd`
 - AMD real-model deployment reference:
   - [deploy/amd/README.md](../../deploy/amd/README.md)
-  - [deploy/amd/config.yaml](../../deploy/amd/config.yaml)
+  - [deploy/recipes/balance.yaml](../../deploy/recipes/balance.yaml)
 - If the task is about deploying a real AMD backend with alias-based routing instead of smoke validation, prefer:
-  - `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=deploy/amd/config.yaml`
+  - `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=deploy/recipes/balance.yaml`
   - plus the backend/network setup from `deploy/amd/README.md`
 - Feature-gate smoke defaults to the env-specific manifest config under `e2e/config/config.agent-smoke.*.yaml`
 - Use `AGENT_SERVE_CONFIG` only when you need to override that default

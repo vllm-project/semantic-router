@@ -21,7 +21,7 @@
 - If you need a non-default config, run `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=<config>`
 - The same `AGENT_STACK_NAME=<name>` and `AGENT_PORT_OFFSET=<n>` overrides work for isolated AMD-local stacks
 - For real AMD model deployment and backend container setup, read [deploy/amd/README.md](../../deploy/amd/README.md)
-- Use [deploy/amd/config.yaml](../../deploy/amd/config.yaml) as the reference YAML-first AMD routing profile
+- Use [deploy/recipes/balance.yaml](../../deploy/recipes/balance.yaml) as the reference YAML-first AMD routing profile
 - See [amd-local.md](amd-local.md)
 
 ## `ci-k8s`

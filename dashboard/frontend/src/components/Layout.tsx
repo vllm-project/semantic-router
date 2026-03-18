@@ -213,6 +213,12 @@ const Layout: React.FC<LayoutProps> = ({
           <nav className={styles.nav} aria-label="Global navigation">
             <div className={styles.navSection} role="group" aria-label="Primary navigation">
               {PRIMARY_NAV_LINKS.map(renderTopNavLink)}
+            </div>
+
+            <div className={styles.navDivider} />
+
+            <div className={`${styles.navSection} ${styles.navSectionSecondary}`} role="group" aria-label="Secondary navigation">
+              {secondaryNavLinks.map(renderTopNavLink)}
               <div className={styles.navDropdown}>
                 <button
                   type="button"
@@ -241,12 +247,6 @@ const Layout: React.FC<LayoutProps> = ({
                   ? renderDropdownMenu(MANAGER_MENU_SECTIONS, styles.dropdownMenu, 'Manager')
                   : null}
               </div>
-            </div>
-
-            <div className={styles.navDivider} />
-
-            <div className={`${styles.navSection} ${styles.navSectionSecondary}`} role="group" aria-label="Secondary navigation">
-              {secondaryNavLinks.map(renderTopNavLink)}
               <div className={styles.navDropdown}>
                 <button
                   type="button"

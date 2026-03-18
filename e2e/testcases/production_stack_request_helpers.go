@@ -35,6 +35,13 @@ type productionStackRequestResult struct {
 	Body             []byte
 }
 
+type productionStackWarmupSummary struct {
+	Successes     int
+	Attempts      int
+	FastResponses int
+	RequestErrors int
+}
+
 func openProductionStackChatSession(
 	ctx context.Context,
 	client *kubernetes.Clientset,
@@ -78,6 +85,44 @@ func sendProductionStackChatRequest(
 		return result, fmt.Errorf("status %d: %s", result.StatusCode, truncateString(string(resp.Body), 200))
 	}
 	return result, nil
+}
+
+func warmProductionStackBackend(
+	ctx context.Context,
+	chatClient *fixtures.ChatCompletionsClient,
+	startRequestID int,
+	requiredSuccesses int,
+	maxAttempts int,
+) (int, productionStackWarmupSummary, error) {
+	summary := productionStackWarmupSummary{}
+	requestID := startRequestID
+
+	for summary.Attempts < maxAttempts {
+		result, err := sendProductionStackChatRequest(ctx, chatClient, requestID)
+		summary.Attempts++
+		requestID++
+
+		switch {
+		case err != nil:
+			summary.RequestErrors++
+		case result.FastResponse:
+			summary.FastResponses++
+		default:
+			summary.Successes++
+			if summary.Successes >= requiredSuccesses {
+				return requestID, summary, nil
+			}
+		}
+	}
+
+	return requestID, summary, fmt.Errorf(
+		"backend warmup did not reach %d successes within %d attempts (successes=%d, fast_responses=%d, errors=%d)",
+		requiredSuccesses,
+		maxAttempts,
+		summary.Successes,
+		summary.FastResponses,
+		summary.RequestErrors,
+	)
 }
 
 func isProductionStackFastResponse(headers http.Header) bool {

@@ -31,6 +31,7 @@ export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
   { label: 'Playground', to: '/playground' },
   { label: 'Brain', to: '/topology' },
   { label: 'DSL', to: '/builder' },
+  { label: 'Insight', to: '/insights' },
 ]
 
 export const SECONDARY_NAV_LINKS: LayoutNavLink[] = [
@@ -54,7 +55,6 @@ export const ANALYSIS_OPERATIONS_MENU_SECTIONS: LayoutMenuSection[] = [
     items: [
       { kind: 'config', label: 'Global Config', configSection: 'global-config' },
       { kind: 'route', label: 'Evaluation', to: '/evaluation' },
-      { kind: 'route', label: 'Replay', to: '/replay' },
       { kind: 'route', label: 'Ratings', to: '/ratings' },
     ],
   },
