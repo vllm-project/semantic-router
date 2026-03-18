@@ -15,7 +15,13 @@ import {
   type TraceInfo,
   type TraceSample,
 } from '../utils/fleetSimApi'
-import { formatDateTime, formatNumber } from './fleetSimPageSupport'
+import {
+  describeBuiltinWorkload,
+  formatBuiltinWorkloadName,
+  formatDateTime,
+  formatNumber,
+  formatTraceFormat,
+} from './fleetSimPageSupport'
 
 type BuiltinWorkloadWithStats = BuiltinWorkload & {
   statsSummary?: string
@@ -96,30 +102,6 @@ export default function FleetSimWorkloadsPage() {
     }
   }
 
-  const workloadColumns: Column<BuiltinWorkloadWithStats>[] = [
-    {
-      key: 'name',
-      header: 'Workload',
-      sortable: true,
-      render: (row) => (
-        <div className={styles.compactListMeta}>
-          <span className={styles.compactListTitle}>{row.name}</span>
-          <span className={styles.compactListText}>{row.description}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'statsSummary',
-      header: 'Profile',
-      render: (row) => row.statsSummary || 'Loading…',
-    },
-    {
-      key: 'path',
-      header: 'Bundle Path',
-      render: (row) => <span className={styles.mono}>{row.path.split('/').slice(-1)[0]}</span>,
-    },
-  ]
-
   const traceColumns: Column<TraceInfo>[] = [
     {
       key: 'name',
@@ -136,7 +118,7 @@ export default function FleetSimWorkloadsPage() {
       key: 'format',
       header: 'Format',
       sortable: true,
-      render: (row) => <span className={styles.mono}>{row.format}</span>,
+      render: (row) => <span className={styles.mono}>{formatTraceFormat(row.format)}</span>,
     },
     {
       key: 'upload_time',
@@ -149,86 +131,121 @@ export default function FleetSimWorkloadsPage() {
   const filteredTraces = traces.filter((trace) =>
     trace.name.toLowerCase().includes(search.toLowerCase()) || trace.format.includes(search.toLowerCase())
   )
+  const selectedTraceCount = selectedSample ? Math.min(selectedSample.records.length, selectedSample.total) : 0
 
   return (
     <FleetSimSurfaceLayout
       title="Workloads"
-      description="Curate the trace library that powers fleet sizing. Built-in workload CDFs stay bundled with the package, while uploaded request traces persist in the shared simulator state."
+      description="Curate the traffic inputs behind every planning run, from reusable library profiles to uploaded production traces."
       currentPath="/fleet-sim/workloads"
       meta={[
-        { label: 'Built-ins', value: formatNumber(workloads.length) },
+        { label: 'Library profiles', value: formatNumber(workloads.length) },
         { label: 'Uploaded traces', value: formatNumber(traces.length) },
-        { label: 'Sample preview', value: selectedSample ? formatNumber(selectedSample.total) : 'Idle' },
+        { label: 'Preview rows', value: selectedSample ? formatNumber(selectedTraceCount) : 'Idle' },
       ]}
     >
-      <div className={styles.splitGrid}>
+      <div className={styles.composerSplit}>
         <section className={styles.sectionCard}>
           <div className={styles.sectionHeader}>
             <div>
+              <span className={styles.sectionKicker}>Upload</span>
               <h2 className={styles.sectionTitle}>Trace Intake</h2>
-              <p className={styles.sectionDescription}>Upload semantic-router JSONL, generic JSONL, or CSV traces and keep them available to every dashboard session on this workspace.</p>
+              <p className={styles.sectionDescription}>Add replayable traces for traffic you want to compare against the built-in planning library.</p>
             </div>
           </div>
-          <div className={styles.formGrid}>
-            <label className={`${styles.field} ${styles.fieldWide}`}>
-              <span className={styles.fieldLabel}>Trace File</span>
-              <input
-                className={styles.fileInput}
-                type="file"
-                onChange={(event) => setUploadFile(event.target.files?.[0] || null)}
-              />
-            </label>
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>Format</span>
-              <select
-                className={styles.select}
-                value={uploadFormat}
-                onChange={(event) => setUploadFormat(event.target.value as FleetSimTraceFormat)}
-              >
-                <option value="jsonl">jsonl</option>
-                <option value="semantic_router">semantic_router</option>
-                <option value="csv">csv</option>
-              </select>
-            </label>
+          <div className={styles.formStack}>
+            <div className={styles.fieldSection}>
+              <div>
+                <span className={styles.sectionKicker}>Trace source</span>
+                <p className={styles.sectionDescription}>Use the same intake formats the simulator already understands and keep them searchable from the dashboard.</p>
+              </div>
+              <div className={styles.formGrid}>
+                <label className={`${styles.field} ${styles.fieldWide}`}>
+                  <span className={styles.fieldLabel}>Trace file</span>
+                  <input
+                    className={styles.fileInput}
+                    type="file"
+                    onChange={(event) => setUploadFile(event.target.files?.[0] || null)}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Format</span>
+                  <select
+                    className={styles.select}
+                    value={uploadFormat}
+                    onChange={(event) => setUploadFormat(event.target.value as FleetSimTraceFormat)}
+                  >
+                    <option value="jsonl">JSONL</option>
+                    <option value="semantic_router">Router JSONL</option>
+                    <option value="csv">CSV</option>
+                  </select>
+                </label>
+              </div>
+            </div>
           </div>
           <div className={styles.buttonRow} style={{ marginTop: '0.9rem' }}>
             <button type="button" className={styles.primaryButton} onClick={() => void handleUpload()}>
               Upload Trace
             </button>
-            <span className={styles.inlineHint}>The backend proxy forwards uploads straight to the sidecar API.</span>
+            <span className={styles.inlineHint}>Best used for production replays, incident slices, and customer-specific traffic checks.</span>
           </div>
           {message ? <p className={`${styles.message} ${styles.messageSuccess}`}>{message}</p> : null}
           {error ? <p className={`${styles.message} ${styles.messageError}`}>{error}</p> : null}
         </section>
 
-        <section className={styles.sectionCard}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <h2 className={styles.sectionTitle}>Trace Sample</h2>
-              <p className={styles.sectionDescription}>Use a lightweight sample to verify that uploaded fields match the simulator parser before submitting runs.</p>
-            </div>
+        <aside className={styles.summaryCard}>
+          <div className={styles.summaryHeader}>
+            <span className={styles.summaryEyebrow}>Preview</span>
+            <h2 className={styles.summaryTitle}>Trace sample</h2>
+            <p className={styles.summaryText}>Use a quick sample to confirm the uploaded traffic looks right before you plan against it.</p>
+          </div>
+          <div className={styles.summaryPillRow}>
+            <span className={styles.summaryPill}>Built-ins: {formatNumber(workloads.length)}</span>
+            <span className={styles.summaryPill}>Uploads: {formatNumber(traces.length)}</span>
           </div>
           {selectedTrace && selectedSample ? (
             <>
               <p className={styles.message}>
-                {selectedTrace.name} · showing {Math.min(selectedSample.records.length, selectedSample.total)} of {selectedSample.total} rows
+                {selectedTrace.name} · showing {formatNumber(selectedTraceCount)} of {formatNumber(selectedSample.total)} rows
               </p>
               <pre className={styles.jsonPreview}>{JSON.stringify(selectedSample.records, null, 2)}</pre>
             </>
           ) : (
-            <div className={styles.emptyState}>Select “View” on a trace row to inspect a request sample.</div>
+            <div className={styles.emptyState}>Select “View” on a trace row to inspect a small sample.</div>
           )}
-        </section>
+        </aside>
       </div>
 
       <section className={styles.sectionCard}>
-        <TableHeader title="Built-in Workloads" count={workloads.length} variant="embedded" />
-        <DataTable
-          columns={workloadColumns}
-          data={workloads}
-          keyExtractor={(row) => row.name}
-          emptyMessage="No built-in workloads are available."
-        />
+        <div className={styles.sectionHeader}>
+          <div>
+            <span className={styles.sectionKicker}>Library</span>
+            <h2 className={styles.sectionTitle}>Built-in workloads</h2>
+            <p className={styles.sectionDescription}>Reusable traffic patterns for quick sizing passes before you pull in a custom trace.</p>
+          </div>
+        </div>
+        <div className={styles.libraryGrid}>
+          {workloads.map((workload) => (
+            <article key={workload.name} className={styles.libraryCard}>
+              <div className={styles.libraryCardHeader}>
+                <div>
+                  <span className={styles.libraryCardKey}>Built-in profile</span>
+                  <h3 className={styles.libraryCardTitle}>{formatBuiltinWorkloadName(workload.name)}</h3>
+                </div>
+                <span className={styles.metricPill}>
+                  {workload.stats ? `P99 ${formatNumber(workload.stats.p99_total_tokens)} tokens` : 'Loading profile'}
+                </span>
+              </div>
+              <p className={styles.libraryCardText}>{describeBuiltinWorkload(workload.name, workload.description)}</p>
+              <div className={styles.metricPillRow}>
+                <span className={styles.metricPill}>{workload.stats ? `${formatNumber(workload.stats.n_requests)} samples` : 'Sampling'}</span>
+                <span className={styles.metricPill}>{workload.stats ? `${formatNumber(workload.stats.arrival_rate_rps, 1)} rps` : 'Profiling'}</span>
+                <span className={styles.metricPill}>{workload.stats ? `P95 ${formatNumber(workload.stats.p95_prompt_tokens)} prompt` : 'Waiting'}</span>
+              </div>
+              <p className={styles.cardFootnote}>{workload.path.split('/').slice(-1)[0]}</p>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className={styles.sectionCard}>

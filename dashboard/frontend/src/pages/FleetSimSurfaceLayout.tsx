@@ -30,9 +30,9 @@ export default function FleetSimSurfaceLayout({
         title={title}
         description={description}
         meta={meta}
-        panelEyebrow="Simulator"
-        panelTitle="vllm-sr-sim"
-        panelDescription="Cross-container fleet sizing, trace replay, and what-if analysis for live router operations."
+        panelEyebrow="Planning Workspace"
+        panelTitle="Capacity planning"
+        panelDescription="Review traffic inputs, reusable fleets, and saved planning runs in one operator view."
         pills={FLEET_SIM_NAV_ITEMS.map((item) => ({
           label: item.label,
           active: item.to === currentPath,

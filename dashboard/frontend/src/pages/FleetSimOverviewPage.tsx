@@ -3,10 +3,17 @@ import FleetSimSurfaceLayout from './FleetSimSurfaceLayout'
 import styles from './FleetSimPage.module.css'
 import { FLEET_SIM_API_PREFIX, listFleets, listJobs, listTraces, listWorkloads, type FleetConfig, type FleetSimJob, type TraceInfo, type BuiltinWorkload } from '../utils/fleetSimApi'
 import {
+  extractJobFleetID,
+  describeBuiltinWorkload,
   extractJobWorkload,
+  formatBuiltinWorkloadName,
   formatDateTime,
+  formatJobStatus,
+  formatJobType,
   formatMoneyKusd,
   formatNumber,
+  formatRouterType,
+  formatTraceFormat,
   JobStatusBadge,
   renderJobResultSummary,
 } from './fleetSimPageSupport'
@@ -54,16 +61,24 @@ export default function FleetSimOverviewPage() {
   const finishedJobs = jobs.filter((job) => job.status === 'done')
   const latestJob = [...jobs].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
   const annualSpend = fleets.reduce((sum, fleet) => sum + fleet.estimated_annual_cost_kusd, 0)
+  const latestWorkload = latestJob ? extractJobWorkload(latestJob) : null
+  const latestTrace = latestWorkload?.type === 'trace'
+    ? traces.find((trace) => trace.id === latestWorkload.trace_id)
+    : null
+  const latestFleet = latestJob
+    ? fleets.find((fleet) => fleet.id === extractJobFleetID(latestJob))
+    : null
+  const planningAssets = workloads.length + traces.length
 
   return (
     <FleetSimSurfaceLayout
       title="Overview"
-      description="Keep the simulator sidecar in the same operator loop as the router. Review workload libraries, fleet catalog state, and the latest capacity-planning runs without leaving the dashboard."
+      description="Keep workload libraries, reusable fleets, and recent planning outcomes in one place so operators can decide what to size, replay, or compare next."
       currentPath="/fleet-sim"
       meta={[
-        { label: 'Built-in workloads', value: formatNumber(workloads.length) },
+        { label: 'Workload library', value: formatNumber(workloads.length) },
         { label: 'Saved fleets', value: formatNumber(fleets.length) },
-        { label: 'Tracked traces', value: formatNumber(traces.length) },
+        { label: 'Planning runs', value: formatNumber(jobs.length) },
       ]}
       panelFooter={
         <div className={styles.buttonRow}>
@@ -78,19 +93,25 @@ export default function FleetSimOverviewPage() {
     >
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
-          <span className={styles.statLabel}>Sidecar Endpoint</span>
-          <strong className={`${styles.statValue} ${styles.mono}`}>/api/fleet-sim</strong>
-          <span className={styles.statMeta}>Dashboard backend proxies requests to the simulator container on the shared runtime network.</span>
+          <span className={styles.statLabel}>Planning library</span>
+          <strong className={styles.statValue}>{formatNumber(planningAssets)}</strong>
+          <span className={styles.statMeta}>
+            {formatNumber(workloads.length)} built-in profiles and {formatNumber(traces.length)} uploaded traces ready for comparison.
+          </span>
         </div>
         <div className={styles.statCard}>
-          <span className={styles.statLabel}>Fleet Annual Spend</span>
+          <span className={styles.statLabel}>Annual spend in review</span>
           <strong className={styles.statValue}>{formatMoneyKusd(annualSpend)}</strong>
-          <span className={styles.statMeta}>Combined estimate across every saved fleet profile.</span>
+          <span className={styles.statMeta}>Combined estimate across {formatNumber(fleets.length)} saved fleet plans.</span>
         </div>
         <div className={styles.statCard}>
-          <span className={styles.statLabel}>Run Queue</span>
-          <strong className={styles.statValue}>{formatNumber(jobs.length)}</strong>
-          <span className={styles.statMeta}>{finishedJobs.length} completed jobs available for comparison.</span>
+          <span className={styles.statLabel}>Latest activity</span>
+          <strong className={styles.statValue}>{latestJob ? formatJobType(latestJob.type) : 'Idle'}</strong>
+          <span className={styles.statMeta}>
+            {latestJob
+              ? `${formatJobStatus(latestJob.status)} · ${formatDateTime(latestJob.created_at)}`
+              : 'Create a fleet or upload a trace to start planning.'}
+          </span>
         </div>
       </div>
 
@@ -101,55 +122,78 @@ export default function FleetSimOverviewPage() {
           <div className={styles.sectionHeader}>
             <div>
               <h2 className={styles.sectionTitle}>Latest Run</h2>
-              <p className={styles.sectionDescription}>The freshest optimization or simulation result that landed in the shared simulator state.</p>
+              <p className={styles.sectionDescription}>The most recent planning scenario, ready for a quick read before you drill into full history.</p>
             </div>
           </div>
           {latestJob ? (
             <>
               <div className={styles.compactListItem}>
                 <div className={styles.compactListMeta}>
-                  <span className={styles.compactListTitle}>{latestJob.type.toUpperCase()} · {extractJobWorkload(latestJob)?.name || extractJobWorkload(latestJob)?.trace_id || 'mixed'}</span>
-                  <span className={styles.compactListText}>Created {formatDateTime(latestJob.created_at)}</span>
+                  <span className={styles.compactListTitle}>
+                    {formatJobType(latestJob.type)} · {latestWorkload?.type === 'builtin'
+                      ? formatBuiltinWorkloadName(latestWorkload.name || 'library')
+                      : latestTrace?.name || 'Uploaded trace'}
+                  </span>
+                  <span className={styles.compactListText}>
+                    Created {formatDateTime(latestJob.created_at)}
+                    {latestFleet ? ` · Fleet ${latestFleet.name}` : ''}
+                  </span>
                 </div>
                 <JobStatusBadge status={latestJob.status} />
               </div>
               <div className={styles.resultCard} style={{ marginTop: '0.9rem' }}>
                 {renderJobResultSummary(latestJob)}
               </div>
+              <p className={styles.inlineHint}>
+                {finishedJobs.length} completed runs are available for comparison in the Runs page.
+              </p>
             </>
           ) : (
-            <div className={styles.emptyState}>No simulator jobs have been submitted yet.</div>
+            <div className={styles.emptyState}>No planning runs yet. Start with a saved fleet or a built-in workload.</div>
           )}
         </section>
 
         <section className={styles.sectionCard}>
           <div className={styles.sectionHeader}>
             <div>
-              <h2 className={styles.sectionTitle}>Recent Assets</h2>
-              <p className={styles.sectionDescription}>Trace uploads and saved fleets persisted under the shared `vllm-sr` workspace.</p>
+              <h2 className={styles.sectionTitle}>Planning Assets</h2>
+              <p className={styles.sectionDescription}>The reusable workload, trace, and fleet inputs most likely to drive the next scenario.</p>
             </div>
           </div>
           <ul className={styles.compactList}>
-            {fleets.slice(0, 3).map((fleet) => (
+            {workloads.slice(0, 2).map((workload) => (
+              <li key={workload.name} className={styles.compactListItem}>
+                <div className={styles.compactListMeta}>
+                  <span className={styles.compactListTitle}>{formatBuiltinWorkloadName(workload.name)}</span>
+                  <span className={styles.compactListText}>{describeBuiltinWorkload(workload.name, workload.description)}</span>
+                </div>
+                <span className={styles.compactListText}>Library</span>
+              </li>
+            ))}
+            {fleets.slice(0, 2).map((fleet) => (
               <li key={fleet.id} className={styles.compactListItem}>
                 <div className={styles.compactListMeta}>
                   <span className={styles.compactListTitle}>{fleet.name}</span>
-                  <span className={styles.compactListText}>{fleet.total_gpus} GPUs · {fleet.router} router</span>
+                  <span className={styles.compactListText}>
+                    {formatNumber(fleet.total_gpus)} GPUs · {formatRouterType(fleet.router)}
+                  </span>
                 </div>
                 <span className={styles.compactListText}>{formatMoneyKusd(fleet.estimated_annual_cost_kusd)}</span>
               </li>
             ))}
-            {traces.slice(0, 3).map((trace) => (
+            {traces.slice(0, 2).map((trace) => (
               <li key={trace.id} className={styles.compactListItem}>
                 <div className={styles.compactListMeta}>
                   <span className={styles.compactListTitle}>{trace.name}</span>
-                  <span className={styles.compactListText}>{trace.format} · {formatNumber(trace.n_requests)} requests</span>
+                  <span className={styles.compactListText}>
+                    {formatTraceFormat(trace.format)} · {formatNumber(trace.n_requests)} requests
+                  </span>
                 </div>
                 <span className={styles.compactListText}>{formatDateTime(trace.upload_time)}</span>
               </li>
             ))}
             {fleets.length === 0 && traces.length === 0 ? (
-              <li className={styles.emptyState}>The shared simulator state is empty. Upload traces or save a fleet to begin.</li>
+              <li className={styles.emptyState}>Upload a trace or save a fleet to build out the planning library.</li>
             ) : null}
           </ul>
         </section>

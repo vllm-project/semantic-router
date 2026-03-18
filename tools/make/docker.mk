@@ -288,16 +288,17 @@ vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && python run_cli_tests.py --verbose
 
-vllm-sr-test-integration: ## Run CLI unit + integration tests (requires Docker image)
-vllm-sr-test-integration: vllm-sr-build vllm-sr-install-cli
+vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local router + simulator images)
+vllm-sr-test-integration: vllm-sr-build vllm-sr-sim-build vllm-sr-install-cli
 	@$(LOG_TARGET)
-	@cd e2e/testing/vllm-sr-cli && RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration
+	@cd e2e/testing/vllm-sr-cli && CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration
 
 memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
-memory-test-integration: vllm-sr-build vllm-sr-install-cli docker-build-llm-katan
+memory-test-integration: vllm-sr-build vllm-sr-sim-build vllm-sr-install-cli docker-build-llm-katan
 	@$(LOG_TARGET)
 	@CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) \
 	DOCKER_REGISTRY=$(DOCKER_REGISTRY) \
 	DOCKER_TAG=$(DOCKER_TAG) \
 	VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) \
+	VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) \
 	bash e2e/testing/run_memory_integration.sh

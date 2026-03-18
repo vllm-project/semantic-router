@@ -44,8 +44,7 @@ subsystems:
   - name: fleet-sim
     paths:
       - src/fleet-sim/**
-      - website/docs/installation/vllm-sr-sim.md
-      - website/docs/overview/fleet-sim-*.md
+      - website/docs/fleet-sim/**
       - website/static/files/fleet-sim/**
       - website/static/img/fleet-sim/**
       - .github/workflows/pypi-publish-vllm-sr-sim.yml

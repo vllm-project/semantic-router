@@ -16,10 +16,10 @@
 }
 
 .statCard {
-  padding: 1.1rem 1.2rem;
+  padding: 1.05rem 1.15rem;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .statLabel {
@@ -30,9 +30,10 @@
 }
 
 .statValue {
-  font-size: 1.6rem;
+  font-size: 1.55rem;
   font-weight: 700;
   color: var(--color-text);
+  line-height: 1.1;
 }
 
 .statMeta {
@@ -46,6 +47,13 @@
   gap: 1rem;
 }
 
+.composerSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 1rem;
+  align-items: start;
+}
+
 .sectionCard,
 .resultCard {
   padding: 1rem;
@@ -56,13 +64,22 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.95rem;
 }
 
 .sectionTitle {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 650;
+}
+
+.sectionKicker {
+  display: inline-flex;
+  margin-bottom: 0.3rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(0, 212, 255, 0.7);
 }
 
 .sectionDescription {
@@ -82,6 +99,24 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.9rem;
+}
+
+.formStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.fieldSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
+    rgba(9, 12, 22, 0.82);
 }
 
 .field {
@@ -106,12 +141,22 @@
 .fileInput,
 .textarea {
   width: 100%;
-  padding: 0.75rem 0.85rem;
-  border-radius: 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.68rem 0.82rem;
+  border-radius: 0.82rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(8, 11, 20, 0.82);
   color: var(--color-text);
   font: inherit;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.input:focus,
+.select:focus,
+.fileInput:focus,
+.textarea:focus {
+  outline: none;
+  border-color: rgba(0, 212, 255, 0.42);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.08);
 }
 
 .textarea {
@@ -130,8 +175,8 @@
 .secondaryButton,
 .dangerButton,
 .ghostButton {
-  border-radius: 999px;
-  padding: 0.72rem 1.1rem;
+  border-radius: 0.85rem;
+  padding: 0.66rem 1rem;
   border: 1px solid transparent;
   font: inherit;
   font-weight: 600;
@@ -167,6 +212,142 @@
 .dangerButton:hover,
 .ghostButton:hover {
   transform: translateY(-1px);
+}
+
+.choiceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.75rem;
+}
+
+.choiceButton {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.82rem 0.9rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.choiceButton:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0, 212, 255, 0.22);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.choiceButtonActive {
+  border-color: rgba(118, 185, 0, 0.45);
+  background:
+    linear-gradient(145deg, rgba(118, 185, 0, 0.12), rgba(0, 212, 255, 0.06)),
+    rgba(255, 255, 255, 0.03);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.16);
+}
+
+.choiceButtonTitle {
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.choiceButtonDescription {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at top right, rgba(0, 212, 255, 0.08), rgba(0, 212, 255, 0) 42%),
+    linear-gradient(155deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    rgba(7, 10, 19, 0.9);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.2);
+}
+
+.summaryHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.summaryEyebrow {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(118, 185, 0, 0.82);
+}
+
+.summaryTitle {
+  margin: 0;
+  font-size: 1.22rem;
+  letter-spacing: -0.02em;
+}
+
+.summaryText {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.summaryPillRow,
+.metricPillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.summaryPill,
+.metricPill,
+.resultPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.62rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.summaryList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.summaryItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.summaryLabel {
+  margin: 0;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+}
+
+.summaryValue {
+  margin: 0;
+  font-weight: 650;
+  color: var(--color-text);
+  text-align: right;
 }
 
 .statusBadge {
@@ -225,12 +406,13 @@
 
 .compactListItem {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
   padding: 0.8rem 0.9rem;
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .compactListMeta {
@@ -246,6 +428,7 @@
 .compactListText {
   color: var(--color-text-secondary);
   font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .mono {
@@ -262,6 +445,7 @@
   font-size: 0.82rem;
   line-height: 1.55;
   font-family: var(--font-mono);
+  max-height: 420px;
 }
 
 .resultGrid {
@@ -290,6 +474,162 @@
   font-weight: 650;
 }
 
+.resultSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.resultSummaryHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.resultEyebrow {
+  display: inline-flex;
+  margin-bottom: 0.24rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(0, 212, 255, 0.72);
+}
+
+.resultTitle {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.resultDescription {
+  margin: 0.28rem 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.resultPillSuccess {
+  border-color: rgba(118, 185, 0, 0.22);
+  background: rgba(118, 185, 0, 0.12);
+  color: #d7ff7a;
+}
+
+.resultPillWarning {
+  border-color: rgba(255, 200, 84, 0.2);
+  background: rgba(255, 200, 84, 0.12);
+  color: #ffd67d;
+}
+
+.poolEditorList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.poolEditorCard,
+.libraryCard,
+.profileCard,
+.poolSummaryCard {
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
+    rgba(255, 255, 255, 0.02);
+}
+
+.poolEditorCard {
+  padding: 0.9rem;
+}
+
+.poolEditorHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.poolEditorEyebrow,
+.libraryCardKey {
+  display: inline-flex;
+  margin-bottom: 0.2rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-text-secondary);
+}
+
+.poolEditorTitle,
+.libraryCardTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.poolEditorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.8rem;
+}
+
+.libraryGrid,
+.profileGrid,
+.poolSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.8rem;
+}
+
+.libraryCard,
+.profileCard,
+.poolSummaryCard {
+  padding: 0.95rem;
+}
+
+.libraryCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.libraryCardText {
+  margin: 0.8rem 0;
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}
+
+.cardFootnote {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.profileMetricRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.55rem;
+}
+
+.profileMetricLabel {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.profileMetricValue {
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.expandedPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding-top: 0.4rem;
+}
+
 .emptyState {
   padding: 1.15rem;
   border-radius: 1rem;
@@ -304,7 +644,25 @@
 }
 
 @media (max-width: 980px) {
-  .splitGrid {
+  .splitGrid,
+  .composerSplit {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .summaryItem {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+
+  .summaryValue {
+    text-align: left;
+  }
+
+  .resultSummaryHeader,
+  .poolEditorHeader,
+  .libraryCardHeader {
+    flex-direction: column;
   }
 }
