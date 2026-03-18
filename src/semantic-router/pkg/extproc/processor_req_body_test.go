@@ -9,6 +9,7 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestMaybeForceImageGenerationModalitySetsBothWhenUserContentPresent(t *testing.T) {
