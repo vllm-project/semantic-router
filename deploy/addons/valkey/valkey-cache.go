@@ -43,7 +43,7 @@ func newValkeyConfig() *config.ValkeyConfig {
 	return cfg
 }
 
-func demoCacheOperations(cacheBackend cache.Cache) {
+func demoCacheOperations(cacheBackend cache.CacheBackend) {
 	model := "gpt-4"
 	query := "What is the capital of France?"
 	requestID := "req-12345"
@@ -94,7 +94,7 @@ func demoCacheOperations(cacheBackend cache.Cache) {
 	}
 }
 
-func demoPendingRequestWorkflow(cacheBackend cache.Cache) {
+func demoPendingRequestWorkflow(cacheBackend cache.CacheBackend) {
 	model := "gpt-4"
 	fmt.Println("\n6. Pending Request Workflow:")
 	newRequestID := "req-67890"
@@ -132,7 +132,7 @@ func demoPendingRequestWorkflow(cacheBackend cache.Cache) {
 	}
 }
 
-func printFinalStats(cacheBackend cache.Cache) {
+func printFinalStats(cacheBackend cache.CacheBackend) {
 	fmt.Println("\n7. Final Statistics:")
 	stats := cacheBackend.GetStats()
 	fmt.Printf("  Total Entries: %d\n", stats.TotalEntries)
