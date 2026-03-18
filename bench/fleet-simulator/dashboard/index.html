@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>inference-fleet-sim · Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --accent2: #3fb950;
+  --warn: #d29922;
+  --danger: #f85149;
+  --purple: #bc8cff;
+  --orange: #ffa657;
+  --font: 'IBM Plex Sans', sans-serif;
+  --mono: 'IBM Plex Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+
+/* ── Layout ── */
+.shell { display: flex; height: 100vh; overflow: hidden; }
+.sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+.main { flex: 1; overflow-y: auto; }
+
+/* ── Sidebar ── */
+.logo { padding: 20px 16px 14px; border-bottom: 1px solid var(--border); }
+.logo h1 { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: .5px; line-height: 1.4; }
+.logo small { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+nav { padding: 8px 0; flex: 1; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; border-left: 3px solid transparent; transition: all .15s; }
+.nav-item:hover { color: var(--text); background: rgba(255,255,255,.04); }
+.nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(88,166,255,.08); }
+.nav-icon { width: 16px; text-align: center; font-size: 15px; }
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+/* ── Pages ── */
+.page { display: none; padding: 28px 32px; }
+.page.active { display: block; }
+.page-header { margin-bottom: 24px; }
+.page-header h2 { font-size: 20px; font-weight: 700; }
+.page-header p { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+/* ── Cards ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+
+/* ── Stat tiles ── */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; }
+.stat-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .4px; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+.stat-unit { font-size: 12px; color: var(--muted); margin-left: 3px; }
+.stat.green .stat-value { color: var(--accent2); }
+.stat.blue .stat-value { color: var(--accent); }
+.stat.orange .stat-value { color: var(--orange); }
+.stat.red .stat-value { color: var(--danger); }
+
+/* ── Buttons ── */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid; transition: all .15s; font-family: var(--font); }
+.btn-primary { background: var(--accent); color: #0d1117; border-color: var(--accent); }
+.btn-primary:hover { background: #79c0ff; }
+.btn-secondary { background: var(--surface2); color: var(--text); border-color: var(--border); }
+.btn-secondary:hover { background: var(--border); }
+.btn-danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+.btn-danger:hover { background: rgba(248,81,73,.1); }
+.btn-success { background: var(--accent2); color: #0d1117; border-color: var(--accent2); }
+.btn-success:hover { background: #56d364; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Forms ── */
+.form-group { margin-bottom: 16px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+input, select, textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 8px 10px; font-size: 13px; font-family: var(--font); outline: none; transition: border .15s; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+input[type=range] { padding: 0; cursor: pointer; accent-color: var(--accent); }
+select option { background: var(--surface2); }
+
+/* ── Tables ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; font-weight: 600; }
+td { padding: 10px 12px; border-bottom: 1px solid rgba(48,54,61,.5); vertical-align: middle; }
+tr:hover td { background: rgba(255,255,255,.02); }
+.mono { font-family: var(--mono); font-size: 12px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; font-family: var(--mono); }
+.badge-green { background: rgba(63,185,80,.15); color: var(--accent2); }
+.badge-blue { background: rgba(88,166,255,.15); color: var(--accent); }
+.badge-orange { background: rgba(255,166,87,.15); color: var(--orange); }
+.badge-red { background: rgba(248,81,73,.15); color: var(--danger); }
+.badge-purple { background: rgba(188,140,255,.15); color: var(--purple); }
+.badge-grey { background: rgba(139,148,158,.15); color: var(--muted); }
+
+/* ── Upload area ── */
+.upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 36px; text-align: center; cursor: pointer; transition: all .2s; }
+.upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(88,166,255,.05); }
+.upload-zone p { color: var(--muted); font-size: 13px; margin-top: 8px; }
+.upload-zone .icon { font-size: 32px; }
+
+/* ── Pool builder ── */
+.pool-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.pool-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
+
+/* ── Charts ── */
+.chart-container { position: relative; height: 220px; }
+.chart-container.tall { height: 300px; }
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+
+/* ── Job status ── */
+.job-status { display: flex; align-items: center; gap: 6px; }
+.spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Tabs ── */
+.tabs { display: flex; gap: 2px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+.tab { padding: 10px 18px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Result section ── */
+.result-section { border-left: 3px solid var(--accent); padding-left: 16px; margin-bottom: 20px; }
+.result-section h3 { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+
+/* ── Misc ── */
+.empty { text-align: center; padding: 48px; color: var(--muted); }
+.empty .icon { font-size: 40px; margin-bottom: 12px; }
+.alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; }
+.alert-info { background: rgba(88,166,255,.1); border: 1px solid rgba(88,166,255,.3); color: var(--accent); }
+.alert-warn { background: rgba(210,153,34,.1); border: 1px solid rgba(210,153,34,.3); color: var(--warn); }
+.alert-err  { background: rgba(248,81,73,.1);  border: 1px solid rgba(248,81,73,.3);  color: var(--danger); }
+.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.flex { display: flex; align-items: center; gap: 10px; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.text-muted { color: var(--muted); font-size: 12px; }
+.pool-color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="sidebar">
+  <div class="logo">
+    <h1>inference-fleet-sim</h1>
+    <small>Fleet Capacity Dashboard</small>
+  </div>
+  <nav>
+    <div class="nav-item active" data-page="overview">
+      <span class="nav-icon">⬡</span> Overview
+    </div>
+    <div class="nav-item" data-page="traces">
+      <span class="nav-icon">📂</span> Traces
+    </div>
+    <div class="nav-item" data-page="workloads">
+      <span class="nav-icon">📊</span> Workloads
+    </div>
+    <div class="nav-item" data-page="fleets">
+      <span class="nav-icon">🖥</span> Fleets
+    </div>
+    <div class="nav-item" data-page="run">
+      <span class="nav-icon">▶</span> Run Simulation
+    </div>
+    <div class="nav-item" data-page="results">
+      <span class="nav-icon">📈</span> Results
+    </div>
+  </nav>
+  <div class="sidebar-footer">v0.1.0 · fleet-sim API</div>
+</aside>
+
+<!-- ═══ MAIN CONTENT ═══ -->
+<main class="main">
+
+<!-- ── Overview ── -->
+<div id="page-overview" class="page active">
+  <div class="page-header">
+    <h2>Overview</h2>
+    <p>Fleet capacity planning for LLM inference — size GPU pools to meet SLO at minimum cost.</p>
+  </div>
+  <div class="stat-grid" id="overview-stats">
+    <div class="stat blue"><div class="stat-label">Traces</div><div class="stat-value" id="ov-traces">—</div></div>
+    <div class="stat blue"><div class="stat-label">Fleets</div><div class="stat-value" id="ov-fleets">—</div></div>
+    <div class="stat green"><div class="stat-label">Jobs Done</div><div class="stat-value" id="ov-done">—</div></div>
+    <div class="stat orange"><div class="stat-label">Running</div><div class="stat-value" id="ov-running">—</div></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">Recent Jobs</span></div>
+    <div id="overview-jobs-table"><div class="empty"><div class="icon">📋</div><p>No jobs yet</p></div></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">Quick Start</span></div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.8;">
+      <b style="color:var(--text)">1. Choose a workload</b> — Upload a trace or pick a built-in CDF (Azure, LMSYS, Agent-heavy)<br>
+      <b style="color:var(--text)">2. Define a fleet</b> — Configure GPU pools and a routing algorithm<br>
+      <b style="color:var(--text)">3. Run a scenario</b> — Optimize (find minimum GPUs), Simulate (validate a fixed fleet), or What-if (traffic sweep)<br>
+      <b style="color:var(--text)">4. View results</b> — P99 TTFT, SLO compliance, cost breakdown, utilisation per pool
+    </div>
+  </div>
+</div>
+
+<!-- ── Traces ── -->
+<div id="page-traces" class="page">
+  <div class="page-header flex-between">
+    <div><h2>Traces</h2><p>Upload and inspect request traces (JSONL/CSV) from production semantic routers.</p></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="margin-bottom:14px;">Upload Trace</div>
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+      <div class="icon">⬆</div>
+      <p>Click or drag a JSONL / CSV trace file here</p>
+      <p style="font-size:11px;margin-top:4px;">Fields: timestamp, prompt_tokens, generated_tokens, [selected_model, complexity, …]</p>
+    </div>
+    <input type="file" id="file-input" style="display:none" accept=".jsonl,.csv,.json">
+    <div class="form-row" style="margin-top:12px;">
+      <div class="form-group" style="margin:0;">
+        <label>Format</label>
+        <select id="trace-fmt">
+          <option value="jsonl">JSONL (default)</option>
+          <option value="semantic_router">JSONL — Semantic Router (x_vsr_selected_model)</option>
+          <option value="csv">CSV</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        <button class="btn btn-primary" id="btn-upload" style="width:100%">Upload</button>
+      </div>
+    </div>
+    <div id="upload-status" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Uploaded Traces</span>
+      <button class="btn btn-secondary" onclick="loadTraces()">↻ Refresh</button>
+    </div>
+    <div id="traces-list"><div class="empty"><div class="icon">📂</div><p>No traces uploaded</p></div></div>
+  </div>
+
+  <!-- Trace detail modal-like section -->
+  <div id="trace-detail" style="display:none;">
+    <div class="card">
+      <div class="card-header flex-between">
+        <span class="card-title" id="trace-detail-name">Trace Detail</span>
+        <button class="btn btn-secondary" onclick="document.getElementById('trace-detail').style.display='none'">✕ Close</button>
+      </div>
+      <div class="stat-grid" id="trace-stat-grid"></div>
+      <div class="chart-grid">
+        <div class="card" style="margin:0;padding:14px;">
+          <div class="card-title" style="margin-bottom:10px;">Prompt Token Distribution</div>
+          <div class="chart-container"><canvas id="chart-prompt-hist"></canvas></div>
+        </div>
+        <div class="card" style="margin:0;padding:14px;">
+          <div class="card-title" style="margin-bottom:10px;">Output Token Distribution</div>
+          <div class="chart-container"><canvas id="chart-output-hist"></canvas></div>
+        </div>
+      </div>
+      <div style="margin-top:16px;" id="routing-dist-section" style="display:none;">
+        <div class="card-title" style="margin-bottom:10px;">Routing Distribution</div>
+        <div style="max-width:320px;"><canvas id="chart-routing-dist"></canvas></div>
+      </div>
+      <hr class="divider">
+      <div class="card-title" style="margin-bottom:10px;">Sample Records</div>
+      <div class="table-wrap" id="trace-sample-table"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Workloads ── -->
+<div id="page-workloads" class="page">
+  <div class="page-header">
+    <h2>Built-in Workloads</h2>
+    <p>Pre-packaged empirical CDFs from public LLM serving traces.</p>
+  </div>
+  <div id="workloads-grid" class="card-grid"></div>
+  <div id="workload-detail" style="display:none;margin-top:16px;">
+    <div class="card">
+      <div class="card-header flex-between">
+        <span class="card-title" id="wl-detail-name"></span>
+        <button class="btn btn-secondary" onclick="document.getElementById('workload-detail').style.display='none'">✕ Close</button>
+      </div>
+      <div class="stat-grid" id="wl-stat-grid"></div>
+      <div class="chart-grid">
+        <div class="card" style="margin:0;padding:14px;">
+          <div class="card-title" style="margin-bottom:10px;">Token Length CDF</div>
+          <div class="chart-container"><canvas id="chart-cdf"></canvas></div>
+        </div>
+        <div class="card" style="margin:0;padding:14px;">
+          <div class="card-title" style="margin-bottom:10px;">Token Distribution</div>
+          <div class="chart-container"><canvas id="chart-wl-hist"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Fleets ── -->
+<div id="page-fleets" class="page">
+  <div class="page-header"><h2>Fleets</h2><p>Define GPU pool configurations for simulation.</p></div>
+
+  <div class="card">
+    <div class="card-title" style="margin-bottom:14px;">Fleet Builder</div>
+    <div class="form-row">
+      <div class="form-group"><label>Fleet Name</label><input id="fleet-name" placeholder="e.g. azure-2pool-a100"></div>
+      <div class="form-group">
+        <label>Router</label>
+        <select id="fleet-router">
+          <option value="length">LengthRouter — route by token count (default)</option>
+          <option value="model">ModelRouter — route by request.model_id</option>
+          <option value="least_loaded">LeastLoadedRouter — route to least queued pool</option>
+          <option value="compress_route">CompressAndRouteRouter — C&R borderline requests</option>
+          <option value="random">RandomRouter — uniform random (baseline)</option>
+        </select>
+      </div>
+    </div>
+    <div id="gamma-row" style="display:none;" class="form-group">
+      <label>Compress Gamma (γ) — compression boundary multiplier</label>
+      <input type="number" id="fleet-gamma" min="1.0" max="3.0" step="0.1" value="1.5" style="max-width:120px;">
+    </div>
+    <div class="card-title" style="margin-bottom:10px;">Pools</div>
+    <div class="pool-list" id="pool-list"></div>
+    <button class="btn btn-secondary" onclick="addPool()" style="margin-bottom:16px;">+ Add Pool</button>
+    <div id="fleet-cost-preview" class="text-muted"></div>
+    <hr class="divider">
+    <div class="flex">
+      <button class="btn btn-success" onclick="saveFleet()">💾 Save Fleet</button>
+      <div id="fleet-save-status" style="font-size:12px;color:var(--muted);"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Saved Fleets</span>
+      <button class="btn btn-secondary" onclick="loadFleets()">↻ Refresh</button>
+    </div>
+    <div id="fleets-list"><div class="empty"><div class="icon">🖥</div><p>No fleets saved</p></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Available GPU Profiles</span></div>
+    <div id="gpu-profiles-table"></div>
+  </div>
+</div>
+
+<!-- ── Run Simulation ── -->
+<div id="page-run" class="page">
+  <div class="page-header"><h2>Run Simulation</h2><p>Submit optimize, simulate, or what-if analysis jobs.</p></div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="tab-optimize">Optimize</div>
+    <div class="tab" data-tab="tab-simulate">Simulate</div>
+    <div class="tab" data-tab="tab-whatif">What-if</div>
+  </div>
+
+  <!-- Optimize Tab -->
+  <div class="tab-panel active" id="tab-optimize">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:14px;">Fleet Optimizer — find minimum-cost GPU count under SLO</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Workload Source</label>
+          <select id="opt-wl-type" onchange="updateWorkloadFields('opt')">
+            <option value="builtin">Built-in CDF</option>
+            <option value="trace">Uploaded Trace</option>
+          </select>
+        </div>
+        <div class="form-group" id="opt-wl-builtin-div">
+          <label>CDF Dataset</label>
+          <select id="opt-wl-builtin">
+            <option value="azure">Azure Production</option>
+            <option value="lmsys">LMSYS Chat</option>
+            <option value="lmsys_multiturn">LMSYS Multi-turn</option>
+            <option value="agent_heavy">Agent-Heavy</option>
+          </select>
+        </div>
+        <div class="form-group" id="opt-wl-trace-div" style="display:none;">
+          <label>Trace</label>
+          <select id="opt-wl-trace"><option value="">— select uploaded trace —</option></select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label>Arrival Rate (req/s)</label><input type="number" id="opt-lam" value="200" min="1"></div>
+        <div class="form-group"><label>P99 TTFT SLO (ms)</label><input type="number" id="opt-slo" value="500" min="50"></div>
+        <div class="form-group"><label>B_short (tokens)</label><input type="number" id="opt-bshort" value="4096" min="256" step="256"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>GPU — Short Pool</label>
+          <select id="opt-gpu-short"><option value="a100">A100-80GB</option><option value="h100">H100-80GB</option><option value="a10g">A10G-24GB</option></select>
+        </div>
+        <div class="form-group"><label>GPU — Long Pool</label>
+          <select id="opt-gpu-long"><option value="a100">A100-80GB</option><option value="h100">H100-80GB</option><option value="a10g">A10G-24GB</option></select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label>γ min</label><input type="number" id="opt-gmin" value="1.0" step="0.1" min="1.0"></div>
+        <div class="form-group"><label>γ max</label><input type="number" id="opt-gmax" value="2.0" step="0.1" max="4.0"></div>
+        <div class="form-group"><label>Sim Requests</label><input type="number" id="opt-nreq" value="20000" min="1000" step="1000"></div>
+      </div>
+      <button class="btn btn-primary" id="btn-run-opt" onclick="submitOptimize()">▶ Run Optimizer</button>
+      <span id="opt-submit-status" style="margin-left:12px;font-size:12px;color:var(--muted);"></span>
+    </div>
+  </div>
+
+  <!-- Simulate Tab -->
+  <div class="tab-panel" id="tab-simulate">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:14px;">DES Simulator — validate a fixed fleet configuration</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Workload Source</label>
+          <select id="sim-wl-type" onchange="updateWorkloadFields('sim')">
+            <option value="builtin">Built-in CDF</option>
+            <option value="trace">Uploaded Trace</option>
+          </select>
+        </div>
+        <div class="form-group" id="sim-wl-builtin-div">
+          <label>CDF Dataset</label>
+          <select id="sim-wl-builtin">
+            <option value="azure">Azure Production</option>
+            <option value="lmsys">LMSYS Chat</option>
+            <option value="lmsys_multiturn">LMSYS Multi-turn</option>
+            <option value="agent_heavy">Agent-Heavy</option>
+          </select>
+        </div>
+        <div class="form-group" id="sim-wl-trace-div" style="display:none;">
+          <label>Trace</label>
+          <select id="sim-wl-trace"><option value="">— select uploaded trace —</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Fleet</label>
+          <select id="sim-fleet-sel"><option value="">— select saved fleet —</option></select>
+        </div>
+        <div class="form-group"><label>Arrival Rate (req/s)</label><input type="number" id="sim-lam" value="200" min="1"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>P99 TTFT SLO (ms)</label><input type="number" id="sim-slo" value="500" min="50"></div>
+        <div class="form-group"><label>Requests to Simulate</label><input type="number" id="sim-nreq" value="20000" min="100" step="1000"></div>
+      </div>
+      <button class="btn btn-primary" id="btn-run-sim" onclick="submitSimulate()">▶ Run Simulation</button>
+      <span id="sim-submit-status" style="margin-left:12px;font-size:12px;color:var(--muted);"></span>
+    </div>
+  </div>
+
+  <!-- What-if Tab -->
+  <div class="tab-panel" id="tab-whatif">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:14px;">What-if Analysis — sweep arrival rates to find SLO break point</div>
+      <div class="form-row">
+        <div class="form-group"><label>Fleet</label>
+          <select id="wi-fleet-sel"><option value="">— select saved fleet —</option></select>
+        </div>
+        <div class="form-group">
+          <label>Workload</label>
+          <select id="wi-wl-builtin">
+            <option value="azure">Azure Production</option>
+            <option value="lmsys">LMSYS Chat</option>
+            <option value="lmsys_multiturn">LMSYS Multi-turn</option>
+            <option value="agent_heavy">Agent-Heavy</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label>λ min (req/s)</label><input type="number" id="wi-lam-min" value="50" min="1"></div>
+        <div class="form-group"><label>λ max (req/s)</label><input type="number" id="wi-lam-max" value="400" min="1"></div>
+        <div class="form-group"><label>Steps</label><input type="number" id="wi-steps" value="7" min="2" max="20"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>P99 TTFT SLO (ms)</label><input type="number" id="wi-slo" value="500" min="50"></div>
+        <div class="form-group"><label>Requests per Point</label><input type="number" id="wi-nreq" value="10000" min="100" step="1000"></div>
+      </div>
+      <button class="btn btn-primary" id="btn-run-wi" onclick="submitWhatif()">▶ Run What-if</button>
+      <span id="wi-submit-status" style="margin-left:12px;font-size:12px;color:var(--muted);"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Results ── -->
+<div id="page-results" class="page">
+  <div class="page-header flex-between">
+    <div><h2>Results</h2><p>Simulation and optimization job outputs.</p></div>
+    <button class="btn btn-secondary" onclick="loadJobs()">↻ Refresh</button>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div id="jobs-list"><div class="empty"><div class="icon">📈</div><p>No jobs yet. Submit a simulation from the Run page.</p></div></div>
+  </div>
+
+  <!-- Result detail -->
+  <div id="result-detail" style="display:none;">
+    <div class="card">
+      <div class="card-header flex-between">
+        <span class="card-title" id="result-job-title">Job Result</span>
+        <button class="btn btn-secondary" onclick="document.getElementById('result-detail').style.display='none'">✕ Close</button>
+      </div>
+      <div id="result-content"></div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<script>
+const API = '';  // same origin
+
+// ═══════════════════════════════════════════════════════════ CHARTS REGISTRY
+const _charts = {};
+function destroyChart(id) { if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; } }
+function makeChart(id, config) { destroyChart(id); const c = document.getElementById(id); if (!c) return; _charts[id] = new Chart(c, config); }
+
+const POOL_COLORS = ['#58a6ff','#3fb950','#ffa657','#bc8cff','#f85149','#79c0ff','#56d364'];
+
+// ═══════════════════════════════════════════════════════════ NAVIGATION
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('page-' + el.dataset.page).classList.add('active');
+    if (el.dataset.page === 'traces') loadTraces();
+    if (el.dataset.page === 'workloads') loadWorkloads();
+    if (el.dataset.page === 'fleets') { loadFleets(); loadGpuProfiles(); }
+    if (el.dataset.page === 'run') { loadFleetsIntoSelects(); loadTracesIntoSelects(); }
+    if (el.dataset.page === 'results') loadJobs();
+    if (el.dataset.page === 'overview') loadOverview();
+  });
+});
+
+document.querySelectorAll('.tab').forEach(el => {
+  el.addEventListener('click', () => {
+    const container = el.closest('.tabs').parentElement;
+    container.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+    container.querySelectorAll('.tab-panel').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById(el.dataset.tab).classList.add('active');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════ HELPERS
+async function api(method, path, body) {
+  const opts = { method, headers: {'Content-Type': 'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API + '/api' + path, opts);
+  if (!r.ok) { const e = await r.json().catch(() => ({detail: r.statusText})); throw new Error(e.detail || r.statusText); }
+  return r.json();
+}
+
+function fmt(v, digits=1) { return v == null || isNaN(v) ? '—' : Number(v).toFixed(digits); }
+function fmtPct(v) { return v == null || isNaN(v) ? '—' : (v*100).toFixed(1) + '%'; }
+function sloClass(v) { return v >= 0.99 ? 'badge-green' : v >= 0.95 ? 'badge-orange' : 'badge-red'; }
+function statusBadge(s) {
+  const m = {pending:'badge-grey',running:'badge-blue',done:'badge-green',failed:'badge-red'};
+  return `<span class="badge ${m[s]||'badge-grey'}">${s}</span>`;
+}
+
+function histChart(id, hist, label, color='#58a6ff') {
+  if (!hist || !hist.length) return;
+  makeChart(id, {
+    type: 'bar',
+    data: {
+      labels: hist.map(b => b.lo < 1000 ? b.lo : (b.lo/1000).toFixed(0)+'K'),
+      datasets: [{ label, data: hist.map(b => b.count),
+        backgroundColor: color + '99', borderColor: color, borderWidth: 1 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } },
+                y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } } } }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════ OVERVIEW
+async function loadOverview() {
+  const [traces, fleets, jobs] = await Promise.all([
+    api('GET', '/traces').catch(() => []),
+    api('GET', '/fleets').catch(() => []),
+    api('GET', '/jobs').catch(() => []),
+  ]);
+  document.getElementById('ov-traces').textContent = traces.length;
+  document.getElementById('ov-fleets').textContent = fleets.length;
+  document.getElementById('ov-done').textContent = jobs.filter(j => j.status === 'done').length;
+  document.getElementById('ov-running').textContent = jobs.filter(j => j.status === 'running').length;
+
+  const recent = jobs.slice(0, 6);
+  const el = document.getElementById('overview-jobs-table');
+  if (!recent.length) { el.innerHTML = '<div class="empty"><div class="icon">📋</div><p>No jobs yet</p></div>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <tr><th>ID</th><th>Type</th><th>Status</th><th>Created</th><th></th></tr>
+    ${recent.map(j => `<tr>
+      <td class="mono">${j.id}</td>
+      <td><span class="badge badge-blue">${j.type}</span></td>
+      <td>${statusBadge(j.status)}</td>
+      <td class="text-muted">${new Date(j.created_at).toLocaleString()}</td>
+      <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="viewResult('${j.id}')">View</button></td>
+    </tr>`).join('')}
+  </table></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════ TRACES
+async function loadTraces() {
+  const traces = await api('GET', '/traces').catch(() => []);
+  const el = document.getElementById('traces-list');
+  if (!traces.length) { el.innerHTML = '<div class="empty"><div class="icon">📂</div><p>No traces uploaded</p></div>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <tr><th>Name</th><th>Format</th><th>Requests</th><th>Arr. Rate</th><th>P99 Total Tokens</th><th>Upload Time</th><th></th></tr>
+    ${traces.map(t => `<tr>
+      <td>${t.name}</td>
+      <td><span class="badge badge-purple">${t.format}</span></td>
+      <td class="mono">${t.n_requests?.toLocaleString() || '—'}</td>
+      <td class="mono">${t.stats?.arrival_rate_rps != null ? fmt(t.stats.arrival_rate_rps) + ' rps' : '—'}</td>
+      <td class="mono">${t.stats?.p99_total_tokens?.toLocaleString() || '—'}</td>
+      <td class="text-muted">${new Date(t.upload_time).toLocaleString()}</td>
+      <td style="display:flex;gap:6px;">
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="viewTrace('${t.id}','${t.name}')">View</button>
+        <button class="btn btn-danger" style="padding:4px 10px;font-size:11px;" onclick="deleteTrace('${t.id}')">✕</button>
+      </td>
+    </tr>`).join('')}
+  </table></div>`;
+}
+
+// Upload
+const fileInput = document.getElementById('file-input');
+const uploadZone = document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('drag'); if (e.dataTransfer.files[0]) { fileInput.files = e.dataTransfer.files; } });
+document.getElementById('btn-upload').addEventListener('click', uploadTrace);
+
+async function uploadTrace() {
+  const file = fileInput.files[0];
+  const statusEl = document.getElementById('upload-status');
+  if (!file) { statusEl.innerHTML = '<div class="alert alert-warn">Select a file first.</div>'; return; }
+  const fmt = document.getElementById('trace-fmt').value;
+  statusEl.innerHTML = '<div class="alert alert-info">Uploading…</div>';
+  const form = new FormData();
+  form.append('file', file);
+  const r = await fetch(`/api/traces?fmt=${fmt}`, { method: 'POST', body: form });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); statusEl.innerHTML = `<div class="alert alert-err">Upload failed: ${e.detail || r.statusText}</div>`; return; }
+  const data = await r.json();
+  statusEl.innerHTML = `<div class="alert alert-info" style="color:var(--accent2)">✓ Uploaded "${data.name}" — ${data.n_requests?.toLocaleString()} requests</div>`;
+  loadTraces();
+}
+
+async function viewTrace(id, name) {
+  const meta = await api('GET', `/traces/${id}`).catch(() => null);
+  const sample = await api('GET', `/traces/${id}/sample?limit=20`).catch(() => null);
+  if (!meta) return;
+  document.getElementById('trace-detail-name').textContent = name;
+  document.getElementById('trace-detail').style.display = 'block';
+  const s = meta.stats || {};
+  document.getElementById('trace-stat-grid').innerHTML = [
+    ['Requests', s.n_requests?.toLocaleString(), ''],
+    ['Arrival Rate', fmt(s.arrival_rate_rps) + ' rps', 'blue'],
+    ['P50 Prompt Tokens', s.p50_prompt_tokens?.toLocaleString(), ''],
+    ['P99 Prompt Tokens', s.p99_prompt_tokens?.toLocaleString(), 'orange'],
+    ['P50 Output Tokens', s.p50_output_tokens?.toLocaleString(), ''],
+    ['P99 Output Tokens', s.p99_output_tokens?.toLocaleString(), 'orange'],
+  ].map(([l,v,cls]) => `<div class="stat ${cls}"><div class="stat-label">${l}</div><div class="stat-value">${v||'—'}</div></div>`).join('');
+
+  setTimeout(() => {
+    if (s.prompt_histogram?.length) histChart('chart-prompt-hist', s.prompt_histogram, 'Prompt Tokens', '#58a6ff');
+    if (s.output_histogram?.length) histChart('chart-output-hist', s.output_histogram, 'Output Tokens', '#3fb950');
+    const rd = s.routing_distribution || {};
+    if (Object.keys(rd).length) {
+      document.getElementById('routing-dist-section').style.display = 'block';
+      const keys = Object.keys(rd), vals = keys.map(k => rd[k]);
+      makeChart('chart-routing-dist', { type: 'doughnut',
+        data: { labels: keys, datasets: [{ data: vals.map(v => (v*100).toFixed(1)),
+          backgroundColor: POOL_COLORS.slice(0, keys.length) }] },
+        options: { responsive: true, plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 } } } } }
+      });
+    }
+  }, 50);
+
+  if (sample?.records?.length) {
+    const keys = [...new Set(sample.records.flatMap(r => Object.keys(r)))].slice(0, 8);
+    document.getElementById('trace-sample-table').innerHTML = `<table>
+      <tr>${keys.map(k => `<th>${k}</th>`).join('')}</tr>
+      ${sample.records.map(r => `<tr>${keys.map(k => `<td class="mono">${r[k] ?? ''}</td>`).join('')}</tr>`).join('')}
+    </table>`;
+  }
+  document.getElementById('trace-detail').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function deleteTrace(id) {
+  if (!confirm('Delete this trace?')) return;
+  await api('DELETE', `/traces/${id}`).catch(() => {});
+  loadTraces();
+}
+
+// ═══════════════════════════════════════════════════════════ WORKLOADS
+async function loadWorkloads() {
+  const wls = await api('GET', '/workloads').catch(() => []);
+  const grid = document.getElementById('workloads-grid');
+  grid.innerHTML = wls.map(w => `
+    <div class="card" style="cursor:pointer;transition:border .15s;" onmouseover="this.style.borderColor='#58a6ff'" onmouseout="this.style.borderColor='#30363d'" onclick="viewWorkload('${w.name}')">
+      <div class="card-title" style="margin-bottom:8px;">${w.name}</div>
+      <p style="font-size:12px;color:var(--muted);line-height:1.5;">${w.description}</p>
+      <div style="margin-top:12px;"><span class="badge badge-blue">CDF</span></div>
+    </div>`).join('');
+}
+
+async function viewWorkload(name) {
+  const [cdf, stats] = await Promise.all([
+    api('GET', `/workloads/${name}/cdf`),
+    api('GET', `/workloads/${name}/stats`),
+  ]);
+  document.getElementById('wl-detail-name').textContent = name.toUpperCase() + ' workload';
+  document.getElementById('workload-detail').style.display = 'block';
+  document.getElementById('wl-stat-grid').innerHTML = [
+    ['P50 Total Tokens', stats.p50_total_tokens?.toLocaleString(), 'blue'],
+    ['P99 Total Tokens', stats.p99_total_tokens?.toLocaleString(), 'orange'],
+    ['P50 Prompt Tokens', stats.p50_prompt_tokens?.toLocaleString(), ''],
+    ['P99 Prompt Tokens', stats.p99_prompt_tokens?.toLocaleString(), ''],
+  ].map(([l,v,cls]) => `<div class="stat ${cls}"><div class="stat-label">${l}</div><div class="stat-value">${v||'—'}</div></div>`).join('');
+  setTimeout(() => {
+    // CDF line chart
+    const sample = cdf.filter((_, i) => i % Math.max(1, Math.floor(cdf.length/40)) === 0);
+    makeChart('chart-cdf', { type: 'line',
+      data: { labels: sample.map(p => p.threshold < 1000 ? p.threshold : (p.threshold/1000).toFixed(0)+'K'),
+        datasets: [{ label: 'CDF', data: sample.map(p => (p.cumulative_frac*100).toFixed(1)),
+          borderColor: '#58a6ff', fill: true, backgroundColor: 'rgba(88,166,255,.08)',
+          tension: 0.3, pointRadius: 0 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } },
+                  y: { min: 0, max: 100, ticks: { color: '#8b949e', font: { size: 10 }, callback: v => v+'%' }, grid: { color: '#21262d' } } } }
+    });
+    histChart('chart-wl-hist', stats.prompt_histogram, 'Token count', '#bc8cff');
+  }, 50);
+  document.getElementById('workload-detail').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ═══════════════════════════════════════════════════════════ FLEETS
+const GPU_COSTS = { a100: 2.21, h100: 3.89, a10g: 1.01 };
+let poolCount = 0;
+
+function addPool(defaults={}) {
+  const id = ++poolCount;
+  const li = document.createElement('div');
+  li.className = 'pool-item';
+  li.id = `pool-${id}`;
+  li.innerHTML = `
+    <div class="form-group" style="margin:0;"><label>Pool ID</label><input class="pool-field pool-id" value="${defaults.pool_id||'pool'+id}"></div>
+    <div class="form-group" style="margin:0;"><label>GPU</label>
+      <select class="pool-field pool-gpu" onchange="updateFleetCost()">
+        <option value="a100" ${defaults.gpu==='a100'?'selected':''}>A100-80GB ($2.21/hr)</option>
+        <option value="h100" ${defaults.gpu==='h100'?'selected':''}>H100-80GB ($3.89/hr)</option>
+        <option value="a10g" ${defaults.gpu==='a10g'?'selected':''}>A10G-24GB ($1.01/hr)</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin:0;"><label>GPUs</label><input type="number" class="pool-field pool-ngpus" value="${defaults.n_gpus||10}" min="1" onchange="updateFleetCost()"></div>
+    <div class="form-group" style="margin:0;"><label>Max Context</label>
+      <select class="pool-field pool-maxctx">
+        <option value="4096" ${defaults.max_ctx==4096?'selected':''}>4K</option>
+        <option value="8192" ${defaults.max_ctx==8192?'selected':''}>8K</option>
+        <option value="16384" ${defaults.max_ctx==16384?'selected':''}>16K</option>
+        <option value="32768" ${defaults.max_ctx==32768?'selected':''}>32K</option>
+        <option value="65536" ${!defaults.max_ctx||defaults.max_ctx==65536?'selected':''}>64K</option>
+      </select>
+    </div>
+    <button class="btn btn-danger" style="padding:6px 10px;" onclick="removePool(${id})">✕</button>`;
+  document.getElementById('pool-list').appendChild(li);
+  updateFleetCost();
+}
+
+function removePool(id) {
+  document.getElementById(`pool-${id}`)?.remove();
+  updateFleetCost();
+}
+
+function updateFleetCost() {
+  let total = 0, gpuCount = 0;
+  document.querySelectorAll('.pool-item').forEach(el => {
+    const gpu = el.querySelector('.pool-gpu').value;
+    const n = parseInt(el.querySelector('.pool-ngpus').value) || 0;
+    total += (GPU_COSTS[gpu] || 0) * n;
+    gpuCount += n;
+  });
+  const ann = total * 8760 / 1000;
+  document.getElementById('fleet-cost-preview').textContent =
+    gpuCount ? `Estimated: ${gpuCount} GPUs · $${total.toFixed(2)}/hr · $${ann.toFixed(0)}K/yr` : '';
+}
+
+document.getElementById('fleet-router').addEventListener('change', function() {
+  document.getElementById('gamma-row').style.display = this.value === 'compress_route' ? 'block' : 'none';
+});
+
+async function saveFleet() {
+  const name = document.getElementById('fleet-name').value.trim();
+  if (!name) { document.getElementById('fleet-save-status').textContent = 'Fleet name required'; return; }
+  const pools = [];
+  document.querySelectorAll('.pool-item').forEach(el => {
+    pools.push({
+      pool_id: el.querySelector('.pool-id').value,
+      gpu: el.querySelector('.pool-gpu').value,
+      n_gpus: parseInt(el.querySelector('.pool-ngpus').value),
+      max_ctx: parseInt(el.querySelector('.pool-maxctx').value),
+    });
+  });
+  if (!pools.length) { document.getElementById('fleet-save-status').textContent = 'Add at least one pool'; return; }
+  const router = document.getElementById('fleet-router').value;
+  const gamma = router === 'compress_route' ? parseFloat(document.getElementById('fleet-gamma').value) : null;
+  try {
+    await api('POST', '/fleets', { name, pools, router, compress_gamma: gamma });
+    document.getElementById('fleet-save-status').textContent = '✓ Saved';
+    setTimeout(() => document.getElementById('fleet-save-status').textContent = '', 2000);
+    loadFleets();
+  } catch(e) { document.getElementById('fleet-save-status').textContent = 'Error: ' + e.message; }
+}
+
+async function loadFleets() {
+  const fleets = await api('GET', '/fleets').catch(() => []);
+  const el = document.getElementById('fleets-list');
+  if (!fleets.length) { el.innerHTML = '<div class="empty"><div class="icon">🖥</div><p>No fleets saved</p></div>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <tr><th>Name</th><th>Pools</th><th>Router</th><th>Total GPUs</th><th>Est. Cost/yr</th><th></th></tr>
+    ${fleets.map(f => `<tr>
+      <td>${f.name}</td>
+      <td>${f.pools.map(p => `<span class="badge badge-blue" style="margin-right:3px;">${p.pool_id}·${p.n_gpus}×${p.gpu}</span>`).join('')}</td>
+      <td><span class="badge badge-purple">${f.router}</span></td>
+      <td class="mono">${f.total_gpus}</td>
+      <td class="mono">$${f.estimated_annual_cost_kusd}K</td>
+      <td style="display:flex;gap:6px;">
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="loadFleetIntoBuilder('${f.id}')">Edit</button>
+        <button class="btn btn-danger" style="padding:4px 10px;font-size:11px;" onclick="deleteFleet('${f.id}')">✕</button>
+      </td>
+    </tr>`).join('')}
+  </table></div>`;
+}
+
+async function loadFleetIntoBuilder(id) {
+  const f = await api('GET', `/fleets/${id}`).catch(() => null);
+  if (!f) return;
+  document.getElementById('fleet-name').value = f.name;
+  document.getElementById('fleet-router').value = f.router;
+  document.getElementById('pool-list').innerHTML = '';
+  poolCount = 0;
+  f.pools.forEach(p => addPool(p));
+  document.getElementById('page-fleets').scrollIntoView();
+}
+
+async function deleteFleet(id) {
+  if (!confirm('Delete this fleet?')) return;
+  await api('DELETE', `/fleets/${id}`).catch(() => {});
+  loadFleets();
+}
+
+async function loadGpuProfiles() {
+  const profiles = await api('GET', '/gpu-profiles').catch(() => []);
+  document.getElementById('gpu-profiles-table').innerHTML = `<div class="table-wrap"><table>
+    <tr><th>Name</th><th>W (ms)</th><th>H (ms/slot)</th><th>Chunk</th><th>Max Slots</th><th>Cost/hr</th></tr>
+    ${profiles.map(p => `<tr>
+      <td class="mono">${p.name}</td>
+      <td class="mono">${p.W_ms}</td>
+      <td class="mono">${p.H_ms_per_slot}</td>
+      <td class="mono">${p.chunk}</td>
+      <td class="mono">${p.max_slots}</td>
+      <td class="mono">$${p.cost_per_hr}</td>
+    </tr>`).join('')}
+  </table></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════ RUN SIMULATION
+async function loadFleetsIntoSelects() {
+  const fleets = await api('GET', '/fleets').catch(() => []);
+  ['sim-fleet-sel', 'wi-fleet-sel'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">— select saved fleet —</option>' +
+      fleets.map(f => `<option value="${f.id}">${f.name} (${f.total_gpus} GPUs)</option>`).join('');
+  });
+}
+
+async function loadTracesIntoSelects() {
+  const traces = await api('GET', '/traces').catch(() => []);
+  ['opt-wl-trace', 'sim-wl-trace'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">— select uploaded trace —</option>' +
+      traces.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+  });
+}
+
+function updateWorkloadFields(prefix) {
+  const t = document.getElementById(`${prefix}-wl-type`).value;
+  document.getElementById(`${prefix}-wl-builtin-div`).style.display = t === 'builtin' ? '' : 'none';
+  document.getElementById(`${prefix}-wl-trace-div`).style.display = t === 'trace' ? '' : 'none';
+}
+
+function workloadRef(prefix) {
+  const t = document.getElementById(`${prefix}-wl-type`).value;
+  if (t === 'trace') return { type: 'trace', trace_id: document.getElementById(`${prefix}-wl-trace`).value };
+  return { type: 'builtin', name: document.getElementById(`${prefix}-wl-builtin`).value };
+}
+
+async function submitJob(body, statusId, btnId) {
+  document.getElementById(statusId).textContent = 'Submitting…';
+  document.getElementById(btnId).disabled = true;
+  try {
+    const job = await api('POST', '/jobs', body);
+    document.getElementById(statusId).textContent = `✓ Job ${job.id} submitted — check Results tab`;
+    setTimeout(() => { document.getElementById(statusId).textContent = ''; document.getElementById(btnId).disabled = false; }, 4000);
+    // Switch to results and poll
+    document.querySelector('[data-page=results]').click();
+    pollJob(job.id);
+  } catch(e) {
+    document.getElementById(statusId).textContent = 'Error: ' + e.message;
+    document.getElementById(btnId).disabled = false;
+  }
+}
+
+function submitOptimize() {
+  submitJob({
+    type: 'optimize',
+    optimize: {
+      workload: workloadRef('opt'),
+      lam: parseFloat(document.getElementById('opt-lam').value),
+      slo_ms: parseFloat(document.getElementById('opt-slo').value),
+      b_short: parseInt(document.getElementById('opt-bshort').value),
+      gpu_short: document.getElementById('opt-gpu-short').value,
+      gpu_long: document.getElementById('opt-gpu-long').value,
+      gamma_min: parseFloat(document.getElementById('opt-gmin').value),
+      gamma_max: parseFloat(document.getElementById('opt-gmax').value),
+      gamma_step: 0.1,
+      n_sim_requests: parseInt(document.getElementById('opt-nreq').value),
+    }
+  }, 'opt-submit-status', 'btn-run-opt');
+}
+
+function submitSimulate() {
+  const fleetId = document.getElementById('sim-fleet-sel').value;
+  if (!fleetId) { document.getElementById('sim-submit-status').textContent = 'Select a fleet first'; return; }
+  submitJob({
+    type: 'simulate',
+    simulate: {
+      workload: workloadRef('sim'),
+      fleet_id: fleetId,
+      lam: parseFloat(document.getElementById('sim-lam').value),
+      slo_ms: parseFloat(document.getElementById('sim-slo').value),
+      n_requests: parseInt(document.getElementById('sim-nreq').value),
+    }
+  }, 'sim-submit-status', 'btn-run-sim');
+}
+
+function submitWhatif() {
+  const fleetId = document.getElementById('wi-fleet-sel').value;
+  if (!fleetId) { document.getElementById('wi-submit-status').textContent = 'Select a fleet first'; return; }
+  const min = parseFloat(document.getElementById('wi-lam-min').value);
+  const max = parseFloat(document.getElementById('wi-lam-max').value);
+  const steps = parseInt(document.getElementById('wi-steps').value);
+  const step = (max - min) / (steps - 1);
+  const range = Array.from({length: steps}, (_, i) => Math.round((min + i * step) * 10) / 10);
+  submitJob({
+    type: 'whatif',
+    whatif: {
+      workload: { type: 'builtin', name: document.getElementById('wi-wl-builtin').value },
+      fleet_id: fleetId,
+      lam_range: range,
+      slo_ms: parseFloat(document.getElementById('wi-slo').value),
+      n_requests: parseInt(document.getElementById('wi-nreq').value),
+    }
+  }, 'wi-submit-status', 'btn-run-wi');
+}
+
+// ═══════════════════════════════════════════════════════════ RESULTS
+async function loadJobs() {
+  const jobs = await api('GET', '/jobs').catch(() => []);
+  const el = document.getElementById('jobs-list');
+  if (!jobs.length) { el.innerHTML = '<div class="empty"><div class="icon">📈</div><p>No jobs yet</p></div>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <tr><th>ID</th><th>Type</th><th>Status</th><th>Created</th><th>Duration</th><th></th></tr>
+    ${jobs.map(j => {
+      const dur = j.completed_at && j.started_at
+        ? ((new Date(j.completed_at) - new Date(j.started_at)) / 1000).toFixed(1) + 's'
+        : j.status === 'running' ? '<div class="flex"><div class="spinner"></div> running</div>' : '—';
+      return `<tr>
+        <td class="mono">${j.id}</td>
+        <td><span class="badge badge-blue">${j.type}</span></td>
+        <td>${statusBadge(j.status)}</td>
+        <td class="text-muted">${new Date(j.created_at).toLocaleString()}</td>
+        <td class="mono">${dur}</td>
+        <td style="display:flex;gap:6px;">
+          ${j.status==='done' ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="viewResult('${j.id}')">View</button>` : ''}
+          <button class="btn btn-danger" style="padding:4px 10px;font-size:11px;" onclick="deleteJob('${j.id}')">✕</button>
+        </td>
+      </tr>`;
+    }).join('')}
+  </table></div>`;
+}
+
+function pollJob(jobId, interval=2000) {
+  const timer = setInterval(async () => {
+    const job = await api('GET', `/jobs/${jobId}`).catch(() => null);
+    if (!job) { clearInterval(timer); return; }
+    loadJobs();
+    if (job.status === 'done' || job.status === 'failed') clearInterval(timer);
+  }, interval);
+}
+
+async function deleteJob(id) {
+  await api('DELETE', `/jobs/${id}`).catch(() => {});
+  loadJobs();
+  document.getElementById('result-detail').style.display = 'none';
+}
+
+async function viewResult(id) {
+  const job = await api('GET', `/jobs/${id}`).catch(() => null);
+  if (!job) return;
+  document.getElementById('result-job-title').textContent = `${job.type.toUpperCase()} · ${id} · ${job.status}`;
+  const el = document.getElementById('result-content');
+  document.getElementById('result-detail').style.display = 'block';
+
+  if (job.status === 'failed') {
+    el.innerHTML = `<div class="alert alert-err">Job failed: ${job.error}</div>`;
+    document.getElementById('result-detail').scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+  if (job.status !== 'done') {
+    el.innerHTML = `<div class="alert alert-info"><div class="flex"><div class="spinner"></div> Job is ${job.status}…</div></div>`;
+    return;
+  }
+
+  if (job.type === 'optimize' && job.result_optimize) renderOptResult(el, job.result_optimize);
+  else if (job.type === 'simulate' && job.result_simulate) renderSimResult(el, job.result_simulate);
+  else if (job.type === 'whatif' && job.result_whatif) renderWhatifResult(el, job.result_whatif);
+  else el.innerHTML = '<div class="alert alert-warn">No result data.</div>';
+
+  document.getElementById('result-detail').scrollIntoView({ behavior: 'smooth' });
+}
+
+function renderOptResult(el, r) {
+  const b = r.best;
+  el.innerHTML = `
+    <div class="result-section">
+      <h3>Best Configuration</h3>
+      <div class="stat-grid">
+        <div class="stat blue"><div class="stat-label">γ (Compress)</div><div class="stat-value">${b.gamma}</div></div>
+        <div class="stat blue"><div class="stat-label">Short Pool GPUs</div><div class="stat-value">${b.n_s}</div></div>
+        <div class="stat blue"><div class="stat-label">Long Pool GPUs</div><div class="stat-value">${b.n_l}</div></div>
+        <div class="stat green"><div class="stat-label">Annual Cost</div><div class="stat-value">$${fmt(b.annual_cost_kusd,0)}K</div></div>
+        <div class="stat ${r.savings_pct > 0 ? 'green' : ''}">
+          <div class="stat-label">Saving vs γ=1</div>
+          <div class="stat-value">${fmt(r.savings_pct,1)}<span class="stat-unit">%</span></div>
+        </div>
+        <div class="stat ${b.slo_met ? 'green' : 'red'}">
+          <div class="stat-label">SLO</div>
+          <div class="stat-value">${b.slo_met ? '✓' : '✗'}</div>
+        </div>
+      </div>
+    </div>
+    <div class="result-section">
+      <h3>γ Sweep</h3>
+      <div class="chart-grid">
+        <div class="card" style="margin:0;padding:14px;">
+          <div class="card-title" style="margin-bottom:10px;">Annual Cost vs γ</div>
+          <div class="chart-container"><canvas id="chart-sweep-cost"></canvas></div>
+        </div>
+        <div class="card" style="margin:0;padding:14px;">
+          <div class="card-title" style="margin-bottom:10px;">P99 Queue Wait vs γ</div>
+          <div class="chart-container"><canvas id="chart-sweep-p99"></canvas></div>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:16px;">
+        <table>
+          <tr><th>γ</th><th>n_s</th><th>n_l</th><th>Total GPUs</th><th>Annual Cost</th><th>P99 Short</th><th>P99 Long</th><th>SLO</th><th>Source</th></tr>
+          ${r.sweep.map(s => `<tr>
+            <td class="mono">${s.gamma}</td><td class="mono">${s.n_s}</td><td class="mono">${s.n_l}</td>
+            <td class="mono">${s.total_gpus}</td><td class="mono">$${fmt(s.annual_cost_kusd,0)}K</td>
+            <td class="mono">${fmt(s.p99_short_ms)}ms</td><td class="mono">${fmt(s.p99_long_ms)}ms</td>
+            <td>${s.slo_met ? '<span class="badge badge-green">✓</span>' : '<span class="badge badge-red">✗</span>'}</td>
+            <td class="text-muted">${s.source}</td>
+          </tr>`).join('')}
+        </table>
+      </div>
+    </div>
+    ${r.sim_validation ? renderSimResultHTML(r.sim_validation, 'DES Validation') : ''}
+  `;
+  setTimeout(() => {
+    const gammas = r.sweep.map(s => s.gamma);
+    const metOnly = r.sweep.filter(s => s.slo_met);
+    makeChart('chart-sweep-cost', { type: 'line',
+      data: { labels: gammas, datasets: [
+        { label: 'Annual Cost (K$)', data: r.sweep.map(s => s.annual_cost_kusd),
+          borderColor: '#58a6ff', fill: false, tension: 0.3, pointRadius: 5,
+          pointBackgroundColor: r.sweep.map(s => s.slo_met ? '#3fb950' : '#f85149') }
+      ]},
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                  y: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } } } }
+    });
+    makeChart('chart-sweep-p99', { type: 'line',
+      data: { labels: gammas, datasets: [
+        { label: 'P99 Short (ms)', data: r.sweep.map(s => s.p99_short_ms), borderColor: '#58a6ff', fill: false, tension: 0.3, pointRadius: 3 },
+        { label: 'P99 Long (ms)',  data: r.sweep.map(s => s.p99_long_ms),  borderColor: '#ffa657', fill: false, tension: 0.3, pointRadius: 3 },
+      ]},
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#8b949e' } } },
+        scales: { x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                  y: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } } } }
+    });
+  }, 50);
+}
+
+function renderSimResultHTML(r, title) {
+  return `
+    <div class="result-section" style="margin-top:20px;">
+      <h3>${title || 'Simulation Result'}</h3>
+      <div class="stat-grid">
+        <div class="stat blue"><div class="stat-label">Total GPUs</div><div class="stat-value">${r.total_gpus}</div></div>
+        <div class="stat green"><div class="stat-label">Annual Cost</div><div class="stat-value">$${fmt(r.annual_cost_kusd,0)}K</div></div>
+        <div class="stat ${r.fleet_p99_ttft_ms < 500 ? 'green' : 'red'}">
+          <div class="stat-label">P99 TTFT</div><div class="stat-value">${fmt(r.fleet_p99_ttft_ms)}<span class="stat-unit">ms</span></div>
+        </div>
+        <div class="stat"><div class="stat-label">P50 TTFT</div><div class="stat-value">${fmt(r.fleet_p50_ttft_ms)}<span class="stat-unit">ms</span></div></div>
+        <div class="stat ${r.fleet_slo_compliance >= 0.99 ? 'green' : 'orange'}">
+          <div class="stat-label">SLO Compliance</div><div class="stat-value">${fmtPct(r.fleet_slo_compliance)}</div>
+        </div>
+        <div class="stat"><div class="stat-label">Utilisation</div><div class="stat-value">${fmtPct(r.fleet_mean_utilisation)}</div></div>
+      </div>
+      <div class="chart-grid">
+        <div class="card" style="margin:0;padding:14px;">
+          <div class="card-title" style="margin-bottom:10px;">TTFT Distribution</div>
+          <div class="chart-container" id="container-ttft-${title?.replace(/\W/g,'')}"><canvas id="chart-ttft-${title?.replace(/\W/g,'')}"></canvas></div>
+        </div>
+        <div class="card" style="margin:0;padding:14px;">
+          <div class="card-title" style="margin-bottom:10px;">Per-Pool Metrics</div>
+          <div class="chart-container"><canvas id="chart-pools-${title?.replace(/\W/g,'')}"></canvas></div>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:16px;">
+        <table>
+          <tr><th>Pool</th><th>GPU</th><th>GPUs</th><th>P99 TTFT</th><th>P99 Q-Wait</th><th>SLO</th><th>Utilisation</th><th>Cost/hr</th></tr>
+          ${r.pools.map((p, i) => `<tr>
+            <td><span class="pool-color-dot" style="background:${POOL_COLORS[i]}"></span> ${p.pool_id}</td>
+            <td class="mono">${p.gpu}</td><td class="mono">${p.n_gpus}</td>
+            <td class="mono">${fmt(p.p99_ttft_ms)}ms</td><td class="mono">${fmt(p.p99_queue_wait_ms)}ms</td>
+            <td><span class="badge ${sloClass(p.slo_compliance)}">${fmtPct(p.slo_compliance)}</span></td>
+            <td class="mono">${fmtPct(p.mean_utilisation)}</td>
+            <td class="mono">$${fmt(p.cost_per_hr, 2)}</td>
+          </tr>`).join('')}
+        </table>
+      </div>
+    </div>
+    <script>
+    (function() {
+      var key = '${title?.replace(/\W/g,'')}';
+      setTimeout(function() {
+        var hist = ${JSON.stringify(r.ttft_histogram)};
+        histChart('chart-ttft-'+key, hist, 'Requests', '#58a6ff');
+        var pools = ${JSON.stringify(r.pools)};
+        if (pools.length) {
+          makeChart('chart-pools-'+key, { type: 'bar',
+            data: { labels: pools.map(p => p.pool_id),
+              datasets: [
+                { label: 'P99 TTFT (ms)', data: pools.map(p => p.p99_ttft_ms), backgroundColor: '#58a6ff99' },
+                { label: 'Utilisation %', data: pools.map(p => +(p.mean_utilisation*100).toFixed(1)), backgroundColor: '#3fb95099', yAxisID: 'y2' },
+              ]},
+            options: { responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { labels: { color: '#8b949e', font: { size: 10 } } } },
+              scales: {
+                x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                y:  { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                y2: { position: 'right', ticks: { color: '#3fb950', callback: v => v+'%' }, grid: { display: false } }
+              }
+            }
+          });
+        }
+      }, 80);
+    })();
+    <\/script>`;
+}
+
+function renderSimResult(el, r) {
+  el.innerHTML = renderSimResultHTML(r, 'Simulation');
+}
+
+function renderWhatifResult(el, r) {
+  el.innerHTML = `
+    <div class="result-section">
+      <h3>Traffic Sensitivity Sweep</h3>
+      ${r.slo_break_lam != null ? `<div class="alert alert-warn" style="margin-bottom:12px;">SLO degrades at λ ≈ ${r.slo_break_lam} req/s</div>` : '<div class="alert alert-info" style="margin-bottom:12px;">SLO maintained across all tested load levels</div>'}
+      <div class="chart-grid">
+        <div class="card" style="margin:0;padding:14px;">
+          <div class="card-title" style="margin-bottom:10px;">P99 TTFT vs Arrival Rate</div>
+          <div class="chart-container"><canvas id="chart-wi-p99"></canvas></div>
+        </div>
+        <div class="card" style="margin:0;padding:14px;">
+          <div class="card-title" style="margin-bottom:10px;">SLO Compliance vs Arrival Rate</div>
+          <div class="chart-container"><canvas id="chart-wi-slo"></canvas></div>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:16px;"><table>
+        <tr><th>λ (req/s)</th><th>P99 TTFT</th><th>SLO Compliance</th><th>Utilisation</th></tr>
+        ${r.points.map(p => `<tr>
+          <td class="mono">${p.lam}</td>
+          <td class="mono">${fmt(p.fleet_p99_ttft_ms)}ms</td>
+          <td><span class="badge ${sloClass(p.fleet_slo_compliance)}">${fmtPct(p.fleet_slo_compliance)}</span></td>
+          <td class="mono">${fmtPct(p.fleet_mean_utilisation)}</td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+  setTimeout(() => {
+    const lams = r.points.map(p => p.lam);
+    makeChart('chart-wi-p99', { type: 'line',
+      data: { labels: lams, datasets: [
+        { label: 'P99 TTFT (ms)', data: r.points.map(p => p.fleet_p99_ttft_ms),
+          borderColor: '#58a6ff', fill: true, backgroundColor: 'rgba(88,166,255,.08)', tension: 0.3, pointRadius: 5 }
+      ]},
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                  y: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } } } }
+    });
+    makeChart('chart-wi-slo', { type: 'line',
+      data: { labels: lams, datasets: [
+        { label: 'SLO Compliance', data: r.points.map(p => +(p.fleet_slo_compliance*100).toFixed(2)),
+          borderColor: '#3fb950', fill: true, backgroundColor: 'rgba(63,185,80,.08)', tension: 0.3, pointRadius: 5,
+          pointBackgroundColor: r.points.map(p => p.fleet_slo_compliance >= 0.99 ? '#3fb950' : '#f85149') }
+      ]},
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                  y: { min: 0, max: 100, ticks: { color: '#8b949e', callback: v => v+'%' }, grid: { color: '#21262d' } } } }
+    });
+  }, 50);
+}
+
+// ═══════════════════════════════════════════════════════════ INIT
+loadOverview();
+addPool({ pool_id: 'short', gpu: 'a100', n_gpus: 50, max_ctx: 8192 });
+addPool({ pool_id: 'long',  gpu: 'a100', n_gpus: 10, max_ctx: 65536 });
+loadGpuProfiles();
+</script>
+</body>
+</html>

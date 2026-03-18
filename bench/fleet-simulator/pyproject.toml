@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "inference-fleet-sim"
+version = "0.1.0"
+description = "Fleet-level LLM inference simulator for capacity planning and SLO validation"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "python-multipart>=0.0.9",
+]
+
+[project.urls]
+Homepage = "https://github.com/vllm-project/semantic-router"
+Repository = "https://github.com/vllm-project/semantic-router/tree/main/bench/fleet-simulator"
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "black", "ruff"]
+
+[project.scripts]
+fleet-sim = "run_sim:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fleet_sim*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
