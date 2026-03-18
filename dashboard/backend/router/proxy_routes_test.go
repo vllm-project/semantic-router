@@ -28,8 +28,10 @@ func TestRegisterFleetSimRoutesProxiesSimulatorPaths(t *testing.T) {
 	t.Parallel()
 
 	var proxiedPath string
+	var forwardedPrefix string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		proxiedPath = r.URL.Path
+		forwardedPrefix = r.Header.Get("X-Forwarded-Prefix")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"ok":true}`)
 	}))
@@ -47,5 +49,8 @@ func TestRegisterFleetSimRoutesProxiesSimulatorPaths(t *testing.T) {
 	}
 	if proxiedPath != "/api/workloads" {
 		t.Fatalf("proxied path = %q, want %q", proxiedPath, "/api/workloads")
+	}
+	if forwardedPrefix != "/api/fleet-sim" {
+		t.Fatalf("forwarded prefix = %q, want %q", forwardedPrefix, "/api/fleet-sim")
 	}
 }

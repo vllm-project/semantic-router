@@ -318,6 +318,11 @@ func registerFleetSimRoutes(mux *http.ServeMux, cfg *config.Config) {
 	if err != nil {
 		log.Fatalf("fleet simulator proxy error: %v", err)
 	}
+	originalDirector := fleetSimProxy.Director
+	fleetSimProxy.Director = func(r *http.Request) {
+		originalDirector(r)
+		r.Header.Set("X-Forwarded-Prefix", "/api/fleet-sim")
+	}
 	mux.HandleFunc("/api/fleet-sim/", func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return

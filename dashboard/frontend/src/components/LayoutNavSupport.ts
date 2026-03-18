@@ -36,12 +36,15 @@ export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
   { label: 'Insight', to: '/insights' },
 ]
 
-export const SECONDARY_NAV_LINKS: LayoutNavLink[] = [
-  { label: 'Users', to: '/users' },
-  { label: 'ClawOS', to: '/clawos' },
-]
+export const SECONDARY_NAV_LINKS: LayoutNavLink[] = []
 
 export const MANAGER_MENU_SECTIONS: LayoutMenuSection[] = [
+  {
+    items: [
+      { kind: 'route', label: 'Users', to: '/users' },
+      { kind: 'route', label: 'ClawOS', to: '/clawos' },
+    ],
+  },
   {
     items: [
       { kind: 'config', label: 'Models', configSection: 'models' },

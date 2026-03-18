@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import FleetSimSurfaceLayout from './FleetSimSurfaceLayout'
@@ -32,11 +32,11 @@ export default function FleetSimWorkloadsPage() {
   const [traces, setTraces] = useState<TraceInfo[]>([])
   const [selectedTrace, setSelectedTrace] = useState<TraceInfo | null>(null)
   const [selectedSample, setSelectedSample] = useState<TraceSample | null>(null)
-  const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploadFormat, setUploadFormat] = useState<FleetSimTraceFormat>('jsonl')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const load = async () => {
     const [workloadsData, tracesData] = await Promise.all([listWorkloads(), listTraces()])
@@ -60,20 +60,30 @@ export default function FleetSimWorkloadsPage() {
     })
   }, [])
 
-  const handleUpload = async () => {
-    if (!uploadFile) {
+  const handleUpload = async (file: File) => {
+    if (!file) {
       setError('Choose a trace file before uploading.')
       return
     }
     try {
-      await uploadTrace(uploadFile, uploadFormat)
-      setUploadFile(null)
-      setMessage(`Uploaded ${uploadFile.name}`)
+      await uploadTrace(file, uploadFormat)
+      setMessage(`Uploaded ${file.name}`)
       setError('')
       await load()
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload trace')
     }
+  }
+
+  const handleUploadButtonClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleUploadSelection = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    await handleUpload(file)
   }
 
   const handleDeleteTrace = async (trace: TraceInfo) => {
@@ -160,14 +170,6 @@ export default function FleetSimWorkloadsPage() {
                 <p className={styles.sectionDescription}>Use the same intake formats the simulator already understands and keep them searchable from the dashboard.</p>
               </div>
               <div className={styles.formGrid}>
-                <label className={`${styles.field} ${styles.fieldWide}`}>
-                  <span className={styles.fieldLabel}>Trace file</span>
-                  <input
-                    className={styles.fileInput}
-                    type="file"
-                    onChange={(event) => setUploadFile(event.target.files?.[0] || null)}
-                  />
-                </label>
                 <label className={styles.field}>
                   <span className={styles.fieldLabel}>Format</span>
                   <select
@@ -184,10 +186,16 @@ export default function FleetSimWorkloadsPage() {
             </div>
           </div>
           <div className={styles.buttonRow} style={{ marginTop: '0.9rem' }}>
-            <button type="button" className={styles.primaryButton} onClick={() => void handleUpload()}>
+            <input
+              ref={fileInputRef}
+              className={styles.hiddenFileInput}
+              type="file"
+              onChange={(event) => void handleUploadSelection(event)}
+            />
+            <button type="button" className={styles.primaryButton} onClick={handleUploadButtonClick}>
               Upload Trace
             </button>
-            <span className={styles.inlineHint}>Best used for production replays, incident slices, and customer-specific traffic checks.</span>
+            <span className={styles.inlineHint}>Pick the format first, then choose the trace file from the system upload dialog.</span>
           </div>
           {message ? <p className={`${styles.message} ${styles.messageSuccess}`}>{message}</p> : null}
           {error ? <p className={`${styles.message} ${styles.messageError}`}>{error}</p> : null}

@@ -73,6 +73,18 @@ def delete_trace(trace_id: str) -> bool:
     return True
 
 
+def trace_seed_sentinel_path() -> Path:
+    return _TRACE_META.parent / ".trace-seed-complete"
+
+
+def trace_seed_completed() -> bool:
+    return trace_seed_sentinel_path().exists()
+
+
+def mark_trace_seed_completed() -> None:
+    trace_seed_sentinel_path().write_text(now_iso())
+
+
 # ── Fleets ────────────────────────────────────────────────────────────────────
 
 

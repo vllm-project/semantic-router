@@ -317,3 +317,112 @@ export function renderJobResultSummary(job: FleetSimJob) {
 
   return <p className={styles.message}>Result pending.</p>
 }
+
+export function renderJobResultRows(job: FleetSimJob) {
+  if (job.status === 'failed') {
+    return <p className={`${styles.message} ${styles.messageError}`}>{job.error || 'Job failed'}</p>
+  }
+
+  if (job.result_optimize) {
+    const best = job.result_optimize.best
+    return (
+      <div className={styles.inlineDetails}>
+        <div className={styles.inlineDetailRow}>
+          <span className={styles.inlineDetailLabel}>Result</span>
+          <span className={styles.inlineDetailValue}>Recommended fleet split</span>
+        </div>
+        <div className={styles.inlineDetailGrid}>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Best gamma</span>
+            <span className={styles.inlineDetailValue}>{best.gamma.toFixed(2)}</span>
+          </div>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Fleet GPUs</span>
+            <span className={styles.inlineDetailValue}>{formatNumber(best.total_gpus)}</span>
+          </div>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Annual cost</span>
+            <span className={styles.inlineDetailValue}>{formatMoneyKusd(best.annual_cost_kusd)}</span>
+          </div>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Savings</span>
+            <span className={styles.inlineDetailValue}>{job.result_optimize.savings_pct.toFixed(1)}%</span>
+          </div>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>SLO</span>
+            <span className={styles.inlineDetailValue}>{best.slo_met ? 'Matched' : 'Needs review'}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (job.result_simulate) {
+    return (
+      <div className={styles.inlineDetails}>
+        <div className={styles.inlineDetailRow}>
+          <span className={styles.inlineDetailLabel}>Result</span>
+          <span className={styles.inlineDetailValue}>Saved fleet replay</span>
+        </div>
+        <div className={styles.inlineDetailGrid}>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>P99 TTFT</span>
+            <span className={styles.inlineDetailValue}>{formatNumber(job.result_simulate.fleet_p99_ttft_ms, 1)} ms</span>
+          </div>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Hit rate</span>
+            <span className={styles.inlineDetailValue}>{formatPercent(job.result_simulate.fleet_slo_compliance)}</span>
+          </div>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Utilization</span>
+            <span className={styles.inlineDetailValue}>{formatPercent(job.result_simulate.fleet_mean_utilisation)}</span>
+          </div>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Fleet GPUs</span>
+            <span className={styles.inlineDetailValue}>{formatNumber(job.result_simulate.total_gpus)}</span>
+          </div>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Annual cost</span>
+            <span className={styles.inlineDetailValue}>{formatMoneyKusd(job.result_simulate.annual_cost_kusd)}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (job.result_whatif) {
+    const maxLam = job.result_whatif.points.reduce((current, point) => Math.max(current, point.lam), 0)
+    return (
+      <div className={styles.inlineDetails}>
+        <div className={styles.inlineDetailRow}>
+          <span className={styles.inlineDetailLabel}>Result</span>
+          <span className={styles.inlineDetailValue}>Traffic envelope</span>
+        </div>
+        <div className={styles.inlineDetailGrid}>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Sweep points</span>
+            <span className={styles.inlineDetailValue}>{formatNumber(job.result_whatif.points.length)}</span>
+          </div>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Break lambda</span>
+            <span className={styles.inlineDetailValue}>
+              {job.result_whatif.slo_break_lam != null ? formatNumber(job.result_whatif.slo_break_lam, 1) : 'Stable'}
+            </span>
+          </div>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Highest tested</span>
+            <span className={styles.inlineDetailValue}>{formatNumber(maxLam, 1)}</span>
+          </div>
+          <div className={styles.inlineDetailCell}>
+            <span className={styles.inlineDetailLabel}>Sweep status</span>
+            <span className={styles.inlineDetailValue}>
+              {job.result_whatif.slo_break_lam != null ? 'Break point found' : 'Stable across sweep'}
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return <p className={styles.message}>Result pending.</p>
+}

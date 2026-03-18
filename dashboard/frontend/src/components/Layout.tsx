@@ -45,6 +45,10 @@ const Layout: React.FC<LayoutProps> = ({
   const canManageUsers = user?.role === 'admin'
   const canUseMLSetup = canAccessMLSetup(user)
   const secondaryNavLinks = SECONDARY_NAV_LINKS.filter((link) => link.to !== '/users' || canManageUsers)
+  const managerMenuSections = filterLayoutMenuSections(
+    MANAGER_MENU_SECTIONS,
+    item => canManageUsers || item.kind !== 'route' || item.to !== '/users'
+  )
   const analysisOperationsMenuSections = filterLayoutMenuSections(
     ANALYSIS_OPERATIONS_MENU_SECTIONS,
     item => canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'
@@ -55,7 +59,7 @@ const Layout: React.FC<LayoutProps> = ({
 
   const isConfigPage = location.pathname === '/config' || location.pathname.startsWith('/config/')
   const isManagerActive = hasActiveLayoutMenuSection(
-    MANAGER_MENU_SECTIONS,
+    managerMenuSections,
     location.pathname,
     isConfigPage,
     configSection
@@ -255,7 +259,7 @@ const Layout: React.FC<LayoutProps> = ({
                   </svg>
                 </button>
                 {openDropdown === 'manager'
-                  ? renderDropdownMenu(MANAGER_MENU_SECTIONS, styles.dropdownMenu, 'Manager')
+                  ? renderDropdownMenu(managerMenuSections, styles.dropdownMenu, 'Manager')
                   : null}
               </div>
               {fleetSimEnabled ? (
@@ -265,12 +269,12 @@ const Layout: React.FC<LayoutProps> = ({
                     aria-expanded={openDropdown === 'fleetSim'}
                     aria-haspopup="menu"
                     className={`${styles.navLink} ${isFleetSimActive ? styles.navLinkActive : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleDropdown('fleetSim')
-                    }}
-                  >
-                    Fleet Sim
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleDropdown('fleetSim')
+                  }}
+                >
+                  Simulator
                     <svg
                       width="12"
                       height="12"
@@ -287,7 +291,7 @@ const Layout: React.FC<LayoutProps> = ({
                     ? renderDropdownMenu(
                         FLEET_SIM_MENU_SECTIONS,
                         styles.dropdownMenu,
-                        'Fleet Sim'
+                        'Simulator'
                       )
                     : null}
                 </div>
@@ -414,8 +418,8 @@ const Layout: React.FC<LayoutProps> = ({
                 {link.label}
               </NavLink>
             ))}
-            {renderMobileMenuSection('Manager', MANAGER_MENU_SECTIONS)}
-            {fleetSimEnabled ? renderMobileMenuSection('Fleet Sim', FLEET_SIM_MENU_SECTIONS) : null}
+            {renderMobileMenuSection('Manager', managerMenuSections)}
+            {fleetSimEnabled ? renderMobileMenuSection('Simulator', FLEET_SIM_MENU_SECTIONS) : null}
             {renderMobileMenuSection('System', analysisOperationsMenuSections)}
           </div>
         ) : null}

@@ -27,7 +27,7 @@ import {
   formatJobType,
   formatNumber,
   JobStatusBadge,
-  renderJobResultSummary,
+  renderJobResultRows,
 } from './fleetSimPageSupport'
 
 const GPU_OPTIONS = ['a100', 'h100', 'a10g']
@@ -590,19 +590,25 @@ export default function FleetSimRunsPage() {
             const fleetLabel = resolveFleetLabel(extractJobFleetID(row), fleets)
             return (
               <div className={styles.expandedPanel}>
-                <div className={styles.poolSummaryGrid}>
-                  <article className={styles.poolSummaryCard}>
-                    <span className={styles.poolEditorEyebrow}>Scenario</span>
-                    <h4 className={styles.poolEditorTitle}>{formatJobType(row.type)}</h4>
-                    <p className={styles.cardFootnote}>{resolveWorkloadLabel(workload, workloads, traces)}</p>
-                  </article>
-                  <article className={styles.poolSummaryCard}>
-                    <span className={styles.poolEditorEyebrow}>Fleet</span>
-                    <h4 className={styles.poolEditorTitle}>{fleetLabel}</h4>
-                    <p className={styles.cardFootnote}>Created {formatDateTime(row.created_at)}</p>
-                  </article>
+                <div className={styles.inlineDetailGrid}>
+                  <div className={styles.inlineDetailCell}>
+                    <span className={styles.inlineDetailLabel}>Scenario</span>
+                    <span className={styles.inlineDetailValue}>{formatJobType(row.type)}</span>
+                  </div>
+                  <div className={styles.inlineDetailCell}>
+                    <span className={styles.inlineDetailLabel}>Workload</span>
+                    <span className={styles.inlineDetailValue}>{resolveWorkloadLabel(workload, workloads, traces)}</span>
+                  </div>
+                  <div className={styles.inlineDetailCell}>
+                    <span className={styles.inlineDetailLabel}>Fleet</span>
+                    <span className={styles.inlineDetailValue}>{fleetLabel}</span>
+                  </div>
+                  <div className={styles.inlineDetailCell}>
+                    <span className={styles.inlineDetailLabel}>Created</span>
+                    <span className={styles.inlineDetailValue}>{formatDateTime(row.created_at)}</span>
+                  </div>
                 </div>
-                {renderJobResultSummary(row)}
+                {renderJobResultRows(row)}
               </div>
             )
           }}

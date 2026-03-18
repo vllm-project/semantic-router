@@ -445,6 +445,8 @@ def cmd_serve(args):
             "vllm-sr-sim service mode requires API extras: pip install 'vllm-sr-sim[api]'"
         ) from exc
 
+    os.environ.setdefault("VLLM_SR_SIM_SEED_EXAMPLE_TRACES", "true")
+
     print("\n  vllm-sr-sim service")
     print(f"  {'─' * 28}")
     print(f"  API docs  : http://{args.host}:{args.port}/api/docs")

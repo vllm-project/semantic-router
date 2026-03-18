@@ -107,6 +107,11 @@ class TestSystemRoutes:
         assert body["service"] == "vllm-sr-sim"
         assert body["docs"] == "/api/docs"
 
+    def test_docs_resolve_openapi_under_forwarded_prefix(self, client):
+        r = client.get("/api/docs", headers={"x-forwarded-prefix": "/api/fleet-sim"})
+        assert r.status_code == 200
+        assert "/api/fleet-sim/api/openapi.json" in r.text
+
 
 # ── Workload routes ───────────────────────────────────────────────────────────
 
@@ -400,6 +405,33 @@ class TestTraceRoutes:
     def test_delete_trace_not_found(self, client):
         r = client.delete("/api/traces/doesnotexist")
         assert r.status_code == 404
+
+    def test_startup_seeds_example_traces_when_enabled(
+        self, isolated_storage, monkeypatch, tmp_path
+    ):
+        seed_dir = tmp_path / "trace_samples"
+        seed_dir.mkdir()
+        (seed_dir / "router_decisions.semantic_router.jsonl").write_text(_MINIMAL_JSONL)
+        (seed_dir / "generic_chat_mix.jsonl").write_text(_MINIMAL_JSONL)
+        (seed_dir / "batch_spike_requests.csv").write_text(_MINIMAL_CSV)
+
+        monkeypatch.setenv("VLLM_SR_SIM_SEED_EXAMPLE_TRACES", "true")
+        monkeypatch.setenv("VLLM_SR_SIM_SEED_TRACE_DIR", str(seed_dir))
+
+        from fleet_sim.api.app import app
+
+        with TestClient(app, raise_server_exceptions=True) as seeded_client:
+            r = seeded_client.get("/api/traces")
+
+        assert r.status_code == 200
+        traces = r.json()
+        assert len(traces) == 3
+        names = {trace["name"] for trace in traces}
+        assert names == {
+            "Router decisions sample",
+            "Generic chat mix",
+            "Batch spike requests",
+        }
 
 
 # ── Job routes (status / CRUD, no heavy computation) ─────────────────────────

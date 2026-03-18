@@ -356,29 +356,28 @@ export default function FleetSimFleetsPage() {
           }}
           renderExpandedRow={(row) => (
             <div className={styles.expandedPanel}>
-              <div className={styles.resultGrid}>
-                <div className={styles.resultMetric}>
-                  <span className={styles.resultMetricLabel}>Router</span>
-                  <span className={styles.resultMetricValue}>{formatRouterType(row.router)}</span>
+              <div className={styles.inlineDetailGrid}>
+                <div className={styles.inlineDetailCell}>
+                  <span className={styles.inlineDetailLabel}>Router</span>
+                  <span className={styles.inlineDetailValue}>{formatRouterType(row.router)}</span>
                 </div>
-                <div className={styles.resultMetric}>
-                  <span className={styles.resultMetricLabel}>Total GPUs</span>
-                  <span className={styles.resultMetricValue}>{formatNumber(row.total_gpus)}</span>
+                <div className={styles.inlineDetailCell}>
+                  <span className={styles.inlineDetailLabel}>Total GPUs</span>
+                  <span className={styles.inlineDetailValue}>{formatNumber(row.total_gpus)}</span>
                 </div>
-                <div className={styles.resultMetric}>
-                  <span className={styles.resultMetricLabel}>Annual cost</span>
-                  <span className={styles.resultMetricValue}>{formatMoneyKusd(row.estimated_annual_cost_kusd)}</span>
+                <div className={styles.inlineDetailCell}>
+                  <span className={styles.inlineDetailLabel}>Annual cost</span>
+                  <span className={styles.inlineDetailValue}>{formatMoneyKusd(row.estimated_annual_cost_kusd)}</span>
                 </div>
               </div>
-              <div className={styles.poolSummaryGrid}>
+              <div className={styles.inlineDetailRows}>
                 {row.pools.map((pool) => (
-                  <article key={pool.pool_id} className={styles.poolSummaryCard}>
-                    <span className={styles.poolEditorEyebrow}>{pool.pool_id}</span>
-                    <h4 className={styles.poolEditorTitle}>{formatGpuLabel(pool.gpu)}</h4>
-                    <p className={styles.cardFootnote}>
-                      {formatNumber(pool.n_gpus)} GPUs · max context {formatNumber(pool.max_ctx)}
-                    </p>
-                  </article>
+                  <div key={pool.pool_id} className={styles.inlineDetailRow}>
+                    <span className={styles.inlineDetailValue}>{pool.pool_id}</span>
+                    <span className={styles.inlineDetailText}>{formatGpuLabel(pool.gpu)}</span>
+                    <span className={styles.inlineDetailText}>{formatNumber(pool.n_gpus)} GPUs</span>
+                    <span className={styles.inlineDetailText}>Max context {formatNumber(pool.max_ctx)}</span>
+                  </div>
                 ))}
               </div>
             </div>

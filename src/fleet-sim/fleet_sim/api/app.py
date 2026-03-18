@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from .trace_ingest import seed_example_traces_if_enabled
 from .routes import fleets, jobs, traces, workloads
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    seed_example_traces_if_enabled()
+    yield
+
 
 app = FastAPI(
     title="vllm-sr-sim API",
@@ -18,6 +29,7 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -26,6 +38,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def apply_forwarded_prefix_root_path(request: Request, call_next):
+    """Honor dashboard proxy prefixes so Swagger/OpenAPI assets resolve correctly."""
+
+    forwarded_prefix = request.headers.get("x-forwarded-prefix", "").rstrip("/")
+    if forwarded_prefix:
+        request.scope["root_path"] = forwarded_prefix
+    return await call_next(request)
 
 # ── API routes ────────────────────────────────────────────────────────────────
 app.include_router(traces.router, prefix="/api")
