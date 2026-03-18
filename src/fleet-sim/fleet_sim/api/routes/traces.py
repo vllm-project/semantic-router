@@ -5,13 +5,13 @@ from __future__ import annotations
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 from .. import storage
-from ..trace_ingest import parse_records, persist_trace_bytes
 from ..models import (
     TraceFormat,
     TraceInfo,
     TraceSample,
     TraceStats,
 )
+from ..trace_ingest import parse_records, persist_trace_bytes
 
 router = APIRouter(prefix="/traces", tags=["Traces"])
 
