@@ -4499,59 +4499,67 @@ TEST routing_intent {
 	if len(errs) > 0 {
 		t.Fatalf("parse errors: %v", errs)
 	}
-
-	t.Run("parse", func(t *testing.T) {
-		if len(prog.SignalGroups) != 1 {
-			t.Errorf("expected 1 signal group")
-		}
-		if len(prog.TestBlocks) != 1 {
-			t.Errorf("expected 1 test block")
-		}
-	})
+	assertConflictFreeParse(t, prog)
 
 	cfg, compileErrs := CompileAST(prog)
 	if len(compileErrs) > 0 {
 		t.Fatalf("compile errors: %v", compileErrs)
 	}
+	assertConflictFreeCompile(t, cfg)
+	assertConflictFreeValidate(t, prog)
+	assertConflictFreeRoundTrip(t, cfg)
+}
 
-	t.Run("compile", func(t *testing.T) {
-		if len(cfg.SignalGroups) != 1 {
-			t.Errorf("expected 1 signal group in config")
-		}
-		if cfg.Decisions[0].Tier != 1 {
-			t.Errorf("safety route tier = %d, want 1", cfg.Decisions[0].Tier)
-		}
-		if cfg.Decisions[1].Tier != 2 {
-			t.Errorf("math route tier = %d, want 2", cfg.Decisions[1].Tier)
-		}
-	})
+func assertConflictFreeParse(t *testing.T, prog *Program) {
+	t.Helper()
+	if len(prog.SignalGroups) != 1 {
+		t.Errorf("expected 1 signal group, got %d", len(prog.SignalGroups))
+	}
+	if len(prog.TestBlocks) != 1 {
+		t.Errorf("expected 1 test block, got %d", len(prog.TestBlocks))
+	}
+}
 
-	t.Run("validate", func(t *testing.T) {
-		diags := ValidateAST(prog)
-		for _, d := range diags {
-			if d.Level == DiagError {
-				t.Errorf("unexpected error: %s", d)
-			}
-		}
-	})
+func assertConflictFreeCompile(t *testing.T, cfg *config.RouterConfig) {
+	t.Helper()
+	if len(cfg.SignalGroups) != 1 {
+		t.Errorf("expected 1 signal group in config, got %d", len(cfg.SignalGroups))
+	}
+	if cfg.Decisions[0].Tier != 1 {
+		t.Errorf("safety route tier = %d, want 1", cfg.Decisions[0].Tier)
+	}
+	if cfg.Decisions[1].Tier != 2 {
+		t.Errorf("math route tier = %d, want 2", cfg.Decisions[1].Tier)
+	}
+}
 
-	t.Run("round_trip", func(t *testing.T) {
-		dslText, err := DecompileRouting(cfg)
-		if err != nil {
-			t.Fatalf("decompile error: %v", err)
+func assertConflictFreeValidate(t *testing.T, prog *Program) {
+	t.Helper()
+	diags := ValidateAST(prog)
+	for _, d := range diags {
+		if d.Level == DiagError {
+			t.Errorf("unexpected validation error: %s", d)
 		}
-		if !strings.Contains(dslText, "SIGNAL_GROUP") {
-			t.Error("round-trip lost SIGNAL_GROUP")
-		}
-		if !strings.Contains(dslText, "TIER 1") {
-			t.Error("round-trip lost TIER")
-		}
-		prog2, errs2 := Parse(dslText)
-		if len(errs2) > 0 {
-			t.Fatalf("re-parse errors: %v\nDSL:\n%s", errs2, dslText)
-		}
-		if len(prog2.SignalGroups) != 1 {
-			t.Errorf("re-parsed signal groups = %d, want 1", len(prog2.SignalGroups))
-		}
-	})
+	}
+}
+
+func assertConflictFreeRoundTrip(t *testing.T, cfg *config.RouterConfig) {
+	t.Helper()
+	dslText, err := DecompileRouting(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(dslText, "SIGNAL_GROUP") {
+		t.Error("round-trip lost SIGNAL_GROUP")
+	}
+	if !strings.Contains(dslText, "TIER 1") {
+		t.Error("round-trip lost TIER")
+	}
+	prog2, errs2 := Parse(dslText)
+	if len(errs2) > 0 {
+		t.Fatalf("re-parse errors: %v\nDSL:\n%s", errs2, dslText)
+	}
+	if len(prog2.SignalGroups) != 1 {
+		t.Errorf("re-parsed signal groups = %d, want 1", len(prog2.SignalGroups))
+	}
 }
