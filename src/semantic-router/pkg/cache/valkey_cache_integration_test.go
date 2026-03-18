@@ -419,6 +419,10 @@ func TestValkeyCacheIntegration_TTLZeroSkipsCaching(t *testing.T) {
 }
 
 func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
+	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
+		t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
+	}
+
 	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
 		t.Skipf("Failed to initialize BERT model: %v", err)
 	}
@@ -554,6 +558,10 @@ func TestValkeyCacheIntegration_MultipleEntries(t *testing.T) {
 }
 
 func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
+	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
+		t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
+	}
+
 	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
 		t.Skipf("Failed to initialize BERT model: %v", err)
 	}
@@ -599,6 +607,10 @@ func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
 }
 
 func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
+	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
+		t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
+	}
+
 	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
 		t.Skipf("Failed to initialize BERT model: %v", err)
 	}
@@ -765,6 +777,10 @@ func TestValkeyCacheIntegration_ErrorScenarios(t *testing.T) {
 	})
 
 	t.Run("Index creation disabled when index doesn't exist", func(t *testing.T) {
+		if os.Getenv("SKIP_VALKEY_TESTS") == "true" {
+			t.Skip("Valkey integration tests skipped due to SKIP_VALKEY_TESTS=true")
+		}
+
 		if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
 			t.Skipf("Failed to initialize BERT model: %v", err)
 		}
