@@ -34,6 +34,11 @@ description: Modifies the repository's agent contract including AGENTS.md, docs 
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to verify all surfaces pass
 5. Record any durable code/spec divergence as indexed debt entries
 
+## Gotchas
+
+- Do not add a prose-only harness rule when the same invariant can be enforced in manifests, scripts, or CI.
+- When routing, validation, or contributor workflow changes, update the executable layer and the human-readable layer in the same patch.
+
 ## Must Read
 
 - [docs/agent/README.md](../../../../docs/agent/README.md)

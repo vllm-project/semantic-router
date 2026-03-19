@@ -76,6 +76,12 @@ export const PROVISION_STEPS = [
   { key: 'deploy', label: 'Deploy' },
 ]
 
+export const truncateText = (value?: string, maxLength = 180): string => {
+  const text = (value || '').trim()
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, maxLength).trim()}...`
+}
+
 interface KernelFeature {
   title: string
   module: string

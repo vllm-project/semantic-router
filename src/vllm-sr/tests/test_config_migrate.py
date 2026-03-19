@@ -239,6 +239,61 @@ def test_parse_user_config_rejects_deprecated_global_modules(tmp_path: Path):
         raise AssertionError("expected ConfigParseError")
 
 
+def test_parse_user_config_rejects_legacy_flat_signal_blocks(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "listeners": [
+                    {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
+                ],
+                "providers": {
+                    "defaults": {"default_model": "gpt-4o-mini"},
+                    "models": [
+                        {
+                            "name": "gpt-4o-mini",
+                            "backend_refs": [
+                                {
+                                    "endpoint": "host.docker.internal:8000",
+                                    "protocol": "http",
+                                }
+                            ],
+                        }
+                    ],
+                },
+                "routing": {
+                    "modelCards": [{"name": "gpt-4o-mini"}],
+                    "decisions": [
+                        {
+                            "name": "default-route",
+                            "description": "fallback",
+                            "priority": 100,
+                            "rules": {"operator": "AND", "conditions": []},
+                            "modelRefs": [{"model": "gpt-4o-mini"}],
+                        }
+                    ],
+                },
+                "keyword_rules": [
+                    {
+                        "name": "legacy-keywords",
+                        "operator": "OR",
+                        "keywords": ["hello"],
+                    }
+                ],
+            },
+            sort_keys=False,
+        )
+    )
+
+    try:
+        parse_user_config(str(config_path))
+    except ConfigParseError as exc:
+        assert "keyword_rules" in str(exc)
+    else:
+        raise AssertionError("expected ConfigParseError")
+
+
 def _legacy_model_catalog_config() -> dict:
     return {
         "version": "v0.1",

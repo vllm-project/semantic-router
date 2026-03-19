@@ -18,6 +18,11 @@ description: Modifies frontend dashboard surfaces including config editing UI, t
 3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to identify impacted surfaces
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate alignment with router and CLI contracts
 
+## Gotchas
+
+- Frontend-only display work can still encode router-contract assumptions; verify the emitted data shape before treating it as cosmetic.
+- Avoid moving business or routing logic into pages or components when the contract belongs upstream.
+
 ## Must Read
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
