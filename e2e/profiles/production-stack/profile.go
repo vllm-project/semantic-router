@@ -602,7 +602,7 @@ func (p *Profile) verifyNoOOMRestarts(ctx context.Context, opts *framework.Setup
 		}
 
 		oomDetected := false
-		allReady := true
+		podsReady := true
 		var maxRestartCount int32
 		for _, pod := range pods.Items {
 			for _, cs := range pod.Status.ContainerStatuses {
@@ -614,7 +614,7 @@ func (p *Profile) verifyNoOOMRestarts(ctx context.Context, opts *framework.Setup
 					maxRestartCount = cs.RestartCount
 				}
 				if !cs.Ready {
-					allReady = false
+					podsReady = false
 				}
 			}
 		}
@@ -629,7 +629,7 @@ func (p *Profile) verifyNoOOMRestarts(ctx context.Context, opts *framework.Setup
 			return p.scaleDownAfterOOM(ctx, opts)
 		}
 
-		if allReady {
+		if podsReady {
 			if time.Since(stableSince) >= oomStableRequired {
 				p.log("OOM-restarted pods have recovered and been stable for %s", oomStableRequired)
 				return nil
