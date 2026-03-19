@@ -172,12 +172,13 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
         monaco.editor.setModelLanguage(model, DSL_LANGUAGE_ID)
       }
 
-      // Load default content if empty
-      if (!dslSource) {
+      // The standalone editor gets a starter template; the Builder page must
+      // stay empty until its router-backed import fills the store.
+      if (!embedded && !useDSLStore.getState().dslSource.trim()) {
         setDslSource(DEFAULT_DSL)
       }
     },
-    [dslSource, setDslSource],
+    [embedded, setDslSource],
   )
 
   const handleEditorChange = useCallback(
@@ -451,7 +452,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
           <Editor
             height="100%"
             defaultLanguage={DSL_LANGUAGE_ID}
-            defaultValue={dslSource || DEFAULT_DSL}
+            defaultValue={embedded ? dslSource : dslSource || DEFAULT_DSL}
             value={dslSource}
             theme="signal-dsl-dark"
             onChange={handleEditorChange}
