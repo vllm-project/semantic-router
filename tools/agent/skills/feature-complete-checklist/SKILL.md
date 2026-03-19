@@ -30,6 +30,11 @@ description: Runs the repository-standard completion checklist before closing a 
 3. Run `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."` to verify feature readiness
 4. Generate the final report with primary skill, impacted surfaces, validation results, and any debt entries
 
+## Gotchas
+
+- Do not treat a clean `agent-feature-gate` run as sufficient if conditional surfaces were intentionally skipped and not explained.
+- If a known architecture or contract gap remains, the close-out is incomplete until the matching debt entry is updated.
+
 ## Must Read
 
 - [docs/agent/feature-complete-checklist.md](../../../../docs/agent/feature-complete-checklist.md)
