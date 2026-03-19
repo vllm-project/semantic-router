@@ -145,6 +145,9 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 	// Level 3: Constraint checks
 	v.checkConstraints()
 
+	// Level 4: Conflict detection
+	v.checkConflicts()
+
 	// Extract symbol table for editor completions
 	symbols := v.extractSymbolTable()
 
@@ -163,6 +166,7 @@ func ValidateAST(prog *Program) []Diagnostic {
 	v.buildSymbolTable()
 	v.checkReferences()
 	v.checkConstraints()
+	v.checkConflicts()
 	return v.diagnostics
 }
 
@@ -656,15 +660,4 @@ func (v *Validator) addDiag(level DiagLevel, pos Position, message string, fix *
 		Pos:     pos,
 		Fix:     fix,
 	})
-}
-
-// ---------- Utility ----------
-
-func keysOfBool(m map[string]bool) []string {
-	result := make([]string, 0, len(m))
-	for k := range m {
-		result = append(result, k)
-	}
-	sort.Strings(result)
-	return result
 }

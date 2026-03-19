@@ -16,6 +16,7 @@ var dslLexer = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Float", Pattern: `[+-]?[0-9]+\.[0-9]+`},
 	{Name: "Int", Pattern: `[+-]?[0-9]+`},
 	{Name: "String", Pattern: `"(?:[^"\\]|\\.)*"`},
+	{Name: "Arrow", Pattern: `->`},
 	{Name: "Ident", Pattern: `[a-zA-Z_][a-zA-Z0-9_\-\.\/]*`},
 	{Name: "LBrace", Pattern: `\{`},
 	{Name: "RBrace", Pattern: `\}`},
@@ -25,6 +26,7 @@ var dslLexer = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "RBracket", Pattern: `\]`},
 	{Name: "Colon", Pattern: `:`},
 	{Name: "Comma", Pattern: `,`},
+	{Name: "GreaterThan", Pattern: `>`},
 	{Name: "Equals", Pattern: `=`},
 })
 
@@ -66,9 +68,11 @@ func Parse(input string) (*Program, []error) {
 		parsedAny = true
 		resolved := rawToProgram(r)
 		prog.Signals = append(prog.Signals, resolved.Signals...)
+		prog.SignalGroups = append(prog.SignalGroups, resolved.SignalGroups...)
 		prog.Routes = append(prog.Routes, resolved.Routes...)
 		prog.Models = append(prog.Models, resolved.Models...)
 		prog.Plugins = append(prog.Plugins, resolved.Plugins...)
+		prog.TestBlocks = append(prog.TestBlocks, resolved.TestBlocks...)
 	}
 
 	if !parsedAny {
@@ -84,7 +88,7 @@ func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
 	start := 0
-	keywords := []string{"SIGNAL", "ROUTE", "MODEL", "PLUGIN"}
+	keywords := []string{"SIGNAL_GROUP", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
@@ -146,6 +150,8 @@ func rawToProgram(raw *rawProgram) *Program {
 	prog := &Program{}
 	for _, entry := range raw.Entries {
 		switch {
+		case entry.SignalGroup != nil:
+			prog.SignalGroups = append(prog.SignalGroups, rawToSignalGroup(entry.SignalGroup))
 		case entry.Signal != nil:
 			prog.Signals = append(prog.Signals, rawToSignal(entry.Signal))
 		case entry.Route != nil:
@@ -154,9 +160,62 @@ func rawToProgram(raw *rawProgram) *Program {
 			prog.Models = append(prog.Models, rawToModelDecl(entry.Model))
 		case entry.Plugin != nil:
 			prog.Plugins = append(prog.Plugins, rawToPlugin(entry.Plugin))
+		case entry.TestBlock != nil:
+			prog.TestBlocks = append(prog.TestBlocks, rawToTestBlock(entry.TestBlock))
 		}
 	}
 	return prog
+}
+
+func rawToSignalGroup(r *rawSignalGroupDecl) *SignalGroupDecl {
+	sg := &SignalGroupDecl{
+		Name: unquoteIdent(r.Name),
+		Pos:  posFromLexer(r.Pos),
+	}
+	fields := entriesToMap(r.Fields)
+	if v, ok := fields["semantics"]; ok {
+		if sv, ok := v.(StringValue); ok {
+			sg.Semantics = sv.V
+		}
+	}
+	if v, ok := fields["temperature"]; ok {
+		switch tv := v.(type) {
+		case FloatValue:
+			sg.Temperature = tv.V
+		case IntValue:
+			sg.Temperature = float64(tv.V)
+		}
+	}
+	if v, ok := fields["members"]; ok {
+		if av, ok := v.(ArrayValue); ok {
+			for _, item := range av.Items {
+				if sv, ok := item.(StringValue); ok {
+					sg.Members = append(sg.Members, sv.V)
+				}
+			}
+		}
+	}
+	if v, ok := fields["default"]; ok {
+		if sv, ok := v.(StringValue); ok {
+			sg.Default = sv.V
+		}
+	}
+	return sg
+}
+
+func rawToTestBlock(r *rawTestBlockDecl) *TestBlockDecl {
+	tb := &TestBlockDecl{
+		Name: unquoteIdent(r.Name),
+		Pos:  posFromLexer(r.Pos),
+	}
+	for _, entry := range r.Entries {
+		tb.Entries = append(tb.Entries, &TestEntry{
+			Query:     unquote(entry.Query),
+			RouteName: unquoteIdent(entry.RouteName),
+			Pos:       posFromLexer(entry.Pos),
+		})
+	}
+	return tb
 }
 
 func rawToSignal(r *rawSignalDecl) *SignalDecl {
@@ -186,6 +245,8 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 		switch {
 		case item.Priority != nil:
 			route.Priority = *item.Priority
+		case item.Tier != nil:
+			route.Tier = *item.Tier
 		case item.When != nil:
 			route.When = toBoolExpr(item.When)
 		case item.Model != nil:
@@ -451,10 +512,12 @@ func Lex(input string) ([]Token, []error) {
 	}
 
 	keywordMap := map[string]TokenType{
-		"SIGNAL": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE, "PLUGIN": TOKEN_PLUGIN,
-		"PRIORITY": TOKEN_PRIORITY, "WHEN": TOKEN_WHEN, "MODEL": TOKEN_MODEL,
-		"ALGORITHM": TOKEN_ALGORITHM, "AND": TOKEN_AND, "OR": TOKEN_OR,
-		"NOT": TOKEN_NOT, "true": TOKEN_BOOL, "false": TOKEN_BOOL,
+		"SIGNAL": TOKEN_SIGNAL, "SIGNAL_GROUP": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
+		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
+		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
+		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
+		"AND": TOKEN_AND, "OR": TOKEN_OR, "NOT": TOKEN_NOT,
+		"true": TOKEN_BOOL, "false": TOKEN_BOOL,
 	}
 	punctMap := map[lexer.TokenType]TokenType{}
 
@@ -473,6 +536,8 @@ func Lex(input string) ([]Token, []error) {
 	colonSym := symMap["Colon"]
 	commaSym := symMap["Comma"]
 	equalsSym := symMap["Equals"]
+	arrowSym := symMap["Arrow"]
+	greaterThanSym := symMap["GreaterThan"]
 	commentSym := symMap["Comment"]
 	wsSym := symMap["Whitespace"]
 
@@ -485,6 +550,8 @@ func Lex(input string) ([]Token, []error) {
 	punctMap[colonSym] = TOKEN_COLON
 	punctMap[commaSym] = TOKEN_COMMA
 	punctMap[equalsSym] = TOKEN_EQUALS
+	_ = arrowSym
+	_ = greaterThanSym
 
 	var tokens []Token
 	for {
@@ -524,10 +591,12 @@ func Lex(input string) ([]Token, []error) {
 // LookupIdent returns the token type for an identifier string.
 func LookupIdent(ident string) TokenType {
 	keywords := map[string]TokenType{
-		"SIGNAL": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE, "PLUGIN": TOKEN_PLUGIN,
-		"PRIORITY": TOKEN_PRIORITY, "WHEN": TOKEN_WHEN, "MODEL": TOKEN_MODEL,
-		"ALGORITHM": TOKEN_ALGORITHM, "AND": TOKEN_AND, "OR": TOKEN_OR,
-		"NOT": TOKEN_NOT, "true": TOKEN_BOOL, "false": TOKEN_BOOL,
+		"SIGNAL": TOKEN_SIGNAL, "SIGNAL_GROUP": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
+		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
+		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
+		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
+		"AND": TOKEN_AND, "OR": TOKEN_OR, "NOT": TOKEN_NOT,
+		"true": TOKEN_BOOL, "false": TOKEN_BOOL,
 	}
 	if tok, ok := keywords[ident]; ok {
 		return tok

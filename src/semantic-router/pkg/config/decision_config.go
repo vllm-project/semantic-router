@@ -5,6 +5,7 @@ type Decision struct {
 	Name                    string                `yaml:"name"`
 	Description             string                `yaml:"description,omitempty"`
 	Priority                int                   `yaml:"priority,omitempty"`
+	Tier                    int                   `yaml:"tier,omitempty"`
 	Rules                   RuleCombination       `yaml:"rules"`
 	ModelSelectionAlgorithm *ModelSelectionConfig `yaml:"modelSelectionAlgorithm,omitempty"`
 	ModelRefs               []ModelRef            `yaml:"modelRefs,omitempty"`

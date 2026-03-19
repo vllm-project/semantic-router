@@ -219,6 +219,23 @@ func (d *decompiler) decompileSignals() {
 		}
 		d.write("}\n\n")
 	}
+
+	for _, sg := range d.cfg.SignalGroups {
+		d.write("SIGNAL_GROUP %s {\n", quoteName(sg.Name))
+		if sg.Semantics != "" {
+			d.write("  semantics: %q\n", sg.Semantics)
+		}
+		if sg.Temperature != 0 {
+			d.write("  temperature: %v\n", sg.Temperature)
+		}
+		if len(sg.Members) > 0 {
+			d.write("  members: %s\n", formatStringArray(sg.Members))
+		}
+		if sg.Default != "" {
+			d.write("  default: %q\n", sg.Default)
+		}
+		d.write("}\n\n")
+	}
 }
 
 // ---------- Plugin Template Extraction ----------
@@ -275,6 +292,9 @@ func (d *decompiler) decompileDecisions() {
 		}
 
 		d.write("  PRIORITY %d\n", dec.Priority)
+		if dec.Tier != 0 {
+			d.write("  TIER %d\n", dec.Tier)
+		}
 
 		// WHEN expression
 		ruleExpr := decompileRuleNode(&dec.Rules)
@@ -986,6 +1006,7 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		Name:        dec.Name,
 		Description: dec.Description,
 		Priority:    dec.Priority,
+		Tier:        dec.Tier,
 	}
 
 	// WHEN

@@ -10,10 +10,36 @@ import "encoding/json"
 
 // ProgramJSON is the JSON-serializable form of Program.
 type ProgramJSON struct {
-	Signals []*SignalDeclJSON `json:"signals"`
-	Routes  []*RouteDeclJSON  `json:"routes"`
-	Models  []*ModelDeclJSON  `json:"models"`
-	Plugins []*PluginDeclJSON `json:"plugins"`
+	Signals      []*SignalDeclJSON      `json:"signals"`
+	SignalGroups []*SignalGroupDeclJSON `json:"signalGroups,omitempty"`
+	Routes       []*RouteDeclJSON       `json:"routes"`
+	Models       []*ModelDeclJSON       `json:"models"`
+	Plugins      []*PluginDeclJSON      `json:"plugins"`
+	TestBlocks   []*TestBlockDeclJSON   `json:"testBlocks,omitempty"`
+}
+
+// SignalGroupDeclJSON is the JSON form of SignalGroupDecl.
+type SignalGroupDeclJSON struct {
+	Name        string   `json:"name"`
+	Semantics   string   `json:"semantics,omitempty"`
+	Temperature float64  `json:"temperature,omitempty"`
+	Members     []string `json:"members"`
+	Default     string   `json:"default,omitempty"`
+	Pos         Position `json:"pos"`
+}
+
+// TestBlockDeclJSON is the JSON form of TestBlockDecl.
+type TestBlockDeclJSON struct {
+	Name    string               `json:"name"`
+	Entries []*TestEntryDeclJSON `json:"entries"`
+	Pos     Position             `json:"pos"`
+}
+
+// TestEntryDeclJSON is the JSON form of TestEntry.
+type TestEntryDeclJSON struct {
+	Query     string   `json:"query"`
+	RouteName string   `json:"routeName"`
+	Pos       Position `json:"pos"`
 }
 
 // SignalDeclJSON is the JSON form of SignalDecl.
@@ -29,6 +55,7 @@ type RouteDeclJSON struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description,omitempty"`
 	Priority    int              `json:"priority"`
+	Tier        int              `json:"tier,omitempty"`
 	When        *BoolExprJSON    `json:"when,omitempty"`
 	Models      []*ModelRefJSON  `json:"models"`
 	Algorithm   *AlgoSpecJSON    `json:"algorithm,omitempty"`
@@ -144,46 +171,19 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 		})
 	}
 
+	for _, sg := range prog.SignalGroups {
+		result.SignalGroups = append(result.SignalGroups, &SignalGroupDeclJSON{
+			Name:        sg.Name,
+			Semantics:   sg.Semantics,
+			Temperature: sg.Temperature,
+			Members:     sg.Members,
+			Default:     sg.Default,
+			Pos:         sg.Pos,
+		})
+	}
+
 	for _, r := range prog.Routes {
-		rj := &RouteDeclJSON{
-			Name:        r.Name,
-			Description: r.Description,
-			Priority:    r.Priority,
-			When:        marshalBoolExpr(r.When),
-			Models:      make([]*ModelRefJSON, 0, len(r.Models)),
-			Plugins:     make([]*PluginRefJSON, 0, len(r.Plugins)),
-			Pos:         r.Pos,
-		}
-		for _, m := range r.Models {
-			rj.Models = append(rj.Models, &ModelRefJSON{
-				Model:     m.Model,
-				Reasoning: m.Reasoning,
-				Effort:    m.Effort,
-				LoRA:      m.LoRA,
-				ParamSize: m.ParamSize,
-				Weight:    m.Weight,
-				Pos:       m.Pos,
-			})
-		}
-		if r.Algorithm != nil {
-			rj.Algorithm = &AlgoSpecJSON{
-				AlgoType: r.Algorithm.AlgoType,
-				Fields:   marshalObjectFields(r.Algorithm.Fields),
-				Pos:      r.Algorithm.Pos,
-			}
-		}
-		for _, p := range r.Plugins {
-			pj := &PluginRefJSON{
-				Name: p.Name,
-				Pos:  p.Pos,
-			}
-			if len(p.Fields) > 0 {
-				fields := marshalObjectFields(p.Fields)
-				pj.Fields = &fields
-			}
-			rj.Plugins = append(rj.Plugins, pj)
-		}
-		result.Routes = append(result.Routes, rj)
+		result.Routes = append(result.Routes, routeDeclToJSON(r))
 	}
 
 	for _, m := range prog.Models {
@@ -203,7 +203,66 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 		})
 	}
 
+	for _, tb := range prog.TestBlocks {
+		tbj := &TestBlockDeclJSON{
+			Name:    tb.Name,
+			Entries: make([]*TestEntryDeclJSON, 0, len(tb.Entries)),
+			Pos:     tb.Pos,
+		}
+		for _, e := range tb.Entries {
+			tbj.Entries = append(tbj.Entries, &TestEntryDeclJSON{
+				Query:     e.Query,
+				RouteName: e.RouteName,
+				Pos:       e.Pos,
+			})
+		}
+		result.TestBlocks = append(result.TestBlocks, tbj)
+	}
+
 	return result
+}
+
+func routeDeclToJSON(r *RouteDecl) *RouteDeclJSON {
+	rj := &RouteDeclJSON{
+		Name:        r.Name,
+		Description: r.Description,
+		Priority:    r.Priority,
+		Tier:        r.Tier,
+		When:        marshalBoolExpr(r.When),
+		Models:      make([]*ModelRefJSON, 0, len(r.Models)),
+		Plugins:     make([]*PluginRefJSON, 0, len(r.Plugins)),
+		Pos:         r.Pos,
+	}
+	for _, m := range r.Models {
+		rj.Models = append(rj.Models, &ModelRefJSON{
+			Model:     m.Model,
+			Reasoning: m.Reasoning,
+			Effort:    m.Effort,
+			LoRA:      m.LoRA,
+			ParamSize: m.ParamSize,
+			Weight:    m.Weight,
+			Pos:       m.Pos,
+		})
+	}
+	if r.Algorithm != nil {
+		rj.Algorithm = &AlgoSpecJSON{
+			AlgoType: r.Algorithm.AlgoType,
+			Fields:   marshalObjectFields(r.Algorithm.Fields),
+			Pos:      r.Algorithm.Pos,
+		}
+	}
+	for _, p := range r.Plugins {
+		pj := &PluginRefJSON{
+			Name: p.Name,
+			Pos:  p.Pos,
+		}
+		if len(p.Fields) > 0 {
+			fields := marshalObjectFields(p.Fields)
+			pj.Fields = &fields
+		}
+		rj.Plugins = append(rj.Plugins, pj)
+	}
+	return rj
 }
 
 // MarshalProgramJSON marshals a Program to JSON bytes.

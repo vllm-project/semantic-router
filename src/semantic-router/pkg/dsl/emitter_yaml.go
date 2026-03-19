@@ -65,6 +65,7 @@ func denormalizeSignals(raw map[string]interface{}) {
 		"role_bindings":       "authz",
 		"jailbreak":           "jailbreak",
 		"pii":                 "pii",
+		"signal_groups":       "signal_groups",
 	}
 
 	signals := make(map[string]interface{})
