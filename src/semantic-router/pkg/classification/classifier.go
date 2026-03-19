@@ -72,6 +72,24 @@ func createMmBERT32KCategoryInitializer() CategoryInitializer {
 	return &MmBERT32KCategoryInitializerImpl{}
 }
 
+// ModernBERTCategoryInitializerImpl explicitly initializes ModernBERT for category
+// classification, bypassing the CandleBERT auto-detection path.
+type ModernBERTCategoryInitializerImpl struct{}
+
+func (c *ModernBERTCategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
+	logging.Infof("Initializing ModernBERT category classifier (explicit): %s", modelID)
+	err := candle_binding.InitModernBertClassifier(modelID, useCPU)
+	if err != nil {
+		return fmt.Errorf("failed to initialize ModernBERT category classifier: %w", err)
+	}
+	logging.Infof("Initialized ModernBERT category classifier")
+	return nil
+}
+
+func createModernBERTCategoryInitializer() CategoryInitializer {
+	return &ModernBERTCategoryInitializerImpl{}
+}
+
 type CategoryInference interface {
 	Classify(text string) (candle_binding.ClassResult, error)
 	ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error)
@@ -122,6 +140,22 @@ func (c *MmBERT32KCategoryInferenceImpl) ClassifyWithProbabilities(text string) 
 // createMmBERT32KCategoryInference creates mmBERT-32K category inference
 func createMmBERT32KCategoryInference() CategoryInference {
 	return &MmBERT32KCategoryInferenceImpl{}
+}
+
+// ModernBERTCategoryInferenceImpl delegates classification to ModernBERT FFI directly,
+// without the CandleBERT-first fallback used by the auto-detect path.
+type ModernBERTCategoryInferenceImpl struct{}
+
+func (c *ModernBERTCategoryInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
+	return candle_binding.ClassifyModernBertText(text)
+}
+
+func (c *ModernBERTCategoryInferenceImpl) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
+	return candle_binding.ClassifyModernBertTextWithProbabilities(text)
+}
+
+func createModernBERTCategoryInference() CategoryInference {
+	return &ModernBERTCategoryInferenceImpl{}
 }
 
 type JailbreakInitializer interface {
@@ -749,6 +783,10 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 			logging.Infof("Using mmBERT-32K for intent/category classification (32K context, YaRN RoPE)")
 			categoryInitializer = createMmBERT32KCategoryInitializer()
 			categoryInference = createMmBERT32KCategoryInference()
+		} else if cfg.UseModernBERT {
+			logging.Infof("Using ModernBERT for category classification (with probability distribution support)")
+			categoryInitializer = createModernBERTCategoryInitializer()
+			categoryInference = createModernBERTCategoryInference()
 		} else {
 			categoryInitializer = createCategoryInitializer()
 			categoryInference = createCategoryInference()
