@@ -108,6 +108,7 @@ const BuilderPage: React.FC = () => {
   const importTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const autoLoadedDefaultConfigRef = useRef(false);
+  const autoLoadingDefaultConfigRef = useRef(false);
 
   // Initialize WASM on mount
   useEffect(() => {
@@ -342,8 +343,17 @@ const BuilderPage: React.FC = () => {
 
   // On first entry, load current router config and compile it by default.
   useEffect(() => {
-    if (!wasmReady || autoLoadedDefaultConfigRef.current) return;
-    autoLoadedDefaultConfigRef.current = true;
+    if (
+      !wasmReady ||
+      readonlyLoading ||
+      dslSource.trim() ||
+      autoLoadedDefaultConfigRef.current ||
+      autoLoadingDefaultConfigRef.current
+    ) {
+      return;
+    }
+
+    autoLoadingDefaultConfigRef.current = true;
     let cancelled = false;
     const loadDefaultConfig = async () => {
       setLoadingFromRouter(true);
@@ -352,6 +362,7 @@ const BuilderPage: React.FC = () => {
         await loadFromRouter();
         if (!cancelled) {
           compile();
+          autoLoadedDefaultConfigRef.current = true;
         }
       } catch (err) {
         console.error(
@@ -359,6 +370,7 @@ const BuilderPage: React.FC = () => {
           err,
         );
       } finally {
+        autoLoadingDefaultConfigRef.current = false;
         if (!cancelled) {
           setLoadingFromRouter(false);
         }
@@ -368,7 +380,7 @@ const BuilderPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [wasmReady, loadFromRouter, compile]);
+  }, [wasmReady, readonlyLoading, dslSource, loadFromRouter, compile]);
 
   // Diagnostic counts
   const errorCount = diagnostics.filter((d) => d.level === "error").length;

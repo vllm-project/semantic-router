@@ -50,6 +50,14 @@ See [environments.md](environments.md) for the concrete commands.
   - `memory-integration` via `make memory-test-integration`
 - Manual-only Go profiles are valid durable suites, but they must be named in `manual_profile_rules` instead of existing as undocumented runner-only paths.
 
+## Acceptance Versus Reporting
+
+- Acceptance tests must encode a meaningful failure condition for the behavior they claim to protect.
+- `0%`-only accuracy checks, "at least one request succeeded", or purely report-only success-rate summaries do not satisfy the repository's acceptance bar for routing, classification, plugin, fallback, or API behavior.
+- If a testcase is primarily benchmarking, soak, or observability-oriented, keep it explicitly named as reporting coverage unless it also declares an executable threshold.
+- When a threshold is probabilistic, document a conservative floor and keep the rationale close to the testcase or shared helper constant.
+- Prefer shared helpers that collect metrics and separate helpers that evaluate acceptance, so future testcases do not silently inherit report-only semantics.
+
 ## Source of Truth
 
 - Gate selection and commands: [../../tools/agent/task-matrix.yaml](../../tools/agent/task-matrix.yaml)
@@ -58,3 +66,4 @@ See [environments.md](environments.md) for the concrete commands.
 - E2E taxonomy and suite selection guidance: [playbooks/e2e-selection.md](playbooks/e2e-selection.md)
 - Executable entrypoints: [../../tools/make/agent.mk](../../tools/make/agent.mk)
 - Done criteria: [feature-complete-checklist.md](feature-complete-checklist.md)
+- Local testcase rules: [../../e2e/testcases/AGENTS.md](../../e2e/testcases/AGENTS.md)

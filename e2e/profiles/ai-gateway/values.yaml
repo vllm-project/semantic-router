@@ -103,12 +103,7 @@ config:
           - type: semantic-cache
             configuration:
               enabled: true
-              similarity_threshold: 0.92
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice.
-              mode: replace
+              similarity_threshold: 0.8
       - name: biology_decision
         description: Biology and life sciences questions
         priority: 10
@@ -179,12 +174,7 @@ config:
           - type: semantic-cache
             configuration:
               enabled: true
-              similarity_threshold: 0.95
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies.
-              mode: replace
+              similarity_threshold: 0.8
       - name: economics_decision
         description: Economics and financial topics
         priority: 10
@@ -363,12 +353,7 @@ config:
           - type: semantic-cache
             configuration:
               enabled: true
-              similarity_threshold: 0.95
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-              mode: replace
+              similarity_threshold: 0.75
     signals:
       keywords:
         - name: thinking
@@ -502,7 +487,7 @@ config:
       semantic_cache:
         enabled: true
         backend_type: memory
-        similarity_threshold: 0.95
+        similarity_threshold: 0.8
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo

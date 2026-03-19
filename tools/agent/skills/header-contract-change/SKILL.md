@@ -20,6 +20,11 @@ description: Adds, renames, removes, or changes the meaning of `x-vsr-*` HTTP he
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate alignment
 5. Verify header constants, emission, and UI allowlists remain aligned with relevant test coverage
 
+## Gotchas
+
+- Header rename or removal is a downstream contract change; update display allowlists, docs, and tests in the same change.
+- Avoid exposing unstable internal metadata as a user-visible header just because it is easy to emit.
+
 ## Must Read
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)

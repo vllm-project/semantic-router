@@ -19,6 +19,11 @@ description: Modifies boolean decision predicates, thresholds, gates, and priori
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate all constraints
 5. Verify boolean decision behavior is covered by targeted tests and affected E2E profiles
 
+## Gotchas
+
+- Do not smuggle signal-extraction changes into the decision layer unless the routing contract itself is changing.
+- Threshold and priority tweaks are behavior changes, not refactors; they still need explicit tests and affected E2E coverage.
+
 ## Must Read
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)

@@ -43,6 +43,11 @@ surfaces:
   plugin_runtime:
     - path: docs/agent/playbooks/go-router.md
       reason: Router playbook for plugin runtime changes.
+  router_service_platform:
+    - path: docs/agent/playbooks/go-router.md
+      reason: Router playbook for service-layer API, storage, provider, and runtime support changes.
+    - path: docs/agent/module-boundaries.md
+      reason: Router service-layer boundaries and hotspot guidance.
   native_binding:
     - path: docs/agent/playbooks/rust-bindings.md
       reason: Native binding workflow and validation expectations.
@@ -75,7 +80,15 @@ surfaces:
   k8s_operator:
     - path: docs/agent/module-boundaries.md
       reason: Operator control-plane seams and affected subsystem boundaries.
-  training_post_training:
+  deployment_profile_stack:
+    - path: docs/agent/playbooks/e2e-selection.md
+      reason: Deployment profiles are validated through the affected E2E profile map and execution policy.
+  fleet_sim_runtime:
+    - path: src/fleet-sim/AGENTS.md
+      reason: Fleet simulator local rules and maintained package boundaries.
+    - path: docs/agent/repo-map.md
+      reason: Fleet simulator subsystem entrypoints and ownership.
+  training_stack:
     - path: docs/agent/repo-map.md
       reason: Training subsystem entrypoints and ownership.
   docs_examples:

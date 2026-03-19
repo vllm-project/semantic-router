@@ -72,6 +72,19 @@ Keep the numeric index unique within `docs/agent/tech-debt/`.
 - [TD015 Weak Typing Still Leaks Through Dashboard Editor Models and DSL Serialization Helpers](td-015-weakly-typed-config-and-dsl-contracts.md)
 - [TD016 Fleet Sim Subtree Still Diverges from the Shared Ruff Contract](td-016-fleet-sim-shared-ruff-contract-gap.md)
 - [TD017 Fleet Sim Migration Still Depends on Relaxed Structure Gates](td-017-fleet-sim-structure-gate-migration-gap.md)
+- [TD018 Skill Surface Taxonomy Has Drifted Away from Active Module Boundaries](td-018-skill-surface-coverage-drift.md)
+- [TD019 Behavior Contract E2E Tests Still Encode Report-Only Thresholds](td-019-e2e-behavior-contract-thresholds.md)
+- [TD020 Classification Subsystem Boundaries Have Collapsed Into Hotspot Orchestrators](td-020-classification-subsystem-boundary-collapse.md)
+- [TD021 Milvus Lifecycle Logic Is Duplicated Across Runtime Stores](td-021-milvus-adapter-duplication-across-runtime-stores.md)
+- [TD022 CLI Config Contract Knowledge Is Collapsed Across Schema, Migration, and Validation Hotspots](td-022-cli-config-contract-boundary-collapse.md)
+- [TD023 Extproc Request Pipeline Phases Have Collapsed Across Request Filters](td-023-extproc-request-pipeline-phase-collapse.md)
+- [TD024 OpenClaw Feature Slice Still Collapses Page, Transport, and Proxy Control Boundaries](td-024-openclaw-feature-slice-boundary-collapse.md)
+- [TD025 Dashboard Backend Runtime-Control Slice Still Collapses Handler Transport, Config Persistence, and Status Collection](td-025-dashboard-backend-runtime-control-slice-collapse.md)
+- [TD026 Go Router Config Contract Knowledge Still Collapses Across Schema Families, Canonical Conversion, and Validation Hotspots](td-026-go-config-contract-boundary-collapse.md)
+- [TD027 Fleet Sim Optimizer and Public Surface Boundaries Still Collapse Analytical Sizing, DES Verification, and Export Policy](td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
+- [TD028 Operator Config Contract Still Collapses Across CRD Schema, Webhook Validation, Canonical Translation, and Sample Fixtures](td-028-operator-config-contract-boundary-collapse.md)
+- [TD029 Extproc Response Pipeline Phases Still Collapse Normalization, Streaming, Replay, and Response-Side Warnings](td-029-extproc-response-pipeline-phase-collapse.md)
+- [TD030 Dashboard Frontend Config and Interaction Surfaces Still Collapse Route Shell, Page Orchestration, and Large UI Containers](td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
 
 ## Retired Debt Entries
 

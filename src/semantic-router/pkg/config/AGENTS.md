@@ -9,6 +9,9 @@
 
 - Keep `config.go` focused on the central schema table and shared config contracts.
 - Treat adjacent files as the place for plugin contracts, validators, and load/registry helpers.
+- Keep canonical import/export and normalization in `canonical_*.go` instead of drifting that logic back into `config.go`.
+- Keep plugin-family-specific contracts and backend decoders in dedicated files; do not let one plugin hotspot become a second schema table.
+- Keep semantic validation split by family; `validator.go` can coordinate shared checks, but broad type-specific logic should move to focused support files.
 - Treat canonical `version/listeners/providers/routing/global` parsing as the only steady-state runtime contract.
 - Keep migration-only compatibility out of the runtime parser; legacy user layouts belong in explicit migration tooling, not in normal config loading.
 - Keep canonical `providers` split readable:
@@ -31,6 +34,7 @@
 ## Change Rules
 
 - Do not add new plugin structs, helper decoders, or utility walkers back into `config.go` if they can live in an adjacent file.
+- Do not move canonical import/export or normalization helpers back into `config.go`; extend `canonical_*.go` or add focused support files instead.
 - Do not collapse signal, decision, algorithm, plugin, and global config into one catch-all struct when separate contracts or support files can keep ownership clear.
 - If you change supported signals, decision algorithms, or decision plugins, update the router-owned surface catalog and the repo-owned `config/` fragment tree in the same change.
 - Config-contract changes must update the relevant public docs and proposal in the same change:
@@ -44,6 +48,8 @@
   - plugin contracts/helpers in dedicated `*_plugin.go` or support files
   - validation in `validator.go`
   - load/registry behavior in `loader.go` and `registry.go`
+- `validator.go` is a ratcheted hotspot. Keep the package entrypoint there, but move modality/image-gen/RAG/provider or other family-specific checks into sibling validator files when extending them.
+- `rag_plugin.go` is a plugin-family hotspot. New backend-specific payload types, decode helpers, or validation branches should move into sibling support files before that file grows further.
 - Keep fragment-catalog enforcement tests adjacent to the config package so drift is caught by `go test ./pkg/config/...`.
 - Keep exhaustive `config/config.yaml` reference-config enforcement adjacent to the config package too, and wire it into harness lint so public-schema drift is blocked before merge.
 - Keep maintained `deploy/` and `e2e/` router config assets under the same guard as the canonical contract so repo-owned examples and harness profiles do not regress to legacy steady-state fields.

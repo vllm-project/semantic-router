@@ -5,6 +5,12 @@ from pathlib import Path
 from typing import Dict, Any
 from pydantic import ValidationError
 
+from cli.config_contract import (
+    LEGACY_PROVIDER_DEFAULT_KEYS,
+    LEGACY_PROVIDER_MODEL_SURFACE_KEYS,
+    LEGACY_SIGNAL_KEY_TO_CANONICAL,
+    iter_named_signal_entries,
+)
 from cli.models import UserConfig
 from cli.utils import get_logger
 
@@ -20,7 +26,7 @@ class ConfigParseError(Exception):
 def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
     fields: list[str] = []
 
-    for field_name in ("signals", "decisions"):
+    for field_name in ("signals", "decisions", *LEGACY_SIGNAL_KEY_TO_CANONICAL):
         if field_name in data:
             fields.append(field_name)
 
@@ -34,9 +40,7 @@ def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
             "model_targets",
             "backends",
             "auth_profiles",
-            "default_model",
-            "reasoning_families",
-            "default_reasoning_effort",
+            *LEGACY_PROVIDER_DEFAULT_KEYS,
         ):
             if field_name in providers:
                 fields.append(f"providers.{field_name}")
@@ -48,18 +52,7 @@ def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
                     continue
                 if "access" in model:
                     fields.append(f"providers.models[{index}].access")
-                for field_name in (
-                    "endpoints",
-                    "access_key",
-                    "param_size",
-                    "context_window_size",
-                    "description",
-                    "capabilities",
-                    "loras",
-                    "quality_score",
-                    "modality",
-                    "tags",
-                ):
+                for field_name in LEGACY_PROVIDER_MODEL_SURFACE_KEYS:
                     if field_name in model:
                         fields.append(f"providers.models[{index}].{field_name}")
 
@@ -197,33 +190,13 @@ def validate_signal_uniqueness(config: UserConfig) -> list:
     if not config.signals:
         return errors
 
-    # Check keyword signals
-    for signal in config.signals.keywords:
-        if signal.name in seen:
+    for family, signal_name in iter_named_signal_entries(config.signals):
+        if signal_name in seen:
             errors.append(
-                f"Duplicate signal name '{signal.name}' in keywords "
-                f"(already defined in {seen[signal.name]})"
+                f"Duplicate signal name '{signal_name}' in {family} "
+                f"(already defined in {seen[signal_name]})"
             )
-        seen[signal.name] = "keywords"
-
-    # Check embedding signals
-    for signal in config.signals.embeddings:
-        if signal.name in seen:
-            errors.append(
-                f"Duplicate signal name '{signal.name}' in embeddings "
-                f"(already defined in {seen[signal.name]})"
-            )
-        seen[signal.name] = "embeddings"
-
-    # Check context signals
-    if config.signals.context_rules:
-        for signal in config.signals.context_rules:
-            if signal.name in seen:
-                errors.append(
-                    f"Duplicate signal name '{signal.name}' in context rules "
-                    f"(already defined in {seen[signal.name]})"
-                )
-            seen[signal.name] = "context_rules"
+        seen[signal_name] = family
 
     return errors
 

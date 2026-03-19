@@ -169,6 +169,7 @@ func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clien
 
 	opts := testcases.TestCaseOptions{
 		Verbose:       r.opts.Verbose,
+		Profile:       r.profile.Name(),
 		Namespace:     "default",
 		Timeout:       "5m",
 		RestConfig:    r.restConfig,

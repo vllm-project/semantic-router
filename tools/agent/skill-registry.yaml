@@ -38,6 +38,33 @@ surfaces:
       - src/semantic-router/pkg/extproc/processor_res_body_*.go
     task_rules:
       - router-core
+  router_service_platform:
+    description: Router-side service, API, storage, authz, memory, provider, and runtime support modules outside the config, decision, selection, and extproc plugin chains.
+    paths:
+      - src/semantic-router/pkg/anthropic/**
+      - src/semantic-router/pkg/apiserver/**
+      - src/semantic-router/pkg/authz/**
+      - src/semantic-router/pkg/cache/**
+      - src/semantic-router/pkg/hnsw/**
+      - src/semantic-router/pkg/imagegen/**
+      - src/semantic-router/pkg/latency/**
+      - src/semantic-router/pkg/mcp/**
+      - src/semantic-router/pkg/memory/**
+      - src/semantic-router/pkg/modeldownload/**
+      - src/semantic-router/pkg/modelinventory/**
+      - src/semantic-router/pkg/observability/**
+      - src/semantic-router/pkg/openai/**
+      - src/semantic-router/pkg/promptcompression/**
+      - src/semantic-router/pkg/ratelimit/**
+      - src/semantic-router/pkg/responseapi/**
+      - src/semantic-router/pkg/responsestore/**
+      - src/semantic-router/pkg/routerreplay/**
+      - src/semantic-router/pkg/services/**
+      - src/semantic-router/pkg/startupstatus/**
+      - src/semantic-router/pkg/tools/**
+      - src/semantic-router/pkg/vectorstore/**
+    task_rules:
+      - router-core
   native_binding:
     description: Rust/cgo/onnx/native model bindings used by signals, classifiers, or training artifact consumption.
     paths:
@@ -130,8 +157,35 @@ surfaces:
     task_rules:
       - operator-stack
       - e2e-framework
-  training_post_training:
-    description: Post-training, classifier fine-tuning, model-classifier data pipelines, and training artifacts that feed runtime behavior.
+  deployment_profile_stack:
+    description: Kubernetes deployment profiles, stack manifests, and profile-owned platform resources outside operator CRDs.
+    paths:
+      - deploy/kubernetes/ai-gateway/**
+      - deploy/kubernetes/aibrix/**
+      - deploy/kubernetes/dynamo/**
+      - deploy/kubernetes/istio/**
+      - deploy/kubernetes/llm-d/**
+      - deploy/kubernetes/llm-katan/**
+      - deploy/kubernetes/llmd-base/**
+      - deploy/kubernetes/observability/**
+      - deploy/kubernetes/response-api/**
+      - deploy/kubernetes/routing-strategies/**
+      - deploy/kubernetes/streaming/**
+    task_rules:
+      - e2e-framework
+  fleet_sim_runtime:
+    description: Fleet simulator package, API service, release workflow, and simulator-owned docs/assets that must stay runnable as one subsystem.
+    paths:
+      - src/fleet-sim/**
+      - website/docs/fleet-sim/**
+      - website/static/files/fleet-sim/**
+      - website/static/img/fleet-sim/**
+      - .github/workflows/pypi-publish-vllm-sr-sim.yml
+    task_rules:
+      - fleet-sim
+      - repo-docs
+  training_stack:
+    description: Training-stack workflows, selector or embedding artifacts, evaluation scripts, and runtime-facing training outputs under src/training.
     paths:
       - src/training/**
       - tools/make/models.mk
@@ -158,11 +212,18 @@ surfaces:
       - docs/agent/**
       - tools/agent/skills/**
       - src/fleet-sim/AGENTS.md
+      - src/fleet-sim/fleet_sim/optimizer/AGENTS.md
       - src/vllm-sr/cli/AGENTS.md
       - src/semantic-router/pkg/config/AGENTS.md
+      - src/semantic-router/pkg/classification/AGENTS.md
       - src/semantic-router/pkg/extproc/AGENTS.md
+      - deploy/operator/api/v1alpha1/AGENTS.md
+      - deploy/operator/controllers/AGENTS.md
+      - dashboard/frontend/src/AGENTS.md
       - dashboard/frontend/src/pages/AGENTS.md
       - dashboard/frontend/src/components/AGENTS.md
+      - dashboard/backend/handlers/AGENTS.md
+      - e2e/testcases/AGENTS.md
     task_rules:
       - agent_text
       - repo-docs
@@ -237,11 +298,18 @@ skills:
         - docs/agent/**
         - tools/agent/skills/**
         - src/fleet-sim/AGENTS.md
+        - src/fleet-sim/fleet_sim/optimizer/AGENTS.md
         - src/vllm-sr/cli/AGENTS.md
         - src/semantic-router/pkg/config/AGENTS.md
+        - src/semantic-router/pkg/classification/AGENTS.md
         - src/semantic-router/pkg/extproc/AGENTS.md
+        - deploy/operator/api/v1alpha1/AGENTS.md
+        - deploy/operator/controllers/AGENTS.md
+        - dashboard/frontend/src/AGENTS.md
         - dashboard/frontend/src/pages/AGENTS.md
         - dashboard/frontend/src/components/AGENTS.md
+        - dashboard/backend/handlers/AGENTS.md
+        - e2e/testcases/AGENTS.md
         - tools/agent/*.yaml
         - tools/agent/scripts/**
         - tools/make/agent.mk
@@ -579,6 +647,76 @@ skills:
       acceptance_criteria:
         - Console backend changes remain aligned with frontend callers and local smoke expectations.
         - Any new auth, storage, or session behavior is documented in the canonical harness or debt register.
+    - name: router-service-platform-change
+      path: tools/agent/skills/router-service-platform-change/SKILL.md
+      description: Change router-side API, authz, memory, storage, provider, or runtime service modules that live outside config, decision, selection, and extproc plugin chains.
+      priority: 91
+      selector_paths:
+        - src/semantic-router/pkg/anthropic/**
+        - src/semantic-router/pkg/apiserver/**
+        - src/semantic-router/pkg/authz/**
+        - src/semantic-router/pkg/cache/**
+        - src/semantic-router/pkg/hnsw/**
+        - src/semantic-router/pkg/imagegen/**
+        - src/semantic-router/pkg/latency/**
+        - src/semantic-router/pkg/mcp/**
+        - src/semantic-router/pkg/memory/**
+        - src/semantic-router/pkg/modeldownload/**
+        - src/semantic-router/pkg/modelinventory/**
+        - src/semantic-router/pkg/observability/**
+        - src/semantic-router/pkg/openai/**
+        - src/semantic-router/pkg/promptcompression/**
+        - src/semantic-router/pkg/ratelimit/**
+        - src/semantic-router/pkg/responseapi/**
+        - src/semantic-router/pkg/responsestore/**
+        - src/semantic-router/pkg/routerreplay/**
+        - src/semantic-router/pkg/services/**
+        - src/semantic-router/pkg/startupstatus/**
+        - src/semantic-router/pkg/tools/**
+        - src/semantic-router/pkg/vectorstore/**
+      fragments:
+        - router-service-platform
+        - e2e-selection
+        - architecture-guardrails
+      required_surfaces:
+        - router_service_platform
+      conditional_surfaces:
+        - response_headers
+        - docs_examples
+        - local_smoke
+        - local_e2e
+        - ci_e2e
+      optional_surfaces: []
+      stop_conditions:
+        - The service or API change depends on runtime policy that is not encoded in code, tests, or profile coverage.
+      acceptance_criteria:
+        - Router-side service modules, storage or API seams, and affected validation paths stay aligned.
+        - Changes that hit profile-owned behavior update the relevant local or CI E2E expectation.
+    - name: fleet-sim-change
+      path: tools/agent/skills/fleet-sim-change/SKILL.md
+      description: Change the fleet simulator package, API service, release wiring, or simulator-owned docs and assets as one maintained subsystem.
+      priority: 90
+      selector_paths:
+        - src/fleet-sim/**
+        - website/docs/fleet-sim/**
+        - website/static/files/fleet-sim/**
+        - website/static/img/fleet-sim/**
+        - .github/workflows/pypi-publish-vllm-sr-sim.yml
+      fragments:
+        - fleet-sim-runtime
+        - architecture-guardrails
+      required_surfaces:
+        - fleet_sim_runtime
+      conditional_surfaces:
+        - docs_examples
+        - local_smoke
+        - contributor_interface
+      optional_surfaces: []
+      stop_conditions:
+        - The simulator change would break the maintained CLI or API surface without a validated replacement path.
+      acceptance_criteria:
+        - Simulator package, API entrypoints, and subsystem-owned docs or assets stay aligned.
+        - Any simulator release or runtime contract change updates the maintained workflow and validation path.
     - name: k8s-operator-change
       path: tools/agent/skills/k8s-operator-change/SKILL.md
       description: Change operator APIs, CRDs, or Kubernetes control-plane behavior for semantic-router deployments.
@@ -606,9 +744,42 @@ skills:
       acceptance_criteria:
         - Operator APIs, CRDs, and router-facing translation stay aligned.
         - Relevant Kubernetes-facing validation is updated when behavior changes.
-    - name: classifier-post-training
-      path: tools/agent/skills/classifier-post-training/SKILL.md
-      description: Change model-classifier fine-tuning, post-training data flows, or training artifacts that feed runtime behavior.
+    - name: deployment-profile-change
+      path: tools/agent/skills/deployment-profile-change/SKILL.md
+      description: Change non-operator Kubernetes deployment manifests, profile-owned stack resources, or profile-specific platform wiring.
+      priority: 89
+      selector_paths:
+        - deploy/kubernetes/ai-gateway/**
+        - deploy/kubernetes/aibrix/**
+        - deploy/kubernetes/dynamo/**
+        - deploy/kubernetes/istio/**
+        - deploy/kubernetes/llm-d/**
+        - deploy/kubernetes/llm-katan/**
+        - deploy/kubernetes/llmd-base/**
+        - deploy/kubernetes/observability/**
+        - deploy/kubernetes/response-api/**
+        - deploy/kubernetes/routing-strategies/**
+        - deploy/kubernetes/streaming/**
+      fragments:
+        - deployment-profile-stack
+        - e2e-selection
+        - architecture-guardrails
+      required_surfaces:
+        - deployment_profile_stack
+      conditional_surfaces:
+        - docs_examples
+        - local_smoke
+        - local_e2e
+        - ci_e2e
+      optional_surfaces: []
+      stop_conditions:
+        - The deployment change depends on cluster policy or runtime behavior that is not represented by the current manifests or profile coverage.
+      acceptance_criteria:
+        - Deployment manifests, profile-owned resources, and affected E2E expectations stay aligned.
+        - Operator-only CRD behavior remains separated from stack-manifest changes.
+    - name: training-stack-change
+      path: tools/agent/skills/training-stack-change/SKILL.md
+      description: Change training-stack workflows, selector or embedding pipelines, evaluation artifacts, or runtime-facing outputs under src/training.
       priority: 88
       selector_paths:
         - src/training/**
@@ -616,11 +787,11 @@ skills:
         - scripts/train-mmbert32k-gpu.sh
         - website/docs/training/**
       fragments:
-        - training-model-classifier
+        - training-stack-runtime
         - binding-ffi
         - architecture-guardrails
       required_surfaces:
-        - training_post_training
+        - training_stack
       conditional_surfaces:
         - native_binding
         - docs_examples
@@ -642,6 +813,7 @@ skills:
         - decision-logic
         - algorithm-selection
         - plugin-runtime
+        - router-service-platform
         - python-cli-schema
         - python-cli-runtime
         - dashboard-config-ui
@@ -650,7 +822,9 @@ skills:
         - playground-reveal
         - dsl-crd
         - k8s-operator
-        - training-model-classifier
+        - deployment-profile-stack
+        - fleet-sim-runtime
+        - training-stack-runtime
         - e2e-selection
         - architecture-guardrails
       required_surfaces:
@@ -662,6 +836,7 @@ skills:
         - decision_logic
         - algorithm_selection
         - plugin_runtime
+        - router_service_platform
         - native_binding
         - response_headers
         - python_cli_schema
@@ -672,7 +847,9 @@ skills:
         - playground_reveal
         - dsl_crd
         - k8s_operator
-        - training_post_training
+        - deployment_profile_stack
+        - fleet_sim_runtime
+        - training_stack
         - docs_examples
         - local_smoke
       optional_surfaces:
@@ -730,6 +907,15 @@ skills:
         - Plugin behavior needs a contract change outside runtime processing that is not yet defined.
       acceptance_criteria:
         - Plugin runtime behavior, config hooks, and tests stay aligned.
+    - name: router-service-platform
+      path: tools/agent/skills/router-service-platform/SKILL.md
+      description: Router-side API, authz, memory, provider, storage, and service-support modules outside config, decision, selection, and extproc plugin chains.
+      owned_surfaces:
+        - router_service_platform
+      stop_conditions:
+        - The service-layer behavior depends on runtime policy or external contracts that are not encoded in the repo.
+      acceptance_criteria:
+        - Router-side service modules and their validation paths agree on the same contract.
     - name: binding-ffi
       path: tools/agent/skills/binding-ffi/SKILL.md
       description: Native binding and FFI layers for runtime signals, classifiers, or training artifacts.
@@ -811,11 +997,29 @@ skills:
         - Kubernetes control-plane behavior depends on cluster policy or runtime behavior that is not encoded in the repo.
       acceptance_criteria:
         - Operator APIs, CRDs, and controller-facing config agree on the same contract.
-    - name: training-model-classifier
-      path: tools/agent/skills/training-model-classifier/SKILL.md
-      description: Model-classifier fine-tuning, training scripts, and runtime-facing artifact expectations.
+    - name: deployment-profile-stack
+      path: tools/agent/skills/deployment-profile-stack/SKILL.md
+      description: Non-operator Kubernetes deployment manifests, profile-owned stack resources, and profile-specific platform wiring.
       owned_surfaces:
-        - training_post_training
+        - deployment_profile_stack
+      stop_conditions:
+        - The deployment profile behavior depends on cluster policy or runtime contracts that are not encoded in the current manifests.
+      acceptance_criteria:
+        - Deployment manifests and the profile-owned validation path stay aligned.
+    - name: fleet-sim-runtime
+      path: tools/agent/skills/fleet-sim-runtime/SKILL.md
+      description: Fleet simulator package, API surface, release workflow, and subsystem-owned docs or assets.
+      owned_surfaces:
+        - fleet_sim_runtime
+      stop_conditions:
+        - The simulator behavior depends on package or release policy that is not encoded in the current subtree.
+      acceptance_criteria:
+        - Simulator package, API entrypoints, and owned docs or assets stay aligned.
+    - name: training-stack-runtime
+      path: tools/agent/skills/training-stack-runtime/SKILL.md
+      description: Training-stack workflows, selector or embedding pipelines, evaluation scripts, and runtime-facing artifact expectations.
+      owned_surfaces:
+        - training_stack
       stop_conditions:
         - Training behavior depends on datasets or artifact policies that are not described in the repo or current task.
       acceptance_criteria:
@@ -857,10 +1061,14 @@ skills:
         - decision_logic
         - algorithm_selection
         - plugin_runtime
+        - router_service_platform
         - python_cli_schema
         - python_cli_runtime
         - dashboard_config_ui
         - dashboard_console_backend
+        - deployment_profile_stack
+        - fleet_sim_runtime
+        - training_stack
       stop_conditions:
         - The proposed edit requires an exception to the current structure rules.
       acceptance_criteria:

@@ -1,6 +1,7 @@
 # Skill Catalog
 
 This document is the human-readable index for the repository's skill system.
+Skills stay intentionally concise. Keep deep reference material in the linked playbooks and docs instead of copying it into each skill, and use `## Gotchas` in primary or support skills to capture repeated failure modes that need to stay visible at trigger time.
 
 ## Primary Skills
 
@@ -14,8 +15,11 @@ This document is the human-readable index for the repository's skill system.
 - `startup-chain-change`
 - `dashboard-surface-change`
 - `dashboard-console-platform-change`
+- `router-service-platform-change`
+- `fleet-sim-change`
 - `k8s-operator-change`
-- `classifier-post-training`
+- `deployment-profile-change`
+- `training-stack-change`
 - `cross-stack-bugfix`
 
 ## Fragment Skills
@@ -25,6 +29,7 @@ This document is the human-readable index for the repository's skill system.
 - `decision-logic`
 - `algorithm-selection`
 - `plugin-runtime`
+- `router-service-platform`
 - `binding-ffi`
 - `python-cli-schema`
 - `python-cli-runtime`
@@ -34,7 +39,9 @@ This document is the human-readable index for the repository's skill system.
 - `playground-reveal`
 - `dsl-crd`
 - `k8s-operator`
-- `training-model-classifier`
+- `deployment-profile-stack`
+- `fleet-sim-runtime`
+- `training-stack-runtime`
 - `e2e-selection`
 - `local-dev-cpu`
 - `local-dev-amd`
