@@ -59,6 +59,8 @@ type Classifier struct {
 	// Used by EvaluateAllSignalsWithHeaders to read user identity from requests.
 	authzUserIDHeader     string
 	authzUserGroupsHeader string
+	// authzFailOpen: cfg.Authz.FailOpen; see applyAuthzFailOpenOnClassifyError.
+	authzFailOpen bool
 
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
@@ -171,6 +173,7 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	// Resolve identity header names from authz.identity config (or defaults).
 	classifier.authzUserIDHeader = cfg.Authz.Identity.GetUserIDHeader()
 	classifier.authzUserGroupsHeader = cfg.Authz.Identity.GetUserGroupsHeader()
+	classifier.authzFailOpen = cfg.Authz.FailOpen
 
 	for _, option := range options {
 		option(classifier)

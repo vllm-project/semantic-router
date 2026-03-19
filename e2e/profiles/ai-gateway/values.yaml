@@ -505,7 +505,6 @@ config:
         similarity_threshold: 0.2
         tools_db_path: config/tools_db.json
         fallback_to_empty: true
-<<<<<<< HEAD
 resources:
   limits:
     cpu: "2"
@@ -513,9 +512,7 @@ resources:
   requests:
     cpu: "1"
     memory: "5Gi"
-=======
 
 # E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:
   enabled: false
->>>>>>> 0354c921 (fix(authz-rbac): add JWT validation security fix for Issue #1447)
