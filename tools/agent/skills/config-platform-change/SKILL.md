@@ -20,6 +20,11 @@ description: Synchronizes config representations across router config, Python CL
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate constraints
 5. Record any intentional remaining mismatches as indexed debt entries
 
+## Gotchas
+
+- Do not update the router config contract without also checking CLI, dashboard, DSL, and Kubernetes translation layers in the same change.
+- If defaults, field names, or compatibility policy change, make the migration posture explicit or record the intentional gap as indexed debt.
+
 ## Must Read
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
