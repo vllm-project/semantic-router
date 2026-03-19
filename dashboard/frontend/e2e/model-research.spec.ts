@@ -153,22 +153,22 @@ const recipesResponse = {
     },
     {
       key: 'domain',
-      label: 'Explore domain signal classifier',
+      label: 'Explore a new signal classifier',
       goal_templates: ['explore_signal'],
       default_dataset: 'mmlu-prox-en',
-      dataset_hint: 'Signal eval dataset id from signal_eval.py.',
+      dataset_hint: 'Provide a signal hypothesis, then optionally override the evaluation dataset id from signal_eval.py, for example mmlu-prox-zh or mmlu-pro-en.',
       default_success_threshold_pp: 0.5,
       primary_metric: 'accuracy',
       supports_dataset_override: true,
       supports_hyperparameter_hints: true,
       baseline: {
-        label: 'Explore domain signal classifier',
+        label: 'Explore a new signal classifier',
         source: 'runtime',
         runtime_name: 'category_classifier',
         model_path: 'models/mmbert32k-intent-classifier-merged',
         model_id: 'models/mmbert32k-intent-classifier-merged',
         request_model: 'MoM',
-        description: 'Current MoM domain classifier baseline.',
+        description: 'Current MoM signal-classifier baseline.',
       },
     },
   ],
@@ -187,6 +187,7 @@ function buildCampaign(overrides: {
     status: 'completed',
     goal_template: 'improve_accuracy',
     target: 'feedback',
+    signal_hypothesis: '',
     platform: 'amd',
     primary_metric: 'accuracy',
     success_threshold_pp: 0.5,
@@ -385,6 +386,7 @@ test.describe('Auto Research page', () => {
     await expect(page.getByText('Runtime key: feedback_detector')).toBeVisible();
     await expect(page.locator('select option[value="intent"]')).toHaveText('Improve intent classifier accuracy');
     await expect(page.locator('select option[value="pii"]')).toHaveText('Improve PII classifier accuracy');
+    await expect(page.getByText('Run bounded classifier research loops against the current router while keeping MoM as the default request model.')).toBeVisible();
 
     await expect(page.getByLabel('API base override')).toHaveCount(0);
     await expect(page.getByLabel('Request model override')).toHaveCount(0);

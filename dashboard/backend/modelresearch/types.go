@@ -49,6 +49,7 @@ type CreateCampaignRequest struct {
 	Name               string       `json:"name"`
 	GoalTemplate       GoalTemplate `json:"goal_template"`
 	Target             string       `json:"target"`
+	SignalHypothesis   string       `json:"signal_hypothesis,omitempty"`
 	Budget             Budget       `json:"budget"`
 	SuccessThresholdPP float64      `json:"success_threshold_pp"`
 	Overrides          Overrides    `json:"overrides,omitempty"`
@@ -110,6 +111,7 @@ type Campaign struct {
 	Status              CampaignStatus                     `json:"status"`
 	GoalTemplate        GoalTemplate                       `json:"goal_template"`
 	Target              string                             `json:"target"`
+	SignalHypothesis    string                             `json:"signal_hypothesis,omitempty"`
 	Platform            string                             `json:"platform"`
 	PrimaryMetric       string                             `json:"primary_metric"`
 	SuccessThresholdPP  float64                            `json:"success_threshold_pp"`

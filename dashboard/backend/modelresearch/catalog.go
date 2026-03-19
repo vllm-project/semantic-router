@@ -89,15 +89,15 @@ var recipeCatalog = map[string]recipeDefinition{
 	},
 	"domain": {
 		Key:                       "domain",
-		Label:                     "Explore domain signal classifier",
+		Label:                     "Explore a new signal classifier",
 		GoalTemplates:             []GoalTemplate{GoalExploreSignal},
 		DefaultDataset:            "mmlu-prox-en",
-		DatasetHint:               "Signal eval dataset id from signal_eval.py, for example mmlu-prox-zh or mmlu-pro-en.",
+		DatasetHint:               "Provide a signal hypothesis, then optionally override the evaluation dataset id from signal_eval.py, for example mmlu-prox-zh or mmlu-pro-en.",
 		DefaultSuccessThresholdPP: 0.5,
 		PrimaryMetric:             "accuracy",
 		RuntimeNames:              []string{"category_classifier"},
 		FallbackModelID:           "llm-semantic-router/mmbert-intent-classifier-merged",
-		FallbackDescription:       "Current MoM domain classifier baseline.",
+		FallbackDescription:       "Current MoM signal-classifier baseline.",
 		SupportsDatasetOverride:   true,
 	},
 }

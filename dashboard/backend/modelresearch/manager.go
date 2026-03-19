@@ -130,6 +130,9 @@ func (m *Manager) StartCampaign(req CreateCampaignRequest) (*Campaign, error) {
 	if err != nil {
 		return nil, err
 	}
+	if req.GoalTemplate == GoalExploreSignal && strings.TrimSpace(req.SignalHypothesis) == "" {
+		return nil, errors.New("signal_hypothesis is required for explore_signal campaigns")
+	}
 
 	if strings.TrimSpace(req.Name) == "" {
 		req.Name = strings.ReplaceAll(def.Label, " ", "-")
@@ -164,6 +167,7 @@ func (m *Manager) StartCampaign(req CreateCampaignRequest) (*Campaign, error) {
 		Status:              StatusPending,
 		GoalTemplate:        req.GoalTemplate,
 		Target:              req.Target,
+		SignalHypothesis:    strings.TrimSpace(req.SignalHypothesis),
 		Platform:            m.resolveCampaignPlatform(req.Overrides.AllowCPUDryRun),
 		PrimaryMetric:       def.PrimaryMetric,
 		SuccessThresholdPP:  req.SuccessThresholdPP,

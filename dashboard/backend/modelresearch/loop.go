@@ -21,238 +21,6 @@ type trialPlan struct {
 	UseLoRA bool
 }
 
-func (m *Manager) runCampaign(ctx context.Context, campaignID string, def recipeDefinition) {
-	campaign := m.GetCampaign(campaignID)
-	if campaign == nil {
-		return
-	}
-
-	m.updateCampaign(campaignID, func(current *Campaign) {
-		current.Status = StatusRunning
-	})
-	m.recordEvent(campaignID, CampaignEvent{
-		Timestamp: time.Now().UTC(),
-		Kind:      EventStatus,
-		Level:     "info",
-		Message:   "Research loop started",
-	})
-
-	device := "cpu"
-	if campaign.Platform == "amd" {
-		device = "cuda"
-	}
-
-	baselineEval, err := m.runOfflineEval(ctx, campaignID, def, campaign.Baseline.ModelID, false, campaign.Overrides.DatasetOverride, filepath.Join(campaign.ArtifactDir, "baseline", "offline"), device, 0)
-	if err != nil {
-		m.failCampaign(campaignID, StatusFailed, fmt.Sprintf("baseline evaluation failed: %v", err))
-		return
-	}
-	m.updateCampaign(campaignID, func(current *Campaign) {
-		current.BaselineEval = baselineEval
-	})
-	m.recordEvent(campaignID, CampaignEvent{
-		Timestamp: time.Now().UTC(),
-		Kind:      EventMetric,
-		Level:     "info",
-		Message:   fmt.Sprintf("Baseline %s accuracy %.2f%%", def.Key, baselineEval.Accuracy*100),
-		Percent:   10,
-	})
-
-	if runtimeDataset := runtimeDatasetForRecipe(def.Key, campaign.Overrides.DatasetOverride); runtimeDataset != "" && strings.TrimSpace(campaign.APIBase) != "" {
-		runtimeEval, runtimeErr := m.runSignalEval(ctx, campaignID, runtimeDataset, campaign.APIBase, filepath.Join(campaign.ArtifactDir, "baseline", "runtime"), 0)
-		if runtimeErr != nil {
-			m.recordEvent(campaignID, CampaignEvent{
-				Timestamp: time.Now().UTC(),
-				Kind:      EventLog,
-				Level:     "warn",
-				Message:   fmt.Sprintf("Runtime baseline skipped: %v", runtimeErr),
-				Percent:   15,
-			})
-		} else {
-			m.updateCampaign(campaignID, func(current *Campaign) {
-				current.RuntimeBaseline = runtimeEval
-			})
-		}
-	}
-
-	plans, err := buildTrialPlans(def, campaign.Budget.MaxTrials, campaign.Overrides.HyperparameterHints)
-	if err != nil {
-		m.failCampaign(campaignID, StatusFailed, err.Error())
-		return
-	}
-	if len(plans) == 0 {
-		m.failCampaign(campaignID, StatusFailed, "no trial plans generated")
-		return
-	}
-
-	successfulTrials := 0
-	bestAccuracy := -1.0
-	for idx, plan := range plans {
-		if err := ctx.Err(); err != nil {
-			m.stopCampaign(campaignID, "Campaign stopped before all trials completed")
-			return
-		}
-
-		trial := TrialResult{
-			Index:         idx + 1,
-			Name:          plan.Name,
-			Status:        StatusRunning,
-			StartedAt:     time.Now().UTC(),
-			Params:        cloneMap(plan.Params),
-			UseLoRA:       plan.UseLoRA,
-			PrimaryMetric: def.PrimaryMetric,
-		}
-		m.updateCampaign(campaignID, func(current *Campaign) {
-			current.Trials = append(current.Trials, trial)
-		})
-		m.recordEvent(campaignID, CampaignEvent{
-			Timestamp:  time.Now().UTC(),
-			Kind:       EventProgress,
-			Level:      "info",
-			Message:    fmt.Sprintf("Starting %s", plan.Name),
-			Percent:    20 + int(float64(idx)/float64(len(plans))*60),
-			TrialIndex: trial.Index,
-		})
-
-		trialDir := filepath.Join(campaign.ArtifactDir, "trials", plan.Name)
-		if err := os.MkdirAll(trialDir, 0o755); err != nil {
-			m.finishTrial(campaignID, idx, nil, "", nil, fmt.Errorf("create trial dir: %w", err))
-			continue
-		}
-
-		modelPath, artifacts, trainErr := m.runTraining(ctx, campaignID, def, campaign, plan, trialDir, device, trial.Index)
-		if trainErr != nil {
-			m.finishTrial(campaignID, idx, nil, "", nil, trainErr)
-			continue
-		}
-
-		evalResult, evalErr := m.runOfflineEval(ctx, campaignID, def, modelPath, plan.UseLoRA, campaign.Overrides.DatasetOverride, filepath.Join(trialDir, "eval"), device, trial.Index)
-		if evalErr != nil {
-			m.finishTrial(campaignID, idx, nil, modelPath, artifacts, evalErr)
-			continue
-		}
-
-		evalResult.ImprovementPP = (evalResult.Accuracy - baselineEval.Accuracy) * 100
-		successfulTrials++
-		m.finishTrial(campaignID, idx, evalResult, modelPath, artifacts, nil)
-
-		if evalResult.Accuracy > bestAccuracy {
-			bestAccuracy = evalResult.Accuracy
-			bestTrial := m.GetCampaign(campaignID).Trials[idx]
-			m.updateCampaign(campaignID, func(current *Campaign) {
-				current.BestTrial = &bestTrial
-			})
-			fragmentPath, fragmentErr := m.writeConfigFragment(campaignID, baselineEval, &bestTrial)
-			if fragmentErr == nil {
-				m.updateCampaign(campaignID, func(current *Campaign) {
-					current.ConfigFragmentPath = fragmentPath
-				})
-			}
-		}
-	}
-
-	if successfulTrials == 0 {
-		m.failCampaign(campaignID, StatusFailed, "all trials failed")
-		return
-	}
-
-	finalCampaign := m.GetCampaign(campaignID)
-	if finalCampaign == nil || finalCampaign.BestTrial == nil || finalCampaign.BestTrial.Eval == nil {
-		m.failCampaign(campaignID, StatusFailed, "no successful trial metrics available")
-		return
-	}
-
-	improvement := finalCampaign.BestTrial.Eval.ImprovementPP
-	if improvement < finalCampaign.SuccessThresholdPP {
-		m.completeCampaign(campaignID, fmt.Sprintf("Loop finished; best trial improved by %.2fpp, below threshold %.2fpp", improvement, finalCampaign.SuccessThresholdPP))
-		return
-	}
-	m.completeCampaign(campaignID, fmt.Sprintf("Loop finished; best trial improved by %.2fpp", improvement))
-}
-
-func (m *Manager) stopCampaign(id string, message string) {
-	now := time.Now().UTC()
-	m.updateCampaign(id, func(campaign *Campaign) {
-		campaign.Status = StatusStopped
-		campaign.CompletedAt = &now
-	})
-	m.recordEvent(id, CampaignEvent{
-		Timestamp: now,
-		Kind:      EventStatus,
-		Level:     "warn",
-		Message:   message,
-		Percent:   100,
-	})
-	m.markTerminal(id)
-}
-
-func (m *Manager) markTerminal(id string) {
-	m.mu.Lock()
-	delete(m.cancelFns, id)
-	m.mu.Unlock()
-	select {
-	case m.events <- StreamEvent{
-		CampaignID: id,
-		Event: CampaignEvent{
-			Timestamp: time.Now().UTC(),
-			Kind:      EventStatus,
-			Level:     "info",
-			Message:   "terminal",
-			Percent:   100,
-		},
-		Terminal: true,
-	}:
-	default:
-	}
-}
-
-func (m *Manager) finishTrial(
-	campaignID string,
-	index int,
-	eval *MetricSnapshot,
-	modelPath string,
-	artifacts map[string]string,
-	runErr error,
-) {
-	now := time.Now().UTC()
-	m.updateCampaign(campaignID, func(campaign *Campaign) {
-		if index >= len(campaign.Trials) {
-			return
-		}
-		trial := campaign.Trials[index]
-		if runErr != nil {
-			trial.Status = StatusFailed
-			trial.Error = runErr.Error()
-		} else {
-			trial.Status = StatusCompleted
-			trial.Eval = eval
-			trial.ModelPath = modelPath
-			trial.Artifacts = artifacts
-		}
-		trial.CompletedAt = &now
-		campaign.Trials[index] = trial
-	})
-
-	if runErr != nil {
-		m.recordEvent(campaignID, CampaignEvent{
-			Timestamp:  now,
-			Kind:       EventLog,
-			Level:      "error",
-			Message:    runErr.Error(),
-			TrialIndex: index + 1,
-		})
-		return
-	}
-
-	m.recordEvent(campaignID, CampaignEvent{
-		Timestamp:  now,
-		Kind:       EventMetric,
-		Level:      "info",
-		Message:    fmt.Sprintf("Trial %d accuracy %.2f%% (%+.2fpp)", index+1, eval.Accuracy*100, eval.ImprovementPP),
-		TrialIndex: index + 1,
-	})
-}
-
 func (m *Manager) runTraining(
 	ctx context.Context,
 	campaignID string,
@@ -466,6 +234,12 @@ func (m *Manager) runOfflineEval(
 	}
 
 	statsPath := filepath.Join(outputDir, fmt.Sprintf("%s_results.json", modelKey))
+	if _, err := os.Stat(statsPath); err != nil {
+		return nil, fmt.Errorf(
+			"offline evaluation did not produce %s; inspect the preceding model_eval logs for device or model load errors",
+			filepath.Base(statsPath),
+		)
+	}
 	return readOfflineMetrics(statsPath, def.DefaultDataset, modelID)
 }
 
@@ -509,6 +283,7 @@ func (m *Manager) writeConfigFragment(campaignID string, baseline *MetricSnapsho
 			"name":               campaign.Name,
 			"target":             campaign.Target,
 			"goal_template":      campaign.GoalTemplate,
+			"signal_hypothesis":  campaign.SignalHypothesis,
 			"platform":           campaign.Platform,
 			"model_path":         bestTrial.ModelPath,
 			"use_lora":           bestTrial.UseLoRA,

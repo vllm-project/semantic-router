@@ -253,6 +253,10 @@
   gap: 0.45rem;
 }
 
+.fieldWide {
+  grid-column: 1 / -1;
+}
+
 .field span {
   font-size: 0.79rem;
   font-weight: 700;
@@ -522,6 +526,10 @@
   .heroFacts,
   .campaignGrid {
     grid-template-columns: 1fr;
+  }
+
+  .fieldWide {
+    grid-column: auto;
   }
 }
 

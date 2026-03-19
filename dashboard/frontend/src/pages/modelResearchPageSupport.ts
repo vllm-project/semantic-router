@@ -15,8 +15,8 @@ export const GOAL_TEMPLATE_OPTIONS: Array<{ value: ModelResearchGoalTemplate; la
   },
   {
     value: 'explore_signal',
-    label: 'Explore a new domain or signal classifier',
-    description: 'Train and validate a candidate classifier that still fits the current domain or signal runtime contract.',
+    label: 'Explore a new signal classifier',
+    description: 'Start from a signal hypothesis, then train and validate a candidate classifier that still fits the current runtime contract.',
   },
 ]
 
@@ -48,10 +48,14 @@ export function getCampaignStatusTone(status: ModelResearchStatus): 'good' | 'wa
 
 export function getCampaignSubtitle(campaign: ModelResearchCampaign): string {
   const best = campaign.best_trial?.eval?.improvement_pp
+  const subject =
+    campaign.goal_template === 'explore_signal'
+      ? campaign.signal_hypothesis || 'signal exploration'
+      : campaign.target
   if (typeof best === 'number') {
-    return `${campaign.target} · best ${formatImprovementPP(best)}`
+    return `${subject} · best ${formatImprovementPP(best)}`
   }
-  return `${campaign.target} · ${campaign.platform}`
+  return `${subject} · ${campaign.platform}`
 }
 
 export function defaultCampaignName(goalTemplate: ModelResearchGoalTemplate, target: string): string {

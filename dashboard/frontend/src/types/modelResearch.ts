@@ -26,6 +26,7 @@ export interface ModelResearchCreateRequest {
   name: string
   goal_template: ModelResearchGoalTemplate
   target: string
+  signal_hypothesis?: string
   budget: ModelResearchBudget
   success_threshold_pp: number
   overrides?: ModelResearchOverrides
@@ -100,6 +101,7 @@ export interface ModelResearchCampaign {
   status: ModelResearchStatus
   goal_template: ModelResearchGoalTemplate
   target: string
+  signal_hypothesis?: string
   platform: string
   primary_metric: string
   success_threshold_pp: number
@@ -132,4 +134,3 @@ export interface ModelResearchRecipesResponse {
   runtime_models?: RouterModelsInfo | null
   recipes: ModelResearchRecipeSummary[]
 }
-

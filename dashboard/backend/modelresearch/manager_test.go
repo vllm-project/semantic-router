@@ -162,6 +162,35 @@ func TestCampaignOverridesRemainScopedToThatCampaign(t *testing.T) {
 	}
 }
 
+func TestStartCampaignRequiresSignalHypothesisForExploreSignal(t *testing.T) {
+	t.Parallel()
+
+	server := newResearchTestServer(t)
+	defer server.Close()
+
+	manager, err := NewManager(ManagerConfig{
+		BaseDir:             t.TempDir(),
+		RepoRoot:            "/repo",
+		PythonPath:          "python3",
+		DefaultAPIBase:      server.URL,
+		DefaultRequestModel: "MoM",
+		Platform:            "amd",
+	})
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	_, err = manager.StartCampaign(CreateCampaignRequest{
+		Name:         "missing-signal-idea",
+		GoalTemplate: GoalExploreSignal,
+		Target:       "domain",
+		Budget:       Budget{MaxTrials: 1},
+	})
+	if err == nil || !strings.Contains(err.Error(), "signal_hypothesis") {
+		t.Fatalf("StartCampaign() error = %v, want signal_hypothesis validation error", err)
+	}
+}
+
 func newResearchTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
 

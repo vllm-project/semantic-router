@@ -49,6 +49,7 @@ export default function ModelResearchPage() {
   const [datasetOverride, setDatasetOverride] = useState('')
   const [hyperparameterHints, setHyperparameterHints] = useState('')
   const [allowCPUDryRun, setAllowCPUDryRun] = useState(false)
+  const [signalHypothesis, setSignalHypothesis] = useState('')
 
   const targetOptions = targetsByGoal[goalTemplate]
   const selectedRecipe = useMemo<ModelResearchRecipeSummary | null>(() => {
@@ -86,6 +87,10 @@ export default function ModelResearchPage() {
 
   const handleStartCampaign = async () => {
     if (!selectedRecipe) return
+    if (goalTemplate === 'explore_signal' && !signalHypothesis.trim()) {
+      setError('Signal hypothesis is required for signal exploration campaigns')
+      return
+    }
 
     let parsedHints: Record<string, unknown> | undefined
     if (hyperparameterHints.trim()) {
@@ -101,6 +106,7 @@ export default function ModelResearchPage() {
       name: name.trim() || defaultCampaignName(goalTemplate, selectedRecipe.key),
       goal_template: goalTemplate,
       target: selectedRecipe.key,
+      signal_hypothesis: goalTemplate === 'explore_signal' ? signalHypothesis.trim() || undefined : undefined,
       budget: { max_trials: maxTrials },
       success_threshold_pp: successThresholdPP,
       overrides: {
@@ -120,15 +126,15 @@ export default function ModelResearchPage() {
       <DashboardSurfaceHero
         eyebrow="Operations"
         title="Auto Research"
-        description="Run AMD-first classifier research loops against the current router, keep MoM as the default request model, and confine any API/model overrides to the current campaign."
+        description="Run bounded classifier research loops against the current router while keeping MoM as the default request model."
         meta={[
           { label: 'Current surface', value: selectedGoalOption.label },
           { label: 'Tracked campaigns', value: `${campaigns.length}` },
           { label: 'Runtime baselines', value: `${runtimeModelCount} models` },
         ]}
         panelEyebrow="Router defaults"
-        panelTitle="MoM-aligned classifier loops"
-        panelDescription="The backend reuses the connected router target for runtime discovery and eval. Advanced overrides stay campaign-local and never rewrite dashboard-wide settings."
+        panelTitle="Campaign-local research loops"
+        panelDescription="Runtime discovery and evaluation reuse the connected router target. Overrides stay local to the campaign."
         pills={GOAL_TEMPLATE_OPTIONS.map((option) => ({
           label: option.label,
           active: option.value === goalTemplate,
@@ -197,11 +203,22 @@ export default function ModelResearchPage() {
                     </option>
                   ))}
                 </select>
-              </label>
+                </label>
 
-              <label className={styles.field}>
-                <span>Budget (max trials)</span>
-                <input
+                {goalTemplate === 'explore_signal' && (
+                  <label className={`${styles.field} ${styles.fieldWide}`}>
+                    <span>Signal hypothesis</span>
+                    <input
+                      value={signalHypothesis}
+                      onChange={(event) => setSignalHypothesis(event.target.value)}
+                      placeholder="Detect requests that likely need spreadsheet-style numeric reasoning"
+                    />
+                  </label>
+                )}
+
+                <label className={styles.field}>
+                  <span>Budget (max trials)</span>
+                  <input
                   type="number"
                   min={1}
                   max={3}
@@ -427,6 +444,9 @@ export default function ModelResearchPage() {
                   <h3>Baseline</h3>
                   <p>{selectedCampaign.baseline.description || 'Current runtime baseline'}</p>
                   <div className={styles.detailList}>
+                    {selectedCampaign.signal_hypothesis ? (
+                      <span>Signal hypothesis: {selectedCampaign.signal_hypothesis}</span>
+                    ) : null}
                     <span>Source: {selectedCampaign.baseline.source}</span>
                     <span>
                       Model:{' '}
