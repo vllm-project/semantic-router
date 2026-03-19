@@ -31,11 +31,34 @@ type rawProgram struct {
 
 // rawTopLevel is a union for top-level declarations.
 type rawTopLevel struct {
+	Pos         lexer.Position
+	SignalGroup *rawSignalGroupDecl `parser:"  @@"`
+	Signal      *rawSignalDecl      `parser:"| @@"`
+	Route       *rawRouteDecl       `parser:"| @@"`
+	Model       *rawModelDecl       `parser:"| @@"`
+	Plugin      *rawPluginDecl      `parser:"| @@"`
+	TestBlock   *rawTestBlockDecl   `parser:"| @@"`
+}
+
+// rawSignalGroupDecl: SIGNAL_GROUP <name> { fields... }
+type rawSignalGroupDecl struct {
 	Pos    lexer.Position
-	Signal *rawSignalDecl `parser:"  @@"`
-	Route  *rawRouteDecl  `parser:"| @@"`
-	Model  *rawModelDecl  `parser:"| @@"`
-	Plugin *rawPluginDecl `parser:"| @@"`
+	Name   string        `parser:"'SIGNAL_GROUP' @(Ident | String)"`
+	Fields []*FieldEntry `parser:"'{' @@* '}'"`
+}
+
+// rawTestBlockDecl: TEST <name> { entries... }
+type rawTestBlockDecl struct {
+	Pos     lexer.Position
+	Name    string              `parser:"'TEST' @(Ident | String)"`
+	Entries []*rawTestEntryDecl `parser:"'{' @@* '}'"`
+}
+
+// rawTestEntryDecl: "query" -> route_name
+type rawTestEntryDecl struct {
+	Pos       lexer.Position
+	Query     string `parser:"@String"`
+	RouteName string `parser:"Arrow @(Ident | String)"`
 }
 
 // rawSignalDecl: SIGNAL <type> <name> { fields... }
@@ -72,6 +95,7 @@ type RouteOpt struct {
 type rawRouteItem struct {
 	Pos       lexer.Position
 	Priority  *int          `parser:"  'PRIORITY' @Int"`
+	Tier      *int          `parser:"| 'TIER' @Int"`
 	When      *BoolExprTop  `parser:"| 'WHEN' @@"`
 	Model     *rawModelList `parser:"| 'MODEL' @@"`
 	Algorithm *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
@@ -179,10 +203,40 @@ type ArrayVal struct {
 
 // Program is the root AST node, representing a complete DSL file.
 type Program struct {
-	Signals []*SignalDecl
-	Routes  []*RouteDecl
-	Models  []*ModelDecl
-	Plugins []*PluginDecl
+	Signals      []*SignalDecl
+	SignalGroups []*SignalGroupDecl
+	Routes       []*RouteDecl
+	Models       []*ModelDecl
+	Plugins      []*PluginDecl
+	TestBlocks   []*TestBlockDecl
+}
+
+// SignalGroupDecl declares a mutually exclusive partition of signals.
+// When Semantics is "softmax_exclusive", the runtime applies Voronoi
+// normalization so that at most one member fires per query.
+type SignalGroupDecl struct {
+	Name        string
+	Semantics   string
+	Temperature float64
+	Members     []string
+	Default     string
+	Pos         Position
+}
+
+// TestBlockDecl declares expected routing outcomes for specific queries.
+// The validator runs them through the signal pipeline to catch conflicts
+// that static checks cannot find.
+type TestBlockDecl struct {
+	Name    string
+	Entries []*TestEntry
+	Pos     Position
+}
+
+// TestEntry is a single query → expected route mapping inside a TEST block.
+type TestEntry struct {
+	Query     string
+	RouteName string
+	Pos       Position
 }
 
 // SignalDecl represents a SIGNAL declaration.
@@ -198,6 +252,7 @@ type RouteDecl struct {
 	Name        string
 	Description string
 	Priority    int
+	Tier        int
 	When        BoolExpr
 	Models      []*ModelRef
 	Algorithm   *AlgoSpec
