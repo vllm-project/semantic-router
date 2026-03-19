@@ -573,6 +573,31 @@ func truncateProbeBody(body string, maxLen int) string {
 	return body[:maxLen] + "..."
 }
 
+type oomStatus struct {
+	detected        bool
+	ready           bool
+	maxRestartCount int32
+}
+
+func inspectOOMStatus(pods *corev1.PodList) oomStatus {
+	s := oomStatus{ready: true}
+	for _, pod := range pods.Items {
+		for _, cs := range pod.Status.ContainerStatuses {
+			if cs.LastTerminationState.Terminated != nil &&
+				cs.LastTerminationState.Terminated.Reason == "OOMKilled" {
+				s.detected = true
+			}
+			if cs.RestartCount > s.maxRestartCount {
+				s.maxRestartCount = cs.RestartCount
+			}
+			if !cs.Ready {
+				s.ready = false
+			}
+		}
+	}
+	return s
+}
+
 // verifyNoOOMRestarts checks that no semantic-router pods have been OOMKilled
 // since the stack was scaled. If OOM restarts are detected, it waits for the
 // pods to recover and re-stabilize. If OOM keeps recurring (persistent OOM),
@@ -594,42 +619,22 @@ func (p *Profile) verifyNoOOMRestarts(ctx context.Context, opts *framework.Setup
 	stableSince := time.Now()
 
 	for time.Now().Before(deadline) {
-		pods, err := opts.KubeClient.CoreV1().Pods(namespaceSemanticRouter).List(ctx, metav1.ListOptions{
-			LabelSelector: "app.kubernetes.io/name=semantic-router",
-		})
+		status, err := p.getOOMStatus(ctx, opts)
 		if err != nil {
-			return fmt.Errorf("list semantic-router pods: %w", err)
+			return err
 		}
 
-		oomDetected := false
-		podsReady := true
-		var maxRestartCount int32
-		for _, pod := range pods.Items {
-			for _, cs := range pod.Status.ContainerStatuses {
-				if cs.LastTerminationState.Terminated != nil &&
-					cs.LastTerminationState.Terminated.Reason == "OOMKilled" {
-					oomDetected = true
-				}
-				if cs.RestartCount > maxRestartCount {
-					maxRestartCount = cs.RestartCount
-				}
-				if !cs.Ready {
-					podsReady = false
-				}
-			}
-		}
-
-		if !oomDetected {
+		if !status.detected {
 			p.log("No OOM restarts detected, pods are healthy")
 			return nil
 		}
 
-		if maxRestartCount >= maxOOMRestarts {
-			p.log("Persistent OOM detected (%d restarts), scaling semantic-router to 1 replica to recover", maxRestartCount)
+		if status.maxRestartCount >= maxOOMRestarts {
+			p.log("Persistent OOM detected (%d restarts), scaling semantic-router to 1 replica to recover", status.maxRestartCount)
 			return p.scaleDownAfterOOM(ctx, opts)
 		}
 
-		if podsReady {
+		if status.ready {
 			if time.Since(stableSince) >= oomStableRequired {
 				p.log("OOM-restarted pods have recovered and been stable for %s", oomStableRequired)
 				return nil
@@ -639,7 +644,7 @@ func (p *Profile) verifyNoOOMRestarts(ctx context.Context, opts *framework.Setup
 		}
 
 		p.log("OOM restarts detected (restart count %d), waiting for pods to recover (stable for %s/%s)...",
-			maxRestartCount, time.Since(stableSince).Round(time.Second), oomStableRequired)
+			status.maxRestartCount, time.Since(stableSince).Round(time.Second), oomStableRequired)
 
 		select {
 		case <-ctx.Done():
@@ -650,6 +655,16 @@ func (p *Profile) verifyNoOOMRestarts(ctx context.Context, opts *framework.Setup
 
 	p.log("OOM recovery timed out after %s, scaling semantic-router to 1 replica as fallback", oomRecoveryTimeout)
 	return p.scaleDownAfterOOM(ctx, opts)
+}
+
+func (p *Profile) getOOMStatus(ctx context.Context, opts *framework.SetupOptions) (oomStatus, error) {
+	pods, err := opts.KubeClient.CoreV1().Pods(namespaceSemanticRouter).List(ctx, metav1.ListOptions{
+		LabelSelector: "app.kubernetes.io/name=semantic-router",
+	})
+	if err != nil {
+		return oomStatus{}, fmt.Errorf("list semantic-router pods: %w", err)
+	}
+	return inspectOOMStatus(pods), nil
 }
 
 // scaleDownAfterOOM scales the semantic-router deployment back to 1 replica
