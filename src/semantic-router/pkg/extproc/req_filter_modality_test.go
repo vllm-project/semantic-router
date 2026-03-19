@@ -1,12 +1,14 @@
 package extproc
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
 // =============================================================================
@@ -445,4 +447,75 @@ func TestResolveDiffusionBackend_NoFallbackScan(t *testing.T) {
 	_, err := resolveDiffusionBackend(cfg, "wrong-model-name")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found in model_config")
+}
+
+func TestBuildOmniRequestBody_RewritesModelAndAddsExtraBody(t *testing.T) {
+	req, err := parseOpenAIRequest([]byte(`{
+		"model": "auto",
+		"messages": [{"role": "user", "content": "draw a cat"}],
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "lookup_weather",
+				"description": "Lookup weather",
+				"parameters": {"type": "object", "properties": {}}
+			}
+		}],
+		"tool_choice": "auto"
+	}`))
+	require.NoError(t, err)
+
+	ctx := &RequestContext{
+		ResponseAPICtx: &ResponseAPIContext{
+			ImageGenToolParams: &responseapi.ImageGenerationToolParams{
+				Size: "1024x1536",
+			},
+		},
+	}
+
+	body, err := buildOmniRequestBody(req, ctx, "omni-model")
+	require.NoError(t, err)
+
+	var got map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &got))
+
+	assert.Equal(t, "omni-model", got["model"])
+	assert.Equal(t, "auto", got["tool_choice"])
+	_, hasTools := got["tools"]
+	assert.True(t, hasTools)
+
+	extraBody, ok := got["extra_body"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, float64(1024), extraBody["width"])
+	assert.Equal(t, float64(1536), extraBody["height"])
+}
+
+func TestBuildARRequestBody_RewritesModelAndRemovesToolFields(t *testing.T) {
+	req, err := parseOpenAIRequest([]byte(`{
+		"model": "auto",
+		"messages": [{"role": "user", "content": "hello"}],
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "lookup_weather",
+				"description": "Lookup weather",
+				"parameters": {"type": "object", "properties": {}}
+			}
+		}],
+		"tool_choice": "auto"
+	}`))
+	require.NoError(t, err)
+
+	body, err := buildARRequestBody(req, "ar-model")
+	require.NoError(t, err)
+
+	var got map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &got))
+
+	assert.Equal(t, "ar-model", got["model"])
+	assert.NotNil(t, got["messages"])
+	_, hasTools := got["tools"]
+	assert.False(t, hasTools)
+	_, hasToolChoice := got["tool_choice"]
+	assert.False(t, hasToolChoice)
 }
