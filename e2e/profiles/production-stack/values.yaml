@@ -344,5 +344,12 @@ config:
     integrations:
       tools:
         enabled: false
+resources:
+  limits:
+    memory: "10Gi"
+    cpu: "4"
+  requests:
+    memory: "5Gi"
+    cpu: "1"
 image:
   pullPolicy: IfNotPresent
