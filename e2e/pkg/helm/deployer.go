@@ -27,7 +27,8 @@ func NewDeployer(kubeConfig string, verbose bool) *Deployer {
 	}
 }
 
-// Install installs a Helm chart
+// Install installs or upgrades a Helm chart (helm upgrade --install) so re-runs and CI
+// do not fail with "cannot re-use a name that is still in use" when the release exists.
 func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 	d.log("Installing Helm chart: %s/%s", opts.Namespace, opts.ReleaseName)
 
@@ -46,7 +47,8 @@ func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	args := []string{
-		"install", opts.ReleaseName, chart,
+		"upgrade", opts.ReleaseName, chart,
+		"--install",
 		"--namespace", opts.Namespace,
 		"--create-namespace",
 		"--kubeconfig", d.KubeConfig,
@@ -78,10 +80,10 @@ func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to install chart: %w", err)
+		return fmt.Errorf("failed to install/upgrade chart: %w", err)
 	}
 
-	d.log("Chart %s installed successfully", opts.ReleaseName)
+	d.log("Chart %s installed/upgraded successfully", opts.ReleaseName)
 	return nil
 }
 
