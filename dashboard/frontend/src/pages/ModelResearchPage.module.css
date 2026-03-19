@@ -14,6 +14,12 @@
   margin: 0 auto;
 }
 
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .heroFacts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -78,33 +84,17 @@
   cursor: pointer;
 }
 
-.layout {
-  display: grid;
-  grid-template-columns: 20rem minmax(0, 1fr);
-  gap: 1rem;
-}
-
-.sidebar,
 .panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.1rem 1.2rem;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
 }
 
-.sidebar {
-  align-self: start;
-  padding: 1rem;
-}
-
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.1rem 1.2rem;
-}
-
-.sidebarHeader,
 .panelHeader {
   display: flex;
   align-items: flex-start;
@@ -113,7 +103,6 @@
   flex-wrap: wrap;
 }
 
-.sidebarHeader h2,
 .panelHeader h2,
 .tableSection h3,
 .logSection h3,
@@ -124,9 +113,9 @@
   font-weight: 700;
 }
 
-.sidebarHeader p,
 .panelHeader p,
 .campaignHint,
+.campaignMeta,
 .emptyState,
 .recipeCard p,
 .detailCard p {
@@ -136,7 +125,7 @@
   line-height: 1.55;
 }
 
-.sidebarHeader > span {
+.panelCount {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -150,11 +139,10 @@
   font-weight: 700;
 }
 
-.sidebarList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 1rem;
+.campaignGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 0.85rem;
 }
 
 .campaignButton {
@@ -189,10 +177,11 @@
   gap: 0.75rem;
 }
 
-.main {
+.campaignMeta {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.8rem;
 }
 
 .secondaryButton,
@@ -526,15 +515,12 @@
 }
 
 @media (max-width: 1100px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
   .formGrid,
   .statsGrid,
   .detailGrid,
   .recipeMeta,
-  .heroFacts {
+  .heroFacts,
+  .campaignGrid {
     grid-template-columns: 1fr;
   }
 }
@@ -545,7 +531,7 @@
   }
 
   .panelHeader,
-  .sidebarHeader {
+  .campaignMeta {
     flex-direction: column;
   }
 }

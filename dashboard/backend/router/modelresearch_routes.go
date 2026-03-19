@@ -3,6 +3,7 @@ package router
 import (
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -12,12 +13,12 @@ import (
 )
 
 func registerModelResearchRoutes(mux *http.ServeMux, cfg *config.Config) {
-	repoRoot := filepath.Dir(cfg.ConfigDir)
+	repoRoot := resolveModelResearchProjectRoot(cfg)
 	manager, err := modelresearch.NewManager(modelresearch.ManagerConfig{
 		BaseDir:             filepath.Join(cfg.ConfigDir, ".vllm-sr", "model-research"),
 		RepoRoot:            repoRoot,
 		PythonPath:          cfg.PythonPath,
-		DefaultAPIBase:      cfg.RouterAPIURL,
+		DefaultAPIBase:      resolveModelResearchDefaultAPIBase(cfg),
 		DefaultRequestModel: "MoM",
 		Platform:            cfg.Platform,
 	})
@@ -49,4 +50,52 @@ func registerModelResearchRoutes(mux *http.ServeMux, cfg *config.Config) {
 		}
 	})
 	log.Printf("Model Research API endpoints registered: /api/model-research/*")
+}
+
+func resolveModelResearchProjectRoot(cfg *config.Config) string {
+	candidates := []string{cfg.ConfigDir}
+	if cfg.ConfigDir != "" {
+		candidates = append(candidates, filepath.Dir(cfg.ConfigDir))
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, cwd)
+	}
+
+	for _, candidate := range candidates {
+		if root := findModelResearchProjectRoot(candidate); root != "" {
+			return root
+		}
+	}
+
+	return filepath.Dir(cfg.ConfigDir)
+}
+
+func resolveModelResearchDefaultAPIBase(cfg *config.Config) string {
+	if envoyURL := strings.TrimRight(strings.TrimSpace(cfg.EnvoyURL), "/"); envoyURL != "" {
+		return envoyURL
+	}
+	return strings.TrimRight(strings.TrimSpace(cfg.RouterAPIURL), "/")
+}
+
+func findModelResearchProjectRoot(start string) string {
+	current := filepath.Clean(strings.TrimSpace(start))
+	if current == "." || current == "" {
+		return ""
+	}
+
+	for {
+		if hasModelResearchScripts(current) {
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return ""
+		}
+		current = parent
+	}
+}
+
+func hasModelResearchScripts(root string) bool {
+	_, err := os.Stat(filepath.Join(root, "src", "training", "model_eval", "mom_collection_eval.py"))
+	return err == nil
 }

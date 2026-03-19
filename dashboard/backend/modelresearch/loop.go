@@ -270,6 +270,10 @@ func (m *Manager) runTraining(
 		return m.runFactCheckTraining(ctx, campaignID, campaign, plan, trialDir, device, trialIndex)
 	case "jailbreak":
 		return m.runJailbreakTraining(ctx, campaignID, campaign, plan, trialDir, device, trialIndex)
+	case "intent":
+		return m.runIntentTraining(ctx, campaignID, campaign, plan, trialDir, device, trialIndex)
+	case "pii":
+		return m.runPIITraining(ctx, campaignID, campaign, plan, trialDir, device, trialIndex)
 	case "domain":
 		return m.runDomainTraining(ctx, campaignID, campaign, plan, trialDir, device, trialIndex)
 	default:
@@ -344,9 +348,16 @@ func (m *Manager) runJailbreakTraining(ctx context.Context, campaignID string, _
 	return outputDir, map[string]string{"training_dir": outputDir}, nil
 }
 
+func (m *Manager) runIntentTraining(ctx context.Context, campaignID string, _ *Campaign, plan trialPlan, trialDir, device string, trialIndex int) (string, map[string]string, error) {
+	return m.runIntentStyleTraining(ctx, campaignID, plan, filepath.Join(trialDir, "intent-lora"), device, trialIndex)
+}
+
 func (m *Manager) runDomainTraining(ctx context.Context, campaignID string, _ *Campaign, plan trialPlan, trialDir, device string, trialIndex int) (string, map[string]string, error) {
+	return m.runIntentStyleTraining(ctx, campaignID, plan, filepath.Join(trialDir, "domain-lora"), device, trialIndex)
+}
+
+func (m *Manager) runIntentStyleTraining(ctx context.Context, campaignID string, plan trialPlan, outputDir string, device string, trialIndex int) (string, map[string]string, error) {
 	scriptDir := filepath.Join(m.repoRoot, "src", "training", "model_classifier", "classifier_model_fine_tuning_lora")
-	outputDir := filepath.Join(trialDir, "domain-lora")
 	args := []string{
 		filepath.Join(scriptDir, "ft_linear_lora.py"),
 		"--mode", "train",
@@ -364,6 +375,31 @@ func (m *Manager) runDomainTraining(ctx context.Context, campaignID string, _ *C
 		args = append(args, "--alignment-weight", fmt.Sprintf("%.4f", floatHint(plan.Params, "alignment_weight", 0.1)))
 	}
 	if err := m.executePython(ctx, commandSpec{Dir: scriptDir, Name: m.pythonPath, Args: args, Env: trainingEnv(device)}, campaignID, trialIndex); err != nil {
+		return "", nil, err
+	}
+	return outputDir, map[string]string{"training_dir": outputDir}, nil
+}
+
+func (m *Manager) runPIITraining(ctx context.Context, campaignID string, _ *Campaign, plan trialPlan, trialDir, device string, trialIndex int) (string, map[string]string, error) {
+	scriptDir := filepath.Join(m.repoRoot, "src", "training", "model_classifier", "pii_model_fine_tuning_lora")
+	modelName := stringHint(plan.Params, "model", "mmbert-32k")
+	loraRank := intHint(plan.Params, "lora_rank", 8)
+	outputDir := filepath.Join(trialDir, fmt.Sprintf("lora_pii_detector_%s_r%d_token_model", modelName, loraRank))
+	args := []string{
+		filepath.Join(scriptDir, "pii_bert_finetuning_lora.py"),
+		"--mode", "train",
+		"--model", modelName,
+		"--epochs", strconv.Itoa(intHint(plan.Params, "epochs", 3)),
+		"--batch-size", strconv.Itoa(intHint(plan.Params, "batch_size", 8)),
+		"--learning-rate", fmt.Sprintf("%.6f", floatHint(plan.Params, "learning_rate", 1e-4)),
+		"--lora-rank", strconv.Itoa(loraRank),
+		"--lora-alpha", strconv.Itoa(intHint(plan.Params, "lora_alpha", 16)),
+		"--max-samples", strconv.Itoa(intHint(plan.Params, "max_samples", 5000)),
+	}
+	if !boolHint(plan.Params, "use_ai4privacy", true) {
+		args = append(args, "--no-ai4privacy")
+	}
+	if err := m.executePython(ctx, commandSpec{Dir: trialDir, Name: m.pythonPath, Args: args, Env: trainingEnv(device)}, campaignID, trialIndex); err != nil {
 		return "", nil, err
 	}
 	return outputDir, map[string]string{"training_dir": outputDir}, nil
@@ -587,6 +623,16 @@ func defaultPlan(recipeKey string, variant int) map[string]any {
 			{"model": "mmbert-base", "epochs": 4, "batch_size": 8, "learning_rate": 2e-5, "lora_rank": 16, "lora_alpha": 32},
 			{"model": "roberta-base", "epochs": 4, "batch_size": 12, "learning_rate": 2e-5, "lora_rank": 16, "lora_alpha": 32},
 		},
+		"intent": {
+			{"model": "mmbert-32k", "epochs": 3, "batch_size": 8, "learning_rate": 3e-5, "lora_rank": 32, "lora_alpha": 64, "max_samples": 5000},
+			{"model": "mmbert-base", "epochs": 4, "batch_size": 8, "learning_rate": 2e-5, "lora_rank": 32, "lora_alpha": 64, "enable_feature_alignment": true, "alignment_weight": 0.1, "max_samples": 5000},
+			{"model": "modernbert-base", "epochs": 3, "batch_size": 8, "learning_rate": 3e-5, "lora_rank": 16, "lora_alpha": 32, "max_samples": 4000},
+		},
+		"pii": {
+			{"model": "mmbert-32k", "epochs": 3, "batch_size": 8, "learning_rate": 1e-4, "lora_rank": 8, "lora_alpha": 16, "max_samples": 5000, "use_ai4privacy": true},
+			{"model": "mmbert-base", "epochs": 4, "batch_size": 8, "learning_rate": 8e-5, "lora_rank": 16, "lora_alpha": 32, "max_samples": 6000, "use_ai4privacy": true},
+			{"model": "modernbert-base", "epochs": 3, "batch_size": 8, "learning_rate": 7e-5, "lora_rank": 16, "lora_alpha": 32, "max_samples": 4000, "use_ai4privacy": false},
+		},
 		"domain": {
 			{"model": "mmbert-32k", "epochs": 3, "batch_size": 8, "learning_rate": 3e-5, "lora_rank": 32, "lora_alpha": 64, "max_samples": 5000},
 			{"model": "mmbert-base", "epochs": 4, "batch_size": 8, "learning_rate": 2e-5, "lora_rank": 32, "lora_alpha": 64, "enable_feature_alignment": true, "alignment_weight": 0.1, "max_samples": 5000},
@@ -614,27 +660,42 @@ func allowedHintKeys(recipeKey string) map[string]struct{} {
 	switch recipeKey {
 	case "feedback":
 		common["model_name"] = struct{}{}
-	case "fact-check", "jailbreak", "domain":
+	case "fact-check", "jailbreak", "intent", "pii", "domain":
 		common["model"] = struct{}{}
 	}
-	if recipeKey == "domain" {
+	if recipeKey == "intent" || recipeKey == "domain" {
 		common["max_samples"] = struct{}{}
 		common["enable_feature_alignment"] = struct{}{}
 		common["alignment_weight"] = struct{}{}
+	}
+	if recipeKey == "pii" {
+		common["max_samples"] = struct{}{}
+		common["use_ai4privacy"] = struct{}{}
 	}
 	return common
 }
 
 func runtimeDatasetForRecipe(recipeKey string, override string) string {
-	if strings.TrimSpace(override) != "" && !strings.Contains(override, "/") && !strings.Contains(override, ".") {
-		return override
-	}
 	switch recipeKey {
 	case "feedback":
+		if strings.TrimSpace(override) != "" && !strings.Contains(override, "/") && !strings.Contains(override, ".") {
+			return override
+		}
 		return "feedback-en"
 	case "fact-check":
+		if strings.TrimSpace(override) != "" && !strings.Contains(override, "/") && !strings.Contains(override, ".") {
+			return override
+		}
 		return "fact-check-en"
+	case "intent":
+		if strings.TrimSpace(override) != "" && !strings.Contains(override, "/") && !strings.Contains(override, ".") {
+			return override
+		}
+		return "mmlu-prox-en"
 	case "domain":
+		if strings.TrimSpace(override) != "" && !strings.Contains(override, "/") && !strings.Contains(override, ".") {
+			return override
+		}
 		return "mmlu-prox-en"
 	default:
 		return ""
@@ -649,6 +710,10 @@ func offlineEvalModelKey(recipeKey string) string {
 		return "fact-check"
 	case "jailbreak":
 		return "jailbreak"
+	case "intent":
+		return "intent"
+	case "pii":
+		return "pii"
 	case "domain":
 		return "intent"
 	default:
@@ -660,7 +725,8 @@ func offlineDatasetOverride(recipeKey string, override string) string {
 	if strings.TrimSpace(override) == "" {
 		return ""
 	}
-	if recipeKey == "domain" && !strings.Contains(override, ".json") && !strings.Contains(override, ".csv") {
+	if (recipeKey == "intent" || recipeKey == "domain" || recipeKey == "pii") &&
+		!strings.Contains(override, ".json") && !strings.Contains(override, ".csv") {
 		return ""
 	}
 	return override

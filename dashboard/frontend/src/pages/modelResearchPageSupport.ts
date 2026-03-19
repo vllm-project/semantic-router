@@ -1,19 +1,22 @@
 import type {
+  ModelResearchBaseline,
   ModelResearchCampaign,
   ModelResearchGoalTemplate,
+  ModelResearchRecipeSummary,
   ModelResearchStatus,
 } from '../types/modelResearch'
+import type { RouterModelInfo, RouterModelsInfo } from '../utils/routerRuntime'
 
 export const GOAL_TEMPLATE_OPTIONS: Array<{ value: ModelResearchGoalTemplate; label: string; description: string }> = [
   {
     value: 'improve_accuracy',
-    label: '提升现有 classifier 准确率',
-    description: '围绕当前 feedback / fact-check / jailbreak 等 classifier 做离线评测和 LoRA 调参循环。',
+    label: 'Improve current classifier accuracy',
+    description: 'Run bounded LoRA training and offline evaluation loops against the current feedback, fact-check, jailbreak, intent, or PII classifiers.',
   },
   {
     value: 'explore_signal',
-    label: '探索新的 domain / signal classifier',
-    description: '围绕现有 domain signal contract 生成和验证新的候选 classifier。',
+    label: 'Explore a new domain or signal classifier',
+    description: 'Train and validate a candidate classifier that still fits the current domain or signal runtime contract.',
   },
 ]
 
@@ -54,6 +57,54 @@ export function getCampaignSubtitle(campaign: ModelResearchCampaign): string {
 export function defaultCampaignName(goalTemplate: ModelResearchGoalTemplate, target: string): string {
   const prefix = goalTemplate === 'improve_accuracy' ? 'accuracy' : 'signal'
   return `${prefix}-${target}-${new Date().toISOString().slice(0, 10)}`
+}
+
+export function getDisplayedBaseline(
+  campaign: ModelResearchCampaign | null,
+  recipe: ModelResearchRecipeSummary | null,
+): ModelResearchBaseline | null {
+  if (campaign?.baseline) {
+    return campaign.baseline
+  }
+  return recipe?.baseline ?? null
+}
+
+export function getCampaignDatasetLabel(campaign: ModelResearchCampaign): string {
+  return campaign.overrides?.dataset_override || campaign.recipe.default_dataset
+}
+
+export function getRuntimeBaselineModel(
+  runtimeModels: RouterModelsInfo | null | undefined,
+  baseline: ModelResearchBaseline | null,
+): RouterModelInfo | null {
+  if (!runtimeModels?.models?.length || !baseline?.runtime_name) {
+    return null
+  }
+
+  return (
+    runtimeModels.models.find((model) => model.name.toLowerCase() === baseline.runtime_name?.toLowerCase()) ??
+    null
+  )
+}
+
+export function getRuntimeBaselineInventory(
+  runtimeModels: RouterModelsInfo | null | undefined,
+  baseline: ModelResearchBaseline | null,
+): RouterModelsInfo | null {
+  const matchedModel = getRuntimeBaselineModel(runtimeModels, baseline)
+  if (!runtimeModels || !matchedModel) {
+    return null
+  }
+
+  return {
+    ...runtimeModels,
+    models: [matchedModel],
+    summary: {
+      ...(runtimeModels.summary ?? {}),
+      loaded_models: matchedModel.loaded ? 1 : 0,
+      total_models: 1,
+    },
+  }
 }
 
 export interface ModelResearchTrendPoint {

@@ -61,6 +61,32 @@ var recipeCatalog = map[string]recipeDefinition{
 		FallbackDescription:       "Current MoM jailbreak detector baseline.",
 		SupportsDatasetOverride:   true,
 	},
+	"intent": {
+		Key:                       "intent",
+		Label:                     "Improve intent classifier accuracy",
+		GoalTemplates:             []GoalTemplate{GoalImproveAccuracy},
+		DefaultDataset:            "TIGER-Lab/MMLU-Pro",
+		DatasetHint:               "Offline eval accepts a local JSON/CSV override. Training continues to use the built-in MMLU-Pro intent corpus.",
+		DefaultSuccessThresholdPP: 0.5,
+		PrimaryMetric:             "accuracy",
+		RuntimeNames:              []string{"category_classifier"},
+		FallbackModelID:           "llm-semantic-router/mmbert-intent-classifier-merged",
+		FallbackDescription:       "Current MoM intent classifier baseline.",
+		SupportsDatasetOverride:   true,
+	},
+	"pii": {
+		Key:                       "pii",
+		Label:                     "Improve PII classifier accuracy",
+		GoalTemplates:             []GoalTemplate{GoalImproveAccuracy},
+		DefaultDataset:            "presidio",
+		DatasetHint:               "Offline eval accepts a local JSON/CSV override. Training defaults to Presidio plus AI4Privacy unless advanced hints disable it.",
+		DefaultSuccessThresholdPP: 0.5,
+		PrimaryMetric:             "accuracy",
+		RuntimeNames:              []string{"pii_classifier"},
+		FallbackModelID:           "llm-semantic-router/mmbert-pii-detector-merged",
+		FallbackDescription:       "Current MoM PII detector baseline.",
+		SupportsDatasetOverride:   true,
+	},
 	"domain": {
 		Key:                       "domain",
 		Label:                     "Explore domain signal classifier",
@@ -83,7 +109,7 @@ func recipesResponse(
 	runtimeModels *modelinventory.ModelsInfoResponse,
 ) RecipesResponse {
 	items := make([]RecipeSummary, 0, len(recipeCatalog))
-	for _, key := range []string{"feedback", "fact-check", "jailbreak", "domain"} {
+	for _, key := range []string{"feedback", "fact-check", "jailbreak", "intent", "pii", "domain"} {
 		def := recipeCatalog[key]
 		items = append(items, RecipeSummary{
 			Key:                         def.Key,
@@ -149,7 +175,7 @@ func resolveBaseline(
 			baseline.ModelID = firstNonEmpty(baseline.ModelPath, def.FallbackModelID)
 			baseline.State = candidate.State
 			baseline.Categories = append([]string(nil), candidate.Categories...)
-			if candidate.Registry != nil && candidate.Registry.Description != "" {
+			if baseline.Description == "" && candidate.Registry != nil && candidate.Registry.Description != "" {
 				baseline.Description = candidate.Registry.Description
 			}
 			if baseline.Description == "" {

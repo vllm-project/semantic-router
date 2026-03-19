@@ -171,6 +171,9 @@ docs:
   - docs/agent/tech-debt/td-028-operator-config-contract-boundary-collapse.md
   - docs/agent/tech-debt/td-029-extproc-response-pipeline-phase-collapse.md
   - docs/agent/tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md
+  - docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md
+  - docs/agent/tech-debt/td-032-training-evaluation-artifact-contract-drift.md
+  - docs/agent/tech-debt/td-033-native-binding-runtime-parity-and-lifecycle-gap.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
@@ -389,6 +392,15 @@ doc_governance:
     - path: docs/agent/tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md
       steward: dashboard
       freshness: update when the TD030 debt record changes materially
+    - path: docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md
+      steward: router-core
+      freshness: update when the TD031 debt record changes materially
+    - path: docs/agent/tech-debt/td-032-training-evaluation-artifact-contract-drift.md
+      steward: training-stack
+      freshness: update when the TD032 debt record changes materially
+    - path: docs/agent/tech-debt/td-033-native-binding-runtime-parity-and-lifecycle-gap.md
+      steward: rust-bindings
+      freshness: update when the TD033 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change

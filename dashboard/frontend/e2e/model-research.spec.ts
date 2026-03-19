@@ -29,15 +29,28 @@ const runtimeModels = {
         num_classes: 8,
       },
     },
+    {
+      name: 'pii_classifier',
+      type: 'pii_detection',
+      loaded: true,
+      state: 'ready',
+      resolved_model_path: 'models/mmbert32k-pii-detector-merged',
+      registry: {
+        local_path: 'models/mmbert32k-pii-detector-merged',
+        purpose: 'classifier',
+        description: 'Current MoM PII detector baseline.',
+        num_classes: 32,
+      },
+    },
   ],
   summary: {
-    loaded_models: 2,
-    total_models: 2,
+    loaded_models: 3,
+    total_models: 3,
   },
 };
 
 const recipesResponse = {
-  default_api_base: 'http://router.internal:8080',
+  default_api_base: 'http://envoy.internal:8899',
   default_request_model: 'MoM',
   default_platform: 'amd',
   runtime_models: runtimeModels,
@@ -60,6 +73,82 @@ const recipesResponse = {
         model_id: 'models/mmbert-feedback-detector-merged',
         request_model: 'MoM',
         description: 'Current MoM feedback detector baseline.',
+      },
+    },
+    {
+      key: 'fact-check',
+      label: 'Improve fact-check classifier accuracy',
+      goal_templates: ['improve_accuracy'],
+      default_dataset: 'llm-semantic-router/fact-check-classification-dataset',
+      dataset_hint: 'Offline eval accepts a Hugging Face dataset id or local JSON/CSV path.',
+      default_success_threshold_pp: 0.5,
+      primary_metric: 'accuracy',
+      supports_dataset_override: true,
+      supports_hyperparameter_hints: true,
+      baseline: {
+        label: 'Improve fact-check classifier accuracy',
+        source: 'fallback',
+        model_id: 'llm-semantic-router/mmbert-fact-check-merged',
+        request_model: 'MoM',
+        description: 'Current MoM fact-check baseline.',
+      },
+    },
+    {
+      key: 'jailbreak',
+      label: 'Improve jailbreak classifier accuracy',
+      goal_templates: ['improve_accuracy'],
+      default_dataset: 'llm-semantic-router/jailbreak-detection-dataset',
+      dataset_hint: 'Offline eval accepts a Hugging Face dataset id or local JSON/CSV path.',
+      default_success_threshold_pp: 0.5,
+      primary_metric: 'accuracy',
+      supports_dataset_override: true,
+      supports_hyperparameter_hints: true,
+      baseline: {
+        label: 'Improve jailbreak classifier accuracy',
+        source: 'fallback',
+        model_id: 'llm-semantic-router/mmbert-jailbreak-detector-merged',
+        request_model: 'MoM',
+        description: 'Current MoM jailbreak detector baseline.',
+      },
+    },
+    {
+      key: 'intent',
+      label: 'Improve intent classifier accuracy',
+      goal_templates: ['improve_accuracy'],
+      default_dataset: 'TIGER-Lab/MMLU-Pro',
+      dataset_hint: 'Offline eval accepts a local JSON/CSV override. Training continues to use the built-in MMLU-Pro intent corpus.',
+      default_success_threshold_pp: 0.5,
+      primary_metric: 'accuracy',
+      supports_dataset_override: true,
+      supports_hyperparameter_hints: true,
+      baseline: {
+        label: 'Improve intent classifier accuracy',
+        source: 'runtime',
+        runtime_name: 'category_classifier',
+        model_path: 'models/mmbert32k-intent-classifier-merged',
+        model_id: 'models/mmbert32k-intent-classifier-merged',
+        request_model: 'MoM',
+        description: 'Current MoM intent classifier baseline.',
+      },
+    },
+    {
+      key: 'pii',
+      label: 'Improve PII classifier accuracy',
+      goal_templates: ['improve_accuracy'],
+      default_dataset: 'presidio',
+      dataset_hint: 'Offline eval accepts a local JSON/CSV override. Training defaults to Presidio plus AI4Privacy unless advanced hints disable it.',
+      default_success_threshold_pp: 0.5,
+      primary_metric: 'accuracy',
+      supports_dataset_override: true,
+      supports_hyperparameter_hints: true,
+      baseline: {
+        label: 'Improve PII classifier accuracy',
+        source: 'runtime',
+        runtime_name: 'pii_classifier',
+        model_path: 'models/mmbert32k-pii-detector-merged',
+        model_id: 'models/mmbert32k-pii-detector-merged',
+        request_model: 'MoM',
+        description: 'Current MoM PII detector baseline.',
       },
     },
     {
@@ -216,7 +305,7 @@ test.describe('Auto Research page', () => {
     await mockAuthenticatedAppShell(page, {
       settings: {
         platform: 'amd',
-        envoyUrl: 'http://envoy.internal:8081',
+        envoyUrl: 'http://envoy.internal:8899',
       },
     });
 
@@ -289,9 +378,13 @@ test.describe('Auto Research page', () => {
     await page.getByRole('menu', { name: 'System' }).getByRole('menuitem', { name: 'Auto Research' }).click();
 
     await expect(page.getByRole('heading', { name: 'Auto Research' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Recent campaigns' })).toBeVisible();
     await expect(page.getByText('Default platform', { exact: true })).toBeVisible();
     await expect(page.getByText('Request model', { exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Runtime baseline' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Selected baseline' })).toBeVisible();
+    await expect(page.getByText('Runtime key: feedback_detector')).toBeVisible();
+    await expect(page.locator('select option[value="intent"]')).toHaveText('Improve intent classifier accuracy');
+    await expect(page.locator('select option[value="pii"]')).toHaveText('Improve PII classifier accuracy');
 
     await expect(page.getByLabel('API base override')).toHaveCount(0);
     await expect(page.getByLabel('Request model override')).toHaveCount(0);

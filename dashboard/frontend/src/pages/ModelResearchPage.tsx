@@ -9,10 +9,14 @@ import type {
 } from '../types/modelResearch'
 import {
   defaultCampaignName,
+  getCampaignDatasetLabel,
   formatImprovementPP,
   formatPercent,
   getCampaignStatusTone,
   getCampaignSubtitle,
+  getDisplayedBaseline,
+  getRuntimeBaselineInventory,
+  getRuntimeBaselineModel,
   GOAL_TEMPLATE_OPTIONS,
 } from './modelResearchPageSupport'
 import ModelResearchTrendPanel from './ModelResearchTrendPanel'
@@ -68,6 +72,15 @@ export default function ModelResearchPage() {
   }, [goalTemplate, selectedRecipe])
 
   const runtimeModels = selectedCampaign?.runtime_models ?? recipesResponse?.runtime_models ?? null
+  const displayedBaseline = getDisplayedBaseline(selectedCampaign, selectedRecipe)
+  const runtimeBaselineInventory = useMemo(
+    () => getRuntimeBaselineInventory(runtimeModels, displayedBaseline),
+    [runtimeModels, displayedBaseline]
+  )
+  const runtimeBaselineModel = useMemo(
+    () => getRuntimeBaselineModel(runtimeModels, displayedBaseline),
+    [runtimeModels, displayedBaseline]
+  )
   const selectedGoalOption = GOAL_TEMPLATE_OPTIONS.find((option) => option.value === goalTemplate) ?? GOAL_TEMPLATE_OPTIONS[0]
   const runtimeModelCount = runtimeModels?.summary?.loaded_models ?? runtimeModels?.models?.length ?? 0
 
@@ -149,20 +162,162 @@ export default function ModelResearchPage() {
       )}
 
       <div className={styles.body}>
-        <div className={styles.layout}>
-          <aside className={styles.sidebar}>
-            <div className={styles.sidebarHeader}>
+        <main className={styles.main}>
+          <section className={styles.panel}>
+            <div className={styles.panelHeader}>
               <div>
-                <h2>Campaigns</h2>
-                <p>Recent research runs and their best observed lift.</p>
+                <h2>Create Campaign</h2>
+                <p>{selectedGoalOption.description}</p>
               </div>
-              <span>{campaigns.length}</span>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setShowAdvanced((value) => !value)}
+              >
+                {showAdvanced ? 'Hide advanced controls' : 'Show advanced controls'}
+              </button>
             </div>
-            <div className={styles.sidebarList}>
-              {campaigns.length === 0 && !loading ? (
-                <div className={styles.emptyState}>No campaigns yet.</div>
-              ) : (
-                campaigns.map((campaign) => (
+
+            <div className={styles.formGrid}>
+              <label className={styles.field}>
+                <span>Campaign name</span>
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="accuracy-feedback-2026-03-19"
+                />
+              </label>
+
+              <label className={styles.field}>
+                <span>Target classifier / signal</span>
+                <select value={target} onChange={(event) => setTarget(event.target.value)}>
+                  {targetOptions.map((recipe) => (
+                    <option key={recipe.key} value={recipe.key}>
+                      {recipe.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className={styles.field}>
+                <span>Budget (max trials)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={3}
+                  value={maxTrials}
+                  onChange={(event) => setMaxTrials(Number(event.target.value) || 1)}
+                />
+              </label>
+
+              <label className={styles.field}>
+                <span>Success threshold (pp)</span>
+                <input
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  value={successThresholdPP}
+                  onChange={(event) => setSuccessThresholdPP(Number(event.target.value) || 0.5)}
+                />
+              </label>
+            </div>
+
+            {selectedRecipe && (
+              <div className={styles.recipeCard}>
+                <div className={styles.recipeCardHeader}>
+                  <h3>{selectedRecipe.label}</h3>
+                  <span className={styles.inlinePill}>{selectedRecipe.primary_metric}</span>
+                </div>
+                <p>{selectedRecipe.dataset_hint}</p>
+                <div className={styles.recipeMeta}>
+                  <span>Default dataset: {selectedRecipe.default_dataset}</span>
+                  <span>
+                    Baseline:{' '}
+                    {selectedRecipe.baseline.model_id ||
+                      selectedRecipe.baseline.model_path ||
+                      'MoM runtime'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {showAdvanced && (
+              <div className={styles.advancedPanel}>
+                <div className={styles.formGrid}>
+                  <label className={styles.field}>
+                    <span>API base override</span>
+                    <input
+                      value={apiBaseOverride}
+                      onChange={(event) => setAPIBaseOverride(event.target.value)}
+                      placeholder={recipesResponse?.default_api_base || 'http://localhost:8080'}
+                    />
+                  </label>
+
+                  <label className={styles.field}>
+                    <span>Request model override</span>
+                    <input
+                      value={requestModelOverride}
+                      onChange={(event) => setRequestModelOverride(event.target.value)}
+                      placeholder={recipesResponse?.default_request_model || 'MoM'}
+                    />
+                  </label>
+
+                  <label className={styles.field}>
+                    <span>Dataset override</span>
+                    <input
+                      value={datasetOverride}
+                      onChange={(event) => setDatasetOverride(event.target.value)}
+                      placeholder={selectedRecipe?.default_dataset || ''}
+                    />
+                  </label>
+
+                  <label className={`${styles.field} ${styles.checkboxField}`}>
+                    <input
+                      type="checkbox"
+                      checked={allowCPUDryRun}
+                      onChange={(event) => setAllowCPUDryRun(event.target.checked)}
+                    />
+                    <span>Allow CPU dry run when AMD is unavailable</span>
+                  </label>
+                </div>
+
+                <label className={styles.field}>
+                  <span>Partial hyperparameter hints (JSON)</span>
+                  <textarea
+                    value={hyperparameterHints}
+                    onChange={(event) => setHyperparameterHints(event.target.value)}
+                    placeholder='{"epochs": 6, "learning_rate": 0.00002}'
+                    rows={6}
+                  />
+                </label>
+              </div>
+            )}
+
+            <div className={styles.panelActions}>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={handleStartCampaign}
+                disabled={submitting || !selectedRecipe}
+              >
+                {submitting ? 'Starting…' : 'Start campaign'}
+              </button>
+            </div>
+          </section>
+
+          <section className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <div>
+                <h2>Recent campaigns</h2>
+                <p>Select a run to inspect its best lift, trend, and logs without splitting the page into a narrow side rail.</p>
+              </div>
+              <span className={styles.panelCount}>{campaigns.length}</span>
+            </div>
+            {campaigns.length === 0 ? (
+              <div className={styles.emptyState}>{loading ? 'Loading campaigns…' : 'No campaigns yet.'}</div>
+            ) : (
+              <div className={styles.campaignGrid}>
+                {campaigns.map((campaign) => (
                   <button
                     key={campaign.id}
                     type="button"
@@ -178,304 +333,186 @@ export default function ModelResearchPage() {
                       </span>
                     </div>
                     <span className={styles.campaignHint}>{getCampaignSubtitle(campaign)}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </aside>
-
-          <main className={styles.main}>
-            <section className={styles.panel}>
-              <div className={styles.panelHeader}>
-                <div>
-                  <h2>Create Campaign</h2>
-                  <p>{selectedGoalOption.description}</p>
-                </div>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => setShowAdvanced((value) => !value)}
-                >
-                  {showAdvanced ? 'Hide advanced controls' : 'Show advanced controls'}
-                </button>
-              </div>
-
-              <div className={styles.formGrid}>
-                <label className={styles.field}>
-                  <span>Campaign name</span>
-                  <input
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    placeholder="accuracy-feedback-2026-03-19"
-                  />
-                </label>
-
-                <label className={styles.field}>
-                  <span>Target classifier / signal</span>
-                  <select value={target} onChange={(event) => setTarget(event.target.value)}>
-                    {targetOptions.map((recipe) => (
-                      <option key={recipe.key} value={recipe.key}>
-                        {recipe.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className={styles.field}>
-                  <span>Budget (max trials)</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={3}
-                    value={maxTrials}
-                    onChange={(event) => setMaxTrials(Number(event.target.value) || 1)}
-                  />
-                </label>
-
-                <label className={styles.field}>
-                  <span>Success threshold (pp)</span>
-                  <input
-                    type="number"
-                    min={0.1}
-                    step={0.1}
-                    value={successThresholdPP}
-                    onChange={(event) => setSuccessThresholdPP(Number(event.target.value) || 0.5)}
-                  />
-                </label>
-              </div>
-
-              {selectedRecipe && (
-                <div className={styles.recipeCard}>
-                  <div className={styles.recipeCardHeader}>
-                    <h3>{selectedRecipe.label}</h3>
-                    <span className={styles.inlinePill}>{selectedRecipe.primary_metric}</span>
-                  </div>
-                  <p>{selectedRecipe.dataset_hint}</p>
-                  <div className={styles.recipeMeta}>
-                    <span>Default dataset: {selectedRecipe.default_dataset}</span>
-                    <span>
-                      Baseline:{' '}
-                      {selectedRecipe.baseline.model_id ||
-                        selectedRecipe.baseline.model_path ||
-                        'MoM runtime'}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {showAdvanced && (
-                <div className={styles.advancedPanel}>
-                  <div className={styles.formGrid}>
-                    <label className={styles.field}>
-                      <span>API base override</span>
-                      <input
-                        value={apiBaseOverride}
-                        onChange={(event) => setAPIBaseOverride(event.target.value)}
-                        placeholder={recipesResponse?.default_api_base || 'http://localhost:8080'}
-                      />
-                    </label>
-
-                    <label className={styles.field}>
-                      <span>Request model override</span>
-                      <input
-                        value={requestModelOverride}
-                        onChange={(event) => setRequestModelOverride(event.target.value)}
-                        placeholder={recipesResponse?.default_request_model || 'MoM'}
-                      />
-                    </label>
-
-                    <label className={styles.field}>
-                      <span>Dataset override</span>
-                      <input
-                        value={datasetOverride}
-                        onChange={(event) => setDatasetOverride(event.target.value)}
-                        placeholder={selectedRecipe?.default_dataset || ''}
-                      />
-                    </label>
-
-                    <label className={`${styles.field} ${styles.checkboxField}`}>
-                      <input
-                        type="checkbox"
-                        checked={allowCPUDryRun}
-                        onChange={(event) => setAllowCPUDryRun(event.target.checked)}
-                      />
-                      <span>Allow CPU dry run when AMD is unavailable</span>
-                    </label>
-                  </div>
-
-                  <label className={styles.field}>
-                    <span>Partial hyperparameter hints (JSON)</span>
-                    <textarea
-                      value={hyperparameterHints}
-                      onChange={(event) => setHyperparameterHints(event.target.value)}
-                      placeholder='{"epochs": 6, "learning_rate": 0.00002}'
-                      rows={6}
-                    />
-                  </label>
-                </div>
-              )}
-
-              <div className={styles.panelActions}>
-                <button
-                  type="button"
-                  className={styles.primaryButton}
-                  onClick={handleStartCampaign}
-                  disabled={submitting || !selectedRecipe}
-                >
-                  {submitting ? 'Starting…' : 'Start campaign'}
-                </button>
-              </div>
-            </section>
-
-            <section className={styles.panel}>
-              <div className={styles.panelHeader}>
-                <div>
-                  <h2>Runtime baseline</h2>
-                  <p>
-                    Read-only inventory discovered from the current router. These models seed the
-                    baseline shown in each recipe.
-                  </p>
-                </div>
-              </div>
-              <RouterModelInventory
-                modelsInfo={runtimeModels}
-                mode="preview"
-                previewLimit={4}
-                emptyMessage="No runtime models discovered from /info/models."
-              />
-            </section>
-
-            {selectedCampaign && (
-              <section className={styles.panel}>
-                <div className={styles.panelHeader}>
-                  <div>
-                    <h2>{selectedCampaign.name}</h2>
-                    <p>{selectedCampaign.recipe.label}</p>
-                  </div>
-                  {['pending', 'running'].includes(selectedCampaign.status) && (
-                    <button
-                      type="button"
-                      className={styles.stopButton}
-                      onClick={() => void stopSelectedCampaign()}
-                    >
-                      Stop campaign
-                    </button>
-                  )}
-                </div>
-
-                <div className={styles.statsGrid}>
-                  <StatCard
-                    label="Status"
-                    value={selectedCampaign.status}
-                    tone={getCampaignStatusTone(selectedCampaign.status)}
-                  />
-                  <StatCard label="Platform" value={selectedCampaign.platform} />
-                  <StatCard
-                    label="Baseline accuracy"
-                    value={formatPercent(selectedCampaign.baseline_eval?.accuracy)}
-                  />
-                  <StatCard
-                    label="Best improvement"
-                    value={formatImprovementPP(selectedCampaign.best_trial?.eval?.improvement_pp)}
-                  />
-                  <StatCard label="API base" value={selectedCampaign.api_base} compact />
-                  <StatCard label="Request model" value={selectedCampaign.request_model} />
-                </div>
-
-                <ModelResearchTrendPanel campaign={selectedCampaign} />
-
-                <div className={styles.detailGrid}>
-                  <div className={styles.detailCard}>
-                    <h3>Baseline</h3>
-                    <p>{selectedCampaign.baseline.description || 'Current runtime baseline'}</p>
-                    <div className={styles.detailList}>
-                      <span>Source: {selectedCampaign.baseline.source}</span>
-                      <span>
-                        Model:{' '}
-                        {selectedCampaign.baseline.model_id ||
-                          selectedCampaign.baseline.model_path ||
-                          'N/A'}
-                      </span>
-                      <span>Dataset: {selectedCampaign.recipe.default_dataset}</span>
-                      {selectedCampaign.runtime_baseline && (
-                        <span>
-                          Runtime signal eval:{' '}
-                          {formatPercent(selectedCampaign.runtime_baseline.accuracy)}
-                        </span>
-                      )}
+                    <div className={styles.campaignMeta}>
+                      <span>{campaign.recipe.label}</span>
+                      <span>{new Date(campaign.updated_at).toLocaleString()}</span>
                     </div>
-                  </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
 
-                  <div className={styles.detailCard}>
-                    <h3>Best candidate</h3>
-                    {selectedCampaign.best_trial?.eval ? (
-                      <div className={styles.detailList}>
-                        <span>Trial: {selectedCampaign.best_trial.name}</span>
-                        <span>
-                          Accuracy: {formatPercent(selectedCampaign.best_trial.eval.accuracy)}
-                        </span>
-                        <span>F1: {formatPercent(selectedCampaign.best_trial.eval.f1)}</span>
-                        <span>
-                          Improvement:{' '}
-                          {formatImprovementPP(
-                            selectedCampaign.best_trial.eval.improvement_pp
-                          )}
-                        </span>
-                        <span>Model path: {selectedCampaign.best_trial.model_path || 'N/A'}</span>
-                        <span>
-                          Config fragment: {selectedCampaign.config_fragment_path || 'Pending'}
-                        </span>
-                      </div>
-                    ) : (
-                      <p>No successful trial yet.</p>
+          <section className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <div>
+                <h2>Selected baseline</h2>
+                <p>
+                  {displayedBaseline?.source === 'runtime'
+                    ? 'This is the runtime model currently used as the baseline for the selected recipe or campaign.'
+                    : 'The selected recipe is currently using a fallback baseline because the matching runtime model was not discovered from /info/models.'}
+                </p>
+              </div>
+            </div>
+            {displayedBaseline ? (
+              <div className={styles.detailCard}>
+                <h3>{displayedBaseline.label}</h3>
+                <p>{displayedBaseline.description || 'Current baseline for the selected recipe.'}</p>
+                <div className={styles.detailList}>
+                  <span>Source: {displayedBaseline.source}</span>
+                  <span>Request model: {displayedBaseline.request_model || recipesResponse?.default_request_model || 'MoM'}</span>
+                  <span>Runtime key: {displayedBaseline.runtime_name || 'Not discovered from runtime'}</span>
+                  <span>Model: {displayedBaseline.model_id || displayedBaseline.model_path || 'N/A'}</span>
+                  <span>State: {displayedBaseline.state || runtimeBaselineModel?.state || 'Unknown'}</span>
+                  {runtimeBaselineModel?.categories?.length ? (
+                    <span>Categories: {runtimeBaselineModel.categories.join(', ')}</span>
+                  ) : null}
+                  {selectedCampaign ? (
+                    <span>Dataset: {getCampaignDatasetLabel(selectedCampaign)}</span>
+                  ) : selectedRecipe ? (
+                    <span>Dataset: {selectedRecipe.default_dataset}</span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            <RouterModelInventory
+              modelsInfo={runtimeBaselineInventory}
+              mode="preview"
+              previewLimit={1}
+              emptyMessage="No matching runtime baseline model was discovered from /info/models."
+            />
+          </section>
+
+          {selectedCampaign && (
+            <section className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <h2>{selectedCampaign.name}</h2>
+                  <p>{selectedCampaign.recipe.label}</p>
+                </div>
+                {['pending', 'running'].includes(selectedCampaign.status) && (
+                  <button
+                    type="button"
+                    className={styles.stopButton}
+                    onClick={() => void stopSelectedCampaign()}
+                  >
+                    Stop campaign
+                  </button>
+                )}
+              </div>
+
+              <div className={styles.statsGrid}>
+                <StatCard
+                  label="Status"
+                  value={selectedCampaign.status}
+                  tone={getCampaignStatusTone(selectedCampaign.status)}
+                />
+                <StatCard label="Platform" value={selectedCampaign.platform} />
+                <StatCard
+                  label="Baseline accuracy"
+                  value={formatPercent(selectedCampaign.baseline_eval?.accuracy)}
+                />
+                <StatCard
+                  label="Best improvement"
+                  value={formatImprovementPP(selectedCampaign.best_trial?.eval?.improvement_pp)}
+                />
+                <StatCard label="API base" value={selectedCampaign.api_base} compact />
+                <StatCard label="Request model" value={selectedCampaign.request_model} />
+              </div>
+
+              <ModelResearchTrendPanel campaign={selectedCampaign} />
+
+              <div className={styles.detailGrid}>
+                <div className={styles.detailCard}>
+                  <h3>Baseline</h3>
+                  <p>{selectedCampaign.baseline.description || 'Current runtime baseline'}</p>
+                  <div className={styles.detailList}>
+                    <span>Source: {selectedCampaign.baseline.source}</span>
+                    <span>
+                      Model:{' '}
+                      {selectedCampaign.baseline.model_id ||
+                        selectedCampaign.baseline.model_path ||
+                        'N/A'}
+                    </span>
+                    <span>Dataset: {getCampaignDatasetLabel(selectedCampaign)}</span>
+                    {selectedCampaign.runtime_baseline && (
+                      <span>
+                        Runtime signal eval:{' '}
+                        {formatPercent(selectedCampaign.runtime_baseline.accuracy)}
+                      </span>
                     )}
                   </div>
                 </div>
 
-                <div className={styles.tableSection}>
-                  <h3>Trials</h3>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Status</th>
-                        <th>Accuracy</th>
-                        <th>Improvement</th>
-                        <th>Model</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(selectedCampaign.trials ?? []).map((trial) => (
-                        <tr key={trial.name}>
-                          <td>{trial.name}</td>
-                          <td>{trial.status}</td>
-                          <td>{formatPercent(trial.eval?.accuracy)}</td>
-                          <td>{formatImprovementPP(trial.eval?.improvement_pp)}</td>
-                          <td className={styles.monoCell}>{trial.model_path || 'Pending'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className={styles.detailCard}>
+                  <h3>Best candidate</h3>
+                  {selectedCampaign.best_trial?.eval ? (
+                    <div className={styles.detailList}>
+                      <span>Trial: {selectedCampaign.best_trial.name}</span>
+                      <span>
+                        Accuracy: {formatPercent(selectedCampaign.best_trial.eval.accuracy)}
+                      </span>
+                      <span>F1: {formatPercent(selectedCampaign.best_trial.eval.f1)}</span>
+                      <span>
+                        Improvement:{' '}
+                        {formatImprovementPP(
+                          selectedCampaign.best_trial.eval.improvement_pp
+                        )}
+                      </span>
+                      <span>Model path: {selectedCampaign.best_trial.model_path || 'N/A'}</span>
+                      <span>
+                        Config fragment: {selectedCampaign.config_fragment_path || 'Pending'}
+                      </span>
+                    </div>
+                  ) : (
+                    <p>No successful trial yet.</p>
+                  )}
                 </div>
+              </div>
 
-                <div className={styles.logSection}>
-                  <h3>Live log</h3>
-                  <div className={styles.logList}>
-                    {(selectedCampaign.events ?? []).map((event, index) => (
-                      <div key={`${event.timestamp}-${index}`} className={styles.logItem}>
-                        <span className={styles.logTime}>
-                          {new Date(event.timestamp).toLocaleTimeString()}
-                        </span>
-                        <span className={styles.logLevel}>{event.level || event.kind}</span>
-                        <span className={styles.logMessage}>{event.message}</span>
-                      </div>
+              <div className={styles.tableSection}>
+                <h3>Trials</h3>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Status</th>
+                      <th>Accuracy</th>
+                      <th>Improvement</th>
+                      <th>Model</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedCampaign.trials ?? []).map((trial) => (
+                      <tr key={trial.name}>
+                        <td>{trial.name}</td>
+                        <td>{trial.status}</td>
+                        <td>{formatPercent(trial.eval?.accuracy)}</td>
+                        <td>{formatImprovementPP(trial.eval?.improvement_pp)}</td>
+                        <td className={styles.monoCell}>{trial.model_path || 'Pending'}</td>
+                      </tr>
                     ))}
-                  </div>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className={styles.logSection}>
+                <h3>Live log</h3>
+                <div className={styles.logList}>
+                  {(selectedCampaign.events ?? []).map((event, index) => (
+                    <div key={`${event.timestamp}-${index}`} className={styles.logItem}>
+                      <span className={styles.logTime}>
+                        {new Date(event.timestamp).toLocaleTimeString()}
+                      </span>
+                      <span className={styles.logLevel}>{event.level || event.kind}</span>
+                      <span className={styles.logMessage}>{event.message}</span>
+                    </div>
+                  ))}
                 </div>
-              </section>
-            )}
-          </main>
-        </div>
+              </div>
+            </section>
+          )}
+        </main>
       </div>
     </div>
   )
