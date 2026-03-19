@@ -5,9 +5,11 @@ import {
   TestQueryResult,
   MatchedSignal,
   SignalType,
+  RuleNode,
   RuleCombination,
   KeywordSignalConfig,
 } from '../types'
+import { collectRuleSignalTypes, isRuleCombination } from './ruleTree'
 
 /**
  * Simulate signal matching for a test query (frontend-only)
@@ -113,8 +115,8 @@ export async function simulateSignalMatching(
       matchedModels = decision.modelRefs.map(r => r.model)
 
       // Build highlighted path
-      decision.rules.conditions.forEach(cond => {
-        highlightedPath.push(`signal-group-${cond.type}`)
+      collectRuleSignalTypes(decision.rules).forEach(type => {
+        highlightedPath.push(`signal-group-${type}`)
       })
       highlightedPath.push(`decision-${decision.name}`)
       if (decision.algorithm) {
@@ -150,14 +152,7 @@ function evaluateRules(rules: RuleCombination, matchedSignals: MatchedSignal[]):
     return true // No conditions = always match (default decision)
   }
 
-  const conditionResults = rules.conditions.map(cond => {
-    const signal = matchedSignals.find(s => s.type === cond.type && s.name === cond.name)
-    // If signal needs backend, we can't evaluate accurately - assume false for safety
-    if (signal?.needsBackend) {
-      return false
-    }
-    return signal?.matched ?? false
-  })
+  const conditionResults = rules.conditions.map(cond => evaluateRuleNode(cond, matchedSignals))
 
   if (rules.operator === 'AND') {
     return conditionResults.every(r => r)
@@ -167,6 +162,19 @@ function evaluateRules(rules: RuleCombination, matchedSignals: MatchedSignal[]):
   } else {
     return conditionResults.some(r => r)
   }
+}
+
+function evaluateRuleNode(rule: RuleNode, matchedSignals: MatchedSignal[]): boolean {
+  if (!isRuleCombination(rule)) {
+    const signal = matchedSignals.find(s => s.type === rule.type && s.name === rule.name)
+    if (signal?.needsBackend) {
+      return false
+    }
+
+    return signal?.matched ?? false
+  }
+
+  return evaluateRules(rule, matchedSignals)
 }
 
 /**

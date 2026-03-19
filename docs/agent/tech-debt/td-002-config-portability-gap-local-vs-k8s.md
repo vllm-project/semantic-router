@@ -15,7 +15,7 @@ The primary local, AMD, Helm, operator, onboarding, and DSL workflows now share 
 ## Evidence
 
 - [src/vllm-sr/cli/templates/config.template.yaml](../../../src/vllm-sr/cli/templates/config.template.yaml)
-- [deploy/amd/config.yaml](../../../deploy/amd/config.yaml)
+- [deploy/recipes/balance.yaml](../../../deploy/recipes/balance.yaml)
 - [deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_simple.yaml](../../../deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_simple.yaml)
 - [website/docs/installation/configuration.md](../../../website/docs/installation/configuration.md)
 - [website/docs/installation/k8s/operator.md](../../../website/docs/installation/k8s/operator.md)

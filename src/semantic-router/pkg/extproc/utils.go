@@ -72,56 +72,7 @@ func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, 
 	var nonUser []string
 
 	for _, msg := range req.Messages {
-		// Extract content based on message type
-		var textContent string
-		var role string
-
-		if msg.OfUser != nil {
-			role = "user"
-			// Handle user message content
-			if msg.OfUser.Content.OfString.Value != "" {
-				textContent = msg.OfUser.Content.OfString.Value
-			} else if len(msg.OfUser.Content.OfArrayOfContentParts) > 0 {
-				// Extract text from content parts
-				var parts []string
-				for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
-					if part.OfText != nil {
-						parts = append(parts, part.OfText.Text)
-					}
-				}
-				textContent = strings.Join(parts, " ")
-			}
-		} else if msg.OfSystem != nil {
-			role = "system"
-			if msg.OfSystem.Content.OfString.Value != "" {
-				textContent = msg.OfSystem.Content.OfString.Value
-			} else if len(msg.OfSystem.Content.OfArrayOfContentParts) > 0 {
-				// Extract text from content parts
-				var parts []string
-				for _, part := range msg.OfSystem.Content.OfArrayOfContentParts {
-					if part.Text != "" {
-						parts = append(parts, part.Text)
-					}
-				}
-				textContent = strings.Join(parts, " ")
-			}
-		} else if msg.OfAssistant != nil {
-			role = "assistant"
-			if msg.OfAssistant.Content.OfString.Value != "" {
-				textContent = msg.OfAssistant.Content.OfString.Value
-			} else if len(msg.OfAssistant.Content.OfArrayOfContentParts) > 0 {
-				// Extract text from content parts
-				var parts []string
-				for _, part := range msg.OfAssistant.Content.OfArrayOfContentParts {
-					if part.OfText != nil {
-						parts = append(parts, part.OfText.Text)
-					}
-				}
-				textContent = strings.Join(parts, " ")
-			}
-		}
-
-		// Categorize by role
+		role, textContent := extractMessageRoleAndContent(msg)
 		if role == "user" {
 			userContent = textContent
 		} else if role != "" {
@@ -132,17 +83,101 @@ func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, 
 	return userContent, nonUser
 }
 
+func extractMessageRoleAndContent(msg openai.ChatCompletionMessageParamUnion) (string, string) {
+	switch {
+	case msg.OfUser != nil:
+		return "user", extractUserMessageContent(msg.OfUser.Content)
+	case msg.OfSystem != nil:
+		return "system", extractSystemMessageContent(msg.OfSystem.Content)
+	case msg.OfAssistant != nil:
+		return "assistant", extractAssistantMessageContent(msg.OfAssistant.Content)
+	default:
+		return "", ""
+	}
+}
+
+func extractUserMessageContent(content openai.ChatCompletionUserMessageParamContentUnion) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
+	}
+	return joinUserContentParts(content.OfArrayOfContentParts)
+}
+
+func extractSystemMessageContent(content openai.ChatCompletionSystemMessageParamContentUnion) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
+	}
+	return joinSystemContentParts(content.OfArrayOfContentParts)
+}
+
+func extractAssistantMessageContent(
+	content openai.ChatCompletionAssistantMessageParamContentUnion,
+) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
+	}
+	return joinAssistantContentParts(content.OfArrayOfContentParts)
+}
+
+func joinUserContentParts(parts []openai.ChatCompletionContentPartUnionParam) string {
+	textParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.OfText != nil {
+			textParts = append(textParts, part.OfText.Text)
+		}
+	}
+	return strings.Join(textParts, " ")
+}
+
+func joinSystemContentParts(parts []openai.ChatCompletionContentPartTextParam) string {
+	textParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.Text != "" {
+			textParts = append(textParts, part.Text)
+		}
+	}
+	return strings.Join(textParts, " ")
+}
+
+func joinAssistantContentParts(
+	parts []openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion,
+) string {
+	textParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.OfText != nil {
+			textParts = append(textParts, part.OfText.Text)
+		}
+	}
+	return strings.Join(textParts, " ")
+}
+
 // statusCodeToEnum converts HTTP status code to typev3.StatusCode enum
 func statusCodeToEnum(statusCode int) typev3.StatusCode {
 	switch statusCode {
 	case 200:
 		return typev3.StatusCode_OK
+	case 401:
+		return typev3.StatusCode_Unauthorized
+	case 403:
+		return typev3.StatusCode_Forbidden
 	case 400:
 		return typev3.StatusCode_BadRequest
 	case 404:
 		return typev3.StatusCode_NotFound
+	case 405:
+		return typev3.StatusCode_MethodNotAllowed
+	case 413:
+		return typev3.StatusCode_PayloadTooLarge
+	case 422:
+		return typev3.StatusCode_UnprocessableEntity
+	case 429:
+		return typev3.StatusCode_TooManyRequests
 	case 500:
 		return typev3.StatusCode_InternalServerError
+	case 502:
+		return typev3.StatusCode_BadGateway
+	case 503:
+		return typev3.StatusCode_ServiceUnavailable
 	default:
 		return typev3.StatusCode_OK
 	}
