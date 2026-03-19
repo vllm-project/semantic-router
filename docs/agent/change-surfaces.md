@@ -28,8 +28,14 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 ## `plugin_runtime`
 
-- Post-decision processing such as cache behavior, prompt rewriting, and request or response handling owned by plugins.
-- Typical paths: `src/semantic-router/pkg/plugins/**`, `processor_req_body_*.go`, `processor_res_body_*.go`, `req_filter_*.go`
+- Post-decision processing such as cache behavior, prompt rewriting, and request or response handling owned by the extproc plugin chain.
+- Typical paths: `src/semantic-router/pkg/extproc/req_filter_*.go`, `processor_req_body_*.go`, `processor_res_body_*.go`
+- Task rules: `router-core`
+
+## `router_service_platform`
+
+- Router-side service, API, storage, authz, memory, provider, and runtime support modules outside the config, decision, selection, and extproc plugin chains.
+- Typical paths: `src/semantic-router/pkg/apiserver/**`, `authz/**`, `memory/**`, `responseapi/**`, `responsestore/**`, `openai/**`, `anthropic/**`, `routerreplay/**`
 - Task rules: `router-core`
 
 ## `native_binding`
@@ -92,9 +98,21 @@ This document defines the project-level surfaces used by skills, reports, and va
 - Typical paths: `deploy/operator/**`, `deploy/kubernetes/crds/**`, `src/semantic-router/pkg/apis/**`
 - Task rules: `operator-stack`, `e2e-framework`
 
-## `training_post_training`
+## `deployment_profile_stack`
 
-- Post-training, classifier fine-tuning, model-classifier data pipelines, and training artifacts that feed runtime behavior.
+- Kubernetes deployment profiles, stack manifests, and profile-owned platform resources outside operator CRDs.
+- Typical paths: `deploy/kubernetes/response-api/**`, `deploy/kubernetes/ai-gateway/**`, `deploy/kubernetes/observability/**`, `deploy/kubernetes/streaming/**`
+- Task rules: `e2e-framework`
+
+## `fleet_sim_runtime`
+
+- Fleet simulator package, API service, release workflow, and simulator-owned docs or assets that must stay runnable as one subsystem.
+- Typical paths: `src/fleet-sim/**`, `website/docs/fleet-sim/**`, `.github/workflows/pypi-publish-vllm-sr-sim.yml`
+- Task rules: `fleet-sim`, `repo-docs`
+
+## `training_stack`
+
+- Training-stack workflows, selector or embedding artifacts, evaluation scripts, and runtime-facing training outputs under `src/training`.
 - Typical paths: `src/training/**`, `tools/make/models.mk`, `scripts/train-mmbert32k-gpu.sh`, `website/docs/training/**`
 - Task rules: `training-stack`, `repo-docs`
 

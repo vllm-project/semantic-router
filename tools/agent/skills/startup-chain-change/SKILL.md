@@ -20,6 +20,11 @@ description: Modifies the local startup chain including image build, container s
 4. Run `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."` to validate startup behavior
 5. Verify the canonical local serve path works with the default smoke config
 
+## Gotchas
+
+- Do not introduce an alternate local serve path; the local image flow remains the canonical local-dev contract.
+- A smoke-only green run is not enough when CLI orchestration or image selection semantics changed.
+
 ## Must Read
 
 - [docs/agent/environments.md](../../../../docs/agent/environments.md)

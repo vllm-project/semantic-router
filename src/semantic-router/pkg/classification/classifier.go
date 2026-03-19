@@ -1306,9 +1306,10 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		logging.Infof("[Signal Computation] Keyword signal not used in any decision, skipping evaluation")
 	}
 
-	// Evaluate embedding rules in parallel (only if used in decisions)
-	// Uses ClassifyAll() to return ALL matched rules (not just the single best),
-	// enabling AND conditions in the Decision Engine (e.g., embedding:"ai" AND embedding:"programming").
+	// Evaluate embedding rules in parallel (only if used in decisions).
+	// ClassifyAll() returns the highest-ranking matches subject to
+	// embedding_config.top_k (default 1). Increasing top_k allows the decision
+	// engine to compose multiple embedding signals together when needed.
 	// Also stores real similarity scores in SignalConfidences for quality-based routing.
 	if isSignalTypeUsed(usedSignals, config.SignalTypeEmbedding) && c.keywordEmbeddingClassifier != nil {
 		wg.Add(1)
@@ -1335,7 +1336,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 				results.Metrics.Embedding.Confidence = bestConfidence
 
 				mu.Lock()
-				// Add ALL matched rules (not just the best one)
+				// Add the configured top-k matched rules.
 				for _, mr := range matchedRules {
 					// Record signal extraction and match metrics for each matched rule
 					metrics.RecordSignalExtraction(config.SignalTypeEmbedding, mr.RuleName, elapsed.Seconds())
@@ -2859,7 +2860,7 @@ func (c *Classifier) IsPreferenceClassifierEnabled() bool {
 		return false
 	}
 
-	if c.Config.Classifier.PreferenceModel.UseContrastive {
+	if c.Config.PreferenceModel.ContrastiveEnabled() {
 		return true
 	}
 
@@ -2876,7 +2877,8 @@ func (c *Classifier) initializePreferenceClassifier() error {
 	}
 
 	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)
-	classifier, err := NewPreferenceClassifier(externalCfg, c.Config.PreferenceRules, &c.Config.Classifier.PreferenceModel)
+	preferenceCfg := c.Config.PreferenceModel.WithDefaults()
+	classifier, err := NewPreferenceClassifier(externalCfg, c.Config.PreferenceRules, &preferenceCfg)
 	if err != nil {
 		return fmt.Errorf("failed to create preference classifier: %w", err)
 	}

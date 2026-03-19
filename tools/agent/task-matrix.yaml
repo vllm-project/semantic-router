@@ -17,11 +17,19 @@ rules:
       - AGENTS.md
       - docs/agent/**
       - tools/agent/skills/**
+      - src/fleet-sim/AGENTS.md
+      - src/fleet-sim/fleet_sim/optimizer/AGENTS.md
       - src/vllm-sr/cli/AGENTS.md
       - src/semantic-router/pkg/config/AGENTS.md
+      - src/semantic-router/pkg/classification/AGENTS.md
       - src/semantic-router/pkg/extproc/AGENTS.md
+      - deploy/operator/api/v1alpha1/AGENTS.md
+      - deploy/operator/controllers/AGENTS.md
+      - dashboard/frontend/src/AGENTS.md
       - dashboard/frontend/src/pages/AGENTS.md
       - dashboard/frontend/src/components/AGENTS.md
+      - dashboard/backend/handlers/AGENTS.md
+      - e2e/testcases/AGENTS.md
       - .github/copilot-instructions.md
       - .github/PULL_REQUEST_TEMPLATE.md
       - .github/ISSUE_TEMPLATE/**
@@ -57,6 +65,14 @@ rules:
     feature_tests:
       - make vllm-sr-test-integration
     requires_local_smoke: true
+  - name: fleet-sim
+    doc_only: false
+    paths:
+      - src/fleet-sim/**
+    fast_tests:
+      - make vllm-sr-sim-test
+    feature_tests: []
+    requires_local_smoke: false
   - name: memory-integration
     doc_only: false
     paths:

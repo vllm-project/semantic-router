@@ -19,6 +19,11 @@ description: Modifies Kubernetes operator APIs, CRD schemas, and control-plane r
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate all constraints
 5. Verify operator APIs, CRDs, and router-facing translation stay aligned
 
+## Gotchas
+
+- CRD schema changes, translation updates, and reconciliation logic usually need to land together to avoid split-brain behavior.
+- Do not fix the Kubernetes representation while leaving the router-side config contract ambiguous.
+
 ## Must Read
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)

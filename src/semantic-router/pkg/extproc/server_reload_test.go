@@ -11,6 +11,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 )
 
+var expectedAMDModelPaths = []string{
+	"models/mom-embedding-ultra",
+	"models/mmbert32k-intent-classifier-merged",
+	"models/mmbert32k-pii-detector-merged",
+	"models/mmbert32k-jailbreak-detector-merged",
+	"models/mmbert32k-factcheck-classifier-merged",
+	"models/mmbert32k-feedback-detector-merged",
+}
+
 func TestReloadRouterFromFileEnsuresAMDModelsBeforeSwap(t *testing.T) {
 	configPath := amdDeployConfigPath(t)
 	candidateCfg := loadRouterConfigFixture(t, configPath)
@@ -45,17 +54,9 @@ func TestReloadRouterFromFileEnsuresAMDModelsBeforeSwap(t *testing.T) {
 			t.Fatalf("BuildModelSpecs() error = %v", err)
 		}
 
-		wantPaths := []string{
-			"models/mom-embedding-ultra",
-			"models/mmbert32k-intent-classifier-merged",
-			"models/mmbert32k-pii-detector-merged",
-			"models/mmbert32k-jailbreak-detector-merged",
-			"models/mmbert32k-factcheck-classifier-merged",
-			"models/mmbert32k-feedback-detector-merged",
-		}
-		assertModelSpecPaths(t, specs, wantPaths)
-		if len(specs) != len(wantPaths) {
-			t.Fatalf("BuildModelSpecs() returned %d specs, want %d", len(specs), len(wantPaths))
+		assertModelSpecPaths(t, specs, expectedAMDModelPaths)
+		if len(specs) != len(expectedAMDModelPaths) {
+			t.Fatalf("BuildModelSpecs() returned %d specs, want %d", len(specs), len(expectedAMDModelPaths))
 		}
 
 		return nil
@@ -212,7 +213,7 @@ func amdDeployConfigPath(t *testing.T) string {
 	if !ok {
 		t.Fatal("failed to resolve test file path")
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../deploy/amd/config.yaml"))
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../deploy/recipes/balance.yaml"))
 }
 
 func loadRouterConfigFixture(t *testing.T, path string) *config.RouterConfig {

@@ -16,7 +16,7 @@ This file is the short entrypoint for coding agents. The detailed human-readable
 - Full task routing, primary-skill resolution, local-rule surfacing, and validation planning still come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
 - `tools/agent/**` remains the canonical harness source; `.agents/skills/**` is only a discovery bridge.
 
-If you need real AMD model deployment details instead of the minimal smoke path, also read [deploy/amd/README.md](deploy/amd/README.md) and [deploy/amd/config.yaml](deploy/amd/config.yaml).
+If you need real AMD model deployment details instead of the minimal smoke path, also read [deploy/amd/README.md](deploy/amd/README.md) and [deploy/recipes/balance.yaml](deploy/recipes/balance.yaml).
 
 ## Supported Environments
 
@@ -36,7 +36,7 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 - If the desired architecture and the current implementation still diverge after your change, add or update the durable debt entry indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md) instead of leaving the gap only in chat or PR text.
 - Keep modules narrow: one main responsibility per file, small orchestrators plus helpers, interfaces only at seams.
 - Legacy hotspots are debt, not precedent. Touched hotspot files must not grow in responsibility; prefer extraction-first edits.
-- Read the nearest local `AGENTS.md` before editing hotspot trees under `src/semantic-router/pkg/config/`, `src/semantic-router/pkg/extproc/`, `src/vllm-sr/cli/`, `dashboard/frontend/src/pages/`, and `dashboard/frontend/src/components/`.
+- Read the nearest local `AGENTS.md` before editing hotspot trees under `src/semantic-router/pkg/config/`, `src/semantic-router/pkg/extproc/`, `src/vllm-sr/cli/`, `src/fleet-sim/fleet_sim/optimizer/`, `deploy/operator/api/v1alpha1/`, `deploy/operator/controllers/`, `dashboard/frontend/src/`, `dashboard/frontend/src/pages/`, `dashboard/frontend/src/components/`, and `dashboard/backend/handlers/`.
 
 ## Canonical Commands
 
