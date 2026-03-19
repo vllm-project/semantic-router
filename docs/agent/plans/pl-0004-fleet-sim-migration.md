@@ -37,11 +37,12 @@
 - [x] `F005` Add dashboard backend proxy routes and runtime wiring for simulator operations exposed by the service.
 - [x] `F006` Add dashboard simulator pages plus a top-nav dropdown that fits the current layout and manager-style page shell.
 - [x] `F007` Migrate simulator docs into the website and move guide artifacts into website-managed locations.
-- [ ] `F008` Remove obsolete simulator-local frontend assets, validate the affected surfaces, and close remaining harness drift.
+- [x] `F008` Remove obsolete simulator-local frontend assets, validate the affected surfaces, and close remaining harness drift.
 
 ## Current Loop
 
-- In progress: finish audit fixes after the main migration by restoring the missing model catalog package, publishing the simulator container image, closing harness drift, and rerunning the affected validation paths.
+- Completed on 2026-03-19: the obsolete `bench/fleet-simulator` subtree and standalone simulator frontend are gone, Fleet Sim now lives behind the maintained dashboard pages and website docs, representative routing resolves to `fleet-sim-change`, and the affected validation paths (`make vllm-sr-sim-test`, `make dashboard-check`, and `make agent-ci-gate CHANGED_FILES="src/fleet-sim/fleet_sim/api/app.py,dashboard/frontend/src/pages/FleetSimOverviewPage.tsx,website/docs/fleet-sim/overview.md"`) passed.
+- Residual fleet-sim quality work now lives in the dedicated debt items for Ruff drift, structure-gate debt, and optimizer/public-surface boundaries rather than in the migration plan itself.
 
 ## Decision Log
 
@@ -58,10 +59,13 @@
 - The dashboard backend exposes `/api/fleet-sim/*` and forwards it to `TARGET_FLEET_SIM_URL`.
 - The dashboard frontend adds a conditional `Fleet Sim` dropdown with Overview, Workloads, Fleets, and Runs pages.
 - Simulator docs, guide assets, and long-form overview material now live under `website/`.
-- Harness metadata now needs to recognize `src/fleet-sim` as a maintained subsystem so `agent-report` and future task routing stay accurate.
+- Harness metadata now recognizes `src/fleet-sim` as a maintained subsystem, so `agent-report` routes representative code, dashboard, and website changes through `fleet-sim-change` instead of a generic fallback.
 
 ## Follow-up Debt / ADR Links
 
 - [../tech-debt-register.md](../tech-debt-register.md)
 - [../tech-debt/README.md](../tech-debt/README.md)
+- [../tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md](../tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md)
+- [../tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md](../tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md)
+- [../tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md](../tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
 - [../adr/README.md](../adr/README.md)

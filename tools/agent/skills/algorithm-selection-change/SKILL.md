@@ -19,6 +19,11 @@ description: Modifies candidate-model selection logic that runs after a routing 
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate all constraints pass
 5. Verify selection behavior is covered by targeted tests and affected E2E profiles
 
+## Gotchas
+
+- Keep candidate-model selection downstream of a matched decision; do not leak pre-match routing logic back into signal or plugin layers.
+- Cost or latency heuristics that can change user-visible routing still need targeted tests and affected E2E coverage.
+
 ## Must Read
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
