@@ -28,7 +28,7 @@ func NewDeployer(kubeConfig string, verbose bool) *Deployer {
 }
 
 // Install installs or upgrades a Helm chart (helm upgrade --install) so re-runs and CI
-// do not fail with "cannot re-use a name that is still in use" when the release exists.
+// do not fail with "cannot reuse a name that is still in use" when the release exists.
 func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 	d.log("Installing Helm chart: %s/%s", opts.Namespace, opts.ReleaseName)
 
