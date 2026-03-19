@@ -156,8 +156,12 @@ type RequestContext struct {
 }
 
 // HasPersonalizedContext returns true if the request/response is tainted with user-specific
-// context (RAG, memory, PII, injected system prompt) that should prevent caching the response.
+// context (RAG, memory, PII) that should prevent caching the response.
 // The second return value is the canonical reason for observability (metrics/tracing).
+//
+// Note: VSRInjectedSystemPrompt is intentionally excluded. System prompts are
+// per-decision, not per-user — all users hitting the same decision get the same
+// system prompt, so the response is not "personalized" in the cross-user-leak sense.
 func (ctx *RequestContext) HasPersonalizedContext() (bool, string) {
 	if ctx == nil {
 		return false, ""
@@ -170,9 +174,6 @@ func (ctx *RequestContext) HasPersonalizedContext() (bool, string) {
 	}
 	if ctx.PIIDetected {
 		return true, "pii_detected"
-	}
-	if ctx.VSRInjectedSystemPrompt {
-		return true, "system_prompt_injected"
 	}
 	return false, ""
 }
