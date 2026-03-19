@@ -31,6 +31,7 @@ class CLITestBase(unittest.TestCase):
 
     # Container name used by vllm-sr
     CONTAINER_NAME = "vllm-sr-container"
+    SIM_CONTAINER_NAME = "vllm-sr-sim-container"
 
     # Default timeout for CLI commands
     DEFAULT_TIMEOUT = 60
@@ -113,12 +114,13 @@ class CLITestBase(unittest.TestCase):
     def _cleanup_container(cls):
         """Stop and remove any existing vllm-sr container."""
         runtime = cls.container_runtime
-        for command in (
-            [runtime, "stop", cls.CONTAINER_NAME],
-            [runtime, "rm", "-f", cls.CONTAINER_NAME],
-        ):
-            with suppress(Exception):
-                cls._run_subprocess(command, timeout=30)
+        for container_name in (cls.CONTAINER_NAME, cls.SIM_CONTAINER_NAME):
+            for command in (
+                [runtime, "stop", container_name],
+                [runtime, "rm", "-f", container_name],
+            ):
+                with suppress(Exception):
+                    cls._run_subprocess(command, timeout=30)
 
     def run_cli(
         self,
@@ -239,13 +241,14 @@ class CLITestBase(unittest.TestCase):
         )
         return str(config_path)
 
-    def container_status(self) -> str:
+    def container_status(self, container_name: str | None = None) -> str:
         """
-        Get the status of the vllm-sr container.
+        Get the status of a managed container.
 
         Returns:
             'running', 'exited', 'paused', 'not found', or 'error'
         """
+        container_name = container_name or self.CONTAINER_NAME
         try:
             result = self._run_subprocess(
                 [
@@ -253,7 +256,7 @@ class CLITestBase(unittest.TestCase):
                     "ps",
                     "-a",
                     "--filter",
-                    f"name={self.CONTAINER_NAME}",
+                    f"name={container_name}",
                     "--format",
                     "{{.Status}}",
                 ],
@@ -273,11 +276,13 @@ class CLITestBase(unittest.TestCase):
             print(f"Failed to get container status: {e}")
             return "error"
 
-    def wait_for_container_running(self, timeout: int = 60) -> bool:
+    def wait_for_container_running(
+        self, timeout: int = 60, container_name: str | None = None
+    ) -> bool:
         """Wait for container to be in running state."""
         start = time.time()
         while time.time() - start < timeout:
-            status = self.container_status()
+            status = self.container_status(container_name=container_name)
             if status == "running":
                 return True
             if status == "exited":
@@ -334,16 +339,20 @@ class CLITestBase(unittest.TestCase):
             return f"Failed to get logs: {e}"
 
     def inspect_container(
-        self, format_string: str, timeout: int = 10
+        self,
+        format_string: str,
+        timeout: int = 10,
+        container_name: str | None = None,
     ) -> tuple[int, str, str]:
-        """Inspect the vllm-sr container with the active runtime."""
+        """Inspect a managed container with the active runtime."""
+        container_name = container_name or self.CONTAINER_NAME
         result = self._run_subprocess(
             [
                 self.container_runtime,
                 "inspect",
                 "--format",
                 format_string,
-                self.CONTAINER_NAME,
+                container_name,
             ],
             timeout=timeout,
         )

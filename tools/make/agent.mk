@@ -12,12 +12,14 @@ AGENT_SERVE_ARGS ?=
 AGENT_SMOKE_TIMEOUT ?= 90
 AGENT_STACK_NAME ?=
 AGENT_PORT_OFFSET ?= 0
+AGENT_GOLANGCI_LINT_VERSION ?= 2.5.0
 
 agent-help: ## Show help for agent-specific targets
 	@echo "Agent commands:"
 	@echo "  make agent-bootstrap"
 	@echo "  make agent-validate"
 	@echo "  make agent-scorecard"
+	@echo "  make agent-ci-lint CHANGED_FILES=\"...\""
 	@echo "  make agent-dev ENV=cpu|amd"
 	@echo "  make agent-serve-local ENV=cpu|amd"
 	@echo "    optional: AGENT_STACK_NAME=<name> AGENT_PORT_OFFSET=<n>"
@@ -32,14 +34,15 @@ agent-bootstrap: ## Install agent validation tooling
 	@$(LOG_TARGET)
 	@echo "Installing agent Python tooling..."
 	@python3 -m pip install -r tools/agent/requirements.txt
-	@python3 -m pip install pre-commit
-	@python3 -m pip install yamllint codespell
 	@if command -v npm >/dev/null 2>&1; then \
 		npm install -g markdownlint-cli@0.43.0 >/dev/null 2>&1 || true; \
 	fi
-	@if ! command -v golangci-lint >/dev/null 2>&1 && command -v go >/dev/null 2>&1; then \
-		echo "Installing golangci-lint..."; \
-		go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.5.0; \
+	@if command -v go >/dev/null 2>&1; then \
+		GOLANGCI_BIN="$$(go env GOPATH)/bin/golangci-lint"; \
+		if [ ! -x "$$GOLANGCI_BIN" ] || ! "$$GOLANGCI_BIN" version 2>/dev/null | grep -q " $(AGENT_GOLANGCI_LINT_VERSION) "; then \
+			echo "Installing golangci-lint v$(AGENT_GOLANGCI_LINT_VERSION)..."; \
+			go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(AGENT_GOLANGCI_LINT_VERSION); \
+		fi; \
 	fi
 	@if command -v rustup >/dev/null 2>&1; then \
 		rustup component add clippy >/dev/null 2>&1 || true; \
@@ -115,6 +118,23 @@ agent-fast-gate: ## Run the fast gate: manifest validation, lint, and lightweigh
 	@$(MAKE) agent-lint CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
 	@python3 tools/agent/scripts/agent_gate.py run-tests --mode fast --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
 
+agent-ci-lint: agent-bootstrap ## Reproduce the CI changed-file lint gate locally
+	@$(LOG_TARGET)
+	@BASE_REF="$(AGENT_BASE_REF)"; \
+	if [ -z "$$BASE_REF" ] && git rev-parse --verify origin/main >/dev/null 2>&1; then \
+		BASE_REF="origin/main"; \
+	fi; \
+	if [ -z "$$BASE_REF" ] && git rev-parse --verify HEAD^ >/dev/null 2>&1; then \
+		BASE_REF="HEAD^"; \
+	fi; \
+	if [ -n "$$BASE_REF" ]; then \
+		echo "Using AGENT_BASE_REF=$$BASE_REF"; \
+	else \
+		echo "Using AGENT_BASE_REF=<empty>"; \
+	fi; \
+	$(MAKE) codespell-tracked && \
+	$(MAKE) agent-fast-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$$BASE_REF"
+
 agent-report: ## Show primary skill, impacted surfaces, and validation commands
 	@$(LOG_TARGET)
 	@python3 tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
@@ -176,6 +196,6 @@ agent-feature-gate: ## Run lint, targeted tests, local smoke, and affected E2E p
 	$(MAKE) agent-e2e-affected CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"; \
 	python3 tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
 
-.PHONY: agent-help agent-bootstrap agent-dev agent-serve-local agent-stop-local \
+.PHONY: agent-help agent-bootstrap agent-ci-lint agent-dev agent-serve-local agent-stop-local \
 	agent-validate agent-lint agent-fast-gate agent-report agent-ci-gate agent-smoke-local agent-e2e-affected \
 	agent-feature-gate

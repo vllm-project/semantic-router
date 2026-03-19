@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vllm-sr-sim"
+version = "0.1.0"
+description = "vLLM Semantic Router fleet simulator for capacity planning, SLO validation, and what-if analysis"
+authors = [{name = "vLLM Semantic Router Team"}]
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+keywords = ["vllm", "semantic-router", "simulation", "capacity-planning", "gpu"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/vllm-project/semantic-router"
+Documentation = "https://vllm-semantic-router.com/docs/fleet-sim/overview"
+Repository = "https://github.com/vllm-project/semantic-router/tree/main/src/fleet-sim"
+Issues = "https://github.com/vllm-project/semantic-router/issues"
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "python-multipart>=0.0.9",
+]
+dev = [
+    "pytest>=7",
+    "black",
+    "ruff",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+vllm-sr-sim = "run_sim:main"
+fleet-sim = "run_sim:main"
+
+[tool.setuptools]
+py-modules = ["run_sim"]
+
+[tool.setuptools.package-data]
+fleet_sim = ["data/*.json", "data/*.md"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fleet_sim*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -37,6 +37,41 @@ max-nested-blocks = 4
 "src/vllm-sr/cli/config_migration.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
 "src/vllm-sr/cli/config_generator.py" = ["C901", "PLR0912", "PLR0915"]
 "src/vllm-sr/cli/commands/show_config.py" = ["C901", "PLR0912", "PLR0915"]
+# Fleet-sim is now maintained under src/, but the subtree still carries its
+# legacy local style/lint contract. Track convergence to the shared Ruff gate in TD016.
+"src/fleet-sim/**/*.py" = [
+  "B007",
+  "B008",
+  "B904",
+  "B905",
+  "C901",
+  "E402",
+  "E741",
+  "F401",
+  "F821",
+  "F841",
+  "N802",
+  "N803",
+  "N806",
+  "N812",
+  "N814",
+  "PLC0415",
+  "PLR0912",
+  "PLR0915",
+  "PLR2004",
+  "PLW1510",
+  "PLW2901",
+  "RUF001",
+  "RUF002",
+  "RUF003",
+  "RUF005",
+  "RUF012",
+  "RUF022",
+  "RUF046",
+  "SIM105",
+  "SIM108",
+  "SIM115",
+]
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
 "src/vllm-sr/tests/test_config_template.py" = ["E402", "UP015"]
 "src/vllm-sr/tests/test_latency_validation.py" = ["I001"]

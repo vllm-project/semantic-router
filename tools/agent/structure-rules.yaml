@@ -121,6 +121,17 @@ legacy_hotspots:
       - deploy/operator/controllers/semanticrouter_controller_test.go
     file_checks: relaxed
   - paths:
+      - src/fleet-sim/fleet_sim/optimizer/base.py
+      - src/fleet-sim/run_sim.py
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - src/fleet-sim/fleet_sim/api/routes/traces.py
+    function_checks: relaxed
+  - paths:
+      - src/fleet-sim/tests/test_api.py
+    file_checks: relaxed
+  - paths:
       - src/semantic-router/pkg/responsestore/interface.go
     interface_checks: relaxed
   - paths:

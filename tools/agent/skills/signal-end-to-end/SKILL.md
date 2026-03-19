@@ -20,6 +20,11 @@ description: Implements end-to-end signal changes spanning router config, signal
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate signal contract alignment
 5. Verify router config, signal extraction, and CLI schema stay aligned with relevant E2E coverage
 
+## Gotchas
+
+- Signal changes rarely stop at extraction; CLI schema, display surfaces, or bindings often need updates too.
+- New signal semantics need explicit E2E ownership, not just unit-level classifier coverage.
+
 ## Must Read
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
