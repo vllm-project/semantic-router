@@ -1,0 +1,95 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, rgba(118, 185, 0, 0.06), rgba(0, 212, 255, 0.03)),
+    var(--color-bg-tertiary);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.description {
+  margin: 0.35rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.summaryCard {
+  min-width: 0;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 11, 11, 0.6);
+}
+
+.summaryLabel {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summaryValue {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--color-text);
+  font-size: 1.18rem;
+  font-weight: 700;
+}
+
+.chartShell {
+  min-height: 280px;
+}
+
+:global(.recharts-text) {
+  fill: var(--color-text-secondary);
+}
+
+:global(.recharts-cartesian-axis-tick-value) {
+  fill: var(--color-text-secondary);
+}
+
+:global(.recharts-legend-item-text) {
+  color: var(--color-text-secondary) !important;
+}
+
+:global(.recharts-tooltip-cursor) {
+  display: none !important;
+}
+
+@media (max-width: 1200px) {
+  .summaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+}

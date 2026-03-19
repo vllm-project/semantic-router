@@ -18,7 +18,7 @@ import {
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import { canAccessMLSetup } from '../utils/accessControl'
+import { canAccessMLSetup, canAccessModelResearch } from '../utils/accessControl'
 
 interface LayoutProps {
   children: ReactNode
@@ -44,6 +44,7 @@ const Layout: React.FC<LayoutProps> = ({
   const navigate = useNavigate()
   const canManageUsers = user?.role === 'admin'
   const canUseMLSetup = canAccessMLSetup(user)
+  const canUseModelResearch = canAccessModelResearch(user)
   const secondaryNavLinks = SECONDARY_NAV_LINKS.filter((link) => link.to !== '/users' || canManageUsers)
   const managerMenuSections = filterLayoutMenuSections(
     MANAGER_MENU_SECTIONS,
@@ -51,7 +52,18 @@ const Layout: React.FC<LayoutProps> = ({
   )
   const analysisOperationsMenuSections = filterLayoutMenuSections(
     ANALYSIS_OPERATIONS_MENU_SECTIONS,
-    item => canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'
+    item => {
+      if (item.kind !== 'route') {
+        return true
+      }
+      if (item.to === '/ml-setup') {
+        return canUseMLSetup
+      }
+      if (item.to === '/model-research') {
+        return canUseModelResearch
+      }
+      return true
+    }
   )
   const accountName = user?.name?.trim() || 'Account'
   const accountEmail = user?.email?.trim() || 'Session pending'

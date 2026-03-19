@@ -66,6 +66,7 @@ export const ANALYSIS_OPERATIONS_MENU_SECTIONS: LayoutMenuSection[] = [
   {
     title: 'Operations',
     items: [
+      { kind: 'route', label: 'Auto Research', to: '/model-research' },
       { kind: 'route', label: 'ML Setup', to: '/ml-setup' },
       { kind: 'config', label: 'MCP Servers', configSection: 'mcp' },
       { kind: 'route', label: 'Status', to: '/status' },

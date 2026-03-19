@@ -18,3 +18,7 @@ export function canAccessMLSetup(user?: PermissionUser | null): boolean {
   const normalizedRole = typeof user.role === 'string' ? user.role.trim().toLowerCase() : ''
   return WRITE_CAPABLE_ROLES.has(normalizedRole)
 }
+
+export function canAccessModelResearch(user?: PermissionUser | null): boolean {
+  return canAccessMLSetup(user)
+}

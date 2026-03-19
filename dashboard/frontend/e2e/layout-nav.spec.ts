@@ -502,6 +502,7 @@ test.describe('Layout top navigation', () => {
     await secondaryGroup.getByRole('button', { name: 'System' }).click();
 
     const menu = page.getByRole('menu', { name: 'System' });
+    await expect(menu.getByRole('menuitem', { name: 'Auto Research' })).toHaveCount(0);
     await expect(menu.getByRole('menuitem', { name: 'ML Setup' })).toHaveCount(0);
     await expect(menu.getByRole('menuitem', { name: 'MCP Servers' })).toBeVisible();
 

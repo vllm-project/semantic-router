@@ -20,6 +20,7 @@ import StatusPage from './pages/StatusPage'
 import LogsPage from './pages/LogsPage'
 import EvaluationPage from './pages/EvaluationPage'
 import MLSetupPage from './pages/MLSetupPage'
+import ModelResearchPage from './pages/ModelResearchPage'
 import RatingsPage from './pages/RatingsPage'
 import BuilderPage from './pages/BuilderPage'
 import DashboardPage from './pages/DashboardPage'
@@ -38,7 +39,7 @@ import SetupWizardPage from './pages/SetupWizardPage'
 import OnboardingGuide from './components/OnboardingGuide'
 import LoginPage from './pages/LoginPage'
 import AuthTransitionPage from './pages/AuthTransitionPage'
-import { canAccessMLSetup } from './utils/accessControl'
+import { canAccessMLSetup, canAccessModelResearch } from './utils/accessControl'
 
 const ConfigSectionRoute: React.FC<{
   configSection: ConfigSection
@@ -181,6 +182,7 @@ const AppRouter: React.FC = () => {
   const { user } = useAuth()
   const [configSection, setConfigSection] = useState<ConfigSection>('global-config')
   const canUseMLSetup = canAccessMLSetup(user)
+  const canUseModelResearch = canAccessModelResearch(user)
 
   if (isLoading) {
     return (
@@ -338,6 +340,21 @@ const AppRouter: React.FC = () => {
                 >
                   <EvaluationPage />
                 </Layout>
+              }
+            />
+            <Route
+              path="/model-research"
+              element={
+                canUseModelResearch ? (
+                  <Layout
+                    configSection={configSection}
+                    onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                  >
+                    <ModelResearchPage />
+                  </Layout>
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
               }
             />
             <Route
