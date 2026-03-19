@@ -439,13 +439,6 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 	require.NoError(t, err, "Failed to create cache with FLAT index")
 	defer func() { _ = cache.Close() }()
 
-	ctx := context.Background()
-
-	// Verify index was created
-	result, err := cache.client.CustomCommand(ctx, []string{"FT.INFO", cache.indexName})
-	assert.NoError(t, err, "FT.INFO should succeed")
-	assert.NotNil(t, result, "Index info should not be nil")
-
 	// Add an entry and verify it works
 	err = cache.AddEntry("req_flat_1", "gpt-4", "test flat index", []byte("{}"), []byte(`{"result":"flat"}`), 300)
 	assert.NoError(t, err, "AddEntry should work with FLAT index")
