@@ -301,6 +301,7 @@ routing:
     - name: static_business_route
       description: Static fallback for standard business traffic.
       priority: 200
+      tier: 2
       rules:
         operator: AND
         conditions:

@@ -74,6 +74,19 @@ func (d *decompiler) appendSignalsToProgram(prog *Program) {
 	d.appendCoreSignals(prog)
 	d.appendOperationalSignals(prog)
 	d.appendSafetySignals(prog)
+	d.appendSignalGroups(prog)
+}
+
+func (d *decompiler) appendSignalGroups(prog *Program) {
+	for _, sg := range d.cfg.SignalGroups {
+		prog.SignalGroups = append(prog.SignalGroups, &SignalGroupDecl{
+			Name:        sg.Name,
+			Semantics:   sg.Semantics,
+			Temperature: sg.Temperature,
+			Members:     sg.Members,
+			Default:     sg.Default,
+		})
+	}
 }
 
 func (d *decompiler) appendCoreSignals(prog *Program) {
