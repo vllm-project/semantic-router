@@ -30,6 +30,11 @@ description: Selects which local and CI end-to-end test profiles are affected by
 3. Run `make e2e-test E2E_PROFILE=<profile>` for each affected profile
 4. Verify local and CI E2E expectations are explicit and match the profile map
 
+## Gotchas
+
+- Workflow-driven integration suites are not interchangeable with standard Go profile E2E; use the profile map instead of guessing.
+- A passing local default profile does not imply the full CI matrix is covered for a contract-changing edit.
+
 ## Must Read
 
 - [tools/agent/e2e-profile-map.yaml](../../e2e-profile-map.yaml)

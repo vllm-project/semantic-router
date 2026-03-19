@@ -10,11 +10,14 @@ A feature is not done until all applicable checks below are satisfied.
 - Relevant feature/integration tests pass
 - Local image startup smoke passes for non-doc code changes
 - Affected local E2E profiles pass
+- Behavior-sensitive E2E coverage uses explicit acceptance thresholds instead of report-only metrics
 - CI covers the remaining affected profiles
 
 ## E2E Expectation
 
 - If user-visible behavior changes, update or add at least one E2E case
+- Report-only or `0%`-only tests do not count as behavior coverage
+- Benchmark and stress probes may supplement E2E coverage, but they do not replace acceptance tests unless they declare explicit pass/fail budgets
 - Pure refactors may skip new E2E coverage only when behavior is unchanged
 
 ## Standard Report Format
