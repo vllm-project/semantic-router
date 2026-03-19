@@ -295,3 +295,78 @@ func TestCacheReconstructedStreamingResponse_StoresWhenDecisionCacheEnabled(t *t
 	assert.NoError(t, err)
 	assert.True(t, mockCache.addEntryCalled, "should call AddEntry when decision has semantic-cache enabled")
 }
+
+func TestCacheStreamingSkippedWhenRAGContextPresent(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{Cache: mockCache}
+	ctx := &RequestContext{
+		RequestID:           "req-rag",
+		RequestModel:        "test-model",
+		RequestQuery:        "what is our refund policy",
+		StreamingComplete:   true,
+		StreamingContent:    "Based on your documents...",
+		StreamingMetadata:   map[string]interface{}{"id": "chatcmpl-1", "model": "test-model", "created": int64(1234567890)},
+		RAGRetrievedContext: "Internal policy doc: refunds within 30 days",
+	}
+
+	err := router.cacheStreamingResponse(ctx)
+	assert.NoError(t, err)
+	assert.False(t, mockCache.addEntryCalled, "cache write must be skipped when RAG context is present")
+	assert.False(t, mockCache.updateCalled, "cache update must be skipped when RAG context is present")
+}
+
+func TestCacheStreamingSkippedWhenMemoryContextPresent(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{Cache: mockCache}
+	ctx := &RequestContext{
+		RequestID:         "req-mem",
+		RequestModel:      "test-model",
+		RequestQuery:      "remind me what we discussed",
+		StreamingComplete: true,
+		StreamingContent:  "Last time you mentioned...",
+		StreamingMetadata: map[string]interface{}{"id": "chatcmpl-2", "model": "test-model", "created": int64(1234567890)},
+		MemoryContext:     "User previously discussed project deadlines",
+	}
+
+	err := router.cacheStreamingResponse(ctx)
+	assert.NoError(t, err)
+	assert.False(t, mockCache.addEntryCalled, "cache write must be skipped when memory context is present")
+	assert.False(t, mockCache.updateCalled, "cache update must be skipped when memory context is present")
+}
+
+func TestCacheStreamingSkippedWhenPIIDetected(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{Cache: mockCache}
+	ctx := &RequestContext{
+		RequestID:         "req-pii",
+		RequestModel:      "test-model",
+		RequestQuery:      "parse this email",
+		StreamingComplete: true,
+		StreamingContent:  "The email contains...",
+		StreamingMetadata: map[string]interface{}{"id": "chatcmpl-3", "model": "test-model", "created": int64(1234567890)},
+		PIIDetected:       true,
+	}
+
+	err := router.cacheStreamingResponse(ctx)
+	assert.NoError(t, err)
+	assert.False(t, mockCache.addEntryCalled, "cache write must be skipped when PII is detected")
+	assert.False(t, mockCache.updateCalled, "cache update must be skipped when PII is detected")
+}
+
+func TestCacheStreamingAllowedForGenericRequest(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{Cache: mockCache}
+	ctx := &RequestContext{
+		RequestID:         "req-generic",
+		RequestModel:      "test-model",
+		RequestQuery:      "explain quantum computing",
+		StreamingComplete: true,
+		StreamingContent:  "Quantum computing uses qubits...",
+		StreamingMetadata: map[string]interface{}{"id": "chatcmpl-4", "model": "test-model", "created": int64(1234567890)},
+	}
+
+	err := router.cacheStreamingResponse(ctx)
+	assert.NoError(t, err)
+	assert.True(t, mockCache.addEntryCalled || mockCache.updateCalled,
+		"cache write must proceed for generic requests without personalized context")
+}
