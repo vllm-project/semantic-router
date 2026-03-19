@@ -7,14 +7,47 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
+// decisionWillPersonalize checks whether the matched decision is configured
+// with plugins (RAG, memory) that inject user-specific context. When true,
+// we skip the entire cache path — both reads and writes — because:
+//   - reads would serve a generic cached answer instead of the personalized one
+//   - writes would cache a personalized answer that could leak to other users
+//
+// This avoids orphaned pending cache entries and unnecessary embedding work.
+func decisionWillPersonalize(ctx *RequestContext, cfg *config.RouterConfig) bool {
+	d := ctx.VSRSelectedDecision
+	if d == nil {
+		return false
+	}
+	if ragCfg := d.GetRAGConfig(); ragCfg != nil && ragCfg.Enabled {
+		return true
+	}
+	if memCfg := d.GetMemoryConfig(); memCfg != nil && memCfg.Enabled {
+		return true
+	}
+	if cfg != nil && cfg.Memory.Enabled {
+		return true
+	}
+	return false
+}
+
 // handleCaching handles cache lookup and storage with category-specific settings
 func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
+	// Skip entire cache path for decisions that will inject user-specific context.
+	// Both reads (would serve stale generic answers) and writes (would leak
+	// personalized data) are wrong when RAG or memory is enabled.
+	if decisionWillPersonalize(ctx, r.Config) {
+		logging.Debugf("[Cache] Skipping cache for decision '%s': RAG or memory enabled", categoryName)
+		return nil, false
+	}
+
 	// Skip cache read for looper internal requests
 	// Looper requests should not return cached responses, but should still write to cache
 	if ctx.LooperRequest {
