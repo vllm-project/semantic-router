@@ -28,6 +28,7 @@ Standard CI-backed profiles:
 - **multi-endpoint**: Environment-specific routing and safety policy behavior
 - **authz-rbac**: Authz-driven routing and per-user rate limiting
 - **streaming**: Streamed request-body and streaming-cache behavior
+- **dashboard**: Dashboard API surface — health, status, config read, deploy preview, config versions, and input validation
 
 Manual-only profiles:
 
@@ -52,6 +53,7 @@ Manual-only profiles:
 | `multi-endpoint` | `chat-completions-request` | Environment-specific safety policies |
 | `authz-rbac` | `chat-completions-request` | Authz and rate-limiting behavior |
 | `streaming` | none | Streaming request-body and SSE cache behavior |
+| `dashboard` | none | Dashboard HTTP API contract |
 | `dynamo` | none | GPU and batching behavior |
 | `rag-hybrid-search` | none | RAG vector-store and hybrid-search behavior |
 

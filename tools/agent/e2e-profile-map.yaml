@@ -42,6 +42,15 @@ profile_rules:
     paths:
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
+  dashboard:
+    owner: e2e
+    coverage_role: dashboard-api-contract
+    selection_mode: full-ci
+    summary: Dashboard API surface — health, status, config read (JSON/YAML), deploy preview, config versions, and input validation.
+    paths:
+      - e2e/profiles/dashboard/**
+      - e2e/testcases/dashboard_*.go
+      - deploy/kubernetes/observability/dashboard/**
   aibrix:
     owner: e2e
     coverage_role: aibrix-control-plane-and-gateway

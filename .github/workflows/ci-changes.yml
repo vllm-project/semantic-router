@@ -31,6 +31,8 @@ on:
         value: ${{ jobs.filter.outputs.e2e_ai_gateway }}
       e2e_aibrix:
         value: ${{ jobs.filter.outputs.e2e_aibrix }}
+      e2e_dashboard:
+        value: ${{ jobs.filter.outputs.e2e_dashboard }}
       e2e_dynamic_config:
         value: ${{ jobs.filter.outputs.e2e_dynamic_config }}
       e2e_llm_d:
@@ -75,6 +77,7 @@ jobs:
       e2e_istio: ${{ steps.changes.outputs.e2e_istio }}
       e2e_ai_gateway: ${{ steps.changes.outputs.e2e_ai_gateway }}
       e2e_aibrix: ${{ steps.changes.outputs.e2e_aibrix }}
+      e2e_dashboard: ${{ steps.changes.outputs.e2e_dashboard }}
       e2e_dynamic_config: ${{ steps.changes.outputs.e2e_dynamic_config }}
       e2e_llm_d: ${{ steps.changes.outputs.e2e_llm_d }}
       e2e_routing_strategies: ${{ steps.changes.outputs.e2e_routing_strategies }}
@@ -176,6 +179,10 @@ jobs:
             e2e_aibrix:
               - 'e2e/profiles/aibrix/**'
               - 'deploy/kubernetes/aibrix/**'
+            e2e_dashboard:
+              - 'e2e/profiles/dashboard/**'
+              - 'e2e/testcases/dashboard_*.go'
+              - 'deploy/kubernetes/observability/dashboard/**'
             e2e_dynamic_config:
               - 'e2e/profiles/dynamic-config/**'
             e2e_llm_d:
