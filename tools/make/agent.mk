@@ -13,6 +13,10 @@ AGENT_SMOKE_TIMEOUT ?= 90
 AGENT_STACK_NAME ?=
 AGENT_PORT_OFFSET ?= 0
 AGENT_GOLANGCI_LINT_VERSION ?= 2.5.0
+AGENT_VENV_DIR ?= .venv-agent
+
+# Path to venv python (set once; used by all python tool invocations)
+VENV_PYTHON := $(AGENT_VENV_DIR)/bin/python3
 
 agent-help: ## Show help for agent-specific targets
 	@echo "Agent commands:"
@@ -33,7 +37,11 @@ agent-help: ## Show help for agent-specific targets
 agent-bootstrap: ## Install agent validation tooling
 	@$(LOG_TARGET)
 	@echo "Installing agent Python tooling..."
-	@python3 -m pip install -r tools/agent/requirements.txt
+	@if [ ! -f "$(AGENT_VENV_DIR)/bin/python3" ]; then \
+		echo "Creating agent venv at $(AGENT_VENV_DIR)..."; \
+		python3 -m venv "$(AGENT_VENV_DIR)"; \
+	fi
+	@$(VENV_PYTHON) -m pip install -r tools/agent/requirements.txt
 	@if command -v npm >/dev/null 2>&1; then \
 		npm install -g markdownlint-cli@0.43.0 >/dev/null 2>&1 || true; \
 	fi
@@ -51,11 +59,11 @@ agent-bootstrap: ## Install agent validation tooling
 
 agent-validate: agent-bootstrap ## Validate the shared agent harness manifests and docs
 	@$(LOG_TARGET)
-	@python3 tools/agent/scripts/agent_gate.py validate
+	@$(VENV_PYTHON) tools/agent/scripts/agent_gate.py validate
 
 agent-scorecard: agent-bootstrap ## Show the current harness governance scorecard
 	@$(LOG_TARGET)
-	@python3 tools/agent/scripts/agent_gate.py scorecard --format summary
+	@$(VENV_PYTHON) tools/agent/scripts/agent_gate.py scorecard --format summary
 
 agent-dev: ## Build the canonical local development image for the selected environment
 	@$(LOG_TARGET)
@@ -67,7 +75,7 @@ agent-dev: ## Build the canonical local development image for the selected envir
 
 agent-serve-local: ## Start vllm-sr with the canonical local image flow
 	@$(LOG_TARGET)
-	@DEFAULT_CONFIG="$$(python3 tools/agent/scripts/agent_gate.py resolve-env --env "$(ENV)" --field smoke_config)"; \
+	@DEFAULT_CONFIG="$$($(VENV_PYTHON) tools/agent/scripts/agent_gate.py resolve-env --env "$(ENV)" --field smoke_config)"; \
 	CONFIG_PATH="$(AGENT_SERVE_CONFIG)"; \
 	if [ -z "$$CONFIG_PATH" ]; then \
 		CONFIG_PATH="$$DEFAULT_CONFIG"; \
@@ -92,7 +100,7 @@ agent-stop-local: ## Stop local vllm-sr services
 
 agent-lint: agent-bootstrap ## Run lint and structure gates for changed files
 	@$(LOG_TARGET)
-	@RAW_FILES="$$(python3 tools/agent/scripts/agent_gate.py changed-files --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)")"; \
+	@RAW_FILES="$$($(VENV_PYTHON) tools/agent/scripts/agent_gate.py changed-files --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)")"; \
 	if [ -z "$$RAW_FILES" ]; then \
 		echo "No changed files detected."; \
 		exit 0; \
@@ -102,21 +110,21 @@ agent-lint: agent-bootstrap ## Run lint and structure gates for changed files
 	echo "Running baseline pre-commit checks..."; \
 	pre-commit run --files $$FILE_ARGS && \
 	echo "Running Python lint..." && \
-	python3 tools/agent/scripts/agent_gate.py run-python-lint --changed-files "$$CSV_FILES" && \
+	$(VENV_PYTHON) tools/agent/scripts/agent_gate.py run-python-lint --changed-files "$$CSV_FILES" && \
 	echo "Running Go structural lint..." && \
-	python3 tools/agent/scripts/agent_gate.py run-go-lint --base-ref "$(AGENT_BASE_REF)" --changed-files "$$CSV_FILES" && \
+	$(VENV_PYTHON) tools/agent/scripts/agent_gate.py run-go-lint --base-ref "$(AGENT_BASE_REF)" --changed-files "$$CSV_FILES" && \
 	echo "Running reference config contract lint..." && \
-	python3 tools/agent/scripts/agent_gate.py run-config-contract-lint --changed-files "$$CSV_FILES" && \
+	$(VENV_PYTHON) tools/agent/scripts/agent_gate.py run-config-contract-lint --changed-files "$$CSV_FILES" && \
 	echo "Running Rust lint..." && \
-	python3 tools/agent/scripts/agent_gate.py run-rust-lint --changed-files "$$CSV_FILES" && \
+	$(VENV_PYTHON) tools/agent/scripts/agent_gate.py run-rust-lint --changed-files "$$CSV_FILES" && \
 	echo "Running structure checks..." && \
-	python3 tools/agent/scripts/structure_check.py --base-ref "$(AGENT_BASE_REF)" $$FILE_ARGS
+	$(VENV_PYTHON) tools/agent/scripts/structure_check.py --base-ref "$(AGENT_BASE_REF)" $$FILE_ARGS
 
 agent-fast-gate: ## Run the fast gate: manifest validation, lint, and lightweight tests
 	@$(LOG_TARGET)
 	@$(MAKE) agent-validate
 	@$(MAKE) agent-lint CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
-	@python3 tools/agent/scripts/agent_gate.py run-tests --mode fast --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
+	@$(VENV_PYTHON) tools/agent/scripts/agent_gate.py run-tests --mode fast --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
 
 agent-ci-lint: agent-bootstrap ## Reproduce the CI changed-file lint gate locally
 	@$(LOG_TARGET)
@@ -137,12 +145,12 @@ agent-ci-lint: agent-bootstrap ## Reproduce the CI changed-file lint gate locall
 
 agent-report: ## Show primary skill, impacted surfaces, and validation commands
 	@$(LOG_TARGET)
-	@python3 tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
+	@$(VENV_PYTHON) tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
 
 agent-ci-gate: ## Run the repo-standard fast CI gate
 	@$(LOG_TARGET)
 	@$(MAKE) agent-report ENV="$(ENV)" CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
-	@python3 tools/agent/scripts/agent_gate.py resolve --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --format summary
+	@$(VENV_PYTHON) tools/agent/scripts/agent_gate.py resolve --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --format summary
 	@$(MAKE) agent-fast-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
 
 agent-smoke-local: ## Validate local container, router, envoy, and dashboard health
@@ -180,21 +188,21 @@ agent-smoke-local: ## Validate local container, router, envoy, and dashboard hea
 
 agent-e2e-affected: ## Run local E2E profiles affected by the changed files
 	@$(LOG_TARGET)
-	@python3 tools/agent/scripts/agent_gate.py run-e2e --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
+	@$(VENV_PYTHON) tools/agent/scripts/agent_gate.py run-e2e --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
 
 agent-feature-gate: ## Run lint, targeted tests, local smoke, and affected E2E profiles
 	@$(LOG_TARGET)
 	@set -e; \
 	$(MAKE) agent-ci-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"; \
-	python3 tools/agent/scripts/agent_gate.py run-tests --mode feature-only --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"; \
-	if [ "$$(python3 tools/agent/scripts/agent_gate.py needs-smoke --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)")" = "true" ]; then \
+	$(VENV_PYTHON) tools/agent/scripts/agent_gate.py run-tests --mode feature-only --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"; \
+	if [ "$$($(VENV_PYTHON) tools/agent/scripts/agent_gate.py needs-smoke --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)")" = "true" ]; then \
 		trap '$(MAKE) agent-stop-local ENV=$(ENV) AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)" >/dev/null 2>&1 || true' EXIT; \
 		$(MAKE) agent-dev ENV=$(ENV); \
 		$(MAKE) agent-serve-local ENV=$(ENV) AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)"; \
 		$(MAKE) agent-smoke-local AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)"; \
 	fi; \
 	$(MAKE) agent-e2e-affected CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"; \
-	python3 tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
+	$(VENV_PYTHON) tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
 
 .PHONY: agent-help agent-bootstrap agent-ci-lint agent-dev agent-serve-local agent-stop-local \
 	agent-validate agent-lint agent-fast-gate agent-report agent-ci-gate agent-smoke-local agent-e2e-affected \
