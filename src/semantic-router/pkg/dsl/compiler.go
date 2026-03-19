@@ -46,11 +46,27 @@ func (c *Compiler) compile() {
 	// 2. Compile signals
 	c.compileSignals()
 
-	// 3. Compile top-level model catalog
+	// 3. Compile signal groups
+	c.compileSignalGroups()
+
+	// 4. Compile top-level model catalog
 	c.compileModels()
 
-	// 4. Compile routes (decisions)
+	// 5. Compile routes (decisions)
 	c.compileRoutes()
+}
+
+func (c *Compiler) compileSignalGroups() {
+	for _, sg := range c.prog.SignalGroups {
+		group := config.SignalGroup{
+			Name:        sg.Name,
+			Semantics:   sg.Semantics,
+			Temperature: sg.Temperature,
+			Members:     sg.Members,
+			Default:     sg.Default,
+		}
+		c.config.SignalGroups = append(c.config.SignalGroups, group)
+	}
 }
 
 // ---------- Signals ----------
@@ -308,6 +324,7 @@ func (c *Compiler) compileRoutes() {
 			Name:        r.Name,
 			Description: r.Description,
 			Priority:    r.Priority,
+			Tier:        r.Tier,
 		}
 
 		// Compile WHEN expression → RuleNode tree.
