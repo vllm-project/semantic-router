@@ -45,8 +45,8 @@ func extractAutoStore(ctx *RequestContext) bool {
 //  1. Auth header (x-authz-user-id) injected by external auth service (Authorino, Envoy Gateway JWT, etc.)
 //  2. metadata["user_id"] in Response API request (fallback for development/testing)
 func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, history []memory.Message, err error) {
-	// First check if this is a Response API request
-	// Non-Response API requests cannot track turns without ConversationID
+	// Memory storage requires Response API — Chat Completions is stateless and
+	// has no ConversationID to track turns against.
 	if ctx.ResponseAPICtx == nil || !ctx.ResponseAPICtx.IsResponseAPIRequest {
 		return "", "", nil, fmt.Errorf("ConversationID required for memory extraction - cannot track turns without it. Please use Response API (/v1/responses) with conversation_id or previous_response_id")
 	}

@@ -130,6 +130,28 @@ func (r *OpenAIRouter) handleLooperExecution(
 	// Attach response body to router replay record
 	r.attachRouterReplayResponse(reqCtx, resp.Body, true)
 
+	// Memory auto_store: the normal response body pipeline (where
+	// scheduleResponseMemoryStore runs) is bypassed by ImmediateResponse.
+	// Trigger it here while resp.Body is still in Chat Completions format
+	// (extractAssistantResponseText parses Chat Completions). The
+	// ResponseAPICtx on reqCtx provides the ConversationID and user message
+	// needed by extractMemoryInfo / extractCurrentUserMessage.
+	r.scheduleResponseMemoryStore(reqCtx, resp.Body)
+
+	// Response API back-translation: the looper executes against Chat
+	// Completions endpoints directly, so resp.Body is in Chat Completions
+	// format. If the original client request was a Response API request,
+	// translate the response back before returning to the client.
+	if isResponseAPIRequest(reqCtx) && r.ResponseAPIFilter != nil {
+		translated, err := r.ResponseAPIFilter.TranslateResponse(ctx, reqCtx.ResponseAPICtx, resp.Body)
+		if err != nil {
+			logging.Errorf("[Looper] Response API translation failed: %v", err)
+		} else {
+			resp.Body = translated
+			logging.Infof("[Looper] Translated looper response to Response API format")
+		}
+	}
+
 	// Create immediate response with detailed headers
 	return r.createLooperResponse(resp, reqCtx), nil
 }
