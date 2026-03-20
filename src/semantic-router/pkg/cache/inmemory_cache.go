@@ -37,6 +37,7 @@ type HNSWIndex struct {
 
 // InMemoryCache provides a high-performance semantic cache using BERT embeddings in memory
 type InMemoryCache struct {
+	SimilarityTracker   // embedded — provides LastSimilarity()
 	entries             []CacheEntry
 	entryMap            map[string]int // requestID -> index for O(1) lookup
 	mu                  sync.RWMutex
@@ -605,6 +606,9 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
 		return nil, false, nil
 	}
+
+	// Store similarity for response headers
+	c.StoreSimilarity(bestSimilarity)
 
 	// Check if the best match meets the similarity threshold
 	if bestSimilarity >= threshold {

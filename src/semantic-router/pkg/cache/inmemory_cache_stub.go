@@ -4,6 +4,7 @@ package cache
 
 // InMemoryCache provides high-performance in-memory semantic caching
 type InMemoryCache struct {
+	SimilarityTracker // embedded — provides LastSimilarity()
 	enabled bool
 }
 
