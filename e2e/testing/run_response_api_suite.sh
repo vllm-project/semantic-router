@@ -8,11 +8,16 @@ SUITE_DIR="${REPO_ROOT}/response-api-artifacts"
 EXIT_CODES_FILE="${SUITE_DIR}/exit-codes.txt"
 AGGREGATED_REPORT_FILE="${SUITE_DIR}/suite-test-report.md"
 AGGREGATED_LOG_FILE="${SUITE_DIR}/suite-semantic-router-logs.txt"
-PROFILES=(
+DEFAULT_PROFILES=(
   "response-api"
   "response-api-redis"
   "response-api-redis-cluster"
 )
+PROFILES=("${DEFAULT_PROFILES[@]}")
+
+if [[ -n "${RESPONSE_API_SUITE_PROFILES:-}" ]]; then
+  IFS=',' read -r -a PROFILES <<< "${RESPONSE_API_SUITE_PROFILES}"
+fi
 
 run_profile() {
   local profile="$1"
