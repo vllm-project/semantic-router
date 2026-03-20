@@ -20,6 +20,19 @@ type Signals struct {
 	RoleBindings      []RoleBinding      `yaml:"role_bindings,omitempty"`
 	JailbreakRules    []JailbreakRule    `yaml:"jailbreak,omitempty"`
 	PIIRules          []PIIRule          `yaml:"pii,omitempty"`
+	SignalGroups      []SignalGroup      `yaml:"signal_groups,omitempty"`
+}
+
+// SignalGroup declares a set of signals that form a mutually exclusive partition.
+// When Semantics is "softmax_exclusive", the runtime applies Voronoi normalization
+// (temperature-scaled softmax over all member similarity scores) so that at most
+// one member fires per query — eliminating co-firing without model retraining.
+type SignalGroup struct {
+	Name        string   `yaml:"name"`
+	Semantics   string   `yaml:"semantics"`
+	Temperature float64  `yaml:"temperature,omitempty"`
+	Members     []string `yaml:"members"`
+	Default     string   `yaml:"default,omitempty"`
 }
 
 type KeywordRule struct {

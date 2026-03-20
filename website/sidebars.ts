@@ -213,6 +213,7 @@ const sidebars: SidebarsConfig = {
         'proposals/multi-protocol-adaptor',
         'proposals/agentic-rag',
         'proposals/agentic-memory',
+        'proposals/Prism-153key',
       ],
     },
     {
