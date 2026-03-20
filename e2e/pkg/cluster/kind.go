@@ -11,11 +11,14 @@ import (
 	"time"
 )
 
+const WorkspaceModelsNodeMountPath = "/mnt/workspace-models"
+
 // KindCluster manages Kind cluster lifecycle
 type KindCluster struct {
-	Name       string
-	Verbose    bool
-	GPUEnabled bool // Enable GPU support for the cluster
+	Name               string
+	Verbose            bool
+	GPUEnabled         bool // Enable GPU support for the cluster
+	WorkspaceModelsDir string
 }
 
 // NewKindCluster creates a new Kind cluster manager
@@ -29,6 +32,11 @@ func NewKindCluster(name string, verbose bool) *KindCluster {
 // SetGPUEnabled enables GPU support for the cluster
 func (k *KindCluster) SetGPUEnabled(enabled bool) {
 	k.GPUEnabled = enabled
+}
+
+// SetWorkspaceModelsDir enables an opt-in host mount for the workspace models directory.
+func (k *KindCluster) SetWorkspaceModelsDir(dir string) {
+	k.WorkspaceModelsDir = dir
 }
 
 // Create creates a new Kind cluster
@@ -270,6 +278,16 @@ func (k *KindCluster) createClusterConfig() (string, error) {
 		k.log("Warning: failed to create ML models directory %s: %v", mlModelsDir, err)
 	}
 
+	workspaceModelsMount := ""
+	if k.WorkspaceModelsDir != "" {
+		if err := os.MkdirAll(k.WorkspaceModelsDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create workspace models directory %s: %w", k.WorkspaceModelsDir, err)
+		}
+		workspaceModelsMount = fmt.Sprintf(`
+      - hostPath: %s
+        containerPath: %s`, k.WorkspaceModelsDir, WorkspaceModelsNodeMountPath)
+	}
+
 	// Base config with host mount for storage (always included)
 	// Also mount /tmp/kind-ml-models for ML model selection E2E tests
 	kindConfig := fmt.Sprintf(`kind: Cluster
@@ -281,7 +299,7 @@ nodes:
       - hostPath: %s
         containerPath: /mnt
       - hostPath: /tmp/kind-ml-models
-        containerPath: /tmp/ml-models`, k.Name, hostPath)
+        containerPath: /tmp/ml-models%s`, k.Name, hostPath, workspaceModelsMount)
 
 	// Add GPU mount to worker if GPU is enabled
 	if k.GPUEnabled {
@@ -291,10 +309,10 @@ nodes:
       - hostPath: %s
         containerPath: /mnt
       - hostPath: /tmp/kind-ml-models
-        containerPath: /tmp/ml-models
+        containerPath: /tmp/ml-models%s
       - hostPath: /dev/null
         containerPath: /var/run/nvidia-container-devices/all
-`, hostPath)
+`, hostPath, workspaceModelsMount)
 	} else {
 		kindConfig += fmt.Sprintf(`
   - role: worker
@@ -302,8 +320,8 @@ nodes:
       - hostPath: %s
         containerPath: /mnt
       - hostPath: /tmp/kind-ml-models
-        containerPath: /tmp/ml-models
-`, hostPath)
+        containerPath: /tmp/ml-models%s
+`, hostPath, workspaceModelsMount)
 	}
 
 	configFile, err := os.CreateTemp("", "kind-config-*.yaml")

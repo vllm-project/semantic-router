@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/cluster"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -14,10 +15,11 @@ import (
 )
 
 type runState struct {
-	exitCode   int
-	kubeClient *kubernetes.Clientset
-	kubeConfig string
-	cleanup    []func()
+	exitCode    int
+	kubeClient  *kubernetes.Clientset
+	kubeConfig  string
+	valuesFiles map[string]string
+	cleanup     []func()
 }
 
 func (s *runState) addCleanup(fn func()) {
@@ -62,10 +64,12 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	if err := r.finishRun(ctx, state, results); err != nil {
 		state.exitCode = 1
+		r.logPreservedEnvironmentHints()
 		return err
 	}
 
 	r.log("✅ All tests passed!")
+	r.logPreservedEnvironmentHints()
 	return nil
 }
 
@@ -82,6 +86,7 @@ func (r *Runner) initializeReport() {
 	r.reporter.SetEnvironment("go_version", "1.24")
 	r.reporter.SetEnvironment("verbose", fmt.Sprintf("%v", r.opts.Verbose))
 	r.reporter.SetEnvironment("parallel", fmt.Sprintf("%v", r.opts.Parallel))
+	r.reporter.SetEnvironment("use_workspace_models", fmt.Sprintf("%v", r.opts.UseWorkspaceModels))
 }
 
 func (r *Runner) finalizeReport(state *runState) {
@@ -112,6 +117,9 @@ func (r *Runner) prepareRuntime(ctx context.Context, state *runState) error {
 	}
 
 	r.configureHFTokenSecret(ctx, state.kubeClient)
+	if err := r.prepareWorkspaceModelsValues(state); err != nil {
+		return err
+	}
 
 	if err := r.setupProfile(ctx, state); err != nil {
 		return err
@@ -122,6 +130,9 @@ func (r *Runner) prepareRuntime(ctx context.Context, state *runState) error {
 
 func (r *Runner) prepareCluster(ctx context.Context, state *runState) error {
 	if r.opts.UseExistingCluster {
+		if r.opts.UseWorkspaceModels {
+			r.log("Workspace model reuse requires the existing cluster to have been created with -use-workspace-models enabled")
+		}
 		return nil
 	}
 
@@ -199,18 +210,38 @@ func (r *Runner) setupProfile(ctx context.Context, state *runState) error {
 		ClusterName: r.opts.ClusterName,
 		ImageTag:    r.opts.ImageTag,
 		Verbose:     r.opts.Verbose,
+		ValuesFiles: state.valuesFiles,
 	}
 
 	if err := r.profile.Setup(ctx, setupOpts); err != nil {
 		return fmt.Errorf("failed to setup profile: %w", err)
 	}
 
-	if !r.opts.SetupOnly {
+	if !r.opts.SetupOnly && !r.opts.KeepCluster {
 		state.addCleanup(func() {
 			r.teardownProfile(state)
 		})
 	}
 
+	return nil
+}
+
+func (r *Runner) prepareWorkspaceModelsValues(state *runState) error {
+	if !r.opts.UseWorkspaceModels || r.opts.SkipSetup {
+		return nil
+	}
+
+	valuesFile, cleanup, err := createWorkspaceModelsValuesFile()
+	if err != nil {
+		return err
+	}
+
+	if state.valuesFiles == nil {
+		state.valuesFiles = make(map[string]string)
+	}
+	state.valuesFiles["semantic-router"] = valuesFile
+	state.addCleanup(cleanup)
+	r.log("Using semantic-router workspace models overlay: %s", valuesFile)
 	return nil
 }
 
@@ -232,6 +263,17 @@ func (r *Runner) logSetupOnlyHints() {
 	r.log("   - Run tests manually: ./bin/e2e -profile %s -skip-setup -use-existing-cluster", r.opts.Profile)
 	r.log("   - Inspect the cluster: kubectl --context kind-%s get pods -A", r.opts.ClusterName)
 	r.log("   - Clean up when done: make e2e-cleanup")
+}
+
+func (r *Runner) logPreservedEnvironmentHints() {
+	if !r.opts.KeepCluster {
+		return
+	}
+
+	r.log("💡 Preserved E2E environment for cluster %s", r.opts.ClusterName)
+	r.log("   - Re-run tests without setup: ./bin/e2e -profile %s -skip-setup -use-existing-cluster", r.opts.Profile)
+	r.log("   - Inspect the cluster: kubectl --context kind-%s get pods -A", r.opts.ClusterName)
+	r.log("   - Clean up when done: make e2e-cleanup E2E_CLUSTER_NAME=%s", r.opts.ClusterName)
 }
 
 func (r *Runner) finishRun(ctx context.Context, state *runState, results []TestResult) error {
@@ -322,4 +364,38 @@ func (r *Runner) handleHFTokenSecretCreateError(
 		return nil
 	}
 	return fmt.Errorf("failed to create HF_TOKEN secret in %s: %w", nsName, createErr)
+}
+
+func createWorkspaceModelsValuesFile() (string, func(), error) {
+	tmpFile, err := os.CreateTemp("", "semantic-router-workspace-models-*.yaml")
+	if err != nil {
+		return "", nil, fmt.Errorf("create workspace models values file: %w", err)
+	}
+
+	content := fmt.Sprintf(`persistence:
+  enabled: false
+extraVolumes:
+  - name: workspace-models
+    hostPath:
+      path: %s
+      type: DirectoryOrCreate
+extraVolumeMounts:
+  - name: workspace-models
+    mountPath: /app/models
+`, cluster.WorkspaceModelsNodeMountPath)
+
+	if _, err := tmpFile.WriteString(content); err != nil {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
+		return "", nil, fmt.Errorf("write workspace models values file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmpFile.Name())
+		return "", nil, fmt.Errorf("close workspace models values file: %w", err)
+	}
+
+	cleanup := func() {
+		_ = os.Remove(tmpFile.Name())
+	}
+	return tmpFile.Name(), cleanup, nil
 }

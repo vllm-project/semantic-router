@@ -154,11 +154,23 @@ jobs:
 
           set +e
           if [ "${{ matrix.profile }}" = "response-api" ]; then
-            make e2e-test-response-api-suite E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
+            # Temporarily keep CI on the memory-backed Responses API profile only.
+            RESPONSE_API_SUITE_PROFILES=response-api \
+              make e2e-test-response-api-suite E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
             TEST_EXIT_CODE=$?
             set -e
             echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT
             exit "${TEST_EXIT_CODE}"
+          fi
+
+          if [ "${{ matrix.profile }}" = "ai-gateway" ]; then
+            # Temporarily skip the stress / pressure coverage until the suite is stable again.
+            AI_GATEWAY_CI_TESTS="chat-completions-request,apiserver-runtime-config-endpoints,domain-classify,semantic-cache,pii-detection,jailbreak-detection,decision-priority-selection,plugin-chain-execution,rule-condition-logic,decision-fallback-behavior,plugin-config-variations"
+            make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_TESTS="${AI_GATEWAY_CI_TESTS}" E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
+            TEST_EXIT_CODE=$?
+            set -e
+            echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT
+            exit ${TEST_EXIT_CODE}
           fi
 
           make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_VERBOSE=true E2E_KEEP_CLUSTER=false

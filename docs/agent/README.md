@@ -31,6 +31,8 @@ This directory is the human-readable system of record for the repository's agent
   - landing page and policy for repository technical debt
 - [tech-debt/README.md](tech-debt/README.md)
   - per-item debt inventory, template, and current entry set
+- [state-taxonomy-and-inventory.md](state-taxonomy-and-inventory.md)
+  - canonical inventory of runtime and dashboard state surfaces, durability levels, and recovery expectations
 - [glossary.md](glossary.md)
   - shared terminology for skills, surfaces, and harness layers
 - [adr/README.md](adr/README.md)

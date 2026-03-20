@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +53,15 @@ func (r *Runner) setupCluster(ctx context.Context) error {
 	if r.profileCapabilities.RequiresGPU {
 		r.log("Enabling GPU support for profile %s", r.profile.Name())
 		r.cluster.SetGPUEnabled(true)
+	}
+
+	if r.opts.UseWorkspaceModels {
+		workspaceModelsDir, err := resolveWorkspaceModelsDir()
+		if err != nil {
+			return err
+		}
+		r.log("Using workspace models directory: %s", workspaceModelsDir)
+		r.cluster.SetWorkspaceModelsDir(workspaceModelsDir)
 	}
 
 	return r.cluster.Create(ctx)
@@ -227,6 +237,20 @@ func (r *Runner) log(format string, args ...interface{}) {
 	if r.opts.Verbose {
 		fmt.Printf("[Runner] "+format+"\n", args...)
 	}
+}
+
+func resolveWorkspaceModelsDir() (string, error) {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("resolve workspace models directory: %w", err)
+	}
+
+	modelsDir := filepath.Join(workingDir, "models")
+	if err := os.MkdirAll(modelsDir, 0o755); err != nil {
+		return "", fmt.Errorf("create workspace models directory %s: %w", modelsDir, err)
+	}
+
+	return modelsDir, nil
 }
 
 func (r *Runner) printAllPodsDebugInfo(ctx context.Context, client *kubernetes.Clientset) {
