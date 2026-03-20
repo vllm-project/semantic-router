@@ -506,3 +506,10 @@ config:
         similarity_threshold: 0.2
         tools_db_path: config/tools_db.json
         fallback_to_empty: true
+resources:
+  limits:
+    cpu: "2"
+    memory: "12Gi"
+  requests:
+    cpu: "1"
+    memory: "5Gi"

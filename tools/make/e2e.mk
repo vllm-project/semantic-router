@@ -15,6 +15,7 @@ E2E_PARALLEL ?= false
 E2E_TESTS ?=
 E2E_SETUP_ONLY ?= false
 E2E_SKIP_SETUP ?= false
+E2E_USE_WORKSPACE_MODELS ?= false
 
 # Build the E2E test binary
 build-e2e: ## Build the E2E test binary
@@ -33,6 +34,7 @@ e2e-test: build-e2e
 		-image-tag=$(E2E_IMAGE_TAG) \
 		-keep-cluster=$(E2E_KEEP_CLUSTER) \
 		-use-existing-cluster=$(E2E_USE_EXISTING_CLUSTER) \
+		-use-workspace-models=$(E2E_USE_WORKSPACE_MODELS) \
 		-verbose=$(E2E_VERBOSE) \
 		-parallel=$(E2E_PARALLEL) \
 		-setup-only=$(E2E_SETUP_ONLY) \
@@ -132,20 +134,22 @@ e2e-help: ## Show help for E2E testing
 	@echo "  E2E_PROFILE              - Test profile to run (default: ai-gateway)"
 	@echo "  E2E_CLUSTER_NAME         - Kind cluster name (default: semantic-router-e2e)"
 	@echo "  E2E_IMAGE_TAG            - Docker image tag (default: e2e-test)"
-	@echo "  E2E_KEEP_CLUSTER         - Keep cluster after tests (default: false)"
+	@echo "  E2E_KEEP_CLUSTER         - Keep cluster and deployed profile after tests (default: false)"
 	@echo "  E2E_USE_EXISTING_CLUSTER - Use existing cluster (default: false)"
 	@echo "  E2E_VERBOSE              - Enable verbose logging (default: true)"
 	@echo "  E2E_PARALLEL             - Run tests in parallel (default: false)"
 	@echo "  E2E_TESTS                - Comma-separated list of test cases to run"
 	@echo "  E2E_SETUP_ONLY           - Only setup profile without running tests (default: false)"
 	@echo "  E2E_SKIP_SETUP           - Skip setup and only run tests (default: false)"
+	@echo "  E2E_USE_WORKSPACE_MODELS - Mount ./models into semantic-router for reuse (default: false)"
 	@echo ""
 	@echo "Common Commands:"
 	@echo "  make e2e-test                                    # Run all tests with default profile"
 	@echo "  make e2e-test E2E_PROFILE=ai-gateway             # Run AI Gateway tests"
+	@echo "  make e2e-test E2E_PROFILE=ai-gateway E2E_USE_WORKSPACE_MODELS=true"
 	@echo "  make e2e-test-response-api-suite                 # Run response-api + Redis + Redis Cluster suite"
 	@echo "  make e2e-test-dynamo                             # Run Dynamo tests (requires GPU)"
-	@echo "  make e2e-test-debug                              # Run tests and keep cluster"
+	@echo "  make e2e-test-debug                              # Run tests and keep cluster + deployed profile"
 	@echo "  make e2e-test-specific E2E_TESTS=\"test1,test2\"   # Run specific tests"
 	@echo "  make e2e-cleanup                                 # Clean up test cluster"
 	@echo ""

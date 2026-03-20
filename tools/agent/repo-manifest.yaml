@@ -139,6 +139,8 @@ docs:
   - docs/agent/plans/pl-0008-dashboard-backend-and-go-config-boundary-ratchet.md
   - docs/agent/plans/pl-0009-fleet-sim-optimizer-and-operator-config-boundary-ratchet.md
   - docs/agent/plans/pl-0010-extproc-response-and-dashboard-frontend-boundary-ratchet.md
+  - docs/agent/plans/pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md
+  - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
   - docs/agent/tech-debt/td-001-config-surface-fragmentation.md
@@ -171,6 +173,10 @@ docs:
   - docs/agent/tech-debt/td-028-operator-config-contract-boundary-collapse.md
   - docs/agent/tech-debt/td-029-extproc-response-pipeline-phase-collapse.md
   - docs/agent/tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md
+  - docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md
+  - docs/agent/tech-debt/td-032-training-evaluation-artifact-contract-drift.md
+  - docs/agent/tech-debt/td-033-native-binding-runtime-parity-and-lifecycle-gap.md
+  - docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
@@ -293,6 +299,12 @@ doc_governance:
     - path: docs/agent/plans/pl-0010-extproc-response-and-dashboard-frontend-boundary-ratchet.md
       steward: agent-contract
       freshness: update at the start and end of each extproc-response and dashboard-frontend boundary ratchet loop and after each completed loop task
+    - path: docs/agent/plans/pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md
+      steward: agent-contract
+      freshness: update at the start and end of each runtime-and-dashboard state durability and telemetry ratchet loop and after each completed loop task
+    - path: docs/agent/state-taxonomy-and-inventory.md
+      steward: agent-contract
+      freshness: update when the runtime or dashboard state inventory, durability taxonomy, or persistence guidance changes materially
     - path: docs/agent/tech-debt-register.md
       steward: agent-contract
       freshness: update when debt workflow or landing-page guidance changes
@@ -389,6 +401,18 @@ doc_governance:
     - path: docs/agent/tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md
       steward: dashboard
       freshness: update when the TD030 debt record changes materially
+    - path: docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md
+      steward: router-core
+      freshness: update when the TD031 debt record changes materially
+    - path: docs/agent/tech-debt/td-032-training-evaluation-artifact-contract-drift.md
+      steward: training-stack
+      freshness: update when the TD032 debt record changes materially
+    - path: docs/agent/tech-debt/td-033-native-binding-runtime-parity-and-lifecycle-gap.md
+      steward: rust-bindings
+      freshness: update when the TD033 debt record changes materially
+    - path: docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md
+      steward: agent-contract
+      freshness: update when the TD034 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change

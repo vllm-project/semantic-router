@@ -85,6 +85,41 @@ Keep the numeric index unique within `docs/agent/tech-debt/`.
 - [TD028 Operator Config Contract Still Collapses Across CRD Schema, Webhook Validation, Canonical Translation, and Sample Fixtures](td-028-operator-config-contract-boundary-collapse.md)
 - [TD029 Extproc Response Pipeline Phases Still Collapse Normalization, Streaming, Replay, and Response-Side Warnings](td-029-extproc-response-pipeline-phase-collapse.md)
 - [TD030 Dashboard Frontend Config and Interaction Surfaces Still Collapse Route Shell, Page Orchestration, and Large UI Containers](td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
+- [TD031 Router Runtime Bootstrap and Shared Service Registry Still Depend on Process-Wide Globals](td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md)
+- [TD032 Training and Evaluation Artifact Contracts Still Drift Across Dashboard, Runtime, and Scripts](td-032-training-evaluation-artifact-contract-drift.md)
+- [TD033 Native Binding Runtime Parity and Lifecycle Still Diverge Across Candle and ONNX Backends](td-033-native-binding-runtime-parity-and-lifecycle-gap.md)
+- [TD034 Runtime and Dashboard State Surfaces Still Lack a Coherent Durability, Recovery, and Telemetry Contract](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
+
+## Architecture Review Coverage Map
+
+Use this map when turning scale-out architecture findings into debt work. Reuse the matching entry first instead of opening a duplicate item for the same gap.
+
+- Router core
+  - runtime bootstrap and shared runtime state: [TD031](td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md)
+  - classification subsystem boundary collapse: [TD020](td-020-classification-subsystem-boundary-collapse.md)
+  - extproc request and response phase collapse: [TD023](td-023-extproc-request-pipeline-phase-collapse.md), [TD029](td-029-extproc-response-pipeline-phase-collapse.md)
+  - restart-sensitive runtime state and control-plane telemetry semantics: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
+  - remaining hotspot-ratchet debt across router and binding hotspots: [TD006](td-006-structural-rule-target-vs-legacy-hotspots.md)
+- Dashboard frontend and backend
+  - frontend route shell, editor control plane, and large UI containers: [TD030](td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
+  - dashboard backend training, evaluation, and model-research contract seams: [TD032](td-032-training-evaluation-artifact-contract-drift.md)
+  - historical dashboard runtime-control handler split: [TD025](td-025-dashboard-backend-runtime-control-slice-collapse.md)
+  - cross-stack console state durability, recovery, and telemetry semantics: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
+- Python CLI
+  - local Docker versus Kubernetes workflow split: [TD004](td-004-python-cli-kubernetes-workflow-separation.md)
+  - remaining config-adapter and weak-typing seams shared with dashboard/DSL helpers: [TD015](td-015-weakly-typed-config-and-dsl-contracts.md)
+  - prior CLI config-contract consolidation work: [TD022](td-022-cli-config-contract-boundary-collapse.md)
+  - workspace-backed local state versus durable product-state ownership: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
+- Training src
+  - training or evaluation artifact drift across dashboard, runtime, and scripts: [TD032](td-032-training-evaluation-artifact-contract-drift.md)
+- Candle binding and ONNX binding
+  - backend capability, parity, and lifecycle contract gap: [TD033](td-033-native-binding-runtime-parity-and-lifecycle-gap.md)
+  - remaining structural hotspot relief in binding support code: [TD006](td-006-structural-rule-target-vs-legacy-hotspots.md)
+- Shared config, schema, contracts, utilities, and tooling
+  - weakly typed or hybrid adapter seams in dashboard and DSL helpers: [TD015](td-015-weakly-typed-config-and-dsl-contracts.md)
+  - operator-side contract ownership and canonical translation boundaries: [TD028](td-028-operator-config-contract-boundary-collapse.md)
+  - state taxonomy, durability ownership, and restart-aware telemetry across router/dashboard/CLI: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
+  - resolved predecessor work for repo-wide canonical contract consolidation: [TD001](td-001-config-surface-fragmentation.md), [TD026](td-026-go-config-contract-boundary-collapse.md)
 
 ## Retired Debt Entries
 
