@@ -58,10 +58,10 @@ import shutil
 import sys
 import time
 from collections import Counter
+from collections.abc import Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import requests
 from datasets import (
@@ -72,7 +72,6 @@ from datasets import (
     load_from_disk,
 )
 from tqdm import tqdm
-
 
 CURRENT_DIR = Path(__file__).resolve().parent
 TRAINING_DIR = CURRENT_DIR.parent
@@ -112,6 +111,10 @@ DEFAULT_API_URL = os.getenv("VLLM_API_URL", "http://localhost:8000/v1/chat/compl
 DEFAULT_API_KEY = os.getenv("VLLM_API_KEY") or os.getenv("OPENAI_API_KEY")
 INTERNAL_SPLIT_COL = "_verify_source_split"
 INTERNAL_INDEX_COL = "_verify_source_index"
+MAX_VOTE_OBJECT_DEPTH = 10
+HIGH_CONFIDENCE_FRACTION = 0.8
+MEDIUM_CONFIDENCE_FRACTION = 0.5
+PROGRESS_LOG_INTERVAL_SECONDS = 15
 LABEL_FIELD_CANDIDATES = (
     "label",
     "predicted_label",
@@ -179,14 +182,14 @@ class TaskSpec:
     label_col: str
     labels: Sequence[str]
     label_storage: str
-    label_name_col: Optional[str] = None
+    label_name_col: str | None = None
 
 
 @dataclass(frozen=True)
 class JudgeConfig:
     model: str
     api_url: str
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
 
 @dataclass
@@ -195,9 +198,9 @@ class JudgeVote:
     predicted_label: str
     confidence: str
     reasoning: str
-    is_correct: Optional[bool]
-    raw_response: Optional[Dict] = None
-    error: Optional[str] = None
+    is_correct: bool | None
+    raw_response: dict | None = None
+    error: str | None = None
 
 
 @dataclass
@@ -211,14 +214,14 @@ class VerificationResult:
     predicted_label: str
     confidence: str
     is_correct: bool
-    suggested_correction: Optional[str]
+    suggested_correction: str | None
     vote_count: int
     total_votes: int
     vote_fraction: float
-    judge_votes: List[JudgeVote] = field(default_factory=list)
-    stage1_vote: Optional[JudgeVote] = None
-    stage2_trigger_reasons: List[str] = field(default_factory=list)
-    stage2_judge_votes: List[JudgeVote] = field(default_factory=list)
+    judge_votes: list[JudgeVote] = field(default_factory=list)
+    stage1_vote: JudgeVote | None = None
+    stage2_trigger_reasons: list[str] = field(default_factory=list)
+    stage2_judge_votes: list[JudgeVote] = field(default_factory=list)
     review_path: str = "single_stage"
 
 
@@ -229,14 +232,14 @@ class TaskStats:
     incorrect: int = 0
     uncertain: int = 0
     errors: int = 0
-    label_stats: Dict[str, Dict[str, Dict[str, int] | int]] = field(
+    label_stats: dict[str, dict[str, dict[str, int] | int]] = field(
         default_factory=dict
     )
 
     def accuracy(self) -> float:
         return self.correct / self.total if self.total else 0.0
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "total": self.total,
             "correct": self.correct,
@@ -248,7 +251,7 @@ class TaskStats:
         }
 
 
-TASK_SPECS: Dict[str, TaskSpec] = {
+TASK_SPECS: dict[str, TaskSpec] = {
     "feedback": TaskSpec(
         task="feedback",
         dataset_id=MODEL_REGISTRY["feedback"]["hf_dataset"],
@@ -447,8 +450,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def resolve_tasks(tasks: Sequence[str]) -> List[str]:
-    resolved: List[str] = []
+def resolve_tasks(tasks: Sequence[str]) -> list[str]:
+    resolved: list[str] = []
     for task in tasks:
         if task == "all-text":
             resolved.extend(TEXT_TASKS)
@@ -457,8 +460,8 @@ def resolve_tasks(tasks: Sequence[str]) -> List[str]:
     return sorted(set(resolved))
 
 
-def parse_mapping_args(entries: Iterable[str], name: str) -> Dict[str, str]:
-    parsed: Dict[str, str] = {}
+def parse_mapping_args(entries: Iterable[str], name: str) -> dict[str, str]:
+    parsed: dict[str, str] = {}
     for entry in entries:
         if "=" not in entry:
             raise ValueError(f"Invalid {name} entry '{entry}'. Expected KEY=VALUE.")
@@ -472,11 +475,11 @@ def parse_mapping_args(entries: Iterable[str], name: str) -> Dict[str, str]:
 
 
 def build_judge_configs(
-    model_names: Optional[Sequence[str]],
+    model_names: Sequence[str] | None,
     default_api_url: str,
-    default_api_key: Optional[str],
+    default_api_key: str | None,
     endpoint_entries: Iterable[str],
-) -> List[JudgeConfig]:
+) -> list[JudgeConfig]:
     endpoint_overrides = parse_mapping_args(endpoint_entries, "--judge-endpoint")
     judges = []
     for model_name in model_names or []:
@@ -493,7 +496,7 @@ def build_judge_configs(
 def build_task_specs(
     tasks: Sequence[str],
     dataset_override_entries: Iterable[str],
-) -> Dict[str, TaskSpec]:
+) -> dict[str, TaskSpec]:
     dataset_overrides = parse_mapping_args(
         dataset_override_entries,
         "--dataset-id-override",
@@ -504,7 +507,7 @@ def build_task_specs(
             "Unknown task(s) for --dataset-id-override: " + ", ".join(unknown_tasks)
         )
 
-    specs: Dict[str, TaskSpec] = {}
+    specs: dict[str, TaskSpec] = {}
     for task in tasks:
         spec = TASK_SPECS[task]
         override_source = dataset_overrides.get(task)
@@ -540,11 +543,11 @@ def detect_language(text: str, target_lang: str) -> bool:
     return any("a" <= char.lower() <= "z" for char in text)
 
 
-def get_text(example: Dict, spec: TaskSpec) -> str:
+def get_text(example: dict, spec: TaskSpec) -> str:
     return str(example.get(spec.text_col, "") or "")
 
 
-def normalize_label_name(example: Dict, spec: TaskSpec) -> Optional[str]:
+def normalize_label_name(example: dict, spec: TaskSpec) -> str | None:
     if spec.label_name_col:
         label_name = example.get(spec.label_name_col)
         if isinstance(label_name, str) and label_name in spec.labels:
@@ -578,16 +581,16 @@ def filter_dataset_by_language(
     return filtered
 
 
-def load_task_dataset(
+def load_task_dataset(  # noqa: C901,PLR0912,PLR0915
     spec: TaskSpec,
-    split_override: Optional[str],
-    language: Optional[str],
-) -> Tuple[Dataset, List[str], str]:
+    split_override: str | None,
+    language: str | None,
+) -> tuple[Dataset, list[str], str]:
     requested_split = split_override or spec.split
     dataset_source = spec.dataset_id
     dataset_path = Path(dataset_source).expanduser()
     nested_disk_path = dataset_path / "hf_dataset"
-    disk_dataset_path: Optional[Path] = None
+    disk_dataset_path: Path | None = None
 
     if nested_disk_path.exists():
         disk_dataset_path = nested_disk_path
@@ -607,8 +610,8 @@ def load_task_dataset(
 
             if requested_split == "all-splits":
                 merged_splits = []
-                available_splits: List[str] = []
-                for split_name in dataset_dict.keys():
+                available_splits: list[str] = []
+                for split_name in dataset_dict:
                     split_dataset = prepare_split_dataset(
                         dataset=dataset_dict[split_name],
                         spec=spec,
@@ -670,8 +673,8 @@ def load_task_dataset(
         )
 
         merged_splits = []
-        available_splits: List[str] = []
-        for split_name in dataset_dict.keys():
+        available_splits: list[str] = []
+        for split_name in dataset_dict:
             split_dataset = prepare_split_dataset(
                 dataset=dataset_dict[split_name],
                 spec=spec,
@@ -711,7 +714,7 @@ def prepare_split_dataset(
     dataset: Dataset,
     spec: TaskSpec,
     split_name: str,
-    language: Optional[str],
+    language: str | None,
 ) -> Dataset:
     if spec.task == "intent":
         dataset = dataset.filter(lambda x: x.get("category") in spec.labels)
@@ -731,8 +734,8 @@ def prepare_split_dataset(
 
 
 def choose_indices(
-    dataset_size: int, sample_size: Optional[int], use_all: bool, seed: int
-) -> List[int]:
+    dataset_size: int, sample_size: int | None, use_all: bool, seed: int
+) -> list[int]:
     if use_all or sample_size is None or sample_size >= dataset_size:
         return list(range(dataset_size))
     ordered = list(range(dataset_size))
@@ -785,7 +788,7 @@ Return JSON only:
 }}"""
 
 
-def extract_message_content(response_json: Dict) -> str:
+def extract_message_content(response_json: dict) -> str:  # noqa: C901,PLR0912
     choices = response_json.get("choices") or []
     if not choices:
         for key in ("output_text", "text", "content"):
@@ -823,7 +826,7 @@ def extract_message_content(response_json: Dict) -> str:
     return str(content)
 
 
-def extract_json_from_response(content: str) -> Optional[Dict]:
+def extract_json_from_response(content: str) -> dict | None:  # noqa: C901,PLR0912
     content = content.strip()
     if not content:
         return None
@@ -872,7 +875,7 @@ def extract_json_from_response(content: str) -> Optional[Dict]:
     return None
 
 
-def extract_balanced_json(text: str) -> Optional[str]:
+def extract_balanced_json(text: str) -> str | None:
     brace_count = 0
     for index, char in enumerate(text):
         if char == "{":
@@ -884,8 +887,10 @@ def extract_balanced_json(text: str) -> Optional[str]:
     return None
 
 
-def extract_vote_object(value, depth: int = 0) -> Optional[Dict]:
-    if depth > 10 or value is None:
+def extract_vote_object(  # noqa: C901,PLR0911,PLR0912
+    value, depth: int = 0
+) -> dict | None:
+    if depth > MAX_VOTE_OBJECT_DEPTH or value is None:
         return None
 
     if isinstance(value, dict):
@@ -936,7 +941,7 @@ def extract_vote_object(value, depth: int = 0) -> Optional[Dict]:
     return None
 
 
-def summarize_response_shape(response_json: Dict) -> str:
+def summarize_response_shape(response_json: dict) -> str:
     choices = response_json.get("choices") or []
     if not choices:
         return f"top_level_keys={sorted(response_json.keys())[:10]}"
@@ -960,7 +965,7 @@ def summarize_response_shape(response_json: Dict) -> str:
     )
 
 
-def extract_reasoning_content(response_json: Dict) -> str:
+def extract_reasoning_content(response_json: dict) -> str:
     choices = response_json.get("choices") or []
     if not choices:
         return ""
@@ -982,7 +987,7 @@ def extract_reasoning_content(response_json: Dict) -> str:
     return ""
 
 
-def extract_vote_from_response_json(response_json: Dict) -> Optional[Dict]:
+def extract_vote_from_response_json(response_json: dict) -> dict | None:
     direct_vote = extract_vote_object(response_json)
     if direct_vote is not None:
         return direct_vote
@@ -993,7 +998,7 @@ def extract_vote_from_response_json(response_json: Dict) -> Optional[Dict]:
     return None
 
 
-def normalize_label_candidate(predicted_label, labels: Sequence[str]) -> Optional[str]:
+def normalize_label_candidate(predicted_label, labels: Sequence[str]) -> str | None:
     if predicted_label is None:
         return None
 
@@ -1007,7 +1012,7 @@ def normalize_label_candidate(predicted_label, labels: Sequence[str]) -> Optiona
     return label_map.get(candidate.lower())
 
 
-def parse_correct_flag(value) -> Optional[bool]:
+def parse_correct_flag(value) -> bool | None:
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -1019,7 +1024,7 @@ def parse_correct_flag(value) -> Optional[bool]:
     return None
 
 
-def serialize_judge_config(judge: JudgeConfig) -> Dict[str, object]:
+def serialize_judge_config(judge: JudgeConfig) -> dict[str, object]:
     return {
         "model": judge.model,
         "api_url": judge.api_url,
@@ -1033,7 +1038,7 @@ def call_judge(
     timeout: int,
     max_retries: int,
     max_tokens: int,
-) -> Tuple[Optional[Dict], Optional[str]]:
+) -> tuple[dict | None, str | None]:
     headers = {"Content-Type": "application/json"}
     if judge.api_key:
         headers["Authorization"] = f"Bearer {judge.api_key}"
@@ -1099,7 +1104,7 @@ def call_judge(
             )
         except requests.RequestException as exc:
             error = f"Request failed: {exc}"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             error = f"Unexpected error: {exc}"
 
         if attempt < max_retries - 1:
@@ -1109,8 +1114,8 @@ def call_judge(
 
 
 def normalize_vote(
-    raw_vote: Optional[Dict],
-    error: Optional[str],
+    raw_vote: dict | None,
+    error: str | None,
     labels: Sequence[str],
     judge: JudgeConfig,
 ) -> JudgeVote:
@@ -1165,13 +1170,13 @@ def normalize_vote(
 def choose_majority_label(
     votes: Sequence[JudgeVote],
     original_label: str,
-) -> Tuple[str, int, float, str]:
+) -> tuple[str, int, float, str]:
     valid_votes = [vote for vote in votes if vote.predicted_label != "ERROR"]
     if not valid_votes:
         return "ERROR", 0, 0.0, "low"
 
     counts = Counter(vote.predicted_label for vote in valid_votes)
-    confidence_totals: Dict[str, int] = {}
+    confidence_totals: dict[str, int] = {}
     for vote in valid_votes:
         confidence_totals[vote.predicted_label] = (
             confidence_totals.get(vote.predicted_label, 0)
@@ -1195,9 +1200,9 @@ def choose_majority_label(
     avg_confidence = confidence_totals.get(winner, 0) / max(1, winner_count)
     if len(tied_labels) > 1:
         ensemble_confidence = "low"
-    elif vote_fraction >= 0.8 and avg_confidence >= 1.0:
+    elif vote_fraction >= HIGH_CONFIDENCE_FRACTION and avg_confidence >= 1.0:
         ensemble_confidence = "high"
-    elif vote_fraction > 0.5:
+    elif vote_fraction > MEDIUM_CONFIDENCE_FRACTION:
         ensemble_confidence = "medium"
     else:
         ensemble_confidence = "low"
@@ -1224,7 +1229,7 @@ def verify_single_example(
         max_chars=args.max_chars,
     )
 
-    judge_votes: List[JudgeVote] = []
+    judge_votes: list[JudgeVote] = []
     for judge in judges:
         raw_vote, error = call_judge(
             judge=judge,
@@ -1264,7 +1269,7 @@ def verify_single_example(
     )
 
 
-def format_eta(seconds: Optional[float]) -> str:
+def format_eta(seconds: float | None) -> str:
     if seconds is None or seconds < 0:
         return "unknown"
     total_seconds = int(seconds)
@@ -1306,10 +1311,10 @@ def verify_task_dataset(
     indices: Sequence[int],
     judges: Sequence[JudgeConfig],
     args: argparse.Namespace,
-    progress_label: Optional[str] = None,
-) -> List[VerificationResult]:
+    progress_label: str | None = None,
+) -> list[VerificationResult]:
     futures = {}
-    results: List[VerificationResult] = []
+    results: list[VerificationResult] = []
     progress_label = progress_label or spec.task
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
@@ -1357,7 +1362,7 @@ def verify_task_dataset(
                 completed += 1
                 try:
                     result = future.result()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     error_count += 1
                     logger.error("Verification error for %s: %s", progress_label, exc)
                 else:
@@ -1375,7 +1380,7 @@ def verify_task_dataset(
                 if (
                     completed == total_futures
                     or completed % progress_step == 0
-                    or now - last_log_at >= 15
+                    or now - last_log_at >= PROGRESS_LOG_INTERVAL_SECONDS
                 ):
                     log_verify_progress(
                         progress_label=progress_label,
@@ -1437,8 +1442,8 @@ def build_task_stats(
 def should_escalate_stage1_result(
     result: VerificationResult,
     confidence_threshold: str,
-) -> List[str]:
-    reasons: List[str] = []
+) -> list[str]:
+    reasons: list[str] = []
 
     if result.predicted_label == "ERROR" or result.total_votes == 0:
         reasons.append("stage1_error")
@@ -1451,9 +1456,12 @@ def should_escalate_stage1_result(
         reasons.append(f"stage1_{result.confidence}_confidence")
 
     stage1_vote = result.judge_votes[0] if result.judge_votes else None
-    if stage1_vote is not None and stage1_vote.is_correct is False:
-        if "stage1_label_mismatch" not in reasons:
-            reasons.append("stage1_marked_incorrect")
+    if (
+        stage1_vote is not None
+        and stage1_vote.is_correct is False
+        and "stage1_label_mismatch" not in reasons
+    ):
+        reasons.append("stage1_marked_incorrect")
 
     return reasons
 
@@ -1462,9 +1470,9 @@ def merge_stage_results(
     stage1_results: Sequence[VerificationResult],
     stage2_results: Sequence[VerificationResult],
     stage1_escalation_threshold: str,
-) -> Tuple[List[VerificationResult], int]:
+) -> tuple[list[VerificationResult], int]:
     stage2_by_index = {result.index: result for result in stage2_results}
-    final_results: List[VerificationResult] = []
+    final_results: list[VerificationResult] = []
     escalated_count = 0
 
     for stage1_result in stage1_results:
@@ -1526,7 +1534,7 @@ def apply_corrections(
     spec: TaskSpec,
     results: Sequence[VerificationResult],
     confidence_threshold: str,
-) -> Tuple[Dataset, int]:
+) -> tuple[Dataset, int]:
     corrections = {
         result.index: result.suggested_correction
         for result in results
@@ -1564,7 +1572,7 @@ def save_corrected_dataset(
     dataset: Dataset,
     output_dir: Path,
     split_name: str,
-    split_names: Optional[Sequence[str]] = None,
+    split_names: Sequence[str] | None = None,
 ) -> None:
     if split_name == "all-splits":
         split_order = list(split_names or [])
@@ -1578,7 +1586,8 @@ def save_corrected_dataset(
 
         for source_split in split_order:
             split_dataset = dataset.filter(
-                lambda x: x[INTERNAL_SPLIT_COL] == source_split,
+                lambda x, source_split=source_split: x[INTERNAL_SPLIT_COL]
+                == source_split,
                 desc=f"Collecting corrected {source_split}",
             )
             split_dataset = strip_internal_columns(split_dataset)
@@ -1619,8 +1628,8 @@ def print_task_report(
     task: str,
     stats: TaskStats,
     results: Sequence[VerificationResult],
-    stage1_stats: Optional[TaskStats] = None,
-    stage2_stats: Optional[TaskStats] = None,
+    stage1_stats: TaskStats | None = None,
+    stage2_stats: TaskStats | None = None,
     stage2_candidates: int = 0,
 ) -> None:
     print("\n" + "=" * 70)
@@ -1687,7 +1696,7 @@ def print_task_report(
             )
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915
     args = parse_args()
     if not args.stage1_model and not args.judge_model:
         raise SystemExit("At least one of --judge-model or --stage1-model is required.")
@@ -1782,7 +1791,7 @@ def main() -> None:
                 len(stage1_results),
             )
 
-            stage2_results: List[VerificationResult] = []
+            stage2_results: list[VerificationResult] = []
             if judges and candidate_indices:
                 stage2_results = verify_task_dataset(
                     spec,

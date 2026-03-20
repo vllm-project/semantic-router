@@ -25,11 +25,17 @@ import os
 import shutil
 import sys
 from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, Mapping, Sequence, Tuple
 
 from datasets import Dataset, DatasetDict
+
+try:
+    from huggingface_hub import HfApi, upload_folder
+except ImportError:  # pragma: no cover - optional dependency
+    HfApi = None
+    upload_folder = None
 
 SPLIT_NAMES = ("train", "validation", "test")
 DEFAULT_OUTPUT_DIR = (
@@ -185,12 +191,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_output_dir(output_dir: Path, overwrite: bool) -> None:
-    if output_dir.exists():
-        if not overwrite:
-            raise FileExistsError(
-                f"Output directory already exists: {output_dir}. "
-                "Pass --overwrite to replace it."
-            )
+    if output_dir.exists() and not overwrite:
+        raise FileExistsError(
+            f"Output directory already exists: {output_dir}. "
+            "Pass --overwrite to replace it."
+        )
 
 
 def prepare_output_dir(output_dir: Path, overwrite: bool) -> None:
@@ -210,7 +215,7 @@ def build_split_dataset(
         )
 
     rows = []
-    for text, label in zip(texts, labels):
+    for text, label in zip(texts, labels, strict=True):
         rows.append(
             {
                 "text": text,
@@ -222,7 +227,7 @@ def build_split_dataset(
 
 
 def build_dataset_dict(
-    split_payloads: Mapping[str, Tuple[Sequence[str], Sequence[int]]],
+    split_payloads: Mapping[str, tuple[Sequence[str], Sequence[int]]],
     id2label: Mapping[int, str],
 ) -> DatasetDict:
     dataset_dict = DatasetDict()
@@ -234,7 +239,7 @@ def build_dataset_dict(
 
 def compute_label_counts(
     labels: Iterable[int], id2label: Mapping[int, str]
-) -> Dict[str, int]:
+) -> dict[str, int]:
     counter = Counter(labels)
     return {id2label[idx]: counter.get(idx, 0) for idx in sorted(id2label)}
 
@@ -242,7 +247,7 @@ def compute_label_counts(
 def compute_dataset_stats(
     dataset_dict: DatasetDict,
     id2label: Mapping[int, str],
-) -> Dict[str, object]:
+) -> dict[str, object]:
     split_stats = {}
     total_counter = Counter()
 
@@ -286,7 +291,7 @@ def write_jsonl_exports(output_dir: Path, dataset_dict: DatasetDict) -> None:
 
 def build_export_config(
     args: argparse.Namespace, label2id: Mapping[str, int]
-) -> Dict[str, object]:
+) -> dict[str, object]:
     return {
         "dataset_title": args.dataset_title,
         "exported_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -444,13 +449,11 @@ def push_export_to_hub(args: argparse.Namespace, output_dir: Path) -> None:
     if not args.repo_id:
         raise ValueError("--repo-id is required when using --push-to-hub")
 
-    try:
-        from huggingface_hub import HfApi, upload_folder
-    except ImportError as exc:  # pragma: no cover - dependency error path
+    if HfApi is None or upload_folder is None:
         raise RuntimeError(
             "huggingface_hub is required for --push-to-hub. "
             "Install it in the export environment before uploading."
-        ) from exc
+        )
 
     api = HfApi(token=args.hf_token)
     api.create_repo(
