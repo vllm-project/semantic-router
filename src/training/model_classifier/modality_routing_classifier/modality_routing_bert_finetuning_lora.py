@@ -472,12 +472,6 @@ class ModalityRoutingDataset:
         # Datasets to try in order of quality/availability
         datasets_to_try = [
             {
-                "name": "Gustavosta/Stable-Diffusion-Prompts",
-                "split": "train",
-                "text_field": "Prompt",
-                "description": "Curated SD prompts (~80K)",
-            },
-            {
                 "name": "FredZhang7/stable-diffusion-prompts-2.47M",
                 "split": "train",
                 "text_field": "text",
@@ -1573,6 +1567,11 @@ class ModalityRoutingDataset:
 
         samples_per_class = max_samples // 3
         source_counts = {}
+        skip_wildchat = os.getenv("MODALITY_SKIP_WILDCHAT", "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
 
         # Global dedup set: prevents the same prompt from appearing in multiple classes
         global_seen = set()
@@ -1580,10 +1579,17 @@ class ModalityRoutingDataset:
         # ==================================
         # Mine WildChat for all 3 classes first (real user prompts)
         # ==================================
-        wc_max = samples_per_class // 4  # Use WildChat for ~25% of each class
-        wc_ar, wc_diffusion, wc_both = self._load_wildchat_prompts(
-            wc_max, global_seen=global_seen
-        )
+        wc_ar, wc_diffusion, wc_both = [], [], []
+        wc_max = 0
+        if skip_wildchat:
+            logger.info(
+                "Skipping WildChat mining because MODALITY_SKIP_WILDCHAT is enabled"
+            )
+        else:
+            wc_max = samples_per_class // 4  # Use WildChat for ~25% of each class
+            wc_ar, wc_diffusion, wc_both = self._load_wildchat_prompts(
+                wc_max, global_seen=global_seen
+            )
         source_counts["WildChat_AR"] = len(wc_ar)
         source_counts["WildChat_DIFF"] = len(wc_diffusion)
         source_counts["WildChat_BOTH"] = len(wc_both)
