@@ -232,7 +232,9 @@ def build_dataset_dict(
     return dataset_dict
 
 
-def compute_label_counts(labels: Iterable[int], id2label: Mapping[int, str]) -> Dict[str, int]:
+def compute_label_counts(
+    labels: Iterable[int], id2label: Mapping[int, str]
+) -> Dict[str, int]:
     counter = Counter(labels)
     return {id2label[idx]: counter.get(idx, 0) for idx in sorted(id2label)}
 
@@ -256,7 +258,9 @@ def compute_dataset_stats(
     total_rows = sum(split_stats[split]["num_rows"] for split in SPLIT_NAMES)
     return {
         "total_rows": total_rows,
-        "label_counts": {id2label[idx]: total_counter.get(idx, 0) for idx in sorted(id2label)},
+        "label_counts": {
+            id2label[idx]: total_counter.get(idx, 0) for idx in sorted(id2label)
+        },
         "splits": split_stats,
     }
 
@@ -280,7 +284,9 @@ def write_jsonl_exports(output_dir: Path, dataset_dict: DatasetDict) -> None:
         write_jsonl(output_dir / f"{split_name}.jsonl", rows)
 
 
-def build_export_config(args: argparse.Namespace, label2id: Mapping[str, int]) -> Dict[str, object]:
+def build_export_config(
+    args: argparse.Namespace, label2id: Mapping[str, int]
+) -> Dict[str, object]:
     return {
         "dataset_title": args.dataset_title,
         "exported_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -312,7 +318,9 @@ def build_dataset_card(
             f"{split_stats['label_counts'][LABEL_BOTH]} |"
         )
 
-    synthesis_note = "enabled" if export_config["vllm_synthesis_enabled"] else "disabled"
+    synthesis_note = (
+        "enabled" if export_config["vllm_synthesis_enabled"] else "disabled"
+    )
 
     return f"""---
 pretty_name: {dataset_title}

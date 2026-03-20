@@ -64,7 +64,13 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import requests
-from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset, load_from_disk
+from datasets import (
+    Dataset,
+    DatasetDict,
+    concatenate_datasets,
+    load_dataset,
+    load_from_disk,
+)
 from tqdm import tqdm
 
 
@@ -223,7 +229,9 @@ class TaskStats:
     incorrect: int = 0
     uncertain: int = 0
     errors: int = 0
-    label_stats: Dict[str, Dict[str, Dict[str, int] | int]] = field(default_factory=dict)
+    label_stats: Dict[str, Dict[str, Dict[str, int] | int]] = field(
+        default_factory=dict
+    )
 
     def accuracy(self) -> float:
         return self.correct / self.total if self.total else 0.0
@@ -555,7 +563,9 @@ def normalize_label_name(example: Dict, spec: TaskSpec) -> Optional[str]:
     return None
 
 
-def filter_dataset_by_language(dataset: Dataset, spec: TaskSpec, language: str) -> Dataset:
+def filter_dataset_by_language(
+    dataset: Dataset, spec: TaskSpec, language: str
+) -> Dataset:
     original_len = len(dataset)
     filtered = dataset.filter(lambda x: detect_language(get_text(x, spec), language))
     logger.info(
@@ -674,10 +684,14 @@ def load_task_dataset(
             available_splits.append(split_name)
 
         if not merged_splits:
-            raise ValueError(f"No usable samples found for task {spec.task} across all splits")
+            raise ValueError(
+                f"No usable samples found for task {spec.task} across all splits"
+            )
         return concatenate_datasets(merged_splits), available_splits, requested_split
 
-    logger.info("Loading %s split '%s' from %s", spec.task, requested_split, spec.dataset_id)
+    logger.info(
+        "Loading %s split '%s' from %s", spec.task, requested_split, spec.dataset_id
+    )
     dataset = retry_load_dataset(
         lambda: load_dataset(spec.dataset_id, split=requested_split),
         max_retries=3,
@@ -716,7 +730,9 @@ def prepare_split_dataset(
     return dataset
 
 
-def choose_indices(dataset_size: int, sample_size: Optional[int], use_all: bool, seed: int) -> List[int]:
+def choose_indices(
+    dataset_size: int, sample_size: Optional[int], use_all: bool, seed: int
+) -> List[int]:
     if use_all or sample_size is None or sample_size >= dataset_size:
         return list(range(dataset_size))
     ordered = list(range(dataset_size))
@@ -1092,7 +1108,12 @@ def call_judge(
     return None, error
 
 
-def normalize_vote(raw_vote: Optional[Dict], error: Optional[str], labels: Sequence[str], judge: JudgeConfig) -> JudgeVote:
+def normalize_vote(
+    raw_vote: Optional[Dict],
+    error: Optional[str],
+    labels: Sequence[str],
+    judge: JudgeConfig,
+) -> JudgeVote:
     if raw_vote is None:
         return JudgeVote(
             model=judge.model,
@@ -1152,9 +1173,10 @@ def choose_majority_label(
     counts = Counter(vote.predicted_label for vote in valid_votes)
     confidence_totals: Dict[str, int] = {}
     for vote in valid_votes:
-        confidence_totals[vote.predicted_label] = confidence_totals.get(
-            vote.predicted_label, 0
-        ) + CONFIDENCE_SCORES[vote.confidence]
+        confidence_totals[vote.predicted_label] = (
+            confidence_totals.get(vote.predicted_label, 0)
+            + CONFIDENCE_SCORES[vote.confidence]
+        )
 
     winner_count = max(counts.values())
     tied_labels = [label for label, count in counts.items() if count == winner_count]
@@ -1218,7 +1240,9 @@ def verify_single_example(
         original_label=original_label,
     )
     is_correct = predicted_label == original_label
-    suggested_correction = None if is_correct or predicted_label == "ERROR" else predicted_label
+    suggested_correction = (
+        None if is_correct or predicted_label == "ERROR" else predicted_label
+    )
 
     return VerificationResult(
         index=index,
@@ -1232,7 +1256,9 @@ def verify_single_example(
         is_correct=is_correct,
         suggested_correction=suggested_correction,
         vote_count=vote_count,
-        total_votes=len([vote for vote in judge_votes if vote.predicted_label != "ERROR"]),
+        total_votes=len(
+            [vote for vote in judge_votes if vote.predicted_label != "ERROR"]
+        ),
         vote_fraction=vote_fraction,
         judge_votes=judge_votes,
     )
@@ -1364,7 +1390,9 @@ def verify_task_dataset(
     return results
 
 
-def build_task_stats(spec: TaskSpec, results: Sequence[VerificationResult]) -> TaskStats:
+def build_task_stats(
+    spec: TaskSpec, results: Sequence[VerificationResult]
+) -> TaskStats:
     stats = TaskStats()
     for label in spec.labels:
         stats.label_stats[label] = {
@@ -1399,9 +1427,9 @@ def build_task_stats(spec: TaskSpec, results: Sequence[VerificationResult]) -> T
         if label_stats is not None:
             label_stats["incorrect"] += 1
             confused_with = label_stats["confused_with"]
-            confused_with[result.predicted_label] = confused_with.get(
-                result.predicted_label, 0
-            ) + 1
+            confused_with[result.predicted_label] = (
+                confused_with.get(result.predicted_label, 0) + 1
+            )
 
     return stats
 
@@ -1440,7 +1468,9 @@ def merge_stage_results(
     escalated_count = 0
 
     for stage1_result in stage1_results:
-        stage1_vote = stage1_result.judge_votes[0] if stage1_result.judge_votes else None
+        stage1_vote = (
+            stage1_result.judge_votes[0] if stage1_result.judge_votes else None
+        )
         stage1_result.stage1_vote = stage1_vote
         trigger_reasons = should_escalate_stage1_result(
             stage1_result,
@@ -1455,7 +1485,11 @@ def merge_stage_results(
 
         escalated_count += 1
         stage2_result = stage2_by_index.get(stage1_result.index)
-        if stage2_result is None or stage2_result.predicted_label == "ERROR" or stage2_result.total_votes == 0:
+        if (
+            stage2_result is None
+            or stage2_result.predicted_label == "ERROR"
+            or stage2_result.total_votes == 0
+        ):
             if stage2_result is not None:
                 stage1_result.stage2_judge_votes = stage2_result.judge_votes
             stage1_result.review_path = "stage1_fallback"
@@ -1471,10 +1505,14 @@ def merge_stage_results(
     return final_results, escalated_count
 
 
-def should_apply_correction(result: VerificationResult, confidence_threshold: str) -> bool:
+def should_apply_correction(
+    result: VerificationResult, confidence_threshold: str
+) -> bool:
     if result.is_correct or not result.suggested_correction:
         return False
-    return CONFIDENCE_SCORES[result.confidence] >= CONFIDENCE_SCORES[confidence_threshold]
+    return (
+        CONFIDENCE_SCORES[result.confidence] >= CONFIDENCE_SCORES[confidence_threshold]
+    )
 
 
 def encode_label_value(spec: TaskSpec, new_label: str):
@@ -1589,7 +1627,9 @@ def print_task_report(
     print(f"{task.upper()} DATASET VERIFICATION REPORT")
     print("=" * 70)
     print(f"Total verified: {stats.total}")
-    print(f"Correct: {stats.correct} ({stats.correct / max(1, stats.total) * 100:.1f}%)")
+    print(
+        f"Correct: {stats.correct} ({stats.correct / max(1, stats.total) * 100:.1f}%)"
+    )
     print(
         f"Incorrect: {stats.incorrect} ({stats.incorrect / max(1, stats.total) * 100:.1f}%)"
     )
@@ -1621,14 +1661,20 @@ def print_task_report(
         )
         confused_with = label_stats["confused_with"]
         if confused_with:
-            ordered_confusions = sorted(confused_with.items(), key=lambda item: -item[1])
-            top_confusions = ", ".join(f"{name}:{count}" for name, count in ordered_confusions[:5])
+            ordered_confusions = sorted(
+                confused_with.items(), key=lambda item: -item[1]
+            )
+            top_confusions = ", ".join(
+                f"{name}:{count}" for name, count in ordered_confusions[:5]
+            )
             print(f"    confused_with={top_confusions}")
 
     bad_examples = [
         result
         for result in results
-        if not result.is_correct and result.confidence != "low" and result.predicted_label != "ERROR"
+        if not result.is_correct
+        and result.confidence != "low"
+        and result.predicted_label != "ERROR"
     ]
     if bad_examples:
         print("\nSample voted corrections:")
@@ -1679,7 +1725,9 @@ def main() -> None:
     summary = {
         "tasks": {},
         "mode": "two_stage" if stage1_judge is not None else "one_stage",
-        "stage1_judge": serialize_judge_config(stage1_judge) if stage1_judge is not None else None,
+        "stage1_judge": (
+            serialize_judge_config(stage1_judge) if stage1_judge is not None else None
+        ),
         "judges": [serialize_judge_config(judge) for judge in judges],
         "language": args.language,
         "sample": None if args.all else args.sample,
@@ -1781,8 +1829,12 @@ def main() -> None:
             "source_splits": source_splits,
             "language": args.language,
             "mode": summary["mode"],
-            "stage1_stats": stage1_stats.to_dict() if stage1_stats is not None else None,
-            "stage2_stats": stage2_stats.to_dict() if stage2_stats is not None else None,
+            "stage1_stats": (
+                stage1_stats.to_dict() if stage1_stats is not None else None
+            ),
+            "stage2_stats": (
+                stage2_stats.to_dict() if stage2_stats is not None else None
+            ),
             "stage2_candidates": stage2_candidates,
             "stats": stats.to_dict(),
             "results": [asdict(result) for result in results],
@@ -1809,8 +1861,12 @@ def main() -> None:
 
         summary["tasks"][task] = {
             "stats": stats.to_dict(),
-            "stage1_stats": stage1_stats.to_dict() if stage1_stats is not None else None,
-            "stage2_stats": stage2_stats.to_dict() if stage2_stats is not None else None,
+            "stage1_stats": (
+                stage1_stats.to_dict() if stage1_stats is not None else None
+            ),
+            "stage2_stats": (
+                stage2_stats.to_dict() if stage2_stats is not None else None
+            ),
             "stage2_candidates": stage2_candidates,
             "report_path": str(report_path),
             "corrections_applied": corrections_applied,
