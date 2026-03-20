@@ -96,6 +96,37 @@ func TestHandleLooperExecution_NoTranslationForChatCompletions(t *testing.T) {
 	assert.Equal(t, originalBody, resp.Body, "body should be unchanged")
 }
 
+func TestLooperStreamingOverride_ResponseAPIForcesNonStreaming(t *testing.T) {
+	reqCtx := &RequestContext{
+		ExpectStreamingResponse: true,
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+		},
+	}
+
+	streaming := reqCtx.ExpectStreamingResponse
+	if isResponseAPIRequest(reqCtx) {
+		streaming = false
+	}
+
+	assert.False(t, streaming,
+		"Response API requests must force non-streaming looper execution")
+}
+
+func TestLooperStreamingOverride_ChatCompletionsPreservesStreaming(t *testing.T) {
+	reqCtx := &RequestContext{
+		ExpectStreamingResponse: true,
+	}
+
+	streaming := reqCtx.ExpectStreamingResponse
+	if isResponseAPIRequest(reqCtx) {
+		streaming = false
+	}
+
+	assert.True(t, streaming,
+		"Chat Completions requests should preserve streaming preference")
+}
+
 func TestScheduleResponseMemoryStore_NoOpWithoutMemoryExtractor(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{

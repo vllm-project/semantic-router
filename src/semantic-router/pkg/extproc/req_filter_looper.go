@@ -91,14 +91,21 @@ func (r *OpenAIRouter) handleLooperExecution(
 	// Create looper based on algorithm type
 	l := looper.Factory(&r.Config.Looper, decision.Algorithm.Type)
 
-	// Build looper request
+	// Build looper request.
+	// Response API requests always return JSON, so force non-streaming in the
+	// looper to get a JSON body that TranslateResponse can parse. The
+	// Response API layer handles its own streaming format separately.
+	streaming := reqCtx.ExpectStreamingResponse
+	if isResponseAPIRequest(reqCtx) {
+		streaming = false
+	}
 	looperReq := &looper.Request{
 		OriginalRequest: openAIRequest,
 		ModelRefs:       decision.ModelRefs,
 		ModelParams:     r.getModelParams(),
 		Algorithm:       decision.Algorithm,
-		IsStreaming:     reqCtx.ExpectStreamingResponse,
-		DecisionName:    decision.Name, // Pass decision name for extproc lookup
+		IsStreaming:     streaming,
+		DecisionName:    decision.Name,
 	}
 
 	// Execute looper
