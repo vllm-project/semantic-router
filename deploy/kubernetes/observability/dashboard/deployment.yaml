@@ -18,8 +18,11 @@ spec:
         - name: dashboard
           image: ghcr.io/vllm-project/semantic-router/dashboard:latest
           imagePullPolicy: IfNotPresent
+          # The image ENTRYPOINT is /app/entrypoint.sh (exec su-exec nonroot "$@"),
+          # so args must include the binary path as the first element.
           args:
             [
+              "/app/dashboard-backend",
               "-port=8700",
               "-static=/app/frontend",
               "-config=/app/config/config.yaml",
@@ -50,11 +53,13 @@ spec:
                 configMapKeyRef:
                   name: semantic-router-dashboard-config
                   key: TARGET_OPENWEBUI_URL
+                  optional: true
             - name: TARGET_CHATUI_URL
               valueFrom:
                 configMapKeyRef:
                   name: semantic-router-dashboard-config
                   key: TARGET_CHATUI_URL
+                  optional: true
             - name: ROUTER_CONFIG_PATH
               value: /app/config/config.yaml
             # ML service sidecar: connect to localhost since it's in the same pod

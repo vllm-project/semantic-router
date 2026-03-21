@@ -1,10 +1,12 @@
 package extproc
 
 import (
+	"encoding/json"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
 type requestHeaderTestCase struct {
@@ -175,5 +177,70 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 	}
 	if ctx.RequestID != "req-123" {
 		t.Fatalf("expected request ID to be captured, got %q", ctx.RequestID)
+	}
+}
+
+func TestHandleRequestHeadersReturnsMethodNotAllowedForChatCompletionsGet(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{Headers: make(map[string]string)}
+
+	response, err := router.handleRequestHeaders(newRequestHeaders("GET", "/v1/chat/completions"), ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders failed: %v", err)
+	}
+
+	assertImmediateErrorResponse(t, response, typev3.StatusCode_MethodNotAllowed, "method not allowed")
+}
+
+func TestHandleRequestHeadersReturnsMethodNotAllowedForModelsPost(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{Headers: make(map[string]string)}
+
+	response, err := router.handleRequestHeaders(newRequestHeaders("POST", "/v1/models"), ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders failed: %v", err)
+	}
+
+	assertImmediateErrorResponse(t, response, typev3.StatusCode_MethodNotAllowed, "method not allowed")
+}
+
+func TestHandleRequestHeadersReturnsNotFoundForUnknownV1Endpoint(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{Headers: make(map[string]string)}
+
+	response, err := router.handleRequestHeaders(newRequestHeaders("POST", "/v1/does-not-exist"), ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders failed: %v", err)
+	}
+
+	assertImmediateErrorResponse(t, response, typev3.StatusCode_NotFound, "endpoint not found")
+}
+
+func assertImmediateErrorResponse(
+	t *testing.T,
+	response *ext_proc.ProcessingResponse,
+	wantStatus typev3.StatusCode,
+	wantMessage string,
+) {
+	t.Helper()
+
+	immediate := response.GetImmediateResponse()
+	if immediate == nil {
+		t.Fatal("expected immediate response")
+	}
+	if immediate.Status == nil || immediate.Status.Code != wantStatus {
+		t.Fatalf("expected status %v, got %v", wantStatus, immediate.Status)
+	}
+
+	var decoded struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(immediate.Body, &decoded); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if decoded.Error.Message != wantMessage {
+		t.Fatalf("expected error message %q, got %q", wantMessage, decoded.Error.Message)
 	}
 }

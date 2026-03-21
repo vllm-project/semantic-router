@@ -39,16 +39,21 @@ type EmbeddingModels struct {
 	MultiModalModelPath string     `yaml:"multimodal_model_path,omitempty"`
 	BertModelPath       string     `yaml:"bert_model_path"`
 	UseCPU              bool       `yaml:"use_cpu"`
-	HNSWConfig          HNSWConfig `yaml:"hnsw_config,omitempty"`
+	EmbeddingConfig     HNSWConfig `yaml:"embedding_config,omitempty"`
 }
 
-// HNSWConfig contains settings for optimizing the embedding classifier.
+func (e EmbeddingModels) MinSimilarityThreshold() float32 {
+	return e.EmbeddingConfig.WithDefaults().MinScoreThreshold
+}
+
+// HNSWConfig contains settings for optimizing embedding-backed classification.
 type HNSWConfig struct {
 	ModelType          string  `yaml:"model_type,omitempty"`
 	PreloadEmbeddings  bool    `yaml:"preload_embeddings"`
 	TargetDimension    int     `yaml:"target_dimension,omitempty"`
 	TargetLayer        int     `yaml:"target_layer,omitempty"`
 	EnableSoftMatching *bool   `yaml:"enable_soft_matching,omitempty"`
+	TopK               *int    `yaml:"top_k,omitempty"`
 	MinScoreThreshold  float32 `yaml:"min_score_threshold,omitempty"`
 }
 
@@ -63,6 +68,13 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 	if result.EnableSoftMatching == nil {
 		defaultEnabled := true
 		result.EnableSoftMatching = &defaultEnabled
+	}
+	if result.TopK == nil {
+		defaultTopK := 1
+		result.TopK = &defaultTopK
+	} else if *result.TopK < 0 {
+		defaultTopK := 1
+		result.TopK = &defaultTopK
 	}
 	if result.MinScoreThreshold <= 0 {
 		result.MinScoreThreshold = 0.5
@@ -128,8 +140,21 @@ type FeedbackDetectorConfig struct {
 }
 
 type PreferenceModelConfig struct {
-	UseContrastive bool   `yaml:"use_contrastive"`
+	UseContrastive *bool  `yaml:"use_contrastive,omitempty"`
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+}
+
+func (c PreferenceModelConfig) WithDefaults() PreferenceModelConfig {
+	result := c
+	if result.UseContrastive == nil {
+		defaultEnabled := true
+		result.UseContrastive = &defaultEnabled
+	}
+	return result
+}
+
+func (c PreferenceModelConfig) ContrastiveEnabled() bool {
+	return *c.WithDefaults().UseContrastive
 }
 
 type ExternalModelConfig struct {
@@ -250,9 +275,11 @@ type ModelParams struct {
 	LoRAs              []LoRAAdapter     `yaml:"loras,omitempty"`
 	AccessKey          string            `yaml:"access_key,omitempty"`
 	ParamSize          string            `yaml:"param_size,omitempty"`
+	ContextWindowSize  int               `yaml:"context_window_size,omitempty"`
 	APIFormat          string            `yaml:"api_format,omitempty"`
 	Description        string            `yaml:"description,omitempty"`
 	Capabilities       []string          `yaml:"capabilities,omitempty"`
+	Tags               []string          `yaml:"tags,omitempty"`
 	QualityScore       float64           `yaml:"quality_score,omitempty"`
 	ExternalModelIDs   map[string]string `yaml:"external_model_ids,omitempty"`
 	Modality           string            `yaml:"modality,omitempty"`

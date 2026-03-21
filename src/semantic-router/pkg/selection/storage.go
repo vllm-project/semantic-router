@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -67,7 +68,7 @@ type StoredRatings struct {
 type FileEloStorage struct {
 	path     string
 	mu       sync.RWMutex
-	dirty    bool
+	dirty    atomic.Bool
 	stopChan chan struct{}
 	doneChan chan struct{}
 }
@@ -314,20 +315,20 @@ func (f *FileEloStorage) StartAutoSave(interval time.Duration, getAll func() map
 			select {
 			case <-f.stopChan:
 				// Final save before shutdown
-				if f.dirty {
+				if f.dirty.Swap(false) {
 					ratings := getAll()
 					if err := f.SaveAllRatings(ratings); err != nil {
+						f.dirty.Store(true)
 						logging.Errorf("[EloStorage] Failed final save: %v", err)
 					}
 				}
 				return
 			case <-ticker.C:
-				if f.dirty {
+				if f.dirty.Swap(false) {
 					ratings := getAll()
 					if err := f.SaveAllRatings(ratings); err != nil {
+						f.dirty.Store(true)
 						logging.Errorf("[EloStorage] Auto-save failed: %v", err)
-					} else {
-						f.dirty = false
 					}
 				}
 			}
@@ -337,7 +338,7 @@ func (f *FileEloStorage) StartAutoSave(interval time.Duration, getAll func() map
 
 // MarkDirty marks that ratings have changed and need to be saved
 func (f *FileEloStorage) MarkDirty() {
-	f.dirty = true
+	f.dirty.Store(true)
 }
 
 // MemoryEloStorage implements EloStorage using in-memory storage (for testing)

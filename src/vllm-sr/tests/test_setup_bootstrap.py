@@ -12,7 +12,7 @@ from cli.bootstrap import (
 def test_build_bootstrap_config_contains_setup_marker():
     config = build_bootstrap_config()
 
-    assert config["version"] == "v0.1"
+    assert config["version"] == "v0.3"
     assert config["listeners"][0]["port"] == 8899
     assert config["setup"]["mode"] is True
     assert config["setup"]["state"] == "bootstrap"
@@ -25,10 +25,10 @@ def test_ensure_bootstrap_workspace_creates_expected_files(tmp_path: Path):
 
     assert result.created_config is True
     assert result.created_output_dir is True
-    assert result.created_defaults is True
+    assert result.created_defaults is False
     assert result.setup_mode is True
     assert config_path.exists()
-    assert (tmp_path / ".vllm-sr" / "router-defaults.yaml").exists()
+    assert (tmp_path / ".vllm-sr").exists()
     assert is_setup_mode_config(config_path) is True
 
     with open(config_path, "r") as f:

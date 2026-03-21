@@ -44,11 +44,14 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		return nil, err
 	}
 
-	components, err := buildRouterComponents(cfg)
+	router, err := buildOpenAIRouterFromConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return components.buildRouter(), nil
+
+	config.Replace(cfg)
+	logLoadedRouterConfig(configPath, cfg)
+	return router, nil
 }
 
 func loadRouterConfig(configPath string) (*config.RouterConfig, error) {
@@ -63,7 +66,18 @@ func loadRouterConfig(configPath string) (*config.RouterConfig, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	config.Replace(cfg)
+	return cfg, nil
+}
+
+func buildOpenAIRouterFromConfig(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	components, err := buildRouterComponents(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return components.buildRouter(), nil
+}
+
+func logLoadedRouterConfig(configPath string, cfg *config.RouterConfig) {
 	logging.Debugf("[NewOpenAIRouter] Parsed config from file: %s, decisions=%d", configPath, len(cfg.Decisions))
 	for i, decision := range cfg.Decisions {
 		logging.Debugf(
@@ -74,7 +88,6 @@ func loadRouterConfig(configPath string) (*config.RouterConfig, error) {
 			decision.Priority,
 		)
 	}
-	return cfg, nil
 }
 
 func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) {

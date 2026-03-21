@@ -157,7 +157,6 @@ type SemanticCache struct {
 	EvictionPolicy      string        `yaml:"eviction_policy,omitempty"`
 	Redis               *RedisConfig  `yaml:"redis,omitempty"`
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
-	BackendConfigPath   string        `yaml:"backend_config_path,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
 	// ContextWindowTurns enables context-aware cache keys for multi-turn conversations.
 	// 0 = disabled (default): cache key is the last user message only.
@@ -212,13 +211,12 @@ type MemoryMilvusConfig struct {
 }
 
 type ResponseAPIConfig struct {
-	Enabled           bool                    `yaml:"enabled"`
-	StoreBackend      string                  `yaml:"store_backend,omitempty"`
-	TTLSeconds        int                     `yaml:"ttl_seconds,omitempty"`
-	MaxResponses      int                     `yaml:"max_responses,omitempty"`
-	BackendConfigPath string                  `yaml:"backend_config_path,omitempty"`
-	Milvus            ResponseAPIMilvusConfig `yaml:"milvus,omitempty"`
-	Redis             ResponseAPIRedisConfig  `yaml:"redis,omitempty"`
+	Enabled      bool                    `yaml:"enabled"`
+	StoreBackend string                  `yaml:"store_backend,omitempty"`
+	TTLSeconds   int                     `yaml:"ttl_seconds,omitempty"`
+	MaxResponses int                     `yaml:"max_responses,omitempty"`
+	Milvus       ResponseAPIMilvusConfig `yaml:"milvus,omitempty"`
+	Redis        ResponseAPIRedisConfig  `yaml:"redis,omitempty"`
 }
 
 type ResponseAPIMilvusConfig struct {

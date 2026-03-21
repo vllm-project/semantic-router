@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -15,6 +16,13 @@ func jsonCompatibleValue(value interface{}) interface{} {
 func jsonCompatibleReflectValue(value reflect.Value) interface{} {
 	if !value.IsValid() {
 		return nil
+	}
+	if value.CanInterface() {
+		if marshaler, ok := value.Interface().(json.Marshaler); ok {
+			if normalized, ok := jsonCompatibleMarshalerValue(marshaler); ok {
+				return normalized
+			}
+		}
 	}
 
 	switch value.Kind() {
@@ -45,6 +53,18 @@ func jsonCompatibleReflectValue(value reflect.Value) interface{} {
 	default:
 		return value.Interface()
 	}
+}
+
+func jsonCompatibleMarshalerValue(marshaler json.Marshaler) (interface{}, bool) {
+	data, err := marshaler.MarshalJSON()
+	if err != nil || len(data) == 0 {
+		return nil, false
+	}
+	var normalized interface{}
+	if err := json.Unmarshal(data, &normalized); err != nil {
+		return nil, false
+	}
+	return normalized, true
 }
 
 func jsonCompatibleStruct(value reflect.Value) map[string]interface{} {

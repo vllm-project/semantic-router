@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,28 +10,30 @@ environment and deployment configuration
 
 ## Summary
 
-Local Docker startup, repo config examples, and Kubernetes deployment paths do not share one portable config story.
+The primary local, AMD, Helm, operator, onboarding, and DSL workflows now share the same canonical v0.3 config concepts. Operator wrapping and backend discovery remain documented adapter layers, not a second steady-state config model.
 
 ## Evidence
 
 - [src/vllm-sr/cli/templates/config.template.yaml](../../../src/vllm-sr/cli/templates/config.template.yaml)
-- [src/vllm-sr/cli/templates/router-defaults.yaml](../../../src/vllm-sr/cli/templates/router-defaults.yaml)
-- [config/config.yaml](../../../config/config.yaml)
-- [deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.local](../../../deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.local)
-- [src/semantic-router/pkg/config/validator.go](../../../src/semantic-router/pkg/config/validator.go)
+- [deploy/recipes/balance.yaml](../../../deploy/recipes/balance.yaml)
+- [deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_simple.yaml](../../../deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_simple.yaml)
+- [website/docs/installation/configuration.md](../../../website/docs/installation/configuration.md)
+- [website/docs/installation/k8s/operator.md](../../../website/docs/installation/k8s/operator.md)
 
 ## Why It Matters
 
-- Local Docker startup, repo config examples, and Kubernetes/operator deployment paths do not share one portable config story.
-- The `config/` directory mixes legacy and environment-specific examples that are not consistently reusable across local and Kubernetes flows.
-- Kubernetes mode currently needs special validation and loading behavior instead of looking like the same config model deployed differently.
+- The old portability story mixed canonical config with environment-specific wrappers, which made Kubernetes look like a separate user-facing schema.
+- A portable contract only works if the repo clearly distinguishes between canonical config and adapter metadata such as operator wrapping or backend discovery.
 
 ## Desired End State
 
-- A clearer split between canonical portable config, environment overlays, and legacy examples.
-- Local Docker, AMD, and Kubernetes paths can consume the same conceptual config with predictable adapters.
+- A clearer split between canonical portable config, environment adapters, and compatibility-only legacy files.
+- Local Docker, AMD, Helm, and Kubernetes paths all start from the same conceptual config, with operator-specific wrapping documented as an adapter rather than a second config model.
 
 ## Exit Criteria
 
 - The primary local and Kubernetes workflows can start from the same canonical config structure or a formally defined overlay system.
 - Legacy-only examples are either retired or explicitly isolated from the default path.
+- Local helper commands and docs no longer imply that `.vllm-sr/router-defaults.yaml` is part of the normal portability story, and any auxiliary files under `.vllm-sr/` are clearly documented as references rather than config sources.
+
+All exit criteria are satisfied as of 2026-03-14. The remaining environment-specific differences are explicit deployment adapters (`spec.config`, `spec.vllmEndpoints`, Helm chart values wrapping), not a portability debt in the config contract itself.

@@ -16,6 +16,7 @@ var dslLexer = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Float", Pattern: `[+-]?[0-9]+\.[0-9]+`},
 	{Name: "Int", Pattern: `[+-]?[0-9]+`},
 	{Name: "String", Pattern: `"(?:[^"\\]|\\.)*"`},
+	{Name: "Arrow", Pattern: `->`},
 	{Name: "Ident", Pattern: `[a-zA-Z_][a-zA-Z0-9_\-\.\/]*`},
 	{Name: "LBrace", Pattern: `\{`},
 	{Name: "RBrace", Pattern: `\}`},
@@ -25,6 +26,7 @@ var dslLexer = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "RBracket", Pattern: `\]`},
 	{Name: "Colon", Pattern: `:`},
 	{Name: "Comma", Pattern: `,`},
+	{Name: "GreaterThan", Pattern: `>`},
 	{Name: "Equals", Pattern: `=`},
 })
 
@@ -66,12 +68,11 @@ func Parse(input string) (*Program, []error) {
 		parsedAny = true
 		resolved := rawToProgram(r)
 		prog.Signals = append(prog.Signals, resolved.Signals...)
+		prog.SignalGroups = append(prog.SignalGroups, resolved.SignalGroups...)
 		prog.Routes = append(prog.Routes, resolved.Routes...)
+		prog.Models = append(prog.Models, resolved.Models...)
 		prog.Plugins = append(prog.Plugins, resolved.Plugins...)
-		prog.Backends = append(prog.Backends, resolved.Backends...)
-		if resolved.Global != nil {
-			prog.Global = resolved.Global
-		}
+		prog.TestBlocks = append(prog.TestBlocks, resolved.TestBlocks...)
 	}
 
 	if !parsedAny {
@@ -81,13 +82,13 @@ func Parse(input string) (*Program, []error) {
 }
 
 // splitTopLevelBlocks splits DSL source into top-level blocks by finding
-// top-level keywords (SIGNAL, ROUTE, PLUGIN, BACKEND, GLOBAL) that appear
+// top-level keywords (SIGNAL, ROUTE, MODEL, PLUGIN) that appear
 // outside of braces.
 func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
 	start := 0
-	keywords := []string{"SIGNAL", "ROUTE", "PLUGIN", "BACKEND", "GLOBAL"}
+	keywords := []string{"SIGNAL_GROUP", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
@@ -149,19 +150,72 @@ func rawToProgram(raw *rawProgram) *Program {
 	prog := &Program{}
 	for _, entry := range raw.Entries {
 		switch {
+		case entry.SignalGroup != nil:
+			prog.SignalGroups = append(prog.SignalGroups, rawToSignalGroup(entry.SignalGroup))
 		case entry.Signal != nil:
 			prog.Signals = append(prog.Signals, rawToSignal(entry.Signal))
 		case entry.Route != nil:
 			prog.Routes = append(prog.Routes, rawToRoute(entry.Route))
+		case entry.Model != nil:
+			prog.Models = append(prog.Models, rawToModelDecl(entry.Model))
 		case entry.Plugin != nil:
 			prog.Plugins = append(prog.Plugins, rawToPlugin(entry.Plugin))
-		case entry.Backend != nil:
-			prog.Backends = append(prog.Backends, rawToBackend(entry.Backend))
-		case entry.Global != nil:
-			prog.Global = rawToGlobal(entry.Global)
+		case entry.TestBlock != nil:
+			prog.TestBlocks = append(prog.TestBlocks, rawToTestBlock(entry.TestBlock))
 		}
 	}
 	return prog
+}
+
+func rawToSignalGroup(r *rawSignalGroupDecl) *SignalGroupDecl {
+	sg := &SignalGroupDecl{
+		Name: unquoteIdent(r.Name),
+		Pos:  posFromLexer(r.Pos),
+	}
+	fields := entriesToMap(r.Fields)
+	if v, ok := fields["semantics"]; ok {
+		if sv, ok := v.(StringValue); ok {
+			sg.Semantics = sv.V
+		}
+	}
+	if v, ok := fields["temperature"]; ok {
+		switch tv := v.(type) {
+		case FloatValue:
+			sg.Temperature = tv.V
+		case IntValue:
+			sg.Temperature = float64(tv.V)
+		}
+	}
+	if v, ok := fields["members"]; ok {
+		if av, ok := v.(ArrayValue); ok {
+			for _, item := range av.Items {
+				if sv, ok := item.(StringValue); ok {
+					sg.Members = append(sg.Members, sv.V)
+				}
+			}
+		}
+	}
+	if v, ok := fields["default"]; ok {
+		if sv, ok := v.(StringValue); ok {
+			sg.Default = sv.V
+		}
+	}
+	return sg
+}
+
+func rawToTestBlock(r *rawTestBlockDecl) *TestBlockDecl {
+	tb := &TestBlockDecl{
+		Name: unquoteIdent(r.Name),
+		Pos:  posFromLexer(r.Pos),
+	}
+	for _, entry := range r.Entries {
+		tb.Entries = append(tb.Entries, &TestEntry{
+			Query:     unquote(entry.Query),
+			RouteName: unquoteIdent(entry.RouteName),
+			Pos:       posFromLexer(entry.Pos),
+		})
+	}
+	return tb
 }
 
 func rawToSignal(r *rawSignalDecl) *SignalDecl {
@@ -191,6 +245,8 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 		switch {
 		case item.Priority != nil:
 			route.Priority = *item.Priority
+		case item.Tier != nil:
+			route.Tier = *item.Tier
 		case item.When != nil:
 			route.When = toBoolExpr(item.When)
 		case item.Model != nil:
@@ -205,6 +261,14 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 	}
 
 	return route
+}
+
+func rawToModelDecl(r *rawModelDecl) *ModelDecl {
+	return &ModelDecl{
+		Name:   unquoteIdent(r.Name),
+		Fields: entriesToMap(r.Fields),
+		Pos:    posFromLexer(r.Pos),
+	}
 }
 
 func rawToPlugin(r *rawPluginDecl) *PluginDecl {
@@ -225,22 +289,6 @@ func rawToPluginRef(r *rawPluginRef) *PluginRef {
 		ref.Fields = entriesToMap(r.Fields)
 	}
 	return ref
-}
-
-func rawToBackend(r *rawBackendDecl) *BackendDecl {
-	return &BackendDecl{
-		BackendType: r.BackendType,
-		Name:        unquoteIdent(r.Name),
-		Fields:      entriesToMap(r.Fields),
-		Pos:         posFromLexer(r.Pos),
-	}
-}
-
-func rawToGlobal(r *rawGlobalDecl) *GlobalDecl {
-	return &GlobalDecl{
-		Fields: entriesToMap(r.Fields),
-		Pos:    posFromLexer(r.Pos),
-	}
 }
 
 func rawToAlgo(r *rawAlgoSpec) *AlgoSpec {
@@ -284,10 +332,6 @@ func rawToModelRef(r *rawModelRef) *ModelRef {
 				m.Weight = float64(*v.Int)
 			} else if v.Float != nil {
 				m.Weight = *v.Float
-			}
-		case "reasoning_family":
-			if v.Str != nil {
-				m.ReasoningFamily = unquote(*v.Str)
 			}
 		}
 	}
@@ -414,8 +458,6 @@ const (
 	TOKEN_SIGNAL
 	TOKEN_ROUTE
 	TOKEN_PLUGIN
-	TOKEN_BACKEND
-	TOKEN_GLOBAL
 	TOKEN_PRIORITY
 	TOKEN_WHEN
 	TOKEN_MODEL
@@ -439,10 +481,9 @@ func (t TokenType) String() string {
 		TOKEN_EOF: "EOF", TOKEN_ILLEGAL: "ILLEGAL", TOKEN_IDENT: "IDENT",
 		TOKEN_STRING: "STRING", TOKEN_INT: "INT", TOKEN_FLOAT: "FLOAT",
 		TOKEN_BOOL: "BOOL", TOKEN_COMMENT: "COMMENT", TOKEN_SIGNAL: "SIGNAL",
-		TOKEN_ROUTE: "ROUTE", TOKEN_PLUGIN: "PLUGIN", TOKEN_BACKEND: "BACKEND",
-		TOKEN_GLOBAL: "GLOBAL", TOKEN_PRIORITY: "PRIORITY", TOKEN_WHEN: "WHEN",
-		TOKEN_MODEL: "MODEL", TOKEN_ALGORITHM: "ALGORITHM", TOKEN_AND: "AND",
-		TOKEN_OR: "OR", TOKEN_NOT: "NOT", TOKEN_LBRACE: "{", TOKEN_RBRACE: "}",
+		TOKEN_ROUTE: "ROUTE", TOKEN_PLUGIN: "PLUGIN", TOKEN_PRIORITY: "PRIORITY",
+		TOKEN_WHEN: "WHEN", TOKEN_MODEL: "MODEL", TOKEN_ALGORITHM: "ALGORITHM",
+		TOKEN_AND: "AND", TOKEN_OR: "OR", TOKEN_NOT: "NOT", TOKEN_LBRACE: "{", TOKEN_RBRACE: "}",
 		TOKEN_LPAREN: "(", TOKEN_RPAREN: ")", TOKEN_LBRACKET: "[",
 		TOKEN_RBRACKET: "]", TOKEN_COLON: ":", TOKEN_COMMA: ",", TOKEN_EQUALS: "=",
 	}
@@ -471,9 +512,10 @@ func Lex(input string) ([]Token, []error) {
 	}
 
 	keywordMap := map[string]TokenType{
-		"SIGNAL": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE, "PLUGIN": TOKEN_PLUGIN,
-		"BACKEND": TOKEN_BACKEND, "GLOBAL": TOKEN_GLOBAL, "PRIORITY": TOKEN_PRIORITY,
-		"WHEN": TOKEN_WHEN, "MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
+		"SIGNAL": TOKEN_SIGNAL, "SIGNAL_GROUP": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
+		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
+		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
+		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
 		"AND": TOKEN_AND, "OR": TOKEN_OR, "NOT": TOKEN_NOT,
 		"true": TOKEN_BOOL, "false": TOKEN_BOOL,
 	}
@@ -494,6 +536,8 @@ func Lex(input string) ([]Token, []error) {
 	colonSym := symMap["Colon"]
 	commaSym := symMap["Comma"]
 	equalsSym := symMap["Equals"]
+	arrowSym := symMap["Arrow"]
+	greaterThanSym := symMap["GreaterThan"]
 	commentSym := symMap["Comment"]
 	wsSym := symMap["Whitespace"]
 
@@ -506,6 +550,8 @@ func Lex(input string) ([]Token, []error) {
 	punctMap[colonSym] = TOKEN_COLON
 	punctMap[commaSym] = TOKEN_COMMA
 	punctMap[equalsSym] = TOKEN_EQUALS
+	_ = arrowSym
+	_ = greaterThanSym
 
 	var tokens []Token
 	for {
@@ -545,9 +591,10 @@ func Lex(input string) ([]Token, []error) {
 // LookupIdent returns the token type for an identifier string.
 func LookupIdent(ident string) TokenType {
 	keywords := map[string]TokenType{
-		"SIGNAL": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE, "PLUGIN": TOKEN_PLUGIN,
-		"BACKEND": TOKEN_BACKEND, "GLOBAL": TOKEN_GLOBAL, "PRIORITY": TOKEN_PRIORITY,
-		"WHEN": TOKEN_WHEN, "MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
+		"SIGNAL": TOKEN_SIGNAL, "SIGNAL_GROUP": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
+		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
+		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
+		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
 		"AND": TOKEN_AND, "OR": TOKEN_OR, "NOT": TOKEN_NOT,
 		"true": TOKEN_BOOL, "false": TOKEN_BOOL,
 	}

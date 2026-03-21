@@ -88,12 +88,26 @@ export interface DecisionConfig {
 
 export interface RuleCombination {
   operator: 'AND' | 'OR' | 'NOT'
-  conditions: RuleCondition[]
+  conditions: RuleNode[]
 }
 
 export interface RuleCondition {
   type: SignalType
   name: string
+}
+
+export type RuleNode = RuleCombination | RuleCondition
+
+export interface RawRuleNode {
+  type?: string
+  name?: string
+  operator?: string
+  conditions?: RawRuleNode[]
+}
+
+export interface RawRuleCombination {
+  operator?: string
+  conditions?: RawRuleNode[]
 }
 
 // ============== Algorithm Types ==============
@@ -288,14 +302,19 @@ export interface FilterState {
 
 // ============== Config Data (from API) ==============
 export interface ConfigData {
-  bert_model?: {
-    model_id?: string
-    threshold?: number
+  embedding_models?: {
+    bert_model_path?: string
+    mmbert_model_path?: string
     use_cpu?: boolean
+    embedding_config?: {
+      top_k?: number
+      min_score_threshold?: number
+    }
   }
   prompt_guard?: {
     enabled: boolean
     model_id?: string
+    model_ref?: string
     use_modernbert?: boolean
     threshold?: number
     use_vllm?: boolean
@@ -309,6 +328,7 @@ export interface ConfigData {
     pii_model?: {
       enabled?: boolean
       model_id?: string
+      model_ref?: string
       use_modernbert?: boolean
       threshold?: number
     }
@@ -496,13 +516,7 @@ export interface ConfigData {
     name: string
     description?: string
     priority?: number
-    rules?: {
-      operator?: string
-      conditions?: Array<{
-        type: string
-        name: string
-      }>
-    }
+    rules?: RawRuleCombination
     algorithm?: {
       type: string
       confidence?: {
@@ -530,10 +544,52 @@ export interface ConfigData {
     }>
   }>
   providers?: {
+    defaults?: {
+      default_model?: string
+    }
     models?: Array<{
       name: string
       reasoning_family?: string
     }>
-    default_model?: string
+  }
+  routing?: {
+    modelCards?: Array<{
+      name: string
+    }>
+    signals?: ConfigData['signals']
+    decisions?: ConfigData['decisions']
+  }
+  global?: {
+    router?: {
+      strategy?: 'priority' | 'confidence'
+    }
+    stores?: {
+      semantic_cache?: {
+        enabled?: boolean
+        backend_type?: string
+        similarity_threshold?: number
+        ttl_seconds?: number
+      }
+    }
+    model_catalog?: {
+      modules?: {
+        prompt_guard?: {
+          enabled?: boolean
+          model_id?: string
+          model_ref?: string
+          threshold?: number
+          use_modernbert?: boolean
+          use_vllm?: boolean
+        }
+        classifier?: {
+          pii?: {
+            model_id?: string
+            model_ref?: string
+            threshold?: number
+            enabled?: boolean
+          }
+        }
+      }
+    }
   }
 }

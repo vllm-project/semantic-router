@@ -11,9 +11,9 @@ import (
 
 // retrieveFromHybrid retrieves context using hybrid backend (multiple backends)
 func (r *OpenAIRouter) retrieveFromHybrid(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
-	hybridConfig, ok := ragConfig.BackendConfig.(*config.HybridRAGConfig)
-	if !ok {
-		return "", fmt.Errorf("invalid hybrid RAG config")
+	hybridConfig, err := ragConfig.HybridBackendConfig()
+	if err != nil {
+		return "", fmt.Errorf("invalid hybrid RAG config: %w", err)
 	}
 
 	if hybridConfig.Primary == "" {

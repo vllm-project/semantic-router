@@ -1,0 +1,846 @@
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.statCard,
+.sectionCard,
+.resultCard {
+  border: 1px solid var(--color-border);
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    rgba(7, 10, 19, 0.9);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.2);
+}
+
+.statCard {
+  padding: 1.05rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.statLabel {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+}
+
+.statValue {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+.statMeta {
+  font-size: 0.88rem;
+  color: var(--color-text-secondary);
+}
+
+.splitGrid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1rem;
+}
+
+.composerSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.sectionCard,
+.resultCard {
+  padding: 1rem;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.95rem;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.sectionKicker {
+  display: inline-flex;
+  margin-bottom: 0.3rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(0, 212, 255, 0.7);
+}
+
+.sectionDescription {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.panelActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.9rem;
+}
+
+.formStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.fieldSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
+    rgba(9, 12, 22, 0.82);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.fieldWide {
+  grid-column: 1 / -1;
+}
+
+.fieldLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.input,
+.select,
+.fileInput,
+.textarea {
+  width: 100%;
+  padding: 0.68rem 0.82rem;
+  border-radius: 0.82rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 11, 20, 0.82);
+  color: var(--color-text);
+  font: inherit;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.input:focus,
+.select:focus,
+.fileInput:focus,
+.textarea:focus {
+  outline: none;
+  border-color: rgba(0, 212, 255, 0.42);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.08);
+}
+
+.textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+
+.buttonRow {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton,
+.ghostButton {
+  border-radius: 0.85rem;
+  padding: 0.66rem 1rem;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+}
+
+.primaryButton {
+  background: linear-gradient(135deg, var(--color-primary), #d7ff7a);
+  color: #081000;
+}
+
+.secondaryButton {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--color-text);
+}
+
+.ghostButton {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--color-text-secondary);
+}
+
+.dangerButton {
+  background: rgba(255, 87, 87, 0.14);
+  border-color: rgba(255, 87, 87, 0.22);
+  color: #ffb3b3;
+}
+
+.primaryButton:hover,
+.secondaryButton:hover,
+.dangerButton:hover,
+.ghostButton:hover {
+  transform: translateY(-1px);
+}
+
+.choiceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.75rem;
+}
+
+.choiceButton {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.82rem 0.9rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.choiceButton:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0, 212, 255, 0.22);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.choiceButtonActive {
+  border-color: rgba(118, 185, 0, 0.45);
+  background:
+    linear-gradient(145deg, rgba(118, 185, 0, 0.12), rgba(0, 212, 255, 0.06)),
+    rgba(255, 255, 255, 0.03);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.16);
+}
+
+.choiceButtonTitle {
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.choiceButtonDescription {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at top right, rgba(0, 212, 255, 0.08), rgba(0, 212, 255, 0) 42%),
+    linear-gradient(155deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    rgba(7, 10, 19, 0.9);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.2);
+}
+
+.summaryHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.summaryEyebrow {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(118, 185, 0, 0.82);
+}
+
+.summaryTitle {
+  margin: 0;
+  font-size: 1.22rem;
+  letter-spacing: -0.02em;
+}
+
+.summaryText {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.summaryPillRow,
+.metricPillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.summaryPill,
+.metricPill,
+.resultPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.62rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.summaryList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.summaryItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.summaryLabel {
+  margin: 0;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+}
+
+.summaryValue {
+  margin: 0;
+  font-weight: 650;
+  color: var(--color-text);
+  text-align: right;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.statusPending {
+  background: rgba(255, 200, 84, 0.14);
+  color: #ffd67d;
+}
+
+.statusRunning {
+  background: rgba(91, 180, 255, 0.16);
+  color: #a8dcff;
+}
+
+.statusDone {
+  background: rgba(118, 185, 0, 0.16);
+  color: #d7ff7a;
+}
+
+.statusFailed {
+  background: rgba(255, 87, 87, 0.16);
+  color: #ffb3b3;
+}
+
+.message {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--color-text-secondary);
+}
+
+.messageError {
+  color: #ffb3b3;
+}
+
+.messageSuccess {
+  color: #c8ff8e;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
+.compactList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.compactListItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.compactListMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.compactListTitle {
+  font-weight: 600;
+}
+
+.compactListText {
+  color: var(--color-text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.jsonPreview {
+  margin: 0;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: rgba(0, 0, 0, 0.34);
+  color: var(--color-text-secondary);
+  overflow: auto;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  font-family: var(--font-mono);
+  max-height: 420px;
+}
+
+.dialogOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(3, 6, 14, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.dialogPanel {
+  width: min(960px, 100%);
+  max-height: calc(100vh - 2.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.1rem;
+  border-radius: 1.3rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at top right, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0) 32%),
+    linear-gradient(155deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015)),
+    rgba(6, 10, 18, 0.96);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.48);
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.dialogEyebrow {
+  display: inline-flex;
+  margin-bottom: 0.3rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(118, 185, 0, 0.82);
+}
+
+.dialogTitle {
+  margin: 0;
+  font-size: 1.28rem;
+  letter-spacing: -0.02em;
+}
+
+.dialogSubtitle {
+  margin: 0.3rem 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}
+
+.dialogCloseButton {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-secondary);
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.dialogCloseButton:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0, 212, 255, 0.26);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.dialogMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.dialogBody {
+  overflow: auto;
+}
+
+.dialogJsonPreview {
+  margin: 0;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(3, 6, 14, 0.82);
+  color: #d9e3f2;
+  overflow: auto;
+  font-size: 0.82rem;
+  line-height: 1.62;
+  font-family: var(--font-mono);
+  max-height: min(60vh, 720px);
+}
+
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.resultGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.resultMetric {
+  padding: 0.85rem 0.9rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.resultMetricLabel {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.resultMetricValue {
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.resultSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.resultSummaryHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.resultEyebrow {
+  display: inline-flex;
+  margin-bottom: 0.24rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(0, 212, 255, 0.72);
+}
+
+.resultTitle {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.resultDescription {
+  margin: 0.28rem 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.resultPillSuccess {
+  border-color: rgba(118, 185, 0, 0.22);
+  background: rgba(118, 185, 0, 0.12);
+  color: #d7ff7a;
+}
+
+.resultPillWarning {
+  border-color: rgba(255, 200, 84, 0.2);
+  background: rgba(255, 200, 84, 0.12);
+  color: #ffd67d;
+}
+
+.poolEditorList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.poolEditorCard,
+.libraryCard,
+.profileCard,
+.poolSummaryCard {
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
+    rgba(255, 255, 255, 0.02);
+}
+
+.poolEditorCard {
+  padding: 0.9rem;
+}
+
+.poolEditorHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.poolEditorEyebrow,
+.libraryCardKey {
+  display: inline-flex;
+  margin-bottom: 0.2rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-text-secondary);
+}
+
+.poolEditorTitle,
+.libraryCardTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.poolEditorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.8rem;
+}
+
+.libraryGrid,
+.profileGrid,
+.poolSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.8rem;
+}
+
+.libraryCard,
+.profileCard,
+.poolSummaryCard {
+  padding: 0.95rem;
+}
+
+.libraryCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.libraryCardText {
+  margin: 0.8rem 0;
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}
+
+.cardFootnote {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.profileMetricRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.55rem;
+}
+
+.profileMetricLabel {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.profileMetricValue {
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.expandedPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding-top: 0.25rem;
+}
+
+.inlineDetails,
+.inlineDetailRows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.inlineDetailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.55rem;
+}
+
+.inlineDetailCell,
+.inlineDetailRow {
+  display: grid;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.72rem 0.8rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.inlineDetailCell {
+  grid-template-columns: 1fr;
+}
+
+.inlineDetailRow {
+  grid-template-columns: minmax(120px, 1.1fr) repeat(3, minmax(0, 1fr));
+}
+
+.inlineDetailLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+}
+
+.inlineDetailValue {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.inlineDetailText {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+.emptyState {
+  padding: 1.15rem;
+  border-radius: 1rem;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.inlineHint {
+  color: var(--color-text-secondary);
+  font-size: 0.84rem;
+}
+
+@media (max-width: 980px) {
+  .splitGrid,
+  .composerSplit {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .summaryItem {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+
+  .summaryValue {
+    text-align: left;
+  }
+
+  .resultSummaryHeader,
+  .poolEditorHeader,
+  .libraryCardHeader {
+    flex-direction: column;
+  }
+
+  .inlineDetailRow {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .dialogOverlay {
+    padding: 0.75rem;
+  }
+
+  .dialogPanel {
+    padding: 0.95rem;
+  }
+
+  .dialogHeader {
+    flex-direction: column;
+  }
+
+  .dialogCloseButton {
+    align-self: flex-end;
+  }
+}
