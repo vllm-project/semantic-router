@@ -28,6 +28,13 @@ This document defines the harness-side validation ladder for repository changes.
 - Use `make agent-ci-lint CHANGED_FILES="..."` when you want the same changed-file lint path that the pre-commit workflow runs in CI.
 - Use `ENV=amd` when platform behavior, AMD defaults, or ROCm image selection are affected.
 
+## Loop Handling
+
+- `make agent-report` resolves the task loop mode from `tools/agent/task-matrix.yaml`.
+- `lightweight` tasks keep iterating until the applicable gates for the current change pass or a real external blocker is recorded.
+- `completion` tasks keep iterating until the active subtask passes its applicable gates; when the work spans multiple ordered loops or sessions, move the task state into an execution plan.
+- A failing lint, test, smoke, integration, or E2E run is not a handoff point. Fix the issue or narrow the failing surface, then rerun the smallest relevant gate until the current completion boundary is satisfied.
+
 ## Environment Expectations
 
 - `cpu-local`

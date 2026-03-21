@@ -45,8 +45,8 @@ func extractAutoStore(ctx *RequestContext) bool {
 //  1. Auth header (x-authz-user-id) injected by external auth service (Authorino, Envoy Gateway JWT, etc.)
 //  2. metadata["user_id"] in Response API request (fallback for development/testing)
 func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, history []memory.Message, err error) {
-	// First check if this is a Response API request
-	// Non-Response API requests cannot track turns without ConversationID
+	// Memory storage requires Response API — Chat Completions is stateless and
+	// has no ConversationID to track turns against.
 	if ctx.ResponseAPICtx == nil || !ctx.ResponseAPICtx.IsResponseAPIRequest {
 		return "", "", nil, fmt.Errorf("ConversationID required for memory extraction - cannot track turns without it. Please use Response API (/v1/responses) with conversation_id or previous_response_id")
 	}
@@ -90,53 +90,52 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 // It extracts user input and assistant output from each stored response.
 func convertStoredResponsesToMessages(storedResponses []*responseapi.StoredResponse) []memory.Message {
 	var messages []memory.Message
-
 	for _, stored := range storedResponses {
-		// Add input items as user messages
-		for _, inputItem := range stored.Input {
-			if inputItem.Type == "message" {
-				// Extract content from InputItem
-				content := extractContentFromInputItem(inputItem)
-				if content != "" {
-					role := inputItem.Role
-					if role == "" {
-						role = "user" // Default to user
-					}
-					messages = append(messages, memory.Message{
-						Role:    role,
-						Content: content,
-					})
-				}
-			}
-		}
-
-		// Add output items as assistant messages
-		// First, try to use OutputText if available (simpler)
-		if stored.OutputText != "" {
-			messages = append(messages, memory.Message{
-				Role:    "assistant",
-				Content: stored.OutputText,
-			})
-		} else {
-			// Fallback: extract from Output items
-			for _, outputItem := range stored.Output {
-				if outputItem.Type == "message" {
-					content := extractContentFromOutputItem(outputItem)
-					if content != "" {
-						role := outputItem.Role
-						if role == "" {
-							role = "assistant" // Default to assistant
-						}
-						messages = append(messages, memory.Message{
-							Role:    role,
-							Content: content,
-						})
-					}
-				}
-			}
-		}
+		messages = appendInputMessages(messages, stored.Input)
+		messages = appendOutputMessages(messages, stored.OutputText, stored.Output)
 	}
+	return messages
+}
 
+// appendInputMessages appends user-side messages extracted from Response API InputItems.
+func appendInputMessages(messages []memory.Message, items []responseapi.InputItem) []memory.Message {
+	for _, item := range items {
+		if item.Type != "message" {
+			continue
+		}
+		content := extractContentFromInputItem(item)
+		if content == "" {
+			continue
+		}
+		role := item.Role
+		if role == "" {
+			role = "user"
+		}
+		messages = append(messages, memory.Message{Role: role, Content: content})
+	}
+	return messages
+}
+
+// appendOutputMessages appends assistant-side messages. It prefers OutputText
+// when available and falls back to extracting from individual OutputItems.
+func appendOutputMessages(messages []memory.Message, outputText string, items []responseapi.OutputItem) []memory.Message {
+	if outputText != "" {
+		return append(messages, memory.Message{Role: "assistant", Content: outputText})
+	}
+	for _, item := range items {
+		if item.Type != "message" {
+			continue
+		}
+		content := extractContentFromOutputItem(item)
+		if content == "" {
+			continue
+		}
+		role := item.Role
+		if role == "" {
+			role = "assistant"
+		}
+		messages = append(messages, memory.Message{Role: role, Content: content})
+	}
 	return messages
 }
 
