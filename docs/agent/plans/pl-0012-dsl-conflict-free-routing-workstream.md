@@ -40,36 +40,32 @@
 - [x] `W012` Implement the remaining core classification/config API handlers and tests so the published API surface no longer advertises stubbed config/classification endpoints.
 - [x] `W013` Add maintained router-config and DSL-config examples for the new capabilities, and update `deploy/recipes/balance.yaml` so the shipped recipe visibly exercises the new routing surface.
 - [x] `W014` Run the full applicable harness ladder for the expanded spec surface, then close all implementation-complete tasks once their shared feature gate passes.
-- [ ] `W015` Replace invalid `balance.yaml` demo domains with repo-supported routing domains, and add early domain-value validation across config plus DSL compiler/validator surfaces.
-- [ ] `W016` Rework `deploy/recipes/balance.yaml` to use repo-native learned-signal + heuristic-signal + `SIGNAL_GROUP` routing patterns that better match `.augment/clawrouter.md` without inventing a second runtime.
-- [ ] `W017` Close the PR CI gaps for the new branch, including alternate Go modfile drift and any affected tests/gates, then rerun the applicable harness ladder until the branch is green.
+- [x] `W015` Replace invalid `balance.yaml` demo domains with repo-supported routing domains, and add early domain-value validation across config plus DSL compiler/validator surfaces.
+- [x] `W016` Rework `deploy/recipes/balance.yaml` to use repo-native learned-signal + heuristic-signal + `SIGNAL_GROUP` routing patterns that better match `.augment/clawrouter.md` without inventing a second runtime.
+- [x] `W017` Revert the unfinished `TD036` branch attempt, keep `DECISION_TREE` as DSL authoring sugar only, and realign debt/docs/examples/schema mirrors with that narrower contract.
 
 ## Current Loop
 
-- Date: 2026-03-21
-- Current task: `W015` in progress
+- Date: 2026-03-22
+- Current task: `W017` completed
 - Changed files:
-  - `deploy/recipes/balance.yaml`
   - `docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md`
-  - `src/semantic-router/go.onnx.mod`
-  - `src/semantic-router/pkg/config/validator.go`
-  - `src/semantic-router/pkg/dsl/compiler.go`
-  - `src/semantic-router/pkg/dsl/validator.go`
-  - `src/semantic-router/pkg/dsl/validator_conflicts.go`
-  - `src/semantic-router/pkg/dsl/dsl_test.go`
-  - `src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go`
-  - `src/semantic-router/pkg/config/config_test.go`
 - Commands run:
+  - `codebase-retrieval` for the earlier `TD036` attempt across `pkg/dsl`, `pkg/config`, canonical export/import, API/config surfaces, maintained examples, tests, and indexed debt docs
+  - `make agent-report ENV=cpu CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
+  - `make agent-lint CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
+  - `make agent-validate`
 - Failure observed:
-  - `deploy/recipes/balance.yaml` currently declares `balance_demo_compact`, `balance_demo_deep`, and `balance_demo_default`, which are not part of the repo-supported 14 routing domains documented in `e2e/profiles/ml-model-selection/README.md`.
-  - PR `#1620` currently fails broad CI because alternate build paths use `src/semantic-router/go.onnx.mod`, which did not pick up the new DSL parser dependency `github.com/alecthomas/participle/v2`.
+  - The previous loop record still listed the reverted `TD036` attempt as if those code and docs files remained part of the active diff, which no longer matched the working tree after the revert.
 - Fix applied:
-  - none yet; this loop is still at the context-and-root-cause stage
+  - Re-ran `agent-report` on the actual one-file diff, confirmed the task is `documentation-only`, and validated with the repo-native harness gates for that classification.
+  - Kept `TD036` open and left `DECISION_TREE` as DSL sugar only; no runtime/config/schema/API expansion remains in the active diff.
 - Current result:
-  - The smallest actionable subtask is `W015`: centralize the allowed routing-domain contract and reject invalid domain values before runtime in config plus DSL flows.
-  - Candidate files for this subtask are `deploy/recipes/balance.yaml`, `src/semantic-router/go.onnx.mod`, `src/semantic-router/pkg/config/validator.go`, `src/semantic-router/pkg/dsl/compiler.go`, `src/semantic-router/pkg/dsl/validator.go`, `src/semantic-router/pkg/dsl/validator_conflicts.go`, `src/semantic-router/pkg/dsl/dsl_test.go`, `src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go`, and `src/semantic-router/pkg/config/config_test.go`.
+  - The working tree is narrowed to this execution plan update plus unrelated user-owned untracked files outside the workstream.
+  - `DECISION_TREE` remains DSL authoring sugar only, and the round-trip gap is still tracked in `TD036` rather than promoted into the runtime config contract.
+  - `make agent-lint` and `make agent-validate` both pass for the current changed-file set; `agent-report` does not require `agent-ci-gate` for this documentation-only diff.
 - Next action:
-  - Run `make agent-report ENV=cpu CHANGED_FILES="deploy/recipes/balance.yaml,src/semantic-router/go.onnx.mod,src/semantic-router/pkg/config/validator.go,src/semantic-router/pkg/dsl/compiler.go,src/semantic-router/pkg/dsl/validator.go,src/semantic-router/pkg/dsl/validator_conflicts.go,src/semantic-router/pkg/dsl/dsl_test.go,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go,src/semantic-router/pkg/config/config_test.go"` and then implement the smallest domain-contract fix first.
+  - If this plan-only update should be published to the active PR, create a signed-off commit and push it; otherwise wait for the next product task.
 
 ## Decision Log
 
@@ -105,6 +101,8 @@
 - 2026-03-21: new debt entries are part of the canonical harness surface, not just the `docs/agent/tech-debt/` directory. `tools/agent/repo-manifest.yaml` must list them under both `docs` and `doc_governance.canonical_docs` or `make agent-validate` will fail.
 - 2026-03-21: the Docker socket issue was environmental, not a code regression. After restoring Docker Desktop and reusing workspace models, the exact same feature-gate command passed without further product changes.
 - 2026-03-21: `W007` through `W014` close together on the shared feature gate. Once `vllm-sr-test-integration`, local smoke, and the `ai-gateway` E2E profile were green on the full changed-file set, the remaining implementation-complete tasks and workstream exit criteria were all satisfied.
+- 2026-03-22: an attempted `TD036` implementation added per-decision tree metadata to canonical config, CLI, dashboard, docs, and decompile. That path increased contract complexity without changing runtime capability and should not continue unless the repo explicitly wants full authoring round-trip support.
+- 2026-03-22: by explicit user direction, `DECISION_TREE` stays as DSL sugar only. Runtime config and config-backed tooling continue to operate on the existing flat `routing.decisions` contract, and `TD036` remains the indexed place to track any future round-trip work.
 
 ## Follow-up Debt / ADR Links
 
