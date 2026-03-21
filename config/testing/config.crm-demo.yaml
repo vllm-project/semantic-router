@@ -1,5 +1,5 @@
 # CRM Demo Config (v0.3 canonical)
-# Expensive: qwen3.5:35b-a3b (36B) vs Cheap: qwen2.5:14b (14.8B)
+# Expensive: qwen2.5:1.5b vs Cheap: qwen2.5:0.5b
 # Demonstrates per-decision routing momentum
 
 version: v0.3
@@ -12,39 +12,53 @@ listeners:
 
 providers:
   defaults:
-    default_model: "qwen2.5:14b"
+    default_model: "qwen2.5:0.5b"
   endpoints:
     - name: ollama
       url: "http://127.0.0.1:11434"
   models:
-    - name: "qwen3.5:35b-a3b"
-      provider_model_id: "qwen3.5:35b-a3b"
+    - name: "qwen2.5:1.5b"
+      provider_model_id: "qwen2.5:1.5b"
       api_format: openai
-    - name: "qwen2.5:14b"
-      provider_model_id: "qwen2.5:14b"
+    - name: "qwen2.5:0.5b"
+      provider_model_id: "qwen2.5:0.5b"
       api_format: openai
 
 routing:
   modelCards:
-    - name: "qwen3.5:35b-a3b"
-      param_size: 36B
+    - name: "qwen2.5:1.5b"
+      param_size: 1.5B
       context_window_size: 131072
-      description: High-quality MoE model for complex tasks.
+      description: Higher quality model for complex tasks.
       capabilities: [chat, reasoning]
-      quality_score: 0.95
+      quality_score: 0.85
       modality: ar
       tags: [premium]
-    - name: "qwen2.5:14b"
-      param_size: 14B
-      context_window_size: 131072
-      description: Efficient model for simple tasks.
+    - name: "qwen2.5:0.5b"
+      param_size: 0.5B
+      context_window_size: 32768
+      description: Fast cheap model for simple tasks.
       capabilities: [chat]
-      quality_score: 0.75
+      quality_score: 0.50
       modality: ar
       tags: [fast, default]
 
   signals:
-    complexity_rules:
+    keywords:
+      - name: code_keywords
+        operator: OR
+        method: bm25
+        keywords: ["implement", "algorithm", "concurrent", "compiler", "kernel", "mutex"]
+        case_sensitive: false
+        bm25_threshold: 0.1
+    domains:
+      - name: "computer science"
+        description: "Computer science and programming"
+        mmlu_categories: ["computer science"]
+      - name: other
+        description: "General topics"
+        mmlu_categories: ["other"]
+    complexity:
       - name: "prompt_complexity"
         threshold: 0.15
         description: "Classify prompt complexity"
@@ -65,43 +79,33 @@ routing:
             - "add tests"
             - "deploy it"
 
-  categories:
-    - name: "computer science"
-      description: "Computer science and programming"
-      mmlu_categories: ["computer science"]
-    - name: other
-      description: "General topics"
-      mmlu_categories: ["other"]
-
-  strategy: "priority"
-
   decisions:
-    - name: "cs_query"
-      description: "CS queries routed to capable model"
+    - name: "complex_query"
+      description: "Complex queries routed to capable model"
       priority: 200
       rules:
         operator: "AND"
         conditions:
-          - type: "domain"
-            name: "computer science"
+          - type: "complexity"
+            name: "prompt_complexity:hard"
       algorithm:
         type: "confidence"
         momentum:
           enabled: true
       modelRefs:
-        - model: "qwen3.5:35b-a3b"
+        - model: "qwen2.5:1.5b"
           use_reasoning: false
 
     - name: "general_query"
-      description: "General queries routed to efficient model"
-      priority: 100
+      description: "General queries"
+      priority: 1
       rules:
         operator: "AND"
         conditions:
           - type: "domain"
             name: "other"
       modelRefs:
-        - model: "qwen2.5:14b"
+        - model: "qwen2.5:0.5b"
           use_reasoning: false
 
 global:

@@ -1,40 +1,13 @@
 package extproc
 
 import (
-	"crypto/sha256"
-	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
-
-// complexityScoreCache stores real classifier scores for messages that were
-// previously classified. When a message becomes historical in a later turn,
-// the cached score is used instead of the cheap length-based proxy.
-// Key: SHA-256 hash of message text (first 16 bytes). Value: float64 score.
-var complexityScoreCache sync.Map
-
-// cacheComplexityScore stores a message's real complexity score for reuse.
-func cacheComplexityScore(message string, score float64) {
-	hash := sha256.Sum256([]byte(message))
-	key := fmt.Sprintf("%x", hash[:16])
-	complexityScoreCache.Store(key, score)
-}
-
-// getCachedComplexityScore retrieves a previously cached score.
-func getCachedComplexityScore(message string) (float64, bool) {
-	hash := sha256.Sum256([]byte(message))
-	key := fmt.Sprintf("%x", hash[:16])
-	val, ok := complexityScoreCache.Load(key)
-	if !ok {
-		return 0, false
-	}
-	return val.(float64), true
-}
 
 // Conversational Routing Momentum (CRM)
 //
@@ -86,30 +59,31 @@ func ComputeRoutingMomentum(signals []float64, attack, release float64) float64 
 	return momentum
 }
 
-// EstimateComplexityFromLength returns a cheap complexity proxy based on
-// message character length. Used for historical messages in the conversation
-// to avoid expensive embedding computation on every turn.
-//
-// The mapping is a simple piecewise linear function:
-//
-//	len < 20   → 0.1  (trivial: "yes", "ok", "thanks")
-//	len 20-40  → 0.3  (short: "can you explain that?")
-//	len 40-100 → 0.6  (medium: "implement a queue in Go")
-//	len 100-300 → 0.8 (detailed: technical questions with context)
-//	len > 300  → 0.9  (long: detailed technical prompts)
-func EstimateComplexityFromLength(messageLen int) float64 {
-	switch {
-	case messageLen < 20:
-		return 0.1
-	case messageLen < 40:
-		return 0.3
-	case messageLen < 100:
-		return 0.6
-	case messageLen < 300:
-		return 0.8
-	default:
-		return 0.9
+// scoreMessageComplexity evaluates a single message's complexity using the
+// classifier's signal evaluation. Returns a score in [0.0, 1.0].
+// Uses the same classifier that evaluates the current message — no heuristics.
+func (r *OpenAIRouter) scoreMessageComplexity(text string) float64 {
+	if r.Classifier == nil || text == "" {
+		return 0.5
 	}
+	signals := r.Classifier.EvaluateAllSignals(text)
+	if signals == nil {
+		return 0.5
+	}
+
+	// If complexity rules matched, use them directly
+	score := complexityScoreFromRules(signals.MatchedComplexityRules)
+	if len(signals.MatchedComplexityRules) > 0 {
+		return score
+	}
+
+	// If the message matched keyword or embedding signals, it's complex
+	if len(signals.MatchedKeywordRules) > 0 || len(signals.MatchedEmbeddingRules) > 0 {
+		return 0.85
+	}
+
+	// No complexity, keyword, or embedding signals — message is trivial
+	return 0.1
 }
 
 // extractUserMessageText extracts the text content from a user message.
@@ -177,20 +151,6 @@ func findEnabledMomentumConfig(cfg *config.RouterConfig) *config.RoutingMomentum
 	return nil
 }
 
-// isMomentumDecision checks if the named decision has momentum enabled.
-func isMomentumDecision(cfg *config.RouterConfig, decisionName string) bool {
-	if cfg == nil || decisionName == "" {
-		return false
-	}
-	for i := range cfg.Decisions {
-		if cfg.Decisions[i].Name == decisionName {
-			m := cfg.Decisions[i].GetMomentumConfig()
-			return m != nil && m.Enabled
-		}
-	}
-	return false
-}
-
 // applyCRMOverride checks if conversational routing momentum disagrees with
 // the current routing decision and returns an override if needed.
 // Returns empty strings if no override is needed.
@@ -200,36 +160,18 @@ func (r *OpenAIRouter) applyCRMOverride(ctx *RequestContext, currentDecision str
 	release := cfg.GetRelease()
 	threshold := cfg.GetThreshold()
 
-	// Determine the current message's complexity score.
-	// If the classifier matched the momentum-enabled decision for this turn,
-	// the message is genuinely complex regardless of length — score it high.
-	// Otherwise fall back to complexity rules or length estimation.
-	currentScore := complexityScoreFromRules(ctx.VSRMatchedComplexity)
-	if len(ctx.VSRMatchedComplexity) == 0 {
-		if isMomentumDecision(r.Config, currentDecision) {
-			currentScore = 0.85
-		} else {
-			currentScore = EstimateComplexityFromLength(len(allMsgs[len(allMsgs)-1]))
-		}
-	}
-	cacheComplexityScore(allMsgs[len(allMsgs)-1], currentScore)
-
-	// Single message — no history to compute momentum, just cache the score
+	// Single message — no history to compute momentum
 	if len(allMsgs) <= 1 {
 		return "", ""
 	}
 
-	// Build signal history: cached real score for historical, current score for latest
+	// Evaluate complexity for every message in the conversation.
+	// Fully stateless — each request re-evaluates the entire history.
 	signalHistory := make([]float64, len(allMsgs))
 	for i, msg := range allMsgs {
-		if i == len(allMsgs)-1 {
-			signalHistory[i] = currentScore
-		} else if cached, ok := getCachedComplexityScore(msg); ok {
-			signalHistory[i] = cached
-		} else {
-			signalHistory[i] = EstimateComplexityFromLength(len(msg))
-		}
+		signalHistory[i] = r.scoreMessageComplexity(msg)
 	}
+	currentScore := signalHistory[len(signalHistory)-1]
 
 	momentum := ComputeRoutingMomentum(signalHistory, attack, release)
 	ctx.RoutingMomentum = momentum

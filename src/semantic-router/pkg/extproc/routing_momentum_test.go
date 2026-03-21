@@ -269,22 +269,3 @@ func TestDecision_GetMomentumConfig(t *testing.T) {
 	}
 }
 
-func TestEstimateComplexityFromLength(t *testing.T) {
-	tests := []struct {
-		length   int
-		expected float64
-	}{
-		{5, 0.1},   // "yes"
-		{10, 0.1},  // "ok thanks"
-		{25, 0.3},  // "can you explain that?"
-		{60, 0.6},  // "implement a queue in Go"
-		{150, 0.8}, // detailed technical question
-	}
-
-	for _, tt := range tests {
-		got := EstimateComplexityFromLength(tt.length)
-		if got != tt.expected {
-			t.Errorf("EstimateComplexityFromLength(%d) = %f, want %f", tt.length, got, tt.expected)
-		}
-	}
-}
