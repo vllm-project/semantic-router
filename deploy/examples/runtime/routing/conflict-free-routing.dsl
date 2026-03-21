@@ -36,16 +36,17 @@ MODEL "qwen-default" {
 
 SIGNAL domain math {
   description: "Mathematics and symbolic reasoning."
-  mmlu_categories: ["abstract_algebra", "college_mathematics"]
+  mmlu_categories: ["math"]
 }
 
 SIGNAL domain science {
   description: "Natural science explanations and analysis."
-  mmlu_categories: ["astronomy", "college_chemistry", "college_physics"]
+  mmlu_categories: ["biology", "chemistry", "physics"]
 }
 
 SIGNAL domain general {
   description: "Catch-all domain for uncategorized requests."
+  mmlu_categories: ["other"]
 }
 
 SIGNAL_GROUP domain_taxonomy {

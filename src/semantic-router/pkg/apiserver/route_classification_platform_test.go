@@ -19,9 +19,17 @@ func TestHandleGetConfigReturnsRoutingSurface(t *testing.T) {
 		config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
 				Signals: config.Signals{
-					Categories: []config.Category{{
-						CategoryMetadata: config.CategoryMetadata{Name: "math"},
-					}},
+					Categories: []config.Category{
+						{
+							CategoryMetadata: config.CategoryMetadata{Name: "math"},
+						},
+						{
+							CategoryMetadata: config.CategoryMetadata{
+								Name:           "general",
+								MMLUCategories: []string{"other"},
+							},
+						},
+					},
 					SignalGroups: []config.SignalGroup{{
 						Name:        "subject_partition",
 						Semantics:   "softmax_exclusive",
@@ -112,7 +120,7 @@ func TestHandleUpdateConfigMergesRoutingPayload(t *testing.T) {
 				}},
 				"domains": []map[string]interface{}{
 					{"name": "math", "description": "math"},
-					{"name": "general", "description": "general"},
+					{"name": "general", "description": "general", "mmlu_categories": []string{"other"}},
 				},
 			},
 		},

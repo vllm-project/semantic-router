@@ -2275,7 +2275,8 @@ func TestLargeScaleInput(t *testing.T) {
 	numRoutes := 50
 
 	for i := 0; i < numSignals; i++ {
-		fmt.Fprintf(&sb, "SIGNAL domain domain_%d { description: \"Domain %d\" mmlu_categories: [\"cat_%d\"] }\n", i, i, i)
+		domainValues := config.SupportedRoutingDomainNames()
+		fmt.Fprintf(&sb, "SIGNAL domain domain_%d { description: \"Domain %d\" mmlu_categories: [\"%s\"] }\n", i, i, domainValues[i%len(domainValues)])
 	}
 	for i := 0; i < numRoutes; i++ {
 		fmt.Fprintf(&sb, `ROUTE route_%d {
@@ -3595,8 +3596,8 @@ func TestCLIValidateRunsRuntimeSignalGroupDiagnostics(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 
 	_, _ = tmpFile.WriteString(`
-SIGNAL domain math { mmlu_categories: ["algebra"] }
-SIGNAL domain general {}
+SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain general { mmlu_categories: ["other"] }
 
 SIGNAL_GROUP domain_taxonomy {
   semantics: "softmax_exclusive"
@@ -4039,10 +4040,10 @@ ROUTE rag_route (description = "RAG route") {
 func TestValidateDomainCategoryOverlap(t *testing.T) {
 	input := `
 SIGNAL domain math {
-  mmlu_categories: ["college_mathematics", "college_physics"]
+  mmlu_categories: ["math", "physics"]
 }
 SIGNAL domain science {
-  mmlu_categories: ["college_physics", "college_chemistry"]
+  mmlu_categories: ["physics", "chemistry"]
 }
 ROUTE r1 { PRIORITY 200 WHEN domain("math") MODEL "m1" }
 ROUTE r2 { PRIORITY 100 WHEN domain("science") AND NOT domain("math") MODEL "m2" }
@@ -4050,23 +4051,23 @@ ROUTE r2 { PRIORITY 100 WHEN domain("science") AND NOT domain("math") MODEL "m2"
 	diags, _ := Validate(input)
 	found := false
 	for _, d := range diags {
-		if d.Level == DiagWarning && strings.Contains(d.Message, "college_physics") &&
+		if d.Level == DiagWarning && strings.Contains(d.Message, "physics") &&
 			strings.Contains(d.Message, "share MMLU category") {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected warning about shared MMLU category 'college_physics'")
+		t.Error("expected warning about shared MMLU category 'physics'")
 	}
 }
 
 func TestValidateDomainCategoryNoOverlap(t *testing.T) {
 	input := `
 SIGNAL domain math {
-  mmlu_categories: ["college_mathematics", "abstract_algebra"]
+  mmlu_categories: ["math", "business"]
 }
 SIGNAL domain science {
-  mmlu_categories: ["college_physics", "college_chemistry"]
+  mmlu_categories: ["physics", "chemistry"]
 }
 ROUTE r1 { PRIORITY 200 WHEN domain("math") MODEL "m1" }
 ROUTE r2 { PRIORITY 100 WHEN domain("science") AND NOT domain("math") MODEL "m2" }
@@ -4083,8 +4084,8 @@ ROUTE r2 { PRIORITY 100 WHEN domain("science") AND NOT domain("math") MODEL "m2"
 
 func TestValidateSameSignalTypeNoGuard(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["college_mathematics"] }
-SIGNAL domain science { mmlu_categories: ["college_physics"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain science { mmlu_categories: ["physics"] }
 ROUTE math_route { PRIORITY 200 WHEN domain("math") MODEL "m1" }
 ROUTE science_route { PRIORITY 100 WHEN domain("science") MODEL "m2" }
 `
@@ -4107,8 +4108,8 @@ ROUTE science_route { PRIORITY 100 WHEN domain("science") MODEL "m2" }
 
 func TestValidateSameSignalTypeWithGuard(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["college_mathematics"] }
-SIGNAL domain science { mmlu_categories: ["college_physics"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain science { mmlu_categories: ["physics"] }
 ROUTE math_route { PRIORITY 200 WHEN domain("math") MODEL "m1" }
 ROUTE science_route { PRIORITY 100 WHEN domain("science") AND NOT domain("math") MODEL "m2" }
 `
@@ -4123,7 +4124,7 @@ ROUTE science_route { PRIORITY 100 WHEN domain("science") AND NOT domain("math")
 
 func TestValidateDifferentSignalTypesNoWarning(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["college_mathematics"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL keyword urgent { keywords: ["urgent"] }
 ROUTE r1 { PRIORITY 200 WHEN domain("math") MODEL "m1" }
 ROUTE r2 { PRIORITY 100 WHEN keyword("urgent") MODEL "m2" }
@@ -4140,10 +4141,10 @@ ROUTE r2 { PRIORITY 100 WHEN keyword("urgent") MODEL "m2" }
 
 func TestParseSignalGroup(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["abstract_algebra"] }
-SIGNAL domain science { mmlu_categories: ["college_physics"] }
-SIGNAL domain coding { mmlu_categories: ["computer_science"] }
-SIGNAL domain general {}
+SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain science { mmlu_categories: ["physics"] }
+SIGNAL domain coding { mmlu_categories: ["computer science"] }
+SIGNAL domain general { mmlu_categories: ["other"] }
 
 SIGNAL_GROUP domain_taxonomy {
   semantics: "softmax_exclusive"
@@ -4181,8 +4182,8 @@ ROUTE r1 { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 
 func TestCompileSignalGroup(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["algebra"] }
-SIGNAL domain general {}
+SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain general { mmlu_categories: ["other"] }
 
 SIGNAL_GROUP domain_taxonomy {
   semantics: "softmax_exclusive"
@@ -4211,7 +4212,7 @@ ROUTE r1 { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 
 func TestValidateSignalGroupMissingMember(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 
 SIGNAL_GROUP test_group {
   semantics: "exclusive"
@@ -4233,7 +4234,7 @@ SIGNAL_GROUP test_group {
 
 func TestValidateSignalGroupMissingDefault(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL domain science { mmlu_categories: ["physics"] }
 
 SIGNAL_GROUP test_group {
@@ -4255,8 +4256,8 @@ SIGNAL_GROUP test_group {
 
 func TestValidateSignalGroupCategoryOverlap(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["college_physics", "algebra"] }
-SIGNAL domain science { mmlu_categories: ["college_physics", "chemistry"] }
+SIGNAL domain math { mmlu_categories: ["physics", "math"] }
+SIGNAL domain science { mmlu_categories: ["physics", "chemistry"] }
 
 SIGNAL_GROUP test_group {
   semantics: "exclusive"
@@ -4268,7 +4269,7 @@ SIGNAL_GROUP test_group {
 	found := false
 	for _, d := range diags {
 		if strings.Contains(d.Message, "violates group disjointness") &&
-			strings.Contains(d.Message, "college_physics") {
+			strings.Contains(d.Message, "physics") {
 			found = true
 		}
 	}
@@ -4279,8 +4280,8 @@ SIGNAL_GROUP test_group {
 
 func TestValidateSignalGroupSoftmaxNoTemp(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["algebra"] }
-SIGNAL domain general {}
+SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain general { mmlu_categories: ["other"] }
 
 SIGNAL_GROUP test_group {
   semantics: "softmax_exclusive"
@@ -4304,7 +4305,7 @@ SIGNAL_GROUP test_group {
 
 func TestParseTestBlock(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 ROUTE math_route { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 
 TEST routing_intent {
@@ -4381,7 +4382,7 @@ func (s stubRuntimeValidationRunner) ValidateSignalGroups(_ *Program) []Diagnost
 
 func TestValidateTestBlockUndefinedRoute(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 ROUTE math_route { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 
 TEST routing_intent {
@@ -4402,7 +4403,7 @@ TEST routing_intent {
 
 func TestValidateTestBlockValidRoutes(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 ROUTE math_route { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 
 TEST routing_intent {
@@ -4456,7 +4457,7 @@ TEST routing_intent {
 func TestParseTier(t *testing.T) {
 	input := `
 SIGNAL jailbreak detector { method: "embedding" }
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 
 ROUTE safety_block {
   TIER 1
@@ -4490,7 +4491,7 @@ ROUTE math_route {
 func TestCompileTier(t *testing.T) {
 	input := `
 SIGNAL jailbreak detector { method: "embedding" }
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 
 ROUTE safety_block {
   TIER 1
@@ -4543,7 +4544,7 @@ ROUTE test {
 func TestParseDecisionTreeLowersToRoutes(t *testing.T) {
 	input := `
 SIGNAL jailbreak detector { method: "embedding" threshold: 0.8 }
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 
 DECISION_TREE routing_policy {
   IF jailbreak("detector") {
@@ -4600,7 +4601,7 @@ DECISION_TREE routing_policy {
 
 func TestParseDecisionTreeRequiresElse(t *testing.T) {
 	_, errs := Parse(`
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 
 DECISION_TREE routing_policy {
   IF domain("math") {
@@ -4615,7 +4616,7 @@ DECISION_TREE routing_policy {
 
 func TestParseDecisionTreeRejectsMixedRoutes(t *testing.T) {
 	_, errs := Parse(`
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 
 ROUTE legacy_route {
   PRIORITY 100
@@ -4648,7 +4649,7 @@ DECISION_TREE routing_policy {
 
 func TestParseDecisionTreeGeneratesBranchNames(t *testing.T) {
 	prog, errs := Parse(`
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 
 DECISION_TREE routing_policy {
   IF domain("math") {
@@ -4674,8 +4675,8 @@ DECISION_TREE routing_policy {
 
 func TestDecompileSignalGroupRoundTrip(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["algebra"] }
-SIGNAL domain general {}
+SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain general { mmlu_categories: ["other"] }
 
 SIGNAL_GROUP domain_taxonomy {
   semantics: "softmax_exclusive"
@@ -4793,15 +4794,15 @@ func TestProgramToJSONWithTier(t *testing.T) {
 func TestConflictFreeConfigWithSignalGroup(t *testing.T) {
 	input := `
 SIGNAL domain math {
-  mmlu_categories: ["abstract_algebra", "college_mathematics"]
+  mmlu_categories: ["math", "physics"]
 }
 SIGNAL domain science {
-  mmlu_categories: ["astronomy", "college_chemistry", "college_biology"]
+  mmlu_categories: ["physics", "chemistry", "biology"]
 }
 SIGNAL domain coding {
-  mmlu_categories: ["computer_science"]
+  mmlu_categories: ["computer science"]
 }
-SIGNAL domain general {}
+SIGNAL domain general { mmlu_categories: ["other"] }
 
 SIGNAL_GROUP domain_taxonomy {
   semantics: "softmax_exclusive"

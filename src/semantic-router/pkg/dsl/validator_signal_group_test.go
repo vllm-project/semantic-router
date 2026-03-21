@@ -30,7 +30,7 @@ SIGNAL_GROUP test_group {
 
 func TestValidateSignalGroupMixedMemberTypes(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL embedding ai {
   examples: ["transformer", "neural network"]
 }
@@ -58,7 +58,7 @@ SIGNAL_GROUP test_group {
 
 func TestValidateSignalGroupImpossibleAndCondition(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL domain science { mmlu_categories: ["physics"] }
 
 SIGNAL_GROUP domain_taxonomy {

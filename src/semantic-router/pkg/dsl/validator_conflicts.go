@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // ---------- Level 4: Conflict Detection ----------
@@ -204,6 +206,7 @@ func (v *Validator) checkSignalGroup(sg *SignalGroupDecl) {
 	v.checkSignalGroupMemberTypes(sg, context)
 	v.checkSignalGroupDefault(sg, context)
 	v.checkSignalGroupCategoryDisjointness(sg, context)
+	v.checkSignalGroupSupportedDomainValues(sg, context)
 }
 
 func (v *Validator) checkSignalGroupSemantics(sg *SignalGroupDecl, context string) {
@@ -314,6 +317,55 @@ func (v *Validator) checkSignalGroupCategoryDisjointness(sg *SignalGroupDecl, co
 				)
 			}
 			catOwner[cat] = member
+		}
+	}
+}
+
+func (v *Validator) checkSignalGroupSupportedDomainValues(sg *SignalGroupDecl, context string) {
+	if sg.Semantics != "softmax_exclusive" {
+		return
+	}
+	for _, member := range sg.Members {
+		sig := v.findSignalByName(member)
+		if sig == nil || sig.SignalType != "domain" {
+			continue
+		}
+		mmluCategories := getMMLUCategories(sig)
+		if len(mmluCategories) == 0 {
+			if config.IsSupportedRoutingDomainName(sig.Name) {
+				continue
+			}
+			v.addDiag(
+				DiagConstraint,
+				sg.Pos,
+				fmt.Sprintf(
+					"%s: domain member %q must use a supported routing domain name (%s) or declare mmlu_categories explicitly%s",
+					context,
+					member,
+					strings.Join(config.SupportedRoutingDomainNames(), ", "),
+					formatDomainQuickFixSuffix(member),
+				),
+				domainQuickFix(member),
+			)
+			continue
+		}
+		for _, mmluCategory := range mmluCategories {
+			if config.IsSupportedRoutingDomainName(mmluCategory) {
+				continue
+			}
+			v.addDiag(
+				DiagConstraint,
+				sg.Pos,
+				fmt.Sprintf(
+					"%s: domain member %q has unsupported mmlu_categories value %q; supported values: %s%s",
+					context,
+					member,
+					mmluCategory,
+					strings.Join(config.SupportedRoutingDomainNames(), ", "),
+					formatDomainQuickFixSuffix(mmluCategory),
+				),
+				domainQuickFix(mmluCategory),
+			)
 		}
 	}
 }

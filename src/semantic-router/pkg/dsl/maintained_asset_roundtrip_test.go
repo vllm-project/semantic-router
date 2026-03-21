@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -53,12 +54,9 @@ func TestMaintainedBalanceRecipeUsesSignalGroupsAndTieredDecisions(t *testing.T)
 	if len(cfg.SignalGroups) == 0 {
 		t.Fatal("expected deploy/recipes/balance.yaml to include at least one signal_group")
 	}
-
-	for _, decision := range cfg.Decisions {
-		if decision.Tier <= 0 {
-			t.Fatalf("expected decision %q to define a positive tier", decision.Name)
-		}
-	}
+	assertMaintainedBalanceDomainPartition(t, cfg.SignalGroups)
+	assertMaintainedBalanceDecisionTiers(t, cfg.Decisions)
+	assertMaintainedBalanceRoute(t, cfg.Decisions, "verified_health")
 }
 
 func TestMaintainedConflictFreeRoutingExamplesStayInSync(t *testing.T) {
@@ -94,6 +92,52 @@ func mustLoadMaintainedConflictFreeDSLProgram(t *testing.T, dslPath string) *Pro
 	}
 	assertMaintainedConflictFreeDSLDiagnostics(t, prog)
 	return prog
+}
+
+func assertMaintainedBalanceDomainPartition(t *testing.T, groups []config.SignalGroup) {
+	t.Helper()
+
+	var domainPartition *config.SignalGroup
+	for i := range groups {
+		if groups[i].Name == "balance_domain_partition" {
+			domainPartition = &groups[i]
+			break
+		}
+	}
+	if domainPartition == nil {
+		t.Fatal("expected deploy/recipes/balance.yaml to define balance_domain_partition")
+	}
+	gotMembers := append([]string(nil), domainPartition.Members...)
+	wantMembers := config.SupportedRoutingDomainNames()
+	slices.Sort(gotMembers)
+	slices.Sort(wantMembers)
+	if !slices.Equal(gotMembers, wantMembers) {
+		t.Fatalf("balance_domain_partition members mismatch\nwant: %v\ngot:  %v", wantMembers, gotMembers)
+	}
+	if domainPartition.Default != "other" {
+		t.Fatalf("expected balance_domain_partition default to be %q, got %q", "other", domainPartition.Default)
+	}
+}
+
+func assertMaintainedBalanceDecisionTiers(t *testing.T, decisions []config.Decision) {
+	t.Helper()
+
+	for _, decision := range decisions {
+		if decision.Tier <= 0 {
+			t.Fatalf("expected decision %q to define a positive tier", decision.Name)
+		}
+	}
+}
+
+func assertMaintainedBalanceRoute(t *testing.T, decisions []config.Decision, name string) {
+	t.Helper()
+
+	for _, decision := range decisions {
+		if decision.Name == name {
+			return
+		}
+	}
+	t.Fatalf("expected deploy/recipes/balance.yaml to include %s route", name)
 }
 
 func assertMaintainedConflictFreeDSLMarkers(t *testing.T, dslPath, dslText string) {

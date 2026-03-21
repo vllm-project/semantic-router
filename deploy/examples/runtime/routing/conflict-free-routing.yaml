@@ -39,16 +39,17 @@ routing:
     - name: math
       description: Mathematics and symbolic reasoning.
       mmlu_categories:
-      - abstract_algebra
-      - college_mathematics
+      - math
     - name: science
       description: Natural science explanations and analysis.
       mmlu_categories:
-      - astronomy
-      - college_chemistry
-      - college_physics
+      - biology
+      - chemistry
+      - physics
     - name: general
       description: Catch-all domain for uncategorized requests.
+      mmlu_categories:
+      - other
     signal_groups:
     - name: domain_taxonomy
       semantics: softmax_exclusive

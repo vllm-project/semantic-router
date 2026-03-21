@@ -429,6 +429,8 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 				nil,
 			)
 		}
+	case "domain":
+		v.checkDomainSignalConstraints(s, context)
 	}
 }
 
@@ -469,6 +471,8 @@ func (v *Validator) checkAlgorithmConstraints(algo *AlgoSpec, parentContext stri
 }
 
 // checkFieldConstraints recursively checks all numeric field values against the constraint rules.
+//
+//nolint:gocognit,cyclop // Recursive constraint walking stays centralized for DSL numeric validation.
 func (v *Validator) checkFieldConstraints(fields map[string]Value, pos Position, context string) {
 	for k, val := range fields {
 		for _, rule := range constraintRules {
