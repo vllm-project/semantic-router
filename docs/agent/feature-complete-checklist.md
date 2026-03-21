@@ -13,6 +13,12 @@ A feature is not done until all applicable checks below are satisfied.
 - Behavior-sensitive E2E coverage uses explicit acceptance thresholds instead of report-only metrics
 - CI covers the remaining affected profiles
 
+## Loop Completion
+
+- A task is not done when a failing gate is merely observed.
+- The active loop continues until the applicable gates pass for the current change or subtask, or an external blocker is explicitly reported.
+- Long-horizon multi-subtask work keeps its execution plan current as part of the done state.
+
 ## E2E Expectation
 
 - If user-visible behavior changes, update or add at least one E2E case

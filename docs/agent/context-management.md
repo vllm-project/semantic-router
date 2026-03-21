@@ -6,7 +6,7 @@ This document defines how the harness exposes the minimum useful context for a t
 
 - `AGENTS.md` should stay short and navigational.
 - `docs/agent/*` should stay canonical, but the set is now large enough that agents need a task-first read path.
-- `make agent-report ENV=cpu|amd CHANGED_FILES="..."` should resolve not only validation, but also the minimum context pack for the task.
+- `make agent-report ENV=cpu|amd CHANGED_FILES="..."` should resolve not only validation, but also the minimum context pack and loop policy for the task.
 
 ## Disclosure Layers
 
@@ -16,6 +16,7 @@ This document defines how the harness exposes the minimum useful context for a t
 - `L1` task contract
   - resolved primary skill
   - fragment skills
+  - loop mode and execution-plan guidance for the active task
   - the `## Must Read` links referenced by those skills
 - `L2` surface context
   - only docs and executable sources for the impacted surfaces
@@ -26,12 +27,12 @@ This document defines how the harness exposes the minimum useful context for a t
 
 ## Context Pack Flow
 
-1. Resolve changed files through `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
+1. Resolve changed files through `make agent-report ENV=cpu|amd CHANGED_FILES="..."` so the harness can emit the active skill, loop mode, execution-plan guidance, and validation commands.
 2. Select the primary skill and fragment skills from `tools/agent/skill-registry.yaml`.
 3. Pull the skill `## Must Read` references from the active `SKILL.md` files.
 4. Add surface-specific references from `tools/agent/context-map.yaml`.
 5. Add nearest local `AGENTS.md` files for hotspot paths when applicable.
-6. Add resume references such as plans or debt only as low-priority follow-up context.
+6. Add resume references such as plans or debt as low-priority follow-up context, then promote them into the active loop when the task becomes long-horizon, multi-loop, or unresolved.
 
 ## Source of Truth
 
