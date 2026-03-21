@@ -487,11 +487,6 @@ ROUTE premium_legal (description = "Premium-only route for high-value legal and 
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -506,11 +501,6 @@ ROUTE reasoning_math (description = "Dedicated reasoning tier for proofs, deriva
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -525,11 +515,6 @@ ROUTE reasoning_philosophy (description = "Dedicated reasoning tier for philosop
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -544,11 +529,6 @@ ROUTE complex_agentic (description = "High-structure execution plans, migrations
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -563,11 +543,6 @@ ROUTE complex_architecture (description = "Complex systems, architecture, and la
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -582,11 +557,6 @@ ROUTE complex_stem (description = "Complex STEM analysis outside the dedicated m
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -601,11 +571,6 @@ ROUTE feedback_wrong_answer_verified (description = "Narrow recovery path for ex
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -620,11 +585,6 @@ ROUTE medium_code_general (description = "Low-medium cost coding, debugging, ref
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -639,11 +599,6 @@ ROUTE medium_business (description = "Mid-tier business and economics analysis w
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -658,11 +613,6 @@ ROUTE verified_business (description = "Conservative factual overlay for evidenc
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -677,11 +627,6 @@ ROUTE verified_health (description = "Conservative route for evidence-sensitive 
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -696,11 +641,6 @@ ROUTE medium_history (description = "Mid-tier historical explanation and compari
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -715,11 +655,6 @@ ROUTE verified_history (description = "Conservative factual overlay for source-s
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -734,11 +669,6 @@ ROUTE medium_psychology (description = "Mid-tier psychology and behavior queries
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -753,11 +683,6 @@ ROUTE medium_creative (description = "Mid-tier creative, copywriting, and ideati
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -772,11 +697,6 @@ ROUTE reasoning_general (description = "General reasoning escalation for non-dom
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -791,11 +711,6 @@ ROUTE feedback_need_clarification (description = "Narrow follow-up lane for expl
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -810,11 +725,6 @@ ROUTE verified_fast_qa_zh (description = "Conservative factual overlay for Chine
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -829,11 +739,6 @@ ROUTE simple_fast_qa_zh (description = "Cheapest short-context Chinese factual o
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -848,11 +753,6 @@ ROUTE simple_fast_qa_en (description = "Cheapest short-context English factual o
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -867,11 +767,6 @@ ROUTE verified_fast_qa_en (description = "Conservative factual overlay for Engli
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 
@@ -886,11 +781,6 @@ ROUTE simple_general (description = "Lowest-cost fallback for everyday traffic a
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
-    capture_request_body: true
-    capture_response_body: true
-    enabled: true
-    max_body_bytes: 4096
-    max_records: 100000
   }
 }
 

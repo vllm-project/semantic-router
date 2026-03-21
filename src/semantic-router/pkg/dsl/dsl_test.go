@@ -4046,6 +4046,45 @@ ROUTE rag_route (description = "RAG route") {
 	}
 }
 
+func TestDecompileKnownPluginConfigDoesNotDuplicateTypedFields(t *testing.T) {
+	input := `
+SIGNAL domain test { mmlu_categories: ["other"] }
+ROUTE replay_route (description = "Replay route") {
+  PRIORITY 100
+  WHEN domain("test")
+  MODEL "m:1b"
+  PLUGIN router_replay {
+    enabled: true
+    max_records: 100000
+    capture_request_body: true
+    capture_response_body: true
+    max_body_bytes: 4096
+  }
+}
+`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+
+	dslText, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+
+	for _, field := range []string{
+		"enabled: true",
+		"max_records: 100000",
+		"capture_request_body: true",
+		"capture_response_body: true",
+		"max_body_bytes: 4096",
+	} {
+		if count := strings.Count(dslText, field); count != 1 {
+			t.Fatalf("expected %q exactly once in decompiled plugin block, got %d\n%s", field, count, dslText)
+		}
+	}
+}
+
 // ==================== Conflict Detection Tests ====================
 
 // ---------- M1: MMLU Category Overlap ----------

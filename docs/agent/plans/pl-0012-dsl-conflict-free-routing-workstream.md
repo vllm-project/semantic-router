@@ -52,45 +52,45 @@
 - Date: 2026-03-22
 - Current task: `W020` in progress
 - Changed files:
-  - `deploy/amd/README.md`
-  - `deploy/recipes/balance.yaml`
+  - `deploy/examples/runtime/routing/conflict-free-routing.dsl`
+  - `deploy/examples/runtime/routing/conflict-free-routing.yaml`
   - `deploy/recipes/balance.dsl`
+  - `docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md`
   - `docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md`
-  - `src/semantic-router/cmd/dsl/main.go`
-  - `src/semantic-router/pkg/dsl/compiler.go`
   - `src/semantic-router/pkg/dsl/decompiler.go`
   - `src/semantic-router/pkg/dsl/dsl_test.go`
-  - `src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go`
 - Commands run:
-  - `sed -n '1,220p' AGENTS.md`
-  - `sed -n '1,220p' docs/agent/{README.md,context-management.md,plans/README.md,testing-strategy.md,feature-complete-checklist.md}`
-  - `make agent-report ENV=cpu CHANGED_FILES="deploy/recipes/balance.yaml,deploy/recipes/balance.dsl,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
-  - `sed -n '1,860p' .augment/clawrouter.md`
-  - `codebase-retrieval` for maintained `balance` assets, DSL CLI output handling, signal groups, learned signals, complexity semantics, tests, and docs
+  - `git status --short`
+  - `sed -n '1,240p' docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md`
+  - `sed -n '1,220p' docs/agent/tech-debt/{td-035-signal-group-default-coverage-contract-gap.md,td-036-decision-tree-authoring-roundtrip-gap.md}`
+  - `gh pr view 1620 --json number,url,title,headRefName,baseRefName,statusCheckRollup`
+  - `make agent-report ENV=cpu CHANGED_FILES="deploy/recipes/balance.dsl,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go"`
+  - `codebase-retrieval` for maintained `balance` assets, DSL decompiler plugin emission, maintained asset sync tests, docs, and the active execution plan
+  - `gofmt -w src/semantic-router/pkg/dsl/decompiler.go src/semantic-router/pkg/dsl/dsl_test.go`
   - `go run ./cmd/dsl decompile -o ../../deploy/recipes/balance.dsl ../../deploy/recipes/balance.yaml`
-  - `go test ./pkg/dsl -run 'TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals|TestMaintainedBalanceRecipeUsesSignalGroupsAndTieredDecisions|TestMaintainedBalanceRoutingAssetsStayInSync|TestCompileAllSignalTypes|TestAllSignalTypesRoundTrip|TestDecompileAllSignalTypes' -count=1`
+  - `go test ./pkg/dsl -run 'TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals|TestMaintainedBalanceRecipeUsesSignalGroupsAndTieredDecisions|TestMaintainedBalanceRoutingAssetsStayInSync|TestCompileAllSignalTypes|TestAllSignalTypesRoundTrip|TestDecompileAllSignalTypes|TestDecompileRAGPlugin|TestDecompileKnownPluginConfigDoesNotDuplicateTypedFields' -count=1`
   - `go test ./cmd/dsl -count=1`
-  - `make agent-lint CHANGED_FILES="deploy/recipes/balance.yaml,deploy/recipes/balance.dsl,deploy/amd/README.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,src/semantic-router/cmd/dsl/main.go,src/semantic-router/pkg/dsl/compiler.go,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go"`
-  - `make agent-ci-gate CHANGED_FILES="deploy/recipes/balance.yaml,deploy/recipes/balance.dsl,deploy/amd/README.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,src/semantic-router/cmd/dsl/main.go,src/semantic-router/pkg/dsl/compiler.go,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go"`
-  - `E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu CHANGED_FILES="deploy/recipes/balance.yaml,deploy/recipes/balance.dsl,deploy/amd/README.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,src/semantic-router/cmd/dsl/main.go,src/semantic-router/pkg/dsl/compiler.go,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go"`
-  - `open -a Docker`
-  - `docker info`
-  - `docker context ls`
+  - `make test-semantic-router`
+  - `make agent-validate`
+  - `make agent-lint CHANGED_FILES="deploy/examples/runtime/routing/conflict-free-routing.dsl,deploy/examples/runtime/routing/conflict-free-routing.yaml,deploy/recipes/balance.dsl,docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go"`
+  - `make agent-ci-gate CHANGED_FILES="deploy/examples/runtime/routing/conflict-free-routing.dsl,deploy/examples/runtime/routing/conflict-free-routing.yaml,deploy/recipes/balance.dsl,docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go"`
+  - `E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu CHANGED_FILES="deploy/examples/runtime/routing/conflict-free-routing.dsl,deploy/examples/runtime/routing/conflict-free-routing.yaml,deploy/recipes/balance.dsl,docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go"`
+  - `docker image inspect python:3.12-slim`
+  - `docker image inspect envoyproxy/envoy:v1.34-latest`
+  - `pkill -f "make agent-feature-gate ENV=cpu"`
 - Failure observed:
-  - The initial `go run ./cmd/dsl decompile ../../deploy/recipes/balance.yaml -o ../../deploy/recipes/balance.dsl` invocation did not write the file because the Go `flag` parser only honors `-o` before the positional input path, while the CLI help text still advertised the reverse order.
-  - The first maintained-asset round-trip run failed because `balance_intent_partition` had no `default`, so the DSL validator correctly rejected it as an incomplete `SIGNAL_GROUP` partition.
-  - The next round-trip failed because `deploy/recipes/balance.yaml` still carried explicit `image_candidates: []` stubs that the DSL authoring surface does not emit, making the maintained pair drift on a nil-vs-empty canonical detail.
-  - `make agent-feature-gate` reached `make vllm-sr-dev` after Docker Desktop recovered, but the local Docker build stalled indefinitely while trying to fetch missing base images (`python:3.12-slim` and `envoyproxy/envoy:v1.34-latest`), so the feature gate still cannot complete in this environment.
+  - `deploy/recipes/balance.dsl` still contained duplicated `router_replay` keys because `decompilePluginConfig()` emitted typed plugin fields and then appended the same normalized raw payload again.
+  - `TD036` still pointed at the older `deploy/examples/runtime/routing/conflict-free-routing.{dsl,yaml}` pair, which left the debt doc out of sync with the repo's current maintained `balance` assets and the narrowed `DECISION_TREE` sugar-only contract.
+  - The rerun `agent-feature-gate` again reached `make vllm-sr-dev` and then stalled at base-image metadata/pull for `python:3.12-slim` and `envoyproxy/envoy:v1.34-latest`; both images remain absent locally, so the local smoke path still cannot complete in this workstation environment.
 - Fix applied:
-  - Reworked `deploy/recipes/balance.yaml` around clawrouter-inspired learned-intent plus heuristic difficulty bands, added the maintained `deploy/recipes/balance.dsl` pair, and added focused maintained-asset coverage in `src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go`.
-  - Fixed the DSL compiler/decompiler contract for preference `examples` and `threshold`, and corrected the `sr-dsl` help text so `compile` / `decompile` / `fmt` examples match the actual `flag` parsing order.
-  - Added a neutral `general_chat_fallback` embedding as the `balance_intent_partition.default` catch-all, and removed empty `image_candidates` noise from the maintained YAML so the DSL/YAML pair round-trips canonically.
-  - Restored Docker Desktop and the missing socket at `unix:///Users/bitliu/.docker/run/docker.sock`, then reran the same feature gate until the remaining blocker was isolated to the stalled base-image pulls rather than the previous missing-daemon failure.
+  - Filtered known typed plugin keys out of the raw fallback path in `src/semantic-router/pkg/dsl/decompiler.go`, so decompile still preserves raw-only plugin fields without duplicating structured fields for known plugin contracts.
+  - Added `TestDecompileKnownPluginConfigDoesNotDuplicateTypedFields` in `src/semantic-router/pkg/dsl/dsl_test.go` and regenerated `deploy/recipes/balance.dsl` from the maintained YAML after the decompiler fix.
+  - Deleted the stale `deploy/examples/runtime/routing/conflict-free-routing.{dsl,yaml}` pair and updated `docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md` so the open debt now references the maintained `balance` pair and the current paired-source model explicitly.
 - Current result:
-  - `W018` and `W019` are complete: the repository now has a maintained `balance.yaml` / `balance.dsl` pair, clawrouter-inspired learned-plus-heuristic routing structure, updated docs, and passing targeted DSL plus changed-file lint/CI gates.
-  - `W020` remains open only because the local `agent-feature-gate` cannot finish the canonical `make vllm-sr-dev` build while Docker stalls on first-time pulls for missing base images in this workstation environment.
+  - The remaining repo-local cleanup is in place: maintained `balance.dsl` is cleanly regenerated, the stale conflict-free example pair is gone, TD036 now matches the current repository contract, and targeted DSL tests plus `make test-semantic-router`, `make agent-validate`, `make agent-lint`, and `make agent-ci-gate` all pass.
+  - `W020` remains open only because the local `agent-feature-gate` still cannot finish the canonical `make vllm-sr-dev` smoke path while Docker stalls on first-time pulls for missing base images in this workstation environment.
 - Next action:
-  - Once the local Docker daemon can pull `python:3.12-slim` and `envoyproxy/envoy:v1.34-latest` without stalling, rerun the same `E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu ...` command, then update the PR with the final green feature-gate result.
+  - Commit and push this audit/fix loop to PR `#1620`, then monitor the remote checks. Once the local Docker daemon can actually pull `python:3.12-slim` and `envoyproxy/envoy:v1.34-latest` without stalling, rerun the same `E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu ...` command and close `W020`.
 
 ## Decision Log
 
@@ -135,6 +135,8 @@
 - 2026-03-22: the maintained YAML should follow the same canonical authoring surface as the DSL pair. Explicit `image_candidates: []` stubs add round-trip drift without changing behavior, so the smallest clean fix is to remove those empty arrays from `deploy/recipes/balance.yaml`.
 - 2026-03-22: the `sr-dsl` CLI already supports `-o`, but its usage text was misleading because Go's `flag` parser only accepts `-o` before the positional input. The docs/examples were corrected instead of broadening the CLI parser in this loop.
 - 2026-03-22: the current blocker for `W020` is no longer the missing Docker socket. Docker Desktop now runs locally, but the canonical `make vllm-sr-dev` build stalls on first-time base image pulls, so the remaining feature-gate failure is an external environment/network issue rather than a repo code failure.
+- 2026-03-22: decompiler plugin emission must treat typed plugin fields and raw structured payloads as two layers of the same contract. The correct behavior is to emit the typed fields once and only append raw-only keys that are not already covered by the known plugin schema.
+- 2026-03-22: the repo should not keep both the old `conflict-free-routing` pair and the maintained `balance` pair as parallel example sources after the user narrowed the example story. The stale conflict-free example assets were removed so the maintained `balance` pair is the only live DSL/YAML recipe example.
 
 ## Follow-up Debt / ADR Links
 

@@ -6,17 +6,17 @@ Open
 
 ## Scope
 
-`spec/dsl.md`, `deploy/examples/runtime/routing/**`, `src/semantic-router/pkg/dsl/{decision_tree.go,decompiler.go}`, and any API or tooling surface that claims round-trip fidelity between DSL authoring and canonical router config
+`spec/dsl.md`, `deploy/recipes/{balance.dsl,balance.yaml}`, `src/semantic-router/pkg/dsl/{decision_tree.go,decompiler.go}`, and any API or tooling surface that claims round-trip fidelity between DSL authoring and canonical router config
 
 ## Summary
 
-The repository now supports `DECISION_TREE` / `IF ELSE` authoring by lowering tree branches into flat `config.Decision` entries at parse time. That keeps runtime routing, the config API, and canonical router config on one existing model, but it also means the original tree structure is discarded before decompile and API consumers ever see it. `DecompileRouting()` still reconstructs plain `ROUTE` blocks from `config.Decision`, so a DSL file authored as a decision tree cannot be losslessly recovered from runtime config or from the core config endpoints.
+The repository now supports `DECISION_TREE` / `IF ELSE` authoring by lowering tree branches into flat `config.Decision` entries at parse time. That keeps runtime routing, the config API, and canonical router config on one existing model, but it also means the original tree structure is discarded before decompile and API consumers ever see it. `DecompileRouting()` still reconstructs plain `ROUTE` blocks from `config.Decision`, so a DSL file authored as a decision tree cannot be losslessly recovered from runtime config or from the core config endpoints. The maintained `balance` recipe pair is therefore the current explicit paired-source model for showcasing richer DSL authoring without claiming runtime-config tree round-trip.
 
 ## Evidence
 
 - [spec/dsl.md](../../../spec/dsl.md)
-- [deploy/examples/runtime/routing/conflict-free-routing.dsl](../../../deploy/examples/runtime/routing/conflict-free-routing.dsl)
-- [deploy/examples/runtime/routing/conflict-free-routing.yaml](../../../deploy/examples/runtime/routing/conflict-free-routing.yaml)
+- [deploy/recipes/balance.dsl](../../../deploy/recipes/balance.dsl)
+- [deploy/recipes/balance.yaml](../../../deploy/recipes/balance.yaml)
 - [src/semantic-router/pkg/dsl/decision_tree.go](../../../src/semantic-router/pkg/dsl/decision_tree.go)
 - [src/semantic-router/pkg/dsl/decompiler.go](../../../src/semantic-router/pkg/dsl/decompiler.go)
 - [src/semantic-router/pkg/apiserver/route_classification_config.go](../../../src/semantic-router/pkg/apiserver/route_classification_config.go)
@@ -26,6 +26,7 @@ The repository now supports `DECISION_TREE` / `IF ELSE` authoring by lowering tr
 - Authors can now express conflict-free routing with `IF`, `ELSE IF`, and `ELSE`, but downstream tooling still only sees flattened routes and cannot recover the original partitioning intent.
 - The core config API exposes canonical router config, not DSL source. Without preserved tree metadata, API-backed editors or future migration tools will silently degrade tree authoring into route lists.
 - Maintained examples currently need both a DSL source file and a compiled YAML artifact because neither runtime config nor decompile can serve as the sole source of truth for tree-authored configs.
+- The repo has already narrowed its public contract to `DECISION_TREE` as authoring sugar only, so debt remains open until every doc/example/API claim matches that narrower posture.
 
 ## Desired End State
 

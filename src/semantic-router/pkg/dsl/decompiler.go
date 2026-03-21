@@ -554,11 +554,41 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 			fmt.Fprintf(&sb, "    delete: %s\n", formatStringArray(cfg.Delete))
 		}
 	}
-	// Also handle raw payloads from config parsing.
+	// Preserve raw-only plugin keys, but do not duplicate typed fields that were
+	// already emitted above for known plugin contracts.
 	if rawMap, ok := normalizePluginConfigMap(p.Configuration); ok {
-		writePluginConfigMap(&sb, rawMap, "    ")
+		extraFields := filterPluginConfigMap(rawMap, knownPluginConfigKeys(p))
+		if len(extraFields) > 0 {
+			writePluginConfigMap(&sb, extraFields, "    ")
+		}
 	}
 	return sb.String()
+}
+
+func knownPluginConfigKeys(p *config.DecisionPlugin) map[string]struct{} {
+	fields := pluginConfigToFields(p)
+	if len(fields) == 0 {
+		return nil
+	}
+	keys := make(map[string]struct{}, len(fields))
+	for key := range fields {
+		keys[key] = struct{}{}
+	}
+	return keys
+}
+
+func filterPluginConfigMap(raw map[string]interface{}, omit map[string]struct{}) map[string]interface{} {
+	if len(raw) == 0 {
+		return nil
+	}
+	filtered := make(map[string]interface{}, len(raw))
+	for key, value := range raw {
+		if _, skip := omit[key]; skip {
+			continue
+		}
+		filtered[key] = value
+	}
+	return filtered
 }
 
 func decodePluginConfig[T any](p *config.DecisionPlugin) (*T, bool) {
