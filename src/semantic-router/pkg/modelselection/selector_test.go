@@ -1718,8 +1718,8 @@ func TestFloat32ToFloat64(t *testing.T) {
 }
 
 // =============================================================================
-// Integration Tests: Decision with ModelSelectionAlgorithm
-// These tests verify the full flow: Decision matched -> ModelSelectionAlgorithm -> Model selected
+// Integration Tests: Decision with per-decision algorithm
+// These tests verify the full flow: Decision matched -> algorithm -> Model selected
 // =============================================================================
 
 // TestDecisionIntegration_AllAlgorithms tests that all algorithm types can be created
@@ -1870,7 +1870,7 @@ func TestDecisionIntegration_CompleteFlow(t *testing.T) {
 		}
 
 		// When no algorithm configured, use first model (this is what req_filter_classification.go does)
-		if matchedDecision.ModelSelectionAlgorithm != nil {
+		if matchedDecision.Algorithm != nil {
 			t.Fatal("Test expects no algorithm")
 		}
 		selected := matchedDecision.ModelRefs[0]

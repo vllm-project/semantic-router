@@ -316,13 +316,6 @@ routing:
         conditions:
           - type: domain
             name: business
-      modelSelectionAlgorithm:
-        enabled: true
-        method: router_dc
-        router_dc:
-          temperature: 0.2
-          dimension_size: 384
-          min_similarity: 0.72
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false

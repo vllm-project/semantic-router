@@ -45,52 +45,60 @@
 - [x] `W017` Revert the unfinished `TD036` branch attempt, keep `DECISION_TREE` as DSL authoring sugar only, and realign debt/docs/examples/schema mirrors with that narrower contract.
 - [x] `W018` Re-audit `deploy/recipes/balance.yaml` against `.augment/clawrouter.md`, identify the missing multi-dimensional difficulty/intent structure, and define the narrowest maintained asset set for a stronger repo-native strategy.
 - [x] `W019` Implement the maintained `balance` routing pair (`deploy/recipes/balance.yaml` + `deploy/recipes/balance.dsl`) and targeted tests/docs so the recipe expresses the stronger learned + heuristic + `SIGNAL_GROUP` strategy without new runtime primitives.
-- [ ] `W020` Run the applicable harness ladder for the `balance` asset refactor, including any affected E2E/profile coverage, then update the PR once the changed-set gates pass.
+- [x] `W020` Run the applicable harness ladder for the `balance` asset refactor, including any affected E2E/profile coverage, then update the PR once the changed-set gates pass.
+- [x] `W021` Remove the deprecated per-decision `modelSelectionAlgorithm` config surface, unify on `routing.decisions[].algorithm`, and keep the repo-native local feature-gate/E2E build path green for that contract change.
 
 ## Current Loop
 
 - Date: 2026-03-22
-- Current task: `W020` in progress
+- Current task: `W021` completed
 - Changed files:
-  - `deploy/examples/runtime/routing/conflict-free-routing.dsl`
-  - `deploy/examples/runtime/routing/conflict-free-routing.yaml`
-  - `deploy/recipes/balance.dsl`
-  - `docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md`
+  - `.dockerignore`
+  - `config/config.yaml`
   - `docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md`
-  - `src/semantic-router/pkg/dsl/decompiler.go`
-  - `src/semantic-router/pkg/dsl/dsl_test.go`
+  - `deploy/helm/semantic-router/values.yaml`
+  - `e2e/pkg/docker/builder.go`
+  - `e2e/pkg/docker/builder_test.go`
+  - `e2e/pkg/framework/runner.go`
+  - `src/semantic-router/pkg/config/canonical_loader_test.go`
+  - `src/semantic-router/pkg/config/decision_config.go`
+  - `src/semantic-router/pkg/config/loader.go`
+  - `src/semantic-router/pkg/modelselection/selector_test.go`
+  - `tools/agent/structure-rules.yaml`
+  - `tools/linter/go/.golangci.agent.yml`
 - Commands run:
   - `git status --short`
-  - `sed -n '1,240p' docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md`
-  - `sed -n '1,220p' docs/agent/tech-debt/{td-035-signal-group-default-coverage-contract-gap.md,td-036-decision-tree-authoring-roundtrip-gap.md}`
-  - `gh pr view 1620 --json number,url,title,headRefName,baseRefName,statusCheckRollup`
-  - `make agent-report ENV=cpu CHANGED_FILES="deploy/recipes/balance.dsl,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go"`
-  - `codebase-retrieval` for maintained `balance` assets, DSL decompiler plugin emission, maintained asset sync tests, docs, and the active execution plan
-  - `gofmt -w src/semantic-router/pkg/dsl/decompiler.go src/semantic-router/pkg/dsl/dsl_test.go`
-  - `go run ./cmd/dsl decompile -o ../../deploy/recipes/balance.dsl ../../deploy/recipes/balance.yaml`
-  - `go test ./pkg/dsl -run 'TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals|TestMaintainedBalanceRecipeUsesSignalGroupsAndTieredDecisions|TestMaintainedBalanceRoutingAssetsStayInSync|TestCompileAllSignalTypes|TestAllSignalTypesRoundTrip|TestDecompileAllSignalTypes|TestDecompileRAGPlugin|TestDecompileKnownPluginConfigDoesNotDuplicateTypedFields' -count=1`
-  - `go test ./cmd/dsl -count=1`
+  - `make agent-report ENV=cpu CHANGED_FILES=".dockerignore,config/config.yaml,deploy/helm/semantic-router/values.yaml,e2e/pkg/docker/builder.go,e2e/pkg/docker/builder_test.go,e2e/pkg/framework/runner.go,src/semantic-router/pkg/config/canonical_loader_test.go,src/semantic-router/pkg/config/decision_config.go,src/semantic-router/pkg/config/loader.go,src/semantic-router/pkg/modelselection/selector_test.go,tools/linter/go/.golangci.agent.yml,tools/agent/structure-rules.yaml"`
+  - `codebase-retrieval` for the `Decision` config contract, deprecated loader handling, model-selection callers/tests, local feature-gate build path, and the nearest config/E2E rule layers
+  - `rg -n "modelSelectionAlgorithm|ModelSelectionAlgorithm" /Users/bitliu/vs`
+  - `go test ./pkg/config/... -run 'TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField|TestReferenceConfig' -count=1`
+  - `go test ./pkg/modelselection -run 'TestDecisionIntegration_CompleteFlow|TestDecisionIntegration_ConfigValidation' -count=1`
+  - `go test ./pkg/docker ./pkg/framework -count=1`
   - `make test-semantic-router`
+  - `make build-e2e`
   - `make agent-validate`
-  - `make agent-lint CHANGED_FILES="deploy/examples/runtime/routing/conflict-free-routing.dsl,deploy/examples/runtime/routing/conflict-free-routing.yaml,deploy/recipes/balance.dsl,docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go"`
-  - `make agent-ci-gate CHANGED_FILES="deploy/examples/runtime/routing/conflict-free-routing.dsl,deploy/examples/runtime/routing/conflict-free-routing.yaml,deploy/recipes/balance.dsl,docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go"`
-  - `E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu CHANGED_FILES="deploy/examples/runtime/routing/conflict-free-routing.dsl,deploy/examples/runtime/routing/conflict-free-routing.yaml,deploy/recipes/balance.dsl,docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go"`
-  - `docker image inspect python:3.12-slim`
-  - `docker image inspect envoyproxy/envoy:v1.34-latest`
-  - `pkill -f "make agent-feature-gate ENV=cpu"`
+  - `make agent-lint CHANGED_FILES=".dockerignore,config/config.yaml,deploy/helm/semantic-router/values.yaml,e2e/pkg/docker/builder.go,e2e/pkg/docker/builder_test.go,e2e/pkg/framework/runner.go,src/semantic-router/pkg/config/canonical_loader_test.go,src/semantic-router/pkg/config/decision_config.go,src/semantic-router/pkg/config/loader.go,src/semantic-router/pkg/modelselection/selector_test.go,tools/linter/go/.golangci.agent.yml,tools/agent/structure-rules.yaml"`
+  - `make agent-ci-gate CHANGED_FILES=".dockerignore,config/config.yaml,deploy/helm/semantic-router/values.yaml,e2e/pkg/docker/builder.go,e2e/pkg/docker/builder_test.go,e2e/pkg/framework/runner.go,src/semantic-router/pkg/config/canonical_loader_test.go,src/semantic-router/pkg/config/decision_config.go,src/semantic-router/pkg/config/loader.go,src/semantic-router/pkg/modelselection/selector_test.go,tools/linter/go/.golangci.agent.yml,tools/agent/structure-rules.yaml"`
+  - `DOCKER_CONFIG=/tmp/docker-nocreds docker build -f tools/mock-vllm/Dockerfile -t ghcr.io/vllm-project/semantic-router/mock-vllm:latest tools/mock-vllm`
+  - `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu CHANGED_FILES=".dockerignore,config/config.yaml,deploy/helm/semantic-router/values.yaml,e2e/pkg/docker/builder.go,e2e/pkg/docker/builder_test.go,e2e/pkg/framework/runner.go,src/semantic-router/pkg/config/canonical_loader_test.go,src/semantic-router/pkg/config/decision_config.go,src/semantic-router/pkg/config/loader.go,src/semantic-router/pkg/modelselection/selector_test.go,tools/linter/go/.golangci.agent.yml,tools/agent/structure-rules.yaml"`
+  - `kubectl --context kind-semantic-router-e2e get pods -A`
+  - `kubectl --context kind-semantic-router-e2e logs -n vllm-semantic-router-system deployment/semantic-router --tail=120`
 - Failure observed:
-  - `deploy/recipes/balance.dsl` still contained duplicated `router_replay` keys because `decompilePluginConfig()` emitted typed plugin fields and then appended the same normalized raw payload again.
-  - `TD036` still pointed at the older `deploy/examples/runtime/routing/conflict-free-routing.{dsl,yaml}` pair, which left the debt doc out of sync with the repo's current maintained `balance` assets and the narrowed `DECISION_TREE` sugar-only contract.
-  - The rerun `agent-feature-gate` again reached `make vllm-sr-dev` and then stalled at base-image metadata/pull for `python:3.12-slim` and `envoyproxy/envoy:v1.34-latest`; both images remain absent locally, so the local smoke path still cannot complete in this workstation environment.
+  - The repo still exposed two per-decision model-selection knobs: legacy `routing.decisions[].modelSelectionAlgorithm` and canonical `routing.decisions[].algorithm`, which left reference config and comments out of sync with the runtime contract.
+  - The canonical local-dev path (`make vllm-sr-dev`) builds from repository root `.`. Without a repository-root `.dockerignore`, the feature-gate smoke path kept sending multi-gigabyte local workspace artifacts into Docker build context.
+  - The local E2E extproc build path did not pass `BUILDPLATFORM` or `TARGETARCH`, so `tools/docker/Dockerfile.extproc` failed immediately at `FROM --platform=$BUILDPLATFORM`.
+  - The first rerun of `agent-feature-gate` then hit a transient PyPI TLS EOF while building `tools/mock-vllm/Dockerfile`.
 - Fix applied:
-  - Filtered known typed plugin keys out of the raw fallback path in `src/semantic-router/pkg/dsl/decompiler.go`, so decompile still preserves raw-only plugin fields without duplicating structured fields for known plugin contracts.
-  - Added `TestDecompileKnownPluginConfigDoesNotDuplicateTypedFields` in `src/semantic-router/pkg/dsl/dsl_test.go` and regenerated `deploy/recipes/balance.dsl` from the maintained YAML after the decompiler fix.
-  - Deleted the stale `deploy/examples/runtime/routing/conflict-free-routing.{dsl,yaml}` pair and updated `docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md` so the open debt now references the maintained `balance` pair and the current paired-source model explicitly.
+  - Removed `ModelSelectionAlgorithm` from `src/semantic-router/pkg/config/decision_config.go`, removed the legacy example block from `config/config.yaml`, updated the Helm comment surface to point at `routing.decisions[].algorithm`, and updated model-selection tests to use the single canonical field.
+  - Added deprecated-field rejection in `src/semantic-router/pkg/config/loader.go` and `TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField` so configs fail fast instead of silently accepting the retired field.
+  - Added a repository-root `.dockerignore` tuned to the actual local-dev Dockerfiles so root-context builds exclude large local-only artifacts without changing runtime behavior.
+  - Extended `e2e/pkg/docker.BuildOptions` with sorted `BuildArgs`, threaded `BUILDPLATFORM` and `TARGETARCH` through `e2e/pkg/framework/runner.go`, and added `TestBuildCommandArgsIncludesSortedBuildArgs`.
+  - Prewarmed `ghcr.io/vllm-project/semantic-router/mock-vllm:latest` locally and reran the exact same feature gate once the external PyPI TLS blip cleared.
 - Current result:
-  - The remaining repo-local cleanup is in place: maintained `balance.dsl` is cleanly regenerated, the stale conflict-free example pair is gone, TD036 now matches the current repository contract, and targeted DSL tests plus `make test-semantic-router`, `make agent-validate`, `make agent-lint`, and `make agent-ci-gate` all pass.
-  - `W020` remains open only because the local `agent-feature-gate` still cannot finish the canonical `make vllm-sr-dev` smoke path while Docker stalls on first-time pulls for missing base images in this workstation environment.
+  - `W020` and `W021` are complete. The changed-set gates all passed: `make agent-validate`, `make test-semantic-router`, `make build-e2e`, `make agent-lint`, `make agent-ci-gate`, and `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu ...`.
+  - The feature gate covered the full local ladder: `make vllm-sr-dev`, `make agent-serve-local`, `make agent-smoke-local`, and `make e2e-test E2E_PROFILE=ml-model-selection E2E_VERBOSE=true` all completed successfully on the final rerun.
 - Next action:
-  - Commit and push this audit/fix loop to PR `#1620`, then monitor the remote checks. Once the local Docker daemon can actually pull `python:3.12-slim` and `envoyproxy/envoy:v1.34-latest` without stalling, rerun the same `E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu ...` command and close `W020`.
+  - Clean generated local test artifacts, commit and push this loop to PR `#1620`, then monitor the remote checks for the updated branch.
 
 ## Decision Log
 
@@ -137,6 +145,10 @@
 - 2026-03-22: the current blocker for `W020` is no longer the missing Docker socket. Docker Desktop now runs locally, but the canonical `make vllm-sr-dev` build stalls on first-time base image pulls, so the remaining feature-gate failure is an external environment/network issue rather than a repo code failure.
 - 2026-03-22: decompiler plugin emission must treat typed plugin fields and raw structured payloads as two layers of the same contract. The correct behavior is to emit the typed fields once and only append raw-only keys that are not already covered by the known plugin schema.
 - 2026-03-22: the repo should not keep both the old `conflict-free-routing` pair and the maintained `balance` pair as parallel example sources after the user narrowed the example story. The stale conflict-free example assets were removed so the maintained `balance` pair is the only live DSL/YAML recipe example.
+- 2026-03-22: `routing.decisions[].modelSelectionAlgorithm` should be removed, not mirrored. Keeping both fields would leave two public per-decision contracts for the same behavior, so the loader now rejects the deprecated field and the canonical field is only `routing.decisions[].algorithm`.
+- 2026-03-22: the repository-local feature gate uses Docker build context `.` for `make vllm-sr-dev`; a subdirectory `.dockerignore` is insufficient. A repository-root `.dockerignore` is the smallest repo-native fix that makes local smoke reproducible without changing the Dockerfiles' behavior.
+- 2026-03-22: the local E2E image builder must forward explicit `BUILDPLATFORM` and `TARGETARCH` values into `tools/docker/Dockerfile.extproc`. Relying on unset Dockerfile args makes the repo-native extproc image path fail before tests even start.
+- 2026-03-22: the PyPI TLS EOF during `tools/mock-vllm/Dockerfile` build was transient external noise. Prewarming the same image and rerunning the same canonical feature gate was preferable to mutating the repo contract for a one-off registry/network blip.
 
 ## Follow-up Debt / ADR Links
 
