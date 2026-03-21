@@ -34,6 +34,16 @@ class EmbeddingSignal(BaseModel):
     aggregation_method: str = "max"
 
 
+class SignalGroup(BaseModel):
+    """Grouping metadata for mutually exclusive routing signals."""
+
+    name: str
+    semantics: str
+    members: List[str]
+    temperature: Optional[float] = None
+    default: Optional[str] = None
+
+
 class Domain(BaseModel):
     """Domain category configuration."""
 
@@ -170,6 +180,7 @@ class Signals(BaseModel):
     keywords: Optional[List[KeywordSignal]] = []
     embeddings: Optional[List[EmbeddingSignal]] = []
     domains: Optional[List[Domain]] = []
+    signal_groups: Optional[List[SignalGroup]] = []
     fact_check: Optional[List[FactCheck]] = []
     user_feedbacks: Optional[List[UserFeedback]] = []
     preferences: Optional[List[Preference]] = []

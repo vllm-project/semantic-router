@@ -57,6 +57,7 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "keywords"), reflect.TypeOf(KeywordRule{}), "routing.signals.keywords")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "embeddings"), reflect.TypeOf(EmbeddingRule{}), "routing.signals.embeddings")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "domains"), reflect.TypeOf(Category{}), "routing.signals.domains")
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "signal_groups"), reflect.TypeOf(SignalGroup{}), "routing.signals.signal_groups")
 	assertSliceUnionCoversStructFields(
 		t,
 		collectNestedSliceItems(t, mustSliceAt(t, signals, "domains"), "model_scores", "routing.signals.domains"),

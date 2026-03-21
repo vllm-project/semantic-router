@@ -542,8 +542,24 @@ routing:
         description: Philosophy, ethics, and abstract argumentation.
       - name: history
         description: Historical explanation, comparison, and context.
+      - name: balance_demo_compact
+        description: Maintained-example domain used to demonstrate signal-group partitions in the balance recipe.
+      - name: balance_demo_deep
+        description: Maintained-example domain used to demonstrate signal-group partitions in the balance recipe.
+      - name: balance_demo_default
+        description: Maintained-example fallback domain used to demonstrate signal-group defaults in the balance recipe.
       - name: other
         description: General knowledge and miscellaneous topics.
+
+    signal_groups:
+      - name: balance_demo_partition
+        semantics: softmax_exclusive
+        temperature: 0.10
+        members:
+          - balance_demo_compact
+          - balance_demo_deep
+          - balance_demo_default
+        default: balance_demo_default
 
     context:
       - name: short_context
@@ -683,6 +699,7 @@ routing:
     - name: premium_legal
       description: Premium-only route for high-value legal and compliance analysis.
       priority: 260
+      tier: 1
       rules:
         operator: AND
         conditions:
@@ -722,6 +739,7 @@ routing:
     - name: reasoning_math
       description: Dedicated reasoning tier for proofs, derivations, and hard math.
       priority: 250
+      tier: 2
       rules:
         operator: AND
         conditions:
@@ -753,6 +771,7 @@ routing:
     - name: reasoning_philosophy
       description: Dedicated reasoning tier for philosophy, ethics, and abstract argumentation.
       priority: 245
+      tier: 3
       rules:
         operator: AND
         conditions:
@@ -784,6 +803,7 @@ routing:
     - name: complex_architecture
       description: Complex systems, architecture, and large-scope technical design.
       priority: 240
+      tier: 4
       rules:
         operator: AND
         conditions:
@@ -827,6 +847,7 @@ routing:
     - name: complex_stem
       description: Complex STEM analysis outside the dedicated math reasoning route.
       priority: 235
+      tier: 5
       rules:
         operator: AND
         conditions:
@@ -866,6 +887,7 @@ routing:
     - name: feedback_wrong_answer_verified
       description: Narrow recovery path for explicit corrections on evidence-sensitive or high-stakes follow-ups.
       priority: 232
+      tier: 6
       rules:
         operator: AND
         conditions:
@@ -907,6 +929,7 @@ routing:
     - name: medium_code_general
       description: Low-medium cost coding, debugging, refactoring, and technical Q&A.
       priority: 220
+      tier: 7
       rules:
         operator: AND
         conditions:
@@ -946,6 +969,7 @@ routing:
     - name: medium_business
       description: Mid-tier business and economics analysis without premium escalation.
       priority: 215
+      tier: 9
       rules:
         operator: AND
         conditions:
@@ -981,6 +1005,7 @@ routing:
     - name: verified_business
       description: Conservative factual overlay for evidence-sensitive business and economics requests.
       priority: 216
+      tier: 8
       rules:
         operator: AND
         conditions:
@@ -1019,6 +1044,7 @@ routing:
     - name: medium_history
       description: Mid-tier historical explanation and comparison with better writing quality.
       priority: 210
+      tier: 11
       rules:
         operator: AND
         conditions:
@@ -1048,6 +1074,7 @@ routing:
     - name: verified_history
       description: Conservative factual overlay for source-sensitive history explanation.
       priority: 211
+      tier: 10
       rules:
         operator: AND
         conditions:
@@ -1082,6 +1109,7 @@ routing:
     - name: medium_psychology
       description: Mid-tier psychology and behavior queries with nuanced explanation.
       priority: 205
+      tier: 12
       rules:
         operator: AND
         conditions:
@@ -1111,6 +1139,7 @@ routing:
     - name: medium_creative
       description: Mid-tier creative, copywriting, and ideation requests.
       priority: 200
+      tier: 13
       rules:
         operator: AND
         conditions:
@@ -1147,6 +1176,7 @@ routing:
     - name: reasoning_general
       description: General reasoning escalation for non-domain-specific deep analysis.
       priority: 190
+      tier: 14
       rules:
         operator: AND
         conditions:
@@ -1188,6 +1218,7 @@ routing:
     - name: feedback_need_clarification
       description: Narrow follow-up lane for explicit clarification requests that should stay on the cheap model.
       priority: 185
+      tier: 15
       rules:
         operator: AND
         conditions:
@@ -1216,6 +1247,7 @@ routing:
     - name: verified_fast_qa_zh
       description: Conservative factual overlay for Chinese short-context questions that explicitly ask for verification.
       priority: 181
+      tier: 16
       rules:
         operator: AND
         conditions:
@@ -1248,6 +1280,7 @@ routing:
     - name: simple_fast_qa_zh
       description: Cheapest short-context Chinese factual or definitional answers.
       priority: 180
+      tier: 17
       rules:
         operator: AND
         conditions:
@@ -1280,6 +1313,7 @@ routing:
     - name: simple_fast_qa_en
       description: Cheapest short-context English factual or definitional answers.
       priority: 175
+      tier: 19
       rules:
         operator: AND
         conditions:
@@ -1312,6 +1346,7 @@ routing:
     - name: verified_fast_qa_en
       description: Conservative factual overlay for English short-context questions that explicitly ask for verification.
       priority: 176
+      tier: 18
       rules:
         operator: AND
         conditions:
@@ -1344,6 +1379,7 @@ routing:
     - name: simple_general
       description: Lowest-cost fallback for everyday traffic and non-specialized requests.
       priority: 170
+      tier: 20
       rules:
         operator: OR
         conditions:

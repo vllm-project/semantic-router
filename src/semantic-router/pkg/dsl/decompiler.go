@@ -1411,5 +1411,12 @@ func Format(input string) (string, error) {
 		return "", fmt.Errorf("compile errors: %v", compileErrs)
 	}
 
-	return DecompileRouting(cfg)
+	formatted, err := DecompileRouting(cfg)
+	if err != nil {
+		return "", err
+	}
+	if len(prog.TestBlocks) == 0 {
+		return formatted, nil
+	}
+	return appendFormattedTestBlocks(formatted, prog.TestBlocks), nil
 }

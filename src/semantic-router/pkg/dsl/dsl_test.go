@@ -3428,6 +3428,34 @@ func TestFormatIdempotency(t *testing.T) {
 	}
 }
 
+func TestFormatPreservesTestBlocks(t *testing.T) {
+	input := `
+SIGNAL keyword urgent { operator: "any" keywords: ["urgent"] }
+ROUTE urgent_route { PRIORITY 100 WHEN keyword("urgent") MODEL "m:1b" }
+
+TEST routing_intent {
+  "urgent help" -> urgent_route
+}
+`
+
+	formatted, err := Format(input)
+	if err != nil {
+		t.Fatalf("format error: %v", err)
+	}
+
+	if !strings.Contains(formatted, "TEST routing_intent") {
+		t.Fatalf("formatted DSL lost TEST block:\n%s", formatted)
+	}
+
+	prog, errs := Parse(formatted)
+	if len(errs) > 0 {
+		t.Fatalf("formatted DSL parse errors: %v\n%s", errs, formatted)
+	}
+	if len(prog.TestBlocks) != 1 {
+		t.Fatalf("expected 1 TEST block after format, got %d", len(prog.TestBlocks))
+	}
+}
+
 // ==================== CLI Unit Tests ====================
 
 func TestCLIValidateOutput(t *testing.T) {
@@ -3480,6 +3508,123 @@ ROUTE test {
 	output := buf.String()
 	if !strings.Contains(output, "nonexistent") {
 		t.Errorf("expected warning about 'nonexistent', got: %s", output)
+	}
+}
+
+func TestCLIValidateRunsRuntimeTestBlocks(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "test_runtime_ok*.dsl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, _ = tmpFile.WriteString(`
+SIGNAL keyword urgent { operator: "OR" keywords: ["urgent"] }
+ROUTE urgent_route { PRIORITY 100 WHEN keyword("urgent") MODEL "m:1b" }
+
+TEST routing_intent {
+  "urgent help" -> urgent_route
+}
+	`)
+	tmpFile.Close()
+
+	var buf bytes.Buffer
+	errCount := CLIValidateWithRunner(tmpFile.Name(), &buf, func(_ *Program) (TestBlockRunner, error) {
+		return stubTestBlockRunner{
+			results: map[string]*TestBlockResult{
+				"urgent help": {
+					DecisionName: "urgent_route",
+					Confidence:   0.99,
+					MatchedRules: []string{"keyword:urgent"},
+				},
+			},
+		}, nil
+	})
+	if errCount != 0 {
+		t.Fatalf("expected runtime TEST validation to pass, got %d errors\n%s", errCount, buf.String())
+	}
+	if strings.Contains(buf.String(), "expected route") {
+		t.Fatalf("unexpected TEST failure output:\n%s", buf.String())
+	}
+}
+
+func TestCLIValidateReportsRuntimeTestMismatch(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "test_runtime_fail*.dsl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, _ = tmpFile.WriteString(`
+SIGNAL keyword urgent { operator: "OR" keywords: ["urgent"] }
+SIGNAL keyword calm { operator: "OR" keywords: ["calm"] }
+ROUTE urgent_route { PRIORITY 100 WHEN keyword("urgent") MODEL "m:1b" }
+ROUTE calm_route { PRIORITY 100 WHEN keyword("calm") MODEL "m:1b" }
+
+TEST routing_intent {
+  "urgent help" -> calm_route
+}
+	`)
+	tmpFile.Close()
+
+	var buf bytes.Buffer
+	errCount := CLIValidateWithRunner(tmpFile.Name(), &buf, func(_ *Program) (TestBlockRunner, error) {
+		return stubTestBlockRunner{
+			results: map[string]*TestBlockResult{
+				"urgent help": {
+					DecisionName: "urgent_route",
+					Confidence:   0.88,
+					MatchedRules: []string{"keyword:urgent"},
+				},
+			},
+		}, nil
+	})
+	if errCount == 0 {
+		t.Fatalf("expected runtime TEST validation failure, got success\n%s", buf.String())
+	}
+	if !strings.Contains(buf.String(), `expected route "calm_route", got "urgent_route"`) {
+		t.Fatalf("expected mismatch diagnostic, got:\n%s", buf.String())
+	}
+}
+
+func TestCLIValidateRunsRuntimeSignalGroupDiagnostics(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "signal_group_runtime*.dsl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, _ = tmpFile.WriteString(`
+SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain general {}
+
+SIGNAL_GROUP domain_taxonomy {
+  semantics: "softmax_exclusive"
+  temperature: 0.1
+  members: ["math", "general"]
+  default: "general"
+}
+
+ROUTE general_route { PRIORITY 100 WHEN domain("general") MODEL "m:1b" }
+	`)
+	tmpFile.Close()
+
+	var buf bytes.Buffer
+	errCount := CLIValidateWithRunner(tmpFile.Name(), &buf, func(_ *Program) (TestBlockRunner, error) {
+		return stubRuntimeValidationRunner{
+			diags: []Diagnostic{
+				{
+					Level:   DiagWarning,
+					Message: `SIGNAL_GROUP domain_taxonomy: members "math" and "general" candidate centroids have cosine similarity 0.81 (threshold: 0.7) — softmax scores may be near-uniform on ambiguous queries`,
+				},
+			},
+		}, nil
+	})
+	if errCount != 0 {
+		t.Fatalf("expected runtime signal-group validation warning only, got %d errors\n%s", errCount, buf.String())
+	}
+	if !strings.Contains(buf.String(), "candidate centroids have cosine similarity 0.81") {
+		t.Fatalf("expected runtime signal-group diagnostic, got:\n%s", buf.String())
 	}
 }
 
@@ -4189,6 +4334,51 @@ TEST routing_intent {
 	}
 }
 
+func TestParseTestBlockUnicodeArrow(t *testing.T) {
+	input := `
+SIGNAL keyword urgent { operator: "any" keywords: ["urgent"] }
+ROUTE urgent_route { PRIORITY 100 WHEN keyword("urgent") MODEL "m1" }
+
+TEST routing_intent {
+  "urgent help" → urgent_route
+}
+`
+	prog, errs := Parse(input)
+	if len(errs) > 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	if len(prog.TestBlocks) != 1 || len(prog.TestBlocks[0].Entries) != 1 {
+		t.Fatalf("unexpected TEST block parse result: %+v", prog.TestBlocks)
+	}
+	if prog.TestBlocks[0].Entries[0].RouteName != "urgent_route" {
+		t.Fatalf("route = %q, want urgent_route", prog.TestBlocks[0].Entries[0].RouteName)
+	}
+}
+
+type stubTestBlockRunner struct {
+	results map[string]*TestBlockResult
+	errs    map[string]error
+}
+
+func (s stubTestBlockRunner) EvaluateTestBlockQuery(query string) (*TestBlockResult, error) {
+	if err, ok := s.errs[query]; ok {
+		return nil, err
+	}
+	if result, ok := s.results[query]; ok {
+		return result, nil
+	}
+	return nil, nil
+}
+
+type stubRuntimeValidationRunner struct {
+	stubTestBlockRunner
+	diags []Diagnostic
+}
+
+func (s stubRuntimeValidationRunner) ValidateSignalGroups(_ *Program) []Diagnostic {
+	return append([]Diagnostic(nil), s.diags...)
+}
+
 func TestValidateTestBlockUndefinedRoute(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["algebra"] }
@@ -4224,6 +4414,40 @@ TEST routing_intent {
 		if strings.Contains(d.Message, "TEST routing_intent") && strings.Contains(d.Message, "not defined") {
 			t.Errorf("unexpected warning about undefined route: %s", d.Message)
 		}
+	}
+}
+
+func TestValidateTestBlocksReportsMismatch(t *testing.T) {
+	prog, errs := Parse(`
+SIGNAL keyword urgent { operator: "any" keywords: ["urgent"] }
+ROUTE urgent_route { PRIORITY 100 WHEN keyword("urgent") MODEL "m1" }
+ROUTE calm_route { PRIORITY 100 WHEN keyword("calm") MODEL "m1" }
+
+TEST routing_intent {
+  "urgent help" -> calm_route
+}
+`)
+	if len(errs) > 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+
+	diags := ValidateTestBlocks(prog, stubTestBlockRunner{
+		results: map[string]*TestBlockResult{
+			"urgent help": {
+				DecisionName: "urgent_route",
+				Confidence:   0.91,
+				MatchedRules: []string{"keyword:urgent"},
+			},
+		},
+	})
+	if len(diags) != 1 {
+		t.Fatalf("expected 1 diagnostic, got %d: %+v", len(diags), diags)
+	}
+	if diags[0].Level != DiagError {
+		t.Fatalf("expected error diagnostic, got %v", diags[0].Level)
+	}
+	if !strings.Contains(diags[0].Message, `expected route "calm_route", got "urgent_route"`) {
+		t.Fatalf("unexpected diagnostic: %s", diags[0].Message)
 	}
 }
 
@@ -4313,6 +4537,136 @@ ROUTE test {
 	}
 	if !found {
 		t.Error("expected constraint about negative tier")
+	}
+}
+
+func TestParseDecisionTreeLowersToRoutes(t *testing.T) {
+	input := `
+SIGNAL jailbreak detector { method: "embedding" threshold: 0.8 }
+SIGNAL domain math { mmlu_categories: ["algebra"] }
+
+DECISION_TREE routing_policy {
+  IF jailbreak("detector") {
+    NAME "jailbreak_block"
+    TIER 1
+    MODEL "fast-reject"
+  }
+  ELSE IF domain("math") {
+    NAME "math_route"
+    TIER 2
+    MODEL "qwen-math"
+  }
+  ELSE {
+    NAME "default_route"
+    TIER 2
+    MODEL "qwen-default"
+  }
+}
+`
+	prog, errs := Parse(input)
+	if len(errs) > 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	if len(prog.Routes) != 3 {
+		t.Fatalf("expected 3 lowered routes, got %d", len(prog.Routes))
+	}
+	if prog.Routes[0].Name != "jailbreak_block" || prog.Routes[0].Tier != 1 {
+		t.Fatalf("unexpected first lowered route: %+v", prog.Routes[0])
+	}
+	if prog.Routes[1].Name != "math_route" || prog.Routes[1].Tier != 2 {
+		t.Fatalf("unexpected second lowered route: %+v", prog.Routes[1])
+	}
+	if prog.Routes[2].Name != "default_route" || prog.Routes[2].Tier != 2 {
+		t.Fatalf("unexpected third lowered route: %+v", prog.Routes[2])
+	}
+	if prog.Routes[0].Priority <= prog.Routes[1].Priority || prog.Routes[1].Priority <= prog.Routes[2].Priority {
+		t.Fatalf("expected lowered priorities to preserve branch order, got %d > %d > %d", prog.Routes[0].Priority, prog.Routes[1].Priority, prog.Routes[2].Priority)
+	}
+
+	cfg, compileErrs := CompileAST(prog)
+	if len(compileErrs) > 0 {
+		t.Fatalf("compile errors: %v", compileErrs)
+	}
+	if len(cfg.Decisions) != 3 {
+		t.Fatalf("expected 3 compiled decisions, got %d", len(cfg.Decisions))
+	}
+	if cfg.Decisions[1].Rules.Operator != "AND" || len(cfg.Decisions[1].Rules.Conditions) != 2 {
+		t.Fatalf("expected second branch to include original condition plus prior-branch negation, got %+v", cfg.Decisions[1].Rules)
+	}
+	if cfg.Decisions[2].Rules.Operator != "AND" || len(cfg.Decisions[2].Rules.Conditions) != 2 {
+		t.Fatalf("expected ELSE branch to include two negated prior branches, got %+v", cfg.Decisions[2].Rules)
+	}
+}
+
+func TestParseDecisionTreeRequiresElse(t *testing.T) {
+	_, errs := Parse(`
+SIGNAL domain math { mmlu_categories: ["algebra"] }
+
+DECISION_TREE routing_policy {
+  IF domain("math") {
+    MODEL "qwen-math"
+  }
+}
+`)
+	if len(errs) == 0 {
+		t.Fatal("expected parse error when DECISION_TREE has no ELSE branch")
+	}
+}
+
+func TestParseDecisionTreeRejectsMixedRoutes(t *testing.T) {
+	_, errs := Parse(`
+SIGNAL domain math { mmlu_categories: ["algebra"] }
+
+ROUTE legacy_route {
+  PRIORITY 100
+  WHEN domain("math")
+  MODEL "qwen-math"
+}
+
+DECISION_TREE routing_policy {
+  IF domain("math") {
+    MODEL "qwen-math"
+  }
+  ELSE {
+    MODEL "qwen-default"
+  }
+}
+`)
+	if len(errs) == 0 {
+		t.Fatal("expected parse error when DECISION_TREE is mixed with ROUTE")
+	}
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "cannot be mixed with ROUTE") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected mixed-route error, got %v", errs)
+	}
+}
+
+func TestParseDecisionTreeGeneratesBranchNames(t *testing.T) {
+	prog, errs := Parse(`
+SIGNAL domain math { mmlu_categories: ["algebra"] }
+
+DECISION_TREE routing_policy {
+  IF domain("math") {
+    MODEL "qwen-math"
+  }
+  ELSE {
+    MODEL "qwen-default"
+  }
+}
+`)
+	if len(errs) > 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	if got := prog.Routes[0].Name; got != "routing_policy__branch_01" {
+		t.Fatalf("generated branch name = %q, want routing_policy__branch_01", got)
+	}
+	if got := prog.Routes[1].Name; got != "routing_policy__branch_02" {
+		t.Fatalf("generated branch name = %q, want routing_policy__branch_02", got)
 	}
 }
 

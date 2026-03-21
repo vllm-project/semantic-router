@@ -30,6 +30,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `routing.modelCards`
   - `routing.modelCards[].loras`
   - `routing.signals`
+  - `routing.signals.signal_groups` for coordination metadata across declared domain or embedding signals
   - `routing.decisions`
 - `providers` owns deployment and default-selection metadata.
   - `defaults`
@@ -90,6 +91,19 @@ routing:
       - name: math_terms
         operator: OR
         keywords: ["algebra", "calculus"]
+    embeddings:
+      - name: technical_support
+        threshold: 0.75
+        candidates: ["installation guide", "troubleshooting steps"]
+      - name: account_management
+        threshold: 0.72
+        candidates: ["billing information", "subscription management"]
+    signal_groups:
+      - name: support_intents
+        semantics: exclusive
+        temperature: 0.3
+        members: [technical_support, account_management]
+        default: technical_support
 
   decisions:
     - name: math_route

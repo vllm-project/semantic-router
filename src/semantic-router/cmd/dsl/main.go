@@ -112,7 +112,7 @@ func runValidate() {
 	}
 
 	inputPath := fs.Arg(0)
-	errCount := dsl.CLIValidate(inputPath, os.Stdout)
+	errCount := dsl.CLIValidateWithRunner(inputPath, os.Stdout, buildNativeTestBlockRunner)
 	if errCount > 0 {
 		os.Exit(1)
 	}

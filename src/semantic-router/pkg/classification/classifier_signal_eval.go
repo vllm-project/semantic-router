@@ -205,9 +205,9 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 		}
 		results.MatchedAuthzRules = authzResult.MatchedRules
 
-		logging.Infof("[Signal Computation] Authz signal evaluation completed in %v", elapsed)
+		logging.Debugf("[Signal Computation] Authz signal evaluation completed in %v", elapsed)
 	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) {
-		logging.Infof("[Signal Computation] Authz signal not used in any decision, skipping evaluation")
+		logging.Debugf("[Signal Computation] Authz signal not used in any decision, skipping evaluation")
 	}
 
 	return results, nil
@@ -227,7 +227,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v",
+	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules, signals.MatchedContextRules,
@@ -269,7 +269,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 	// Populate matched keywords from signal evaluation
 	result.MatchedKeywords = signals.MatchedKeywords
 
-	logging.Infof("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v, matched_keywords=%v",
+	logging.Debugf("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v, matched_keywords=%v",
 		result.Decision.Name, result.Confidence, result.MatchedRules, result.MatchedKeywords)
 
 	return result, nil

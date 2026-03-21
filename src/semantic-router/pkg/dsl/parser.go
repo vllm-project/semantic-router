@@ -16,7 +16,7 @@ var dslLexer = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Float", Pattern: `[+-]?[0-9]+\.[0-9]+`},
 	{Name: "Int", Pattern: `[+-]?[0-9]+`},
 	{Name: "String", Pattern: `"(?:[^"\\]|\\.)*"`},
-	{Name: "Arrow", Pattern: `->`},
+	{Name: "Arrow", Pattern: `->|→`},
 	{Name: "Ident", Pattern: `[a-zA-Z_][a-zA-Z0-9_\-\.\/]*`},
 	{Name: "LBrace", Pattern: `\{`},
 	{Name: "RBrace", Pattern: `\}`},
@@ -43,7 +43,7 @@ var rawParser = participle.MustBuild[rawProgram](
 func Parse(input string) (*Program, []error) {
 	raw, err := rawParser.ParseString("", input)
 	if err == nil {
-		return rawToProgram(raw), nil
+		return rawToProgram(raw)
 	}
 
 	// Error recovery: split input into top-level blocks and parse each
@@ -66,13 +66,14 @@ func Parse(input string) (*Program, []error) {
 			continue
 		}
 		parsedAny = true
-		resolved := rawToProgram(r)
+		resolved, lowerErrs := rawToProgram(r)
 		prog.Signals = append(prog.Signals, resolved.Signals...)
 		prog.SignalGroups = append(prog.SignalGroups, resolved.SignalGroups...)
 		prog.Routes = append(prog.Routes, resolved.Routes...)
 		prog.Models = append(prog.Models, resolved.Models...)
 		prog.Plugins = append(prog.Plugins, resolved.Plugins...)
 		prog.TestBlocks = append(prog.TestBlocks, resolved.TestBlocks...)
+		allErrors = append(allErrors, lowerErrs...)
 	}
 
 	if !parsedAny {
@@ -88,7 +89,7 @@ func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
 	start := 0
-	keywords := []string{"SIGNAL_GROUP", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
+	keywords := []string{"DECISION_TREE", "SIGNAL_GROUP", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
@@ -146,8 +147,11 @@ func splitTopLevelBlocks(input string) []string {
 
 // ---------- Raw → Resolved Conversion ----------
 
-func rawToProgram(raw *rawProgram) *Program {
+func rawToProgram(raw *rawProgram) (*Program, []error) {
 	prog := &Program{}
+	var errs []error
+	hasDirectRoutes := false
+	treeCount := 0
 	for _, entry := range raw.Entries {
 		switch {
 		case entry.SignalGroup != nil:
@@ -155,7 +159,13 @@ func rawToProgram(raw *rawProgram) *Program {
 		case entry.Signal != nil:
 			prog.Signals = append(prog.Signals, rawToSignal(entry.Signal))
 		case entry.Route != nil:
+			hasDirectRoutes = true
 			prog.Routes = append(prog.Routes, rawToRoute(entry.Route))
+		case entry.DecisionTree != nil:
+			treeCount++
+			routes, treeErrs := rawDecisionTreeToRoutes(entry.DecisionTree, treeCount-1)
+			prog.Routes = append(prog.Routes, routes...)
+			errs = append(errs, treeErrs...)
 		case entry.Model != nil:
 			prog.Models = append(prog.Models, rawToModelDecl(entry.Model))
 		case entry.Plugin != nil:
@@ -164,7 +174,10 @@ func rawToProgram(raw *rawProgram) *Program {
 			prog.TestBlocks = append(prog.TestBlocks, rawToTestBlock(entry.TestBlock))
 		}
 	}
-	return prog
+	if hasDirectRoutes && treeCount > 0 {
+		errs = append(errs, fmt.Errorf("DECISION_TREE declarations cannot be mixed with ROUTE declarations in the same DSL program"))
+	}
+	return prog, errs
 }
 
 func rawToSignalGroup(r *rawSignalGroupDecl) *SignalGroupDecl {

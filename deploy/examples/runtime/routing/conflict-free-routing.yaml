@@ -1,0 +1,135 @@
+routing:
+  modelCards:
+  - name: fast-reject
+    param_size: 1b
+    context_window_size: 8192
+    description: Safety response model for hard rejects.
+    capabilities:
+    - safety
+    quality_score: 0.99
+    modality: text
+  - name: qwen-default
+    param_size: 7b
+    context_window_size: 32768
+    description: Low-cost fallback model for general traffic.
+    capabilities:
+    - general
+    quality_score: 0.82
+    modality: text
+  - name: qwen-math
+    param_size: 14b
+    context_window_size: 65536
+    description: Reasoning-oriented model for mathematics.
+    capabilities:
+    - math
+    - reasoning
+    quality_score: 0.91
+    modality: text
+  - name: qwen-science
+    param_size: 14b
+    context_window_size: 65536
+    description: Reasoning-oriented model for science explanations.
+    capabilities:
+    - science
+    - reasoning
+    quality_score: 0.9
+    modality: text
+  signals:
+    domains:
+    - name: math
+      description: Mathematics and symbolic reasoning.
+      mmlu_categories:
+      - abstract_algebra
+      - college_mathematics
+    - name: science
+      description: Natural science explanations and analysis.
+      mmlu_categories:
+      - astronomy
+      - college_chemistry
+      - college_physics
+    - name: general
+      description: Catch-all domain for uncategorized requests.
+    signal_groups:
+    - name: domain_taxonomy
+      semantics: softmax_exclusive
+      temperature: 0.1
+      members:
+      - math
+      - science
+      - general
+      default: general
+    jailbreak:
+    - name: detector
+      method: embedding
+      threshold: 0.8
+  decisions:
+  - name: jailbreak_block
+    description: Hard safety gate for jailbreak attempts.
+    priority: 1000000
+    tier: 1
+    rules:
+      operator: AND
+      conditions:
+      - type: jailbreak
+        name: detector
+    modelRefs:
+    - model: fast-reject
+      use_reasoning: null
+  - name: math_route
+    description: Math questions stay on the domain-specific route.
+    priority: 999999
+    tier: 2
+    rules:
+      operator: AND
+      conditions:
+      - type: domain
+        name: math
+      - operator: NOT
+        conditions:
+        - type: jailbreak
+          name: detector
+    modelRefs:
+    - model: qwen-math
+      use_reasoning: null
+  - name: science_route
+    description: Science questions stay on the science route.
+    priority: 999998
+    tier: 2
+    rules:
+      operator: AND
+      conditions:
+      - type: domain
+        name: science
+      - operator: NOT
+        conditions:
+        - type: jailbreak
+          name: detector
+      - operator: NOT
+        conditions:
+        - type: domain
+          name: math
+    modelRefs:
+    - model: qwen-science
+      use_reasoning: null
+  - name: default_route
+    description: Catch-all branch required for exhaustive routing.
+    priority: 999997
+    tier: 3
+    rules:
+      operator: AND
+      conditions:
+      - operator: NOT
+        conditions:
+        - type: jailbreak
+          name: detector
+      - operator: NOT
+        conditions:
+        - type: domain
+          name: math
+      - operator: NOT
+        conditions:
+        - type: domain
+          name: science
+    modelRefs:
+    - model: qwen-default
+      use_reasoning: null

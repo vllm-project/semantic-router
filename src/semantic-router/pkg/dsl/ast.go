@@ -31,13 +31,14 @@ type rawProgram struct {
 
 // rawTopLevel is a union for top-level declarations.
 type rawTopLevel struct {
-	Pos         lexer.Position
-	SignalGroup *rawSignalGroupDecl `parser:"  @@"`
-	Signal      *rawSignalDecl      `parser:"| @@"`
-	Route       *rawRouteDecl       `parser:"| @@"`
-	Model       *rawModelDecl       `parser:"| @@"`
-	Plugin      *rawPluginDecl      `parser:"| @@"`
-	TestBlock   *rawTestBlockDecl   `parser:"| @@"`
+	Pos          lexer.Position
+	SignalGroup  *rawSignalGroupDecl  `parser:"  @@"`
+	Signal       *rawSignalDecl       `parser:"| @@"`
+	Route        *rawRouteDecl        `parser:"| @@"`
+	DecisionTree *rawDecisionTreeDecl `parser:"| @@"`
+	Model        *rawModelDecl        `parser:"| @@"`
+	Plugin       *rawPluginDecl       `parser:"| @@"`
+	TestBlock    *rawTestBlockDecl    `parser:"| @@"`
 }
 
 // rawSignalGroupDecl: SIGNAL_GROUP <name> { fields... }
@@ -75,6 +76,39 @@ type rawRouteDecl struct {
 	Name string          `parser:"'ROUTE' @(Ident | String)"`
 	Opts []*RouteOpt     `parser:"( '(' @@* ')' )?"`
 	Body []*rawRouteItem `parser:"'{' @@* '}'"`
+}
+
+// rawDecisionTreeDecl: DECISION_TREE <name> { IF ... ELSE IF ... ELSE ... }
+type rawDecisionTreeDecl struct {
+	Pos     lexer.Position
+	Name    string                     `parser:"'DECISION_TREE' @(Ident | String)"`
+	If      *rawDecisionTreeIfBranch   `parser:"'{' @@"`
+	ElseIfs []*rawDecisionTreeIfBranch `parser:"@@*"`
+	Else    *rawDecisionTreeElseBranch `parser:"@@ '}'"`
+}
+
+// rawDecisionTreeIfBranch represents IF/ELSE IF branches inside DECISION_TREE.
+type rawDecisionTreeIfBranch struct {
+	Pos       lexer.Position
+	Condition *BoolExprTop           `parser:"( 'IF' | 'ELSE' 'IF' ) @@"`
+	Body      []*rawDecisionTreeItem `parser:"'{' @@* '}'"`
+}
+
+// rawDecisionTreeElseBranch represents the terminal ELSE branch.
+type rawDecisionTreeElseBranch struct {
+	Pos  lexer.Position
+	Body []*rawDecisionTreeItem `parser:"'ELSE' '{' @@* '}'"`
+}
+
+// rawDecisionTreeItem is a route-like statement inside one DECISION_TREE branch.
+type rawDecisionTreeItem struct {
+	Pos         lexer.Position
+	Name        *string       `parser:"  'NAME' @(Ident | String)"`
+	Description *string       `parser:"| 'DESCRIPTION' @String"`
+	Tier        *int          `parser:"| 'TIER' @Int"`
+	Model       *rawModelList `parser:"| 'MODEL' @@"`
+	Algorithm   *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
+	Plugin      *rawPluginRef `parser:"| 'PLUGIN' @@"`
 }
 
 // rawModelDecl: MODEL <name> { fields... }
@@ -224,8 +258,8 @@ type SignalGroupDecl struct {
 }
 
 // TestBlockDecl declares expected routing outcomes for specific queries.
-// The validator runs them through the signal pipeline to catch conflicts
-// that static checks cannot find.
+// Native validation paths can run them through the routing signal pipeline
+// to catch conflicts that static checks cannot find.
 type TestBlockDecl struct {
 	Name    string
 	Entries []*TestEntry

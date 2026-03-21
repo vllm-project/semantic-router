@@ -43,3 +43,19 @@ def test_signal_reference_exists_strips_suffixes_for_non_complexity_signals():
     assert signal_reference_exists(signal_names, "keyword", "security:match")
     assert signal_reference_exists(signal_names, "authz", "admin-access")
     assert not signal_reference_exists(signal_names, "complexity", "security:match")
+
+
+def test_signals_model_accepts_signal_groups_without_emitting_new_references():
+    signals = Signals(
+        signal_groups=[
+            {
+                "name": "support-intents",
+                "semantics": "exclusive",
+                "members": ["technical_support", "account_management"],
+                "default": "technical_support",
+            }
+        ]
+    )
+
+    assert signals.signal_groups[0].name == "support-intents"
+    assert build_signal_reference_index(signals) == set()

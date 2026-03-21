@@ -194,6 +194,15 @@ routing:
         description: General fallback traffic.
         mmlu_categories: [other]
 
+    signal_groups:
+      - name: support_intents
+        semantics: exclusive
+        temperature: 0.3
+        members:
+          - technical_support
+          - account_management
+        default: technical_support
+
     fact_check:
       - name: needs_fact_check
         description: Prompts with factual claims that should be verified.
@@ -965,6 +974,9 @@ global:
   services:
     api:
       batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
         metrics:
           sample_rate: 1.0
           batch_size_ranges:

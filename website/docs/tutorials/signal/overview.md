@@ -5,6 +5,7 @@
 `signal/` is the detection layer of `routing`.
 
 Signals define named detectors under `routing.signals`. A decision then references those names from `routing.decisions`, so detection stays reusable and route logic stays readable.
+`routing.signals.signal_groups` can also coordinate declared domain or embedding signals when the config needs explicit exclusivity metadata, but it does not introduce a new detector family of its own.
 
 This tutorial group maps directly to the fragment tree under `config/signal/`, but the docs are organized by extraction style:
 
@@ -44,6 +45,19 @@ routing:
       - name: urgent_keywords
         operator: OR
         keywords: ["urgent", "asap"]
+    embeddings:
+      - name: technical_support
+        threshold: 0.75
+        candidates: ["installation guide", "troubleshooting steps"]
+      - name: account_management
+        threshold: 0.72
+        candidates: ["billing information", "subscription management"]
+    signal_groups:
+      - name: support_intents
+        semantics: exclusive
+        temperature: 0.3
+        members: [technical_support, account_management]
+        default: technical_support
 ```
 
 The latest signal docs still cover every family under `config/signal/`, but they are grouped into two second-level categories so the runtime cost and dependency model stay clear.

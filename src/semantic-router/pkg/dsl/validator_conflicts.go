@@ -3,6 +3,7 @@ package dsl
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // ---------- Level 4: Conflict Detection ----------
@@ -192,6 +193,7 @@ func (v *Validator) checkSignalGroups() {
 	for _, sg := range v.prog.SignalGroups {
 		v.checkSignalGroup(sg)
 	}
+	v.checkSignalGroupImpossibleANDs()
 }
 
 func (v *Validator) checkSignalGroup(sg *SignalGroupDecl) {
@@ -199,6 +201,7 @@ func (v *Validator) checkSignalGroup(sg *SignalGroupDecl) {
 
 	v.checkSignalGroupSemantics(sg, context)
 	v.checkSignalGroupMembers(sg, context)
+	v.checkSignalGroupMemberTypes(sg, context)
 	v.checkSignalGroupDefault(sg, context)
 	v.checkSignalGroupCategoryDisjointness(sg, context)
 }
@@ -234,6 +237,47 @@ func (v *Validator) checkSignalGroupMembers(sg *SignalGroupDecl, context string)
 			)
 		}
 	}
+}
+
+func (v *Validator) checkSignalGroupMemberTypes(sg *SignalGroupDecl, context string) {
+	membersByType := make(map[string][]string)
+	for _, member := range sg.Members {
+		sig := v.findSignalByName(member)
+		if sig == nil {
+			continue
+		}
+		membersByType[sig.SignalType] = append(membersByType[sig.SignalType], member)
+	}
+	if len(membersByType) == 0 {
+		return
+	}
+
+	if len(membersByType) == 1 {
+		for signalType, members := range membersByType {
+			if isSupportedSignalGroupType(signalType) {
+				return
+			}
+			v.addDiag(DiagConstraint, sg.Pos,
+				fmt.Sprintf(
+					"%s: members must use a supported runtime signal type (domain or embedding), found %s=%v",
+					context,
+					signalType,
+					members,
+				),
+				nil,
+			)
+			return
+		}
+	}
+
+	v.addDiag(DiagConstraint, sg.Pos,
+		fmt.Sprintf(
+			"%s: members must all share one supported runtime signal type (domain or embedding), found %s",
+			context,
+			describeSignalGroupMemberTypes(membersByType),
+		),
+		nil,
+	)
 }
 
 func (v *Validator) checkSignalGroupDefault(sg *SignalGroupDecl, context string) {
@@ -274,6 +318,26 @@ func (v *Validator) checkSignalGroupCategoryDisjointness(sg *SignalGroupDecl, co
 	}
 }
 
+func isSupportedSignalGroupType(signalType string) bool {
+	return signalType == "domain" || signalType == "embedding"
+}
+
+func describeSignalGroupMemberTypes(membersByType map[string][]string) string {
+	keys := make([]string, 0, len(membersByType))
+	for signalType := range membersByType {
+		keys = append(keys, signalType)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, signalType := range keys {
+		members := append([]string(nil), membersByType[signalType]...)
+		sort.Strings(members)
+		parts = append(parts, fmt.Sprintf("%s=%v", signalType, members))
+	}
+	return strings.Join(parts, ", ")
+}
+
 func (v *Validator) isSignalDeclaredByName(name string) bool {
 	for _, s := range v.prog.Signals {
 		if s.Name == name {
@@ -290,6 +354,110 @@ func (v *Validator) findSignalByName(name string) *SignalDecl {
 		}
 	}
 	return nil
+}
+
+func (v *Validator) checkSignalGroupImpossibleANDs() {
+	memberToGroup := v.signalGroupMembers()
+	if len(memberToGroup) == 0 {
+		return
+	}
+
+	for _, route := range v.prog.Routes {
+		if route.When == nil {
+			continue
+		}
+		v.checkSignalGroupImpossibleANDsInRoute(route, memberToGroup)
+	}
+}
+
+func (v *Validator) signalGroupMembers() map[string]string {
+	memberToGroup := make(map[string]string)
+	for _, group := range v.prog.SignalGroups {
+		for _, member := range group.Members {
+			sig := v.findSignalByName(member)
+			if sig == nil || !isSupportedSignalGroupType(sig.SignalType) {
+				continue
+			}
+			memberToGroup[signalGroupMemberKey(sig.SignalType, member)] = group.Name
+		}
+	}
+	return memberToGroup
+}
+
+func signalGroupMemberKey(signalType string, signalName string) string {
+	return signalType + ":" + signalName
+}
+
+func (v *Validator) checkSignalGroupImpossibleANDsInRoute(route *RouteDecl, memberToGroup map[string]string) {
+	clauses := positiveConjunctionClauses(route.When)
+	seen := make(map[string]struct{})
+
+	for _, clause := range clauses {
+		groupMembers := make(map[string]SignalRefExpr)
+		for _, ref := range clause {
+			groupName, ok := memberToGroup[signalGroupMemberKey(ref.SignalType, ref.SignalName)]
+			if !ok {
+				continue
+			}
+
+			if existing, clash := groupMembers[groupName]; clash && existing.SignalName != ref.SignalName {
+				pair := []string{
+					signalGroupMemberKey(existing.SignalType, existing.SignalName),
+					signalGroupMemberKey(ref.SignalType, ref.SignalName),
+				}
+				sort.Strings(pair)
+				diagKey := route.Name + "|" + groupName + "|" + strings.Join(pair, "|")
+				if _, alreadyReported := seen[diagKey]; alreadyReported {
+					continue
+				}
+				seen[diagKey] = struct{}{}
+
+				v.addDiag(DiagConstraint, route.Pos,
+					fmt.Sprintf(
+						"ROUTE %q: WHEN clause ANDs SIGNAL_GROUP %q members %s(%q) and %s(%q), but that group declares them mutually exclusive",
+						route.Name,
+						groupName,
+						existing.SignalType,
+						existing.SignalName,
+						ref.SignalType,
+						ref.SignalName,
+					),
+					nil,
+				)
+				continue
+			}
+
+			groupMembers[groupName] = ref
+		}
+	}
+}
+
+func positiveConjunctionClauses(expr BoolExpr) [][]SignalRefExpr {
+	switch e := expr.(type) {
+	case *SignalRefExpr:
+		return [][]SignalRefExpr{{*e}}
+	case *BoolNot:
+		return [][]SignalRefExpr{{}}
+	case *BoolOr:
+		left := positiveConjunctionClauses(e.Left)
+		right := positiveConjunctionClauses(e.Right)
+		return append(left, right...)
+	case *BoolAnd:
+		left := positiveConjunctionClauses(e.Left)
+		right := positiveConjunctionClauses(e.Right)
+		clauses := make([][]SignalRefExpr, 0, len(left)*len(right))
+		for _, leftClause := range left {
+			for _, rightClause := range right {
+				clause := make([]SignalRefExpr, 0, len(leftClause)+len(rightClause))
+				clause = append(clause, leftClause...)
+				clause = append(clause, rightClause...)
+				clauses = append(clauses, clause)
+			}
+		}
+		return clauses
+	default:
+		return nil
+	}
 }
 
 func (v *Validator) suggestSignalByName(name string) *QuickFix {

@@ -719,6 +719,7 @@ export interface ConfigSignals {
   keywords?: KeywordSignal[]
   embeddings?: EmbeddingSignal[]
   domains?: DomainSignal[]
+  signal_groups?: SignalGroup[]
   fact_check?: FactCheckSignal[]
   user_feedbacks?: UserFeedbackSignal[]
   preferences?: PreferenceSignal[]
@@ -936,6 +937,14 @@ export interface DomainSignal {
   name: string
   description: string
   mmlu_categories?: string[]
+}
+
+export interface SignalGroup {
+  name: string
+  semantics: string
+  members: string[]
+  temperature?: number
+  default?: string
 }
 
 export interface ModalitySignal {

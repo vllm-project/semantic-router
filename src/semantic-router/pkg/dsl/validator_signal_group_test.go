@@ -1,0 +1,89 @@
+package dsl
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestValidateSignalGroupUnsupportedMemberType(t *testing.T) {
+	input := `
+SIGNAL keyword urgent { operator: "any" patterns: ["urgent"] }
+
+SIGNAL_GROUP test_group {
+  semantics: "exclusive"
+  members: ["urgent"]
+  default: "urgent"
+}
+`
+	diags, _ := Validate(input)
+	found := false
+	for _, d := range diags {
+		if strings.Contains(d.Message, "supported runtime signal type") &&
+			strings.Contains(d.Message, "keyword") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected constraint about unsupported signal-group member type")
+	}
+}
+
+func TestValidateSignalGroupMixedMemberTypes(t *testing.T) {
+	input := `
+SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL embedding ai {
+  examples: ["transformer", "neural network"]
+}
+
+SIGNAL_GROUP test_group {
+  semantics: "softmax_exclusive"
+  temperature: 0.1
+  members: ["math", "ai"]
+  default: "math"
+}
+`
+	diags, _ := Validate(input)
+	found := false
+	for _, d := range diags {
+		if strings.Contains(d.Message, "share one supported runtime signal type") &&
+			strings.Contains(d.Message, "domain") &&
+			strings.Contains(d.Message, "embedding") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected constraint about mixed signal-group member types")
+	}
+}
+
+func TestValidateSignalGroupImpossibleAndCondition(t *testing.T) {
+	input := `
+SIGNAL domain math { mmlu_categories: ["algebra"] }
+SIGNAL domain science { mmlu_categories: ["physics"] }
+
+SIGNAL_GROUP domain_taxonomy {
+  semantics: "exclusive"
+  members: ["math", "science"]
+  default: "science"
+}
+
+ROUTE impossible_route {
+  PRIORITY 100
+  WHEN domain("math") AND domain("science")
+  MODEL "m1"
+}
+`
+	diags, _ := Validate(input)
+	found := false
+	for _, d := range diags {
+		if strings.Contains(d.Message, "mutually exclusive") &&
+			strings.Contains(d.Message, "domain_taxonomy") &&
+			strings.Contains(d.Message, "math") &&
+			strings.Contains(d.Message, "science") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected constraint about impossible AND between group members")
+	}
+}
