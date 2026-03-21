@@ -55,42 +55,41 @@ func TestMaintainedBalanceRecipeUsesSignalGroupsAndTieredDecisions(t *testing.T)
 		t.Fatal("expected deploy/recipes/balance.yaml to include at least one signal_group")
 	}
 	assertMaintainedBalanceDomainPartition(t, cfg.SignalGroups)
+	assertMaintainedBalanceIntentPartition(t, cfg.SignalGroups)
 	assertMaintainedBalanceDecisionTiers(t, cfg.Decisions)
+	assertMaintainedBalanceRoute(t, cfg.Decisions, "complex_agentic")
 	assertMaintainedBalanceRoute(t, cfg.Decisions, "verified_health")
 }
 
-func TestMaintainedConflictFreeRoutingExamplesStayInSync(t *testing.T) {
-	dslPath := filepath.Join("..", "..", "..", "..", "deploy", "examples", "runtime", "routing", "conflict-free-routing.dsl")
-	yamlPath := filepath.Join("..", "..", "..", "..", "deploy", "examples", "runtime", "routing", "conflict-free-routing.yaml")
+func TestMaintainedBalanceRoutingAssetsStayInSync(t *testing.T) {
+	dslPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.dsl")
+	yamlPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml")
 
-	prog := mustLoadMaintainedConflictFreeDSLProgram(t, dslPath)
-	want := mustCompileMaintainedConflictFreeRouting(t, prog)
-	got := mustLoadMaintainedConflictFreeRoutingYAML(t, yamlPath)
+	prog := mustLoadMaintainedBalanceDSLProgram(t, dslPath)
+	want := mustCompileMaintainedRoutingDSL(t, prog)
+	got := mustLoadMaintainedBalanceRoutingYAML(t, yamlPath)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("maintained DSL/YAML examples diverged\nwant: %+v\ngot: %+v", want, got)
 	}
 }
 
-func mustLoadMaintainedConflictFreeDSLProgram(t *testing.T, dslPath string) *Program {
+func mustLoadMaintainedBalanceDSLProgram(t *testing.T, dslPath string) *Program {
 	t.Helper()
 
 	dslData, err := os.ReadFile(dslPath)
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", dslPath, err)
 	}
-	assertMaintainedConflictFreeDSLMarkers(t, dslPath, string(dslData))
+	assertMaintainedBalanceDSLMarkers(t, dslPath, string(dslData))
 
 	prog, errs := Parse(string(dslData))
 	if len(errs) > 0 {
 		t.Fatalf("Parse errors: %v", errs)
 	}
-	if len(prog.SignalGroups) != 1 {
-		t.Fatalf("expected 1 signal group in maintained DSL example, got %d", len(prog.SignalGroups))
+	if len(prog.SignalGroups) < 2 {
+		t.Fatalf("expected maintained balance DSL to declare at least 2 signal groups, got %d", len(prog.SignalGroups))
 	}
-	if len(prog.TestBlocks) != 1 {
-		t.Fatalf("expected 1 test block in maintained DSL example, got %d", len(prog.TestBlocks))
-	}
-	assertMaintainedConflictFreeDSLDiagnostics(t, prog)
+	assertMaintainedBalanceDSLDiagnostics(t, prog)
 	return prog
 }
 
@@ -119,6 +118,49 @@ func assertMaintainedBalanceDomainPartition(t *testing.T, groups []config.Signal
 	}
 }
 
+func assertMaintainedBalanceIntentPartition(t *testing.T, groups []config.SignalGroup) {
+	t.Helper()
+
+	var intentPartition *config.SignalGroup
+	for i := range groups {
+		if groups[i].Name == "balance_intent_partition" {
+			intentPartition = &groups[i]
+			break
+		}
+	}
+	if intentPartition == nil {
+		t.Fatal("expected deploy/recipes/balance.yaml to define balance_intent_partition")
+	}
+
+	wantMembers := []string{
+		"agentic_workflows",
+		"architecture_design",
+		"business_analysis",
+		"code_general",
+		"complex_stem",
+		"creative_tasks",
+		"fast_qa_en",
+		"fast_qa_zh",
+		"general_chat_fallback",
+		"health_guidance",
+		"history_explainer",
+		"premium_legal_analysis",
+		"psychology_support",
+		"reasoning_general_en",
+		"reasoning_general_zh",
+		"research_synthesis",
+	}
+	gotMembers := append([]string(nil), intentPartition.Members...)
+	slices.Sort(gotMembers)
+	slices.Sort(wantMembers)
+	if !slices.Equal(gotMembers, wantMembers) {
+		t.Fatalf("balance_intent_partition members mismatch\nwant: %v\ngot:  %v", wantMembers, gotMembers)
+	}
+	if intentPartition.Default != "general_chat_fallback" {
+		t.Fatalf("expected balance_intent_partition default to be %q, got %q", "general_chat_fallback", intentPartition.Default)
+	}
+}
+
 func assertMaintainedBalanceDecisionTiers(t *testing.T, decisions []config.Decision) {
 	t.Helper()
 
@@ -140,17 +182,17 @@ func assertMaintainedBalanceRoute(t *testing.T, decisions []config.Decision, nam
 	t.Fatalf("expected deploy/recipes/balance.yaml to include %s route", name)
 }
 
-func assertMaintainedConflictFreeDSLMarkers(t *testing.T, dslPath, dslText string) {
+func assertMaintainedBalanceDSLMarkers(t *testing.T, dslPath, dslText string) {
 	t.Helper()
-	if !strings.Contains(dslText, "DECISION_TREE") {
-		t.Fatalf("%s must demonstrate DECISION_TREE authoring", dslPath)
+	if !strings.Contains(dslText, "SIGNAL_GROUP balance_intent_partition") {
+		t.Fatalf("%s must define the learned intent SIGNAL_GROUP", dslPath)
 	}
-	if !strings.Contains(dslText, "TEST routing_intent") {
-		t.Fatalf("%s must demonstrate TEST blocks", dslPath)
+	if !strings.Contains(dslText, "ROUTE complex_agentic") {
+		t.Fatalf("%s must include the clawrouter-inspired complex_agentic route", dslPath)
 	}
 }
 
-func assertMaintainedConflictFreeDSLDiagnostics(t *testing.T, prog *Program) {
+func assertMaintainedBalanceDSLDiagnostics(t *testing.T, prog *Program) {
 	t.Helper()
 	for _, diag := range ValidateAST(prog) {
 		if diag.Level == DiagError || diag.Level == DiagConstraint {
@@ -159,7 +201,7 @@ func assertMaintainedConflictFreeDSLDiagnostics(t *testing.T, prog *Program) {
 	}
 }
 
-func mustCompileMaintainedConflictFreeRouting(t *testing.T, prog *Program) config.CanonicalRouting {
+func mustCompileMaintainedRoutingDSL(t *testing.T, prog *Program) config.CanonicalRouting {
 	t.Helper()
 
 	compiledCfg, compileErrs := CompileAST(prog)
@@ -177,16 +219,16 @@ func mustCompileMaintainedConflictFreeRouting(t *testing.T, prog *Program) confi
 	return config.CanonicalRoutingFromRouterConfig(compiledParsedCfg)
 }
 
-func mustLoadMaintainedConflictFreeRoutingYAML(t *testing.T, yamlPath string) config.CanonicalRouting {
+func mustLoadMaintainedBalanceRoutingYAML(t *testing.T, yamlPath string) config.CanonicalRouting {
 	t.Helper()
 
 	yamlData, err := os.ReadFile(yamlPath)
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", yamlPath, err)
 	}
-	parsedCfg, err := config.ParseRoutingYAMLBytes(yamlData)
+	parsedCfg, err := config.ParseYAMLBytes(yamlData)
 	if err != nil {
-		t.Fatalf("ParseRoutingYAMLBytes error: %v", err)
+		t.Fatalf("ParseYAMLBytes error: %v", err)
 	}
 	return config.CanonicalRoutingFromRouterConfig(parsedCfg)
 }

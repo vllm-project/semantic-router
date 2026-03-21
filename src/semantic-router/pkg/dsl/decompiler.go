@@ -112,6 +112,12 @@ func (d *decompiler) decompileSignals() {
 		if pref.Description != "" {
 			d.write("  description: %q\n", pref.Description)
 		}
+		if len(pref.Examples) > 0 {
+			d.write("  examples: %s\n", formatStringArray(pref.Examples))
+		}
+		if pref.Threshold != 0 {
+			d.write("  threshold: %g\n", pref.Threshold)
+		}
 		d.write("}\n\n")
 	}
 
@@ -891,6 +897,12 @@ func (d *decompiler) preferenceToSignal(pref *config.PreferenceRule) *SignalDecl
 	fields := make(map[string]Value)
 	if pref.Description != "" {
 		fields["description"] = StringValue{V: pref.Description}
+	}
+	if len(pref.Examples) > 0 {
+		fields["examples"] = stringsToArray(pref.Examples)
+	}
+	if pref.Threshold != 0 {
+		fields["threshold"] = FloatValue{V: float64(pref.Threshold)}
 	}
 	return &SignalDecl{SignalType: "preference", Name: pref.Name, Fields: fields}
 }

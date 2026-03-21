@@ -202,6 +202,12 @@ func (c *Compiler) compilePreferenceSignal(s *SignalDecl) {
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v
 	}
+	if v, ok := getStringArrayField(s.Fields, "examples"); ok {
+		rule.Examples = v
+	}
+	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
+		rule.Threshold = v
+	}
 	c.config.PreferenceRules = append(c.config.PreferenceRules, rule)
 }
 

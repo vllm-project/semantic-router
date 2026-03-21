@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -594,7 +595,7 @@ SIGNAL embedding emb { threshold: 0.75 candidates: ["test"] }
 SIGNAL domain dom { description: "test" mmlu_categories: ["math"] }
 SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
-SIGNAL preference pref { description: "preference" }
+SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
 SIGNAL language lang { description: "English" }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard task"] } easy: { candidates: ["easy task"] } }
@@ -623,6 +624,12 @@ SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 	}
 	if len(cfg.PreferenceRules) != 1 {
 		t.Errorf("expected 1 preference rule, got %d", len(cfg.PreferenceRules))
+	}
+	if cfg.PreferenceRules[0].Threshold != 0.7 {
+		t.Errorf("unexpected preference threshold: %v", cfg.PreferenceRules[0].Threshold)
+	}
+	if !reflect.DeepEqual(cfg.PreferenceRules[0].Examples, []string{"keep it concise", "bullet points only"}) {
+		t.Errorf("unexpected preference examples: %v", cfg.PreferenceRules[0].Examples)
 	}
 	if len(cfg.LanguageRules) != 1 {
 		t.Errorf("expected 1 language rule, got %d", len(cfg.LanguageRules))
@@ -2317,7 +2324,7 @@ SIGNAL embedding emb { threshold: 0.75 candidates: ["test"] aggregation_method: 
 SIGNAL domain dom { description: "test" mmlu_categories: ["math"] }
 SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
-SIGNAL preference pref { description: "preference" }
+SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
 SIGNAL language lang { description: "English" }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard"] } easy: { candidates: ["easy"] } }
@@ -3266,7 +3273,7 @@ SIGNAL embedding emb { threshold: 0.75 candidates: ["test"] }
 SIGNAL domain dom { description: "test" mmlu_categories: ["math"] }
 SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
-SIGNAL preference pref { description: "preference" }
+SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
 SIGNAL language lang { description: "English" }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard"] } easy: { candidates: ["easy"] } }
@@ -3295,6 +3302,12 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 		if !strings.Contains(dslText, sig) {
 			t.Errorf("missing %q in decompiled output", sig)
 		}
+	}
+	if !strings.Contains(dslText, `threshold: 0.7`) {
+		t.Error("decompiled DSL missing preference threshold")
+	}
+	if !strings.Contains(dslText, `examples: ["keep it concise", "bullet points only"]`) {
+		t.Error("decompiled DSL missing preference examples")
 	}
 }
 

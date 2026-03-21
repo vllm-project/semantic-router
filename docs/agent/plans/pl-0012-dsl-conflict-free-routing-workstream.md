@@ -43,29 +43,54 @@
 - [x] `W015` Replace invalid `balance.yaml` demo domains with repo-supported routing domains, and add early domain-value validation across config plus DSL compiler/validator surfaces.
 - [x] `W016` Rework `deploy/recipes/balance.yaml` to use repo-native learned-signal + heuristic-signal + `SIGNAL_GROUP` routing patterns that better match `.augment/clawrouter.md` without inventing a second runtime.
 - [x] `W017` Revert the unfinished `TD036` branch attempt, keep `DECISION_TREE` as DSL authoring sugar only, and realign debt/docs/examples/schema mirrors with that narrower contract.
+- [x] `W018` Re-audit `deploy/recipes/balance.yaml` against `.augment/clawrouter.md`, identify the missing multi-dimensional difficulty/intent structure, and define the narrowest maintained asset set for a stronger repo-native strategy.
+- [x] `W019` Implement the maintained `balance` routing pair (`deploy/recipes/balance.yaml` + `deploy/recipes/balance.dsl`) and targeted tests/docs so the recipe expresses the stronger learned + heuristic + `SIGNAL_GROUP` strategy without new runtime primitives.
+- [ ] `W020` Run the applicable harness ladder for the `balance` asset refactor, including any affected E2E/profile coverage, then update the PR once the changed-set gates pass.
 
 ## Current Loop
 
 - Date: 2026-03-22
-- Current task: `W017` completed
+- Current task: `W020` in progress
 - Changed files:
+  - `deploy/amd/README.md`
+  - `deploy/recipes/balance.yaml`
+  - `deploy/recipes/balance.dsl`
   - `docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md`
+  - `src/semantic-router/cmd/dsl/main.go`
+  - `src/semantic-router/pkg/dsl/compiler.go`
+  - `src/semantic-router/pkg/dsl/decompiler.go`
+  - `src/semantic-router/pkg/dsl/dsl_test.go`
+  - `src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go`
 - Commands run:
-  - `codebase-retrieval` for the earlier `TD036` attempt across `pkg/dsl`, `pkg/config`, canonical export/import, API/config surfaces, maintained examples, tests, and indexed debt docs
-  - `make agent-report ENV=cpu CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
-  - `make agent-lint CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
-  - `make agent-validate`
+  - `sed -n '1,220p' AGENTS.md`
+  - `sed -n '1,220p' docs/agent/{README.md,context-management.md,plans/README.md,testing-strategy.md,feature-complete-checklist.md}`
+  - `make agent-report ENV=cpu CHANGED_FILES="deploy/recipes/balance.yaml,deploy/recipes/balance.dsl,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
+  - `sed -n '1,860p' .augment/clawrouter.md`
+  - `codebase-retrieval` for maintained `balance` assets, DSL CLI output handling, signal groups, learned signals, complexity semantics, tests, and docs
+  - `go run ./cmd/dsl decompile -o ../../deploy/recipes/balance.dsl ../../deploy/recipes/balance.yaml`
+  - `go test ./pkg/dsl -run 'TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals|TestMaintainedBalanceRecipeUsesSignalGroupsAndTieredDecisions|TestMaintainedBalanceRoutingAssetsStayInSync|TestCompileAllSignalTypes|TestAllSignalTypesRoundTrip|TestDecompileAllSignalTypes' -count=1`
+  - `go test ./cmd/dsl -count=1`
+  - `make agent-lint CHANGED_FILES="deploy/recipes/balance.yaml,deploy/recipes/balance.dsl,deploy/amd/README.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,src/semantic-router/cmd/dsl/main.go,src/semantic-router/pkg/dsl/compiler.go,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go"`
+  - `make agent-ci-gate CHANGED_FILES="deploy/recipes/balance.yaml,deploy/recipes/balance.dsl,deploy/amd/README.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,src/semantic-router/cmd/dsl/main.go,src/semantic-router/pkg/dsl/compiler.go,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go"`
+  - `E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu CHANGED_FILES="deploy/recipes/balance.yaml,deploy/recipes/balance.dsl,deploy/amd/README.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,src/semantic-router/cmd/dsl/main.go,src/semantic-router/pkg/dsl/compiler.go,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go"`
+  - `open -a Docker`
+  - `docker info`
+  - `docker context ls`
 - Failure observed:
-  - The previous loop record still listed the reverted `TD036` attempt as if those code and docs files remained part of the active diff, which no longer matched the working tree after the revert.
+  - The initial `go run ./cmd/dsl decompile ../../deploy/recipes/balance.yaml -o ../../deploy/recipes/balance.dsl` invocation did not write the file because the Go `flag` parser only honors `-o` before the positional input path, while the CLI help text still advertised the reverse order.
+  - The first maintained-asset round-trip run failed because `balance_intent_partition` had no `default`, so the DSL validator correctly rejected it as an incomplete `SIGNAL_GROUP` partition.
+  - The next round-trip failed because `deploy/recipes/balance.yaml` still carried explicit `image_candidates: []` stubs that the DSL authoring surface does not emit, making the maintained pair drift on a nil-vs-empty canonical detail.
+  - `make agent-feature-gate` reached `make vllm-sr-dev` after Docker Desktop recovered, but the local Docker build stalled indefinitely while trying to fetch missing base images (`python:3.12-slim` and `envoyproxy/envoy:v1.34-latest`), so the feature gate still cannot complete in this environment.
 - Fix applied:
-  - Re-ran `agent-report` on the actual one-file diff, confirmed the task is `documentation-only`, and validated with the repo-native harness gates for that classification.
-  - Kept `TD036` open and left `DECISION_TREE` as DSL sugar only; no runtime/config/schema/API expansion remains in the active diff.
+  - Reworked `deploy/recipes/balance.yaml` around clawrouter-inspired learned-intent plus heuristic difficulty bands, added the maintained `deploy/recipes/balance.dsl` pair, and added focused maintained-asset coverage in `src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go`.
+  - Fixed the DSL compiler/decompiler contract for preference `examples` and `threshold`, and corrected the `sr-dsl` help text so `compile` / `decompile` / `fmt` examples match the actual `flag` parsing order.
+  - Added a neutral `general_chat_fallback` embedding as the `balance_intent_partition.default` catch-all, and removed empty `image_candidates` noise from the maintained YAML so the DSL/YAML pair round-trips canonically.
+  - Restored Docker Desktop and the missing socket at `unix:///Users/bitliu/.docker/run/docker.sock`, then reran the same feature gate until the remaining blocker was isolated to the stalled base-image pulls rather than the previous missing-daemon failure.
 - Current result:
-  - The working tree is narrowed to this execution plan update plus unrelated user-owned untracked files outside the workstream.
-  - `DECISION_TREE` remains DSL authoring sugar only, and the round-trip gap is still tracked in `TD036` rather than promoted into the runtime config contract.
-  - `make agent-lint` and `make agent-validate` both pass for the current changed-file set; `agent-report` does not require `agent-ci-gate` for this documentation-only diff.
+  - `W018` and `W019` are complete: the repository now has a maintained `balance.yaml` / `balance.dsl` pair, clawrouter-inspired learned-plus-heuristic routing structure, updated docs, and passing targeted DSL plus changed-file lint/CI gates.
+  - `W020` remains open only because the local `agent-feature-gate` cannot finish the canonical `make vllm-sr-dev` build while Docker stalls on first-time pulls for missing base images in this workstation environment.
 - Next action:
-  - If this plan-only update should be published to the active PR, create a signed-off commit and push it; otherwise wait for the next product task.
+  - Once the local Docker daemon can pull `python:3.12-slim` and `envoyproxy/envoy:v1.34-latest` without stalling, rerun the same `E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu ...` command, then update the PR with the final green feature-gate result.
 
 ## Decision Log
 
@@ -103,6 +128,13 @@
 - 2026-03-21: `W007` through `W014` close together on the shared feature gate. Once `vllm-sr-test-integration`, local smoke, and the `ai-gateway` E2E profile were green on the full changed-file set, the remaining implementation-complete tasks and workstream exit criteria were all satisfied.
 - 2026-03-22: an attempted `TD036` implementation added per-decision tree metadata to canonical config, CLI, dashboard, docs, and decompile. That path increased contract complexity without changing runtime capability and should not continue unless the repo explicitly wants full authoring round-trip support.
 - 2026-03-22: by explicit user direction, `DECISION_TREE` stays as DSL sugar only. Runtime config and config-backed tooling continue to operate on the existing flat `routing.decisions` contract, and `TD036` remains the indexed place to track any future round-trip work.
+- 2026-03-22: with `deploy/examples/runtime/routing/` gone, the maintained `balance` recipe should carry both the YAML runtime asset and a co-owned routing-only DSL authoring asset if we want the repo to keep showcasing the DSL surface on real routing strategy examples.
+- 2026-03-22: the repo cannot natively reproduce clawrouter's literal weighted-sum scorer without new runtime primitives, so the right direction is to map those dimensions onto stronger repo-native learned signals, heuristic markers, complexity bands, tiered decisions, and `SIGNAL_GROUP`-mediated winner selection.
+- 2026-03-22: the maintained `balance` strategy should express clawrouter-style coverage with repo-native primitives rather than a fake weighted-sum runtime: learned intent embeddings, heuristic markers, complexity bands, and `SIGNAL_GROUP` winner selection are enough to model the stronger routing story.
+- 2026-03-22: `balance_intent_partition` should keep the stricter `SIGNAL_GROUP` partition contract from `spec/dsl.md`; the right fix is a neutral learned catch-all (`general_chat_fallback`), not weakening validator coverage rules for embedding groups.
+- 2026-03-22: the maintained YAML should follow the same canonical authoring surface as the DSL pair. Explicit `image_candidates: []` stubs add round-trip drift without changing behavior, so the smallest clean fix is to remove those empty arrays from `deploy/recipes/balance.yaml`.
+- 2026-03-22: the `sr-dsl` CLI already supports `-o`, but its usage text was misleading because Go's `flag` parser only accepts `-o` before the positional input. The docs/examples were corrected instead of broadening the CLI parser in this loop.
+- 2026-03-22: the current blocker for `W020` is no longer the missing Docker socket. Docker Desktop now runs locally, but the canonical `make vllm-sr-dev` build stalls on first-time base image pulls, so the remaining feature-gate failure is an external environment/network issue rather than a repo code failure.
 
 ## Follow-up Debt / ADR Links
 

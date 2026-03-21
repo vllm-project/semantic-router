@@ -179,6 +179,26 @@ routing:
           - 实施这个方案
           - 自动化这个流程
         case_sensitive: false
+      - name: implementation_markers
+        operator: OR
+        method: bm25
+        bm25_threshold: 0.12
+        keywords:
+          - build the system
+          - create the service
+          - implement the solution
+          - design the workflow
+          - develop the pipeline
+          - deploy the stack
+          - configure the service
+          - write the implementation
+          - 构建这个系统
+          - 创建这个服务
+          - 实现这个方案
+          - 设计这个流程
+          - 搭建这个管道
+          - 部署这个系统
+        case_sensitive: false
       - name: code_request_markers
         operator: OR
         method: bm25
@@ -245,6 +265,24 @@ routing:
           - 引用资料
           - 根据文献
           - 参考法规
+        case_sensitive: false
+      - name: research_request_markers
+        operator: OR
+        method: bm25
+        bm25_threshold: 0.12
+        keywords:
+          - literature review
+          - compare the evidence
+          - survey the field
+          - synthesize the sources
+          - summarize the research
+          - source-backed analysis
+          - policy memo
+          - 文献综述
+          - 对比证据
+          - 综合资料
+          - 总结研究现状
+          - 基于来源分析
         case_sensitive: false
       - name: verification_markers
         operator: OR
@@ -484,6 +522,33 @@ routing:
           - Plan a migration from a monolith to event-driven microservices.
           - Propose a consistency strategy for a global payments platform.
           - Design a multi-tenant observability architecture with low latency.
+      - name: agentic_workflows
+        threshold: 0.78
+        aggregation_method: max
+        candidates:
+          - Create a migration plan with rollback, validation, and checkpoints.
+          - Troubleshoot the production issue and iterate until it is fixed.
+          - Break this system redesign into phases, owners, and verification steps.
+          - Design an execution workflow with concrete milestones and guardrails.
+          - 给我一个分阶段实施方案，并包含校验与回滚步骤。
+      - name: research_synthesis
+        threshold: 0.77
+        aggregation_method: max
+        candidates:
+          - Compare several studies, cite the evidence, and explain the trade-offs.
+          - Write a source-backed memo that synthesizes multiple references.
+          - Survey the literature and recommend a position with supporting evidence.
+          - Compare conflicting historical or policy interpretations with references.
+          - 请综合多份资料并给出带依据的分析结论。
+      - name: general_chat_fallback
+        threshold: 0.72
+        aggregation_method: max
+        candidates:
+          - Explain this in plain language for a general audience.
+          - Give me a practical answer without assuming special expertise.
+          - Help me understand the basics before we go deeper.
+          - 用通俗的话解释清楚这个问题。
+          - 先给我一个适合普通用户的直接回答。
       - name: reasoning_general_en
         threshold: 0.78
         aggregation_method: max
@@ -575,6 +640,27 @@ routing:
           - physics
           - psychology
         default: other
+      - name: balance_intent_partition
+        semantics: softmax_exclusive
+        temperature: 0.18
+        members:
+          - agentic_workflows
+          - architecture_design
+          - business_analysis
+          - code_general
+          - complex_stem
+          - creative_tasks
+          - fast_qa_en
+          - fast_qa_zh
+          - general_chat_fallback
+          - health_guidance
+          - history_explainer
+          - premium_legal_analysis
+          - psychology_support
+          - reasoning_general_en
+          - reasoning_general_zh
+          - research_synthesis
+        default: general_chat_fallback
 
     context:
       - name: short_context
@@ -598,7 +684,6 @@ routing:
             - root-cause analysis for a complex failure
             - derive the answer from first principles
             - 严格论证并比较取舍
-          image_candidates: []
         easy:
           candidates:
             - brief definition
@@ -607,7 +692,6 @@ routing:
             - short direct answer
             - rewrite this sentence
             - 简单解释一下
-          image_candidates: []
         description: General difficulty boundary for simple answers versus synthesis-heavy reasoning.
       - name: code_task
         threshold: 0.12
@@ -623,7 +707,6 @@ routing:
             - optimize a database query plan at scale
             - refactor a large service boundary safely
             - migrate a monolith to microservices
-          image_candidates: []
         easy:
           candidates:
             - explain what this function does
@@ -631,7 +714,6 @@ routing:
             - write a helper function
             - convert this loop to a list comprehension
             - explain the stack trace briefly
-          image_candidates: []
         description: Coding and software-engineering difficulty for cheap code help versus hard systems work.
       - name: math_task
         threshold: 0.12
@@ -647,7 +729,6 @@ routing:
             - analyze asymptotic behavior formally
             - solve a differential equation with proof
             - prove this by contradiction
-          image_candidates: []
         easy:
           candidates:
             - what is 2 plus 2
@@ -655,7 +736,6 @@ routing:
             - calculate a percentage
             - basic geometry area question
             - simple arithmetic word problem
-          image_candidates: []
         description: Math difficulty for simple calculations versus formal proofs and derivations.
       - name: legal_risk
         threshold: 0.12
@@ -670,15 +750,64 @@ routing:
             - compare two compliance strategies and regulatory exposure
             - draft a legal-risk memo for cross-border operations
             - interpret contract clauses with risk trade-offs
-          image_candidates: []
         easy:
           candidates:
             - what does NDA mean
             - define arbitration clause
             - explain what compliance means
             - brief overview of a privacy policy
-          image_candidates: []
         description: Legal risk boundary for informational law questions versus premium-risk analysis.
+      - name: agentic_delivery
+        threshold: 0.12
+        hard:
+          candidates:
+            - create a migration plan with checkpoints, rollback, and validation
+            - troubleshoot this production issue until the root cause is fixed
+            - design an execution workflow with milestones, owners, and guardrails
+            - automate the process and include verification after each phase
+            - break this project into tasks, dependencies, and acceptance checks
+        easy:
+          candidates:
+            - give me a short checklist
+            - provide a simple one-step setup guide
+            - write a small implementation plan
+            - suggest the next step only
+            - give me a brief task list
+        description: Workflow and execution difficulty boundary for agentic requests.
+      - name: evidence_synthesis
+        threshold: 0.12
+        composer:
+          operator: OR
+          conditions:
+            - type: domain
+              name: business
+            - type: domain
+              name: economics
+            - type: domain
+              name: health
+            - type: domain
+              name: history
+            - type: domain
+              name: law
+            - type: domain
+              name: philosophy
+            - type: domain
+              name: psychology
+        hard:
+          candidates:
+            - compare several sources and recommend the strongest evidence-backed position
+            - write a source-backed memo that synthesizes multiple references
+            - survey the literature and explain conflicting evidence with citations
+            - compare policy or historical interpretations and justify the conclusion
+            - synthesize several studies into one decision recommendation
+        easy:
+          candidates:
+            - give a quick overview of the topic
+            - summarize one article briefly
+            - explain the term in simple language
+            - list the main idea without detailed sourcing
+            - provide a short summary only
+        description: Evidence-heavy research boundary for source-backed synthesis versus lighter overview tasks.
 
     jailbreak:
       - name: jailbreak_standard
@@ -815,10 +944,64 @@ routing:
             capture_response_body: true
             max_body_bytes: 4096
 
+    - name: complex_agentic
+      description: High-structure execution plans, migrations, and workflow orchestration with multi-step constraints.
+      priority: 243
+      tier: 4
+      rules:
+        operator: AND
+        conditions:
+          - operator: OR
+            conditions:
+              - type: embedding
+                name: agentic_workflows
+              - type: preference
+                name: agentic_execution
+              - type: keyword
+                name: agentic_request_markers
+              - type: keyword
+                name: implementation_markers
+          - operator: OR
+            conditions:
+              - type: complexity
+                name: agentic_delivery:hard
+              - type: keyword
+                name: multi_step_markers
+              - type: keyword
+                name: constraint_markers
+              - type: keyword
+                name: output_format_markers
+              - type: context
+                name: long_context
+          - operator: OR
+            conditions:
+              - type: domain
+                name: business
+              - type: domain
+                name: computer science
+              - type: domain
+                name: economics
+              - type: domain
+                name: engineering
+              - type: domain
+                name: other
+      modelRefs:
+        - model: google/gemini-3.1-pro
+          use_reasoning: true
+          reasoning_effort: high
+      plugins:
+        - type: router_replay
+          configuration:
+            enabled: true
+            max_records: 100000
+            capture_request_body: true
+            capture_response_body: true
+            max_body_bytes: 4096
+
     - name: complex_architecture
       description: Complex systems, architecture, and large-scope technical design.
       priority: 240
-      tier: 4
+      tier: 5
       rules:
         operator: AND
         conditions:
@@ -831,17 +1014,27 @@ routing:
           - operator: OR
             conditions:
               - type: embedding
+                name: agentic_workflows
+              - type: embedding
                 name: architecture_design
+              - type: complexity
+                name: agentic_delivery:hard
               - type: complexity
                 name: code_task:hard
               - type: keyword
                 name: architecture_markers
+              - type: keyword
+                name: implementation_markers
           - operator: OR
             conditions:
               - type: keyword
                 name: multi_step_markers
               - type: keyword
                 name: agentic_request_markers
+              - type: keyword
+                name: output_format_markers
+              - type: keyword
+                name: constraint_markers
               - type: complexity
                 name: general_reasoning:hard
               - type: context
@@ -862,7 +1055,7 @@ routing:
     - name: complex_stem
       description: Complex STEM analysis outside the dedicated math reasoning route.
       priority: 235
-      tier: 5
+      tier: 6
       rules:
         operator: AND
         conditions:
@@ -880,10 +1073,16 @@ routing:
             conditions:
               - type: embedding
                 name: complex_stem
+              - type: embedding
+                name: research_synthesis
+              - type: complexity
+                name: evidence_synthesis:hard
               - type: complexity
                 name: general_reasoning:hard
               - type: keyword
                 name: reasoning_request_markers
+              - type: keyword
+                name: research_request_markers
               - type: context
                 name: long_context
       modelRefs:
@@ -902,7 +1101,7 @@ routing:
     - name: feedback_wrong_answer_verified
       description: Narrow recovery path for explicit corrections on evidence-sensitive or high-stakes follow-ups.
       priority: 232
-      tier: 6
+      tier: 7
       rules:
         operator: AND
         conditions:
@@ -944,7 +1143,7 @@ routing:
     - name: medium_code_general
       description: Low-medium cost coding, debugging, refactoring, and technical Q&A.
       priority: 220
-      tier: 7
+      tier: 8
       rules:
         operator: AND
         conditions:
@@ -954,12 +1153,22 @@ routing:
                 name: computer science
               - type: keyword
                 name: code_request_markers
+              - type: keyword
+                name: implementation_markers
+              - type: embedding
+                name: agentic_workflows
               - type: embedding
                 name: code_general
               - type: preference
                 name: coding_partner
+              - type: preference
+                name: agentic_execution
           - operator: OR
             conditions:
+              - type: complexity
+                name: agentic_delivery:easy
+              - type: complexity
+                name: agentic_delivery:medium
               - type: complexity
                 name: code_task:easy
               - type: complexity
@@ -968,6 +1177,8 @@ routing:
                 name: general_reasoning:easy
               - type: complexity
                 name: general_reasoning:medium
+              - type: keyword
+                name: output_format_markers
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -984,7 +1195,7 @@ routing:
     - name: medium_business
       description: Mid-tier business and economics analysis without premium escalation.
       priority: 215
-      tier: 9
+      tier: 10
       rules:
         operator: AND
         conditions:
@@ -998,12 +1209,20 @@ routing:
             conditions:
               - type: embedding
                 name: business_analysis
+              - type: embedding
+                name: research_synthesis
+              - type: complexity
+                name: evidence_synthesis:easy
+              - type: complexity
+                name: evidence_synthesis:medium
               - type: complexity
                 name: general_reasoning:easy
               - type: complexity
                 name: general_reasoning:medium
               - type: preference
                 name: structured_delivery
+              - type: keyword
+                name: output_format_markers
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -1020,7 +1239,7 @@ routing:
     - name: verified_business
       description: Conservative factual overlay for evidence-sensitive business and economics requests.
       priority: 216
-      tier: 8
+      tier: 9
       rules:
         operator: AND
         conditions:
@@ -1035,13 +1254,23 @@ routing:
           - operator: OR
             conditions:
               - type: keyword
+                name: research_request_markers
+              - type: keyword
                 name: verification_markers
               - type: keyword
                 name: reference_heavy_markers
+              - type: keyword
+                name: output_format_markers
           - operator: OR
             conditions:
               - type: embedding
                 name: business_analysis
+              - type: embedding
+                name: research_synthesis
+              - type: complexity
+                name: evidence_synthesis:medium
+              - type: complexity
+                name: evidence_synthesis:hard
               - type: preference
                 name: structured_delivery
       modelRefs:
@@ -1059,7 +1288,7 @@ routing:
     - name: verified_health
       description: Conservative route for evidence-sensitive health and medical guidance.
       priority: 214
-      tier: 10
+      tier: 11
       rules:
         operator: AND
         conditions:
@@ -1070,6 +1299,8 @@ routing:
               - type: fact_check
                 name: needs_fact_check
               - type: keyword
+                name: research_request_markers
+              - type: keyword
                 name: verification_markers
               - type: keyword
                 name: reference_heavy_markers
@@ -1077,6 +1308,12 @@ routing:
             conditions:
               - type: embedding
                 name: health_guidance
+              - type: embedding
+                name: research_synthesis
+              - type: complexity
+                name: evidence_synthesis:medium
+              - type: complexity
+                name: evidence_synthesis:hard
               - type: complexity
                 name: general_reasoning:medium
               - type: complexity
@@ -1099,7 +1336,7 @@ routing:
     - name: medium_history
       description: Mid-tier historical explanation and comparison with better writing quality.
       priority: 210
-      tier: 11
+      tier: 13
       rules:
         operator: AND
         conditions:
@@ -1109,6 +1346,12 @@ routing:
             conditions:
               - type: embedding
                 name: history_explainer
+              - type: embedding
+                name: research_synthesis
+              - type: complexity
+                name: evidence_synthesis:easy
+              - type: complexity
+                name: evidence_synthesis:medium
               - type: complexity
                 name: general_reasoning:easy
               - type: complexity
@@ -1129,7 +1372,7 @@ routing:
     - name: verified_history
       description: Conservative factual overlay for source-sensitive history explanation.
       priority: 211
-      tier: 10
+      tier: 12
       rules:
         operator: AND
         conditions:
@@ -1140,6 +1383,8 @@ routing:
           - operator: OR
             conditions:
               - type: keyword
+                name: research_request_markers
+              - type: keyword
                 name: verification_markers
               - type: keyword
                 name: reference_heavy_markers
@@ -1147,6 +1392,12 @@ routing:
             conditions:
               - type: embedding
                 name: history_explainer
+              - type: embedding
+                name: research_synthesis
+              - type: complexity
+                name: evidence_synthesis:medium
+              - type: complexity
+                name: evidence_synthesis:hard
               - type: complexity
                 name: general_reasoning:medium
       modelRefs:
@@ -1164,7 +1415,7 @@ routing:
     - name: medium_psychology
       description: Mid-tier psychology and behavior queries with nuanced explanation.
       priority: 205
-      tier: 12
+      tier: 14
       rules:
         operator: AND
         conditions:
@@ -1174,6 +1425,12 @@ routing:
             conditions:
               - type: embedding
                 name: psychology_support
+              - type: embedding
+                name: research_synthesis
+              - type: complexity
+                name: evidence_synthesis:easy
+              - type: complexity
+                name: evidence_synthesis:medium
               - type: complexity
                 name: general_reasoning:easy
               - type: complexity
@@ -1194,7 +1451,7 @@ routing:
     - name: medium_creative
       description: Mid-tier creative, copywriting, and ideation requests.
       priority: 200
-      tier: 13
+      tier: 15
       rules:
         operator: AND
         conditions:
@@ -1231,24 +1488,34 @@ routing:
     - name: reasoning_general
       description: General reasoning escalation for non-domain-specific deep analysis.
       priority: 190
-      tier: 14
+      tier: 16
       rules:
         operator: AND
         conditions:
           - operator: OR
             conditions:
               - type: embedding
+                name: agentic_workflows
+              - type: embedding
                 name: reasoning_general_en
               - type: embedding
                 name: reasoning_general_zh
+              - type: embedding
+                name: research_synthesis
               - type: keyword
                 name: reasoning_request_markers
               - type: keyword
                 name: multi_step_markers
               - type: keyword
                 name: agentic_request_markers
+              - type: keyword
+                name: research_request_markers
           - operator: OR
             conditions:
+              - type: complexity
+                name: agentic_delivery:hard
+              - type: complexity
+                name: evidence_synthesis:hard
               - type: complexity
                 name: general_reasoning:hard
               - type: context
@@ -1257,6 +1524,10 @@ routing:
                 name: constraint_markers
               - type: keyword
                 name: reference_heavy_markers
+              - type: keyword
+                name: output_format_markers
+              - type: keyword
+                name: negation_markers
       modelRefs:
         - model: openai/gpt5.4
           use_reasoning: true
@@ -1273,7 +1544,7 @@ routing:
     - name: feedback_need_clarification
       description: Narrow follow-up lane for explicit clarification requests that should stay on the cheap model.
       priority: 185
-      tier: 15
+      tier: 17
       rules:
         operator: AND
         conditions:
@@ -1302,7 +1573,7 @@ routing:
     - name: verified_fast_qa_zh
       description: Conservative factual overlay for Chinese short-context questions that explicitly ask for verification.
       priority: 181
-      tier: 16
+      tier: 18
       rules:
         operator: AND
         conditions:
@@ -1335,7 +1606,7 @@ routing:
     - name: simple_fast_qa_zh
       description: Cheapest short-context Chinese factual or definitional answers.
       priority: 180
-      tier: 17
+      tier: 19
       rules:
         operator: AND
         conditions:
@@ -1368,7 +1639,7 @@ routing:
     - name: simple_fast_qa_en
       description: Cheapest short-context English factual or definitional answers.
       priority: 175
-      tier: 19
+      tier: 21
       rules:
         operator: AND
         conditions:
@@ -1401,7 +1672,7 @@ routing:
     - name: verified_fast_qa_en
       description: Conservative factual overlay for English short-context questions that explicitly ask for verification.
       priority: 176
-      tier: 18
+      tier: 20
       rules:
         operator: AND
         conditions:
@@ -1434,7 +1705,7 @@ routing:
     - name: simple_general
       description: Lowest-cost fallback for everyday traffic and non-specialized requests.
       priority: 170
-      tier: 20
+      tier: 22
       rules:
         operator: OR
         conditions:
