@@ -68,6 +68,10 @@ legacy_hotspots:
       - src/vllm-sr/cli/validator.py
     function_checks: relaxed
   - paths:
+      - src/training/model_classifier/verify_text_classification_datasets.py
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
       - deploy/operator/api/v1alpha1/semanticrouter_types.go
       - src/vllm-sr/cli/models.py
     file_checks: relaxed
