@@ -51,54 +51,39 @@
 ## Current Loop
 
 - Date: 2026-03-22
-- Current task: `W021` completed
+- Current task: `W021` audit wrap-up completed
 - Changed files:
-  - `.dockerignore`
-  - `config/config.yaml`
   - `docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md`
-  - `deploy/helm/semantic-router/values.yaml`
-  - `e2e/pkg/docker/builder.go`
-  - `e2e/pkg/docker/builder_test.go`
-  - `e2e/pkg/framework/runner.go`
-  - `src/semantic-router/pkg/config/canonical_loader_test.go`
-  - `src/semantic-router/pkg/config/decision_config.go`
-  - `src/semantic-router/pkg/config/loader.go`
-  - `src/semantic-router/pkg/modelselection/selector_test.go`
-  - `tools/agent/structure-rules.yaml`
-  - `tools/linter/go/.golangci.agent.yml`
 - Commands run:
+  - `make agent-report ENV=cpu CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,e2e/testcases/model_selection.go"`
+  - `codebase-retrieval` for execution-plan closure, tech-debt status, deprecated config references, and the remaining E2E wording surface
   - `git status --short`
-  - `make agent-report ENV=cpu CHANGED_FILES=".dockerignore,config/config.yaml,deploy/helm/semantic-router/values.yaml,e2e/pkg/docker/builder.go,e2e/pkg/docker/builder_test.go,e2e/pkg/framework/runner.go,src/semantic-router/pkg/config/canonical_loader_test.go,src/semantic-router/pkg/config/decision_config.go,src/semantic-router/pkg/config/loader.go,src/semantic-router/pkg/modelselection/selector_test.go,tools/linter/go/.golangci.agent.yml,tools/agent/structure-rules.yaml"`
-  - `codebase-retrieval` for the `Decision` config contract, deprecated loader handling, model-selection callers/tests, local feature-gate build path, and the nearest config/E2E rule layers
-  - `rg -n "modelSelectionAlgorithm|ModelSelectionAlgorithm" /Users/bitliu/vs`
-  - `go test ./pkg/config/... -run 'TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField|TestReferenceConfig' -count=1`
-  - `go test ./pkg/modelselection -run 'TestDecisionIntegration_CompleteFlow|TestDecisionIntegration_ConfigValidation' -count=1`
-  - `go test ./pkg/docker ./pkg/framework -count=1`
-  - `make test-semantic-router`
-  - `make build-e2e`
   - `make agent-validate`
-  - `make agent-lint CHANGED_FILES=".dockerignore,config/config.yaml,deploy/helm/semantic-router/values.yaml,e2e/pkg/docker/builder.go,e2e/pkg/docker/builder_test.go,e2e/pkg/framework/runner.go,src/semantic-router/pkg/config/canonical_loader_test.go,src/semantic-router/pkg/config/decision_config.go,src/semantic-router/pkg/config/loader.go,src/semantic-router/pkg/modelselection/selector_test.go,tools/linter/go/.golangci.agent.yml,tools/agent/structure-rules.yaml"`
-  - `make agent-ci-gate CHANGED_FILES=".dockerignore,config/config.yaml,deploy/helm/semantic-router/values.yaml,e2e/pkg/docker/builder.go,e2e/pkg/docker/builder_test.go,e2e/pkg/framework/runner.go,src/semantic-router/pkg/config/canonical_loader_test.go,src/semantic-router/pkg/config/decision_config.go,src/semantic-router/pkg/config/loader.go,src/semantic-router/pkg/modelselection/selector_test.go,tools/linter/go/.golangci.agent.yml,tools/agent/structure-rules.yaml"`
-  - `DOCKER_CONFIG=/tmp/docker-nocreds docker build -f tools/mock-vllm/Dockerfile -t ghcr.io/vllm-project/semantic-router/mock-vllm:latest tools/mock-vllm`
-  - `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu CHANGED_FILES=".dockerignore,config/config.yaml,deploy/helm/semantic-router/values.yaml,e2e/pkg/docker/builder.go,e2e/pkg/docker/builder_test.go,e2e/pkg/framework/runner.go,src/semantic-router/pkg/config/canonical_loader_test.go,src/semantic-router/pkg/config/decision_config.go,src/semantic-router/pkg/config/loader.go,src/semantic-router/pkg/modelselection/selector_test.go,tools/linter/go/.golangci.agent.yml,tools/agent/structure-rules.yaml"`
-  - `kubectl --context kind-semantic-router-e2e get pods -A`
-  - `kubectl --context kind-semantic-router-e2e logs -n vllm-semantic-router-system deployment/semantic-router --tail=120`
+  - `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make build-e2e`
+  - `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make e2e-test E2E_PROFILE=ai-gateway E2E_VERBOSE=true`
+  - `sed -n '1,220p' e2e/testcases/AGENTS.md`
+  - `sed -n '1,220p' docs/agent/tech-debt/td-035-signal-group-default-coverage-contract-gap.md`
+  - `sed -n '1,220p' docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md`
+  - `rg -n "Model Selection Algorithm|model selection algorithm|ModelSelectionAlgorithm correctly|modelSelectionAlgorithm" /Users/bitliu/vs/docs /Users/bitliu/vs/e2e /Users/bitliu/vs/deploy /Users/bitliu/vs/src/semantic-router /Users/bitliu/vs/src/vllm-sr`
+  - `make agent-lint CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,e2e/testcases/model_selection.go"`
+  - `make agent-report ENV=cpu CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
+  - `make agent-lint CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
+  - `make agent-validate`
+  - `make agent-ci-gate CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
 - Failure observed:
-  - The repo still exposed two per-decision model-selection knobs: legacy `routing.decisions[].modelSelectionAlgorithm` and canonical `routing.decisions[].algorithm`, which left reference config and comments out of sync with the runtime contract.
-  - The canonical local-dev path (`make vllm-sr-dev`) builds from repository root `.`. Without a repository-root `.dockerignore`, the feature-gate smoke path kept sending multi-gigabyte local workspace artifacts into Docker build context.
-  - The local E2E extproc build path did not pass `BUILDPLATFORM` or `TARGETARCH`, so `tools/docker/Dockerfile.extproc` failed immediately at `FROM --platform=$BUILDPLATFORM`.
-  - The first rerun of `agent-feature-gate` then hit a transient PyPI TLS EOF while building `tools/mock-vllm/Dockerfile`.
+  - The code and docs were already converged, but one E2E testcase still printed the retired internal name `ModelSelectionAlgorithm`, which looked stale next to the single public contract `routing.decisions[].algorithm`.
+  - Treating that as a changed-file fix was a bad tradeoff: `make agent-lint` on `e2e/testcases/model_selection.go` surfaced pre-existing hotspot debt (`errcheck`, `funlen`, `gocognit`, `nestif`) unrelated to this PR, and the local E2E run also generated `test-report.md`, which initially tripped repo-wide markdown lint.
+  - The audit also reconfirmed that `TD035` is already closed and `TD036` remains intentionally open because the repository explicitly kept `DECISION_TREE` as DSL sugar only rather than extending runtime/config round-trip scope.
 - Fix applied:
-  - Removed `ModelSelectionAlgorithm` from `src/semantic-router/pkg/config/decision_config.go`, removed the legacy example block from `config/config.yaml`, updated the Helm comment surface to point at `routing.decisions[].algorithm`, and updated model-selection tests to use the single canonical field.
-  - Added deprecated-field rejection in `src/semantic-router/pkg/config/loader.go` and `TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField` so configs fail fast instead of silently accepting the retired field.
-  - Added a repository-root `.dockerignore` tuned to the actual local-dev Dockerfiles so root-context builds exclude large local-only artifacts without changing runtime behavior.
-  - Extended `e2e/pkg/docker.BuildOptions` with sorted `BuildArgs`, threaded `BUILDPLATFORM` and `TARGETARCH` through `e2e/pkg/framework/runner.go`, and added `TestBuildCommandArgsIncludesSortedBuildArgs`.
-  - Prewarmed `ghcr.io/vllm-project/semantic-router/mock-vllm:latest` locally and reran the exact same feature gate once the external PyPI TLS blip cleared.
+  - Reverted the cosmetic `e2e/testcases/model_selection.go` wording tweak so this wrap-up loop would not drag unrelated hotspot refactors into the PR.
+  - Deleted the generated `semantic-router-logs.txt`, `test-report.json`, and `test-report.md` artifacts from the local E2E run before rerunning the harness-only gates.
+  - Reconfirmed and recorded the debt posture in this plan: `TD035` stays closed; `TD036` stays open by design until the repository chooses to preserve decision-tree authoring metadata through runtime config.
 - Current result:
-  - `W020` and `W021` are complete. The changed-set gates all passed: `make agent-validate`, `make test-semantic-router`, `make build-e2e`, `make agent-lint`, `make agent-ci-gate`, and `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu ...`.
-  - The feature gate covered the full local ladder: `make vllm-sr-dev`, `make agent-serve-local`, `make agent-smoke-local`, and `make e2e-test E2E_PROFILE=ml-model-selection E2E_VERBOSE=true` all completed successfully on the final rerun.
+  - The requested audit is complete: the prior implementation work remains intact, the relevant docs are aligned, and the only related debt that should be closed is already closed (`TD035`).
+  - `TD036` is not stale; it remains the explicit indexed record of the intentionally deferred `DECISION_TREE` round-trip work that the repository chose not to implement.
+  - Validation is green on the true final changed set (`docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md`): `make agent-validate`, `make agent-lint`, and `make agent-ci-gate` all pass, and the audit loop also reran `ai-gateway` locally with `E2E_USE_WORKSPACE_MODELS=true` and got 14/14 passing tests.
 - Next action:
-  - Clean generated local test artifacts, commit and push this loop to PR `#1620`, then monitor the remote checks for the updated branch.
+  - Commit the plan update, push the PR refresh, and continue watching the remote checks.
 
 ## Decision Log
 
@@ -149,6 +134,7 @@
 - 2026-03-22: the repository-local feature gate uses Docker build context `.` for `make vllm-sr-dev`; a subdirectory `.dockerignore` is insufficient. A repository-root `.dockerignore` is the smallest repo-native fix that makes local smoke reproducible without changing the Dockerfiles' behavior.
 - 2026-03-22: the local E2E image builder must forward explicit `BUILDPLATFORM` and `TARGETARCH` values into `tools/docker/Dockerfile.extproc`. Relying on unset Dockerfile args makes the repo-native extproc image path fail before tests even start.
 - 2026-03-22: the PyPI TLS EOF during `tools/mock-vllm/Dockerfile` build was transient external noise. Prewarming the same image and rerunning the same canonical feature gate was preferable to mutating the repo contract for a one-off registry/network blip.
+- 2026-03-22: a wording-only tweak inside `e2e/testcases/model_selection.go` is not worth reopening that hotspot's existing changed-file lint debt. For PR-audit-only closure loops, keep the net diff on the harness/plan surface unless the behavior contract actually changes.
 
 ## Follow-up Debt / ADR Links
 
