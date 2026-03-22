@@ -9,7 +9,7 @@ import (
 )
 
 func TestSupportedRoutingDomainNamesStayInSyncWithClassifierMapping(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "models", "mmbert32k-intent-classifier-merged", "category_mapping.json"))
+	data, err := os.ReadFile(filepath.Join(referenceConfigRepoRoot(t), "models", "mmbert32k-intent-classifier-merged", "category_mapping.json"))
 	if err != nil {
 		t.Fatalf("read category_mapping.json: %v", err)
 	}

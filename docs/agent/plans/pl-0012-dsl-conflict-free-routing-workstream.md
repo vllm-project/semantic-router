@@ -47,43 +47,38 @@
 - [x] `W019` Implement the maintained `balance` routing pair (`deploy/recipes/balance.yaml` + `deploy/recipes/balance.dsl`) and targeted tests/docs so the recipe expresses the stronger learned + heuristic + `SIGNAL_GROUP` strategy without new runtime primitives.
 - [x] `W020` Run the applicable harness ladder for the `balance` asset refactor, including any affected E2E/profile coverage, then update the PR once the changed-set gates pass.
 - [x] `W021` Remove the deprecated per-decision `modelSelectionAlgorithm` config surface, unify on `routing.decisions[].algorithm`, and keep the repo-native local feature-gate/E2E build path green for that contract change.
+- [x] `W022` Fix the CI-only `pkg/config` domain-sync test path so `make agent-ci-lint` / `make test-semantic-router` no longer depend on the runner working directory, then update the PR with the repaired validation state.
 
 ## Current Loop
 
 - Date: 2026-03-22
-- Current task: `W021` audit wrap-up completed
+- Current task: `W022` completed
 - Changed files:
+  - `src/semantic-router/pkg/config/validator_domain_test.go`
   - `docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md`
 - Commands run:
-  - `make agent-report ENV=cpu CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,e2e/testcases/model_selection.go"`
-  - `codebase-retrieval` for execution-plan closure, tech-debt status, deprecated config references, and the remaining E2E wording surface
-  - `git status --short`
-  - `make agent-validate`
-  - `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make build-e2e`
-  - `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make e2e-test E2E_PROFILE=ai-gateway E2E_VERBOSE=true`
-  - `sed -n '1,220p' e2e/testcases/AGENTS.md`
-  - `sed -n '1,220p' docs/agent/tech-debt/td-035-signal-group-default-coverage-contract-gap.md`
-  - `sed -n '1,220p' docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md`
-  - `rg -n "Model Selection Algorithm|model selection algorithm|ModelSelectionAlgorithm correctly|modelSelectionAlgorithm" /Users/bitliu/vs/docs /Users/bitliu/vs/e2e /Users/bitliu/vs/deploy /Users/bitliu/vs/src/semantic-router /Users/bitliu/vs/src/vllm-sr`
-  - `make agent-lint CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,e2e/testcases/model_selection.go"`
-  - `make agent-report ENV=cpu CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
-  - `make agent-lint CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
-  - `make agent-validate`
-  - `make agent-ci-gate CHANGED_FILES="docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
+  - `codebase-retrieval` for the CI-only `make test-semantic-router` failure path across `tools/make/build-run-test.mk`, `tools/make/agent.mk`, `tools/agent/scripts/*`, CI workflows, `pkg/config`, and local rule files
+  - `gh pr checks 1620`
+  - `gh run view 23388505311 --job 68048373911 --log > /tmp/pr1620-precommit-rerun.log`
+  - `rg -n "^(FAIL|--- FAIL:|panic:|fatal error:|ok   |\\?   )" /tmp/pr1620-precommit-rerun.log`
+  - `sed -n '3990,4035p' /tmp/pr1620-precommit-rerun.log`
+  - `sed -n '1,220p' src/semantic-router/pkg/config/AGENTS.md`
+  - `make agent-report ENV=cpu CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
+  - `cd src/semantic-router && go test ./pkg/config -run TestSupportedRoutingDomainNamesStayInSyncWithClassifierMapping -count=1 -v`
+  - `make test-semantic-router`
+  - `make agent-lint CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go"`
+  - `make agent-ci-lint CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go"`
 - Failure observed:
-  - The code and docs were already converged, but one E2E testcase still printed the retired internal name `ModelSelectionAlgorithm`, which looked stale next to the single public contract `routing.decisions[].algorithm`.
-  - Treating that as a changed-file fix was a bad tradeoff: `make agent-lint` on `e2e/testcases/model_selection.go` surfaced pre-existing hotspot debt (`errcheck`, `funlen`, `gocognit`, `nestif`) unrelated to this PR, and the local E2E run also generated `test-report.md`, which initially tripped repo-wide markdown lint.
-  - The audit also reconfirmed that `TD035` is already closed and `TD036` remains intentionally open because the repository explicitly kept `DECISION_TREE` as DSL sugar only rather than extending runtime/config round-trip scope.
+  - The only red PR check was `Run pre-commit hooks check file lint`, and the first real failing package inside its `make test-semantic-router` run was `src/semantic-router/pkg/config`.
+  - `TestSupportedRoutingDomainNamesStayInSyncWithClassifierMapping` tried to open `../../../../models/mmbert32k-intent-classifier-merged/category_mapping.json`; that relative path depended on the test process working directory and failed on the GitHub runner.
 - Fix applied:
-  - Reverted the cosmetic `e2e/testcases/model_selection.go` wording tweak so this wrap-up loop would not drag unrelated hotspot refactors into the PR.
-  - Deleted the generated `semantic-router-logs.txt`, `test-report.json`, and `test-report.md` artifacts from the local E2E run before rerunning the harness-only gates.
-  - Reconfirmed and recorded the debt posture in this plan: `TD035` stays closed; `TD036` stays open by design until the repository chooses to preserve decision-tree authoring metadata through runtime config.
+  - Switched `validator_domain_test.go` to resolve the classifier mapping from `referenceConfigRepoRoot(t)` instead of from process-relative `../../../../...`.
+  - Reused the existing config-test helper rather than adding a second repo-root resolver inside the hotspot.
 - Current result:
-  - The requested audit is complete: the prior implementation work remains intact, the relevant docs are aligned, and the only related debt that should be closed is already closed (`TD035`).
-  - `TD036` is not stale; it remains the explicit indexed record of the intentionally deferred `DECISION_TREE` round-trip work that the repository chose not to implement.
-  - Validation is green on the true final changed set (`docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md`): `make agent-validate`, `make agent-lint`, and `make agent-ci-gate` all pass, and the audit loop also reran `ai-gateway` locally with `E2E_USE_WORKSPACE_MODELS=true` and got 14/14 passing tests.
+  - The targeted config test, `make test-semantic-router`, `make agent-lint`, and the exact failing path `make agent-ci-lint` all pass locally after the fix.
+  - No new durable architecture gap was introduced; existing debt status is unchanged.
 - Next action:
-  - Commit the plan update, push the PR refresh, and continue watching the remote checks.
+  - Push the fix to the PR branch and monitor the rerun checks until the previously failing CI job goes green.
 
 ## Decision Log
 
@@ -135,6 +130,7 @@
 - 2026-03-22: the local E2E image builder must forward explicit `BUILDPLATFORM` and `TARGETARCH` values into `tools/docker/Dockerfile.extproc`. Relying on unset Dockerfile args makes the repo-native extproc image path fail before tests even start.
 - 2026-03-22: the PyPI TLS EOF during `tools/mock-vllm/Dockerfile` build was transient external noise. Prewarming the same image and rerunning the same canonical feature gate was preferable to mutating the repo contract for a one-off registry/network blip.
 - 2026-03-22: a wording-only tweak inside `e2e/testcases/model_selection.go` is not worth reopening that hotspot's existing changed-file lint debt. For PR-audit-only closure loops, keep the net diff on the harness/plan surface unless the behavior contract actually changes.
+- 2026-03-22: tests that read maintained repo assets must resolve from a shared repo-root helper or the test file location, not from process-relative `../../../../...` paths. The GitHub runner exposed that `validator_domain_test.go` still depended on `go test` cwd, so the smallest fix was to reuse `referenceConfigRepoRoot(t)`.
 
 ## Follow-up Debt / ADR Links
 
