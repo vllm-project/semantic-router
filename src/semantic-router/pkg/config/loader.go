@@ -230,6 +230,24 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 		fields = append(fields, "global.modules")
 	}
 
+	fields = append(fields, deprecatedDecisionConfigFields(routing)...)
+
+	return fields
+}
+
+func deprecatedDecisionConfigFields(routing map[string]interface{}) []string {
+	decisions, ok := routing["decisions"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	fields := make([]string, 0)
+	for index, rawDecision := range decisions {
+		decision := nestedStringMap(rawDecision)
+		if _, ok := decision["modelSelectionAlgorithm"]; ok {
+			fields = append(fields, fmt.Sprintf("routing.decisions[%d].modelSelectionAlgorithm", index))
+		}
+	}
 	return fields
 }
 

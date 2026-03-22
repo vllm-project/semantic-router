@@ -297,6 +297,54 @@ routing:
           - EMAIL_ADDRESS
         description: Sensitive prompts where only low-risk identifiers may pass through.
 
+  projections:
+    partitions:
+      - name: support_intents
+        semantics: exclusive
+        temperature: 0.3
+        members:
+          - technical_support
+          - account_management
+        default: technical_support
+    scores:
+      - name: request_difficulty
+        method: weighted_sum
+        inputs:
+          - type: embedding
+            name: technical_support
+            weight: 0.18
+            value_source: confidence
+            match: 1.0
+            miss: 0.0
+          - type: embedding
+            name: account_management
+            weight: -0.08
+            value_source: confidence
+          - type: complexity
+            name: needs_reasoning:medium
+            weight: 0.18
+          - type: complexity
+            name: needs_reasoning:hard
+            weight: 0.36
+          - type: context
+            name: long_context
+            weight: 0.18
+    mappings:
+      - name: request_band
+        source: request_difficulty
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 10.0
+        outputs:
+          - name: support_fast
+            lte: 0.20
+          - name: support_balanced
+            gt: 0.20
+            lt: 0.45
+          - name: support_escalated
+            gte: 0.45
+
   decisions:
     - name: static_business_route
       description: Static fallback for standard business traffic.
@@ -307,13 +355,6 @@ routing:
         conditions:
           - type: domain
             name: business
-      modelSelectionAlgorithm:
-        enabled: true
-        method: router_dc
-        router_dc:
-          temperature: 0.2
-          dimension_size: 384
-          min_similarity: 0.72
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
@@ -499,13 +540,15 @@ routing:
             message: The primary model is saturated, so a lightweight response was returned immediately.
 
     - name: support_router_dc_route
-      description: Embedding-driven support route with RouterDC selection.
+      description: Embedding-driven support route that escalates only when the derived projection band says the request is not a simple support query.
       priority: 150
       rules:
         operator: AND
         conditions:
           - type: embedding
             name: technical_support
+          - type: projection
+            name: support_escalated
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
@@ -965,6 +1008,9 @@ global:
   services:
     api:
       batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
         metrics:
           sample_rate: 1.0
           batch_size_ranges:

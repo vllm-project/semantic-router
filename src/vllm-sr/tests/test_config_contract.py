@@ -1,9 +1,10 @@
 from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
+    build_projection_reference_index,
     build_signal_reference_index,
     signal_reference_exists,
 )
-from cli.models import Signals
+from cli.models import Projections, Signals
 
 
 def test_legacy_signal_inventory_covers_flat_authz_and_context_blocks():
@@ -43,3 +44,24 @@ def test_signal_reference_exists_strips_suffixes_for_non_complexity_signals():
     assert signal_reference_exists(signal_names, "keyword", "security:match")
     assert signal_reference_exists(signal_names, "authz", "admin-access")
     assert not signal_reference_exists(signal_names, "complexity", "security:match")
+
+
+def test_projection_reference_index_collects_mapping_outputs():
+    projections = Projections(
+        mappings=[
+            {
+                "name": "difficulty_band",
+                "source": "difficulty_score",
+                "method": "threshold_bands",
+                "outputs": [
+                    {"name": "balance_simple", "lt": 0.15},
+                    {"name": "balance_medium", "gte": 0.15, "lt": 0.45},
+                ],
+            }
+        ]
+    )
+
+    assert build_projection_reference_index(projections) == {
+        "balance_simple",
+        "balance_medium",
+    }

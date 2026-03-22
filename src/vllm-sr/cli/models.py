@@ -34,6 +34,70 @@ class EmbeddingSignal(BaseModel):
     aggregation_method: str = "max"
 
 
+class ProjectionPartition(BaseModel):
+    """Partition metadata coordinating mutually exclusive routing signals."""
+
+    name: str
+    semantics: str
+    members: List[str]
+    temperature: Optional[float] = None
+    default: Optional[str] = None
+
+
+class ProjectionScoreInput(BaseModel):
+    """One weighted signal contribution to a derived projection score."""
+
+    type: str
+    name: str
+    weight: float
+    value_source: Optional[str] = None
+    match: Optional[float] = None
+    miss: Optional[float] = None
+
+
+class ProjectionScore(BaseModel):
+    """Weighted derived score over existing routing signals."""
+
+    name: str
+    method: str
+    inputs: List[ProjectionScoreInput]
+
+
+class ProjectionMappingCalibration(BaseModel):
+    """Confidence calibration for a projection mapping output band."""
+
+    method: str
+    slope: Optional[float] = None
+
+
+class ProjectionMappingOutput(BaseModel):
+    """One named threshold band emitted by a projection mapping."""
+
+    name: str
+    lt: Optional[float] = None
+    lte: Optional[float] = None
+    gt: Optional[float] = None
+    gte: Optional[float] = None
+
+
+class ProjectionMapping(BaseModel):
+    """Maps a derived score into named routing outputs."""
+
+    name: str
+    source: str
+    method: str
+    calibration: Optional[ProjectionMappingCalibration] = None
+    outputs: List[ProjectionMappingOutput]
+
+
+class Projections(BaseModel):
+    """Derived routing surfaces that sit alongside base signals."""
+
+    partitions: Optional[List[ProjectionPartition]] = []
+    scores: Optional[List[ProjectionScore]] = []
+    mappings: Optional[List[ProjectionMapping]] = []
+
+
 class Domain(BaseModel):
     """Domain category configuration."""
 
@@ -599,6 +663,7 @@ class Routing(BaseModel):
 
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     signals: Signals = Field(default_factory=Signals)
+    projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
 
     class Config:

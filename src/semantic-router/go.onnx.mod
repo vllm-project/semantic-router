@@ -15,6 +15,7 @@ replace (
 
 require (
 	github.com/abadojack/whatlanggo v1.0.1
+	github.com/alecthomas/participle/v2 v2.1.4
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4
 	github.com/fsnotify/fsnotify v1.9.0

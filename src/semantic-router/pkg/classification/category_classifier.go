@@ -27,7 +27,7 @@ func (c *Classifier) matchDomainCategories(
 	}
 
 	entropyResult := entropy.AnalyzeEntropy(domainResult.Probabilities)
-	logging.Infof("[Signal Computation] Domain entropy analysis: entropy=%.3f, normalized=%.3f, uncertainty=%s",
+	logging.Debugf("[Signal Computation] Domain entropy analysis: entropy=%.3f, normalized=%.3f, uncertainty=%s",
 		entropyResult.Entropy, entropyResult.NormalizedEntropy, entropyResult.UncertaintyLevel)
 
 	categoryNames := make([]string, len(domainResult.Probabilities))
@@ -56,7 +56,7 @@ func (c *Classifier) matchDomainCategories(
 		}
 	}
 
-	logging.Infof("[Signal Computation] Domain signal matched %d categories (uncertainty=%s)",
+	logging.Debugf("[Signal Computation] Domain signal matched %d categories (uncertainty=%s)",
 		len(matched), entropyResult.UncertaintyLevel)
 	return matched
 }

@@ -323,7 +323,7 @@ Explain that more clearly and give one simple example.
 - `curl -s "http://localhost:${VLLM_PORT_122B:-8090}/v1/models"` lists all five tier-aware alias IDs.
 - The router is started with `vllm-sr serve --image-pull-policy never --platform amd`.
 - Requests hitting the playground show matched signals, one selected decision, one selected alias, and cost/savings in Insights.
-- `deploy/recipes/balance.yaml` remains aligned with this document's alias catalog, decision table, and examples.
+- `deploy/recipes/balance.dsl` remains aligned with the maintained routing authoring story, and `deploy/recipes/balance.yaml` remains aligned with this document's alias catalog, decision table, and examples.
 
 ## Resources
 

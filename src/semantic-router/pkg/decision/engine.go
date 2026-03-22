@@ -72,6 +72,7 @@ type SignalMatches struct {
 	AuthzRules        []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
 	JailbreakRules    []string // Jailbreak rule names matched (confidence >= threshold)
 	PIIRules          []string // PII rule names matched (denied PII types detected)
+	ProjectionRules   []string // Derived routing outputs from routing.projections.mappings
 
 	SignalConfidences map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
 }
@@ -180,55 +181,60 @@ func (e *DecisionEngine) evalLeaf(
 ) (matched bool, confidence float64, matchedRules []string) {
 	normalizedType := strings.ToLower(strings.TrimSpace(typ))
 
-	switch normalizedType {
-	case "keyword":
-		matched = slices.Contains(signals.KeywordRules, name)
-	case "embedding":
-		matched = slices.Contains(signals.EmbeddingRules, name)
-	case "domain":
-		matched = e.matchesDomainCondition(name, signals.DomainRules)
-	case "fact_check":
-		matched = slices.Contains(signals.FactCheckRules, name)
-	case "user_feedback":
-		matched = slices.Contains(signals.UserFeedbackRules, name)
-	case "preference":
-		matched = slices.Contains(signals.PreferenceRules, name)
-	case "language":
-		matched = slices.Contains(signals.LanguageRules, name)
-	case "context":
-		matched = slices.Contains(signals.ContextRules, name)
-	case "complexity":
-		matched = slices.Contains(signals.ComplexityRules, name)
-	case "modality":
-		matched = slices.Contains(signals.ModalityRules, name)
-	case "authz":
-		matched = slices.Contains(signals.AuthzRules, name)
-	case "jailbreak":
-		matched = slices.Contains(signals.JailbreakRules, name)
-	case "pii":
-		matched = slices.Contains(signals.PIIRules, name)
-	default:
+	matched, supported := e.matchesSignalType(normalizedType, name, signals)
+	if !supported {
 		return false, 0, nil
 	}
-
 	if !matched {
 		return false, 0, nil
 	}
 
-	// Use real confidence score if available (e.g., embedding similarity = 0.88),
-	// otherwise fall back to 1.0 for backward compatibility.
-	signalKey := fmt.Sprintf("%s:%s", normalizedType, name)
-	if signals.SignalConfidences != nil {
-		if score, ok := signals.SignalConfidences[signalKey]; ok && score > 0 {
-			confidence = score
-		} else {
-			confidence = 1.0
-		}
-	} else {
-		confidence = 1.0
+	confidence = signalConfidence(signals.SignalConfidences, normalizedType, name)
+	return true, confidence, []string{fmt.Sprintf("%s:%s", typ, name)}
+}
+
+func (e *DecisionEngine) matchesSignalType(
+	normalizedType string,
+	name string,
+	signals *SignalMatches,
+) (matched bool, supported bool) {
+	if normalizedType == "domain" {
+		return e.matchesDomainCondition(name, signals.DomainRules), true
 	}
 
-	return true, confidence, []string{fmt.Sprintf("%s:%s", typ, name)}
+	ruleSets := map[string][]string{
+		"keyword":       signals.KeywordRules,
+		"embedding":     signals.EmbeddingRules,
+		"fact_check":    signals.FactCheckRules,
+		"user_feedback": signals.UserFeedbackRules,
+		"preference":    signals.PreferenceRules,
+		"language":      signals.LanguageRules,
+		"context":       signals.ContextRules,
+		"complexity":    signals.ComplexityRules,
+		"modality":      signals.ModalityRules,
+		"authz":         signals.AuthzRules,
+		"jailbreak":     signals.JailbreakRules,
+		"pii":           signals.PIIRules,
+		"projection":    signals.ProjectionRules,
+	}
+
+	rules, ok := ruleSets[normalizedType]
+	if !ok {
+		return false, false
+	}
+	return slices.Contains(rules, name), true
+}
+
+func signalConfidence(confidences map[string]float64, signalType string, name string) float64 {
+	if confidences == nil {
+		return 1.0
+	}
+
+	signalKey := fmt.Sprintf("%s:%s", signalType, name)
+	if score, ok := confidences[signalKey]; ok && score > 0 {
+		return score
+	}
+	return 1.0
 }
 
 // evalAND returns true only when every child matches; confidence is the average.
@@ -327,19 +333,56 @@ func (e *DecisionEngine) selectBestDecision(results []DecisionResult) *DecisionR
 		return &results[0]
 	}
 
-	// Sort based on strategy
-	if e.strategy == "confidence" {
-		// Sort by confidence (descending)
-		sort.Slice(results, func(i, j int) bool {
-			return results[i].Confidence > results[j].Confidence
-		})
-	} else {
-		// Default: priority strategy
-		// Sort by priority (descending)
-		sort.Slice(results, func(i, j int) bool {
-			return results[i].Decision.Priority > results[j].Decision.Priority
-		})
-	}
+	useTieredSelection := e.useTieredSelection(results)
+	sort.Slice(results, func(i, j int) bool {
+		return e.decisionResultLess(results[i], results[j], useTieredSelection)
+	})
 
 	return &results[0]
+}
+
+func (e *DecisionEngine) useTieredSelection(results []DecisionResult) bool {
+	for _, result := range results {
+		if result.Decision != nil && result.Decision.Tier > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *DecisionEngine) decisionResultLess(
+	left DecisionResult,
+	right DecisionResult,
+	useTieredSelection bool,
+) bool {
+	if useTieredSelection {
+		if left.Decision.Tier != right.Decision.Tier {
+			return left.Decision.Tier < right.Decision.Tier
+		}
+		if left.Confidence != right.Confidence {
+			return left.Confidence > right.Confidence
+		}
+		if left.Decision.Priority != right.Decision.Priority {
+			return left.Decision.Priority > right.Decision.Priority
+		}
+		return left.Decision.Name < right.Decision.Name
+	}
+
+	if e.strategy == "confidence" {
+		if left.Confidence != right.Confidence {
+			return left.Confidence > right.Confidence
+		}
+		if left.Decision.Priority != right.Decision.Priority {
+			return left.Decision.Priority > right.Decision.Priority
+		}
+		return left.Decision.Name < right.Decision.Name
+	}
+
+	if left.Decision.Priority != right.Decision.Priority {
+		return left.Decision.Priority > right.Decision.Priority
+	}
+	if left.Confidence != right.Confidence {
+		return left.Confidence > right.Confidence
+	}
+	return left.Decision.Name < right.Decision.Name
 }

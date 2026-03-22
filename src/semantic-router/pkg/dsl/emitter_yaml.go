@@ -65,7 +65,6 @@ func denormalizeSignals(raw map[string]interface{}) {
 		"role_bindings":       "authz",
 		"jailbreak":           "jailbreak",
 		"pii":                 "pii",
-		"signal_groups":       "signal_groups",
 	}
 
 	signals := make(map[string]interface{})
@@ -80,6 +79,22 @@ func denormalizeSignals(raw map[string]interface{}) {
 	if len(signals) > 0 {
 		raw["signals"] = signals
 	}
+}
+
+type endpointInfo struct {
+	name     string
+	address  string
+	port     int
+	weight   interface{}
+	protocol string
+	epType   string
+	apiKey   string
+}
+
+type modelEntry struct {
+	name      string
+	endpoints []endpointInfo
+	config    map[string]interface{}
 }
 
 // denormalizeProviders groups vllm_endpoints + model_config into a nested "providers" section
@@ -117,140 +132,120 @@ func denormalizeProviders(raw map[string]interface{}) {
 // normalizeYAML creates endpoint names as "{modelName}_{epName}".
 // We group by modelName and reconstruct endpoints with address:port → "endpoint" field.
 func buildModelsFromEndpoints(endpoints []interface{}, modelConfigRaw map[string]interface{}) []interface{} {
-	// Group endpoints by model name (extracted from endpoint name pattern: modelName_epName)
-	type endpointInfo struct {
-		name     string
-		address  string
-		port     int
-		weight   interface{}
-		protocol string
-		epType   string
-		apiKey   string
-	}
+	modelMap, modelOrder := collectModelEntries(endpoints)
+	mergeModelConfig(modelMap, &modelOrder, modelConfigRaw)
+	return buildUserModels(modelMap, modelOrder)
+}
 
-	type modelEntry struct {
-		name      string
-		endpoints []endpointInfo
-		config    map[string]interface{}
-	}
-
+func collectModelEntries(endpoints []interface{}) (map[string]*modelEntry, []string) {
 	modelMap := make(map[string]*modelEntry)
 	var modelOrder []string
-
 	for _, ep := range endpoints {
-		epMap, ok := ep.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		fullName, _ := epMap["name"].(string)
-		address, _ := epMap["address"].(string)
-		port := toInt(epMap["port"])
-		weight := epMap["weight"]
-		protocol, _ := epMap["protocol"].(string)
-		epType, _ := epMap["type"].(string)
-		apiKey, _ := epMap["api_key"].(string)
-		model, _ := epMap["model"].(string)
-
-		// Determine model name and original endpoint name.
-		// normalizeYAML sets name = modelName + "_" + epName
-		// and stores model = modelName.
-		modelName := model
-		epName := "vllm_endpoint"
-		if modelName == "" {
-			// Fallback: try to extract from fullName pattern modelName_epName
-			modelName, epName = splitEndpointName(fullName)
-		} else if strings.HasPrefix(fullName, modelName+"_") {
-			epName = fullName[len(modelName)+1:]
-		}
-
-		if modelName == "" {
-			continue
-		}
-
-		me, exists := modelMap[modelName]
-		if !exists {
-			me = &modelEntry{name: modelName}
-			modelMap[modelName] = me
-			modelOrder = append(modelOrder, modelName)
-		}
-		me.endpoints = append(me.endpoints, endpointInfo{
-			name:     epName,
-			address:  address,
-			port:     port,
-			weight:   weight,
-			protocol: protocol,
-			epType:   epType,
-			apiKey:   apiKey,
-		})
+		addEndpointToModelMap(modelMap, &modelOrder, ep)
 	}
+	return modelMap, modelOrder
+}
 
-	// Merge model_config data
+func addEndpointToModelMap(modelMap map[string]*modelEntry, modelOrder *[]string, ep interface{}) {
+	epMap, ok := ep.(map[string]interface{})
+	if !ok {
+		return
+	}
+	fullName, _ := epMap["name"].(string)
+	modelName, epName := deriveModelAndEndpointNames(epMap, fullName)
+	if modelName == "" {
+		return
+	}
+	me := ensureModelEntry(modelMap, modelOrder, modelName)
+	me.endpoints = append(me.endpoints, endpointInfo{
+		name:     epName,
+		address:  toString(epMap["address"]),
+		port:     toInt(epMap["port"]),
+		weight:   epMap["weight"],
+		protocol: toString(epMap["protocol"]),
+		epType:   toString(epMap["type"]),
+		apiKey:   toString(epMap["api_key"]),
+	})
+}
+
+func deriveModelAndEndpointNames(epMap map[string]interface{}, fullName string) (string, string) {
+	modelName := toString(epMap["model"])
+	epName := "vllm_endpoint"
+	if modelName == "" {
+		return splitEndpointName(fullName)
+	}
+	if strings.HasPrefix(fullName, modelName+"_") {
+		epName = fullName[len(modelName)+1:]
+	}
+	return modelName, epName
+}
+
+func ensureModelEntry(modelMap map[string]*modelEntry, modelOrder *[]string, modelName string) *modelEntry {
+	if me, ok := modelMap[modelName]; ok {
+		return me
+	}
+	me := &modelEntry{name: modelName}
+	modelMap[modelName] = me
+	*modelOrder = append(*modelOrder, modelName)
+	return me
+}
+
+func mergeModelConfig(modelMap map[string]*modelEntry, modelOrder *[]string, modelConfigRaw map[string]interface{}) {
 	for modelName, mcRaw := range modelConfigRaw {
 		mc, ok := mcRaw.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		me, exists := modelMap[modelName]
-		if !exists {
-			me = &modelEntry{name: modelName}
-			modelMap[modelName] = me
-			modelOrder = append(modelOrder, modelName)
-		}
-		me.config = mc
+		ensureModelEntry(modelMap, modelOrder, modelName).config = mc
 	}
+}
 
-	// Build output
-	var models []interface{}
+func buildUserModels(modelMap map[string]*modelEntry, modelOrder []string) []interface{} {
+	models := make([]interface{}, 0, len(modelOrder))
 	for _, modelName := range modelOrder {
-		me := modelMap[modelName]
-		m := map[string]interface{}{
-			"name": me.name,
-		}
-
-		// Add model_config fields (reasoning_family, param_size, etc.)
-		if me.config != nil {
-			for k, v := range me.config {
-				if k == "preferred_endpoints" {
-					continue // Don't emit this in nested format
-				}
-				if !isZeroValue(v) {
-					m[k] = v
-				}
-			}
-		}
-
-		// Build endpoints list
-		if len(me.endpoints) > 0 {
-			var epList []interface{}
-			for _, ep := range me.endpoints {
-				epOut := map[string]interface{}{
-					"name": ep.name,
-				}
-				endpoint := ep.address
-				if ep.port != 0 {
-					endpoint = fmt.Sprintf("%s:%d", ep.address, ep.port)
-				}
-				epOut["endpoint"] = endpoint
-				if ep.weight != nil && !isZeroValue(ep.weight) {
-					epOut["weight"] = ep.weight
-				}
-				if ep.protocol != "" && ep.protocol != "http" {
-					epOut["protocol"] = ep.protocol
-				}
-				if ep.epType != "" {
-					epOut["type"] = ep.epType
-				}
-				if ep.apiKey != "" {
-					epOut["api_key"] = ep.apiKey
-				}
-				epList = append(epList, epOut)
-			}
-			m["endpoints"] = epList
-		}
-
-		models = append(models, m)
+		models = append(models, buildUserModelEntry(modelMap[modelName]))
 	}
 	return models
+}
+
+func buildUserModelEntry(me *modelEntry) map[string]interface{} {
+	m := map[string]interface{}{"name": me.name}
+	for k, v := range me.config {
+		if k == "preferred_endpoints" || isZeroValue(v) {
+			continue
+		}
+		m[k] = v
+	}
+	if endpoints := buildUserEndpoints(me.endpoints); len(endpoints) > 0 {
+		m["endpoints"] = endpoints
+	}
+	return m
+}
+
+func buildUserEndpoints(endpoints []endpointInfo) []interface{} {
+	epList := make([]interface{}, 0, len(endpoints))
+	for _, ep := range endpoints {
+		epOut := map[string]interface{}{"name": ep.name}
+		endpoint := ep.address
+		if ep.port != 0 {
+			endpoint = fmt.Sprintf("%s:%d", ep.address, ep.port)
+		}
+		epOut["endpoint"] = endpoint
+		if ep.weight != nil && !isZeroValue(ep.weight) {
+			epOut["weight"] = ep.weight
+		}
+		if ep.protocol != "" && ep.protocol != "http" {
+			epOut["protocol"] = ep.protocol
+		}
+		if ep.epType != "" {
+			epOut["type"] = ep.epType
+		}
+		if ep.apiKey != "" {
+			epOut["api_key"] = ep.apiKey
+		}
+		epList = append(epList, epOut)
+	}
+	return epList
 }
 
 // splitEndpointName tries to split "modelName_epName" back into parts.
@@ -350,6 +345,13 @@ func toInt(v interface{}) int {
 		return int(val)
 	}
 	return 0
+}
+
+func toString(v interface{}) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // EmitUserYAMLOrdered emits YAML in user-friendly format with a controlled key order

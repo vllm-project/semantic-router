@@ -46,9 +46,10 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
-		ModelCards: routingModelsFromRouterConfig(cfg),
-		Signals:    canonicalSignalsFromRouterConfig(cfg),
-		Decisions:  copyDecisions(cfg.Decisions),
+		ModelCards:  routingModelsFromRouterConfig(cfg),
+		Signals:     canonicalSignalsFromRouterConfig(cfg),
+		Projections: canonicalProjectionsFromRouterConfig(cfg),
+		Decisions:   copyDecisions(cfg.Decisions),
 	}
 }
 
@@ -67,6 +68,14 @@ func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
 		RoleBindings:  append([]RoleBinding(nil), cfg.RoleBindings...),
 		Jailbreak:     append([]JailbreakRule(nil), cfg.JailbreakRules...),
 		PII:           append([]PIIRule(nil), cfg.PIIRules...),
+	}
+}
+
+func canonicalProjectionsFromRouterConfig(cfg *RouterConfig) CanonicalProjections {
+	return CanonicalProjections{
+		Partitions: append([]ProjectionPartition(nil), cfg.Projections.Partitions...),
+		Scores:     append([]ProjectionScore(nil), cfg.Projections.Scores...),
+		Mappings:   append([]ProjectionMapping(nil), cfg.Projections.Mappings...),
 	}
 }
 

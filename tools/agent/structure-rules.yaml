@@ -98,6 +98,7 @@ legacy_hotspots:
   - paths:
       - src/semantic-router/pkg/apiserver/server_test.go
       - src/semantic-router/pkg/cache/cache_test.go
+      - src/semantic-router/pkg/modelselection/selector_test.go
     file_checks: relaxed
     function_checks: relaxed
   - paths:

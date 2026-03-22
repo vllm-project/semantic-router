@@ -5,6 +5,8 @@
 `signal/` is the detection layer of `routing`.
 
 Signals define named detectors under `routing.signals`. A decision then references those names from `routing.decisions`, so detection stays reusable and route logic stays readable.
+Cross-signal coordination and derived routing bands now live under `routing.projections`. `routing.projections.partitions` is the runtime home for exclusive domain or embedding partitions, while decisions can reference `routing.projections.mappings` outputs with `type: projection`. In DSL authoring, the same concepts show up as `PROJECTION partition ...` plus `PROJECTION score ...` / `PROJECTION mapping ...` blocks.
+For the full projection workflow, canonical YAML contract, dashboard path, and DSL examples, see [Projections](./projections).
 
 This tutorial group maps directly to the fragment tree under `config/signal/`, but the docs are organized by extraction style:
 
@@ -44,6 +46,35 @@ routing:
       - name: urgent_keywords
         operator: OR
         keywords: ["urgent", "asap"]
+    embeddings:
+      - name: technical_support
+        threshold: 0.75
+        candidates: ["installation guide", "troubleshooting steps"]
+      - name: account_management
+        threshold: 0.72
+        candidates: ["billing information", "subscription management"]
+  projections:
+    partitions:
+      - name: support_intents
+        semantics: exclusive
+        temperature: 0.3
+        members: [technical_support, account_management]
+        default: technical_support
+    scores:
+      - name: request_difficulty
+        method: weighted_sum
+        inputs:
+          - type: embedding
+            name: technical_support
+            weight: 0.18
+            value_source: confidence
+    mappings:
+      - name: request_band
+        source: request_difficulty
+        method: threshold_bands
+        outputs:
+          - name: support_escalated
+            gte: 0.25
 ```
 
 The latest signal docs still cover every family under `config/signal/`, but they are grouped into two second-level categories so the runtime cost and dependency model stay clear.
@@ -79,5 +110,14 @@ Keep these rules in mind:
 
 - keep signals named and reusable
 - keep signals detection-only; routing outcomes belong in `decision/`
+- keep partitions and derived routing bands in `routing.projections`, not back inside `routing.signals`
 - keep model choice separate; that belongs in `algorithm/`
 - keep route-side behavior separate; that belongs in `plugin/`
+
+## Next Steps
+
+- Read [Projections](./projections) when you need `PROJECTION partition`, weighted score aggregation, or named routing bands.
+- Start from [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) for the exhaustive public contract.
+- Use the maintained `balance` assets when you want a realistic repo-native routing strategy:
+  - [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
+  - [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)

@@ -45,6 +45,9 @@ The harness correctly ratchets the repo toward smaller modules, but several lega
 - [src/semantic-router/pkg/apiserver/server_test.go](../../../src/semantic-router/pkg/apiserver/server_test.go)
 - [src/semantic-router/pkg/cache/cache_interface.go](../../../src/semantic-router/pkg/cache/cache_interface.go)
 - [src/semantic-router/pkg/cache/cache_test.go](../../../src/semantic-router/pkg/cache/cache_test.go)
+- [src/semantic-router/pkg/dsl/parser.go](../../../src/semantic-router/pkg/dsl/parser.go)
+- [src/semantic-router/pkg/dsl/decompiler.go](../../../src/semantic-router/pkg/dsl/decompiler.go)
+- [src/semantic-router/pkg/dsl/dsl_test.go](../../../src/semantic-router/pkg/dsl/dsl_test.go)
 - [src/semantic-router/pkg/extproc/memory_helpers_test.go](../../../src/semantic-router/pkg/extproc/memory_helpers_test.go)
 - [src/semantic-router/pkg/extproc/req_filter_rag_external.go](../../../src/semantic-router/pkg/extproc/req_filter_rag_external.go)
 - [src/semantic-router/pkg/extproc/req_filter_rag_hybrid.go](../../../src/semantic-router/pkg/extproc/req_filter_rag_hybrid.go)
@@ -82,6 +85,7 @@ The harness correctly ratchets the repo toward smaller modules, but several lega
 - The same Go lint posture now also explicitly covers the API server regression suite, extproc RAG/server helpers, and the cache interface/benchmark test hotspot so changed-file validation stops conflating legacy complexity debt with unrelated follow-up work in those packages.
 - The same posture now explicitly covers `candle-binding/src/core/config_loader.rs`; this keeps the current audit focused on canonical-path correctness while preserving the requirement to extract the file later instead of blessing its current size and nesting as precedent.
 - Signal-runtime follow-up now also intersects `src/semantic-router/pkg/classification/classifier.go`, `src/semantic-router/pkg/classification/embedding_classifier.go`, and the corresponding embedding regression test. Those files still exceed shared `cyclop`, `gocognit`, and `nestif` thresholds, so narrow fixes like embedding top-k or preference-default repairs re-enter hotspot debt instead of getting a clean changed-file lint result.
+- DSL follow-up now also intersects `src/semantic-router/pkg/dsl/parser.go`, `src/semantic-router/pkg/dsl/decompiler.go`, and `src/semantic-router/pkg/dsl/dsl_test.go`. The structure rules already classify those files as relaxed legacy hotspots, but the Go agent lint layer had not mirrored that posture, so narrow routing-language fixes like TEST-block runtime validation still re-triggered unrelated historical complexity and errcheck debt.
 - This is the right governance posture, but it remains a real code/spec gap until the worst hotspots no longer need special handling.
 
 ## Desired End State
@@ -91,6 +95,7 @@ The harness correctly ratchets the repo toward smaller modules, but several lega
 - Training verification workflows land through smaller task-spec, dataset-loader, judge-runtime, and reporting helpers instead of one monolithic script entrypoint.
 - Signal-runtime fixes land by extending narrower classifier helpers instead of reopening the monolithic `classifier.go` and `embedding_classifier.go` hotspots for every routing tweak.
 - The temporary ratchet extensions added for the v0.3 rollout can be removed once the dashboard/backend handlers and tests, operator controller/types/tests, config tests, DSL compiler/decompiler, response-store interfaces, CLI schema modules, and Candle binding config loader are extracted below the structural thresholds.
+- The temporary Go lint exclusions for the DSL parser/decompiler/test hotspots can be removed once those files are decomposed enough that spec-driven DSL work no longer depends on bespoke structural exceptions.
 
 ## Exit Criteria
 

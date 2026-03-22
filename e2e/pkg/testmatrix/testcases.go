@@ -9,6 +9,7 @@ var RouterSmoke = []string{
 var BaselineRouterContract = []string{
 	"chat-completions-request",
 	"apiserver-runtime-config-endpoints",
+	"apiserver-classification-endpoints",
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",

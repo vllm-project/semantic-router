@@ -224,7 +224,10 @@ export default function ConfigPageDecisionsSection({
   }
 
   const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
-    const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'fact_check', 'language', 'context', 'complexity', 'modality', 'authz', 'jailbreak', 'pii'] as const
+    const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'fact_check', 'language', 'context', 'complexity', 'modality', 'authz', 'jailbreak', 'pii', 'projection'] as const
+    const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
+      (mapping.outputs || []).map((output) => output.name)
+    )
 
     const getConditionNameOptions = (type?: ConfigDecisionConditionType) => {
       switch (type) {
@@ -258,6 +261,8 @@ export default function ConfigPageDecisionsSection({
           return config?.signals?.jailbreak?.map((rule) => rule.name) || []
         case 'pii':
           return config?.signals?.pii?.map((rule) => rule.name) || []
+        case 'projection':
+          return projectionOutputs
         default:
           return []
       }

@@ -179,6 +179,14 @@ func (v *Validator) buildSymbolTable() {
 		}
 		v.signalNames[s.SignalType][s.Name] = true
 	}
+	if v.signalNames[config.SignalTypeProjection] == nil {
+		v.signalNames[config.SignalTypeProjection] = make(map[string]bool)
+	}
+	for _, mapping := range v.prog.ProjectionMappings {
+		for _, output := range mapping.Outputs {
+			v.signalNames[config.SignalTypeProjection][output.Name] = true
+		}
+	}
 
 	for _, m := range v.prog.Models {
 		v.modelNames[m.Name] = true
@@ -429,6 +437,8 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 				nil,
 			)
 		}
+	case "domain":
+		v.checkDomainSignalConstraints(s, context)
 	}
 }
 
@@ -469,6 +479,8 @@ func (v *Validator) checkAlgorithmConstraints(algo *AlgoSpec, parentContext stri
 }
 
 // checkFieldConstraints recursively checks all numeric field values against the constraint rules.
+//
+//nolint:gocognit,cyclop // Recursive constraint walking stays centralized for DSL numeric validation.
 func (v *Validator) checkFieldConstraints(fields map[string]Value, pos Position, context string) {
 	for k, val := range fields {
 		for _, rule := range constraintRules {
