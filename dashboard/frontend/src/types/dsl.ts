@@ -62,6 +62,15 @@ export interface ASTSignalDecl {
   pos: ASTPosition
 }
 
+export interface ASTSignalGroupDecl {
+  name: string
+  semantics?: string
+  temperature?: number
+  members: string[]
+  default?: string
+  pos: ASTPosition
+}
+
 export interface ASTModelRef {
   model: string
   reasoning?: boolean
@@ -89,6 +98,7 @@ export interface ASTRouteDecl {
   name: string
   description?: string
   priority: number
+  tier?: number
   when: BoolExprNode | null
   models: ASTModelRef[]
   algorithm?: ASTAlgoSpec
@@ -109,11 +119,25 @@ export interface ASTPluginDecl {
   pos: ASTPosition
 }
 
+export interface ASTTestEntryDecl {
+  query: string
+  routeName: string
+  pos: ASTPosition
+}
+
+export interface ASTTestBlockDecl {
+  name: string
+  entries: ASTTestEntryDecl[]
+  pos: ASTPosition
+}
+
 export interface ASTProgram {
   signals: ASTSignalDecl[]
+  signalGroups?: ASTSignalGroupDecl[]
   routes: ASTRouteDecl[]
   models?: ASTModelDecl[]
   plugins: ASTPluginDecl[]
+  testBlocks?: ASTTestBlockDecl[]
 }
 
 // ---------- WASM Result Types ----------

@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -49,28 +50,81 @@ func (c *Compiler) compile() {
 	// 3. Compile signal groups
 	c.compileSignalGroups()
 
-	// 4. Compile top-level model catalog
+	// 4. Compile projections
+	c.compileProjectionScores()
+	c.compileProjectionMappings()
+
+	// 5. Compile top-level model catalog
 	c.compileModels()
 
-	// 5. Compile routes (decisions)
+	// 6. Compile routes (decisions)
 	c.compileRoutes()
 }
 
 func (c *Compiler) compileSignalGroups() {
 	for _, sg := range c.prog.SignalGroups {
-		group := config.SignalGroup{
+		c.validateSoftmaxDomainSignalGroup(sg)
+		group := config.ProjectionPartition{
 			Name:        sg.Name,
 			Semantics:   sg.Semantics,
 			Temperature: sg.Temperature,
 			Members:     sg.Members,
 			Default:     sg.Default,
 		}
-		c.config.SignalGroups = append(c.config.SignalGroups, group)
+		c.config.Projections.Partitions = append(c.config.Projections.Partitions, group)
+	}
+}
+
+func (c *Compiler) compileProjectionScores() {
+	for _, scoreDecl := range c.prog.ProjectionScores {
+		score := config.ProjectionScore{
+			Name:   scoreDecl.Name,
+			Method: scoreDecl.Method,
+			Inputs: make([]config.ProjectionScoreInput, 0, len(scoreDecl.Inputs)),
+		}
+		for _, inputDecl := range scoreDecl.Inputs {
+			score.Inputs = append(score.Inputs, config.ProjectionScoreInput{
+				Type:        inputDecl.SignalType,
+				Name:        inputDecl.SignalName,
+				Weight:      inputDecl.Weight,
+				ValueSource: inputDecl.ValueSource,
+				Match:       inputDecl.Match,
+				Miss:        inputDecl.Miss,
+			})
+		}
+		c.config.Projections.Scores = append(c.config.Projections.Scores, score)
+	}
+}
+
+func (c *Compiler) compileProjectionMappings() {
+	for _, mappingDecl := range c.prog.ProjectionMappings {
+		mapping := config.ProjectionMapping{
+			Name:   mappingDecl.Name,
+			Source: mappingDecl.Source,
+			Method: mappingDecl.Method,
+		}
+		if mappingDecl.Calibration != nil {
+			mapping.Calibration = &config.ProjectionMappingCalibration{
+				Method: mappingDecl.Calibration.Method,
+				Slope:  mappingDecl.Calibration.Slope,
+			}
+		}
+		for _, outputDecl := range mappingDecl.Outputs {
+			mapping.Outputs = append(mapping.Outputs, config.ProjectionMappingOutput{
+				Name: outputDecl.Name,
+				LT:   outputDecl.LT,
+				LTE:  outputDecl.LTE,
+				GT:   outputDecl.GT,
+				GTE:  outputDecl.GTE,
+			})
+		}
+		c.config.Projections.Mappings = append(c.config.Projections.Mappings, mapping)
 	}
 }
 
 // ---------- Signals ----------
 
+//nolint:cyclop // Flat dispatch keeps signal-type ownership explicit at the compile entrypoint.
 func (c *Compiler) compileSignals() {
 	for _, s := range c.prog.Signals {
 		switch s.SignalType {
@@ -159,6 +213,20 @@ func (c *Compiler) compileDomainSignal(s *SignalDecl) {
 		cat.Description = v
 	}
 	if v, ok := getStringArrayField(s.Fields, "mmlu_categories"); ok {
+		for _, mmluCategory := range v {
+			if config.IsSupportedRoutingDomainName(mmluCategory) {
+				continue
+			}
+			c.addError(
+				s.Pos,
+				"SIGNAL domain %q has unsupported mmlu_categories value %q (supported: %s)%s",
+				s.Name,
+				mmluCategory,
+				strings.Join(config.SupportedRoutingDomainNames(), ", "),
+				compileDomainSuggestionSuffix(mmluCategory),
+			)
+			return
+		}
 		cat.MMLUCategories = v
 	}
 	c.config.Categories = append(c.config.Categories, cat)
@@ -184,6 +252,12 @@ func (c *Compiler) compilePreferenceSignal(s *SignalDecl) {
 	rule := config.PreferenceRule{Name: s.Name}
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v
+	}
+	if v, ok := getStringArrayField(s.Fields, "examples"); ok {
+		rule.Examples = v
+	}
+	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
+		rule.Threshold = v
 	}
 	c.config.PreferenceRules = append(c.config.PreferenceRules, rule)
 }
@@ -289,6 +363,7 @@ func (c *Compiler) compilePIISignal(s *SignalDecl) {
 	c.config.PIIRules = append(c.config.PIIRules, rule)
 }
 
+//nolint:gocognit,nestif // Legacy schema decoding stays localized until the authz signal surface is extracted.
 func (c *Compiler) compileAuthzSignal(s *SignalDecl) {
 	rb := config.RoleBinding{Name: s.Name}
 	if v, ok := getStringField(s.Fields, "role"); ok {
@@ -318,6 +393,7 @@ func (c *Compiler) compileAuthzSignal(s *SignalDecl) {
 
 // ---------- Routes (Decisions) ----------
 
+//nolint:gocognit,cyclop // Route lowering owns the DSL-to-config translation in one place.
 func (c *Compiler) compileRoutes() {
 	for _, r := range c.prog.Routes {
 		decision := config.Decision{
@@ -457,6 +533,7 @@ func (c *Compiler) flattenBoolExpr(
 	return []config.RuleNode{c.compileBoolExpr(expr)}
 }
 
+//nolint:cyclop // The supported algorithm surface is intentionally enumerated here.
 func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	algo := &config.AlgorithmConfig{
 		Type: spec.AlgoType,
@@ -504,6 +581,7 @@ func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	return algo
 }
 
+//nolint:nestif // Nested object decoding mirrors the DSL object shape.
 func (c *Compiler) compileConfidenceAlgo(fields map[string]Value) *config.ConfidenceAlgorithmConfig {
 	cfg := &config.ConfidenceAlgorithmConfig{}
 	if v, ok := getStringField(fields, "confidence_method"); ok {
@@ -724,6 +802,7 @@ func (c *Compiler) compilePluginRef(ref *PluginRef) *config.DecisionPlugin {
 	return c.buildDecisionPlugin(ref.Name, fields)
 }
 
+//nolint:gocognit,cyclop,funlen // Plugin decoding remains centralized so type-specific payload wiring stays consistent.
 func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Value) *config.DecisionPlugin {
 	dp := &config.DecisionPlugin{Type: pluginType}
 	setPluginConfig := func(value interface{}) {
@@ -841,6 +920,7 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 	return dp
 }
 
+//nolint:nestif // Nested backend_config decoding mirrors the DSL object shape.
 func (c *Compiler) compileRAGPlugin(fields map[string]Value) config.RAGPluginConfig {
 	cfg := config.RAGPluginConfig{}
 	if v, ok := getBoolField(fields, "enabled"); ok {
@@ -978,6 +1058,64 @@ func getStringArrayField(fields map[string]Value, key string) ([]string, bool) {
 		}
 	}
 	return nil, false
+}
+
+func compileDomainSuggestionSuffix(value string) string {
+	suggestion := config.SuggestSupportedRoutingDomainName(value)
+	if suggestion == "" || suggestion == value {
+		return ""
+	}
+	return fmt.Sprintf("; did you mean %q?", suggestion)
+}
+
+func (c *Compiler) validateSoftmaxDomainSignalGroup(sg *SignalGroupDecl) {
+	if sg.Semantics != "softmax_exclusive" {
+		return
+	}
+	for _, member := range sg.Members {
+		signal := c.findSignalDeclByName(member)
+		if signal == nil || signal.SignalType != "domain" {
+			continue
+		}
+		mmluCategories := getMMLUCategories(signal)
+		if len(mmluCategories) == 0 {
+			if config.IsSupportedRoutingDomainName(signal.Name) {
+				continue
+			}
+			c.addError(
+				sg.Pos,
+				"SIGNAL_GROUP %q member %q must use a supported routing domain name (%s) or declare mmlu_categories explicitly%s",
+				sg.Name,
+				member,
+				strings.Join(config.SupportedRoutingDomainNames(), ", "),
+				compileDomainSuggestionSuffix(member),
+			)
+			continue
+		}
+		for _, value := range mmluCategories {
+			if config.IsSupportedRoutingDomainName(value) {
+				continue
+			}
+			c.addError(
+				sg.Pos,
+				"SIGNAL_GROUP %q member %q has unsupported mmlu_categories value %q (supported: %s)%s",
+				sg.Name,
+				member,
+				value,
+				strings.Join(config.SupportedRoutingDomainNames(), ", "),
+				compileDomainSuggestionSuffix(value),
+			)
+		}
+	}
+}
+
+func (c *Compiler) findSignalDeclByName(name string) *SignalDecl {
+	for _, signal := range c.prog.Signals {
+		if signal.Name == name {
+			return signal
+		}
+	}
+	return nil
 }
 
 func getIntArrayField(fields map[string]Value, key string) ([]int, bool) {

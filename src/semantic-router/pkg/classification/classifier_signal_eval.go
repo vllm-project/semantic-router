@@ -21,6 +21,7 @@ func (c *Classifier) getUsedSignals() map[string]bool {
 	for _, decision := range c.Config.Decisions {
 		c.analyzeRuleCombination(decision.Rules, usedSignals)
 	}
+	c.expandProjectionDependencies(usedSignals)
 
 	return usedSignals
 }
@@ -50,6 +51,11 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeAuthz, c.Config.GetRoleBindings(), func(rb config.RoleBinding) string { return rb.Role })
 	collectSignalKeys(allSignals, config.SignalTypeJailbreak, c.Config.JailbreakRules, func(r config.JailbreakRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
+	for _, mapping := range c.Config.Projections.Mappings {
+		for _, output := range mapping.Outputs {
+			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true
+		}
+	}
 
 	return allSignals
 }
@@ -77,6 +83,8 @@ type SignalResults struct {
 	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
 	MatchedJailbreakRules    []string // Matched jailbreak rule names (confidence >= threshold)
 	MatchedPIIRules          []string // Matched PII rule names (denied PII types detected)
+	MatchedProjectionRules   []string // Matched derived routing outputs from routing.projections.mappings
+	ProjectionScores         map[string]float64
 
 	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
 	JailbreakDetected   bool    // Whether any jailbreak was detected (across all rules)
@@ -120,6 +128,42 @@ func (c *Classifier) analyzeRuleCombination(node config.RuleNode, usedSignals ma
 	}
 	for _, child := range node.Conditions {
 		c.analyzeRuleCombination(child, usedSignals)
+	}
+}
+
+func (c *Classifier) expandProjectionDependencies(usedSignals map[string]bool) {
+	if len(c.Config.Projections.Scores) == 0 || len(c.Config.Projections.Mappings) == 0 {
+		return
+	}
+
+	scoreByName := make(map[string]config.ProjectionScore, len(c.Config.Projections.Scores))
+	for _, score := range c.Config.Projections.Scores {
+		scoreByName[score.Name] = score
+	}
+
+	sourceByOutput := make(map[string]string)
+	for _, mapping := range c.Config.Projections.Mappings {
+		for _, output := range mapping.Outputs {
+			sourceByOutput[strings.ToLower(output.Name)] = mapping.Source
+		}
+	}
+
+	for key := range usedSignals {
+		if !strings.HasPrefix(key, config.SignalTypeProjection+":") {
+			continue
+		}
+		outputName := strings.TrimPrefix(key, config.SignalTypeProjection+":")
+		scoreName, ok := sourceByOutput[outputName]
+		if !ok {
+			continue
+		}
+		score, ok := scoreByName[scoreName]
+		if !ok {
+			continue
+		}
+		for _, input := range score.Inputs {
+			usedSignals[strings.ToLower(input.Type+":"+input.Name)] = true
+		}
 	}
 }
 
@@ -205,9 +249,9 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 		}
 		results.MatchedAuthzRules = authzResult.MatchedRules
 
-		logging.Infof("[Signal Computation] Authz signal evaluation completed in %v", elapsed)
+		logging.Debugf("[Signal Computation] Authz signal evaluation completed in %v", elapsed)
 	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) {
-		logging.Infof("[Signal Computation] Authz signal not used in any decision, skipping evaluation")
+		logging.Debugf("[Signal Computation] Authz signal not used in any decision, skipping evaluation")
 	}
 
 	return results, nil
@@ -227,7 +271,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v",
+	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules, signals.MatchedContextRules,
@@ -258,6 +302,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		AuthzRules:        signals.MatchedAuthzRules,
 		JailbreakRules:    signals.MatchedJailbreakRules,
 		PIIRules:          signals.MatchedPIIRules,
+		ProjectionRules:   signals.MatchedProjectionRules,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
@@ -269,7 +314,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 	// Populate matched keywords from signal evaluation
 	result.MatchedKeywords = signals.MatchedKeywords
 
-	logging.Infof("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v, matched_keywords=%v",
+	logging.Debugf("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v, matched_keywords=%v",
 		result.Decision.Name, result.Confidence, result.MatchedRules, result.MatchedKeywords)
 
 	return result, nil

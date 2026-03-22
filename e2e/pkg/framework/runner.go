@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -81,6 +82,7 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 		Dockerfile:   "tools/docker/Dockerfile.extproc",
 		Tag:          fmt.Sprintf("ghcr.io/vllm-project/semantic-router/extproc:%s", r.opts.ImageTag),
 		BuildContext: ".",
+		BuildArgs:    localDockerBuildArgs(),
 	}
 
 	if err := r.builder.BuildAndLoad(ctx, r.opts.ClusterName, buildOpts); err != nil {
@@ -251,6 +253,13 @@ func resolveWorkspaceModelsDir() (string, error) {
 	}
 
 	return modelsDir, nil
+}
+
+func localDockerBuildArgs() map[string]string {
+	return map[string]string{
+		"BUILDPLATFORM": "linux/" + runtime.GOARCH,
+		"TARGETARCH":    runtime.GOARCH,
+	}
 }
 
 func (r *Runner) printAllPodsDebugInfo(ctx context.Context, client *kubernetes.Clientset) {

@@ -20,9 +20,10 @@ type CanonicalConfig struct {
 
 // CanonicalRouting contains the DSL-owned routing surface.
 type CanonicalRouting struct {
-	ModelCards []RoutingModel   `yaml:"modelCards,omitempty"`
-	Signals    CanonicalSignals `yaml:"signals,omitempty"`
-	Decisions  []Decision       `yaml:"decisions,omitempty"`
+	ModelCards  []RoutingModel       `yaml:"modelCards,omitempty"`
+	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
+	Projections CanonicalProjections `yaml:"projections,omitempty"`
+	Decisions   []Decision           `yaml:"decisions,omitempty"`
 }
 
 // CanonicalSignals groups routing signals under routing.signals.
@@ -40,6 +41,13 @@ type CanonicalSignals struct {
 	RoleBindings  []RoleBinding      `yaml:"role_bindings,omitempty"`
 	Jailbreak     []JailbreakRule    `yaml:"jailbreak,omitempty"`
 	PII           []PIIRule          `yaml:"pii,omitempty"`
+}
+
+// CanonicalProjections groups derived routing outputs under routing.projections.
+type CanonicalProjections struct {
+	Partitions []ProjectionPartition `yaml:"partitions,omitempty"`
+	Scores     []ProjectionScore     `yaml:"scores,omitempty"`
+	Mappings   []ProjectionMapping   `yaml:"mappings,omitempty"`
 }
 
 // RoutingModel defines the logical model catalog available to routing decisions.
@@ -93,6 +101,7 @@ func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	cfg.Decisions = copyDecisions(canonical.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
+	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {
@@ -241,6 +250,14 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 	}
 
 	return result
+}
+
+func normalizeProjections(projections CanonicalProjections) Projections {
+	return Projections{
+		Partitions: append([]ProjectionPartition(nil), projections.Partitions...),
+		Scores:     append([]ProjectionScore(nil), projections.Scores...),
+		Mappings:   append([]ProjectionMapping(nil), projections.Mappings...),
+	}
 }
 
 func canonicalRoutingModels(routing CanonicalRouting) []RoutingModel {
