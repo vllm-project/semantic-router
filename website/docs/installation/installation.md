@@ -55,6 +55,32 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime sk
 
 If `~/.local/bin` is not already on your `PATH`, the installer prints the export line to add it.
 
+### Agent install (OpenClaw and similar agents)
+
+Use the agent flow when another local agent should perform the install on your behalf. Keep the same supported installer, but tell the agent to use the no-launch path so it does not auto-start `vllm-sr serve` or open a browser during the handoff.
+
+Preferred long-term path: publish or install the repo-managed `openclaw-vsr-bridge` skill from this repository (`skills/openclaw-vsr-bridge/SKILL.md`). Until that registry entry exists, the direct prompts below are the supported fallback.
+
+CLI-only prompt:
+
+```text
+Install vLLM Semantic Router from https://vllm-semantic-router.com/install.sh using the supported installer in agent-safe mode.
+Run: curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli --runtime skip --no-launch
+Then verify the install with `vllm-sr --version`.
+```
+
+Install-and-bridge prompt:
+
+```text
+Install vLLM Semantic Router from https://vllm-semantic-router.com/install.sh using the supported installer in agent-safe mode.
+Run: curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli --runtime skip --no-launch
+If the `openclaw-vsr-bridge` skill is available, use it.
+Otherwise locate the OpenClaw config and run `vllm-sr config import --from openclaw --source <openclaw.json> --target config.yaml`.
+Then report the rewritten OpenClaw base URL and suggest `vllm-sr validate config.yaml`.
+```
+
+The installer path is still the same supported installer. OpenClaw handoff happens later through the bridge skill or `vllm-sr config import --from openclaw`, not through a second installer.
+
 Windows users should use the manual PyPI flow below.
 
 ### 2. Manual PyPI install
@@ -151,7 +177,7 @@ If you prefer to edit YAML directly instead of using the dashboard setup flow:
 vllm-sr validate config.yaml
 ```
 
-`vllm-sr init` was removed in v0.3. Create `config.yaml` directly with the canonical `version/listeners/providers/routing/global` layout, or migrate an older file with `vllm-sr config migrate --config old-config.yaml`.
+`vllm-sr init` was removed in v0.3. Create `config.yaml` directly with the canonical `version/listeners/providers/routing/global` layout, migrate an older file with `vllm-sr config migrate --config old-config.yaml`, or import supported OpenClaw model providers with `vllm-sr config import --from openclaw`.
 
 ### HuggingFace Settings
 
