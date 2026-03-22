@@ -1,30 +1,35 @@
 package config
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+
+	yamlv3 "gopkg.in/yaml.v3"
 )
 
-func TestSupportedRoutingDomainNamesStayInSyncWithClassifierMapping(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(referenceConfigRepoRoot(t), "models", "mmbert32k-intent-classifier-merged", "category_mapping.json"))
+func TestSupportedRoutingDomainNamesStayInSyncWithCommittedDomainContract(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(referenceConfigRepoRoot(t), "config", "signal", "domain", "mmlu.yaml"))
 	if err != nil {
-		t.Fatalf("read category_mapping.json: %v", err)
+		t.Fatalf("read config/signal/domain/mmlu.yaml: %v", err)
 	}
 
-	var mapping struct {
-		CategoryToIdx map[string]int `json:"category_to_idx"`
+	var fragment struct {
+		Routing struct {
+			Signals struct {
+				Domains []Category `yaml:"domains"`
+			} `yaml:"signals"`
+		} `yaml:"routing"`
 	}
-	if err := json.Unmarshal(data, &mapping); err != nil {
-		t.Fatalf("unmarshal category mapping: %v", err)
+	if err := yamlv3.Unmarshal(data, &fragment); err != nil {
+		t.Fatalf("unmarshal committed domain contract: %v", err)
 	}
 
 	got := SupportedRoutingDomainNames()
-	want := make([]string, 0, len(mapping.CategoryToIdx))
-	for name := range mapping.CategoryToIdx {
-		want = append(want, name)
+	want := make([]string, 0, len(fragment.Routing.Signals.Domains))
+	for _, domain := range fragment.Routing.Signals.Domains {
+		want = append(want, domain.Name)
 	}
 	slices.Sort(got)
 	slices.Sort(want)

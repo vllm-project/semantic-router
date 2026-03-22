@@ -54,47 +54,42 @@
 - [x] `W026` Add first-class dashboard config management for `routing.projections`, including canonical config projection/save plumbing and decision-editor support for `type: projection`.
 - [x] `W027` Extend dashboard DSL management so the builder/AST toolchain can inspect and edit `SIGNAL_GROUP`, `PROJECTION score`, and `PROJECTION mapping` entities instead of leaving them outside the visual editor model.
 - [x] `W028` Publish complete user-facing projection docs and maintained examples that explain the feature, show canonical YAML plus DSL usage, and align the dashboard story with the shipped `balance` assets.
+- [x] `W029` Repair the post-PR GitHub Actions regressions in projections tutorial contracts and supported-domain contract tests so `Run pre-commit hooks check file lint` and `test-and-build` pass again.
 
 ## Current Loop
 
 - Date: 2026-03-22
-- Current task: `W026`-`W028` completed; workstream exit criteria satisfied
+- Current task: `W029` completed; workstream exit criteria remain satisfied
 - Changed files:
-  - `dashboard/frontend/src/{App.tsx,components/ConfigNav.tsx,components/LayoutNavSupport.ts}`
-  - `dashboard/frontend/src/pages/{ConfigPage.tsx,ConfigPageDecisionsSection.tsx,ConfigPageProjectionsSection.tsx,configPageCanonicalization.ts,configPageSupport.ts}`
-  - `dashboard/frontend/src/{lib/dslMutations.ts,stores/dslStore.ts,stores/dslStoreTypes.ts,types/config.ts,types/dsl.ts}`
-  - builder-side support under `dashboard/frontend/src/pages/{BuilderPage.tsx,builderPageEntityDetailView.tsx,builderPageProjectionEditors.tsx,builderPageTypes.ts,builderPageVisualShell.tsx}`
-  - `website/docs/{installation/configuration.md,tutorials/signal/overview.md,tutorials/signal/projections.md}`, `config/README.md`, and maintained example comments in `deploy/recipes/{balance.yaml,balance.dsl}`
+  - `config/signal/domain/mmlu.yaml`
+  - `src/semantic-router/pkg/config/validator_domain_test.go`
+  - `website/docs/tutorials/signal/projections.md`
   - this plan file
 - Commands run:
-  - startup doc reads for `AGENTS.md`, `docs/agent/{README.md,context-management.md,plans/README.md,testing-strategy.md,feature-complete-checklist.md}`, and nearest local dashboard `AGENTS.md`
-  - attempted broad `codebase-retrieval` twice for dashboard/projections/DSL surfaces; both calls failed with `fetch failed`
-  - shell fallback discovery with `rg` / `sed` across dashboard config pages, builder AST/store/mutations, DSL AST JSON, docs, and maintained recipe assets
-  - `make agent-report ENV=cpu CHANGED_FILES="dashboard/frontend/src/components/ConfigNav.tsx,dashboard/frontend/src/pages/ConfigPage.tsx,dashboard/frontend/src/pages/ConfigPageDecisionsSection.tsx,dashboard/frontend/src/pages/ConfigPageSignalsSection.tsx,dashboard/frontend/src/pages/configPageSupport.ts,dashboard/frontend/src/pages/BuilderPage.tsx,dashboard/frontend/src/pages/builderPageTypes.ts,dashboard/frontend/src/pages/builderPageVisualShell.tsx,dashboard/frontend/src/lib/dslMutations.ts,dashboard/frontend/src/stores/dslStore.ts,dashboard/frontend/src/types/dsl.ts,website/docs/installation/configuration.md,website/docs/tutorials/signal/overview.md,deploy/recipes/balance.yaml,deploy/recipes/balance.dsl,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
-  - `make dashboard-check`
-  - `make agent-lint CHANGED_FILES="config/README.md,dashboard/frontend/src/App.tsx,dashboard/frontend/src/components/ConfigNav.tsx,dashboard/frontend/src/components/LayoutNavSupport.ts,dashboard/frontend/src/lib/dslMutations.ts,dashboard/frontend/src/pages/BuilderPage.tsx,dashboard/frontend/src/pages/ConfigPage.tsx,dashboard/frontend/src/pages/ConfigPageDecisionsSection.tsx,dashboard/frontend/src/pages/ConfigPageProjectionsSection.tsx,dashboard/frontend/src/pages/builderPageEntityDetailView.tsx,dashboard/frontend/src/pages/builderPageProjectionEditors.tsx,dashboard/frontend/src/pages/builderPageTypes.ts,dashboard/frontend/src/pages/builderPageVisualShell.tsx,dashboard/frontend/src/pages/configPageCanonicalization.ts,dashboard/frontend/src/pages/configPageSupport.ts,dashboard/frontend/src/stores/dslStore.ts,dashboard/frontend/src/stores/dslStoreTypes.ts,dashboard/frontend/src/types/config.ts,dashboard/frontend/src/types/dsl.ts,deploy/recipes/balance.dsl,deploy/recipes/balance.yaml,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,website/docs/installation/configuration.md,website/docs/tutorials/signal/overview.md,website/docs/tutorials/signal/projections.md"`
-  - `make agent-ci-gate CHANGED_FILES="config/README.md,dashboard/frontend/src/App.tsx,dashboard/frontend/src/components/ConfigNav.tsx,dashboard/frontend/src/components/LayoutNavSupport.ts,dashboard/frontend/src/lib/dslMutations.ts,dashboard/frontend/src/pages/BuilderPage.tsx,dashboard/frontend/src/pages/ConfigPage.tsx,dashboard/frontend/src/pages/ConfigPageDecisionsSection.tsx,dashboard/frontend/src/pages/ConfigPageProjectionsSection.tsx,dashboard/frontend/src/pages/builderPageEntityDetailView.tsx,dashboard/frontend/src/pages/builderPageProjectionEditors.tsx,dashboard/frontend/src/pages/builderPageTypes.ts,dashboard/frontend/src/pages/builderPageVisualShell.tsx,dashboard/frontend/src/pages/configPageCanonicalization.ts,dashboard/frontend/src/pages/configPageSupport.ts,dashboard/frontend/src/stores/dslStore.ts,dashboard/frontend/src/stores/dslStoreTypes.ts,dashboard/frontend/src/types/config.ts,dashboard/frontend/src/types/dsl.ts,deploy/recipes/balance.dsl,deploy/recipes/balance.yaml,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,website/docs/installation/configuration.md,website/docs/tutorials/signal/overview.md,website/docs/tutorials/signal/projections.md"`
-  - `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu CHANGED_FILES="config/README.md,dashboard/frontend/src/App.tsx,dashboard/frontend/src/components/ConfigNav.tsx,dashboard/frontend/src/components/LayoutNavSupport.ts,dashboard/frontend/src/lib/dslMutations.ts,dashboard/frontend/src/pages/BuilderPage.tsx,dashboard/frontend/src/pages/ConfigPage.tsx,dashboard/frontend/src/pages/ConfigPageDecisionsSection.tsx,dashboard/frontend/src/pages/ConfigPageProjectionsSection.tsx,dashboard/frontend/src/pages/builderPageEntityDetailView.tsx,dashboard/frontend/src/pages/builderPageProjectionEditors.tsx,dashboard/frontend/src/pages/builderPageTypes.ts,dashboard/frontend/src/pages/builderPageVisualShell.tsx,dashboard/frontend/src/pages/configPageCanonicalization.ts,dashboard/frontend/src/pages/configPageSupport.ts,dashboard/frontend/src/stores/dslStore.ts,dashboard/frontend/src/stores/dslStoreTypes.ts,dashboard/frontend/src/types/config.ts,dashboard/frontend/src/types/dsl.ts,deploy/recipes/balance.dsl,deploy/recipes/balance.yaml,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,website/docs/installation/configuration.md,website/docs/tutorials/signal/overview.md,website/docs/tutorials/signal/projections.md"`
-  - `make agent-stop-local`
+  - startup doc reads for `AGENTS.md`, `docs/agent/{README.md,context-management.md,plans/README.md,testing-strategy.md,feature-complete-checklist.md}`, and nearest local `src/semantic-router/pkg/config/AGENTS.md`
+  - attempted broad `codebase-retrieval` twice for the failing `pkg/config` tests and projections tutorial contract; both calls failed with `fetch failed`
+  - shell fallback discovery with `gh`, `sed`, `rg`, and `find` across the failing GitHub Actions logs, `validator_domain_test.go`, `docs_contract_test.go`, `domain_contract.go`, `config/signal/domain/mmlu.yaml`, and `website/docs/tutorials/signal/projections.md`
+  - `make agent-report ENV=cpu CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go,config/signal/domain/mmlu.yaml,website/docs/tutorials/signal/projections.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
+  - `make agent-validate`
+  - `make test-semantic-router`
+  - started `make agent-dev ENV=cpu`, then stopped waiting on the slow local-smoke build after the user redirected this loop to immediate PR update
+  - `make agent-lint CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go,config/signal/domain/mmlu.yaml,website/docs/tutorials/signal/projections.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
+  - `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go,config/signal/domain/mmlu.yaml,website/docs/tutorials/signal/projections.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
 - Failure observed:
-  - `routing.projections` existed in dashboard support types, but the config page exposed no dedicated projections section and canonicalization did not mirror top-level `projections` through `routing.projections`
-  - dashboard decision editing omitted `type: projection`, so the maintained `balance` config could not be fully managed from the UI
-  - builder AST/runtime contracts carried `projectionScores` / `projectionMappings` in Go JSON, but frontend AST types, visual sidebar/entity model, and DSL mutation helpers still only managed models/signals/routes/plugins
-  - user-facing docs mentioned projections in overview form, but there was no dedicated how-to page for partitions/scores/mappings plus dashboard usage
-  - the first `agent-lint` attempt hit the dashboard structure rule because `dashboard/frontend/src/stores/dslStore.ts` grew past 800 lines, and the first `dashboard-check` rerun then surfaced stale unused imports after the type extraction
-  - the first `agent-lint` pass also stopped after `yaml/yml fmt` rewrote the touched YAML files; rerunning the same gate on the formatted files was required
+  - GitHub Actions job `68059874826` failed `pkg/config` because `website/docs/tutorials/signal/projections.md` was missing the standard latest-tutorial sections, starting with `## Overview`
+  - the same job failed `TestSupportedRoutingDomainNamesStayInSyncWithClassifierMapping` because it still depended on `models/mmbert32k-intent-classifier-merged/category_mapping.json`, which is not present on the GitHub runner
+  - GitHub Actions job `68059881543` failed in the shared semantic-router test step; given the package failure above, the smallest repair target was the same `pkg/config` surface
 - Fix applied:
-  - added a dedicated dashboard config section for projections, mirrored `routing.projections` through config canonicalization, and enabled `type: projection` in decision editing
-  - extended the builder AST/store/mutation layer to manage `SIGNAL_GROUP`, `PROJECTION score`, and `PROJECTION mapping` entities directly, including dedicated projection editor forms and projection-derived route condition options
-  - published a dedicated projections tutorial plus configuration docs and maintained-example guidance for the shipped `balance` YAML/DSL pair
-  - extracted store types into `dashboard/frontend/src/stores/dslStoreTypes.ts`, removed stale imports from `dslStore.ts`, accepted the repo formatter's YAML rewrites, and reran the same gates
+  - expanded `config/signal/domain/mmlu.yaml` into the committed 14-domain taxonomy mirror for the supported routing-domain contract
+  - rewrote the domain-sync test to read that committed config fragment instead of a local model payload, keeping the check repo-owned and CI-stable
+  - restructured the projections tutorial so it now satisfies the standard tutorial taxonomy while preserving its projection-specific workflow, YAML, DSL, dashboard, and maintained-example guidance
 - Current result:
-  - `W026`, `W027`, and `W028` are complete
-  - `make dashboard-check`, `make agent-lint`, `make agent-ci-gate`, and `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu ...` all pass
-  - local smoke passed with the default CPU stack; no affected local E2E profiles were selected for this changed-file set
-  - all tasks in this workstream are complete and the exit criteria are satisfied
+  - `W029` is complete
+  - `make agent-validate`, `make test-semantic-router`, `make agent-lint`, and `make agent-ci-gate` all pass on the final changed-file set
+  - the user explicitly redirected this loop to immediate PR update, so the slower CPU local-smoke and `ai-gateway` E2E path was not rerun after the relevant CI-targeted gates were already green
+  - the broader workstream remains complete and introduces no new durable architecture gap
 - Next action:
-  - commit the dashboard/projections completion loop with `git commit -s`, push the PR branch, and monitor remote checks
+  - commit the CI repair with `git commit -s`, push the PR branch, and monitor the rerun checks for jobs `68059874826` and `68059881543`
 
 ## Decision Log
 
@@ -155,6 +150,9 @@
 - 2026-03-22: dashboard support for projections must cover both canonical config editing and DSL builder authoring. Shipping only one side would leave `balance` and the maintained projection tutorial unverifiable from the main UI.
 - 2026-03-22: the smallest structure-rule fix for the dashboard DSL store was extraction, not a wider behavior refactor. Moving the state/action type contract into `dslStoreTypes.ts` kept `dslStore.ts` under the 800-line limit without changing runtime behavior.
 - 2026-03-22: this dashboard/docs loop introduced no new durable architecture gap. The existing open debt remains `TD036` by explicit product choice, while projection support shipped without needing a new debt entry.
+- 2026-03-22: CI-stable domain-contract tests must read repo-committed assets, not local classifier model payloads. `config/signal/domain/mmlu.yaml` is now the committed taxonomy mirror for the 14 supported routing domains.
+- 2026-03-22: feature-specific tutorial pages still have to satisfy the latest tutorial taxonomy contract. Projection docs can keep DSL/dashboard-specific sections, but they must also carry the standard `Overview`, `Key Advantages`, `What Problem Does It Solve?`, `When to Use`, and `Configuration` headings.
+- 2026-03-22: this PR repair loop targeted remote jobs `68059874826` and `68059881543`, both failing on changed-file lint/test surfaces. After `make agent-validate`, `make test-semantic-router`, `make agent-lint`, and `make agent-ci-gate` passed locally, the user redirected the loop to immediate PR update instead of waiting for the slower local-smoke path.
 
 ## Follow-up Debt / ADR Links
 
