@@ -797,6 +797,9 @@ routing:
         include_history: false
         description: Block high-sensitivity PII while allowing common contact entities.
 
+  # Projections turn the raw signal catalog into repo-native routing bands:
+  # partitions resolve winners, scores aggregate evidence, and mappings emit
+  # named outputs that decisions can reference with `type: projection`.
   projections:
     partitions:
       - name: balance_domain_partition

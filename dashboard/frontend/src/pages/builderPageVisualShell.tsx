@@ -21,6 +21,11 @@ import {
   AddSignalForm,
 } from "./builderPageEntityForms";
 import {
+  AddProjectionMappingForm,
+  AddProjectionScoreForm,
+  AddSignalGroupForm,
+} from "./builderPageProjectionEditors";
+import {
   DashboardView,
   EntityListView,
   SidebarSection,
@@ -46,6 +51,9 @@ interface VisualModeProps {
   selectedEntity: BuilderSelectedEntity;
   modelCount: number;
   signalCount: number;
+  signalGroupCount: number;
+  projectionScoreCount: number;
+  projectionMappingCount: number;
   routeCount: number;
   pluginCount: number;
   wasmReady: boolean;
@@ -56,6 +64,15 @@ interface VisualModeProps {
   onUpdateModelFields: (name: string, fields: DSLFieldObject) => void;
   onUpdateSignalFields: (
     signalType: string,
+    name: string,
+    fields: DSLFieldObject,
+  ) => void;
+  onUpdateSignalGroupFields: (name: string, fields: DSLFieldObject) => void;
+  onUpdateProjectionScoreFields: (
+    name: string,
+    fields: DSLFieldObject,
+  ) => void;
+  onUpdateProjectionMappingFields: (
     name: string,
     fields: DSLFieldObject,
   ) => void;
@@ -70,6 +87,9 @@ interface VisualModeProps {
     name: string,
     fields: DSLFieldObject,
   ) => void;
+  onAddSignalGroup: (name: string, fields: DSLFieldObject) => void;
+  onAddProjectionScore: (name: string, fields: DSLFieldObject) => void;
+  onAddProjectionMapping: (name: string, fields: DSLFieldObject) => void;
   onAddPlugin: (
     name: string,
     pluginType: string,
@@ -92,6 +112,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
   selectedEntity,
   modelCount,
   signalCount,
+  signalGroupCount,
+  projectionScoreCount,
+  projectionMappingCount,
   routeCount,
   pluginCount,
   wasmReady,
@@ -101,9 +124,15 @@ const VisualMode: React.FC<VisualModeProps> = ({
   onDeleteEntity,
   onUpdateModelFields,
   onUpdateSignalFields,
+  onUpdateSignalGroupFields,
+  onUpdateProjectionScoreFields,
+  onUpdateProjectionMappingFields,
   onUpdatePluginFields,
   onAddModel,
   onAddSignal,
+  onAddSignalGroup,
+  onAddProjectionScore,
+  onAddProjectionMapping,
   onAddPlugin,
   onUpdateRoute,
   onAddRoute,
@@ -124,8 +153,13 @@ const VisualMode: React.FC<VisualModeProps> = ({
         result.push({ signalType: s.signalType, name: s.name });
       }
     }
+    for (const mapping of ast?.projectionMappings ?? []) {
+      for (const output of mapping.outputs ?? []) {
+        result.push({ signalType: "projection", name: output.name });
+      }
+    }
     return result;
-  }, [ast?.signals]);
+  }, [ast?.signals, ast?.projectionMappings]);
   // Collect available plugin names for toggle panel
   const availablePlugins = useMemo(
     () =>
@@ -289,6 +323,99 @@ const VisualMode: React.FC<VisualModeProps> = ({
             ))}
           </SidebarSection>
 
+          <SidebarSection
+            title="Signal Groups"
+            count={signalGroupCount}
+            open={sections.signalGroups}
+            onToggle={() => onToggleSection("signalGroups")}
+            onAdd={() => {
+              onSetAddingEntity("signal-group");
+              onSelect(null);
+            }}
+          >
+            {ast?.signalGroups?.map((group) => (
+              <li
+                key={group.name}
+                className={
+                  selection?.kind === "signal-group" &&
+                  selection.name === group.name
+                    ? styles.sidebarItemActive
+                    : styles.sidebarItem
+                }
+                onClick={() => {
+                  onSetAddingEntity(null);
+                  onSelect({ kind: "signal-group", name: group.name });
+                }}
+              >
+                <SignalIcon className={styles.sidebarItemIcon} />
+                <span className={styles.sidebarItemName}>{group.name}</span>
+                <span className={styles.sidebarItemType}>group</span>
+              </li>
+            ))}
+          </SidebarSection>
+
+          <SidebarSection
+            title="Projection Scores"
+            count={projectionScoreCount}
+            open={sections.projectionScores}
+            onToggle={() => onToggleSection("projectionScores")}
+            onAdd={() => {
+              onSetAddingEntity("projection-score");
+              onSelect(null);
+            }}
+          >
+            {ast?.projectionScores?.map((score) => (
+              <li
+                key={score.name}
+                className={
+                  selection?.kind === "projection-score" &&
+                  selection.name === score.name
+                    ? styles.sidebarItemActive
+                    : styles.sidebarItem
+                }
+                onClick={() => {
+                  onSetAddingEntity(null);
+                  onSelect({ kind: "projection-score", name: score.name });
+                }}
+              >
+                <RouteIcon className={styles.sidebarItemIcon} />
+                <span className={styles.sidebarItemName}>{score.name}</span>
+                <span className={styles.sidebarItemType}>score</span>
+              </li>
+            ))}
+          </SidebarSection>
+
+          <SidebarSection
+            title="Projection Mappings"
+            count={projectionMappingCount}
+            open={sections.projectionMappings}
+            onToggle={() => onToggleSection("projectionMappings")}
+            onAdd={() => {
+              onSetAddingEntity("projection-mapping");
+              onSelect(null);
+            }}
+          >
+            {ast?.projectionMappings?.map((mapping) => (
+              <li
+                key={mapping.name}
+                className={
+                  selection?.kind === "projection-mapping" &&
+                  selection.name === mapping.name
+                    ? styles.sidebarItemActive
+                    : styles.sidebarItem
+                }
+                onClick={() => {
+                  onSetAddingEntity(null);
+                  onSelect({ kind: "projection-mapping", name: mapping.name });
+                }}
+              >
+                <RouteIcon className={styles.sidebarItemIcon} />
+                <span className={styles.sidebarItemName}>{mapping.name}</span>
+                <span className={styles.sidebarItemType}>mapping</span>
+              </li>
+            ))}
+          </SidebarSection>
+
           {/* Routes */}
           <SidebarSection
             title="Routes"
@@ -373,6 +500,21 @@ const VisualMode: React.FC<VisualModeProps> = ({
                 onAdd={onAddSignal}
                 onCancel={() => onSetAddingEntity(null)}
               />
+            ) : addingEntity === "signal-group" ? (
+              <AddSignalGroupForm
+                onAdd={onAddSignalGroup}
+                onCancel={() => onSetAddingEntity(null)}
+              />
+            ) : addingEntity === "projection-score" ? (
+              <AddProjectionScoreForm
+                onAdd={onAddProjectionScore}
+                onCancel={() => onSetAddingEntity(null)}
+              />
+            ) : addingEntity === "projection-mapping" ? (
+              <AddProjectionMappingForm
+                onAdd={onAddProjectionMapping}
+                onCancel={() => onSetAddingEntity(null)}
+              />
             ) : addingEntity === "plugin" ? (
               <AddPluginForm
                 onAdd={onAddPlugin}
@@ -414,6 +556,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
                 onDeleteEntity={onDeleteEntity}
                 onUpdateModelFields={onUpdateModelFields}
                 onUpdateSignalFields={onUpdateSignalFields}
+                onUpdateSignalGroupFields={onUpdateSignalGroupFields}
+                onUpdateProjectionScoreFields={onUpdateProjectionScoreFields}
+                onUpdateProjectionMappingFields={onUpdateProjectionMappingFields}
                 onUpdatePluginFields={onUpdatePluginFields}
                 onUpdateRoute={onUpdateRoute}
                 availableSignals={availableSignals}

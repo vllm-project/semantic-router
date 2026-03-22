@@ -1069,6 +1069,7 @@ export interface ConfigData {
   version?: string
   listeners?: ListenerConfig[]
   signals?: ConfigSignals
+  projections?: ConfigProjections
   decisions?: DecisionConfig[]
   providers?: ProvidersConfig
   routing?: RoutingConfig

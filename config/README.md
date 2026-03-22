@@ -16,6 +16,7 @@ Inside canonical `config.yaml`:
 - `routing.projections` carries cross-signal coordination and derived routing outputs
 - `routing.projections.partitions` is the canonical runtime home for exclusive domain or embedding partitions; DSL authoring still uses `SIGNAL_GROUP`
 - `routing.projections.scores` and `routing.projections.mappings` let maintained configs turn learned and heuristic signals into named routing bands that decisions can reference with `type: projection`
+- the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/signal/projections.md` and the maintained `deploy/recipes/balance.{yaml,dsl}` pair for end-to-end usage
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
 - embedding fallback tuning such as `global.model_catalog.embeddings.semantic.embedding_config.top_k` lives under the router-owned model catalog, not under individual signal rules
 - `global.router.config_source` selects the router's steady-state config source; the exhaustive reference uses `file`, while Kubernetes CRD reconciliation uses `kubernetes`

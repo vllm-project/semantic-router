@@ -6,6 +6,7 @@
 
 Signals define named detectors under `routing.signals`. A decision then references those names from `routing.decisions`, so detection stays reusable and route logic stays readable.
 Cross-signal coordination and derived routing bands now live under `routing.projections`. `routing.projections.partitions` is the runtime home for exclusive domain or embedding partitions, while decisions can reference `routing.projections.mappings` outputs with `type: projection`. In DSL authoring, the same concepts show up as `SIGNAL_GROUP` plus `PROJECTION score ...` / `PROJECTION mapping ...` blocks.
+For the full projection workflow, canonical YAML contract, dashboard path, and DSL examples, see [Projections](./projections).
 
 This tutorial group maps directly to the fragment tree under `config/signal/`, but the docs are organized by extraction style:
 
@@ -112,3 +113,11 @@ Keep these rules in mind:
 - keep partitions and derived routing bands in `routing.projections`, not back inside `routing.signals`
 - keep model choice separate; that belongs in `algorithm/`
 - keep route-side behavior separate; that belongs in `plugin/`
+
+## Next Steps
+
+- Read [Projections](./projections) when you need `SIGNAL_GROUP`, weighted score aggregation, or named routing bands.
+- Start from [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) for the exhaustive public contract.
+- Use the maintained `balance` assets when you want a realistic repo-native routing strategy:
+  - [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
+  - [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)

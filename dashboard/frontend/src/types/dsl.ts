@@ -71,6 +71,44 @@ export interface ASTSignalGroupDecl {
   pos: ASTPosition
 }
 
+export interface ASTProjectionScoreInput {
+  signalType: string
+  signalName: string
+  weight: number
+  valueSource?: string
+  match?: number
+  miss?: number
+}
+
+export interface ASTProjectionScoreDecl {
+  name: string
+  method?: string
+  inputs?: ASTProjectionScoreInput[]
+  pos: ASTPosition
+}
+
+export interface ASTProjectionMappingCalibration {
+  method?: string
+  slope?: number
+}
+
+export interface ASTProjectionMappingOutput {
+  name: string
+  lt?: number
+  lte?: number
+  gt?: number
+  gte?: number
+}
+
+export interface ASTProjectionMappingDecl {
+  name: string
+  source?: string
+  method?: string
+  calibration?: ASTProjectionMappingCalibration
+  outputs?: ASTProjectionMappingOutput[]
+  pos: ASTPosition
+}
+
 export interface ASTModelRef {
   model: string
   reasoning?: boolean
@@ -134,6 +172,8 @@ export interface ASTTestBlockDecl {
 export interface ASTProgram {
   signals: ASTSignalDecl[]
   signalGroups?: ASTSignalGroupDecl[]
+  projectionScores?: ASTProjectionScoreDecl[]
+  projectionMappings?: ASTProjectionMappingDecl[]
   routes: ASTRouteDecl[]
   models?: ASTModelDecl[]
   plugins: ASTPluginDecl[]

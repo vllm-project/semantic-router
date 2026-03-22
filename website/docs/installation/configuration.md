@@ -193,6 +193,27 @@ Those directories are support assets, not the main user-facing config contract. 
 - `make agent-lint` runs the same reference-config contract check at lint level, so config/schema drift is blocked before merge
 - maintained `deploy/` and `e2e/` router config assets are checked against the same canonical contract, so repo-owned examples and harness profiles cannot drift back to legacy steady-state fields
 
+## Projection Workflow
+
+Use `routing.projections` when the raw signal catalog is not enough on its own:
+
+1. `routing.signals` defines reusable detectors.
+2. `routing.projections.partitions` resolves one winner inside an exclusive domain or embedding family.
+3. `routing.projections.scores` combines learned and heuristic signals into a weighted score.
+4. `routing.projections.mappings` turns that score into named routing bands.
+5. `routing.decisions[*].rules.conditions[*]` can reference those bands with `type: projection`.
+
+The dashboard mirrors the same contract:
+
+- `Config -> Projections` edits partitions, scores, and mappings
+- `Config -> Decisions` can reference mapping outputs with condition type `projection`
+- `DSL -> Visual` manages `SIGNAL_GROUP`, `PROJECTION score`, and `PROJECTION mapping` entities directly
+
+For a focused tutorial, read [Signal Projections](../tutorials/signal/projections). For a maintained end-to-end example, use:
+
+- [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
+- [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)
+
 ## How to use it
 
 ### Python CLI

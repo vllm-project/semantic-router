@@ -7,6 +7,7 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
 import ConfigPageModelsSection from './ConfigPageModelsSection'
 import ConfigPageSignalsSection from './ConfigPageSignalsSection'
+import ConfigPageProjectionsSection from './ConfigPageProjectionsSection'
 import ConfigPageDecisionsSection from './ConfigPageDecisionsSection'
 import ConfigPageMCPSection from './ConfigPageMCPSection'
 import {
@@ -334,6 +335,16 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     />
   )
 
+  const renderProjectionsSection = () => (
+    <ConfigPageProjectionsSection
+      config={config}
+      isReadonly={isReadonly}
+      saveConfig={saveConfig}
+      openEditModal={openEditModal}
+      openViewModal={openViewModal}
+    />
+  )
+
   const renderModelsSection = () => (
     <ConfigPageModelsSection
       config={config}
@@ -374,6 +385,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         return renderSignalsSection()
       case 'decisions':
         return renderDecisionsSection()
+      case 'projections':
+        return renderProjectionsSection()
       case 'models':
         return renderModelsSection()
       case 'global-config':

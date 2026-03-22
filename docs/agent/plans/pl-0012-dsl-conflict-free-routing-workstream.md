@@ -51,45 +51,50 @@
 - [x] `W023` Introduce the canonical `routing.projections` contract, move existing `signal_groups` partition semantics under `projections.partitions`, and sync the config/DSL/runtime/platform surfaces to that renamed contract.
 - [x] `W024` Implement weighted projection scores plus threshold mappings as repo-native derived routing outputs, allow decisions to reference those outputs, and refactor the maintained `balance` assets plus reference config/docs to exercise the stronger routing strategy.
 - [x] `W025` Run the full applicable harness ladder for the projections refactor, including local smoke and affected E2E, close any completed debt, and update the PR with the final validation state.
+- [x] `W026` Add first-class dashboard config management for `routing.projections`, including canonical config projection/save plumbing and decision-editor support for `type: projection`.
+- [x] `W027` Extend dashboard DSL management so the builder/AST toolchain can inspect and edit `SIGNAL_GROUP`, `PROJECTION score`, and `PROJECTION mapping` entities instead of leaving them outside the visual editor model.
+- [x] `W028` Publish complete user-facing projection docs and maintained examples that explain the feature, show canonical YAML plus DSL usage, and align the dashboard story with the shipped `balance` assets.
 
 ## Current Loop
 
 - Date: 2026-03-22
-- Current task: `W025` completed
+- Current task: `W026`-`W028` completed; workstream exit criteria satisfied
 - Changed files:
-  - `src/semantic-router/pkg/config/{config.go,signal_config.go,projection_config.go,canonical_config.go,canonical_export.go,canonical_routing_loader.go,validator.go,validator_domain.go,validator_projection.go,reference_config_public_surface_test.go,validator_domain_test.go,validator_projection_test.go}`
-  - `src/semantic-router/pkg/classification/{classifier_signal_context.go,classifier_signal_eval.go,classifier_signal_groups.go,classifier_signal_group_similarity.go,classifier_projections.go,classifier_signal_groups_test.go,classifier_projections_test.go}`
-  - `src/semantic-router/pkg/dsl/{ast.go,ast_json.go,parser.go,compiler.go,decompiler.go,routing_contract.go,validator.go,validator_conflicts.go,dsl_test.go,maintained_asset_roundtrip_test.go}`
-  - `src/semantic-router/pkg/{decision/engine.go,apiserver/route_classification_metrics.go,apiserver/route_classification_platform_test.go}`
-  - `src/vllm-sr/cli/{models.py,config_contract.py,validator.py}` and `src/vllm-sr/tests/test_config_contract.py`
-  - `deploy/recipes/{balance.yaml,balance.dsl}`, `config/{config.yaml,README.md}`, `website/docs/{installation/configuration.md,proposals/unified-config-contract-v0-3.md,tutorials/signal/overview.md}`, `docs/agent/tech-debt/td-035-signal-group-default-coverage-contract-gap.md`, and this plan file
+  - `dashboard/frontend/src/{App.tsx,components/ConfigNav.tsx,components/LayoutNavSupport.ts}`
+  - `dashboard/frontend/src/pages/{ConfigPage.tsx,ConfigPageDecisionsSection.tsx,ConfigPageProjectionsSection.tsx,configPageCanonicalization.ts,configPageSupport.ts}`
+  - `dashboard/frontend/src/{lib/dslMutations.ts,stores/dslStore.ts,stores/dslStoreTypes.ts,types/config.ts,types/dsl.ts}`
+  - builder-side support under `dashboard/frontend/src/pages/{BuilderPage.tsx,builderPageEntityDetailView.tsx,builderPageProjectionEditors.tsx,builderPageTypes.ts,builderPageVisualShell.tsx}`
+  - `website/docs/{installation/configuration.md,tutorials/signal/overview.md,tutorials/signal/projections.md}`, `config/README.md`, and maintained example comments in `deploy/recipes/{balance.yaml,balance.dsl}`
+  - this plan file
 - Commands run:
-  - broad `codebase-retrieval` covering projections/config/runtime/DSL/schema/tests before edits
-  - `make agent-report ENV=cpu CHANGED_FILES="config/README.md,config/config.yaml,dashboard/frontend/src/pages/configPageSupport.ts,deploy/recipes/balance.dsl,deploy/recipes/balance.yaml,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,docs/agent/tech-debt/td-035-signal-group-default-coverage-contract-gap.md,src/semantic-router/pkg/apiserver/route_classification_metrics.go,src/semantic-router/pkg/apiserver/route_classification_platform_test.go,src/semantic-router/pkg/classification/classifier_signal_context.go,src/semantic-router/pkg/classification/classifier_signal_eval.go,src/semantic-router/pkg/classification/classifier_signal_group_similarity.go,src/semantic-router/pkg/classification/classifier_signal_groups.go,src/semantic-router/pkg/classification/classifier_signal_groups_test.go,src/semantic-router/pkg/classification/classifier_projections.go,src/semantic-router/pkg/classification/classifier_projections_test.go,src/semantic-router/pkg/config/canonical_config.go,src/semantic-router/pkg/config/canonical_export.go,src/semantic-router/pkg/config/canonical_routing_loader.go,src/semantic-router/pkg/config/config.go,src/semantic-router/pkg/config/projection_config.go,src/semantic-router/pkg/config/reference_config_public_surface_test.go,src/semantic-router/pkg/config/signal_config.go,src/semantic-router/pkg/config/validator.go,src/semantic-router/pkg/config/validator_domain.go,src/semantic-router/pkg/config/validator_domain_test.go,src/semantic-router/pkg/config/validator_projection.go,src/semantic-router/pkg/config/validator_projection_test.go,src/semantic-router/pkg/decision/engine.go,src/semantic-router/pkg/dsl/ast.go,src/semantic-router/pkg/dsl/ast_json.go,src/semantic-router/pkg/dsl/compiler.go,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go,src/semantic-router/pkg/dsl/parser.go,src/semantic-router/pkg/dsl/routing_contract.go,src/semantic-router/pkg/dsl/validator.go,src/semantic-router/pkg/dsl/validator_conflicts.go,src/vllm-sr/cli/config_contract.py,src/vllm-sr/cli/models.py,src/vllm-sr/cli/validator.py,src/vllm-sr/tests/test_config_contract.py,website/docs/installation/configuration.md,website/docs/proposals/unified-config-contract-v0-3.md,website/docs/tutorials/signal/overview.md"`
-  - `cd src/vllm-sr && pytest tests/test_config_contract.py -q`
-  - `cd src/semantic-router && go test ./pkg/config/... -count=1`
-  - `cd src/semantic-router && go test ./pkg/dsl/... -count=1`
-  - `cd src/semantic-router && go test ./pkg/classification/... -count=1`
-  - `cd src/semantic-router && go test ./pkg/apiserver -run 'TestHandle(GetConfigReturnsRoutingSurface|UpdateConfigMergesRoutingPayload|ClassificationMetricsReportsCounts)' -count=1`
-  - `cd src/semantic-router && go test ./cmd/dsl -count=1`
-  - `cd src/semantic-router && go run ./cmd/dsl decompile -o ../../deploy/recipes/balance.dsl ../../deploy/recipes/balance.yaml`
-  - `gofmt -w src/semantic-router/pkg/classification/classifier_projections.go src/semantic-router/pkg/apiserver/route_classification_platform_test.go src/semantic-router/pkg/config/validator_projection.go src/semantic-router/pkg/dsl/ast_json.go`
-  - `make agent-lint CHANGED_FILES="...projection changed set..."`
-  - `make agent-ci-gate CHANGED_FILES="...projection changed set..."`
-  - `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu CHANGED_FILES="...projection changed set..."`
+  - startup doc reads for `AGENTS.md`, `docs/agent/{README.md,context-management.md,plans/README.md,testing-strategy.md,feature-complete-checklist.md}`, and nearest local dashboard `AGENTS.md`
+  - attempted broad `codebase-retrieval` twice for dashboard/projections/DSL surfaces; both calls failed with `fetch failed`
+  - shell fallback discovery with `rg` / `sed` across dashboard config pages, builder AST/store/mutations, DSL AST JSON, docs, and maintained recipe assets
+  - `make agent-report ENV=cpu CHANGED_FILES="dashboard/frontend/src/components/ConfigNav.tsx,dashboard/frontend/src/pages/ConfigPage.tsx,dashboard/frontend/src/pages/ConfigPageDecisionsSection.tsx,dashboard/frontend/src/pages/ConfigPageSignalsSection.tsx,dashboard/frontend/src/pages/configPageSupport.ts,dashboard/frontend/src/pages/BuilderPage.tsx,dashboard/frontend/src/pages/builderPageTypes.ts,dashboard/frontend/src/pages/builderPageVisualShell.tsx,dashboard/frontend/src/lib/dslMutations.ts,dashboard/frontend/src/stores/dslStore.ts,dashboard/frontend/src/types/dsl.ts,website/docs/installation/configuration.md,website/docs/tutorials/signal/overview.md,deploy/recipes/balance.yaml,deploy/recipes/balance.dsl,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
+  - `make dashboard-check`
+  - `make agent-lint CHANGED_FILES="config/README.md,dashboard/frontend/src/App.tsx,dashboard/frontend/src/components/ConfigNav.tsx,dashboard/frontend/src/components/LayoutNavSupport.ts,dashboard/frontend/src/lib/dslMutations.ts,dashboard/frontend/src/pages/BuilderPage.tsx,dashboard/frontend/src/pages/ConfigPage.tsx,dashboard/frontend/src/pages/ConfigPageDecisionsSection.tsx,dashboard/frontend/src/pages/ConfigPageProjectionsSection.tsx,dashboard/frontend/src/pages/builderPageEntityDetailView.tsx,dashboard/frontend/src/pages/builderPageProjectionEditors.tsx,dashboard/frontend/src/pages/builderPageTypes.ts,dashboard/frontend/src/pages/builderPageVisualShell.tsx,dashboard/frontend/src/pages/configPageCanonicalization.ts,dashboard/frontend/src/pages/configPageSupport.ts,dashboard/frontend/src/stores/dslStore.ts,dashboard/frontend/src/stores/dslStoreTypes.ts,dashboard/frontend/src/types/config.ts,dashboard/frontend/src/types/dsl.ts,deploy/recipes/balance.dsl,deploy/recipes/balance.yaml,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,website/docs/installation/configuration.md,website/docs/tutorials/signal/overview.md,website/docs/tutorials/signal/projections.md"`
+  - `make agent-ci-gate CHANGED_FILES="config/README.md,dashboard/frontend/src/App.tsx,dashboard/frontend/src/components/ConfigNav.tsx,dashboard/frontend/src/components/LayoutNavSupport.ts,dashboard/frontend/src/lib/dslMutations.ts,dashboard/frontend/src/pages/BuilderPage.tsx,dashboard/frontend/src/pages/ConfigPage.tsx,dashboard/frontend/src/pages/ConfigPageDecisionsSection.tsx,dashboard/frontend/src/pages/ConfigPageProjectionsSection.tsx,dashboard/frontend/src/pages/builderPageEntityDetailView.tsx,dashboard/frontend/src/pages/builderPageProjectionEditors.tsx,dashboard/frontend/src/pages/builderPageTypes.ts,dashboard/frontend/src/pages/builderPageVisualShell.tsx,dashboard/frontend/src/pages/configPageCanonicalization.ts,dashboard/frontend/src/pages/configPageSupport.ts,dashboard/frontend/src/stores/dslStore.ts,dashboard/frontend/src/stores/dslStoreTypes.ts,dashboard/frontend/src/types/config.ts,dashboard/frontend/src/types/dsl.ts,deploy/recipes/balance.dsl,deploy/recipes/balance.yaml,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,website/docs/installation/configuration.md,website/docs/tutorials/signal/overview.md,website/docs/tutorials/signal/projections.md"`
+  - `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu CHANGED_FILES="config/README.md,dashboard/frontend/src/App.tsx,dashboard/frontend/src/components/ConfigNav.tsx,dashboard/frontend/src/components/LayoutNavSupport.ts,dashboard/frontend/src/lib/dslMutations.ts,dashboard/frontend/src/pages/BuilderPage.tsx,dashboard/frontend/src/pages/ConfigPage.tsx,dashboard/frontend/src/pages/ConfigPageDecisionsSection.tsx,dashboard/frontend/src/pages/ConfigPageProjectionsSection.tsx,dashboard/frontend/src/pages/builderPageEntityDetailView.tsx,dashboard/frontend/src/pages/builderPageProjectionEditors.tsx,dashboard/frontend/src/pages/builderPageTypes.ts,dashboard/frontend/src/pages/builderPageVisualShell.tsx,dashboard/frontend/src/pages/configPageCanonicalization.ts,dashboard/frontend/src/pages/configPageSupport.ts,dashboard/frontend/src/stores/dslStore.ts,dashboard/frontend/src/stores/dslStoreTypes.ts,dashboard/frontend/src/types/config.ts,dashboard/frontend/src/types/dsl.ts,deploy/recipes/balance.dsl,deploy/recipes/balance.yaml,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,website/docs/installation/configuration.md,website/docs/tutorials/signal/overview.md,website/docs/tutorials/signal/projections.md"`
+  - `make agent-stop-local`
 - Failure observed:
-  - `agent-lint` initially failed on `gofumpt`, a shadowed `ok` binding, and then on `cyclop/gocognit` limits in the new projection helpers.
-  - The first `agent-ci-gate` rerun also tripped `parallel golangci-lint is running` because an earlier lint session was still active.
+  - `routing.projections` existed in dashboard support types, but the config page exposed no dedicated projections section and canonicalization did not mirror top-level `projections` through `routing.projections`
+  - dashboard decision editing omitted `type: projection`, so the maintained `balance` config could not be fully managed from the UI
+  - builder AST/runtime contracts carried `projectionScores` / `projectionMappings` in Go JSON, but frontend AST types, visual sidebar/entity model, and DSL mutation helpers still only managed models/signals/routes/plugins
+  - user-facing docs mentioned projections in overview form, but there was no dedicated how-to page for partitions/scores/mappings plus dashboard usage
+  - the first `agent-lint` attempt hit the dashboard structure rule because `dashboard/frontend/src/stores/dslStore.ts` grew past 800 lines, and the first `dashboard-check` rerun then surfaced stale unused imports after the type extraction
+  - the first `agent-lint` pass also stopped after `yaml/yml fmt` rewrote the touched YAML files; rerunning the same gate on the formatted files was required
 - Fix applied:
-  - Renamed the canonical runtime/config surface to `routing.projections` and moved legacy `signal_groups` semantics into `projections.partitions` while keeping DSL authoring on `SIGNAL_GROUP`.
-  - Added projection runtime support for `scores` and `mappings`, decision consumption through `type: projection`, and synced compiler/decompiler, validator, CLI schema, dashboard typing, reference config, maintained `balance` assets, and docs.
-  - Refactored the new helpers into smaller table-driven functions so changed-file Go lint passes without weakening repo structure rules, then reran the same harness gates sequentially.
+  - added a dedicated dashboard config section for projections, mirrored `routing.projections` through config canonicalization, and enabled `type: projection` in decision editing
+  - extended the builder AST/store/mutation layer to manage `SIGNAL_GROUP`, `PROJECTION score`, and `PROJECTION mapping` entities directly, including dedicated projection editor forms and projection-derived route condition options
+  - published a dedicated projections tutorial plus configuration docs and maintained-example guidance for the shipped `balance` YAML/DSL pair
+  - extracted store types into `dashboard/frontend/src/stores/dslStoreTypes.ts`, removed stale imports from `dslStore.ts`, accepted the repo formatter's YAML rewrites, and reran the same gates
 - Current result:
-  - `W023`, `W024`, and `W025` are complete.
-  - `make agent-lint`, `make agent-ci-gate`, and `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu ...` all pass.
-  - The `ai-gateway` feature profile passed `14/14`; no new durable architecture gap was introduced, and `TD035` only needed wording updates for the renamed runtime surface.
+  - `W026`, `W027`, and `W028` are complete
+  - `make dashboard-check`, `make agent-lint`, `make agent-ci-gate`, and `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu ...` all pass
+  - local smoke passed with the default CPU stack; no affected local E2E profiles were selected for this changed-file set
+  - all tasks in this workstream are complete and the exit criteria are satisfied
 - Next action:
-  - Commit the projections refactor with `git commit -s`, push the PR branch, and update the PR status.
+  - commit the dashboard/projections completion loop with `git commit -s`, push the PR branch, and monitor remote checks
 
 ## Decision Log
 
@@ -147,6 +152,9 @@
 - 2026-03-22: clawrouter-style weighted routing should land as repo-native derived outputs, not by overloading base signals. The stable contract is `routing.projections.scores` plus `routing.projections.mappings`, with decisions consuming mapping outputs via `type: projection`.
 - 2026-03-22: the maintained `balance` recipe and the exhaustive reference config must both exercise `partitions`, `scores`, `mappings`, and `type: projection`. That is the smallest way to keep examples, public-surface tests, and schema mirrors aligned on the new contract.
 - 2026-03-22: local feature validation for this refactor must keep `E2E_USE_WORKSPACE_MODELS=true` and a clean Docker config (`DOCKER_CONFIG=/tmp/docker-nocreds`) so the repo-native feature gate reuses workspace models and avoids incidental credential noise during the long image-build path.
+- 2026-03-22: dashboard support for projections must cover both canonical config editing and DSL builder authoring. Shipping only one side would leave `balance` and the maintained projection tutorial unverifiable from the main UI.
+- 2026-03-22: the smallest structure-rule fix for the dashboard DSL store was extraction, not a wider behavior refactor. Moving the state/action type contract into `dslStoreTypes.ts` kept `dslStore.ts` under the 800-line limit without changing runtime behavior.
+- 2026-03-22: this dashboard/docs loop introduced no new durable architecture gap. The existing open debt remains `TD036` by explicit product choice, while projection support shipped without needing a new debt entry.
 
 ## Follow-up Debt / ADR Links
 

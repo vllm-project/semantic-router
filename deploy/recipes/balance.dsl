@@ -403,6 +403,8 @@ SIGNAL pii pii_relaxed {
   description: "Block high-sensitivity PII while allowing common contact entities."
 }
 
+# Projection authoring in DSL starts with SIGNAL_GROUP and then layers
+# PROJECTION score / mapping blocks on top of the resolved signal catalog.
 SIGNAL_GROUP balance_domain_partition {
   semantics: "softmax_exclusive"
   temperature: 0.1
@@ -807,4 +809,3 @@ ROUTE simple_general (description = "Lowest-cost fallback for everyday traffic a
     max_body_bytes: 4096
   }
 }
-
