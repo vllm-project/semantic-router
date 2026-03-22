@@ -226,10 +226,10 @@ func fetchLogsFromDocker(component string, lines int) ([]string, error) {
 		case "envoy":
 			// Match envoy-specific logs and supervisor messages
 			// Envoy logs have timestamp format [YYYY-MM-DD HH:MM:SS.mmm][level]
-			if (strings.Contains(line, "[20") && strings.Contains(line, "][")) ||
+			if strings.Contains(line, "[20") || // Timestamp pattern
+				strings.Contains(lineLower, "envoy") || // Any envoy-related log
 				strings.Contains(line, "spawned: 'envoy'") ||
 				strings.Contains(lineLower, "success: envoy") ||
-				strings.Contains(lineLower, "envoy entered running") ||
 				strings.Contains(line, "Generating Envoy config") {
 				filtered = append(filtered, line)
 			}
