@@ -179,6 +179,14 @@ func (v *Validator) buildSymbolTable() {
 		}
 		v.signalNames[s.SignalType][s.Name] = true
 	}
+	if v.signalNames[config.SignalTypeProjection] == nil {
+		v.signalNames[config.SignalTypeProjection] = make(map[string]bool)
+	}
+	for _, mapping := range v.prog.ProjectionMappings {
+		for _, output := range mapping.Outputs {
+			v.signalNames[config.SignalTypeProjection][output.Name] = true
+		}
+	}
 
 	for _, m := range v.prog.Models {
 		v.modelNames[m.Name] = true

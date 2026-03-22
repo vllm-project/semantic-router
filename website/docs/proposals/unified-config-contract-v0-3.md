@@ -65,7 +65,7 @@ DSL now owns only:
 
 - `routing.modelCards`
 - `routing.signals`
-- `routing.signals.signal_groups` as coordination metadata for declared routing signals
+- `routing.projections` for signal coordination and derived routing outputs
 - `routing.decisions`
 
 It no longer owns endpoints, API keys, listeners, or router-global runtime settings.

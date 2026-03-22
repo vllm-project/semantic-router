@@ -9,7 +9,7 @@ import (
 )
 
 func (c *Classifier) applySignalGroups(results *SignalResults) *SignalResults {
-	if results == nil || len(c.Config.SignalGroups) == 0 {
+	if results == nil || len(c.Config.Projections.Partitions) == 0 {
 		return results
 	}
 
@@ -33,7 +33,7 @@ func (c *Classifier) applySignalGroupsForType(
 	confidences map[string]float64,
 ) []string {
 	result := matched
-	for _, group := range c.Config.SignalGroups {
+	for _, group := range c.Config.Projections.Partitions {
 		members := c.signalGroupMembersForType(group, signalType)
 		if len(members) <= 1 {
 			continue
@@ -44,7 +44,7 @@ func (c *Classifier) applySignalGroupsForType(
 	return result
 }
 
-func (c *Classifier) signalGroupMembersForType(group config.SignalGroup, signalType string) []string {
+func (c *Classifier) signalGroupMembersForType(group config.ProjectionPartition, signalType string) []string {
 	exists := make(map[string]struct{})
 
 	switch signalType {
@@ -72,7 +72,7 @@ func (c *Classifier) signalGroupMembersForType(group config.SignalGroup, signalT
 
 func applySignalGroupToMatches(
 	signalType string,
-	group config.SignalGroup,
+	group config.ProjectionPartition,
 	groupMembers []string,
 	matched []string,
 	confidences map[string]float64,
@@ -127,7 +127,7 @@ func applySignalGroupToMatches(
 
 func applySignalGroupDefaultFallback(
 	signalType string,
-	group config.SignalGroup,
+	group config.ProjectionPartition,
 	memberSet map[string]struct{},
 	matched []string,
 ) []string {
@@ -154,7 +154,7 @@ func applySignalGroupDefaultFallback(
 
 func selectSignalGroupWinner(
 	signalType string,
-	group config.SignalGroup,
+	group config.ProjectionPartition,
 	contenders []string,
 	confidences map[string]float64,
 ) (string, float64) {

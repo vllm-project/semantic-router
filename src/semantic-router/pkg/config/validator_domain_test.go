@@ -88,7 +88,9 @@ func TestValidateDomainContractsRejectsUnsupportedSoftmaxGroupImplicitDomain(t *
 		IntelligentRouting: IntelligentRouting{
 			Signals: Signals{
 				Categories: []Category{testDomainCategory("balance_demo_compact")},
-				SignalGroups: []SignalGroup{{
+			},
+			Projections: Projections{
+				Partitions: []ProjectionPartition{{
 					Name:      "domain_partition",
 					Semantics: "softmax_exclusive",
 					Members:   []string{"balance_demo_compact"},

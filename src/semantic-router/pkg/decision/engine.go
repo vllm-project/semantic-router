@@ -72,6 +72,7 @@ type SignalMatches struct {
 	AuthzRules        []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
 	JailbreakRules    []string // Jailbreak rule names matched (confidence >= threshold)
 	PIIRules          []string // PII rule names matched (denied PII types detected)
+	ProjectionRules   []string // Derived routing outputs from routing.projections.mappings
 
 	SignalConfidences map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
 }
@@ -214,6 +215,7 @@ func (e *DecisionEngine) matchesSignalType(
 		"authz":         signals.AuthzRules,
 		"jailbreak":     signals.JailbreakRules,
 		"pii":           signals.PIIRules,
+		"projection":    signals.ProjectionRules,
 	}
 
 	rules, ok := ruleSets[normalizedType]

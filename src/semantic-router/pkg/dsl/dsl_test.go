@@ -4250,10 +4250,10 @@ ROUTE r1 { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	if len(cfg.SignalGroups) != 1 {
+	if len(cfg.Projections.Partitions) != 1 {
 		t.Fatalf("expected 1 signal group in compiled config")
 	}
-	sg := cfg.SignalGroups[0]
+	sg := cfg.Projections.Partitions[0]
 	if sg.Semantics != "softmax_exclusive" {
 		t.Errorf("semantics = %q", sg.Semantics)
 	}
@@ -4350,6 +4350,112 @@ SIGNAL_GROUP test_group {
 	}
 	if !found {
 		t.Error("expected constraint about missing temperature for softmax_exclusive")
+	}
+}
+
+func TestParseProjectionDeclarations(t *testing.T) {
+	input := `
+SIGNAL keyword reasoning_request_markers {
+  operator: "OR"
+  keywords: ["reason carefully"]
+}
+SIGNAL context long_context {
+  min_tokens: "8K"
+  max_tokens: "256K"
+}
+
+PROJECTION score difficulty_score {
+  method: "weighted_sum"
+  inputs: [
+    { type: "keyword", name: "reasoning_request_markers", weight: 0.6, value_source: "confidence" },
+    { type: "context", name: "long_context", weight: 0.2 }
+  ]
+}
+
+PROJECTION mapping difficulty_band {
+  source: "difficulty_score"
+  method: "threshold_bands"
+  calibration: { method: "sigmoid_distance", slope: 10.0 }
+  outputs: [
+    { name: "balance_medium", lt: 0.7 },
+    { name: "balance_reasoning", gte: 0.7 }
+  ]
+}
+
+ROUTE reasoning_route {
+  PRIORITY 100
+  WHEN projection("balance_reasoning")
+  MODEL "m1"
+}
+`
+	prog, errs := Parse(input)
+	if len(errs) > 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	if len(prog.ProjectionScores) != 1 {
+		t.Fatalf("expected 1 projection score, got %d", len(prog.ProjectionScores))
+	}
+	if len(prog.ProjectionMappings) != 1 {
+		t.Fatalf("expected 1 projection mapping, got %d", len(prog.ProjectionMappings))
+	}
+	if got := prog.ProjectionScores[0].Inputs[0].SignalType; got != "keyword" {
+		t.Fatalf("first projection input type = %q, want keyword", got)
+	}
+	if got := prog.ProjectionMappings[0].Outputs[1].Name; got != "balance_reasoning" {
+		t.Fatalf("second projection output = %q, want balance_reasoning", got)
+	}
+}
+
+func TestCompileProjectionDeclarations(t *testing.T) {
+	input := `
+SIGNAL keyword reasoning_request_markers {
+  operator: "OR"
+  keywords: ["reason carefully"]
+}
+SIGNAL context long_context {
+  min_tokens: "8K"
+  max_tokens: "256K"
+}
+
+PROJECTION score difficulty_score {
+  method: "weighted_sum"
+  inputs: [
+    { type: "keyword", name: "reasoning_request_markers", weight: 0.6, value_source: "confidence" },
+    { type: "context", name: "long_context", weight: 0.2 }
+  ]
+}
+
+PROJECTION mapping difficulty_band {
+  source: "difficulty_score"
+  method: "threshold_bands"
+  calibration: { method: "sigmoid_distance", slope: 10.0 }
+  outputs: [
+    { name: "balance_medium", lt: 0.7 },
+    { name: "balance_reasoning", gte: 0.7 }
+  ]
+}
+
+ROUTE reasoning_route {
+  PRIORITY 100
+  WHEN projection("balance_reasoning")
+  MODEL "m1"
+}
+`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	if len(cfg.Projections.Scores) != 1 {
+		t.Fatalf("expected 1 projection score, got %d", len(cfg.Projections.Scores))
+	}
+	if len(cfg.Projections.Mappings) != 1 {
+		t.Fatalf("expected 1 projection mapping, got %d", len(cfg.Projections.Mappings))
+	}
+	if got := cfg.Projections.Mappings[0].Outputs[0].Name; got != "balance_medium" {
+		t.Fatalf("first projection output = %q, want balance_medium", got)
+	}
+	if got := cfg.Decisions[0].Rules.Conditions[0].Type; got != "projection" {
+		t.Fatalf("compiled route leaf type = %q, want projection", got)
 	}
 }
 
@@ -4929,8 +5035,8 @@ func assertConflictFreeParse(t *testing.T, prog *Program) {
 
 func assertConflictFreeCompile(t *testing.T, cfg *config.RouterConfig) {
 	t.Helper()
-	if len(cfg.SignalGroups) != 1 {
-		t.Errorf("expected 1 signal group in config, got %d", len(cfg.SignalGroups))
+	if len(cfg.Projections.Partitions) != 1 {
+		t.Errorf("expected 1 signal group in config, got %d", len(cfg.Projections.Partitions))
 	}
 	if cfg.Decisions[0].Tier != 1 {
 		t.Errorf("safety route tier = %d, want 1", cfg.Decisions[0].Tier)

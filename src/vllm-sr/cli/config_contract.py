@@ -134,6 +134,21 @@ def build_signal_reference_index(signals: Any) -> set[str]:
     return names
 
 
+def build_projection_reference_index(projections: Any) -> set[str]:
+    """Build the valid decision reference names for declared projection outputs."""
+    names: set[str] = set()
+    if not projections:
+        return names
+
+    for mapping in getattr(projections, "mappings", None) or []:
+        for output in getattr(mapping, "outputs", None) or []:
+            name = getattr(output, "name", None)
+            if name:
+                names.add(name)
+
+    return names
+
+
 def is_signal_condition_type(condition_type: str | None) -> bool:
     """Return whether a decision condition type references a routing signal."""
     if not condition_type:

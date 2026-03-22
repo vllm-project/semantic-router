@@ -30,7 +30,9 @@ func TestHandleGetConfigReturnsRoutingSurface(t *testing.T) {
 							},
 						},
 					},
-					SignalGroups: []config.SignalGroup{{
+				},
+				Projections: config.Projections{
+					Partitions: []config.ProjectionPartition{{
 						Name:        "subject_partition",
 						Semantics:   "softmax_exclusive",
 						Temperature: 0.1,
@@ -73,12 +75,15 @@ func TestHandleGetConfigReturnsRoutingSurface(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected routing document, got %#v", payload)
 	}
-	signals, ok := routing["signals"].(map[string]interface{})
-	if !ok {
+	if _, hasSignals := routing["signals"].(map[string]interface{}); !hasSignals {
 		t.Fatalf("expected routing.signals, got %#v", routing)
 	}
-	if _, ok := signals["signal_groups"]; !ok {
-		t.Fatalf("expected routing.signals.signal_groups in response, got %#v", signals)
+	projections, ok := routing["projections"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected routing.projections, got %#v", routing)
+	}
+	if _, ok := projections["partitions"]; !ok {
+		t.Fatalf("expected routing.projections.partitions in response, got %#v", projections)
 	}
 }
 
@@ -111,17 +116,19 @@ func TestHandleUpdateConfigMergesRoutingPayload(t *testing.T) {
 	body, err := json.Marshal(map[string]interface{}{
 		"routing": map[string]interface{}{
 			"signals": map[string]interface{}{
-				"signal_groups": []map[string]interface{}{{
+				"domains": []map[string]interface{}{
+					{"name": "math", "description": "math"},
+					{"name": "general", "description": "general", "mmlu_categories": []string{"other"}},
+				},
+			},
+			"projections": map[string]interface{}{
+				"partitions": []map[string]interface{}{{
 					"name":        "subject_partition",
 					"semantics":   "softmax_exclusive",
 					"temperature": 0.1,
 					"members":     []string{"math", "general"},
 					"default":     "general",
 				}},
-				"domains": []map[string]interface{}{
-					{"name": "math", "description": "math"},
-					{"name": "general", "description": "general", "mmlu_categories": []string{"other"}},
-				},
 			},
 		},
 	})
@@ -137,8 +144,8 @@ func TestHandleUpdateConfigMergesRoutingPayload(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
 	}
-	if len(apiServer.config.SignalGroups) != 1 {
-		t.Fatalf("expected updated config to include signal group, got %+v", apiServer.config.SignalGroups)
+	if len(apiServer.config.Projections.Partitions) != 1 {
+		t.Fatalf("expected updated config to include projection partition, got %+v", apiServer.config.Projections.Partitions)
 	}
 	if len(apiServer.config.Categories) != 2 {
 		t.Fatalf("expected updated domains to be applied, got %+v", apiServer.config.Categories)
@@ -188,12 +195,32 @@ func TestHandleClassificationMetricsReportsCounts(t *testing.T) {
 					}},
 					KeywordRules:   []config.KeywordRule{{Name: "urgent"}},
 					EmbeddingRules: []config.EmbeddingRule{{Name: "fast_qa_en"}},
-					SignalGroups: []config.SignalGroup{{
+				},
+				Projections: config.Projections{
+					Partitions: []config.ProjectionPartition{{
 						Name:        "subject_partition",
 						Semantics:   "softmax_exclusive",
 						Temperature: 0.1,
 						Members:     []string{"fast_qa_en", "fast_qa_default"},
 						Default:     "fast_qa_default",
+					}},
+					Scores: []config.ProjectionScore{{
+						Name:   "difficulty_score",
+						Method: "weighted_sum",
+						Inputs: []config.ProjectionScoreInput{{
+							Type:   config.SignalTypeKeyword,
+							Name:   "urgent",
+							Weight: 0.2,
+						}},
+					}},
+					Mappings: []config.ProjectionMapping{{
+						Name:   "difficulty_band",
+						Source: "difficulty_score",
+						Method: "threshold_bands",
+						Outputs: []config.ProjectionMappingOutput{{
+							Name: "balance_medium",
+							GTE:  floatPtr(0.2),
+						}},
 					}},
 				},
 				Decisions: []config.Decision{{
@@ -221,10 +248,19 @@ func TestHandleClassificationMetricsReportsCounts(t *testing.T) {
 	if response.DecisionCount != 1 {
 		t.Fatalf("decision_count = %d, want 1", response.DecisionCount)
 	}
-	if response.SignalGroupCount != 1 {
-		t.Fatalf("signal_group_count = %d, want 1", response.SignalGroupCount)
+	if response.ProjectionPartitionCount != 1 || response.ProjectionScoreCount != 1 || response.ProjectionMappingCount != 1 {
+		t.Fatalf("unexpected projection counts: %+v", response)
 	}
 	if response.SignalCounts["domains"] != 1 || response.SignalCounts["embeddings"] != 1 {
 		t.Fatalf("unexpected signal counts: %+v", response.SignalCounts)
 	}
+	if response.SignalCounts["projection_partitions"] != 1 ||
+		response.SignalCounts["projection_scores"] != 1 ||
+		response.SignalCounts["projection_mappings"] != 1 {
+		t.Fatalf("unexpected projection signal counts: %+v", response.SignalCounts)
+	}
+}
+
+func floatPtr(v float64) *float64 {
+	return &v
 }

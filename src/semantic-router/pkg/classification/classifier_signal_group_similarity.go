@@ -26,7 +26,7 @@ func (c *Classifier) AnalyzeSoftmaxSignalGroupCentroids(threshold float64) ([]Si
 	}
 
 	rulesByName := embeddingRulesByName(c.Config.EmbeddingRules)
-	groups := softmaxEmbeddingSignalGroups(c.Config.SignalGroups, rulesByName)
+	groups := softmaxEmbeddingSignalGroups(c.Config.Projections.Partitions, rulesByName)
 	if len(groups) == 0 {
 		return nil, nil
 	}
@@ -57,7 +57,7 @@ func (c *Classifier) AnalyzeSoftmaxSignalGroupCentroids(threshold float64) ([]Si
 }
 
 func (c *Classifier) analyzeSoftmaxEmbeddingGroup(
-	group config.SignalGroup,
+	group config.ProjectionPartition,
 	rulesByName map[string]config.EmbeddingRule,
 	centroids map[string][]float32,
 	threshold float64,
@@ -87,7 +87,7 @@ func (c *Classifier) analyzeSoftmaxEmbeddingGroup(
 }
 
 func (c *Classifier) signalGroupCentroidWarningsForMember(
-	group config.SignalGroup,
+	group config.ProjectionPartition,
 	left string,
 	leftCentroid []float32,
 	remainingMembers []string,
@@ -124,10 +124,10 @@ func embeddingRulesByName(rules []config.EmbeddingRule) map[string]config.Embedd
 }
 
 func softmaxEmbeddingSignalGroups(
-	groups []config.SignalGroup,
+	groups []config.ProjectionPartition,
 	rulesByName map[string]config.EmbeddingRule,
-) []config.SignalGroup {
-	result := make([]config.SignalGroup, 0)
+) []config.ProjectionPartition {
+	result := make([]config.ProjectionPartition, 0)
 	for _, group := range groups {
 		if !strings.EqualFold(group.Semantics, "softmax_exclusive") {
 			continue

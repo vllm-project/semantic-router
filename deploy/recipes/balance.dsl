@@ -417,6 +417,30 @@ SIGNAL_GROUP balance_intent_partition {
   default: "general_chat_fallback"
 }
 
+PROJECTION score difficulty_score {
+  method: "weighted_sum"
+  inputs: [{ type: "keyword", name: "simple_request_markers", weight: -0.28 }, { type: "embedding", name: "fast_qa_en", weight: -0.16, value_source: "confidence" }, { type: "embedding", name: "fast_qa_zh", weight: -0.16, value_source: "confidence" }, { type: "context", name: "short_context", weight: -0.1 }, { type: "context", name: "medium_context", weight: 0.03 }, { type: "context", name: "long_context", weight: 0.18 }, { type: "keyword", name: "reasoning_request_markers", weight: 0.22, value_source: "confidence" }, { type: "keyword", name: "multi_step_markers", weight: 0.14, value_source: "confidence" }, { type: "keyword", name: "code_request_markers", weight: 0.12, value_source: "confidence" }, { type: "keyword", name: "architecture_markers", weight: 0.1, value_source: "confidence" }, { type: "keyword", name: "research_request_markers", weight: 0.1, value_source: "confidence" }, { type: "keyword", name: "constraint_markers", weight: 0.08, value_source: "confidence" }, { type: "keyword", name: "output_format_markers", weight: 0.05, value_source: "confidence" }, { type: "keyword", name: "negation_markers", weight: 0.03, value_source: "confidence" }, { type: "keyword", name: "agentic_request_markers", weight: 0.14, value_source: "confidence" }, { type: "keyword", name: "implementation_markers", weight: 0.1, value_source: "confidence" }, { type: "embedding", name: "reasoning_general_en", weight: 0.18, value_source: "confidence" }, { type: "embedding", name: "reasoning_general_zh", weight: 0.18, value_source: "confidence" }, { type: "embedding", name: "agentic_workflows", weight: 0.18, value_source: "confidence" }, { type: "embedding", name: "architecture_design", weight: 0.15, value_source: "confidence" }, { type: "embedding", name: "complex_stem", weight: 0.14, value_source: "confidence" }, { type: "embedding", name: "research_synthesis", weight: 0.12, value_source: "confidence" }, { type: "embedding", name: "premium_legal_analysis", weight: 0.16, value_source: "confidence" }, { type: "complexity", name: "general_reasoning:medium", weight: 0.1 }, { type: "complexity", name: "general_reasoning:hard", weight: 0.22 }, { type: "complexity", name: "code_task:medium", weight: 0.08 }, { type: "complexity", name: "code_task:hard", weight: 0.18 }, { type: "complexity", name: "math_task:hard", weight: 0.2 }, { type: "complexity", name: "legal_risk:hard", weight: 0.16 }, { type: "complexity", name: "agentic_delivery:medium", weight: 0.1 }, { type: "complexity", name: "agentic_delivery:hard", weight: 0.22 }, { type: "complexity", name: "evidence_synthesis:medium", weight: 0.1 }, { type: "complexity", name: "evidence_synthesis:hard", weight: 0.18 }]
+}
+
+PROJECTION score verification_pressure {
+  method: "weighted_sum"
+  inputs: [{ type: "fact_check", name: "needs_fact_check", weight: 0.28 }, { type: "keyword", name: "verification_markers", weight: 0.2, value_source: "confidence" }, { type: "keyword", name: "reference_heavy_markers", weight: 0.16, value_source: "confidence" }, { type: "keyword", name: "research_request_markers", weight: 0.1, value_source: "confidence" }, { type: "keyword", name: "legal_risk_markers", weight: 0.1, value_source: "confidence" }, { type: "domain", name: "health", weight: 0.1 }, { type: "domain", name: "law", weight: 0.12 }, { type: "domain", name: "business", weight: 0.06 }, { type: "domain", name: "history", weight: 0.06 }, { type: "user_feedback", name: "wrong_answer", weight: 0.12 }, { type: "keyword", name: "correction_feedback_markers", weight: 0.06, value_source: "confidence" }, { type: "context", name: "long_context", weight: 0.04 }]
+}
+
+PROJECTION mapping difficulty_band {
+  source: "difficulty_score"
+  method: "threshold_bands"
+  calibration: { method: "sigmoid_distance", slope: 10 }
+  outputs: [{ name: "balance_simple", lt: 0.18 }, { name: "balance_medium", gte: 0.18, lt: 0.48 }, { name: "balance_complex", gte: 0.48, lt: 0.82 }, { name: "balance_reasoning", gte: 0.82 }]
+}
+
+PROJECTION mapping verification_band {
+  source: "verification_pressure"
+  method: "threshold_bands"
+  calibration: { method: "sigmoid_distance", slope: 12 }
+  outputs: [{ name: "verification_standard", lt: 0.35 }, { name: "verification_required", gte: 0.35 }]
+}
+
 # =============================================================================
 # MODELS
 # =============================================================================
@@ -479,7 +503,7 @@ PLUGIN router_replay router_replay {}
 ROUTE premium_legal (description = "Premium-only route for high-value legal and compliance analysis.") {
   PRIORITY 260
   TIER 1
-  WHEN domain("law") AND (embedding("premium_legal_analysis") OR complexity("legal_risk:medium") OR complexity("legal_risk:hard") OR keyword("legal_risk_markers") AND (keyword("reference_heavy_markers") OR keyword("constraint_markers")))
+  WHEN domain("law") AND projection("verification_required") AND (projection("balance_complex") OR projection("balance_reasoning") OR embedding("premium_legal_analysis") OR complexity("legal_risk:hard"))
   MODEL "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -493,7 +517,7 @@ ROUTE premium_legal (description = "Premium-only route for high-value legal and 
 ROUTE reasoning_math (description = "Dedicated reasoning tier for proofs, derivations, and hard math.") {
   PRIORITY 250
   TIER 2
-  WHEN domain("math") AND (complexity("math_task:hard") OR keyword("reasoning_request_markers") OR embedding("reasoning_general_en") OR embedding("reasoning_general_zh"))
+  WHEN domain("math") AND projection("balance_reasoning")
   MODEL "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -507,7 +531,7 @@ ROUTE reasoning_math (description = "Dedicated reasoning tier for proofs, deriva
 ROUTE reasoning_philosophy (description = "Dedicated reasoning tier for philosophy, ethics, and abstract argumentation.") {
   PRIORITY 245
   TIER 3
-  WHEN domain("philosophy") AND (keyword("reasoning_request_markers") OR embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR complexity("general_reasoning:hard"))
+  WHEN domain("philosophy") AND projection("balance_reasoning")
   MODEL "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -521,7 +545,7 @@ ROUTE reasoning_philosophy (description = "Dedicated reasoning tier for philosop
 ROUTE complex_agentic (description = "High-structure execution plans, migrations, and workflow orchestration with multi-step constraints.") {
   PRIORITY 243
   TIER 4
-  WHEN (embedding("agentic_workflows") OR preference("agentic_execution") OR keyword("agentic_request_markers") OR keyword("implementation_markers")) AND (complexity("agentic_delivery:hard") OR keyword("multi_step_markers") OR keyword("constraint_markers") OR keyword("output_format_markers") OR context("long_context")) AND (domain("business") OR domain("computer science") OR domain("economics") OR domain("engineering") OR domain("other"))
+  WHEN (embedding("agentic_workflows") OR preference("agentic_execution") OR keyword("agentic_request_markers") OR keyword("implementation_markers")) AND (projection("balance_complex") OR projection("balance_reasoning")) AND (domain("business") OR domain("computer science") OR domain("economics") OR domain("engineering") OR domain("other"))
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -535,7 +559,7 @@ ROUTE complex_agentic (description = "High-structure execution plans, migrations
 ROUTE complex_architecture (description = "Complex systems, architecture, and large-scope technical design.") {
   PRIORITY 240
   TIER 5
-  WHEN (domain("computer science") OR domain("engineering")) AND (embedding("agentic_workflows") OR embedding("architecture_design") OR complexity("agentic_delivery:hard") OR complexity("code_task:hard") OR keyword("architecture_markers") OR keyword("implementation_markers")) AND (keyword("multi_step_markers") OR keyword("agentic_request_markers") OR keyword("output_format_markers") OR keyword("constraint_markers") OR complexity("general_reasoning:hard") OR context("long_context"))
+  WHEN (domain("computer science") OR domain("engineering")) AND (embedding("agentic_workflows") OR embedding("architecture_design") OR keyword("architecture_markers")) AND (projection("balance_complex") OR projection("balance_reasoning"))
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -549,7 +573,7 @@ ROUTE complex_architecture (description = "Complex systems, architecture, and la
 ROUTE complex_stem (description = "Complex STEM analysis outside the dedicated math reasoning route.") {
   PRIORITY 235
   TIER 6
-  WHEN (domain("physics") OR domain("chemistry") OR domain("biology") OR domain("engineering")) AND (embedding("complex_stem") OR embedding("research_synthesis") OR complexity("evidence_synthesis:hard") OR complexity("general_reasoning:hard") OR keyword("reasoning_request_markers") OR keyword("research_request_markers") OR context("long_context"))
+  WHEN (domain("physics") OR domain("chemistry") OR domain("biology") OR domain("engineering")) AND (embedding("complex_stem") OR embedding("research_synthesis") OR projection("balance_complex") OR projection("balance_reasoning"))
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -563,7 +587,7 @@ ROUTE complex_stem (description = "Complex STEM analysis outside the dedicated m
 ROUTE feedback_wrong_answer_verified (description = "Narrow recovery path for explicit corrections on evidence-sensitive or high-stakes follow-ups.") {
   PRIORITY 232
   TIER 7
-  WHEN user_feedback("wrong_answer") AND keyword("correction_feedback_markers") AND (fact_check("needs_fact_check") OR keyword("reference_heavy_markers") OR domain("law") OR domain("business") OR domain("history")) AND (context("short_context") OR context("medium_context"))
+  WHEN user_feedback("wrong_answer") AND keyword("correction_feedback_markers") AND projection("verification_required") AND (context("short_context") OR context("medium_context"))
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
     enabled: true
@@ -577,7 +601,7 @@ ROUTE feedback_wrong_answer_verified (description = "Narrow recovery path for ex
 ROUTE medium_code_general (description = "Low-medium cost coding, debugging, refactoring, and technical Q&A.") {
   PRIORITY 220
   TIER 8
-  WHEN (domain("computer science") OR keyword("code_request_markers") OR keyword("implementation_markers") OR embedding("agentic_workflows") OR embedding("code_general") OR preference("coding_partner") OR preference("agentic_execution")) AND (complexity("agentic_delivery:easy") OR complexity("agentic_delivery:medium") OR complexity("code_task:easy") OR complexity("code_task:medium") OR complexity("general_reasoning:easy") OR complexity("general_reasoning:medium") OR keyword("output_format_markers"))
+  WHEN (domain("computer science") OR keyword("code_request_markers") OR keyword("implementation_markers") OR embedding("agentic_workflows") OR embedding("code_general") OR preference("coding_partner") OR preference("agentic_execution")) AND (projection("balance_medium") OR projection("balance_complex"))
   MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
     enabled: true
@@ -591,7 +615,7 @@ ROUTE medium_code_general (description = "Low-medium cost coding, debugging, ref
 ROUTE medium_business (description = "Mid-tier business and economics analysis without premium escalation.") {
   PRIORITY 215
   TIER 10
-  WHEN (domain("business") OR domain("economics")) AND (embedding("business_analysis") OR embedding("research_synthesis") OR complexity("evidence_synthesis:easy") OR complexity("evidence_synthesis:medium") OR complexity("general_reasoning:easy") OR complexity("general_reasoning:medium") OR preference("structured_delivery") OR keyword("output_format_markers"))
+  WHEN (domain("business") OR domain("economics")) AND (embedding("business_analysis") OR embedding("research_synthesis") OR preference("structured_delivery")) AND (projection("balance_medium") OR projection("balance_complex"))
   MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
     enabled: true
@@ -605,7 +629,7 @@ ROUTE medium_business (description = "Mid-tier business and economics analysis w
 ROUTE verified_business (description = "Conservative factual overlay for evidence-sensitive business and economics requests.") {
   PRIORITY 216
   TIER 9
-  WHEN (domain("business") OR domain("economics")) AND fact_check("needs_fact_check") AND (keyword("research_request_markers") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR keyword("output_format_markers")) AND (embedding("business_analysis") OR embedding("research_synthesis") OR complexity("evidence_synthesis:medium") OR complexity("evidence_synthesis:hard") OR preference("structured_delivery"))
+  WHEN (domain("business") OR domain("economics")) AND projection("verification_required") AND (projection("balance_medium") OR projection("balance_complex") OR embedding("business_analysis") OR embedding("research_synthesis"))
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -619,7 +643,7 @@ ROUTE verified_business (description = "Conservative factual overlay for evidenc
 ROUTE verified_health (description = "Conservative route for evidence-sensitive health and medical guidance.") {
   PRIORITY 214
   TIER 11
-  WHEN domain("health") AND (fact_check("needs_fact_check") OR keyword("research_request_markers") OR keyword("verification_markers") OR keyword("reference_heavy_markers")) AND (embedding("health_guidance") OR embedding("research_synthesis") OR complexity("evidence_synthesis:medium") OR complexity("evidence_synthesis:hard") OR complexity("general_reasoning:medium") OR complexity("general_reasoning:hard") OR keyword("constraint_markers"))
+  WHEN domain("health") AND projection("verification_required") AND (embedding("health_guidance") OR embedding("research_synthesis") OR projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning"))
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
     enabled: true
@@ -633,7 +657,7 @@ ROUTE verified_health (description = "Conservative route for evidence-sensitive 
 ROUTE medium_history (description = "Mid-tier historical explanation and comparison with better writing quality.") {
   PRIORITY 210
   TIER 13
-  WHEN domain("history") AND (embedding("history_explainer") OR embedding("research_synthesis") OR complexity("evidence_synthesis:easy") OR complexity("evidence_synthesis:medium") OR complexity("general_reasoning:easy") OR complexity("general_reasoning:medium"))
+  WHEN domain("history") AND (embedding("history_explainer") OR embedding("research_synthesis")) AND (projection("balance_medium") OR projection("balance_complex"))
   MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
     enabled: true
@@ -647,7 +671,7 @@ ROUTE medium_history (description = "Mid-tier historical explanation and compari
 ROUTE verified_history (description = "Conservative factual overlay for source-sensitive history explanation.") {
   PRIORITY 211
   TIER 12
-  WHEN domain("history") AND fact_check("needs_fact_check") AND (keyword("research_request_markers") OR keyword("verification_markers") OR keyword("reference_heavy_markers")) AND (embedding("history_explainer") OR embedding("research_synthesis") OR complexity("evidence_synthesis:medium") OR complexity("evidence_synthesis:hard") OR complexity("general_reasoning:medium"))
+  WHEN domain("history") AND projection("verification_required") AND (embedding("history_explainer") OR embedding("research_synthesis") OR projection("balance_medium") OR projection("balance_complex"))
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -661,7 +685,7 @@ ROUTE verified_history (description = "Conservative factual overlay for source-s
 ROUTE medium_psychology (description = "Mid-tier psychology and behavior queries with nuanced explanation.") {
   PRIORITY 205
   TIER 14
-  WHEN domain("psychology") AND (embedding("psychology_support") OR embedding("research_synthesis") OR complexity("evidence_synthesis:easy") OR complexity("evidence_synthesis:medium") OR complexity("general_reasoning:easy") OR complexity("general_reasoning:medium"))
+  WHEN domain("psychology") AND (embedding("psychology_support") OR embedding("research_synthesis")) AND (projection("balance_medium") OR projection("balance_complex"))
   MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "low")
   PLUGIN router_replay {
     enabled: true
@@ -675,7 +699,7 @@ ROUTE medium_psychology (description = "Mid-tier psychology and behavior queries
 ROUTE medium_creative (description = "Mid-tier creative, copywriting, and ideation requests.") {
   PRIORITY 200
   TIER 15
-  WHEN (keyword("creative_request_markers") OR embedding("creative_tasks") OR preference("creative_collaboration")) AND (complexity("general_reasoning:easy") OR complexity("general_reasoning:medium") OR context("short_context") OR context("medium_context"))
+  WHEN (keyword("creative_request_markers") OR embedding("creative_tasks") OR preference("creative_collaboration")) AND (projection("balance_simple") OR projection("balance_medium"))
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -689,7 +713,7 @@ ROUTE medium_creative (description = "Mid-tier creative, copywriting, and ideati
 ROUTE reasoning_general (description = "General reasoning escalation for non-domain-specific deep analysis.") {
   PRIORITY 190
   TIER 16
-  WHEN (embedding("agentic_workflows") OR embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR embedding("research_synthesis") OR keyword("reasoning_request_markers") OR keyword("multi_step_markers") OR keyword("agentic_request_markers") OR keyword("research_request_markers")) AND (complexity("agentic_delivery:hard") OR complexity("evidence_synthesis:hard") OR complexity("general_reasoning:hard") OR context("long_context") OR keyword("constraint_markers") OR keyword("reference_heavy_markers") OR keyword("output_format_markers") OR keyword("negation_markers"))
+  WHEN (embedding("agentic_workflows") OR embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR embedding("research_synthesis") OR keyword("reasoning_request_markers") OR keyword("multi_step_markers") OR keyword("agentic_request_markers") OR keyword("research_request_markers")) AND (projection("balance_complex") OR projection("balance_reasoning"))
   MODEL "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -717,7 +741,7 @@ ROUTE feedback_need_clarification (description = "Narrow follow-up lane for expl
 ROUTE verified_fast_qa_zh (description = "Conservative factual overlay for Chinese short-context questions that explicitly ask for verification.") {
   PRIORITY 181
   TIER 18
-  WHEN embedding("fast_qa_zh") AND language("zh") AND context("short_context") AND fact_check("needs_fact_check") AND (keyword("verification_markers") OR keyword("reference_heavy_markers"))
+  WHEN embedding("fast_qa_zh") AND language("zh") AND context("short_context") AND projection("balance_simple") AND projection("verification_required")
   MODEL "qwen/qwen3.5-rocm" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -731,7 +755,7 @@ ROUTE verified_fast_qa_zh (description = "Conservative factual overlay for Chine
 ROUTE simple_fast_qa_zh (description = "Cheapest short-context Chinese factual or definitional answers.") {
   PRIORITY 180
   TIER 19
-  WHEN embedding("fast_qa_zh") AND language("zh") AND context("short_context") AND (keyword("simple_request_markers") OR complexity("general_reasoning:easy") OR preference("concise_answers"))
+  WHEN embedding("fast_qa_zh") AND language("zh") AND context("short_context") AND projection("balance_simple")
   MODEL "qwen/qwen3.5-rocm" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -745,7 +769,7 @@ ROUTE simple_fast_qa_zh (description = "Cheapest short-context Chinese factual o
 ROUTE simple_fast_qa_en (description = "Cheapest short-context English factual or definitional answers.") {
   PRIORITY 175
   TIER 21
-  WHEN embedding("fast_qa_en") AND language("en") AND context("short_context") AND (keyword("simple_request_markers") OR complexity("general_reasoning:easy") OR preference("concise_answers"))
+  WHEN embedding("fast_qa_en") AND language("en") AND context("short_context") AND projection("balance_simple")
   MODEL "qwen/qwen3.5-rocm" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -759,7 +783,7 @@ ROUTE simple_fast_qa_en (description = "Cheapest short-context English factual o
 ROUTE verified_fast_qa_en (description = "Conservative factual overlay for English short-context questions that explicitly ask for verification.") {
   PRIORITY 176
   TIER 20
-  WHEN embedding("fast_qa_en") AND language("en") AND context("short_context") AND fact_check("needs_fact_check") AND (keyword("verification_markers") OR keyword("reference_heavy_markers"))
+  WHEN embedding("fast_qa_en") AND language("en") AND context("short_context") AND projection("balance_simple") AND projection("verification_required")
   MODEL "qwen/qwen3.5-rocm" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -773,7 +797,7 @@ ROUTE verified_fast_qa_en (description = "Conservative factual overlay for Engli
 ROUTE simple_general (description = "Lowest-cost fallback for everyday traffic and non-specialized requests.") {
   PRIORITY 170
   TIER 22
-  WHEN (context("short_context") AND (keyword("simple_request_markers") OR preference("concise_answers") OR domain("other") OR language("en") OR language("zh")) OR context("medium_context") AND domain("other"))
+  WHEN (context("short_context") AND projection("balance_simple") OR context("medium_context") AND domain("other") AND (projection("balance_simple") OR projection("balance_medium")))
   MODEL "qwen/qwen3.5-rocm" (reasoning = false)
   PLUGIN router_replay {
     enabled: true

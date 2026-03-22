@@ -14,6 +14,7 @@ func (v *Validator) checkConflicts() {
 	v.checkDomainSignalOverlap()
 	v.checkSameSignalTypeGuard()
 	v.checkSignalGroups()
+	v.checkProjections()
 	v.checkTestBlocks()
 	v.checkTierConstraints()
 }
@@ -524,6 +525,201 @@ func (v *Validator) suggestSignalByName(name string) *QuickFix {
 	return &QuickFix{
 		Description: fmt.Sprintf("Change to %q", closest),
 		NewText:     closest,
+	}
+}
+
+func (v *Validator) checkProjections() {
+	scoreNames := make(map[string]bool, len(v.prog.ProjectionScores))
+	for _, score := range v.prog.ProjectionScores {
+		if score.Name == "" {
+			v.addDiag(DiagConstraint, score.Pos, "PROJECTION score: name cannot be empty", nil)
+			continue
+		}
+		if scoreNames[score.Name] {
+			v.addDiag(DiagConstraint, score.Pos, fmt.Sprintf("PROJECTION score %q: duplicate score name", score.Name), nil)
+			continue
+		}
+		scoreNames[score.Name] = true
+		v.checkProjectionScore(score)
+	}
+
+	outputNames := make(map[string]bool)
+	for _, mapping := range v.prog.ProjectionMappings {
+		if mapping.Name == "" {
+			v.addDiag(DiagConstraint, mapping.Pos, "PROJECTION mapping: name cannot be empty", nil)
+			continue
+		}
+		v.checkProjectionMapping(mapping, scoreNames, outputNames)
+	}
+}
+
+func (v *Validator) checkProjectionScore(score *ProjectionScoreDecl) {
+	context := fmt.Sprintf("PROJECTION score %s", score.Name)
+	if score.Method == "" {
+		score.Method = "weighted_sum"
+	}
+	if score.Method != "weighted_sum" {
+		v.addDiag(
+			DiagConstraint,
+			score.Pos,
+			fmt.Sprintf("%s: unknown method %q (supported: weighted_sum)", context, score.Method),
+			nil,
+		)
+	}
+	if len(score.Inputs) == 0 {
+		v.addDiag(DiagConstraint, score.Pos, fmt.Sprintf("%s: inputs cannot be empty", context), nil)
+		return
+	}
+
+	for _, input := range score.Inputs {
+		v.checkProjectionScoreInput(context, score.Pos, input)
+	}
+}
+
+func (v *Validator) checkProjectionScoreInput(context string, pos Position, input *ProjectionScoreInputDecl) {
+	if input == nil {
+		return
+	}
+	if !isProjectionInputTypeSupported(input.SignalType) {
+		v.addDiag(
+			DiagConstraint,
+			pos,
+			fmt.Sprintf(
+				"%s: input %s(%q) uses unsupported type %q",
+				context,
+				input.SignalType,
+				input.SignalName,
+				input.SignalType,
+			),
+			nil,
+		)
+		return
+	}
+	if !v.signalNames[input.SignalType][input.SignalName] {
+		v.addDiag(
+			DiagWarning,
+			pos,
+			fmt.Sprintf("%s: input %s(%q) is not defined", context, input.SignalType, input.SignalName),
+			v.suggestSignalByName(input.SignalName),
+		)
+	}
+	switch input.ValueSource {
+	case "", "binary", "confidence":
+	default:
+		v.addDiag(
+			DiagConstraint,
+			pos,
+			fmt.Sprintf(
+				"%s: input %s(%q) has unsupported value_source %q (supported: binary, confidence)",
+				context,
+				input.SignalType,
+				input.SignalName,
+				input.ValueSource,
+			),
+			nil,
+		)
+	}
+}
+
+func isProjectionInputTypeSupported(signalType string) bool {
+	switch signalType {
+	case config.SignalTypeKeyword,
+		config.SignalTypeEmbedding,
+		config.SignalTypeDomain,
+		config.SignalTypeFactCheck,
+		config.SignalTypeUserFeedback,
+		config.SignalTypePreference,
+		config.SignalTypeLanguage,
+		config.SignalTypeContext,
+		config.SignalTypeComplexity,
+		config.SignalTypeModality,
+		config.SignalTypeAuthz,
+		config.SignalTypeJailbreak,
+		config.SignalTypePII:
+		return true
+	default:
+		return false
+	}
+}
+
+func (v *Validator) checkProjectionMapping(mapping *ProjectionMappingDecl, scoreNames map[string]bool, outputNames map[string]bool) {
+	context := fmt.Sprintf("PROJECTION mapping %s", mapping.Name)
+	if mapping.Method == "" {
+		mapping.Method = "threshold_bands"
+	}
+	if !scoreNames[mapping.Source] {
+		v.addDiag(
+			DiagConstraint,
+			mapping.Pos,
+			fmt.Sprintf("%s: source %q is not a declared projection score", context, mapping.Source),
+			nil,
+		)
+	}
+	if mapping.Method != "threshold_bands" {
+		v.addDiag(
+			DiagConstraint,
+			mapping.Pos,
+			fmt.Sprintf("%s: unknown method %q (supported: threshold_bands)", context, mapping.Method),
+			nil,
+		)
+	}
+	if mapping.Calibration != nil {
+		switch mapping.Calibration.Method {
+		case "", "sigmoid_distance":
+		default:
+			v.addDiag(
+				DiagConstraint,
+				mapping.Pos,
+				fmt.Sprintf(
+					"%s: unsupported calibration method %q (supported: sigmoid_distance)",
+					context,
+					mapping.Calibration.Method,
+				),
+				nil,
+			)
+		}
+	}
+	if len(mapping.Outputs) == 0 {
+		v.addDiag(DiagConstraint, mapping.Pos, fmt.Sprintf("%s: outputs cannot be empty", context), nil)
+		return
+	}
+	for _, output := range mapping.Outputs {
+		v.checkProjectionMappingOutput(context, mapping.Pos, output, outputNames)
+	}
+}
+
+func (v *Validator) checkProjectionMappingOutput(
+	context string,
+	pos Position,
+	output *ProjectionMappingOutputDecl,
+	outputNames map[string]bool,
+) {
+	if output == nil {
+		return
+	}
+	if output.Name == "" {
+		v.addDiag(DiagConstraint, pos, fmt.Sprintf("%s: output name cannot be empty", context), nil)
+		return
+	}
+	if outputNames[output.Name] {
+		v.addDiag(DiagConstraint, pos, fmt.Sprintf("%s: duplicate output name %q", context, output.Name), nil)
+		return
+	}
+	outputNames[output.Name] = true
+
+	if output.GT == nil && output.GTE == nil && output.LT == nil && output.LTE == nil {
+		v.addDiag(
+			DiagConstraint,
+			pos,
+			fmt.Sprintf("%s output %q: at least one threshold bound is required", context, output.Name),
+			nil,
+		)
+	}
+	if output.GT != nil && output.GTE != nil {
+		v.addDiag(DiagConstraint, pos, fmt.Sprintf("%s output %q: cannot set both gt and gte", context, output.Name), nil)
+	}
+	if output.LT != nil && output.LTE != nil {
+		v.addDiag(DiagConstraint, pos, fmt.Sprintf("%s output %q: cannot set both lt and lte", context, output.Name), nil)
 	}
 }
 

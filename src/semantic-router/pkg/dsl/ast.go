@@ -34,6 +34,7 @@ type rawTopLevel struct {
 	Pos          lexer.Position
 	SignalGroup  *rawSignalGroupDecl  `parser:"  @@"`
 	Signal       *rawSignalDecl       `parser:"| @@"`
+	Projection   *rawProjectionDecl   `parser:"| @@"`
 	Route        *rawRouteDecl        `parser:"| @@"`
 	DecisionTree *rawDecisionTreeDecl `parser:"| @@"`
 	Model        *rawModelDecl        `parser:"| @@"`
@@ -68,6 +69,14 @@ type rawSignalDecl struct {
 	SignalType string        `parser:"'SIGNAL' @Ident"`
 	Name       string        `parser:"@(Ident | String)"`
 	Fields     []*FieldEntry `parser:"'{' @@* '}'"`
+}
+
+// rawProjectionDecl: PROJECTION <score|mapping> <name> { fields... }
+type rawProjectionDecl struct {
+	Pos    lexer.Position
+	Kind   string        `parser:"'PROJECTION' @('score' | 'mapping')"`
+	Name   string        `parser:"@(Ident | String)"`
+	Fields []*FieldEntry `parser:"'{' @@* '}'"`
 }
 
 // rawRouteDecl: ROUTE <name> (opts...) { body... }
@@ -237,12 +246,14 @@ type ArrayVal struct {
 
 // Program is the root AST node, representing a complete DSL file.
 type Program struct {
-	Signals      []*SignalDecl
-	SignalGroups []*SignalGroupDecl
-	Routes       []*RouteDecl
-	Models       []*ModelDecl
-	Plugins      []*PluginDecl
-	TestBlocks   []*TestBlockDecl
+	Signals            []*SignalDecl
+	SignalGroups       []*SignalGroupDecl
+	ProjectionScores   []*ProjectionScoreDecl
+	ProjectionMappings []*ProjectionMappingDecl
+	Routes             []*RouteDecl
+	Models             []*ModelDecl
+	Plugins            []*PluginDecl
+	TestBlocks         []*TestBlockDecl
 }
 
 // SignalGroupDecl declares a mutually exclusive partition of signals.
@@ -255,6 +266,49 @@ type SignalGroupDecl struct {
 	Members     []string
 	Default     string
 	Pos         Position
+}
+
+// ProjectionScoreDecl defines a weighted derived score over base signals.
+type ProjectionScoreDecl struct {
+	Name   string
+	Method string
+	Inputs []*ProjectionScoreInputDecl
+	Pos    Position
+}
+
+// ProjectionScoreInputDecl is one weighted contribution to a projection score.
+type ProjectionScoreInputDecl struct {
+	SignalType  string
+	SignalName  string
+	Weight      float64
+	ValueSource string
+	Match       float64
+	Miss        float64
+}
+
+// ProjectionMappingDecl maps one score into named routing outputs.
+type ProjectionMappingDecl struct {
+	Name        string
+	Source      string
+	Method      string
+	Calibration *ProjectionMappingCalibrationDecl
+	Outputs     []*ProjectionMappingOutputDecl
+	Pos         Position
+}
+
+// ProjectionMappingCalibrationDecl controls confidence derived from the mapped band.
+type ProjectionMappingCalibrationDecl struct {
+	Method string
+	Slope  float64
+}
+
+// ProjectionMappingOutputDecl defines one threshold band emitted by a mapping.
+type ProjectionMappingOutputDecl struct {
+	Name string
+	LT   *float64
+	LTE  *float64
+	GT   *float64
+	GTE  *float64
 }
 
 // TestBlockDecl declares expected routing outcomes for specific queries.

@@ -14,7 +14,7 @@ func validateDomainContracts(cfg *RouterConfig) error {
 		declared[category.Name] = category
 	}
 
-	if err := validateSoftmaxDomainSignalGroups(cfg.SignalGroups, declared); err != nil {
+	if err := validateSoftmaxDomainPartitions(cfg.Projections.Partitions, declared); err != nil {
 		return err
 	}
 
@@ -44,13 +44,13 @@ func validateDeclaredDomain(category Category) error {
 	return nil
 }
 
-func validateSoftmaxDomainSignalGroups(groups []SignalGroup, declared map[string]Category) error {
+func validateSoftmaxDomainPartitions(groups []ProjectionPartition, declared map[string]Category) error {
 	for _, group := range groups {
-		if !shouldValidateSoftmaxDomainSignalGroup(group, declared) {
+		if !shouldValidateSoftmaxDomainPartition(group, declared) {
 			continue
 		}
 		for _, member := range group.Members {
-			if err := validateSoftmaxDomainSignalMember(group.Name, member, declared[member]); err != nil {
+			if err := validateSoftmaxDomainPartitionMember(group.Name, member, declared[member]); err != nil {
 				return err
 			}
 		}
@@ -58,17 +58,17 @@ func validateSoftmaxDomainSignalGroups(groups []SignalGroup, declared map[string
 	return nil
 }
 
-func shouldValidateSoftmaxDomainSignalGroup(group SignalGroup, declared map[string]Category) bool {
+func shouldValidateSoftmaxDomainPartition(group ProjectionPartition, declared map[string]Category) bool {
 	return group.Semantics == "softmax_exclusive" && allMembersDeclaredCategories(group.Members, declared)
 }
 
-func validateSoftmaxDomainSignalMember(groupName, member string, category Category) error {
+func validateSoftmaxDomainPartitionMember(groupName, member string, category Category) error {
 	if len(category.MMLUCategories) == 0 {
 		if IsSupportedRoutingDomainName(category.Name) {
 			return nil
 		}
 		return fmt.Errorf(
-			"routing.signals.signal_groups[%q]: domain member %q must use a supported routing domain name (%s) or declare mmlu_categories explicitly%s",
+			"routing.projections.partitions[%q]: domain member %q must use a supported routing domain name (%s) or declare mmlu_categories explicitly%s",
 			groupName,
 			member,
 			strings.Join(SupportedRoutingDomainNames(), ", "),
@@ -81,7 +81,7 @@ func validateSoftmaxDomainSignalMember(groupName, member string, category Catego
 			continue
 		}
 		return fmt.Errorf(
-			"routing.signals.signal_groups[%q]: domain member %q has unsupported mmlu_categories value %q; supported values: %s%s",
+			"routing.projections.partitions[%q]: domain member %q has unsupported mmlu_categories value %q; supported values: %s%s",
 			groupName,
 			member,
 			value,

@@ -10,12 +10,12 @@ Closed
 
 ## Summary
 
-The repository now parses, compiles, decompiles, validates, and enforces `SIGNAL_GROUP.default` as a live runtime fallback contract. Request-time grouped signal evaluation synthesizes the declared default member when no member in the group fires, and native DSL validation now also surfaces centroid-similarity warnings for `softmax_exclusive` embedding groups. The previous declarative-only gap is retired.
+The repository now parses, compiles, decompiles, validates, and enforces `SIGNAL_GROUP.default` as a live runtime fallback contract. The DSL authoring surface still uses `SIGNAL_GROUP`, while the canonical runtime/config surface now stores those partitions under `routing.projections.partitions`. Request-time grouped signal evaluation synthesizes the declared default member when no member in the group fires, and native DSL validation also surfaces centroid-similarity warnings for `softmax_exclusive` embedding groups. The previous declarative-only gap is retired.
 
 ## Evidence
 
 - [spec/dsl.md](../../../spec/dsl.md)
-- [src/semantic-router/pkg/config/signal_config.go](../../../src/semantic-router/pkg/config/signal_config.go)
+- [src/semantic-router/pkg/config/projection_config.go](../../../src/semantic-router/pkg/config/projection_config.go)
 - [src/semantic-router/pkg/dsl/validator_conflicts.go](../../../src/semantic-router/pkg/dsl/validator_conflicts.go)
 - [src/semantic-router/pkg/dsl/dsl_test.go](../../../src/semantic-router/pkg/dsl/dsl_test.go)
 - [src/semantic-router/pkg/classification/classifier_signal_groups.go](../../../src/semantic-router/pkg/classification/classifier_signal_groups.go)
@@ -40,6 +40,6 @@ The repository now parses, compiles, decompiles, validates, and enforces `SIGNAL
 
 ## Resolution
 
-- `src/semantic-router/pkg/classification/classifier_signal_groups.go` now appends the declared group default when no member in the group fires, so grouped routes retain a live fallback contract at request time.
+- `src/semantic-router/pkg/classification/classifier_signal_groups.go` now appends the declared group default when no member in the group fires, so grouped routes retain a live fallback contract at request time, even though the canonical config surface now stores those groups under `routing.projections.partitions`.
 - `src/semantic-router/pkg/classification/classifier_signal_group_similarity.go` computes embedding-rule centroids and reports near-uniform `softmax_exclusive` groups through native validation.
 - `src/semantic-router/cmd/dsl/test_runner.go` and `src/semantic-router/pkg/dsl/cli.go` route those native warnings into `sr-dsl validate`, while browser/WASM validation keeps an explicit warning that those runtime checks require native execution.

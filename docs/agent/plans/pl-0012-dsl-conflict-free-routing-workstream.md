@@ -48,37 +48,48 @@
 - [x] `W020` Run the applicable harness ladder for the `balance` asset refactor, including any affected E2E/profile coverage, then update the PR once the changed-set gates pass.
 - [x] `W021` Remove the deprecated per-decision `modelSelectionAlgorithm` config surface, unify on `routing.decisions[].algorithm`, and keep the repo-native local feature-gate/E2E build path green for that contract change.
 - [x] `W022` Fix the CI-only `pkg/config` domain-sync test path so `make agent-ci-lint` / `make test-semantic-router` no longer depend on the runner working directory, then update the PR with the repaired validation state.
+- [x] `W023` Introduce the canonical `routing.projections` contract, move existing `signal_groups` partition semantics under `projections.partitions`, and sync the config/DSL/runtime/platform surfaces to that renamed contract.
+- [x] `W024` Implement weighted projection scores plus threshold mappings as repo-native derived routing outputs, allow decisions to reference those outputs, and refactor the maintained `balance` assets plus reference config/docs to exercise the stronger routing strategy.
+- [x] `W025` Run the full applicable harness ladder for the projections refactor, including local smoke and affected E2E, close any completed debt, and update the PR with the final validation state.
 
 ## Current Loop
 
 - Date: 2026-03-22
-- Current task: `W022` completed
+- Current task: `W025` completed
 - Changed files:
-  - `src/semantic-router/pkg/config/validator_domain_test.go`
-  - `docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md`
+  - `src/semantic-router/pkg/config/{config.go,signal_config.go,projection_config.go,canonical_config.go,canonical_export.go,canonical_routing_loader.go,validator.go,validator_domain.go,validator_projection.go,reference_config_public_surface_test.go,validator_domain_test.go,validator_projection_test.go}`
+  - `src/semantic-router/pkg/classification/{classifier_signal_context.go,classifier_signal_eval.go,classifier_signal_groups.go,classifier_signal_group_similarity.go,classifier_projections.go,classifier_signal_groups_test.go,classifier_projections_test.go}`
+  - `src/semantic-router/pkg/dsl/{ast.go,ast_json.go,parser.go,compiler.go,decompiler.go,routing_contract.go,validator.go,validator_conflicts.go,dsl_test.go,maintained_asset_roundtrip_test.go}`
+  - `src/semantic-router/pkg/{decision/engine.go,apiserver/route_classification_metrics.go,apiserver/route_classification_platform_test.go}`
+  - `src/vllm-sr/cli/{models.py,config_contract.py,validator.py}` and `src/vllm-sr/tests/test_config_contract.py`
+  - `deploy/recipes/{balance.yaml,balance.dsl}`, `config/{config.yaml,README.md}`, `website/docs/{installation/configuration.md,proposals/unified-config-contract-v0-3.md,tutorials/signal/overview.md}`, `docs/agent/tech-debt/td-035-signal-group-default-coverage-contract-gap.md`, and this plan file
 - Commands run:
-  - `codebase-retrieval` for the CI-only `make test-semantic-router` failure path across `tools/make/build-run-test.mk`, `tools/make/agent.mk`, `tools/agent/scripts/*`, CI workflows, `pkg/config`, and local rule files
-  - `gh pr checks 1620`
-  - `gh run view 23388505311 --job 68048373911 --log > /tmp/pr1620-precommit-rerun.log`
-  - `rg -n "^(FAIL|--- FAIL:|panic:|fatal error:|ok   |\\?   )" /tmp/pr1620-precommit-rerun.log`
-  - `sed -n '3990,4035p' /tmp/pr1620-precommit-rerun.log`
-  - `sed -n '1,220p' src/semantic-router/pkg/config/AGENTS.md`
-  - `make agent-report ENV=cpu CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
-  - `cd src/semantic-router && go test ./pkg/config -run TestSupportedRoutingDomainNamesStayInSyncWithClassifierMapping -count=1 -v`
-  - `make test-semantic-router`
-  - `make agent-lint CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go"`
-  - `make agent-ci-lint CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go"`
+  - broad `codebase-retrieval` covering projections/config/runtime/DSL/schema/tests before edits
+  - `make agent-report ENV=cpu CHANGED_FILES="config/README.md,config/config.yaml,dashboard/frontend/src/pages/configPageSupport.ts,deploy/recipes/balance.dsl,deploy/recipes/balance.yaml,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md,docs/agent/tech-debt/td-035-signal-group-default-coverage-contract-gap.md,src/semantic-router/pkg/apiserver/route_classification_metrics.go,src/semantic-router/pkg/apiserver/route_classification_platform_test.go,src/semantic-router/pkg/classification/classifier_signal_context.go,src/semantic-router/pkg/classification/classifier_signal_eval.go,src/semantic-router/pkg/classification/classifier_signal_group_similarity.go,src/semantic-router/pkg/classification/classifier_signal_groups.go,src/semantic-router/pkg/classification/classifier_signal_groups_test.go,src/semantic-router/pkg/classification/classifier_projections.go,src/semantic-router/pkg/classification/classifier_projections_test.go,src/semantic-router/pkg/config/canonical_config.go,src/semantic-router/pkg/config/canonical_export.go,src/semantic-router/pkg/config/canonical_routing_loader.go,src/semantic-router/pkg/config/config.go,src/semantic-router/pkg/config/projection_config.go,src/semantic-router/pkg/config/reference_config_public_surface_test.go,src/semantic-router/pkg/config/signal_config.go,src/semantic-router/pkg/config/validator.go,src/semantic-router/pkg/config/validator_domain.go,src/semantic-router/pkg/config/validator_domain_test.go,src/semantic-router/pkg/config/validator_projection.go,src/semantic-router/pkg/config/validator_projection_test.go,src/semantic-router/pkg/decision/engine.go,src/semantic-router/pkg/dsl/ast.go,src/semantic-router/pkg/dsl/ast_json.go,src/semantic-router/pkg/dsl/compiler.go,src/semantic-router/pkg/dsl/decompiler.go,src/semantic-router/pkg/dsl/dsl_test.go,src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go,src/semantic-router/pkg/dsl/parser.go,src/semantic-router/pkg/dsl/routing_contract.go,src/semantic-router/pkg/dsl/validator.go,src/semantic-router/pkg/dsl/validator_conflicts.go,src/vllm-sr/cli/config_contract.py,src/vllm-sr/cli/models.py,src/vllm-sr/cli/validator.py,src/vllm-sr/tests/test_config_contract.py,website/docs/installation/configuration.md,website/docs/proposals/unified-config-contract-v0-3.md,website/docs/tutorials/signal/overview.md"`
+  - `cd src/vllm-sr && pytest tests/test_config_contract.py -q`
+  - `cd src/semantic-router && go test ./pkg/config/... -count=1`
+  - `cd src/semantic-router && go test ./pkg/dsl/... -count=1`
+  - `cd src/semantic-router && go test ./pkg/classification/... -count=1`
+  - `cd src/semantic-router && go test ./pkg/apiserver -run 'TestHandle(GetConfigReturnsRoutingSurface|UpdateConfigMergesRoutingPayload|ClassificationMetricsReportsCounts)' -count=1`
+  - `cd src/semantic-router && go test ./cmd/dsl -count=1`
+  - `cd src/semantic-router && go run ./cmd/dsl decompile -o ../../deploy/recipes/balance.dsl ../../deploy/recipes/balance.yaml`
+  - `gofmt -w src/semantic-router/pkg/classification/classifier_projections.go src/semantic-router/pkg/apiserver/route_classification_platform_test.go src/semantic-router/pkg/config/validator_projection.go src/semantic-router/pkg/dsl/ast_json.go`
+  - `make agent-lint CHANGED_FILES="...projection changed set..."`
+  - `make agent-ci-gate CHANGED_FILES="...projection changed set..."`
+  - `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu CHANGED_FILES="...projection changed set..."`
 - Failure observed:
-  - The only red PR check was `Run pre-commit hooks check file lint`, and the first real failing package inside its `make test-semantic-router` run was `src/semantic-router/pkg/config`.
-  - `TestSupportedRoutingDomainNamesStayInSyncWithClassifierMapping` tried to open `../../../../models/mmbert32k-intent-classifier-merged/category_mapping.json`; that relative path depended on the test process working directory and failed on the GitHub runner.
+  - `agent-lint` initially failed on `gofumpt`, a shadowed `ok` binding, and then on `cyclop/gocognit` limits in the new projection helpers.
+  - The first `agent-ci-gate` rerun also tripped `parallel golangci-lint is running` because an earlier lint session was still active.
 - Fix applied:
-  - Switched `validator_domain_test.go` to resolve the classifier mapping from `referenceConfigRepoRoot(t)` instead of from process-relative `../../../../...`.
-  - Reused the existing config-test helper rather than adding a second repo-root resolver inside the hotspot.
+  - Renamed the canonical runtime/config surface to `routing.projections` and moved legacy `signal_groups` semantics into `projections.partitions` while keeping DSL authoring on `SIGNAL_GROUP`.
+  - Added projection runtime support for `scores` and `mappings`, decision consumption through `type: projection`, and synced compiler/decompiler, validator, CLI schema, dashboard typing, reference config, maintained `balance` assets, and docs.
+  - Refactored the new helpers into smaller table-driven functions so changed-file Go lint passes without weakening repo structure rules, then reran the same harness gates sequentially.
 - Current result:
-  - The targeted config test, `make test-semantic-router`, `make agent-lint`, and the exact failing path `make agent-ci-lint` all pass locally after the fix.
-  - No new durable architecture gap was introduced; existing debt status is unchanged.
+  - `W023`, `W024`, and `W025` are complete.
+  - `make agent-lint`, `make agent-ci-gate`, and `DOCKER_CONFIG=/tmp/docker-nocreds E2E_USE_WORKSPACE_MODELS=true make agent-feature-gate ENV=cpu ...` all pass.
+  - The `ai-gateway` feature profile passed `14/14`; no new durable architecture gap was introduced, and `TD035` only needed wording updates for the renamed runtime surface.
 - Next action:
-  - Push the fix to the PR branch and monitor the rerun checks until the previously failing CI job goes green.
+  - Commit the projections refactor with `git commit -s`, push the PR branch, and update the PR status.
 
 ## Decision Log
 
@@ -131,6 +142,11 @@
 - 2026-03-22: the PyPI TLS EOF during `tools/mock-vllm/Dockerfile` build was transient external noise. Prewarming the same image and rerunning the same canonical feature gate was preferable to mutating the repo contract for a one-off registry/network blip.
 - 2026-03-22: a wording-only tweak inside `e2e/testcases/model_selection.go` is not worth reopening that hotspot's existing changed-file lint debt. For PR-audit-only closure loops, keep the net diff on the harness/plan surface unless the behavior contract actually changes.
 - 2026-03-22: tests that read maintained repo assets must resolve from a shared repo-root helper or the test file location, not from process-relative `../../../../...` paths. The GitHub runner exposed that `validator_domain_test.go` still depended on `go test` cwd, so the smallest fix was to reuse `referenceConfigRepoRoot(t)`.
+- 2026-03-22: the canonical post-signal surface should be named `routing.projections`, not `routing.signal_processing`. It cleanly covers both partitions over existing signals and new derived routing outputs without pretending those objects are raw detector families.
+- 2026-03-22: keep DSL authoring and runtime config intentionally asymmetric here: `SIGNAL_GROUP` remains the authoring keyword, while runtime/canonical config stores the same partition semantics under `routing.projections.partitions`.
+- 2026-03-22: clawrouter-style weighted routing should land as repo-native derived outputs, not by overloading base signals. The stable contract is `routing.projections.scores` plus `routing.projections.mappings`, with decisions consuming mapping outputs via `type: projection`.
+- 2026-03-22: the maintained `balance` recipe and the exhaustive reference config must both exercise `partitions`, `scores`, `mappings`, and `type: projection`. That is the smallest way to keep examples, public-surface tests, and schema mirrors aligned on the new contract.
+- 2026-03-22: local feature validation for this refactor must keep `E2E_USE_WORKSPACE_MODELS=true` and a clean Docker config (`DOCKER_CONFIG=/tmp/docker-nocreds`) so the repo-native feature gate reuses workspace models and avoids incidental credential noise during the long image-build path.
 
 ## Follow-up Debt / ADR Links
 

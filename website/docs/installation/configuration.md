@@ -30,7 +30,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `routing.modelCards`
   - `routing.modelCards[].loras`
   - `routing.signals`
-  - `routing.signals.signal_groups` for coordination metadata across declared domain or embedding signals
+  - `routing.projections` for partitions plus derived routing outputs
   - `routing.decisions`
 - `providers` owns deployment and default-selection metadata.
   - `defaults`
@@ -98,22 +98,46 @@ routing:
       - name: account_management
         threshold: 0.72
         candidates: ["billing information", "subscription management"]
-    signal_groups:
+
+  projections:
+    partitions:
       - name: support_intents
         semantics: exclusive
         temperature: 0.3
         members: [technical_support, account_management]
         default: technical_support
+    scores:
+      - name: request_difficulty
+        method: weighted_sum
+        inputs:
+          - type: embedding
+            name: technical_support
+            weight: 0.18
+            value_source: confidence
+          - type: context
+            name: long_context
+            weight: 0.18
+    mappings:
+      - name: request_band
+        source: request_difficulty
+        method: threshold_bands
+        outputs:
+          - name: support_fast
+            lt: 0.25
+          - name: support_escalated
+            gte: 0.25
 
   decisions:
-    - name: math_route
-      description: Route math requests
+    - name: support_route
+      description: Route support requests that need an escalated answer
       priority: 100
       rules:
         operator: AND
         conditions:
-          - type: keyword
-            name: math_terms
+          - type: embedding
+            name: technical_support
+          - type: projection
+            name: support_escalated
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true

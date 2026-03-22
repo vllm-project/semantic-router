@@ -620,48 +620,6 @@ routing:
       - name: other
         description: General knowledge and miscellaneous topics.
 
-    signal_groups:
-      - name: balance_domain_partition
-        semantics: softmax_exclusive
-        temperature: 0.10
-        members:
-          - biology
-          - business
-          - chemistry
-          - computer science
-          - economics
-          - engineering
-          - health
-          - history
-          - law
-          - math
-          - other
-          - philosophy
-          - physics
-          - psychology
-        default: other
-      - name: balance_intent_partition
-        semantics: softmax_exclusive
-        temperature: 0.18
-        members:
-          - agentic_workflows
-          - architecture_design
-          - business_analysis
-          - code_general
-          - complex_stem
-          - creative_tasks
-          - fast_qa_en
-          - fast_qa_zh
-          - general_chat_fallback
-          - health_guidance
-          - history_explainer
-          - premium_legal_analysis
-          - psychology_support
-          - reasoning_general_en
-          - reasoning_general_zh
-          - research_synthesis
-        default: general_chat_fallback
-
     context:
       - name: short_context
         min_tokens: "0"
@@ -839,6 +797,247 @@ routing:
         include_history: false
         description: Block high-sensitivity PII while allowing common contact entities.
 
+  projections:
+    partitions:
+      - name: balance_domain_partition
+        semantics: softmax_exclusive
+        temperature: 0.10
+        members:
+          - biology
+          - business
+          - chemistry
+          - computer science
+          - economics
+          - engineering
+          - health
+          - history
+          - law
+          - math
+          - other
+          - philosophy
+          - physics
+          - psychology
+        default: other
+      - name: balance_intent_partition
+        semantics: softmax_exclusive
+        temperature: 0.18
+        members:
+          - agentic_workflows
+          - architecture_design
+          - business_analysis
+          - code_general
+          - complex_stem
+          - creative_tasks
+          - fast_qa_en
+          - fast_qa_zh
+          - general_chat_fallback
+          - health_guidance
+          - history_explainer
+          - premium_legal_analysis
+          - psychology_support
+          - reasoning_general_en
+          - reasoning_general_zh
+          - research_synthesis
+        default: general_chat_fallback
+
+    scores:
+      - name: difficulty_score
+        method: weighted_sum
+        inputs:
+          - type: keyword
+            name: simple_request_markers
+            weight: -0.28
+          - type: embedding
+            name: fast_qa_en
+            weight: -0.16
+            value_source: confidence
+          - type: embedding
+            name: fast_qa_zh
+            weight: -0.16
+            value_source: confidence
+          - type: context
+            name: short_context
+            weight: -0.10
+          - type: context
+            name: medium_context
+            weight: 0.03
+          - type: context
+            name: long_context
+            weight: 0.18
+          - type: keyword
+            name: reasoning_request_markers
+            weight: 0.22
+            value_source: confidence
+          - type: keyword
+            name: multi_step_markers
+            weight: 0.14
+            value_source: confidence
+          - type: keyword
+            name: code_request_markers
+            weight: 0.12
+            value_source: confidence
+          - type: keyword
+            name: architecture_markers
+            weight: 0.10
+            value_source: confidence
+          - type: keyword
+            name: research_request_markers
+            weight: 0.10
+            value_source: confidence
+          - type: keyword
+            name: constraint_markers
+            weight: 0.08
+            value_source: confidence
+          - type: keyword
+            name: output_format_markers
+            weight: 0.05
+            value_source: confidence
+          - type: keyword
+            name: negation_markers
+            weight: 0.03
+            value_source: confidence
+          - type: keyword
+            name: agentic_request_markers
+            weight: 0.14
+            value_source: confidence
+          - type: keyword
+            name: implementation_markers
+            weight: 0.10
+            value_source: confidence
+          - type: embedding
+            name: reasoning_general_en
+            weight: 0.18
+            value_source: confidence
+          - type: embedding
+            name: reasoning_general_zh
+            weight: 0.18
+            value_source: confidence
+          - type: embedding
+            name: agentic_workflows
+            weight: 0.18
+            value_source: confidence
+          - type: embedding
+            name: architecture_design
+            weight: 0.15
+            value_source: confidence
+          - type: embedding
+            name: complex_stem
+            weight: 0.14
+            value_source: confidence
+          - type: embedding
+            name: research_synthesis
+            weight: 0.12
+            value_source: confidence
+          - type: embedding
+            name: premium_legal_analysis
+            weight: 0.16
+            value_source: confidence
+          - type: complexity
+            name: general_reasoning:medium
+            weight: 0.10
+          - type: complexity
+            name: general_reasoning:hard
+            weight: 0.22
+          - type: complexity
+            name: code_task:medium
+            weight: 0.08
+          - type: complexity
+            name: code_task:hard
+            weight: 0.18
+          - type: complexity
+            name: math_task:hard
+            weight: 0.20
+          - type: complexity
+            name: legal_risk:hard
+            weight: 0.16
+          - type: complexity
+            name: agentic_delivery:medium
+            weight: 0.10
+          - type: complexity
+            name: agentic_delivery:hard
+            weight: 0.22
+          - type: complexity
+            name: evidence_synthesis:medium
+            weight: 0.10
+          - type: complexity
+            name: evidence_synthesis:hard
+            weight: 0.18
+
+      - name: verification_pressure
+        method: weighted_sum
+        inputs:
+          - type: fact_check
+            name: needs_fact_check
+            weight: 0.28
+          - type: keyword
+            name: verification_markers
+            weight: 0.20
+            value_source: confidence
+          - type: keyword
+            name: reference_heavy_markers
+            weight: 0.16
+            value_source: confidence
+          - type: keyword
+            name: research_request_markers
+            weight: 0.10
+            value_source: confidence
+          - type: keyword
+            name: legal_risk_markers
+            weight: 0.10
+            value_source: confidence
+          - type: domain
+            name: health
+            weight: 0.10
+          - type: domain
+            name: law
+            weight: 0.12
+          - type: domain
+            name: business
+            weight: 0.06
+          - type: domain
+            name: history
+            weight: 0.06
+          - type: user_feedback
+            name: wrong_answer
+            weight: 0.12
+          - type: keyword
+            name: correction_feedback_markers
+            weight: 0.06
+            value_source: confidence
+          - type: context
+            name: long_context
+            weight: 0.04
+
+    mappings:
+      - name: difficulty_band
+        source: difficulty_score
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 10.0
+        outputs:
+          - name: balance_simple
+            lt: 0.18
+          - name: balance_medium
+            gte: 0.18
+            lt: 0.48
+          - name: balance_complex
+            gte: 0.48
+            lt: 0.82
+          - name: balance_reasoning
+            gte: 0.82
+      - name: verification_band
+        source: verification_pressure
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 12.0
+        outputs:
+          - name: verification_standard
+            lt: 0.35
+          - name: verification_required
+            gte: 0.35
+
   decisions:
     - name: premium_legal
       description: Premium-only route for high-value legal and compliance analysis.
@@ -849,24 +1048,18 @@ routing:
         conditions:
           - type: domain
             name: law
+          - type: projection
+            name: verification_required
           - operator: OR
             conditions:
+              - type: projection
+                name: balance_complex
+              - type: projection
+                name: balance_reasoning
               - type: embedding
                 name: premium_legal_analysis
               - type: complexity
-                name: legal_risk:medium
-              - type: complexity
                 name: legal_risk:hard
-              - operator: AND
-                conditions:
-                  - type: keyword
-                    name: legal_risk_markers
-                  - operator: OR
-                    conditions:
-                      - type: keyword
-                        name: reference_heavy_markers
-                      - type: keyword
-                        name: constraint_markers
       modelRefs:
         - model: anthropic/claude-opus-4.6
           use_reasoning: true
@@ -889,16 +1082,8 @@ routing:
         conditions:
           - type: domain
             name: math
-          - operator: OR
-            conditions:
-              - type: complexity
-                name: math_task:hard
-              - type: keyword
-                name: reasoning_request_markers
-              - type: embedding
-                name: reasoning_general_en
-              - type: embedding
-                name: reasoning_general_zh
+          - type: projection
+            name: balance_reasoning
       modelRefs:
         - model: openai/gpt5.4
           use_reasoning: true
@@ -921,16 +1106,8 @@ routing:
         conditions:
           - type: domain
             name: philosophy
-          - operator: OR
-            conditions:
-              - type: keyword
-                name: reasoning_request_markers
-              - type: embedding
-                name: reasoning_general_en
-              - type: embedding
-                name: reasoning_general_zh
-              - type: complexity
-                name: general_reasoning:hard
+          - type: projection
+            name: balance_reasoning
       modelRefs:
         - model: openai/gpt5.4
           use_reasoning: true
@@ -963,16 +1140,10 @@ routing:
                 name: implementation_markers
           - operator: OR
             conditions:
-              - type: complexity
-                name: agentic_delivery:hard
-              - type: keyword
-                name: multi_step_markers
-              - type: keyword
-                name: constraint_markers
-              - type: keyword
-                name: output_format_markers
-              - type: context
-                name: long_context
+              - type: projection
+                name: balance_complex
+              - type: projection
+                name: balance_reasoning
           - operator: OR
             conditions:
               - type: domain
@@ -1017,28 +1188,14 @@ routing:
                 name: agentic_workflows
               - type: embedding
                 name: architecture_design
-              - type: complexity
-                name: agentic_delivery:hard
-              - type: complexity
-                name: code_task:hard
               - type: keyword
                 name: architecture_markers
-              - type: keyword
-                name: implementation_markers
           - operator: OR
             conditions:
-              - type: keyword
-                name: multi_step_markers
-              - type: keyword
-                name: agentic_request_markers
-              - type: keyword
-                name: output_format_markers
-              - type: keyword
-                name: constraint_markers
-              - type: complexity
-                name: general_reasoning:hard
-              - type: context
-                name: long_context
+              - type: projection
+                name: balance_complex
+              - type: projection
+                name: balance_reasoning
       modelRefs:
         - model: google/gemini-3.1-pro
           use_reasoning: true
@@ -1075,16 +1232,10 @@ routing:
                 name: complex_stem
               - type: embedding
                 name: research_synthesis
-              - type: complexity
-                name: evidence_synthesis:hard
-              - type: complexity
-                name: general_reasoning:hard
-              - type: keyword
-                name: reasoning_request_markers
-              - type: keyword
-                name: research_request_markers
-              - type: context
-                name: long_context
+              - type: projection
+                name: balance_complex
+              - type: projection
+                name: balance_reasoning
       modelRefs:
         - model: google/gemini-3.1-pro
           use_reasoning: true
@@ -1109,18 +1260,8 @@ routing:
             name: wrong_answer
           - type: keyword
             name: correction_feedback_markers
-          - operator: OR
-            conditions:
-              - type: fact_check
-                name: needs_fact_check
-              - type: keyword
-                name: reference_heavy_markers
-              - type: domain
-                name: law
-              - type: domain
-                name: business
-              - type: domain
-                name: history
+          - type: projection
+            name: verification_required
           - operator: OR
             conditions:
               - type: context
@@ -1165,20 +1306,10 @@ routing:
                 name: agentic_execution
           - operator: OR
             conditions:
-              - type: complexity
-                name: agentic_delivery:easy
-              - type: complexity
-                name: agentic_delivery:medium
-              - type: complexity
-                name: code_task:easy
-              - type: complexity
-                name: code_task:medium
-              - type: complexity
-                name: general_reasoning:easy
-              - type: complexity
-                name: general_reasoning:medium
-              - type: keyword
-                name: output_format_markers
+              - type: projection
+                name: balance_medium
+              - type: projection
+                name: balance_complex
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -1211,18 +1342,14 @@ routing:
                 name: business_analysis
               - type: embedding
                 name: research_synthesis
-              - type: complexity
-                name: evidence_synthesis:easy
-              - type: complexity
-                name: evidence_synthesis:medium
-              - type: complexity
-                name: general_reasoning:easy
-              - type: complexity
-                name: general_reasoning:medium
               - type: preference
                 name: structured_delivery
-              - type: keyword
-                name: output_format_markers
+          - operator: OR
+            conditions:
+              - type: projection
+                name: balance_medium
+              - type: projection
+                name: balance_complex
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -1249,30 +1376,18 @@ routing:
                 name: business
               - type: domain
                 name: economics
-          - type: fact_check
-            name: needs_fact_check
+          - type: projection
+            name: verification_required
           - operator: OR
             conditions:
-              - type: keyword
-                name: research_request_markers
-              - type: keyword
-                name: verification_markers
-              - type: keyword
-                name: reference_heavy_markers
-              - type: keyword
-                name: output_format_markers
-          - operator: OR
-            conditions:
+              - type: projection
+                name: balance_medium
+              - type: projection
+                name: balance_complex
               - type: embedding
                 name: business_analysis
               - type: embedding
                 name: research_synthesis
-              - type: complexity
-                name: evidence_synthesis:medium
-              - type: complexity
-                name: evidence_synthesis:hard
-              - type: preference
-                name: structured_delivery
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
@@ -1294,32 +1409,20 @@ routing:
         conditions:
           - type: domain
             name: health
-          - operator: OR
-            conditions:
-              - type: fact_check
-                name: needs_fact_check
-              - type: keyword
-                name: research_request_markers
-              - type: keyword
-                name: verification_markers
-              - type: keyword
-                name: reference_heavy_markers
+          - type: projection
+            name: verification_required
           - operator: OR
             conditions:
               - type: embedding
                 name: health_guidance
               - type: embedding
                 name: research_synthesis
-              - type: complexity
-                name: evidence_synthesis:medium
-              - type: complexity
-                name: evidence_synthesis:hard
-              - type: complexity
-                name: general_reasoning:medium
-              - type: complexity
-                name: general_reasoning:hard
-              - type: keyword
-                name: constraint_markers
+              - type: projection
+                name: balance_medium
+              - type: projection
+                name: balance_complex
+              - type: projection
+                name: balance_reasoning
       modelRefs:
         - model: google/gemini-3.1-pro
           use_reasoning: true
@@ -1348,14 +1451,12 @@ routing:
                 name: history_explainer
               - type: embedding
                 name: research_synthesis
-              - type: complexity
-                name: evidence_synthesis:easy
-              - type: complexity
-                name: evidence_synthesis:medium
-              - type: complexity
-                name: general_reasoning:easy
-              - type: complexity
-                name: general_reasoning:medium
+          - operator: OR
+            conditions:
+              - type: projection
+                name: balance_medium
+              - type: projection
+                name: balance_complex
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -1378,28 +1479,18 @@ routing:
         conditions:
           - type: domain
             name: history
-          - type: fact_check
-            name: needs_fact_check
-          - operator: OR
-            conditions:
-              - type: keyword
-                name: research_request_markers
-              - type: keyword
-                name: verification_markers
-              - type: keyword
-                name: reference_heavy_markers
+          - type: projection
+            name: verification_required
           - operator: OR
             conditions:
               - type: embedding
                 name: history_explainer
               - type: embedding
                 name: research_synthesis
-              - type: complexity
-                name: evidence_synthesis:medium
-              - type: complexity
-                name: evidence_synthesis:hard
-              - type: complexity
-                name: general_reasoning:medium
+              - type: projection
+                name: balance_medium
+              - type: projection
+                name: balance_complex
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
@@ -1427,14 +1518,12 @@ routing:
                 name: psychology_support
               - type: embedding
                 name: research_synthesis
-              - type: complexity
-                name: evidence_synthesis:easy
-              - type: complexity
-                name: evidence_synthesis:medium
-              - type: complexity
-                name: general_reasoning:easy
-              - type: complexity
-                name: general_reasoning:medium
+          - operator: OR
+            conditions:
+              - type: projection
+                name: balance_medium
+              - type: projection
+                name: balance_complex
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -1465,14 +1554,10 @@ routing:
                 name: creative_collaboration
           - operator: OR
             conditions:
-              - type: complexity
-                name: general_reasoning:easy
-              - type: complexity
-                name: general_reasoning:medium
-              - type: context
-                name: short_context
-              - type: context
-                name: medium_context
+              - type: projection
+                name: balance_simple
+              - type: projection
+                name: balance_medium
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
@@ -1512,22 +1597,10 @@ routing:
                 name: research_request_markers
           - operator: OR
             conditions:
-              - type: complexity
-                name: agentic_delivery:hard
-              - type: complexity
-                name: evidence_synthesis:hard
-              - type: complexity
-                name: general_reasoning:hard
-              - type: context
-                name: long_context
-              - type: keyword
-                name: constraint_markers
-              - type: keyword
-                name: reference_heavy_markers
-              - type: keyword
-                name: output_format_markers
-              - type: keyword
-                name: negation_markers
+              - type: projection
+                name: balance_complex
+              - type: projection
+                name: balance_reasoning
       modelRefs:
         - model: openai/gpt5.4
           use_reasoning: true
@@ -1583,14 +1656,10 @@ routing:
             name: zh
           - type: context
             name: short_context
-          - type: fact_check
-            name: needs_fact_check
-          - operator: OR
-            conditions:
-              - type: keyword
-                name: verification_markers
-              - type: keyword
-                name: reference_heavy_markers
+          - type: projection
+            name: balance_simple
+          - type: projection
+            name: verification_required
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -1616,14 +1685,8 @@ routing:
             name: zh
           - type: context
             name: short_context
-          - operator: OR
-            conditions:
-              - type: keyword
-                name: simple_request_markers
-              - type: complexity
-                name: general_reasoning:easy
-              - type: preference
-                name: concise_answers
+          - type: projection
+            name: balance_simple
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -1649,14 +1712,8 @@ routing:
             name: en
           - type: context
             name: short_context
-          - operator: OR
-            conditions:
-              - type: keyword
-                name: simple_request_markers
-              - type: complexity
-                name: general_reasoning:easy
-              - type: preference
-                name: concise_answers
+          - type: projection
+            name: balance_simple
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -1682,14 +1739,10 @@ routing:
             name: en
           - type: context
             name: short_context
-          - type: fact_check
-            name: needs_fact_check
-          - operator: OR
-            conditions:
-              - type: keyword
-                name: verification_markers
-              - type: keyword
-                name: reference_heavy_markers
+          - type: projection
+            name: balance_simple
+          - type: projection
+            name: verification_required
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -1713,24 +1766,20 @@ routing:
             conditions:
               - type: context
                 name: short_context
-              - operator: OR
-                conditions:
-                  - type: keyword
-                    name: simple_request_markers
-                  - type: preference
-                    name: concise_answers
-                  - type: domain
-                    name: other
-                  - type: language
-                    name: en
-                  - type: language
-                    name: zh
+              - type: projection
+                name: balance_simple
           - operator: AND
             conditions:
               - type: context
                 name: medium_context
               - type: domain
                 name: other
+              - operator: OR
+                conditions:
+                  - type: projection
+                    name: balance_simple
+                  - type: projection
+                    name: balance_medium
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false

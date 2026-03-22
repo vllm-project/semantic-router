@@ -86,15 +86,15 @@ func TestSignalGroupDefaultFallbackMatchesDomainRouteWhenNoGroupMemberFires(t *t
 						{CategoryMetadata: config.CategoryMetadata{Name: "health"}},
 						{CategoryMetadata: config.CategoryMetadata{Name: "other"}},
 					},
-					SignalGroups: []config.SignalGroup{
-						{
-							Name:        "finance-vs-health",
-							Semantics:   "softmax_exclusive",
-							Temperature: 0.1,
-							Members:     []string{"economics", "health", "other"},
-							Default:     "other",
-						},
-					},
+				},
+				Projections: config.Projections{
+					Partitions: []config.ProjectionPartition{{
+						Name:        "finance-vs-health",
+						Semantics:   "softmax_exclusive",
+						Temperature: 0.1,
+						Members:     []string{"economics", "health", "other"},
+						Default:     "other",
+					}},
 				},
 				Decisions: []config.Decision{
 					{
@@ -138,15 +138,15 @@ func TestSignalGroupDefaultFallbackMatchesEmbeddingRouteWhenNoGroupMemberFires(t
 						{Name: "programming"},
 						{Name: "cooking"},
 					},
-					SignalGroups: []config.SignalGroup{
-						{
-							Name:        "tech-topics",
-							Semantics:   "softmax_exclusive",
-							Temperature: 0.1,
-							Members:     []string{"ai", "programming", "cooking"},
-							Default:     "cooking",
-						},
-					},
+				},
+				Projections: config.Projections{
+					Partitions: []config.ProjectionPartition{{
+						Name:        "tech-topics",
+						Semantics:   "softmax_exclusive",
+						Temperature: 0.1,
+						Members:     []string{"ai", "programming", "cooking"},
+						Default:     "cooking",
+					}},
 				},
 				Decisions: []config.Decision{
 					{
@@ -219,15 +219,15 @@ func TestAnalyzeSoftmaxSignalGroupCentroidsWarnsOnSimilarMembers(t *testing.T) {
 							AggregationMethodConfiged: config.AggregationMethodMax,
 						},
 					},
-					SignalGroups: []config.SignalGroup{
-						{
-							Name:        "tech-topics",
-							Semantics:   "softmax_exclusive",
-							Temperature: 0.1,
-							Members:     []string{"ai", "programming", "cooking"},
-							Default:     "cooking",
-						},
-					},
+				},
+				Projections: config.Projections{
+					Partitions: []config.ProjectionPartition{{
+						Name:        "tech-topics",
+						Semantics:   "softmax_exclusive",
+						Temperature: 0.1,
+						Members:     []string{"ai", "programming", "cooking"},
+						Default:     "cooking",
+					}},
 				},
 			},
 		},
@@ -292,7 +292,7 @@ func buildGroupedDomainClassifier(mock *MockCategoryInference) *Classifier {
 			},
 		},
 	}
-	cfg.SignalGroups = []config.SignalGroup{
+	cfg.Projections.Partitions = []config.ProjectionPartition{
 		{
 			Name:        "finance-vs-health",
 			Semantics:   "softmax_exclusive",
@@ -326,15 +326,15 @@ func buildGroupedEmbeddingClassifier(t *testing.T) *Classifier {
 			IntelligentRouting: config.IntelligentRouting{
 				Signals: config.Signals{
 					EmbeddingRules: rules,
-					SignalGroups: []config.SignalGroup{
-						{
-							Name:        "tech-topics",
-							Semantics:   "softmax_exclusive",
-							Temperature: 0.1,
-							Members:     []string{"ai", "programming", "cooking"},
-							Default:     "cooking",
-						},
-					},
+				},
+				Projections: config.Projections{
+					Partitions: []config.ProjectionPartition{{
+						Name:        "tech-topics",
+						Semantics:   "softmax_exclusive",
+						Temperature: 0.1,
+						Members:     []string{"ai", "programming", "cooking"},
+						Default:     "cooking",
+					}},
 				},
 				Decisions: []config.Decision{
 					{

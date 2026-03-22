@@ -51,11 +51,15 @@ func TestMaintainedBalanceRecipeUsesSignalGroupsAndTieredDecisions(t *testing.T)
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes error: %v", err)
 	}
-	if len(cfg.SignalGroups) == 0 {
-		t.Fatal("expected deploy/recipes/balance.yaml to include at least one signal_group")
+	if len(cfg.Projections.Partitions) == 0 {
+		t.Fatal("expected deploy/recipes/balance.yaml to include at least one projection partition")
 	}
-	assertMaintainedBalanceDomainPartition(t, cfg.SignalGroups)
-	assertMaintainedBalanceIntentPartition(t, cfg.SignalGroups)
+	if len(cfg.Projections.Scores) == 0 || len(cfg.Projections.Mappings) == 0 {
+		t.Fatalf("expected deploy/recipes/balance.yaml to include derived projection scores and mappings, got %+v", cfg.Projections)
+	}
+	assertMaintainedBalanceDomainPartition(t, cfg.Projections.Partitions)
+	assertMaintainedBalanceIntentPartition(t, cfg.Projections.Partitions)
+	assertMaintainedBalanceProjectionBands(t, cfg.Projections)
 	assertMaintainedBalanceDecisionTiers(t, cfg.Decisions)
 	assertMaintainedBalanceRoute(t, cfg.Decisions, "complex_agentic")
 	assertMaintainedBalanceRoute(t, cfg.Decisions, "verified_health")
@@ -171,6 +175,36 @@ func assertMaintainedBalanceDecisionTiers(t *testing.T, decisions []config.Decis
 	}
 }
 
+func assertMaintainedBalanceProjectionBands(t *testing.T, projections config.Projections) {
+	t.Helper()
+
+	scoreNames := make(map[string]bool, len(projections.Scores))
+	for _, score := range projections.Scores {
+		scoreNames[score.Name] = true
+	}
+	if !scoreNames["difficulty_score"] || !scoreNames["verification_pressure"] {
+		t.Fatalf("expected balance projections to include difficulty_score and verification_pressure, got %v", scoreNames)
+	}
+
+	outputNames := make(map[string]bool)
+	for _, mapping := range projections.Mappings {
+		for _, output := range mapping.Outputs {
+			outputNames[output.Name] = true
+		}
+	}
+	for _, name := range []string{
+		"balance_simple",
+		"balance_medium",
+		"balance_complex",
+		"balance_reasoning",
+		"verification_required",
+	} {
+		if !outputNames[name] {
+			t.Fatalf("expected balance projections to emit %q, got %v", name, outputNames)
+		}
+	}
+}
+
 func assertMaintainedBalanceRoute(t *testing.T, decisions []config.Decision, name string) {
 	t.Helper()
 
@@ -186,6 +220,12 @@ func assertMaintainedBalanceDSLMarkers(t *testing.T, dslPath, dslText string) {
 	t.Helper()
 	if !strings.Contains(dslText, "SIGNAL_GROUP balance_intent_partition") {
 		t.Fatalf("%s must define the learned intent SIGNAL_GROUP", dslPath)
+	}
+	if !strings.Contains(dslText, "PROJECTION score difficulty_score") {
+		t.Fatalf("%s must define the derived difficulty score", dslPath)
+	}
+	if !strings.Contains(dslText, "PROJECTION mapping verification_band") {
+		t.Fatalf("%s must define the verification mapping", dslPath)
 	}
 	if !strings.Contains(dslText, "ROUTE complex_agentic") {
 		t.Fatalf("%s must include the clawrouter-inspired complex_agentic route", dslPath)

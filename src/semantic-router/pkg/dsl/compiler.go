@@ -50,24 +50,75 @@ func (c *Compiler) compile() {
 	// 3. Compile signal groups
 	c.compileSignalGroups()
 
-	// 4. Compile top-level model catalog
+	// 4. Compile projections
+	c.compileProjectionScores()
+	c.compileProjectionMappings()
+
+	// 5. Compile top-level model catalog
 	c.compileModels()
 
-	// 5. Compile routes (decisions)
+	// 6. Compile routes (decisions)
 	c.compileRoutes()
 }
 
 func (c *Compiler) compileSignalGroups() {
 	for _, sg := range c.prog.SignalGroups {
 		c.validateSoftmaxDomainSignalGroup(sg)
-		group := config.SignalGroup{
+		group := config.ProjectionPartition{
 			Name:        sg.Name,
 			Semantics:   sg.Semantics,
 			Temperature: sg.Temperature,
 			Members:     sg.Members,
 			Default:     sg.Default,
 		}
-		c.config.SignalGroups = append(c.config.SignalGroups, group)
+		c.config.Projections.Partitions = append(c.config.Projections.Partitions, group)
+	}
+}
+
+func (c *Compiler) compileProjectionScores() {
+	for _, scoreDecl := range c.prog.ProjectionScores {
+		score := config.ProjectionScore{
+			Name:   scoreDecl.Name,
+			Method: scoreDecl.Method,
+			Inputs: make([]config.ProjectionScoreInput, 0, len(scoreDecl.Inputs)),
+		}
+		for _, inputDecl := range scoreDecl.Inputs {
+			score.Inputs = append(score.Inputs, config.ProjectionScoreInput{
+				Type:        inputDecl.SignalType,
+				Name:        inputDecl.SignalName,
+				Weight:      inputDecl.Weight,
+				ValueSource: inputDecl.ValueSource,
+				Match:       inputDecl.Match,
+				Miss:        inputDecl.Miss,
+			})
+		}
+		c.config.Projections.Scores = append(c.config.Projections.Scores, score)
+	}
+}
+
+func (c *Compiler) compileProjectionMappings() {
+	for _, mappingDecl := range c.prog.ProjectionMappings {
+		mapping := config.ProjectionMapping{
+			Name:   mappingDecl.Name,
+			Source: mappingDecl.Source,
+			Method: mappingDecl.Method,
+		}
+		if mappingDecl.Calibration != nil {
+			mapping.Calibration = &config.ProjectionMappingCalibration{
+				Method: mappingDecl.Calibration.Method,
+				Slope:  mappingDecl.Calibration.Slope,
+			}
+		}
+		for _, outputDecl := range mappingDecl.Outputs {
+			mapping.Outputs = append(mapping.Outputs, config.ProjectionMappingOutput{
+				Name: outputDecl.Name,
+				LT:   outputDecl.LT,
+				LTE:  outputDecl.LTE,
+				GT:   outputDecl.GT,
+				GTE:  outputDecl.GTE,
+			})
+		}
+		c.config.Projections.Mappings = append(c.config.Projections.Mappings, mapping)
 	}
 }
 

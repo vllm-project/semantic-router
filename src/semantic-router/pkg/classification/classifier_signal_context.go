@@ -162,6 +162,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	wg.Wait()
 	results = c.applySignalGroups(results)
 	results = c.applySignalComposers(results)
+	results = c.applyProjections(results)
 	return results
 }
 
