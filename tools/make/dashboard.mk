@@ -86,6 +86,10 @@ dashboard-go-mod-tidy: ## Check go mod tidy for dashboard backend
 		fi
 	@echo "dashboard/backend go mod tidy check passed"
 
+dashboard-test-backend: ## Run dashboard backend Go tests (run from repo root: make dashboard-test-backend)
+	@$(LOG_TARGET)
+	cd $(DASHBOARD_BACKEND_DIR) && go test ./...
+
 dashboard-check: dashboard-lint dashboard-type-check dashboard-go-mod-tidy ## Run all dashboard checks (lint, type-check, go mod tidy)
 	@$(LOG_TARGET)
 	@echo "All dashboard checks passed"
@@ -101,6 +105,7 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 
 .PHONY: dashboard-install dashboard-dev-frontend dashboard-dev-backend \
 	dashboard-build dashboard-build-frontend dashboard-build-backend \
+	dashboard-test-backend \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \
 	dashboard-check dashboard-clean
 

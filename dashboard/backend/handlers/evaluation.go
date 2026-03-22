@@ -182,9 +182,13 @@ func (h *EvaluationHandler) CreateTaskHandler() http.HandlerFunc {
 					return
 				}
 			} else {
-				// MoM-level doesn't support signal dimensions
+				// MoM-level supports system dimensions (accuracy, etc.)
 				if dim == models.DimensionDomain || dim == models.DimensionFactCheck || dim == models.DimensionUserFeedback {
 					http.Error(w, fmt.Sprintf("Dimension '%s' is not valid for mom-level evaluation", dim), http.StatusBadRequest)
+					return
+				}
+				if dim != models.DimensionAccuracy {
+					http.Error(w, fmt.Sprintf("Unknown system dimension '%s'", dim), http.StatusBadRequest)
 					return
 				}
 			}

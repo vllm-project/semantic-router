@@ -406,3 +406,50 @@ func extractSignalEvalMetrics(raw map[string]interface{}) map[string]interface{}
 	metrics["status"] = "success"
 	return metrics
 }
+
+// ParseMMLUProOutput finds analysis.json under the given output dir (e.g. from mmlu_pro_vllm_eval.py) and returns metrics.
+func ParseMMLUProOutput(outputDir string) (map[string]interface{}, error) {
+	var analysisPath string
+	dirEntries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read output dir: %w", err)
+	}
+	for _, e := range dirEntries {
+		if !e.IsDir() {
+			continue
+		}
+		p := filepath.Join(outputDir, e.Name(), "analysis.json")
+		if _, err := os.Stat(p); err == nil {
+			analysisPath = p
+			break
+		}
+	}
+	if analysisPath == "" {
+		return nil, fmt.Errorf("no analysis.json found under %s", outputDir)
+	}
+	data, err := os.ReadFile(analysisPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read analysis file: %w", err)
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse analysis JSON: %w", err)
+	}
+	return extractMMLUProMetrics(raw), nil
+}
+
+// extractMMLUProMetrics maps MMLU-Pro analysis fields to a flat metrics map.
+func extractMMLUProMetrics(raw map[string]interface{}) map[string]interface{} {
+	metrics := make(map[string]interface{})
+	for _, key := range []string{
+		"overall_accuracy", "total_questions", "successful_queries", "failed_queries",
+		"avg_response_time", "category_accuracy",
+	} {
+		if val, ok := raw[key]; ok {
+			metrics[key] = val
+		}
+	}
+	metrics["accuracy"] = raw["overall_accuracy"]
+	metrics["status"] = "success"
+	return metrics
+}

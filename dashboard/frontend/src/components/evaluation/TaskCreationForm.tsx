@@ -125,7 +125,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
   const renderStep2 = () => {
     // Filter dimensions based on level
     const routerDimensions: EvaluationDimension[] = ['domain', 'fact_check', 'user_feedback'];
-    const momDimensions: EvaluationDimension[] = []; // To be added when MoM dimensions are implemented
+    const momDimensions: EvaluationDimension[] = ['accuracy'];
 
     const availableDimensions = form.level === 'router' ? routerDimensions : momDimensions;
     const filteredDimensionInfo = Object.entries(DIMENSION_INFO).filter(([dim]) =>

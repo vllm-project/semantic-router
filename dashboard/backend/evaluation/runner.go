@@ -150,6 +150,8 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 			switch dimension {
 			case models.DimensionDomain, models.DimensionFactCheck, models.DimensionUserFeedback:
 				result, runErr = r.runSignalEvaluation(ctx, taskID, task.Config, string(dimension), dataset, taskOutputDir)
+			case models.DimensionAccuracy:
+				result, runErr = r.runSystemEvaluation(ctx, taskID, task.Config, dataset, taskOutputDir)
 			default:
 				log.Printf("Unknown dimension: %s", dimension)
 				continue
@@ -208,6 +210,8 @@ func getDefaultDataset(dimension models.EvaluationDimension) string {
 		return "fact-check-en"
 	case models.DimensionUserFeedback:
 		return "feedback-en"
+	case models.DimensionAccuracy:
+		return "mmlu-pro"
 	default:
 		return "default"
 	}
@@ -261,6 +265,63 @@ func (r *Runner) runSignalEvaluation(ctx context.Context, taskID string, cfg mod
 		DatasetName:    datasetID,
 		Metrics:        metrics,
 		RawResultsPath: outputPath,
+	}, nil
+}
+
+// runSystemEvaluation runs system-level (MoM) evaluation, e.g. MMLU-Pro accuracy against an endpoint.
+func (r *Runner) runSystemEvaluation(ctx context.Context, taskID string, cfg models.EvaluationConfig, datasetID, outputDir string) (*models.EvaluationResult, error) {
+	// Only mmlu-pro is supported for accuracy dimension
+	if datasetID != "mmlu-pro" {
+		log.Printf("Unsupported system eval dataset: %s, using mmlu-pro", datasetID)
+		datasetID = "mmlu-pro"
+	}
+
+	outDir := filepath.Join(outputDir, "system_eval_accuracy")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create output dir: %w", err)
+	}
+
+	endpoint := strings.TrimSuffix(cfg.Endpoint, "/")
+	samplesPerCat := cfg.SamplesPerCat
+	if samplesPerCat <= 0 {
+		samplesPerCat = 5
+	}
+	args := []string{
+		"src/training/model_eval/mmlu_pro_vllm_eval.py",
+		"--endpoint", endpoint,
+		"--output-dir", outDir,
+		"--samples-per-category", fmt.Sprintf("%d", samplesPerCat),
+	}
+	if cfg.Concurrent > 0 {
+		args = append(args, "--concurrent-requests", fmt.Sprintf("%d", cfg.Concurrent))
+	}
+	if cfg.Model != "" {
+		args = append(args, "--models", cfg.Model)
+	}
+
+	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath is configured at startup
+	cmd.Dir = r.projectRoot
+	cmd.Env = append(os.Environ(), "PYTHONPATH="+r.projectRoot)
+
+	r.activeProcesses.Store(taskID, cmd)
+	defer r.activeProcesses.Delete(taskID)
+
+	_, err := r.runCommandWithProgress(ctx, cmd, taskID, "accuracy")
+	if err != nil {
+		return nil, fmt.Errorf("system evaluation failed: %w", err)
+	}
+
+	metrics, err := ParseMMLUProOutput(outDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse system evaluation output: %w", err)
+	}
+
+	return &models.EvaluationResult{
+		TaskID:         taskID,
+		Dimension:      models.DimensionAccuracy,
+		DatasetName:    datasetID,
+		Metrics:        metrics,
+		RawResultsPath: outDir,
 	}, nil
 }
 
@@ -431,6 +492,14 @@ func GetAvailableDatasets() map[string][]models.DatasetInfo {
 				Description: "User Feedback (English) - 4-class detection",
 				Dimension:   models.DimensionUserFeedback,
 				Level:       models.LevelRouter,
+			},
+		},
+		string(models.DimensionAccuracy): {
+			{
+				Name:        "mmlu-pro",
+				Description: "MMLU-Pro system accuracy via chat completions endpoint",
+				Dimension:   models.DimensionAccuracy,
+				Level:       models.LevelMoM,
 			},
 		},
 	}
