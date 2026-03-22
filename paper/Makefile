@@ -12,9 +12,10 @@ OUTNAME  = white-paper
 TEX      = pdflatex
 BIB      = bibtex
 TEXFLAGS = -interaction=nonstopmode -halt-on-error -file-line-error -jobname=$(OUTNAME)
+LOGO     = ../website/static/img/artworks/vllm-sr-logo.dark.pdf
 
 SECTIONS = $(wildcard sections/*.tex)
-SOURCES  = $(MAIN).tex $(SECTIONS) references.bib
+SOURCES  = $(MAIN).tex $(SECTIONS) references.bib vllm.cls $(LOGO)
 
 # Generated files to clean
 AUX_EXTS = aux bbl blg log out toc lof lot fls fdb_latexmk synctex.gz nav snm vrb run.xml bcf
