@@ -1,57 +1,50 @@
 % vLLM Semantic Router: Signal Driven Decision Routing for Mixture-of-Modality Models
 % Main document -- compile with: pdflatex main && bibtex main && pdflatex main && pdflatex main
 
-\documentclass{article}
+\documentclass{vllm}
 
-\usepackage{iclr2026_conference}
+% ---------- template / layout ----------
+\usepackage[margin=1.2in]{geometry}
+\graphicspath{{../website/static/img/}}
 
 % ---------- packages ----------
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{graphicx}
-\usepackage{amsmath,amssymb,amsthm}
 \usepackage{amsfonts}
-\usepackage{booktabs}
-\usepackage{multirow}
-\usepackage{enumitem}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
 \usepackage{algorithm}
 \usepackage{algorithmic}
+\usepackage[noabbrev,nameinlink]{cleveref}
+\usepackage{enumitem}
 \usepackage{float}
 \usepackage{listings}
-\usepackage{xcolor}
-\usepackage{hyperref}
-\usepackage{cleveref}
-\usepackage{subcaption}
 \usepackage{tabularx}
-\usepackage{url}
 \usepackage{tikz}
-\usetikzlibrary{shapes,shapes.geometric,arrows,positioning,fit,calc,backgrounds,decorations.pathreplacing}
+\usepackage{cite}
+\usetikzlibrary{shapes,shapes.geometric,arrows,arrows.meta,positioning,fit,calc,backgrounds,decorations.pathreplacing,matrix,shadows,patterns}
 
 % ---------- theorem environments ----------
+\theoremstyle{definition}
 \newtheorem{definition}{Definition}
+\theoremstyle{plain}
 \newtheorem{theorem}{Theorem}
 \newtheorem{proposition}{Proposition}
 
 % ---------- listing style ----------
 \lstset{
   basicstyle=\ttfamily\small,
-  keywordstyle=\color{blue}\bfseries,
-  commentstyle=\color{gray},
-  stringstyle=\color{red!70!black},
+  keywordstyle=\color{metablue}\bfseries,
+  commentstyle=\color{black!55},
+  stringstyle=\color{metafg},
   breaklines=true,
   frame=single,
   numbers=left,
-  numberstyle=\tiny\color{gray},
+  numberstyle=\tiny\color{black!45},
   captionpos=b,
   tabsize=2
 }
 
-% ---------- hyperref setup ----------
+% ---------- hyperref metadata ----------
 \hypersetup{
-  colorlinks=true,
-  linkcolor=blue!70!black,
-  citecolor=green!50!black,
-  urlcolor=blue!60!black,
   pdfauthor={vLLM Semantic Router Team},
   pdftitle={vLLM Semantic Router: Signal Driven Decision Routing for Mixture-of-Modality Models}
 }
@@ -65,25 +58,21 @@
 \newcommand{\vsr}{\texttt{vllm-sr}}
 
 \setlength{\emergencystretch}{2em}
-\iclrfinalcopy
 
-\title{%
-\textbf{vLLM Semantic Router:}\\[-1pt]
-{\fontsize{11}{12.5}\selectfont\mbox{Signal Driven Decision Routing for Mixture-of-Modality Models}}%
-}
+\title{vLLM Semantic Router}
+\subtitle{Signal Driven Decision Routing for Mixture-of-Modality Models}
 
 \author{%
-\parbox[t]{0.965\textwidth}{\centering\small\normalfont
-Xunzhuo Liu, Huamin Chen, Samzong Lu, Yossi Ovadia, Guohong Wen, Hao Wu, \\
-Zhengda Tan, Jintao Zhang, Senan Zedan, Yehudit Kerido, Liav Weiss,
-Haichen Zhang, Bishen Yu, Asaad Balum, Noa Limoy,
-Abdallah Samara, Baofa Fan, Sanjeev Rampal, Brent Salisbury, Ryan Cook, Zhijie Wang,
-Qiping Pan, Rehan Khan, Avishek Goswami, Houston H.\ Zhang, Shuyi Wang,
-Ziang Tang, Fang Han, Zohaib Hassan, Jianqiao Zheng, Avinash Changrani%
-}%
+Xunzhuo Liu, Huamin Chen, Samzong Lu, Yossi Ovadia, Guohong Wen, Hao Wu,\\
+Zhengda Tan, Jintao Zhang, Senan Zedan, Yehudit Kerido, Liav Weiss, Haichen Zhang,\\
+Bishen Yu, Asaad Balum, Noa Limoy, Abdallah Samara, Baofa Fan, Sanjeev Rampal,\\
+Brent Salisbury, Ryan Cook, Zhijie Wang, Qiping Pan, Rehan Khan, Avishek Goswami,\\
+Houston H.\ Zhang, Shuyi Wang, Ziang Tang, Fang Han, Zohaib Hassan, Jianqiao Zheng,\\
+Avinash Changrani%
 }
 
-\date{February 2026}
+\date{March 2026}
+\abstract{\input{sections/abstract}}
 
 % =====================================================================
 %  DOCUMENT
@@ -91,13 +80,6 @@ Ziang Tang, Fang Han, Zohaib Hassan, Jianqiao Zheng, Avinash Changrani%
 \begin{document}
 
 \maketitle
-\begingroup
-\renewcommand{\thefootnote}{}
-\footnotetext{Corresponding repository: \href{https://github.com/vllm-project/semantic-router}{GitHub repository}}
-\endgroup
-
-% --- Abstract ---
-\input{sections/abstract}
 
 % --- Introduction ---
 \input{sections/introduction}
@@ -147,8 +129,6 @@ Ziang Tang, Fang Han, Zohaib Hassan, Jianqiao Zheng, Avinash Changrani%
 % --- Evaluation ---
 \input{sections/evaluation}
 
-
-
 % --- Related Work ---
 \input{sections/related_work}
 
@@ -156,7 +136,7 @@ Ziang Tang, Fang Han, Zohaib Hassan, Jianqiao Zheng, Avinash Changrani%
 \input{sections/conclusion}
 
 % --- Bibliography ---
-\bibliographystyle{iclr2026_conference}
+\bibliographystyle{unsrt}
 \bibliography{references}
 
 \end{document}

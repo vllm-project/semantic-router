@@ -223,6 +223,7 @@ export interface DecisionConfig {
 export interface RoutingConfig {
   modelCards?: RoutingModelCard[]
   signals?: ConfigSignals
+  projections?: ConfigProjections
   decisions?: DecisionConfig[]
 }
 
@@ -731,6 +732,12 @@ export interface ConfigSignals {
   pii?: PIISignal[]
 }
 
+export interface ConfigProjections {
+  partitions?: ProjectionPartition[]
+  scores?: ProjectionScore[]
+  mappings?: ProjectionMapping[]
+}
+
 export interface DecisionPluginConfiguration {
   [key: string]: unknown
 }
@@ -938,6 +945,50 @@ export interface DomainSignal {
   mmlu_categories?: string[]
 }
 
+export interface ProjectionPartition {
+  name: string
+  semantics: string
+  members: string[]
+  temperature?: number
+  default?: string
+}
+
+export interface ProjectionScoreInput {
+  type: string
+  name: string
+  weight: number
+  value_source?: string
+  match?: number
+  miss?: number
+}
+
+export interface ProjectionScore {
+  name: string
+  method: string
+  inputs: ProjectionScoreInput[]
+}
+
+export interface ProjectionMappingCalibration {
+  method: string
+  slope?: number
+}
+
+export interface ProjectionMappingOutput {
+  name: string
+  lt?: number
+  lte?: number
+  gt?: number
+  gte?: number
+}
+
+export interface ProjectionMapping {
+  name: string
+  source: string
+  method: string
+  calibration?: ProjectionMappingCalibration
+  outputs: ProjectionMappingOutput[]
+}
+
 export interface ModalitySignal {
   name: string
   description?: string
@@ -1018,6 +1069,7 @@ export interface ConfigData {
   version?: string
   listeners?: ListenerConfig[]
   signals?: ConfigSignals
+  projections?: ConfigProjections
   decisions?: DecisionConfig[]
   providers?: ProvidersConfig
   routing?: RoutingConfig

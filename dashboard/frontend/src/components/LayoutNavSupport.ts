@@ -2,7 +2,7 @@ import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 
 export type LayoutDropdownKey = 'manager' | 'analysisOps' | 'fleetSim'
 
-export type LayoutConfigSection = 'models' | 'signals' | 'decisions' | 'global-config' | 'mcp'
+export type LayoutConfigSection = 'models' | 'signals' | 'projections' | 'decisions' | 'global-config' | 'mcp'
 
 type LayoutRouteMenuItem = {
   kind: 'route'
@@ -50,6 +50,7 @@ export const MANAGER_MENU_SECTIONS: LayoutMenuSection[] = [
       { kind: 'config', label: 'Models', configSection: 'models' },
       { kind: 'config', label: 'Decisions', configSection: 'decisions' },
       { kind: 'config', label: 'Signals', configSection: 'signals' },
+      { kind: 'config', label: 'Projections', configSection: 'projections' },
     ],
   },
 ]

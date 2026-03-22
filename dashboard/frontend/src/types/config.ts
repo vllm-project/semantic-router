@@ -185,7 +185,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'fact_check' | 'language' | 'context' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'fact_check' | 'language' | 'context' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii' | 'projection'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string
