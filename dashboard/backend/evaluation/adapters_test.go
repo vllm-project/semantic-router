@@ -60,8 +60,8 @@ func TestParseMMLUProOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(subdir, "analysis.json"), data, 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
+	if writeErr := os.WriteFile(filepath.Join(subdir, "analysis.json"), data, 0o600); writeErr != nil {
+		t.Fatalf("WriteFile: %v", writeErr)
 	}
 
 	metrics, err := ParseMMLUProOutput(dir)

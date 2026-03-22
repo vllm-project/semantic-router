@@ -54,7 +54,8 @@ dashboard-lint: ## Lint dashboard frontend and backend
 	@echo "Running golangci-lint for dashboard backend..."
 	@cd $(DASHBOARD_BACKEND_DIR) && \
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
-		export GOPATH=$${GOPATH:-$$HOME/go} && \
+		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
+		export PATH="$$GOPATH/bin:$$PATH" && \
 		golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
 	@echo "dashboard/backend lint passed"
 
@@ -66,7 +67,8 @@ dashboard-lint-fix: ## Auto-fix lint issues in dashboard (frontend + backend)
 	@echo "Running golangci-lint fix for dashboard backend..."
 	@cd $(DASHBOARD_BACKEND_DIR) && \
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
-		export GOPATH=$${GOPATH:-$$HOME/go} && \
+		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
+		export PATH="$$GOPATH/bin:$$PATH" && \
 		golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
 	@echo "dashboard/backend lint fix applied"
 

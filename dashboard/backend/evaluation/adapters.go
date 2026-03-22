@@ -419,7 +419,7 @@ func ParseMMLUProOutput(outputDir string) (map[string]interface{}, error) {
 			continue
 		}
 		p := filepath.Join(outputDir, e.Name(), "analysis.json")
-		if _, err := os.Stat(p); err == nil {
+		if _, statErr := os.Stat(p); statErr == nil {
 			analysisPath = p
 			break
 		}
@@ -432,8 +432,8 @@ func ParseMMLUProOutput(outputDir string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("failed to read analysis file: %w", err)
 	}
 	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse analysis JSON: %w", err)
+	if unmarshalErr := json.Unmarshal(data, &raw); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse analysis JSON: %w", unmarshalErr)
 	}
 	return extractMMLUProMetrics(raw), nil
 }

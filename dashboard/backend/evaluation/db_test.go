@@ -21,16 +21,16 @@ func TestRecoverRunningTasks(t *testing.T) {
 		Name:   "recover-test",
 		Config: models.EvaluationConfig{Level: models.LevelRouter, Dimensions: []models.EvaluationDimension{models.DimensionDomain}},
 	}
-	if err := evalDB.CreateTask(task); err != nil {
+	if err = evalDB.CreateTask(task); err != nil {
 		t.Fatalf("CreateTask() error = %v", err)
 	}
 
-	if err := evalDB.UpdateTaskStatus(task.ID, models.StatusRunning, ""); err != nil {
+	if err = evalDB.UpdateTaskStatus(task.ID, models.StatusRunning, ""); err != nil {
 		t.Fatalf("UpdateTaskStatus(running) error = %v", err)
 	}
 
 	msg := "Dashboard restarted; task interrupted"
-	if err := evalDB.RecoverRunningTasks(msg); err != nil {
+	if err = evalDB.RecoverRunningTasks(msg); err != nil {
 		t.Fatalf("RecoverRunningTasks() error = %v", err)
 	}
 
@@ -66,7 +66,7 @@ func TestCreateTaskAndGetTask(t *testing.T) {
 			MaxSamples: 50,
 		},
 	}
-	if err := evalDB.CreateTask(task); err != nil {
+	if err = evalDB.CreateTask(task); err != nil {
 		t.Fatalf("CreateTask() error = %v", err)
 	}
 	if task.ID == "" {
@@ -107,7 +107,7 @@ func TestCreateTask_SystemLevelAccuracy(t *testing.T) {
 			MaxSamples: 20,
 		},
 	}
-	if err := evalDB.CreateTask(task); err != nil {
+	if err = evalDB.CreateTask(task); err != nil {
 		t.Fatalf("CreateTask() error = %v", err)
 	}
 	if task.ID == "" {
