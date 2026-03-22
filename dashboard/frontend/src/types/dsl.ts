@@ -62,7 +62,7 @@ export interface ASTSignalDecl {
   pos: ASTPosition
 }
 
-export interface ASTSignalGroupDecl {
+export interface ASTProjectionPartitionDecl {
   name: string
   semantics?: string
   temperature?: number
@@ -171,7 +171,7 @@ export interface ASTTestBlockDecl {
 
 export interface ASTProgram {
   signals: ASTSignalDecl[]
-  signalGroups?: ASTSignalGroupDecl[]
+  projectionPartitions?: ASTProjectionPartitionDecl[]
   projectionScores?: ASTProjectionScoreDecl[]
   projectionMappings?: ASTProjectionMappingDecl[]
   routes: ASTRouteDecl[]

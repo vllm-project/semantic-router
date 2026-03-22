@@ -20,9 +20,9 @@ import {
   updateSignal,
   addSignal as addSignalMut,
   deleteSignal as deleteSignalMut,
-  updateSignalGroup as updateSignalGroupMut,
-  addSignalGroup as addSignalGroupMut,
-  deleteSignalGroup as deleteSignalGroupMut,
+  updateProjectionPartition as updateProjectionPartitionMut,
+  addProjectionPartition as addProjectionPartitionMut,
+  deleteProjectionPartition as deleteProjectionPartitionMut,
   updateProjection as updateProjectionMut,
   addProjection as addProjectionMut,
   deleteProjection as deleteProjectionMut,
@@ -337,24 +337,24 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (wasmReady) get().parseAST()
   },
 
-  mutateSignalGroup(name: string, fields: DSLFieldObject) {
+  mutateProjectionPartition(name: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
-    const newSrc = updateSignalGroupMut(dslSource, name, fields)
+    const newSrc = updateProjectionPartitionMut(dslSource, name, fields)
     if (newSrc === dslSource) return
     set({ dslSource: newSrc, dirty: true })
     if (wasmReady) get().parseAST()
   },
 
-  addSignalGroup(name: string, fields: DSLFieldObject) {
+  addProjectionPartition(name: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
-    const newSrc = addSignalGroupMut(dslSource, name, fields)
+    const newSrc = addProjectionPartitionMut(dslSource, name, fields)
     set({ dslSource: newSrc, dirty: true })
     if (wasmReady) get().parseAST()
   },
 
-  deleteSignalGroup(name: string) {
+  deleteProjectionPartition(name: string) {
     const { dslSource, wasmReady } = get()
-    const newSrc = deleteSignalGroupMut(dslSource, name)
+    const newSrc = deleteProjectionPartitionMut(dslSource, name)
     if (newSrc === dslSource) return
     set({ dslSource: newSrc, dirty: true })
     if (wasmReady) get().parseAST()

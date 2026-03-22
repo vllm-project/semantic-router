@@ -3,7 +3,7 @@
 ## Goal
 
 - Turn [`spec/dsl.md`](../../../spec/dsl.md) into the canonical resumable workstream for conflict-free and confidence-aware routing behavior.
-- Close the gap between the DSL surface that already parses and validates `SIGNAL_GROUP`, `TEST`, and `TIER`, and the runtime surfaces that must enforce those semantics.
+- Close the gap between the DSL surface that already parses and validates projection partitions, `TEST`, and `TIER`, and the runtime surfaces that must enforce those semantics.
 - Retire this workstream only when validator, compiler, runtime signal evaluation, decision selection, and tests all agree on the same routing behavior.
 
 ## Scope
@@ -19,8 +19,8 @@
 ## Exit Criteria
 
 - The repository has one durable execution record for this spec-backed workstream and it points to the real spec file path in the repo.
-- Validator behavior for domain overlap, mutual exclusion guidance, `SIGNAL_GROUP`, `TEST`, and `TIER` is covered by targeted tests and stays aligned with the runtime contract.
-- Runtime signal evaluation enforces grouped exclusivity where `signal_groups` declare it, or any remaining unsupported behavior is promoted into indexed technical debt in the same change.
+- Validator behavior for domain overlap, mutual exclusion guidance, `PROJECTION partition`, `TEST`, and `TIER` is covered by targeted tests and stays aligned with the runtime contract.
+- Runtime signal evaluation enforces grouped exclusivity where `routing.projections.partitions` declare it, or any remaining unsupported behavior is promoted into indexed technical debt in the same change.
 - Decision selection preserves categorical precedence across tiers and uses score-aware selection within a tier where the spec requires it.
 - All applicable harness gates for the touched files pass, including required E2E or integration coverage for behavior-visible routing changes.
 
@@ -28,68 +28,69 @@
 
 - [x] `W001` Bootstrap the indexed execution plan, reconcile the spec path mismatch, and lock the first implementation loop to repo-native harness inputs.
 - [x] `W002` Audit which `spec/dsl.md` features are already implemented in DSL/parser/compiler/validator code versus which runtime behaviors are still missing.
-- [x] `W003` Implement runtime `signal_groups` enforcement for grouped domain and embedding signals, with focused classification and decision tests.
+- [x] `W003` Implement runtime projection-partition enforcement for grouped domain and embedding signals, with focused classification and decision tests.
 - [x] `W004` Implement tier-aware decision selection so cross-tier precedence stays categorical and within-tier conflicts are resolved by score rather than raw priority.
 - [x] `W005` Close the remaining authoring/runtime gap for grouped signals, including any missing validator checks, runtime plumbing, docs, and targeted behavior coverage.
 - [x] `W006` Run the full applicable harness validation ladder for the final changed-file set, update debt if any durable architecture gap remains, and mark the workstream complete.
-- [x] `W007` Sync `routing.signals.signal_groups` into the canonical config contract, exhaustive reference config, and cross-surface schema/docs coverage, then rerun the applicable feature gate.
+- [x] `W007` Sync grouped-partition semantics into the canonical config contract, exhaustive reference config, and cross-surface schema/docs coverage, then rerun the applicable feature gate.
 - [x] `W008` Implement runtime-backed `TEST` block validation for actionable `spec/dsl.md` coverage, plus any DSL AST/editor contract updates needed so `TEST` and related routing-only constructs round-trip cleanly across tooling.
-- [x] `W009` Close the remaining actionable `spec/dsl.md` signal-group gaps by enforcing `SIGNAL_GROUP.default` as a runtime fallback contract and adding native centroid-similarity validation for `softmax_exclusive` embedding groups.
+- [x] `W009` Close the remaining actionable `spec/dsl.md` projection-partition gaps by enforcing `PROJECTION partition.default` as a runtime fallback contract and adding native centroid-similarity validation for `softmax_exclusive` embedding groups.
 - [x] `W010` Re-audit the newly requested `spec/dsl.md` expansion scope: `DECISION_TREE` / `IF ELSE`, remaining stubbed core APIs, and maintained router/DSL example assets including `deploy/recipes/balance.yaml`.
 - [x] `W011` Implement minimal `DECISION_TREE` / `IF ELSE` DSL support with tests, compiling it into the existing router decision model without a second runtime.
 - [x] `W012` Implement the remaining core classification/config API handlers and tests so the published API surface no longer advertises stubbed config/classification endpoints.
 - [x] `W013` Add maintained router-config and DSL-config examples for the new capabilities, and update `deploy/recipes/balance.yaml` so the shipped recipe visibly exercises the new routing surface.
 - [x] `W014` Run the full applicable harness ladder for the expanded spec surface, then close all implementation-complete tasks once their shared feature gate passes.
 - [x] `W015` Replace invalid `balance.yaml` demo domains with repo-supported routing domains, and add early domain-value validation across config plus DSL compiler/validator surfaces.
-- [x] `W016` Rework `deploy/recipes/balance.yaml` to use repo-native learned-signal + heuristic-signal + `SIGNAL_GROUP` routing patterns that better match `.augment/clawrouter.md` without inventing a second runtime.
+- [x] `W016` Rework `deploy/recipes/balance.yaml` to use repo-native learned-signal + heuristic-signal + projection-partition routing patterns that better match `.augment/clawrouter.md` without inventing a second runtime.
 - [x] `W017` Revert the unfinished `TD036` branch attempt, keep `DECISION_TREE` as DSL authoring sugar only, and realign debt/docs/examples/schema mirrors with that narrower contract.
 - [x] `W018` Re-audit `deploy/recipes/balance.yaml` against `.augment/clawrouter.md`, identify the missing multi-dimensional difficulty/intent structure, and define the narrowest maintained asset set for a stronger repo-native strategy.
-- [x] `W019` Implement the maintained `balance` routing pair (`deploy/recipes/balance.yaml` + `deploy/recipes/balance.dsl`) and targeted tests/docs so the recipe expresses the stronger learned + heuristic + `SIGNAL_GROUP` strategy without new runtime primitives.
+- [x] `W019` Implement the maintained `balance` routing pair (`deploy/recipes/balance.yaml` + `deploy/recipes/balance.dsl`) and targeted tests/docs so the recipe expresses the stronger learned + heuristic + projection-partition strategy without new runtime primitives.
 - [x] `W020` Run the applicable harness ladder for the `balance` asset refactor, including any affected E2E/profile coverage, then update the PR once the changed-set gates pass.
 - [x] `W021` Remove the deprecated per-decision `modelSelectionAlgorithm` config surface, unify on `routing.decisions[].algorithm`, and keep the repo-native local feature-gate/E2E build path green for that contract change.
 - [x] `W022` Fix the CI-only `pkg/config` domain-sync test path so `make agent-ci-lint` / `make test-semantic-router` no longer depend on the runner working directory, then update the PR with the repaired validation state.
-- [x] `W023` Introduce the canonical `routing.projections` contract, move existing `signal_groups` partition semantics under `projections.partitions`, and sync the config/DSL/runtime/platform surfaces to that renamed contract.
+- [x] `W023` Introduce the canonical `routing.projections` contract, move grouped partition semantics under `projections.partitions`, and sync the config/DSL/runtime/platform surfaces to that renamed contract.
 - [x] `W024` Implement weighted projection scores plus threshold mappings as repo-native derived routing outputs, allow decisions to reference those outputs, and refactor the maintained `balance` assets plus reference config/docs to exercise the stronger routing strategy.
 - [x] `W025` Run the full applicable harness ladder for the projections refactor, including local smoke and affected E2E, close any completed debt, and update the PR with the final validation state.
 - [x] `W026` Add first-class dashboard config management for `routing.projections`, including canonical config projection/save plumbing and decision-editor support for `type: projection`.
-- [x] `W027` Extend dashboard DSL management so the builder/AST toolchain can inspect and edit `SIGNAL_GROUP`, `PROJECTION score`, and `PROJECTION mapping` entities instead of leaving them outside the visual editor model.
+- [x] `W027` Extend dashboard DSL management so the builder/AST toolchain can inspect and edit `PROJECTION partition`, `PROJECTION score`, and `PROJECTION mapping` entities instead of leaving them outside the visual editor model.
 - [x] `W028` Publish complete user-facing projection docs and maintained examples that explain the feature, show canonical YAML plus DSL usage, and align the dashboard story with the shipped `balance` assets.
 - [x] `W029` Repair the post-PR GitHub Actions regressions in projections tutorial contracts and supported-domain contract tests so `Run pre-commit hooks check file lint` and `test-and-build` pass again.
+- [x] `W030` Replace the DSL authoring keyword `SIGNAL_GROUP` with `PROJECTION partition` across parser, AST, compiler, decompiler, validator, runtime validation hooks, and DSL tests, while removing the old authoring syntax.
+- [x] `W031` Migrate dashboard DSL editing, maintained DSL assets, and user-facing docs/examples from `SIGNAL_GROUP` to `PROJECTION partition` so authoring and UI contracts stay aligned.
+- [ ] `W032` Run the applicable harness ladder for the `PROJECTION partition` authoring migration, update plan/debt state, and push the PR branch once the changed-set gates pass.
 
 ## Current Loop
 
 - Date: 2026-03-22
-- Current task: `W029` completed; workstream exit criteria remain satisfied
+- Current task: `W032` in progress
 - Changed files:
-  - `config/signal/domain/mmlu.yaml`
-  - `src/semantic-router/pkg/config/validator_domain_test.go`
-  - `website/docs/tutorials/signal/projections.md`
+  - DSL authoring/runtime files under `src/semantic-router/pkg/dsl/**` plus native validation touchpoints in `src/semantic-router/cmd/{dsl,wasm}/**`
+  - dashboard DSL-editor files under `dashboard/frontend/src/{lib,stores,types,pages}/**`
+  - maintained DSL/doc assets including `deploy/recipes/balance.dsl`, `website/docs/tutorials/signal/{overview.md,projections.md}`, `config/README.md`, and `docs/agent/tech-debt/{README.md,td-035-signal-group-default-coverage-contract-gap.md}`
   - this plan file
 - Commands run:
-  - startup doc reads for `AGENTS.md`, `docs/agent/{README.md,context-management.md,plans/README.md,testing-strategy.md,feature-complete-checklist.md}`, and nearest local `src/semantic-router/pkg/config/AGENTS.md`
-  - attempted broad `codebase-retrieval` twice for the failing `pkg/config` tests and projections tutorial contract; both calls failed with `fetch failed`
-  - shell fallback discovery with `gh`, `sed`, `rg`, and `find` across the failing GitHub Actions logs, `validator_domain_test.go`, `docs_contract_test.go`, `domain_contract.go`, `config/signal/domain/mmlu.yaml`, and `website/docs/tutorials/signal/projections.md`
-  - `make agent-report ENV=cpu CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go,config/signal/domain/mmlu.yaml,website/docs/tutorials/signal/projections.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
-  - `make agent-validate`
-  - `make test-semantic-router`
-  - started `make agent-dev ENV=cpu`, then stopped waiting on the slow local-smoke build after the user redirected this loop to immediate PR update
-  - `make agent-lint CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go,config/signal/domain/mmlu.yaml,website/docs/tutorials/signal/projections.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
-  - `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/config/validator_domain_test.go,config/signal/domain/mmlu.yaml,website/docs/tutorials/signal/projections.md,docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md"`
+  - startup doc reads for `AGENTS.md`, `docs/agent/{README.md,context-management.md,plans/README.md,testing-strategy.md,feature-complete-checklist.md}`, plus nearest local dashboard rules in `dashboard/frontend/src/AGENTS.md` and `dashboard/frontend/src/pages/AGENTS.md`
+  - broad `codebase-retrieval` over DSL AST/parser/compiler/decompiler, dashboard DSL editor surfaces, maintained assets, and projection docs for replacing `SIGNAL_GROUP` with `PROJECTION partition`
+  - second broad `codebase-retrieval` audit over DSL/runtime/config/dashboard/docs to classify every remaining `SIGNAL_GROUP` / `signal_groups` occurrence after the migration landed
+  - focused `codebase-retrieval` over `src/semantic-router/pkg/dsl/emitter_yaml.go` plus tests/callers before touching the last compat-key residue
+  - shell discovery with `rg`, `sed`, `nl`, and `git status` across `src/semantic-router/pkg/dsl/**`, `src/semantic-router/cmd/{dsl,wasm}/**`, `dashboard/frontend/src/**`, `deploy/recipes/balance.dsl`, projection tutorial docs, and `docs/agent/**`
+  - `git mv src/semantic-router/pkg/dsl/validator_signal_group_test.go src/semantic-router/pkg/dsl/validator_projection_partition_test.go`
+  - `gofmt -w src/semantic-router/pkg/dsl/{dsl_test.go,emitter_yaml.go,emitter_yaml_test.go,validator_projection_partition_test.go}`
+  - `go test ./pkg/dsl -count=1`
+  - `make agent-lint CHANGED_FILES="...current changed set..."`
 - Failure observed:
-  - GitHub Actions job `68059874826` failed `pkg/config` because `website/docs/tutorials/signal/projections.md` was missing the standard latest-tutorial sections, starting with `## Overview`
-  - the same job failed `TestSupportedRoutingDomainNamesStayInSyncWithClassifierMapping` because it still depended on `models/mmbert32k-intent-classifier-merged/category_mapping.json`, which is not present on the GitHub runner
-  - GitHub Actions job `68059881543` failed in the shared semantic-router test step; given the package failure above, the smallest repair target was the same `pkg/config` surface
+  - the post-migration audit still found active cleanup misses: one DSL test file name, one temp-file prefix, active debt/plan index text that still described `SIGNAL_GROUP` as the current contract, and a legacy `signal_groups` compat key in `EmitUserYAML`
+  - an earlier `agent-feature-gate` rerun failed before smoke because temporary `DOCKER_CONFIG=/tmp/docker-nocreds` dropped the desktop Docker context and the CLI fell back to `/var/run/docker.sock`
 - Fix applied:
-  - expanded `config/signal/domain/mmlu.yaml` into the committed 14-domain taxonomy mirror for the supported routing-domain contract
-  - rewrote the domain-sync test to read that committed config fragment instead of a local model payload, keeping the check repo-owned and CI-stable
-  - restructured the projections tutorial so it now satisfies the standard tutorial taxonomy while preserving its projection-specific workflow, YAML, DSL, dashboard, and maintained-example guidance
+  - renamed the remaining DSL test file to `validator_projection_partition_test.go`, updated the temp-file prefix, refreshed active plan/debt index text, and closed the last active authoring/runtime/dashboard/doc contract residue found by `codebase-retrieval`
+  - removed the dead `signal_groups` denormalization path from `EmitUserYAML`, extracted helpers so the touched file still passes changed-file structure lint, and added `TestEmitUserYAMLUsesProjectionsWithoutLegacySignalGroupsKey`
+  - relaunched Docker Desktop and verified the correct desktop socket with explicit `DOCKER_HOST` for any future feature-gate reruns
 - Current result:
-  - `W029` is complete
-  - `make agent-validate`, `make test-semantic-router`, `make agent-lint`, and `make agent-ci-gate` all pass on the final changed-file set
-  - the user explicitly redirected this loop to immediate PR update, so the slower CPU local-smoke and `ai-gateway` E2E path was not rerun after the relevant CI-targeted gates were already green
-  - the broader workstream remains complete and introduces no new durable architecture gap
+  - `W030` and `W031` are implemented and diff-scoped validation is green
+  - `codebase-retrieval` plus targeted `rg` now show no active `SIGNAL_GROUP` / `signal_groups` references in the DSL/runtime/dashboard-builder/docs contract surfaces; the remaining hits are intentional history, internal runtime filenames, or unrelated UI grouping names
+  - `make agent-lint` passes on the full changed set, including the last `EmitUserYAML` cleanup
 - Next action:
-  - commit the CI repair with `git commit -s`, push the PR branch, and monitor the rerun checks for jobs `68059874826` and `68059881543`
+  - update the PR with the cleaned migration diff; by explicit user direction this PR-audit loop stops at `make agent-lint` instead of rerunning local smoke or E2E
 
 ## Decision Log
 
@@ -153,11 +154,14 @@
 - 2026-03-22: CI-stable domain-contract tests must read repo-committed assets, not local classifier model payloads. `config/signal/domain/mmlu.yaml` is now the committed taxonomy mirror for the 14 supported routing domains.
 - 2026-03-22: feature-specific tutorial pages still have to satisfy the latest tutorial taxonomy contract. Projection docs can keep DSL/dashboard-specific sections, but they must also carry the standard `Overview`, `Key Advantages`, `What Problem Does It Solve?`, `When to Use`, and `Configuration` headings.
 - 2026-03-22: this PR repair loop targeted remote jobs `68059874826` and `68059881543`, both failing on changed-file lint/test surfaces. After `make agent-validate`, `make test-semantic-router`, `make agent-lint`, and `make agent-ci-gate` passed locally, the user redirected the loop to immediate PR update instead of waiting for the slower local-smoke path.
+- 2026-03-22: the final `PROJECTION partition` audit must distinguish active migration misses from intentional leftovers. `codebase-retrieval` confirmed that dashboard topology `signalGroups` names are generic UI grouping state, while `classifier_signal_groups*.go` remains an internal runtime filename; neither is part of the public authoring contract migration.
+- 2026-03-22: `EmitUserYAML` should not keep denormalizing the removed `signal_groups` key. The smallest safe cleanup was to delete that mapping, add a focused regression test, and extract helpers from `buildModelsFromEndpoints` so changed-file structural lint still passes.
+- 2026-03-22: by explicit user direction, this PR-audit loop stops at `make agent-lint` after the codebase-retrieval cleanup pass; local smoke and E2E reruns are not required for this incremental PR update.
 
 ## Follow-up Debt / ADR Links
 
 - [TD006 Structural Rule Target Still Exceeds Reality in Key Legacy Hotspots](../tech-debt/td-006-structural-rule-target-vs-legacy-hotspots.md)
 - [TD015 Weak Typing Still Leaks Through Dashboard Editor Models and DSL Serialization Helpers](../tech-debt/td-015-weakly-typed-config-and-dsl-contracts.md)
 - [TD020 Classification Subsystem Boundaries Have Collapsed Into Hotspot Orchestrators](../tech-debt/td-020-classification-subsystem-boundary-collapse.md)
-- [TD035 SIGNAL_GROUP Default Coverage Contract Is Still Declarative Only](../tech-debt/td-035-signal-group-default-coverage-contract-gap.md)
+- [TD035 Projection Partition Default Coverage Contract Is No Longer Declarative Only](../tech-debt/td-035-signal-group-default-coverage-contract-gap.md)
 - [TD036 Decision Tree Authoring Cannot Round-Trip Through Runtime Config](../tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md)

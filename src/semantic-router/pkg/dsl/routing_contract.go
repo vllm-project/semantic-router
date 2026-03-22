@@ -74,19 +74,19 @@ func (d *decompiler) appendSignalsToProgram(prog *Program) {
 	d.appendCoreSignals(prog)
 	d.appendOperationalSignals(prog)
 	d.appendSafetySignals(prog)
-	d.appendSignalGroups(prog)
+	d.appendProjectionPartitions(prog)
 	d.appendProjectionScores(prog)
 	d.appendProjectionMappings(prog)
 }
 
-func (d *decompiler) appendSignalGroups(prog *Program) {
-	for _, sg := range d.cfg.Projections.Partitions {
-		prog.SignalGroups = append(prog.SignalGroups, &SignalGroupDecl{
-			Name:        sg.Name,
-			Semantics:   sg.Semantics,
-			Temperature: sg.Temperature,
-			Members:     sg.Members,
-			Default:     sg.Default,
+func (d *decompiler) appendProjectionPartitions(prog *Program) {
+	for _, partition := range d.cfg.Projections.Partitions {
+		prog.ProjectionPartitions = append(prog.ProjectionPartitions, &ProjectionPartitionDecl{
+			Name:        partition.Name,
+			Semantics:   partition.Semantics,
+			Temperature: partition.Temperature,
+			Members:     partition.Members,
+			Default:     partition.Default,
 		})
 	}
 }

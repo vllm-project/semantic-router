@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 
 import type {
+  ASTProjectionPartitionDecl,
   ASTProjectionMappingDecl,
   ASTProjectionScoreDecl,
-  ASTSignalGroupDecl,
   DSLFieldObject,
 } from "@/types/dsl";
 import { serializeFields } from "@/lib/dslMutations";
@@ -20,14 +20,16 @@ function buildDslPreview(header: string, fields: DSLFieldObject): string {
   return `${header} {\n${body}\n}`;
 }
 
-export function signalGroupToFields(group: ASTSignalGroupDecl): DSLFieldObject {
+export function projectionPartitionToFields(
+  partition: ASTProjectionPartitionDecl,
+): DSLFieldObject {
   return {
-    ...(group.semantics ? { semantics: group.semantics } : {}),
-    ...(typeof group.temperature === "number"
-      ? { temperature: group.temperature }
+    ...(partition.semantics ? { semantics: partition.semantics } : {}),
+    ...(typeof partition.temperature === "number"
+      ? { temperature: partition.temperature }
       : {}),
-    members: group.members ?? [],
-    ...(group.default ? { default: group.default } : {}),
+    members: partition.members ?? [],
+    ...(partition.default ? { default: partition.default } : {}),
   };
 }
 
@@ -169,15 +171,15 @@ const NamedBlockAddForm: React.FC<{
   );
 };
 
-export const SignalGroupEditorForm: React.FC<{
-  group: ASTSignalGroupDecl;
+export const ProjectionPartitionEditorForm: React.FC<{
+  partition: ASTProjectionPartitionDecl;
   onUpdate: (fields: DSLFieldObject) => void;
-}> = ({ group, onUpdate }) => (
+}> = ({ partition, onUpdate }) => (
   <NamedBlockEditor
-    title="Signal Group"
-    previewTitle="Signal Group Preview"
-    previewHeader={`SIGNAL_GROUP ${group.name}`}
-    fields={signalGroupToFields(group)}
+    title="Projection Partition"
+    previewTitle="Projection Partition Preview"
+    previewHeader={`PROJECTION partition ${partition.name}`}
+    fields={projectionPartitionToFields(partition)}
     onUpdate={onUpdate}
   />
 );
@@ -208,16 +210,16 @@ export const ProjectionMappingEditorForm: React.FC<{
   />
 );
 
-export const AddSignalGroupForm: React.FC<{
+export const AddProjectionPartitionForm: React.FC<{
   onAdd: (name: string, fields: DSLFieldObject) => void;
   onCancel: () => void;
 }> = ({ onAdd, onCancel }) => (
   <NamedBlockAddForm
-    title="New Signal Group"
+    title="New Projection Partition"
     namePlaceholder="balance_domain_partition"
     initialFields={{ semantics: "exclusive", members: [] }}
-    previewTitle="Signal Group Preview"
-    buildHeader={(name) => `SIGNAL_GROUP ${name}`}
+    previewTitle="Projection Partition Preview"
+    buildHeader={(name) => `PROJECTION partition ${name}`}
     onAdd={onAdd}
     onCancel={onCancel}
   />

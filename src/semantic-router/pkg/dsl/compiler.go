@@ -47,8 +47,8 @@ func (c *Compiler) compile() {
 	// 2. Compile signals
 	c.compileSignals()
 
-	// 3. Compile signal groups
-	c.compileSignalGroups()
+	// 3. Compile projection partitions
+	c.compileProjectionPartitions()
 
 	// 4. Compile projections
 	c.compileProjectionScores()
@@ -61,17 +61,17 @@ func (c *Compiler) compile() {
 	c.compileRoutes()
 }
 
-func (c *Compiler) compileSignalGroups() {
-	for _, sg := range c.prog.SignalGroups {
-		c.validateSoftmaxDomainSignalGroup(sg)
-		group := config.ProjectionPartition{
-			Name:        sg.Name,
-			Semantics:   sg.Semantics,
-			Temperature: sg.Temperature,
-			Members:     sg.Members,
-			Default:     sg.Default,
+func (c *Compiler) compileProjectionPartitions() {
+	for _, partitionDecl := range c.prog.ProjectionPartitions {
+		c.validateSoftmaxDomainProjectionPartition(partitionDecl)
+		partition := config.ProjectionPartition{
+			Name:        partitionDecl.Name,
+			Semantics:   partitionDecl.Semantics,
+			Temperature: partitionDecl.Temperature,
+			Members:     partitionDecl.Members,
+			Default:     partitionDecl.Default,
 		}
-		c.config.Projections.Partitions = append(c.config.Projections.Partitions, group)
+		c.config.Projections.Partitions = append(c.config.Projections.Partitions, partition)
 	}
 }
 
@@ -1068,11 +1068,13 @@ func compileDomainSuggestionSuffix(value string) string {
 	return fmt.Sprintf("; did you mean %q?", suggestion)
 }
 
-func (c *Compiler) validateSoftmaxDomainSignalGroup(sg *SignalGroupDecl) {
-	if sg.Semantics != "softmax_exclusive" {
+func (c *Compiler) validateSoftmaxDomainProjectionPartition(
+	partition *ProjectionPartitionDecl,
+) {
+	if partition.Semantics != "softmax_exclusive" {
 		return
 	}
-	for _, member := range sg.Members {
+	for _, member := range partition.Members {
 		signal := c.findSignalDeclByName(member)
 		if signal == nil || signal.SignalType != "domain" {
 			continue
@@ -1083,9 +1085,9 @@ func (c *Compiler) validateSoftmaxDomainSignalGroup(sg *SignalGroupDecl) {
 				continue
 			}
 			c.addError(
-				sg.Pos,
-				"SIGNAL_GROUP %q member %q must use a supported routing domain name (%s) or declare mmlu_categories explicitly%s",
-				sg.Name,
+				partition.Pos,
+				"PROJECTION partition %q member %q must use a supported routing domain name (%s) or declare mmlu_categories explicitly%s",
+				partition.Name,
 				member,
 				strings.Join(config.SupportedRoutingDomainNames(), ", "),
 				compileDomainSuggestionSuffix(member),
@@ -1097,9 +1099,9 @@ func (c *Compiler) validateSoftmaxDomainSignalGroup(sg *SignalGroupDecl) {
 				continue
 			}
 			c.addError(
-				sg.Pos,
-				"SIGNAL_GROUP %q member %q has unsupported mmlu_categories value %q (supported: %s)%s",
-				sg.Name,
+				partition.Pos,
+				"PROJECTION partition %q member %q has unsupported mmlu_categories value %q (supported: %s)%s",
+				partition.Name,
 				member,
 				value,
 				strings.Join(config.SupportedRoutingDomainNames(), ", "),

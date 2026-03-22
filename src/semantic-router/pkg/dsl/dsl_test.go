@@ -3601,8 +3601,8 @@ TEST routing_intent {
 	}
 }
 
-func TestCLIValidateRunsRuntimeSignalGroupDiagnostics(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "signal_group_runtime*.dsl")
+func TestCLIValidateRunsRuntimeProjectionPartitionDiagnostics(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "projection_partition_runtime*.dsl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3612,7 +3612,7 @@ func TestCLIValidateRunsRuntimeSignalGroupDiagnostics(t *testing.T) {
 SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL domain general { mmlu_categories: ["other"] }
 
-SIGNAL_GROUP domain_taxonomy {
+PROJECTION partition domain_taxonomy {
   semantics: "softmax_exclusive"
   temperature: 0.1
   members: ["math", "general"]
@@ -3629,16 +3629,16 @@ ROUTE general_route { PRIORITY 100 WHEN domain("general") MODEL "m:1b" }
 			diags: []Diagnostic{
 				{
 					Level:   DiagWarning,
-					Message: `SIGNAL_GROUP domain_taxonomy: members "math" and "general" candidate centroids have cosine similarity 0.81 (threshold: 0.7) — softmax scores may be near-uniform on ambiguous queries`,
+					Message: `PROJECTION partition domain_taxonomy: members "math" and "general" candidate centroids have cosine similarity 0.81 (threshold: 0.7) — softmax scores may be near-uniform on ambiguous queries`,
 				},
 			},
 		}, nil
 	})
 	if errCount != 0 {
-		t.Fatalf("expected runtime signal-group validation warning only, got %d errors\n%s", errCount, buf.String())
+		t.Fatalf("expected runtime projection partition validation warning only, got %d errors\n%s", errCount, buf.String())
 	}
 	if !strings.Contains(buf.String(), "candidate centroids have cosine similarity 0.81") {
-		t.Fatalf("expected runtime signal-group diagnostic, got:\n%s", buf.String())
+		t.Fatalf("expected runtime projection partition diagnostic, got:\n%s", buf.String())
 	}
 }
 
@@ -4189,16 +4189,16 @@ ROUTE r2 { PRIORITY 100 WHEN keyword("urgent") MODEL "m2" }
 	}
 }
 
-// ---------- SIGNAL_GROUP Tests ----------
+// ---------- PROJECTION partition Tests ----------
 
-func TestParseSignalGroup(t *testing.T) {
+func TestParseProjectionPartition(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL domain science { mmlu_categories: ["physics"] }
 SIGNAL domain coding { mmlu_categories: ["computer science"] }
 SIGNAL domain general { mmlu_categories: ["other"] }
 
-SIGNAL_GROUP domain_taxonomy {
+PROJECTION partition domain_taxonomy {
   semantics: "softmax_exclusive"
   temperature: 0.1
   members: ["math", "science", "coding", "general"]
@@ -4211,33 +4211,33 @@ ROUTE r1 { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 	if len(errs) > 0 {
 		t.Fatalf("parse errors: %v", errs)
 	}
-	if len(prog.SignalGroups) != 1 {
-		t.Fatalf("expected 1 signal group, got %d", len(prog.SignalGroups))
+	if len(prog.ProjectionPartitions) != 1 {
+		t.Fatalf("expected 1 projection partition, got %d", len(prog.ProjectionPartitions))
 	}
-	sg := prog.SignalGroups[0]
-	if sg.Name != "domain_taxonomy" {
-		t.Errorf("name = %q", sg.Name)
+	partition := prog.ProjectionPartitions[0]
+	if partition.Name != "domain_taxonomy" {
+		t.Errorf("name = %q", partition.Name)
 	}
-	if sg.Semantics != "softmax_exclusive" {
-		t.Errorf("semantics = %q", sg.Semantics)
+	if partition.Semantics != "softmax_exclusive" {
+		t.Errorf("semantics = %q", partition.Semantics)
 	}
-	if sg.Temperature != 0.1 {
-		t.Errorf("temperature = %v", sg.Temperature)
+	if partition.Temperature != 0.1 {
+		t.Errorf("temperature = %v", partition.Temperature)
 	}
-	if len(sg.Members) != 4 {
-		t.Errorf("members = %v", sg.Members)
+	if len(partition.Members) != 4 {
+		t.Errorf("members = %v", partition.Members)
 	}
-	if sg.Default != "general" {
-		t.Errorf("default = %q", sg.Default)
+	if partition.Default != "general" {
+		t.Errorf("default = %q", partition.Default)
 	}
 }
 
-func TestCompileSignalGroup(t *testing.T) {
+func TestCompileProjectionPartition(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL domain general { mmlu_categories: ["other"] }
 
-SIGNAL_GROUP domain_taxonomy {
+PROJECTION partition domain_taxonomy {
   semantics: "softmax_exclusive"
   temperature: 0.1
   members: ["math", "general"]
@@ -4251,22 +4251,22 @@ ROUTE r1 { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 		t.Fatalf("compile errors: %v", errs)
 	}
 	if len(cfg.Projections.Partitions) != 1 {
-		t.Fatalf("expected 1 signal group in compiled config")
+		t.Fatalf("expected 1 projection partition in compiled config")
 	}
-	sg := cfg.Projections.Partitions[0]
-	if sg.Semantics != "softmax_exclusive" {
-		t.Errorf("semantics = %q", sg.Semantics)
+	partition := cfg.Projections.Partitions[0]
+	if partition.Semantics != "softmax_exclusive" {
+		t.Errorf("semantics = %q", partition.Semantics)
 	}
-	if sg.Temperature != 0.1 {
-		t.Errorf("temperature = %v", sg.Temperature)
+	if partition.Temperature != 0.1 {
+		t.Errorf("temperature = %v", partition.Temperature)
 	}
 }
 
-func TestValidateSignalGroupMissingMember(t *testing.T) {
+func TestValidateProjectionPartitionMissingMember(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["math"] }
 
-SIGNAL_GROUP test_group {
+PROJECTION partition test_group {
   semantics: "exclusive"
   members: ["math", "nonexistent"]
   default: "math"
@@ -4284,12 +4284,12 @@ SIGNAL_GROUP test_group {
 	}
 }
 
-func TestValidateSignalGroupMissingDefault(t *testing.T) {
+func TestValidateProjectionPartitionMissingDefault(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL domain science { mmlu_categories: ["physics"] }
 
-SIGNAL_GROUP test_group {
+PROJECTION partition test_group {
   semantics: "exclusive"
   members: ["math", "science"]
 }
@@ -4306,12 +4306,12 @@ SIGNAL_GROUP test_group {
 	}
 }
 
-func TestValidateSignalGroupCategoryOverlap(t *testing.T) {
+func TestValidateProjectionPartitionCategoryOverlap(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["physics", "math"] }
 SIGNAL domain science { mmlu_categories: ["physics", "chemistry"] }
 
-SIGNAL_GROUP test_group {
+PROJECTION partition test_group {
   semantics: "exclusive"
   members: ["math", "science"]
   default: "math"
@@ -4320,22 +4320,22 @@ SIGNAL_GROUP test_group {
 	diags, _ := Validate(input)
 	found := false
 	for _, d := range diags {
-		if strings.Contains(d.Message, "violates group disjointness") &&
+		if strings.Contains(d.Message, "violates partition disjointness") &&
 			strings.Contains(d.Message, "physics") {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected warning about category overlap within signal group")
+		t.Error("expected warning about category overlap within projection partition")
 	}
 }
 
-func TestValidateSignalGroupSoftmaxNoTemp(t *testing.T) {
+func TestValidateProjectionPartitionSoftmaxNoTemp(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL domain general { mmlu_categories: ["other"] }
 
-SIGNAL_GROUP test_group {
+PROJECTION partition test_group {
   semantics: "softmax_exclusive"
   members: ["math", "general"]
   default: "general"
@@ -4534,7 +4534,7 @@ type stubRuntimeValidationRunner struct {
 	diags []Diagnostic
 }
 
-func (s stubRuntimeValidationRunner) ValidateSignalGroups(_ *Program) []Diagnostic {
+func (s stubRuntimeValidationRunner) ValidateProjectionPartitions(_ *Program) []Diagnostic {
 	return append([]Diagnostic(nil), s.diags...)
 }
 
@@ -4831,12 +4831,12 @@ DECISION_TREE routing_policy {
 
 // ---------- Decompiler Round-trip for new constructs ----------
 
-func TestDecompileSignalGroupRoundTrip(t *testing.T) {
+func TestDecompileProjectionPartitionRoundTrip(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL domain general { mmlu_categories: ["other"] }
 
-SIGNAL_GROUP domain_taxonomy {
+PROJECTION partition domain_taxonomy {
   semantics: "softmax_exclusive"
   temperature: 0.1
   members: ["math", "general"]
@@ -4853,8 +4853,8 @@ ROUTE r1 { PRIORITY 100 WHEN domain("math") MODEL "m1" }
 	if err != nil {
 		t.Fatalf("decompile error: %v", err)
 	}
-	if !strings.Contains(dslText, "SIGNAL_GROUP") {
-		t.Error("decompiled DSL missing SIGNAL_GROUP")
+	if !strings.Contains(dslText, "PROJECTION partition") {
+		t.Error("decompiled DSL missing PROJECTION partition")
 	}
 	if !strings.Contains(dslText, "softmax_exclusive") {
 		t.Error("decompiled DSL missing softmax_exclusive semantics")
@@ -4889,9 +4889,9 @@ ROUTE test_route {
 
 // ---------- JSON Serialization ----------
 
-func TestProgramToJSONWithSignalGroup(t *testing.T) {
+func TestProgramToJSONWithProjectionPartition(t *testing.T) {
 	prog := &Program{
-		SignalGroups: []*SignalGroupDecl{
+		ProjectionPartitions: []*ProjectionPartitionDecl{
 			{
 				Name:        "test_group",
 				Semantics:   "softmax_exclusive",
@@ -4902,11 +4902,11 @@ func TestProgramToJSONWithSignalGroup(t *testing.T) {
 		},
 	}
 	pj := ProgramToJSON(prog)
-	if len(pj.SignalGroups) != 1 {
-		t.Fatalf("expected 1 signal group in JSON")
+	if len(pj.ProjectionPartitions) != 1 {
+		t.Fatalf("expected 1 projection partition in JSON")
 	}
-	if pj.SignalGroups[0].Semantics != "softmax_exclusive" {
-		t.Errorf("semantics = %q", pj.SignalGroups[0].Semantics)
+	if pj.ProjectionPartitions[0].Semantics != "softmax_exclusive" {
+		t.Errorf("semantics = %q", pj.ProjectionPartitions[0].Semantics)
 	}
 }
 
@@ -4949,7 +4949,7 @@ func TestProgramToJSONWithTier(t *testing.T) {
 
 // ---------- Full Integration: Conflict-Free Config ----------
 
-func TestConflictFreeConfigWithSignalGroup(t *testing.T) {
+func TestConflictFreeConfigWithProjectionPartition(t *testing.T) {
 	input := `
 SIGNAL domain math {
   mmlu_categories: ["math", "physics"]
@@ -4962,7 +4962,7 @@ SIGNAL domain coding {
 }
 SIGNAL domain general { mmlu_categories: ["other"] }
 
-SIGNAL_GROUP domain_taxonomy {
+PROJECTION partition domain_taxonomy {
   semantics: "softmax_exclusive"
   temperature: 0.1
   members: ["math", "science", "coding", "general"]
@@ -5025,8 +5025,8 @@ TEST routing_intent {
 
 func assertConflictFreeParse(t *testing.T, prog *Program) {
 	t.Helper()
-	if len(prog.SignalGroups) != 1 {
-		t.Errorf("expected 1 signal group, got %d", len(prog.SignalGroups))
+	if len(prog.ProjectionPartitions) != 1 {
+		t.Errorf("expected 1 projection partition, got %d", len(prog.ProjectionPartitions))
 	}
 	if len(prog.TestBlocks) != 1 {
 		t.Errorf("expected 1 test block, got %d", len(prog.TestBlocks))
@@ -5036,7 +5036,7 @@ func assertConflictFreeParse(t *testing.T, prog *Program) {
 func assertConflictFreeCompile(t *testing.T, cfg *config.RouterConfig) {
 	t.Helper()
 	if len(cfg.Projections.Partitions) != 1 {
-		t.Errorf("expected 1 signal group in config, got %d", len(cfg.Projections.Partitions))
+		t.Errorf("expected 1 projection partition in config, got %d", len(cfg.Projections.Partitions))
 	}
 	if cfg.Decisions[0].Tier != 1 {
 		t.Errorf("safety route tier = %d, want 1", cfg.Decisions[0].Tier)
@@ -5062,8 +5062,8 @@ func assertConflictFreeRoundTrip(t *testing.T, cfg *config.RouterConfig) {
 	if err != nil {
 		t.Fatalf("decompile error: %v", err)
 	}
-	if !strings.Contains(dslText, "SIGNAL_GROUP") {
-		t.Error("round-trip lost SIGNAL_GROUP")
+	if !strings.Contains(dslText, "PROJECTION partition") {
+		t.Error("round-trip lost PROJECTION partition")
 	}
 	if !strings.Contains(dslText, "TIER 1") {
 		t.Error("round-trip lost TIER")
@@ -5072,7 +5072,7 @@ func assertConflictFreeRoundTrip(t *testing.T, cfg *config.RouterConfig) {
 	if len(errs2) > 0 {
 		t.Fatalf("re-parse errors: %v\nDSL:\n%s", errs2, dslText)
 	}
-	if len(prog2.SignalGroups) != 1 {
-		t.Errorf("re-parsed signal groups = %d, want 1", len(prog2.SignalGroups))
+	if len(prog2.ProjectionPartitions) != 1 {
+		t.Errorf("re-parsed projection partitions = %d, want 1", len(prog2.ProjectionPartitions))
 	}
 }

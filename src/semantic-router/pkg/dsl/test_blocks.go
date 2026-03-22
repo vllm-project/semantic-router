@@ -17,10 +17,10 @@ type TestBlockRunner interface {
 	EvaluateTestBlockQuery(query string) (*TestBlockResult, error)
 }
 
-// SignalGroupRuntimeValidator emits native diagnostics that require runtime
+// ProjectionPartitionRuntimeValidator emits native diagnostics that require runtime
 // signal analysis beyond static AST validation.
-type SignalGroupRuntimeValidator interface {
-	ValidateSignalGroups(prog *Program) []Diagnostic
+type ProjectionPartitionRuntimeValidator interface {
+	ValidateProjectionPartitions(prog *Program) []Diagnostic
 }
 
 // ValidateTestBlocks evaluates TEST blocks with a runtime runner and emits diagnostics
@@ -149,8 +149,8 @@ func programNeedsRuntimeValidation(prog *Program) bool {
 	if len(prog.TestBlocks) > 0 {
 		return true
 	}
-	for _, sg := range prog.SignalGroups {
-		if strings.EqualFold(sg.Semantics, "softmax_exclusive") {
+	for _, partition := range prog.ProjectionPartitions {
+		if strings.EqualFold(partition.Semantics, "softmax_exclusive") {
 			return true
 		}
 	}

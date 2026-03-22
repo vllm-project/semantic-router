@@ -8,7 +8,7 @@ import (
 func TestValidateDomainSignalRejectsUnsupportedImplicitDomainName(t *testing.T) {
 	input := `
 SIGNAL domain balance_demo_compact {}
-SIGNAL_GROUP domain_partition {
+PROJECTION partition domain_partition {
   semantics: "softmax_exclusive"
   temperature: 0.1
   members: ["balance_demo_compact"]
@@ -47,7 +47,7 @@ ROUTE r1 { PRIORITY 100 WHEN domain("compact") MODEL "m1" }
 func TestCompileDomainSignalRejectsUnsupportedSoftmaxGroupImplicitDomainName(t *testing.T) {
 	input := `
 SIGNAL domain balance_demo_compact {}
-SIGNAL_GROUP domain_partition {
+PROJECTION partition domain_partition {
   semantics: "softmax_exclusive"
   temperature: 0.1
   members: ["balance_demo_compact"]

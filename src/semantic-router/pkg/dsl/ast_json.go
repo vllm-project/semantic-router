@@ -10,18 +10,18 @@ import "encoding/json"
 
 // ProgramJSON is the JSON-serializable form of Program.
 type ProgramJSON struct {
-	Signals            []*SignalDeclJSON            `json:"signals"`
-	SignalGroups       []*SignalGroupDeclJSON       `json:"signalGroups,omitempty"`
-	ProjectionScores   []*ProjectionScoreDeclJSON   `json:"projectionScores,omitempty"`
-	ProjectionMappings []*ProjectionMappingDeclJSON `json:"projectionMappings,omitempty"`
-	Routes             []*RouteDeclJSON             `json:"routes"`
-	Models             []*ModelDeclJSON             `json:"models"`
-	Plugins            []*PluginDeclJSON            `json:"plugins"`
-	TestBlocks         []*TestBlockDeclJSON         `json:"testBlocks,omitempty"`
+	Signals              []*SignalDeclJSON              `json:"signals"`
+	ProjectionPartitions []*ProjectionPartitionDeclJSON `json:"projectionPartitions,omitempty"`
+	ProjectionScores     []*ProjectionScoreDeclJSON     `json:"projectionScores,omitempty"`
+	ProjectionMappings   []*ProjectionMappingDeclJSON   `json:"projectionMappings,omitempty"`
+	Routes               []*RouteDeclJSON               `json:"routes"`
+	Models               []*ModelDeclJSON               `json:"models"`
+	Plugins              []*PluginDeclJSON              `json:"plugins"`
+	TestBlocks           []*TestBlockDeclJSON           `json:"testBlocks,omitempty"`
 }
 
-// SignalGroupDeclJSON is the JSON form of SignalGroupDecl.
-type SignalGroupDeclJSON struct {
+// ProjectionPartitionDeclJSON is the JSON form of ProjectionPartitionDecl.
+type ProjectionPartitionDeclJSON struct {
 	Name        string   `json:"name"`
 	Semantics   string   `json:"semantics,omitempty"`
 	Temperature float64  `json:"temperature,omitempty"`
@@ -207,7 +207,7 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 		Plugins: make([]*PluginDeclJSON, 0, len(prog.Plugins)),
 	}
 	appendSignalDecls(result, prog.Signals)
-	appendSignalGroupDecls(result, prog.SignalGroups)
+	appendProjectionPartitionDecls(result, prog.ProjectionPartitions)
 	appendProjectionScoreDecls(result, prog.ProjectionScores)
 	appendProjectionMappingDecls(result, prog.ProjectionMappings)
 	appendRouteDecls(result, prog.Routes)
@@ -228,16 +228,22 @@ func appendSignalDecls(result *ProgramJSON, signals []*SignalDecl) {
 	}
 }
 
-func appendSignalGroupDecls(result *ProgramJSON, groups []*SignalGroupDecl) {
-	for _, group := range groups {
-		result.SignalGroups = append(result.SignalGroups, &SignalGroupDeclJSON{
-			Name:        group.Name,
-			Semantics:   group.Semantics,
-			Temperature: group.Temperature,
-			Members:     group.Members,
-			Default:     group.Default,
-			Pos:         group.Pos,
-		})
+func appendProjectionPartitionDecls(
+	result *ProgramJSON,
+	partitions []*ProjectionPartitionDecl,
+) {
+	for _, partition := range partitions {
+		result.ProjectionPartitions = append(
+			result.ProjectionPartitions,
+			&ProjectionPartitionDeclJSON{
+				Name:        partition.Name,
+				Semantics:   partition.Semantics,
+				Temperature: partition.Temperature,
+				Members:     partition.Members,
+				Default:     partition.Default,
+				Pos:         partition.Pos,
+			},
+		)
 	}
 }
 

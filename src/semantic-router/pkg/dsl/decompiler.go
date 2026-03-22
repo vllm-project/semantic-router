@@ -226,19 +226,19 @@ func (d *decompiler) decompileSignals() {
 		d.write("}\n\n")
 	}
 
-	for _, sg := range d.cfg.Projections.Partitions {
-		d.write("SIGNAL_GROUP %s {\n", quoteName(sg.Name))
-		if sg.Semantics != "" {
-			d.write("  semantics: %q\n", sg.Semantics)
+	for _, partition := range d.cfg.Projections.Partitions {
+		d.write("PROJECTION partition %s {\n", quoteName(partition.Name))
+		if partition.Semantics != "" {
+			d.write("  semantics: %q\n", partition.Semantics)
 		}
-		if sg.Temperature != 0 {
-			d.write("  temperature: %v\n", sg.Temperature)
+		if partition.Temperature != 0 {
+			d.write("  temperature: %v\n", partition.Temperature)
 		}
-		if len(sg.Members) > 0 {
-			d.write("  members: %s\n", formatStringArray(sg.Members))
+		if len(partition.Members) > 0 {
+			d.write("  members: %s\n", formatStringArray(partition.Members))
 		}
-		if sg.Default != "" {
-			d.write("  default: %q\n", sg.Default)
+		if partition.Default != "" {
+			d.write("  default: %q\n", partition.Default)
 		}
 		d.write("}\n\n")
 	}

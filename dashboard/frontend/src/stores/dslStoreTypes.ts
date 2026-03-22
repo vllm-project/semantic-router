@@ -101,14 +101,14 @@ interface DSLActions {
   /** Delete a signal from DSL source text, then re-parse AST. */
   deleteSignal(signalType: string, name: string): void
 
-  /** Update a signal-group declaration's fields, then re-parse AST. */
-  mutateSignalGroup(name: string, fields: DSLFieldObject): void
+  /** Update a projection partition declaration's fields, then re-parse AST. */
+  mutateProjectionPartition(name: string, fields: DSLFieldObject): void
 
-  /** Add a new signal-group declaration, then re-parse AST. */
-  addSignalGroup(name: string, fields: DSLFieldObject): void
+  /** Add a new projection partition declaration, then re-parse AST. */
+  addProjectionPartition(name: string, fields: DSLFieldObject): void
 
-  /** Delete a signal-group declaration, then re-parse AST. */
-  deleteSignalGroup(name: string): void
+  /** Delete a projection partition declaration, then re-parse AST. */
+  deleteProjectionPartition(name: string): void
 
   /** Update a projection score declaration, then re-parse AST. */
   mutateProjectionScore(name: string, fields: DSLFieldObject): void

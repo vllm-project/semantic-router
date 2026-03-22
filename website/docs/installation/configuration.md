@@ -207,7 +207,7 @@ The dashboard mirrors the same contract:
 
 - `Config -> Projections` edits partitions, scores, and mappings
 - `Config -> Decisions` can reference mapping outputs with condition type `projection`
-- `DSL -> Visual` manages `SIGNAL_GROUP`, `PROJECTION score`, and `PROJECTION mapping` entities directly
+- `DSL -> Visual` manages `PROJECTION partition`, `PROJECTION score`, and `PROJECTION mapping` entities directly
 
 For a focused tutorial, read [Signal Projections](../tutorials/signal/projections). For a maintained end-to-end example, use:
 

@@ -403,16 +403,16 @@ SIGNAL pii pii_relaxed {
   description: "Block high-sensitivity PII while allowing common contact entities."
 }
 
-# Projection authoring in DSL starts with SIGNAL_GROUP and then layers
+# Projection authoring in DSL starts with PROJECTION partition and then layers
 # PROJECTION score / mapping blocks on top of the resolved signal catalog.
-SIGNAL_GROUP balance_domain_partition {
+PROJECTION partition balance_domain_partition {
   semantics: "softmax_exclusive"
   temperature: 0.1
   members: ["biology", "business", "chemistry", "computer science", "economics", "engineering", "health", "history", "law", "math", "other", "philosophy", "physics", "psychology"]
   default: "other"
 }
 
-SIGNAL_GROUP balance_intent_partition {
+PROJECTION partition balance_intent_partition {
   semantics: "softmax_exclusive"
   temperature: 0.18
   members: ["agentic_workflows", "architecture_design", "business_analysis", "code_general", "complex_stem", "creative_tasks", "fast_qa_en", "fast_qa_zh", "general_chat_fallback", "health_guidance", "history_explainer", "premium_legal_analysis", "psychology_support", "reasoning_general_en", "reasoning_general_zh", "research_synthesis"]

@@ -68,7 +68,7 @@ func Parse(input string) (*Program, []error) {
 		parsedAny = true
 		resolved, lowerErrs := rawToProgram(r)
 		prog.Signals = append(prog.Signals, resolved.Signals...)
-		prog.SignalGroups = append(prog.SignalGroups, resolved.SignalGroups...)
+		prog.ProjectionPartitions = append(prog.ProjectionPartitions, resolved.ProjectionPartitions...)
 		prog.ProjectionScores = append(prog.ProjectionScores, resolved.ProjectionScores...)
 		prog.ProjectionMappings = append(prog.ProjectionMappings, resolved.ProjectionMappings...)
 		prog.Routes = append(prog.Routes, resolved.Routes...)
@@ -91,7 +91,7 @@ func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
 	start := 0
-	keywords := []string{"DECISION_TREE", "PROJECTION", "SIGNAL_GROUP", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
+	keywords := []string{"DECISION_TREE", "PROJECTION", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
@@ -156,12 +156,12 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 	treeCount := 0
 	for _, entry := range raw.Entries {
 		switch {
-		case entry.SignalGroup != nil:
-			prog.SignalGroups = append(prog.SignalGroups, rawToSignalGroup(entry.SignalGroup))
 		case entry.Signal != nil:
 			prog.Signals = append(prog.Signals, rawToSignal(entry.Signal))
 		case entry.Projection != nil:
 			switch entry.Projection.Kind {
+			case "partition":
+				prog.ProjectionPartitions = append(prog.ProjectionPartitions, rawToProjectionPartition(entry.Projection))
 			case "score":
 				prog.ProjectionScores = append(prog.ProjectionScores, rawToProjectionScore(entry.Projection))
 			case "mapping":
@@ -189,40 +189,40 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 	return prog, errs
 }
 
-func rawToSignalGroup(r *rawSignalGroupDecl) *SignalGroupDecl {
-	sg := &SignalGroupDecl{
+func rawToProjectionPartition(r *rawProjectionDecl) *ProjectionPartitionDecl {
+	partition := &ProjectionPartitionDecl{
 		Name: unquoteIdent(r.Name),
 		Pos:  posFromLexer(r.Pos),
 	}
 	fields := entriesToMap(r.Fields)
 	if v, ok := fields["semantics"]; ok {
 		if sv, ok := v.(StringValue); ok {
-			sg.Semantics = sv.V
+			partition.Semantics = sv.V
 		}
 	}
 	if v, ok := fields["temperature"]; ok {
 		switch tv := v.(type) {
 		case FloatValue:
-			sg.Temperature = tv.V
+			partition.Temperature = tv.V
 		case IntValue:
-			sg.Temperature = float64(tv.V)
+			partition.Temperature = float64(tv.V)
 		}
 	}
 	if v, ok := fields["members"]; ok {
 		if av, ok := v.(ArrayValue); ok {
 			for _, item := range av.Items {
 				if sv, ok := item.(StringValue); ok {
-					sg.Members = append(sg.Members, sv.V)
+					partition.Members = append(partition.Members, sv.V)
 				}
 			}
 		}
 	}
 	if v, ok := fields["default"]; ok {
 		if sv, ok := v.(StringValue); ok {
-			sg.Default = sv.V
+			partition.Default = sv.V
 		}
 	}
-	return sg
+	return partition
 }
 
 func rawToProjectionScore(r *rawProjectionDecl) *ProjectionScoreDecl {
@@ -630,7 +630,7 @@ func Lex(input string) ([]Token, []error) {
 	}
 
 	keywordMap := map[string]TokenType{
-		"SIGNAL": TOKEN_SIGNAL, "SIGNAL_GROUP": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
+		"SIGNAL": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
 		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
 		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
 		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
@@ -709,7 +709,7 @@ func Lex(input string) ([]Token, []error) {
 // LookupIdent returns the token type for an identifier string.
 func LookupIdent(ident string) TokenType {
 	keywords := map[string]TokenType{
-		"SIGNAL": TOKEN_SIGNAL, "SIGNAL_GROUP": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
+		"SIGNAL": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
 		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
 		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
 		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,

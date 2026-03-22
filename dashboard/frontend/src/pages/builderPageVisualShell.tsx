@@ -22,8 +22,8 @@ import {
 } from "./builderPageEntityForms";
 import {
   AddProjectionMappingForm,
+  AddProjectionPartitionForm,
   AddProjectionScoreForm,
-  AddSignalGroupForm,
 } from "./builderPageProjectionEditors";
 import {
   DashboardView,
@@ -51,7 +51,7 @@ interface VisualModeProps {
   selectedEntity: BuilderSelectedEntity;
   modelCount: number;
   signalCount: number;
-  signalGroupCount: number;
+  projectionPartitionCount: number;
   projectionScoreCount: number;
   projectionMappingCount: number;
   routeCount: number;
@@ -67,7 +67,7 @@ interface VisualModeProps {
     name: string,
     fields: DSLFieldObject,
   ) => void;
-  onUpdateSignalGroupFields: (name: string, fields: DSLFieldObject) => void;
+  onUpdateProjectionPartitionFields: (name: string, fields: DSLFieldObject) => void;
   onUpdateProjectionScoreFields: (
     name: string,
     fields: DSLFieldObject,
@@ -87,7 +87,7 @@ interface VisualModeProps {
     name: string,
     fields: DSLFieldObject,
   ) => void;
-  onAddSignalGroup: (name: string, fields: DSLFieldObject) => void;
+  onAddProjectionPartition: (name: string, fields: DSLFieldObject) => void;
   onAddProjectionScore: (name: string, fields: DSLFieldObject) => void;
   onAddProjectionMapping: (name: string, fields: DSLFieldObject) => void;
   onAddPlugin: (
@@ -112,7 +112,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
   selectedEntity,
   modelCount,
   signalCount,
-  signalGroupCount,
+  projectionPartitionCount,
   projectionScoreCount,
   projectionMappingCount,
   routeCount,
@@ -124,13 +124,13 @@ const VisualMode: React.FC<VisualModeProps> = ({
   onDeleteEntity,
   onUpdateModelFields,
   onUpdateSignalFields,
-  onUpdateSignalGroupFields,
+  onUpdateProjectionPartitionFields,
   onUpdateProjectionScoreFields,
   onUpdateProjectionMappingFields,
   onUpdatePluginFields,
   onAddModel,
   onAddSignal,
-  onAddSignalGroup,
+  onAddProjectionPartition,
   onAddProjectionScore,
   onAddProjectionMapping,
   onAddPlugin,
@@ -324,32 +324,32 @@ const VisualMode: React.FC<VisualModeProps> = ({
           </SidebarSection>
 
           <SidebarSection
-            title="Signal Groups"
-            count={signalGroupCount}
-            open={sections.signalGroups}
-            onToggle={() => onToggleSection("signalGroups")}
+            title="Projection Partitions"
+            count={projectionPartitionCount}
+            open={sections.projectionPartitions}
+            onToggle={() => onToggleSection("projectionPartitions")}
             onAdd={() => {
-              onSetAddingEntity("signal-group");
+              onSetAddingEntity("projection-partition");
               onSelect(null);
             }}
           >
-            {ast?.signalGroups?.map((group) => (
+            {ast?.projectionPartitions?.map((partition) => (
               <li
-                key={group.name}
+                key={partition.name}
                 className={
-                  selection?.kind === "signal-group" &&
-                  selection.name === group.name
+                  selection?.kind === "projection-partition" &&
+                  selection.name === partition.name
                     ? styles.sidebarItemActive
                     : styles.sidebarItem
                 }
                 onClick={() => {
                   onSetAddingEntity(null);
-                  onSelect({ kind: "signal-group", name: group.name });
+                  onSelect({ kind: "projection-partition", name: partition.name });
                 }}
               >
                 <SignalIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>{group.name}</span>
-                <span className={styles.sidebarItemType}>group</span>
+                <span className={styles.sidebarItemName}>{partition.name}</span>
+                <span className={styles.sidebarItemType}>partition</span>
               </li>
             ))}
           </SidebarSection>
@@ -500,9 +500,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
                 onAdd={onAddSignal}
                 onCancel={() => onSetAddingEntity(null)}
               />
-            ) : addingEntity === "signal-group" ? (
-              <AddSignalGroupForm
-                onAdd={onAddSignalGroup}
+            ) : addingEntity === "projection-partition" ? (
+              <AddProjectionPartitionForm
+                onAdd={onAddProjectionPartition}
                 onCancel={() => onSetAddingEntity(null)}
               />
             ) : addingEntity === "projection-score" ? (
@@ -556,7 +556,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
                 onDeleteEntity={onDeleteEntity}
                 onUpdateModelFields={onUpdateModelFields}
                 onUpdateSignalFields={onUpdateSignalFields}
-                onUpdateSignalGroupFields={onUpdateSignalGroupFields}
+                onUpdateProjectionPartitionFields={onUpdateProjectionPartitionFields}
                 onUpdateProjectionScoreFields={onUpdateProjectionScoreFields}
                 onUpdateProjectionMappingFields={onUpdateProjectionMappingFields}
                 onUpdatePluginFields={onUpdatePluginFields}

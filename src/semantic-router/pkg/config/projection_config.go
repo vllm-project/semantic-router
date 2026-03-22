@@ -18,10 +18,6 @@ type ProjectionPartition struct {
 	Default     string   `yaml:"default,omitempty"`
 }
 
-// SignalGroup is kept as an internal compatibility alias while the canonical
-// public contract moves to routing.projections.partitions.
-type SignalGroup = ProjectionPartition
-
 // ProjectionScore computes a continuous derived score from existing signals.
 type ProjectionScore struct {
 	Name   string                 `yaml:"name"`

@@ -26,7 +26,7 @@ interface BlockSpan {
  */
 export function findBlock(
   src: string,
-  construct: 'MODEL' | 'SIGNAL' | 'ROUTE' | 'PLUGIN' | 'SIGNAL_GROUP' | 'PROJECTION',
+  construct: 'MODEL' | 'SIGNAL' | 'ROUTE' | 'PLUGIN' | 'PROJECTION',
   subType: string | null,
   name: string | null,
 ): BlockSpan | null {
@@ -43,8 +43,6 @@ export function findBlock(
     pattern = `^ROUTE\\s+${escRe(name!)}\\s*(?:\\([^)]*\\))?\\s*\\{`
   } else if (construct === 'PLUGIN' && subType) {
     pattern = `^PLUGIN\\s+${escRe(name!)}\\s+${escRe(subType)}\\s*\\{`
-  } else if (construct === 'SIGNAL_GROUP') {
-    pattern = `^SIGNAL_GROUP\\s+${dslNamePattern(name!)}\\s*\\{`
   } else if (construct === 'PROJECTION' && subType) {
     pattern = `^PROJECTION\\s+${escRe(subType)}\\s+${dslNamePattern(name!)}\\s*\\{`
   } else {
@@ -330,31 +328,31 @@ function insertAfterLastBlock(
   return src.slice(0, firstNonCommentLine) + newBlock + '\n' + src.slice(firstNonCommentLine)
 }
 
-export function updateSignalGroup(
+export function updateProjectionPartition(
   src: string,
   name: string,
   fields: DSLFieldObject,
 ): string {
-  const block = findBlock(src, 'SIGNAL_GROUP', null, name)
+  const block = findBlock(src, 'PROJECTION', 'partition', name)
   if (!block) return src
-  const newBlock = buildNamedBlock(`SIGNAL_GROUP ${formatDslName(name)}`, fields)
+  const newBlock = buildNamedBlock(`PROJECTION partition ${formatDslName(name)}`, fields)
   return src.slice(0, block.start) + newBlock + src.slice(block.end)
 }
 
-export function addSignalGroup(
+export function addProjectionPartition(
   src: string,
   name: string,
   fields: DSLFieldObject,
 ): string {
-  const newBlock = buildNamedBlock(`SIGNAL_GROUP ${formatDslName(name)}`, fields)
+  const newBlock = buildNamedBlock(`PROJECTION partition ${formatDslName(name)}`, fields)
   return insertAfterLastBlock(src, [
-    /^SIGNAL_GROUP\s+(?:"[^"]+"|\S+)\s*\{/gm,
+    /^PROJECTION\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
     /^SIGNAL\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
   ], newBlock)
 }
 
-export function deleteSignalGroup(src: string, name: string): string {
-  const block = findBlock(src, 'SIGNAL_GROUP', null, name)
+export function deleteProjectionPartition(src: string, name: string): string {
+  const block = findBlock(src, 'PROJECTION', 'partition', name)
   if (!block) return src
   let result = src.slice(0, block.start) + src.slice(block.end)
   result = result.replace(/\n{3,}/g, '\n\n')
@@ -363,7 +361,7 @@ export function deleteSignalGroup(src: string, name: string): string {
 
 export function updateProjection(
   src: string,
-  kind: 'score' | 'mapping',
+  kind: 'partition' | 'score' | 'mapping',
   name: string,
   fields: DSLFieldObject,
 ): string {
@@ -375,21 +373,20 @@ export function updateProjection(
 
 export function addProjection(
   src: string,
-  kind: 'score' | 'mapping',
+  kind: 'partition' | 'score' | 'mapping',
   name: string,
   fields: DSLFieldObject,
 ): string {
   const newBlock = buildNamedBlock(`PROJECTION ${kind} ${formatDslName(name)}`, fields)
   return insertAfterLastBlock(src, [
     /^PROJECTION\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
-    /^SIGNAL_GROUP\s+(?:"[^"]+"|\S+)\s*\{/gm,
     /^SIGNAL\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
   ], newBlock)
 }
 
 export function deleteProjection(
   src: string,
-  kind: 'score' | 'mapping',
+  kind: 'partition' | 'score' | 'mapping',
   name: string,
 ): string {
   const block = findBlock(src, 'PROJECTION', kind, name)

@@ -14,9 +14,9 @@ Use it when you need one of these behaviors:
 - combine learned and heuristic signals into one continuous score
 - map that score into named routing bands that decisions can reference with `type: projection`
 
-The repo keeps authoring and runtime naming intentionally asymmetric:
+The repo now uses one projection-first naming story across authoring and runtime:
 
-- DSL authoring uses `SIGNAL_GROUP`, `PROJECTION score`, and `PROJECTION mapping`
+- DSL authoring uses `PROJECTION partition`, `PROJECTION score`, and `PROJECTION mapping`
 - canonical runtime config stores the same contract under `routing.projections.partitions`, `routing.projections.scores`, and `routing.projections.mappings`
 
 ## Key Advantages
@@ -131,7 +131,7 @@ SIGNAL context long_context {
   max_tokens: "200000"
 }
 
-SIGNAL_GROUP support_intents {
+PROJECTION partition support_intents {
   semantics: "exclusive"
   members: ["technical_support", "account_management"]
   default: "technical_support"
@@ -167,7 +167,7 @@ The dashboard now exposes the whole projection contract directly:
 
 - `Config -> Projections` manages partitions, scores, and mappings in canonical config form
 - `Config -> Decisions` can reference mapping outputs with condition type `projection`
-- `DSL -> Visual` shows `Signal Groups`, `Projection Scores`, and `Projection Mappings` as editable entities alongside signals, routes, models, and plugins
+- `DSL -> Visual` shows `Projection Partitions`, `Projection Scores`, and `Projection Mappings` as editable entities alongside signals, routes, models, and plugins
 
 For raw import/export, the DSL page still decompiles the current router YAML into routing-only DSL and recompiles the edited DSL back into canonical YAML.
 

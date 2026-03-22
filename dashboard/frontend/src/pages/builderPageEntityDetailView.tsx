@@ -2,12 +2,12 @@ import React from "react";
 
 import type {
   ASTModelDecl,
+  ASTProjectionPartitionDecl,
   ASTProjectionMappingDecl,
   ASTProjectionScoreDecl,
   ASTPluginDecl,
   ASTRouteDecl,
   ASTSignalDecl,
-  ASTSignalGroupDecl,
   DSLFieldObject,
 } from "@/types/dsl";
 import type { RouteInput } from "@/lib/dslMutations";
@@ -26,8 +26,8 @@ import {
 } from "./builderPageEntityForms";
 import {
   ProjectionMappingEditorForm,
+  ProjectionPartitionEditorForm,
   ProjectionScoreEditorForm,
-  SignalGroupEditorForm,
 } from "./builderPageProjectionEditors";
 import { RouteEditorForm } from "./builderPageRouteForms";
 import type {
@@ -47,7 +47,7 @@ interface EntityDetailViewProps {
     name: string,
     fields: DSLFieldObject,
   ) => void;
-  onUpdateSignalGroupFields: (
+  onUpdateProjectionPartitionFields: (
     name: string,
     fields: DSLFieldObject,
   ) => void;
@@ -78,7 +78,7 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
   onDeleteEntity,
   onUpdateModelFields,
   onUpdateSignalFields,
-  onUpdateSignalGroupFields,
+  onUpdateProjectionPartitionFields,
   onUpdateProjectionScoreFields,
   onUpdateProjectionMappingFields,
   onUpdatePluginFields,
@@ -151,7 +151,7 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
             <span className={styles.editorBadge}>{entity.signalType}</span>
           )}
           {"semantics" in entity && (
-            <span className={styles.editorBadge}>signal group</span>
+            <span className={styles.editorBadge}>projection partition</span>
           )}
           {"source" in entity && !("signalType" in entity) && !("pluginType" in entity) && (
             <span className={styles.editorBadge}>projection mapping</span>
@@ -198,12 +198,12 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
         />
       )}
 
-      {selection.kind === "signal-group" && "members" in entity && (
-        <SignalGroupEditorForm
-          group={entity as ASTSignalGroupDecl}
+      {selection.kind === "projection-partition" && "members" in entity && (
+        <ProjectionPartitionEditorForm
+          partition={entity as ASTProjectionPartitionDecl}
           onUpdate={(fields) =>
-            onUpdateSignalGroupFields(
-              (entity as ASTSignalGroupDecl).name,
+            onUpdateProjectionPartitionFields(
+              (entity as ASTProjectionPartitionDecl).name,
               fields,
             )
           }

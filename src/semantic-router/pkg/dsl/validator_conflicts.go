@@ -13,7 +13,7 @@ import (
 func (v *Validator) checkConflicts() {
 	v.checkDomainSignalOverlap()
 	v.checkSameSignalTypeGuard()
-	v.checkSignalGroups()
+	v.checkProjectionPartitions()
 	v.checkProjections()
 	v.checkTestBlocks()
 	v.checkTierConstraints()
@@ -189,53 +189,59 @@ func containsString(ss []string, target string) bool {
 	return false
 }
 
-// checkSignalGroups validates SIGNAL_GROUP declarations: member existence,
+// checkProjectionPartitions validates PROJECTION partition declarations: member existence,
 // MMLU category disjointness within the group, default member existence,
 // valid semantics value, and temperature range.
-func (v *Validator) checkSignalGroups() {
-	for _, sg := range v.prog.SignalGroups {
-		v.checkSignalGroup(sg)
+func (v *Validator) checkProjectionPartitions() {
+	for _, partition := range v.prog.ProjectionPartitions {
+		v.checkProjectionPartition(partition)
 	}
-	v.checkSignalGroupImpossibleANDs()
+	v.checkProjectionPartitionImpossibleANDs()
 }
 
-func (v *Validator) checkSignalGroup(sg *SignalGroupDecl) {
-	context := fmt.Sprintf("SIGNAL_GROUP %s", sg.Name)
+func (v *Validator) checkProjectionPartition(partition *ProjectionPartitionDecl) {
+	context := fmt.Sprintf("PROJECTION partition %s", partition.Name)
 
-	v.checkSignalGroupSemantics(sg, context)
-	v.checkSignalGroupMembers(sg, context)
-	v.checkSignalGroupMemberTypes(sg, context)
-	v.checkSignalGroupDefault(sg, context)
-	v.checkSignalGroupCategoryDisjointness(sg, context)
-	v.checkSignalGroupSupportedDomainValues(sg, context)
+	v.checkProjectionPartitionSemantics(partition, context)
+	v.checkProjectionPartitionMembers(partition, context)
+	v.checkProjectionPartitionMemberTypes(partition, context)
+	v.checkProjectionPartitionDefault(partition, context)
+	v.checkProjectionPartitionCategoryDisjointness(partition, context)
+	v.checkProjectionPartitionSupportedDomainValues(partition, context)
 }
 
-func (v *Validator) checkSignalGroupSemantics(sg *SignalGroupDecl, context string) {
+func (v *Validator) checkProjectionPartitionSemantics(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
 	validSemantics := []string{"exclusive", "softmax_exclusive"}
-	if sg.Semantics != "" && !containsString(validSemantics, sg.Semantics) {
-		v.addDiag(DiagConstraint, sg.Pos,
-			fmt.Sprintf("%s: unknown semantics %q (supported: exclusive, softmax_exclusive)", context, sg.Semantics),
+	if partition.Semantics != "" && !containsString(validSemantics, partition.Semantics) {
+		v.addDiag(DiagConstraint, partition.Pos,
+			fmt.Sprintf("%s: unknown semantics %q (supported: exclusive, softmax_exclusive)", context, partition.Semantics),
 			nil,
 		)
 	}
-	if sg.Semantics == "softmax_exclusive" && sg.Temperature <= 0 {
-		v.addDiag(DiagConstraint, sg.Pos,
+	if partition.Semantics == "softmax_exclusive" && partition.Temperature <= 0 {
+		v.addDiag(DiagConstraint, partition.Pos,
 			fmt.Sprintf("%s: softmax_exclusive requires temperature > 0", context),
 			&QuickFix{Description: "Set temperature to 0.1", NewText: "0.1"},
 		)
 	}
 }
 
-func (v *Validator) checkSignalGroupMembers(sg *SignalGroupDecl, context string) {
-	if len(sg.Members) == 0 {
-		v.addDiag(DiagConstraint, sg.Pos,
+func (v *Validator) checkProjectionPartitionMembers(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
+	if len(partition.Members) == 0 {
+		v.addDiag(DiagConstraint, partition.Pos,
 			fmt.Sprintf("%s: members list is empty", context),
 			nil,
 		)
 	}
-	for _, member := range sg.Members {
+	for _, member := range partition.Members {
 		if !v.isSignalDeclaredByName(member) {
-			v.addDiag(DiagWarning, sg.Pos,
+			v.addDiag(DiagWarning, partition.Pos,
 				fmt.Sprintf("%s: member %q is not defined as a signal", context, member),
 				v.suggestSignalByName(member),
 			)
@@ -243,9 +249,12 @@ func (v *Validator) checkSignalGroupMembers(sg *SignalGroupDecl, context string)
 	}
 }
 
-func (v *Validator) checkSignalGroupMemberTypes(sg *SignalGroupDecl, context string) {
+func (v *Validator) checkProjectionPartitionMemberTypes(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
 	membersByType := make(map[string][]string)
-	for _, member := range sg.Members {
+	for _, member := range partition.Members {
 		sig := v.findSignalByName(member)
 		if sig == nil {
 			continue
@@ -258,10 +267,10 @@ func (v *Validator) checkSignalGroupMemberTypes(sg *SignalGroupDecl, context str
 
 	if len(membersByType) == 1 {
 		for signalType, members := range membersByType {
-			if isSupportedSignalGroupType(signalType) {
+			if isSupportedProjectionPartitionType(signalType) {
 				return
 			}
-			v.addDiag(DiagConstraint, sg.Pos,
+			v.addDiag(DiagConstraint, partition.Pos,
 				fmt.Sprintf(
 					"%s: members must use a supported runtime signal type (domain or embedding), found %s=%v",
 					context,
@@ -274,45 +283,51 @@ func (v *Validator) checkSignalGroupMemberTypes(sg *SignalGroupDecl, context str
 		}
 	}
 
-	v.addDiag(DiagConstraint, sg.Pos,
+	v.addDiag(DiagConstraint, partition.Pos,
 		fmt.Sprintf(
 			"%s: members must all share one supported runtime signal type (domain or embedding), found %s",
 			context,
-			describeSignalGroupMemberTypes(membersByType),
+			describeProjectionPartitionMemberTypes(membersByType),
 		),
 		nil,
 	)
 }
 
-func (v *Validator) checkSignalGroupDefault(sg *SignalGroupDecl, context string) {
-	if sg.Default == "" {
-		v.addDiag(DiagConstraint, sg.Pos,
+func (v *Validator) checkProjectionPartitionDefault(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
+	if partition.Default == "" {
+		v.addDiag(DiagConstraint, partition.Pos,
 			fmt.Sprintf("%s: a default member is required for coverage — every query must route somewhere", context),
 			nil,
 		)
 		return
 	}
-	if !containsString(sg.Members, sg.Default) {
-		v.addDiag(DiagWarning, sg.Pos,
-			fmt.Sprintf("%s: default %q is not listed in members", context, sg.Default),
+	if !containsString(partition.Members, partition.Default) {
+		v.addDiag(DiagWarning, partition.Pos,
+			fmt.Sprintf("%s: default %q is not listed in members", context, partition.Default),
 			nil,
 		)
 	}
 }
 
-func (v *Validator) checkSignalGroupCategoryDisjointness(sg *SignalGroupDecl, context string) {
+func (v *Validator) checkProjectionPartitionCategoryDisjointness(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
 	catOwner := make(map[string]string)
-	for _, member := range sg.Members {
+	for _, member := range partition.Members {
 		sig := v.findSignalByName(member)
 		if sig == nil {
 			continue
 		}
 		for _, cat := range getMMLUCategories(sig) {
 			if existing, clash := catOwner[cat]; clash {
-				v.addDiag(DiagWarning, sg.Pos,
+				v.addDiag(DiagWarning, partition.Pos,
 					fmt.Sprintf(
 						"%s: members %q and %q share MMLU category %q — "+
-							"violates group disjointness",
+							"violates partition disjointness",
 						context, member, existing, cat),
 					nil,
 				)
@@ -322,11 +337,14 @@ func (v *Validator) checkSignalGroupCategoryDisjointness(sg *SignalGroupDecl, co
 	}
 }
 
-func (v *Validator) checkSignalGroupSupportedDomainValues(sg *SignalGroupDecl, context string) {
-	if sg.Semantics != "softmax_exclusive" {
+func (v *Validator) checkProjectionPartitionSupportedDomainValues(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
+	if partition.Semantics != "softmax_exclusive" {
 		return
 	}
-	for _, member := range sg.Members {
+	for _, member := range partition.Members {
 		sig := v.findSignalByName(member)
 		if sig == nil || sig.SignalType != "domain" {
 			continue
@@ -338,7 +356,7 @@ func (v *Validator) checkSignalGroupSupportedDomainValues(sg *SignalGroupDecl, c
 			}
 			v.addDiag(
 				DiagConstraint,
-				sg.Pos,
+				partition.Pos,
 				fmt.Sprintf(
 					"%s: domain member %q must use a supported routing domain name (%s) or declare mmlu_categories explicitly%s",
 					context,
@@ -356,7 +374,7 @@ func (v *Validator) checkSignalGroupSupportedDomainValues(sg *SignalGroupDecl, c
 			}
 			v.addDiag(
 				DiagConstraint,
-				sg.Pos,
+				partition.Pos,
 				fmt.Sprintf(
 					"%s: domain member %q has unsupported mmlu_categories value %q; supported values: %s%s",
 					context,
@@ -371,11 +389,13 @@ func (v *Validator) checkSignalGroupSupportedDomainValues(sg *SignalGroupDecl, c
 	}
 }
 
-func isSupportedSignalGroupType(signalType string) bool {
+func isSupportedProjectionPartitionType(signalType string) bool {
 	return signalType == "domain" || signalType == "embedding"
 }
 
-func describeSignalGroupMemberTypes(membersByType map[string][]string) string {
+func describeProjectionPartitionMemberTypes(
+	membersByType map[string][]string,
+) string {
 	keys := make([]string, 0, len(membersByType))
 	for signalType := range membersByType {
 		keys = append(keys, signalType)
@@ -409,9 +429,9 @@ func (v *Validator) findSignalByName(name string) *SignalDecl {
 	return nil
 }
 
-func (v *Validator) checkSignalGroupImpossibleANDs() {
-	memberToGroup := v.signalGroupMembers()
-	if len(memberToGroup) == 0 {
+func (v *Validator) checkProjectionPartitionImpossibleANDs() {
+	memberToPartition := v.projectionPartitionMembers()
+	if len(memberToPartition) == 0 {
 		return
 	}
 
@@ -419,47 +439,50 @@ func (v *Validator) checkSignalGroupImpossibleANDs() {
 		if route.When == nil {
 			continue
 		}
-		v.checkSignalGroupImpossibleANDsInRoute(route, memberToGroup)
+		v.checkProjectionPartitionImpossibleANDsInRoute(route, memberToPartition)
 	}
 }
 
-func (v *Validator) signalGroupMembers() map[string]string {
-	memberToGroup := make(map[string]string)
-	for _, group := range v.prog.SignalGroups {
-		for _, member := range group.Members {
+func (v *Validator) projectionPartitionMembers() map[string]string {
+	memberToPartition := make(map[string]string)
+	for _, partition := range v.prog.ProjectionPartitions {
+		for _, member := range partition.Members {
 			sig := v.findSignalByName(member)
-			if sig == nil || !isSupportedSignalGroupType(sig.SignalType) {
+			if sig == nil || !isSupportedProjectionPartitionType(sig.SignalType) {
 				continue
 			}
-			memberToGroup[signalGroupMemberKey(sig.SignalType, member)] = group.Name
+			memberToPartition[projectionPartitionMemberKey(sig.SignalType, member)] = partition.Name
 		}
 	}
-	return memberToGroup
+	return memberToPartition
 }
 
-func signalGroupMemberKey(signalType string, signalName string) string {
+func projectionPartitionMemberKey(signalType string, signalName string) string {
 	return signalType + ":" + signalName
 }
 
-func (v *Validator) checkSignalGroupImpossibleANDsInRoute(route *RouteDecl, memberToGroup map[string]string) {
+func (v *Validator) checkProjectionPartitionImpossibleANDsInRoute(
+	route *RouteDecl,
+	memberToPartition map[string]string,
+) {
 	clauses := positiveConjunctionClauses(route.When)
 	seen := make(map[string]struct{})
 
 	for _, clause := range clauses {
-		groupMembers := make(map[string]SignalRefExpr)
+		partitionMembers := make(map[string]SignalRefExpr)
 		for _, ref := range clause {
-			groupName, ok := memberToGroup[signalGroupMemberKey(ref.SignalType, ref.SignalName)]
+			partitionName, ok := memberToPartition[projectionPartitionMemberKey(ref.SignalType, ref.SignalName)]
 			if !ok {
 				continue
 			}
 
-			if existing, clash := groupMembers[groupName]; clash && existing.SignalName != ref.SignalName {
+			if existing, clash := partitionMembers[partitionName]; clash && existing.SignalName != ref.SignalName {
 				pair := []string{
-					signalGroupMemberKey(existing.SignalType, existing.SignalName),
-					signalGroupMemberKey(ref.SignalType, ref.SignalName),
+					projectionPartitionMemberKey(existing.SignalType, existing.SignalName),
+					projectionPartitionMemberKey(ref.SignalType, ref.SignalName),
 				}
 				sort.Strings(pair)
-				diagKey := route.Name + "|" + groupName + "|" + strings.Join(pair, "|")
+				diagKey := route.Name + "|" + partitionName + "|" + strings.Join(pair, "|")
 				if _, alreadyReported := seen[diagKey]; alreadyReported {
 					continue
 				}
@@ -467,9 +490,9 @@ func (v *Validator) checkSignalGroupImpossibleANDsInRoute(route *RouteDecl, memb
 
 				v.addDiag(DiagConstraint, route.Pos,
 					fmt.Sprintf(
-						"ROUTE %q: WHEN clause ANDs SIGNAL_GROUP %q members %s(%q) and %s(%q), but that group declares them mutually exclusive",
+						"ROUTE %q: WHEN clause ANDs PROJECTION partition %q members %s(%q) and %s(%q), but that partition declares them mutually exclusive",
 						route.Name,
-						groupName,
+						partitionName,
 						existing.SignalType,
 						existing.SignalName,
 						ref.SignalType,
@@ -480,7 +503,7 @@ func (v *Validator) checkSignalGroupImpossibleANDsInRoute(route *RouteDecl, memb
 				continue
 			}
 
-			groupMembers[groupName] = ref
+			partitionMembers[partitionName] = ref
 		}
 	}
 }

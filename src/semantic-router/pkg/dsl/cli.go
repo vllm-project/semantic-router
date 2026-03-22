@@ -133,8 +133,8 @@ func collectRuntimeValidationDiagnostics(prog *Program, runner TestBlockRunner) 
 	if len(prog.TestBlocks) > 0 {
 		diags = append(diags, ValidateTestBlocks(prog, runner)...)
 	}
-	if validator, ok := runner.(SignalGroupRuntimeValidator); ok {
-		diags = append(diags, validator.ValidateSignalGroups(prog)...)
+	if validator, ok := runner.(ProjectionPartitionRuntimeValidator); ok {
+		diags = append(diags, validator.ValidateProjectionPartitions(prog)...)
 	}
 	return diags
 }
@@ -146,9 +146,9 @@ func runtimeValidationPos(prog *Program) Position {
 	if len(prog.TestBlocks) > 0 {
 		return prog.TestBlocks[0].Pos
 	}
-	for _, sg := range prog.SignalGroups {
-		if programNeedsRuntimeValidation(&Program{SignalGroups: []*SignalGroupDecl{sg}}) {
-			return sg.Pos
+	for _, partition := range prog.ProjectionPartitions {
+		if programNeedsRuntimeValidation(&Program{ProjectionPartitions: []*ProjectionPartitionDecl{partition}}) {
+			return partition.Pos
 		}
 	}
 	return Position{}

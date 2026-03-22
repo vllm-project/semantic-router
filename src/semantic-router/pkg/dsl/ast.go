@@ -32,21 +32,13 @@ type rawProgram struct {
 // rawTopLevel is a union for top-level declarations.
 type rawTopLevel struct {
 	Pos          lexer.Position
-	SignalGroup  *rawSignalGroupDecl  `parser:"  @@"`
-	Signal       *rawSignalDecl       `parser:"| @@"`
+	Signal       *rawSignalDecl       `parser:"  @@"`
 	Projection   *rawProjectionDecl   `parser:"| @@"`
 	Route        *rawRouteDecl        `parser:"| @@"`
 	DecisionTree *rawDecisionTreeDecl `parser:"| @@"`
 	Model        *rawModelDecl        `parser:"| @@"`
 	Plugin       *rawPluginDecl       `parser:"| @@"`
 	TestBlock    *rawTestBlockDecl    `parser:"| @@"`
-}
-
-// rawSignalGroupDecl: SIGNAL_GROUP <name> { fields... }
-type rawSignalGroupDecl struct {
-	Pos    lexer.Position
-	Name   string        `parser:"'SIGNAL_GROUP' @(Ident | String)"`
-	Fields []*FieldEntry `parser:"'{' @@* '}'"`
 }
 
 // rawTestBlockDecl: TEST <name> { entries... }
@@ -71,10 +63,10 @@ type rawSignalDecl struct {
 	Fields     []*FieldEntry `parser:"'{' @@* '}'"`
 }
 
-// rawProjectionDecl: PROJECTION <score|mapping> <name> { fields... }
+// rawProjectionDecl: PROJECTION <partition|score|mapping> <name> { fields... }
 type rawProjectionDecl struct {
 	Pos    lexer.Position
-	Kind   string        `parser:"'PROJECTION' @('score' | 'mapping')"`
+	Kind   string        `parser:"'PROJECTION' @('partition' | 'score' | 'mapping')"`
 	Name   string        `parser:"@(Ident | String)"`
 	Fields []*FieldEntry `parser:"'{' @@* '}'"`
 }
@@ -246,20 +238,20 @@ type ArrayVal struct {
 
 // Program is the root AST node, representing a complete DSL file.
 type Program struct {
-	Signals            []*SignalDecl
-	SignalGroups       []*SignalGroupDecl
-	ProjectionScores   []*ProjectionScoreDecl
-	ProjectionMappings []*ProjectionMappingDecl
-	Routes             []*RouteDecl
-	Models             []*ModelDecl
-	Plugins            []*PluginDecl
-	TestBlocks         []*TestBlockDecl
+	Signals              []*SignalDecl
+	ProjectionPartitions []*ProjectionPartitionDecl
+	ProjectionScores     []*ProjectionScoreDecl
+	ProjectionMappings   []*ProjectionMappingDecl
+	Routes               []*RouteDecl
+	Models               []*ModelDecl
+	Plugins              []*PluginDecl
+	TestBlocks           []*TestBlockDecl
 }
 
-// SignalGroupDecl declares a mutually exclusive partition of signals.
+// ProjectionPartitionDecl declares a mutually exclusive partition of signals.
 // When Semantics is "softmax_exclusive", the runtime applies Voronoi
 // normalization so that at most one member fires per query.
-type SignalGroupDecl struct {
+type ProjectionPartitionDecl struct {
 	Name        string
 	Semantics   string
 	Temperature float64

@@ -55,9 +55,9 @@ const BuilderPage: React.FC = () => {
     mutateSignal,
     addSignal,
     deleteSignal,
-    mutateSignalGroup,
-    addSignalGroup,
-    deleteSignalGroup,
+    mutateProjectionPartition,
+    addProjectionPartition,
+    deleteProjectionPartition,
     mutateProjectionScore,
     addProjectionScore,
     deleteProjectionScore,
@@ -88,7 +88,7 @@ const BuilderPage: React.FC = () => {
   const [sections, setSections] = useState<SectionState>({
     models: true,
     signals: true,
-    signalGroups: true,
+    projectionPartitions: true,
     projectionScores: true,
     projectionMappings: true,
     routes: true,
@@ -166,8 +166,8 @@ const BuilderPage: React.FC = () => {
         case "signal":
           if (subType) deleteSignal(subType, name);
           break;
-        case "signal-group":
-          deleteSignalGroup(name);
+        case "projection-partition":
+          deleteProjectionPartition(name);
           break;
         case "projection-score":
           deleteProjectionScore(name);
@@ -187,7 +187,7 @@ const BuilderPage: React.FC = () => {
     [
       deleteModel,
       deleteSignal,
-      deleteSignalGroup,
+      deleteProjectionPartition,
       deleteProjectionScore,
       deleteProjectionMapping,
       deleteRoute,
@@ -225,11 +225,11 @@ const BuilderPage: React.FC = () => {
     [mutatePlugin],
   );
 
-  const handleUpdateSignalGroupFields = useCallback(
+  const handleUpdateProjectionPartitionFields = useCallback(
     (name: string, fields: DSLFieldObject) => {
-      mutateSignalGroup(name, fields);
+      mutateProjectionPartition(name, fields);
     },
-    [mutateSignalGroup],
+    [mutateProjectionPartition],
   );
 
   const handleUpdateProjectionScoreFields = useCallback(
@@ -264,13 +264,13 @@ const BuilderPage: React.FC = () => {
     [addPlugin],
   );
 
-  const handleAddSignalGroup = useCallback(
+  const handleAddProjectionPartition = useCallback(
     (name: string, fields: DSLFieldObject) => {
-      addSignalGroup(name, fields);
-      setSelection({ kind: "signal-group", name });
+      addProjectionPartition(name, fields);
+      setSelection({ kind: "projection-partition", name });
       setAddingEntity(null);
     },
-    [addSignalGroup],
+    [addProjectionPartition],
   );
 
   const handleAddProjectionScore = useCallback(
@@ -463,7 +463,7 @@ const BuilderPage: React.FC = () => {
   const errorCount = diagnostics.filter((d) => d.level === "error").length;
   const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0;
   const signalCount = ast?.signals?.length ?? symbols?.signals?.length ?? 0;
-  const signalGroupCount = ast?.signalGroups?.length ?? 0;
+  const projectionPartitionCount = ast?.projectionPartitions?.length ?? 0;
   const projectionScoreCount = ast?.projectionScores?.length ?? 0;
   const projectionMappingCount = ast?.projectionMappings?.length ?? 0;
   const routeCount = ast?.routes?.length ?? symbols?.routes?.length ?? 0;
@@ -479,8 +479,8 @@ const BuilderPage: React.FC = () => {
         return ast.models?.find((m) => m.name === selection.name) ?? null;
       case "signal":
         return ast.signals?.find((s) => s.name === selection.name) ?? null;
-      case "signal-group":
-        return ast.signalGroups?.find((group) => group.name === selection.name) ?? null;
+      case "projection-partition":
+        return ast.projectionPartitions?.find((partition) => partition.name === selection.name) ?? null;
       case "projection-score":
         return ast.projectionScores?.find((score) => score.name === selection.name) ?? null;
       case "projection-mapping":
@@ -541,7 +541,7 @@ const BuilderPage: React.FC = () => {
               selectedEntity={selectedEntity}
               modelCount={modelCount}
               signalCount={signalCount}
-              signalGroupCount={signalGroupCount}
+              projectionPartitionCount={projectionPartitionCount}
               projectionScoreCount={projectionScoreCount}
               projectionMappingCount={projectionMappingCount}
               routeCount={routeCount}
@@ -553,13 +553,13 @@ const BuilderPage: React.FC = () => {
               onDeleteEntity={handleDeleteEntity}
               onUpdateModelFields={handleUpdateModelFields}
               onUpdateSignalFields={handleUpdateSignalFields}
-              onUpdateSignalGroupFields={handleUpdateSignalGroupFields}
+              onUpdateProjectionPartitionFields={handleUpdateProjectionPartitionFields}
               onUpdateProjectionScoreFields={handleUpdateProjectionScoreFields}
               onUpdateProjectionMappingFields={handleUpdateProjectionMappingFields}
               onUpdatePluginFields={handleUpdatePluginFields}
               onAddModel={handleAddModel}
               onAddSignal={handleAddSignal}
-              onAddSignalGroup={handleAddSignalGroup}
+              onAddProjectionPartition={handleAddProjectionPartition}
               onAddProjectionScore={handleAddProjectionScore}
               onAddProjectionMapping={handleAddProjectionMapping}
               onAddPlugin={handleAddPlugin}

@@ -12,7 +12,7 @@ type nativeTestBlockRunner struct {
 	classifier *classification.Classifier
 }
 
-const signalGroupCentroidWarningThreshold = 0.7
+const projectionPartitionCentroidWarningThreshold = 0.7
 
 func buildNativeTestBlockRunner(prog *dsl.Program) (dsl.TestBlockRunner, error) {
 	if prog == nil {
@@ -96,54 +96,56 @@ func (r *nativeTestBlockRunner) EvaluateTestBlockQuery(query string) (*dsl.TestB
 	}, nil
 }
 
-func (r *nativeTestBlockRunner) ValidateSignalGroups(prog *dsl.Program) []dsl.Diagnostic {
+func (r *nativeTestBlockRunner) ValidateProjectionPartitions(
+	prog *dsl.Program,
+) []dsl.Diagnostic {
 	if r == nil || r.classifier == nil || prog == nil {
 		return nil
 	}
 
-	warnings, err := r.classifier.AnalyzeSoftmaxSignalGroupCentroids(signalGroupCentroidWarningThreshold)
+	warnings, err := r.classifier.AnalyzeSoftmaxSignalGroupCentroids(projectionPartitionCentroidWarningThreshold)
 	if err != nil {
 		return []dsl.Diagnostic{{
 			Level:   dsl.DiagError,
-			Message: fmt.Sprintf("SIGNAL_GROUP native centroid validation failed: %v", err),
-			Pos:     firstSoftmaxSignalGroupPos(prog),
+			Message: fmt.Sprintf("PROJECTION partition native centroid validation failed: %v", err),
+			Pos:     firstSoftmaxProjectionPartitionPos(prog),
 		}}
 	}
 	if len(warnings) == 0 {
 		return nil
 	}
 
-	positions := signalGroupPositions(prog)
+	positions := projectionPartitionPositions(prog)
 	diags := make([]dsl.Diagnostic, 0, len(warnings))
 	for _, warning := range warnings {
 		diags = append(diags, dsl.Diagnostic{
 			Level: dsl.DiagWarning,
 			Pos:   positions[warning.GroupName],
 			Message: fmt.Sprintf(
-				`SIGNAL_GROUP %s: members %q and %q candidate centroids have cosine similarity %.2f (threshold: %.1f) — softmax scores may be near-uniform on ambiguous queries`,
+				`PROJECTION partition %s: members %q and %q candidate centroids have cosine similarity %.2f (threshold: %.1f) — softmax scores may be near-uniform on ambiguous queries`,
 				warning.GroupName,
 				warning.LeftMember,
 				warning.RightMember,
 				warning.Similarity,
-				signalGroupCentroidWarningThreshold,
+				projectionPartitionCentroidWarningThreshold,
 			),
 		})
 	}
 	return diags
 }
 
-func signalGroupPositions(prog *dsl.Program) map[string]dsl.Position {
-	positions := make(map[string]dsl.Position, len(prog.SignalGroups))
-	for _, group := range prog.SignalGroups {
-		positions[group.Name] = group.Pos
+func projectionPartitionPositions(prog *dsl.Program) map[string]dsl.Position {
+	positions := make(map[string]dsl.Position, len(prog.ProjectionPartitions))
+	for _, partition := range prog.ProjectionPartitions {
+		positions[partition.Name] = partition.Pos
 	}
 	return positions
 }
 
-func firstSoftmaxSignalGroupPos(prog *dsl.Program) dsl.Position {
-	for _, group := range prog.SignalGroups {
-		if group.Semantics == "softmax_exclusive" {
-			return group.Pos
+func firstSoftmaxProjectionPartitionPos(prog *dsl.Program) dsl.Position {
+	for _, partition := range prog.ProjectionPartitions {
+		if partition.Semantics == "softmax_exclusive" {
+			return partition.Pos
 		}
 	}
 	return dsl.Position{}

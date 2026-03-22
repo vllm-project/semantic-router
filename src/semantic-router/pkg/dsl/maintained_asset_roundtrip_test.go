@@ -40,7 +40,7 @@ func TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals(t *testing.T) {
 	}
 }
 
-func TestMaintainedBalanceRecipeUsesSignalGroupsAndTieredDecisions(t *testing.T) {
+func TestMaintainedBalanceRecipeUsesProjectionPartitionsAndTieredDecisions(t *testing.T) {
 	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml")
 	data, err := os.ReadFile(assetPath)
 	if err != nil {
@@ -90,17 +90,17 @@ func mustLoadMaintainedBalanceDSLProgram(t *testing.T, dslPath string) *Program 
 	if len(errs) > 0 {
 		t.Fatalf("Parse errors: %v", errs)
 	}
-	if len(prog.SignalGroups) < 2 {
-		t.Fatalf("expected maintained balance DSL to declare at least 2 signal groups, got %d", len(prog.SignalGroups))
+	if len(prog.ProjectionPartitions) < 2 {
+		t.Fatalf("expected maintained balance DSL to declare at least 2 projection partitions, got %d", len(prog.ProjectionPartitions))
 	}
 	assertMaintainedBalanceDSLDiagnostics(t, prog)
 	return prog
 }
 
-func assertMaintainedBalanceDomainPartition(t *testing.T, groups []config.SignalGroup) {
+func assertMaintainedBalanceDomainPartition(t *testing.T, groups []config.ProjectionPartition) {
 	t.Helper()
 
-	var domainPartition *config.SignalGroup
+	var domainPartition *config.ProjectionPartition
 	for i := range groups {
 		if groups[i].Name == "balance_domain_partition" {
 			domainPartition = &groups[i]
@@ -122,10 +122,10 @@ func assertMaintainedBalanceDomainPartition(t *testing.T, groups []config.Signal
 	}
 }
 
-func assertMaintainedBalanceIntentPartition(t *testing.T, groups []config.SignalGroup) {
+func assertMaintainedBalanceIntentPartition(t *testing.T, groups []config.ProjectionPartition) {
 	t.Helper()
 
-	var intentPartition *config.SignalGroup
+	var intentPartition *config.ProjectionPartition
 	for i := range groups {
 		if groups[i].Name == "balance_intent_partition" {
 			intentPartition = &groups[i]
@@ -218,8 +218,8 @@ func assertMaintainedBalanceRoute(t *testing.T, decisions []config.Decision, nam
 
 func assertMaintainedBalanceDSLMarkers(t *testing.T, dslPath, dslText string) {
 	t.Helper()
-	if !strings.Contains(dslText, "SIGNAL_GROUP balance_intent_partition") {
-		t.Fatalf("%s must define the learned intent SIGNAL_GROUP", dslPath)
+	if !strings.Contains(dslText, "PROJECTION partition balance_intent_partition") {
+		t.Fatalf("%s must define the learned intent projection partition", dslPath)
 	}
 	if !strings.Contains(dslText, "PROJECTION score difficulty_score") {
 		t.Fatalf("%s must define the derived difficulty score", dslPath)

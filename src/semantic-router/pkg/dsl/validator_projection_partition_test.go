@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-func TestValidateSignalGroupUnsupportedMemberType(t *testing.T) {
+func TestValidateProjectionPartitionUnsupportedMemberType(t *testing.T) {
 	input := `
 SIGNAL keyword urgent { operator: "any" patterns: ["urgent"] }
 
-SIGNAL_GROUP test_group {
+PROJECTION partition test_group {
   semantics: "exclusive"
   members: ["urgent"]
   default: "urgent"
@@ -24,18 +24,18 @@ SIGNAL_GROUP test_group {
 		}
 	}
 	if !found {
-		t.Error("expected constraint about unsupported signal-group member type")
+		t.Error("expected constraint about unsupported projection partition member type")
 	}
 }
 
-func TestValidateSignalGroupMixedMemberTypes(t *testing.T) {
+func TestValidateProjectionPartitionMixedMemberTypes(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL embedding ai {
   examples: ["transformer", "neural network"]
 }
 
-SIGNAL_GROUP test_group {
+PROJECTION partition test_group {
   semantics: "softmax_exclusive"
   temperature: 0.1
   members: ["math", "ai"]
@@ -52,16 +52,16 @@ SIGNAL_GROUP test_group {
 		}
 	}
 	if !found {
-		t.Error("expected constraint about mixed signal-group member types")
+		t.Error("expected constraint about mixed projection partition member types")
 	}
 }
 
-func TestValidateSignalGroupImpossibleAndCondition(t *testing.T) {
+func TestValidateProjectionPartitionImpossibleAndCondition(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL domain science { mmlu_categories: ["physics"] }
 
-SIGNAL_GROUP domain_taxonomy {
+PROJECTION partition domain_taxonomy {
   semantics: "exclusive"
   members: ["math", "science"]
   default: "science"
@@ -84,6 +84,6 @@ ROUTE impossible_route {
 		}
 	}
 	if !found {
-		t.Error("expected constraint about impossible AND between group members")
+		t.Error("expected constraint about impossible AND between partition members")
 	}
 }

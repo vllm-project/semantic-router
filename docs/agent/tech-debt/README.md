@@ -89,7 +89,7 @@ Keep the numeric index unique within `docs/agent/tech-debt/`.
 - [TD032 Training and Evaluation Artifact Contracts Still Drift Across Dashboard, Runtime, and Scripts](td-032-training-evaluation-artifact-contract-drift.md)
 - [TD033 Native Binding Runtime Parity and Lifecycle Still Diverge Across Candle and ONNX Backends](td-033-native-binding-runtime-parity-and-lifecycle-gap.md)
 - [TD034 Runtime and Dashboard State Surfaces Still Lack a Coherent Durability, Recovery, and Telemetry Contract](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
-- [TD035 SIGNAL_GROUP Default Coverage Contract Is Still Declarative Only](td-035-signal-group-default-coverage-contract-gap.md)
+- [TD035 Projection Partition Default Coverage Contract Is No Longer Declarative Only](td-035-signal-group-default-coverage-contract-gap.md)
 - [TD036 Decision Tree Authoring Cannot Round-Trip Through Runtime Config](td-036-decision-tree-authoring-roundtrip-gap.md)
 
 ## Architecture Review Coverage Map
@@ -120,7 +120,7 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
 - Shared config, schema, contracts, utilities, and tooling
   - weakly typed or hybrid adapter seams in dashboard and DSL helpers: [TD015](td-015-weakly-typed-config-and-dsl-contracts.md)
   - operator-side contract ownership and canonical translation boundaries: [TD028](td-028-operator-config-contract-boundary-collapse.md)
-  - resolved `SIGNAL_GROUP` fallback and centroid-validation contract work: [TD035](td-035-signal-group-default-coverage-contract-gap.md)
+  - resolved projection-partition fallback and centroid-validation contract work: [TD035](td-035-signal-group-default-coverage-contract-gap.md)
   - `DECISION_TREE` authoring still lowers away before runtime config and decompile, so tree-authored DSL cannot yet round-trip through canonical router config: [TD036](td-036-decision-tree-authoring-roundtrip-gap.md)
   - state taxonomy, durability ownership, and restart-aware telemetry across router/dashboard/CLI: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
   - resolved predecessor work for repo-wide canonical contract consolidation: [TD001](td-001-config-surface-fragmentation.md), [TD026](td-026-go-config-contract-boundary-collapse.md)

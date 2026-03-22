@@ -1,17 +1,17 @@
 import type {
   ASTModelDecl,
+  ASTProjectionPartitionDecl,
   ASTProjectionMappingDecl,
   ASTProjectionScoreDecl,
   ASTPluginDecl,
   ASTRouteDecl,
   ASTSignalDecl,
-  ASTSignalGroupDecl,
 } from "@/types/dsl";
 
 export type EntityKind =
   | "model"
   | "signal"
-  | "signal-group"
+  | "projection-partition"
   | "projection-score"
   | "projection-mapping"
   | "route"
@@ -25,7 +25,7 @@ export interface Selection {
 export interface SectionState {
   models: boolean;
   signals: boolean;
-  signalGroups: boolean;
+  projectionPartitions: boolean;
   projectionScores: boolean;
   projectionMappings: boolean;
   routes: boolean;
@@ -35,7 +35,7 @@ export interface SectionState {
 export type BuilderSelectedEntity =
   | ASTModelDecl
   | ASTSignalDecl
-  | ASTSignalGroupDecl
+  | ASTProjectionPartitionDecl
   | ASTProjectionScoreDecl
   | ASTProjectionMappingDecl
   | ASTRouteDecl
