@@ -11,52 +11,15 @@ import (
 // ParseHallucinationOutput parses the output from the hallucination benchmark.
 // It first tries to read from the output file, then falls back to parsing stdout.
 func ParseHallucinationOutput(stdout, outputPath string) (map[string]interface{}, error) {
-	var result map[string]interface{}
-
-	// First, try to read from the output file
-	if outputPath != "" {
-		// The script generates files with timestamp, so find the latest one
-		dir := filepath.Dir(outputPath)
-		files, err := os.ReadDir(dir)
-		if err == nil {
-			var latestFile string
-			var latestTime int64
-			for _, f := range files {
-				if strings.HasPrefix(f.Name(), "results_") && strings.HasSuffix(f.Name(), ".json") {
-					filePath := filepath.Join(dir, f.Name())
-					info, err := f.Info()
-					if err == nil {
-						modTime := info.ModTime().UnixNano()
-						if modTime > latestTime {
-							latestTime = modTime
-							latestFile = filePath
-						}
-					}
-				}
-			}
-			if latestFile != "" {
-				data, err := os.ReadFile(latestFile)
-				if err == nil {
-					if err := json.Unmarshal(data, &result); err == nil {
-						return extractHallucinationMetrics(result), nil
-					}
-				}
-			}
-		}
+	if result, ok := tryHallucinationMetricsFromOutputFile(outputPath); ok {
+		return extractHallucinationMetrics(result), nil
 	}
-
-	// Fall back to parsing stdout for JSON
 	lines := strings.Split(stdout, "\n")
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "{") && strings.HasSuffix(line, "}") {
-			if err := json.Unmarshal([]byte(line), &result); err == nil {
-				return extractHallucinationMetrics(result), nil
-			}
+		if result, ok := parseHallucinationLineFromStdout(line); ok {
+			return extractHallucinationMetrics(result), nil
 		}
 	}
-
-	// Return empty metrics if parsing failed
 	return map[string]interface{}{
 		"error":  "Failed to parse benchmark output",
 		"stdout": stdout,
@@ -288,36 +251,6 @@ func extractAccuracyMetrics(raw map[string]interface{}) map[string]interface{} {
 
 	metrics["status"] = "success"
 	return metrics
-}
-
-// ParsePrometheusMetrics parses Prometheus query results into metrics.
-func ParsePrometheusMetrics(queryResult map[string]interface{}, metricType string) (map[string]interface{}, error) {
-	metrics := make(map[string]interface{})
-
-	// Prometheus API response format:
-	// { "status": "success", "data": { "resultType": "vector/matrix", "result": [...] } }
-	if data, ok := queryResult["data"].(map[string]interface{}); ok {
-		if result, ok := data["result"].([]interface{}); ok {
-			for i, r := range result {
-				if resultMap, ok := r.(map[string]interface{}); ok {
-					// Get metric labels
-					if metric, ok := resultMap["metric"].(map[string]interface{}); ok {
-						prefix := fmt.Sprintf("%s_%d", metricType, i)
-						for k, v := range metric {
-							metrics[fmt.Sprintf("%s_%s", prefix, k)] = v
-						}
-					}
-
-					// Get value(s)
-					if value, ok := resultMap["value"].([]interface{}); ok && len(value) == 2 {
-						metrics[fmt.Sprintf("%s_%d_value", metricType, i)] = value[1]
-					}
-				}
-			}
-		}
-	}
-
-	return metrics, nil
 }
 
 // CalculateDerivedMetrics calculates additional metrics from raw results.

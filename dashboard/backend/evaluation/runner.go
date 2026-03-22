@@ -344,39 +344,15 @@ func (r *Runner) runCommandWithProgress(ctx context.Context, cmd *exec.Cmd, task
 	var output strings.Builder
 	var errOutput strings.Builder
 
-	// Helper to parse tqdm progress from a line
-	parseProgress := func(line string) {
-		// tqdm format: " 50%|████████  | 25/50 [00:30<00:30, 1.00it/s]"
-		// Also handle: "50%|..."
-		if strings.Contains(line, "%|") || strings.Contains(line, "% |") {
-			// Find percentage - look for number followed by %
-			for i := 0; i < len(line); i++ {
-				if line[i] == '%' && i > 0 {
-					// Find the start of the number
-					start := i - 1
-					for start > 0 && (line[start-1] >= '0' && line[start-1] <= '9') {
-						start--
-					}
-					if start < i {
-						var percent int
-						_, _ = fmt.Sscanf(line[start:i], "%d", &percent)
-						if percent > 0 && percent <= 100 {
-							r.sendProgress(taskID, percent, dimension, fmt.Sprintf("Processing: %d%%", percent))
-						}
-					}
-					break
-				}
-			}
-		}
-	}
-
 	// Read stdout
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
 			output.WriteString(line + "\n")
-			parseProgress(line)
+			if pct, ok := tqdmPercentFromLine(line); ok {
+				r.sendProgress(taskID, pct, dimension, fmt.Sprintf("Processing: %d%%", pct))
+			}
 		}
 	}()
 
@@ -386,7 +362,9 @@ func (r *Runner) runCommandWithProgress(ctx context.Context, cmd *exec.Cmd, task
 		for scanner.Scan() {
 			line := scanner.Text()
 			errOutput.WriteString(line + "\n")
-			parseProgress(line)
+			if pct, ok := tqdmPercentFromLine(line); ok {
+				r.sendProgress(taskID, pct, dimension, fmt.Sprintf("Processing: %d%%", pct))
+			}
 		}
 	}()
 
