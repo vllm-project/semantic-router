@@ -10,22 +10,67 @@ import "encoding/json"
 
 // ProgramJSON is the JSON-serializable form of Program.
 type ProgramJSON struct {
-	Signals      []*SignalDeclJSON      `json:"signals"`
-	SignalGroups []*SignalGroupDeclJSON `json:"signalGroups,omitempty"`
-	Routes       []*RouteDeclJSON       `json:"routes"`
-	Models       []*ModelDeclJSON       `json:"models"`
-	Plugins      []*PluginDeclJSON      `json:"plugins"`
-	TestBlocks   []*TestBlockDeclJSON   `json:"testBlocks,omitempty"`
+	Signals              []*SignalDeclJSON              `json:"signals"`
+	ProjectionPartitions []*ProjectionPartitionDeclJSON `json:"projectionPartitions,omitempty"`
+	ProjectionScores     []*ProjectionScoreDeclJSON     `json:"projectionScores,omitempty"`
+	ProjectionMappings   []*ProjectionMappingDeclJSON   `json:"projectionMappings,omitempty"`
+	Routes               []*RouteDeclJSON               `json:"routes"`
+	Models               []*ModelDeclJSON               `json:"models"`
+	Plugins              []*PluginDeclJSON              `json:"plugins"`
+	TestBlocks           []*TestBlockDeclJSON           `json:"testBlocks,omitempty"`
 }
 
-// SignalGroupDeclJSON is the JSON form of SignalGroupDecl.
-type SignalGroupDeclJSON struct {
+// ProjectionPartitionDeclJSON is the JSON form of ProjectionPartitionDecl.
+type ProjectionPartitionDeclJSON struct {
 	Name        string   `json:"name"`
 	Semantics   string   `json:"semantics,omitempty"`
 	Temperature float64  `json:"temperature,omitempty"`
 	Members     []string `json:"members"`
 	Default     string   `json:"default,omitempty"`
 	Pos         Position `json:"pos"`
+}
+
+// ProjectionScoreDeclJSON is the JSON form of ProjectionScoreDecl.
+type ProjectionScoreDeclJSON struct {
+	Name   string                      `json:"name"`
+	Method string                      `json:"method,omitempty"`
+	Inputs []*ProjectionScoreInputJSON `json:"inputs,omitempty"`
+	Pos    Position                    `json:"pos"`
+}
+
+// ProjectionScoreInputJSON is the JSON form of ProjectionScoreInputDecl.
+type ProjectionScoreInputJSON struct {
+	SignalType  string  `json:"signalType"`
+	SignalName  string  `json:"signalName"`
+	Weight      float64 `json:"weight"`
+	ValueSource string  `json:"valueSource,omitempty"`
+	Match       float64 `json:"match,omitempty"`
+	Miss        float64 `json:"miss,omitempty"`
+}
+
+// ProjectionMappingDeclJSON is the JSON form of ProjectionMappingDecl.
+type ProjectionMappingDeclJSON struct {
+	Name        string                            `json:"name"`
+	Source      string                            `json:"source,omitempty"`
+	Method      string                            `json:"method,omitempty"`
+	Calibration *ProjectionMappingCalibrationJSON `json:"calibration,omitempty"`
+	Outputs     []*ProjectionMappingOutputJSON    `json:"outputs,omitempty"`
+	Pos         Position                          `json:"pos"`
+}
+
+// ProjectionMappingCalibrationJSON is the JSON form of ProjectionMappingCalibrationDecl.
+type ProjectionMappingCalibrationJSON struct {
+	Method string  `json:"method,omitempty"`
+	Slope  float64 `json:"slope,omitempty"`
+}
+
+// ProjectionMappingOutputJSON is the JSON form of ProjectionMappingOutputDecl.
+type ProjectionMappingOutputJSON struct {
+	Name string   `json:"name"`
+	LT   *float64 `json:"lt,omitempty"`
+	LTE  *float64 `json:"lte,omitempty"`
+	GT   *float64 `json:"gt,omitempty"`
+	GTE  *float64 `json:"gte,omitempty"`
 }
 
 // TestBlockDeclJSON is the JSON form of TestBlockDecl.
@@ -161,65 +206,138 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 		Models:  make([]*ModelDeclJSON, 0, len(prog.Models)),
 		Plugins: make([]*PluginDeclJSON, 0, len(prog.Plugins)),
 	}
+	appendSignalDecls(result, prog.Signals)
+	appendProjectionPartitionDecls(result, prog.ProjectionPartitions)
+	appendProjectionScoreDecls(result, prog.ProjectionScores)
+	appendProjectionMappingDecls(result, prog.ProjectionMappings)
+	appendRouteDecls(result, prog.Routes)
+	appendModelDecls(result, prog.Models)
+	appendPluginDecls(result, prog.Plugins)
+	appendTestBlockDecls(result, prog.TestBlocks)
+	return result
+}
 
-	for _, s := range prog.Signals {
+func appendSignalDecls(result *ProgramJSON, signals []*SignalDecl) {
+	for _, signal := range signals {
 		result.Signals = append(result.Signals, &SignalDeclJSON{
-			SignalType: s.SignalType,
-			Name:       s.Name,
-			Fields:     marshalObjectFields(s.Fields),
-			Pos:        s.Pos,
+			SignalType: signal.SignalType,
+			Name:       signal.Name,
+			Fields:     marshalObjectFields(signal.Fields),
+			Pos:        signal.Pos,
 		})
 	}
+}
 
-	for _, sg := range prog.SignalGroups {
-		result.SignalGroups = append(result.SignalGroups, &SignalGroupDeclJSON{
-			Name:        sg.Name,
-			Semantics:   sg.Semantics,
-			Temperature: sg.Temperature,
-			Members:     sg.Members,
-			Default:     sg.Default,
-			Pos:         sg.Pos,
-		})
+func appendProjectionPartitionDecls(
+	result *ProgramJSON,
+	partitions []*ProjectionPartitionDecl,
+) {
+	for _, partition := range partitions {
+		result.ProjectionPartitions = append(
+			result.ProjectionPartitions,
+			&ProjectionPartitionDeclJSON{
+				Name:        partition.Name,
+				Semantics:   partition.Semantics,
+				Temperature: partition.Temperature,
+				Members:     partition.Members,
+				Default:     partition.Default,
+				Pos:         partition.Pos,
+			},
+		)
 	}
+}
 
-	for _, r := range prog.Routes {
-		result.Routes = append(result.Routes, routeDeclToJSON(r))
-	}
-
-	for _, m := range prog.Models {
-		result.Models = append(result.Models, &ModelDeclJSON{
-			Name:   m.Name,
-			Fields: marshalObjectFields(m.Fields),
-			Pos:    m.Pos,
-		})
-	}
-
-	for _, p := range prog.Plugins {
-		result.Plugins = append(result.Plugins, &PluginDeclJSON{
-			Name:       p.Name,
-			PluginType: p.PluginType,
-			Fields:     marshalObjectFields(p.Fields),
-			Pos:        p.Pos,
-		})
-	}
-
-	for _, tb := range prog.TestBlocks {
-		tbj := &TestBlockDeclJSON{
-			Name:    tb.Name,
-			Entries: make([]*TestEntryDeclJSON, 0, len(tb.Entries)),
-			Pos:     tb.Pos,
+func appendProjectionScoreDecls(result *ProgramJSON, scores []*ProjectionScoreDecl) {
+	for _, score := range scores {
+		scoreJSON := &ProjectionScoreDeclJSON{
+			Name:   score.Name,
+			Method: score.Method,
+			Pos:    score.Pos,
 		}
-		for _, e := range tb.Entries {
-			tbj.Entries = append(tbj.Entries, &TestEntryDeclJSON{
-				Query:     e.Query,
-				RouteName: e.RouteName,
-				Pos:       e.Pos,
+		for _, input := range score.Inputs {
+			scoreJSON.Inputs = append(scoreJSON.Inputs, &ProjectionScoreInputJSON{
+				SignalType:  input.SignalType,
+				SignalName:  input.SignalName,
+				Weight:      input.Weight,
+				ValueSource: input.ValueSource,
+				Match:       input.Match,
+				Miss:        input.Miss,
 			})
 		}
-		result.TestBlocks = append(result.TestBlocks, tbj)
+		result.ProjectionScores = append(result.ProjectionScores, scoreJSON)
 	}
+}
 
-	return result
+func appendProjectionMappingDecls(result *ProgramJSON, mappings []*ProjectionMappingDecl) {
+	for _, mapping := range mappings {
+		mappingJSON := &ProjectionMappingDeclJSON{
+			Name:   mapping.Name,
+			Source: mapping.Source,
+			Method: mapping.Method,
+			Pos:    mapping.Pos,
+		}
+		if mapping.Calibration != nil {
+			mappingJSON.Calibration = &ProjectionMappingCalibrationJSON{
+				Method: mapping.Calibration.Method,
+				Slope:  mapping.Calibration.Slope,
+			}
+		}
+		for _, output := range mapping.Outputs {
+			mappingJSON.Outputs = append(mappingJSON.Outputs, &ProjectionMappingOutputJSON{
+				Name: output.Name,
+				LT:   output.LT,
+				LTE:  output.LTE,
+				GT:   output.GT,
+				GTE:  output.GTE,
+			})
+		}
+		result.ProjectionMappings = append(result.ProjectionMappings, mappingJSON)
+	}
+}
+
+func appendRouteDecls(result *ProgramJSON, routes []*RouteDecl) {
+	for _, route := range routes {
+		result.Routes = append(result.Routes, routeDeclToJSON(route))
+	}
+}
+
+func appendModelDecls(result *ProgramJSON, models []*ModelDecl) {
+	for _, model := range models {
+		result.Models = append(result.Models, &ModelDeclJSON{
+			Name:   model.Name,
+			Fields: marshalObjectFields(model.Fields),
+			Pos:    model.Pos,
+		})
+	}
+}
+
+func appendPluginDecls(result *ProgramJSON, plugins []*PluginDecl) {
+	for _, plugin := range plugins {
+		result.Plugins = append(result.Plugins, &PluginDeclJSON{
+			Name:       plugin.Name,
+			PluginType: plugin.PluginType,
+			Fields:     marshalObjectFields(plugin.Fields),
+			Pos:        plugin.Pos,
+		})
+	}
+}
+
+func appendTestBlockDecls(result *ProgramJSON, blocks []*TestBlockDecl) {
+	for _, block := range blocks {
+		testBlockJSON := &TestBlockDeclJSON{
+			Name:    block.Name,
+			Entries: make([]*TestEntryDeclJSON, 0, len(block.Entries)),
+			Pos:     block.Pos,
+		}
+		for _, entry := range block.Entries {
+			testBlockJSON.Entries = append(testBlockJSON.Entries, &TestEntryDeclJSON{
+				Query:     entry.Query,
+				RouteName: entry.RouteName,
+				Pos:       entry.Pos,
+			})
+		}
+		result.TestBlocks = append(result.TestBlocks, testBlockJSON)
+	}
 }
 
 func routeDeclToJSON(r *RouteDecl) *RouteDeclJSON {

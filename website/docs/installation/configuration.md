@@ -30,6 +30,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `routing.modelCards`
   - `routing.modelCards[].loras`
   - `routing.signals`
+  - `routing.projections` for partitions plus derived routing outputs
   - `routing.decisions`
 - `providers` owns deployment and default-selection metadata.
   - `defaults`
@@ -90,16 +91,53 @@ routing:
       - name: math_terms
         operator: OR
         keywords: ["algebra", "calculus"]
+    embeddings:
+      - name: technical_support
+        threshold: 0.75
+        candidates: ["installation guide", "troubleshooting steps"]
+      - name: account_management
+        threshold: 0.72
+        candidates: ["billing information", "subscription management"]
+
+  projections:
+    partitions:
+      - name: support_intents
+        semantics: exclusive
+        temperature: 0.3
+        members: [technical_support, account_management]
+        default: technical_support
+    scores:
+      - name: request_difficulty
+        method: weighted_sum
+        inputs:
+          - type: embedding
+            name: technical_support
+            weight: 0.18
+            value_source: confidence
+          - type: context
+            name: long_context
+            weight: 0.18
+    mappings:
+      - name: request_band
+        source: request_difficulty
+        method: threshold_bands
+        outputs:
+          - name: support_fast
+            lt: 0.25
+          - name: support_escalated
+            gte: 0.25
 
   decisions:
-    - name: math_route
-      description: Route math requests
+    - name: support_route
+      description: Route support requests that need an escalated answer
       priority: 100
       rules:
         operator: AND
         conditions:
-          - type: keyword
-            name: math_terms
+          - type: embedding
+            name: technical_support
+          - type: projection
+            name: support_escalated
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
@@ -154,6 +192,27 @@ Those directories are support assets, not the main user-facing config contract. 
 - `go test ./pkg/config/...` checks that it stays aligned to the canonical schema and routing surface catalog
 - `make agent-lint` runs the same reference-config contract check at lint level, so config/schema drift is blocked before merge
 - maintained `deploy/` and `e2e/` router config assets are checked against the same canonical contract, so repo-owned examples and harness profiles cannot drift back to legacy steady-state fields
+
+## Projection Workflow
+
+Use `routing.projections` when the raw signal catalog is not enough on its own:
+
+1. `routing.signals` defines reusable detectors.
+2. `routing.projections.partitions` resolves one winner inside an exclusive domain or embedding family.
+3. `routing.projections.scores` combines learned and heuristic signals into a weighted score.
+4. `routing.projections.mappings` turns that score into named routing bands.
+5. `routing.decisions[*].rules.conditions[*]` can reference those bands with `type: projection`.
+
+The dashboard mirrors the same contract:
+
+- `Config -> Projections` edits partitions, scores, and mappings
+- `Config -> Decisions` can reference mapping outputs with condition type `projection`
+- `DSL -> Visual` manages `PROJECTION partition`, `PROJECTION score`, and `PROJECTION mapping` entities directly
+
+For a focused tutorial, read [Signal Projections](../tutorials/signal/projections). For a maintained end-to-end example, use:
+
+- [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
+- [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)
 
 ## How to use it
 

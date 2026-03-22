@@ -85,3 +85,4 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0009-fleet-sim-optimizer-and-operator-config-boundary-ratchet.md](pl-0009-fleet-sim-optimizer-and-operator-config-boundary-ratchet.md)
 - [pl-0010-extproc-response-and-dashboard-frontend-boundary-ratchet.md](pl-0010-extproc-response-and-dashboard-frontend-boundary-ratchet.md)
 - [pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md](pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md)
+- [pl-0012-dsl-conflict-free-routing-workstream.md](pl-0012-dsl-conflict-free-routing-workstream.md)

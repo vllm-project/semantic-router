@@ -26,7 +26,7 @@ interface BlockSpan {
  */
 export function findBlock(
   src: string,
-  construct: 'MODEL' | 'SIGNAL' | 'ROUTE' | 'PLUGIN',
+  construct: 'MODEL' | 'SIGNAL' | 'ROUTE' | 'PLUGIN' | 'PROJECTION',
   subType: string | null,
   name: string | null,
 ): BlockSpan | null {
@@ -43,6 +43,8 @@ export function findBlock(
     pattern = `^ROUTE\\s+${escRe(name!)}\\s*(?:\\([^)]*\\))?\\s*\\{`
   } else if (construct === 'PLUGIN' && subType) {
     pattern = `^PLUGIN\\s+${escRe(name!)}\\s+${escRe(subType)}\\s*\\{`
+  } else if (construct === 'PROJECTION' && subType) {
+    pattern = `^PROJECTION\\s+${escRe(subType)}\\s+${dslNamePattern(name!)}\\s*\\{`
   } else {
     // Generic fallback
     const parts: string[] = [construct]
@@ -289,6 +291,106 @@ export function deleteSignal(src: string, signalType: string, name: string): str
   if (!block) return src
 
   // Remove extra blank lines left behind
+  let result = src.slice(0, block.start) + src.slice(block.end)
+  result = result.replace(/\n{3,}/g, '\n\n')
+  return result
+}
+
+function buildNamedBlock(
+  header: string,
+  fields: DSLFieldObject,
+): string {
+  const body = serializeFields(fields)
+  return `${header} {\n${body}\n}\n`
+}
+
+function insertAfterLastBlock(
+  src: string,
+  patterns: RegExp[],
+  newBlock: string,
+): string {
+  for (const pattern of patterns) {
+    let lastMatch: RegExpExecArray | null = null
+    let match: RegExpExecArray | null
+    while ((match = pattern.exec(src)) !== null) {
+      lastMatch = match
+    }
+    if (!lastMatch) {
+      continue
+    }
+    const lastBlock = findBlockFromIndex(src, lastMatch.index)
+    if (lastBlock) {
+      return src.slice(0, lastBlock.end) + '\n' + newBlock + src.slice(lastBlock.end)
+    }
+  }
+
+  const firstNonCommentLine = findFirstNonCommentLine(src)
+  return src.slice(0, firstNonCommentLine) + newBlock + '\n' + src.slice(firstNonCommentLine)
+}
+
+export function updateProjectionPartition(
+  src: string,
+  name: string,
+  fields: DSLFieldObject,
+): string {
+  const block = findBlock(src, 'PROJECTION', 'partition', name)
+  if (!block) return src
+  const newBlock = buildNamedBlock(`PROJECTION partition ${formatDslName(name)}`, fields)
+  return src.slice(0, block.start) + newBlock + src.slice(block.end)
+}
+
+export function addProjectionPartition(
+  src: string,
+  name: string,
+  fields: DSLFieldObject,
+): string {
+  const newBlock = buildNamedBlock(`PROJECTION partition ${formatDslName(name)}`, fields)
+  return insertAfterLastBlock(src, [
+    /^PROJECTION\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
+    /^SIGNAL\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
+  ], newBlock)
+}
+
+export function deleteProjectionPartition(src: string, name: string): string {
+  const block = findBlock(src, 'PROJECTION', 'partition', name)
+  if (!block) return src
+  let result = src.slice(0, block.start) + src.slice(block.end)
+  result = result.replace(/\n{3,}/g, '\n\n')
+  return result
+}
+
+export function updateProjection(
+  src: string,
+  kind: 'partition' | 'score' | 'mapping',
+  name: string,
+  fields: DSLFieldObject,
+): string {
+  const block = findBlock(src, 'PROJECTION', kind, name)
+  if (!block) return src
+  const newBlock = buildNamedBlock(`PROJECTION ${kind} ${formatDslName(name)}`, fields)
+  return src.slice(0, block.start) + newBlock + src.slice(block.end)
+}
+
+export function addProjection(
+  src: string,
+  kind: 'partition' | 'score' | 'mapping',
+  name: string,
+  fields: DSLFieldObject,
+): string {
+  const newBlock = buildNamedBlock(`PROJECTION ${kind} ${formatDslName(name)}`, fields)
+  return insertAfterLastBlock(src, [
+    /^PROJECTION\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
+    /^SIGNAL\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
+  ], newBlock)
+}
+
+export function deleteProjection(
+  src: string,
+  kind: 'partition' | 'score' | 'mapping',
+  name: string,
+): string {
+  const block = findBlock(src, 'PROJECTION', kind, name)
+  if (!block) return src
   let result = src.slice(0, block.start) + src.slice(block.end)
   result = result.replace(/\n{3,}/g, '\n\n')
   return result
