@@ -212,6 +212,7 @@ const SIGNAL_DESCRIPTIONS: Record<string, string> = {
   preference: 'User preference-based routing',
   language: 'Detect query language',
   context: 'Context window length requirements',
+  structure: 'Detect request-shape features such as counts, density, and ordered markers',
   complexity: 'Estimate query difficulty via embedding similarity',
   modality: 'Detect multi-modal input (text, image, audio)',
   authz: 'Authorization-based routing (RBAC)',

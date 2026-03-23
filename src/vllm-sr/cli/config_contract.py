@@ -75,6 +75,7 @@ SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("preferences", "preferences", "preference", "preference_rules"),
     SignalFamilySpec("language", "language", "language", "language_rules"),
     SignalFamilySpec("context", "context", "context", "context_rules"),
+    SignalFamilySpec("structure", "structure", "structure", "structure_rules"),
     SignalFamilySpec(
         "complexity",
         "complexity",

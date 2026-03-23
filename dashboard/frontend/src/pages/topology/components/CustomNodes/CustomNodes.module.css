@@ -490,7 +490,10 @@
 /* ============== Model Node ============== */
 .modelNode {
   composes: nodeBase;
-  min-width: 160px;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  box-sizing: border-box;
   color: white;
 }
 
@@ -511,7 +514,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 120px;
+  max-width: 164px;
 }
 
 .modelFeatures {
@@ -572,7 +575,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100px;
+  max-width: 150px;
 }
 
 .modelSource {
@@ -595,7 +598,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 140px;
+  max-width: 180px;
 }
 
 /* ============== Multi-Mode Model Styles ============== */

@@ -203,6 +203,7 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		SignalTypePreference,
 		SignalTypeLanguage,
 		SignalTypeContext,
+		SignalTypeStructure,
 		SignalTypeComplexity,
 		SignalTypeModality,
 		SignalTypeAuthz,
@@ -224,6 +225,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypePreference:   collectPreferenceRuleNames(cfg.PreferenceRules),
 		SignalTypeLanguage:     collectLanguageRuleNames(cfg.LanguageRules),
 		SignalTypeContext:      collectContextRuleNames(cfg.ContextRules),
+		SignalTypeStructure:    collectStructureRuleNames(cfg.StructureRules),
 		SignalTypeComplexity:   collectComplexityRuleNames(cfg.ComplexityRules),
 		SignalTypeModality:     collectModalityRuleNames(cfg.ModalityRules),
 		SignalTypeAuthz:        collectRoleBindingNames(cfg.GetRoleBindings()),
@@ -403,6 +405,14 @@ func collectLanguageRuleNames(rules []LanguageRule) map[string]struct{} {
 }
 
 func collectContextRuleNames(rules []ContextRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
+func collectStructureRuleNames(rules []StructureRule) map[string]struct{} {
 	names := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {
 		names[rule.Name] = struct{}{}

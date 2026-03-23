@@ -91,6 +91,123 @@ routing:
           - act as if
           - forget your guidelines
         case_sensitive: false
+      - name: correction_feedback_markers
+        operator: OR
+        keywords:
+          - that's wrong
+          - this is wrong
+          - that's incorrect
+          - that is incorrect
+          - incorrect
+          - wrong answer
+          - please correct
+          - correct the explanation
+          - correct this answer
+          - try again
+          - answer again
+          - re-answer
+          - fix your answer
+          - you got this wrong
+          - you got this wrong earlier
+          - 错了
+          - 不对
+          - 回答错了
+          - 重新回答
+          - 再答一次
+        case_sensitive: false
+      - name: clarification_feedback_markers
+        operator: OR
+        keywords:
+          - explain that more clearly
+          - clarify your answer
+          - give one simple example
+          - restate that more simply
+          - that was confusing
+          - restate it more simply
+          - walk me through that again
+          - use one simple example
+          - 讲清楚一点
+          - 说得更清楚
+          - 简单一点
+          - 举个例子
+          - 解释得更明白
+        case_sensitive: false
+      - name: verification_markers
+        operator: OR
+        keywords:
+          - verify this
+          - verify the claim
+          - verify with a source
+          - verify with sources
+          - verify with a source whether
+          - cite the source
+          - cite a reliable source
+          - cite sources
+          - with sources
+          - with a source
+          - with citations
+          - answer with citations
+          - with reliable sources
+          - with reputable sources
+          - cite reliable historical sources
+          - reliable historical sources
+          - reputable historical sources
+          - reliable medical sources
+          - is this true
+          - fact check this
+          - verify with evidence
+          - 核实一下
+          - 给出处
+          - 请给出处
+          - 这是真的吗
+          - 请核验
+          - 请给来源
+          - 请核实并给出处
+          - 请核实并给来源
+          - 请核验并给来源
+        case_sensitive: false
+      - name: reference_heavy_markers
+        operator: OR
+        keywords:
+          - cite sources
+          - according to
+          - reference the paper
+          - compare the literature
+          - use case law
+          - relevant regulation
+          - cite the rfc
+          - support the answer with sources
+          - support the answer with reputable sources
+          - support the correction with sources
+          - historical sources
+          - reliable historical sources
+          - reputable historical sources
+          - medical sources
+          - verify with a source whether
+          - 请核实并给来源
+          - 请核实并给出处
+          - 引用资料
+          - 根据文献
+          - 参考法规
+        case_sensitive: false
+      - name: legal_risk_markers
+        operator: OR
+        method: bm25
+        bm25_threshold: 0.12
+        keywords:
+          - contract clause
+          - liability analysis
+          - compliance memo
+          - regulatory risk
+          - legal exposure
+          - indemnity
+          - jurisdiction
+          - lawsuit
+          - 合同条款
+          - 合规分析
+          - 法律风险
+          - 责任认定
+        case_sensitive: false
       - name: simple_request_markers
         operator: OR
         keywords:
@@ -125,38 +242,25 @@ routing:
           - 写一个故事
           - 写一首诗
         case_sensitive: false
-      - name: reasoning_request_markers
-        operator: OR
-        method: bm25
-        bm25_threshold: 0.12
-        keywords:
-          - think step by step
-          - reason carefully
-          - prove rigorously
-          - derive the formula
-          - compare trade-offs
-          - analyze the root cause
-          - evaluate multiple approaches
-          - formal proof
-          - 逐步推理
-          - 严格证明
-          - 推导公式
-          - 权衡利弊
-          - 深入分析
-        case_sensitive: false
       - name: multi_step_markers
         operator: OR
-        method: ngram
-        ngram_threshold: 0.35
-        ngram_arity: 3
         keywords:
           - step by step
-          - first second third
           - phased plan
           - implementation plan
           - migration plan
           - checklist
           - roadmap
+          - runbook
+          - rollback plan
+          - rollback steps
+          - rollback criteria
+          - checkpoints
+          - owners
+          - dependencies
+          - verification gates
+          - validation steps
+          - validation after each phase
           - 分步骤
           - 实施计划
           - 路线图
@@ -164,8 +268,6 @@ routing:
         case_sensitive: false
       - name: agentic_request_markers
         operator: OR
-        method: bm25
-        bm25_threshold: 0.12
         keywords:
           - create a migration plan
           - propose an execution plan
@@ -174,10 +276,39 @@ routing:
           - implement the workflow
           - automate the process
           - break this into tasks
+          - create a runbook
+          - define rollback criteria
+          - include verification gates
+          - phase the rollout
           - 制定迁移计划
           - 排查这个问题
           - 实施这个方案
           - 自动化这个流程
+        case_sensitive: false
+      - name: architecture_markers
+        operator: OR
+        method: bm25
+        bm25_threshold: 0.12
+        keywords:
+          - distributed system
+          - microservices
+          - rate limiter
+          - high availability
+          - consistency model
+          - sharding strategy
+          - event driven architecture
+          - reliability architecture
+          - system design
+          - fault tolerance
+          - observability architecture
+          - service boundaries
+          - storage boundaries
+          - cache strategy
+          - multi-region
+          - control plane
+          - data plane
+          - tradeoffs
+          - trade-offs
         case_sensitive: false
       - name: implementation_markers
         operator: OR
@@ -219,52 +350,27 @@ routing:
           - algorithm
           - recursion
         case_sensitive: false
-      - name: architecture_markers
+      - name: history_topic_markers
         operator: OR
         method: bm25
-        bm25_threshold: 0.12
+        bm25_threshold: 0.08
         keywords:
-          - distributed system
-          - microservices
-          - rate limiter
-          - high availability
-          - consistency model
-          - sharding strategy
-          - event driven architecture
-          - reliability architecture
-          - system design
-          - fault tolerance
-          - observability architecture
-        case_sensitive: false
-      - name: output_format_markers
-        operator: OR
-        keywords:
-          - json
-          - yaml
-          - csv
-          - markdown table
-          - bullet points
-          - format as
-          - return a schema
-          - 用表格
-          - 用 json
-          - 按列表输出
-        case_sensitive: false
-      - name: reference_heavy_markers
-        operator: OR
-        method: bm25
-        bm25_threshold: 0.12
-        keywords:
-          - cite sources
-          - according to
-          - reference the paper
-          - compare the literature
-          - use case law
-          - relevant regulation
-          - cite the rfc
-          - 引用资料
-          - 根据文献
-          - 参考法规
+          - roman republic
+          - roman republic collapse
+          - ming dynasty
+          - ming dynasty fell
+          - meiji restoration
+          - empire
+          - dynasty
+          - revolution
+          - treaty
+          - monarchy
+          - republic
+          - historical collapse
+          - 历史
+          - 王朝
+          - 帝国
+          - 革命
         case_sensitive: false
       - name: research_request_markers
         operator: OR
@@ -284,23 +390,38 @@ routing:
           - 总结研究现状
           - 基于来源分析
         case_sensitive: false
-      - name: verification_markers
+      - name: reasoning_request_markers
         operator: OR
         method: bm25
         bm25_threshold: 0.18
         keywords:
-          - verify this
-          - verify the claim
-          - cite the source
-          - cite sources
-          - is this true
-          - fact check this
-          - verify with evidence
-          - 核实一下
-          - 给出处
-          - 这是真的吗
-          - 请核验
-          - 请给来源
+          - think step by step
+          - reason carefully
+          - prove rigorously
+          - derive the formula
+          - compare trade-offs
+          - analyze the root cause
+          - evaluate multiple approaches
+          - formal proof
+          - 逐步推理
+          - 严格证明
+          - 推导公式
+          - 权衡利弊
+          - 深入分析
+        case_sensitive: false
+      - name: output_format_markers
+        operator: OR
+        keywords:
+          - json
+          - yaml
+          - csv
+          - markdown table
+          - bullet points
+          - format as
+          - return a schema
+          - 用表格
+          - 用 json
+          - 按列表输出
         case_sensitive: false
       - name: constraint_markers
         operator: OR
@@ -331,59 +452,6 @@ routing:
           - 不包含
           - 不要用
           - 而不是
-        case_sensitive: false
-      - name: legal_risk_markers
-        operator: OR
-        method: bm25
-        bm25_threshold: 0.12
-        keywords:
-          - contract clause
-          - liability analysis
-          - compliance memo
-          - regulatory risk
-          - legal exposure
-          - indemnity
-          - jurisdiction
-          - lawsuit
-          - 合同条款
-          - 合规分析
-          - 法律风险
-          - 责任认定
-        case_sensitive: false
-      - name: correction_feedback_markers
-        operator: OR
-        method: bm25
-        bm25_threshold: 0.20
-        keywords:
-          - that's wrong
-          - this is wrong
-          - incorrect
-          - wrong answer
-          - try again
-          - answer again
-          - fix your answer
-          - 错了
-          - 不对
-          - 回答错了
-          - 重新回答
-          - 再答一次
-        case_sensitive: false
-      - name: clarification_feedback_markers
-        operator: OR
-        method: bm25
-        bm25_threshold: 0.20
-        keywords:
-          - explain more clearly
-          - be more clear
-          - simplify this
-          - clarify that
-          - give an example
-          - explain in simpler terms
-          - 讲清楚一点
-          - 说得更清楚
-          - 简单一点
-          - 举个例子
-          - 解释得更明白
         case_sensitive: false
 
     preferences:
@@ -448,6 +516,8 @@ routing:
           - What is the capital of France?
           - Briefly explain what an API is.
           - What is the boiling point of water?
+          - What is 2 + 2?
+          - Does light travel faster than sound?
       - name: fast_qa_zh
         threshold: 0.72
         aggregation_method: max
@@ -457,6 +527,8 @@ routing:
           - 法国的首都是哪里？
           - 什么是 API？请简单解释。
           - 水的沸点是多少？
+          - 一年有几个月？
+          - 太阳系最大的行星是什么？
       - name: creative_tasks
         threshold: 0.74
         aggregation_method: max
@@ -474,10 +546,13 @@ routing:
           - Analyze CAC, LTV, and retention trade-offs for a subscription business.
           - Draft a market-entry strategy for a new AI tooling startup.
           - Evaluate org design options for a fast-growing product team.
+          - Compare enterprise SaaS churn benchmarks and explain the trade-offs.
       - name: history_explainer
         threshold: 0.75
         aggregation_method: max
         candidates:
+          - Explain why the Roman Republic collapsed.
+          - Explain why the Ming dynasty fell.
           - Compare the causes of the Roman Empire's decline with later empires.
           - Explain how industrialization changed political power in Europe.
           - Analyze the historical consequences of the Treaty of Versailles.
@@ -486,6 +561,8 @@ routing:
         threshold: 0.75
         aggregation_method: max
         candidates:
+          - Explain why people procrastinate and what interventions usually help.
+          - Explain confirmation bias and what strategies help reduce it.
           - Explain cognitive biases that affect negotiation outcomes.
           - Compare attachment styles and how they affect adult relationships.
           - Analyze burnout patterns in high-pressure knowledge work.
@@ -519,6 +596,7 @@ routing:
         aggregation_method: max
         candidates:
           - Design a distributed rate limiter and explain failure modes.
+          - Design a multi-region feature-flag service with storage boundaries, cache strategy, and consistency trade-offs.
           - Plan a migration from a monolith to event-driven microservices.
           - Propose a consistency strategy for a global payments platform.
           - Design a multi-tenant observability architecture with low latency.
@@ -527,6 +605,7 @@ routing:
         aggregation_method: max
         candidates:
           - Create a migration plan with rollback, validation, and checkpoints.
+          - Plan a zero-downtime migration with checkpoints, owners, rollback steps, and validation after each phase.
           - Troubleshoot the production issue and iterate until it is fixed.
           - Break this system redesign into phases, owners, and verification steps.
           - Design an execution workflow with concrete milestones and guardrails.
@@ -570,6 +649,7 @@ routing:
         aggregation_method: max
         candidates:
           - Analyze indemnity, limitation of liability, and governing-law risks in this contract.
+          - Assess the legal risk in this agreement by analyzing indemnification, limitation of liability, and compliance duties.
           - Draft a legal-risk memo for a cross-border data transfer policy.
           - Compare regulatory exposure under two compliance strategies.
           - 评估该合同条款中的责任分配、赔偿和合规风险。
@@ -623,13 +703,97 @@ routing:
     context:
       - name: short_context
         min_tokens: "0"
-        max_tokens: 1K
+        max_tokens: "999"
       - name: medium_context
         min_tokens: 1K
-        max_tokens: 8K
+        max_tokens: "7999"
       - name: long_context
         min_tokens: 8K
         max_tokens: 256K
+
+    structure:
+      - name: many_questions
+        description: Prompts with several explicit questions, usually indicating multi-part answers.
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          gte: 4
+      - name: ordered_workflow
+        description: Prompts with ordered workflow markers that imply phased execution.
+        feature:
+          type: sequence
+          source:
+            type: sequence
+            sequences:
+              - ["first", "then"]
+              - ["first", "next", "finally"]
+              - ["先", "再"]
+              - ["首先", "然后"]
+      - name: numbered_steps
+        description: Prompts that contain numbered list items such as "1. ..."
+        feature:
+          type: exists
+          source:
+            type: regex
+            pattern: '(?m)^\s*\d+\.\s+'
+      - name: first_then_flow
+        description: Prompts that express an ordered workflow.
+        feature:
+          type: sequence
+          source:
+            type: sequence
+            case_sensitive: false
+            sequences:
+              - ["first", "then"]
+              - ["first", "next", "finally"]
+              - ["首先", "然后"]
+              - ["先", "再"]
+      - name: constraint_dense
+        description: Constraint language is dense relative to multilingual text units.
+        feature:
+          type: density
+          source:
+            type: keyword_set
+            case_sensitive: false
+            keywords:
+              - under
+              - at most
+              - at least
+              - within
+              - no more than
+              - 不超过
+              - 至少
+              - 最多
+        predicate:
+          gt: 0.08
+      - name: format_directive_dense
+        description: Output-format directives are dense relative to multilingual text units.
+        feature:
+          type: density
+          source:
+            type: keyword_set
+            keywords:
+              - table
+              - bullet
+              - json
+              - markdown
+              - 表格
+              - 列表
+              - JSON
+        predicate:
+          gt: 0.08
+      - name: low_question_density
+        description: Prompts with very low question density relative to multilingual text units.
+        feature:
+          type: density
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          lt: 0.05
 
     complexity:
       - name: general_reasoning
@@ -867,6 +1031,27 @@ routing:
           - type: context
             name: long_context
             weight: 0.18
+          - type: structure
+            name: many_questions
+            weight: 0.06
+          - type: structure
+            name: ordered_workflow
+            weight: 0.11
+          - type: structure
+            name: numbered_steps
+            weight: 0.08
+          - type: structure
+            name: first_then_flow
+            weight: 0.10
+          - type: structure
+            name: constraint_dense
+            weight: 0.06
+          - type: structure
+            name: format_directive_dense
+            weight: 0.04
+          - type: structure
+            name: low_question_density
+            weight: -0.05
           - type: keyword
             name: reasoning_request_markers
             weight: 0.22
@@ -1049,18 +1234,28 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: domain
-            name: law
-          - type: projection
-            name: verification_required
           - operator: OR
             conditions:
+              - type: domain
+                name: law
+              - type: keyword
+                name: legal_risk_markers
+              - type: embedding
+                name: premium_legal_analysis
+          - operator: OR
+            conditions:
+              - type: projection
+                name: balance_simple
+              - type: projection
+                name: balance_medium
               - type: projection
                 name: balance_complex
               - type: projection
                 name: balance_reasoning
               - type: embedding
                 name: premium_legal_analysis
+              - type: complexity
+                name: legal_risk:medium
               - type: complexity
                 name: legal_risk:hard
       modelRefs:
@@ -1085,8 +1280,14 @@ routing:
         conditions:
           - type: domain
             name: math
-          - type: projection
-            name: balance_reasoning
+          - operator: OR
+            conditions:
+              - type: projection
+                name: balance_reasoning
+              - type: complexity
+                name: math_task:medium
+              - type: complexity
+                name: math_task:hard
       modelRefs:
         - model: openai/gpt5.4
           use_reasoning: true
@@ -1109,8 +1310,36 @@ routing:
         conditions:
           - type: domain
             name: philosophy
-          - type: projection
-            name: balance_reasoning
+          - operator: OR
+            conditions:
+              - type: projection
+                name: balance_simple
+              - type: projection
+                name: balance_medium
+              - type: projection
+                name: balance_complex
+              - type: projection
+                name: balance_reasoning
+          - operator: OR
+            conditions:
+              - type: keyword
+                name: reasoning_request_markers
+              - type: embedding
+                name: reasoning_general_en
+              - type: embedding
+                name: reasoning_general_zh
+              - type: embedding
+                name: research_synthesis
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: keyword
+                    name: agentic_request_markers
+                  - type: keyword
+                    name: code_request_markers
+                  - type: keyword
+                    name: implementation_markers
       modelRefs:
         - model: openai/gpt5.4
           use_reasoning: true
@@ -1135,30 +1364,36 @@ routing:
             conditions:
               - type: embedding
                 name: agentic_workflows
-              - type: preference
-                name: agentic_execution
               - type: keyword
                 name: agentic_request_markers
-              - type: keyword
-                name: implementation_markers
           - operator: OR
             conditions:
+              - type: keyword
+                name: multi_step_markers
+              - type: structure
+                name: ordered_workflow
+              - type: structure
+                name: numbered_steps
+              - type: structure
+                name: first_then_flow
+              - type: structure
+                name: constraint_dense
+              - type: structure
+                name: format_directive_dense
+          - operator: OR
+            conditions:
+              - type: projection
+                name: balance_simple
+              - type: projection
+                name: balance_medium
               - type: projection
                 name: balance_complex
               - type: projection
                 name: balance_reasoning
-          - operator: OR
+          - operator: NOT
             conditions:
-              - type: domain
-                name: business
-              - type: domain
-                name: computer science
-              - type: domain
-                name: economics
-              - type: domain
-                name: engineering
-              - type: domain
-                name: other
+              - type: keyword
+                name: architecture_markers
       modelRefs:
         - model: google/gemini-3.1-pro
           use_reasoning: true
@@ -1188,17 +1423,29 @@ routing:
           - operator: OR
             conditions:
               - type: embedding
-                name: agentic_workflows
-              - type: embedding
                 name: architecture_design
               - type: keyword
                 name: architecture_markers
           - operator: OR
             conditions:
               - type: projection
+                name: balance_medium
+              - type: projection
                 name: balance_complex
               - type: projection
                 name: balance_reasoning
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: keyword
+                    name: multi_step_markers
+                  - type: structure
+                    name: ordered_workflow
+                  - type: structure
+                    name: numbered_steps
+                  - type: structure
+                    name: first_then_flow
       modelRefs:
         - model: google/gemini-3.1-pro
           use_reasoning: true
@@ -1235,10 +1482,26 @@ routing:
                 name: complex_stem
               - type: embedding
                 name: research_synthesis
+              - type: keyword
+                name: reasoning_request_markers
+              - type: keyword
+                name: research_request_markers
+              - type: projection
+                name: balance_medium
               - type: projection
                 name: balance_complex
               - type: projection
                 name: balance_reasoning
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: embedding
+                    name: fast_qa_en
+                  - type: embedding
+                    name: fast_qa_zh
+                  - type: keyword
+                    name: simple_request_markers
       modelRefs:
         - model: google/gemini-3.1-pro
           use_reasoning: true
@@ -1263,8 +1526,20 @@ routing:
             name: wrong_answer
           - type: keyword
             name: correction_feedback_markers
-          - type: projection
-            name: verification_required
+          - operator: OR
+            conditions:
+              - type: projection
+                name: verification_required
+              - type: fact_check
+                name: needs_fact_check
+              - type: keyword
+                name: verification_markers
+              - type: keyword
+                name: reference_heavy_markers
+              - type: complexity
+                name: evidence_synthesis:medium
+              - type: complexity
+                name: evidence_synthesis:hard
           - operator: OR
             conditions:
               - type: context
@@ -1300,19 +1575,31 @@ routing:
               - type: keyword
                 name: implementation_markers
               - type: embedding
-                name: agentic_workflows
-              - type: embedding
                 name: code_general
-              - type: preference
-                name: coding_partner
-              - type: preference
-                name: agentic_execution
           - operator: OR
             conditions:
               - type: projection
                 name: balance_medium
               - type: projection
                 name: balance_complex
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: keyword
+                    name: agentic_request_markers
+                  - type: keyword
+                    name: architecture_markers
+                  - type: keyword
+                    name: creative_request_markers
+                  - type: preference
+                    name: agentic_execution
+                  - type: preference
+                    name: creative_collaboration
+                  - type: user_feedback
+                    name: wrong_answer
+                  - type: user_feedback
+                    name: need_clarification
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -1339,20 +1626,26 @@ routing:
                 name: business
               - type: domain
                 name: economics
-          - operator: OR
-            conditions:
-              - type: embedding
-                name: business_analysis
-              - type: embedding
-                name: research_synthesis
-              - type: preference
-                name: structured_delivery
+          - type: embedding
+            name: business_analysis
           - operator: OR
             conditions:
               - type: projection
                 name: balance_medium
               - type: projection
                 name: balance_complex
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: projection
+                    name: verification_required
+                  - type: complexity
+                    name: evidence_synthesis:hard
+                  - type: keyword
+                    name: verification_markers
+                  - type: keyword
+                    name: reference_heavy_markers
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -1379,8 +1672,16 @@ routing:
                 name: business
               - type: domain
                 name: economics
-          - type: projection
-            name: verification_required
+          - operator: OR
+            conditions:
+              - type: projection
+                name: verification_required
+              - type: complexity
+                name: evidence_synthesis:hard
+              - type: keyword
+                name: verification_markers
+              - type: keyword
+                name: reference_heavy_markers
           - operator: OR
             conditions:
               - type: projection
@@ -1389,8 +1690,6 @@ routing:
                 name: balance_complex
               - type: embedding
                 name: business_analysis
-              - type: embedding
-                name: research_synthesis
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
@@ -1412,14 +1711,10 @@ routing:
         conditions:
           - type: domain
             name: health
-          - type: projection
-            name: verification_required
           - operator: OR
             conditions:
               - type: embedding
                 name: health_guidance
-              - type: embedding
-                name: research_synthesis
               - type: projection
                 name: balance_medium
               - type: projection
@@ -1446,20 +1741,34 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: domain
-            name: history
           - operator: OR
             conditions:
+              - type: domain
+                name: history
               - type: embedding
                 name: history_explainer
-              - type: embedding
-                name: research_synthesis
+              - type: keyword
+                name: history_topic_markers
           - operator: OR
             conditions:
+              - type: projection
+                name: balance_simple
               - type: projection
                 name: balance_medium
               - type: projection
                 name: balance_complex
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: projection
+                    name: verification_required
+                  - type: complexity
+                    name: evidence_synthesis:hard
+                  - type: keyword
+                    name: verification_markers
+                  - type: keyword
+                    name: reference_heavy_markers
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -1480,16 +1789,28 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: domain
-            name: history
-          - type: projection
-            name: verification_required
+          - operator: OR
+            conditions:
+              - type: domain
+                name: history
+              - type: embedding
+                name: history_explainer
+              - type: keyword
+                name: history_topic_markers
+          - operator: OR
+            conditions:
+              - type: projection
+                name: verification_required
+              - type: complexity
+                name: evidence_synthesis:hard
+              - type: keyword
+                name: verification_markers
+              - type: keyword
+                name: reference_heavy_markers
           - operator: OR
             conditions:
               - type: embedding
                 name: history_explainer
-              - type: embedding
-                name: research_synthesis
               - type: projection
                 name: balance_medium
               - type: projection
@@ -1515,14 +1836,12 @@ routing:
         conditions:
           - type: domain
             name: psychology
+          - type: embedding
+            name: psychology_support
           - operator: OR
             conditions:
-              - type: embedding
-                name: psychology_support
-              - type: embedding
-                name: research_synthesis
-          - operator: OR
-            conditions:
+              - type: projection
+                name: balance_simple
               - type: projection
                 name: balance_medium
               - type: projection
@@ -1553,14 +1872,44 @@ routing:
                 name: creative_request_markers
               - type: embedding
                 name: creative_tasks
-              - type: preference
-                name: creative_collaboration
           - operator: OR
             conditions:
               - type: projection
                 name: balance_simple
               - type: projection
                 name: balance_medium
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: embedding
+                    name: fast_qa_en
+                  - type: embedding
+                    name: fast_qa_zh
+                  - type: embedding
+                    name: business_analysis
+                  - type: embedding
+                    name: health_guidance
+                  - type: embedding
+                    name: history_explainer
+                  - type: embedding
+                    name: code_general
+                  - type: embedding
+                    name: complex_stem
+                  - type: embedding
+                    name: architecture_design
+                  - type: embedding
+                    name: agentic_workflows
+                  - type: embedding
+                    name: premium_legal_analysis
+                  - type: projection
+                    name: verification_required
+                  - type: fact_check
+                    name: needs_fact_check
+                  - type: keyword
+                    name: verification_markers
+                  - type: keyword
+                    name: reference_heavy_markers
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
@@ -1583,8 +1932,6 @@ routing:
           - operator: OR
             conditions:
               - type: embedding
-                name: agentic_workflows
-              - type: embedding
                 name: reasoning_general_en
               - type: embedding
                 name: reasoning_general_zh
@@ -1595,15 +1942,49 @@ routing:
               - type: keyword
                 name: multi_step_markers
               - type: keyword
-                name: agentic_request_markers
-              - type: keyword
                 name: research_request_markers
           - operator: OR
             conditions:
               - type: projection
+                name: balance_medium
+              - type: projection
                 name: balance_complex
               - type: projection
                 name: balance_reasoning
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: embedding
+                    name: premium_legal_analysis
+                  - type: embedding
+                    name: architecture_design
+                  - type: embedding
+                    name: complex_stem
+                  - type: embedding
+                    name: business_analysis
+                  - type: embedding
+                    name: health_guidance
+                  - type: embedding
+                    name: history_explainer
+                  - type: embedding
+                    name: fast_qa_en
+                  - type: embedding
+                    name: fast_qa_zh
+                  - type: domain
+                    name: math
+                  - type: domain
+                    name: philosophy
+                  - type: keyword
+                    name: architecture_markers
+                  - type: keyword
+                    name: agentic_request_markers
+                  - type: keyword
+                    name: code_request_markers
+                  - type: keyword
+                    name: implementation_markers
+                  - type: preference
+                    name: agentic_execution
       modelRefs:
         - model: openai/gpt5.4
           use_reasoning: true
@@ -1624,8 +2005,6 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: user_feedback
-            name: need_clarification
           - type: keyword
             name: clarification_feedback_markers
           - operator: OR
@@ -1653,16 +2032,40 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: embedding
-            name: fast_qa_zh
+          - operator: OR
+            conditions:
+              - type: embedding
+                name: fast_qa_zh
+              - type: keyword
+                name: simple_request_markers
           - type: language
             name: zh
           - type: context
             name: short_context
-          - type: projection
-            name: balance_simple
-          - type: projection
-            name: verification_required
+          - operator: OR
+            conditions:
+              - type: projection
+                name: balance_simple
+              - type: projection
+                name: balance_medium
+          - operator: OR
+            conditions:
+              - type: projection
+                name: verification_required
+              - type: keyword
+                name: verification_markers
+              - type: keyword
+                name: reference_heavy_markers
+              - type: fact_check
+                name: needs_fact_check
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: keyword
+                    name: code_request_markers
+                  - type: keyword
+                    name: implementation_markers
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -1682,14 +2085,30 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: embedding
-            name: fast_qa_zh
+          - operator: OR
+            conditions:
+              - type: embedding
+                name: fast_qa_zh
+              - type: keyword
+                name: simple_request_markers
           - type: language
             name: zh
           - type: context
             name: short_context
           - type: projection
             name: balance_simple
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: projection
+                    name: verification_required
+                  - type: fact_check
+                    name: needs_fact_check
+                  - type: keyword
+                    name: verification_markers
+                  - type: keyword
+                    name: reference_heavy_markers
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -1709,14 +2128,30 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: embedding
-            name: fast_qa_en
+          - operator: OR
+            conditions:
+              - type: embedding
+                name: fast_qa_en
+              - type: keyword
+                name: simple_request_markers
           - type: language
             name: en
           - type: context
             name: short_context
           - type: projection
             name: balance_simple
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: projection
+                    name: verification_required
+                  - type: fact_check
+                    name: needs_fact_check
+                  - type: keyword
+                    name: verification_markers
+                  - type: keyword
+                    name: reference_heavy_markers
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -1736,16 +2171,40 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: embedding
-            name: fast_qa_en
+          - operator: OR
+            conditions:
+              - type: embedding
+                name: fast_qa_en
+              - type: keyword
+                name: simple_request_markers
           - type: language
             name: en
           - type: context
             name: short_context
-          - type: projection
-            name: balance_simple
-          - type: projection
-            name: verification_required
+          - operator: OR
+            conditions:
+              - type: projection
+                name: balance_simple
+              - type: projection
+                name: balance_medium
+          - operator: OR
+            conditions:
+              - type: projection
+                name: verification_required
+              - type: keyword
+                name: verification_markers
+              - type: keyword
+                name: reference_heavy_markers
+              - type: fact_check
+                name: needs_fact_check
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: keyword
+                    name: code_request_markers
+                  - type: keyword
+                    name: implementation_markers
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -1771,6 +2230,30 @@ routing:
                 name: short_context
               - type: projection
                 name: balance_simple
+              - operator: OR
+                conditions:
+                  - type: embedding
+                    name: general_chat_fallback
+                  - type: structure
+                    name: low_question_density
+              - operator: NOT
+                conditions:
+                  - operator: OR
+                    conditions:
+                      - type: user_feedback
+                        name: wrong_answer
+                      - type: keyword
+                        name: clarification_feedback_markers
+                      - type: keyword
+                        name: simple_request_markers
+                      - type: embedding
+                        name: fast_qa_en
+                      - type: embedding
+                        name: fast_qa_zh
+                      - type: fact_check
+                        name: needs_fact_check
+                      - type: projection
+                        name: verification_required
           - operator: AND
             conditions:
               - type: context
@@ -1783,6 +2266,14 @@ routing:
                     name: balance_simple
                   - type: projection
                     name: balance_medium
+              - operator: NOT
+                conditions:
+                  - operator: OR
+                    conditions:
+                      - type: embedding
+                        name: fast_qa_en
+                      - type: embedding
+                        name: fast_qa_zh
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false

@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -136,6 +137,18 @@ func (d *decompiler) decompileSignals() {
 		}
 		if ctx.MaxTokens != "" {
 			d.write("  max_tokens: %q\n", string(ctx.MaxTokens))
+		}
+		d.write("}\n\n")
+	}
+
+	for _, structure := range d.cfg.StructureRules {
+		d.write("SIGNAL structure %s {\n", quoteName(structure.Name))
+		if structure.Description != "" {
+			d.write("  description: %q\n", structure.Description)
+		}
+		d.write("  feature: %s\n", formatPluginConfigValue(structureFeatureToMap(structure.Feature)))
+		if structure.Predicate != nil {
+			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(structure.Predicate)))
 		}
 		d.write("}\n\n")
 	}
@@ -677,6 +690,30 @@ func normalizePluginConfigValue(raw interface{}) interface{} {
 		}
 		return normalized
 	default:
+		return normalizePluginConfigReflectValue(raw)
+	}
+}
+
+func normalizePluginConfigReflectValue(raw interface{}) interface{} {
+	if raw == nil {
+		return nil
+	}
+	value := reflect.ValueOf(raw)
+	switch value.Kind() {
+	case reflect.Array, reflect.Slice:
+		normalized := make([]interface{}, value.Len())
+		for index := 0; index < value.Len(); index++ {
+			normalized[index] = normalizePluginConfigValue(value.Index(index).Interface())
+		}
+		return normalized
+	case reflect.Map:
+		normalized := make(map[string]interface{}, value.Len())
+		iter := value.MapRange()
+		for iter.Next() {
+			normalized[fmt.Sprintf("%v", iter.Key().Interface())] = normalizePluginConfigValue(iter.Value().Interface())
+		}
+		return normalized
+	default:
 		return raw
 	}
 }
@@ -984,6 +1021,18 @@ func (d *decompiler) contextToSignal(ctx *config.ContextRule) *SignalDecl {
 	return &SignalDecl{SignalType: "context", Name: ctx.Name, Fields: fields}
 }
 
+func (d *decompiler) structureToSignal(rule *config.StructureRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	fields["feature"] = structureFeatureValue(rule.Feature)
+	if rule.Predicate != nil {
+		fields["predicate"] = structurePredicateValue(rule.Predicate)
+	}
+	return &SignalDecl{SignalType: "structure", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl {
 	fields := make(map[string]Value)
 	if comp.Threshold != 0 {
@@ -1200,6 +1249,101 @@ func stringsToArray(items []string) ArrayValue {
 		vals[i] = StringValue{V: s}
 	}
 	return ArrayValue{Items: vals}
+}
+
+func structureFeatureValue(feature config.StructureFeature) ObjectValue {
+	fields := map[string]Value{
+		"type":   StringValue{V: feature.Type},
+		"source": structureSourceValue(feature.Source),
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func structureSourceValue(source config.StructureSource) ObjectValue {
+	fields := map[string]Value{
+		"type": StringValue{V: source.Type},
+	}
+	if source.Pattern != "" {
+		fields["pattern"] = StringValue{V: source.Pattern}
+	}
+	if len(source.Keywords) > 0 {
+		fields["keywords"] = stringsToArray(source.Keywords)
+	}
+	if source.CaseSensitive {
+		fields["case_sensitive"] = BoolValue{V: true}
+	}
+	if len(source.Sequences) > 0 {
+		items := make([]Value, 0, len(source.Sequences))
+		for _, sequence := range source.Sequences {
+			items = append(items, stringsToArray(sequence))
+		}
+		fields["sequences"] = ArrayValue{Items: items}
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func structurePredicateValue(predicate *config.NumericPredicate) ObjectValue {
+	fields := make(map[string]Value)
+	if predicate.GT != nil {
+		fields["gt"] = FloatValue{V: *predicate.GT}
+	}
+	if predicate.GTE != nil {
+		fields["gte"] = FloatValue{V: *predicate.GTE}
+	}
+	if predicate.LT != nil {
+		fields["lt"] = FloatValue{V: *predicate.LT}
+	}
+	if predicate.LTE != nil {
+		fields["lte"] = FloatValue{V: *predicate.LTE}
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func structureFeatureToMap(feature config.StructureFeature) map[string]interface{} {
+	values := map[string]interface{}{
+		"type":   feature.Type,
+		"source": structureSourceToMap(feature.Source),
+	}
+	return values
+}
+
+func structureSourceToMap(source config.StructureSource) map[string]interface{} {
+	values := map[string]interface{}{
+		"type": source.Type,
+	}
+	if source.Pattern != "" {
+		values["pattern"] = source.Pattern
+	}
+	if len(source.Keywords) > 0 {
+		values["keywords"] = source.Keywords
+	}
+	if source.CaseSensitive {
+		values["case_sensitive"] = true
+	}
+	if len(source.Sequences) > 0 {
+		values["sequences"] = source.Sequences
+	}
+	return values
+}
+
+func structurePredicateToMap(predicate *config.NumericPredicate) map[string]interface{} {
+	values := make(map[string]interface{})
+	if predicate == nil {
+		return values
+	}
+	if predicate.GT != nil {
+		values["gt"] = *predicate.GT
+	}
+	if predicate.GTE != nil {
+		values["gte"] = *predicate.GTE
+	}
+	if predicate.LT != nil {
+		values["lt"] = *predicate.LT
+	}
+	if predicate.LTE != nil {
+		values["lte"] = *predicate.LTE
+	}
+	return values
 }
 
 func formatProjectionScoreInputs(inputs []config.ProjectionScoreInput) string {

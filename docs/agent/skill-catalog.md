@@ -49,6 +49,7 @@ Skills stay intentionally concise. Keep deep reference material in the linked pl
 
 ## Support Skills
 
+- `routing-calibration-loop`
 - `feature-complete-checklist`
 - `maintainer-issue-pr-management`
 

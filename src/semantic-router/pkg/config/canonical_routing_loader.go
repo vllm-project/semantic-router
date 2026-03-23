@@ -14,6 +14,14 @@ type routingFragmentDocument struct {
 // canonical surface under `routing:`. This intentionally skips provider/global
 // cross-reference checks so DSL compile/decompile flows can round-trip fragments.
 func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
+	raw, err := parseRawConfigMap(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
+	}
+	if rejectErr := rejectRemovedStructureFields(raw); rejectErr != nil {
+		return nil, rejectErr
+	}
+
 	doc := &routingFragmentDocument{}
 	if err := yaml.Unmarshal(data, doc); err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)

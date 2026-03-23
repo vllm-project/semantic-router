@@ -10,6 +10,7 @@ import {
 import {
   EDGE_COLORS,
   LAYOUT_CONFIG,
+  MODEL_NODE_WIDTH,
   SIGNAL_LATENCY,
   SIGNAL_TYPES,
 } from '../constants'
@@ -553,7 +554,7 @@ export function buildLayoutGraph(
     const uniqueModes = new Set(modes.map(mode => mode.hasReasoning ? 'reasoning' : 'standard'))
     const nodeHeight = 80 + (uniqueModes.size > 1 ? 30 : 0)
 
-    nodeDimensions.set(modelId, { width: 180, height: nodeHeight })
+    nodeDimensions.set(modelId, { width: MODEL_NODE_WIDTH, height: nodeHeight })
 
     const configKeys = connections.map(connection => getModelConfigKey(connection.modelRef))
     const modelHighlighted = configKeys.some(configKey => {
@@ -643,7 +644,7 @@ export function buildLayoutGraph(
         },
       }))
     } else {
-      nodeDimensions.set(defaultModelId, { width: 180, height: 80 })
+      nodeDimensions.set(defaultModelId, { width: MODEL_NODE_WIDTH, height: 80 })
 
       const modelHighlighted = isHighlighted(defaultModelId)
 

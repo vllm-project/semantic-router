@@ -71,6 +71,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
                 'tutorials/signal/heuristic/modality',
+                'tutorials/signal/heuristic/structure',
               ],
             },
             {

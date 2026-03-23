@@ -34,6 +34,7 @@ type classificationReadinessService interface {
 
 type configUpdateService interface {
 	UpdateConfig(newConfig *config.RouterConfig)
+	RefreshRuntimeConfig(newConfig *config.RouterConfig)
 }
 
 type classificationService interface {
@@ -130,4 +131,8 @@ func (s *liveClassificationService) HasFeedbackDetector() bool {
 
 func (s *liveClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
 	s.current().UpdateConfig(newConfig)
+}
+
+func (s *liveClassificationService) RefreshRuntimeConfig(newConfig *config.RouterConfig) {
+	s.current().RefreshRuntimeConfig(newConfig)
 }
