@@ -1,7 +1,8 @@
 """Pydantic models for vLLM Semantic Router configuration."""
 
-from typing import List, Dict, Any, Optional, Literal
 from enum import Enum
+from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field, model_validator
 
 from .algorithms import AlgorithmConfig, ModelRef
@@ -668,37 +669,6 @@ class Routing(BaseModel):
 
     class Config:
         populate_by_name = True
-
-
-class MemoryMilvusConfig(BaseModel):
-    """Milvus configuration for memory storage."""
-
-    address: str
-    collection: str = "agentic_memory"
-    dimension: int = 384
-
-
-class MemoryConfig(BaseModel):
-    """Agentic Memory configuration for cross-session memory.
-
-    Query rewriting and fact extraction are enabled by adding external_models
-    with role="memory_rewrite" or role="memory_extraction".
-    See global.model_catalog.external configuration for details.
-
-    The embedding_model is auto-detected from global.model_catalog.embeddings.semantic if not specified.
-    Priority: mmbert > bert > multimodal > qwen3 > gemma
-    """
-
-    enabled: bool = True
-    auto_store: bool = False  # Auto-store extracted facts after each response
-    milvus: Optional[MemoryMilvusConfig] = None
-    # Embedding model to use for memory vectors
-    # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
-    # If not set, auto-detected from global.model_catalog.embeddings.semantic (mmbert preferred)
-    embedding_model: Optional[str] = None
-    default_retrieval_limit: int = 5
-    default_similarity_threshold: float = 0.70
-    extraction_batch_size: int = 10  # Extract every N turns
 
 
 class EmbeddingModelsConfig(BaseModel):
