@@ -12,6 +12,7 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   preference: '⚙️',
   language: '🌐',
   context: '📏',
+  structure: '🧱',
   complexity: '🧠',
   modality: '🖼️',
   authz: '🔐',
@@ -30,6 +31,7 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   preference: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
   language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
   context: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
+  structure: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
   complexity: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
   modality: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
   authz: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
@@ -48,6 +50,7 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   preference: '200-500ms',
   language: '<1ms',
   context: '<1ms',
+  structure: '<1ms',
   complexity: '50-100ms',
   modality: '50-100ms',
   authz: '<1ms',
@@ -221,6 +224,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'preference',
   'language',
   'context',
+  'structure',
   'complexity',
   'modality',
   'authz',

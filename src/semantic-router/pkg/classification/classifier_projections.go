@@ -19,6 +19,7 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypePreference:   func(results *SignalResults) []string { return results.MatchedPreferenceRules },
 	config.SignalTypeLanguage:     func(results *SignalResults) []string { return results.MatchedLanguageRules },
 	config.SignalTypeContext:      func(results *SignalResults) []string { return results.MatchedContextRules },
+	config.SignalTypeStructure:    func(results *SignalResults) []string { return results.MatchedStructureRules },
 	config.SignalTypeComplexity:   func(results *SignalResults) []string { return results.MatchedComplexityRules },
 	config.SignalTypeModality:     func(results *SignalResults) []string { return results.MatchedModalityRules },
 	config.SignalTypeAuthz:        func(results *SignalResults) []string { return results.MatchedAuthzRules },

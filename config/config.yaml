@@ -227,6 +227,87 @@ routing:
         max_tokens: 256K
         description: Requests that need larger effective context windows.
 
+    structure:
+      - name: many_questions
+        description: Prompts that contain many explicit questions.
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          gte: 4
+      - name: numbered_steps
+        description: Prompts that contain numbered list items such as "1. ..."
+        feature:
+          type: exists
+          source:
+            type: regex
+            pattern: '(?m)^\s*\d+\.\s+'
+      - name: first_then_flow
+        description: Prompts that express an ordered workflow.
+        feature:
+          type: sequence
+          source:
+            type: sequence
+            case_sensitive: false
+            sequences:
+              - ["first", "then"]
+              - ["first", "next", "finally"]
+              - ["首先", "然后"]
+              - ["先", "再"]
+      - name: constraint_dense
+        description: Prompts with dense explicit constraints.
+        feature:
+          type: density
+          normalize_by: char_count
+          source:
+            type: keyword_set
+            case_sensitive: false
+            keywords:
+              - under
+              - at most
+              - at least
+              - within
+              - no more than
+              - 不超过
+              - 至少
+              - 最多
+        predicate:
+          gt: 0.02
+      - name: format_directive_dense_words
+        description: Prompts with dense output-format directives.
+        feature:
+          type: density
+          normalize_by: word_count
+          source:
+            type: keyword_set
+            keywords: ["table", "bullet", "json", "markdown", "表格", "列表", "JSON"]
+        predicate:
+          gt: 0.08
+      - name: low_question_density
+        description: Prompts with very low question density.
+        feature:
+          type: density
+          normalize_by: char_count
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          lt: 0.02
+      - name: tight_first_then_gap
+        description: Ordered steps where the transition markers stay close together.
+        feature:
+          type: span_distance
+          normalize_by: token_count
+          source:
+            type: marker_pair
+            case_sensitive: false
+            start: ["first", "首先", "先"]
+            end: ["then", "然后", "再"]
+        predicate:
+          lte: 6
+
     complexity:
       - name: needs_reasoning
         threshold: 0.75
@@ -329,6 +410,9 @@ routing:
           - type: context
             name: long_context
             weight: 0.18
+          - type: structure
+            name: first_then_flow
+            weight: 0.12
     mappings:
       - name: request_band
         source: request_difficulty

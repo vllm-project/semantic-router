@@ -78,6 +78,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Context',
     type: 'info',
   },
+  'x-vsr-matched-structure': {
+    label: 'Structure',
+    type: 'info',
+  },
   'x-vsr-context-token-count': {
     label: 'Context Count',
     type: 'info',

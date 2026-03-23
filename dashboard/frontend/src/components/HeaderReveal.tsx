@@ -42,6 +42,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Context',
     description: 'Token count-based context classification',
   },
+  'x-vsr-matched-structure': {
+    label: 'Structure',
+    description: 'Matched request-shape and structural heuristic signals',
+  },
   'x-vsr-matched-complexity': {
     label: 'Complexity',
     description: 'Query complexity classification (hard/easy/medium)',

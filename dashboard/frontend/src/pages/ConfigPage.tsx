@@ -260,6 +260,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       case 'Context':
         cfg.signals.context = (cfg.signals.context || []).filter(s => s.name !== targetName)
         break
+      case 'Structure':
+        cfg.signals.structure = (cfg.signals.structure || []).filter(s => s.name !== targetName)
+        break
       case 'Complexity':
         cfg.signals.complexity = (cfg.signals.complexity || []).filter(s => s.name !== targetName)
         break

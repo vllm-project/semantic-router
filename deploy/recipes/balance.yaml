@@ -631,6 +631,29 @@ routing:
         min_tokens: 8K
         max_tokens: 256K
 
+    structure:
+      - name: many_questions
+        description: Prompts with several explicit questions, usually indicating multi-part answers.
+        feature:
+          type: count
+          normalize_by: char_count
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          gte: 4
+      - name: ordered_workflow
+        description: Prompts with ordered workflow markers that imply phased execution.
+        feature:
+          type: sequence
+          source:
+            type: sequence
+            sequences:
+              - ["first", "then"]
+              - ["first", "next", "finally"]
+              - ["先", "再"]
+              - ["首先", "然后"]
+
     complexity:
       - name: general_reasoning
         threshold: 0.14
@@ -867,6 +890,12 @@ routing:
           - type: context
             name: long_context
             weight: 0.18
+          - type: structure
+            name: many_questions
+            weight: 0.06
+          - type: structure
+            name: ordered_workflow
+            weight: 0.11
           - type: keyword
             name: reasoning_request_markers
             weight: 0.22

@@ -69,6 +69,7 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "preferences"), reflect.TypeOf(PreferenceRule{}), "routing.signals.preferences")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "language"), reflect.TypeOf(LanguageRule{}), "routing.signals.language")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "context"), reflect.TypeOf(ContextRule{}), "routing.signals.context")
+	assertReferenceConfigStructureCoverage(t, mustSliceAt(t, signals, "structure"))
 	assertReferenceConfigComplexityCoverage(t, mustSliceAt(t, signals, "complexity"))
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "modality"), reflect.TypeOf(ModalityRule{}), "routing.signals.modality")
 	assertReferenceConfigRoleBindingCoverage(t, mustSliceAt(t, signals, "role_bindings"))
@@ -129,6 +130,33 @@ func assertReferenceConfigComplexityCoverage(t testingT, complexity []interface{
 		collectChildMapsFromSlice(t, complexity, "easy", "routing.signals.complexity"),
 		reflect.TypeOf(ComplexityCandidates{}),
 		"routing.signals.complexity[].easy",
+	)
+}
+
+func assertReferenceConfigStructureCoverage(t testingT, structure []interface{}) {
+	assertSliceUnionCoversStructFields(t, structure, reflect.TypeOf(StructureRule{}), "routing.signals.structure")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, structure, "feature", "routing.signals.structure"),
+		reflect.TypeOf(StructureFeature{}),
+		"routing.signals.structure[].feature",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, structure, "predicate", "routing.signals.structure"),
+		reflect.TypeOf(NumericPredicate{}),
+		"routing.signals.structure[].predicate",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(
+			t,
+			collectChildMapsFromSlice(t, structure, "feature", "routing.signals.structure"),
+			"source",
+			"routing.signals.structure[].feature",
+		),
+		reflect.TypeOf(StructureSource{}),
+		"routing.signals.structure[].feature.source",
 	)
 }
 

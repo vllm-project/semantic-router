@@ -104,6 +104,10 @@ const (
 	//nolint:gosec
 	VSRContextTokenCount = "x-vsr-context-token-count"
 
+	// VSRMatchedStructure contains comma-separated list of matched structure rule names.
+	// Example: "many_questions,numbered_steps"
+	VSRMatchedStructure = "x-vsr-matched-structure"
+
 	// VSRMatchedComplexity contains comma-separated list of matched complexity rules with difficulty levels.
 	// Example: "code_complexity:hard,math_complexity:easy"
 	VSRMatchedComplexity = "x-vsr-matched-complexity"

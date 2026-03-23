@@ -102,6 +102,7 @@ func buildResponseHeaderMutation(
 	builder.addJoined(headers.VSRMatchedLanguage, ctx.VSRMatchedLanguage)
 	builder.addJoined(headers.VSRMatchedContext, ctx.VSRMatchedContext)
 	builder.addInt(headers.VSRContextTokenCount, ctx.VSRContextTokenCount)
+	builder.addJoined(headers.VSRMatchedStructure, ctx.VSRMatchedStructure)
 	builder.addJoined(headers.VSRMatchedComplexity, ctx.VSRMatchedComplexity)
 	builder.addJoined(headers.VSRMatchedModality, ctx.VSRMatchedModality)
 	builder.addJoined(headers.VSRMatchedAuthz, ctx.VSRMatchedAuthz)

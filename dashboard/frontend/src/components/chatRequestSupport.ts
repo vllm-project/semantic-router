@@ -33,6 +33,7 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-matched-preference',
   'x-vsr-matched-language',
   'x-vsr-matched-context',
+  'x-vsr-matched-structure',
   'x-vsr-context-token-count',
   'x-vsr-matched-complexity',
   'x-vsr-matched-modality',

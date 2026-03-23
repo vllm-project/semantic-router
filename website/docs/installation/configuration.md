@@ -91,6 +91,15 @@ routing:
       - name: math_terms
         operator: OR
         keywords: ["algebra", "calculus"]
+    structure:
+      - name: many_questions
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          gte: 3
     embeddings:
       - name: technical_support
         threshold: 0.75
@@ -117,6 +126,9 @@ routing:
           - type: context
             name: long_context
             weight: 0.18
+          - type: structure
+            name: many_questions
+            weight: 0.12
     mappings:
       - name: request_band
         source: request_difficulty

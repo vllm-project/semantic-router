@@ -165,6 +165,9 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 	for _, ctx := range d.cfg.ContextRules {
 		prog.Signals = append(prog.Signals, d.contextToSignal(&ctx))
 	}
+	for _, structure := range d.cfg.StructureRules {
+		prog.Signals = append(prog.Signals, d.structureToSignal(&structure))
+	}
 	for _, comp := range d.cfg.ComplexityRules {
 		prog.Signals = append(prog.Signals, d.complexityToSignal(&comp))
 	}

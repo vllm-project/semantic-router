@@ -16,6 +16,7 @@ const LEGACY_SIGNAL_SECTIONS = [
   ['preference_rules', 'preferences'],
   ['language_rules', 'language'],
   ['context_rules', 'context'],
+  ['structure_rules', 'structure'],
   ['complexity_rules', 'complexity'],
   ['jailbreak', 'jailbreak'],
   ['pii', 'pii'],

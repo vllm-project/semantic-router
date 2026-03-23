@@ -224,7 +224,7 @@ export default function ConfigPageDecisionsSection({
   }
 
   const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
-    const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'fact_check', 'language', 'context', 'complexity', 'modality', 'authz', 'jailbreak', 'pii', 'projection'] as const
+    const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'fact_check', 'language', 'context', 'structure', 'complexity', 'modality', 'authz', 'jailbreak', 'pii', 'projection'] as const
     const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
       (mapping.outputs || []).map((output) => output.name)
     )
@@ -247,6 +247,8 @@ export default function ConfigPageDecisionsSection({
           return config?.signals?.language?.map((l) => l.name) || []
         case 'context':
           return config?.signals?.context?.map((c) => c.name) || []
+        case 'structure':
+          return config?.signals?.structure?.map((s) => s.name) || []
         case 'complexity':
           return (config?.signals?.complexity || []).flatMap((signal) => [
             `${signal.name}:easy`,

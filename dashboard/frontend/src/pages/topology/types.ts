@@ -12,6 +12,7 @@ export type SignalType =
   | 'preference'
   | 'language'
   | 'context'
+  | 'structure'
   | 'complexity'
   | 'modality'
   | 'authz'
@@ -24,7 +25,7 @@ export interface SignalConfig {
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | GenericSignalConfig
+  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | StructureSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -46,6 +47,41 @@ export interface DomainSignalConfig {
 export interface ContextSignalConfig {
   min_tokens?: string
   max_tokens?: string
+}
+
+export interface StructureSourceConfig {
+  type: string
+  pattern?: string
+  keywords?: string[]
+  case_sensitive?: boolean
+  sequences?: string[][]
+  start?: string[]
+  end?: string[]
+}
+
+export interface StructureFeatureConfig {
+  type: string
+  normalize_by?: string
+  source?: StructureSourceConfig
+}
+
+export interface NumericPredicateConfig {
+  gt?: number
+  gte?: number
+  lt?: number
+  lte?: number
+}
+
+export interface StructureSignalConfig {
+  feature?: StructureFeatureConfig
+  predicate?: NumericPredicateConfig
+}
+
+export interface StructureRuleDefinition {
+  name: string
+  description?: string
+  feature: StructureFeatureConfig
+  predicate?: NumericPredicateConfig
 }
 
 export interface ComplexitySignalConfig {
@@ -376,6 +412,7 @@ export interface ConfigData {
     min_tokens?: string
     max_tokens?: string
   }>
+  structure_rules?: StructureRuleDefinition[]
   complexity_rules?: Array<{
     name: string
     threshold?: number
@@ -485,6 +522,7 @@ export interface ConfigData {
       min_tokens?: string
       max_tokens?: string
     }>
+    structure?: StructureRuleDefinition[]
     complexity?: Array<{
       name: string
       threshold?: number

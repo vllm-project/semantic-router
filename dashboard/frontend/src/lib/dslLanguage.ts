@@ -65,7 +65,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
   signalTypes: [
     'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
-    'preference', 'language', 'context', 'complexity', 'modality', 'authz',
+    'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
   ],
 
   pluginTypes: [
@@ -107,7 +107,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Signal types (after SIGNAL keyword)
       [
-        /\b(keyword|embedding|domain|fact_check|user_feedback|preference|language|context|complexity|modality|authz)\b/,
+        /\b(keyword|embedding|domain|fact_check|user_feedback|preference|language|context|structure|complexity|modality|authz)\b/,
         'type',
       ],
 
@@ -206,6 +206,7 @@ const SIGNAL_TYPE_SUGGESTIONS = [
   { label: 'preference', detail: 'User preference signal' },
   { label: 'language', detail: 'Language detection signal' },
   { label: 'context', detail: 'Context length signal' },
+  { label: 'structure', detail: 'Request-shape and structural heuristic signal' },
   { label: 'complexity', detail: 'Query complexity signal' },
   { label: 'modality', detail: 'Input modality signal' },
   { label: 'authz', detail: 'Authorization signal' },
