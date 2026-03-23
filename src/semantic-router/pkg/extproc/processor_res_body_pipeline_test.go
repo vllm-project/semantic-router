@@ -104,3 +104,28 @@ func TestUpdateResponseCache_StoresWhenNoDecisionSelected(t *testing.T) {
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
 	assert.True(t, mockCache.updateCalled, "should store response when no decision is selected (global cache applies)")
 }
+
+func TestParseResponseUsage_ExtractsUsageFields(t *testing.T) {
+	usage := parseResponseUsage([]byte(`{
+		"usage": {
+			"prompt_tokens": 11,
+			"completion_tokens": 7
+		}
+	}`), "test-model")
+
+	assert.Equal(t, responseUsageMetrics{
+		promptTokens:     11,
+		completionTokens: 7,
+	}, usage)
+}
+
+func TestParseResponseUsage_ReturnsZeroForInvalidUsageTypes(t *testing.T) {
+	usage := parseResponseUsage([]byte(`{
+		"usage": {
+			"prompt_tokens": "11",
+			"completion_tokens": 7
+		}
+	}`), "test-model")
+
+	assert.Equal(t, responseUsageMetrics{}, usage)
+}

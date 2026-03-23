@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openai/openai-go"
+	"github.com/tidwall/gjson"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -209,20 +209,20 @@ func extractCurrentUserMessage(ctx *RequestContext) string {
 // is already clean. StripThinkTags is applied as a safety net for backends that
 // may still embed <think> blocks in the content field.
 func extractAssistantResponseText(responseBody []byte) string {
-	if len(responseBody) == 0 {
+	// Content is clean when vLLM separates reasoning; safety-net strip for others.
+	return memory.StripThinkTags(extractAssistantContentFromResponse(responseBody))
+}
+
+// extractAssistantContentFromResponse extracts the assistant's content from the response
+func extractAssistantContentFromResponse(responseBody []byte) string {
+	if !gjson.ValidBytes(responseBody) {
+		logging.Debugf("Failed to parse response for hallucination detection: invalid JSON")
 		return ""
 	}
 
-	var completion openai.ChatCompletion
-	if err := json.Unmarshal(responseBody, &completion); err != nil {
-		logging.Debugf("extractAssistantResponseText: failed to parse response: %v", err)
+	content := gjson.GetBytes(responseBody, "choices.0.message.content")
+	if content.Type != gjson.String {
 		return ""
 	}
-
-	if len(completion.Choices) == 0 {
-		return ""
-	}
-
-	// Content is clean when vLLM separates reasoning; safety-net strip for others
-	return memory.StripThinkTags(completion.Choices[0].Message.Content)
+	return content.String()
 }
