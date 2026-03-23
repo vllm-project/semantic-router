@@ -53,7 +53,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	if ctx.LooperRequest {
 		logging.Debugf("[Cache] Skipping cache read for looper internal request")
 		// Still extract model and query for potential cache write later
-		requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+		requestModel, requestQuery, cacheKey, err := cache.BuildContextAwareCacheQuery(ctx.OriginalRequestBody, contextWindowTurns)
 		if err != nil {
 			logging.Errorf("Error extracting query from request: %v", err)
 			return nil, false
@@ -70,8 +70,11 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		return nil, false
 	}
 
-	// Extract the model and query for cache lookup
-	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+	// Extract the model and query for cache lookup.
+	// cacheKey incorporates conversation context when context_window_turns > 0,
+	// so that identical last-user messages in different conversation threads do
+	// not produce false cache hits.
+	requestModel, requestQuery, cacheKey, err := cache.BuildContextAwareCacheQuery(ctx.OriginalRequestBody, contextWindowTurns)
 	if err != nil {
 		logging.Errorf("Error extracting query from request: %v", err)
 		// Continue without caching
@@ -79,7 +82,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	}
 
 	ctx.RequestModel = requestModel
-	ctx.RequestQuery = requestQuery
+	ctx.RequestQuery = requestQuery // last user message only – used for logging/metrics
 
 	// Check if caching is enabled for this decision
 	cacheEnabled := r.Config.SemanticCache.Enabled
