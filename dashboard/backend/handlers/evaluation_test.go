@@ -81,6 +81,31 @@ func TestCreateTaskHandler_MoMWithDomainReturns400(t *testing.T) {
 	}
 }
 
+func TestCreateTaskHandler_MoMWithSignalDatasetReturns400(t *testing.T) {
+	t.Parallel()
+	handler := newTestEvaluationHandler(t)
+	body := map[string]interface{}{
+		"name": "invalid-mom-dataset",
+		"config": map[string]interface{}{
+			"level":      "mom",
+			"dimensions": []string{"accuracy"},
+			"datasets": map[string]interface{}{
+				"accuracy": []string{"mmlu-pro-en"},
+			},
+			"endpoint": "http://localhost:8801",
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/evaluation/tasks", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.CreateTaskHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
 func TestCreateTaskHandler_RouterWithDomainReturns201(t *testing.T) {
 	t.Parallel()
 	handler := newTestEvaluationHandler(t)
@@ -101,6 +126,44 @@ func TestCreateTaskHandler_RouterWithDomainReturns201(t *testing.T) {
 
 	if rec.Code != http.StatusCreated {
 		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+}
+
+func TestCreateTaskHandler_NormalizesDefaultDatasetsAndExtraKeys(t *testing.T) {
+	t.Parallel()
+	handler := newTestEvaluationHandler(t)
+	body := map[string]interface{}{
+		"name": "signal-eval-defaults",
+		"config": map[string]interface{}{
+			"level":      "router",
+			"dimensions": []string{"domain"},
+			"datasets": map[string]interface{}{
+				"domain":   []string{"default", "default"},
+				"accuracy": []string{"mmlu-pro"},
+			},
+			"endpoint": "http://localhost:8080/api/v1/eval",
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/evaluation/tasks", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.CreateTaskHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	var task models.EvaluationTask
+	if err := json.NewDecoder(rec.Body).Decode(&task); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if _, ok := task.Config.Datasets["accuracy"]; ok {
+		t.Fatalf("unexpected dataset key 'accuracy' in normalized config: %v", task.Config.Datasets)
+	}
+	if datasets := task.Config.Datasets["domain"]; len(datasets) != 0 {
+		t.Fatalf("expected empty normalized domain datasets, got %v", datasets)
 	}
 }
 

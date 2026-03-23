@@ -190,6 +190,11 @@ html[data-route-kind='blog'] .nav-docs-only {
     grid-template-columns: 1fr;
   }
 
+  .navbar.navbar-sidebar--show {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   .navbar-sidebar {
     background: rgba(16, 16, 16, 0.98);
   }

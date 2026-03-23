@@ -223,7 +223,7 @@ The dashboard mirrors the same contract:
 - `Config -> Decisions` can reference mapping outputs with condition type `projection`
 - `DSL -> Visual` manages `PROJECTION partition`, `PROJECTION score`, and `PROJECTION mapping` entities directly
 
-For a focused tutorial, read [Signal Projections](../tutorials/signal/projections). For a maintained end-to-end example, use:
+For a focused tutorial, read [Projections](../tutorials/projection/overview). For a maintained end-to-end example, use:
 
 - [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
 - [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)

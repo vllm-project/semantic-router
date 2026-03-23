@@ -93,7 +93,7 @@ Extensible plugin system for request/response processing:
 - [**Overview**](overview/goals) for project goals, semantic routing concepts, and collective intelligence.
 - [**Installation**](installation) for setup, deployment options, and configuration.
 - [**Fleet Simulator**](fleet-sim/overview) for planning GPU fleets, evaluating routing strategies, and reading the guide PDF.
-- [**Capacities**](tutorials/signal/overview) for signals, decisions, plugins, algorithms, and global controls.
+- [**Capacities**](tutorials/signal/overview) for signals, projections, decisions, plugins, algorithms, and global controls.
 - [**Proposals**](proposals/unified-config-contract-v0-3) for design work that has not yet been folded into the stable docs set.
 
 ## Contributing

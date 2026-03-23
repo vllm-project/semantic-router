@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { CreateTaskRequest, DatasetInfo, EvaluationDimension, EvaluationLevel } from '../../types/evaluation';
 import { DIMENSION_INFO, LEVEL_INFO } from '../../types/evaluation';
 import { useTaskCreationForm, useDatasets } from '../../hooks/useEvaluation';
+import { getAllowedDimensionsForLevel } from '../../utils/evaluationConfig';
 import styles from './TaskCreationForm.module.css';
 
 interface TaskCreationFormProps {
@@ -123,11 +124,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
   );
 
   const renderStep2 = () => {
-    // Filter dimensions based on level
-    const routerDimensions: EvaluationDimension[] = ['domain', 'fact_check', 'user_feedback'];
-    const momDimensions: EvaluationDimension[] = ['accuracy'];
-
-    const availableDimensions = form.level === 'router' ? routerDimensions : momDimensions;
+    const availableDimensions = getAllowedDimensionsForLevel(form.level);
     const filteredDimensionInfo = Object.entries(DIMENSION_INFO).filter(([dim]) =>
       availableDimensions.includes(dim as EvaluationDimension)
     ) as [EvaluationDimension, typeof DIMENSION_INFO[EvaluationDimension]][];
@@ -258,7 +255,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
             {Object.entries(config.config.datasets).map(([dim, datasets]) => (
               <div key={dim}>
                 <dt>{DIMENSION_INFO[dim as EvaluationDimension]?.label || dim}</dt>
-                <dd>{(datasets as string[]).join(', ') || 'default'}</dd>
+                <dd>{(datasets as string[]).length > 0 ? (datasets as string[]).join(', ') : 'Use backend default dataset'}</dd>
               </div>
             ))}
           </dl>

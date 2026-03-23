@@ -150,6 +150,7 @@ func (h *EvaluationHandler) CreateTaskHandler() http.HandlerFunc {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
 		}
+		normalizeEvaluationCreateConfig(&req.Config)
 		if msg, code := validateEvaluationCreateRequest(&req); msg != "" {
 			http.Error(w, msg, code)
 			return

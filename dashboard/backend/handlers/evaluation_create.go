@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/models"
 )
 
@@ -27,7 +28,43 @@ func validateEvaluationCreateRequest(req *models.CreateTaskRequest) (string, int
 			return msg, code
 		}
 	}
+	if msg, code := validateDatasetsForConfig(req.Config); msg != "" {
+		return msg, code
+	}
 	return "", 0
+}
+
+func normalizeEvaluationCreateConfig(cfg *models.EvaluationConfig) {
+	if cfg.Datasets == nil {
+		cfg.Datasets = map[string][]string{}
+		return
+	}
+
+	normalizedDatasets := make(map[string][]string, len(cfg.Dimensions))
+	for _, dim := range cfg.Dimensions {
+		normalizedDatasets[string(dim)] = normalizeDatasetNames(cfg.Datasets[string(dim)])
+	}
+
+	cfg.Datasets = normalizedDatasets
+}
+
+func normalizeDatasetNames(datasets []string) []string {
+	cleaned := make([]string, 0, len(datasets))
+	seen := make(map[string]struct{}, len(datasets))
+
+	for _, dataset := range datasets {
+		dataset = strings.TrimSpace(dataset)
+		if dataset == "" || strings.EqualFold(dataset, "default") {
+			continue
+		}
+		if _, ok := seen[dataset]; ok {
+			continue
+		}
+		seen[dataset] = struct{}{}
+		cleaned = append(cleaned, dataset)
+	}
+
+	return cleaned
 }
 
 func validateDimensionForLevel(level models.EvaluationLevel, dim models.EvaluationDimension) (string, int) {
@@ -43,6 +80,37 @@ func validateDimensionForLevel(level models.EvaluationLevel, dim models.Evaluati
 	if dim != models.DimensionAccuracy {
 		return fmt.Sprintf("Unknown system dimension '%s'", dim), http.StatusBadRequest
 	}
+	return "", 0
+}
+
+func validateDatasetsForConfig(cfg models.EvaluationConfig) (string, int) {
+	availableDatasets := evaluation.GetAvailableDatasets()
+
+	for _, dim := range cfg.Dimensions {
+		requestedDatasets := cfg.Datasets[string(dim)]
+		if len(requestedDatasets) == 0 {
+			continue
+		}
+
+		allowedDatasets := make(map[string]struct{})
+		for _, dataset := range availableDatasets[string(dim)] {
+			if dataset.Level == cfg.Level && dataset.Dimension == dim {
+				allowedDatasets[dataset.Name] = struct{}{}
+			}
+		}
+
+		for _, dataset := range requestedDatasets {
+			if _, ok := allowedDatasets[dataset]; !ok {
+				return fmt.Sprintf(
+					"Dataset '%s' is not valid for %s dimension at %s-level evaluation",
+					dataset,
+					dim,
+					cfg.Level,
+				), http.StatusBadRequest
+			}
+		}
+	}
+
 	return "", 0
 }
 
