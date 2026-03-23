@@ -14,6 +14,13 @@ Use partitions when:
 - downstream routing should work from one resolved winner instead of multiple overlapping matches
 - you want fallback behavior when nothing in the partition fires
 
+## Key Advantages
+
+- Collapses competing domain or embedding matches to one winner before decisions run.
+- Provides a stable default fallback when no member clearly wins.
+- Keeps downstream decisions simple — they read the resolved raw signal, not partition logic.
+- Supports softmax renormalization for confidence-aware winner selection.
+
 ## What Problem Does It Solve?
 
 Without partitions, a request can match several nearby domain or embedding lanes at once. That is often undesirable for routing:
@@ -85,6 +92,10 @@ PROJECTION partition balance_intent_partition {
 | `temperature` | only meaningful for `softmax_exclusive`; lower values make the winner more decisive |
 | `members` | existing `domain` or `embedding` signal names to coordinate |
 | `default` | fallback member synthesized when none of the members matched |
+
+## Configuration
+
+Partitions are configured under `routing.projections.partitions`. Each partition requires a `name`, `semantics` (`exclusive` or `softmax_exclusive`), a list of `members`, and a `default`. See the [Canonical YAML](#canonical-yaml) and [Config Fields](#config-fields) sections above for full field reference.
 
 ## When to Use
 
