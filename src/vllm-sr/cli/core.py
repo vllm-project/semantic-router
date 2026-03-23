@@ -38,10 +38,7 @@ log = get_logger(__name__)
 SERVICE_LOG_PATTERNS = {
     "router": r'"caller"|spawned: \'router\'|success: router|cli\.commands',
     "dashboard": r"dashboard|Dashboard|spawned: 'dashboard'|success: dashboard|:8700",
-    "envoy": (
-        r"\[2[0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*\]\[.*\]"
-        r"|spawned: 'envoy'|success: envoy"
-    ),
+    "envoy": r"\[20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]|\[.*\]\[.*\]|envoy|spawned: \'envoy\'|success: envoy|Generating Envoy config",
 }
 
 
