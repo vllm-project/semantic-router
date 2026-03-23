@@ -14,6 +14,13 @@ Use scores when:
 - learned and heuristic evidence should contribute to the same routing outcome
 - you want numeric aggregation to stay outside the decision layer
 
+## Key Advantages
+
+- Aggregates several weak signals into one continuous numeric value for routing.
+- Keeps weighted blending logic in a single, auditable place.
+- Supports both binary and confidence-based value sources.
+- Negative weights let a matched signal actively lower the score (e.g., obvious simple requests).
+
 ## What Problem Does It Solve?
 
 Decisions are built for readable boolean logic. They are not a good place to express "take a little evidence from context length, some from reasoning markers, subtract some weight for very simple requests, and then decide which tier this belongs to."
@@ -120,6 +127,10 @@ PROJECTION score difficulty_score {
 | `inputs[].weight` | contribution multiplier; negative weights lower the score |
 | `inputs[].value_source` | `binary` or `confidence` behavior |
 | `inputs[].match` / `inputs[].miss` | explicit values for binary mode |
+
+## Configuration
+
+Scores are configured under `routing.projections.scores`. Each score requires a `name`, a `method` (currently `weighted_sum`), and a list of `inputs` referencing declared signals. See the [Canonical YAML](#canonical-yaml) and [Config Fields](#config-fields) sections above for full field reference.
 
 ## When to Use
 
