@@ -109,6 +109,11 @@ func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
 		return
 	}
 
+	// Recover tasks that were running before a dashboard restart so UI state is consistent
+	if err := evalDB.RecoverRunningTasks("Dashboard restarted; task interrupted"); err != nil {
+		log.Printf("Warning: failed to recover running evaluation tasks: %v", err)
+	}
+
 	runner := evaluation.NewRunner(evaluation.RunnerConfig{
 		DB:            evalDB,
 		ProjectRoot:   projectRoot,

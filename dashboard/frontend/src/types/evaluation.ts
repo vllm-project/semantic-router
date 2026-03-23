@@ -7,7 +7,8 @@ export type EvaluationLevel = 'router' | 'mom';
 export type EvaluationDimension =
   | 'domain'
   | 'fact_check'
-  | 'user_feedback';
+  | 'user_feedback'
+  | 'accuracy';
 
 export interface EvaluationConfig {
   level: EvaluationLevel; // evaluation level (router or mom)
@@ -140,6 +141,11 @@ export const DIMENSION_INFO: Record<EvaluationDimension, { label: string; descri
     label: 'User Feedback Detection',
     description: 'Evaluates feedback signal extraction accuracy',
     color: '#22c55e', // green
+  },
+  accuracy: {
+    label: 'System Accuracy',
+    description: 'Evaluates end-to-end accuracy (e.g. MMLU-Pro) via chat completions',
+    color: '#0ea5e9', // sky
   },
 };
 
