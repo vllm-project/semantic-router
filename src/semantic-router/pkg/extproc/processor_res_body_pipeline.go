@@ -2,11 +2,10 @@ package extproc
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/openai/openai-go"
+	"github.com/tidwall/gjson"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -56,15 +55,24 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 }
 
 func parseResponseUsage(responseBody []byte, model string) responseUsageMetrics {
-	var parsed openai.ChatCompletion
-	if err := json.Unmarshal(responseBody, &parsed); err != nil {
-		logging.Errorf("Error parsing tokens from response: %v", err)
+	if !gjson.ValidBytes(responseBody) {
+		logging.Errorf("Error parsing tokens from response: invalid JSON")
 		metrics.RecordRequestError(model, "parse_error")
+		return responseUsageMetrics{}
+	}
+
+	promptTokens := gjson.GetBytes(responseBody, "usage.prompt_tokens")
+	completionTokens := gjson.GetBytes(responseBody, "usage.completion_tokens")
+	if (promptTokens.Exists() && promptTokens.Type != gjson.Number) ||
+		(completionTokens.Exists() && completionTokens.Type != gjson.Number) {
+		logging.Errorf("Error parsing tokens from response: usage fields must be numbers")
+		metrics.RecordRequestError(model, "parse_error")
+		return responseUsageMetrics{}
 	}
 
 	return responseUsageMetrics{
-		promptTokens:     int(parsed.Usage.PromptTokens),
-		completionTokens: int(parsed.Usage.CompletionTokens),
+		promptTokens:     int(promptTokens.Int()),
+		completionTokens: int(completionTokens.Int()),
 	}
 }
 
