@@ -146,6 +146,53 @@ class ContextRule(BaseModel):
     description: Optional[str] = None
 
 
+class StructureSource(BaseModel):
+    """Source selector for structure-based signals."""
+
+    type: str
+    pattern: Optional[str] = None
+    keywords: Optional[List[str]] = None
+    case_sensitive: bool = False
+    sequences: Optional[List[List[str]]] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class StructureFeature(BaseModel):
+    """Typed request-shape feature extractor."""
+
+    type: str
+    source: StructureSource
+
+    class Config:
+        extra = "forbid"
+
+
+class NumericPredicate(BaseModel):
+    """Numeric threshold predicate for structure signals."""
+
+    gt: Optional[float] = None
+    gte: Optional[float] = None
+    lt: Optional[float] = None
+    lte: Optional[float] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class StructureRule(BaseModel):
+    """Request-shape routing signal configuration."""
+
+    name: str
+    description: Optional[str] = None
+    feature: StructureFeature
+    predicate: Optional[NumericPredicate] = None
+
+    class Config:
+        extra = "forbid"
+
+
 class ComplexityCandidates(BaseModel):
     """Complexity candidates configuration."""
 
@@ -240,6 +287,7 @@ class Signals(BaseModel):
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
     context: Optional[List[ContextRule]] = []
+    structure: Optional[List[StructureRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
     modality: Optional[List[ModalityRule]] = []
     role_bindings: Optional[List[RoleBindingRule]] = []

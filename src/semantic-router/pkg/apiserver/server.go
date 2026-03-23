@@ -78,7 +78,7 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 	apiServer := &ClassificationAPIServer{
 		classificationSvc:     liveClassificationSvc,
 		config:                cfg,
-		runtimeConfig:         newLiveRuntimeConfig(cfg, config.Get, liveClassificationSvc.UpdateConfig),
+		runtimeConfig:         newLiveRuntimeConfig(cfg, config.Get, liveClassificationSvc.RefreshRuntimeConfig),
 		configPath:            configPath,
 		memoryStore:           memoryStore,
 		enableSystemPromptAPI: enableSystemPromptAPI,

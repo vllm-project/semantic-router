@@ -12,6 +12,7 @@ interface TestQueryResponse {
     type: string
     name: string
     confidence: number
+    value?: number
     reason?: string
   }>
   matchedDecision: string | null
@@ -113,6 +114,8 @@ function convertSignals(signals: TestQueryResponse['matchedSignals']): MatchedSi
     type: s.type as SignalType,
     name: s.name,
     matched: true, // Backend only returns matched signals
+    value: s.value,
+    confidence: s.confidence,
     score: s.confidence,
     reason: s.reason,
     needsBackend: false,

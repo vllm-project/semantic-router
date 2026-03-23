@@ -90,6 +90,7 @@ These signals route from explicit rules, request form, or lightweight detectors 
 | `keyword` | `config/signal/keyword/` | route from lexical or BM25-style matches | [Keyword](./heuristic/keyword) |
 | `language` | `config/signal/language/` | route by detected request language | [Language](./heuristic/language) |
 | `modality` | `config/signal/modality/` | route by text, image-generation, or mixed flow shape | [Modality](./heuristic/modality) |
+| `structure` | `config/signal/structure/` | route from request shape such as question counts or ordered workflow markers | [Structure](./heuristic/structure) |
 
 ### Learned Signals
 
