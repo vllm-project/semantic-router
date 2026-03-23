@@ -75,7 +75,7 @@ func splitContentIntoChunks(content string) []string {
 }
 
 // CreateCacheHitResponse creates an immediate response from cache
-func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category string, decisionName string, matchedKeywords []string) *ext_proc.ProcessingResponse {
+func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category string, decisionName string, matchedKeywords []string, similarity ...float32) *ext_proc.ProcessingResponse {
 	var responseBody []byte
 	var contentType string
 
@@ -265,6 +265,16 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 				RawValue: []byte(decisionName),
 			},
 		},
+	}
+
+	// Add cache similarity header
+	if len(similarity) > 0 && similarity[0] > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      "x-vsr-cache-similarity",
+				RawValue: []byte(fmt.Sprintf("%.4f", similarity[0])),
+			},
+		})
 	}
 
 	// Add matched keywords header if provided
