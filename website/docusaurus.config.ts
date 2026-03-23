@@ -116,6 +116,14 @@ const config: Config = {
             from: '/docs/cli/troubleshooting',
             to: '/docs/troubleshooting/common-errors',
           },
+          {
+            from: '/docs/tutorials/signal/projections',
+            to: '/docs/tutorials/projection/overview',
+          },
+          {
+            from: '/docs/tutorials/signal/heuristic/modality',
+            to: '/docs/tutorials/signal/learned/modality',
+          },
         ],
       },
     ],
