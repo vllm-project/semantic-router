@@ -397,20 +397,20 @@ func TestExtractMemoryInfo_WithConversationHistory(t *testing.T) {
 	assert.Equal(t, "Your budget is $10,000", history[3].Content)
 }
 
-func TestExtractMemoryInfo_NonResponseAPI(t *testing.T) {
+func TestExtractMemoryInfo_NoHistoryAvailable(t *testing.T) {
 	ctx := &RequestContext{
-		RequestID:      "req_123",
-		ResponseAPICtx: nil, // Not a Response API request
+		RequestID:              "req_123",
+		ResponseAPICtx:         nil, // Not a Response API request
+		ChatCompletionMessages: nil, // No Chat Completions messages either
 	}
 
 	sessionID, userID, history, err := extractMemoryInfo(ctx)
 
-	require.Error(t, err, "should return error for non-Response API request")
-	// For non-Response API, we check ConversationID requirement first (before userID)
-	// because we can't track turns without ConversationID
-	assert.Contains(t, err.Error(), "ConversationID required", "error message should mention ConversationID requirement for non-Response API")
-	assert.Empty(t, sessionID, "should return empty sessionID for non-Response API request")
-	assert.Empty(t, userID, "should return empty userID for non-Response API request")
+	require.Error(t, err, "should return error when no history available")
+	// Now supports both Response API and Chat Completions
+	assert.Contains(t, err.Error(), "no conversation history available", "error should indicate no history available")
+	assert.Empty(t, sessionID)
+	assert.Empty(t, userID)
 	assert.Empty(t, history)
 }
 
