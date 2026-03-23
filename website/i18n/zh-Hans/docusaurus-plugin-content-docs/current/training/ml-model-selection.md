@@ -2,7 +2,7 @@
 translation:
   source_commit: "a2b965a"
   source_file: "docs/training/ml-model-selection.md"
-  outdated: false
+  outdated: true
 ---
 
 # 基于 ML 的模型选择
