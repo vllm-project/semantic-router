@@ -30,6 +30,7 @@ var supportedSignalTypes = []string{
 	SignalTypeModality,
 	SignalTypePII,
 	SignalTypePreference,
+	SignalTypeStructure,
 	SignalTypeUserFeedback,
 }
 

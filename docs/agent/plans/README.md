@@ -87,3 +87,4 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md](pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md)
 - [pl-0012-dsl-conflict-free-routing-workstream.md](pl-0012-dsl-conflict-free-routing-workstream.md)
 - [pl-0013-openclaw-vsr-install-import-workstream.md](pl-0013-openclaw-vsr-install-import-workstream.md)
+- [pl-0014-structure-signal-family-implementation.md](pl-0014-structure-signal-family-implementation.md)

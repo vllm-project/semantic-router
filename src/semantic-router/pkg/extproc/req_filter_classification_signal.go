@@ -79,11 +79,13 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
+	ctx.VSRMatchedStructure = signals.MatchedStructureRules
 	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
 	ctx.VSRMatchedModality = signals.MatchedModalityRules
 	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
 	ctx.VSRMatchedJailbreak = signals.MatchedJailbreakRules
 	ctx.VSRMatchedPII = signals.MatchedPIIRules
+	ctx.VSRMatchedProjection = signals.MatchedProjectionRules
 
 	if signals.JailbreakDetected {
 		ctx.JailbreakDetected = signals.JailbreakDetected
@@ -108,9 +110,14 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedUserFeedbackRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedContextRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedStructureRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedComplexityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedAuthzRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedJailbreakRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedProjectionRules...)
 	return allMatchedRules
 }
 

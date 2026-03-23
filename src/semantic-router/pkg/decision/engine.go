@@ -67,6 +67,7 @@ type SignalMatches struct {
 	PreferenceRules   []string // Route preference names matched via external LLM
 	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
 	ContextRules      []string // Context rule names matched (e.g. "low_token_count")
+	StructureRules    []string // Structure rule names matched (e.g. "many_questions")
 	ComplexityRules   []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
 	ModalityRules     []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
 	AuthzRules        []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
@@ -210,6 +211,7 @@ func (e *DecisionEngine) matchesSignalType(
 		"preference":    signals.PreferenceRules,
 		"language":      signals.LanguageRules,
 		"context":       signals.ContextRules,
+		"structure":     signals.StructureRules,
 		"complexity":    signals.ComplexityRules,
 		"modality":      signals.ModalityRules,
 		"authz":         signals.AuthzRules,

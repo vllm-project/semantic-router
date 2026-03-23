@@ -91,6 +91,15 @@ routing:
       - name: math_terms
         operator: OR
         keywords: ["algebra", "calculus"]
+    structure:
+      - name: many_questions
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          gte: 3
     embeddings:
       - name: technical_support
         threshold: 0.75
@@ -117,6 +126,9 @@ routing:
           - type: context
             name: long_context
             weight: 0.18
+          - type: structure
+            name: many_questions
+            weight: 0.12
     mappings:
       - name: request_band
         source: request_difficulty
@@ -151,6 +163,8 @@ global:
       metrics:
         enabled: true
 ```
+
+For `routing.signals.structure`, `feature.type: density` now uses built-in multilingual text-unit normalization. The router counts each CJK character as one unit, counts contiguous runs of other letters and digits as one unit, and ignores punctuation, so the same density rule shape behaves consistently across English, Chinese, and mixed-script prompts without a separate `normalize_by` field.
 
 ## Repository config assets
 

@@ -5,7 +5,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 SKILL_CATALOG_PATH = (
     PROJECT_ROOT / "dashboard" / "backend" / "config" / "openclaw-skills.json"
 )
-SKILL_ROOT = PROJECT_ROOT / "skills"
+SKILLPACK_ROOT = PROJECT_ROOT / "dashboard" / "backend" / "skillpacks"
 
 
 def test_openclaw_vsr_bridge_skill_is_cataloged_and_packaged() -> None:
@@ -22,7 +22,7 @@ def test_openclaw_vsr_bridge_skill_is_cataloged_and_packaged() -> None:
     assert "curl" in bridge_entry.get("requires", [])
     assert "bash" in bridge_entry.get("requires", [])
 
-    skill_doc = SKILL_ROOT / "openclaw-vsr-bridge" / "SKILL.md"
+    skill_doc = SKILLPACK_ROOT / "openclaw-vsr-bridge" / "SKILL.md"
     assert skill_doc.exists()
 
     skill_text = skill_doc.read_text(encoding="utf-8")

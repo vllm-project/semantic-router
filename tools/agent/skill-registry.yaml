@@ -340,12 +340,16 @@ skills:
         - The change improves discoverability, source-of-truth clarity, or mechanical enforcement of the harness.
     - name: signal-end-to-end
       path: tools/agent/skills/signal-end-to-end/SKILL.md
-      description: Add or evolve a signal that spans router config, signal extraction, CLI schema, optional bindings, dashboard surfaces, and E2E.
+      description: Add or evolve a signal that spans router config, signal extraction, CLI schema, optional bindings, user-visible header or reveal surfaces, and E2E.
       priority: 110
       selector_paths:
         - src/semantic-router/pkg/config/**
         - src/semantic-router/pkg/classification/**
         - src/semantic-router/pkg/extproc/req_filter_classification.go
+        - src/semantic-router/pkg/extproc/req_filter_classification_signal.go
+        - src/semantic-router/pkg/extproc/processor_res_header*.go
+        - src/semantic-router/pkg/headers/**
+        - src/semantic-router/pkg/services/classification.go
         - src/vllm-sr/cli/models.py
         - src/vllm-sr/cli/parser.py
         - src/vllm-sr/cli/validator.py
@@ -355,15 +359,24 @@ skills:
         - nlp-binding/**
         - onnx-binding/**
         - dashboard/frontend/src/pages/ConfigPage*.tsx
+        - dashboard/frontend/src/pages/topology/**
+        - dashboard/frontend/src/components/chatRequestSupport.ts
         - dashboard/frontend/src/components/Header*.tsx
+        - dashboard/backend/handlers/topology.go
       anchor_paths:
         - src/semantic-router/pkg/classification/**
         - src/semantic-router/pkg/extproc/req_filter_classification.go
+        - src/semantic-router/pkg/extproc/req_filter_classification_signal.go
+        - src/semantic-router/pkg/headers/**
+        - src/semantic-router/pkg/services/classification.go
         - candle-binding/**
         - ml-binding/**
         - nlp-binding/**
         - onnx-binding/**
+        - dashboard/frontend/src/pages/topology/**
+        - dashboard/frontend/src/components/chatRequestSupport.ts
         - dashboard/frontend/src/components/Header*.tsx
+        - dashboard/backend/handlers/topology.go
       fragments:
         - signal-runtime
         - python-cli-schema
@@ -395,7 +408,7 @@ skills:
         - The feature needs a new native model/runtime path that cannot be validated in the current environment.
       acceptance_criteria:
         - Router config, signal extraction, and Python CLI schema stay aligned for the signal contract.
-        - Relevant UI or header surfaces are updated when the signal becomes user-visible.
+        - When the signal becomes user-visible, classify or eval payloads, emitted headers, topology visualization, and playground reveal surfaces are updated together.
         - At least one affected E2E path is added or updated when behavior changes.
     - name: plugin-end-to-end
       path: tools/agent/skills/plugin-end-to-end/SKILL.md
@@ -436,15 +449,19 @@ skills:
         - User-visible plugin changes include matching UI or header updates when applicable.
     - name: header-contract-change
       path: tools/agent/skills/header-contract-change/SKILL.md
-      description: Add or change request or response header contracts and the user-visible reveal/display path.
+      description: Add or change request or response header contracts and keep reveal, display, and topology consumers aligned.
       priority: 104
       selector_paths:
         - src/semantic-router/pkg/headers/**
         - src/semantic-router/pkg/extproc/processor_res_header.go
+        - src/semantic-router/pkg/extproc/processor_res_header_mutation.go
         - src/semantic-router/pkg/extproc/req_filter_looper*.go
+        - dashboard/frontend/src/components/chatRequestSupport.ts
         - dashboard/frontend/src/components/HeaderDisplay.tsx
         - dashboard/frontend/src/components/HeaderReveal.tsx
         - dashboard/frontend/src/components/ChatComponent*.tsx
+        - dashboard/frontend/src/pages/topology/**
+        - dashboard/backend/handlers/topology.go
       fragments:
         - playground-reveal
         - topology-visualization
@@ -464,7 +481,7 @@ skills:
       stop_conditions:
         - The header semantics are not stable enough to expose to users or downstream tooling.
       acceptance_criteria:
-        - Header constants, emission, and display or reveal allowlists stay aligned.
+        - Header constants, emission, display or reveal allowlists, and any user-visible topology consumers stay aligned.
         - Relevant tests cover any new or changed user-visible header contract.
     - name: config-platform-change
       path: tools/agent/skills/config-platform-change/SKILL.md
@@ -594,7 +611,7 @@ skills:
         - Startup-chain changes include local smoke and relevant CLI or integration coverage.
     - name: dashboard-surface-change
       path: tools/agent/skills/dashboard-surface-change/SKILL.md
-      description: Change frontend dashboard config, topology, or playground surfaces that reflect router behavior.
+      description: Change frontend dashboard config, topology, or playground surfaces that reflect router behavior, including new signal visualization paths.
       priority: 94
       selector_paths:
         - dashboard/frontend/**
@@ -963,22 +980,24 @@ skills:
         - Backend console handlers, persistence, and callers stay aligned.
     - name: topology-visualization
       path: tools/agent/skills/topology-visualization/SKILL.md
-      description: Topology graph APIs, parsing, and frontend visualization details.
+      description: Topology graph APIs, parsing, and frontend visualization details, including signal-family node or highlight alignment.
       owned_surfaces:
         - topology_visualization
       stop_conditions:
         - Topology output depends on missing router or backend data contracts.
       acceptance_criteria:
-        - Topology renderers and data sources agree on the same graph semantics.
+        - Topology renderers, backend converters, and data sources agree on the same graph semantics.
+        - New signal families are represented consistently across parser output, node metadata, and highlighted paths.
     - name: playground-reveal
       path: tools/agent/skills/playground-reveal/SKILL.md
-      description: Playground response rendering, reveal overlays, and user-visible route metadata presentation.
+      description: Playground response rendering, reveal overlays, and user-visible route metadata presentation, including matched-signal disclosure.
       owned_surfaces:
         - playground_reveal
       stop_conditions:
         - Playground reveal behavior depends on metadata that is not stable enough to expose.
       acceptance_criteria:
         - Playground reveal surfaces stay aligned with emitted metadata and user-visible expectations.
+        - Newly exposed signal metadata appears in the allowlist and both reveal or display components together.
     - name: dsl-crd
       path: tools/agent/skills/dsl-crd/SKILL.md
       description: DSL and Kubernetes translation layers between router config and platform-facing forms.
@@ -1075,6 +1094,11 @@ skills:
         - Changed code passes structure rules and preserves modular boundaries.
 
   support:
+    - name: routing-calibration-loop
+      path: tools/agent/skills/routing-calibration-loop/SKILL.md
+      description: Live routing calibration loop for executable probes, local validate, versioned deploy, and post-deploy re-evaluation against a router apiserver.
+      acceptance_criteria:
+        - Calibration requests leave behind versioned probe reports and explicit review of query quality, routing design, and validator quality.
     - name: feature-complete-checklist
       path: tools/agent/skills/feature-complete-checklist/SKILL.md
       description: Final validation checklist and reporting shape before closing a task.

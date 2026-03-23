@@ -2,7 +2,6 @@ package classification
 
 import (
 	"fmt"
-	"strings"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -39,6 +38,9 @@ type Classifier struct {
 
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
+
+	// Structure classifier for request-shape routing signals
+	structureClassifier *StructureClassifier
 
 	// Complexity classifier for complexity-based routing using embedding similarity
 	complexityClassifier *ComplexityClassifier
@@ -112,6 +114,12 @@ func withContextClassifier(contextClassifier *ContextClassifier) option {
 	}
 }
 
+func withStructureClassifier(structureClassifier *StructureClassifier) option {
+	return func(c *Classifier) {
+		c.structureClassifier = structureClassifier
+	}
+}
+
 func withComplexityClassifier(complexityClassifier *ComplexityClassifier) option {
 	return func(c *Classifier) {
 		c.complexityClassifier = complexityClassifier
@@ -132,77 +140,14 @@ func withAuthzClassifier(authzClassifier *AuthzClassifier) option {
 
 // initModels initializes the models for the classifier
 func initModels(classifier *Classifier) (*Classifier, error) {
-	// Initialize either in-tree OR MCP-based category classifier
-	if classifier.IsCategoryEnabled() {
-		if err := classifier.initializeCategoryClassifier(); err != nil {
-			return nil, err
-		}
-	} else if classifier.IsMCPCategoryEnabled() {
-		if err := classifier.initializeMCPCategoryClassifier(); err != nil {
-			return nil, err
-		}
+	if err := classifier.initializeConfiguredCategoryRuntime(); err != nil {
+		return nil, err
 	}
-
-	if classifier.IsJailbreakEnabled() {
-		if err := classifier.initializeJailbreakClassifier(); err != nil {
-			return nil, err
-		}
+	if err := classifier.initializeRequiredRuntimeClassifiers(); err != nil {
+		return nil, err
 	}
-
-	if classifier.IsPIIEnabled() {
-		if err := classifier.initializePIIClassifier(); err != nil {
-			return nil, err
-		}
-	}
-
-	if classifier.IsKeywordEmbeddingClassifierEnabled() {
-		if err := classifier.initializeKeywordEmbeddingClassifier(); err != nil {
-			return nil, err
-		}
-	}
-
-	// Initialize context classifier (no external model init needed, but good to log)
-	if classifier.contextClassifier != nil {
-		logging.Infof("Context classifier initialized with %d rules", len(classifier.contextClassifier.rules))
-	}
-
-	// Initialize hallucination mitigation classifiers
-	if classifier.IsFactCheckEnabled() {
-		if err := classifier.initializeFactCheckClassifier(); err != nil {
-			logging.Warnf("Failed to initialize fact-check classifier: %v", err)
-			// Non-fatal - continue without fact-check
-		}
-	}
-
-	if classifier.IsHallucinationDetectionEnabled() {
-		if err := classifier.initializeHallucinationDetector(); err != nil {
-			logging.Warnf("Failed to initialize hallucination detector: %v", err)
-			// Non-fatal - continue without hallucination detection
-		}
-	}
-
-	if classifier.IsFeedbackDetectorEnabled() {
-		if err := classifier.initializeFeedbackDetector(); err != nil {
-			logging.Warnf("Failed to initialize feedback detector: %v", err)
-			// Non-fatal - continue without feedback detection
-		}
-	}
-
-	if classifier.IsPreferenceClassifierEnabled() {
-		if err := classifier.initializePreferenceClassifier(); err != nil {
-			logging.Warnf("Failed to initialize preference classifier: %v", err)
-			// Non-fatal - continue without preference classification
-		}
-	}
-
-	// Initialize language classifier
-	if len(classifier.Config.LanguageRules) > 0 {
-		if err := classifier.initializeLanguageClassifier(); err != nil {
-			logging.Warnf("Failed to initialize language classifier: %v", err)
-			// Non-fatal - continue without language classification
-		}
-	}
-
+	classifier.logHeuristicClassifierInitialization()
+	classifier.initializeBestEffortRuntimeClassifiers()
 	return classifier, nil
 }
 
@@ -233,183 +178,19 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 // At runtime, in-tree classifier will be tried first, with MCP as a fallback,
 // allowing flexible deployment scenarios such as gradual migration.
 func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) (*Classifier, error) {
-	// Create jailbreak inference (vLLM or Candle)
-	// Pass full RouterConfig to allow lookup of external models
-	jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard, cfg)
+	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create jailbreak inference: %w", err)
+		return nil, err
 	}
-
-	// Create jailbreak initializer (only needed for Candle, nil for vLLM)
-	var jailbreakInitializer JailbreakInitializer
-	if !cfg.PromptGuard.UseVLLM {
-		if cfg.PromptGuard.UseMmBERT32K {
-			jailbreakInitializer = createMmBERT32KJailbreakInitializer()
-		} else {
-			jailbreakInitializer = createJailbreakInitializer()
-		}
-	}
-
-	// Create PII initializer and inference based on config
-	var piiInitializer PIIInitializer
-	var piiInference PIIInference
-	if cfg.PIIModel.UseMmBERT32K {
-		logging.Infof("Using mmBERT-32K for PII detection (32K context, YaRN RoPE)")
-		piiInitializer = createMmBERT32KPIIInitializer()
-		piiInference = createMmBERT32KPIIInference()
-	} else {
-		piiInitializer = createPIIInitializer()
-		piiInference = createPIIInference()
-	}
-
-	options := []option{
+	piiInitializer, piiInference := buildPIIDependencies(cfg)
+	builder := newClassifierOptionBuilder(cfg, []option{
 		withJailbreak(jailbreakMapping, jailbreakInitializer, jailbreakInference),
 		withPII(piiMapping, piiInitializer, piiInference),
+	})
+	options, err := builder.build(categoryMapping)
+	if err != nil {
+		return nil, err
 	}
-
-	multiModalInitialized := false
-	initMultiModalIfNeeded := func(reason string) error {
-		if multiModalInitialized {
-			return nil
-		}
-		mmPath := config.ResolveModelPath(cfg.EmbeddingModels.MultiModalModelPath)
-		if mmPath == "" {
-			return fmt.Errorf("%s requires embedding_models.multimodal_model_path to be set", reason)
-		}
-		if err := initMultiModalModel(mmPath, cfg.EmbeddingModels.UseCPU); err != nil {
-			return fmt.Errorf("failed to initialize multimodal model for %s: %w", reason, err)
-		}
-		logging.Infof("Initialized multimodal embedding model for %s: %s", reason, mmPath)
-		multiModalInitialized = true
-		return nil
-	}
-
-	// Add keyword classifier if configured
-	if len(cfg.KeywordRules) > 0 {
-		keywordClassifier, err := NewKeywordClassifier(cfg.KeywordRules)
-		if err != nil {
-			logging.Errorf("Failed to create keyword classifier: %v", err)
-			return nil, err
-		}
-		options = append(options, withKeywordClassifier(keywordClassifier))
-	}
-
-	// Add keyword embedding classifier if configured
-	if len(cfg.EmbeddingRules) > 0 {
-		// Get optimization config from embedding models configuration
-		optConfig := cfg.EmbeddingConfig
-		if strings.EqualFold(strings.TrimSpace(optConfig.ModelType), "multimodal") {
-			if err := initMultiModalIfNeeded("embedding_rules with model_type=multimodal"); err != nil {
-				return nil, err
-			}
-		}
-		keywordEmbeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules, optConfig)
-		if err != nil {
-			logging.Errorf("Failed to create keyword embedding classifier: %v", err)
-			return nil, err
-		}
-		options = append(options, withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier))
-	}
-
-	// Add context classifier if configured
-	if len(cfg.ContextRules) > 0 {
-		// Create token counter (uses character-based heuristic for performance)
-		tokenCounter := &CharacterBasedTokenCounter{}
-		contextClassifier := NewContextClassifier(tokenCounter, cfg.ContextRules)
-		options = append(options, withContextClassifier(contextClassifier))
-	}
-
-	// Add complexity classifier if configured
-	if len(cfg.ComplexityRules) > 0 {
-		// Get model type from embedding models configuration (reuse same model as embedding classifier)
-		modelType := cfg.EmbeddingConfig.ModelType
-		if modelType == "" {
-			modelType = "qwen3" // Default to qwen3
-		}
-
-		// Initialize multimodal model if any complexity rule uses image candidates
-		if config.HasImageCandidatesInRules(cfg.ComplexityRules) {
-			if err := initMultiModalIfNeeded("complexity image_candidates"); err != nil {
-				return nil, err
-			}
-		}
-
-		if strings.EqualFold(strings.TrimSpace(modelType), "multimodal") {
-			if err := initMultiModalIfNeeded("complexity model_type=multimodal"); err != nil {
-				return nil, err
-			}
-		}
-
-		complexityClassifier, err := NewComplexityClassifier(cfg.ComplexityRules, modelType)
-		if err != nil {
-			logging.Errorf("Failed to create complexity classifier: %v", err)
-			return nil, err
-		}
-		options = append(options, withComplexityClassifier(complexityClassifier))
-	}
-
-	// Add contrastive jailbreak classifiers for rules with method == "contrastive"
-	{
-		contrastiveClassifiers := make(map[string]*ContrastiveJailbreakClassifier)
-		defaultModelType := cfg.EmbeddingConfig.ModelType
-		for _, rule := range cfg.JailbreakRules {
-			if rule.Method != "contrastive" {
-				continue
-			}
-			if strings.EqualFold(strings.TrimSpace(defaultModelType), "multimodal") {
-				if err := initMultiModalIfNeeded("contrastive jailbreak with model_type=multimodal"); err != nil {
-					return nil, err
-				}
-			}
-			cjc, err := NewContrastiveJailbreakClassifier(rule, defaultModelType)
-			if err != nil {
-				logging.Errorf("Failed to create contrastive jailbreak classifier for rule %q: %v", rule.Name, err)
-				return nil, err
-			}
-			contrastiveClassifiers[rule.Name] = cjc
-		}
-		if len(contrastiveClassifiers) > 0 {
-			options = append(options, withContrastiveJailbreakClassifiers(contrastiveClassifiers))
-			logging.Infof("Initialized %d contrastive jailbreak classifiers", len(contrastiveClassifiers))
-		}
-	}
-
-	// Add authz classifier if authz rules are configured
-	roleBindings := cfg.GetRoleBindings()
-	if len(roleBindings) > 0 {
-		authzClassifier, err := NewAuthzClassifier(roleBindings)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create authz classifier: %w", err)
-		}
-		options = append(options, withAuthzClassifier(authzClassifier))
-		logging.Infof("Authz classifier initialized with %d role bindings", len(roleBindings))
-	}
-
-	// Add in-tree classifier if configured
-	if cfg.CategoryModel.ModelID != "" {
-		var categoryInitializer CategoryInitializer
-		var categoryInference CategoryInference
-		if cfg.CategoryModel.UseMmBERT32K {
-			logging.Infof("Using mmBERT-32K for intent/category classification (32K context, YaRN RoPE)")
-			categoryInitializer = createMmBERT32KCategoryInitializer()
-			categoryInference = createMmBERT32KCategoryInference()
-		} else {
-			categoryInitializer = createCategoryInitializer()
-			categoryInference = createCategoryInference()
-		}
-		options = append(options, withCategory(categoryMapping, categoryInitializer, categoryInference))
-	}
-
-	// Add MCP classifier if configured
-	// Note: Both in-tree and MCP classifiers can be configured simultaneously.
-	// At runtime, in-tree classifier will be tried first, with MCP as a fallback.
-	// This allows flexible deployment scenarios (e.g., gradual migration, A/B testing).
-	if cfg.MCPCategoryModel.Enabled {
-		mcpInit := createMCPCategoryInitializer()
-		mcpInf := createMCPCategoryInference(mcpInit)
-		options = append(options, withMCPCategory(mcpInit, mcpInf))
-	}
-
 	return newClassifierWithOptions(cfg, options...)
 }
 

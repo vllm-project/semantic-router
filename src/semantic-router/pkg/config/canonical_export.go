@@ -63,6 +63,7 @@ func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
 		Preferences:   append([]PreferenceRule(nil), cfg.PreferenceRules...),
 		Language:      append([]LanguageRule(nil), cfg.LanguageRules...),
 		Context:       append([]ContextRule(nil), cfg.ContextRules...),
+		Structure:     append([]StructureRule(nil), cfg.StructureRules...),
 		Complexity:    append([]ComplexityRule(nil), cfg.ComplexityRules...),
 		Modality:      append([]ModalityRule(nil), cfg.ModalityRules...),
 		RoleBindings:  append([]RoleBinding(nil), cfg.RoleBindings...),

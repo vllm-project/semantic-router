@@ -77,6 +77,55 @@ func TestMaintainedBalanceRoutingAssetsStayInSync(t *testing.T) {
 	}
 }
 
+func TestMaintainedBalanceBaseRoutesExplicitlyExcludeVerifiedOverlay(t *testing.T) {
+	yamlPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml")
+	cfg := mustLoadMaintainedBalanceRouterConfig(t, yamlPath)
+
+	for _, routeName := range []string{
+		"medium_business",
+		"medium_history",
+		"simple_fast_qa_en",
+		"simple_fast_qa_zh",
+	} {
+		decision := mustFindMaintainedBalanceDecision(t, cfg.Decisions, routeName)
+		if !ruleTreeContainsNegatedSignal(&decision.Rules, config.SignalTypeProjection, "verification_required") {
+			t.Fatalf("expected %s to negate projection(%q) so verified overlays stay explicit siblings", routeName, "verification_required")
+		}
+	}
+}
+
+func TestMaintainedBalanceWarningBudgetStaysBelowCeiling(t *testing.T) {
+	yamlPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml")
+	cfg := mustLoadMaintainedBalanceRouterConfig(t, yamlPath)
+
+	dslText, err := DecompileRouting(cfg)
+	if err != nil {
+		t.Fatalf("DecompileRouting error: %v", err)
+	}
+	diags, errs := Validate(dslText)
+	if len(errs) > 0 {
+		t.Fatalf("Validate parse errors: %v", errs)
+	}
+
+	warnings := 0
+	for _, diag := range diags {
+		if diag.Level == DiagError || diag.Level == DiagConstraint {
+			t.Fatalf("unexpected maintained balance diagnostic: %s", diag.String())
+		}
+		if diag.Level == DiagWarning {
+			if !strings.Contains(diag.Message, "no mutual exclusion guard") {
+				t.Fatalf("unexpected maintained balance warning category: %s", diag.Message)
+			}
+			warnings++
+		}
+	}
+
+	const maxWarnings = 0
+	if warnings > maxWarnings {
+		t.Fatalf("expected maintained balance warning count <= %d after recipe guard tightening, got %d", maxWarnings, warnings)
+	}
+}
+
 func mustLoadMaintainedBalanceDSLProgram(t *testing.T, dslPath string) *Program {
 	t.Helper()
 
@@ -262,6 +311,13 @@ func mustCompileMaintainedRoutingDSL(t *testing.T, prog *Program) config.Canonic
 func mustLoadMaintainedBalanceRoutingYAML(t *testing.T, yamlPath string) config.CanonicalRouting {
 	t.Helper()
 
+	parsedCfg := mustLoadMaintainedBalanceRouterConfig(t, yamlPath)
+	return config.CanonicalRoutingFromRouterConfig(parsedCfg)
+}
+
+func mustLoadMaintainedBalanceRouterConfig(t *testing.T, yamlPath string) *config.RouterConfig {
+	t.Helper()
+
 	yamlData, err := os.ReadFile(yamlPath)
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", yamlPath, err)
@@ -270,5 +326,41 @@ func mustLoadMaintainedBalanceRoutingYAML(t *testing.T, yamlPath string) config.
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes error: %v", err)
 	}
-	return config.CanonicalRoutingFromRouterConfig(parsedCfg)
+	return parsedCfg
+}
+
+func mustFindMaintainedBalanceDecision(t *testing.T, decisions []config.Decision, name string) *config.Decision {
+	t.Helper()
+
+	for i := range decisions {
+		if decisions[i].Name == name {
+			return &decisions[i]
+		}
+	}
+	t.Fatalf("expected deploy/recipes/balance.yaml to include %s route", name)
+	return nil
+}
+
+func ruleTreeContainsNegatedSignal(node *config.RuleCombination, signalType string, name string) bool {
+	return ruleTreeContainsSignal(node, false, signalType, name)
+}
+
+func ruleTreeContainsSignal(node *config.RuleCombination, negated bool, signalType string, name string) bool {
+	if node == nil {
+		return false
+	}
+	if node.Type != "" {
+		return negated && node.Type == signalType && node.Name == name
+	}
+
+	childNegated := negated
+	if node.Operator == "NOT" {
+		childNegated = !negated
+	}
+	for i := range node.Conditions {
+		if ruleTreeContainsSignal(&node.Conditions[i], childNegated, signalType, name) {
+			return true
+		}
+	}
+	return false
 }

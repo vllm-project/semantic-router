@@ -19,6 +19,7 @@ var signalTutorialBuckets = map[string]string{
 	"keyword":       "heuristic",
 	"language":      "heuristic",
 	"modality":      "heuristic",
+	"structure":     "heuristic",
 	"pii":           "learned",
 	"preference":    "learned",
 	"user-feedback": "learned",

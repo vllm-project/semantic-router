@@ -36,6 +36,7 @@ type CanonicalSignals struct {
 	Preferences   []PreferenceRule   `yaml:"preferences,omitempty"`
 	Language      []LanguageRule     `yaml:"language,omitempty"`
 	Context       []ContextRule      `yaml:"context,omitempty"`
+	Structure     []StructureRule    `yaml:"structure,omitempty"`
 	Complexity    []ComplexityRule   `yaml:"complexity,omitempty"`
 	Modality      []ModalityRule     `yaml:"modality,omitempty"`
 	RoleBindings  []RoleBinding      `yaml:"role_bindings,omitempty"`
@@ -238,6 +239,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		PreferenceRules:   append([]PreferenceRule(nil), signals.Preferences...),
 		LanguageRules:     append([]LanguageRule(nil), signals.Language...),
 		ContextRules:      append([]ContextRule(nil), signals.Context...),
+		StructureRules:    append([]StructureRule(nil), signals.Structure...),
 		ComplexityRules:   append([]ComplexityRule(nil), signals.Complexity...),
 		ModalityRules:     append([]ModalityRule(nil), signals.Modality...),
 		RoleBindings:      append([]RoleBinding(nil), signals.RoleBindings...),

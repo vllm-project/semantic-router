@@ -142,6 +142,7 @@ docs:
   - docs/agent/plans/pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md
   - docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md
   - docs/agent/plans/pl-0013-openclaw-vsr-install-import-workstream.md
+  - docs/agent/plans/pl-0014-structure-signal-family-implementation.md
   - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
@@ -312,6 +313,9 @@ doc_governance:
     - path: docs/agent/plans/pl-0013-openclaw-vsr-install-import-workstream.md
       steward: agent-contract
       freshness: update at the start and end of each OpenClaw-to-VSR install/import loop and after each completed loop task
+    - path: docs/agent/plans/pl-0014-structure-signal-family-implementation.md
+      steward: agent-contract
+      freshness: update at the start and end of each structure-signal-family implementation loop and after each completed loop task
     - path: docs/agent/state-taxonomy-and-inventory.md
       steward: agent-contract
       freshness: update when the runtime or dashboard state inventory, durability taxonomy, or persistence guidance changes materially
@@ -522,6 +526,7 @@ skills:
   - tools/agent/skills/e2e-selection/SKILL.md
   - tools/agent/skills/local-dev-cpu/SKILL.md
   - tools/agent/skills/local-dev-amd/SKILL.md
+  - tools/agent/skills/routing-calibration-loop/SKILL.md
   - tools/agent/skills/feature-complete-checklist/SKILL.md
   - tools/agent/skills/maintainer-issue-pr-management/SKILL.md
   - tools/agent/skills/architecture-guardrails/SKILL.md

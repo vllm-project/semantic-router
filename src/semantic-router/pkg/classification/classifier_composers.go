@@ -144,6 +144,8 @@ func (c *Classifier) evalComposerLeaf(
 		return slices.Contains(signals.MatchedLanguageRules, name)
 	case "context":
 		return slices.Contains(signals.MatchedContextRules, name)
+	case "structure":
+		return slices.Contains(signals.MatchedStructureRules, name)
 	case "modality":
 		return slices.Contains(signals.MatchedModalityRules, name)
 	default:

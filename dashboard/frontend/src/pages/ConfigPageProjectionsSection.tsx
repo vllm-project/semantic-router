@@ -581,7 +581,6 @@ export default function ConfigPageProjectionsSection({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <TableHeader
           title="Projection Surfaces"
-          icon="🧭"
           count={partitions.length + scores.length + mappings.length}
           searchPlaceholder="Search partitions, scores, or mappings..."
           searchValue={search}
@@ -592,7 +591,6 @@ export default function ConfigPageProjectionsSection({
         <section>
           <TableHeader
             title="Partitions"
-            icon="🪢"
             count={filteredPartitions.length}
             onAdd={handleAddPartition}
             addButtonText="Add Partition"
@@ -614,7 +612,6 @@ export default function ConfigPageProjectionsSection({
         <section>
           <TableHeader
             title="Scores"
-            icon="⚖️"
             count={filteredScores.length}
             onAdd={handleAddScore}
             addButtonText="Add Score"
@@ -636,7 +633,6 @@ export default function ConfigPageProjectionsSection({
         <section>
           <TableHeader
             title="Mappings"
-            icon="🎯"
             count={filteredMappings.length}
             onAdd={handleAddMapping}
             addButtonText="Add Mapping"

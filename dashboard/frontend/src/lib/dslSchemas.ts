@@ -10,7 +10,7 @@ export interface FieldSchema {
 
 export const SIGNAL_TYPES = [
   'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
-  'preference', 'language', 'context', 'complexity', 'modality', 'authz',
+  'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
   'jailbreak', 'pii',
 ] as const
 
@@ -63,6 +63,12 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'min_tokens', label: 'Min Tokens', type: 'string', required: true, placeholder: '4K' },
         { key: 'max_tokens', label: 'Max Tokens', type: 'string', required: true, placeholder: '32K' },
         { key: 'description', label: 'Description', type: 'string' },
+      ]
+    case 'structure':
+      return [
+        { key: 'description', label: 'Description', type: 'string' },
+        { key: 'feature', label: 'Feature', type: 'json', required: true, description: 'Typed structure feature object, e.g. { type: "count", source: { type: "regex", pattern: "[?？]" } }' },
+        { key: 'predicate', label: 'Predicate', type: 'json', description: 'Optional numeric predicate, e.g. { gte: 4 }' },
       ]
     case 'complexity':
       return [

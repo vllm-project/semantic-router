@@ -63,7 +63,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 }
 
 func logSignalEvaluationResults(signals *classification.SignalResults) {
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, modality=%v, jailbreak=%v, pii=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, projection=%v",
 		signals.MatchedKeywordRules,
 		signals.MatchedEmbeddingRules,
 		signals.MatchedDomainRules,
@@ -71,9 +71,13 @@ func logSignalEvaluationResults(signals *classification.SignalResults) {
 		signals.MatchedUserFeedbackRules,
 		signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules,
+		signals.MatchedContextRules,
+		signals.MatchedComplexityRules,
 		signals.MatchedModalityRules,
+		signals.MatchedAuthzRules,
 		signals.MatchedJailbreakRules,
-		signals.MatchedPIIRules)
+		signals.MatchedPIIRules,
+		signals.MatchedProjectionRules)
 }
 
 func (r *OpenAIRouter) runDecisionEngine(

@@ -4189,6 +4189,420 @@ ROUTE r2 { PRIORITY 100 WHEN keyword("urgent") MODEL "m2" }
 	}
 }
 
+func TestValidateSameSignalTypeAggregatesMultipleOverlaps(t *testing.T) {
+	input := `
+SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain science { mmlu_categories: ["physics"] }
+SIGNAL domain history { mmlu_categories: ["history"] }
+SIGNAL keyword urgent { keywords: ["urgent"] }
+SIGNAL keyword asap { keywords: ["asap"] }
+SIGNAL keyword help { keywords: ["help"] }
+ROUTE primary_route {
+  PRIORITY 200
+  WHEN (domain("math") OR domain("science")) AND (keyword("urgent") OR keyword("asap"))
+  MODEL "m1"
+}
+ROUTE fallback_route {
+  PRIORITY 100
+  WHEN domain("history") AND keyword("help")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+
+	var guardDiags []Diagnostic
+	for _, d := range diags {
+		if d.Level == DiagWarning && strings.Contains(d.Message, "no mutual exclusion guard") {
+			guardDiags = append(guardDiags, d)
+		}
+	}
+	if len(guardDiags) != 1 {
+		t.Fatalf("expected 1 aggregated guard warning, got %d: %v", len(guardDiags), guardDiags)
+	}
+
+	guardDiag := guardDiags[0]
+	if !strings.Contains(guardDiag.Message, "domain=2, keyword=2") {
+		t.Fatalf("expected per-type overlap counts in message, got: %s", guardDiag.Message)
+	}
+	if !strings.Contains(guardDiag.Message, `domain("math") vs domain("history")`) {
+		t.Fatalf("expected first representative domain example, got: %s", guardDiag.Message)
+	}
+	if !strings.Contains(guardDiag.Message, `domain("science") vs domain("history")`) {
+		t.Fatalf("expected second representative domain example, got: %s", guardDiag.Message)
+	}
+	if !strings.Contains(guardDiag.Message, `keyword("asap") vs keyword("help")`) {
+		t.Fatalf("expected third representative keyword example, got: %s", guardDiag.Message)
+	}
+	if guardDiag.Fix == nil {
+		t.Fatal("expected quick fix for aggregated guard warning")
+	}
+	if got := guardDiag.Fix.NewText; got != `domain("history") AND NOT domain("math")` {
+		t.Fatalf("aggregated guard fix = %q, want %q", got, `domain("history") AND NOT domain("math")`)
+	}
+}
+
+func TestValidateProjectionScoreAcceptsComplexitySublevels(t *testing.T) {
+	input := `
+SIGNAL complexity reasoning_complexity {
+  threshold: 0.1
+  hard: { candidates: ["hard task"] }
+  easy: { candidates: ["easy task"] }
+}
+
+PROJECTION score difficulty_score {
+  method: "weighted_sum"
+  inputs: [
+    { type: "complexity", name: "reasoning_complexity:easy", weight: -0.1 },
+    { type: "complexity", name: "reasoning_complexity:medium", weight: 0.1 },
+    { type: "complexity", name: "reasoning_complexity:hard", weight: 0.3 }
+  ]
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, `input complexity("reasoning_complexity:`) &&
+			strings.Contains(d.Message, "is not defined") {
+			t.Fatalf("unexpected complexity sublevel warning: %s", d.Message)
+		}
+	}
+}
+
+func TestValidateSameProjectionMappingOutputsDoNotWarn(t *testing.T) {
+	input := `
+SIGNAL keyword reasoning_request_markers {
+  operator: "OR"
+  keywords: ["reason carefully"]
+}
+
+PROJECTION score difficulty_score {
+  method: "weighted_sum"
+  inputs: [
+    { type: "keyword", name: "reasoning_request_markers", weight: 0.6 }
+  ]
+}
+
+PROJECTION mapping difficulty_band {
+  source: "difficulty_score"
+  method: "threshold_bands"
+  outputs: [
+    { name: "balance_medium", lt: 0.7 },
+    { name: "balance_reasoning", gte: 0.7 }
+  ]
+}
+
+ROUTE reasoning_route {
+  PRIORITY 200
+  WHEN projection("balance_reasoning")
+  MODEL "m1"
+}
+
+ROUTE medium_route {
+  PRIORITY 100
+  WHEN projection("balance_medium")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") &&
+			strings.Contains(d.Message, "reasoning_route") &&
+			strings.Contains(d.Message, "medium_route") {
+			t.Fatalf("expected same-mapping projection outputs to skip guard warning, got: %s", d.Message)
+		}
+	}
+}
+
+func TestValidateProjectionSignalsFromDifferentMappingsDoNotWarn(t *testing.T) {
+	input := `
+SIGNAL keyword reasoning_request_markers {
+  operator: "OR"
+  keywords: ["reason carefully"]
+}
+SIGNAL keyword verification_markers {
+  operator: "OR"
+  keywords: ["verify this"]
+}
+
+PROJECTION score difficulty_score {
+  method: "weighted_sum"
+  inputs: [
+    { type: "keyword", name: "reasoning_request_markers", weight: 0.6 }
+  ]
+}
+
+PROJECTION mapping difficulty_band {
+  source: "difficulty_score"
+  method: "threshold_bands"
+  outputs: [
+    { name: "balance_medium", lt: 0.7 },
+    { name: "balance_reasoning", gte: 0.7 }
+  ]
+}
+
+PROJECTION score verification_score {
+  method: "weighted_sum"
+  inputs: [
+    { type: "keyword", name: "verification_markers", weight: 0.6 }
+  ]
+}
+
+PROJECTION mapping verification_band {
+  source: "verification_score"
+  method: "threshold_bands"
+  outputs: [
+    { name: "verification_standard", lt: 0.7 },
+    { name: "verification_required", gte: 0.7 }
+  ]
+}
+
+ROUTE reasoning_route {
+  PRIORITY 200
+  WHEN projection("balance_reasoning")
+  MODEL "m1"
+}
+
+ROUTE verified_route {
+  PRIORITY 100
+  WHEN projection("verification_required")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") &&
+			strings.Contains(d.Message, "reasoning_route") &&
+			strings.Contains(d.Message, "verified_route") {
+			t.Fatalf("expected projection families from different mappings to skip guard warning, got: %s", d.Message)
+		}
+	}
+}
+
+func TestValidateProjectionPartitionSuppressesCrossRouteDomainWarnings(t *testing.T) {
+	input := `
+SIGNAL domain business { mmlu_categories: ["business"] }
+SIGNAL domain economics { mmlu_categories: ["economics"] }
+
+PROJECTION partition balance_domain_partition {
+  semantics: "softmax_exclusive"
+  temperature: 0.1
+  members: ["business", "economics"]
+  default: "business"
+}
+
+ROUTE business_route {
+  PRIORITY 200
+  WHEN domain("business")
+  MODEL "m1"
+}
+
+ROUTE economics_route {
+  PRIORITY 100
+  WHEN domain("economics")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") &&
+			strings.Contains(d.Message, "business_route") &&
+			strings.Contains(d.Message, "economics_route") {
+			t.Fatalf("expected partition-exclusive domain members to skip guard warning, got: %s", d.Message)
+		}
+	}
+}
+
+func TestValidateContextDisjointRangesDoNotWarn(t *testing.T) {
+	input := `
+SIGNAL context short_context {
+  min_tokens: "0"
+  max_tokens: "1K"
+}
+SIGNAL context long_context {
+  min_tokens: "4K"
+  max_tokens: "128K"
+}
+
+ROUTE short_route {
+  PRIORITY 200
+  WHEN context("short_context")
+  MODEL "m1"
+}
+
+ROUTE long_route {
+  PRIORITY 100
+  WHEN context("long_context")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") &&
+			strings.Contains(d.Message, "short_route") &&
+			strings.Contains(d.Message, "long_route") {
+			t.Fatalf("expected disjoint context ranges to skip guard warning, got: %s", d.Message)
+		}
+	}
+}
+
+func TestValidateContextBoundaryOverlapStillWarns(t *testing.T) {
+	input := `
+SIGNAL context short_context {
+  min_tokens: "0"
+  max_tokens: "1K"
+}
+SIGNAL context medium_context {
+  min_tokens: "1K"
+  max_tokens: "8K"
+}
+
+ROUTE short_route {
+  PRIORITY 200
+  WHEN context("short_context")
+  MODEL "m1"
+}
+
+ROUTE medium_route {
+  PRIORITY 100
+  WHEN context("medium_context")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	found := false
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") &&
+			strings.Contains(d.Message, "short_route") &&
+			strings.Contains(d.Message, "medium_route") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected overlapping context boundary to keep guard warning")
+	}
+}
+
+func TestValidateImpossibleClausePairSkipsGuardWarning(t *testing.T) {
+	input := `
+SIGNAL keyword alpha { keywords: ["alpha"] }
+SIGNAL keyword beta { keywords: ["beta"] }
+SIGNAL keyword gamma { keywords: ["gamma"] }
+SIGNAL keyword delta { keywords: ["delta"] }
+
+ROUTE guarded_route {
+  PRIORITY 200
+  WHEN (keyword("alpha") OR keyword("beta")) AND NOT keyword("gamma")
+  MODEL "m1"
+}
+
+ROUTE gamma_route {
+  PRIORITY 100
+  WHEN keyword("gamma") AND keyword("delta")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") &&
+			strings.Contains(d.Message, "guarded_route") &&
+			strings.Contains(d.Message, "gamma_route") {
+			t.Fatalf("expected incompatible clause pair to skip guard warning, got: %s", d.Message)
+		}
+	}
+}
+
+func TestValidateFeedbackOverlaySuppressesNonFeedbackWarnings(t *testing.T) {
+	input := `
+SIGNAL user_feedback need_clarification {}
+SIGNAL keyword clarification_feedback_markers { keywords: ["clarify"] }
+SIGNAL keyword code_request_markers { keywords: ["code"] }
+SIGNAL context short_context { min_tokens: "0" max_tokens: "1K" }
+SIGNAL context medium_context { min_tokens: "1K" max_tokens: "8K" }
+
+ROUTE feedback_overlay {
+  PRIORITY 200
+  WHEN user_feedback("need_clarification") AND keyword("clarification_feedback_markers") AND (context("short_context") OR context("medium_context"))
+  MODEL "m1"
+}
+
+ROUTE code_route {
+  PRIORITY 100
+  WHEN keyword("code_request_markers") AND context("short_context")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") &&
+			strings.Contains(d.Message, "feedback_overlay") &&
+			strings.Contains(d.Message, "code_route") {
+			t.Fatalf("expected feedback overlay route to skip guard warning against non-feedback route, got: %s", d.Message)
+		}
+	}
+}
+
+func TestValidateFeedbackOverlayRoutesDoNotWarnAgainstEachOther(t *testing.T) {
+	input := `
+SIGNAL user_feedback wrong_answer {}
+SIGNAL user_feedback need_clarification {}
+SIGNAL keyword correction_feedback_markers { keywords: ["wrong"] }
+SIGNAL keyword clarification_feedback_markers { keywords: ["clarify"] }
+SIGNAL context short_context { min_tokens: "0" max_tokens: "1K" }
+SIGNAL context medium_context { min_tokens: "1K" max_tokens: "8K" }
+
+ROUTE verified_feedback {
+  PRIORITY 200
+  WHEN user_feedback("wrong_answer") AND keyword("correction_feedback_markers") AND (context("short_context") OR context("medium_context"))
+  MODEL "m1"
+}
+
+ROUTE clarification_feedback {
+  PRIORITY 100
+  WHEN user_feedback("need_clarification") AND keyword("clarification_feedback_markers") AND (context("short_context") OR context("medium_context"))
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") &&
+			strings.Contains(d.Message, "verified_feedback") &&
+			strings.Contains(d.Message, "clarification_feedback") {
+			t.Fatalf("expected feedback overlay routes to skip generic guard warning, got: %s", d.Message)
+		}
+	}
+}
+
+func TestValidatePartialFeedbackBranchDoesNotSuppressGuardWarning(t *testing.T) {
+	input := `
+SIGNAL user_feedback need_clarification {}
+SIGNAL keyword clarification_feedback_markers { keywords: ["clarify"] }
+SIGNAL keyword code_request_markers { keywords: ["code"] }
+
+ROUTE mixed_route {
+  PRIORITY 200
+  WHEN (user_feedback("need_clarification") AND keyword("clarification_feedback_markers")) OR keyword("code_request_markers")
+  MODEL "m1"
+}
+
+ROUTE code_route {
+  PRIORITY 100
+  WHEN keyword("clarification_feedback_markers")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	found := false
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") &&
+			strings.Contains(d.Message, "mixed_route") &&
+			strings.Contains(d.Message, "code_route") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected routes with only partial feedback coverage to keep guard warning")
+	}
+}
+
 // ---------- PROJECTION partition Tests ----------
 
 func TestParseProjectionPartition(t *testing.T) {

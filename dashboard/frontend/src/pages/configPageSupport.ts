@@ -725,6 +725,7 @@ export interface ConfigSignals {
   preferences?: PreferenceSignal[]
   language?: LanguageSignal[]
   context?: ContextSignal[]
+  structure?: StructureSignal[]
   complexity?: ComplexitySignal[]
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
@@ -1035,6 +1036,33 @@ export interface ContextSignal {
   description?: string
 }
 
+export interface StructureSource {
+  type: string
+  pattern?: string
+  keywords?: string[]
+  case_sensitive?: boolean
+  sequences?: string[][]
+}
+
+export interface StructureFeature {
+  type: string
+  source: StructureSource
+}
+
+export interface NumericPredicate {
+  gt?: number
+  gte?: number
+  lt?: number
+  lte?: number
+}
+
+export interface StructureSignal {
+  name: string
+  description?: string
+  feature: StructureFeature
+  predicate?: NumericPredicate
+}
+
 export interface ComplexitySignal {
   name: string
   threshold: number
@@ -1108,6 +1136,7 @@ export interface ConfigData {
   preference_rules?: PreferenceSignal[]
   language_rules?: LanguageSignal[]
   context_rules?: ContextSignal[]
+  structure_rules?: StructureSignal[]
   complexity_rules?: ComplexitySignal[]
   jailbreak?: JailbreakSignal[]
   pii?: PIISignal[]
@@ -1122,6 +1151,7 @@ export type SignalType =
   | 'User Feedback'
   | 'Language'
   | 'Context'
+  | 'Structure'
   | 'Complexity'
   | 'Modality'
   | 'Authz'
@@ -1154,6 +1184,8 @@ export interface AddSignalFormState {
   preference_examples?: string
   preference_threshold?: number
   complexity_threshold?: number
+  structure_feature?: string
+  structure_predicate?: string
   role?: string
   subjects?: string
   hard_candidates?: string

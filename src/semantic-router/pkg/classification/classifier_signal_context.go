@@ -47,6 +47,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypePreference:   len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled(),
 		config.SignalTypeLanguage:     len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
 		config.SignalTypeContext:      c.contextClassifier != nil,
+		config.SignalTypeStructure:    c.structureClassifier != nil,
 		config.SignalTypeComplexity:   c.complexityClassifier != nil,
 		config.SignalTypeModality:     len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
 		config.SignalTypeJailbreak:    len(c.Config.JailbreakRules) > 0 && c.IsJailbreakEnabled(),
@@ -82,6 +83,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	results := &SignalResults{
 		Metrics:           &SignalMetricsCollection{},
 		SignalConfidences: make(map[string]float64),
+		SignalValues:      make(map[string]float64),
 	}
 
 	var wg sync.WaitGroup
@@ -91,73 +93,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		imgArg = imageURL[0]
 	}
 
-	type signalDispatch struct {
-		signalType string
-		name       string
-		evaluate   func()
-	}
-
-	dispatchers := []signalDispatch{
-		{
-			config.SignalTypeKeyword, "Keyword",
-			func() { c.evaluateKeywordSignal(results, &mu, textForSignal(config.SignalTypeKeyword)) },
-		},
-		{
-			config.SignalTypeEmbedding, "Embedding",
-			func() { c.evaluateEmbeddingSignal(results, &mu, textForSignal(config.SignalTypeEmbedding)) },
-		},
-		{
-			config.SignalTypeDomain, "Domain",
-			func() { c.evaluateDomainSignal(results, &mu, textForSignal(config.SignalTypeDomain)) },
-		},
-		{
-			config.SignalTypeFactCheck, "Fact-check",
-			func() { c.evaluateFactCheckSignal(results, &mu, textForSignal(config.SignalTypeFactCheck)) },
-		},
-		{
-			config.SignalTypeUserFeedback, "User feedback",
-			func() { c.evaluateUserFeedbackSignal(results, &mu, textForSignal(config.SignalTypeUserFeedback)) },
-		},
-		{
-			config.SignalTypePreference, "Preference",
-			func() { c.evaluatePreferenceSignal(results, &mu, textForSignal(config.SignalTypePreference)) },
-		},
-		{
-			config.SignalTypeLanguage, "Language",
-			func() { c.evaluateLanguageSignal(results, &mu, textForSignal(config.SignalTypeLanguage)) },
-		},
-		{
-			config.SignalTypeContext, "Context",
-			func() { c.evaluateContextSignal(results, &mu, contextText) },
-		},
-		{
-			config.SignalTypeComplexity, "Complexity",
-			func() { c.evaluateComplexitySignal(results, &mu, textForSignal(config.SignalTypeComplexity), imgArg) },
-		},
-		{
-			config.SignalTypeModality, "Modality",
-			func() { c.evaluateModalitySignal(results, &mu, textForSignal(config.SignalTypeModality)) },
-		},
-		{
-			config.SignalTypeJailbreak, "Jailbreak",
-			func() {
-				c.evaluateJailbreakSignal(results, &mu, textForSignal(config.SignalTypeJailbreak), nonUserMessages)
-			},
-		},
-		{
-			config.SignalTypePII, "PII",
-			func() { c.evaluatePIISignal(results, &mu, textForSignal(config.SignalTypePII), nonUserMessages) },
-		},
-	}
-
-	for _, d := range dispatchers {
-		if isSignalTypeUsed(usedSignals, d.signalType) && ready[d.signalType] {
-			wg.Add(1)
-			go func() { defer wg.Done(); d.evaluate() }()
-		} else if !isSignalTypeUsed(usedSignals, d.signalType) {
-			logging.Debugf("[Signal Computation] %s signal not used in any decision, skipping evaluation", d.name)
-		}
-	}
+	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, nonUserMessages, imgArg)
+	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
 
 	wg.Wait()
 	results = c.applySignalGroups(results)

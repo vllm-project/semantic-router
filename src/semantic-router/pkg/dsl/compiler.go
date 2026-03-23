@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"gopkg.in/yaml.v2"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -144,6 +146,8 @@ func (c *Compiler) compileSignals() {
 			c.compileLanguageSignal(s)
 		case "context":
 			c.compileContextSignal(s)
+		case "structure":
+			c.compileStructureSignal(s)
 		case "complexity":
 			c.compileComplexitySignal(s)
 		case "modality":
@@ -282,6 +286,29 @@ func (c *Compiler) compileContextSignal(s *SignalDecl) {
 		rule.Description = v
 	}
 	c.config.ContextRules = append(c.config.ContextRules, rule)
+}
+
+func (c *Compiler) compileStructureSignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode structure signal %q: %v", s.Name, err)
+		return
+	}
+
+	var rule config.StructureRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode structure signal %q: %v", s.Name, err)
+		return
+	}
+	rule.Name = s.Name
+	if err := config.ValidateStructureRuleContract(rule); err != nil {
+		c.addError(s.Pos, "%v", err)
+		return
+	}
+	c.config.StructureRules = append(c.config.StructureRules, rule)
 }
 
 func (c *Compiler) compileComplexitySignal(s *SignalDecl) {

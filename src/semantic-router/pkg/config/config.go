@@ -30,6 +30,7 @@ const (
 	SignalTypePreference   = "preference"
 	SignalTypeLanguage     = "language"
 	SignalTypeContext      = "context"
+	SignalTypeStructure    = "structure"
 	SignalTypeComplexity   = "complexity"
 	SignalTypeModality     = "modality"
 	SignalTypeAuthz        = "authz"

@@ -137,6 +137,7 @@ def test_serve_uses_algorithm_translated_config(monkeypatch, tmp_path: Path):
         captured["env_vars"]["VLLM_SR_RUNTIME_CONFIG_PATH"]
         == "/app/.vllm-sr/runtime-config.yaml"
     )
+    assert captured["env_vars"]["VLLM_SR_SOURCE_CONFIG_PATH"] == "/app/config.yaml"
     assert captured["env_vars"]["VLLM_SR_ALGORITHM_OVERRIDE"] == "elo"
     assert translated["routing"]["decisions"][0]["algorithm"]["type"] == "elo"
     assert captured["pull_policy"] == "never"

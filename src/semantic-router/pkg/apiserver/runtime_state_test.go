@@ -59,6 +59,10 @@ func (s *fakeResolvedClassificationService) UpdateConfig(newConfig *config.Route
 	s.updatedConfig = newConfig
 }
 
+func (s *fakeResolvedClassificationService) RefreshRuntimeConfig(newConfig *config.RouterConfig) {
+	s.updatedConfig = newConfig
+}
+
 func TestHandleBatchClassificationUsesResolvedClassificationService(t *testing.T) {
 	resolvedSvc := &fakeResolvedClassificationService{}
 	apiServer := &ClassificationAPIServer{

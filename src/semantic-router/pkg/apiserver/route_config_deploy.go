@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	yamlv2 "gopkg.in/yaml.v2"
 	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -48,178 +47,9 @@ type ConfigVersionEntry struct {
 	Filename  string `json:"filename"`
 }
 
-// handleConfigDeploy handles POST /config/deploy
-// The Router writes its own config file and triggers hot-reload via fsnotify.
-func (s *ClassificationAPIServer) handleConfigDeploy(w http.ResponseWriter, r *http.Request) {
-	if s.configPath == "" {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
-		return
-	}
-
-	// Acquire deploy lock (only one deploy at a time)
-	if !deployMu.TryLock() {
-		s.writeErrorResponse(w, http.StatusConflict, "DEPLOY_IN_PROGRESS", "Another deploy operation is in progress. Please try again.")
-		return
-	}
-	defer deployMu.Unlock()
-
-	var req ConfigDeployRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
-		return
-	}
-
-	if strings.TrimSpace(req.YAML) == "" {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "YAML content is required")
-		return
-	}
-
-	// Step 1: Validate YAML syntax
-	yamlBytes := []byte(req.YAML)
-	var yamlMap interface{}
-	if err := yaml.Unmarshal(yamlBytes, &yamlMap); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "YAML_PARSE_ERROR", fmt.Sprintf("Invalid YAML syntax: %v", err))
-		return
-	}
-
-	// Step 2: Validate using router's config parser (authoritative validation)
-	tempFile := filepath.Join(os.TempDir(), fmt.Sprintf("deploy_validate_%d.yaml", time.Now().UnixNano()))
-	if err := os.WriteFile(tempFile, yamlBytes, 0o644); err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "TEMP_FILE_ERROR", fmt.Sprintf("Failed to create temp file: %v", err))
-		return
-	}
-	defer func() { _ = os.Remove(tempFile) }()
-
-	parsedCfg, err := config.Parse(tempFile)
-	if err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "CONFIG_VALIDATION_ERROR", fmt.Sprintf("Config validation failed: %v", err))
-		return
-	}
-
-	// Log decisions after parse
-	logging.Infof("[Deploy] After config.Parse: decisions=%d", len(parsedCfg.Decisions))
-	for i, d := range parsedCfg.Decisions {
-		logging.Infof("[Deploy]   parsed decision[%d]: name=%q, modelRefs=%d, priority=%d", i, d.Name, len(d.ModelRefs), d.Priority)
-	}
-
-	// Step 2b: Normalize to flat RouterConfig YAML format.
-	flatYAML, err := yamlv2.Marshal(parsedCfg)
-	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "NORMALIZE_ERROR", fmt.Sprintf("Failed to normalize config: %v", err))
-		return
-	}
-
-	logging.Infof("[Deploy] After yamlv2.Marshal (normalize): flatYAML size=%d bytes", len(flatYAML))
-
-	// Step 2c: Deep merge with existing config.
-	// DSL only covers signals/decisions/models — infrastructure fields must be preserved.
-	existingData, err := os.ReadFile(s.configPath)
-	if err == nil && len(existingData) > 0 {
-		logging.Infof("[Deploy] Existing config found: path=%s, size=%d bytes", s.configPath, len(existingData))
-		existingMap := make(map[string]interface{})
-		if unmarshalErr := yamlv2.Unmarshal(existingData, &existingMap); unmarshalErr == nil {
-			newMap := make(map[string]interface{})
-			if unmarshalNewErr := yamlv2.Unmarshal(flatYAML, &newMap); unmarshalNewErr == nil {
-				// Log decisions in newMap before merge
-				if decisionsRaw, ok := newMap["decisions"]; ok {
-					if decisionsSlice, ok := decisionsRaw.([]interface{}); ok {
-						logging.Infof("[Deploy] newMap decisions before merge: count=%d", len(decisionsSlice))
-						for i, d := range decisionsSlice {
-							if dm, ok := d.(map[interface{}]interface{}); ok {
-								logging.Infof("[Deploy]   newMap decision[%d]: name=%v", i, dm["name"])
-							} else if dm, ok := d.(map[string]interface{}); ok {
-								logging.Infof("[Deploy]   newMap decision[%d]: name=%v", i, dm["name"])
-							}
-						}
-					} else {
-						logging.Infof("[Deploy] newMap decisions is not a slice: type=%T", decisionsRaw)
-					}
-				} else {
-					logging.Warnf("[Deploy] newMap has NO 'decisions' key!")
-				}
-
-				merged := configDeepMerge(existingMap, newMap)
-
-				// Log decisions in merged map
-				if decisionsRaw, ok := merged["decisions"]; ok {
-					if decisionsSlice, ok := decisionsRaw.([]interface{}); ok {
-						logging.Infof("[Deploy] After merge: decisions count=%d", len(decisionsSlice))
-						for i, d := range decisionsSlice {
-							if dm, ok := d.(map[interface{}]interface{}); ok {
-								logging.Infof("[Deploy]   merged decision[%d]: name=%v", i, dm["name"])
-							} else if dm, ok := d.(map[string]interface{}); ok {
-								logging.Infof("[Deploy]   merged decision[%d]: name=%v", i, dm["name"])
-							}
-						}
-					}
-				}
-
-				if mergedYAML, marshalErr := yamlv2.Marshal(merged); marshalErr == nil {
-					flatYAML = mergedYAML
-				}
-			}
-		}
-	} else {
-		logging.Infof("[Deploy] No existing config at path=%s (err=%v), using new config as-is", s.configPath, err)
-	}
-	yamlBytes = flatYAML
-
-	// Step 3: Create backup of current config
-	configDir := filepath.Dir(s.configPath)
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
-		logging.Warnf("Failed to create backup directory: %v", err)
-	}
-
-	version := time.Now().Format("20060102-150405")
-
-	existingData, readErr := os.ReadFile(s.configPath)
-	if readErr == nil && len(existingData) > 0 {
-		backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-		if err := os.WriteFile(backupFile, existingData, 0o644); err != nil {
-			logging.Warnf("Failed to create backup: %v", err)
-		} else {
-			logging.Infof("Config backup created: %s", backupFile)
-		}
-	}
-
-	// Step 4: Archive DSL source (for audit trail)
-	if req.DSL != "" {
-		dslDir := filepath.Join(configDir, ".vllm-sr")
-		dslFile := filepath.Join(dslDir, "config.dsl")
-		if err := os.WriteFile(dslFile, []byte(req.DSL), 0o644); err != nil {
-			logging.Warnf("Failed to archive DSL source: %v", err)
-		}
-	}
-
-	// Step 5: Atomic write — write to temp file then rename
-	// This triggers fsnotify and the Router hot-reloads automatically.
-	tmpConfigFile := s.configPath + ".tmp"
-	if err := os.WriteFile(tmpConfigFile, yamlBytes, 0o644); err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "WRITE_ERROR", fmt.Sprintf("Failed to write config: %v", err))
-		return
-	}
-	if err := os.Rename(tmpConfigFile, s.configPath); err != nil {
-		// Fallback to direct write if rename fails (e.g., cross-device)
-		if writeErr := os.WriteFile(s.configPath, yamlBytes, 0o644); writeErr != nil {
-			s.writeErrorResponse(w, http.StatusInternalServerError, "WRITE_ERROR", fmt.Sprintf("Failed to write config: %v", writeErr))
-			return
-		}
-	}
-
-	logging.Infof("Config deployed via API: version=%s, size=%d bytes, configPath=%s", version, len(yamlBytes), s.configPath)
-
-	// Step 6: Clean up old backups
-	configCleanupBackups(backupDir)
-
-	s.writeJSONResponse(w, http.StatusOK, ConfigDeployResponse{
-		Status:  "success",
-		Version: version,
-		Message: "Config deployed successfully. Router will reload automatically via fsnotify.",
-	})
-}
-
 // handleConfigRollback handles POST /config/rollback
+//
+//nolint:cyclop,funlen // Legacy rollback flow still owns validation, backup, and atomic write in one handler.
 func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r *http.Request) {
 	if s.configPath == "" {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
@@ -244,7 +74,8 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 		return
 	}
 
-	configDir := filepath.Dir(s.configPath)
+	paths := resolveConfigPersistencePaths(s.configPath)
+	configDir := filepath.Dir(paths.sourcePath)
 	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", req.Version))
 
@@ -269,26 +100,30 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 
 	// Back up current config before rollback
 	currentVersion := time.Now().Format("20060102-150405")
-	existingData, err := os.ReadFile(s.configPath)
+	existingData, err := os.ReadFile(paths.sourcePath)
 	if err == nil && len(existingData) > 0 {
 		preRollbackFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", currentVersion))
 		_ = os.WriteFile(preRollbackFile, existingData, 0o644)
 	}
 
-	// Atomic write
-	tmpConfigFile := s.configPath + ".tmp"
-	if err := os.WriteFile(tmpConfigFile, backupData, 0o644); err != nil {
+	if err := writeConfigAtomically(paths.sourcePath, backupData); err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "WRITE_ERROR", fmt.Sprintf("Failed to write config: %v", err))
 		return
 	}
-	if err := os.Rename(tmpConfigFile, s.configPath); err != nil {
-		if writeErr := os.WriteFile(s.configPath, backupData, 0o644); writeErr != nil {
-			s.writeErrorResponse(w, http.StatusInternalServerError, "WRITE_ERROR", fmt.Sprintf("Failed to write config: %v", writeErr))
+
+	if paths.usesRuntimeOverride() {
+		if _, err := runtimeConfigSyncRunner(paths.sourcePath); err != nil {
+			s.writeErrorResponse(w, http.StatusInternalServerError, "RUNTIME_SYNC_ERROR", err.Error())
 			return
 		}
 	}
 
-	logging.Infof("Config rolled back to version %s via API", req.Version)
+	logging.Infof(
+		"Config rolled back to version %s via API: sourceConfigPath=%s, runtimeConfigPath=%s",
+		req.Version,
+		paths.sourcePath,
+		paths.runtimePath,
+	)
 
 	s.writeJSONResponse(w, http.StatusOK, ConfigDeployResponse{
 		Status:  "success",
@@ -304,7 +139,8 @@ func (s *ClassificationAPIServer) handleConfigVersions(w http.ResponseWriter, _ 
 		return
 	}
 
-	configDir := filepath.Dir(s.configPath)
+	paths := resolveConfigPersistencePaths(s.configPath)
+	configDir := filepath.Dir(paths.sourcePath)
 	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
 
 	versions := []ConfigVersionEntry{}
@@ -351,7 +187,8 @@ func (s *ClassificationAPIServer) handleConfigGet(w http.ResponseWriter, _ *http
 		return
 	}
 
-	data, err := os.ReadFile(s.configPath)
+	paths := resolveConfigPersistencePaths(s.configPath)
+	data, err := os.ReadFile(paths.sourcePath)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read config: %v", err))
 		return
@@ -367,6 +204,8 @@ func (s *ClassificationAPIServer) handleConfigGet(w http.ResponseWriter, _ *http
 }
 
 // configDeepMerge recursively merges src into dst.
+//
+//nolint:nestif // Canonical config merge accepts mixed YAML map shapes from legacy payloads.
 func configDeepMerge(dst, src map[string]interface{}) map[string]interface{} {
 	for key, srcVal := range src {
 		if dstVal, exists := dst[key]; exists {

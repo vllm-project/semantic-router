@@ -21,6 +21,7 @@ description: Modifies frontend dashboard surfaces including config editing UI, t
 ## Gotchas
 
 - Frontend-only display work can still encode router-contract assumptions; verify the emitted data shape before treating it as cosmetic.
+- New signal visualization rarely lives in one file; keep config editors, topology parsing or highlighting, and playground header reveal surfaces on the same contract.
 - Avoid moving business or routing logic into pages or components when the contract belongs upstream.
 
 ## Must Read
@@ -36,4 +37,4 @@ description: Modifies frontend dashboard surfaces including config editing UI, t
 ## Acceptance
 
 - Frontend dashboard surfaces remain aligned with router and CLI contracts
-- User-visible routing metadata stays consistent across config, topology, and playground
+- User-visible routing metadata stays consistent across config, topology, and playground, especially when adding a new signal family

@@ -73,92 +73,6 @@ func getMMLUCategories(s *SignalDecl) []string {
 	return cats
 }
 
-// checkSameSignalTypeGuard warns when two routes reference the same signal type
-// in their WHEN clauses without a NOT guard for mutual exclusion. Without a guard,
-// both routes can match the same query, and priority alone picks the winner —
-// even if the lower-priority route's signal has higher confidence.
-// routeSignalInfo collects positive and negated signal references from a route's WHEN clause.
-type routeSignalInfo struct {
-	route        *RouteDecl
-	positiveRefs map[string][]string // signalType → [signalName, ...]
-	negatedRefs  map[string][]string // signalType → [signalName, ...] (under NOT)
-}
-
-func (v *Validator) checkSameSignalTypeGuard() {
-	infos := v.collectRouteSignalInfos()
-	for i := 0; i < len(infos); i++ {
-		for j := i + 1; j < len(infos); j++ {
-			v.checkSignalTypeGuardPair(infos[i], infos[j])
-		}
-	}
-}
-
-func (v *Validator) collectRouteSignalInfos() []routeSignalInfo {
-	var infos []routeSignalInfo
-	for _, r := range v.prog.Routes {
-		if r.When == nil {
-			continue
-		}
-		info := routeSignalInfo{
-			route:        r,
-			positiveRefs: make(map[string][]string),
-			negatedRefs:  make(map[string][]string),
-		}
-		collectSignalRefs(r.When, false, &info)
-		infos = append(infos, info)
-	}
-	return infos
-}
-
-func (v *Validator) checkSignalTypeGuardPair(a, b routeSignalInfo) {
-	for sigType, aNamesPos := range a.positiveRefs {
-		bNamesPos, ok := b.positiveRefs[sigType]
-		if !ok {
-			continue
-		}
-		for _, aName := range aNamesPos {
-			for _, bName := range bNamesPos {
-				if aName == bName {
-					continue
-				}
-				v.emitGuardDiagIfNeeded(sigType, a, b, aName, bName)
-			}
-		}
-	}
-}
-
-func (v *Validator) emitGuardDiagIfNeeded(sigType string, a, b routeSignalInfo, aName, bName string) {
-	hiRoute, loRoute, hiName, loName := a.route, b.route, aName, bName
-	if b.route.Priority > a.route.Priority ||
-		(b.route.Priority == a.route.Priority && b.route.Tier > a.route.Tier) {
-		hiRoute, loRoute, hiName, loName = b.route, a.route, bName, aName
-	}
-	loInfo := b
-	if hiRoute == b.route {
-		loInfo = a
-	}
-	if containsString(loInfo.negatedRefs[sigType], hiName) {
-		return
-	}
-
-	v.addDiag(DiagWarning, loRoute.Pos,
-		fmt.Sprintf(
-			"ROUTE %q and ROUTE %q both reference %s signals "+
-				"(%s(%q) and %s(%q)) with no mutual exclusion guard — "+
-				"both can fire on the same query",
-			hiRoute.Name, loRoute.Name,
-			sigType, sigType, hiName, sigType, loName),
-		&QuickFix{
-			Description: fmt.Sprintf(
-				"Add guard: WHEN %s(%q) AND NOT %s(%q)",
-				sigType, loName, sigType, hiName),
-			NewText: fmt.Sprintf(
-				"%s(\"%s\") AND NOT %s(\"%s\")",
-				sigType, loName, sigType, hiName),
-		},
-	)
-}
-
 // collectSignalRefs walks a boolean expression tree and classifies signal
 // references as positive (directly referenced) or negated (under a NOT).
 func collectSignalRefs(expr BoolExpr, negated bool, info *routeSignalInfo) {
@@ -618,7 +532,7 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 		)
 		return
 	}
-	if !v.signalNames[input.SignalType][input.SignalName] {
+	if !v.isSignalDefined(input.SignalType, input.SignalName) {
 		v.addDiag(
 			DiagWarning,
 			pos,
@@ -654,6 +568,7 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		config.SignalTypePreference,
 		config.SignalTypeLanguage,
 		config.SignalTypeContext,
+		config.SignalTypeStructure,
 		config.SignalTypeComplexity,
 		config.SignalTypeModality,
 		config.SignalTypeAuthz,

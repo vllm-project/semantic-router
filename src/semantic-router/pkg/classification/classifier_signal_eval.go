@@ -46,6 +46,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypePreference, c.Config.PreferenceRules, func(r config.PreferenceRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeLanguage, c.Config.LanguageRules, func(r config.LanguageRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeContext, c.Config.ContextRules, func(r config.ContextRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeStructure, c.Config.StructureRules, func(r config.StructureRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeComplexity, c.Config.ComplexityRules, func(r config.ComplexityRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeModality, c.Config.ModalityRules, func(r config.ModalityRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeAuthz, c.Config.GetRoleBindings(), func(rb config.RoleBinding) string { return rb.Role })
@@ -78,6 +79,7 @@ type SignalResults struct {
 	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
 	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
 	TokenCount               int      // Total token count
+	MatchedStructureRules    []string // Matched structure rule names (e.g. "many_questions")
 	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
 	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
 	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
@@ -96,6 +98,7 @@ type SignalResults struct {
 	PIIEntities []string // Detected PII entity types (e.g., "EMAIL_ADDRESS", "PERSON")
 
 	SignalConfidences map[string]float64 // Real confidence scores per signal, e.g. "embedding:ai" → 0.88
+	SignalValues      map[string]float64 // Raw signal values per signal when the evaluator exposes them, e.g. "structure:many_questions" → 4
 
 	// Signal metrics (only populated in eval mode)
 	Metrics *SignalMetricsCollection
@@ -111,6 +114,7 @@ type SignalMetricsCollection struct {
 	Preference   SignalMetrics `json:"preference"`
 	Language     SignalMetrics `json:"language"`
 	Context      SignalMetrics `json:"context"`
+	Structure    SignalMetrics `json:"structure"`
 	Complexity   SignalMetrics `json:"complexity"`
 	Modality     SignalMetrics `json:"modality"`
 	Authz        SignalMetrics `json:"authz"`
@@ -271,10 +275,10 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v",
+	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules, signals.MatchedContextRules,
+		signals.MatchedLanguageRules, signals.MatchedContextRules, signals.MatchedStructureRules,
 		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedAuthzRules,
 		signals.MatchedJailbreakRules, signals.MatchedPIIRules)
 	// Create decision engine
@@ -296,6 +300,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		PreferenceRules:   signals.MatchedPreferenceRules,
 		LanguageRules:     signals.MatchedLanguageRules,
 		ContextRules:      signals.MatchedContextRules,
+		StructureRules:    signals.MatchedStructureRules,
 		ComplexityRules:   signals.MatchedComplexityRules,
 		ModalityRules:     signals.MatchedModalityRules,
 		SignalConfidences: signals.SignalConfidences,
