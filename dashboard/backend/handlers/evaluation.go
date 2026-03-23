@@ -141,96 +141,30 @@ func (h *EvaluationHandler) CreateTaskHandler() http.HandlerFunc {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
-
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-
 		var req models.CreateTaskRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
 		}
-
-		// Validate request
-		if req.Name == "" {
-			http.Error(w, "Task name is required", http.StatusBadRequest)
+		if msg, code := validateEvaluationCreateRequest(&req); msg != "" {
+			http.Error(w, msg, code)
 			return
 		}
-		if len(req.Config.Dimensions) == 0 {
-			http.Error(w, "At least one evaluation dimension is required", http.StatusBadRequest)
-			return
-		}
-
-		// Validate level
-		if req.Config.Level == "" {
-			http.Error(w, "Evaluation level is required (router or mom)", http.StatusBadRequest)
-			return
-		}
-		if req.Config.Level != models.LevelRouter && req.Config.Level != models.LevelMoM {
-			http.Error(w, "Invalid evaluation level. Must be 'router' or 'mom'", http.StatusBadRequest)
-			return
-		}
-
-		// Validate dimensions match the level
-		for _, dim := range req.Config.Dimensions {
-			if req.Config.Level == models.LevelRouter {
-				// Router-level only supports signal dimensions
-				if dim != models.DimensionDomain && dim != models.DimensionFactCheck && dim != models.DimensionUserFeedback {
-					http.Error(w, fmt.Sprintf("Dimension '%s' is not valid for router-level evaluation", dim), http.StatusBadRequest)
-					return
-				}
-			} else {
-				// MoM-level doesn't support signal dimensions
-				if dim == models.DimensionDomain || dim == models.DimensionFactCheck || dim == models.DimensionUserFeedback {
-					http.Error(w, fmt.Sprintf("Dimension '%s' is not valid for mom-level evaluation", dim), http.StatusBadRequest)
-					return
-				}
-			}
-		}
-
-		// Set defaults
-		if req.Config.MaxSamples <= 0 {
-			req.Config.MaxSamples = 50
-		}
-		if req.Config.Endpoint == "" {
-			// Choose default endpoint based on evaluation level
-			if req.Config.Level == models.LevelRouter {
-				// Router-level: use Router's eval API
-				if h.routerAPIURL != "" {
-					req.Config.Endpoint = strings.TrimSuffix(h.routerAPIURL, "/") + "/api/v1/eval"
-				} else {
-					req.Config.Endpoint = "http://localhost:8080/api/v1/eval"
-				}
-			} else {
-				// MoM-level: use Envoy's chat completions API
-				if h.envoyURL != "" {
-					req.Config.Endpoint = h.envoyURL
-				} else {
-					req.Config.Endpoint = "http://localhost:8801"
-				}
-			}
-		}
-		if req.Config.SamplesPerCat <= 0 {
-			req.Config.SamplesPerCat = 10
-		}
-		if req.Config.Concurrent <= 0 {
-			req.Config.Concurrent = 1 // Default to sequential execution
-		}
-
+		h.applyEvaluationCreateDefaults(&req.Config)
 		task := &models.EvaluationTask{
 			Name:        req.Name,
 			Description: req.Description,
 			Config:      req.Config,
 		}
-
 		if err := h.db.CreateTask(task); err != nil {
 			log.Printf("Failed to create task: %v", err)
 			http.Error(w, fmt.Sprintf("Failed to create task: %v", err), http.StatusInternalServerError)
 			return
 		}
-
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(task); err != nil {
