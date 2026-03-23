@@ -26,8 +26,12 @@ def render_markdown_summary(
     after_results = after_eval.get("results", [])
     acceptance = after_eval.get("acceptance", {})
     lines.extend(_render_decision_section(decision_summaries, acceptance))
+    lines.extend(_render_trace_quality_section(after_results))
+    lines.extend(_render_root_cause_section(after_results))
     lines.extend(_render_variant_section(after_results))
     lines.extend(_render_review_queue(decision_summaries, after_results))
+    if pre_eval and post_eval:
+        lines.extend(_render_trajectory_delta(pre_eval, post_eval))
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -53,10 +57,19 @@ def _render_header(
 
 
 def _render_eval_summary(label: str, evaluation: dict[str, Any]) -> list[str]:
-    return [
+    lines = [
         f"- {label} success: `{evaluation['matched']}/{evaluation['total']}` ({evaluation['success_rate']}%)",
         f"- {label} decision coverage: `{evaluation['matched_decisions']}/{evaluation['total_decisions']}` ({evaluation['decision_success_rate']}%)",
     ]
+    if "hybrid_reward" in evaluation:
+        lines.append(
+            f"- {label} hybrid reward: `{evaluation['hybrid_reward']}` "
+            f"(trace quality: `{evaluation.get('avg_trace_quality', 'N/A')}`)"
+        )
+    fragile_count = evaluation.get("fragile_match_count", 0)
+    if fragile_count:
+        lines.append(f"- {label} fragile matches: `{fragile_count}`")
+    return lines
 
 
 def _render_review_axes() -> list[str]:
@@ -166,6 +179,80 @@ def _render_decision_failures(
             f"Used signals: `{flatten_signal_summary(result.get('used_signals', {}))}`"
         )
     lines.append("")
+    return lines
+
+
+def _render_trace_quality_section(results: list[dict[str, Any]]) -> list[str]:
+    fragile = [
+        r
+        for r in results
+        if r["matched"]
+        and r.get("trace_quality", {}).get("trace_quality", 0) < 0.6
+    ]
+    lines = ["## Trace Quality", ""]
+    if fragile:
+        lines.append(
+            f"**{len(fragile)} fragile matches** (correct decision, low trace quality):"
+        )
+        lines.append("")
+        lines.append(
+            "| Probe | Decision | Trace Quality | Signal Dominance | Avg Confidence |"
+        )
+        lines.append("|---|---|---|---|---|")
+        for r in fragile:
+            tq = r.get("trace_quality", {})
+            lines.append(
+                f"| `{r['id']}` | `{r['actual_decision']}` | "
+                f"`{tq.get('trace_quality', 'N/A')}` | "
+                f"`{tq.get('signal_dominance', 'N/A')}` | "
+                f"`{tq.get('avg_confidence', 'N/A')}` |"
+            )
+        lines.append("")
+    else:
+        lines.append(
+            "No fragile matches detected. All passing probes have clean traces."
+        )
+        lines.append("")
+    return lines
+
+
+def _render_root_cause_section(results: list[dict[str, Any]]) -> list[str]:
+    failing = [r for r in results if not r["matched"]]
+    if not failing:
+        return []
+    lines = ["## Automated Root-Cause Classification", ""]
+    lines.append("| Probe | Expected | Actual | Root Cause | Detail |")
+    lines.append("|---|---|---|---|---|")
+    for r in failing:
+        rc = r.get("root_cause_classification", {})
+        lines.append(
+            f"| `{r['id']}` | `{r['expected_decision']}` | "
+            f"`{r.get('actual_decision', '(none)')}` | "
+            f"`{rc.get('root_cause', 'unknown')}` | "
+            f"{rc.get('detail', '')} |"
+        )
+    lines.append("")
+    return lines
+
+
+def _render_trajectory_delta(
+    pre_eval: dict[str, Any], post_eval: dict[str, Any]
+) -> list[str]:
+    delta_sr = post_eval.get("success_rate", 0) - pre_eval.get("success_rate", 0)
+    delta_hr = post_eval.get("hybrid_reward", 0) - pre_eval.get("hybrid_reward", 0)
+    delta_tq = post_eval.get("avg_trace_quality", 0) - pre_eval.get(
+        "avg_trace_quality", 0
+    )
+    lines = [
+        "## Trajectory Delta",
+        "",
+        f"| Metric | Pre | Post | Delta |",
+        f"|---|---|---|---|",
+        f"| Success rate | `{pre_eval.get('success_rate', 0)}%` | `{post_eval.get('success_rate', 0)}%` | `{delta_sr:+.1f}%` |",
+        f"| Hybrid reward | `{pre_eval.get('hybrid_reward', 0)}` | `{post_eval.get('hybrid_reward', 0)}` | `{delta_hr:+.4f}` |",
+        f"| Avg trace quality | `{pre_eval.get('avg_trace_quality', 0)}` | `{post_eval.get('avg_trace_quality', 0)}` | `{delta_tq:+.4f}` |",
+        "",
+    ]
     return lines
 
 

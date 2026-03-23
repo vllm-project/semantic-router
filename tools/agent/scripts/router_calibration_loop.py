@@ -20,6 +20,7 @@ from router_calibration_support import (
     wait_for_router_ready,
     write_json,
 )
+from router_calibration_trajectory import save_trajectory
 
 
 def cmd_snapshot(args: argparse.Namespace) -> int:
@@ -158,6 +159,16 @@ def cmd_run(args: argparse.Namespace) -> int:
     )
     (report_dir / "summary.md").write_text(summary, encoding="utf-8")
 
+    save_trajectory(
+        report_dir,
+        snapshot_before,
+        pre_eval,
+        validate_result,
+        deploy_result,
+        snapshot_after,
+        post_eval,
+    )
+
     print(f"Report written to {report_dir}")
     print(
         json.dumps(
@@ -167,6 +178,11 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "post_success_rate": post_eval["success_rate"],
                 "pre_decision_success_rate": pre_eval["decision_success_rate"],
                 "post_decision_success_rate": post_eval["decision_success_rate"],
+                "pre_hybrid_reward": pre_eval.get("hybrid_reward"),
+                "post_hybrid_reward": post_eval.get("hybrid_reward"),
+                "pre_avg_trace_quality": pre_eval.get("avg_trace_quality"),
+                "post_avg_trace_quality": post_eval.get("avg_trace_quality"),
+                "fragile_match_count": post_eval.get("fragile_match_count", 0),
                 "deploy_version": (deploy_result or {}).get("version"),
                 "runtime_refresh_applied": refresh_result is not None,
                 "ready_phase": ((ready_result or {}).get("payload") or {}).get("phase"),

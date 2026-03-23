@@ -1,0 +1,159 @@
+# Per-category confidence routing example.
+#
+# Demonstrates how to configure different escalation thresholds per
+# domain category.  The domain classifier detects the query category
+# and the decision engine routes to the appropriate decision, each
+# with its own confidence threshold.
+#
+# Derived from calibration analysis showing that some categories
+# benefit from escalation (uplift) while others are harmed by it
+# (regression).  See router_calibration_pareto.py for how to run
+# the calibration analysis that produces these thresholds.
+#
+# Usage:
+#   1. Run calibration_pareto.py to determine per-category policies
+#   2. Map policies to decisions below
+#   3. Requires the domain classifier model to be enabled
+#
+# Categories are grouped into four strategies:
+#   ESCALATE  — 72B consistently helps; aggressive escalation (t≈0.999)
+#   CAUTIOUS  — mixed uplift + high waste; moderate threshold (t≈0.96)
+#   AVOID     — 72B is worse; keep small model answer (t≈0.80)
+#   SKIP      — no net benefit; keep small model answer (t≈0.80)
+
+version: v0.3
+
+routing:
+  signals:
+    domains:
+      - name: comp_sci
+        description: Computer science and programming
+        mmlu_categories: [computer science]
+      - name: economics
+        description: Economics and finance
+        mmlu_categories: [economics]
+      - name: law
+        description: Law and legal reasoning
+        mmlu_categories: [law]
+      - name: biology
+        description: Biology and life sciences
+        mmlu_categories: [biology]
+      - name: other_general
+        description: General knowledge
+        mmlu_categories: [other]
+      - name: business
+        description: Business and management
+        mmlu_categories: [business]
+      - name: chemistry
+        description: Chemistry
+        mmlu_categories: [chemistry]
+      - name: health
+        description: Health and medicine
+        mmlu_categories: [health]
+      - name: physics
+        description: Physics
+        mmlu_categories: [physics]
+      - name: psychology
+        description: Psychology
+        mmlu_categories: [psychology]
+    context:
+      - name: all_requests
+        min_tokens: "0"
+        max_tokens: 256K
+
+  decisions:
+    # ESCALATE: categories where the large model consistently helps
+    - name: escalate_high_value
+      description: Domains with strong large-model uplift and low waste
+      priority: 200
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: comp_sci
+          - type: domain
+            name: economics
+          - type: domain
+            name: law
+          - type: domain
+            name: biology
+          - type: domain
+            name: other_general
+      modelRefs:
+        - model: small-model
+          use_reasoning: false
+        - model: large-model
+          use_reasoning: false
+      algorithm:
+        type: confidence
+        confidence:
+          confidence_method: avg_logprob
+          threshold: 0.999
+          on_error: skip
+
+    # CAUTIOUS: large model helps but high waste rate
+    - name: escalate_cautious
+      description: Domains where large model helps but many questions stump both
+      priority: 200
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: business
+          - type: domain
+            name: chemistry
+      modelRefs:
+        - model: small-model
+          use_reasoning: false
+        - model: large-model
+          use_reasoning: false
+      algorithm:
+        type: confidence
+        confidence:
+          confidence_method: avg_logprob
+          threshold: 0.96
+          on_error: skip
+
+    # AVOID: large model performs worse — keep small model answer
+    - name: no_escalate
+      description: Domains where large model regression outweighs uplift
+      priority: 200
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: health
+          - type: domain
+            name: physics
+          - type: domain
+            name: psychology
+      modelRefs:
+        - model: small-model
+          use_reasoning: false
+      algorithm:
+        type: confidence
+        confidence:
+          confidence_method: avg_logprob
+          threshold: 0.80
+          on_error: skip
+
+    # FALLBACK: unclassified queries use balanced threshold
+    - name: fallback_routing
+      description: Default confidence routing for unclassified queries
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - type: context
+            name: all_requests
+      modelRefs:
+        - model: small-model
+          use_reasoning: false
+        - model: large-model
+          use_reasoning: false
+      algorithm:
+        type: confidence
+        confidence:
+          confidence_method: avg_logprob
+          threshold: 0.95
+          on_error: skip

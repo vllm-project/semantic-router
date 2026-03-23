@@ -386,3 +386,44 @@ func extractMMLUProMetrics(raw map[string]interface{}) map[string]interface{} {
 	metrics["status"] = "success"
 	return metrics
 }
+
+// ParseDecisionEvalOutput parses the JSON output from the calibration loop's eval command.
+func ParseDecisionEvalOutput(outputPath string) (map[string]interface{}, error) {
+	data, err := os.ReadFile(outputPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read decision eval output: %w", err)
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse decision eval JSON: %w", err)
+	}
+	return extractDecisionEvalMetrics(raw), nil
+}
+
+func extractDecisionEvalMetrics(raw map[string]interface{}) map[string]interface{} {
+	metrics := make(map[string]interface{})
+
+	eval, ok := raw["evaluation"].(map[string]interface{})
+	if !ok {
+		eval = raw
+	}
+
+	for _, key := range []string{
+		"success_rate", "decision_success_rate",
+		"avg_trace_quality", "hybrid_reward",
+		"fragile_match_count", "matched", "total",
+		"matched_decisions", "total_decisions",
+	} {
+		if v, ok := eval[key]; ok {
+			metrics[key] = v
+		}
+	}
+	if decisions, ok := eval["decisions"]; ok {
+		metrics["decisions"] = decisions
+	}
+	if fragile, ok := eval["fragile_matches"]; ok {
+		metrics["fragile_matches"] = fragile
+	}
+	metrics["status"] = "success"
+	return metrics
+}
