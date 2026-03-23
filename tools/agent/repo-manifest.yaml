@@ -141,6 +141,7 @@ docs:
   - docs/agent/plans/pl-0010-extproc-response-and-dashboard-frontend-boundary-ratchet.md
   - docs/agent/plans/pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md
   - docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md
+  - docs/agent/plans/pl-0013-openclaw-vsr-install-import-workstream.md
   - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
@@ -308,6 +309,9 @@ doc_governance:
     - path: docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md
       steward: agent-contract
       freshness: update at the start and end of each DSL conflict-free routing loop and after each completed loop task
+    - path: docs/agent/plans/pl-0013-openclaw-vsr-install-import-workstream.md
+      steward: agent-contract
+      freshness: update at the start and end of each OpenClaw-to-VSR install/import loop and after each completed loop task
     - path: docs/agent/state-taxonomy-and-inventory.md
       steward: agent-contract
       freshness: update when the runtime or dashboard state inventory, durability taxonomy, or persistence guidance changes materially

@@ -61,7 +61,7 @@ To run parallel local stacks from the same machine or multiple worktrees, set `V
 vllm-sr validate config.yaml
 ```
 
-`vllm-sr init` was removed in v0.3. Author `config.yaml` directly using the canonical `version/listeners/providers/routing/global` layout, or migrate an older file with `vllm-sr config migrate --config old-config.yaml`. Router-wide defaults come from the router itself and can be overridden under `global:`.
+`vllm-sr init` was removed in v0.3. Author `config.yaml` directly using the canonical `version/listeners/providers/routing/global` layout, migrate an older file with `vllm-sr config migrate --config old-config.yaml`, or import supported OpenClaw model providers with `vllm-sr config import --from openclaw`. Router-wide defaults come from the router itself and can be overridden under `global:`.
 
 ## Features
 
@@ -249,6 +249,9 @@ vllm-sr validate
 
 # Migrate older configs to the canonical contract
 vllm-sr config migrate --config old-config.yaml
+
+# Import supported OpenClaw model providers into canonical config.yaml
+vllm-sr config import --from openclaw --source openclaw.json --target config.yaml
 ```
 
 ### File Descriptor Limits

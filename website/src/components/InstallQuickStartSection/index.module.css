@@ -54,6 +54,42 @@
     var(--site-surface);
 }
 
+.modeTabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  padding: 0.4rem;
+  border: 1px solid var(--site-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.modeTab {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.75rem 1.15rem;
+  background: transparent;
+  color: var(--site-muted-bright);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.modeTab:hover {
+  color: var(--site-text);
+}
+
+.modeTabActive {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--site-text);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
 .frameHeader {
   display: flex;
   flex-wrap: wrap;
@@ -90,6 +126,48 @@
   word-break: break-word;
 }
 
+.promptStack {
+  display: grid;
+  gap: 1rem;
+}
+
+.promptCard {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.promptHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.promptCopy {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.promptCopy h3,
+.promptCopy p {
+  margin: 0;
+}
+
+.promptCopy h3 {
+  font-size: 1rem;
+}
+
+.promptCopy p {
+  max-width: 40rem;
+  color: var(--site-muted-bright);
+  line-height: 1.65;
+}
+
 .frameFooter {
   display: flex;
   flex-wrap: wrap;
@@ -119,7 +197,18 @@
     padding: 3.5rem 0;
   }
 
+  .modeTabs {
+    display: grid;
+    width: 100%;
+    border-radius: 1rem;
+  }
+
   .frame {
     padding: 1.15rem;
+  }
+
+  .modeTab {
+    width: 100%;
+    text-align: left;
   }
 }

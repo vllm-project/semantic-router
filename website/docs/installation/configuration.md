@@ -346,6 +346,16 @@ This migrates legacy shapes such as:
 
 into canonical `providers/routing/global`.
 
+### Import OpenClaw model providers
+
+Use the CLI import command when you already have an `openclaw.json` with supported OpenAI-compatible provider endpoints and want VSR to take over model routing while rewriting OpenClaw to the first VSR listener:
+
+```bash
+vllm-sr config import --from openclaw --source openclaw.json --target config.yaml
+```
+
+When `--source` is omitted, the importer checks `OPENCLAW_CONFIG_PATH`, `./openclaw.json`, and `~/.openclaw/openclaw.json` in that order.
+
 ## Quick guides by environment
 
 ### Python CLI
