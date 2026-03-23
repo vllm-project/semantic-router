@@ -141,6 +141,10 @@ func (r *Runner) prepareCluster(ctx context.Context, state *runState) error {
 		return fmt.Errorf("failed to setup cluster: %w", err)
 	}
 
+	if err := r.cluster.EnsureSchedulableWorkloadNodes(ctx); err != nil {
+		return fmt.Errorf("failed to ensure schedulable workload nodes: %w", err)
+	}
+
 	if !r.opts.KeepCluster {
 		state.addCleanup(func() {
 			r.cleanupClusterWithLogs(state)
