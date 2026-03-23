@@ -120,6 +120,10 @@ const config: Config = {
             from: '/docs/tutorials/signal/projections',
             to: '/docs/tutorials/projection/overview',
           },
+          {
+            from: '/docs/tutorials/signal/heuristic/modality',
+            to: '/docs/tutorials/signal/learned/modality',
+          },
         ],
       },
     ],

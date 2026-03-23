@@ -11,7 +11,7 @@ For the full projection workflow, canonical YAML contract, dashboard path, and D
 This tutorial group maps directly to the fragment tree under `config/signal/`, but the docs are organized by extraction style:
 
 - `heuristic/` for request-shape, lexical, identity, and lightweight detector signals
-- `learned/` for embedding- or classifier-driven signals that rely on router-owned model assets
+- `learned/` for embedding- or classifier-driven signals that rely on router-owned model assets or maintained detector modules
 
 ## Key Advantages
 
@@ -89,7 +89,6 @@ These signals route from explicit rules, request form, or lightweight detectors 
 | `context` | `config/signal/context/` | route by effective token-window needs | [Context](./heuristic/context) |
 | `keyword` | `config/signal/keyword/` | route from lexical or BM25-style matches | [Keyword](./heuristic/keyword) |
 | `language` | `config/signal/language/` | route by detected request language | [Language](./heuristic/language) |
-| `modality` | `config/signal/modality/` | route by text, image-generation, or mixed flow shape | [Modality](./heuristic/modality) |
 | `structure` | `config/signal/structure/` | route from request shape such as question counts or ordered workflow markers | [Structure](./heuristic/structure) |
 
 ### Learned Signals
@@ -101,6 +100,7 @@ These signals use embeddings or classifier models and typically rely on `global.
 | `complexity` | `config/signal/complexity/` | detect hard vs easy reasoning traffic | [Complexity](./learned/complexity) |
 | `domain` | `config/signal/domain/` | classify the request topic family | [Domain](./learned/domain) |
 | `embedding` | `config/signal/embedding/` | match by semantic similarity | [Embedding](./learned/embedding) |
+| `modality` | `config/signal/modality/` | classify text-only, image-generation, or hybrid output mode | [Modality](./learned/modality) |
 | `fact-check` | `config/signal/fact-check/` | detect prompts that need evidence verification | [Fact Check](./learned/fact-check) |
 | `jailbreak` | `config/signal/jailbreak/` | detect prompt-injection or jailbreak attempts | [Jailbreak](./learned/jailbreak) |
 | `pii` | `config/signal/pii/` | detect sensitive personal data | [PII](./learned/pii) |
