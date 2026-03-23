@@ -186,8 +186,7 @@ def _render_trace_quality_section(results: list[dict[str, Any]]) -> list[str]:
     fragile = [
         r
         for r in results
-        if r["matched"]
-        and r.get("trace_quality", {}).get("trace_quality", 0) < 0.6
+        if r["matched"] and r.get("trace_quality", {}).get("trace_quality", 0) < 0.6
     ]
     lines = ["## Trace Quality", ""]
     if fragile:

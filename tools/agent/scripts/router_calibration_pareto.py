@@ -52,16 +52,50 @@ ANSWER_PATTERN = re.compile(
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--small-endpoint", required=True, help="OpenAI-compatible base URL for small model")
-    p.add_argument("--large-endpoint", required=True, help="OpenAI-compatible base URL for large model")
-    p.add_argument("--small-model", required=True, help="Model name for the small model")
-    p.add_argument("--large-model", required=True, help="Model name for the large model")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--small-endpoint",
+        required=True,
+        help="OpenAI-compatible base URL for small model",
+    )
+    p.add_argument(
+        "--large-endpoint",
+        required=True,
+        help="OpenAI-compatible base URL for large model",
+    )
+    p.add_argument(
+        "--small-model", required=True, help="Model name for the small model"
+    )
+    p.add_argument(
+        "--large-model", required=True, help="Model name for the large model"
+    )
     p.add_argument("--api-key", default="", help="API key for the endpoints")
-    p.add_argument("--small-price-prompt", type=float, default=0.0, help="Small model $/M prompt tokens")
-    p.add_argument("--small-price-completion", type=float, default=0.0, help="Small model $/M completion tokens")
-    p.add_argument("--large-price-prompt", type=float, default=0.0, help="Large model $/M prompt tokens")
-    p.add_argument("--large-price-completion", type=float, default=0.0, help="Large model $/M completion tokens")
+    p.add_argument(
+        "--small-price-prompt",
+        type=float,
+        default=0.0,
+        help="Small model $/M prompt tokens",
+    )
+    p.add_argument(
+        "--small-price-completion",
+        type=float,
+        default=0.0,
+        help="Small model $/M completion tokens",
+    )
+    p.add_argument(
+        "--large-price-prompt",
+        type=float,
+        default=0.0,
+        help="Large model $/M prompt tokens",
+    )
+    p.add_argument(
+        "--large-price-completion",
+        type=float,
+        default=0.0,
+        help="Large model $/M completion tokens",
+    )
     p.add_argument("--samples-per-category", type=int, default=5)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--concurrent", type=int, default=4)
@@ -71,6 +105,7 @@ def parse_args() -> argparse.Namespace:
 
 
 # ── confidence helpers ───────────────────────────────────────────────────
+
 
 def normalize_logprob(avg_lp: float) -> float:
     """Match the SR Go code: ``(avg_logprob + 3) / 3``, clamped [0, 1]."""
@@ -88,6 +123,7 @@ def extract_answer(text: str) -> str | None:
 
 
 # ── data loading ─────────────────────────────────────────────────────────
+
 
 def load_mmlu_questions(samples_per_category: int, seed: int) -> pd.DataFrame:
     dataset = load_dataset("TIGER-Lab/MMLU-Pro", split="test")
@@ -118,9 +154,8 @@ def format_prompt(question: str, options: list[str]) -> str:
 
 # ── inference ────────────────────────────────────────────────────────────
 
-def evaluate_with_logprobs(
-    client: OpenAI, model: str, prompt: str
-) -> dict[str, Any]:
+
+def evaluate_with_logprobs(client: OpenAI, model: str, prompt: str) -> dict[str, Any]:
     t0 = time.time()
     try:
         resp = client.chat.completions.create(
@@ -132,7 +167,9 @@ def evaluate_with_logprobs(
             top_logprobs=1,
         )
         content = resp.choices[0].message.content or ""
-        lp_content = resp.choices[0].logprobs.content if resp.choices[0].logprobs else []
+        lp_content = (
+            resp.choices[0].logprobs.content if resp.choices[0].logprobs else []
+        )
         token_lps = [t.logprob for t in lp_content] if lp_content else []
         avg_lp = sum(token_lps) / len(token_lps) if token_lps else -10.0
         usage = resp.usage
@@ -148,26 +185,36 @@ def evaluate_with_logprobs(
         }
     except Exception as e:
         return {
-            "response": str(e), "predicted": None,
-            "avg_logprob": -10.0, "confidence": 0.0,
-            "prompt_tokens": 0, "completion_tokens": 0,
-            "latency": time.time() - t0, "success": False,
+            "response": str(e),
+            "predicted": None,
+            "avg_logprob": -10.0,
+            "confidence": 0.0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "latency": time.time() - t0,
+            "success": False,
         }
 
 
 def run_eval(
-    questions: pd.DataFrame, endpoint: str, model: str,
-    api_key: str, label: str, concurrent: int,
+    questions: pd.DataFrame,
+    endpoint: str,
+    model: str,
+    api_key: str,
+    label: str,
+    concurrent: int,
 ) -> list[dict[str, Any]]:
     client = OpenAI(base_url=endpoint, api_key=api_key if api_key else "dummy")
     prompts = []
     for _, row in questions.iterrows():
-        prompts.append({
-            "question_id": str(row["question_id"]),
-            "category": row["category"],
-            "correct_answer": row["answer"],
-            "prompt": format_prompt(row["question"], row["options"]),
-        })
+        prompts.append(
+            {
+                "question_id": str(row["question_id"]),
+                "category": row["category"],
+                "correct_answer": row["answer"],
+                "prompt": format_prompt(row["question"], row["options"]),
+            }
+        )
     results = []
     with ThreadPoolExecutor(max_workers=concurrent) as pool:
         futures = {
@@ -178,7 +225,9 @@ def run_eval(
         for fut in as_completed(futures):
             p = futures[fut]
             r = fut.result()
-            is_correct = (r["predicted"] == p["correct_answer"]) if r["predicted"] else False
+            is_correct = (
+                (r["predicted"] == p["correct_answer"]) if r["predicted"] else False
+            )
             results.append({**p, **r, "is_correct": is_correct})
             done += 1
             if done % 10 == 0:
@@ -189,9 +238,15 @@ def run_eval(
 
 # ── analysis ─────────────────────────────────────────────────────────────
 
+
 def four_quadrant(small: list[dict], large: list[dict]) -> dict[str, list[dict]]:
     large_map = {q["question_id"]: q for q in large}
-    quads: dict[str, list] = {"uplift": [], "regression": [], "waste": [], "redundant": []}
+    quads: dict[str, list] = {
+        "uplift": [],
+        "regression": [],
+        "waste": [],
+        "redundant": [],
+    }
     for qs in small:
         ql = large_map[qs["question_id"]]
         rec = {**qs, "correct_large": ql["is_correct"]}
@@ -218,9 +273,15 @@ def calibration_bins(small: list[dict], num_bins: int = 5) -> tuple[list[dict], 
         if in_bin:
             avg_c = sum(q["confidence"] for q in in_bin) / len(in_bin)
             acc = sum(1 for q in in_bin if q["is_correct"]) / len(in_bin)
-            bins.append({"range": f"[{lo:.3f}, {hi:.3f})", "count": len(in_bin),
-                         "avg_confidence": round(avg_c, 4), "actual_accuracy": round(acc, 4),
-                         "gap": round(avg_c - acc, 4)})
+            bins.append(
+                {
+                    "range": f"[{lo:.3f}, {hi:.3f})",
+                    "count": len(in_bin),
+                    "avg_confidence": round(avg_c, 4),
+                    "actual_accuracy": round(acc, 4),
+                    "gap": round(avg_c - acc, 4),
+                }
+            )
     N = len(small)
     ece = sum(b["count"] * abs(b["gap"]) for b in bins) / N if N else 0
     return bins, round(ece, 4)
@@ -228,11 +289,18 @@ def calibration_bins(small: list[dict], num_bins: int = 5) -> tuple[list[dict], 
 
 def per_category_analysis(small: list[dict], large: list[dict]) -> dict[str, dict]:
     large_map = {q["question_id"]: q for q in large}
-    cats: dict[str, dict] = defaultdict(lambda: {
-        "n": 0, "correct_small": 0, "correct_large": 0,
-        "uplift": 0, "regression": 0, "waste": 0, "redundant": 0,
-        "confidences": [],
-    })
+    cats: dict[str, dict] = defaultdict(
+        lambda: {
+            "n": 0,
+            "correct_small": 0,
+            "correct_large": 0,
+            "uplift": 0,
+            "regression": 0,
+            "waste": 0,
+            "redundant": 0,
+            "confidences": [],
+        }
+    )
     for qs in small:
         ql = large_map[qs["question_id"]]
         c = cats[qs["category"]]
@@ -278,8 +346,12 @@ def per_category_analysis(small: list[dict], large: list[dict]) -> dict[str, dic
 
 
 def project_per_category(
-    small: list[dict], large: list[dict], cat_policies: dict[str, dict],
-    pricing_small: dict, pricing_large: dict, default_threshold: float = 0.95,
+    small: list[dict],
+    large: list[dict],
+    cat_policies: dict[str, dict],
+    pricing_small: dict,
+    pricing_large: dict,
+    default_threshold: float = 0.95,
 ) -> dict[str, Any]:
     """Project accuracy and cost under per-category routing policy."""
     large_map = {q["question_id"]: q for q in large}
@@ -294,10 +366,14 @@ def project_per_category(
         policy = cat_policies.get(cat, {})
         threshold = policy.get("recommended_threshold", default_threshold)
 
-        cost_s = (qs["prompt_tokens"] * pricing_small.get("prompt", 0)
-                  + qs["completion_tokens"] * pricing_small.get("completion", 0)) / 1_000_000
-        cost_l = (qs["prompt_tokens"] * pricing_large.get("prompt", 0)
-                  + ql["completion_tokens"] * pricing_large.get("completion", 0)) / 1_000_000
+        cost_s = (
+            qs["prompt_tokens"] * pricing_small.get("prompt", 0)
+            + qs["completion_tokens"] * pricing_small.get("completion", 0)
+        ) / 1_000_000
+        cost_l = (
+            qs["prompt_tokens"] * pricing_large.get("prompt", 0)
+            + ql["completion_tokens"] * pricing_large.get("completion", 0)
+        ) / 1_000_000
 
         if qs["confidence"] < threshold:
             escalated += 1
@@ -322,60 +398,95 @@ def project_per_category(
 
 # ── main ─────────────────────────────────────────────────────────────────
 
+
 def main():
     args = parse_args()
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    pricing_small = {"prompt": args.small_price_prompt, "completion": args.small_price_completion}
-    pricing_large = {"prompt": args.large_price_prompt, "completion": args.large_price_completion}
+    pricing_small = {
+        "prompt": args.small_price_prompt,
+        "completion": args.small_price_completion,
+    }
+    pricing_large = {
+        "prompt": args.large_price_prompt,
+        "completion": args.large_price_completion,
+    }
 
     print("Loading MMLU-Pro dataset...")
     questions = load_mmlu_questions(args.samples_per_category, args.seed)
-    print(f"Loaded {len(questions)} questions across {questions['category'].nunique()} categories")
+    print(
+        f"Loaded {len(questions)} questions across {questions['category'].nunique()} categories"
+    )
 
     print(f"\n=== Evaluating {args.small_model} (with logprobs) ===")
-    small_results = run_eval(questions, args.small_endpoint, args.small_model,
-                             args.api_key, "small", args.concurrent)
+    small_results = run_eval(
+        questions,
+        args.small_endpoint,
+        args.small_model,
+        args.api_key,
+        "small",
+        args.concurrent,
+    )
 
     print(f"\n=== Evaluating {args.large_model} (with logprobs) ===")
-    large_results = run_eval(questions, args.large_endpoint, args.large_model,
-                             args.api_key, "large", args.concurrent)
+    large_results = run_eval(
+        questions,
+        args.large_endpoint,
+        args.large_model,
+        args.api_key,
+        "large",
+        args.concurrent,
+    )
 
     # Calibration
     bins, ece = calibration_bins(small_results)
     print(f"\nECE: {ece}")
     for b in bins:
-        print(f"  {b['range']:>20} n={b['count']:>3}  conf={b['avg_confidence']:.3f}  "
-              f"acc={b['actual_accuracy']:.3f}  gap={b['gap']:+.3f}")
+        print(
+            f"  {b['range']:>20} n={b['count']:>3}  conf={b['avg_confidence']:.3f}  "
+            f"acc={b['actual_accuracy']:.3f}  gap={b['gap']:+.3f}"
+        )
 
     # Four quadrants
     quads = four_quadrant(small_results, large_results)
     N = len(small_results)
-    print(f"\nFour-quadrant: uplift={len(quads['uplift'])}, regression={len(quads['regression'])}, "
-          f"waste={len(quads['waste'])}, redundant={len(quads['redundant'])}")
+    print(
+        f"\nFour-quadrant: uplift={len(quads['uplift'])}, regression={len(quads['regression'])}, "
+        f"waste={len(quads['waste'])}, redundant={len(quads['redundant'])}"
+    )
 
     # Per-category
     cat_policies = per_category_analysis(small_results, large_results)
     print("\nPer-category policies:")
     for cat, p in sorted(cat_policies.items()):
-        print(f"  {cat:>16}: {p['strategy']:>10}  net={p['net_uplift']:+d}  "
-              f"threshold={p['recommended_threshold']:.3f}")
+        print(
+            f"  {cat:>16}: {p['strategy']:>10}  net={p['net_uplift']:+d}  "
+            f"threshold={p['recommended_threshold']:.3f}"
+        )
 
     # Projections
-    proj_global = project_per_category(small_results, large_results, {},
-                                       pricing_small, pricing_large, 0.95)
-    proj_percat = project_per_category(small_results, large_results, cat_policies,
-                                       pricing_small, pricing_large)
+    proj_global = project_per_category(
+        small_results, large_results, {}, pricing_small, pricing_large, 0.95
+    )
+    proj_percat = project_per_category(
+        small_results, large_results, cat_policies, pricing_small, pricing_large
+    )
 
     acc_small = sum(1 for q in small_results if q["is_correct"]) / N * 100
     acc_large = sum(1 for q in large_results if q["is_correct"]) / N * 100
 
     print(f"\n{'Policy':>20} {'Accuracy':>9} {'Escalated':>10} {'Cost/1k':>10}")
     print("-" * 55)
-    print(f"{'Always small':>20} {acc_small:>8.1f}% {'0':>9} ${pricing_small['prompt']*0.25 + pricing_small['completion']*0.2:>8.4f}")
-    print(f"{'Global t=0.95':>20} {proj_global['accuracy']:>8.1f}% {proj_global['escalated']:>9} ${proj_global['cost_per_1k']:>8.6f}")
-    print(f"{'Per-Category':>20} {proj_percat['accuracy']:>8.1f}% {proj_percat['escalated']:>9} ${proj_percat['cost_per_1k']:>8.6f}")
+    print(
+        f"{'Always small':>20} {acc_small:>8.1f}% {'0':>9} ${pricing_small['prompt']*0.25 + pricing_small['completion']*0.2:>8.4f}"
+    )
+    print(
+        f"{'Global t=0.95':>20} {proj_global['accuracy']:>8.1f}% {proj_global['escalated']:>9} ${proj_global['cost_per_1k']:>8.6f}"
+    )
+    print(
+        f"{'Per-Category':>20} {proj_percat['accuracy']:>8.1f}% {proj_percat['escalated']:>9} ${proj_percat['cost_per_1k']:>8.6f}"
+    )
     print(f"{'Always large':>20} {acc_large:>8.1f}% {N:>9}")
 
     # Save summary
@@ -393,8 +504,12 @@ def main():
         "projection_per_category": proj_percat,
     }
     (out / "calibration_summary.json").write_text(json.dumps(summary, indent=2))
-    (out / "small_results.json").write_text(json.dumps(small_results, indent=2, default=str))
-    (out / "large_results.json").write_text(json.dumps(large_results, indent=2, default=str))
+    (out / "small_results.json").write_text(
+        json.dumps(small_results, indent=2, default=str)
+    )
+    (out / "large_results.json").write_text(
+        json.dumps(large_results, indent=2, default=str)
+    )
     print(f"\nResults saved to {out}")
 
 

@@ -32,9 +32,7 @@ def save_trajectory(
         "schema_version": 1,
         "timestamp": utc_now(),
         "policy_before": {
-            "config_hash": _hash_config(
-                snapshot_before.get("config_classification")
-            ),
+            "config_hash": _hash_config(snapshot_before.get("config_classification")),
             "version": snapshot_before.get("config_versions"),
         },
         "observation": {
@@ -75,8 +73,7 @@ def save_trajectory(
                 post_eval["success_rate"] - pre_eval["success_rate"]
             ),
             "delta_hybrid_reward": (
-                post_eval.get("hybrid_reward", 0)
-                - pre_eval.get("hybrid_reward", 0)
+                post_eval.get("hybrid_reward", 0) - pre_eval.get("hybrid_reward", 0)
             ),
         },
     }

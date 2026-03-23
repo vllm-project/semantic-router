@@ -136,9 +136,7 @@ def refresh_runtime_classification(router_url: str) -> dict[str, Any]:
             "skipped": True,
             "reason": "GET /config/classification not available",
         }
-    status, updated_cfg = http_json(
-        "PUT", f"{base}/config/classification", current_cfg
-    )
+    status, updated_cfg = http_json("PUT", f"{base}/config/classification", current_cfg)
     if not (HTTP_OK_MIN <= status < HTTP_REDIRECT_MIN):
         return {
             "router_url": base,
@@ -155,8 +153,7 @@ def refresh_runtime_classification(router_url: str) -> dict[str, Any]:
 
 def _count_signals(signals: dict[str, Any]) -> int:
     return sum(
-        len(v) if isinstance(v, list) else (1 if v else 0)
-        for v in signals.values()
+        len(v) if isinstance(v, list) else (1 if v else 0) for v in signals.values()
     )
 
 
