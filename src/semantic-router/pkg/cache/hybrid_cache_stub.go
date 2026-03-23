@@ -11,7 +11,7 @@ import (
 // HybridCache combines in-memory HNSW index with external Milvus storage
 type HybridCache struct {
 	SimilarityTracker // embedded — provides LastSimilarity()
-	enabled bool
+	enabled           bool
 }
 
 // HybridCacheOptions contains configuration for the hybrid cache
