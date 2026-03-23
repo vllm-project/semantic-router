@@ -1244,6 +1244,13 @@ global:
         collection: agentic_memory
         dimension: 384
         num_partitions: 32
+      redis_cache:
+        enabled: false
+        address: "localhost:6379"
+        ttl_seconds: 300
+        db: 0
+        key_prefix: "memory_cache:"
+        password: ""
       embedding_model: bert
       extraction_batch_size: 16
       default_retrieval_limit: 10

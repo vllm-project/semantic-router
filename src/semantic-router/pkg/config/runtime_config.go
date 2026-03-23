@@ -164,6 +164,7 @@ type MemoryConfig struct {
 	Enabled                    bool                       `yaml:"enabled,omitempty"`
 	AutoStore                  bool                       `yaml:"auto_store,omitempty"`
 	Milvus                     MemoryMilvusConfig         `yaml:"milvus,omitempty"`
+	RedisCache                 *MemoryRedisCacheConfig    `yaml:"redis_cache,omitempty"`
 	EmbeddingModel             string                     `yaml:"embedding_model,omitempty"`
 	ExtractionBatchSize        int                        `yaml:"extraction_batch_size,omitempty"`
 	DefaultRetrievalLimit      int                        `yaml:"default_retrieval_limit,omitempty"`
@@ -173,6 +174,16 @@ type MemoryConfig struct {
 	AdaptiveThreshold          bool                       `yaml:"adaptive_threshold,omitempty"`
 	QualityScoring             MemoryQualityScoringConfig `yaml:"quality_scoring,omitempty"`
 	Reflection                 MemoryReflectionConfig     `yaml:"reflection,omitempty"`
+}
+
+// MemoryRedisCacheConfig configures an optional Redis hot cache in front of Milvus retrieval.
+type MemoryRedisCacheConfig struct {
+	Enabled    bool   `yaml:"enabled,omitempty"`
+	Address    string `yaml:"address,omitempty"`
+	TTLSeconds int    `yaml:"ttl_seconds,omitempty"`
+	DB         int    `yaml:"db,omitempty"`
+	KeyPrefix  string `yaml:"key_prefix,omitempty"`
+	Password   string `yaml:"password,omitempty"`
 }
 
 type MemoryQualityScoringConfig struct {
