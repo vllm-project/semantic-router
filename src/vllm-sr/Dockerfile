@@ -340,6 +340,7 @@ COPY src/vllm-sr/requirements.txt /app/requirements.txt
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
 # Copy OpenClaw skill catalog consumed by dashboard /api/openclaw/skills
 COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
+COPY skills/ /app/skills/
 
 # Copy bench directory for evaluation benchmarks
 COPY bench/ /app/bench/

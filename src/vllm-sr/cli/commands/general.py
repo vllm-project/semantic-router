@@ -5,7 +5,11 @@ from __future__ import annotations
 import click
 
 from cli.commands.common import exit_with_logged_error
-from cli.commands.config import config_command, migrate_config_command
+from cli.commands.config import (
+    config_command,
+    import_config_from_source_command,
+    migrate_config_command,
+)
 from cli.commands.validate import validate_command
 from cli.utils import get_logger
 
@@ -24,6 +28,7 @@ def config(ctx: click.Context) -> None:
         vllm-sr config router
         vllm-sr config envoy --config my-config.yaml
         vllm-sr config migrate --config old.yaml
+        vllm-sr config import --from openclaw --source openclaw.json
     """
     if ctx.invoked_subcommand is not None:
         return
@@ -79,6 +84,48 @@ def config_migrate(config_path: str, output: str | None, force: bool) -> None:
     """Migrate a legacy or mixed config file to canonical v0.3 YAML."""
 
     migrate_config_command(config_path=config_path, output_path=output, force=force)
+
+
+@config.command("import")
+@click.option(
+    "--from",
+    "from_type",
+    required=True,
+    type=click.Choice(["openclaw"], case_sensitive=False),
+    help="Import source type.",
+)
+@click.option(
+    "--source",
+    "source_path",
+    help="Path to the source config file. Defaults to OpenClaw discovery order.",
+)
+@click.option(
+    "--target",
+    "target_path",
+    default="config.yaml",
+    show_default=True,
+    help="Path to the target canonical config file.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite existing backup files for the source or target paths.",
+)
+@exit_with_logged_error(log)
+def config_import(
+    from_type: str,
+    source_path: str | None,
+    target_path: str,
+    force: bool,
+) -> None:
+    """Import a supported external config source into canonical v0.3 YAML."""
+
+    import_config_from_source_command(
+        from_type=from_type,
+        source_path=source_path,
+        target_path=target_path,
+        force=force,
+    )
 
 
 @click.command()
