@@ -56,6 +56,20 @@
   - `plugin` performs post-decision or post-selection processing
   - `global` carries intentionally cross-cutting behavior
 
+## API Type Contracts
+
+- Use official SDK types for OpenAI and Anthropic request/response handling:
+  - `github.com/openai/openai-go` for OpenAI-shaped data
+  - `github.com/anthropics/anthropic-sdk-go` for Anthropic-shaped data
+- Do not define custom structs that duplicate what the SDK provides
+  (e.g., custom `ChatCompletionRequest`, `ChatCompletionResponse`)
+- Exceptions: packages that intentionally avoid the SDK dependency for
+  isolation (e.g., E2E fixtures, standalone training tools) should document
+  the reason in a comment and keep their custom types minimal
+- When the SDK type does not cover a field the router needs, extend via
+  composition (`type ExtendedReq struct { openai.ChatCompletionNewParams; Extra string }`)
+  rather than reimplementing the whole struct
+
 ## Avoid
 
 - giant managers
