@@ -1,0 +1,94 @@
+# Same as config.memory-user.yaml but with Redis hot cache ENABLED for testing.
+# Use this when the router runs in a container on the same network as Redis
+# (e.g. semantic-router-redis). For host-only runs use address: "localhost:6379".
+#
+# Usage: point your router's CONFIG_FILE to this file (or merge redis_cache into your config).
+
+version: v0.3
+listeners:
+  - name: http-8888
+    address: 0.0.0.0
+    port: 8888
+    timeout: 300s
+providers:
+  defaults:
+    default_model: qwen3
+  models:
+    - name: qwen3
+      provider_model_id: qwen3
+      backend_refs:
+        - name: llm_katan
+          weight: 1
+          endpoint: 172.17.0.1:8000
+          protocol: http
+routing:
+  modelCards:
+    - name: qwen3
+      modality: text
+  signals:
+    domains:
+      - name: general
+        description: General queries for memory testing
+        mmlu_categories: [other]
+    keywords: []
+  decisions:
+    - name: default_route
+      description: Default route for memory testing
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: general
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
+            mode: insert
+        - type: memory
+          configuration:
+            enabled: true
+            retrieval_limit: 5
+            similarity_threshold: 0.60
+            auto_store: false
+global:
+  stores:
+    memory:
+      enabled: true
+      auto_store: false
+      milvus:
+        address: 172.17.0.1:19530
+        collection: memory_test_ci
+        dimension: 384
+      embedding_model: bert
+      default_retrieval_limit: 5
+      default_similarity_threshold: 0.60
+      extraction_batch_size: 1
+      redis_cache:
+        enabled: true
+        address: semantic-router-redis:6379
+        ttl_seconds: 900
+        db: 0
+        key_prefix: "memory_cache:"
+        password: ""
+  model_catalog:
+    external:
+      - llm_provider: vllm
+        model_role: memory_rewrite
+        llm_endpoint:
+          address: 172.17.0.1
+          port: 8000
+          protocol: http
+        llm_model_name: qwen3
+        llm_timeout_seconds: 30
+      - llm_provider: vllm
+        model_role: memory_extraction
+        llm_endpoint:
+          address: 172.17.0.1
+          port: 8000
+          protocol: http
+        llm_model_name: qwen3
+        llm_timeout_seconds: 30

@@ -205,7 +205,7 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 	return injectedBody
 }
 
-func (r *OpenAIRouter) getMemoryStore() *memory.MilvusStore {
+func (r *OpenAIRouter) getMemoryStore() memory.Store {
 	return r.MemoryStore
 }
 
