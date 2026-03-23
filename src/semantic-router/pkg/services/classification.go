@@ -183,8 +183,11 @@ type MatchedSignals struct {
 	Language     []string `json:"language,omitempty"`
 	Context      []string `json:"context,omitempty"`
 	Complexity   []string `json:"complexity,omitempty"`
+	Modality     []string `json:"modality,omitempty"`
+	Authz        []string `json:"authz,omitempty"`
 	Jailbreak    []string `json:"jailbreak,omitempty"`
 	PII          []string `json:"pii,omitempty"`
+	Projection   []string `json:"projection,omitempty"`
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -286,8 +289,11 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 			Language:     signals.MatchedLanguageRules,
 			Context:      signals.MatchedContextRules,
 			Complexity:   signals.MatchedComplexityRules,
+			Modality:     signals.MatchedModalityRules,
+			Authz:        signals.MatchedAuthzRules,
 			Jailbreak:    signals.MatchedJailbreakRules,
 			PII:          signals.MatchedPIIRules,
+			Projection:   signals.MatchedProjectionRules,
 		}
 	}
 
@@ -975,8 +981,11 @@ func (s *ClassificationService) buildEvalResponse(
 		Language:     signals.MatchedLanguageRules,
 		Context:      signals.MatchedContextRules,
 		Complexity:   signals.MatchedComplexityRules,
+		Modality:     signals.MatchedModalityRules,
+		Authz:        signals.MatchedAuthzRules,
 		Jailbreak:    signals.MatchedJailbreakRules,
 		PII:          signals.MatchedPIIRules,
+		Projection:   signals.MatchedProjectionRules,
 	}
 
 	// Build unmatched signals by comparing all configured signals with matched signals
@@ -1072,6 +1081,14 @@ func (s *ClassificationService) extractSignalsFromRuleCombination(rules config.R
 			if !contains(usedSignals.Complexity, signalName) {
 				usedSignals.Complexity = append(usedSignals.Complexity, signalName)
 			}
+		case "modality":
+			if !contains(usedSignals.Modality, signalName) {
+				usedSignals.Modality = append(usedSignals.Modality, signalName)
+			}
+		case "authz":
+			if !contains(usedSignals.Authz, signalName) {
+				usedSignals.Authz = append(usedSignals.Authz, signalName)
+			}
 		case "jailbreak":
 			if !contains(usedSignals.Jailbreak, signalName) {
 				usedSignals.Jailbreak = append(usedSignals.Jailbreak, signalName)
@@ -1079,6 +1096,10 @@ func (s *ClassificationService) extractSignalsFromRuleCombination(rules config.R
 		case "pii":
 			if !contains(usedSignals.PII, signalName) {
 				usedSignals.PII = append(usedSignals.PII, signalName)
+			}
+		case "projection":
+			if !contains(usedSignals.Projection, signalName) {
+				usedSignals.Projection = append(usedSignals.Projection, signalName)
 			}
 		}
 	}
@@ -1175,6 +1196,24 @@ func (s *ClassificationService) getUnmatchedSignals(signals *classification.Sign
 		}
 	}
 
+	// Check modality rules
+	for _, rule := range s.classifier.Config.ModalityRules {
+		if !isMatched(rule.Name, signals.MatchedModalityRules) {
+			unmatched.Modality = append(unmatched.Modality, rule.Name)
+		}
+	}
+
+	// Check authz rules
+	for _, rule := range s.classifier.Config.GetRoleBindings() {
+		if !isMatched(rule.Role, signals.MatchedAuthzRules) && !isMatched(rule.Name, signals.MatchedAuthzRules) {
+			name := rule.Name
+			if name == "" {
+				name = rule.Role
+			}
+			unmatched.Authz = append(unmatched.Authz, name)
+		}
+	}
+
 	// Check jailbreak rules
 	for _, rule := range s.classifier.Config.JailbreakRules {
 		if !isMatched(rule.Name, signals.MatchedJailbreakRules) {
@@ -1186,6 +1225,15 @@ func (s *ClassificationService) getUnmatchedSignals(signals *classification.Sign
 	for _, rule := range s.classifier.Config.PIIRules {
 		if !isMatched(rule.Name, signals.MatchedPIIRules) {
 			unmatched.PII = append(unmatched.PII, rule.Name)
+		}
+	}
+
+	// Check projection outputs
+	for _, mapping := range s.classifier.Config.Projections.Mappings {
+		for _, output := range mapping.Outputs {
+			if !isMatched(output.Name, signals.MatchedProjectionRules) {
+				unmatched.Projection = append(unmatched.Projection, output.Name)
+			}
 		}
 	}
 

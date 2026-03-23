@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Sample config for testing - uses raw config fallback since full parsing requires more dependencies
@@ -133,17 +136,7 @@ func TestTopologyTestQueryHandler_BasicDryRun(t *testing.T) {
 		},
 		RecommendedModel: "gpt-4",
 		RoutingDecision:  "reasoning_decision",
-		MatchedSignals: &struct {
-			Keywords     []string `json:"keywords,omitempty"`
-			Embeddings   []string `json:"embeddings,omitempty"`
-			Domains      []string `json:"domains,omitempty"`
-			FactCheck    []string `json:"fact_check,omitempty"`
-			UserFeedback []string `json:"user_feedback,omitempty"`
-			Preferences  []string `json:"preferences,omitempty"`
-			Language     []string `json:"language,omitempty"`
-			Context      []string `json:"context,omitempty"`
-			Complexity   []string `json:"complexity,omitempty"`
-		}{
+		MatchedSignals: &RouterMatchedSignals{
 			Keywords: []string{"thinking"},
 		},
 	})
@@ -208,17 +201,7 @@ func TestTopologyTestQueryHandler_CodingQuery(t *testing.T) {
 		},
 		RecommendedModel: "gpt-4",
 		RoutingDecision:  "coding_decision",
-		MatchedSignals: &struct {
-			Keywords     []string `json:"keywords,omitempty"`
-			Embeddings   []string `json:"embeddings,omitempty"`
-			Domains      []string `json:"domains,omitempty"`
-			FactCheck    []string `json:"fact_check,omitempty"`
-			UserFeedback []string `json:"user_feedback,omitempty"`
-			Preferences  []string `json:"preferences,omitempty"`
-			Language     []string `json:"language,omitempty"`
-			Context      []string `json:"context,omitempty"`
-			Complexity   []string `json:"complexity,omitempty"`
-		}{
+		MatchedSignals: &RouterMatchedSignals{
 			Keywords: []string{"coding"},
 			Domains:  []string{"code"},
 		},
@@ -255,6 +238,58 @@ func TestTopologyTestQueryHandler_CodingQuery(t *testing.T) {
 	// Check for keyword signals if any matched
 	t.Logf("Matched signals: %+v", result.MatchedSignals)
 	t.Logf("Matched decision: %s", result.MatchedDecision)
+}
+
+func TestTopologyTestQueryHandler_ProjectionAndExtendedSignals(t *testing.T) {
+	configPath := setupTestConfig(t)
+	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
+
+	routerAPIURL := setupMockRouterAPI(t, RouterIntentResponse{
+		Classification: struct {
+			Category         string  `json:"category"`
+			Confidence       float64 `json:"confidence"`
+			ProcessingTimeMs int64   `json:"processing_time_ms"`
+		}{
+			Category:         "reasoning",
+			Confidence:       0.97,
+			ProcessingTimeMs: 8,
+		},
+		RecommendedModel: "gpt-4",
+		RoutingDecision:  "reasoning_decision",
+		MatchedSignals: &RouterMatchedSignals{
+			Modality:   []string{"AR"},
+			Authz:      []string{"premium_tier"},
+			Jailbreak:  []string{"jailbreak:block"},
+			PII:        []string{"pii:email"},
+			Projection: []string{"balance_reasoning"},
+		},
+	})
+
+	handler := TopologyTestQueryHandler(configPath, routerAPIURL)
+	reqBody := TestQueryRequest{
+		Query: "Reason carefully about this policy doc",
+		Mode:  TestQueryModeDryRun,
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/topology/test-query", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	var result TestQueryResult
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "modality", Name: "AR", Confidence: 1.0, Reason: "Modality signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "authz", Name: "premium_tier", Confidence: 1.0, Reason: "Authorization signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "jailbreak", Name: "jailbreak:block", Confidence: 1.0, Reason: "Jailbreak signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "pii", Name: "pii:email", Confidence: 1.0, Reason: "PII signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "projection", Name: "balance_reasoning", Confidence: 1.0, Reason: "Projection mapping matched"})
+	assert.Contains(t, result.HighlightedPath, "signal-group-projection")
+	assert.Contains(t, result.HighlightedPath, "signal-projection-balance_reasoning")
 }
 
 func TestTopologyTestQueryHandler_JailbreakDetection(t *testing.T) {

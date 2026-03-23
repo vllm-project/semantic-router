@@ -448,7 +448,32 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
+  extractProjectionSignals(config).forEach(addSignal)
+
   return signals
+}
+
+function extractProjectionSignals(config: ConfigData): SignalConfig[] {
+  const projectionSignals: SignalConfig[] = []
+  const projections = config.routing?.projections ?? config.projections
+
+  projections?.mappings?.forEach(mapping => {
+    mapping.outputs?.forEach(output => {
+      projectionSignals.push({
+        type: 'projection',
+        name: output.name,
+        description: `Projection output from ${mapping.name}`,
+        latency: SIGNAL_LATENCY.projection,
+        config: {
+          source: mapping.source,
+          method: mapping.method || 'threshold_bands',
+          mapping: mapping.name,
+        },
+      })
+    })
+  })
+
+  return projectionSignals
 }
 
 /**
@@ -655,6 +680,7 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     authz: [],
     jailbreak: [],
     pii: [],
+    projection: [],
   }
 
   signals.forEach(signal => {

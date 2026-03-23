@@ -59,7 +59,7 @@ If `~/.local/bin` is not already on your `PATH`, the installer prints the export
 
 Use the agent flow when another local agent should perform the install on your behalf. Keep the same supported installer, but tell the agent to use the no-launch path so it does not auto-start `vllm-sr serve` or open a browser during the handoff.
 
-Preferred long-term path: publish or install the repo-managed `openclaw-vsr-bridge` skill from this repository (`skills/openclaw-vsr-bridge/SKILL.md`). Until that registry entry exists, use the hosted prompt files below so homepage and agent copy stay short.
+Preferred long-term path: publish or install the repo-managed `openclaw-vsr-bridge` skill from this repository (`dashboard/backend/skillpacks/openclaw-vsr-bridge/SKILL.md`). Until that registry entry exists, use the hosted prompt files below so homepage and agent copy stay short.
 
 Hosted prompt files:
 

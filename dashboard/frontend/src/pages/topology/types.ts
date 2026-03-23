@@ -17,6 +17,7 @@ export type SignalType =
   | 'authz'
   | 'jailbreak'
   | 'pii'
+  | 'projection'
 
 export interface SignalConfig {
   type: SignalType
@@ -415,6 +416,16 @@ export interface ConfigData {
     include_history?: boolean
     description?: string
   }>
+  projections?: {
+    mappings?: Array<{
+      name: string
+      source: string
+      method?: string
+      outputs?: Array<{
+        name: string
+      }>
+    }>
+  }
   // Legacy format
   categories?: Array<{
     name: string
@@ -557,6 +568,7 @@ export interface ConfigData {
       name: string
     }>
     signals?: ConfigData['signals']
+    projections?: ConfigData['projections']
     decisions?: ConfigData['decisions']
   }
   global?: {

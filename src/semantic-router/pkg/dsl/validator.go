@@ -340,17 +340,26 @@ func (v *Validator) walkBoolExpr(expr BoolExpr) {
 	}
 }
 
+func signalReferenceDefined(names map[string]bool, signalType, name string) bool {
+	if len(names) == 0 {
+		return false
+	}
+	if names[name] {
+		return true
+	}
+	if signalType == config.SignalTypeComplexity {
+		// Complexity references may target derived levels like "math_task:hard".
+		if idx := strings.Index(name, ":"); idx > 0 {
+			_, exists := names[name[:idx]]
+			return exists
+		}
+	}
+	return false
+}
+
 func (v *Validator) isSignalDefined(signalType, name string) bool {
 	if names, ok := v.signalNames[signalType]; ok {
-		if names[name] {
-			return true
-		}
-		// Support sub-level references like complexity("math_problem:hard")
-		// where "math_problem" is the defined signal and "hard" is a sub-level.
-		if idx := strings.Index(name, ":"); idx > 0 {
-			baseName := name[:idx]
-			return names[baseName]
-		}
+		return signalReferenceDefined(names, signalType, name)
 	}
 	return false
 }

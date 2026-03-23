@@ -14,6 +14,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Decision',
     type: 'info',
   },
+  'x-vsr-selected-modality': {
+    label: 'Modality',
+    type: 'info',
+  },
   'x-vsr-cache-hit': {
     label: 'Cache',
     type: 'success',
@@ -21,6 +25,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
   'x-vsr-selected-reasoning': {
     label: 'Reasoning',
     type: 'info',
+  },
+  'x-vsr-fast-response': {
+    label: 'Fast Response',
+    type: 'success',
   },
   'x-vsr-jailbreak-blocked': {
     label: 'Jailbreak Blocked',
@@ -78,7 +86,31 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Complexity',
     type: 'info',
   },
+  'x-vsr-matched-modality': {
+    label: 'Modality',
+    type: 'info',
+  },
+  'x-vsr-matched-authz': {
+    label: 'Authz',
+    type: 'info',
+  },
+  'x-vsr-matched-jailbreak': {
+    label: 'Jailbreak Signal',
+    type: 'danger',
+  },
+  'x-vsr-matched-pii': {
+    label: 'PII Signal',
+    type: 'warning',
+  },
+  'x-vsr-matched-projection': {
+    label: 'Projection',
+    type: 'info',
+  },
   // Looper headers
+  'x-vsr-looper-model': {
+    label: 'Final Model',
+    type: 'info',
+  },
   'x-vsr-looper-models-used': {
     label: 'Collaborative Models',
     type: 'success',

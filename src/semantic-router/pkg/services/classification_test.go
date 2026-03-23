@@ -9,6 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 func TestNewUnifiedClassificationService(t *testing.T) {
@@ -209,6 +210,92 @@ func TestClassificationService_BasicFunctionality(t *testing.T) {
 			t.Error("Expected global service to match created service")
 		}
 	})
+}
+
+func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testing.T) {
+	service := &ClassificationService{}
+	req := IntentRequest{}
+	signals := &classification.SignalResults{
+		MatchedModalityRules:   []string{"AR"},
+		MatchedAuthzRules:      []string{"premium_tier"},
+		MatchedJailbreakRules:  []string{"jailbreak:block"},
+		MatchedPIIRules:        []string{"pii:email"},
+		MatchedProjectionRules: []string{"balance_reasoning"},
+	}
+	decisionResult := &decision.DecisionResult{
+		Decision: &config.Decision{
+			Name: "projection_route",
+			ModelRefs: []config.ModelRef{{
+				Model: "qwen3-8b",
+			}},
+		},
+		Confidence: 0.91,
+	}
+
+	response := service.buildIntentResponseFromSignals(signals, decisionResult, "projection_route", 0.91, 12, req)
+	require.NotNil(t, response)
+	require.NotNil(t, response.MatchedSignals)
+
+	assert.Equal(t, []string{"AR"}, response.MatchedSignals.Modality)
+	assert.Equal(t, []string{"premium_tier"}, response.MatchedSignals.Authz)
+	assert.Equal(t, []string{"jailbreak:block"}, response.MatchedSignals.Jailbreak)
+	assert.Equal(t, []string{"pii:email"}, response.MatchedSignals.PII)
+	assert.Equal(t, []string{"balance_reasoning"}, response.MatchedSignals.Projection)
+}
+
+func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t *testing.T) {
+	routerConfig := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Projections: config.Projections{
+				Mappings: []config.ProjectionMapping{
+					{
+						Name:   "difficulty_band",
+						Source: "difficulty_score",
+						Method: "threshold_bands",
+						Outputs: []config.ProjectionMappingOutput{
+							{Name: "balance_medium"},
+							{Name: "balance_reasoning"},
+						},
+					},
+				},
+			},
+			Decisions: []config.Decision{
+				{
+					Name: "reasoning_route",
+					Rules: config.RuleCombination{
+						Operator: "AND",
+						Conditions: []config.RuleNode{{
+							Type: "projection",
+							Name: "balance_reasoning",
+						}},
+					},
+				},
+			},
+		},
+	}
+	service := &ClassificationService{
+		classifier: &classification.Classifier{Config: routerConfig},
+		config:     routerConfig,
+	}
+	signals := &classification.SignalResults{
+		MatchedProjectionRules: []string{"balance_reasoning"},
+		Metrics:                &classification.SignalMetricsCollection{},
+		SignalConfidences:      map[string]float64{"projection:balance_reasoning": 0.94},
+	}
+	decisionResult := &decision.DecisionResult{
+		Decision: &routerConfig.Decisions[0],
+	}
+
+	response := service.buildEvalResponse("reason carefully", signals, decisionResult)
+	require.NotNil(t, response)
+	require.NotNil(t, response.DecisionResult)
+	require.NotNil(t, response.DecisionResult.UsedSignals)
+	require.NotNil(t, response.DecisionResult.MatchedSignals)
+	require.NotNil(t, response.DecisionResult.UnmatchedSignals)
+
+	assert.Equal(t, []string{"balance_reasoning"}, response.DecisionResult.UsedSignals.Projection)
+	assert.Equal(t, []string{"balance_reasoning"}, response.DecisionResult.MatchedSignals.Projection)
+	assert.Equal(t, []string{"balance_medium"}, response.DecisionResult.UnmatchedSignals.Projection)
 }
 
 // Benchmark tests for performance validation

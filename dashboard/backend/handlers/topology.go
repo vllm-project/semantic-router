@@ -126,6 +126,23 @@ type RouterIntentOptions struct {
 	ReturnProbabilities bool `json:"return_probabilities,omitempty"`
 }
 
+type RouterMatchedSignals struct {
+	Keywords     []string `json:"keywords,omitempty"`
+	Embeddings   []string `json:"embeddings,omitempty"`
+	Domains      []string `json:"domains,omitempty"`
+	FactCheck    []string `json:"fact_check,omitempty"`
+	UserFeedback []string `json:"user_feedback,omitempty"`
+	Preferences  []string `json:"preferences,omitempty"`
+	Language     []string `json:"language,omitempty"`
+	Context      []string `json:"context,omitempty"`
+	Complexity   []string `json:"complexity,omitempty"`
+	Modality     []string `json:"modality,omitempty"`
+	Authz        []string `json:"authz,omitempty"`
+	Jailbreak    []string `json:"jailbreak,omitempty"`
+	PII          []string `json:"pii,omitempty"`
+	Projection   []string `json:"projection,omitempty"`
+}
+
 // RouterIntentResponse is the response from Router's /api/v1/classify/intent
 type RouterIntentResponse struct {
 	Classification struct {
@@ -133,21 +150,11 @@ type RouterIntentResponse struct {
 		Confidence       float64 `json:"confidence"`
 		ProcessingTimeMs int64   `json:"processing_time_ms"`
 	} `json:"classification"`
-	Probabilities    map[string]float64 `json:"probabilities,omitempty"`
-	RecommendedModel string             `json:"recommended_model,omitempty"`
-	RoutingDecision  string             `json:"routing_decision,omitempty"`
-	MatchedSignals   *struct {
-		Keywords     []string `json:"keywords,omitempty"`
-		Embeddings   []string `json:"embeddings,omitempty"`
-		Domains      []string `json:"domains,omitempty"`
-		FactCheck    []string `json:"fact_check,omitempty"`
-		UserFeedback []string `json:"user_feedback,omitempty"`
-		Preferences  []string `json:"preferences,omitempty"`
-		Language     []string `json:"language,omitempty"`
-		Context      []string `json:"context,omitempty"`
-		Complexity   []string `json:"complexity,omitempty"`
-	} `json:"matched_signals,omitempty"`
-	DecisionResult *struct {
+	Probabilities    map[string]float64    `json:"probabilities,omitempty"`
+	RecommendedModel string                `json:"recommended_model,omitempty"`
+	RoutingDecision  string                `json:"routing_decision,omitempty"`
+	MatchedSignals   *RouterMatchedSignals `json:"matched_signals,omitempty"`
+	DecisionResult   *struct {
 		DecisionName string   `json:"decision_name"`
 		Confidence   float64  `json:"confidence"`
 		MatchedRules []string `json:"matched_rules"`
@@ -323,6 +330,51 @@ func convertRouterResponse(req TestQueryRequest, routerResp *RouterIntentRespons
 				Reason:     "Complexity level matched",
 			})
 			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-complexity-%s", comp))
+		}
+		for _, modality := range routerResp.MatchedSignals.Modality {
+			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
+				Type:       "modality",
+				Name:       modality,
+				Confidence: 1.0,
+				Reason:     "Modality signal matched",
+			})
+			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-modality-%s", modality))
+		}
+		for _, authz := range routerResp.MatchedSignals.Authz {
+			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
+				Type:       "authz",
+				Name:       authz,
+				Confidence: 1.0,
+				Reason:     "Authorization signal matched",
+			})
+			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-authz-%s", authz))
+		}
+		for _, jailbreak := range routerResp.MatchedSignals.Jailbreak {
+			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
+				Type:       "jailbreak",
+				Name:       jailbreak,
+				Confidence: 1.0,
+				Reason:     "Jailbreak signal matched",
+			})
+			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-jailbreak-%s", jailbreak))
+		}
+		for _, pii := range routerResp.MatchedSignals.PII {
+			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
+				Type:       "pii",
+				Name:       pii,
+				Confidence: 1.0,
+				Reason:     "PII signal matched",
+			})
+			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-pii-%s", pii))
+		}
+		for _, projection := range routerResp.MatchedSignals.Projection {
+			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
+				Type:       "projection",
+				Name:       projection,
+				Confidence: 1.0,
+				Reason:     "Projection mapping matched",
+			})
+			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-projection-%s", projection))
 		}
 	}
 

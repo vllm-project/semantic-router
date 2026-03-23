@@ -17,6 +17,7 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   authz: '🔐',
   jailbreak: '🛡️',
   pii: '🔒',
+  projection: '🔀',
 }
 
 // ============== Signal Colors (Gray Nodes, Green Paths) ==============
@@ -34,6 +35,7 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   authz: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
   jailbreak: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
   pii: { background: '#4a5568', border: '#2d3748' },          // Dark Gray
+  projection: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
 }
 
 // ============== Signal Latency ==============
@@ -51,6 +53,7 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   authz: '<1ms',
   jailbreak: '10-50ms',
   pii: '10-50ms',
+  projection: '<1ms',
 }
 
 // ============== Plugin Icons ==============
@@ -223,6 +226,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'authz',
   'jailbreak',
   'pii',
+  'projection',
 ]
 
 // ============== Plugin Types Array ==============

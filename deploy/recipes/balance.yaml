@@ -623,10 +623,10 @@ routing:
     context:
       - name: short_context
         min_tokens: "0"
-        max_tokens: 1K
+        max_tokens: "999"
       - name: medium_context
         min_tokens: 1K
-        max_tokens: 8K
+        max_tokens: "7999"
       - name: long_context
         min_tokens: 8K
         max_tokens: 256K
@@ -1139,26 +1139,16 @@ routing:
                 name: agentic_execution
               - type: keyword
                 name: agentic_request_markers
-              - type: keyword
-                name: implementation_markers
           - operator: OR
             conditions:
               - type: projection
                 name: balance_complex
               - type: projection
                 name: balance_reasoning
-          - operator: OR
+          - operator: NOT
             conditions:
-              - type: domain
-                name: business
-              - type: domain
-                name: computer science
-              - type: domain
-                name: economics
-              - type: domain
-                name: engineering
-              - type: domain
-                name: other
+              - type: keyword
+                name: architecture_markers
       modelRefs:
         - model: google/gemini-3.1-pro
           use_reasoning: true
@@ -1187,8 +1177,6 @@ routing:
                 name: engineering
           - operator: OR
             conditions:
-              - type: embedding
-                name: agentic_workflows
               - type: embedding
                 name: architecture_design
               - type: keyword
@@ -1300,19 +1288,29 @@ routing:
               - type: keyword
                 name: implementation_markers
               - type: embedding
-                name: agentic_workflows
-              - type: embedding
                 name: code_general
               - type: preference
                 name: coding_partner
-              - type: preference
-                name: agentic_execution
           - operator: OR
             conditions:
               - type: projection
                 name: balance_medium
               - type: projection
                 name: balance_complex
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: keyword
+                    name: agentic_request_markers
+                  - type: keyword
+                    name: architecture_markers
+                  - type: keyword
+                    name: creative_request_markers
+                  - type: preference
+                    name: agentic_execution
+                  - type: preference
+                    name: creative_collaboration
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -1339,20 +1337,18 @@ routing:
                 name: business
               - type: domain
                 name: economics
-          - operator: OR
-            conditions:
-              - type: embedding
-                name: business_analysis
-              - type: embedding
-                name: research_synthesis
-              - type: preference
-                name: structured_delivery
+          - type: embedding
+            name: business_analysis
           - operator: OR
             conditions:
               - type: projection
                 name: balance_medium
               - type: projection
                 name: balance_complex
+          - operator: NOT
+            conditions:
+              - type: projection
+                name: verification_required
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -1389,8 +1385,6 @@ routing:
                 name: balance_complex
               - type: embedding
                 name: business_analysis
-              - type: embedding
-                name: research_synthesis
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
@@ -1418,8 +1412,6 @@ routing:
             conditions:
               - type: embedding
                 name: health_guidance
-              - type: embedding
-                name: research_synthesis
               - type: projection
                 name: balance_medium
               - type: projection
@@ -1448,18 +1440,18 @@ routing:
         conditions:
           - type: domain
             name: history
-          - operator: OR
-            conditions:
-              - type: embedding
-                name: history_explainer
-              - type: embedding
-                name: research_synthesis
+          - type: embedding
+            name: history_explainer
           - operator: OR
             conditions:
               - type: projection
                 name: balance_medium
               - type: projection
                 name: balance_complex
+          - operator: NOT
+            conditions:
+              - type: projection
+                name: verification_required
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: true
@@ -1488,8 +1480,6 @@ routing:
             conditions:
               - type: embedding
                 name: history_explainer
-              - type: embedding
-                name: research_synthesis
               - type: projection
                 name: balance_medium
               - type: projection
@@ -1515,12 +1505,8 @@ routing:
         conditions:
           - type: domain
             name: psychology
-          - operator: OR
-            conditions:
-              - type: embedding
-                name: psychology_support
-              - type: embedding
-                name: research_synthesis
+          - type: embedding
+            name: psychology_support
           - operator: OR
             conditions:
               - type: projection
@@ -1595,8 +1581,6 @@ routing:
               - type: keyword
                 name: multi_step_markers
               - type: keyword
-                name: agentic_request_markers
-              - type: keyword
                 name: research_request_markers
           - operator: OR
             conditions:
@@ -1604,6 +1588,34 @@ routing:
                 name: balance_complex
               - type: projection
                 name: balance_reasoning
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: embedding
+                    name: premium_legal_analysis
+                  - type: embedding
+                    name: architecture_design
+                  - type: embedding
+                    name: complex_stem
+                  - type: embedding
+                    name: business_analysis
+                  - type: embedding
+                    name: health_guidance
+                  - type: embedding
+                    name: history_explainer
+                  - type: embedding
+                    name: fast_qa_en
+                  - type: embedding
+                    name: fast_qa_zh
+                  - type: keyword
+                    name: architecture_markers
+                  - type: keyword
+                    name: agentic_request_markers
+                  - type: keyword
+                    name: code_request_markers
+                  - type: keyword
+                    name: implementation_markers
       modelRefs:
         - model: openai/gpt5.4
           use_reasoning: true
@@ -1690,6 +1702,10 @@ routing:
             name: short_context
           - type: projection
             name: balance_simple
+          - operator: NOT
+            conditions:
+              - type: projection
+                name: verification_required
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -1717,6 +1733,10 @@ routing:
             name: short_context
           - type: projection
             name: balance_simple
+          - operator: NOT
+            conditions:
+              - type: projection
+                name: verification_required
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -1783,6 +1803,14 @@ routing:
                     name: balance_simple
                   - type: projection
                     name: balance_medium
+              - operator: NOT
+                conditions:
+                  - operator: OR
+                    conditions:
+                      - type: embedding
+                        name: fast_qa_en
+                      - type: embedding
+                        name: fast_qa_zh
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false

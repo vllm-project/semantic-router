@@ -53,6 +53,7 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 		MatchedAuthzRules:        []string{"authz:team-a"},
 		MatchedJailbreakRules:    []string{"jailbreak:block"},
 		MatchedPIIRules:          []string{"pii:email"},
+		MatchedProjectionRules:   []string{"balance_reasoning"},
 		JailbreakDetected:        true,
 		JailbreakType:            "prompt_injection",
 		JailbreakConfidence:      0.91,
@@ -76,6 +77,7 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 	assert.Equal(t, []string{"authz:team-a"}, ctx.VSRMatchedAuthz)
 	assert.Equal(t, []string{"jailbreak:block"}, ctx.VSRMatchedJailbreak)
 	assert.Equal(t, []string{"pii:email"}, ctx.VSRMatchedPII)
+	assert.Equal(t, []string{"balance_reasoning"}, ctx.VSRMatchedProjection)
 	assert.True(t, ctx.JailbreakDetected)
 	assert.Equal(t, "prompt_injection", ctx.JailbreakType)
 	assert.Equal(t, float32(0.91), ctx.JailbreakConfidence)
@@ -95,9 +97,13 @@ func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
 		MatchedUserFeedbackRules: []string{"feedback:e"},
 		MatchedPreferenceRules:   []string{"pref:f"},
 		MatchedLanguageRules:     []string{"lang:g"},
+		MatchedContextRules:      []string{"context:h"},
+		MatchedComplexityRules:   []string{"complexity:i"},
 		MatchedModalityRules:     []string{"modality:h"},
-		MatchedJailbreakRules:    []string{"jailbreak:i"},
-		MatchedPIIRules:          []string{"pii:j"},
+		MatchedAuthzRules:        []string{"authz:j"},
+		MatchedJailbreakRules:    []string{"jailbreak:k"},
+		MatchedPIIRules:          []string{"pii:l"},
+		MatchedProjectionRules:   []string{"projection:m"},
 	}
 
 	assert.Equal(t, []string{
@@ -108,8 +114,12 @@ func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
 		"feedback:e",
 		"pref:f",
 		"lang:g",
+		"context:h",
+		"complexity:i",
 		"modality:h",
-		"jailbreak:i",
-		"pii:j",
+		"authz:j",
+		"jailbreak:k",
+		"pii:l",
+		"projection:m",
 	}, collectMatchedSignalRules(signals))
 }
