@@ -38,8 +38,8 @@ export default function InstallQuickStartSection(): JSX.Element {
     'openclaw-vsr-bridge.md',
   )
   const installCommand = `curl -fsSL ${installScriptUrl} | bash`
-  const agentCliPrompt = `Fetch and follow ${agentCliPromptUrl}.`
-  const agentBridgePrompt = `Fetch and follow ${agentBridgePromptUrl}.`
+  const agentCliPrompt = `Follow ${agentCliPromptUrl}.`
+  const agentBridgePrompt = `Follow ${agentBridgePromptUrl}.`
   const [mode, setMode] = useState<InstallMode>('human')
   const [copyState, setCopyState] = useState<CopyState>({
     status: 'idle',
@@ -149,8 +149,7 @@ export default function InstallQuickStartSection(): JSX.Element {
                   )
                 : (
                     <Translate id="homepage.install.description.agent">
-                      Use the same supported installer, but send an agent-safe prompt that keeps
-                      first-run launch disabled until the bridge or import step is ready.
+                      Copy a short prompt. The full workflow is hosted on this site.
                     </Translate>
                   )}
             </p>
@@ -182,7 +181,7 @@ export default function InstallQuickStartSection(): JSX.Element {
                     <Translate id="homepage.install.frameLabel.human">One-liner install</Translate>
                   )
                 : (
-                    <Translate id="homepage.install.frameLabel.agent">Agent-safe prompts</Translate>
+                    <Translate id="homepage.install.frameLabel.agent">Hosted prompts</Translate>
                   )}
             </SectionLabel>
             <span className={styles.platform}>macOS / Linux</span>
@@ -231,8 +230,7 @@ export default function InstallQuickStartSection(): JSX.Element {
                           </h3>
                           <p>
                             <Translate id="homepage.install.agent.cli.description">
-                              Fetch the hosted Markdown prompt for the supported CLI path without
-                              auto-starting serve or opening the dashboard.
+                              Hosted prompt for CLI install.
                             </Translate>
                           </p>
                         </div>
@@ -259,8 +257,7 @@ export default function InstallQuickStartSection(): JSX.Element {
                           </h3>
                           <p>
                             <Translate id="homepage.install.agent.bridge.description">
-                              Fetch the hosted Markdown prompt for the OpenClaw bridge flow and
-                              prefer the repo-managed `openclaw-vsr-bridge` skill when available.
+                              Hosted prompt for the OpenClaw bridge flow.
                             </Translate>
                           </p>
                         </div>
@@ -281,10 +278,7 @@ export default function InstallQuickStartSection(): JSX.Element {
                   <div className={styles.frameFooter}>
                     <p className={styles.note}>
                       <Translate id="homepage.install.footer.agent">
-                        These short prompts point to hosted Markdown on this site. The remote files
-                        still use the same supported installer with `--mode cli --runtime skip
-                        --no-launch`, and the preferred long-term path remains the repo-managed
-                        `openclaw-vsr-bridge` skill.
+                        Hosted Markdown. Same installer. `openclaw-vsr-bridge` preferred.
                       </Translate>
                     </p>
 
