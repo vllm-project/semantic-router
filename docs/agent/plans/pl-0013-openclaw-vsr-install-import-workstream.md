@@ -62,6 +62,7 @@
   - `make agent-feature-gate ENV=cpu CHANGED_FILES="dashboard/backend/Dockerfile,dashboard/backend/config/openclaw-skills.json,docs/agent/plans/README.md,docs/agent/plans/pl-0013-openclaw-vsr-install-import-workstream.md,skills/openclaw-vsr-bridge/SKILL.md,src/vllm-sr/Dockerfile,src/vllm-sr/Dockerfile.rocm,src/vllm-sr/README.md,src/vllm-sr/cli/commands/config.py,src/vllm-sr/cli/commands/general.py,src/vllm-sr/cli/config_import.py,src/vllm-sr/tests/test_config_import_openclaw.py,src/vllm-sr/tests/test_openclaw_skill_catalog.py,tools/agent/repo-manifest.yaml,website/docs/installation/configuration.md,website/docs/installation/installation.md,website/src/components/InstallQuickStartSection/index.module.css,website/src/components/InstallQuickStartSection/index.tsx"` initially failed because the local Docker daemon was down
   - reran `make agent-feature-gate ...` after starting Docker Desktop and then with `PIP_TRUSTED_HOST='pypi.org files.pythonhosted.org'`; `make vllm-sr-test-integration` passed and `make agent-smoke-local` passed
   - `make e2e-test E2E_PROFILE=ai-gateway E2E_VERBOSE=true` failed once on an external chart download timeout for Bitnami `redis`, then retried and advanced past chart fetch but stalled in profile bootstrap while the `semantic-router` pod remained unready during unauthenticated first-run Hugging Face model downloads; pod logs showed no OpenClaw-to-VSR code-path failure before the retry was stopped
+  - follow-up website/docs loop for hosted agent prompt files: `make agent-report ENV=cpu CHANGED_FILES="website/src/components/InstallQuickStartSection/index.tsx,website/docs/installation/installation.md,website/static/install/agent/vllm-sr-cli.md,website/static/install/agent/openclaw-vsr-bridge.md"`, `make docs-lint`, and `make docs-build` all passed
 
 ## Decision Log
 
@@ -72,6 +73,7 @@
 - 2026-03-23: The repo-managed bridge skill is shipped through the existing `dashboard/backend/config/openclaw-skills.json` plus `/app/skills/<id>/SKILL.md` packaging contract, so the runtime images now copy the top-level `skills/` tree into `/app/skills/`.
 - 2026-03-23: When duplicate OpenClaw model IDs appear across providers, the importer keeps the upstream `provider_model_id`, assigns a stable logical VSR name as `<provider>/<model_id>`, and rewrites OpenClaw references only after the VSR target write succeeds.
 - 2026-03-23: Local editable-install TLS failures in the feature gate were resolved with the environment-only retry `PIP_TRUSTED_HOST='pypi.org files.pythonhosted.org'`; no repository code change was needed for that workstation-specific network issue.
+- 2026-03-23: The homepage agent cards now copy short fetch-style prompts only; the full agent workflows are hosted as Markdown under `website/static/install/agent/*.md` so agents can fetch instructions from the website domain directly.
 
 ## Follow-up Debt / ADR Links
 

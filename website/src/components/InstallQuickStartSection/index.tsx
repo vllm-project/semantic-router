@@ -18,22 +18,28 @@ function buildInstallScriptUrl(siteUrl: string, baseUrl: string): string {
   return `${normalizedSiteUrl}${normalizedBaseUrl}/install.sh`
 }
 
+function buildHostedPromptUrl(siteUrl: string, baseUrl: string, filename: string): string {
+  const normalizedSiteUrl = siteUrl.replace(/\/$/, '')
+  const normalizedBaseUrl = baseUrl === '/' ? '' : baseUrl.replace(/\/$/, '')
+  return `${normalizedSiteUrl}${normalizedBaseUrl}/install/agent/${filename}`
+}
+
 export default function InstallQuickStartSection(): JSX.Element {
   const { siteConfig } = useDocusaurusContext()
   const installScriptUrl = buildInstallScriptUrl(siteConfig.url, siteConfig.baseUrl)
+  const agentCliPromptUrl = buildHostedPromptUrl(
+    siteConfig.url,
+    siteConfig.baseUrl,
+    'vllm-sr-cli.md',
+  )
+  const agentBridgePromptUrl = buildHostedPromptUrl(
+    siteConfig.url,
+    siteConfig.baseUrl,
+    'openclaw-vsr-bridge.md',
+  )
   const installCommand = `curl -fsSL ${installScriptUrl} | bash`
-  const agentCliPrompt = [
-    `Install vLLM Semantic Router from ${installScriptUrl} using the supported installer in agent-safe mode.`,
-    `Run: curl -fsSL ${installScriptUrl} | bash -s -- --mode cli --runtime skip --no-launch`,
-    'Then verify the install with `vllm-sr --version`.',
-  ].join('\n')
-  const agentBridgePrompt = [
-    `Install vLLM Semantic Router from ${installScriptUrl} using the supported installer in agent-safe mode.`,
-    `Run: curl -fsSL ${installScriptUrl} | bash -s -- --mode cli --runtime skip --no-launch`,
-    'If the `openclaw-vsr-bridge` skill is available, use it.',
-    'Otherwise locate the OpenClaw config and run `vllm-sr config import --from openclaw --source <openclaw.json> --target config.yaml`.',
-    'Then report the rewritten OpenClaw base URL and suggest `vllm-sr validate config.yaml`.',
-  ].join('\n')
+  const agentCliPrompt = `Fetch and follow ${agentCliPromptUrl}.`
+  const agentBridgePrompt = `Fetch and follow ${agentBridgePromptUrl}.`
   const [mode, setMode] = useState<InstallMode>('human')
   const [copyState, setCopyState] = useState<CopyState>({
     status: 'idle',
@@ -225,8 +231,8 @@ export default function InstallQuickStartSection(): JSX.Element {
                           </h3>
                           <p>
                             <Translate id="homepage.install.agent.cli.description">
-                              Install the supported CLI path without auto-starting serve or opening
-                              the dashboard.
+                              Fetch the hosted Markdown prompt for the supported CLI path without
+                              auto-starting serve or opening the dashboard.
                             </Translate>
                           </p>
                         </div>
@@ -253,8 +259,8 @@ export default function InstallQuickStartSection(): JSX.Element {
                           </h3>
                           <p>
                             <Translate id="homepage.install.agent.bridge.description">
-                              Prefer the repo-managed `openclaw-vsr-bridge` skill when available,
-                              then import the existing OpenClaw config into canonical VSR config.
+                              Fetch the hosted Markdown prompt for the OpenClaw bridge flow and
+                              prefer the repo-managed `openclaw-vsr-bridge` skill when available.
                             </Translate>
                           </p>
                         </div>
@@ -275,9 +281,10 @@ export default function InstallQuickStartSection(): JSX.Element {
                   <div className={styles.frameFooter}>
                     <p className={styles.note}>
                       <Translate id="homepage.install.footer.agent">
-                        These prompts use the same supported installer with `--mode cli --runtime
-                        skip --no-launch`. Preferred long-term path: publish or install the
-                        repo-managed `openclaw-vsr-bridge` skill.
+                        These short prompts point to hosted Markdown on this site. The remote files
+                        still use the same supported installer with `--mode cli --runtime skip
+                        --no-launch`, and the preferred long-term path remains the repo-managed
+                        `openclaw-vsr-bridge` skill.
                       </Translate>
                     </p>
 

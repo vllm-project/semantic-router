@@ -59,27 +59,26 @@ If `~/.local/bin` is not already on your `PATH`, the installer prints the export
 
 Use the agent flow when another local agent should perform the install on your behalf. Keep the same supported installer, but tell the agent to use the no-launch path so it does not auto-start `vllm-sr serve` or open a browser during the handoff.
 
-Preferred long-term path: publish or install the repo-managed `openclaw-vsr-bridge` skill from this repository (`skills/openclaw-vsr-bridge/SKILL.md`). Until that registry entry exists, the direct prompts below are the supported fallback.
+Preferred long-term path: publish or install the repo-managed `openclaw-vsr-bridge` skill from this repository (`skills/openclaw-vsr-bridge/SKILL.md`). Until that registry entry exists, use the hosted prompt files below so homepage and agent copy stay short.
+
+Hosted prompt files:
+
+- CLI-only prompt: [https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md](https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md)
+- Install-and-bridge prompt: [https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md](https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md)
 
 CLI-only prompt:
 
 ```text
-Install vLLM Semantic Router from https://vllm-semantic-router.com/install.sh using the supported installer in agent-safe mode.
-Run: curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli --runtime skip --no-launch
-Then verify the install with `vllm-sr --version`.
+Fetch and follow https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md.
 ```
 
 Install-and-bridge prompt:
 
 ```text
-Install vLLM Semantic Router from https://vllm-semantic-router.com/install.sh using the supported installer in agent-safe mode.
-Run: curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli --runtime skip --no-launch
-If the `openclaw-vsr-bridge` skill is available, use it.
-Otherwise locate the OpenClaw config and run `vllm-sr config import --from openclaw --source <openclaw.json> --target config.yaml`.
-Then report the rewritten OpenClaw base URL and suggest `vllm-sr validate config.yaml`.
+Fetch and follow https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md.
 ```
 
-The installer path is still the same supported installer. OpenClaw handoff happens later through the bridge skill or `vllm-sr config import --from openclaw`, not through a second installer.
+The hosted Markdown files still point back to the same supported installer. OpenClaw handoff still happens later through the bridge skill or `vllm-sr config import --from openclaw`, not through a second installer.
 
 Windows users should use the manual PyPI flow below.
 
