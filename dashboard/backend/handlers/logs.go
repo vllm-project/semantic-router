@@ -63,18 +63,12 @@ func LogsHandler(routerAPIURL string) http.HandlerFunc {
 		if runningInContainer {
 			// Running inside container - use supervisorctl to get logs
 			response.DeploymentType = "docker"
-			logs, err := fetchContainerLogs(component, lines)
+			logs, err := responseLogs(component, lines)
+
 			if err != nil {
 				response.Error = err.Error()
 			} else {
-				for _, line := range logs {
-					if line != "" {
-						response.Logs = append(response.Logs, LogEntry{
-							Line:    line,
-							Service: component,
-						})
-					}
-				}
+				response.Logs = logs
 			}
 		} else {
 			// Running outside container - check Docker container status
@@ -83,18 +77,12 @@ func LogsHandler(routerAPIURL string) http.HandlerFunc {
 			switch containerStatus {
 			case "running", "exited":
 				response.DeploymentType = "docker"
-				logs, err := fetchContainerLogs(component, lines)
+				logs, err := responseLogs(component, lines)
+
 				if err != nil {
 					response.Error = err.Error()
 				} else {
-					for _, line := range logs {
-						if line != "" {
-							response.Logs = append(response.Logs, LogEntry{
-								Line:    line,
-								Service: component,
-							})
-						}
-					}
+					response.Logs = logs
 				}
 
 			case "not found":
@@ -276,4 +264,26 @@ func splitLogLines(output string) []string {
 		}
 	}
 	return result
+}
+
+// responseLogs returns logs for a component
+func responseLogs(component string, lines int) ([]LogEntry, error) {
+	logs, err := fetchContainerLogs(component, lines)
+	logEntries := []LogEntry{}
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, line := range logs {
+		if line == "" {
+			continue
+		}
+		logEntries = append(logEntries, LogEntry{
+			Line:    line,
+			Service: component,
+		})
+	}
+
+	return logEntries, nil
 }
