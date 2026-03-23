@@ -361,6 +361,8 @@ routing:
           reasoning_description: Prefer fast, direct business answers.
       algorithm:
         type: static
+        momentum:
+          enabled: false
       plugins:
         - type: system_prompt
           configuration:
