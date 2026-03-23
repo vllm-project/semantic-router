@@ -92,6 +92,16 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
+          label: 'Projections',
+          items: [
+            'tutorials/projection/overview',
+            'tutorials/projection/partitions',
+            'tutorials/projection/scores',
+            'tutorials/projection/mappings',
+          ],
+        },
+        {
+          type: 'category',
           label: 'Decisions',
           items: [
             'tutorials/decision/overview',
