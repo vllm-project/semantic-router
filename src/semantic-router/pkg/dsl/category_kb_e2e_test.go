@@ -15,7 +15,7 @@ import (
 func TestCategoryKB_DSLToRouterConfig_LoadsKBsFromDisk(t *testing.T) {
 	dir := t.TempDir()
 	kbDir := filepath.Join(dir, "knowledge_bases")
-	if err := os.MkdirAll(kbDir, 0755); err != nil {
+	if err := os.MkdirAll(kbDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -201,7 +201,7 @@ ROUTE local_standard {
 	var routingDoc struct {
 		Routing config.CanonicalRouting `yaml:"routing"`
 	}
-	if err := yaml.Unmarshal(routingYAML, &routingDoc); err != nil {
+	if err = yaml.Unmarshal(routingYAML, &routingDoc); err != nil {
 		t.Fatalf("routing YAML unmarshal: %v", err)
 	}
 	if len(routingDoc.Routing.Signals.CategoryKB) != 1 {
@@ -221,9 +221,9 @@ ROUTE local_standard {
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") && entry.Name() != "taxonomy.json" {
 			jsonCount++
-			data, err := os.ReadFile(filepath.Join(kbPath, entry.Name()))
-			if err != nil {
-				t.Errorf("Cannot read KB file %s: %v", entry.Name(), err)
+			data, readErr := os.ReadFile(filepath.Join(kbPath, entry.Name()))
+			if readErr != nil {
+				t.Errorf("Cannot read KB file %s: %v", entry.Name(), readErr)
 				continue
 			}
 			var kb struct {
@@ -286,7 +286,7 @@ func TestCategoryKB_PrivacyRecipeDSL_ProducesValidRoutingYAML(t *testing.T) {
 	var routingDoc struct {
 		Routing config.CanonicalRouting `yaml:"routing"`
 	}
-	if err := yaml.Unmarshal(routingYAML, &routingDoc); err != nil {
+	if err = yaml.Unmarshal(routingYAML, &routingDoc); err != nil {
 		t.Fatalf("routing YAML is not valid: %v", err)
 	}
 
@@ -494,7 +494,7 @@ ROUTE test_route {
 }
 `
 	dslPath := filepath.Join(dir, "test.dsl")
-	if err := os.WriteFile(dslPath, []byte(dslContent), 0644); err != nil {
+	if err := os.WriteFile(dslPath, []byte(dslContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -518,7 +518,7 @@ providers:
           endpoint: localhost:8000
 `
 	basePath := filepath.Join(dir, "providers.yaml")
-	if err := os.WriteFile(basePath, []byte(baseContent), 0644); err != nil {
+	if err := os.WriteFile(basePath, []byte(baseContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -578,7 +578,7 @@ ROUTE test_route {
 }
 `
 	dslPath := filepath.Join(dir, "test.dsl")
-	if err := os.WriteFile(dslPath, []byte(dslContent), 0644); err != nil {
+	if err := os.WriteFile(dslPath, []byte(dslContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -628,7 +628,7 @@ func writeJSON(t *testing.T, path string, v interface{}) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
