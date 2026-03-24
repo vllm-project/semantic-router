@@ -13,9 +13,6 @@ providers:
       qwen3:
         type: chat_template_kwargs
         parameter: enable_thinking
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning.effort
     default_reasoning_effort: medium
   # Example pricing intentionally exaggerates the local-vs-cloud spread so
   # Insights makes privacy-preserving savings obvious. These are not vendor
@@ -23,7 +20,7 @@ providers:
   models:
     - name: local/private-qwen
       reasoning_family: qwen3
-      provider_model_id: replace-with-local-vllm-model
+      provider_model_id: qwen/qwen3.5-rocm
       api_format: openai
       pricing:
         currency: USD
@@ -36,21 +33,17 @@ providers:
           type: vllm
           weight: 1
     - name: cloud/frontier-reasoning
-      reasoning_family: gpt
-      provider_model_id: replace-with-cloud-frontier-model
+      reasoning_family: qwen3
+      provider_model_id: anthropic/claude-opus-4.6
       api_format: openai
       pricing:
         currency: USD
-        prompt_per_1m: 1.20
-        completion_per_1m: 4.80
+        prompt_per_1m: 1.80
+        completion_per_1m: 7.20
       backend_refs:
-        - name: openai-frontier
-          base_url: https://api.openai.com/v1
-          provider: openai
-          type: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENAI_API_KEY
+        - name: vllm_primary
+          endpoint: vllm:8000
+          protocol: http
           weight: 1
 
 routing:
