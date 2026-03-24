@@ -25,6 +25,7 @@ type AlgorithmConfig struct {
 	RLDriven     *RLDrivenSelectionConfig     `yaml:"rl_driven,omitempty"`
 	GMTRouter    *GMTRouterSelectionConfig    `yaml:"gmtrouter,omitempty"`
 	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
+	Momentum     *RoutingMomentumConfig       `yaml:"momentum,omitempty"`
 	OnError      string                       `yaml:"on_error,omitempty"`
 }
 
@@ -86,6 +87,14 @@ type RuleNode struct {
 
 func (n *RuleNode) IsLeaf() bool {
 	return n.Type != ""
+}
+
+// GetMomentumConfig returns the momentum config for this decision, or nil if not configured.
+func (d *Decision) GetMomentumConfig() *RoutingMomentumConfig {
+	if d.Algorithm == nil || d.Algorithm.Momentum == nil {
+		return nil
+	}
+	return d.Algorithm.Momentum
 }
 
 type (

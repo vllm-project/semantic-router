@@ -1,0 +1,142 @@
+# CRM Demo Config (v0.3 canonical)
+# Expensive: qwen2.5:1.5b vs Cheap: qwen2.5:0.5b
+# Demonstrates per-decision routing momentum
+
+version: v0.3
+
+listeners:
+  - name: http-8080
+    address: 0.0.0.0
+    port: 8080
+    timeout: 300s
+
+providers:
+  defaults:
+    default_model: "qwen2.5:0.5b"
+  endpoints:
+    - name: ollama
+      url: "http://127.0.0.1:11434"
+  models:
+    - name: "qwen2.5:1.5b"
+      provider_model_id: "qwen2.5:1.5b"
+      api_format: openai
+    - name: "qwen2.5:0.5b"
+      provider_model_id: "qwen2.5:0.5b"
+      api_format: openai
+
+routing:
+  modelCards:
+    - name: "qwen2.5:1.5b"
+      param_size: 1.5B
+      context_window_size: 131072
+      description: Higher quality model for complex tasks.
+      capabilities: [chat, reasoning]
+      quality_score: 0.85
+      modality: ar
+      tags: [premium]
+    - name: "qwen2.5:0.5b"
+      param_size: 0.5B
+      context_window_size: 32768
+      description: Fast cheap model for simple tasks.
+      capabilities: [chat]
+      quality_score: 0.50
+      modality: ar
+      tags: [fast, default]
+
+  signals:
+    keywords:
+      - name: code_keywords
+        operator: OR
+        method: bm25
+        keywords: ["implement", "algorithm", "concurrent", "compiler", "kernel", "mutex"]
+        case_sensitive: false
+        bm25_threshold: 0.1
+    domains:
+      - name: "computer science"
+        description: "Computer science and programming"
+        mmlu_categories: ["computer science"]
+      - name: other
+        description: "General topics"
+        mmlu_categories: ["other"]
+    complexity:
+      - name: "prompt_complexity"
+        threshold: 0.15
+        description: "Classify prompt complexity"
+        hard:
+          candidates:
+            - "Implement a concurrent lock-free data structure"
+            - "Design a distributed consensus algorithm"
+            - "Write a compiler optimization pass"
+        easy:
+          candidates:
+            - "yes"
+            - "no"
+            - "ok"
+            - "sure"
+            - "thanks"
+            - "hello"
+            - "commit it"
+            - "add tests"
+            - "deploy it"
+
+  decisions:
+    - name: "complex_query"
+      description: "Complex queries routed to capable model"
+      priority: 200
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "complexity"
+            name: "prompt_complexity:hard"
+      algorithm:
+        type: "confidence"
+        momentum:
+          enabled: true
+      modelRefs:
+        - model: "qwen2.5:1.5b"
+          use_reasoning: false
+
+    - name: "general_query"
+      description: "General queries"
+      priority: 1
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "other"
+      modelRefs:
+        - model: "qwen2.5:0.5b"
+          use_reasoning: false
+
+global:
+  router:
+    config_source: file
+    strategy: priority
+  services:
+    semantic_cache:
+      enabled: false
+    prompt_guard:
+      enabled: false
+    hallucination_mitigation:
+      enabled: false
+  inline_models:
+    classifier:
+      category_model:
+        model_id: "models/mom-domain-classifier"
+        threshold: 0.6
+        use_cpu: true
+        category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    embedding_models:
+      qwen3_model_path: "models/mom-embedding-pro"
+      use_cpu: true
+      hnsw_config:
+        model_type: "qwen3"
+        preload_embeddings: true
+        target_dimension: 1024
+        enable_soft_matching: true
+        min_score_threshold: 0.5
+  observability:
+    metrics:
+      enabled: true
+    tracing:
+      enabled: false
