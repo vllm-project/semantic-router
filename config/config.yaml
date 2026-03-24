@@ -1243,7 +1243,7 @@ global:
           vector_field:
             name: embedding
             dimension: 768
-            metric_type: cosine
+            metric_type: COSINE
           index_type: HNSW
           params:
             M: 16
@@ -1314,6 +1314,39 @@ global:
           drop_collection_on_startup: false
           auto_create_collection: true
           verbose_errors: true
+      valkey:
+        connection:
+          host: valkey
+          port: 6379
+          database: 0
+          password: valkey-secret
+          timeout: 5
+          tls:
+            enabled: false
+            cert_file: certs/valkey.crt
+            key_file: certs/valkey.key
+            ca_file: certs/ca.crt
+        index:
+          name: semantic_cache_idx
+          prefix: "vsr:cache:"
+          vector_field:
+            name: embedding
+            dimension: 768
+            metric_type: COSINE
+          index_type: HNSW
+          params:
+            M: 16
+            efConstruction: 200
+        search:
+          topk: 10
+        development:
+          drop_index_on_startup: false
+          auto_create_index: true
+          verbose_errors: true
+        logging:
+          level: info
+          enable_query_log: true
+          enable_metrics: true
     memory:
       enabled: true
       auto_store: true
