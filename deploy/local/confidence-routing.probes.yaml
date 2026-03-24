@@ -1,0 +1,38 @@
+name: confidence-routing
+description: >
+  Eval probes for a dual-model confidence routing setup (small → large
+  escalation).  All queries should route to the single
+  "confidence_routing" decision; variants exercise different complexity
+  levels to surface trace-quality differences.
+acceptance:
+  min_probe_pass_rate: 100.0
+  min_decision_pass_rate: 100.0
+decisions:
+  - id: confidence_routing
+    expected_decision: confidence_routing
+    objective: All requests should hit the confidence_routing decision regardless of topic.
+    variants:
+      - id: simple_arithmetic
+        query: What is 2 + 2?
+        tags: [simple, math]
+      - id: capital_question
+        query: What is the capital of France?
+        tags: [simple, geography]
+      - id: coding_debug
+        query: Debug this Python stack trace and suggest a fix for the KeyError.
+        tags: [medium, coding]
+      - id: explain_gravity
+        query: Explain how gravity works at a high school level.
+        tags: [medium, science]
+      - id: compare_pricing
+        query: Compare product-led growth and sales-led growth strategies for a B2B SaaS startup.
+        tags: [medium, business]
+      - id: architecture_design
+        query: Design the architecture for a distributed rate limiter in a microservices environment.
+        tags: [complex, architecture]
+      - id: prove_sqrt2
+        query: Prove rigorously that the square root of 2 is irrational.
+        tags: [complex, math]
+      - id: chinese_factual
+        query: 太阳系最大的行星是哪颗？
+        tags: [simple, zh]

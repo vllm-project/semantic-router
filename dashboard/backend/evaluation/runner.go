@@ -152,6 +152,8 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 				result, runErr = r.runSignalEvaluation(ctx, taskID, task.Config, string(dimension), dataset, taskOutputDir)
 			case models.DimensionAccuracy:
 				result, runErr = r.runSystemEvaluation(ctx, taskID, task.Config, dataset, taskOutputDir)
+			case models.DimensionDecision:
+				result, runErr = r.runDecisionEvaluation(ctx, taskID, task.Config, dataset, taskOutputDir)
 			default:
 				log.Printf("Unknown dimension: %s", dimension)
 				continue
@@ -212,6 +214,8 @@ func getDefaultDataset(dimension models.EvaluationDimension) string {
 		return "feedback-en"
 	case models.DimensionAccuracy:
 		return "mmlu-pro"
+	case models.DimensionDecision:
+		return "default-probes"
 	default:
 		return "default"
 	}
@@ -325,6 +329,46 @@ func (r *Runner) runSystemEvaluation(ctx context.Context, taskID string, cfg mod
 	}, nil
 }
 
+// runDecisionEvaluation runs the calibration loop's eval step for decision-level probes.
+func (r *Runner) runDecisionEvaluation(ctx context.Context, taskID string, cfg models.EvaluationConfig, probeManifest, outputDir string) (*models.EvaluationResult, error) {
+	outputPath := filepath.Join(outputDir, fmt.Sprintf("decision_eval_%s.json", probeManifest))
+
+	endpoint := strings.TrimSuffix(cfg.Endpoint, "/")
+
+	args := []string{
+		"tools/agent/scripts/router_calibration_loop.py",
+		"eval",
+		"--router-url", endpoint,
+		"--probes", probeManifest,
+		"--output", outputPath,
+	}
+
+	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath is configured at startup
+	cmd.Dir = r.projectRoot
+	cmd.Env = append(os.Environ(), "PYTHONPATH="+filepath.Join(r.projectRoot, "tools", "agent", "scripts"))
+
+	r.activeProcesses.Store(taskID, cmd)
+	defer r.activeProcesses.Delete(taskID)
+
+	_, err := r.runCommandWithProgress(ctx, cmd, taskID, "decision")
+	if err != nil {
+		return nil, fmt.Errorf("decision evaluation failed: %w", err)
+	}
+
+	metrics, err := ParseDecisionEvalOutput(outputPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse decision eval output: %w", err)
+	}
+
+	return &models.EvaluationResult{
+		TaskID:         taskID,
+		Dimension:      models.DimensionDecision,
+		DatasetName:    probeManifest,
+		Metrics:        metrics,
+		RawResultsPath: outputPath,
+	}, nil
+}
+
 // runCommandWithProgress executes a command and captures output with progress updates.
 func (r *Runner) runCommandWithProgress(ctx context.Context, cmd *exec.Cmd, taskID, dimension string) (string, error) {
 	stdout, err := cmd.StdoutPipe()
@@ -385,6 +429,8 @@ func (r *Runner) saveHistoricalMetrics(result *models.EvaluationResult) {
 		"precision", "recall", "f1_score", "accuracy",
 		"avg_latency_ms", "p50_latency_ms", "p99_latency_ms",
 		"efficiency_gain_percent",
+		"success_rate", "decision_success_rate",
+		"hybrid_reward", "avg_trace_quality",
 	}
 
 	for _, metricName := range keyMetrics {
@@ -478,6 +524,14 @@ func GetAvailableDatasets() map[string][]models.DatasetInfo {
 				Description: "MMLU-Pro system accuracy via chat completions endpoint",
 				Dimension:   models.DimensionAccuracy,
 				Level:       models.LevelMoM,
+			},
+		},
+		string(models.DimensionDecision): {
+			{
+				Name:        "default-probes",
+				Description: "Decision-level probe evaluation (Meta-Refiner calibration loop)",
+				Dimension:   models.DimensionDecision,
+				Level:       models.LevelRouter,
 			},
 		},
 	}

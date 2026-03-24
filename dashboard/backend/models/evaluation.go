@@ -35,6 +35,9 @@ const (
 
 	// System evaluation dimensions (MoM-level)
 	DimensionAccuracy EvaluationDimension = "accuracy"
+
+	// Decision-level probe evaluation (Meta-Refiner calibration loop)
+	DimensionDecision EvaluationDimension = "decision"
 )
 
 // EvaluationConfig holds the configuration for an evaluation task.
