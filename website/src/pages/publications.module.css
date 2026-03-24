@@ -126,6 +126,8 @@
 }
 
 .spotlightCard {
+  position: relative;
+  isolation: isolate;
   overflow: hidden;
   border-color: var(--site-border-strong);
   background:
@@ -141,6 +143,7 @@
   inset: 0;
   border-radius: inherit;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 0;
   pointer-events: none;
 }
 
@@ -160,6 +163,8 @@
 }
 
 .awardFrame {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 1rem;
 }
