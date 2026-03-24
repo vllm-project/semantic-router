@@ -19,5 +19,5 @@ func (r *OpenAIRouter) semanticCacheEnabledForScope(decisionName string) bool {
 	if len(r.Config.Decisions) > 0 {
 		return false
 	}
-	return r.Config.SemanticCache.Enabled
+	return r.Config.Enabled
 }
