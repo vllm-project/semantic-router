@@ -318,9 +318,9 @@ type SemanticCacheConfig struct {
 	Enabled bool `json:"enabled,omitempty"`
 
 	// BackendType specifies the cache backend to use
-	// Options: "memory" (default), "redis", "milvus", "hybrid"
+	// Options: "memory" (default), "redis", "valkey", "milvus", "hybrid"
 	// +kubebuilder:default="memory"
-	// +kubebuilder:validation:Enum=memory;redis;milvus;hybrid
+	// +kubebuilder:validation:Enum=memory;redis;valkey;milvus;hybrid
 	// +optional
 	BackendType string `json:"backend_type,omitempty"`
 
@@ -349,6 +349,10 @@ type SemanticCacheConfig struct {
 	// Redis configuration (required when backend_type is "redis")
 	// +optional
 	Redis *RedisCacheConfig `json:"redis,omitempty"`
+
+	// Valkey configuration (required when backend_type is "valkey")
+	// +optional
+	Valkey *ValkeyCacheConfig `json:"valkey,omitempty"`
 
 	// Milvus configuration (required when backend_type is "milvus")
 	// +optional
@@ -523,6 +527,179 @@ type RedisCacheSearch struct {
 
 // RedisCacheDevelopment defines development-mode settings.
 type RedisCacheDevelopment struct {
+	// DropIndexOnStartup clears the index when router starts (for testing)
+	// +kubebuilder:default=false
+	// +optional
+	DropIndexOnStartup bool `json:"drop_index_on_startup,omitempty"`
+
+	// AutoCreateIndex automatically creates the index if it doesn't exist
+	// +kubebuilder:default=true
+	// +optional
+	AutoCreateIndex bool `json:"auto_create_index,omitempty"`
+
+	// VerboseErrors includes detailed error messages in logs
+	// +kubebuilder:default=true
+	// +optional
+	VerboseErrors bool `json:"verbose_errors,omitempty"`
+}
+
+// ValkeyCacheConfig defines Valkey cache backend configuration.
+// Configure these settings when using Valkey as the semantic cache backend.
+type ValkeyCacheConfig struct {
+	// Connection settings for Valkey server
+	// +optional
+	Connection ValkeyCacheConnection `json:"connection,omitempty"`
+
+	// Index settings for Valkey vector search
+	// +optional
+	Index ValkeyCacheIndex `json:"index,omitempty"`
+
+	// Search settings for Valkey queries
+	// +optional
+	Search ValkeyCacheSearch `json:"search,omitempty"`
+
+	// Development settings for Valkey cache
+	// +optional
+	Development ValkeyCacheDevelopment `json:"development,omitempty"`
+}
+
+// ValkeyCacheConnection defines Valkey connection parameters.
+type ValkeyCacheConnection struct {
+	// Host is the Valkey server hostname or IP address
+	// Example: "valkey.default.svc.cluster.local"
+	// +optional
+	Host string `json:"host,omitempty"`
+
+	// Port is the Valkey server port
+	// +kubebuilder:default=6379
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port int `json:"port,omitempty"`
+
+	// Database is the Valkey database number to use
+	// +kubebuilder:default=0
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Database int `json:"database,omitempty"`
+
+	// Password for Valkey authentication (plaintext - consider using PasswordSecretRef instead)
+	// +optional
+	Password string `json:"password,omitempty"`
+
+	// PasswordSecretRef references a Secret containing the Valkey password
+	// Preferred over plaintext Password field for security
+	// +optional
+	PasswordSecretRef *corev1.SecretKeySelector `json:"password_secret_ref,omitempty"`
+
+	// Timeout for Valkey operations in seconds
+	// +kubebuilder:default=30
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Timeout int `json:"timeout,omitempty"`
+
+	// TLS configuration for secure Valkey connections
+	// +optional
+	TLS ValkeyCacheTLS `json:"tls,omitempty"`
+}
+
+// ValkeyCacheTLS defines TLS settings for Valkey connections.
+type ValkeyCacheTLS struct {
+	// Enabled controls whether to use TLS for Valkey connection
+	// +kubebuilder:default=false
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// CertFile is the path to client certificate file
+	// +optional
+	CertFile string `json:"cert_file,omitempty"`
+
+	// KeyFile is the path to client key file
+	// +optional
+	KeyFile string `json:"key_file,omitempty"`
+
+	// CAFile is the path to CA certificate file
+	// +optional
+	CAFile string `json:"ca_file,omitempty"`
+}
+
+// ValkeyCacheIndex defines Valkey vector index configuration.
+type ValkeyCacheIndex struct {
+	// Name of the Valkey index
+	// +kubebuilder:default="semantic_cache_idx"
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Prefix for Valkey keys
+	// +kubebuilder:default="doc:"
+	// +optional
+	Prefix string `json:"prefix,omitempty"`
+
+	// VectorField configuration for embeddings
+	// +optional
+	VectorField ValkeyCacheVectorField `json:"vector_field,omitempty"`
+
+	// IndexType specifies the index algorithm
+	// Options: "HNSW" (recommended), "FLAT"
+	// +kubebuilder:default="HNSW"
+	// +kubebuilder:validation:Enum=HNSW;FLAT
+	// +optional
+	IndexType string `json:"index_type,omitempty"`
+
+	// Params for HNSW index
+	// +optional
+	Params ValkeyCacheIndexParams `json:"params,omitempty"`
+}
+
+// ValkeyCacheVectorField defines vector field configuration.
+type ValkeyCacheVectorField struct {
+	// Name of the vector field
+	// +kubebuilder:default="embedding"
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Dimension of the embedding vectors
+	// For BERT: 384, for Qwen3: 1024, for Gemma: 768
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	Dimension int `json:"dimension,omitempty"`
+
+	// MetricType for vector similarity
+	// Options: "COSINE", "IP" (inner product), "L2" (Euclidean)
+	// +kubebuilder:default="COSINE"
+	// +kubebuilder:validation:Enum=COSINE;IP;L2
+	// +optional
+	MetricType string `json:"metric_type,omitempty"`
+}
+
+// ValkeyCacheIndexParams defines HNSW index parameters.
+type ValkeyCacheIndexParams struct {
+	// M is the number of bi-directional links per node
+	// Higher values = better recall, more memory
+	// +kubebuilder:default=16
+	// +kubebuilder:validation:Minimum=2
+	// +optional
+	M int `json:"M,omitempty"`
+
+	// EfConstruction is the size of dynamic candidate list during construction
+	// Higher values = better quality, slower indexing
+	// +kubebuilder:default=64
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	EfConstruction int `json:"efConstruction,omitempty"`
+}
+
+// ValkeyCacheSearch defines Valkey search parameters.
+type ValkeyCacheSearch struct {
+	// TopK is the number of results to return from vector search
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	TopK int `json:"topk,omitempty"`
+}
+
+// ValkeyCacheDevelopment defines development-mode settings.
+type ValkeyCacheDevelopment struct {
 	// DropIndexOnStartup clears the index when router starts (for testing)
 	// +kubebuilder:default=false
 	// +optional
