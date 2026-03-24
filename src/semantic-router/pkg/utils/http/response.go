@@ -285,6 +285,95 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 	}
 }
 
+// buildStreamingFastBody converts a message into SSE chunks for the fast_response plugin.
+func buildStreamingFastBody(message string, unixTimeStep int64) []byte {
+	chunks := splitContentIntoChunks(message)
+	if len(chunks) == 0 {
+		chunks = []string{message}
+	}
+
+	var sseChunks []string
+	newID := fmt.Sprintf("chatcmpl-fast-%d", unixTimeStep)
+
+	for i, chunkContent := range chunks {
+		streamChunk := map[string]interface{}{
+			"id":      newID,
+			"object":  "chat.completion.chunk",
+			"created": unixTimeStep,
+			"model":   "router",
+			"choices": []map[string]interface{}{
+				{
+					"index": 0,
+					"delta": map[string]interface{}{
+						"content": chunkContent,
+					},
+					"finish_reason": nil,
+				},
+			},
+		}
+		if i == 0 {
+			streamChunk["choices"].([]map[string]interface{})[0]["delta"].(map[string]interface{})["role"] = "assistant"
+		}
+
+		chunkJSON, err := json.Marshal(streamChunk)
+		if err != nil {
+			continue
+		}
+		sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", chunkJSON))
+	}
+
+	finalChunk := map[string]interface{}{
+		"id":      newID,
+		"object":  "chat.completion.chunk",
+		"created": unixTimeStep,
+		"model":   "router",
+		"choices": []map[string]interface{}{
+			{
+				"index":         0,
+				"delta":         map[string]interface{}{},
+				"finish_reason": "stop",
+			},
+		},
+	}
+	finalJSON, _ := json.Marshal(finalChunk)
+	sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", finalJSON))
+	sseChunks = append(sseChunks, "data: [DONE]\n\n")
+
+	return []byte(strings.Join(sseChunks, ""))
+}
+
+// buildNonStreamingFastBody creates a JSON ChatCompletion body for the fast_response plugin.
+func buildNonStreamingFastBody(message string, unixTimeStep int64) []byte {
+	openAIResponse := openai.ChatCompletion{
+		ID:      fmt.Sprintf("chatcmpl-fast-%d", unixTimeStep),
+		Object:  "chat.completion",
+		Created: unixTimeStep,
+		Model:   "router",
+		Choices: []openai.ChatCompletionChoice{
+			{
+				Index: 0,
+				Message: openai.ChatCompletionMessage{
+					Role:    "assistant",
+					Content: message,
+				},
+				FinishReason: "stop",
+			},
+		},
+		Usage: openai.CompletionUsage{
+			PromptTokens:     0,
+			CompletionTokens: 0,
+			TotalTokens:      0,
+		},
+	}
+
+	responseBody, err := json.Marshal(openAIResponse)
+	if err != nil {
+		logging.Errorf("Error marshaling fast_response: %v", err)
+		return []byte(`{"error": "Failed to generate response"}`)
+	}
+	return responseBody
+}
+
 // CreateFastResponse creates an OpenAI-compatible immediate response for the
 // fast_response plugin. It supports both streaming (SSE) and non-streaming (JSON)
 // formats based on the original request's "stream" flag.
@@ -296,93 +385,10 @@ func CreateFastResponse(message string, isStreaming bool, decisionName string) *
 
 	if isStreaming {
 		contentType = "text/event-stream"
-
-		chunks := splitContentIntoChunks(message)
-		if len(chunks) == 0 {
-			chunks = []string{message}
-		}
-
-		var sseChunks []string
-		newID := fmt.Sprintf("chatcmpl-fast-%d", unixTimeStep)
-
-		for i, chunkContent := range chunks {
-			streamChunk := map[string]interface{}{
-				"id":      newID,
-				"object":  "chat.completion.chunk",
-				"created": unixTimeStep,
-				"model":   "router",
-				"choices": []map[string]interface{}{
-					{
-						"index": 0,
-						"delta": map[string]interface{}{
-							"content": chunkContent,
-						},
-						"finish_reason": nil,
-					},
-				},
-			}
-			// First chunk includes role
-			if i == 0 {
-				streamChunk["choices"].([]map[string]interface{})[0]["delta"].(map[string]interface{})["role"] = "assistant"
-			}
-
-			chunkJSON, err := json.Marshal(streamChunk)
-			if err != nil {
-				continue
-			}
-			sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", chunkJSON))
-		}
-
-		// Final chunk with finish_reason
-		finalChunk := map[string]interface{}{
-			"id":      newID,
-			"object":  "chat.completion.chunk",
-			"created": unixTimeStep,
-			"model":   "router",
-			"choices": []map[string]interface{}{
-				{
-					"index":         0,
-					"delta":         map[string]interface{}{},
-					"finish_reason": "stop",
-				},
-			},
-		}
-		finalJSON, _ := json.Marshal(finalChunk)
-		sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", finalJSON))
-		sseChunks = append(sseChunks, "data: [DONE]\n\n")
-
-		responseBody = []byte(strings.Join(sseChunks, ""))
+		responseBody = buildStreamingFastBody(message, unixTimeStep)
 	} else {
 		contentType = "application/json"
-
-		openAIResponse := openai.ChatCompletion{
-			ID:      fmt.Sprintf("chatcmpl-fast-%d", unixTimeStep),
-			Object:  "chat.completion",
-			Created: unixTimeStep,
-			Model:   "router",
-			Choices: []openai.ChatCompletionChoice{
-				{
-					Index: 0,
-					Message: openai.ChatCompletionMessage{
-						Role:    "assistant",
-						Content: message,
-					},
-					FinishReason: "stop",
-				},
-			},
-			Usage: openai.CompletionUsage{
-				PromptTokens:     0,
-				CompletionTokens: 0,
-				TotalTokens:      0,
-			},
-		}
-
-		var err error
-		responseBody, err = json.Marshal(openAIResponse)
-		if err != nil {
-			logging.Errorf("Error marshaling fast_response: %v", err)
-			responseBody = []byte(`{"error": "Failed to generate response"}`)
-		}
+		responseBody = buildNonStreamingFastBody(message, unixTimeStep)
 	}
 
 	setHeaders := []*core.HeaderValueOption{

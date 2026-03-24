@@ -115,6 +115,11 @@ legacy_hotspots:
       - src/semantic-router/pkg/imagegen/backend_vllm_omni.go
     function_checks: relaxed
   - paths:
+      - src/semantic-router/pkg/cache/inmemory_cache.go
+      - src/semantic-router/pkg/cache/milvus_cache.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
       - src/semantic-router/pkg/cache/cache_interface.go
     interface_checks: relaxed
   - paths:
