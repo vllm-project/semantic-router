@@ -56,6 +56,9 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 	}
 
 	valkeyConfig := options.Config
+	// Normalize metric type to uppercase so configs using e.g. "cosine" match the
+	// expected enum values (COSINE, IP, L2) without triggering fallback warnings.
+	valkeyConfig.Index.VectorField.MetricType = strings.ToUpper(valkeyConfig.Index.VectorField.MetricType)
 	logging.Debugf("ValkeyCache: config loaded - host=%s:%d, index=%s, dimension=auto-detect",
 		valkeyConfig.Connection.Host, valkeyConfig.Connection.Port, valkeyConfig.Index.Name)
 
@@ -236,11 +239,9 @@ func (c *ValkeyCache) createIndex() error {
 			"ON", "HASH",
 			"PREFIX", "1", c.config.Index.Prefix,
 			"SCHEMA",
-			"request_id", "TAG", // Changed from TEXT to TAG for exact matching
+			"request_id", "TAG",
 			"model", "TAG",
 			"query", "TEXT",
-			"request_body", "TEXT",
-			"response_body", "TEXT",
 			c.config.Index.VectorField.Name, "VECTOR", "HNSW", "10",
 			"TYPE", "FLOAT32",
 			"DIM", fmt.Sprintf("%d", actualDimension),
@@ -255,11 +256,9 @@ func (c *ValkeyCache) createIndex() error {
 			"ON", "HASH",
 			"PREFIX", "1", c.config.Index.Prefix,
 			"SCHEMA",
-			"request_id", "TAG", // Changed from TEXT to TAG for exact matching
+			"request_id", "TAG",
 			"model", "TAG",
 			"query", "TEXT",
-			"request_body", "TEXT",
-			"response_body", "TEXT",
 			c.config.Index.VectorField.Name, "VECTOR", "FLAT", "6",
 			"TYPE", "FLOAT32",
 			"DIM", fmt.Sprintf("%d", actualDimension),
@@ -431,7 +430,7 @@ func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, 
 
 	ctx := context.Background()
 
-	query := fmt.Sprintf("@request_id:{%s}", requestID)
+	query := fmt.Sprintf("@request_id:{%s}", escapeTagValue(requestID))
 	logging.Debugf("UpdateWithResponse: searching with TAG query: %s", query)
 
 	searchCmd := []string{
@@ -614,6 +613,28 @@ func parseBestMatch(searchResult interface{}) *searchMatch {
 	}
 
 	return nil
+}
+
+// escapeTagValue escapes punctuation and whitespace in a string so it can be
+// safely used inside a Valkey/Redis TAG query expression (@field:{value}).
+// TAG queries treat punctuation characters as token separators; backslash-
+// escaping them preserves the literal value.
+// Reference: https://forum.redis.com/t/tag-fields-and-escaping/96
+func escapeTagValue(s string) string {
+	// Characters that must be backslash-escaped in TAG query values.
+	// These are the punctuation/space characters that the RediSearch/Valkey
+	// query tokenizer treats as separators.
+	const specialChars = " \t,.<>{}[]\"':;!@#$%^&*()-+=~|/\\"
+
+	var b strings.Builder
+	b.Grow(len(s) + 8) // most IDs need only a few extra backslashes
+	for _, c := range s {
+		if strings.ContainsRune(specialChars, c) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(c)
+	}
+	return b.String()
 }
 
 // distanceToSimilarity converts a vector distance to a similarity score based on the metric type.

@@ -1,3 +1,5 @@
+//go:build !windows && cgo
+
 package cache
 
 import (
@@ -16,7 +18,12 @@ import (
 )
 
 // These tests require:
-// 1. A running Valkey instance with search module on localhost:6379
+// 1. A running Valkey instance with search module.
+//    Default: localhost:6379 (standalone / local-only).
+//    Override with VALKEY_HOST / VALKEY_PORT env vars.
+//    In CI (or when Redis already occupies 6379), `make start-valkey`
+//    maps Valkey to port 6380 and the Makefile test targets set
+//    VALKEY_PORT=6380 automatically.
 // 2. BERT model initialized for embeddings
 func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 	// Skip if SKIP_VALKEY_TESTS is set
@@ -274,6 +281,57 @@ func TestValkeyCacheIntegration_UpdateWithResponse(t *testing.T) {
 	require.True(t, hit, "Should find the updated entry after retries")
 	assert.NotNil(t, foundResponse)
 	assert.Contains(t, string(foundResponse), "Python", "Updated response should be findable")
+}
+
+func TestValkeyCacheIntegration_UpdateWithResponseSpecialChars(t *testing.T) {
+	cache := setupValkeyCacheIntegration(t)
+	defer func() { _ = cache.Close() }()
+
+	// Request IDs that contain TAG-separator characters (hyphens, dots, colons).
+	// These previously broke the TAG query in UpdateWithResponse because the
+	// characters were not escaped.
+	specialIDs := []struct {
+		name      string
+		requestID string
+		query     string
+	}{
+		{"UUID hyphens", "550e8400-e29b-41d4-a716-446655440000", "What is Go?"},
+		{"dotted version", "req.v1.2.3", "What is Rust?"},
+		{"colons", "ns:cache:req:789", "What is Java?"},
+	}
+
+	for _, tc := range specialIDs {
+		t.Run(tc.name, func(t *testing.T) {
+			requestBody := []byte(`{"model":"gpt-4"}`)
+			ttlSeconds := 300
+
+			err := cache.AddPendingRequest(tc.requestID, "gpt-4", tc.query, requestBody, ttlSeconds)
+			require.NoError(t, err, "AddPendingRequest should succeed for %s", tc.requestID)
+
+			responseBody := []byte(fmt.Sprintf(`{"choices":[{"message":{"content":"answer for %s"}}]}`, tc.requestID))
+
+			var updateErr error
+			maxRetries := 5
+			for i := 0; i < maxRetries; i++ {
+				if i > 0 {
+					time.Sleep(time.Duration(200*(i+1)) * time.Millisecond)
+				}
+				updateErr = cache.UpdateWithResponse(tc.requestID, responseBody, ttlSeconds)
+				if updateErr == nil {
+					break
+				}
+			}
+			require.NoError(t, updateErr, "UpdateWithResponse should succeed for request_id=%s", tc.requestID)
+
+			// Verify the updated entry is searchable
+			time.Sleep(300 * time.Millisecond)
+			foundResponse, hit, err := cache.FindSimilar("gpt-4", tc.query)
+			assert.NoError(t, err)
+			if hit {
+				assert.Contains(t, string(foundResponse), tc.requestID, "Response should match the request ID")
+			}
+		})
+	}
 }
 
 func TestValkeyCacheIntegration_TTLExpiration(t *testing.T) {

@@ -24,7 +24,7 @@ func newValkeyConfig() *config.ValkeyConfig {
 	cfg := &config.ValkeyConfig{}
 	cfg.Connection.Host = host
 	cfg.Connection.Port = port
-	cfg.Connection.Timeout = 5000
+	cfg.Connection.Timeout = 5 // seconds
 	cfg.Connection.TLS.Enabled = false
 
 	cfg.Index.Name = "semantic_cache_idx"
