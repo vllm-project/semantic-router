@@ -18,7 +18,7 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 }
 
 var validToolScopes = map[string]bool{
-	"":             true,
+	"":                 true,
 	ToolScopeNone:      true,
 	ToolScopeLocalOnly: true,
 	ToolScopeStandard:  true,
