@@ -23,6 +23,7 @@ type CanonicalRouting struct {
 	ModelCards  []RoutingModel       `yaml:"modelCards,omitempty"`
 	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
 	Projections CanonicalProjections `yaml:"projections,omitempty"`
+	Meta        MetaRoutingConfig    `yaml:"meta,omitempty"`
 	Decisions   []Decision           `yaml:"decisions,omitempty"`
 }
 
@@ -103,6 +104,7 @@ func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
 	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
+	cfg.MetaRouting = copyMetaRoutingConfig(canonical.Routing.Meta)
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {

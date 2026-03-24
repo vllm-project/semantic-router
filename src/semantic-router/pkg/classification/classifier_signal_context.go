@@ -67,8 +67,6 @@ func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map
 }
 
 func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, nonUserMessages []string, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, imageURL ...string) *SignalResults {
-	defer c.enterSignalEvaluationLoadGate()()
-	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
 	if forceEvaluateAll {
 		usedSignals = c.getAllSignalTypes()
@@ -76,31 +74,19 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	} else {
 		usedSignals = c.getUsedSignals()
 	}
-
-	textForSignal := textForSignalFunc(text, uncompressedText, skipCompressionSignals)
-	ready := c.signalReadiness()
-
-	results := &SignalResults{
-		Metrics:           &SignalMetricsCollection{},
-		SignalConfidences: make(map[string]float64),
-		SignalValues:      make(map[string]float64),
-	}
-
-	var wg sync.WaitGroup
-	var mu sync.Mutex
 	imgArg := ""
 	if len(imageURL) > 0 {
 		imgArg = imageURL[0]
 	}
-
-	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, nonUserMessages, imgArg)
-	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
-
-	wg.Wait()
-	results = c.applySignalGroups(results)
-	results = c.applySignalComposers(results)
-	results = c.applyProjections(results)
-	return results
+	return c.evaluateSignalsWithSelection(
+		text,
+		contextText,
+		nonUserMessages,
+		usedSignals,
+		uncompressedText,
+		skipCompressionSignals,
+		imgArg,
+	)
 }
 
 func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mutex, text string) {

@@ -66,6 +66,13 @@ func TestApplyProjectionsAddsDerivedOutputsAndScores(t *testing.T) {
 	if len(got.MatchedProjectionRules) != 1 || got.MatchedProjectionRules[0] != "balance_reasoning" {
 		t.Fatalf("matched projection rules = %v, want [balance_reasoning]", got.MatchedProjectionRules)
 	}
+	distance, ok := got.ProjectionBoundaryDistances["balance_reasoning"]
+	if !ok {
+		t.Fatalf("projection boundary distance missing from %+v", got.ProjectionBoundaryDistances)
+	}
+	if distance < 0.03 || distance > 0.05 {
+		t.Fatalf("projection boundary distance = %.3f, want about 0.04", distance)
+	}
 	confidence, ok := got.SignalConfidences["projection:balance_reasoning"]
 	if !ok {
 		t.Fatalf("projection confidence missing from %+v", got.SignalConfidences)

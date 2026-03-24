@@ -88,3 +88,6 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0012-dsl-conflict-free-routing-workstream.md](pl-0012-dsl-conflict-free-routing-workstream.md)
 - [pl-0013-openclaw-vsr-install-import-workstream.md](pl-0013-openclaw-vsr-install-import-workstream.md)
 - [pl-0014-structure-signal-family-implementation.md](pl-0014-structure-signal-family-implementation.md)
+- [pl-0015-meta-routing-refinement-workstream.md](pl-0015-meta-routing-refinement-workstream.md)
+- [pl-0016-meta-routing-dashboard-ui-workstream.md](pl-0016-meta-routing-dashboard-ui-workstream.md)
+- [pl-0017-meta-routing-learned-policy-enablement.md](pl-0017-meta-routing-learned-policy-enablement.md)

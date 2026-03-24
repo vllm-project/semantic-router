@@ -66,6 +66,7 @@ DSL now owns only:
 - `routing.modelCards`
 - `routing.signals`
 - `routing.projections` for signal coordination and derived routing outputs
+- `routing.meta` for optional request-phase assess-and-refine policy
 - `routing.decisions`
 
 It no longer owns endpoints, API keys, listeners, or router-global runtime settings.
@@ -117,6 +118,7 @@ The repo no longer ships large full-example trees under `config/intelligent-rout
 
 - `config/config.yaml` is the exhaustive canonical reference config
 - `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/` hold reusable routing fragments
+- `routing.meta` now round-trips through the same canonical routing contract instead of living in runtime-only flags
 - `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
 - `config/algorithm/` is organized by routing policy family (`looper`, `selection`)
 - latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface

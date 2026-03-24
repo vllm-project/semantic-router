@@ -30,6 +30,7 @@ import FleetSimRunsPage from './pages/FleetSimRunsPage'
 import OpenClawPage from './pages/OpenClawPage'
 import UsersPage from './pages/UsersPage'
 import InsightsPage from './pages/InsightsPage'
+import MetaRoutingPage from './pages/MetaRoutingPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { SetupProvider, useSetup } from './contexts/SetupContext'
@@ -61,6 +62,8 @@ const ConfigSectionRoute: React.FC<{
       'router-config': 'global-config',
       signals: 'signals',
       projections: 'projections',
+      meta: 'meta-routing',
+      'meta-routing': 'meta-routing',
       routes: 'decisions',
       decisions: 'decisions',
       endpoints: 'models',
@@ -354,6 +357,17 @@ const AppRouter: React.FC = () => {
                 ) : (
                   <Navigate to="/dashboard" replace />
                 )
+              }
+            />
+            <Route
+              path="/meta-routing"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <MetaRoutingPage />
+                </Layout>
               }
             />
             <Route

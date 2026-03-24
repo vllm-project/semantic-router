@@ -67,26 +67,36 @@ type SignalMetrics struct {
 	Confidence      float64 `json:"confidence"`        // Confidence score (0.0-1.0), 0 if not applicable
 }
 
+// ProjectionPartitionConflict records a partition that had multiple contenders
+// before partition semantics reduced it to a single winner.
+type ProjectionPartitionConflict struct {
+	Name       string   `json:"name"`
+	SignalType string   `json:"signal_type"`
+	Contenders []string `json:"contenders,omitempty"`
+}
+
 // SignalResults contains all evaluated signal results
 type SignalResults struct {
-	MatchedKeywordRules      []string
-	MatchedKeywords          []string // The actual keywords that matched (not rule names)
-	MatchedEmbeddingRules    []string
-	MatchedDomainRules       []string
-	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
-	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
-	MatchedPreferenceRules   []string // Route preference names matched via external LLM
-	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
-	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
-	TokenCount               int      // Total token count
-	MatchedStructureRules    []string // Matched structure rule names (e.g. "many_questions")
-	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
-	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
-	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
-	MatchedJailbreakRules    []string // Matched jailbreak rule names (confidence >= threshold)
-	MatchedPIIRules          []string // Matched PII rule names (denied PII types detected)
-	MatchedProjectionRules   []string // Matched derived routing outputs from routing.projections.mappings
-	ProjectionScores         map[string]float64
+	MatchedKeywordRules          []string
+	MatchedKeywords              []string // The actual keywords that matched (not rule names)
+	MatchedEmbeddingRules        []string
+	MatchedDomainRules           []string
+	MatchedFactCheckRules        []string // "needs_fact_check" or "no_fact_check_needed"
+	MatchedUserFeedbackRules     []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
+	MatchedPreferenceRules       []string // Route preference names matched via external LLM
+	MatchedLanguageRules         []string // Language codes: "en", "es", "zh", "fr", etc.
+	MatchedContextRules          []string // Matched context rule names (e.g. "low_token_count")
+	TokenCount                   int      // Total token count
+	MatchedStructureRules        []string // Matched structure rule names (e.g. "many_questions")
+	MatchedComplexityRules       []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	MatchedModalityRules         []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
+	MatchedAuthzRules            []string // Matched authz role names for user-level RBAC routing
+	MatchedJailbreakRules        []string // Matched jailbreak rule names (confidence >= threshold)
+	MatchedPIIRules              []string // Matched PII rule names (denied PII types detected)
+	MatchedProjectionRules       []string // Matched derived routing outputs from routing.projections.mappings
+	ProjectionScores             map[string]float64
+	ProjectionBoundaryDistances  map[string]float64
+	ProjectionPartitionConflicts []ProjectionPartitionConflict
 
 	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
 	JailbreakDetected   bool    // Whether any jailbreak was detected (across all rules)

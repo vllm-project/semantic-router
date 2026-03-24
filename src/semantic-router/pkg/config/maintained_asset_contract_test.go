@@ -11,6 +11,7 @@ import (
 
 var maintainedFullConfigAssets = []string{
 	"deploy/recipes/balance.yaml",
+	"deploy/recipes/privacy/privacy-router.yaml",
 	"deploy/kubernetes/istio/config.yaml",
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.local",
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.openai",

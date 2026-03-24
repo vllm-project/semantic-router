@@ -129,8 +129,15 @@ type RequestContext struct {
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
 	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration
 
+	// Meta-routing trace state for request-phase assess-and-plan flows.
+	MetaRoutingTrace *RoutingTrace
+	// Meta-routing feedback persistence state.
+	MetaRoutingFeedbackID      string
+	MetaRoutingFeedbackWritten bool
+
 	// Response API context
-	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
+	ResponseAPICtx         *ResponseAPIContext // Non-nil if this is a Response API request
+	UpstreamResponseStatus int
 
 	// Chat Completions messages (parsed for memory and related flows)
 	ChatCompletionMessages []ChatCompletionMessage

@@ -27,6 +27,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {
 		return replayResp, nil
 	}
+	if feedbackResp := r.handleMetaRoutingFeedbackAPI(method, path); feedbackResp != nil {
+		return feedbackResp, nil
+	}
 
 	detectStreamingExpectation(ctx)
 	if modelsResp, err := r.handleModelsRequestHeaders(method, path); err != nil || modelsResp != nil {

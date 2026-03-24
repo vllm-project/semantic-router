@@ -80,10 +80,22 @@ type SignalMatches struct {
 
 // DecisionResult represents the result of decision evaluation
 type DecisionResult struct {
-	Decision        *config.Decision
-	Confidence      float64
-	MatchedRules    []string
-	MatchedKeywords []string // The actual keywords that matched (not rule names)
+	Decision            *config.Decision
+	Confidence          float64
+	MatchedRules        []string
+	MatchedKeywords     []string // The actual keywords that matched (not rule names)
+	CandidateCount      int
+	DecisionMargin      float64
+	DecisionWinnerBasis string
+	RunnerUp            *DecisionCandidate
+}
+
+// DecisionCandidate is a stable summary of one ranked decision contender.
+type DecisionCandidate struct {
+	Name       string
+	Confidence float64
+	Priority   int
+	Tier       int
 }
 
 // EvaluateDecisions evaluates all decisions and returns the best match based on strategy
@@ -332,7 +344,11 @@ func (e *DecisionEngine) selectBestDecision(results []DecisionResult) *DecisionR
 	}
 
 	if len(results) == 1 {
-		return &results[0]
+		result := results[0]
+		result.CandidateCount = 1
+		result.DecisionMargin = 1.0
+		result.DecisionWinnerBasis = "single_candidate"
+		return &result
 	}
 
 	useTieredSelection := e.useTieredSelection(results)
@@ -340,7 +356,18 @@ func (e *DecisionEngine) selectBestDecision(results []DecisionResult) *DecisionR
 		return e.decisionResultLess(results[i], results[j], useTieredSelection)
 	})
 
-	return &results[0]
+	winner := results[0]
+	runnerUp := results[1]
+	winner.CandidateCount = len(results)
+	winner.DecisionMargin = winner.Confidence - runnerUp.Confidence
+	winner.DecisionWinnerBasis = e.decisionWinnerBasis(winner, runnerUp, useTieredSelection)
+	winner.RunnerUp = &DecisionCandidate{
+		Name:       runnerUp.Decision.Name,
+		Confidence: runnerUp.Confidence,
+		Priority:   runnerUp.Decision.Priority,
+		Tier:       runnerUp.Decision.Tier,
+	}
+	return &winner
 }
 
 func (e *DecisionEngine) useTieredSelection(results []DecisionResult) bool {
@@ -387,4 +414,30 @@ func (e *DecisionEngine) decisionResultLess(
 		return left.Confidence > right.Confidence
 	}
 	return left.Decision.Name < right.Decision.Name
+}
+
+func (e *DecisionEngine) decisionWinnerBasis(
+	winner DecisionResult,
+	runnerUp DecisionResult,
+	useTieredSelection bool,
+) string {
+	if useTieredSelection && winner.Decision.Tier != runnerUp.Decision.Tier {
+		return "tier"
+	}
+	if e.strategy == "confidence" {
+		if winner.Confidence != runnerUp.Confidence {
+			return "confidence"
+		}
+		if winner.Decision.Priority != runnerUp.Decision.Priority {
+			return "priority"
+		}
+		return "lexicographic"
+	}
+	if winner.Decision.Priority != runnerUp.Decision.Priority {
+		return "priority"
+	}
+	if winner.Confidence != runnerUp.Confidence {
+		return "confidence"
+	}
+	return "lexicographic"
 }

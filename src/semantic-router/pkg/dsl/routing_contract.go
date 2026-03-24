@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -54,6 +55,11 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 		d.decompilePluginTemplates()
 	}
 
+	if cfg != nil && cfg.MetaRouting.Enabled() {
+		d.writeSection("META")
+		d.decompileMeta()
+	}
+
 	d.writeSection("ROUTES")
 	d.decompileDecisions()
 
@@ -65,6 +71,7 @@ func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
 	prog := &Program{}
 	d.appendSignalsToProgram(prog)
+	d.appendMetaToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
 	return prog
@@ -77,6 +84,27 @@ func (d *decompiler) appendSignalsToProgram(prog *Program) {
 	d.appendProjectionPartitions(prog)
 	d.appendProjectionScores(prog)
 	d.appendProjectionMappings(prog)
+}
+
+func (d *decompiler) appendMetaToProgram(prog *Program) {
+	if d.cfg == nil || !d.cfg.MetaRouting.Enabled() {
+		return
+	}
+	prog.Meta = &MetaDecl{
+		Fields: metaRoutingToFields(d.cfg.MetaRouting),
+	}
+}
+
+func (d *decompiler) decompileMeta() {
+	fields := metaRoutingToFields(d.cfg.MetaRouting)
+	if len(fields) == 0 {
+		return
+	}
+	d.write("META {\n")
+	for _, key := range sortedFieldKeys(fields) {
+		d.write("  %s: %s\n", key, formatDSLValue(fields[key]))
+	}
+	d.write("}\n\n")
 }
 
 func (d *decompiler) appendProjectionPartitions(prog *Program) {
@@ -303,4 +331,106 @@ func quotedStringArray(values []string) string {
 		quoted = append(quoted, strconv.Quote(value))
 	}
 	return "[" + strings.Join(quoted, ", ") + "]"
+}
+
+func metaRoutingToFields(meta config.MetaRoutingConfig) map[string]Value {
+	fields := make(map[string]Value)
+	if meta.Mode != "" {
+		fields["mode"] = StringValue{V: meta.Mode}
+	}
+	if meta.MaxPasses > 0 {
+		fields["max_passes"] = IntValue{V: meta.MaxPasses}
+	}
+	if meta.TriggerPolicy != nil {
+		triggerFields := make(map[string]Value)
+		if meta.TriggerPolicy.DecisionMarginBelow != nil {
+			triggerFields["decision_margin_below"] = FloatValue{V: *meta.TriggerPolicy.DecisionMarginBelow}
+		}
+		if meta.TriggerPolicy.ProjectionBoundaryWithin != nil {
+			triggerFields["projection_boundary_within"] = FloatValue{V: *meta.TriggerPolicy.ProjectionBoundaryWithin}
+		}
+		if meta.TriggerPolicy.PartitionConflict != nil {
+			triggerFields["partition_conflict"] = BoolValue{V: *meta.TriggerPolicy.PartitionConflict}
+		}
+		if len(meta.TriggerPolicy.RequiredFamilies) > 0 {
+			items := make([]Value, 0, len(meta.TriggerPolicy.RequiredFamilies))
+			for _, family := range meta.TriggerPolicy.RequiredFamilies {
+				familyFields := map[string]Value{
+					"type": StringValue{V: family.Type},
+				}
+				if family.MinConfidence != nil {
+					familyFields["min_confidence"] = FloatValue{V: *family.MinConfidence}
+				}
+				if family.MinMatches != nil {
+					familyFields["min_matches"] = IntValue{V: *family.MinMatches}
+				}
+				items = append(items, ObjectValue{Fields: familyFields})
+			}
+			triggerFields["required_families"] = ArrayValue{Items: items}
+		}
+		if len(meta.TriggerPolicy.FamilyDisagreements) > 0 {
+			items := make([]Value, 0, len(meta.TriggerPolicy.FamilyDisagreements))
+			for _, disagreement := range meta.TriggerPolicy.FamilyDisagreements {
+				items = append(items, ObjectValue{Fields: map[string]Value{
+					"cheap":     StringValue{V: disagreement.Cheap},
+					"expensive": StringValue{V: disagreement.Expensive},
+				}})
+			}
+			triggerFields["family_disagreements"] = ArrayValue{Items: items}
+		}
+		fields["trigger_policy"] = ObjectValue{Fields: triggerFields}
+	}
+	if len(meta.AllowedActions) > 0 {
+		items := make([]Value, 0, len(meta.AllowedActions))
+		for _, action := range meta.AllowedActions {
+			actionFields := map[string]Value{
+				"type": StringValue{V: action.Type},
+			}
+			if len(action.SignalFamilies) > 0 {
+				actionFields["signal_families"] = stringsToArray(action.SignalFamilies)
+			}
+			items = append(items, ObjectValue{Fields: actionFields})
+		}
+		fields["allowed_actions"] = ArrayValue{Items: items}
+	}
+	return fields
+}
+
+func sortedFieldKeys(fields map[string]Value) []string {
+	keys := make([]string, 0, len(fields))
+	for key := range fields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func formatDSLValue(value Value) string {
+	switch v := value.(type) {
+	case StringValue:
+		return strconv.Quote(v.V)
+	case IntValue:
+		return strconv.Itoa(v.V)
+	case FloatValue:
+		return strconv.FormatFloat(v.V, 'f', -1, 64)
+	case BoolValue:
+		if v.V {
+			return "true"
+		}
+		return "false"
+	case ArrayValue:
+		parts := make([]string, 0, len(v.Items))
+		for _, item := range v.Items {
+			parts = append(parts, formatDSLValue(item))
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	case ObjectValue:
+		parts := make([]string, 0, len(v.Fields))
+		for _, key := range sortedFieldKeys(v.Fields) {
+			parts = append(parts, key+": "+formatDSLValue(v.Fields[key]))
+		}
+		return "{ " + strings.Join(parts, ", ") + " }"
+	default:
+		return "null"
+	}
 }

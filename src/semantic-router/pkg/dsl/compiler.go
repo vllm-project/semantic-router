@@ -56,11 +56,37 @@ func (c *Compiler) compile() {
 	c.compileProjectionScores()
 	c.compileProjectionMappings()
 
-	// 5. Compile top-level model catalog
+	// 5. Compile meta-routing contract
+	c.compileMeta()
+
+	// 6. Compile top-level model catalog
 	c.compileModels()
 
-	// 6. Compile routes (decisions)
+	// 7. Compile routes (decisions)
 	c.compileRoutes()
+}
+
+func (c *Compiler) compileMeta() {
+	if c.prog.Meta == nil {
+		return
+	}
+
+	raw, err := yaml.Marshal(fieldsToMap(c.prog.Meta.Fields))
+	if err != nil {
+		c.addError(c.prog.Meta.Pos, "failed to encode META block: %v", err)
+		return
+	}
+
+	var meta config.MetaRoutingConfig
+	if err := yaml.Unmarshal(raw, &meta); err != nil {
+		c.addError(c.prog.Meta.Pos, "failed to decode META block: %v", err)
+		return
+	}
+	if err := config.ValidateMetaRoutingConfig(meta); err != nil {
+		c.addError(c.prog.Meta.Pos, "%v", err)
+		return
+	}
+	c.config.MetaRouting = meta
 }
 
 func (c *Compiler) compileProjectionPartitions() {

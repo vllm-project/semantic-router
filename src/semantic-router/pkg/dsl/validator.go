@@ -406,9 +406,31 @@ func (v *Validator) checkConstraints() {
 		v.checkSignalConstraints(s)
 	}
 
+	if v.prog.Meta != nil {
+		v.checkMetaConstraints(v.prog.Meta)
+	}
+
 	// Check routes
 	for _, r := range v.prog.Routes {
 		v.checkRouteConstraints(r)
+	}
+}
+
+func (v *Validator) checkMetaConstraints(meta *MetaDecl) {
+	raw, err := yaml.Marshal(fieldsToMap(meta.Fields))
+	if err != nil {
+		v.addDiag(DiagConstraint, meta.Pos, fmt.Sprintf("failed to encode META block: %v", err), nil)
+		return
+	}
+
+	var cfg config.MetaRoutingConfig
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		v.addDiag(DiagConstraint, meta.Pos, fmt.Sprintf("failed to decode META block: %v", err), nil)
+		return
+	}
+
+	if err := config.ValidateMetaRoutingConfig(cfg); err != nil {
+		v.addDiag(DiagConstraint, meta.Pos, err.Error(), nil)
 	}
 }
 

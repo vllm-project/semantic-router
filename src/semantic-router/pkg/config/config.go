@@ -174,6 +174,7 @@ type InlineModels struct {
 type IntelligentRouting struct {
 	Signals         `yaml:",inline"`
 	Projections     Projections          `yaml:"projections,omitempty"`
+	MetaRouting     MetaRoutingConfig    `yaml:"meta,omitempty"`
 	Decisions       []Decision           `yaml:"decisions,omitempty"`
 	Strategy        string               `yaml:"strategy,omitempty"`
 	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`

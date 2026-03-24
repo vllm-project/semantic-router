@@ -11,6 +11,9 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 	}
 
 	outcome := evaluateResponseHeaderOutcome(v, ctx)
+	if ctx != nil {
+		ctx.UpstreamResponseStatus = outcome.statusCode
+	}
 	finishUpstreamResponseSpan(ctx, outcome)
 	maybeRecordResponseHeaderTTFT(ctx)
 	r.updateRouterReplayStatus(ctx, outcome.statusCode, ctx != nil && ctx.IsStreamingResponse)

@@ -101,6 +101,15 @@ func routeRouterTrafficToEnvoy(
 		envoyProxy.ServeHTTP(w, r)
 		return true
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/router/v1/meta_routing_feedback") {
+		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
+		log.Printf("Proxying meta_routing_feedback to Envoy: %s %s", r.Method, r.URL.Path)
+		if middleware.HandleCORSPreflight(w, r) {
+			return true
+		}
+		envoyProxy.ServeHTTP(w, r)
+		return true
+	}
 	return false
 }
 

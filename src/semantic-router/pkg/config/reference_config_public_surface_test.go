@@ -50,6 +50,7 @@ func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{
 	)
 	assertReferenceConfigSignalCoverage(t, mustMapAt(t, routing, "signals"))
 	assertReferenceConfigProjectionCoverage(t, mustMapAt(t, routing, "projections"))
+	assertReferenceConfigMetaCoverage(t, mustMapAt(t, routing, "meta"))
 	assertReferenceConfigDecisionCoverage(t, mustSliceAt(t, routing, "decisions"))
 }
 
@@ -189,6 +190,35 @@ func assertReferenceConfigDecisionCoverage(t testingT, decisions []interface{}) 
 		collectNestedSliceItems(t, decisions, "plugins", "routing.decisions"),
 		reflect.TypeOf(DecisionPlugin{}),
 		"routing.decisions[].plugins",
+	)
+}
+
+func assertReferenceConfigMetaCoverage(t testingT, meta map[string]interface{}) {
+	assertMapCoversStructFields(t, meta, reflect.TypeOf(MetaRoutingConfig{}), "routing.meta")
+	triggerPolicy := mustMapAt(t, meta, "trigger_policy")
+	assertMapCoversStructFields(
+		t,
+		triggerPolicy,
+		reflect.TypeOf(MetaTriggerPolicy{}),
+		"routing.meta.trigger_policy",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, triggerPolicy, "required_families"),
+		reflect.TypeOf(MetaRequiredSignalFamily{}),
+		"routing.meta.trigger_policy.required_families",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, triggerPolicy, "family_disagreements"),
+		reflect.TypeOf(MetaSignalFamilyDisagreement{}),
+		"routing.meta.trigger_policy.family_disagreements",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, meta, "allowed_actions"),
+		reflect.TypeOf(MetaRefinementAction{}),
+		"routing.meta.allowed_actions",
 	)
 }
 

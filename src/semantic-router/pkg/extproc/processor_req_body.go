@@ -32,9 +32,11 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 
 	requestBody, earlyResponse := r.translateResponseAPIRequest(ctx.OriginalRequestBody, ctx)
 	if earlyResponse != nil {
+		r.emitMetaRoutingFeedback(ctx, immediateResponseStatusCode(earlyResponse))
 		return earlyResponse, nil
 	}
 	if validationResp := r.validateRequestBody(requestBody, ctx); validationResp != nil {
+		r.emitMetaRoutingFeedback(ctx, immediateResponseStatusCode(validationResp))
 		return validationResp, nil
 	}
 
@@ -60,14 +62,17 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 
 	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, fast, ctx)
 	if earlyResponse != nil {
+		r.emitMetaRoutingFeedback(ctx, immediateResponseStatusCode(earlyResponse))
 		return earlyResponse, nil
 	}
 
 	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, fast.UserContent, ctx)
 	if earlyResponse != nil {
+		r.emitMetaRoutingFeedback(ctx, immediateResponseStatusCode(earlyResponse))
 		return earlyResponse, nil
 	}
 	if validationResp := r.validationResponseFromRequestError(err); validationResp != nil {
+		r.emitMetaRoutingFeedback(ctx, immediateResponseStatusCode(validationResp))
 		return validationResp, nil
 	}
 	if err != nil {

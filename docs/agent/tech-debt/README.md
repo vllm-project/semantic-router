@@ -101,6 +101,7 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
   - classification subsystem boundary collapse: [TD020](td-020-classification-subsystem-boundary-collapse.md)
   - extproc request and response phase collapse: [TD023](td-023-extproc-request-pipeline-phase-collapse.md), [TD029](td-029-extproc-response-pipeline-phase-collapse.md)
   - restart-sensitive runtime state and control-plane telemetry semantics: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
+  - resolved learned meta-routing policy provider enablement contract: [TD037](td-037-meta-routing-learned-policy-provider-follow-on.md)
   - remaining hotspot-ratchet debt across router and binding hotspots: [TD006](td-006-structural-rule-target-vs-legacy-hotspots.md)
 - Dashboard frontend and backend
   - frontend route shell, editor control plane, and large UI containers: [TD030](td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
@@ -114,6 +115,7 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
   - workspace-backed local state versus durable product-state ownership: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
 - Training src
   - training or evaluation artifact drift across dashboard, runtime, and scripts: [TD032](td-032-training-evaluation-artifact-contract-drift.md)
+  - resolved learned meta-routing calibration and policy promotion contract: [TD037](td-037-meta-routing-learned-policy-provider-follow-on.md)
 - Candle binding and ONNX binding
   - backend capability, parity, and lifecycle contract gap: [TD033](td-033-native-binding-runtime-parity-and-lifecycle-gap.md)
   - remaining structural hotspot relief in binding support code: [TD006](td-006-structural-rule-target-vs-legacy-hotspots.md)
@@ -131,3 +133,4 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
 - [TD012 Canonical v0.3 Routing Contract Still Lacks a LoRA Catalog Surface](td-012-canonical-lora-catalog-gap.md)
 - [TD013 Legacy IntelligentPool and IntelligentRoute Controller Bypasses Canonical v0.3 Config](td-013-legacy-k8s-controller-bypasses-canonical-v0-3.md)
 - [TD014 Candle Binding Crate-Wide Clippy Gate Blocks Diff-Scoped Validation](td-014-candle-binding-crate-wide-clippy-gate.md)
+- [TD037 Meta-Routing Learned Policy Providers Still Need a Durable Enablement Contract](td-037-meta-routing-learned-policy-provider-follow-on.md)

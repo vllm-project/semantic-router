@@ -6,57 +6,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
-
-// performDecisionEvaluation performs decision evaluation using DecisionEngine
-// Returns (decisionName, confidence, reasoningDecision, selectedModel)
-// This is the new approach that uses Decision-based routing with AND/OR rule combinations
-// Decision evaluation is ALWAYS performed when decisions are configured (for plugin features like
-// hallucination detection), but model selection only happens for auto models.
-func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
-	var decisionName string
-	var evaluationConfidence float64
-	var reasoningDecision entropy.ReasoningDecision
-	var selectedModel string
-
-	// Check if there's content to evaluate
-	if len(nonUserMessages) == 0 && userContent == "" {
-		return "", 0.0, entropy.ReasoningDecision{}, "", nil
-	}
-
-	// Check if decisions are configured
-	if len(r.Config.Decisions) == 0 {
-		if r.Config.IsAutoModelName(originalModel) {
-			logging.Warnf("No decisions configured, using default model")
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
-		}
-		return "", 0.0, entropy.ReasoningDecision{}, "", nil
-	}
-
-	signalInput := r.prepareSignalEvaluationInput(userContent, nonUserMessages)
-	if signalInput.evaluationText == "" {
-		return "", 0.0, entropy.ReasoningDecision{}, "", nil
-	}
-
-	signals, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, nonUserMessages, ctx)
-	if authzErr != nil {
-		return "", 0, entropy.ReasoningDecision{}, "", authzErr
-	}
-
-	result, fallbackModel := r.runDecisionEngine(originalModel, ctx, signals)
-	if result == nil {
-		return "", 0.0, entropy.ReasoningDecision{}, fallbackModel, nil
-	}
-
-	decisionName, evaluationConfidence, reasoningDecision, selectedModel = r.finalizeDecisionEvaluation(
-		result,
-		originalModel,
-		userContent,
-		ctx,
-	)
-	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, nil
-}
 
 // selectModelFromCandidates uses the configured selection algorithm to choose the best model
 // from the decision's candidate models. Falls back to first model if selection fails.

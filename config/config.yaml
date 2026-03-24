@@ -423,6 +423,31 @@ routing:
           - name: support_escalated
             gte: 0.45
 
+  meta:
+    mode: shadow
+    max_passes: 2
+    trigger_policy:
+      decision_margin_below: 0.18
+      projection_boundary_within: 0.08
+      partition_conflict: true
+      required_families:
+        - type: preference
+          min_confidence: 0.65
+          min_matches: 1
+        - type: jailbreak
+          min_confidence: 0.80
+      family_disagreements:
+        - cheap: keyword
+          expensive: embedding
+        - cheap: context
+          expensive: preference
+    allowed_actions:
+      - type: disable_compression
+      - type: rerun_signal_families
+        signal_families:
+          - preference
+          - jailbreak
+
   decisions:
     - name: static_business_route
       description: Static fallback for standard business traffic.

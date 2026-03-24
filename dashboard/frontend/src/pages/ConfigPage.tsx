@@ -8,6 +8,7 @@ import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
 import ConfigPageModelsSection from './ConfigPageModelsSection'
 import ConfigPageSignalsSection from './ConfigPageSignalsSection'
 import ConfigPageProjectionsSection from './ConfigPageProjectionsSection'
+import ConfigPageMetaRoutingSection from './ConfigPageMetaRoutingSection'
 import ConfigPageDecisionsSection from './ConfigPageDecisionsSection'
 import ConfigPageMCPSection from './ConfigPageMCPSection'
 import {
@@ -348,6 +349,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     />
   )
 
+  const renderMetaRoutingSection = () => (
+    <ConfigPageMetaRoutingSection
+      config={config}
+      isReadonly={isReadonly}
+      saveConfig={saveConfig}
+      openEditModal={openEditModal}
+    />
+  )
+
   const renderModelsSection = () => (
     <ConfigPageModelsSection
       config={config}
@@ -390,6 +400,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         return renderDecisionsSection()
       case 'projections':
         return renderProjectionsSection()
+      case 'meta-routing':
+        return renderMetaRoutingSection()
       case 'models':
         return renderModelsSection()
       case 'global-config':

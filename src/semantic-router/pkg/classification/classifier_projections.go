@@ -38,6 +38,9 @@ func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
 	if results.ProjectionScores == nil {
 		results.ProjectionScores = make(map[string]float64)
 	}
+	if results.ProjectionBoundaryDistances == nil {
+		results.ProjectionBoundaryDistances = make(map[string]float64)
+	}
 	if results.SignalConfidences == nil {
 		results.SignalConfidences = make(map[string]float64)
 	}
@@ -55,7 +58,9 @@ func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
 		if !matched {
 			continue
 		}
+		distance := projectionBoundaryDistance(output, scoreValue)
 		results.MatchedProjectionRules = append(results.MatchedProjectionRules, output.Name)
+		results.ProjectionBoundaryDistances[output.Name] = distance
 		results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, output.Name)] = projectionOutputConfidence(mapping, output, scoreValue)
 	}
 

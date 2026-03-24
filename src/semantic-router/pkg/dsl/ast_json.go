@@ -14,10 +14,17 @@ type ProgramJSON struct {
 	ProjectionPartitions []*ProjectionPartitionDeclJSON `json:"projectionPartitions,omitempty"`
 	ProjectionScores     []*ProjectionScoreDeclJSON     `json:"projectionScores,omitempty"`
 	ProjectionMappings   []*ProjectionMappingDeclJSON   `json:"projectionMappings,omitempty"`
+	Meta                 *MetaDeclJSON                  `json:"meta,omitempty"`
 	Routes               []*RouteDeclJSON               `json:"routes"`
 	Models               []*ModelDeclJSON               `json:"models"`
 	Plugins              []*PluginDeclJSON              `json:"plugins"`
 	TestBlocks           []*TestBlockDeclJSON           `json:"testBlocks,omitempty"`
+}
+
+// MetaDeclJSON is the JSON form of MetaDecl.
+type MetaDeclJSON struct {
+	Fields JSONObject `json:"fields"`
+	Pos    Position   `json:"pos"`
 }
 
 // ProjectionPartitionDeclJSON is the JSON form of ProjectionPartitionDecl.
@@ -210,6 +217,7 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 	appendProjectionPartitionDecls(result, prog.ProjectionPartitions)
 	appendProjectionScoreDecls(result, prog.ProjectionScores)
 	appendProjectionMappingDecls(result, prog.ProjectionMappings)
+	appendMetaDecl(result, prog.Meta)
 	appendRouteDecls(result, prog.Routes)
 	appendModelDecls(result, prog.Models)
 	appendPluginDecls(result, prog.Plugins)
@@ -292,6 +300,16 @@ func appendProjectionMappingDecls(result *ProgramJSON, mappings []*ProjectionMap
 			})
 		}
 		result.ProjectionMappings = append(result.ProjectionMappings, mappingJSON)
+	}
+}
+
+func appendMetaDecl(result *ProgramJSON, meta *MetaDecl) {
+	if meta == nil {
+		return
+	}
+	result.Meta = &MetaDeclJSON{
+		Fields: marshalObjectFields(meta.Fields),
+		Pos:    meta.Pos,
 	}
 }
 

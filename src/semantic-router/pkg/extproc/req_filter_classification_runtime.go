@@ -28,40 +28,6 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"svm":           selection.MethodSVM,
 }
 
-func (r *OpenAIRouter) evaluateSignalsForDecision(
-	originalModel string,
-	signalInput signalEvaluationInput,
-	nonUserMessages []string,
-	ctx *RequestContext,
-) (*classification.SignalResults, error) {
-	signalStart := time.Now()
-	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
-
-	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(
-		signalInput.compressedText,
-		signalInput.allMessagesText,
-		nonUserMessages,
-		ctx.Headers,
-		false,
-		ctx.RequestImageURL,
-		signalInput.evaluationText,
-		signalInput.skipCompressionSignals,
-	)
-	if authzErr != nil {
-		signalSpan.End()
-		logging.Errorf("[Signal Evaluation] Authz evaluation failed: %v", authzErr)
-		return nil, authzErr
-	}
-
-	signalLatency := time.Since(signalStart).Milliseconds()
-	r.applySignalResultsToContext(ctx, signals)
-	logSignalEvaluationResults(signals)
-	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 1.0, signalLatency)
-	ctx.TraceContext = signalCtx
-	r.processUserFeedbackForElo(signals.MatchedUserFeedbackRules, originalModel, ctx)
-	return signals, nil
-}
-
 func logSignalEvaluationResults(signals *classification.SignalResults) {
 	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, projection=%v",
 		signals.MatchedKeywordRules,

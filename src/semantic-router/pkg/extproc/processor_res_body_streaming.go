@@ -81,6 +81,7 @@ func (r *OpenAIRouter) finalizeStreamingResponse(ctx *RequestContext) {
 	}
 
 	r.attachRouterReplayResponse(ctx, []byte(ctx.StreamingContent), true)
+	r.emitMetaRoutingFeedback(ctx, responseStatusOrOK(ctx))
 }
 
 // parseStreamingChunk parses an SSE chunk to extract content and metadata.

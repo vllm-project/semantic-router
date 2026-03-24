@@ -64,6 +64,21 @@ const configResponse = {
   },
   routing: {
     modelCards: [{ name: 'test-model' }],
+    meta: {
+      mode: 'shadow',
+      max_passes: 2,
+      trigger_policy: {
+        decision_margin_below: 0.18,
+        projection_boundary_within: 0.07,
+        partition_conflict: true,
+        required_families: [{ type: 'embedding', min_confidence: 0.65, min_matches: 1 }],
+        family_disagreements: [{ cheap: 'keyword', expensive: 'embedding' }],
+      },
+      allowed_actions: [
+        { type: 'disable_compression' },
+        { type: 'rerun_signal_families', signal_families: ['embedding', 'jailbreak'] },
+      ],
+    },
     signals: {
       domains: [
         { name: 'business', description: 'Business' },
@@ -264,6 +279,246 @@ const replayAggregateResponse = {
   available_models: ['test-model'],
 };
 
+const metaRoutingListResponse = {
+  object: 'meta_routing_feedback.list',
+  count: 2,
+  total: 2,
+  limit: 25,
+  offset: 0,
+  has_more: false,
+  data: [
+    {
+      id: 'meta-1',
+      timestamp: '2026-03-18T08:00:00Z',
+      mode: 'shadow',
+      request_id: 'req-1',
+      request_model: 'test-model',
+      request_query_preview: 'Need a business answer with citations',
+      pass_count: 2,
+      planned: true,
+      executed: true,
+      executed_pass_count: 1,
+      trigger_names: ['low_decision_margin', 'projection_boundary_pressure'],
+      root_causes: ['decision_overlap', 'projection_boundary_pressure'],
+      action_types: ['disable_compression', 'rerun_signal_families'],
+      refined_signal_families: ['embedding'],
+      overturned_decision: true,
+      latency_delta_ms: 45,
+      decision_margin_delta: 0.12,
+      projection_boundary_delta: 0.04,
+      final_decision_name: 'business-route',
+      final_decision_confidence: 0.91,
+      final_model: 'test-model',
+      response_status: 200,
+      streaming: false,
+      cache_hit: false,
+      pii_blocked: false,
+      hallucination_detected: false,
+      response_jailbreak_detected: false,
+      router_replay_id: 'replay-1',
+      user_feedback_signals: ['thumbs-up'],
+    },
+    {
+      id: 'meta-2',
+      timestamp: '2026-03-18T08:05:00Z',
+      mode: 'observe',
+      request_id: 'req-2',
+      request_model: 'test-model',
+      request_query_preview: 'Fast business answer',
+      pass_count: 1,
+      planned: false,
+      executed: false,
+      executed_pass_count: 0,
+      trigger_names: [],
+      root_causes: [],
+      action_types: [],
+      refined_signal_families: [],
+      overturned_decision: false,
+      latency_delta_ms: 0,
+      decision_margin_delta: 0,
+      projection_boundary_delta: 0,
+      final_decision_name: 'business-route',
+      final_decision_confidence: 0.84,
+      final_model: 'test-model',
+      response_status: 200,
+      streaming: true,
+      cache_hit: true,
+      pii_blocked: false,
+      hallucination_detected: false,
+      response_jailbreak_detected: false,
+      router_replay_id: 'replay-2',
+      user_feedback_signals: [],
+    },
+  ],
+};
+
+const metaRoutingAggregateResponse = {
+  object: 'meta_routing_feedback.aggregate',
+  record_count: 2,
+  summary: {
+    planned_refinement_rate: 0.5,
+    executed_refinement_rate: 0.5,
+    overturn_rate: 0.5,
+    average_latency_delta_ms: 22.5,
+    p95_latency_delta_ms: 45,
+    top_trigger: 'low_decision_margin',
+    top_root_cause: 'decision_overlap',
+  },
+  mode_distribution: [
+    { name: 'shadow', value: 1 },
+    { name: 'observe', value: 1 },
+  ],
+  trigger_distribution: [
+    { name: 'low_decision_margin', value: 1 },
+    { name: 'projection_boundary_pressure', value: 1 },
+  ],
+  root_cause_distribution: [
+    { name: 'decision_overlap', value: 1 },
+    { name: 'projection_boundary_pressure', value: 1 },
+  ],
+  action_type_distribution: [
+    { name: 'disable_compression', value: 1 },
+    { name: 'rerun_signal_families', value: 1 },
+  ],
+  signal_family_distribution: [
+    { name: 'embedding', value: 1 },
+  ],
+  decision_change_distribution: [
+    { name: 'overturned', value: 1 },
+    { name: 'stable', value: 1 },
+  ],
+  decision_distribution: [
+    { name: 'business-route', value: 2 },
+  ],
+  model_distribution: [
+    { name: 'test-model', value: 2 },
+  ],
+  response_status_distribution: [
+    { name: '200', value: 2 },
+  ],
+  available_modes: ['observe', 'shadow'],
+  available_triggers: ['low_decision_margin', 'projection_boundary_pressure'],
+  available_root_causes: ['decision_overlap', 'projection_boundary_pressure'],
+  available_action_types: ['disable_compression', 'rerun_signal_families'],
+  available_signal_families: ['embedding'],
+  available_decisions: ['business-route'],
+  available_models: ['test-model'],
+  available_response_statuses: [200],
+};
+
+const metaRoutingDetailResponse = {
+  object: 'meta_routing_feedback.record',
+  id: 'meta-1',
+  timestamp: '2026-03-18T08:00:00Z',
+  record: {
+    mode: 'shadow',
+    observation: {
+      request_id: 'req-1',
+      request_model: 'test-model',
+      request_query: 'Need a business answer with citations',
+      trace: {
+        mode: 'shadow',
+        max_passes: 2,
+        pass_count: 2,
+        trigger_names: ['low_decision_margin', 'projection_boundary_pressure'],
+        refined_signal_families: ['embedding'],
+        overturned_decision: true,
+        latency_delta_ms: 45,
+        decision_margin_delta: 0.12,
+        projection_boundary_delta: 0.04,
+        final_decision_name: 'business-route',
+        final_decision_confidence: 0.91,
+        final_model: 'test-model',
+        passes: [
+          {
+            index: 0,
+            kind: 'base',
+            latency_ms: 31,
+            input_compressed: true,
+            decision_name: 'business-route',
+            decision_confidence: 0.79,
+            decision_margin: 0.03,
+            decision_candidate_count: 2,
+            decision_winner_basis: 'priority',
+            runner_up_decision_name: 'medium_business',
+            runner_up_confidence: 0.76,
+            selected_model: 'test-model',
+            trace_quality: {
+              signal_dominance: 0.55,
+              avg_signal_confidence: 0.68,
+              decision_margin: 0.03,
+              projection_boundary_min_distance: 0.02,
+              fragile: true,
+            },
+            assessment: {
+              needs_refine: true,
+              triggers: ['low_decision_margin', 'projection_boundary_pressure'],
+              root_causes: ['decision_overlap', 'projection_boundary_pressure'],
+            },
+          },
+          {
+            index: 1,
+            kind: 'refinement',
+            latency_ms: 76,
+            input_compressed: false,
+            decision_name: 'business-route',
+            decision_confidence: 0.91,
+            decision_margin: 0.15,
+            decision_candidate_count: 2,
+            decision_winner_basis: 'priority',
+            runner_up_decision_name: 'medium_business',
+            runner_up_confidence: 0.76,
+            selected_model: 'test-model',
+            trace_quality: {
+              signal_dominance: 0.62,
+              avg_signal_confidence: 0.75,
+              decision_margin: 0.15,
+              projection_boundary_min_distance: 0.06,
+              fragile: false,
+            },
+            assessment: {
+              needs_refine: false,
+              triggers: [],
+              root_causes: [],
+            },
+          },
+        ],
+      },
+    },
+    action: {
+      planned: true,
+      executed: true,
+      executed_pass_count: 1,
+      executed_action_types: ['disable_compression', 'rerun_signal_families'],
+      executed_signal_families: ['embedding'],
+      plan: {
+        max_passes: 2,
+        trigger_names: ['low_decision_margin', 'projection_boundary_pressure'],
+        root_causes: ['decision_overlap', 'projection_boundary_pressure'],
+        actions: [
+          { type: 'disable_compression' },
+          { type: 'rerun_signal_families', signal_families: ['embedding'] },
+        ],
+      },
+    },
+    outcome: {
+      final_decision_name: 'business-route',
+      final_decision_confidence: 0.91,
+      final_model: 'test-model',
+      response_status: 200,
+      streaming: false,
+      cache_hit: false,
+      pii_blocked: false,
+      hallucination_detected: false,
+      unverified_factual_response: false,
+      response_jailbreak_detected: false,
+      rag_backend: 'milvus',
+      router_replay_id: 'replay-1',
+      user_feedback_signals: ['thumbs-up'],
+    },
+  },
+};
+
 async function mockCommon(
   page: Page,
   options: {
@@ -361,6 +616,41 @@ async function mockCommon(
       body: JSON.stringify(record ?? { error: { message: 'not found' } }),
     });
   });
+
+  await page.route(/\/api\/router\/v1\/meta_routing_feedback(?:\?.*)?$/, async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(metaRoutingListResponse),
+    });
+  });
+
+  await page.route(/\/api\/router\/v1\/meta_routing_feedback\/aggregate(?:\?.*)?$/, async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(metaRoutingAggregateResponse),
+    });
+  });
+
+  await page.route('**/api/router/v1/meta_routing_feedback/*', async route => {
+    const requestURL = new URL(route.request().url());
+    const recordID = requestURL.pathname.split('/').pop();
+    if (recordID === 'aggregate') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(metaRoutingAggregateResponse),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: recordID === 'meta-1' ? 200 : 404,
+      contentType: 'application/json',
+      body: JSON.stringify(recordID === 'meta-1' ? metaRoutingDetailResponse : { error: { message: 'not found' } }),
+    });
+  });
 }
 
 test.describe('Layout top navigation', () => {
@@ -403,16 +693,14 @@ test.describe('Layout top navigation', () => {
     await expect(managerMenu.getByRole('menuitem', { name: 'Models' })).toBeVisible();
     await expect(managerMenu.getByRole('menuitem', { name: 'Decisions' })).toBeVisible();
     await expect(managerMenu.getByRole('menuitem', { name: 'Signals' })).toBeVisible();
+    await expect(managerMenu.getByRole('menuitem', { name: 'Meta Routing' })).toBeVisible();
 
     await secondaryGroup.getByRole('button', { name: 'System' }).click();
 
     const menu = page.getByRole('menu', { name: 'System' });
     await expect(menu.getByText('Analysis')).toBeVisible();
-    const menuItems = menu.getByRole('menuitem');
-    await expect(menuItems.nth(0)).toHaveText('Global Config');
-    await expect(menuItems.nth(1)).toHaveText('Evaluation');
-    await expect(menuItems.nth(2)).toHaveText('Ratings');
     await expect(menu.getByRole('menuitem', { name: 'Global Config' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Meta Routing' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Evaluation' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Replay' })).toHaveCount(0);
     await expect(menu.getByRole('menuitem', { name: 'Ratings' })).toBeVisible();
@@ -465,6 +753,36 @@ test.describe('Layout top navigation', () => {
     await expect(page).toHaveURL(/\/dashboard$/);
   });
 
+  test('opens Meta Routing from System navigation and links back to policy authoring', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockCommon(page);
+
+    await page.goto('/dashboard');
+
+    const secondaryGroup = page.getByRole('group', { name: 'Secondary navigation' });
+    await secondaryGroup.getByRole('button', { name: 'System' }).click();
+    await page.getByRole('menu', { name: 'System' }).getByRole('menuitem', { name: 'Meta Routing' }).click();
+
+    await expect(page).toHaveURL(/\/meta-routing$/);
+    await expect(page.getByRole('heading', { name: 'Meta Routing', exact: true })).toBeVisible();
+    await expect(page.getByText('Inspect assess-and-refine traces, bounded refinement plans, and whether a second pass actually changed the route.')).toBeVisible();
+    await expect(page.getByText('Planned Refinement')).toBeVisible();
+    await expect(page.getByText('Executed Refinement')).toBeVisible();
+    await expect(page.getByText('Decision Overturn Rate')).toBeVisible();
+    await expect(page.getByText('Average Latency Delta')).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Final Decision' })).toBeVisible();
+    await expect(page.getByRole('table').getByText('low_decision_margin')).toBeVisible();
+
+    await page.getByRole('link', { name: 'Edit Policy' }).click();
+
+    await expect(page).toHaveURL(/\/config\/meta-routing$/);
+    await expect(page.getByRole('heading', { name: 'Meta Routing', exact: true })).toBeVisible();
+    await expect(page.getByText('Rollout and Pass Budget')).toBeVisible();
+    await expect(page.getByText('Deterministic Trigger Policy')).toBeVisible();
+    await expect(page.getByText('Required Signal Families')).toBeVisible();
+    await expect(page.getByText('Allowed Refinement Actions')).toBeVisible();
+  });
+
   test('renders nested canonical decision groups in Brain topology', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await mockCommon(page);
@@ -478,9 +796,9 @@ test.describe('Layout top navigation', () => {
 
     await expect(decisionNode).toBeVisible();
     await expect(decisionNode).toContainText('AND');
-    await expect(decisionNode).toContainText('OR: domain: business | domain: economics');
-    await expect(decisionNode).toContainText('OR: embedding: business_analysis');
-    await expect(decisionNode).toContainText('preference: structured_delivery');
+    await expect(decisionNode).toContainText('domain: business');
+    await expect(decisionNode).toContainText('domain: economics');
+    await expect(decisionNode).toContainText('embedding: business_analysis');
     await expect(decisionNode.getByText('Referenced signals not configured')).toHaveCount(0);
   });
 

@@ -15,11 +15,13 @@ func (c *Classifier) applySignalGroups(results *SignalResults) *SignalResults {
 
 	results.MatchedDomainRules = c.applySignalGroupsForType(
 		config.SignalTypeDomain,
+		results,
 		results.MatchedDomainRules,
 		results.SignalConfidences,
 	)
 	results.MatchedEmbeddingRules = c.applySignalGroupsForType(
 		config.SignalTypeEmbedding,
+		results,
 		results.MatchedEmbeddingRules,
 		results.SignalConfidences,
 	)
@@ -29,6 +31,7 @@ func (c *Classifier) applySignalGroups(results *SignalResults) *SignalResults {
 
 func (c *Classifier) applySignalGroupsForType(
 	signalType string,
+	results *SignalResults,
 	matched []string,
 	confidences map[string]float64,
 ) []string {
@@ -38,7 +41,7 @@ func (c *Classifier) applySignalGroupsForType(
 		if len(members) <= 1 {
 			continue
 		}
-		result = applySignalGroupToMatches(signalType, group, members, result, confidences)
+		result = applySignalGroupToMatches(signalType, group, members, result, confidences, results)
 	}
 
 	return result
@@ -76,6 +79,7 @@ func applySignalGroupToMatches(
 	groupMembers []string,
 	matched []string,
 	confidences map[string]float64,
+	results *SignalResults,
 ) []string {
 	memberSet := make(map[string]struct{}, len(groupMembers))
 	for _, member := range groupMembers {
@@ -98,6 +102,7 @@ func applySignalGroupToMatches(
 	if len(contenders) == 1 {
 		return matched
 	}
+	recordProjectionPartitionConflict(results, signalType, group.Name, contenders)
 
 	winner, winnerScore := selectSignalGroupWinner(signalType, group, contenders, confidences)
 
@@ -123,6 +128,23 @@ func applySignalGroupToMatches(
 	)
 
 	return filtered
+}
+
+func recordProjectionPartitionConflict(
+	results *SignalResults,
+	signalType string,
+	groupName string,
+	contenders []string,
+) {
+	if results == nil || len(contenders) <= 1 {
+		return
+	}
+	conflict := ProjectionPartitionConflict{
+		Name:       groupName,
+		SignalType: signalType,
+		Contenders: append([]string(nil), contenders...),
+	}
+	results.ProjectionPartitionConflicts = append(results.ProjectionPartitionConflicts, conflict)
 }
 
 func applySignalGroupDefaultFallback(

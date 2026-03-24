@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 import type { Column } from '../components/DataTable'
 import CollapsibleSection from '../components/CollapsibleSection'
 import type { ViewField, ViewSection } from '../components/ViewModal'
@@ -310,6 +312,15 @@ export function buildInsightsRecordSections(
       { label: 'Guardrails', value: buildGuardrailsValue(record) },
       { label: 'RAG', value: buildRagValue(record) },
       { label: 'Hallucination Detection', value: buildHallucinationValue(record) },
+      {
+        label: 'Meta routing',
+        value: record.request_id ? (
+          <Link to={`/meta-routing?search=${encodeURIComponent(record.request_id)}`}>
+            Inspect matching meta-routing feedback
+          </Link>
+        ) : 'Request id unavailable',
+        fullWidth: true,
+      },
     ],
   })
 

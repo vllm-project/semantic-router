@@ -49,6 +49,7 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 		ModelCards:  routingModelsFromRouterConfig(cfg),
 		Signals:     canonicalSignalsFromRouterConfig(cfg),
 		Projections: canonicalProjectionsFromRouterConfig(cfg),
+		Meta:        copyMetaRoutingConfig(cfg.MetaRouting),
 		Decisions:   copyDecisions(cfg.Decisions),
 	}
 }

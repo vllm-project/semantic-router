@@ -99,6 +99,59 @@ class Projections(BaseModel):
     mappings: Optional[List[ProjectionMapping]] = []
 
 
+class MetaRequiredSignalFamily(BaseModel):
+    """One required signal family threshold used by routing.meta.trigger_policy."""
+
+    type: str
+    min_confidence: Optional[float] = Field(default=None, ge=0, le=1)
+    min_matches: Optional[int] = Field(default=None, ge=0)
+
+
+class MetaSignalFamilyDisagreement(BaseModel):
+    """Cheap-vs-expensive signal family pair used for disagreement triggers."""
+
+    cheap: str
+    expensive: str
+
+
+class MetaTriggerPolicy(BaseModel):
+    """Deterministic refinement triggers for routing.meta."""
+
+    decision_margin_below: Optional[float] = Field(default=None, ge=0, le=1)
+    projection_boundary_within: Optional[float] = Field(default=None, ge=0, le=1)
+    partition_conflict: Optional[bool] = None
+    required_families: Optional[List[MetaRequiredSignalFamily]] = None
+    family_disagreements: Optional[List[MetaSignalFamilyDisagreement]] = None
+
+
+class MetaRefinementAction(BaseModel):
+    """One allowed refinement action for routing.meta."""
+
+    type: Literal["disable_compression", "rerun_signal_families"]
+    signal_families: Optional[List[str]] = None
+
+    @model_validator(mode="after")
+    def validate_signal_family_binding(self):
+        if self.type == "rerun_signal_families" and not self.signal_families:
+            raise ValueError(
+                "signal_families is required when type=rerun_signal_families"
+            )
+        if self.type == "disable_compression" and self.signal_families:
+            raise ValueError(
+                "signal_families is only supported when type=rerun_signal_families"
+            )
+        return self
+
+
+class MetaRouting(BaseModel):
+    """Optional request-phase meta-routing contract under routing.meta."""
+
+    mode: Literal["observe", "shadow", "active"]
+    max_passes: Optional[int] = Field(default=None, ge=0)
+    trigger_policy: Optional[MetaTriggerPolicy] = None
+    allowed_actions: Optional[List[MetaRefinementAction]] = None
+
+
 class Domain(BaseModel):
     """Domain category configuration."""
 
@@ -713,6 +766,7 @@ class Routing(BaseModel):
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
+    meta: Optional[MetaRouting] = None
     decisions: List[Decision] = Field(default_factory=list)
 
     class Config:

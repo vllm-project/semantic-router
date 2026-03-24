@@ -70,6 +70,8 @@ In the current runtime, projections happen after signal extraction and before de
 
 That is why partitions feel "closer to signals", while mappings feel "closer to decisions".
 
+The current meta-routing runtime also reads projection-derived quality signals from this layer. In particular, mapping-boundary distance feeds the `projection_boundary_pressure` trigger used by `routing.meta` assess-and-refine policies, so projection outputs now influence both decision matching and pass-quality assessment.
+
 ## Current Contract
 
 The repo uses one projection-first naming story across authoring and runtime:

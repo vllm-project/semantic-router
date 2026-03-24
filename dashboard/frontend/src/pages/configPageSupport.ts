@@ -224,6 +224,7 @@ export interface RoutingConfig {
   modelCards?: RoutingModelCard[]
   signals?: ConfigSignals
   projections?: ConfigProjections
+  meta?: MetaRoutingConfig
   decisions?: DecisionConfig[]
 }
 
@@ -988,6 +989,37 @@ export interface ProjectionMapping {
   method: string
   calibration?: ProjectionMappingCalibration
   outputs: ProjectionMappingOutput[]
+}
+
+export interface MetaRequiredSignalFamily {
+  type: string
+  min_confidence?: number
+  min_matches?: number
+}
+
+export interface MetaSignalFamilyDisagreement {
+  cheap: string
+  expensive: string
+}
+
+export interface MetaTriggerPolicy {
+  decision_margin_below?: number
+  projection_boundary_within?: number
+  partition_conflict?: boolean
+  required_families?: MetaRequiredSignalFamily[]
+  family_disagreements?: MetaSignalFamilyDisagreement[]
+}
+
+export interface MetaRefinementAction {
+  type: 'disable_compression' | 'rerun_signal_families'
+  signal_families?: string[]
+}
+
+export interface MetaRoutingConfig {
+  mode: 'observe' | 'shadow' | 'active'
+  max_passes?: number
+  trigger_policy?: MetaTriggerPolicy
+  allowed_actions?: MetaRefinementAction[]
 }
 
 export interface ModalitySignal {

@@ -303,6 +303,123 @@ func TestDecisionEngine_EvaluateDecisionsWithFactCheck(t *testing.T) {
 	}
 }
 
+func TestDecisionEngine_AnnotatesWinnerMarginAndRunnerUp(t *testing.T) {
+	engine := NewDecisionEngine(
+		[]config.KeywordRule{},
+		[]config.EmbeddingRule{},
+		[]config.Category{},
+		[]config.Decision{
+			{
+				Name:     "primary",
+				Priority: 20,
+				Rules: config.RuleCombination{
+					Operator: "OR",
+					Conditions: []config.RuleCondition{
+						{Type: "keyword", Name: "alpha"},
+					},
+				},
+			},
+			{
+				Name:     "secondary",
+				Priority: 10,
+				Rules: config.RuleCombination{
+					Operator: "OR",
+					Conditions: []config.RuleCondition{
+						{Type: "keyword", Name: "beta"},
+					},
+				},
+			},
+		},
+		"confidence",
+	)
+
+	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
+		KeywordRules: []string{"alpha", "beta"},
+		SignalConfidences: map[string]float64{
+			"keyword:alpha": 0.91,
+			"keyword:beta":  0.73,
+		},
+	})
+	if err != nil {
+		t.Fatalf("EvaluateDecisionsWithSignals failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected decision result, got nil")
+	}
+	if result.Decision.Name != "primary" {
+		t.Fatalf("winner = %q, want primary", result.Decision.Name)
+	}
+	if result.CandidateCount != 2 {
+		t.Fatalf("candidate_count = %d, want 2", result.CandidateCount)
+	}
+	if result.DecisionMargin < 0.179 || result.DecisionMargin > 0.181 {
+		t.Fatalf("decision_margin = %.3f, want about 0.18", result.DecisionMargin)
+	}
+	if result.DecisionWinnerBasis != "confidence" {
+		t.Fatalf("winner_basis = %q, want confidence", result.DecisionWinnerBasis)
+	}
+	if result.RunnerUp == nil || result.RunnerUp.Name != "secondary" {
+		t.Fatalf("runner_up = %+v, want secondary", result.RunnerUp)
+	}
+}
+
+func TestDecisionEngine_PrioritySelectionCanExposeNegativeConfidenceMargin(t *testing.T) {
+	engine := NewDecisionEngine(
+		[]config.KeywordRule{},
+		[]config.EmbeddingRule{},
+		[]config.Category{},
+		[]config.Decision{
+			{
+				Name:     "priority-winner",
+				Priority: 20,
+				Rules: config.RuleCombination{
+					Operator: "OR",
+					Conditions: []config.RuleCondition{
+						{Type: "keyword", Name: "alpha"},
+					},
+				},
+			},
+			{
+				Name:     "confidence-runner-up",
+				Priority: 10,
+				Rules: config.RuleCombination{
+					Operator: "OR",
+					Conditions: []config.RuleCondition{
+						{Type: "keyword", Name: "beta"},
+					},
+				},
+			},
+		},
+		"priority",
+	)
+
+	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
+		KeywordRules: []string{"alpha", "beta"},
+		SignalConfidences: map[string]float64{
+			"keyword:alpha": 0.51,
+			"keyword:beta":  0.92,
+		},
+	})
+	if err != nil {
+		t.Fatalf("EvaluateDecisionsWithSignals failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected decision result, got nil")
+	}
+	if result.Decision.Name != "priority-winner" {
+		t.Fatalf("winner = %q, want priority-winner", result.Decision.Name)
+	}
+	if result.DecisionWinnerBasis != "priority" {
+		t.Fatalf("winner_basis = %q, want priority", result.DecisionWinnerBasis)
+	}
+	if result.DecisionMargin >= 0 {
+		t.Fatalf("decision_margin = %.2f, want negative value", result.DecisionMargin)
+	}
+	if result.RunnerUp == nil || result.RunnerUp.Name != "confidence-runner-up" {
+		t.Fatalf("runner_up = %+v, want confidence-runner-up", result.RunnerUp)
+	}
+}
+
 func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
 	tests := []struct {
 		name             string

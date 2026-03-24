@@ -39,9 +39,11 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	)
 
 	if jailbreakResponse := r.performResponseJailbreakDetection(ctx, responseBody); jailbreakResponse != nil {
+		r.emitMetaRoutingFeedback(ctx, immediateResponseStatusCode(jailbreakResponse))
 		return jailbreakResponse
 	}
 	if hallucinationResponse := r.performHallucinationDetection(ctx, responseBody); hallucinationResponse != nil {
+		r.emitMetaRoutingFeedback(ctx, immediateResponseStatusCode(hallucinationResponse))
 		return hallucinationResponse
 	}
 
@@ -51,6 +53,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	response := r.applyResponseWarnings(ctx, responseBody, bodyMutation, headerMutation)
 	r.updateRouterReplayHallucinationStatus(ctx)
 	r.attachRouterReplayResponse(ctx, finalBody, true)
+	r.emitMetaRoutingFeedback(ctx, responseStatusOrOK(ctx))
 	return response
 }
 
