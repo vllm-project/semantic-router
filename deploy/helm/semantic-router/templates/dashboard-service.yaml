@@ -1,0 +1,20 @@
+{{- if .Values.dashboard.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-dashboard
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+spec:
+  type: {{ .Values.dashboard.service.type }}
+  ports:
+  - port: {{ .Values.dashboard.service.port }}
+    targetPort: {{ .Values.dashboard.service.targetPort }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "semantic-router.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+{{- end }}

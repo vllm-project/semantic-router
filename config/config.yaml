@@ -1317,6 +1317,8 @@ global:
     memory:
       enabled: true
       auto_store: true
+      disabled_routes: []
+      disabled_models: []
       milvus:
         address: milvus:19530
         collection: agentic_memory

@@ -149,6 +149,8 @@ func TestCacheReconstructedStreamingResponseSkipsWithoutRequestID(t *testing.T) 
 
 type mockStreamingCache struct {
 	addEntryCalled      bool
+	addPendingCalled    bool
+	findSimilarCalled   bool
 	updateCalled        bool
 	addEntryRequestBody []byte
 	addEntryErr         error
@@ -166,6 +168,7 @@ func (m *mockStreamingCache) AddPendingRequest(
 	_ []byte,
 	_ int,
 ) error {
+	m.addPendingCalled = true
 	return nil
 }
 
@@ -196,6 +199,7 @@ func (m *mockStreamingCache) FindSimilarWithThreshold(
 	_ string,
 	_ float32,
 ) ([]byte, bool, error) {
+	m.findSimilarCalled = true
 	return nil, false, nil
 }
 
@@ -294,6 +298,51 @@ func TestCacheReconstructedStreamingResponse_StoresWhenDecisionCacheEnabled(t *t
 	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
 	assert.NoError(t, err)
 	assert.True(t, mockCache.addEntryCalled, "should call AddEntry when decision has semantic-cache enabled")
+}
+
+func TestCacheReconstructedStreamingResponse_SkipsWhenNoDecisionSelectedButDecisionsConfigured(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	cfg := &config.RouterConfig{
+		SemanticCache: config.SemanticCache{Enabled: true},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name:      "default-route",
+					ModelRefs: []config.ModelRef{{Model: "test"}},
+				},
+			},
+		},
+	}
+	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
+	ctx := &RequestContext{
+		RequestID:               "req-1",
+		RequestModel:            "test-model",
+		RequestQuery:            "hello",
+		VSRSelectedDecisionName: "",
+	}
+
+	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
+	assert.NoError(t, err)
+	assert.False(t, mockCache.addEntryCalled, "should not cache when decisions exist but no decision matched")
+	assert.False(t, mockCache.updateCalled, "should not update cache when decisions exist but no decision matched")
+}
+
+func TestCacheReconstructedStreamingResponse_StoresWhenNoDecisionSelectedAndNoDecisionsConfigured(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	cfg := &config.RouterConfig{
+		SemanticCache: config.SemanticCache{Enabled: true},
+	}
+	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
+	ctx := &RequestContext{
+		RequestID:               "req-1",
+		RequestModel:            "test-model",
+		RequestQuery:            "hello",
+		VSRSelectedDecisionName: "",
+	}
+
+	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
+	assert.NoError(t, err)
+	assert.True(t, mockCache.addEntryCalled, "should preserve global cache behavior when no decisions are configured")
 }
 
 func TestCacheStreamingSkippedWhenRAGContextPresent(t *testing.T) {

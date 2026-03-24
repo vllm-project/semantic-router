@@ -97,7 +97,7 @@ decisions:
   - id: medium_code_general
     expected_decision: medium_code_general
     expected_alias: qwen/qwen3.5-rocm
-    objective: Mid-tier coding help without architecture-heavy or agentic workflow cues.
+    objective: Mid-tier coding help without architecture-heavy or agentic workflow cues, including short urgent bug triage.
     variants:
       - id: python_stack_trace
         query: Debug this Python stack trace and suggest the most likely fix.
@@ -108,6 +108,9 @@ decisions:
       - id: integration_test_refactor
         query: After a refactor, an integration test started failing in a Java codebase. Explain the most likely cause and the first code change to inspect.
         tags: [robustness, coding]
+      - id: urgent_bug_zh
+        query: 这太离谱了！！！马上告诉我该怎么处理这个 bug。
+        tags: [robustness, coding, urgent]
   - id: verified_business
     expected_decision: verified_business
     expected_alias: google/gemini-2.5-flash-lite
@@ -186,6 +189,20 @@ decisions:
       - id: procrastination_important_work
         query: Why do people procrastinate on important work, and what interventions usually help?
         tags: [robustness, psychology]
+  - id: engaged_general
+    expected_decision: engaged_general
+    expected_alias: google/gemini-2.5-flash-lite
+    objective: General prompts with explicit emotion or urgency that should avoid brittle specialist misroutes.
+    variants:
+      - id: celebratory_reply_zh
+        query: 太好了！！！我终于拿到 offer 了，帮我写一段兴奋但得体的回复。
+        tags: [baseline, emotion]
+      - id: roommate_text
+        query: I am overwhelmed right now!! Help me write a calm text to my roommate and keep it supportive.
+        tags: [paraphrase, emotion]
+      - id: dinner_reschedule
+        query: This is ridiculous!! Help me write a calm message to reschedule tonight's dinner.
+        tags: [robustness, emotion]
   - id: medium_creative
     expected_decision: medium_creative
     expected_alias: google/gemini-2.5-flash-lite
