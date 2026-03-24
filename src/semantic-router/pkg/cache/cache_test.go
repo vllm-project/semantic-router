@@ -764,7 +764,7 @@ development:
 			It("should return information about available backends", func() {
 				backends := GetAvailableCacheBackends()
 
-				Expect(backends).To(HaveLen(3)) // Memory, Milvus, and Redis
+				Expect(backends).To(HaveLen(4)) // Memory, Milvus, Redis, and Valkey
 
 				// Check memory backend info
 				memoryBackend := backends[0]

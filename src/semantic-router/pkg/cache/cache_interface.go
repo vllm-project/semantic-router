@@ -102,6 +102,9 @@ const (
 	// RedisCacheType specifies the Redis vector database backend
 	RedisCacheType CacheBackendType = "redis"
 
+	// ValkeyCacheType specifies the Valkey vector database backend
+	ValkeyCacheType CacheBackendType = "valkey"
+
 	// HybridCacheType specifies the hybrid HNSW + Milvus backend
 	HybridCacheType CacheBackendType = "hybrid"
 )
@@ -142,6 +145,9 @@ type CacheConfig struct {
 
 	// Redis specific settings
 	Redis *config.RedisConfig `yaml:"redis,omitempty"`
+
+	// Valkey specific settings
+	Valkey *config.ValkeyConfig `yaml:"valkey,omitempty"`
 
 	// Milvus specific settings
 	Milvus *config.MilvusConfig `yaml:"milvus,omitempty"`

@@ -168,6 +168,21 @@ func (r *SemanticRouterReconciler) resolveSemanticCacheSecrets(
 		cache.Redis.Connection.PasswordSecretRef = nil
 	}
 
+	// Resolve Valkey password from Secret
+	if cache.Valkey != nil && cache.Valkey.Connection.PasswordSecretRef != nil {
+		password, err := r.getSecretValue(
+			ctx,
+			sr.Namespace,
+			cache.Valkey.Connection.PasswordSecretRef,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to resolve Valkey password: %w", err)
+		}
+		cache.Valkey.Connection.Password = password
+		// Clear the SecretRef after resolution so it doesn't appear in the ConfigMap
+		cache.Valkey.Connection.PasswordSecretRef = nil
+	}
+
 	// Resolve Milvus password from Secret
 	if cache.Milvus != nil &&
 		cache.Milvus.Connection.Auth.PasswordSecretRef != nil {
@@ -201,6 +216,13 @@ func validateSemanticCacheConfig(cache *vllmv1alpha1.SemanticCacheConfig) error 
 		if cache.Redis.Connection.Host == "" {
 			return fmt.Errorf("redis.connection.host is required")
 		}
+	case "valkey":
+		if cache.Valkey == nil {
+			return fmt.Errorf("valkey configuration required when backend_type is 'valkey'")
+		}
+		if cache.Valkey.Connection.Host == "" {
+			return fmt.Errorf("valkey.connection.host is required")
+		}
 	case "milvus":
 		if cache.Milvus == nil {
 			return fmt.Errorf("milvus configuration required when backend_type is 'milvus'")
@@ -219,7 +241,7 @@ func validateSemanticCacheConfig(cache *vllmv1alpha1.SemanticCacheConfig) error 
 	case "memory", "":
 		// No additional validation needed for memory backend
 	default:
-		return fmt.Errorf("unsupported backend_type: %s (must be one of: memory, redis, milvus, hybrid)", cache.BackendType)
+		return fmt.Errorf("unsupported backend_type: %s (must be one of: memory, redis, valkey, milvus, hybrid)", cache.BackendType)
 	}
 
 	return nil
