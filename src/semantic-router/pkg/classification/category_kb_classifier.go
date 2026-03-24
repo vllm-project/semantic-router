@@ -185,7 +185,7 @@ func (c *CategoryKBClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan
 	close(refChan)
 
 	modelType := c.modelType
-	targetDim := 384 // default for all-MiniLM-L6-v2 / qwen3 / mmbert
+	targetDim := 0 // use model default dimension for consistency with other classifiers
 
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
@@ -299,7 +299,7 @@ func (c *CategoryKBClassifier) Classify(text string) (*CategoryKBClassifyResult,
 
 	startTime := time.Now()
 
-	queryOutput, err := getEmbeddingWithModelType(text, c.modelType, 384)
+	queryOutput, err := getEmbeddingWithModelType(text, c.modelType, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
 	}

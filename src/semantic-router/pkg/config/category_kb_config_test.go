@@ -145,3 +145,31 @@ func TestToolScopeConstants(t *testing.T) {
 		t.Errorf("ToolScopeFull = %q", ToolScopeFull)
 	}
 }
+
+func makeRouterConfigWithToolScope(name, scope string) *RouterConfig {
+	return &RouterConfig{
+		IntelligentRouting: IntelligentRouting{
+			Decisions: []Decision{{Name: name, ToolScope: scope}},
+		},
+	}
+}
+
+func TestValidateDecisionToolScopes_RejectsUnknown(t *testing.T) {
+	cfg := makeRouterConfigWithToolScope("test_decision", "bogus_scope")
+	err := validateDecisionToolScopes(cfg)
+	if err == nil {
+		t.Fatal("expected error for unrecognized tool_scope, got nil")
+	}
+	if !strings.Contains(err.Error(), "unrecognized tool_scope") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateDecisionToolScopes_AcceptsValid(t *testing.T) {
+	for _, scope := range []string{"", "none", "local_only", "standard", "full"} {
+		cfg := makeRouterConfigWithToolScope("d", scope)
+		if err := validateDecisionToolScopes(cfg); err != nil {
+			t.Errorf("tool_scope=%q should be valid, got: %v", scope, err)
+		}
+	}
+}

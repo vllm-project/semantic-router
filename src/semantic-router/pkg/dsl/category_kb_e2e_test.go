@@ -12,7 +12,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestCategoryKB_DSLToRouterConfig_LoadsKBsFromDisk(t *testing.T) {
+func setupKBTestDir(t *testing.T) (string, string) {
+	t.Helper()
 	dir := t.TempDir()
 	kbDir := filepath.Join(dir, "knowledge_bases")
 	if err := os.MkdirAll(kbDir, 0o755); err != nil {
@@ -21,18 +22,9 @@ func TestCategoryKB_DSLToRouterConfig_LoadsKBsFromDisk(t *testing.T) {
 
 	taxonomy := map[string]interface{}{
 		"categories": map[string]interface{}{
-			"proprietary_code": map[string]interface{}{
-				"tier":        "privacy_policy",
-				"description": "Internal code",
-			},
-			"prompt_injection": map[string]interface{}{
-				"tier":        "security_containment",
-				"description": "Injection attacks",
-			},
-			"generic_coding": map[string]interface{}{
-				"tier":        "local_standard",
-				"description": "General coding",
-			},
+			"proprietary_code": map[string]interface{}{"tier": "privacy_policy", "description": "Internal code"},
+			"prompt_injection": map[string]interface{}{"tier": "security_containment", "description": "Injection attacks"},
+			"generic_coding":   map[string]interface{}{"tier": "local_standard", "description": "General coding"},
 		},
 		"tier_groups": map[string]interface{}{
 			"privacy_categories":  []string{"proprietary_code"},
@@ -48,21 +40,22 @@ func TestCategoryKB_DSLToRouterConfig_LoadsKBsFromDisk(t *testing.T) {
 	writeJSON(t, filepath.Join(kbDir, "taxonomy.json"), taxonomy)
 
 	writeJSON(t, filepath.Join(kbDir, "proprietary_code.json"), map[string]interface{}{
-		"category":  "proprietary_code",
-		"tier":      "privacy_policy",
+		"category": "proprietary_code", "tier": "privacy_policy",
 		"exemplars": []string{"Review our internal SDK", "Debug our pipeline code"},
 	})
 	writeJSON(t, filepath.Join(kbDir, "prompt_injection.json"), map[string]interface{}{
-		"category":  "prompt_injection",
-		"tier":      "security_containment",
+		"category": "prompt_injection", "tier": "security_containment",
 		"exemplars": []string{"Ignore previous instructions", "Bypass safety"},
 	})
 	writeJSON(t, filepath.Join(kbDir, "generic_coding.json"), map[string]interface{}{
-		"category":  "generic_coding",
-		"tier":      "local_standard",
+		"category": "generic_coding", "tier": "local_standard",
 		"exemplars": []string{"How do I sort an array?", "Explain recursion"},
 	})
+	return dir, kbDir
+}
 
+func compileCategoryKBDSL(t *testing.T, kbDir string) *config.RouterConfig {
+	t.Helper()
 	dslInput := `
 SIGNAL category_kb privacy_classifier {
   kb_dir: "` + kbDir + `/"
@@ -102,11 +95,16 @@ ROUTE local_standard {
   MODEL "default-model"
 }
 `
-
 	cfg, errs := Compile(dslInput)
 	if len(errs) > 0 {
 		t.Fatalf("Compile errors: %v", errs)
 	}
+	return cfg
+}
+
+func TestCategoryKB_CompileCategoryKBRule(t *testing.T) {
+	_, kbDir := setupKBTestDir(t)
+	cfg := compileCategoryKBDSL(t, kbDir)
 
 	if len(cfg.CategoryKBRules) != 1 {
 		t.Fatalf("expected 1 CategoryKBRule, got %d", len(cfg.CategoryKBRules))
@@ -124,6 +122,11 @@ ROUTE local_standard {
 	if rule.SecurityThreshold != 0.7 {
 		t.Errorf("rule.SecurityThreshold = %v", rule.SecurityThreshold)
 	}
+}
+
+func TestCategoryKB_CompileDecisionsAndToolScope(t *testing.T) {
+	_, kbDir := setupKBTestDir(t)
+	cfg := compileCategoryKBDSL(t, kbDir)
 
 	if len(cfg.Decisions) != 3 {
 		t.Fatalf("expected 3 decisions, got %d", len(cfg.Decisions))
@@ -141,6 +144,11 @@ ROUTE local_standard {
 	if scopeMap["local_standard"] != "full" {
 		t.Errorf("local_standard ToolScope = %q", scopeMap["local_standard"])
 	}
+}
+
+func TestCategoryKB_CompileProjections(t *testing.T) {
+	_, kbDir := setupKBTestDir(t)
+	cfg := compileCategoryKBDSL(t, kbDir)
 
 	if len(cfg.Projections.Scores) != 1 {
 		t.Errorf("expected 1 projection score, got %d", len(cfg.Projections.Scores))
@@ -156,6 +164,11 @@ ROUTE local_standard {
 	if len(cfg.Projections.Mappings) != 1 {
 		t.Errorf("expected 1 projection mapping, got %d", len(cfg.Projections.Mappings))
 	}
+}
+
+func TestCategoryKB_CompileWHENClauseSignalTypes(t *testing.T) {
+	_, kbDir := setupKBTestDir(t)
+	cfg := compileCategoryKBDSL(t, kbDir)
 
 	secDec := cfg.Decisions[0]
 	if !ruleTreeContainsSignalType(&secDec.Rules, "category_kb") {
@@ -166,38 +179,24 @@ ROUTE local_standard {
 		!ruleTreeContainsSignalType(&privDec.Rules, "projection") {
 		t.Error("privacy_policy WHEN clause should reference category_kb or projection")
 	}
+}
 
-	// Config → Routing YAML (canonical format) round-trip
+func TestCategoryKB_RoutingYAMLRoundTrip(t *testing.T) {
+	_, kbDir := setupKBTestDir(t)
+	cfg := compileCategoryKBDSL(t, kbDir)
+
 	routingYAML, err := EmitRoutingYAMLFromConfig(cfg)
 	if err != nil {
 		t.Fatalf("EmitRoutingYAMLFromConfig: %v", err)
 	}
 	routingStr := string(routingYAML)
 
-	if !strings.Contains(routingStr, "category_kb:") {
-		t.Error("routing YAML missing category_kb signal section")
-	}
-	if !strings.Contains(routingStr, "kb_dir:") {
-		t.Error("routing YAML missing kb_dir field")
-	}
-	if !strings.Contains(routingStr, "taxonomy_path:") {
-		t.Error("routing YAML missing taxonomy_path field")
-	}
-	if !strings.Contains(routingStr, "tool_scope:") {
-		t.Error("routing YAML missing tool_scope field")
+	for _, required := range []string{"category_kb:", "kb_dir:", "taxonomy_path:", "tool_scope:"} {
+		if !strings.Contains(routingStr, required) {
+			t.Errorf("routing YAML missing %s", required)
+		}
 	}
 
-	// Config → UserYAML also includes category_kb under signals
-	userYAML, err := EmitUserYAML(cfg)
-	if err != nil {
-		t.Fatalf("EmitUserYAML: %v", err)
-	}
-	userStr := string(userYAML)
-	if !strings.Contains(userStr, "category_kb:") {
-		t.Error("user YAML missing category_kb signal section")
-	}
-
-	// Parse routing YAML back to verify structure
 	var routingDoc struct {
 		Routing config.CanonicalRouting `yaml:"routing"`
 	}
@@ -210,52 +209,60 @@ ROUTE local_standard {
 	if routingDoc.Routing.Signals.CategoryKB[0].KBDir != kbDir+"/" {
 		t.Errorf("round-trip KBDir = %q", routingDoc.Routing.Signals.CategoryKB[0].KBDir)
 	}
+}
 
-	// Verify the KB files can be read from the paths in config
-	kbPath := routingDoc.Routing.Signals.CategoryKB[0].KBDir
-	entries, err := os.ReadDir(kbPath)
+func TestCategoryKB_UserYAML_IncludesCategoryKB(t *testing.T) {
+	_, kbDir := setupKBTestDir(t)
+	cfg := compileCategoryKBDSL(t, kbDir)
+
+	userYAML, err := EmitUserYAML(cfg)
 	if err != nil {
-		t.Fatalf("Cannot read KB dir at %q: %v", kbPath, err)
+		t.Fatalf("EmitUserYAML: %v", err)
 	}
-	jsonCount := 0
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") && entry.Name() != "taxonomy.json" {
-			jsonCount++
-			data, readErr := os.ReadFile(filepath.Join(kbPath, entry.Name()))
-			if readErr != nil {
-				t.Errorf("Cannot read KB file %s: %v", entry.Name(), readErr)
-				continue
-			}
-			var kb struct {
-				Exemplars []string `json:"exemplars"`
-			}
-			if err = json.Unmarshal(data, &kb); err != nil {
-				t.Errorf("Cannot parse KB file %s: %v", entry.Name(), err)
-				continue
-			}
-			if len(kb.Exemplars) == 0 {
-				t.Errorf("KB file %s has no exemplars", entry.Name())
-			}
-		}
+	if !strings.Contains(string(userYAML), "category_kb:") {
+		t.Error("user YAML missing category_kb signal section")
 	}
+}
+
+func TestCategoryKB_KBFilesReadableFromConfig(t *testing.T) {
+	_, kbDir := setupKBTestDir(t)
+	cfg := compileCategoryKBDSL(t, kbDir)
+
+	routingYAML, err := EmitRoutingYAMLFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("EmitRoutingYAMLFromConfig: %v", err)
+	}
+	var routingDoc struct {
+		Routing config.CanonicalRouting `yaml:"routing"`
+	}
+	if err = yaml.Unmarshal(routingYAML, &routingDoc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	kbPath := routingDoc.Routing.Signals.CategoryKB[0].KBDir
+	jsonCount := countAndValidateKBFiles(t, kbPath)
 	if jsonCount != 3 {
 		t.Errorf("expected 3 KB JSON files, found %d", jsonCount)
 	}
+}
 
-	// Verify taxonomy can be loaded from config path
-	taxPath := routingDoc.Routing.Signals.CategoryKB[0].TaxonomyPath
-	taxData, err := os.ReadFile(taxPath)
+func TestCategoryKB_TaxonomyLoadableFromConfig(t *testing.T) {
+	_, kbDir := setupKBTestDir(t)
+	cfg := compileCategoryKBDSL(t, kbDir)
+
+	routingYAML, err := EmitRoutingYAMLFromConfig(cfg)
 	if err != nil {
-		t.Fatalf("Cannot read taxonomy at %q: %v", taxPath, err)
+		t.Fatalf("EmitRoutingYAMLFromConfig: %v", err)
 	}
-	var taxMap map[string]interface{}
-	if err := json.Unmarshal(taxData, &taxMap); err != nil {
-		t.Fatalf("Cannot parse taxonomy: %v", err)
+	var routingDoc struct {
+		Routing config.CanonicalRouting `yaml:"routing"`
 	}
-	cats, ok := taxMap["categories"].(map[string]interface{})
-	if !ok || len(cats) != 3 {
-		t.Errorf("taxonomy categories count = %d, want 3", len(cats))
+	if err = yaml.Unmarshal(routingYAML, &routingDoc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
 	}
+
+	taxPath := routingDoc.Routing.Signals.CategoryKB[0].TaxonomyPath
+	validateTaxonomyFile(t, taxPath, 3)
 }
 
 func TestCategoryKB_PrivacyRecipeDSL_ProducesValidRoutingYAML(t *testing.T) {
@@ -269,7 +276,6 @@ func TestCategoryKB_PrivacyRecipeDSL_ProducesValidRoutingYAML(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("Compile errors: %v", errs)
 	}
-
 	if len(cfg.CategoryKBRules) != 1 {
 		t.Fatalf("expected 1 CategoryKBRule, got %d", len(cfg.CategoryKBRules))
 	}
@@ -277,19 +283,16 @@ func TestCategoryKB_PrivacyRecipeDSL_ProducesValidRoutingYAML(t *testing.T) {
 		t.Errorf("rule name = %q", cfg.CategoryKBRules[0].Name)
 	}
 
-	// Emit as routing YAML (canonical format with routing: wrapper)
 	routingYAML, err := EmitRoutingYAMLFromConfig(cfg)
 	if err != nil {
 		t.Fatalf("EmitRoutingYAMLFromConfig: %v", err)
 	}
-
 	var routingDoc struct {
 		Routing config.CanonicalRouting `yaml:"routing"`
 	}
 	if err = yaml.Unmarshal(routingYAML, &routingDoc); err != nil {
 		t.Fatalf("routing YAML is not valid: %v", err)
 	}
-
 	if len(routingDoc.Routing.Signals.CategoryKB) != 1 {
 		t.Fatal("routing YAML missing category_kb signal")
 	}
@@ -301,7 +304,6 @@ func TestCategoryKB_PrivacyRecipeDSL_ProducesValidRoutingYAML(t *testing.T) {
 		t.Errorf("category_kb kb_dir = %q", ckb.KBDir)
 	}
 
-	// Verify decisions have tool_scope
 	hasToolScope := false
 	for _, dec := range routingDoc.Routing.Decisions {
 		if dec.ToolScope != "" {
@@ -313,55 +315,8 @@ func TestCategoryKB_PrivacyRecipeDSL_ProducesValidRoutingYAML(t *testing.T) {
 		t.Error("routing YAML decisions should include tool_scope")
 	}
 
-	// Verify KB files exist relative to recipe directory
 	recipeDir := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "privacy")
-	kbDirAbs := filepath.Join(recipeDir, ckb.KBDir)
-	entries, err := os.ReadDir(kbDirAbs)
-	if err != nil {
-		t.Fatalf("KB directory not readable at %q: %v", kbDirAbs, err)
-	}
-
-	kbFileCount := 0
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") && entry.Name() != "taxonomy.json" {
-			kbFileCount++
-		}
-	}
-	if kbFileCount == 0 {
-		t.Error("no KB JSON files found in recipe knowledge_bases/ directory")
-	}
-	t.Logf("Found %d category KB files in %s", kbFileCount, kbDirAbs)
-
-	// Verify taxonomy.json exists and is valid
-	taxPath := filepath.Join(recipeDir, ckb.TaxonomyPath)
-	taxData, err := os.ReadFile(taxPath)
-	if err != nil {
-		t.Fatalf("taxonomy not readable at %q: %v", taxPath, err)
-	}
-	var taxMap map[string]interface{}
-	if err := json.Unmarshal(taxData, &taxMap); err != nil {
-		t.Fatalf("taxonomy JSON invalid: %v", err)
-	}
-	cats, _ := taxMap["categories"].(map[string]interface{})
-	tierGroups, _ := taxMap["tier_groups"].(map[string]interface{})
-	if len(cats) == 0 {
-		t.Error("taxonomy has no categories")
-	}
-	if len(tierGroups) == 0 {
-		t.Error("taxonomy has no tier_groups")
-	}
-	t.Logf("Taxonomy: %d categories, %d tier groups", len(cats), len(tierGroups))
-
-	// Verify every KB file has a matching category in taxonomy
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || entry.Name() == "taxonomy.json" {
-			continue
-		}
-		catName := strings.TrimSuffix(entry.Name(), ".json")
-		if _, ok := cats[catName]; !ok {
-			t.Errorf("KB file %s has no matching category in taxonomy", entry.Name())
-		}
-	}
+	verifyRecipeKBFiles(t, recipeDir, ckb)
 }
 
 func TestCategoryKB_UserYAML_IncludesCategoryKBUnderSignals(t *testing.T) {
@@ -416,7 +371,6 @@ ROUTE test_route {
 		t.Errorf("category_kb[0].kb_dir = %v", entry["kb_dir"])
 	}
 
-	// category_kb should NOT appear as a top-level key (it should be nested under signals)
 	if _, topLevel := raw["category_kb"]; topLevel {
 		t.Error("category_kb should not appear as top-level key; should be under signals")
 	}
@@ -523,7 +477,6 @@ providers:
 	}
 
 	outPath := filepath.Join(dir, "config.yaml")
-
 	if err := CLICompile(dslPath, outPath, "yaml", "", "", basePath); err != nil {
 		t.Fatalf("CLICompile with --base failed: %v", err)
 	}
@@ -534,29 +487,10 @@ providers:
 	}
 	output := string(data)
 
-	if !strings.Contains(output, "version: v0.3") {
-		t.Error("missing version from base config")
-	}
-	if !strings.Contains(output, "listeners:") {
-		t.Error("missing listeners from base config")
-	}
-	if !strings.Contains(output, "providers:") {
-		t.Error("missing providers from base config")
-	}
-	if !strings.Contains(output, "routing:") {
-		t.Error("missing routing section")
-	}
-	if !strings.Contains(output, "category_kb:") {
-		t.Error("missing category_kb in routing signals")
-	}
-	if !strings.Contains(output, "tool_scope:") {
-		t.Error("missing tool_scope in routing decisions")
-	}
-	if !strings.Contains(output, "localhost:8000") {
-		t.Error("missing backend endpoint from base config")
-	}
-	if !strings.Contains(output, "test_route") {
-		t.Error("missing route from DSL")
+	for _, required := range []string{"version: v0.3", "listeners:", "providers:", "routing:", "category_kb:", "tool_scope:", "localhost:8000", "test_route"} {
+		if !strings.Contains(output, required) {
+			t.Errorf("missing %q in merged output", required)
+		}
 	}
 }
 
@@ -596,16 +530,16 @@ ROUTE test_route {
 	if !strings.Contains(output, "routing:") {
 		t.Error("missing routing section")
 	}
-	if strings.Contains(output, "version:") {
-		t.Error("routing-only output should not have version")
-	}
-	if strings.Contains(output, "listeners:") {
-		t.Error("routing-only output should not have listeners")
-	}
-	if strings.Contains(output, "providers:") {
-		t.Error("routing-only output should not have providers")
+	for _, absent := range []string{"version:", "listeners:", "providers:"} {
+		if strings.Contains(output, absent) {
+			t.Errorf("routing-only output should not have %s", absent)
+		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 func ruleTreeContainsSignalType(node *config.RuleCombination, signalType string) bool {
 	if node == nil {
@@ -630,5 +564,101 @@ func writeJSON(t *testing.T, path string, v interface{}) {
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func countAndValidateKBFiles(t *testing.T, kbPath string) int {
+	t.Helper()
+	entries, err := os.ReadDir(kbPath)
+	if err != nil {
+		t.Fatalf("Cannot read KB dir at %q: %v", kbPath, err)
+	}
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || entry.Name() == "taxonomy.json" {
+			continue
+		}
+		count++
+		data, readErr := os.ReadFile(filepath.Join(kbPath, entry.Name()))
+		if readErr != nil {
+			t.Errorf("Cannot read KB file %s: %v", entry.Name(), readErr)
+			continue
+		}
+		var kb struct {
+			Exemplars []string `json:"exemplars"`
+		}
+		if err = json.Unmarshal(data, &kb); err != nil {
+			t.Errorf("Cannot parse KB file %s: %v", entry.Name(), err)
+			continue
+		}
+		if len(kb.Exemplars) == 0 {
+			t.Errorf("KB file %s has no exemplars", entry.Name())
+		}
+	}
+	return count
+}
+
+func validateTaxonomyFile(t *testing.T, taxPath string, expectedCategories int) {
+	t.Helper()
+	data, err := os.ReadFile(taxPath)
+	if err != nil {
+		t.Fatalf("Cannot read taxonomy at %q: %v", taxPath, err)
+	}
+	var taxMap map[string]interface{}
+	if err := json.Unmarshal(data, &taxMap); err != nil {
+		t.Fatalf("Cannot parse taxonomy: %v", err)
+	}
+	cats, ok := taxMap["categories"].(map[string]interface{})
+	if !ok || len(cats) != expectedCategories {
+		t.Errorf("taxonomy categories count = %d, want %d", len(cats), expectedCategories)
+	}
+}
+
+func verifyRecipeKBFiles(t *testing.T, recipeDir string, ckb config.CategoryKBRule) {
+	t.Helper()
+	kbDirAbs := filepath.Join(recipeDir, ckb.KBDir)
+	entries, err := os.ReadDir(kbDirAbs)
+	if err != nil {
+		t.Fatalf("KB directory not readable at %q: %v", kbDirAbs, err)
+	}
+
+	kbFileCount := 0
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") && entry.Name() != "taxonomy.json" {
+			kbFileCount++
+		}
+	}
+	if kbFileCount == 0 {
+		t.Error("no KB JSON files found in recipe knowledge_bases/ directory")
+	}
+	t.Logf("Found %d category KB files in %s", kbFileCount, kbDirAbs)
+
+	taxPath := filepath.Join(recipeDir, ckb.TaxonomyPath)
+	taxData, err := os.ReadFile(taxPath)
+	if err != nil {
+		t.Fatalf("taxonomy not readable at %q: %v", taxPath, err)
+	}
+	var taxMap map[string]interface{}
+	if err := json.Unmarshal(taxData, &taxMap); err != nil {
+		t.Fatalf("taxonomy JSON invalid: %v", err)
+	}
+	cats, _ := taxMap["categories"].(map[string]interface{})
+	tierGroups, _ := taxMap["tier_groups"].(map[string]interface{})
+	if len(cats) == 0 {
+		t.Error("taxonomy has no categories")
+	}
+	if len(tierGroups) == 0 {
+		t.Error("taxonomy has no tier_groups")
+	}
+	t.Logf("Taxonomy: %d categories, %d tier groups", len(cats), len(tierGroups))
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || entry.Name() == "taxonomy.json" {
+			continue
+		}
+		catName := strings.TrimSuffix(entry.Name(), ".json")
+		if _, ok := cats[catName]; !ok {
+			t.Errorf("KB file %s has no matching category in taxonomy", entry.Name())
+		}
 	}
 }
