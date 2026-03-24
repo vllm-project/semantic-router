@@ -20,30 +20,24 @@ func responseStatusOrOK(ctx *RequestContext) int {
 }
 
 func envoyStatusCodeToHTTP(code typev3.StatusCode) int {
-	switch code {
-	case typev3.StatusCode_OK:
-		return 200
-	case typev3.StatusCode_BadRequest:
-		return 400
-	case typev3.StatusCode_Unauthorized:
-		return 401
-	case typev3.StatusCode_Forbidden:
-		return 403
-	case typev3.StatusCode_NotFound:
-		return 404
-	case typev3.StatusCode_MethodNotAllowed:
-		return 405
-	case typev3.StatusCode_PayloadTooLarge:
-		return 413
-	case typev3.StatusCode_UnprocessableEntity:
-		return 422
-	case typev3.StatusCode_TooManyRequests:
-		return 429
-	case typev3.StatusCode_BadGateway:
-		return 502
-	case typev3.StatusCode_ServiceUnavailable:
-		return 503
-	default:
-		return 500
+	if statusCode, ok := envoyToHTTPStatusCodes()[code]; ok {
+		return statusCode
+	}
+	return 500
+}
+
+func envoyToHTTPStatusCodes() map[typev3.StatusCode]int {
+	return map[typev3.StatusCode]int{
+		typev3.StatusCode_OK:                  200,
+		typev3.StatusCode_BadRequest:          400,
+		typev3.StatusCode_Unauthorized:        401,
+		typev3.StatusCode_Forbidden:           403,
+		typev3.StatusCode_NotFound:            404,
+		typev3.StatusCode_MethodNotAllowed:    405,
+		typev3.StatusCode_PayloadTooLarge:     413,
+		typev3.StatusCode_UnprocessableEntity: 422,
+		typev3.StatusCode_TooManyRequests:     429,
+		typev3.StatusCode_BadGateway:          502,
+		typev3.StatusCode_ServiceUnavailable:  503,
 	}
 }

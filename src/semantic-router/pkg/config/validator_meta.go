@@ -54,39 +54,65 @@ func validateMetaTriggerPolicy(policy *MetaTriggerPolicy) error {
 		return nil
 	}
 
+	return validateMetaTriggerPolicyFields(policy)
+}
+
+func validateMetaTriggerPolicyFields(policy *MetaTriggerPolicy) error {
 	if err := validateMetaUnitInterval(policy.DecisionMarginBelow, "routing.meta.trigger_policy.decision_margin_below"); err != nil {
 		return err
 	}
 	if err := validateMetaUnitInterval(policy.ProjectionBoundaryWithin, "routing.meta.trigger_policy.projection_boundary_within"); err != nil {
 		return err
 	}
+	if err := validateMetaRequiredFamilies(policy.RequiredFamilies); err != nil {
+		return err
+	}
+	return validateMetaFamilyDisagreements(policy.FamilyDisagreements)
+}
 
-	for i, family := range policy.RequiredFamilies {
+func validateMetaRequiredFamilies(requiredFamilies []MetaRequiredSignalFamily) error {
+	for i, family := range requiredFamilies {
 		prefix := fmt.Sprintf("routing.meta.trigger_policy.required_families[%d]", i)
-		if err := validateMetaRoutingSignalFamily(prefix+".type", family.Type); err != nil {
+		if err := validateMetaRequiredFamily(prefix, family); err != nil {
 			return err
-		}
-		if err := validateMetaUnitInterval(family.MinConfidence, prefix+".min_confidence"); err != nil {
-			return err
-		}
-		if family.MinMatches != nil && *family.MinMatches < 0 {
-			return fmt.Errorf("%s.min_matches must be >= 0, got %d", prefix, *family.MinMatches)
 		}
 	}
+	return nil
+}
 
-	for i, disagreement := range policy.FamilyDisagreements {
+func validateMetaRequiredFamily(prefix string, family MetaRequiredSignalFamily) error {
+	if err := validateMetaRoutingSignalFamily(prefix+".type", family.Type); err != nil {
+		return err
+	}
+	if err := validateMetaUnitInterval(family.MinConfidence, prefix+".min_confidence"); err != nil {
+		return err
+	}
+	if family.MinMatches != nil && *family.MinMatches < 0 {
+		return fmt.Errorf("%s.min_matches must be >= 0, got %d", prefix, *family.MinMatches)
+	}
+	return nil
+}
+
+func validateMetaFamilyDisagreements(disagreements []MetaSignalFamilyDisagreement) error {
+	for i, disagreement := range disagreements {
 		prefix := fmt.Sprintf("routing.meta.trigger_policy.family_disagreements[%d]", i)
-		if err := validateMetaRoutingSignalFamily(prefix+".cheap", disagreement.Cheap); err != nil {
+		if err := validateMetaFamilyDisagreement(prefix, disagreement); err != nil {
 			return err
-		}
-		if err := validateMetaRoutingSignalFamily(prefix+".expensive", disagreement.Expensive); err != nil {
-			return err
-		}
-		if strings.EqualFold(strings.TrimSpace(disagreement.Cheap), strings.TrimSpace(disagreement.Expensive)) {
-			return fmt.Errorf("%s must compare two distinct signal families", prefix)
 		}
 	}
+	return nil
+}
 
+func validateMetaFamilyDisagreement(prefix string, disagreement MetaSignalFamilyDisagreement) error {
+	if err := validateMetaRoutingSignalFamily(prefix+".cheap", disagreement.Cheap); err != nil {
+		return err
+	}
+	if err := validateMetaRoutingSignalFamily(prefix+".expensive", disagreement.Expensive); err != nil {
+		return err
+	}
+	if strings.EqualFold(strings.TrimSpace(disagreement.Cheap), strings.TrimSpace(disagreement.Expensive)) {
+		return fmt.Errorf("%s must compare two distinct signal families", prefix)
+	}
 	return nil
 }
 

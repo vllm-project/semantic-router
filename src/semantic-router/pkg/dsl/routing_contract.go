@@ -341,57 +341,94 @@ func metaRoutingToFields(meta config.MetaRoutingConfig) map[string]Value {
 	if meta.MaxPasses > 0 {
 		fields["max_passes"] = IntValue{V: meta.MaxPasses}
 	}
-	if meta.TriggerPolicy != nil {
-		triggerFields := make(map[string]Value)
-		if meta.TriggerPolicy.DecisionMarginBelow != nil {
-			triggerFields["decision_margin_below"] = FloatValue{V: *meta.TriggerPolicy.DecisionMarginBelow}
-		}
-		if meta.TriggerPolicy.ProjectionBoundaryWithin != nil {
-			triggerFields["projection_boundary_within"] = FloatValue{V: *meta.TriggerPolicy.ProjectionBoundaryWithin}
-		}
-		if meta.TriggerPolicy.PartitionConflict != nil {
-			triggerFields["partition_conflict"] = BoolValue{V: *meta.TriggerPolicy.PartitionConflict}
-		}
-		if len(meta.TriggerPolicy.RequiredFamilies) > 0 {
-			items := make([]Value, 0, len(meta.TriggerPolicy.RequiredFamilies))
-			for _, family := range meta.TriggerPolicy.RequiredFamilies {
-				familyFields := map[string]Value{
-					"type": StringValue{V: family.Type},
-				}
-				if family.MinConfidence != nil {
-					familyFields["min_confidence"] = FloatValue{V: *family.MinConfidence}
-				}
-				if family.MinMatches != nil {
-					familyFields["min_matches"] = IntValue{V: *family.MinMatches}
-				}
-				items = append(items, ObjectValue{Fields: familyFields})
-			}
-			triggerFields["required_families"] = ArrayValue{Items: items}
-		}
-		if len(meta.TriggerPolicy.FamilyDisagreements) > 0 {
-			items := make([]Value, 0, len(meta.TriggerPolicy.FamilyDisagreements))
-			for _, disagreement := range meta.TriggerPolicy.FamilyDisagreements {
-				items = append(items, ObjectValue{Fields: map[string]Value{
-					"cheap":     StringValue{V: disagreement.Cheap},
-					"expensive": StringValue{V: disagreement.Expensive},
-				}})
-			}
-			triggerFields["family_disagreements"] = ArrayValue{Items: items}
-		}
+	if triggerFields := metaTriggerPolicyToFields(meta.TriggerPolicy); len(triggerFields) > 0 {
 		fields["trigger_policy"] = ObjectValue{Fields: triggerFields}
 	}
-	if len(meta.AllowedActions) > 0 {
-		items := make([]Value, 0, len(meta.AllowedActions))
-		for _, action := range meta.AllowedActions {
-			actionFields := map[string]Value{
-				"type": StringValue{V: action.Type},
-			}
-			if len(action.SignalFamilies) > 0 {
-				actionFields["signal_families"] = stringsToArray(action.SignalFamilies)
-			}
-			items = append(items, ObjectValue{Fields: actionFields})
-		}
+	if items := metaAllowedActionsToValues(meta.AllowedActions); len(items) > 0 {
 		fields["allowed_actions"] = ArrayValue{Items: items}
+	}
+	return fields
+}
+
+func metaTriggerPolicyToFields(policy *config.MetaTriggerPolicy) map[string]Value {
+	if policy == nil {
+		return nil
+	}
+
+	fields := make(map[string]Value)
+	addMetaTriggerThresholdFields(fields, policy)
+	addMetaRequiredFamiliesField(fields, policy.RequiredFamilies)
+	addMetaFamilyDisagreementsField(fields, policy.FamilyDisagreements)
+	return fields
+}
+
+func addMetaTriggerThresholdFields(fields map[string]Value, policy *config.MetaTriggerPolicy) {
+	if policy.DecisionMarginBelow != nil {
+		fields["decision_margin_below"] = FloatValue{V: *policy.DecisionMarginBelow}
+	}
+	if policy.ProjectionBoundaryWithin != nil {
+		fields["projection_boundary_within"] = FloatValue{V: *policy.ProjectionBoundaryWithin}
+	}
+	if policy.PartitionConflict != nil {
+		fields["partition_conflict"] = BoolValue{V: *policy.PartitionConflict}
+	}
+}
+
+func addMetaRequiredFamiliesField(fields map[string]Value, families []config.MetaRequiredSignalFamily) {
+	if len(families) == 0 {
+		return
+	}
+	items := make([]Value, 0, len(families))
+	for _, family := range families {
+		items = append(items, ObjectValue{Fields: metaRequiredFamilyToFields(family)})
+	}
+	fields["required_families"] = ArrayValue{Items: items}
+}
+
+func metaRequiredFamilyToFields(family config.MetaRequiredSignalFamily) map[string]Value {
+	fields := map[string]Value{
+		"type": StringValue{V: family.Type},
+	}
+	if family.MinConfidence != nil {
+		fields["min_confidence"] = FloatValue{V: *family.MinConfidence}
+	}
+	if family.MinMatches != nil {
+		fields["min_matches"] = IntValue{V: *family.MinMatches}
+	}
+	return fields
+}
+
+func addMetaFamilyDisagreementsField(fields map[string]Value, disagreements []config.MetaSignalFamilyDisagreement) {
+	if len(disagreements) == 0 {
+		return
+	}
+	items := make([]Value, 0, len(disagreements))
+	for _, disagreement := range disagreements {
+		items = append(items, ObjectValue{Fields: map[string]Value{
+			"cheap":     StringValue{V: disagreement.Cheap},
+			"expensive": StringValue{V: disagreement.Expensive},
+		}})
+	}
+	fields["family_disagreements"] = ArrayValue{Items: items}
+}
+
+func metaAllowedActionsToValues(actions []config.MetaRefinementAction) []Value {
+	if len(actions) == 0 {
+		return nil
+	}
+	items := make([]Value, 0, len(actions))
+	for _, action := range actions {
+		items = append(items, ObjectValue{Fields: metaAllowedActionToFields(action)})
+	}
+	return items
+}
+
+func metaAllowedActionToFields(action config.MetaRefinementAction) map[string]Value {
+	fields := map[string]Value{
+		"type": StringValue{V: action.Type},
+	}
+	if len(action.SignalFamilies) > 0 {
+		fields["signal_families"] = stringsToArray(action.SignalFamilies)
 	}
 	return fields
 }

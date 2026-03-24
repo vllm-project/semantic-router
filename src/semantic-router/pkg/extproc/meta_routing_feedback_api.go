@@ -304,40 +304,60 @@ func doesMetaRoutingFeedbackMatchFilters(
 	search string,
 ) bool {
 	trace := record.Record.Observation.Trace
-	if filters.mode != "" && strings.ToLower(record.Record.Mode) != filters.mode {
-		return false
+	return matchMetaRoutingMode(record.Record, filters) &&
+		matchMetaRoutingTrigger(trace, filters) &&
+		matchMetaRoutingRootCause(trace, filters) &&
+		matchMetaRoutingActionType(record.Record, filters) &&
+		matchMetaRoutingSignalFamily(record.Record, filters) &&
+		matchMetaRoutingOverturned(trace, filters) &&
+		matchMetaRoutingDecision(record.Record, filters) &&
+		matchMetaRoutingModel(record.Record, filters) &&
+		matchMetaRoutingResponseStatus(record.Record, filters) &&
+		matchMetaRoutingSearch(record, search)
+}
+
+func matchMetaRoutingMode(record FeedbackRecord, filters metaRoutingFeedbackFilters) bool {
+	return filters.mode == "" || strings.ToLower(record.Mode) == filters.mode
+}
+
+func matchMetaRoutingTrigger(trace *RoutingTrace, filters metaRoutingFeedbackFilters) bool {
+	return filters.trigger == "" || containsFold(traceTriggerNames(trace), filters.trigger)
+}
+
+func matchMetaRoutingRootCause(trace *RoutingTrace, filters metaRoutingFeedbackFilters) bool {
+	return filters.rootCause == "" || containsFold(traceRootCauses(trace), filters.rootCause)
+}
+
+func matchMetaRoutingActionType(record FeedbackRecord, filters metaRoutingFeedbackFilters) bool {
+	return filters.actionType == "" || containsFold(actionTypesForFeedbackRecord(record), filters.actionType)
+}
+
+func matchMetaRoutingSignalFamily(record FeedbackRecord, filters metaRoutingFeedbackFilters) bool {
+	return filters.signalFamily == "" || containsFold(signalFamiliesForFeedbackRecord(record), filters.signalFamily)
+}
+
+func matchMetaRoutingOverturned(trace *RoutingTrace, filters metaRoutingFeedbackFilters) bool {
+	if filters.overturned == "" {
+		return true
 	}
-	if filters.trigger != "" && !containsFold(traceTriggerNames(trace), filters.trigger) {
-		return false
-	}
-	if filters.rootCause != "" && !containsFold(traceRootCauses(trace), filters.rootCause) {
-		return false
-	}
-	if filters.actionType != "" && !containsFold(actionTypesForFeedbackRecord(record.Record), filters.actionType) {
-		return false
-	}
-	if filters.signalFamily != "" && !containsFold(signalFamiliesForFeedbackRecord(record.Record), filters.signalFamily) {
-		return false
-	}
-	if filters.overturned != "" {
-		expected := filters.overturned == "true"
-		if trace == nil || trace.OverturnedDecision != expected {
-			return false
-		}
-	}
-	if filters.decision != "" && record.Record.Outcome.FinalDecisionName != filters.decision {
-		return false
-	}
-	if filters.model != "" && !doesMetaRoutingModelMatch(record.Record, filters.model) {
-		return false
-	}
-	if filters.responseStatus != nil && record.Record.Outcome.ResponseStatus != *filters.responseStatus {
-		return false
-	}
-	if search != "" && !doesMetaRoutingSearchMatch(record, search) {
-		return false
-	}
-	return true
+	expected := filters.overturned == "true"
+	return trace != nil && trace.OverturnedDecision == expected
+}
+
+func matchMetaRoutingDecision(record FeedbackRecord, filters metaRoutingFeedbackFilters) bool {
+	return filters.decision == "" || record.Outcome.FinalDecisionName == filters.decision
+}
+
+func matchMetaRoutingModel(record FeedbackRecord, filters metaRoutingFeedbackFilters) bool {
+	return filters.model == "" || doesMetaRoutingModelMatch(record, filters.model)
+}
+
+func matchMetaRoutingResponseStatus(record FeedbackRecord, filters metaRoutingFeedbackFilters) bool {
+	return filters.responseStatus == nil || record.Outcome.ResponseStatus == *filters.responseStatus
+}
+
+func matchMetaRoutingSearch(record metaRoutingFeedbackStoredRecord, search string) bool {
+	return search == "" || doesMetaRoutingSearchMatch(record, search)
 }
 
 func traceTriggerNames(trace *RoutingTrace) []string {

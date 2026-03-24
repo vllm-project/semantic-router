@@ -169,84 +169,97 @@ func applySignalFamilyResults(dst *SignalResults, src *SignalResults, family str
 	if dst == nil || src == nil {
 		return
 	}
-
-	switch family {
-	case config.SignalTypeKeyword:
-		dst.MatchedKeywordRules = cloneStrings(src.MatchedKeywordRules)
-		dst.MatchedKeywords = cloneStrings(src.MatchedKeywords)
-	case config.SignalTypeEmbedding:
-		dst.MatchedEmbeddingRules = cloneStrings(src.MatchedEmbeddingRules)
-	case config.SignalTypeDomain:
-		dst.MatchedDomainRules = cloneStrings(src.MatchedDomainRules)
-	case config.SignalTypeFactCheck:
-		dst.MatchedFactCheckRules = cloneStrings(src.MatchedFactCheckRules)
-	case config.SignalTypeUserFeedback:
-		dst.MatchedUserFeedbackRules = cloneStrings(src.MatchedUserFeedbackRules)
-	case config.SignalTypePreference:
-		dst.MatchedPreferenceRules = cloneStrings(src.MatchedPreferenceRules)
-	case config.SignalTypeLanguage:
-		dst.MatchedLanguageRules = cloneStrings(src.MatchedLanguageRules)
-	case config.SignalTypeContext:
-		dst.MatchedContextRules = cloneStrings(src.MatchedContextRules)
-		dst.TokenCount = src.TokenCount
-	case config.SignalTypeStructure:
-		dst.MatchedStructureRules = cloneStrings(src.MatchedStructureRules)
-	case config.SignalTypeComplexity:
-		dst.MatchedComplexityRules = cloneStrings(src.MatchedComplexityRules)
-	case config.SignalTypeModality:
-		dst.MatchedModalityRules = cloneStrings(src.MatchedModalityRules)
-	case config.SignalTypeAuthz:
-		dst.MatchedAuthzRules = cloneStrings(src.MatchedAuthzRules)
-	case config.SignalTypeJailbreak:
-		dst.MatchedJailbreakRules = cloneStrings(src.MatchedJailbreakRules)
-		dst.JailbreakDetected = src.JailbreakDetected
-		dst.JailbreakType = src.JailbreakType
-		dst.JailbreakConfidence = src.JailbreakConfidence
-	case config.SignalTypePII:
-		dst.MatchedPIIRules = cloneStrings(src.MatchedPIIRules)
-		dst.PIIDetected = src.PIIDetected
-		dst.PIIEntities = cloneStrings(src.PIIEntities)
-	}
-
+	applySignalFamilyMatches(dst, src, family)
 	copySignalMetric(dst, src, family)
 	copySignalConfidenceFamily(dst, src, family)
 	copySignalValueFamily(dst, src, family)
+}
+
+func applySignalFamilyMatches(dst *SignalResults, src *SignalResults, family string) {
+	if handler, ok := signalFamilyMergeHandlers()[family]; ok {
+		handler(dst, src)
+	}
+}
+
+func signalFamilyMergeHandlers() map[string]func(dst *SignalResults, src *SignalResults) {
+	return map[string]func(dst *SignalResults, src *SignalResults){
+		config.SignalTypeKeyword: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedKeywordRules = cloneStrings(src.MatchedKeywordRules)
+			dst.MatchedKeywords = cloneStrings(src.MatchedKeywords)
+		},
+		config.SignalTypeEmbedding: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedEmbeddingRules = cloneStrings(src.MatchedEmbeddingRules)
+		},
+		config.SignalTypeDomain: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedDomainRules = cloneStrings(src.MatchedDomainRules)
+		},
+		config.SignalTypeFactCheck: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedFactCheckRules = cloneStrings(src.MatchedFactCheckRules)
+		},
+		config.SignalTypeUserFeedback: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedUserFeedbackRules = cloneStrings(src.MatchedUserFeedbackRules)
+		},
+		config.SignalTypePreference: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedPreferenceRules = cloneStrings(src.MatchedPreferenceRules)
+		},
+		config.SignalTypeLanguage: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedLanguageRules = cloneStrings(src.MatchedLanguageRules)
+		},
+		config.SignalTypeContext: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedContextRules = cloneStrings(src.MatchedContextRules)
+			dst.TokenCount = src.TokenCount
+		},
+		config.SignalTypeStructure: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedStructureRules = cloneStrings(src.MatchedStructureRules)
+		},
+		config.SignalTypeComplexity: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedComplexityRules = cloneStrings(src.MatchedComplexityRules)
+		},
+		config.SignalTypeModality: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedModalityRules = cloneStrings(src.MatchedModalityRules)
+		},
+		config.SignalTypeAuthz: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedAuthzRules = cloneStrings(src.MatchedAuthzRules)
+		},
+		config.SignalTypeJailbreak: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedJailbreakRules = cloneStrings(src.MatchedJailbreakRules)
+			dst.JailbreakDetected = src.JailbreakDetected
+			dst.JailbreakType = src.JailbreakType
+			dst.JailbreakConfidence = src.JailbreakConfidence
+		},
+		config.SignalTypePII: func(dst *SignalResults, src *SignalResults) {
+			dst.MatchedPIIRules = cloneStrings(src.MatchedPIIRules)
+			dst.PIIDetected = src.PIIDetected
+			dst.PIIEntities = cloneStrings(src.PIIEntities)
+		},
+	}
 }
 
 func copySignalMetric(dst *SignalResults, src *SignalResults, family string) {
 	if dst == nil || src == nil || dst.Metrics == nil || src.Metrics == nil {
 		return
 	}
+	if handler, ok := signalMetricCopyHandlers()[family]; ok {
+		handler(dst, src)
+	}
+}
 
-	switch family {
-	case config.SignalTypeKeyword:
-		dst.Metrics.Keyword = src.Metrics.Keyword
-	case config.SignalTypeEmbedding:
-		dst.Metrics.Embedding = src.Metrics.Embedding
-	case config.SignalTypeDomain:
-		dst.Metrics.Domain = src.Metrics.Domain
-	case config.SignalTypeFactCheck:
-		dst.Metrics.FactCheck = src.Metrics.FactCheck
-	case config.SignalTypeUserFeedback:
-		dst.Metrics.UserFeedback = src.Metrics.UserFeedback
-	case config.SignalTypePreference:
-		dst.Metrics.Preference = src.Metrics.Preference
-	case config.SignalTypeLanguage:
-		dst.Metrics.Language = src.Metrics.Language
-	case config.SignalTypeContext:
-		dst.Metrics.Context = src.Metrics.Context
-	case config.SignalTypeStructure:
-		dst.Metrics.Structure = src.Metrics.Structure
-	case config.SignalTypeComplexity:
-		dst.Metrics.Complexity = src.Metrics.Complexity
-	case config.SignalTypeModality:
-		dst.Metrics.Modality = src.Metrics.Modality
-	case config.SignalTypeAuthz:
-		dst.Metrics.Authz = src.Metrics.Authz
-	case config.SignalTypeJailbreak:
-		dst.Metrics.Jailbreak = src.Metrics.Jailbreak
-	case config.SignalTypePII:
-		dst.Metrics.PII = src.Metrics.PII
+func signalMetricCopyHandlers() map[string]func(dst *SignalResults, src *SignalResults) {
+	return map[string]func(dst *SignalResults, src *SignalResults){
+		config.SignalTypeKeyword:      func(dst *SignalResults, src *SignalResults) { dst.Metrics.Keyword = src.Metrics.Keyword },
+		config.SignalTypeEmbedding:    func(dst *SignalResults, src *SignalResults) { dst.Metrics.Embedding = src.Metrics.Embedding },
+		config.SignalTypeDomain:       func(dst *SignalResults, src *SignalResults) { dst.Metrics.Domain = src.Metrics.Domain },
+		config.SignalTypeFactCheck:    func(dst *SignalResults, src *SignalResults) { dst.Metrics.FactCheck = src.Metrics.FactCheck },
+		config.SignalTypeUserFeedback: func(dst *SignalResults, src *SignalResults) { dst.Metrics.UserFeedback = src.Metrics.UserFeedback },
+		config.SignalTypePreference:   func(dst *SignalResults, src *SignalResults) { dst.Metrics.Preference = src.Metrics.Preference },
+		config.SignalTypeLanguage:     func(dst *SignalResults, src *SignalResults) { dst.Metrics.Language = src.Metrics.Language },
+		config.SignalTypeContext:      func(dst *SignalResults, src *SignalResults) { dst.Metrics.Context = src.Metrics.Context },
+		config.SignalTypeStructure:    func(dst *SignalResults, src *SignalResults) { dst.Metrics.Structure = src.Metrics.Structure },
+		config.SignalTypeComplexity:   func(dst *SignalResults, src *SignalResults) { dst.Metrics.Complexity = src.Metrics.Complexity },
+		config.SignalTypeModality:     func(dst *SignalResults, src *SignalResults) { dst.Metrics.Modality = src.Metrics.Modality },
+		config.SignalTypeAuthz:        func(dst *SignalResults, src *SignalResults) { dst.Metrics.Authz = src.Metrics.Authz },
+		config.SignalTypeJailbreak:    func(dst *SignalResults, src *SignalResults) { dst.Metrics.Jailbreak = src.Metrics.Jailbreak },
+		config.SignalTypePII:          func(dst *SignalResults, src *SignalResults) { dst.Metrics.PII = src.Metrics.PII },
 	}
 }
 
@@ -257,18 +270,7 @@ func copySignalConfidenceFamily(dst *SignalResults, src *SignalResults, family s
 	if dst.SignalConfidences == nil {
 		dst.SignalConfidences = make(map[string]float64)
 	}
-
-	prefix := strings.ToLower(strings.TrimSpace(family)) + ":"
-	for key := range dst.SignalConfidences {
-		if strings.HasPrefix(strings.ToLower(key), prefix) {
-			delete(dst.SignalConfidences, key)
-		}
-	}
-	for key, value := range src.SignalConfidences {
-		if strings.HasPrefix(strings.ToLower(key), prefix) {
-			dst.SignalConfidences[key] = value
-		}
-	}
+	copySignalFamilyMap(dst.SignalConfidences, src.SignalConfidences, family)
 }
 
 func copySignalValueFamily(dst *SignalResults, src *SignalResults, family string) {
@@ -278,16 +280,22 @@ func copySignalValueFamily(dst *SignalResults, src *SignalResults, family string
 	if dst.SignalValues == nil {
 		dst.SignalValues = make(map[string]float64)
 	}
+	copySignalFamilyMap(dst.SignalValues, src.SignalValues, family)
+}
 
+func copySignalFamilyMap(dst map[string]float64, src map[string]float64, family string) {
+	if dst == nil {
+		return
+	}
 	prefix := strings.ToLower(strings.TrimSpace(family)) + ":"
-	for key := range dst.SignalValues {
+	for key := range dst {
 		if strings.HasPrefix(strings.ToLower(key), prefix) {
-			delete(dst.SignalValues, key)
+			delete(dst, key)
 		}
 	}
-	for key, value := range src.SignalValues {
+	for key, value := range src {
 		if strings.HasPrefix(strings.ToLower(key), prefix) {
-			dst.SignalValues[key] = value
+			dst[key] = value
 		}
 	}
 }
