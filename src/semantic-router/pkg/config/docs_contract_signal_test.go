@@ -18,7 +18,7 @@ var signalTutorialBuckets = map[string]string{
 	"jailbreak":     "learned",
 	"keyword":       "heuristic",
 	"language":      "heuristic",
-	"modality":      "heuristic",
+	"modality":      "learned",
 	"structure":     "heuristic",
 	"pii":           "learned",
 	"preference":    "learned",

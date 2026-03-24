@@ -16,6 +16,13 @@ Use it when you need one of these behaviors:
 - combine several weak signals into one continuous routing score
 - centralize threshold policy once and reuse the named result across many decisions
 
+## Key Advantages
+
+- Separates signal coordination from decision logic, keeping both layers readable.
+- Enables one weighted or threshold policy to be reused by many decisions.
+- Provides named routing bands (`balance_simple`, `verification_required`, etc.) instead of scattered numeric comparisons.
+- Supports explicit winner selection across competing domain or embedding lanes.
+
 ## What Problem Does It Solve?
 
 Signals are intentionally narrow. A keyword rule, embedding rule, domain classifier, or context detector tells the router one local fact about the request. Decisions are intentionally boolean. They combine those facts into route selection rules.
@@ -169,6 +176,16 @@ PROJECTION mapping request_band {
   ]
 }
 ```
+
+## Configuration
+
+The full projection contract is configured under `routing.projections` with three subsections:
+
+- `partitions`: coordinate competing domain or embedding matches into one winner
+- `scores`: aggregate matched signal evidence into a continuous numeric value
+- `mappings`: turn a score into named routing bands that decisions reference with `type: projection`
+
+See the [Canonical Shape](#canonical-shape) section above for a complete YAML and DSL example, and the individual sub-tutorials for field-level reference.
 
 ## When to Use
 

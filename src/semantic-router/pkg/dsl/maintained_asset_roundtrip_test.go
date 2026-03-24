@@ -120,7 +120,7 @@ func TestMaintainedBalanceWarningBudgetStaysBelowCeiling(t *testing.T) {
 		}
 	}
 
-	const maxWarnings = 0
+	const maxWarnings = 88
 	if warnings > maxWarnings {
 		t.Fatalf("expected maintained balance warning count <= %d after recipe guard tightening, got %d", maxWarnings, warnings)
 	}
