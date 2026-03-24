@@ -239,13 +239,16 @@ func signalConfidence(confidences map[string]float64, signalType string, name st
 	return 1.0
 }
 
-// evalAND returns true only when every child matches; confidence is the average.
+// evalAND returns true only when every child matches.
+// An empty conjunction acts as a catch-all/default route with zero confidence,
+// so it can serve as a fallback without outranking signal-backed decisions when
+// confidence-based selection is enabled.
 func (e *DecisionEngine) evalAND(
 	children []config.RuleNode,
 	signals *SignalMatches,
 ) (matched bool, confidence float64, matchedRules []string) {
 	if len(children) == 0 {
-		return false, 0, nil
+		return true, 0, nil
 	}
 	totalConf := 0.0
 	for _, child := range children {
