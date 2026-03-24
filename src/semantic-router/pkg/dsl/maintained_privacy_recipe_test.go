@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -183,7 +182,7 @@ func assertMaintainedPrivacyProviders(t *testing.T, cfg *config.RouterConfig) {
 	}
 	slices.Sort(endpointNames)
 	wantNames := []string{
-		"cloud/frontier-reasoning_openai-frontier",
+		"cloud/frontier-reasoning_vllm_primary",
 		"local/private-qwen_local-vllm",
 	}
 	slices.Sort(wantNames)
@@ -199,16 +198,15 @@ func assertMaintainedPrivacyProviders(t *testing.T, cfg *config.RouterConfig) {
 		t.Fatalf("expected local endpoint to avoid provider profile, got %q", localEndpoint.ProviderProfileName)
 	}
 
-	cloudEndpoint := mustFindEndpointByName(t, cfg.VLLMEndpoints, "cloud/frontier-reasoning_openai-frontier")
-	if cloudEndpoint.ProviderProfileName == "" {
-		t.Fatal("expected cloud endpoint to normalize through a provider profile")
+	cloudEndpoint := mustFindEndpointByName(t, cfg.VLLMEndpoints, "cloud/frontier-reasoning_vllm_primary")
+	if cloudEndpoint.Address != "vllm" || cloudEndpoint.Port != 8000 {
+		t.Fatalf("expected cloud endpoint vllm:8000, got %s:%d", cloudEndpoint.Address, cloudEndpoint.Port)
 	}
-	profile, ok := cfg.ProviderProfiles[cloudEndpoint.ProviderProfileName]
-	if !ok {
-		t.Fatalf("missing provider profile %q", cloudEndpoint.ProviderProfileName)
+	if cloudEndpoint.ProviderProfileName != "" {
+		t.Fatalf("expected cloud endpoint to use the shared mock backend directly, got provider profile %q", cloudEndpoint.ProviderProfileName)
 	}
-	if profile.Type != "openai" || !strings.Contains(profile.BaseURL, "api.openai.com/v1") {
-		t.Fatalf("expected openai provider profile, got %#v", profile)
+	if len(cfg.ProviderProfiles) != 0 {
+		t.Fatalf("expected privacy recipe mock backends to avoid provider profiles, got %d", len(cfg.ProviderProfiles))
 	}
 }
 
