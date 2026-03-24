@@ -119,7 +119,7 @@ func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext) ([]o
 	return tools.FilterAndRankTools(query, candidates, topK, advanced, resolveCategory(advanced, ctx)), nil
 }
 
-func resolveCandidatePoolSize(advanced *config.AdvancedFilteringConfig, topK int) int {
+func resolveCandidatePoolSize(advanced *config.AdvancedToolFilteringConfig, topK int) int {
 	var size int
 	switch {
 	case advanced.CandidatePoolSize != nil && *advanced.CandidatePoolSize > 0:
@@ -135,7 +135,7 @@ func resolveCandidatePoolSize(advanced *config.AdvancedFilteringConfig, topK int
 	return size
 }
 
-func resolveCategory(advanced *config.AdvancedFilteringConfig, ctx *RequestContext) string {
+func resolveCategory(advanced *config.AdvancedToolFilteringConfig, ctx *RequestContext) string {
 	cat := ctx.VSRSelectedCategory
 	if advanced.UseCategoryFilter == nil || !*advanced.UseCategoryFilter || cat == "" {
 		return cat
