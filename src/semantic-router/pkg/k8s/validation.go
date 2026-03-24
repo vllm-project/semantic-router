@@ -28,6 +28,7 @@ type crdValidationContext struct {
 	keywords   map[string]struct{}
 	embeddings map[string]struct{}
 	domains    map[string]struct{}
+	structure  map[string]struct{}
 }
 
 func validatePoolRoute(
@@ -67,12 +68,19 @@ func buildCRDValidationContext(
 	if err != nil {
 		return nil, err
 	}
+	structures, err := collectUniqueNames(route.Spec.Signals.Structure, "structure signal", func(signal v1alpha1.StructureSignal) string {
+		return signal.Name
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	return &crdValidationContext{
 		models:     buildValidationModelMap(pool.Spec.Models),
 		keywords:   keywords,
 		embeddings: embeddings,
 		domains:    domains,
+		structure:  structures,
 	}, nil
 }
 
@@ -135,6 +143,8 @@ func validateSignalReference(
 		known = ctx.embeddings
 	case "domain":
 		known = ctx.domains
+	case "structure":
+		known = ctx.structure
 	default:
 		return nil
 	}

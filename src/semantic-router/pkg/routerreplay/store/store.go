@@ -16,6 +16,7 @@ type Signal struct {
 	Preference   []string `json:"preference,omitempty"`
 	Language     []string `json:"language,omitempty"`
 	Context      []string `json:"context,omitempty"`
+	Structure    []string `json:"structure,omitempty"`
 	Complexity   []string `json:"complexity,omitempty"`
 }
 

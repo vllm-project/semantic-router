@@ -15,24 +15,12 @@ type Signals struct {
 	PreferenceRules   []PreferenceRule   `yaml:"preference_rules,omitempty"`
 	LanguageRules     []LanguageRule     `yaml:"language_rules,omitempty"`
 	ContextRules      []ContextRule      `yaml:"context_rules,omitempty"`
+	StructureRules    []StructureRule    `yaml:"structure_rules,omitempty"`
 	ComplexityRules   []ComplexityRule   `yaml:"complexity_rules,omitempty"`
 	ModalityRules     []ModalityRule     `yaml:"modality_rules,omitempty"`
 	RoleBindings      []RoleBinding      `yaml:"role_bindings,omitempty"`
 	JailbreakRules    []JailbreakRule    `yaml:"jailbreak,omitempty"`
 	PIIRules          []PIIRule          `yaml:"pii,omitempty"`
-	SignalGroups      []SignalGroup      `yaml:"signal_groups,omitempty"`
-}
-
-// SignalGroup declares a set of signals that form a mutually exclusive partition.
-// When Semantics is "softmax_exclusive", the runtime applies Voronoi normalization
-// (temperature-scaled softmax over all member similarity scores) so that at most
-// one member fires per query — eliminating co-firing without model retraining.
-type SignalGroup struct {
-	Name        string   `yaml:"name"`
-	Semantics   string   `yaml:"semantics"`
-	Temperature float64  `yaml:"temperature,omitempty"`
-	Members     []string `yaml:"members"`
-	Default     string   `yaml:"default,omitempty"`
 }
 
 type KeywordRule struct {
@@ -137,6 +125,33 @@ type ContextRule struct {
 	MinTokens   TokenCount `yaml:"min_tokens"`
 	MaxTokens   TokenCount `yaml:"max_tokens"`
 	Description string     `yaml:"description,omitempty"`
+}
+
+type StructureRule struct {
+	Name        string            `yaml:"name"`
+	Description string            `yaml:"description,omitempty"`
+	Feature     StructureFeature  `yaml:"feature"`
+	Predicate   *NumericPredicate `yaml:"predicate,omitempty"`
+}
+
+type StructureFeature struct {
+	Type   string          `yaml:"type"`
+	Source StructureSource `yaml:"source"`
+}
+
+type StructureSource struct {
+	Type          string     `yaml:"type"`
+	Pattern       string     `yaml:"pattern,omitempty"`
+	Keywords      []string   `yaml:"keywords,omitempty"`
+	CaseSensitive bool       `yaml:"case_sensitive,omitempty"`
+	Sequences     [][]string `yaml:"sequences,omitempty"`
+}
+
+type NumericPredicate struct {
+	GT  *float64 `yaml:"gt,omitempty"`
+	GTE *float64 `yaml:"gte,omitempty"`
+	LT  *float64 `yaml:"lt,omitempty"`
+	LTE *float64 `yaml:"lte,omitempty"`
 }
 
 type Subject struct {

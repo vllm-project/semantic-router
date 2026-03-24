@@ -8,7 +8,6 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -166,28 +165,6 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 	}
 
 	return nil
-}
-
-// extractAssistantContentFromResponse extracts the assistant's content from the response
-func extractAssistantContentFromResponse(responseBody []byte) string {
-	// Parse response using OpenAI SDK types
-	var completion openai.ChatCompletion
-	if err := json.Unmarshal(responseBody, &completion); err != nil {
-		logging.Debugf("Failed to parse response for hallucination detection: %v", err)
-		return ""
-	}
-
-	// Extract content from the first choice (most common case)
-	if len(completion.Choices) == 0 {
-		return ""
-	}
-
-	message := completion.Choices[0].Message
-	if message.Content != "" {
-		return message.Content
-	}
-
-	return ""
 }
 
 // isNLIEnabledForDecision checks if NLI is enabled for the given decision's hallucination plugin

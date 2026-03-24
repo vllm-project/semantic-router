@@ -13,6 +13,8 @@ interface ResultCardProps {
 export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
   if (!result) return null
 
+  const matchedSignals = result.matchedSignals.filter(signal => signal.matched)
+
   const getSignalColor = (type: SignalType): string => {
     return SIGNAL_COLORS[type]?.background || '#607D8B'
   }
@@ -20,6 +22,14 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
   const getSignalIcon = (type: SignalType): string => {
     return SIGNAL_ICONS[type] || '❓'
   }
+
+  const formatValue = (value: number): string => {
+    if (Number.isInteger(value)) return `${value}`
+    if (Math.abs(value) >= 1) return value.toFixed(2)
+    return value.toFixed(3)
+  }
+
+  const formatScore = (score: number): string => `${Math.round(score * 100)}%`
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -59,18 +69,36 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
           </div>
 
           {/* Matched Signals */}
-          {result.matchedSignals.filter(s => s.matched).length > 0 && (
+          {matchedSignals.length > 0 && (
             <div className={styles.section}>
               <span className={styles.sectionTitle}>Signals:</span>
-              <div className={styles.signalTags}>
-                {result.matchedSignals.filter(s => s.matched).map(signal => (
-                  <span
+              <div className={styles.signalList}>
+                {matchedSignals.map(signal => (
+                  <div
                     key={`${signal.type}-${signal.name}`}
-                    className={styles.signalTag}
-                    style={{ background: getSignalColor(signal.type) }}
+                    className={styles.signalCard}
                   >
-                    {getSignalIcon(signal.type)} {signal.name}
-                  </span>
+                    <div className={styles.signalCardHeader}>
+                      <span
+                        className={styles.signalTag}
+                        style={{ background: getSignalColor(signal.type) }}
+                      >
+                        {getSignalIcon(signal.type)} {signal.name}
+                      </span>
+                      <span className={styles.signalType}>{signal.type}</span>
+                    </div>
+                    <div className={styles.signalMeta}>
+                      {signal.value !== undefined && (
+                        <span className={styles.signalMetric}>Value {formatValue(signal.value)}</span>
+                      )}
+                      {(signal.score ?? signal.confidence) !== undefined && (
+                        <span className={styles.signalMetric}>
+                          Score {formatScore(signal.score ?? signal.confidence ?? 0)}
+                        </span>
+                      )}
+                    </div>
+                    {signal.reason && <div className={styles.signalReason}>{signal.reason}</div>}
+                  </div>
                 ))}
               </div>
             </div>
@@ -87,4 +115,3 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
     </div>
   )
 }
-

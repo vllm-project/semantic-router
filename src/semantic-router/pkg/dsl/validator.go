@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	"gopkg.in/yaml.v2"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -179,6 +181,14 @@ func (v *Validator) buildSymbolTable() {
 		}
 		v.signalNames[s.SignalType][s.Name] = true
 	}
+	if v.signalNames[config.SignalTypeProjection] == nil {
+		v.signalNames[config.SignalTypeProjection] = make(map[string]bool)
+	}
+	for _, mapping := range v.prog.ProjectionMappings {
+		for _, output := range mapping.Outputs {
+			v.signalNames[config.SignalTypeProjection][output.Name] = true
+		}
+	}
 
 	for _, m := range v.prog.Models {
 		v.modelNames[m.Name] = true
@@ -332,17 +342,26 @@ func (v *Validator) walkBoolExpr(expr BoolExpr) {
 	}
 }
 
+func signalReferenceDefined(names map[string]bool, signalType, name string) bool {
+	if len(names) == 0 {
+		return false
+	}
+	if names[name] {
+		return true
+	}
+	if signalType == config.SignalTypeComplexity {
+		// Complexity references may target derived levels like "math_task:hard".
+		if idx := strings.Index(name, ":"); idx > 0 {
+			_, exists := names[name[:idx]]
+			return exists
+		}
+	}
+	return false
+}
+
 func (v *Validator) isSignalDefined(signalType, name string) bool {
 	if names, ok := v.signalNames[signalType]; ok {
-		if names[name] {
-			return true
-		}
-		// Support sub-level references like complexity("math_problem:hard")
-		// where "math_problem" is the defined signal and "hard" is a sub-level.
-		if idx := strings.Index(name, ":"); idx > 0 {
-			baseName := name[:idx]
-			return names[baseName]
-		}
+		return signalReferenceDefined(names, signalType, name)
 	}
 	return false
 }
@@ -429,6 +448,37 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 				nil,
 			)
 		}
+	case "domain":
+		v.checkDomainSignalConstraints(s, context)
+	case "structure":
+		v.checkStructureSignalConstraints(s)
+	}
+}
+
+func (v *Validator) checkStructureSignalConstraints(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		v.addDiag(DiagConstraint, s.Pos,
+			fmt.Sprintf("failed to encode structure signal %q: %v", s.Name, err),
+			nil,
+		)
+		return
+	}
+
+	var rule config.StructureRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		v.addDiag(DiagConstraint, s.Pos,
+			fmt.Sprintf("failed to decode structure signal %q: %v", s.Name, err),
+			nil,
+		)
+		return
+	}
+	rule.Name = s.Name
+	if err := config.ValidateStructureRuleContract(rule); err != nil {
+		v.addDiag(DiagConstraint, s.Pos, err.Error(), nil)
 	}
 }
 
@@ -469,6 +519,8 @@ func (v *Validator) checkAlgorithmConstraints(algo *AlgoSpec, parentContext stri
 }
 
 // checkFieldConstraints recursively checks all numeric field values against the constraint rules.
+//
+//nolint:gocognit,cyclop // Recursive constraint walking stays centralized for DSL numeric validation.
 func (v *Validator) checkFieldConstraints(fields map[string]Value, pos Position, context string) {
 	for k, val := range fields {
 		for _, rule := range constraintRules {

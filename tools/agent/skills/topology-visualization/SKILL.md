@@ -15,7 +15,7 @@ description: Modifies topology graph APIs, data parsers, layout algorithms, and 
 1. Read change surfaces doc to understand topology visualization dependencies
 2. Modify topology graph APIs, parsers, layout, or rendering components
 3. Run `make dashboard-check` to validate UI consistency
-4. Verify topology renderers and data sources agree on the same graph semantics
+4. Verify topology backend conversion, frontend parser or types or constants, and highlighted-path semantics agree on the same graph contract
 
 ## Must Read
 
@@ -28,3 +28,4 @@ description: Modifies topology graph APIs, data parsers, layout algorithms, and 
 ## Acceptance
 
 - Topology renderers and data sources agree on the same graph semantics
+- New signal families appear consistently in topology response conversion, parser output, node metadata, and highlighted paths

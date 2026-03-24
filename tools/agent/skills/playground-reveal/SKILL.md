@@ -15,7 +15,7 @@ description: Modifies playground chat rendering, reveal overlays, and user-visib
 1. Read change surfaces doc to understand playground reveal dependencies
 2. Modify playground rendering, reveal overlays, or route metadata display
 3. Run `make dashboard-check` to validate UI consistency
-4. Verify reveal surfaces stay aligned with emitted metadata and user-visible expectations
+4. Verify emitted metadata, `chatRequestSupport`, `HeaderDisplay`, and `HeaderReveal` stay aligned on the same user-visible keys
 
 ## Must Read
 
@@ -28,3 +28,4 @@ description: Modifies playground chat rendering, reveal overlays, and user-visib
 ## Acceptance
 
 - Playground reveal surfaces stay aligned with emitted metadata and user-visible expectations
+- Newly exposed signal metadata appears in the allowlist and both reveal or display components together

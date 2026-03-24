@@ -67,7 +67,7 @@ func (s *ClassificationAPIServer) updateRuntimeConfig(newCfg *config.RouterConfi
 	}
 	s.config = newCfg
 	if s.classificationSvc != nil {
-		s.classificationSvc.UpdateConfig(newCfg)
+		s.classificationSvc.RefreshRuntimeConfig(newCfg)
 		return
 	}
 	config.Replace(newCfg)
