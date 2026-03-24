@@ -29,6 +29,12 @@ type EnhancedHallucinationInfo struct {
 	Spans      []EnhancedHallucinationSpan `json:"spans"`
 }
 
+// ChatCompletionMessage is role plus plain-text content from a Chat Completions request.
+type ChatCompletionMessage struct {
+	Role    string
+	Content string
+}
+
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
 	Headers             map[string]string
@@ -125,6 +131,13 @@ type RequestContext struct {
 
 	// Response API context
 	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
+
+	// Chat Completions messages (parsed for memory and related flows)
+	ChatCompletionMessages []ChatCompletionMessage
+	// ChatCompletionRequestBody is the raw chat-completions JSON (dev: extract user from body).
+	ChatCompletionRequestBody []byte
+	// ChatCompletionUserID is populated in dev builds when parsing the chat-completions body.
+	ChatCompletionUserID string
 
 	// Router replay context
 	RouterReplayID           string                           // ID of the router replay session, if applicable

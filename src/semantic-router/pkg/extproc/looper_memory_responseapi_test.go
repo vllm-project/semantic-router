@@ -184,14 +184,14 @@ func TestExtractCurrentUserMessage_EmptyForChatCompletions(t *testing.T) {
 	assert.Empty(t, msg)
 }
 
-func TestExtractMemoryInfo_RejectsChatCompletions(t *testing.T) {
+func TestExtractMemoryInfo_RejectsEmptyRequest(t *testing.T) {
 	reqCtx := &RequestContext{
-		RequestID: "req-chat",
+		RequestID: "req-empty",
 	}
 
 	_, _, _, err := extractMemoryInfo(reqCtx)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "ConversationID required")
+	assert.Contains(t, err.Error(), "no conversation history available")
 }
 
 func TestExtractMemoryInfo_ResponseAPIWithUserID(t *testing.T) {

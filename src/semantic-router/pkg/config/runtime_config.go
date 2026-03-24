@@ -163,6 +163,8 @@ type SemanticCache struct {
 type MemoryConfig struct {
 	Enabled                    bool                       `yaml:"enabled,omitempty"`
 	AutoStore                  bool                       `yaml:"auto_store,omitempty"`
+	DisabledRoutes             []string                   `yaml:"disabled_routes,omitempty"`
+	DisabledModels             []string                   `yaml:"disabled_models,omitempty"`
 	Milvus                     MemoryMilvusConfig         `yaml:"milvus,omitempty"`
 	RedisCache                 *MemoryRedisCacheConfig    `yaml:"redis_cache,omitempty"`
 	EmbeddingModel             string                     `yaml:"embedding_model,omitempty"`

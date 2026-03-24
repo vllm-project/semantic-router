@@ -3,12 +3,27 @@ package headers
 // Package headers provides constants for all custom HTTP headers used in the semantic router.
 // All custom headers follow the "x-" prefix convention for non-standard HTTP headers.
 
+// HTTP/2 Pseudo-Headers
+// Standard HTTP/2 headers defined in RFC 7540, prefixed with ":".
+const (
+	// PseudoHeaderPath is the HTTP/2 :path pseudo-header containing the request path and query.
+	// Example: "/v1/chat/completions?stream=true"
+	PseudoHeaderPath = ":path"
+)
+
 // Request Headers
 // These headers are used in incoming requests to the semantic router.
 const (
 	// RequestID is the unique identifier for tracking a request through the system.
 	// This header is case-insensitive when read from incoming requests.
 	RequestID = "x-request-id"
+
+	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.
+	// This prevents "silent double injection" when applications use SDK-managed memory
+	// systems like Mem0, LangMem, LangGraph, or OpenClaw.
+	// Value: "true" to disable router memory, any other value or absence enables it.
+	// Example use case: App with Mem0 sends this header to prevent duplicate memory injection.
+	DisableRouterMemory = "x-disable-router-memory"
 
 	// GatewayDestinationEndpoint specifies the backend endpoint address selected by the router.
 	// This header is set by the router to direct Envoy to the appropriate upstream service.
