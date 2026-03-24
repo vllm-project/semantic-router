@@ -106,13 +106,15 @@ def test_serve_uses_algorithm_translated_config(monkeypatch, tmp_path: Path):
     )
     captured: dict[str, object] = {}
 
+    class _StubBackend:
+        def deploy(self, **kwargs):
+            captured.update(kwargs)
+
     monkeypatch.setattr(
         runtime_commands, "ensure_bootstrap_workspace", lambda _: bootstrap
     )
     monkeypatch.setattr(
-        runtime_commands,
-        "start_vllm_sr",
-        lambda **kwargs: captured.update(kwargs),
+        runtime_commands, "_build_backend", lambda *a, **kw: _StubBackend()
     )
 
     runner = CliRunner()
@@ -130,9 +132,9 @@ def test_serve_uses_algorithm_translated_config(monkeypatch, tmp_path: Path):
     )
 
     assert result.exit_code == 0
-    with Path(captured["runtime_config_file"]).open() as handle:
+    effective_config = Path(captured["config_file"])
+    with effective_config.open() as handle:
         translated = yaml.safe_load(handle)
-    assert Path(captured["config_file"]) == config_path
     assert (
         captured["env_vars"]["VLLM_SR_RUNTIME_CONFIG_PATH"]
         == "/app/.vllm-sr/runtime-config.yaml"
