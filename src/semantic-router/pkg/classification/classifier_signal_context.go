@@ -741,12 +741,26 @@ func (c *Classifier) evaluateCategoryKBSignal(results *SignalResults, mu *sync.M
 	results.CategoryKBBestSim = classifyResult.BestSimilarity
 	results.CategoryKBContrastive = classifyResult.ContrastiveScore
 
+	// Add best-category and best-tier synthetic entries so WHEN clauses can
+	// match on the dominant classification rather than any-above-threshold.
+	if classifyResult.BestCategory != "" {
+		results.MatchedCategoryKBRules = append(results.MatchedCategoryKBRules,
+			"__best__:"+classifyResult.BestCategory)
+	}
+	if classifyResult.BestTier != "" {
+		results.MatchedCategoryKBRules = append(results.MatchedCategoryKBRules,
+			"__tier__:"+classifyResult.BestTier)
+	}
+	// Also add __contrastive__ so projection match gates pass.
+	if classifyResult.ContrastiveScore != 0 {
+		results.MatchedCategoryKBRules = append(results.MatchedCategoryKBRules, "__contrastive__")
+	}
+
 	for cat, conf := range classifyResult.Confidences {
 		key := config.SignalTypeCategoryKB + ":" + cat
 		results.SignalConfidences[key] = conf
 	}
 
-	// Store the contrastive score under a special key for projection scoring
 	results.SignalConfidences[config.SignalTypeCategoryKB+":__contrastive__"] = classifyResult.ContrastiveScore
 
 	for _, cat := range classifyResult.MatchedRules {

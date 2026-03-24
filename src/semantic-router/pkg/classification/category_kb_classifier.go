@@ -36,6 +36,7 @@ type categoryKBData struct {
 type CategoryKBClassifyResult struct {
 	BestCategory     string
 	BestSimilarity   float64
+	BestTier         string   // taxonomy tier of the best-matching category (e.g. "security_containment")
 	ContrastiveScore float64  // max(private) - max(public)
 	MatchedRules     []string // category names that exceeded the applicable threshold
 	Confidences      map[string]float64
@@ -304,13 +305,19 @@ func (c *CategoryKBClassifier) Classify(text string) (*CategoryKBClassifyResult,
 	}
 	contrastive := maxPrivate - maxPublic
 
+	bestTier := ""
+	if entry, ok := c.taxonomy.Categories[bestCat]; ok {
+		bestTier = entry.Tier
+	}
+
 	elapsed := time.Since(startTime)
-	logging.Infof("[CategoryKB] Classified in %v: best=%s (%.3f), contrastive=%.3f, matched=%d categories",
-		elapsed, bestCat, bestSim, contrastive, len(matchedRules))
+	logging.Infof("[CategoryKB] Classified in %v: best=%s (%.3f) tier=%s, contrastive=%.3f, matched=%d categories",
+		elapsed, bestCat, bestSim, bestTier, contrastive, len(matchedRules))
 
 	return &CategoryKBClassifyResult{
 		BestCategory:     bestCat,
 		BestSimilarity:   bestSim,
+		BestTier:         bestTier,
 		ContrastiveScore: contrastive,
 		MatchedRules:     matchedRules,
 		Confidences:      confidences,

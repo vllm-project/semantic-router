@@ -56,9 +56,11 @@ routing:
       priority: 300
       rules:
         conditions:
+          - name: __tier__:security_containment
+            type: category_kb
           - name: policy_security_local_only
             type: projection
-        operator: AND
+        operator: OR
       tier: 1
       tool_scope: none
     - description: Route PII, private code, and internal documents to the local model with local-only tool access.
@@ -76,16 +78,8 @@ routing:
       priority: 250
       rules:
         conditions:
-          - conditions:
-              - name: policy_privacy_local_only
-                type: projection
-              - name: privacy_override_active
-                type: projection
-            operator: OR
-          - conditions:
-              - name: policy_security_local_only
-                type: projection
-            operator: NOT
+          - name: __tier__:privacy_policy
+            type: category_kb
         operator: AND
       tier: 2
       tool_scope: local_only
@@ -104,16 +98,8 @@ routing:
       priority: 200
       rules:
         conditions:
-          - name: policy_frontier_reasoning
-            type: projection
-          - name: policy_privacy_cloud_allowed
-            type: projection
-          - name: policy_security_standard
-            type: projection
-          - conditions:
-              - name: privacy_override_active
-                type: projection
-            operator: NOT
+          - name: __tier__:frontier_reasoning
+            type: category_kb
         operator: AND
       tier: 3
       tool_scope: full
@@ -132,13 +118,17 @@ routing:
       priority: 100
       rules:
         conditions:
-          - name: policy_local_reasoning
-            type: projection
-          - name: policy_privacy_cloud_allowed
-            type: projection
-          - name: policy_security_standard
-            type: projection
-        operator: AND
+          - name: __tier__:local_standard
+            type: category_kb
+          - conditions:
+              - name: policy_local_reasoning
+                type: projection
+              - name: policy_privacy_cloud_allowed
+                type: projection
+              - name: policy_security_standard
+                type: projection
+            operator: AND
+        operator: OR
       tier: 4
       tool_scope: standard
   modelCards:

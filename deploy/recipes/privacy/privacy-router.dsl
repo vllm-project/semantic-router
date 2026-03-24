@@ -246,7 +246,7 @@ ROUTE local_security_containment (description = "Keep suspicious or jailbreak-li
   PRIORITY 300
   TIER 1
   TOOL_SCOPE "none"
-  WHEN projection("policy_security_local_only")
+  WHEN category_kb("__tier__:security_containment") OR projection("policy_security_local_only")
   MODEL "local/private-qwen" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -261,7 +261,7 @@ ROUTE local_privacy_policy (description = "Route PII, private code, and internal
   PRIORITY 250
   TIER 2
   TOOL_SCOPE "local_only"
-  WHEN (projection("policy_privacy_local_only") OR projection("privacy_override_active")) AND NOT projection("policy_security_local_only")
+  WHEN category_kb("__tier__:privacy_policy")
   MODEL "local/private-qwen" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
     enabled: true
@@ -276,7 +276,7 @@ ROUTE cloud_frontier_reasoning (description = "Send only non-sensitive, non-susp
   PRIORITY 200
   TIER 3
   TOOL_SCOPE "full"
-  WHEN projection("policy_frontier_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND NOT projection("privacy_override_active")
+  WHEN category_kb("__tier__:frontier_reasoning")
   MODEL "cloud/frontier-reasoning" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -291,7 +291,7 @@ ROUTE local_standard (description = "Default local route for non-sensitive tasks
   PRIORITY 100
   TIER 4
   TOOL_SCOPE "standard"
-  WHEN projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard")
+  WHEN category_kb("__tier__:local_standard") OR (projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard"))
   MODEL "local/private-qwen" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
     enabled: true
