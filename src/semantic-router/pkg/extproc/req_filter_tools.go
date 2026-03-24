@@ -9,6 +9,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -32,6 +33,10 @@ func (r *OpenAIRouter) handleToolSelectionForRequest(openAIRequest *openai.ChatC
 
 // handleToolSelection handles automatic tool selection based on semantic similarity
 func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionNewParams, userContent string, nonUserMessages []string, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
+	if scopeResp := r.applyToolScope(openAIRequest, response, ctx); scopeResp != nil {
+		return scopeResp
+	}
+
 	// Check if tool_choice is set to "auto"
 	if openAIRequest.ToolChoice.OfAuto.Value == "auto" {
 		// Continue with tool selection logic
@@ -136,6 +141,64 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 	}
 
 	return r.updateRequestWithTools(openAIRequest, response, ctx)
+}
+
+// applyToolScope enforces per-decision tool scope restrictions before semantic
+// tool selection runs. Returns a non-nil error only when the scope has been
+// fully handled and the caller should return immediately.
+func (r *OpenAIRouter) applyToolScope(openAIRequest *openai.ChatCompletionNewParams, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
+	dec := ctx.VSRSelectedDecision
+	if dec == nil || dec.ToolScope == "" {
+		return nil
+	}
+
+	switch dec.ToolScope {
+	case config.ToolScopeNone:
+		logging.Infof("[ToolScope] Decision %q has tool_scope=none, stripping all tools", dec.Name)
+		openAIRequest.Tools = nil
+		return r.updateRequestWithTools(openAIRequest, response, ctx)
+
+	case config.ToolScopeLocalOnly, config.ToolScopeStandard:
+		if len(dec.AllowTools) > 0 || len(dec.BlockTools) > 0 {
+			openAIRequest.Tools = filterToolsByDecisionPolicy(openAIRequest.Tools, dec.AllowTools, dec.BlockTools)
+			logging.Infof("[ToolScope] Decision %q tool_scope=%s, filtered to %d tools via allow/block lists",
+				dec.Name, dec.ToolScope, len(openAIRequest.Tools))
+		}
+		return nil
+
+	case config.ToolScopeFull:
+		return nil
+	}
+
+	return nil
+}
+
+// filterToolsByDecisionPolicy applies per-decision allow/block lists to the
+// request tool set. If allowTools is non-empty, only tools whose function name
+// appears in the allow list are kept. Any tool whose name appears in blockTools
+// is removed regardless.
+func filterToolsByDecisionPolicy(tools []openai.ChatCompletionToolParam, allowTools, blockTools []string) []openai.ChatCompletionToolParam {
+	allowSet := make(map[string]bool, len(allowTools))
+	for _, t := range allowTools {
+		allowSet[t] = true
+	}
+	blockSet := make(map[string]bool, len(blockTools))
+	for _, t := range blockTools {
+		blockSet[t] = true
+	}
+
+	filtered := make([]openai.ChatCompletionToolParam, 0, len(tools))
+	for _, tool := range tools {
+		name := tool.Function.Name
+		if blockSet[name] {
+			continue
+		}
+		if len(allowSet) > 0 && !allowSet[name] {
+			continue
+		}
+		filtered = append(filtered, tool)
+	}
+	return filtered
 }
 
 // updateRequestWithTools updates the request body with the selected tools

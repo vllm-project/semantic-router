@@ -1,0 +1,32 @@
+{
+  "category": "internal_document",
+  "tier": "privacy_policy",
+  "grounding": {
+    "samsung_incident_2023": "Category 2: meeting notes/transcripts submitted for summarization",
+    "confaide_iclr2024": "Tier 4: meeting transcripts with private info (health, projects, maternity)",
+    "privaci_bench_acl2025": "GDPR Confidential Information, Compliance Documentation information flows",
+    "iso27001": "Annex A 5.12 — Confidential classification"
+  },
+  "exemplars": [
+    "Summarize these internal meeting notes from the engineering leadership sync",
+    "Extract action items from the internal team standup notes",
+    "Help me summarize the minutes from our board strategy meeting",
+    "Summarize this meeting transcript and identify the key decisions made",
+    "Generate action items from this internal all-hands meeting recording",
+    "Review the transcript from our product planning meeting for follow-ups",
+    "Review our internal compliance documentation for GDPR audit preparation",
+    "Summarize the confidential board memo about the acquisition strategy",
+    "Summarize this internal runbook for the team",
+    "Extract action items from this internal postmortem about the database outage",
+    "Review our internal RFC on the database migration from Postgres to CockroachDB",
+    "Analyze our internal architecture decision record for consistency",
+    "Draft an executive summary of our internal product roadmap document",
+    "Review the internal incident report from the production outage",
+    "Analyze the internal capacity planning document for Q3",
+    "Review our internal engineering standards document for compliance gaps",
+    "帮我总结这份内部设计文档",
+    "分析这份内部架构评审记录",
+    "总结上周工程团队会议的要点",
+    "审查我们内部的事故复盘报告"
+  ]
+}

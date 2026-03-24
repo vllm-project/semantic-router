@@ -42,6 +42,7 @@ type CanonicalSignals struct {
 	RoleBindings  []RoleBinding      `yaml:"role_bindings,omitempty"`
 	Jailbreak     []JailbreakRule    `yaml:"jailbreak,omitempty"`
 	PII           []PIIRule          `yaml:"pii,omitempty"`
+	CategoryKB    []CategoryKBRule   `yaml:"category_kb,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -245,6 +246,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		RoleBindings:      append([]RoleBinding(nil), signals.RoleBindings...),
 		JailbreakRules:    append([]JailbreakRule(nil), signals.Jailbreak...),
 		PIIRules:          append([]PIIRule(nil), signals.PII...),
+		CategoryKBRules:   append([]CategoryKBRule(nil), signals.CategoryKB...),
 	}
 
 	if len(result.Categories) == 0 {

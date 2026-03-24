@@ -52,6 +52,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeAuthz, c.Config.GetRoleBindings(), func(rb config.RoleBinding) string { return rb.Role })
 	collectSignalKeys(allSignals, config.SignalTypeJailbreak, c.Config.JailbreakRules, func(r config.JailbreakRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeCategoryKB, c.Config.CategoryKBRules, func(r config.CategoryKBRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true
@@ -85,6 +86,10 @@ type SignalResults struct {
 	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
 	MatchedJailbreakRules    []string // Matched jailbreak rule names (confidence >= threshold)
 	MatchedPIIRules          []string // Matched PII rule names (denied PII types detected)
+	MatchedCategoryKBRules   []string // Matched category KB rule names (category names exceeding threshold)
+	CategoryKBBestCategory   string   // Best-matching category from KB classification
+	CategoryKBBestSim        float64  // Similarity score of the best category
+	CategoryKBContrastive    float64  // Contrastive score: max(private) - max(public)
 	MatchedProjectionRules   []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores         map[string]float64
 
@@ -307,6 +312,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		AuthzRules:        signals.MatchedAuthzRules,
 		JailbreakRules:    signals.MatchedJailbreakRules,
 		PIIRules:          signals.MatchedPIIRules,
+		CategoryKBRules:   signals.MatchedCategoryKBRules,
 		ProjectionRules:   signals.MatchedProjectionRules,
 	})
 	if err != nil {

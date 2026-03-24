@@ -27,6 +27,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.addComplexityClassifier,
 		b.addContrastiveJailbreakClassifiers,
 		b.addAuthzClassifier,
+		b.addCategoryKBClassifier,
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
@@ -256,6 +257,25 @@ func (c *Classifier) initializeRequiredRuntimeClassifiers() error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (b *classifierOptionBuilder) addCategoryKBClassifier() error {
+	if len(b.cfg.CategoryKBRules) == 0 {
+		return nil
+	}
+	rule := b.cfg.CategoryKBRules[0]
+	modelType := strings.ToLower(strings.TrimSpace(b.cfg.EmbeddingConfig.ModelType))
+	if modelType == "" {
+		modelType = "qwen3"
+	}
+	classifier, err := NewCategoryKBClassifier(rule, modelType)
+	if err != nil {
+		logging.Warnf("[CategoryKB] Failed to create classifier: %v (category_kb signal disabled)", err)
+		return nil
+	}
+	b.options = append(b.options, withCategoryKBClassifier(classifier))
+	logging.Infof("[CategoryKB] Classifier initialized with %d categories", classifier.CategoryCount())
 	return nil
 }
 

@@ -158,6 +158,8 @@ func (c *Compiler) compileSignals() {
 			c.compileJailbreakSignal(s)
 		case "pii":
 			c.compilePIISignal(s)
+		case "category_kb":
+			c.compileCategoryKBSignal(s)
 		default:
 			c.addError(s.Pos, "unknown signal type %q", s.SignalType)
 		}
@@ -390,6 +392,23 @@ func (c *Compiler) compilePIISignal(s *SignalDecl) {
 	c.config.PIIRules = append(c.config.PIIRules, rule)
 }
 
+func (c *Compiler) compileCategoryKBSignal(s *SignalDecl) {
+	rule := config.CategoryKBRule{Name: s.Name}
+	if v, ok := getStringField(s.Fields, "kb_dir"); ok {
+		rule.KBDir = v
+	}
+	if v, ok := getStringField(s.Fields, "taxonomy_path"); ok {
+		rule.TaxonomyPath = v
+	}
+	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
+		rule.Threshold = v
+	}
+	if v, ok := getFloat32Field(s.Fields, "security_threshold"); ok {
+		rule.SecurityThreshold = v
+	}
+	c.config.CategoryKBRules = append(c.config.CategoryKBRules, rule)
+}
+
 //nolint:gocognit,nestif // Legacy schema decoding stays localized until the authz signal surface is extracted.
 func (c *Compiler) compileAuthzSignal(s *SignalDecl) {
 	rb := config.RoleBinding{Name: s.Name}
@@ -428,6 +447,7 @@ func (c *Compiler) compileRoutes() {
 			Description: r.Description,
 			Priority:    r.Priority,
 			Tier:        r.Tier,
+			ToolScope:   r.ToolScope,
 		}
 
 		// Compile WHEN expression → RuleNode tree.

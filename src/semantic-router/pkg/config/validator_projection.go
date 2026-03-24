@@ -208,7 +208,8 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		SignalTypeModality,
 		SignalTypeAuthz,
 		SignalTypeJailbreak,
-		SignalTypePII:
+		SignalTypePII,
+		SignalTypeCategoryKB:
 		return true
 	default:
 		return false
@@ -231,6 +232,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeAuthz:        collectRoleBindingNames(cfg.GetRoleBindings()),
 		SignalTypeJailbreak:    collectJailbreakRuleNames(cfg.JailbreakRules),
 		SignalTypePII:          collectPIIRuleNames(cfg.PIIRules),
+		SignalTypeCategoryKB:   collectCategoryKBRuleNames(cfg.CategoryKBRules),
 	}
 	return declared
 }
@@ -461,6 +463,17 @@ func collectPIIRuleNames(rules []PIIRule) map[string]struct{} {
 	names := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {
 		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
+func collectCategoryKBRuleNames(rules []CategoryKBRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules)+1)
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	if len(rules) > 0 {
+		names["__contrastive__"] = struct{}{}
 	}
 	return names
 }

@@ -148,6 +148,8 @@ func (c *Classifier) evalComposerLeaf(
 		return slices.Contains(signals.MatchedStructureRules, name)
 	case "modality":
 		return slices.Contains(signals.MatchedModalityRules, name)
+	case "category_kb":
+		return slices.Contains(signals.MatchedCategoryKBRules, name)
 	default:
 		logging.Warnf("Unknown composer condition type: %s", typ)
 		return false

@@ -239,6 +239,23 @@ func (d *decompiler) decompileSignals() {
 		d.write("}\n\n")
 	}
 
+	for _, ckb := range d.cfg.CategoryKBRules {
+		d.write("SIGNAL category_kb %s {\n", quoteName(ckb.Name))
+		if ckb.KBDir != "" {
+			d.write("  kb_dir: %q\n", ckb.KBDir)
+		}
+		if ckb.TaxonomyPath != "" {
+			d.write("  taxonomy_path: %q\n", ckb.TaxonomyPath)
+		}
+		if ckb.Threshold != 0 {
+			d.write("  threshold: %v\n", ckb.Threshold)
+		}
+		if ckb.SecurityThreshold != 0 {
+			d.write("  security_threshold: %v\n", ckb.SecurityThreshold)
+		}
+		d.write("}\n\n")
+	}
+
 	for _, partition := range d.cfg.Projections.Partitions {
 		d.write("PROJECTION partition %s {\n", quoteName(partition.Name))
 		if partition.Semantics != "" {
@@ -341,6 +358,9 @@ func (d *decompiler) decompileDecisions() {
 		d.write("  PRIORITY %d\n", dec.Priority)
 		if dec.Tier != 0 {
 			d.write("  TIER %d\n", dec.Tier)
+		}
+		if dec.ToolScope != "" {
+			d.write("  TOOL_SCOPE %q\n", dec.ToolScope)
 		}
 
 		// WHEN expression

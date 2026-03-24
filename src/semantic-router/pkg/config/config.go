@@ -36,6 +36,7 @@ const (
 	SignalTypeAuthz        = "authz"
 	SignalTypeJailbreak    = "jailbreak"
 	SignalTypePII          = "pii"
+	SignalTypeCategoryKB   = "category_kb"
 	SignalTypeProjection   = "projection"
 )
 

@@ -25,6 +25,7 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeAuthz:        func(results *SignalResults) []string { return results.MatchedAuthzRules },
 	config.SignalTypeJailbreak:    func(results *SignalResults) []string { return results.MatchedJailbreakRules },
 	config.SignalTypePII:          func(results *SignalResults) []string { return results.MatchedPIIRules },
+	config.SignalTypeCategoryKB:   func(results *SignalResults) []string { return results.MatchedCategoryKBRules },
 }
 
 func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {

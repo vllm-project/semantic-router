@@ -21,6 +21,7 @@ type Signals struct {
 	RoleBindings      []RoleBinding      `yaml:"role_bindings,omitempty"`
 	JailbreakRules    []JailbreakRule    `yaml:"jailbreak,omitempty"`
 	PIIRules          []PIIRule          `yaml:"pii,omitempty"`
+	CategoryKBRules   []CategoryKBRule   `yaml:"category_kb,omitempty"`
 }
 
 type KeywordRule struct {

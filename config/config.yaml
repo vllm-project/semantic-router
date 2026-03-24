@@ -372,6 +372,13 @@ routing:
           - EMAIL_ADDRESS
         description: Sensitive prompts where only low-risk identifiers may pass through.
 
+    category_kb:
+      - name: privacy_classifier
+        kb_dir: knowledge_bases/
+        taxonomy_path: knowledge_bases/taxonomy.json
+        threshold: 0.55
+        security_threshold: 0.7
+
   projections:
     partitions:
       - name: support_intents
@@ -428,6 +435,11 @@ routing:
       description: Static fallback for standard business traffic.
       priority: 200
       tier: 2
+      tool_scope: standard
+      allow_tools:
+        - search_web
+      block_tools:
+        - exec_cmd
       rules:
         operator: AND
         conditions:

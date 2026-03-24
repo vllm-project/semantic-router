@@ -1,0 +1,30 @@
+{
+  "category": "root_cause_analysis",
+  "tier": "frontier_reasoning",
+  "grounding": {
+    "note": "Deep first-principles reasoning tasks requiring extended chain-of-thought."
+  },
+  "exemplars": [
+    "From first principles, analyze the failure modes of the circuit breaker pattern in distributed systems and propose a redesign with formal correctness guarantees",
+    "Perform a root cause analysis of why distributed consensus algorithms like Raft fail under network partitions with asymmetric latency",
+    "Analyze why garbage collection pauses in JVM-based systems cause cascading failures in microservice architectures",
+    "Debug from first principles why consistent hashing causes hotspots under power-law request distributions",
+    "Analyze the theoretical limits of conflict-free replicated data types for achieving strong eventual consistency",
+    "Derive the theoretical throughput bounds for a write-ahead log under different fsync strategies",
+    "Analyze why TCP congestion control algorithms fail in data center networks and propose an alternative",
+    "Investigate why leader election algorithms exhibit pathological behavior under symmetric network partitions",
+    "Prove the correctness of a lock-free concurrent queue implementation using linearizability arguments",
+    "Why can apparent superlinear speedups appear in parallel graph algorithms despite Amdahl's law? Formalize measurement pitfalls",
+    "Root-cause sketch: intermittent 503s when p99 queue depth spikes — separate client retries from server saturation using only latency histograms",
+    "Derive conditions under which MVCC snapshot isolation allows write skew in a textbook ticket-selling example",
+    "Explain when optimistic concurrency control outperforms two-phase locking under skewed key access",
+    "Explain why on certain NUMA topologies adding threads decreases merge sort throughput, and give diagnostic steps",
+    "Analyze why DNS resolution chains produce intermittent NXDOMAIN: cache layers, ECS, negative cache TTL interactions",
+    "Analyze tail latency inflation when stop-the-world GC coincides with bursty RPC fan-out in a closed queueing model",
+    "Derive how load balancing migration from random to shortest-queue affects stability regions in open queueing networks",
+    "从第一原理分析断路器模式在分布式系统中的故障模式",
+    "分析JVM垃圾回收暂停为什么会导致微服务级联故障",
+    "解释为什么在某些NUMA拓扑上增加线程数反而降低归并排序吞吐",
+    "推导在开放队列网络中负载均衡从随机到最短队列迁移对稳定性区域的影响"
+  ]
+}
