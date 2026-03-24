@@ -453,6 +453,57 @@ routing:
           - 不要用
           - 而不是
         case_sensitive: false
+      - name: emotion_positive_markers
+        operator: OR
+        keywords:
+          - excited
+          - thrilled
+          - happy
+          - great news
+          - amazing news
+          - so glad
+          - 太好了
+          - 太棒了
+          - 开心
+          - 高兴
+          - 兴奋
+          - 激动
+        case_sensitive: false
+      - name: emotion_negative_markers
+        operator: OR
+        keywords:
+          - frustrated
+          - upset
+          - angry
+          - anxious
+          - worried
+          - stressed
+          - overwhelmed
+          - panicking
+          - this is ridiculous
+          - 焦虑
+          - 着急
+          - 崩溃
+          - 烦死了
+          - 生气
+          - 太离谱了
+        case_sensitive: false
+      - name: urgency_markers
+        operator: OR
+        keywords:
+          - urgent
+          - urgently
+          - asap
+          - right now
+          - immediately
+          - as soon as possible
+          - 马上
+          - 立刻
+          - 立即
+          - 尽快
+          - 赶紧
+          - 现在就
+        case_sensitive: false
 
     preferences:
       - name: concise_answers
@@ -794,6 +845,15 @@ routing:
             pattern: '[?？]'
         predicate:
           lt: 0.05
+      - name: exclamation_emphasis
+        description: Repeated exclamation marks that usually indicate elevated emotional intensity or urgency.
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '[!！]'
+        predicate:
+          gte: 2
 
     complexity:
       - name: general_reasoning
@@ -1195,6 +1255,32 @@ routing:
           - type: context
             name: long_context
             weight: 0.04
+      - name: emotion_valence
+        method: weighted_sum
+        inputs:
+          - type: keyword
+            name: emotion_positive_markers
+            weight: 0.24
+            value_source: confidence
+          - type: keyword
+            name: emotion_negative_markers
+            weight: -0.26
+            value_source: confidence
+      - name: urgency_pressure
+        method: weighted_sum
+        inputs:
+          - type: keyword
+            name: urgency_markers
+            weight: 0.22
+            value_source: confidence
+          - type: structure
+            name: exclamation_emphasis
+            weight: 0.16
+            value_source: confidence
+          - type: keyword
+            name: emotion_negative_markers
+            weight: 0.10
+            value_source: confidence
 
     mappings:
       - name: difficulty_band
@@ -1225,6 +1311,28 @@ routing:
             lt: 0.35
           - name: verification_required
             gte: 0.35
+      - name: emotion_band
+        source: emotion_valence
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 10.0
+        outputs:
+          - name: emotion_negative
+            lte: -0.18
+          - name: emotion_positive
+            gte: 0.18
+      - name: urgency_band
+        source: urgency_pressure
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 12.0
+        outputs:
+          - name: urgency_standard
+            lt: 0.26
+          - name: urgency_elevated
+            gte: 0.26
 
   decisions:
     - name: premium_legal
@@ -1244,16 +1352,10 @@ routing:
                 name: premium_legal_analysis
           - operator: OR
             conditions:
-              - type: projection
-                name: balance_simple
-              - type: projection
-                name: balance_medium
-              - type: projection
-                name: balance_complex
-              - type: projection
-                name: balance_reasoning
               - type: embedding
                 name: premium_legal_analysis
+              - type: projection
+                name: verification_required
               - type: complexity
                 name: legal_risk:medium
               - type: complexity
@@ -1582,6 +1684,12 @@ routing:
                 name: balance_medium
               - type: projection
                 name: balance_complex
+              - operator: AND
+                conditions:
+                  - type: projection
+                    name: balance_simple
+                  - type: projection
+                    name: urgency_elevated
           - operator: NOT
             conditions:
               - operator: OR
@@ -1859,10 +1967,93 @@ routing:
             capture_response_body: true
             max_body_bytes: 4096
 
+    - name: engaged_general
+      description: General and psychology-adjacent prompts with visible emotion or urgency that merit a sturdier mid-tier fallback.
+      priority: 202
+      tier: 15
+      rules:
+        operator: AND
+        conditions:
+          - operator: OR
+            conditions:
+              - type: projection
+                name: emotion_positive
+              - type: projection
+                name: emotion_negative
+              - type: projection
+                name: urgency_elevated
+          - operator: OR
+            conditions:
+              - type: domain
+                name: other
+              - type: domain
+                name: psychology
+              - type: embedding
+                name: general_chat_fallback
+              - type: embedding
+                name: psychology_support
+          - operator: OR
+            conditions:
+              - type: context
+                name: short_context
+              - type: context
+                name: medium_context
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: embedding
+                    name: fast_qa_en
+                  - type: embedding
+                    name: fast_qa_zh
+                  - type: embedding
+                    name: creative_tasks
+                  - type: embedding
+                    name: business_analysis
+                  - type: embedding
+                    name: health_guidance
+                  - type: embedding
+                    name: history_explainer
+                  - type: embedding
+                    name: code_general
+                  - type: embedding
+                    name: complex_stem
+                  - type: embedding
+                    name: architecture_design
+                  - type: embedding
+                    name: agentic_workflows
+                  - type: embedding
+                    name: premium_legal_analysis
+                  - type: projection
+                    name: verification_required
+                  - type: fact_check
+                    name: needs_fact_check
+                  - type: keyword
+                    name: verification_markers
+                  - type: keyword
+                    name: reference_heavy_markers
+                  - type: keyword
+                    name: code_request_markers
+                  - type: keyword
+                    name: implementation_markers
+                  - type: keyword
+                    name: creative_request_markers
+      modelRefs:
+        - model: google/gemini-2.5-flash-lite
+          use_reasoning: false
+      plugins:
+        - type: router_replay
+          configuration:
+            enabled: true
+            max_records: 100000
+            capture_request_body: true
+            capture_response_body: true
+            max_body_bytes: 4096
+
     - name: medium_creative
       description: Mid-tier creative, copywriting, and ideation requests.
       priority: 200
-      tier: 15
+      tier: 16
       rules:
         operator: AND
         conditions:
@@ -2081,7 +2272,7 @@ routing:
     - name: simple_fast_qa_zh
       description: Cheapest short-context Chinese factual or definitional answers.
       priority: 180
-      tier: 19
+      tier: 20
       rules:
         operator: AND
         conditions:
@@ -2109,6 +2300,12 @@ routing:
                     name: verification_markers
                   - type: keyword
                     name: reference_heavy_markers
+                  - type: keyword
+                    name: code_request_markers
+                  - type: keyword
+                    name: implementation_markers
+                  - type: projection
+                    name: urgency_elevated
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -2124,7 +2321,7 @@ routing:
     - name: simple_fast_qa_en
       description: Cheapest short-context English factual or definitional answers.
       priority: 175
-      tier: 21
+      tier: 22
       rules:
         operator: AND
         conditions:
@@ -2152,6 +2349,12 @@ routing:
                     name: verification_markers
                   - type: keyword
                     name: reference_heavy_markers
+                  - type: keyword
+                    name: code_request_markers
+                  - type: keyword
+                    name: implementation_markers
+                  - type: projection
+                    name: urgency_elevated
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
@@ -2167,7 +2370,7 @@ routing:
     - name: verified_fast_qa_en
       description: Conservative factual overlay for English short-context questions that explicitly ask for verification.
       priority: 176
-      tier: 20
+      tier: 21
       rules:
         operator: AND
         conditions:
@@ -2220,7 +2423,7 @@ routing:
     - name: simple_general
       description: Lowest-cost fallback for everyday traffic and non-specialized requests.
       priority: 170
-      tier: 22
+      tier: 23
       rules:
         operator: OR
         conditions:
