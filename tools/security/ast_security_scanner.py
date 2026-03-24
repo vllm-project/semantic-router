@@ -2054,16 +2054,25 @@ def main():
     args = ap.parse_args()
     result = ScanResult()
 
-    if args.command == "scan":
-        root = Path(args.path).resolve()
-        if not root.is_dir():
-            print(f"Error: {root} is not a directory", file=sys.stderr)
-            sys.exit(2)
-        print(f"AST scanning {root} ...", file=sys.stderr)
-        scan_directory(root, result)
-    elif args.command == "diff":
-        print(f"AST scanning diff: {args.base_ref}...HEAD", file=sys.stderr)
-        scan_diff(args.base_ref, args.repo_root, result)
+    try:
+        if args.command == "scan":
+            root = Path(args.path).resolve()
+            if not root.is_dir():
+                print(f"Error: {root} is not a directory", file=sys.stderr)
+                sys.exit(2)
+            print(f"AST scanning {root} ...", file=sys.stderr)
+            scan_directory(root, result)
+        elif args.command == "diff":
+            print(f"AST scanning diff: {args.base_ref}...HEAD", file=sys.stderr)
+            scan_diff(args.base_ref, args.repo_root, result)
+    except Exception as exc:
+        print(f"Scanner error: {exc}", file=sys.stderr)
+        if args.json:
+            json.dump(
+                {"findings": [], "counts": {}, "error": str(exc)}, sys.stdout, indent=2
+            )
+            print()
+        sys.exit(2)
 
     print_report(result, verbose=args.verbose, json_output=args.json)
     threshold = Severity[args.fail_on]
