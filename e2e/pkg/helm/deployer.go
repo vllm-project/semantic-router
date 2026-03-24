@@ -110,6 +110,12 @@ func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef strin
 		return "", nil, fmt.Errorf("failed to copy chart to temp dir: %w", err)
 	}
 
+	// Ensure required Helm repositories are registered before building dependencies.
+	if err := d.ensureHelmRepos(ctx); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to add helm repos: %w", err)
+	}
+
 	// Build dependencies for local chart (creates charts/ and Chart.lock in temp copy).
 	cmd := exec.CommandContext(ctx, "helm", "dependency", "build", tmpChart)
 	if d.Verbose {
@@ -122,6 +128,37 @@ func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef strin
 	}
 
 	return tmpChart, cleanup, nil
+}
+
+var requiredHelmRepos = []struct{ name, url string }{
+	{"bitnami", "https://charts.bitnami.com/bitnami"},
+	{"milvus", "https://milvus-io.github.io/milvus-helm/"},
+	{"jaegertracing", "https://jaegertracing.github.io/helm-charts"},
+	{"prometheus-community", "https://prometheus-community.github.io/helm-charts"},
+	{"grafana", "https://grafana.github.io/helm-charts"},
+}
+
+func (d *Deployer) ensureHelmRepos(ctx context.Context) error {
+	for _, repo := range requiredHelmRepos {
+		cmd := exec.CommandContext(ctx, "helm", "repo", "add", repo.name, repo.url, "--force-update")
+		if d.Verbose {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+		}
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to add helm repo %s: %w", repo.name, err)
+		}
+	}
+
+	cmd := exec.CommandContext(ctx, "helm", "repo", "update")
+	if d.Verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+	if err := cmd.Run(); err != nil {
+		d.log("Warning: helm repo update failed: %v", err)
+	}
+	return nil
 }
 
 func copyDir(src, dst string) error {

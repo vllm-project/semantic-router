@@ -1,0 +1,21 @@
+dependencies:
+- name: redis
+  repository: https://charts.bitnami.com/bitnami
+  version: 25.3.2
+- name: milvus
+  repository: https://milvus-io.github.io/milvus-helm/
+  version: 4.0.31
+- name: redis
+  repository: https://charts.bitnami.com/bitnami
+  version: 25.3.2
+- name: jaeger
+  repository: https://jaegertracing.github.io/helm-charts
+  version: 4.6.0
+- name: prometheus
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 28.13.0
+- name: grafana
+  repository: https://grafana.github.io/helm-charts
+  version: 10.5.15
+digest: sha256:b2390c259655f2f42e35043a0e1fa2f937b08f7726b600cd5fa9b780bc0de4af
+generated: "2026-03-16T13:45:47.179360575+02:00"

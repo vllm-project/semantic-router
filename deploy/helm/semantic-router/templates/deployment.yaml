@@ -62,6 +62,13 @@ spec:
         env:
           {{- toYaml . | nindent 10 }}
         {{- end }}
+        {{- with .Values.envFromSecrets }}
+        envFrom:
+          {{- range . }}
+          - secretRef:
+              name: {{ . }}
+          {{- end }}
+        {{- end }}
         volumeMounts:
         - name: config-volume
           mountPath: /app/config
