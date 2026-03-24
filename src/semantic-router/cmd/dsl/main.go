@@ -17,6 +17,7 @@ Commands:
   fmt        Format a DSL file
 
 Examples:
+  sr-dsl compile -o config.yaml --base providers.yaml privacy-router.dsl
   sr-dsl compile -o config.yaml config.dsl
   sr-dsl compile --format crd -o semanticrouter.yaml config.dsl
   sr-dsl decompile -o config.dsl config.yaml
@@ -55,6 +56,7 @@ func runCompile() {
 	fs := flag.NewFlagSet("compile", flag.ExitOnError)
 	output := fs.String("o", "", "Output file path (default: stdout)")
 	format := fs.String("format", "yaml", "Output format: yaml, crd")
+	base := fs.String("base", "", "Base YAML config with infrastructure (version, listeners, providers); merged with compiled routing to produce a complete config")
 	crdName := fs.String("name", "router", "CRD resource name (for --format crd)")
 	crdNamespace := fs.String("namespace", "", "CRD namespace (for --format crd, default: \"default\")")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -64,12 +66,12 @@ func runCompile() {
 
 	if fs.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "Error: input file required")
-		fmt.Fprintln(os.Stderr, "Usage: sr-dsl compile [-o output.yaml] [--format yaml|crd] <input.dsl>")
+		fmt.Fprintln(os.Stderr, "Usage: sr-dsl compile [-o output.yaml] [--base providers.yaml] [--format yaml|crd] <input.dsl>")
 		os.Exit(1)
 	}
 
 	inputPath := fs.Arg(0)
-	if err := dsl.CLICompile(inputPath, *output, *format, *crdName, *crdNamespace); err != nil {
+	if err := dsl.CLICompile(inputPath, *output, *format, *crdName, *crdNamespace, *base); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
 	}

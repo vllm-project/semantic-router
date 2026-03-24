@@ -1140,6 +1140,23 @@ func (d *decompiler) piiToSignal(pii *config.PIIRule) *SignalDecl {
 	return &SignalDecl{SignalType: "pii", Name: pii.Name, Fields: fields}
 }
 
+func (d *decompiler) categoryKBToSignal(ckb *config.CategoryKBRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if ckb.KBDir != "" {
+		fields["kb_dir"] = StringValue{V: ckb.KBDir}
+	}
+	if ckb.TaxonomyPath != "" {
+		fields["taxonomy_path"] = StringValue{V: ckb.TaxonomyPath}
+	}
+	if ckb.Threshold != 0 {
+		fields["threshold"] = FloatValue{V: float64(ckb.Threshold)}
+	}
+	if ckb.SecurityThreshold != 0 {
+		fields["security_threshold"] = FloatValue{V: float64(ckb.SecurityThreshold)}
+	}
+	return &SignalDecl{SignalType: "category_kb", Name: ckb.Name, Fields: fields}
+}
+
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	route := &RouteDecl{
 		Name:        dec.Name,

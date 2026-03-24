@@ -140,6 +140,14 @@
       "contains_pii": false,
       "languages": ["en", "zh"]
     },
+    "multi_step_tradeoffs": {
+      "tier": "frontier_reasoning",
+      "description": "Multi-step trade-off analysis requiring explicit comparison of alternatives, phased execution plans, and rollback strategies.",
+      "grounding_standards": [],
+      "grounding_benchmarks": [],
+      "contains_pii": false,
+      "languages": ["en", "zh"]
+    },
     "generic_coding": {
       "tier": "local_standard",
       "description": "Standard programming questions, algorithm explanations, code examples using public knowledge.",

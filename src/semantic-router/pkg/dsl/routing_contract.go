@@ -186,6 +186,9 @@ func (d *decompiler) appendSafetySignals(prog *Program) {
 	for _, pii := range d.cfg.PIIRules {
 		prog.Signals = append(prog.Signals, d.piiToSignal(&pii))
 	}
+	for _, ckb := range d.cfg.CategoryKBRules {
+		prog.Signals = append(prog.Signals, d.categoryKBToSignal(&ckb))
+	}
 }
 
 func (d *decompiler) appendModelsToProgram(prog *Program) {

@@ -10,7 +10,10 @@ import (
 
 // CLICompile reads a DSL file, compiles it, and writes the output in the specified format.
 // format can be "yaml" (default), "crd", or "helm".
-func CLICompile(inputPath, outputPath, format, crdName, crdNamespace string) error {
+// basePath, when non-empty, points to a YAML file with infrastructure config
+// (version, listeners, providers) that the compiled routing is merged into,
+// producing a complete runnable config.
+func CLICompile(inputPath, outputPath, format, crdName, crdNamespace, basePath string) error {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("failed to read input file: %w", err)
@@ -27,9 +30,13 @@ func CLICompile(inputPath, outputPath, format, crdName, crdNamespace string) err
 	var output []byte
 	switch format {
 	case "yaml", "":
-		output, err = EmitRoutingYAMLFromConfig(cfg)
+		if basePath != "" {
+			output, err = emitMergedConfig(cfg, basePath)
+		} else {
+			output, err = EmitRoutingYAMLFromConfig(cfg)
+		}
 		if err != nil {
-			return fmt.Errorf("routing YAML emission failed: %w", err)
+			return fmt.Errorf("YAML emission failed: %w", err)
 		}
 	case "crd":
 		if crdName == "" {
@@ -49,6 +56,17 @@ func CLICompile(inputPath, outputPath, format, crdName, crdNamespace string) err
 	}
 
 	return writeOutput(output, outputPath)
+}
+
+// emitMergedConfig reads a base YAML (version, listeners, providers) and
+// overlays the DSL-compiled routing into it, producing a complete config.
+func emitMergedConfig(cfg *config.RouterConfig, basePath string) ([]byte, error) {
+	baseData, err := os.ReadFile(basePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read base config: %w", err)
+	}
+
+	return MergeRoutingIntoBase(cfg, baseData)
 }
 
 // CLIDecompile reads a YAML config file and converts its routing surface to DSL text.

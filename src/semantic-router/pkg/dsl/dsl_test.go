@@ -3660,7 +3660,7 @@ func TestCLICompileAndDecompile(t *testing.T) {
 	defer os.Remove(yamlFile.Name())
 	yamlFile.Close()
 
-	if compileErr := CLICompile(dslFile.Name(), yamlFile.Name(), "yaml", "", ""); compileErr != nil {
+	if compileErr := CLICompile(dslFile.Name(), yamlFile.Name(), "yaml", "", "", ""); compileErr != nil {
 		t.Fatalf("CLICompile error: %v", compileErr)
 	}
 
@@ -3727,7 +3727,7 @@ func TestCLICompileCRD(t *testing.T) {
 	defer os.Remove(crdFile.Name())
 	crdFile.Close()
 
-	if compileErr := CLICompile(dslFile.Name(), crdFile.Name(), "crd", "my-router", "production"); compileErr != nil {
+	if compileErr := CLICompile(dslFile.Name(), crdFile.Name(), "crd", "my-router", "production", ""); compileErr != nil {
 		t.Fatalf("CLICompile CRD error: %v", compileErr)
 	}
 
@@ -3934,7 +3934,7 @@ func TestCLICompileHelm(t *testing.T) {
 	defer os.Remove(helmFile.Name())
 	helmFile.Close()
 
-	if compileErr := CLICompile(dslFile.Name(), helmFile.Name(), "helm", "", ""); compileErr != nil {
+	if compileErr := CLICompile(dslFile.Name(), helmFile.Name(), "helm", "", "", ""); compileErr != nil {
 		t.Fatalf("CLICompile Helm error: %v", compileErr)
 	}
 
