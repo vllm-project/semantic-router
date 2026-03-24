@@ -9,11 +9,14 @@ extraction call). Session chunks are stored every 3 turns (window size 5).
 Test classes live in the memory_tests package:
   - UserIsolationTest: Cross-user memory leak prevention
   - MemoryInjectionPipelineTest: The fundamental store -> inject contract
+  - ChatCompletionsMemoryTest: Memory via /v1/chat/completions
   - MemoryContentIntegrityTest: Content preserved in Milvus (no truncation/corruption)
   - SimilarityThresholdTest: Irrelevant NOT injected, relevant IS injected
   - StaleMemoryTest: Contradicting facts baseline (soft-insert, no contradiction detection)
   - PluginCombinationTest: Memory + system_prompt coexistence
   - MemoryStorageTest: Conversation turns stored in Milvus
+  - PerDecisionMemoryDisabledTest: Decision with memory.enabled=false skips retrieval
+  - PerDecisionThresholdOverrideTest: Decision-level threshold overrides global default
 
 Prerequisites:
   - Milvus running
@@ -36,9 +39,12 @@ import unittest
 
 import requests
 from memory_tests import (
+    ChatCompletionsMemoryTest,
     MemoryContentIntegrityTest,
     MemoryInjectionPipelineTest,
     MemoryStorageTest,
+    PerDecisionMemoryDisabledTest,
+    PerDecisionThresholdOverrideTest,
     PluginCombinationTest,
     SimilarityThresholdTest,
     StaleMemoryTest,
@@ -76,11 +82,15 @@ def run_tests():
         UserIsolationTest,
         # P1: Pipeline correctness
         MemoryInjectionPipelineTest,
+        ChatCompletionsMemoryTest,
         MemoryContentIntegrityTest,
         SimilarityThresholdTest,
         StaleMemoryTest,
         PluginCombinationTest,
         MemoryStorageTest,
+        # P1: Per-decision plugin behavior
+        PerDecisionMemoryDisabledTest,
+        PerDecisionThresholdOverrideTest,
     ]
 
     for test_class in test_classes:

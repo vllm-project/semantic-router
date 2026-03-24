@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -224,14 +225,9 @@ func (r *RedisStore) List(ctx context.Context) ([]Record, error) {
 		records = append(records, record)
 	}
 
-	// Sort by timestamp descending
-	for i := 0; i < len(records)-1; i++ {
-		for j := i + 1; j < len(records); j++ {
-			if records[i].Timestamp.Before(records[j].Timestamp) {
-				records[i], records[j] = records[j], records[i]
-			}
-		}
-	}
+	sort.Slice(records, func(i, j int) bool {
+		return records[i].Timestamp.After(records[j].Timestamp)
+	})
 
 	return records, nil
 }
@@ -354,6 +350,46 @@ func (r *RedisStore) UpdateHallucinationStatus(ctx context.Context, id string, d
 	record.HallucinationDetected = detected
 	record.HallucinationConfidence = confidence
 	record.HallucinationSpans = spans
+
+	data, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("failed to marshal record: %w", err)
+	}
+
+	key := r.keyPrefix + id
+	fn := func() error {
+		if r.ttl > 0 {
+			return r.client.Set(ctx, key, data, r.ttl).Err()
+		}
+		return r.client.Set(ctx, key, data, 0).Err()
+	}
+
+	if r.asyncWrites {
+		r.asyncChan <- asyncOp{fn: fn}
+		return nil
+	}
+
+	return fn()
+}
+
+// UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
+func (r *RedisStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
+	record, found, err := r.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	record.PromptTokens = cloneIntPtr(usage.PromptTokens)
+	record.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
+	record.TotalTokens = cloneIntPtr(usage.TotalTokens)
+	record.ActualCost = cloneFloat64Ptr(usage.ActualCost)
+	record.BaselineCost = cloneFloat64Ptr(usage.BaselineCost)
+	record.CostSavings = cloneFloat64Ptr(usage.CostSavings)
+	record.Currency = cloneStringPtr(usage.Currency)
+	record.BaselineModel = cloneStringPtr(usage.BaselineModel)
 
 	data, err := json.Marshal(record)
 	if err != nil {

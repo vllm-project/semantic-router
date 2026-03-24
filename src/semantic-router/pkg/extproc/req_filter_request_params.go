@@ -13,6 +13,7 @@ var allowedTopLevelFields = map[string]bool{
 	"messages":          true,
 	"frequency_penalty": true,
 	"logit_bias":        true,
+	"logprobs":          true,
 	"max_tokens":        true,
 	"n":                 true,
 	"presence_penalty":  true,
@@ -21,6 +22,7 @@ var allowedTopLevelFields = map[string]bool{
 	"stop":              true,
 	"stream":            true,
 	"temperature":       true,
+	"top_logprobs":      true,
 	"top_p":             true,
 	"tools":             true,
 	"tool_choice":       true,
@@ -101,7 +103,7 @@ func capIntField(
 	if !ok || original <= *limit {
 		return false
 	}
-	body[fieldName] = float64(*limit)
+	body[fieldName] = *limit
 	logging.Debugf("Capped %s from %d to %d for decision '%s'", fieldName, original, *limit, decisionName)
 	recordMetric(decisionName, original, *limit)
 	return true

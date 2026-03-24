@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="website/static/img/code.png" alt="vLLM Semantic Router" width="100%"/>
+<img src="website/static/img/artworks/vllm-sr-logo.dark.png" alt="vLLM Semantic Router" width="50%"/>
 
 [![Documentation](https://img.shields.io/badge/docs-read%20the%20docs-blue)](https://vllm-semantic-router.com)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)

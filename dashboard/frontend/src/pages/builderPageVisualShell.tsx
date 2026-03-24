@@ -3,23 +3,28 @@ import React, { useCallback, useMemo, useState } from "react";
 import type {
   Diagnostic,
   EditorMode,
+  DSLFieldObject,
 } from "@/types/dsl";
 import { useDSLStore } from "@/stores/dslStore";
 import type { RouteInput } from "@/lib/dslMutations";
 
 import styles from "./BuilderPage.module.css";
 import {
-  BackendIcon,
-  GlobalIcon,
+  ModelIcon,
   PluginIcon,
   RouteIcon,
   SignalIcon,
 } from "./builderPageFormPrimitives";
 import {
-  AddBackendForm,
+  AddModelForm,
   AddPluginForm,
   AddSignalForm,
 } from "./builderPageEntityForms";
+import {
+  AddProjectionMappingForm,
+  AddProjectionPartitionForm,
+  AddProjectionScoreForm,
+} from "./builderPageProjectionEditors";
 import {
   DashboardView,
   EntityListView,
@@ -44,48 +49,53 @@ interface VisualModeProps {
   sections: SectionState;
   onToggleSection: (key: keyof SectionState) => void;
   selectedEntity: BuilderSelectedEntity;
+  modelCount: number;
   signalCount: number;
+  projectionPartitionCount: number;
+  projectionScoreCount: number;
+  projectionMappingCount: number;
   routeCount: number;
   pluginCount: number;
-  backendCount: number;
-  hasGlobal: boolean;
   wasmReady: boolean;
   wasmError: string | null;
   addingEntity: EntityKind | null;
   onSetAddingEntity: (kind: EntityKind | null) => void;
   onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void;
+  onUpdateModelFields: (name: string, fields: DSLFieldObject) => void;
   onUpdateSignalFields: (
     signalType: string,
     name: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
+  ) => void;
+  onUpdateProjectionPartitionFields: (name: string, fields: DSLFieldObject) => void;
+  onUpdateProjectionScoreFields: (
+    name: string,
+    fields: DSLFieldObject,
+  ) => void;
+  onUpdateProjectionMappingFields: (
+    name: string,
+    fields: DSLFieldObject,
   ) => void;
   onUpdatePluginFields: (
     name: string,
     pluginType: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
-  onUpdateBackendFields: (
-    backendType: string,
-    name: string,
-    fields: Record<string, unknown>,
-  ) => void;
+  onAddModel: (name: string, fields: DSLFieldObject) => void;
   onAddSignal: (
     signalType: string,
     name: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
+  onAddProjectionPartition: (name: string, fields: DSLFieldObject) => void;
+  onAddProjectionScore: (name: string, fields: DSLFieldObject) => void;
+  onAddProjectionMapping: (name: string, fields: DSLFieldObject) => void;
   onAddPlugin: (
     name: string,
     pluginType: string,
-    fields: Record<string, unknown>,
-  ) => void;
-  onAddBackend: (
-    backendType: string,
-    name: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
   onUpdateRoute: (name: string, input: RouteInput) => void;
-  onUpdateGlobalFields: (fields: Record<string, unknown>) => void;
   onAddRoute: (name: string, input: RouteInput) => void;
   errorCount: number;
   isValid: boolean;
@@ -100,24 +110,31 @@ const VisualMode: React.FC<VisualModeProps> = ({
   sections,
   onToggleSection,
   selectedEntity,
+  modelCount,
   signalCount,
+  projectionPartitionCount,
+  projectionScoreCount,
+  projectionMappingCount,
   routeCount,
   pluginCount,
-  backendCount,
-  hasGlobal,
   wasmReady,
   wasmError,
   addingEntity,
   onSetAddingEntity,
   onDeleteEntity,
+  onUpdateModelFields,
   onUpdateSignalFields,
+  onUpdateProjectionPartitionFields,
+  onUpdateProjectionScoreFields,
+  onUpdateProjectionMappingFields,
   onUpdatePluginFields,
-  onUpdateBackendFields,
+  onAddModel,
   onAddSignal,
+  onAddProjectionPartition,
+  onAddProjectionScore,
+  onAddProjectionMapping,
   onAddPlugin,
-  onAddBackend,
   onUpdateRoute,
-  onUpdateGlobalFields,
   onAddRoute,
   errorCount,
   isValid,
@@ -136,8 +153,13 @@ const VisualMode: React.FC<VisualModeProps> = ({
         result.push({ signalType: s.signalType, name: s.name });
       }
     }
+    for (const mapping of ast?.projectionMappings ?? []) {
+      for (const output of mapping.outputs ?? []) {
+        result.push({ signalType: "projection", name: output.name });
+      }
+    }
     return result;
-  }, [ast?.signals]);
+  }, [ast?.signals, ast?.projectionMappings]);
   // Collect available plugin names for toggle panel
   const availablePlugins = useMemo(
     () =>
@@ -145,8 +167,15 @@ const VisualMode: React.FC<VisualModeProps> = ({
       [],
     [ast?.plugins],
   );
-  // Collect available model names from all routes for selection
+  const semanticModels = useMemo(
+    () => ast?.models?.map((model) => model.name) ?? [],
+    [ast?.models],
+  );
+  // Collect available model names for route selection.
   const availableModels = useMemo(() => {
+    if (semanticModels.length > 0) {
+      return [...semanticModels].sort()
+    }
     const modelSet = new Set<string>();
     ast?.routes?.forEach((r) =>
       r.models.forEach((m) => {
@@ -154,7 +183,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
       }),
     );
     return Array.from(modelSet).sort();
-  }, [ast?.routes]);
+  }, [ast?.routes, semanticModels]);
 
   // Validation panel state
   const [validationOpen, setValidationOpen] = useState(true);
@@ -233,6 +262,36 @@ const VisualMode: React.FC<VisualModeProps> = ({
             Dashboard
           </div>
 
+          <SidebarSection
+            title="Models"
+            count={modelCount}
+            open={sections.models}
+            onToggle={() => onToggleSection("models")}
+            onAdd={() => {
+              onSetAddingEntity("model");
+              onSelect(null);
+            }}
+          >
+            {ast?.models?.map((model) => (
+              <li
+                key={model.name}
+                className={
+                  selection?.kind === "model" && selection.name === model.name
+                    ? styles.sidebarItemActive
+                    : styles.sidebarItem
+                }
+                onClick={() => {
+                  onSetAddingEntity(null);
+                  onSelect({ kind: "model", name: model.name });
+                }}
+              >
+                <ModelIcon className={styles.sidebarItemIcon} />
+                <span className={styles.sidebarItemName}>{model.name}</span>
+                <span className={styles.sidebarItemType}>catalog</span>
+              </li>
+            ))}
+          </SidebarSection>
+
           {/* Signals */}
           <SidebarSection
             title="Signals"
@@ -260,6 +319,99 @@ const VisualMode: React.FC<VisualModeProps> = ({
                 <SignalIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>{s.name}</span>
                 <span className={styles.sidebarItemType}>{s.signalType}</span>
+              </li>
+            ))}
+          </SidebarSection>
+
+          <SidebarSection
+            title="Projection Partitions"
+            count={projectionPartitionCount}
+            open={sections.projectionPartitions}
+            onToggle={() => onToggleSection("projectionPartitions")}
+            onAdd={() => {
+              onSetAddingEntity("projection-partition");
+              onSelect(null);
+            }}
+          >
+            {ast?.projectionPartitions?.map((partition) => (
+              <li
+                key={partition.name}
+                className={
+                  selection?.kind === "projection-partition" &&
+                  selection.name === partition.name
+                    ? styles.sidebarItemActive
+                    : styles.sidebarItem
+                }
+                onClick={() => {
+                  onSetAddingEntity(null);
+                  onSelect({ kind: "projection-partition", name: partition.name });
+                }}
+              >
+                <SignalIcon className={styles.sidebarItemIcon} />
+                <span className={styles.sidebarItemName}>{partition.name}</span>
+                <span className={styles.sidebarItemType}>partition</span>
+              </li>
+            ))}
+          </SidebarSection>
+
+          <SidebarSection
+            title="Projection Scores"
+            count={projectionScoreCount}
+            open={sections.projectionScores}
+            onToggle={() => onToggleSection("projectionScores")}
+            onAdd={() => {
+              onSetAddingEntity("projection-score");
+              onSelect(null);
+            }}
+          >
+            {ast?.projectionScores?.map((score) => (
+              <li
+                key={score.name}
+                className={
+                  selection?.kind === "projection-score" &&
+                  selection.name === score.name
+                    ? styles.sidebarItemActive
+                    : styles.sidebarItem
+                }
+                onClick={() => {
+                  onSetAddingEntity(null);
+                  onSelect({ kind: "projection-score", name: score.name });
+                }}
+              >
+                <RouteIcon className={styles.sidebarItemIcon} />
+                <span className={styles.sidebarItemName}>{score.name}</span>
+                <span className={styles.sidebarItemType}>score</span>
+              </li>
+            ))}
+          </SidebarSection>
+
+          <SidebarSection
+            title="Projection Mappings"
+            count={projectionMappingCount}
+            open={sections.projectionMappings}
+            onToggle={() => onToggleSection("projectionMappings")}
+            onAdd={() => {
+              onSetAddingEntity("projection-mapping");
+              onSelect(null);
+            }}
+          >
+            {ast?.projectionMappings?.map((mapping) => (
+              <li
+                key={mapping.name}
+                className={
+                  selection?.kind === "projection-mapping" &&
+                  selection.name === mapping.name
+                    ? styles.sidebarItemActive
+                    : styles.sidebarItem
+                }
+                onClick={() => {
+                  onSetAddingEntity(null);
+                  onSelect({ kind: "projection-mapping", name: mapping.name });
+                }}
+              >
+                <RouteIcon className={styles.sidebarItemIcon} />
+                <span className={styles.sidebarItemName}>{mapping.name}</span>
+                <span className={styles.sidebarItemType}>mapping</span>
               </li>
             ))}
           </SidebarSection>
@@ -326,61 +478,6 @@ const VisualMode: React.FC<VisualModeProps> = ({
             ))}
           </SidebarSection>
 
-          {/* Backends */}
-          <SidebarSection
-            title="Backends"
-            count={backendCount}
-            open={sections.backends}
-            onToggle={() => onToggleSection("backends")}
-            onAdd={() => {
-              onSetAddingEntity("backend");
-              onSelect(null);
-            }}
-          >
-            {ast?.backends?.map((b) => (
-              <li
-                key={b.name}
-                className={
-                  selection?.kind === "backend" && selection.name === b.name
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
-                }
-                onClick={() => {
-                  onSetAddingEntity(null);
-                  onSelect({ kind: "backend", name: b.name });
-                }}
-              >
-                <BackendIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>{b.name}</span>
-                <span className={styles.sidebarItemType}>{b.backendType}</span>
-              </li>
-            ))}
-          </SidebarSection>
-
-          {/* Global */}
-          <SidebarSection
-            title="Global"
-            count={hasGlobal ? 1 : 0}
-            open={sections.global}
-            onToggle={() => onToggleSection("global")}
-          >
-            {hasGlobal && (
-              <li
-                className={
-                  selection?.kind === "global"
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
-                }
-                onClick={() => {
-                  onSetAddingEntity(null);
-                  onSelect({ kind: "global", name: "global" });
-                }}
-              >
-                <GlobalIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>Global Settings</span>
-              </li>
-            )}
-          </SidebarSection>
         </div>
 
         {/* Main panel */}
@@ -393,19 +490,34 @@ const VisualMode: React.FC<VisualModeProps> = ({
           )}
 
           <div className={styles.mainPanelContent}>
-            {addingEntity === "signal" ? (
+            {addingEntity === "model" ? (
+              <AddModelForm
+                onAdd={onAddModel}
+                onCancel={() => onSetAddingEntity(null)}
+              />
+            ) : addingEntity === "signal" ? (
               <AddSignalForm
                 onAdd={onAddSignal}
+                onCancel={() => onSetAddingEntity(null)}
+              />
+            ) : addingEntity === "projection-partition" ? (
+              <AddProjectionPartitionForm
+                onAdd={onAddProjectionPartition}
+                onCancel={() => onSetAddingEntity(null)}
+              />
+            ) : addingEntity === "projection-score" ? (
+              <AddProjectionScoreForm
+                onAdd={onAddProjectionScore}
+                onCancel={() => onSetAddingEntity(null)}
+              />
+            ) : addingEntity === "projection-mapping" ? (
+              <AddProjectionMappingForm
+                onAdd={onAddProjectionMapping}
                 onCancel={() => onSetAddingEntity(null)}
               />
             ) : addingEntity === "plugin" ? (
               <AddPluginForm
                 onAdd={onAddPlugin}
-                onCancel={() => onSetAddingEntity(null)}
-              />
-            ) : addingEntity === "backend" ? (
-              <AddBackendForm
-                onAdd={onAddBackend}
                 onCancel={() => onSetAddingEntity(null)}
               />
             ) : addingEntity === "route" ? (
@@ -419,11 +531,10 @@ const VisualMode: React.FC<VisualModeProps> = ({
             ) : !selection ? (
               <DashboardView
                 ast={ast}
+                modelCount={modelCount}
                 signalCount={signalCount}
                 routeCount={routeCount}
                 pluginCount={pluginCount}
-                backendCount={backendCount}
-                hasGlobal={hasGlobal}
                 isValid={isValid}
                 errorCount={errorCount}
                 onSelect={onSelect}
@@ -442,13 +553,14 @@ const VisualMode: React.FC<VisualModeProps> = ({
               <EntityDetailView
                 selection={selection}
                 entity={selectedEntity}
-                ast={ast}
                 onDeleteEntity={onDeleteEntity}
+                onUpdateModelFields={onUpdateModelFields}
                 onUpdateSignalFields={onUpdateSignalFields}
+                onUpdateProjectionPartitionFields={onUpdateProjectionPartitionFields}
+                onUpdateProjectionScoreFields={onUpdateProjectionScoreFields}
+                onUpdateProjectionMappingFields={onUpdateProjectionMappingFields}
                 onUpdatePluginFields={onUpdatePluginFields}
-                onUpdateBackendFields={onUpdateBackendFields}
                 onUpdateRoute={onUpdateRoute}
-                onUpdateGlobalFields={onUpdateGlobalFields}
                 availableSignals={availableSignals}
                 availablePlugins={availablePlugins}
                 availableModels={availableModels}

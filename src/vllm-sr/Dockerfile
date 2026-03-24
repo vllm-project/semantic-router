@@ -293,9 +293,9 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
       CC=aarch64-linux-gnu-gcc \
       CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
       CGO_LDFLAGS="-L/usr/lib/aarch64-linux-gnu -lssl -lcrypto" \
-      go build -buildvcs=false -ldflags="-w -s" -o router cmd/main.go; \
+      go build -buildvcs=false -ldflags="-w -s" -o router ./cmd; \
     else \
-      CGO_ENABLED=1 go build -buildvcs=false -ldflags="-w -s" -o router cmd/main.go; \
+      CGO_ENABLED=1 go build -buildvcs=false -ldflags="-w -s" -o router ./cmd; \
     fi
 
 # Stage 3: Get Envoy binary
@@ -338,8 +338,9 @@ COPY src/vllm-sr/requirements.txt /app/requirements.txt
 
 # Copy tools database to config directory
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
-# Copy OpenClaw skill catalog consumed by dashboard /api/openclaw/skills
+# Copy packaged OpenClaw skill catalog and skill packs consumed by dashboard /api/openclaw/skills
 COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
+COPY dashboard/backend/skillpacks/ /app/skills/
 
 # Copy bench directory for evaluation benchmarks
 COPY bench/ /app/bench/

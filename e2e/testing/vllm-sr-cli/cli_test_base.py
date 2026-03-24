@@ -16,8 +16,11 @@ import tempfile
 import time
 import unittest
 from contextlib import suppress
+from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
+
+import yaml
 
 HTTP_STATUS_OK = 200
 SUPPORTED_CONTAINER_RUNTIMES = ("docker", "podman")
@@ -28,6 +31,7 @@ class CLITestBase(unittest.TestCase):
 
     # Container name used by vllm-sr
     CONTAINER_NAME = "vllm-sr-container"
+    SIM_CONTAINER_NAME = "vllm-sr-sim-container"
 
     # Default timeout for CLI commands
     DEFAULT_TIMEOUT = 60
@@ -110,12 +114,13 @@ class CLITestBase(unittest.TestCase):
     def _cleanup_container(cls):
         """Stop and remove any existing vllm-sr container."""
         runtime = cls.container_runtime
-        for command in (
-            [runtime, "stop", cls.CONTAINER_NAME],
-            [runtime, "rm", "-f", cls.CONTAINER_NAME],
-        ):
-            with suppress(Exception):
-                cls._run_subprocess(command, timeout=30)
+        for container_name in (cls.CONTAINER_NAME, cls.SIM_CONTAINER_NAME):
+            for command in (
+                [runtime, "stop", container_name],
+                [runtime, "rm", "-f", container_name],
+            ):
+                with suppress(Exception):
+                    cls._run_subprocess(command, timeout=30)
 
     def run_cli(
         self,
@@ -129,7 +134,7 @@ class CLITestBase(unittest.TestCase):
         Run a vllm-sr CLI command.
 
         Args:
-            args: CLI arguments (e.g., ["init", "--force"])
+            args: CLI arguments (e.g., ["serve", "--config", "config.yaml"])
             timeout: Command timeout in seconds
             env: Additional environment variables
             capture_output: Whether to capture stdout/stderr
@@ -178,13 +183,72 @@ class CLITestBase(unittest.TestCase):
             print(f"Command failed with exception: {e}")
             return -1, "", str(e)
 
-    def container_status(self) -> str:
+    def write_minimal_canonical_config(
+        self,
+        *,
+        port: int = 8888,
+        model_name: str = "test-model",
+        endpoint: str = "host.docker.internal:8000",
+    ) -> str:
+        """Write a minimal runnable canonical v0.3 config into the temp workspace."""
+        config_path = Path(self.test_dir) / "config.yaml"
+        config = {
+            "version": "v0.3",
+            "listeners": [
+                {
+                    "name": "test-listener",
+                    "address": "0.0.0.0",
+                    "port": port,
+                    "timeout": "60s",
+                }
+            ],
+            "providers": {
+                "defaults": {
+                    "default_model": model_name,
+                    "default_reasoning_effort": "medium",
+                },
+                "models": [
+                    {
+                        "name": model_name,
+                        "provider_model_id": model_name,
+                        "backend_refs": [
+                            {
+                                "name": "primary",
+                                "weight": 100,
+                                "endpoint": endpoint,
+                                "protocol": "http",
+                            }
+                        ],
+                    }
+                ],
+            },
+            "routing": {
+                "modelCards": [{"name": model_name}],
+                "decisions": [
+                    {
+                        "name": "default-route",
+                        "description": "Default route for CLI test coverage",
+                        "priority": 100,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [{"model": model_name, "use_reasoning": False}],
+                    }
+                ],
+            },
+        }
+        config_path.write_text(
+            yaml.safe_dump(config, sort_keys=False),
+            encoding="utf-8",
+        )
+        return str(config_path)
+
+    def container_status(self, container_name: str | None = None) -> str:
         """
-        Get the status of the vllm-sr container.
+        Get the status of a managed container.
 
         Returns:
             'running', 'exited', 'paused', 'not found', or 'error'
         """
+        container_name = container_name or self.CONTAINER_NAME
         try:
             result = self._run_subprocess(
                 [
@@ -192,7 +256,7 @@ class CLITestBase(unittest.TestCase):
                     "ps",
                     "-a",
                     "--filter",
-                    f"name={self.CONTAINER_NAME}",
+                    f"name={container_name}",
                     "--format",
                     "{{.Status}}",
                 ],
@@ -212,11 +276,13 @@ class CLITestBase(unittest.TestCase):
             print(f"Failed to get container status: {e}")
             return "error"
 
-    def wait_for_container_running(self, timeout: int = 60) -> bool:
+    def wait_for_container_running(
+        self, timeout: int = 60, container_name: str | None = None
+    ) -> bool:
         """Wait for container to be in running state."""
         start = time.time()
         while time.time() - start < timeout:
-            status = self.container_status()
+            status = self.container_status(container_name=container_name)
             if status == "running":
                 return True
             if status == "exited":
@@ -273,16 +339,20 @@ class CLITestBase(unittest.TestCase):
             return f"Failed to get logs: {e}"
 
     def inspect_container(
-        self, format_string: str, timeout: int = 10
+        self,
+        format_string: str,
+        timeout: int = 10,
+        container_name: str | None = None,
     ) -> tuple[int, str, str]:
-        """Inspect the vllm-sr container with the active runtime."""
+        """Inspect a managed container with the active runtime."""
+        container_name = container_name or self.CONTAINER_NAME
         result = self._run_subprocess(
             [
                 self.container_runtime,
                 "inspect",
                 "--format",
                 format_string,
-                self.CONTAINER_NAME,
+                container_name,
             ],
             timeout=timeout,
         )

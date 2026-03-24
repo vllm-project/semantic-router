@@ -24,9 +24,9 @@ type OpenAIBackend struct {
 
 // NewOpenAIBackend creates a new OpenAI image generation backend
 func NewOpenAIBackend(cfg *config.ImageGenPluginConfig) (Backend, error) {
-	openaiConfig, ok := cfg.BackendConfig.(*config.OpenAIImageGenConfig)
-	if !ok {
-		return nil, fmt.Errorf("invalid backend_config for openai, expected OpenAIImageGenConfig")
+	openaiConfig, err := cfg.OpenAIBackendConfig()
+	if err != nil {
+		return nil, fmt.Errorf("invalid backend_config for openai: %w", err)
 	}
 
 	if openaiConfig.APIKey == "" {

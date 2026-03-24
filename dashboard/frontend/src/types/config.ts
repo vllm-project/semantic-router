@@ -1,8 +1,11 @@
 /**
  * Configuration types for vLLM Semantic Router Dashboard
- * 
- * This file defines TypeScript interfaces for the Python CLI config format.
- * The format uses: providers, signals, decisions (not vllm_endpoints, model_config)
+ *
+ * Public config uses the canonical v0.3 layout:
+ *   version / listeners / providers / routing / global
+ *
+ * Some interfaces below are dashboard view-model adapters that flatten
+ * routing-owned data for editing and legacy read-only fallback handling.
  */
 
 // =============================================================================
@@ -14,18 +17,32 @@ export interface ProviderEndpoint {
   weight: number
   endpoint: string  // e.g., "host.docker.internal:8000" or "api.openai.com"
   protocol: 'http' | 'https'
+  base_url?: string
+  provider?: 'openai' | 'anthropic'
+  api_key?: string
+  api_key_env?: string
 }
 
 export interface ProviderModel {
   name: string  // e.g., "openai/gpt-oss-120b"
   reasoning_family?: string
-  endpoints: ProviderEndpoint[]
+  provider_model_id?: string
+  backend_refs?: ProviderEndpoint[]
+  endpoints?: ProviderEndpoint[]
   access_key?: string
+  api_format?: 'anthropic'
+  external_model_ids?: Record<string, string>
   pricing?: {
     currency?: string
     prompt_per_1m?: number
     completion_per_1m?: number
   }
+}
+
+export interface ProviderDefaults {
+  default_model?: string
+  reasoning_families?: Record<string, ReasoningFamily>
+  default_reasoning_effort?: string
 }
 
 export interface ReasoningFamily {
@@ -35,9 +52,7 @@ export interface ReasoningFamily {
 
 export interface Providers {
   models: ProviderModel[]
-  default_model: string
-  reasoning_families?: Record<string, ReasoningFamily>
-  default_reasoning_effort?: string
+  defaults?: ProviderDefaults
 }
 
 // =============================================================================
@@ -91,6 +106,33 @@ export interface ContextSignal {
   min_tokens: string
   max_tokens: string
   description?: string
+}
+
+export interface StructureSource {
+  type: string
+  pattern?: string
+  keywords?: string[]
+  case_sensitive?: boolean
+  sequences?: string[][]
+}
+
+export interface StructureFeature {
+  type: string
+  source: StructureSource
+}
+
+export interface NumericPredicate {
+  gt?: number
+  gte?: number
+  lt?: number
+  lte?: number
+}
+
+export interface StructureSignal {
+  name: string
+  description?: string
+  feature: StructureFeature
+  predicate?: NumericPredicate
 }
 
 export interface ComplexityCandidates {
@@ -158,6 +200,7 @@ export interface Signals {
   preferences?: PreferenceSignal[]
   language?: LanguageSignal[]
   context?: ContextSignal[]
+  structure?: StructureSignal[]
   complexity?: ComplexitySignal[]
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
@@ -170,7 +213,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'context' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'fact_check' | 'language' | 'context' | 'structure' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii' | 'projection'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string
@@ -184,6 +227,10 @@ export interface DecisionRules {
 export interface ModelRef {
   model: string
   use_reasoning: boolean
+  reasoning_description?: string
+  reasoning_effort?: string
+  lora_name?: string
+  weight?: number
 }
 
 export interface PluginConfig {
@@ -325,6 +372,8 @@ export interface APIConfig {
 
 export type ConfigFormat = 'python-cli' | 'legacy'
 
+type UnknownConfigRecord = Record<string, unknown>
+
 export interface UnifiedConfig extends Partial<PythonCLIConfig>, Partial<LegacyConfig> {
   // Both formats can have these at root level
   version?: string
@@ -352,14 +401,18 @@ export interface UnifiedConfig extends Partial<PythonCLIConfig>, Partial<LegacyC
 /**
  * Detect the config format based on key indicators
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function detectConfigFormat(config: any): ConfigFormat {
+const asUnknownConfigRecord = (value: unknown): UnknownConfigRecord | null =>
+  value && typeof value === 'object' ? value as UnknownConfigRecord : null
+
+export function detectConfigFormat(config: unknown): ConfigFormat {
+  const root = asUnknownConfigRecord(config)
   // Python CLI format has providers.models
-  if (config?.providers?.models) {
+  const providers = asUnknownConfigRecord(root?.providers)
+  if (providers?.models) {
     return 'python-cli'
   }
   // Legacy format has vllm_endpoints or model_config at root
-  if (config?.vllm_endpoints || config?.model_config) {
+  if (root?.vllm_endpoints || root?.model_config) {
     return 'legacy'
   }
   // Default to python-cli as that's the future
@@ -372,44 +425,43 @@ export function detectConfigFormat(config: any): ConfigFormat {
  * (vllm_endpoints, model_config, keyword_rules, etc.) but preserves the `decisions` array.
  * This helper detects that hybrid state so the UI can still render decisions.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function hasDecisions(config: any): boolean {
-  return Array.isArray(config?.decisions) && config.decisions.length > 0
+export function hasDecisions(config: unknown): boolean {
+  const root = asUnknownConfigRecord(config)
+  return Array.isArray(root?.decisions) && root.decisions.length > 0
 }
 
 /**
  * Check if config has flat signal fields (keyword_rules, embedding_rules, etc.)
  * that result from deploy flattening. These map to the nested signals.* structure.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function hasFlatSignals(config: any): boolean {
+export function hasFlatSignals(config: unknown): boolean {
+  const root = asUnknownConfigRecord(config)
   return !!(
-    config?.keyword_rules?.length ||
-    config?.embedding_rules?.length ||
-    config?.categories?.length ||
-    config?.fact_check_rules?.length ||
-    config?.user_feedback_rules?.length ||
-    config?.preference_rules?.length ||
-    config?.language_rules?.length ||
-    config?.context_rules?.length ||
-    config?.complexity_rules?.length ||
-    config?.jailbreak?.length ||
-    config?.pii?.length
+    (Array.isArray(root?.keyword_rules) && root.keyword_rules.length > 0) ||
+    (Array.isArray(root?.embedding_rules) && root.embedding_rules.length > 0) ||
+    (Array.isArray(root?.categories) && root.categories.length > 0) ||
+    (Array.isArray(root?.fact_check_rules) && root.fact_check_rules.length > 0) ||
+    (Array.isArray(root?.user_feedback_rules) && root.user_feedback_rules.length > 0) ||
+    (Array.isArray(root?.preference_rules) && root.preference_rules.length > 0) ||
+    (Array.isArray(root?.language_rules) && root.language_rules.length > 0) ||
+    (Array.isArray(root?.context_rules) && root.context_rules.length > 0) ||
+    (Array.isArray(root?.structure_rules) && root.structure_rules.length > 0) ||
+    (Array.isArray(root?.complexity_rules) && root.complexity_rules.length > 0) ||
+    (Array.isArray(root?.jailbreak) && root.jailbreak.length > 0) ||
+    (Array.isArray(root?.pii) && root.pii.length > 0)
   )
 }
 
 /**
  * Check if config is in Python CLI format
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function isPythonCLIFormat(config: any): config is PythonCLIConfig {
+export function isPythonCLIFormat(config: unknown): config is PythonCLIConfig {
   return detectConfigFormat(config) === 'python-cli'
 }
 
 /**
  * Check if config is in legacy format
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function isLegacyFormat(config: any): config is LegacyConfig {
+export function isLegacyFormat(config: unknown): config is LegacyConfig {
   return detectConfigFormat(config) === 'legacy'
 }

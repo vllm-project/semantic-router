@@ -4,9 +4,10 @@ import styles from './ConfigNav.module.css'
 // New navigation structure aligned with Python CLI config format
 export type ConfigSection =
   | 'signals'        // config.yaml: signals (keywords, embeddings, domains, etc.)
+  | 'projections'    // config.yaml: routing.projections (partitions, scores, mappings)
   | 'decisions'      // config.yaml: decisions (routing rules)
   | 'models'         // config.yaml: providers.models
-  | 'router-config'  // .vllm-sr/router-defaults.yaml (cache, prompt guard, tools, etc.)
+  | 'global-config'  // config.yaml: global runtime overrides (cache, prompt guard, tools, etc.)
   | 'mcp'            // MCP servers configuration
   | 'topology'       // Separate page for visualization
 
@@ -17,6 +18,12 @@ interface ConfigNavProps {
 
 const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange }) => {
   const sections = [
+    {
+      id: 'global-config' as ConfigSection,
+      icon: '⚙️',
+      title: 'Global Config',
+      description: 'Global runtime overrides, services, stores & model catalog'
+    },
     {
       id: 'models' as ConfigSection,
       icon: '🤖',
@@ -36,10 +43,10 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       description: 'Keywords, embeddings, domains & preferences'
     },
     {
-      id: 'router-config' as ConfigSection,
-      icon: '⚙️',
-      title: 'Router Configuration',
-      description: 'Cache, prompt guard, tools & observability'
+      id: 'projections' as ConfigSection,
+      icon: '🧭',
+      title: 'Projections',
+      description: 'Partitions, scores & derived routing bands'
     },
     {
       id: 'mcp' as ConfigSection,

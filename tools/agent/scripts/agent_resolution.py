@@ -111,6 +111,19 @@ def unique_preserve_order(values: Iterable[str]) -> list[str]:
     return result
 
 
+DEFAULT_LOOP_MODE = "completion"
+DEFAULT_EXECUTION_PLAN_POLICY = "long_horizon"
+LOOP_MODE_PRIORITY = {
+    "lightweight": 0,
+    "completion": 1,
+}
+EXECUTION_PLAN_POLICY_PRIORITY = {
+    "none": 0,
+    "long_horizon": 1,
+    "always": 2,
+}
+
+
 def match_task_matrix_rules(
     task_matrix: dict, changed_files: list[str], local_rule_path_set: set[str]
 ) -> tuple[list[dict], list[str], list[str], bool]:
@@ -203,6 +216,27 @@ def is_doc_only_rule_set(matched_rules: list[dict]) -> bool:
     )
 
 
+def resolve_loop_mode(matched_rules: list[dict]) -> str:
+    if not matched_rules:
+        return DEFAULT_LOOP_MODE
+    return max(
+        (rule.get("loop_mode", DEFAULT_LOOP_MODE) for rule in matched_rules),
+        key=lambda mode: LOOP_MODE_PRIORITY.get(mode, -1),
+    )
+
+
+def resolve_execution_plan_policy(matched_rules: list[dict]) -> str:
+    if not matched_rules:
+        return DEFAULT_EXECUTION_PLAN_POLICY
+    return max(
+        (
+            rule.get("execution_plan_policy", DEFAULT_EXECUTION_PLAN_POLICY)
+            for rule in matched_rules
+        ),
+        key=lambda policy: EXECUTION_PLAN_POLICY_PRIORITY.get(policy, -1),
+    )
+
+
 def resolve_context(changed_files: list[str]) -> ResolvedContext:
     repo_manifest, task_matrix, e2e_map, _, _ = load_manifests()
     local_rule_path_set = local_agent_rule_paths(repo_manifest)
@@ -213,6 +247,8 @@ def resolve_context(changed_files: list[str]) -> ResolvedContext:
         resolve_e2e_profiles(changed_files, e2e_map, local_rule_path_set)
     )
     doc_only = is_doc_only_rule_set(matched_rules)
+    loop_mode = resolve_loop_mode(matched_rules)
+    execution_plan_policy = resolve_execution_plan_policy(matched_rules)
     if doc_only:
         local_profiles = []
     return ResolvedContext(
@@ -226,6 +262,8 @@ def resolve_context(changed_files: list[str]) -> ResolvedContext:
         workflow_integration_suites=unique_preserve_order(targeted_workflow_suites),
         ci_e2e_mode=ci_mode,
         doc_only=doc_only,
+        loop_mode=loop_mode,
+        execution_plan_policy=execution_plan_policy,
     )
 
 

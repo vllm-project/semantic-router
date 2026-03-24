@@ -4,12 +4,15 @@ import logging
 import os
 import sys
 import time
+from http import HTTPStatus
+
 import requests
 import yaml
-from pathlib import Path
+
+from cli.consts import DEFAULT_ENVOY_PORT
 
 
-def getLogger(name):
+def get_logger(name):
     """Get a configured logger."""
     logger = logging.getLogger(name)
     if not logger.handlers:
@@ -53,7 +56,7 @@ def find_config_file(path=".", file=None):
 
 def load_config(config_file):
     """Load and parse YAML config file."""
-    with open(config_file, "r") as f:
+    with open(config_file) as f:
         return yaml.safe_load(f)
 
 
@@ -70,7 +73,7 @@ def health_check_endpoint(url, timeout=5):
     """
     try:
         response = requests.get(url, timeout=timeout)
-        return response.status_code == 200
+        return response.status_code == HTTPStatus.OK
     except Exception:
         return False
 
@@ -89,7 +92,7 @@ def wait_for_healthy(url, timeout=120, interval=2, logger=None):
         True if healthy, False if timeout
     """
     if logger is None:
-        logger = getLogger(__name__)
+        logger = get_logger(__name__)
 
     start_time = time.time()
     while time.time() - start_time < timeout:
@@ -113,7 +116,7 @@ def stream_logs_from_file(log_file, follow=False):
     if not os.path.exists(log_file):
         return
 
-    with open(log_file, "r") as f:
+    with open(log_file) as f:
         # Read existing content
         for line in f:
             print(line, end="")
@@ -128,15 +131,8 @@ def stream_logs_from_file(log_file, follow=False):
                     time.sleep(0.1)
 
 
-def get_vllm_endpoints(config):
-    """Extract vLLM endpoints from config."""
-    return config.get("vllm_endpoints", [])
-
-
 def get_envoy_port(config):
     """Get Envoy listen port from config or use default."""
-    from cli.consts import DEFAULT_ENVOY_PORT
-
     # Try to read from listeners configuration
     listeners = config.get("listeners", [])
     if listeners and len(listeners) > 0:

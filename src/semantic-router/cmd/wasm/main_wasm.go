@@ -8,7 +8,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
-	"gopkg.in/yaml.v3"
 )
 
 // CompileResult is the JSON structure returned by signalCompile.
@@ -45,11 +44,10 @@ type ValidateResult struct {
 
 // SymbolTableJSON is a JSON-serializable symbol table for editor completions.
 type SymbolTableJSON struct {
-	Signals  []SymbolInfoJSON `json:"signals"`
-	Models   []string         `json:"models"`
-	Plugins  []string         `json:"plugins"`
-	Backends []SymbolInfoJSON `json:"backends"`
-	Routes   []string         `json:"routes"`
+	Signals []SymbolInfoJSON `json:"signals"`
+	Models  []string         `json:"models"`
+	Plugins []string         `json:"plugins"`
+	Routes  []string         `json:"routes"`
 }
 
 // SymbolInfoJSON is a named symbol with its type.
@@ -108,6 +106,7 @@ func compile(_ js.Value, args []js.Value) interface{} {
 	// 2. Validate (includes lex + parse + reference + constraint checks).
 	diags, valErrs := dsl.Validate(dslSource)
 	diagnostics := convertDiagnostics(diags)
+	diagnostics = appendRuntimeValidationWarning(diagnostics, prog)
 
 	// 3. Compile DSL → RouterConfig.
 	cfg, compileErrs := dsl.Compile(dslSource)
@@ -121,8 +120,8 @@ func compile(_ js.Value, args []js.Value) interface{} {
 		})
 	}
 
-	// 3. Emit YAML in user-friendly nested format (signals/providers).
-	yamlBytes, yamlErr := dsl.EmitUserYAML(cfg)
+	// 3. Emit the canonical routing fragment owned by the DSL surface.
+	yamlBytes, yamlErr := dsl.EmitRoutingYAMLFromConfig(cfg)
 	if yamlErr != nil {
 		return marshalJSON(CompileResult{
 			Diagnostics: diagnostics,
@@ -161,8 +160,10 @@ func validate(_ js.Value, args []js.Value) interface{} {
 	}
 	dslSource := args[0].String()
 
+	prog, _ := dsl.Parse(dslSource)
 	diags, symbols, valErrs := dsl.ValidateWithSymbols(dslSource)
 	diagnostics := convertDiagnostics(diags)
+	diagnostics = appendRuntimeValidationWarning(diagnostics, prog)
 
 	errorCount := 0
 	for _, d := range diags {
@@ -186,9 +187,6 @@ func validate(_ js.Value, args []js.Value) interface{} {
 		for _, s := range symbols.Signals {
 			symbolsJSON.Signals = append(symbolsJSON.Signals, SymbolInfoJSON{Name: s.Name, Type: s.Type})
 		}
-		for _, b := range symbols.Backends {
-			symbolsJSON.Backends = append(symbolsJSON.Backends, SymbolInfoJSON{Name: b.Name, Type: b.Type})
-		}
 	}
 
 	return marshalJSON(ValidateResult{
@@ -200,199 +198,24 @@ func validate(_ js.Value, args []js.Value) interface{} {
 }
 
 // decompile implements signalDecompile(yamlSource: string) → string (JSON).
-// Converts YAML RouterConfig back to DSL text.
-// Supports both the "user-friendly" format (signals.keywords, providers.models)
-// used by deploy configs and the "flat" format (keyword_rules) used by RouterConfig.
+// Converts a full router config YAML or routing fragment YAML back to routing-only DSL text.
 func decompile(_ js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
 		return marshalJSON(DecompileResult{Error: "signalDecompile requires 1 argument: yamlSource"})
 	}
 	yamlSource := args[0].String()
 
-	// Normalize: convert user-friendly YAML (signals.keywords etc.) to flat RouterConfig format.
-	normalized, normErr := normalizeYAML([]byte(yamlSource))
-	if normErr != nil {
-		return marshalJSON(DecompileResult{Error: "YAML normalization error: " + normErr.Error()})
-	}
-
-	var cfg config.RouterConfig
-	if err := yaml.Unmarshal(normalized, &cfg); err != nil {
+	cfg, err := config.ParseYAMLBytes([]byte(yamlSource))
+	if err != nil {
 		return marshalJSON(DecompileResult{Error: "YAML parse error: " + err.Error()})
 	}
 
-	dslText, err := dsl.Decompile(&cfg)
+	dslText, err := dsl.DecompileRouting(cfg)
 	if err != nil {
 		return marshalJSON(DecompileResult{Error: err.Error()})
 	}
 
 	return marshalJSON(DecompileResult{DSL: dslText})
-}
-
-// normalizeYAML converts the user-friendly YAML format (with nested "signals"
-// and "providers" sections) into the flat RouterConfig format that Go can unmarshal.
-// If the YAML is already in flat format, it passes through unchanged.
-func normalizeYAML(data []byte) ([]byte, error) {
-	var raw map[string]interface{}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-
-	changed := false
-
-	// Flatten "signals" section → top-level keys
-	if signals, ok := raw["signals"]; ok {
-		if signalsMap, ok := signals.(map[string]interface{}); ok {
-			signalKeyMap := map[string]string{
-				"keywords":       "keyword_rules",
-				"embeddings":     "embedding_rules",
-				"domains":        "categories",
-				"fact_check":     "fact_check_rules",
-				"user_feedbacks": "user_feedback_rules",
-				"preferences":    "preference_rules",
-				"language":       "language_rules",
-				"context":        "context_rules",
-				"complexity":     "complexity_rules",
-				"modality":       "modality_rules",
-				"authz":          "role_bindings",
-				"jailbreak":      "jailbreak",
-				"pii":            "pii",
-			}
-			for srcKey, dstKey := range signalKeyMap {
-				if v, exists := signalsMap[srcKey]; exists {
-					if _, already := raw[dstKey]; !already {
-						raw[dstKey] = v
-						changed = true
-					}
-				}
-			}
-			delete(raw, "signals")
-			changed = true
-		}
-	}
-
-	// Flatten "providers" section → vllm_endpoints, model_config, default_model, etc.
-	if providers, ok := raw["providers"]; ok {
-		if provMap, ok := providers.(map[string]interface{}); ok {
-			// Extract models → vllm_endpoints + model_config
-			if models, ok := provMap["models"]; ok {
-				if modelList, ok := models.([]interface{}); ok {
-					var endpoints []interface{}
-					modelConfig := make(map[string]interface{})
-					for _, m := range modelList {
-						mMap, ok := m.(map[string]interface{})
-						if !ok {
-							continue
-						}
-						modelName, _ := mMap["name"].(string)
-						if modelName == "" {
-							continue
-						}
-						mc := map[string]interface{}{}
-						if rf, ok := mMap["reasoning_family"]; ok {
-							mc["reasoning_family"] = rf
-						}
-						if ps, ok := mMap["param_size"]; ok {
-							mc["param_size"] = ps
-						}
-						if ak, ok := mMap["access_key"]; ok {
-							mc["access_key"] = ak
-						}
-						if af, ok := mMap["api_format"]; ok {
-							mc["api_format"] = af
-						}
-						if pr, ok := mMap["pricing"]; ok {
-							mc["pricing"] = pr
-						}
-						modelConfig[modelName] = mc
-
-						if epList, ok := mMap["endpoints"].([]interface{}); ok {
-							for _, ep := range epList {
-								epMap, ok := ep.(map[string]interface{})
-								if !ok {
-									continue
-								}
-								epStr, _ := epMap["endpoint"].(string)
-								epName, _ := epMap["name"].(string)
-								weight := epMap["weight"]
-								protocol, _ := epMap["protocol"].(string)
-								if protocol == "" {
-									protocol = "http"
-								}
-								host, port := parseEndpoint(epStr, protocol)
-								endpoints = append(endpoints, map[string]interface{}{
-									"name":     modelName + "_" + epName,
-									"address":  host,
-									"port":     port,
-									"weight":   weight,
-									"protocol": protocol,
-									"model":    modelName,
-								})
-							}
-						}
-					}
-					if _, already := raw["vllm_endpoints"]; !already && len(endpoints) > 0 {
-						raw["vllm_endpoints"] = endpoints
-						changed = true
-					}
-					if _, already := raw["model_config"]; !already && len(modelConfig) > 0 {
-						raw["model_config"] = modelConfig
-						changed = true
-					}
-				}
-			}
-			// Hoist simple keys
-			for _, key := range []string{"default_model", "reasoning_families", "default_reasoning_effort"} {
-				if v, ok := provMap[key]; ok {
-					if _, already := raw[key]; !already {
-						raw[key] = v
-						changed = true
-					}
-				}
-			}
-			delete(raw, "providers")
-			changed = true
-		}
-	}
-
-	if !changed {
-		return data, nil
-	}
-
-	return yaml.Marshal(raw)
-}
-
-// parseEndpoint splits "host:port" or "host:port/path" into host and port.
-func parseEndpoint(ep string, protocol string) (string, int) {
-	// Strip path
-	if idx := indexOf(ep, '/'); idx >= 0 {
-		ep = ep[:idx]
-	}
-	if idx := indexOf(ep, ':'); idx >= 0 {
-		host := ep[:idx]
-		port := 0
-		for _, c := range ep[idx+1:] {
-			if c >= '0' && c <= '9' {
-				port = port*10 + int(c-'0')
-			}
-		}
-		if port == 0 {
-			port = 80
-		}
-		return host, port
-	}
-	if protocol == "https" {
-		return ep, 443
-	}
-	return ep, 80
-}
-
-func indexOf(s string, c byte) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == c {
-			return i
-		}
-	}
-	return -1
 }
 
 // format implements signalFormat(dslSource: string) → string (JSON).
@@ -426,6 +249,7 @@ func parseAST(_ js.Value, args []js.Value) interface{} {
 	// Validate (includes reference + constraint checks) + symbol table
 	diags, symbols, valErrs := dsl.ValidateWithSymbols(dslSource)
 	diagnostics := convertDiagnostics(diags)
+	diagnostics = appendRuntimeValidationWarning(diagnostics, prog)
 
 	errorCount := 0
 	for _, d := range diags {
@@ -457,9 +281,6 @@ func parseAST(_ js.Value, args []js.Value) interface{} {
 		}
 		for _, s := range symbols.Signals {
 			symbolsJSON.Signals = append(symbolsJSON.Signals, SymbolInfoJSON{Name: s.Name, Type: s.Type})
-		}
-		for _, b := range symbols.Backends {
-			symbolsJSON.Backends = append(symbolsJSON.Backends, SymbolInfoJSON{Name: b.Name, Type: b.Type})
 		}
 	}
 
@@ -493,6 +314,56 @@ func convertDiagnostics(diags []dsl.Diagnostic) []DiagnosticJSON {
 		}
 	}
 	return result
+}
+
+func appendRuntimeValidationWarning(diagnostics []DiagnosticJSON, prog *dsl.Program) []DiagnosticJSON {
+	if prog == nil {
+		return diagnostics
+	}
+	line, column := runtimeValidationWarningPosition(prog)
+	if line == 0 {
+		return diagnostics
+	}
+	return append(diagnostics, DiagnosticJSON{
+		Level:   dsl.DiagWarning.String(),
+		Message: runtimeValidationWarningMessage(prog),
+		Line:    line,
+		Column:  column,
+	})
+}
+
+func runtimeValidationWarningMessage(prog *dsl.Program) string {
+	hasTests := len(prog.TestBlocks) > 0
+	hasSoftmaxPartitions := hasSoftmaxExclusiveProjectionPartitions(prog)
+	switch {
+	case hasTests && hasSoftmaxPartitions:
+		return "TEST blocks and softmax_exclusive PROJECTION partition centroid checks are parsed in browser validation but not executed against native runtime validation; run sr-dsl validate natively for runtime routing and centroid checks"
+	case hasTests:
+		return "TEST blocks are parsed in browser validation but not executed against the native routing signal pipeline; run sr-dsl validate natively for runtime TEST checks"
+	default:
+		return "softmax_exclusive PROJECTION partition centroid checks are not run in browser validation; run sr-dsl validate natively for embedding-based centroid similarity warnings"
+	}
+}
+
+func runtimeValidationWarningPosition(prog *dsl.Program) (int, int) {
+	if len(prog.TestBlocks) > 0 {
+		return prog.TestBlocks[0].Pos.Line, prog.TestBlocks[0].Pos.Column
+	}
+	for _, partition := range prog.ProjectionPartitions {
+		if partition.Semantics == "softmax_exclusive" {
+			return partition.Pos.Line, partition.Pos.Column
+		}
+	}
+	return 0, 0
+}
+
+func hasSoftmaxExclusiveProjectionPartitions(prog *dsl.Program) bool {
+	for _, partition := range prog.ProjectionPartitions {
+		if partition.Semantics == "softmax_exclusive" {
+			return true
+		}
+	}
+	return false
 }
 
 func marshalJSON(v interface{}) string {

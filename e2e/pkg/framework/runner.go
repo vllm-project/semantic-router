@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -54,6 +56,15 @@ func (r *Runner) setupCluster(ctx context.Context) error {
 		r.cluster.SetGPUEnabled(true)
 	}
 
+	if r.opts.UseWorkspaceModels {
+		workspaceModelsDir, err := resolveWorkspaceModelsDir()
+		if err != nil {
+			return err
+		}
+		r.log("Using workspace models directory: %s", workspaceModelsDir)
+		r.cluster.SetWorkspaceModelsDir(workspaceModelsDir)
+	}
+
 	return r.cluster.Create(ctx)
 }
 
@@ -71,6 +82,7 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 		Dockerfile:   "tools/docker/Dockerfile.extproc",
 		Tag:          fmt.Sprintf("ghcr.io/vllm-project/semantic-router/extproc:%s", r.opts.ImageTag),
 		BuildContext: ".",
+		BuildArgs:    localDockerBuildArgs(),
 	}
 
 	if err := r.builder.BuildAndLoad(ctx, r.opts.ClusterName, buildOpts); err != nil {
@@ -169,6 +181,7 @@ func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clien
 
 	opts := testcases.TestCaseOptions{
 		Verbose:       r.opts.Verbose,
+		Profile:       r.profile.Name(),
 		Namespace:     "default",
 		Timeout:       "5m",
 		RestConfig:    r.restConfig,
@@ -225,6 +238,27 @@ func (r *Runner) printResults(results []TestResult) {
 func (r *Runner) log(format string, args ...interface{}) {
 	if r.opts.Verbose {
 		fmt.Printf("[Runner] "+format+"\n", args...)
+	}
+}
+
+func resolveWorkspaceModelsDir() (string, error) {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("resolve workspace models directory: %w", err)
+	}
+
+	modelsDir := filepath.Join(workingDir, "models")
+	if err := os.MkdirAll(modelsDir, 0o755); err != nil {
+		return "", fmt.Errorf("create workspace models directory %s: %w", modelsDir, err)
+	}
+
+	return modelsDir, nil
+}
+
+func localDockerBuildArgs() map[string]string {
+	return map[string]string{
+		"BUILDPLATFORM": "linux/" + runtime.GOARCH,
+		"TARGETARCH":    runtime.GOARCH,
 	}
 }
 

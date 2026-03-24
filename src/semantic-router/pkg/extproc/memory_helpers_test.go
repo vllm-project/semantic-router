@@ -77,10 +77,10 @@ func TestExtractAutoStore_PerDecisionPlugin_Enabled(t *testing.T) {
 			Plugins: []config.DecisionPlugin{
 				{
 					Type: "memory",
-					Configuration: map[string]interface{}{
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
 						"enabled":    true,
 						"auto_store": true,
-					},
+					}),
 				},
 			},
 		},
@@ -103,10 +103,10 @@ func TestExtractAutoStore_PerDecisionPlugin_Disabled(t *testing.T) {
 			Plugins: []config.DecisionPlugin{
 				{
 					Type: "memory",
-					Configuration: map[string]interface{}{
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
 						"enabled":    true,
 						"auto_store": false, // Explicitly disabled
-					},
+					}),
 				},
 			},
 		},
@@ -129,10 +129,10 @@ func TestExtractAutoStore_PerDecisionPlugin_NotSet_DefaultsFalse(t *testing.T) {
 			Plugins: []config.DecisionPlugin{
 				{
 					Type: "memory",
-					Configuration: map[string]interface{}{
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
 						"enabled": true,
 						// auto_store NOT set - defaults to false
-					},
+					}),
 				},
 			},
 		},
@@ -153,7 +153,7 @@ func TestExtractAutoStore_NoMemoryPlugin_ReturnsFalse(t *testing.T) {
 		VSRSelectedDecision: &config.Decision{
 			Name: "no_memory_decision",
 			Plugins: []config.DecisionPlugin{
-				{Type: "pii", Configuration: map[string]interface{}{"enabled": true}},
+				{Type: "pii", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true})},
 				// No memory plugin
 			},
 		},
@@ -397,20 +397,20 @@ func TestExtractMemoryInfo_WithConversationHistory(t *testing.T) {
 	assert.Equal(t, "Your budget is $10,000", history[3].Content)
 }
 
-func TestExtractMemoryInfo_NonResponseAPI(t *testing.T) {
+func TestExtractMemoryInfo_NoHistoryAvailable(t *testing.T) {
 	ctx := &RequestContext{
-		RequestID:      "req_123",
-		ResponseAPICtx: nil, // Not a Response API request
+		RequestID:              "req_123",
+		ResponseAPICtx:         nil, // Not a Response API request
+		ChatCompletionMessages: nil, // No Chat Completions messages either
 	}
 
 	sessionID, userID, history, err := extractMemoryInfo(ctx)
 
-	require.Error(t, err, "should return error for non-Response API request")
-	// For non-Response API, we check ConversationID requirement first (before userID)
-	// because we can't track turns without ConversationID
-	assert.Contains(t, err.Error(), "ConversationID required", "error message should mention ConversationID requirement for non-Response API")
-	assert.Empty(t, sessionID, "should return empty sessionID for non-Response API request")
-	assert.Empty(t, userID, "should return empty userID for non-Response API request")
+	require.Error(t, err, "should return error when no history available")
+	// Now supports both Response API and Chat Completions
+	assert.Contains(t, err.Error(), "no conversation history available", "error should indicate no history available")
+	assert.Empty(t, sessionID)
+	assert.Empty(t, userID)
 	assert.Empty(t, history)
 }
 
@@ -794,6 +794,33 @@ func TestExtractTextFromContentParts_EmptySlice(t *testing.T) {
 
 	result = extractTextFromContentParts([]responseapi.ContentPart{})
 	assert.Empty(t, result)
+}
+
+// =============================================================================
+// extractCurrentUserMessage Tests
+// =============================================================================
+
+func TestExtractCurrentUserMessage_ResponseAPIPath(t *testing.T) {
+	reqCtx := &RequestContext{
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				Input: json.RawMessage(`"What is our deployment target?"`),
+			},
+		},
+	}
+
+	msg := extractCurrentUserMessage(reqCtx)
+	assert.Equal(t, "What is our deployment target?", msg)
+}
+
+func TestExtractCurrentUserMessage_EmptyForChatCompletions(t *testing.T) {
+	reqCtx := &RequestContext{
+		OriginalRequestBody: []byte(`{"model":"auto","messages":[{"role":"user","content":"hello"}]}`),
+	}
+
+	msg := extractCurrentUserMessage(reqCtx)
+	assert.Empty(t, msg)
 }
 
 // =============================================================================

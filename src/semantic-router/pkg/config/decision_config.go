@@ -2,14 +2,14 @@ package config
 
 // Decision represents a routing decision that combines multiple rules with boolean logic.
 type Decision struct {
-	Name                    string                `yaml:"name"`
-	Description             string                `yaml:"description,omitempty"`
-	Priority                int                   `yaml:"priority,omitempty"`
-	Rules                   RuleCombination       `yaml:"rules"`
-	ModelSelectionAlgorithm *ModelSelectionConfig `yaml:"modelSelectionAlgorithm,omitempty"`
-	ModelRefs               []ModelRef            `yaml:"modelRefs,omitempty"`
-	Algorithm               *AlgorithmConfig      `yaml:"algorithm,omitempty"`
-	Plugins                 []DecisionPlugin      `yaml:"plugins,omitempty"`
+	Name        string           `yaml:"name"`
+	Description string           `yaml:"description,omitempty"`
+	Priority    int              `yaml:"priority,omitempty"`
+	Tier        int              `yaml:"tier,omitempty"`
+	Rules       RuleCombination  `yaml:"rules"`
+	ModelRefs   []ModelRef       `yaml:"modelRefs,omitempty"`
+	Algorithm   *AlgorithmConfig `yaml:"algorithm,omitempty"`
+	Plugins     []DecisionPlugin `yaml:"plugins,omitempty"`
 }
 
 // AlgorithmConfig defines how multiple models should be executed and aggregated.

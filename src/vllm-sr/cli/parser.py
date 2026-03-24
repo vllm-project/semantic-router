@@ -5,16 +5,62 @@ from pathlib import Path
 from typing import Dict, Any
 from pydantic import ValidationError
 
+from cli.config_contract import (
+    LEGACY_PROVIDER_DEFAULT_KEYS,
+    LEGACY_PROVIDER_MODEL_SURFACE_KEYS,
+    LEGACY_SIGNAL_KEY_TO_CANONICAL,
+    iter_named_signal_entries,
+)
 from cli.models import UserConfig
-from cli.utils import getLogger
+from cli.utils import get_logger
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 class ConfigParseError(Exception):
     """Configuration parsing error."""
 
     pass
+
+
+def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
+    fields: list[str] = []
+
+    for field_name in ("signals", "decisions", *LEGACY_SIGNAL_KEY_TO_CANONICAL):
+        if field_name in data:
+            fields.append(field_name)
+
+    routing = data.get("routing")
+    if isinstance(routing, dict) and "models" in routing:
+        fields.append("routing.models")
+
+    providers = data.get("providers")
+    if isinstance(providers, dict):
+        for field_name in (
+            "model_targets",
+            "backends",
+            "auth_profiles",
+            *LEGACY_PROVIDER_DEFAULT_KEYS,
+        ):
+            if field_name in providers:
+                fields.append(f"providers.{field_name}")
+
+        models = providers.get("models")
+        if isinstance(models, list):
+            for index, model in enumerate(models):
+                if not isinstance(model, dict):
+                    continue
+                if "access" in model:
+                    fields.append(f"providers.models[{index}].access")
+                for field_name in LEGACY_PROVIDER_MODEL_SURFACE_KEYS:
+                    if field_name in model:
+                        fields.append(f"providers.models[{index}].{field_name}")
+
+    global_config = data.get("global")
+    if isinstance(global_config, dict) and "modules" in global_config:
+        fields.append("global.modules")
+
+    return fields
 
 
 def parse_user_config(config_path: str) -> UserConfig:
@@ -47,6 +93,15 @@ def parse_user_config(config_path: str) -> UserConfig:
 
     if not data:
         raise ConfigParseError("Configuration file is empty")
+
+    deprecated_fields = _deprecated_config_fields(data)
+    if deprecated_fields:
+        joined_fields = ", ".join(deprecated_fields)
+        raise ConfigParseError(
+            "Deprecated config fields are no longer supported: "
+            f"{joined_fields}. Use `vllm-sr config migrate --config {config_path}` "
+            "or rewrite the file to canonical v0.3 `providers/routing/global`."
+        )
 
     # Validate with Pydantic
     try:
@@ -135,33 +190,13 @@ def validate_signal_uniqueness(config: UserConfig) -> list:
     if not config.signals:
         return errors
 
-    # Check keyword signals
-    for signal in config.signals.keywords:
-        if signal.name in seen:
+    for family, signal_name in iter_named_signal_entries(config.signals):
+        if signal_name in seen:
             errors.append(
-                f"Duplicate signal name '{signal.name}' in keywords "
-                f"(already defined in {seen[signal.name]})"
+                f"Duplicate signal name '{signal_name}' in {family} "
+                f"(already defined in {seen[signal_name]})"
             )
-        seen[signal.name] = "keywords"
-
-    # Check embedding signals
-    for signal in config.signals.embeddings:
-        if signal.name in seen:
-            errors.append(
-                f"Duplicate signal name '{signal.name}' in embeddings "
-                f"(already defined in {seen[signal.name]})"
-            )
-        seen[signal.name] = "embeddings"
-
-    # Check context signals
-    if config.signals.context_rules:
-        for signal in config.signals.context_rules:
-            if signal.name in seen:
-                errors.append(
-                    f"Duplicate signal name '{signal.name}' in context rules "
-                    f"(already defined in {seen[signal.name]})"
-                )
-            seen[signal.name] = "context_rules"
+        seen[signal_name] = family
 
     return errors
 

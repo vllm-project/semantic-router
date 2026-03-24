@@ -3,8 +3,9 @@ package framework
 import (
 	"context"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 // Profile defines the interface that all test profiles must implement
@@ -46,6 +47,7 @@ type SetupOptions struct {
 	Verbose bool
 
 	// ValuesFiles contains paths to Helm values files
+	// keyed by Helm release name for profile-specific overlays.
 	ValuesFiles map[string]string
 }
 
@@ -75,7 +77,7 @@ type TestOptions struct {
 	// ImageTag is the Docker image tag to use
 	ImageTag string
 
-	// KeepCluster keeps the cluster after tests complete
+	// KeepCluster preserves the kind cluster and profile resources after the run.
 	KeepCluster bool
 
 	// UseExistingCluster uses an existing cluster instead of creating a new one
@@ -95,6 +97,9 @@ type TestOptions struct {
 
 	// SkipSetup skips profile setup and only runs tests (assumes environment is already deployed)
 	SkipSetup bool
+
+	// UseWorkspaceModels mounts the workspace models/ directory into semantic-router.
+	UseWorkspaceModels bool
 }
 
 // TestResult represents the result of a test case

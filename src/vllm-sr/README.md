@@ -20,7 +20,7 @@ pip install -e .
 ### Usage
 
 ```bash
-# Start the router (includes dashboard and first-run setup)
+# Start the router (includes dashboard, simulator sidecar, and first-run setup)
 HF_TOKEN=hf_xxx vllm-sr serve
 
 # Start an isolated second local stack on offset host ports
@@ -37,6 +37,7 @@ vllm-sr dashboard
 vllm-sr logs router
 vllm-sr logs envoy
 vllm-sr logs dashboard
+vllm-sr logs simulator
 
 # Check status
 vllm-sr status
@@ -45,23 +46,49 @@ vllm-sr status
 vllm-sr stop
 ```
 
+### Kubernetes Deployment
+
+The same CLI deploys to Kubernetes via Helm:
+
+```bash
+# Deploy to Kubernetes (uses your existing config.yaml)
+HF_TOKEN=hf_xxx vllm-sr serve --target k8s --profile dev --config config.yaml
+
+# Deploy to a specific namespace and context
+HF_TOKEN=hf_xxx vllm-sr serve --target k8s --namespace production --context prod-cluster
+
+# Check status / logs / stop
+vllm-sr status --target k8s
+vllm-sr logs router --target k8s -f
+vllm-sr stop --target k8s
+```
+
+**Credential handling:** Sensitive environment variables (`HF_TOKEN`, `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`) are automatically stored in a Kubernetes Secret
+(`vllm-sr-env-secrets`) and mounted via `envFrom`. They never appear as
+plain-text values in Helm overrides or the Deployment spec. Non-sensitive
+variables (`HF_ENDPOINT`, `HF_HOME`, etc.) are passed as standard `env`
+entries.
+
+The secret is created before `helm upgrade --install` and cleaned up by
+`vllm-sr stop --target k8s`.
+
 If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspace and opens the dashboard in setup mode. Configure your first model there, then activate routing.
 
 Local dashboard state is persisted under `.vllm-sr/dashboard-data/` and bind-mounted into the container at `/app/data`. User accounts, evaluation history, and ML pipeline artifacts survive `vllm-sr stop` followed by a new `vllm-sr serve` as long as that workspace directory is kept.
+
+The fleet simulator sidecar is started on the same runtime network by default. The dashboard backend proxies it at `/api/fleet-sim/*`, and the dashboard exposes its workflows under the `Fleet Sim` top-bar dropdown.
 
 To run parallel local stacks from the same machine or multiple worktrees, set `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET` before `vllm-sr serve`, `vllm-sr status`, `vllm-sr dashboard`, and `vllm-sr stop`. The stack name isolates container and network names, and the port offset shifts the published host ports while keeping internal container ports unchanged.
 
 ### Advanced YAML-first setup
 
 ```bash
-# Generate an advanced sample config if you prefer editing YAML directly
-vllm-sr init
-
-# Validate the sample before serving
-vllm-sr validate
+# Validate a hand-authored canonical config before serving
+vllm-sr validate config.yaml
 ```
 
-`vllm-sr init` is optional. It generates a lean advanced sample plus `.vllm-sr/router-defaults.yaml` for users who want to hand-author routing config. `router-defaults.yaml` contains advanced runtime defaults; it is not required for first-run dashboard setup.
+`vllm-sr init` was removed in v0.3. Author `config.yaml` directly using the canonical `version/listeners/providers/routing/global` layout, migrate an older file with `vllm-sr config migrate --config old-config.yaml`, or import supported OpenClaw model providers with `vllm-sr config import --from openclaw`. Router-wide defaults come from the router itself and can be overridden under `global:`.
 
 ## Features
 
@@ -116,88 +143,119 @@ The CLI supports configuring plugins in your routing decisions. Plugins are per-
 
 **Plugin Examples:**
 
+Each example shows the plugin list inside a canonical `routing.decisions[]` entry.
+
 1. **semantic-cache** - Cache similar requests:
 
 ```yaml
-plugins:
-  - type: "semantic-cache"
-    configuration:
-      enabled: true
-      similarity_threshold: 0.92  # 0.0-1.0, higher = more strict
-      ttl_seconds: 3600  # Optional: cache TTL in seconds
+routing:
+  decisions:
+    - name: "cached-route"
+      plugins:
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.92  # 0.0-1.0, higher = more strict
+            ttl_seconds: 3600  # Optional: cache TTL in seconds
 ```
 
 2. **jailbreak** - Block adversarial prompts:
 
 ```yaml
-plugins:
-  - type: "jailbreak"
-    configuration:
-      enabled: true
-      threshold: 0.8  # Optional: detection sensitivity 0.0-1.0
+routing:
+  decisions:
+    - name: "guarded-route"
+      plugins:
+        - type: "jailbreak"
+          configuration:
+            enabled: true
+            threshold: 0.8  # Optional: detection sensitivity 0.0-1.0
 ```
 
 3. **pii** - Enforce PII policies:
 
 ```yaml
-plugins:
-  - type: "pii"
-    configuration:
-      enabled: true
-      threshold: 0.7  # Optional: detection sensitivity 0.0-1.0
-      pii_types_allowed: ["EMAIL_ADDRESS"]  # Optional: list of allowed PII types
+routing:
+  decisions:
+    - name: "pii-route"
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            threshold: 0.7  # Optional: detection sensitivity 0.0-1.0
+            pii_types_allowed: ["EMAIL_ADDRESS"]  # Optional: list of allowed PII types
 ```
 
 4. **system_prompt** - Inject custom instructions:
 
 ```yaml
-plugins:
-  - type: "system_prompt"
-    configuration:
-      enabled: true
-      system_prompt: "You are a helpful assistant."
-      mode: "replace"  # "replace" (default) or "insert" (prepend)
+routing:
+  decisions:
+    - name: "persona-route"
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a helpful assistant."
+            mode: "replace"  # "replace" (default) or "insert" (prepend)
 ```
 
 5. **header_mutation** - Modify HTTP headers:
 
 ```yaml
-plugins:
-  - type: "header_mutation"
-    configuration:
-      add:
-        - name: "X-Custom-Header"
-          value: "custom-value"
-      update:
-        - name: "User-Agent"
-          value: "SemanticRouter/1.0"
-      delete:
-        - "X-Old-Header"
+routing:
+  decisions:
+    - name: "header-route"
+      plugins:
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "X-Custom-Header"
+                value: "custom-value"
+            update:
+              - name: "User-Agent"
+                value: "SemanticRouter/1.0"
+            delete:
+              - "X-Old-Header"
 ```
 
 6. **hallucination** - Detect hallucinations:
 
 ```yaml
-plugins:
-  - type: "hallucination"
-    configuration:
-      enabled: true
-      use_nli: false  # Optional: use NLI for detailed analysis
-      hallucination_action: "header"  # "header", "body", or "none"
+routing:
+  decisions:
+    - name: "fact-check-route"
+      plugins:
+        - type: "hallucination"
+          configuration:
+            enabled: true
+            use_nli: false  # Optional: use NLI for detailed analysis
+            hallucination_action: "header"  # "header", "body", or "none"
 ```
 
 7. **router_replay** - Record decisions for debugging:
 
 ```yaml
-plugins:
-  - type: "router_replay"
-    configuration:
-      enabled: true
-      max_records: 200  # Optional: max records in memory (default: 200)
-      capture_request_body: false  # Optional: capture request payloads (default: false)
-      capture_response_body: false  # Optional: capture response payloads (default: false)
-      max_body_bytes: 4096  # Optional: max bytes to capture (default: 4096)
+routing:
+  decisions:
+    - name: "debug-route"
+      plugins:
+        - type: "router_replay"
+          configuration:
+            enabled: true
+            max_records: 200  # Optional: max records in memory (default: 200)
+            capture_request_body: false  # Optional: capture request payloads (default: false)
+            capture_response_body: false  # Optional: capture response payloads (default: false)
+            max_body_bytes: 4096  # Optional: max bytes to capture (default: 4096)
 ```
+
+Router replay records are exposed through:
+
+- `GET /v1/router_replay?limit=20&offset=0&search=req-123&decision=foo&model=bar&cache_status=cached` - List recent records with pagination metadata. Default page size is `20`; larger `limit` values are capped at `100`.
+- `GET /v1/router_replay/aggregate?search=req-123&decision=foo&model=bar&cache_status=cached` - Return summary and chart aggregates for the filtered replay set.
+- `GET /v1/router_replay/{id}` - Fetch a single replay record.
+
+If a replay page would exceed the ext-proc gRPC message budget, the router returns `413 Payload Too Large` instead of failing the stream.
 
 **Validation Rules:**
 
@@ -213,14 +271,14 @@ plugins:
 **CLI Commands:**
 
 ```bash
-# Generate an advanced YAML sample if you want to edit config directly
-vllm-sr init
-
 # Validate configuration (including plugins)
 vllm-sr validate
 
-# Generate router config with plugins
-vllm-sr config router --config config.yaml
+# Migrate older configs to the canonical contract
+vllm-sr config migrate --config old-config.yaml
+
+# Import supported OpenClaw model providers into canonical config.yaml
+vllm-sr config import --from openclaw --source openclaw.json --target config.yaml
 ```
 
 ### File Descriptor Limits

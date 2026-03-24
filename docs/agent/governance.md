@@ -32,6 +32,15 @@ This document defines how the repository's agent rules are layered and maintaine
 - Record durable harness decisions in [adr/README.md](adr/README.md) and the ADR files it indexes.
 - Do not use ADRs for temporary execution plans, one-off migrations, or debt items that have not yet reached a durable decision.
 
+## Default Task Loop
+
+- Every task follows the canonical loop surfaced by `make agent-report`.
+- Start from the resolved skill and context, make the smallest viable change, run the applicable gate, and treat failing runs as continuation signals instead of handoff points.
+- `tools/agent/task-matrix.yaml` classifies rule sets as `lightweight` or `completion`.
+- `lightweight` tasks close when the applicable gates for the current change pass or a real external blocker is recorded.
+- `completion` tasks close when the active subtask and its applicable gates pass; if the work spans multiple ordered loops or must resume across sessions, create or update an execution plan.
+- Stop a loop early only for real external blockers or when another unfinished in-scope subtask can advance while the blocker is pending.
+
 ## What Does Not Belong in the Canonical Harness
 
 - one-off CI repair loops

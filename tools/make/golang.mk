@@ -9,7 +9,8 @@ go-lint: ## Run golangci-lint for src/semantic-router
 	@echo "Running golangci-lint for src/semantic-router..."
 	@cd src/semantic-router/ && \
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
-		export GOPATH=$${GOPATH:-$$HOME/go} && \
+		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
+		export PATH="$$GOPATH/bin:$$PATH" && \
 		golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
 	@echo "src/semantic-router go module lint passed"
 
@@ -18,7 +19,8 @@ go-lint-fix: ## Auto-fix lint issues in src/semantic-router (may need manual fix
 	@echo "Running golangci-lint fix for src/semantic-router..."
 	@cd src/semantic-router/ && \
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
-		export GOPATH=$${GOPATH:-$$HOME/go} && \
+		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
+		export PATH="$$GOPATH/bin:$$PATH" && \
 		golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
 	@echo "src/semantic-router go module lint fix applied"
 
@@ -46,8 +48,13 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 	@echo "All go mod tidy checks passed"
 
 install-controller-gen: ## Install controller-gen for code generation
-	@echo "Installing controller-gen..."
-	@cd src/semantic-router && go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+	@echo "Ensuring controller-gen is available..."
+	@if command -v controller-gen >/dev/null 2>&1; then \
+		echo "Using existing controller-gen at $$(command -v controller-gen)"; \
+	else \
+		echo "Installing controller-gen..."; \
+		cd src/semantic-router && go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest; \
+	fi
 
 generate-crd: install-controller-gen ## Generate CRD manifests using controller-gen
 	@echo "Generating CRD manifests..."

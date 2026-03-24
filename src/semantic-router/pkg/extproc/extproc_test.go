@@ -474,15 +474,13 @@ func CreateTestConfig() *config.RouterConfig {
 
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
-			BertModel: config.BertModel{
-				ModelID:   "sentence-transformers/all-MiniLM-L6-v2",
-				Threshold: 0.8,
-				UseCPU:    true,
-			},
 			EmbeddingModels: config.EmbeddingModels{
-				HNSWConfig: config.HNSWConfig{
-					ModelType:       "qwen3",
-					TargetDimension: 768,
+				BertModelPath: "sentence-transformers/all-MiniLM-L6-v2",
+				UseCPU:        true,
+				EmbeddingConfig: config.HNSWConfig{
+					ModelType:         "qwen3",
+					TargetDimension:   768,
+					MinScoreThreshold: 0.8,
 				},
 			},
 			Classifier: config.Classifier{
@@ -1059,7 +1057,7 @@ var _ = Describe("ExtProc Package", func() {
 		It("should create test configuration successfully", func() {
 			cfg := CreateTestConfig()
 			Expect(cfg).NotTo(BeNil())
-			Expect(cfg.InlineModels.BertModel.ModelID).To(Equal("sentence-transformers/all-MiniLM-L6-v2"))
+			Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).To(Equal("sentence-transformers/all-MiniLM-L6-v2"))
 			Expect(cfg.BackendModels.DefaultModel).To(Equal("model-b"))
 			Expect(len(cfg.IntelligentRouting.Categories)).To(Equal(1))
 			Expect(cfg.IntelligentRouting.Categories[0].CategoryMetadata.Name).To(Equal("coding"))
@@ -1095,7 +1093,7 @@ var _ = Describe("ExtProc Package", func() {
 			cfg := CreateTestConfig()
 
 			// Test essential fields are present
-			Expect(cfg.InlineModels.BertModel.ModelID).NotTo(BeEmpty())
+			Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.DefaultModel).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.ModelConfig).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.ModelConfig).To(HaveKey("model-a"))
@@ -3361,10 +3359,10 @@ func TestHandleRequestHeadersWithModelsEndpoint(t *testing.T) {
 			expectImmediate: false,
 		},
 		{
-			name:            "POST /v1/models - should continue processing",
+			name:            "POST /v1/models - immediate response",
 			method:          "POST",
 			path:            "/v1/models",
-			expectImmediate: false,
+			expectImmediate: true,
 		},
 	}
 
@@ -4142,7 +4140,7 @@ var _ = Describe("Response API Translation", func() {
 		Context("Request Body Handling", func() {
 			It("should parse and validate OpenAI request format", func() {
 				validRequest := &cache.OpenAIRequest{
-					Model: "gpt-4",
+					Model: "model-b",
 					Messages: []cache.ChatMessage{
 						{Role: "user", Content: json.RawMessage(`"What is AI?"`)},
 					},
@@ -4475,7 +4473,7 @@ var _ = Describe("Response API Translation", func() {
 				{
 					Request: &ext_proc.ProcessingRequest_RequestBody{
 						RequestBody: &ext_proc.HttpBody{
-							Body: []byte(`{"model": "gpt-4", "input": "Hello", "instructions": "Be helpful"}`),
+							Body: []byte(`{"model": "model-b", "input": "Hello", "instructions": "Be helpful"}`),
 						},
 					},
 				},
@@ -4501,7 +4499,7 @@ var _ = Describe("Response API Translation", func() {
 			var chatReq map[string]interface{}
 			err = json.Unmarshal(translatedBody, &chatReq)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(chatReq["model"]).To(Equal("gpt-4"))
+			Expect(chatReq["model"]).To(Equal("model-b"))
 
 			// Messages should be present (from instructions + input)
 			messages, ok := chatReq["messages"].([]interface{})
@@ -4509,7 +4507,6 @@ var _ = Describe("Response API Translation", func() {
 			Expect(len(messages)).To(Equal(2)) // system + user
 		})
 	})
-
 	_ = Describe("Response API Content-Length Recalculation", func() {
 		var router *OpenAIRouter
 		var cfg *config.RouterConfig
@@ -4517,6 +4514,7 @@ var _ = Describe("Response API Translation", func() {
 		_ = Describe("ExtProc Model-Specific Reasoning", func() {
 			BeforeEach(func() {
 				cfg = CreateTestConfig()
+				cfg.ModelConfig["gpt-4-oss"] = config.ModelParams{PreferredEndpoints: []string{"test-endpoint1"}}
 				var err error
 				router, err = CreateTestRouter(cfg)
 				Expect(err).NotTo(HaveOccurred())
@@ -4744,7 +4742,7 @@ var _ = Describe("Response API Translation", func() {
 
 			Context("Model Path Validation", func() {
 				It("should validate required model paths are properly configured", func() {
-					Expect(cfg.InlineModels.BertModel.ModelID).NotTo(BeEmpty())
+					Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).NotTo(BeEmpty())
 					Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).NotTo(BeEmpty())
 					// PIIModel.ModelID is optional - do not require it
 				})
@@ -4780,8 +4778,8 @@ var _ = Describe("Response API Translation", func() {
 				})
 
 				It("should have valid classification thresholds", func() {
-					Expect(cfg.InlineModels.BertModel.Threshold).To(BeNumerically(">=", 0))
-					Expect(cfg.InlineModels.BertModel.Threshold).To(BeNumerically("<=", 1.0))
+					Expect(cfg.InlineModels.EmbeddingModels.MinSimilarityThreshold()).To(BeNumerically(">=", 0))
+					Expect(cfg.InlineModels.EmbeddingModels.MinSimilarityThreshold()).To(BeNumerically("<=", 1.0))
 
 					if cfg.InlineModels.Classifier.PIIModel.Threshold > 0 {
 						Expect(cfg.InlineModels.Classifier.PIIModel.Threshold).To(BeNumerically("<=", 1.0))

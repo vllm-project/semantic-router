@@ -1,0 +1,9 @@
+plugin:
+  type: request_params
+  configuration:
+    blocked_params:
+      - logprobs
+      - top_logprobs
+    max_tokens_limit: 500
+    max_n: 1
+    strip_unknown: true

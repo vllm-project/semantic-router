@@ -1038,16 +1038,9 @@ pub extern "C" fn classify_modernbert_text_with_probabilities(
 
     if let Some(classifier) = TRADITIONAL_MODERNBERT_CLASSIFIER.get() {
         let classifier = classifier.clone();
-        match classifier.classify_text(text) {
-            Ok((class_id, confidence)) => {
-                // Convert results to C-compatible format
-                // Create probabilities array from classifier
-                let num_classes = classifier.get_num_classes();
-                let mut probabilities = vec![0.1f32; num_classes];
-                if (class_id as usize) < num_classes {
-                    probabilities[class_id as usize] = confidence;
-                }
-
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_id, confidence, probabilities)) => {
+                let num_classes = probabilities.len();
                 let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
 
                 ModernBertClassificationResultWithProbs {

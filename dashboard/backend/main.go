@@ -36,6 +36,9 @@ func main() {
 	if cfg.EnvoyURL != "" {
 		log.Printf("Envoy: %s → /api/router/v1/chat/completions", cfg.EnvoyURL)
 	}
+	if cfg.FleetSimURL != "" {
+		log.Printf("Fleet Sim: %s → /api/fleet-sim/*", cfg.FleetSimURL)
+	}
 	log.Printf("Router API: %s → /api/router/*", cfg.RouterAPIURL)
 	log.Printf("Router Metrics: %s → /metrics/router", cfg.RouterMetrics)
 	if cfg.ReadonlyMode {

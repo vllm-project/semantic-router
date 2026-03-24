@@ -157,14 +157,16 @@ type SemanticCache struct {
 	EvictionPolicy      string        `yaml:"eviction_policy,omitempty"`
 	Redis               *RedisConfig  `yaml:"redis,omitempty"`
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
-	BackendConfigPath   string        `yaml:"backend_config_path,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
 }
 
 type MemoryConfig struct {
 	Enabled                    bool                       `yaml:"enabled,omitempty"`
 	AutoStore                  bool                       `yaml:"auto_store,omitempty"`
+	DisabledRoutes             []string                   `yaml:"disabled_routes,omitempty"`
+	DisabledModels             []string                   `yaml:"disabled_models,omitempty"`
 	Milvus                     MemoryMilvusConfig         `yaml:"milvus,omitempty"`
+	RedisCache                 *MemoryRedisCacheConfig    `yaml:"redis_cache,omitempty"`
 	EmbeddingModel             string                     `yaml:"embedding_model,omitempty"`
 	ExtractionBatchSize        int                        `yaml:"extraction_batch_size,omitempty"`
 	DefaultRetrievalLimit      int                        `yaml:"default_retrieval_limit,omitempty"`
@@ -174,6 +176,16 @@ type MemoryConfig struct {
 	AdaptiveThreshold          bool                       `yaml:"adaptive_threshold,omitempty"`
 	QualityScoring             MemoryQualityScoringConfig `yaml:"quality_scoring,omitempty"`
 	Reflection                 MemoryReflectionConfig     `yaml:"reflection,omitempty"`
+}
+
+// MemoryRedisCacheConfig configures an optional Redis hot cache in front of Milvus retrieval.
+type MemoryRedisCacheConfig struct {
+	Enabled    bool   `yaml:"enabled,omitempty"`
+	Address    string `yaml:"address,omitempty"`
+	TTLSeconds int    `yaml:"ttl_seconds,omitempty"`
+	DB         int    `yaml:"db,omitempty"`
+	KeyPrefix  string `yaml:"key_prefix,omitempty"`
+	Password   string `yaml:"password,omitempty"`
 }
 
 type MemoryQualityScoringConfig struct {
@@ -206,13 +218,12 @@ type MemoryMilvusConfig struct {
 }
 
 type ResponseAPIConfig struct {
-	Enabled           bool                    `yaml:"enabled"`
-	StoreBackend      string                  `yaml:"store_backend,omitempty"`
-	TTLSeconds        int                     `yaml:"ttl_seconds,omitempty"`
-	MaxResponses      int                     `yaml:"max_responses,omitempty"`
-	BackendConfigPath string                  `yaml:"backend_config_path,omitempty"`
-	Milvus            ResponseAPIMilvusConfig `yaml:"milvus,omitempty"`
-	Redis             ResponseAPIRedisConfig  `yaml:"redis,omitempty"`
+	Enabled      bool                    `yaml:"enabled"`
+	StoreBackend string                  `yaml:"store_backend,omitempty"`
+	TTLSeconds   int                     `yaml:"ttl_seconds,omitempty"`
+	MaxResponses int                     `yaml:"max_responses,omitempty"`
+	Milvus       ResponseAPIMilvusConfig `yaml:"milvus,omitempty"`
+	Redis        ResponseAPIRedisConfig  `yaml:"redis,omitempty"`
 }
 
 type ResponseAPIMilvusConfig struct {

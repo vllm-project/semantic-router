@@ -216,9 +216,7 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 			config: &config.RouterConfig{
 				APIServer: config.APIServer{
 					API: config.APIConfig{
-						BatchClassification: struct {
-							Metrics config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
-						}{
+						BatchClassification: config.BatchClassificationConfig{
 							Metrics: config.BatchClassificationMetricsConfig{
 								Enabled: true,
 							},
@@ -252,9 +250,7 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 			config: &config.RouterConfig{
 				APIServer: config.APIServer{
 					API: config.APIConfig{
-						BatchClassification: struct {
-							Metrics config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
-						}{
+						BatchClassification: config.BatchClassificationConfig{
 							Metrics: config.BatchClassificationMetricsConfig{
 								Enabled: true,
 							},
@@ -847,9 +843,9 @@ func TestShouldInitMemoryStore(t *testing.T) {
 							Plugins: []config.DecisionPlugin{
 								{
 									Type: "memory",
-									Configuration: map[string]interface{}{
+									Configuration: config.MustStructuredPayload(map[string]interface{}{
 										"enabled": true,
-									},
+									}),
 								},
 							},
 						},
@@ -869,9 +865,9 @@ func TestShouldInitMemoryStore(t *testing.T) {
 							Plugins: []config.DecisionPlugin{
 								{
 									Type: "pii",
-									Configuration: map[string]interface{}{
+									Configuration: config.MustStructuredPayload(map[string]interface{}{
 										"enabled": true,
-									},
+									}),
 								},
 							},
 						},

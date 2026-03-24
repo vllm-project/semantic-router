@@ -27,6 +27,26 @@ func TestShouldUseLooper(t *testing.T) {
 		assert.False(t, router.shouldUseLooper(decision))
 	})
 
+	t.Run("ignores selection algorithms", func(t *testing.T) {
+		router := &OpenAIRouter{
+			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
+		}
+		selectionAlgorithms := []string{"static", "elo", "router_dc", "automix", "hybrid", "knn", "kmeans", "svm", "mlp", "gmtrouter", "latency_aware"}
+
+		for _, algorithmType := range selectionAlgorithms {
+			decision := &config.Decision{
+				Name: "routing",
+				ModelRefs: []config.ModelRef{
+					{Model: "model-a"},
+					{Model: "model-b"},
+				},
+				Algorithm: &config.AlgorithmConfig{Type: algorithmType},
+			}
+
+			assert.False(t, router.shouldUseLooper(decision), "algorithm %s should use selector routing, not looper", algorithmType)
+		}
+	})
+
 	t.Run("allows remom with single model", func(t *testing.T) {
 		router := &OpenAIRouter{
 			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
@@ -52,6 +72,26 @@ func TestShouldUseLooper(t *testing.T) {
 
 		assert.False(t, router.shouldUseLooper(decision))
 	})
+
+	t.Run("allows looper-only algorithms with multiple models", func(t *testing.T) {
+		router := &OpenAIRouter{
+			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
+		}
+		looperAlgorithms := []string{"confidence", "ratings"}
+
+		for _, algorithmType := range looperAlgorithms {
+			decision := &config.Decision{
+				Name: "routing",
+				ModelRefs: []config.ModelRef{
+					{Model: "model-a"},
+					{Model: "model-b"},
+				},
+				Algorithm: &config.AlgorithmConfig{Type: algorithmType},
+			}
+
+			assert.True(t, router.shouldUseLooper(decision), "algorithm %s should use looper routing", algorithmType)
+		}
+	})
 }
 
 func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
@@ -67,6 +107,12 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 		VSRMatchedKeywords:      []string{"python"},
 		VSRMatchedEmbeddings:    []string{"coding"},
 		VSRMatchedContext:       []string{"memory"},
+		VSRMatchedComplexity:    []string{"complexity:medium"},
+		VSRMatchedModality:      []string{"AR"},
+		VSRMatchedAuthz:         []string{"authz:team-a"},
+		VSRMatchedJailbreak:     []string{"jailbreak:block"},
+		VSRMatchedPII:           []string{"pii:email"},
+		VSRMatchedProjection:    []string{"balance_reasoning"},
 		VSRContextTokenCount:    42,
 		VSRSelectedDecisionName: "coding",
 		VSRSelectedCategory:     "programming",
@@ -81,6 +127,12 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 	assert.Equal(t, "2", headerMap[headers.VSRLooperIterations])
 	assert.Equal(t, "elo", headerMap[headers.VSRLooperAlgorithm])
 	assert.Equal(t, "python", headerMap[headers.VSRMatchedKeywords])
+	assert.Equal(t, "complexity:medium", headerMap[headers.VSRMatchedComplexity])
+	assert.Equal(t, "AR", headerMap[headers.VSRMatchedModality])
+	assert.Equal(t, "authz:team-a", headerMap[headers.VSRMatchedAuthz])
+	assert.Equal(t, "jailbreak:block", headerMap[headers.VSRMatchedJailbreak])
+	assert.Equal(t, "pii:email", headerMap[headers.VSRMatchedPII])
+	assert.Equal(t, "balance_reasoning", headerMap[headers.VSRMatchedProjection])
 	assert.Equal(t, "coding", headerMap[headers.VSRSelectedDecision])
 	assert.Equal(t, "programming", headerMap[headers.VSRSelectedCategory])
 	assert.Equal(t, "42", headerMap[headers.VSRContextTokenCount])
@@ -137,12 +189,12 @@ func TestBuildHeaderMutationsForLooperIncludesAuthorizationAndPluginHeaders(t *t
 		Plugins: []config.DecisionPlugin{
 			{
 				Type: "header_mutation",
-				Configuration: map[string]interface{}{
+				Configuration: config.MustStructuredPayload(map[string]interface{}{
 					"add": []map[string]interface{}{
 						{"name": "x-extra", "value": "1"},
 					},
 					"delete": []string{"x-remove-me"},
-				},
+				}),
 			},
 		},
 	}

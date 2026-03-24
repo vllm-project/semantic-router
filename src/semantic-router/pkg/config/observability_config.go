@@ -1,9 +1,7 @@
 package config
 
 type APIConfig struct {
-	BatchClassification struct {
-		Metrics BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
-	} `yaml:"batch_classification"`
+	BatchClassification BatchClassificationConfig `yaml:"batch_classification"`
 }
 
 type ObservabilityConfig struct {

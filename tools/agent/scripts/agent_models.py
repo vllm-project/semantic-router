@@ -20,6 +20,8 @@ class ResolvedContext:
     workflow_integration_suites: list[str] = field(default_factory=list)
     ci_e2e_mode: str = "none"
     doc_only: bool = False
+    loop_mode: str = "completion"
+    execution_plan_policy: str = "long_horizon"
 
     def to_json(self) -> str:
         return json.dumps(self.__dict__, indent=2, sort_keys=True)
@@ -38,14 +40,48 @@ class ResolvedContext:
             ),
             "AGENT_CI_E2E_MODE": self.ci_e2e_mode,
             "AGENT_DOC_ONLY": str(self.doc_only).lower(),
+            "AGENT_LOOP_MODE": self.loop_mode,
+            "AGENT_EXECUTION_PLAN_POLICY": self.execution_plan_policy,
         }
         return "\n".join(f"{key}={shlex.quote(value)}" for key, value in values.items())
+
+    def execution_plan_summary(self) -> str:
+        policy_labels = {
+            "none": "not required by default",
+            "long_horizon": "required for long-horizon multi-loop work",
+            "always": "required",
+        }
+        return policy_labels.get(self.execution_plan_policy, self.execution_plan_policy)
+
+    def failure_policy_summary(self) -> str:
+        if self.loop_mode == "lightweight":
+            return (
+                "fix failures and rerun the smallest applicable gate until the current "
+                "change passes or a real blocker is recorded"
+            )
+        return (
+            "fix failures and rerun the smallest applicable gate until the active "
+            "subtask passes; continue across subtasks until the task boundary is met "
+            "or a real blocker is recorded"
+        )
+
+    def stop_condition_summary(self) -> str:
+        if self.loop_mode == "lightweight":
+            return "applicable gates pass for the current change"
+        if self.execution_plan_policy == "always":
+            return "all execution-plan tasks and exit criteria pass"
+        return (
+            "active subtask passes its applicable gates; when the work becomes "
+            "long-horizon or cross-session, keep an execution plan current"
+        )
 
     def to_summary(self) -> str:
         lines = [
             "Agent Context",
             f"  Changed files: {len(self.changed_files)}",
             f"  Matched rules: {', '.join(self.matched_rules) or 'none'}",
+            f"  Loop mode: {self.loop_mode}",
+            f"  Execution plan: {self.execution_plan_summary()}",
             f"  Fast tests: {', '.join(self.fast_tests) or 'none'}",
             f"  Feature tests: {', '.join(self.feature_tests) or 'none'}",
             f"  Local smoke: {'required' if self.requires_local_smoke else 'not required'}",
@@ -53,6 +89,8 @@ class ResolvedContext:
             "  Workflow integration suites: "
             + (", ".join(self.workflow_integration_suites) or "none"),
             f"  CI E2E mode: {self.ci_e2e_mode}",
+            f"  Failure policy: {self.failure_policy_summary()}",
+            f"  Stop condition: {self.stop_condition_summary()}",
         ]
         if self.ci_e2e_profiles:
             lines.append(f"  CI E2E profiles: {', '.join(self.ci_e2e_profiles)}")

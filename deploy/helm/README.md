@@ -22,6 +22,8 @@ deploy/helm/
         ├── configmap.yaml        # Configuration
         ├── pvc.yaml              # Persistent volume claim
         ├── deployment.yaml       # Main deployment
+        ├── dashboard-deployment.yaml  # Dashboard deployment (optional)
+        ├── dashboard-service.yaml     # Dashboard service (optional)
         ├── service.yaml          # Services (gRPC, API, metrics)
         ├── ingress.yaml          # Ingress (optional)
         ├── hpa.yaml              # Horizontal Pod Autoscaler (optional)
@@ -36,7 +38,72 @@ deploy/helm/
 - Helm 3.2.0+
 - kubectl configured to access your cluster
 
-### Install
+### Install via vllm-sr CLI (recommended)
+
+The `vllm-sr` CLI provides a unified deployment experience for both Docker and
+Kubernetes.  Use the same `config.yaml` you already use for local Docker
+development:
+
+```bash
+# Deploy to Kubernetes with dev profile
+vllm-sr serve --target k8s --profile dev --config config.yaml
+
+# Deploy to a specific namespace and context
+vllm-sr serve --target k8s --namespace production --context prod-cluster --profile prod
+
+# Check status
+vllm-sr status --target k8s
+
+# Stream router logs
+vllm-sr logs router --target k8s -f
+
+# Tear down
+vllm-sr stop --target k8s
+```
+
+The CLI translates your `config.yaml` into Helm values and runs
+`helm upgrade --install` under the hood.
+
+#### Credential Handling (Secrets)
+
+Sensitive environment variables (`HF_TOKEN`, `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`) are **never** written as plain-text Helm values.
+Instead, the CLI:
+
+1. Creates a Kubernetes Secret named `vllm-sr-env-secrets` containing only
+   the sensitive keys.
+2. References the secret via `envFrom` / `secretRef` in the Deployment so
+   the pod receives the values at runtime.
+3. Non-sensitive variables (`HF_ENDPOINT`, `HF_HOME`, etc.) are passed as
+   standard `env` entries in the Helm values override.
+
+The secret is recreated on every deploy (idempotent) and removed on
+`vllm-sr stop --target k8s`.
+
+To provide credentials, export them before running the CLI:
+
+```bash
+export HF_TOKEN=hf_xxx
+vllm-sr serve --target k8s --profile dev
+```
+
+If you deploy with Helm directly (bypassing the CLI), create the secret
+manually:
+
+```bash
+kubectl create secret generic vllm-sr-env-secrets \
+  --namespace vllm-semantic-router-system \
+  --from-literal=HF_TOKEN=hf_xxx
+```
+
+Then reference it in your values file:
+
+```yaml
+envFromSecrets:
+  - vllm-sr-env-secrets
+```
+
+### Install with Helm directly
 
 ```bash
 # Using Make (recommended)
@@ -91,10 +158,11 @@ helm install semantic-router ./deploy/helm/semantic-router \
 
 **Features:**
 
-- Reduced resource requests (2Gi RAM, 500m CPU)
+- Reduced resource requests (1Gi RAM, 500m CPU)
 - Smaller storage (5Gi)
+- Dashboard enabled
+- Observability stack enabled (Jaeger, Prometheus, Grafana)
 - Faster probes
-- Debug-friendly configuration
 
 ### Production Environment
 
@@ -112,12 +180,12 @@ helm install semantic-router ./deploy/helm/semantic-router \
 
 **Features:**
 
-- Multiple replicas (3)
+- Multiple replicas (2 minimum, auto-scaling to 10)
 - High resource allocation (8Gi RAM, 4 CPU)
-- Auto-scaling enabled
-- Security hardening
-- Ingress with TLS
-- Production-grade storage
+- Auto-scaling enabled (70% CPU target)
+- Security hardening (runAsNonRoot, no privilege escalation)
+- Prometheus and Grafana enabled, Jaeger disabled
+- Production-grade storage (20Gi)
 
 ### Custom Configuration
 
@@ -133,11 +201,29 @@ resources:
     cpu: "2"
 
 config:
-  vllm_endpoints:
-    - name: "my-endpoint"
-      address: "10.0.1.100"
-      port: 8000
-      weight: 1
+  providers:
+    defaults:
+      default_model: "my-model"
+    models:
+      - name: "my-model"
+        provider_model_id: "my-model"
+        backend_refs:
+          - name: "primary"
+            endpoint: "my-vllm.default.svc.cluster.local:8000"
+            protocol: "http"
+            weight: 1
+  routing:
+    modelCards:
+      - name: "my-model"
+    decisions:
+      - name: "default-route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "my-model"
+            use_reasoning: false
 
 ingress:
   enabled: true
@@ -258,15 +344,33 @@ helm rollback semantic-router 1 --namespace vllm-semantic-router-system
 
 ```yaml
 config:
-  vllm_endpoints:
-    - name: "endpoint-1"
-      address: "10.0.1.10"
-      port: 8000
-      weight: 2
-    - name: "endpoint-2"
-      address: "10.0.1.11"
-      port: 8000
-      weight: 1
+  providers:
+    defaults:
+      default_model: "my-model"
+    models:
+      - name: "my-model"
+        provider_model_id: "my-model"
+        backend_refs:
+          - name: "endpoint-1"
+            endpoint: "10.0.1.10:8000"
+            protocol: "http"
+            weight: 2
+          - name: "endpoint-2"
+            endpoint: "10.0.1.11:8000"
+            protocol: "http"
+            weight: 1
+  routing:
+    modelCards:
+      - name: "my-model"
+    decisions:
+      - name: "default-route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "my-model"
+            use_reasoning: false
 ```
 
 ### Example 2: Enable Ingress
@@ -343,19 +447,30 @@ helm upgrade semantic-router ./deploy/helm/semantic-router \
 ### Model Download Issues
 
 ```bash
-# Models are now downloaded automatically by the router at startup
-# Check router logs for model download progress
+# Models are downloaded automatically by the router at startup.
+# Check router logs for model download progress:
 kubectl logs <pod-name> -n vllm-semantic-router-system
 
 # Common causes:
+# - HuggingFace rate limits (missing HF_TOKEN)
 # - Network issues
-# - HuggingFace rate limits
 # - Insufficient storage
-# - Missing huggingface-cli in container
+# - OOMKilled (increase memory limits)
 
-# Solution: Check PVC and network
+# Verify the HF_TOKEN secret exists:
+kubectl get secret vllm-sr-env-secrets -n vllm-semantic-router-system
+
+# Verify the pod sees the token (value is masked):
+kubectl logs <pod-name> -n vllm-semantic-router-system | grep HF_TOKEN
+
+# Check PVC and storage:
 kubectl get pvc -n vllm-semantic-router-system
 ```
+
+If model downloads are throttled, make sure `HF_TOKEN` is exported before
+deploying via the CLI, or that the `vllm-sr-env-secrets` secret exists
+when deploying with Helm directly. See the **Credential Handling** section
+above.
 
 ### Service Not Accessible
 

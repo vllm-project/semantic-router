@@ -1,0 +1,10 @@
+plugin:
+  type: image_gen
+  configuration:
+    enabled: true
+    backend: vllm_omni
+    backend_config:
+      base_url: http://image-router:8005
+      model: Qwen/Qwen-Image
+      num_inference_steps: 28
+      cfg_scale: 4.5

@@ -1,0 +1,7 @@
+algorithm:
+  type: rl_driven
+  rl_driven:
+    exploration_rate: 0.15
+    use_thompson_sampling: true
+    enable_personalization: true
+

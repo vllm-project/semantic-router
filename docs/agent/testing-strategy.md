@@ -12,6 +12,9 @@ This document defines the harness-side validation ladder for repository changes.
 - `make agent-lint CHANGED_FILES="..."`
   - runs pre-commit, language lint, and structure checks for changed files
   - Go changed-file lint reuses stricter module configs when the repository defines them; `dashboard/backend` uses the same `golangci-lint` config as `make dashboard-lint`
+- `make agent-ci-lint CHANGED_FILES="..."`
+  - reproduces the CI changed-file lint path locally
+  - runs `make codespell-tracked` and `make agent-fast-gate` with the same agent bootstrap toolchain used by CI
 - `make agent-ci-gate CHANGED_FILES="..."`
   - runs `agent-report`, `agent-fast-gate`, and rule-driven fast tests
 - `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."`
@@ -22,7 +25,15 @@ This document defines the harness-side validation ladder for repository changes.
 - Harness-only prose or manifest changes start with `make agent-validate`.
 - Code changes start with `make agent-report` to resolve primary skill, impacted surfaces, and validation commands.
 - Use the smallest gate that matches the change.
+- Use `make agent-ci-lint CHANGED_FILES="..."` when you want the same changed-file lint path that the pre-commit workflow runs in CI.
 - Use `ENV=amd` when platform behavior, AMD defaults, or ROCm image selection are affected.
+
+## Loop Handling
+
+- `make agent-report` resolves the task loop mode from `tools/agent/task-matrix.yaml`.
+- `lightweight` tasks keep iterating until the applicable gates for the current change pass or a real external blocker is recorded.
+- `completion` tasks keep iterating until the active subtask passes its applicable gates; when the work spans multiple ordered loops or sessions, move the task state into an execution plan.
+- A failing lint, test, smoke, integration, or E2E run is not a handoff point. Fix the issue or narrow the failing surface, then rerun the smallest relevant gate until the current completion boundary is satisfied.
 
 ## Environment Expectations
 
@@ -46,6 +57,14 @@ See [environments.md](environments.md) for the concrete commands.
   - `memory-integration` via `make memory-test-integration`
 - Manual-only Go profiles are valid durable suites, but they must be named in `manual_profile_rules` instead of existing as undocumented runner-only paths.
 
+## Acceptance Versus Reporting
+
+- Acceptance tests must encode a meaningful failure condition for the behavior they claim to protect.
+- `0%`-only accuracy checks, "at least one request succeeded", or purely report-only success-rate summaries do not satisfy the repository's acceptance bar for routing, classification, plugin, fallback, or API behavior.
+- If a testcase is primarily benchmarking, soak, or observability-oriented, keep it explicitly named as reporting coverage unless it also declares an executable threshold.
+- When a threshold is probabilistic, document a conservative floor and keep the rationale close to the testcase or shared helper constant.
+- Prefer shared helpers that collect metrics and separate helpers that evaluate acceptance, so future testcases do not silently inherit report-only semantics.
+
 ## Source of Truth
 
 - Gate selection and commands: [../../tools/agent/task-matrix.yaml](../../tools/agent/task-matrix.yaml)
@@ -54,3 +73,4 @@ See [environments.md](environments.md) for the concrete commands.
 - E2E taxonomy and suite selection guidance: [playbooks/e2e-selection.md](playbooks/e2e-selection.md)
 - Executable entrypoints: [../../tools/make/agent.mk](../../tools/make/agent.mk)
 - Done criteria: [feature-complete-checklist.md](feature-complete-checklist.md)
+- Local testcase rules: [../../e2e/testcases/AGENTS.md](../../e2e/testcases/AGENTS.md)

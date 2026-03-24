@@ -312,17 +312,58 @@
   margin-top: 4px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  width: 100%;
 }
 
-.condition {
-  font-size: 10px;
-  padding: 2px 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+.conditionTree {
+  width: 100%;
+  padding: 4px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.conditionRow {
+  width: 100%;
+  min-width: 0;
+}
+
+.conditionLeafRow,
+.conditionMoreRow {
   display: flex;
+}
+
+.conditionOperatorRow {
+  display: flex;
+}
+
+.conditionText {
+  width: 100%;
+  min-width: 0;
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conditionOperatorBadge {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 999px;
+}
+
+.conditionMoreRow .conditionText {
+  opacity: 0.7;
 }
 
 .decisionMeta {
@@ -449,7 +490,10 @@
 /* ============== Model Node ============== */
 .modelNode {
   composes: nodeBase;
-  min-width: 160px;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  box-sizing: border-box;
   color: white;
 }
 
@@ -470,7 +514,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 120px;
+  max-width: 164px;
 }
 
 .modelFeatures {
@@ -531,7 +575,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100px;
+  max-width: 150px;
 }
 
 .modelSource {
@@ -554,7 +598,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 140px;
+  max-width: 180px;
 }
 
 /* ============== Multi-Mode Model Styles ============== */

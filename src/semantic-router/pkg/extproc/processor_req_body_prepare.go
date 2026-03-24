@@ -133,6 +133,17 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
 		return nil, nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
 	}
+
+	// Store Chat Completion messages for memory extraction (if not Response API)
+	// Response API has its own conversation history via previous_response_id chain
+	if ctx.ResponseAPICtx == nil || !ctx.ResponseAPICtx.IsResponseAPIRequest {
+		ctx.ChatCompletionMessages = extractChatCompletionMessages(openAIRequest)
+		// Note: ChatCompletionUserID extraction is handled in user_id_dev.go for dev builds only.
+		// In production, user ID comes ONLY from the trusted auth header (x-authz-user-id).
+		// We store the raw request body to allow dev builds to extract it later.
+		ctx.ChatCompletionRequestBody = requestBody
+	}
+
 	if resp, err := r.handleModalityFromDecision(ctx, openAIRequest); err != nil {
 		logging.Errorf("[ModalityRouter] Error: %v", err)
 		return nil, r.createErrorResponse(503, fmt.Sprintf("Modality routing failed: %v", err)), nil
@@ -143,6 +154,9 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 	requestBody, memErr := r.handleMemoryRetrieval(ctx, userContent, requestBody, openAIRequest)
 	if memErr != nil {
 		logging.Warnf("Memory retrieval failed: %v, continuing without memory", memErr)
+	}
+	if ctx.MemoryContext != "" {
+		ctx.OriginalRequestBody = requestBody
 	}
 	r.refreshResponseAPITranslatedBody(ctx, requestBody)
 	openAIRequest = r.reparseRequestWithMemory(requestBody, openAIRequest, ctx)

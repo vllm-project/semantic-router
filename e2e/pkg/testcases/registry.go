@@ -29,6 +29,9 @@ type TestCaseOptions struct {
 	// Verbose enables verbose logging
 	Verbose bool
 
+	// Profile is the active E2E profile name running this testcase.
+	Profile string
+
 	// Namespace is the Kubernetes namespace to use
 	Namespace string
 
@@ -88,6 +91,7 @@ func Register(name string, tc TestCase) {
 	}
 
 	tc.Name = name
+	tc.Fn = wrapWithAcceptanceContract(name, tc.Fn)
 	registry[name] = tc
 }
 
