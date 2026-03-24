@@ -76,6 +76,25 @@ func (r *OpenAIRouter) resolveMemoryPluginConfig(
 		return nil, false
 	}
 
+	// Check opt-out header (x-disable-router-memory: true)
+	if ctx.Headers["x-disable-router-memory"] == "true" {
+		logging.Debugf("Memory: Disabled via x-disable-router-memory header (SDK-managed memory opt-out)")
+		return memoryPluginConfig, false
+	}
+
+	// Check config-based per-route disable
+	requestPath := ctx.Headers[":path"]
+	if r.isMemoryDisabledForRoute(requestPath) {
+		logging.Debugf("Memory: Disabled for route %s via config (SDK-managed memory opt-out)", requestPath)
+		return memoryPluginConfig, false
+	}
+
+	// Check config-based per-model disable
+	if ctx.RequestModel != "" && r.isMemoryDisabledForModel(ctx.RequestModel) {
+		logging.Debugf("Memory: Disabled for model %s via config (SDK-managed memory opt-out)", ctx.RequestModel)
+		return memoryPluginConfig, false
+	}
+
 	return memoryPluginConfig, true
 }
 
@@ -300,4 +319,36 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 	metrics.RecordPluginExecution("fast_response", decisionName, "executed", 0)
 
 	return httputil.CreateFastResponse(fastCfg.Message, ctx.ExpectStreamingResponse, decisionName)
+}
+
+// isMemoryDisabledForRoute checks if memory is disabled for the given route path.
+// Returns true if the route is in the Config.Memory.DisabledRoutes list.
+func (r *OpenAIRouter) isMemoryDisabledForRoute(requestPath string) bool {
+	if len(r.Config.Memory.DisabledRoutes) == 0 {
+		return false
+	}
+
+	for _, disabledRoute := range r.Config.Memory.DisabledRoutes {
+		if requestPath == disabledRoute {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isMemoryDisabledForModel checks if memory is disabled for the given model name.
+// Returns true if the model is in the Config.Memory.DisabledModels list.
+func (r *OpenAIRouter) isMemoryDisabledForModel(modelName string) bool {
+	if len(r.Config.Memory.DisabledModels) == 0 {
+		return false
+	}
+
+	for _, disabledModel := range r.Config.Memory.DisabledModels {
+		if modelName == disabledModel {
+			return true
+		}
+	}
+
+	return false
 }
