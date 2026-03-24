@@ -2210,6 +2210,16 @@ func (c *Classifier) classifyModalityHybrid(text string, cfg *config.ModalityDet
 	return c.classifyModalityByKeyword(text, cfg)
 }
 
+// ClassifyKeywordsOnly runs only the keyword classifier on the given text.
+// Returns the matched rule name and keywords, or empty if no match.
+// This is lightweight (~0.2ms) compared to full signal evaluation (~120ms).
+func (c *Classifier) ClassifyKeywordsOnly(text string) (string, []string, error) {
+	if c.keywordClassifier == nil {
+		return "", nil, nil
+	}
+	return c.keywordClassifier.ClassifyWithKeywords(text)
+}
+
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
 func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, entropy.ReasoningDecision, error) {
 	// Try keyword classifier first

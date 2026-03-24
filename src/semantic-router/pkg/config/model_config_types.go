@@ -87,43 +87,41 @@ type MCPCategoryModel struct {
 }
 
 // RoutingMomentumConfig configures Conversational Routing Momentum (CRM),
-// an asymmetric low-pass filter that prevents model bouncing in multi-turn
-// conversations. Uses different time constants for escalation (attack) vs
-// de-escalation (release), inspired by audio compressor dynamics.
+// which prevents model bouncing in multi-turn conversations.
+//
+// CRM uses two signals to detect that a conversation is "complex" and
+// should stay on the expensive model:
+//
+//  1. Response length: if any assistant response in the window exceeds
+//     response_threshold characters, the model was doing real work.
+//  2. User keywords: if any user message in the window matches the
+//     configured keyword signals (~0.2ms per check).
+//
+// Both signals are essentially free — no embedding, no re-classification.
+// The conversation history is already in every Chat Completions request.
 type RoutingMomentumConfig struct {
-	Enabled   bool    `yaml:"enabled"`
-	Attack    float64 `yaml:"attack,omitempty"`
-	Release   float64 `yaml:"release,omitempty"`
-	Threshold float64 `yaml:"threshold,omitempty"`
+	Enabled           bool `yaml:"enabled"`
+	Window            int  `yaml:"window,omitempty"`
+	ResponseThreshold int  `yaml:"response_threshold,omitempty"`
 }
 
-// GetAttack returns the attack parameter with default fallback (0.2).
-// Lower = faster escalation. 0.2 responds quickly to complexity spikes
-// while being slightly smoother than the previous 0.3 default.
-func (rm RoutingMomentumConfig) GetAttack() float64 {
-	if rm.Attack == 0 {
-		return 0.2
+// GetWindow returns the lookback window size with default fallback (11).
+// 11 turns covers typical dev workflows (ask → confirm → yes → commit →
+// add tests → deploy → thanks) without premature model downgrade.
+func (rm RoutingMomentumConfig) GetWindow() int {
+	if rm.Window <= 0 {
+		return 11
 	}
-	return rm.Attack
+	return rm.Window
 }
 
-// GetRelease returns the release parameter with default fallback (0.95).
-// Higher = slower decay. 0.95 keeps momentum high for ~11 trivial turns
-// after a complex query, covering typical dev workflows (ask → confirm →
-// yes → commit → add tests → add feature) without premature downgrade.
-func (rm RoutingMomentumConfig) GetRelease() float64 {
-	if rm.Release == 0 {
-		return 0.95
+// GetResponseThreshold returns the minimum assistant response length (in
+// characters) that indicates a complex conversation. Default is 200.
+func (rm RoutingMomentumConfig) GetResponseThreshold() int {
+	if rm.ResponseThreshold <= 0 {
+		return 200
 	}
-	return rm.Release
-}
-
-// GetThreshold returns the threshold parameter with default fallback (0.5).
-func (rm RoutingMomentumConfig) GetThreshold() float64 {
-	if rm.Threshold == 0 {
-		return 0.5
-	}
-	return rm.Threshold
+	return rm.ResponseThreshold
 }
 
 // PromptCompressionConfig controls NLP-based prompt compression before signal extraction.

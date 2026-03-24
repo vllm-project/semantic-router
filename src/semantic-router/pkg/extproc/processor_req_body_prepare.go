@@ -76,7 +76,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	// CRM runs regardless of which decision matched the current turn — trivial
 	// follow-ups may classify to a different decision, but momentum from the
 	// conversation history should override back to the momentum-enabled decision.
-	if momentumCfg := findEnabledMomentumConfig(r.Config); momentumCfg != nil && len(ctx.AllUserMessages) > 0 {
+	if momentumCfg := findEnabledMomentumConfig(r.Config); momentumCfg != nil && len(ctx.ConversationHistory) > 0 {
 		if newDecision, newModel := r.applyCRMOverride(ctx, decisionName, selectedModel, momentumCfg); newDecision != "" {
 			decisionName = newDecision
 			selectedModel = newModel

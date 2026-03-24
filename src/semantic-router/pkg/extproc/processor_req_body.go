@@ -52,12 +52,12 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	ctx.UserContent = fast.UserContent
 	ctx.RequestImageURL = fast.FirstImageURL
 
-	// Extract all user messages for CRM (routing momentum) if any decision
-	// has momentum configured. Uses lightweight JSON extraction from raw body
-	// since full OpenAI request parsing happens later in the pipeline.
+	// Extract conversation history for CRM (routing momentum) if any decision
+	// has momentum configured. Pulls both user and assistant messages so CRM
+	// can check response lengths (complexity evidence) and user keywords.
 	if findEnabledMomentumConfig(r.Config) != nil {
 		if parsed, parseErr := parseOpenAIRequest(requestBody); parseErr == nil {
-			ctx.AllUserMessages = extractAllUserMessages(parsed)
+			ctx.ConversationHistory = extractConversationHistory(parsed)
 		}
 	}
 

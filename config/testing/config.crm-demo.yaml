@@ -92,6 +92,8 @@ routing:
         type: "confidence"
         momentum:
           enabled: true
+          window: 11
+          response_threshold: 200
       modelRefs:
         - model: "qwen2.5:1.5b"
           use_reasoning: false

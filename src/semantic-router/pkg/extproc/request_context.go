@@ -95,8 +95,7 @@ type RequestContext struct {
 	HasToolsForFactCheck      bool                       // Request has tools that provide context for fact-checking
 	ToolResultsContext        string                     // Aggregated tool results for hallucination check
 	UserContent               string                     // Stored user content for hallucination detection
-	AllUserMessages           []string                   // All user messages in conversation (for CRM routing momentum)
-	RoutingMomentum           float64                    // CRM momentum value (0.0-1.0) for response header observability
+	ConversationHistory       []conversationMessage      // User + assistant messages for CRM routing momentum
 	RequestImageURL           string                     // First image URL from user messages (for Tier 1 complexity classification)
 	HallucinationDetected     bool                       // Result of hallucination detection
 	HallucinationSpans        []string                   // Unsupported spans found in answer (basic mode)
