@@ -90,6 +90,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: rgba(6, 10, 9, 0.84);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
 }
 
 .chartTitle {
@@ -179,10 +180,11 @@
   padding: 0.55rem 0.95rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: rgba(118, 185, 0, 0.14);
+  background: rgba(6, 10, 9, 0.84);
   color: var(--color-text);
   font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
   transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
 }
 
@@ -205,7 +207,7 @@
   padding: 0.55rem 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: rgba(2, 5, 5, 0.62);
+  background: rgba(6, 10, 9, 0.84);
   color: var(--color-text);
   font-size: 0.875rem;
 }
@@ -226,6 +228,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: rgba(6, 10, 9, 0.84);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
 }
 
 .paginationInfo {
@@ -345,7 +348,7 @@
   width: 100%;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(6, 10, 9, 0.84);
   color: var(--color-primary-light);
   font-family: var(--font-mono);
   font-size: 0.82rem;

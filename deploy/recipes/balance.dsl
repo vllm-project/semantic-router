@@ -457,6 +457,27 @@ SIGNAL pii pii_relaxed {
   description: "Block high-sensitivity PII while allowing common contact entities."
 }
 
+META {
+  mode: "observe"
+  max_passes: 2
+  trigger_policy: {
+    decision_margin_below: 0.12,
+    projection_boundary_within: 0.06,
+    partition_conflict: true,
+    required_families: [
+      { type: "embedding", min_confidence: 0.74, min_matches: 1 }
+    ],
+    family_disagreements: [
+      { cheap: "keyword", expensive: "embedding" },
+      { cheap: "structure", expensive: "embedding" }
+    ]
+  }
+  allowed_actions: [
+    { type: "disable_compression" },
+    { type: "rerun_signal_families", signal_families: ["embedding", "fact_check", "preference", "complexity"] }
+  ]
+}
+
 PROJECTION partition balance_domain_partition {
   semantics: "softmax_exclusive"
   temperature: 0.1
@@ -609,7 +630,7 @@ ROUTE reasoning_math (description = "Dedicated reasoning tier for proofs, deriva
 ROUTE reasoning_philosophy (description = "Dedicated reasoning tier for philosophy, ethics, and abstract argumentation.") {
   PRIORITY 245
   TIER 3
-  WHEN domain("philosophy") AND (projection("balance_simple") OR projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning")) AND (keyword("reasoning_request_markers") OR embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR embedding("research_synthesis")) AND NOT (keyword("agentic_request_markers") OR keyword("code_request_markers") OR keyword("implementation_markers"))
+  WHEN domain("philosophy") AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning")) AND (keyword("reasoning_request_markers") OR embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR embedding("research_synthesis")) AND NOT (keyword("agentic_request_markers") OR keyword("code_request_markers") OR keyword("implementation_markers"))
   MODEL "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -623,7 +644,7 @@ ROUTE reasoning_philosophy (description = "Dedicated reasoning tier for philosop
 ROUTE complex_agentic (description = "High-structure execution plans, migrations, and workflow orchestration with multi-step constraints.") {
   PRIORITY 243
   TIER 4
-  WHEN (embedding("agentic_workflows") OR keyword("agentic_request_markers")) AND (keyword("multi_step_markers") OR structure("ordered_workflow") OR structure("numbered_steps") OR structure("first_then_flow") OR structure("constraint_dense") OR structure("format_directive_dense")) AND (projection("balance_simple") OR projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning")) AND NOT keyword("architecture_markers")
+  WHEN (embedding("agentic_workflows") OR keyword("agentic_request_markers") OR preference("agentic_execution")) AND (keyword("multi_step_markers") OR structure("ordered_workflow") OR structure("numbered_steps") OR structure("first_then_flow") OR structure("constraint_dense") OR structure("format_directive_dense")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning")) AND NOT keyword("architecture_markers")
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -791,7 +812,7 @@ ROUTE engaged_general (description = "General and psychology-adjacent prompts wi
 ROUTE medium_creative (description = "Mid-tier creative, copywriting, and ideation requests.") {
   PRIORITY 200
   TIER 16
-  WHEN (keyword("creative_request_markers") OR embedding("creative_tasks")) AND (projection("balance_simple") OR projection("balance_medium")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("business_analysis") OR embedding("health_guidance") OR embedding("history_explainer") OR embedding("code_general") OR embedding("complex_stem") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers"))
+  WHEN (keyword("creative_request_markers") OR embedding("creative_tasks") OR preference("creative_collaboration")) AND (projection("balance_simple") OR projection("balance_medium")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("business_analysis") OR embedding("health_guidance") OR embedding("history_explainer") OR embedding("code_general") OR embedding("complex_stem") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers"))
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -899,4 +920,3 @@ ROUTE simple_general (description = "Lowest-cost fallback for everyday traffic a
     max_body_bytes: 4096
   }
 }
-

@@ -307,7 +307,6 @@ export default function MetaRoutingPage() {
       <div className={styles.toolbar}>
         <TableHeader
           title="Feedback Records"
-          icon="🛰️"
           count={totalRecords}
           searchPlaceholder="Search request id, model, decision, or query"
           searchValue={searchTerm}

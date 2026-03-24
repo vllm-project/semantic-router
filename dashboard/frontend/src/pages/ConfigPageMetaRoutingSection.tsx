@@ -507,7 +507,6 @@ export default function ConfigPageMetaRoutingSection({
         <section className={styles.sectionTableBlock}>
           <TableHeader
             title="Required Signal Families"
-            icon="🧩"
             count={requiredFamilyRows.length}
             searchPlaceholder=""
             onAdd={enabled && !isReadonly ? openAddRequiredFamily : undefined}
@@ -529,7 +528,6 @@ export default function ConfigPageMetaRoutingSection({
         <section className={styles.sectionTableBlock}>
           <TableHeader
             title="Family Disagreements"
-            icon="⚖️"
             count={disagreementRows.length}
             searchPlaceholder=""
             onAdd={enabled && !isReadonly ? openAddDisagreement : undefined}
@@ -551,7 +549,6 @@ export default function ConfigPageMetaRoutingSection({
         <section className={styles.sectionTableBlock}>
           <TableHeader
             title="Allowed Refinement Actions"
-            icon="🔁"
             count={allowedActionRows.length}
             searchPlaceholder=""
             onAdd={enabled && !isReadonly ? openAddAllowedAction : undefined}
