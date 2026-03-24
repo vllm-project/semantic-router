@@ -310,9 +310,7 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 	ctx *RequestContext,
 	reconstructedJSON []byte,
 ) error {
-	// Skip cache store if a decision was selected but doesn't have semantic-cache enabled
-	if ctx.VSRSelectedDecisionName != "" && r.Config != nil &&
-		!r.Config.IsCacheEnabledForDecision(ctx.VSRSelectedDecisionName) {
+	if !r.semanticCacheEnabledForScope(ctx.VSRSelectedDecisionName) {
 		return nil
 	}
 
