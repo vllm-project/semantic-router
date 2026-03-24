@@ -7,10 +7,11 @@ import (
 	"os/exec"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (

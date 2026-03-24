@@ -127,3 +127,28 @@ func TestUpdateResponseCache_SkipsWhenNoDecisionSelectedButDecisionsConfigured(t
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
 	assert.False(t, mockCache.updateCalled, "should not store response when decisions exist but no decision matched")
 }
+
+func TestParseResponseUsage_ExtractsUsageFields(t *testing.T) {
+	usage := parseResponseUsage([]byte(`{
+		"usage": {
+			"prompt_tokens": 11,
+			"completion_tokens": 7
+		}
+	}`), "test-model")
+
+	assert.Equal(t, responseUsageMetrics{
+		promptTokens:     11,
+		completionTokens: 7,
+	}, usage)
+}
+
+func TestParseResponseUsage_ReturnsZeroForInvalidUsageTypes(t *testing.T) {
+	usage := parseResponseUsage([]byte(`{
+		"usage": {
+			"prompt_tokens": "11",
+			"completion_tokens": 7
+		}
+	}`), "test-model")
+
+	assert.Equal(t, responseUsageMetrics{}, usage)
+}
