@@ -22,6 +22,7 @@ interface PaperViewerPageProps {
   metaDescription: string
   pdfUrl: string
   shareImagePath: string
+  socialTitle?: string
   title: string
 }
 
@@ -233,10 +234,12 @@ export default function PaperViewerPage({
   metaDescription,
   pdfUrl,
   shareImagePath,
+  socialTitle,
   title,
 }: PaperViewerPageProps): JSX.Element {
   const { siteConfig } = useDocusaurusContext()
   const ogImage = new URL(shareImagePath, siteConfig.url).toString()
+  const resolvedSocialTitle = socialTitle ?? `${title} — vLLM Semantic Router`
 
   return (
     <Layout
@@ -244,12 +247,12 @@ export default function PaperViewerPage({
       description={metaDescription}
     >
       <Head>
-        <meta property="og:title" content={`${title} — vLLM Semantic Router`} />
+        <meta property="og:title" content={resolvedSocialTitle} />
         <meta property="og:description" content={metaDescription} />
         <meta property="og:image" content={ogImage} />
         <meta property="og:type" content="article" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${title} — vLLM Semantic Router`} />
+        <meta name="twitter:title" content={resolvedSocialTitle} />
         <meta name="twitter:description" content={metaDescription} />
         <meta name="twitter:image" content={ogImage} />
       </Head>
