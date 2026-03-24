@@ -97,6 +97,17 @@ repos:
         files: \.py$
         exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site-packages/)
 
+  # Supply chain security scan (AST-based, tree-sitter)
+  - repo: local
+    hooks:
+      - id: supply-chain-security-scan
+        name: supply chain security scan (AST)
+        entry: python3 tools/security/ast_security_scanner.py scan . --fail-on HIGH
+        language: system
+        pass_filenames: false
+        always_run: true
+        files: \.(py|go|js|ts|tsx|rs)$
+
 # Commented out flake8 - only reports issues, doesn't auto-fix
 # -   repo: https://github.com/PyCQA/flake8
 #     rev: 7.3.0
