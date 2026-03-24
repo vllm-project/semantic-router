@@ -34,11 +34,11 @@ type categoryKBData struct {
 
 // CategoryKBClassifyResult contains the output of per-category KB classification.
 type CategoryKBClassifyResult struct {
-	BestCategory    string
-	BestSimilarity  float64
-	ContrastiveScore float64 // max(private) - max(public)
-	MatchedRules    []string // category names that exceeded the applicable threshold
-	Confidences     map[string]float64
+	BestCategory     string
+	BestSimilarity   float64
+	ContrastiveScore float64  // max(private) - max(public)
+	MatchedRules     []string // category names that exceeded the applicable threshold
+	Confidences      map[string]float64
 }
 
 // CategoryKBClassifier performs contrastive per-category knowledge base
@@ -64,7 +64,7 @@ func NewCategoryKBClassifier(rule config.CategoryKBRule, modelType string) (*Cat
 		modelType: modelType,
 		privateTiers: map[string]bool{
 			"security_containment": true,
-			"privacy_policy":      true,
+			"privacy_policy":       true,
 		},
 	}
 
