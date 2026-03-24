@@ -111,29 +111,40 @@ func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext) ([]o
 		return r.ToolsDatabase.FindSimilarTools(query, topK)
 	}
 
-	candidatePoolSize := topK
-	if advanced.CandidatePoolSize != nil && *advanced.CandidatePoolSize > 0 {
-		candidatePoolSize = *advanced.CandidatePoolSize
-	} else if advanced.CandidatePoolSize == nil {
-		candidatePoolSize = max(topK*candidatePoolMultiplier, candidatePoolMinSize)
-	}
-	if candidatePoolSize < topK {
-		candidatePoolSize = topK
-	}
-
-	candidates, err := r.ToolsDatabase.FindSimilarToolsWithScores(query, candidatePoolSize)
+	candidates, err := r.ToolsDatabase.FindSimilarToolsWithScores(query, resolveCandidatePoolSize(advanced, topK))
 	if err != nil {
 		return nil, err
 	}
 
-	selectedCategory := ctx.VSRSelectedCategory
-	if advanced.UseCategoryFilter != nil && *advanced.UseCategoryFilter && selectedCategory != "" {
-		if advanced.CategoryConfidenceThreshold != nil &&
-			ctx.VSRSelectedDecisionConfidence < float64(*advanced.CategoryConfidenceThreshold) {
-			selectedCategory = ""
-		}
+	return tools.FilterAndRankTools(query, candidates, topK, advanced, resolveCategory(advanced, ctx)), nil
+}
+
+func resolveCandidatePoolSize(advanced *config.AdvancedFilteringConfig, topK int) int {
+	var size int
+	switch {
+	case advanced.CandidatePoolSize != nil && *advanced.CandidatePoolSize > 0:
+		size = *advanced.CandidatePoolSize
+	case advanced.CandidatePoolSize == nil:
+		size = max(topK*candidatePoolMultiplier, candidatePoolMinSize)
+	default:
+		size = topK
 	}
-	return tools.FilterAndRankTools(query, candidates, topK, advanced, selectedCategory), nil
+	if size < topK {
+		size = topK
+	}
+	return size
+}
+
+func resolveCategory(advanced *config.AdvancedFilteringConfig, ctx *RequestContext) string {
+	cat := ctx.VSRSelectedCategory
+	if advanced.UseCategoryFilter == nil || !*advanced.UseCategoryFilter || cat == "" {
+		return cat
+	}
+	if advanced.CategoryConfidenceThreshold != nil &&
+		ctx.VSRSelectedDecisionConfidence < float64(*advanced.CategoryConfidenceThreshold) {
+		return ""
+	}
+	return cat
 }
 
 // convertToSDKTools re-serializes tool params through JSON to ensure they
