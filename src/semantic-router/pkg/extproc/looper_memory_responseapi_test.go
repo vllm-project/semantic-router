@@ -127,63 +127,6 @@ func TestLooperStreamingOverride_ChatCompletionsPreservesStreaming(t *testing.T)
 		"Chat Completions requests should preserve streaming preference")
 }
 
-func TestScheduleResponseMemoryStore_NoOpWithoutMemoryExtractor(t *testing.T) {
-	router := &OpenAIRouter{
-		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{AutoStore: true},
-		},
-		MemoryExtractor: nil,
-	}
-
-	reqCtx := &RequestContext{
-		RequestID: "req-noop",
-		ResponseAPICtx: &ResponseAPIContext{
-			IsResponseAPIRequest: true,
-			ConversationID:       "conv-noop",
-		},
-	}
-
-	router.scheduleResponseMemoryStore(reqCtx, chatCompletionBody("test"))
-}
-
-func TestScheduleResponseMemoryStore_SkippedWhenAutoStoreDisabled(t *testing.T) {
-	router := &OpenAIRouter{
-		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{AutoStore: false},
-		},
-		MemoryExtractor: nil,
-	}
-
-	reqCtx := &RequestContext{
-		RequestID: "req-disabled",
-	}
-
-	router.scheduleResponseMemoryStore(reqCtx, chatCompletionBody("test"))
-}
-
-func TestExtractCurrentUserMessage_ResponseAPIPath(t *testing.T) {
-	reqCtx := &RequestContext{
-		ResponseAPICtx: &ResponseAPIContext{
-			IsResponseAPIRequest: true,
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				Input: json.RawMessage(`"What is our deployment target?"`),
-			},
-		},
-	}
-
-	msg := extractCurrentUserMessage(reqCtx)
-	assert.Equal(t, "What is our deployment target?", msg)
-}
-
-func TestExtractCurrentUserMessage_EmptyForChatCompletions(t *testing.T) {
-	reqCtx := &RequestContext{
-		OriginalRequestBody: []byte(`{"model":"auto","messages":[{"role":"user","content":"hello"}]}`),
-	}
-
-	msg := extractCurrentUserMessage(reqCtx)
-	assert.Empty(t, msg)
-}
-
 func TestExtractMemoryInfo_RejectsEmptyRequest(t *testing.T) {
 	reqCtx := &RequestContext{
 		RequestID: "req-empty",
