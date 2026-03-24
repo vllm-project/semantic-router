@@ -37,6 +37,8 @@ func validateRAGBackendConfig(c *RAGPluginConfig) error {
 		return validateOpenAIRAGBackend(c)
 	case "hybrid":
 		return validateHybridRAGBackend(c)
+	case "vectorstore":
+		return nil
 	default:
 		return fmt.Errorf("unknown RAG backend: %s", c.Backend)
 	}
