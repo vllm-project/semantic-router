@@ -146,6 +146,9 @@ docs:
   - docs/agent/plans/pl-0015-meta-routing-refinement-workstream.md
   - docs/agent/plans/pl-0016-meta-routing-dashboard-ui-workstream.md
   - docs/agent/plans/pl-0017-meta-routing-learned-policy-enablement.md
+  - docs/agent/plans/pl-0018-meta-routing-operator-productization.md
+  - docs/agent/plans/pl-0019-meta-routing-learning-loop.md
+  - docs/agent/plans/pl-0020-routing-graph-quality-and-optimization-workstream.md
   - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
@@ -193,6 +196,9 @@ docs:
   - docs/agent/adr/adr-0003-meta-routing-refinement-boundary.md
   - docs/agent/adr/adr-0004-meta-routing-dashboard-ui-surface.md
   - docs/agent/adr/adr-0005-meta-routing-learned-policy-contract.md
+  - docs/agent/adr/adr-0006-meta-routing-operator-ux-and-apiserver-feedback.md
+  - docs/agent/adr/adr-0007-meta-routing-offline-learning-loop.md
+  - docs/agent/adr/adr-0008-routing-graph-optimization-separate-from-meta-routing.md
   - docs/agent/change-surfaces.md
   - docs/agent/repo-map.md
   - docs/agent/environments.md
@@ -332,6 +338,15 @@ doc_governance:
     - path: docs/agent/plans/pl-0017-meta-routing-learned-policy-enablement.md
       steward: agent-contract
       freshness: update at the start and end of each meta-routing learned-policy enablement loop and after each completed loop task
+    - path: docs/agent/plans/pl-0018-meta-routing-operator-productization.md
+      steward: agent-contract
+      freshness: update at the start and end of each meta-routing operator productization loop and after each completed loop task
+    - path: docs/agent/plans/pl-0019-meta-routing-learning-loop.md
+      steward: agent-contract
+      freshness: update at the start and end of each meta-routing learning-loop implementation loop and after each completed loop task
+    - path: docs/agent/plans/pl-0020-routing-graph-quality-and-optimization-workstream.md
+      steward: agent-contract
+      freshness: update at the start and end of each routing-graph quality and optimization loop and after each completed loop task
     - path: docs/agent/state-taxonomy-and-inventory.md
       steward: agent-contract
       freshness: update when the runtime or dashboard state inventory, durability taxonomy, or persistence guidance changes materially
@@ -473,6 +488,15 @@ doc_governance:
     - path: docs/agent/adr/adr-0005-meta-routing-learned-policy-contract.md
       steward: agent-contract
       freshness: update only if the learned meta-routing policy contract decision changes materially
+    - path: docs/agent/adr/adr-0006-meta-routing-operator-ux-and-apiserver-feedback.md
+      steward: agent-contract
+      freshness: update only if the meta-routing operator UX or APIServer feedback ownership decision changes materially
+    - path: docs/agent/adr/adr-0007-meta-routing-offline-learning-loop.md
+      steward: agent-contract
+      freshness: update only if the meta-routing offline learning-loop decision changes materially
+    - path: docs/agent/adr/adr-0008-routing-graph-optimization-separate-from-meta-routing.md
+      steward: agent-contract
+      freshness: update only if the routing-graph optimization boundary decision changes materially
     - path: docs/agent/change-surfaces.md
       steward: agent-contract
       freshness: update when surfaces or their mappings change

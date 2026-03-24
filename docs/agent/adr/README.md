@@ -68,3 +68,6 @@ Keep the numeric index unique within `docs/agent/adr/`.
 - [adr-0003-meta-routing-refinement-boundary.md](adr-0003-meta-routing-refinement-boundary.md)
 - [adr-0004-meta-routing-dashboard-ui-surface.md](adr-0004-meta-routing-dashboard-ui-surface.md)
 - [adr-0005-meta-routing-learned-policy-contract.md](adr-0005-meta-routing-learned-policy-contract.md)
+- [adr-0006-meta-routing-operator-ux-and-apiserver-feedback.md](adr-0006-meta-routing-operator-ux-and-apiserver-feedback.md)
+- [adr-0007-meta-routing-offline-learning-loop.md](adr-0007-meta-routing-offline-learning-loop.md)
+- [adr-0008-routing-graph-optimization-separate-from-meta-routing.md](adr-0008-routing-graph-optimization-separate-from-meta-routing.md)

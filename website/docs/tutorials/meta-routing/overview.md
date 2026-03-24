@@ -30,7 +30,7 @@ The three operating modes are:
 - `shadow`: plan and execute a refinement pass, but still keep the base route
 - `active`: allow the refined result to become final when the bounded plan produces a better outcome
 
-Use this page as the entrypoint, then continue with [Design](./design), [Problems](./problems), and [Usage](./usage).
+Use this page as the entrypoint, then continue with [Modes](./modes), [Design](./design), [Problems](./problems), and [Usage](./usage).
 
 ## Key Advantages
 
@@ -57,6 +57,26 @@ Without a request-phase meta layer, the router can only expose the final matched
 - did a second pass change the decision or just confirm it?
 
 `routing.meta` makes that reliability story explicit.
+
+## What It Optimizes
+
+Meta routing is not trying to make the router "change less." It is trying to
+spend extra routing budget only on the requests that look genuinely ambiguous.
+
+In practice, that means:
+
+- leave clearly stable requests on the normal one-pass path
+- identify fragile requests whose route might flip under slightly better evidence
+- run one bounded refinement pass only for those fragile requests
+- improve final routing quality without paying the extra cost on every request
+
+The optimization target is therefore:
+
+- better final route and model selection
+- under bounded latency and signal-cost overhead
+
+Fragility detection is the budget gate. It decides which requests deserve that
+extra check.
 
 ## When to Use
 
@@ -96,4 +116,4 @@ routing:
         signal_families: [embedding, fact_check, preference]
 ```
 
-Read the field-level behavior in [Usage](./usage), and read the orchestration boundary in [Design](./design).
+Read the beginner-friendly mode explanation in [Modes](./modes), the field-level behavior in [Usage](./usage), and the orchestration boundary in [Design](./design).

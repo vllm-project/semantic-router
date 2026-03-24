@@ -1711,8 +1711,14 @@ routing:
                 conditions:
                   - type: projection
                     name: balance_simple
-                  - type: projection
-                    name: urgency_elevated
+                  - operator: OR
+                    conditions:
+                      - type: projection
+                        name: urgency_elevated
+                      - type: keyword
+                        name: urgency_markers
+                      - type: structure
+                        name: exclamation_emphasis
           - operator: NOT
             conditions:
               - operator: OR
@@ -2030,8 +2036,6 @@ routing:
                   - type: embedding
                     name: fast_qa_zh
                   - type: embedding
-                    name: creative_tasks
-                  - type: embedding
                     name: business_analysis
                   - type: embedding
                     name: health_guidance
@@ -2055,10 +2059,6 @@ routing:
                     name: verification_markers
                   - type: keyword
                     name: reference_heavy_markers
-                  - type: keyword
-                    name: code_request_markers
-                  - type: keyword
-                    name: implementation_markers
                   - type: keyword
                     name: creative_request_markers
       modelRefs:
@@ -2118,6 +2118,12 @@ routing:
                     name: agentic_workflows
                   - type: embedding
                     name: premium_legal_analysis
+                  - type: embedding
+                    name: research_synthesis
+                  - type: embedding
+                    name: reasoning_general_en
+                  - type: embedding
+                    name: reasoning_general_zh
                   - type: projection
                     name: verification_required
                   - type: fact_check

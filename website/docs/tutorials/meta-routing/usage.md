@@ -14,7 +14,7 @@ The normal operator flow is:
 4. move to `shadow`
 5. move to `active` only after the bounded refinement behavior is understood
 
-This page focuses on the practical rollout path.
+This page focuses on the practical rollout path. If you need the plain-language explanation of what the three modes mean, start with [Meta Routing Modes](./modes).
 
 ## Key Advantages
 
@@ -90,6 +90,16 @@ The detail inspector is the fastest way to verify:
 - route overturns
 - latency deltas
 
+The main operator questions should be:
+
+- how often does the router think requests are fragile
+- in `shadow`, how often would the refined pass have changed the route or model
+- in `active`, how often did it actually change them
+- did those changes improve outcomes enough to justify the cost
+
+That is why the dashboard is not just a trace viewer. It is the evidence surface
+for rollout decisions.
+
 ## API and Feedback
 
 Router-owned feedback records are available through the meta-routing feedback APIs and power the dashboard view.
@@ -102,6 +112,20 @@ Those records join:
 - weak outcome labels such as fallback, block, or replay metadata
 
 That is the main evidence source for deciding whether a rollout should move forward.
+
+## Rollout Versus Config Changes
+
+It helps to separate two different operator actions:
+
+- routing-config change
+  - edit YAML or DSL rules
+  - change signals, projections, decisions, thresholds, or model references
+- meta-routing rollout
+  - keep the routing graph the same
+  - change whether the request-time refinement result can be observed only, shadowed, or adopted
+
+The rollout path is about how much authority the assess-and-refine mechanism has.
+It is not the same thing as rewriting the route graph.
 
 ## Advanced Provider Experiments
 

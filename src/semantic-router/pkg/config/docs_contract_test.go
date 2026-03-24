@@ -539,6 +539,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 		},
 	},
 	metaRoutingTutorialOverviewDoc(),
+	metaRoutingTutorialModesDoc(),
 }
 
 var latestTutorialSidebarRequired = []string{

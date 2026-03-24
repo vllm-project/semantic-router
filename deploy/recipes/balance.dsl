@@ -700,7 +700,7 @@ ROUTE feedback_wrong_answer_verified (description = "Narrow recovery path for ex
 ROUTE medium_code_general (description = "Low-medium cost coding, debugging, refactoring, and technical Q&A.") {
   PRIORITY 220
   TIER 8
-  WHEN (domain("computer science") OR keyword("code_request_markers") OR keyword("implementation_markers") OR embedding("code_general")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_simple") AND projection("urgency_elevated")) AND NOT (keyword("agentic_request_markers") OR keyword("architecture_markers") OR keyword("creative_request_markers") OR preference("agentic_execution") OR preference("creative_collaboration") OR user_feedback("wrong_answer") OR user_feedback("need_clarification"))
+  WHEN (domain("computer science") OR keyword("code_request_markers") OR keyword("implementation_markers") OR embedding("code_general")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_simple") AND (projection("urgency_elevated") OR keyword("urgency_markers") OR structure("exclamation_emphasis"))) AND NOT (keyword("agentic_request_markers") OR keyword("architecture_markers") OR keyword("creative_request_markers") OR preference("agentic_execution") OR preference("creative_collaboration") OR user_feedback("wrong_answer") OR user_feedback("need_clarification"))
   MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
     enabled: true
@@ -798,7 +798,7 @@ ROUTE medium_psychology (description = "Mid-tier psychology and behavior queries
 ROUTE engaged_general (description = "General and psychology-adjacent prompts with visible emotion or urgency that merit a sturdier mid-tier fallback.") {
   PRIORITY 202
   TIER 15
-  WHEN (projection("emotion_positive") OR projection("emotion_negative") OR projection("urgency_elevated")) AND (domain("other") OR domain("psychology") OR embedding("general_chat_fallback") OR embedding("psychology_support")) AND (context("short_context") OR context("medium_context")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("creative_tasks") OR embedding("business_analysis") OR embedding("health_guidance") OR embedding("history_explainer") OR embedding("code_general") OR embedding("complex_stem") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR keyword("code_request_markers") OR keyword("implementation_markers") OR keyword("creative_request_markers"))
+  WHEN (projection("emotion_positive") OR projection("emotion_negative") OR projection("urgency_elevated")) AND (domain("other") OR domain("psychology") OR embedding("general_chat_fallback") OR embedding("psychology_support")) AND (context("short_context") OR context("medium_context")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("business_analysis") OR embedding("health_guidance") OR embedding("history_explainer") OR embedding("code_general") OR embedding("complex_stem") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR keyword("creative_request_markers"))
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -812,7 +812,7 @@ ROUTE engaged_general (description = "General and psychology-adjacent prompts wi
 ROUTE medium_creative (description = "Mid-tier creative, copywriting, and ideation requests.") {
   PRIORITY 200
   TIER 16
-  WHEN (keyword("creative_request_markers") OR embedding("creative_tasks") OR preference("creative_collaboration")) AND (projection("balance_simple") OR projection("balance_medium")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("business_analysis") OR embedding("health_guidance") OR embedding("history_explainer") OR embedding("code_general") OR embedding("complex_stem") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers"))
+  WHEN (keyword("creative_request_markers") OR embedding("creative_tasks") OR preference("creative_collaboration")) AND (projection("balance_simple") OR projection("balance_medium")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("business_analysis") OR embedding("health_guidance") OR embedding("history_explainer") OR embedding("code_general") OR embedding("complex_stem") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR embedding("research_synthesis") OR embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers"))
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true

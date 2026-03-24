@@ -76,6 +76,65 @@ The current flow is:
 
 That keeps the meta layer orchestration-only.
 
+## Request-Time Sequence
+
+The important point is that this happens **inside one request**. `active` does
+not wait for the next similar prompt. It allows the refined pass to replace the
+base result for the current request only.
+
+```mermaid
+sequenceDiagram
+    participant U as "User Request"
+    participant E as "ExtProc Request Path"
+    participant S as "Signals and Classifiers"
+    participant D as "Decision Engine"
+    participant M as "Meta Routing"
+    participant L as "Selected Backend LLM"
+
+    U->>E: "chat or response request"
+    E->>S: "evaluate base-pass signals"
+    S-->>E: "signal results"
+    E->>D: "evaluate decisions and select model"
+    D-->>E: "base decision and model"
+    E->>M: "assess fragility"
+    alt "stable or mode=observe"
+        M-->>E: "keep base result"
+    else "fragile and refinement allowed"
+        M->>S: "rerun selected families or disable compression"
+        S-->>M: "refined signal results"
+        M->>D: "rerun decision and model selection"
+        D-->>M: "refined decision and model"
+        alt "mode=shadow"
+            M-->>E: "record refined result but keep base"
+        else "mode=active"
+            M-->>E: "adopt refined result for this request"
+        end
+    end
+    E->>L: "send request to final selected backend"
+```
+
+## What It Does Not Call
+
+Meta routing does **not** call the final answer model to ask which route should
+win. The route is decided before the request is sent to the selected backend
+LLM.
+
+What it can call during routing are the normal routing-time dependencies:
+
+- signal classifiers
+- embeddings
+- fact-check or preference detectors
+- other configured routing-time semantic families
+
+That is why the bounded action list matters. Refinement can rerun selected
+signal families, but it is still a routing-time computation, not a
+"let the answer model think harder about routing" step.
+
+The repository also has evaluation-oriented APIs for offline classification and
+probe runs, but the request-time meta-routing path does not call those APIs.
+Those evaluation APIs are for replay, calibration, and testing, not for the
+normal extproc hot path.
+
 ## Stable Artifacts
 
 Meta routing publishes a stable internal vocabulary:

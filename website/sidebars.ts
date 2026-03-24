@@ -198,6 +198,7 @@ const sidebars: SidebarsConfig = {
           label: 'Meta Routing',
           items: [
             'tutorials/meta-routing/overview',
+            'tutorials/meta-routing/modes',
             'tutorials/meta-routing/design',
             'tutorials/meta-routing/problems',
             'tutorials/meta-routing/usage',

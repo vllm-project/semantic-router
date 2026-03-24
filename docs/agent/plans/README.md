@@ -91,3 +91,6 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0015-meta-routing-refinement-workstream.md](pl-0015-meta-routing-refinement-workstream.md)
 - [pl-0016-meta-routing-dashboard-ui-workstream.md](pl-0016-meta-routing-dashboard-ui-workstream.md)
 - [pl-0017-meta-routing-learned-policy-enablement.md](pl-0017-meta-routing-learned-policy-enablement.md)
+- [pl-0018-meta-routing-operator-productization.md](pl-0018-meta-routing-operator-productization.md)
+- [pl-0019-meta-routing-learning-loop.md](pl-0019-meta-routing-learning-loop.md)
+- [pl-0020-routing-graph-quality-and-optimization-workstream.md](pl-0020-routing-graph-quality-and-optimization-workstream.md)
