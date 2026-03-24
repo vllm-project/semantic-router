@@ -70,7 +70,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
-                'tutorials/signal/heuristic/modality',
+                'tutorials/signal/heuristic/structure',
               ],
             },
             {
@@ -80,6 +80,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/learned/complexity',
                 'tutorials/signal/learned/domain',
                 'tutorials/signal/learned/embedding',
+                'tutorials/signal/learned/modality',
                 'tutorials/signal/learned/fact-check',
                 'tutorials/signal/learned/jailbreak',
                 'tutorials/signal/learned/pii',
@@ -87,6 +88,16 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/learned/user-feedback',
               ],
             },
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Projections',
+          items: [
+            'tutorials/projection/overview',
+            'tutorials/projection/partitions',
+            'tutorials/projection/scores',
+            'tutorials/projection/mappings',
           ],
         },
         {
@@ -213,6 +224,7 @@ const sidebars: SidebarsConfig = {
         'proposals/multi-protocol-adaptor',
         'proposals/agentic-rag',
         'proposals/agentic-memory',
+        'proposals/Prism-153key',
       ],
     },
     {

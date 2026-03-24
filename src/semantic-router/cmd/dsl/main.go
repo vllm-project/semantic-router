@@ -17,11 +17,11 @@ Commands:
   fmt        Format a DSL file
 
 Examples:
-  sr-dsl compile config.dsl -o config.yaml
-  sr-dsl compile config.dsl --format crd -o semanticrouter.yaml
-  sr-dsl decompile config.yaml -o config.dsl
+  sr-dsl compile -o config.yaml config.dsl
+  sr-dsl compile --format crd -o semanticrouter.yaml config.dsl
+  sr-dsl decompile -o config.dsl config.yaml
   sr-dsl validate config.dsl
-  sr-dsl fmt config.dsl
+  sr-dsl fmt -o formatted.dsl config.dsl
 `
 
 func main() {
@@ -64,7 +64,7 @@ func runCompile() {
 
 	if fs.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "Error: input file required")
-		fmt.Fprintln(os.Stderr, "Usage: sr-dsl compile <input.dsl> [-o output.yaml] [--format yaml|crd]")
+		fmt.Fprintln(os.Stderr, "Usage: sr-dsl compile [-o output.yaml] [--format yaml|crd] <input.dsl>")
 		os.Exit(1)
 	}
 
@@ -86,7 +86,7 @@ func runDecompile() {
 
 	if fs.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "Error: input file required")
-		fmt.Fprintln(os.Stderr, "Usage: sr-dsl decompile <input.yaml> [-o output.dsl]")
+		fmt.Fprintln(os.Stderr, "Usage: sr-dsl decompile [-o output.dsl] <input.yaml>")
 		os.Exit(1)
 	}
 
@@ -112,7 +112,7 @@ func runValidate() {
 	}
 
 	inputPath := fs.Arg(0)
-	errCount := dsl.CLIValidate(inputPath, os.Stdout)
+	errCount := dsl.CLIValidateWithRunner(inputPath, os.Stdout, buildNativeTestBlockRunner)
 	if errCount > 0 {
 		os.Exit(1)
 	}
@@ -129,7 +129,7 @@ func runFormat() {
 
 	if fs.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "Error: input file required")
-		fmt.Fprintln(os.Stderr, "Usage: sr-dsl fmt <input.dsl> [-o output.dsl]")
+		fmt.Fprintln(os.Stderr, "Usage: sr-dsl fmt [-o output.dsl] <input.dsl>")
 		os.Exit(1)
 	}
 

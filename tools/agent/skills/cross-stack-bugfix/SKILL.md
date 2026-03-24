@@ -19,6 +19,11 @@ description: Diagnoses and fixes bugs that span multiple layers (runtime, CLI, U
 4. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to verify all surfaces are accounted for
 5. Promote any remaining mismatches into indexed debt entries
 
+## Gotchas
+
+- Treat this as the fallback skill; if inspection shows a narrower primary skill fits, switch to that more specific contract.
+- Fixing the symptom in one layer is not enough when another touched surface still carries the underlying contract mismatch.
+
 ## Must Read
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)

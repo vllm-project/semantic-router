@@ -1,6 +1,12 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Dict, Any, List
+from cli.config_contract import (
+    build_projection_reference_index,
+    build_signal_reference_index,
+    is_signal_condition_type,
+    signal_reference_exists,
+)
 from cli.models import (
     UserConfig,
     PluginType,
@@ -206,92 +212,32 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
     """
     errors = []
 
-    # Build signal name index
-    signal_names = set()
-    if config.signals:
-        for signal in config.signals.keywords:
-            signal_names.add(signal.name)
-        for signal in config.signals.embeddings:
-            signal_names.add(signal.name)
-        if config.signals.domains:
-            for signal in config.signals.domains:
-                signal_names.add(signal.name)
-        if config.signals.fact_check:
-            for signal in config.signals.fact_check:
-                signal_names.add(signal.name)
-        if config.signals.user_feedbacks:
-            for signal in config.signals.user_feedbacks:
-                signal_names.add(signal.name)
-        if config.signals.preferences:
-            for signal in config.signals.preferences:
-                signal_names.add(signal.name)
-        if config.signals.language:
-            for signal in config.signals.language:
-                signal_names.add(signal.name)
-        if config.signals.context:
-            for signal in config.signals.context:
-                signal_names.add(signal.name)
-        if config.signals.complexity:
-            for signal in config.signals.complexity:
-                # Complexity outputs are referenced as "<name>:<level>" in decisions.
-                signal_names.add(f"{signal.name}:easy")
-                signal_names.add(f"{signal.name}:medium")
-                signal_names.add(f"{signal.name}:hard")
-        if config.signals.jailbreak:
-            for signal in config.signals.jailbreak:
-                signal_names.add(signal.name)
-        if config.signals.pii:
-            for signal in config.signals.pii:
-                signal_names.add(signal.name)
-        if config.signals.modality:
-            for signal in config.signals.modality:
-                signal_names.add(signal.name)
-        if config.signals.role_bindings:
-            for signal in config.signals.role_bindings:
-                signal_names.add(signal.name)
+    signal_names = build_signal_reference_index(config.signals)
+    projection_names = build_projection_reference_index(config.routing.projections)
 
     # Check decision conditions
     for decision in config.decisions:
         for condition in _iter_condition_nodes(decision.rules.conditions):
-            if condition.type in [
-                "keyword",
-                "embedding",
-                "domain",
-                "fact_check",
-                "user_feedback",
-                "preference",
-                "language",
-                "context",
-                "complexity",
-                "modality",
-                "authz",
-                "jailbreak",
-                "pii",
-            ]:
-                ref_name = condition.name
-
-                if condition.type == "complexity":
-                    # Complexity conditions are referenced as "<name>:<level>".
-                    # Validate the full reference to avoid false negatives.
-                    if ref_name not in signal_names:
-                        errors.append(
-                            ValidationError(
-                                f"Decision '{decision.name}' references unknown signal '{condition.name}'",
-                                field=f"decisions.{decision.name}.rules.conditions",
-                            )
-                        )
+            if (condition.type or "").strip().lower() == "projection":
+                if condition.name in projection_names:
                     continue
-
-                # Backward-compatible handling for other signal types.
-                if ":" in ref_name:
-                    ref_name = ref_name.split(":")[0]
-                if ref_name not in signal_names:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references unknown signal '{condition.name}'",
-                            field=f"decisions.{decision.name}.rules.conditions",
-                        )
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' references unknown projection '{condition.name}'",
+                        field=f"decisions.{decision.name}.rules.conditions",
                     )
+                )
+                continue
+            if not is_signal_condition_type(condition.type):
+                continue
+            if signal_reference_exists(signal_names, condition.type, condition.name):
+                continue
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision.name}' references unknown signal '{condition.name}'",
+                    field=f"decisions.{decision.name}.rules.conditions",
+                )
+            )
 
     return errors
 

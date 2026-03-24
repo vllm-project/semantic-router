@@ -9,6 +9,10 @@ import type {
   TaskResults,
   EvaluationHistoryEntry,
 } from '../types/evaluation';
+import {
+  DEFAULT_ROUTER_EVAL_ENDPOINT,
+  getDefaultDimensionsForLevel,
+} from './evaluationConfig';
 
 const API_BASE = '/api/evaluation';
 
@@ -155,12 +159,14 @@ export async function downloadExport(taskId: string, format: 'json' | 'csv' = 'j
 
 // Utility to create default config
 export function createDefaultConfig(): CreateTaskRequest['config'] {
+  const dimensions = getDefaultDimensionsForLevel('router');
+
   return {
     level: 'router',
-    dimensions: ['domain'],
-    datasets: { domain: ['mmlu-pro-en'] },
+    dimensions,
+    datasets: Object.fromEntries(dimensions.map((dimension) => [dimension, []])),
     max_samples: 50,
-    endpoint: 'http://localhost:8080/v1/eval',
+    endpoint: DEFAULT_ROUTER_EVAL_ENDPOINT,
     model: 'MoM',
     concurrent: 1,
     samples_per_cat: 10,

@@ -14,6 +14,7 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
+	"github.com/tidwall/sjson"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -298,6 +299,63 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig
 	return r.buildImmediateResponseWithModality(200, responseBody, result), nil
 }
 
+func buildOmniRequestBody(openAIRequest *openai.ChatCompletionNewParams, ctx *RequestContext, omniModel string) ([]byte, error) {
+	reqBody, err := json.Marshal(openAIRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal omni request: %w", err)
+	}
+
+	reqBody, err = rewriteModelInBodyFast(reqBody, omniModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to rewrite omni model: %w", err)
+	}
+
+	extraBody := map[string]interface{}{}
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.ImageGenToolParams != nil {
+		params := ctx.ResponseAPICtx.ImageGenToolParams
+		if params.Size != "" && params.Size != "auto" {
+			w, h := parseSizeString(params.Size)
+			if w > 0 && h > 0 {
+				extraBody["width"] = w
+				extraBody["height"] = h
+			}
+		}
+	}
+	if len(extraBody) == 0 {
+		return reqBody, nil
+	}
+
+	reqBody, err = sjson.SetBytes(reqBody, "extra_body", extraBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set omni extra_body: %w", err)
+	}
+
+	return reqBody, nil
+}
+
+func buildARRequestBody(openAIRequest *openai.ChatCompletionNewParams, arModel string) ([]byte, error) {
+	reqBody, err := json.Marshal(openAIRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal AR request: %w", err)
+	}
+
+	reqBody, err = rewriteModelInBodyFast(reqBody, arModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to rewrite AR model: %w", err)
+	}
+
+	reqBody, err = sjson.DeleteBytes(reqBody, "tools")
+	if err != nil {
+		return nil, fmt.Errorf("failed to remove AR tools: %w", err)
+	}
+	reqBody, err = sjson.DeleteBytes(reqBody, "tool_choice")
+	if err != nil {
+		return nil, fmt.Errorf("failed to remove AR tool_choice: %w", err)
+	}
+
+	return reqBody, nil
+}
+
 // executeOmni sends a single request to an omni model endpoint that can handle both
 // text and image generation natively (e.g. vllm-omni serving Qwen2.5-Omni).
 // The omni model processes the request as a whole and returns a combined response
@@ -308,42 +366,9 @@ func (r *OpenAIRouter) executeOmni(ctx *RequestContext, cfg *config.RouterConfig
 		return nil, fmt.Errorf("failed to resolve omni model endpoint: %w", err)
 	}
 
-	// Serialize the original request
-	reqBody, err := json.Marshal(openAIRequest)
+	reqBody, err := buildOmniRequestBody(openAIRequest, ctx, omniModel)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal omni request: %w", err)
-	}
-
-	// Override model to the omni model name and inject image generation extra_body params
-	var reqMap map[string]interface{}
-	if unmarshalErr := json.Unmarshal(reqBody, &reqMap); unmarshalErr != nil {
-		return nil, fmt.Errorf("failed to parse omni request: %w", unmarshalErr)
-	}
-	reqMap["model"] = omniModel
-
-	// If image_generation tool params are present (from Responses API), apply them
-	// as extra_body parameters for vllm-omni diffusion control.
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.ImageGenToolParams != nil {
-		params := ctx.ResponseAPICtx.ImageGenToolParams
-		extraBody := map[string]interface{}{}
-
-		// Parse size string (e.g. "1024x1536") into width/height
-		if params.Size != "" && params.Size != "auto" {
-			w, h := parseSizeString(params.Size)
-			if w > 0 && h > 0 {
-				extraBody["width"] = w
-				extraBody["height"] = h
-			}
-		}
-
-		if len(extraBody) > 0 {
-			reqMap["extra_body"] = extraBody
-		}
-	}
-
-	reqBody, err = json.Marshal(reqMap)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal modified omni request: %w", err)
+		return nil, err
 	}
 
 	url := omniEndpoint + "/chat/completions"
@@ -474,23 +499,9 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, cfg *config.RouterConfig
 		return nil, fmt.Errorf("failed to resolve AR model endpoint: %w", err)
 	}
 
-	// Serialize the original request
-	reqBody, err := json.Marshal(openAIRequest)
+	reqBody, err := buildARRequestBody(openAIRequest, arModel)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal AR request: %w", err)
-	}
-
-	// Override model to the AR model name
-	var reqMap map[string]interface{}
-	if unmarshalErr := json.Unmarshal(reqBody, &reqMap); unmarshalErr != nil {
-		return nil, fmt.Errorf("failed to parse AR request: %w", unmarshalErr)
-	}
-	reqMap["model"] = arModel
-	delete(reqMap, "tools")
-	delete(reqMap, "tool_choice")
-	reqBody, err = json.Marshal(reqMap)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal modified AR request: %w", err)
+		return nil, err
 	}
 
 	url := arEndpoint + "/chat/completions"

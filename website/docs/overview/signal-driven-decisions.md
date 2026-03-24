@@ -537,6 +537,6 @@ selected_model: "qwen-math"
 
 - [Configuration Guide](../installation/configuration) - Configure signals and decisions
 - [Signal Overview](../tutorials/signal/overview) - Learn the signal catalog
-- [Heuristic Signals](../tutorials/signal/overview#heuristic-signals) - Start with keyword, authz, context, language, and modality
-- [Learned Signals](../tutorials/signal/overview#learned-signals) - Add domain, embedding, safety, and feedback classifiers
+- [Heuristic Signals](../tutorials/signal/overview#heuristic-signals) - Start with keyword, authz, context, language, and structure
+- [Learned Signals](../tutorials/signal/overview#learned-signals) - Add domain, embedding, modality, safety, and feedback classifiers
 - [Decision Overview](../tutorials/decision/overview) - Learn how signals map into route decisions

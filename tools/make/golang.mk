@@ -9,7 +9,8 @@ go-lint: ## Run golangci-lint for src/semantic-router
 	@echo "Running golangci-lint for src/semantic-router..."
 	@cd src/semantic-router/ && \
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
-		export GOPATH=$${GOPATH:-$$HOME/go} && \
+		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
+		export PATH="$$GOPATH/bin:$$PATH" && \
 		golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
 	@echo "src/semantic-router go module lint passed"
 
@@ -18,7 +19,8 @@ go-lint-fix: ## Auto-fix lint issues in src/semantic-router (may need manual fix
 	@echo "Running golangci-lint fix for src/semantic-router..."
 	@cd src/semantic-router/ && \
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
-		export GOPATH=$${GOPATH:-$$HOME/go} && \
+		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
+		export PATH="$$GOPATH/bin:$$PATH" && \
 		golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
 	@echo "src/semantic-router go module lint fix applied"
 

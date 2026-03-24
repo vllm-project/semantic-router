@@ -14,6 +14,14 @@ type routingFragmentDocument struct {
 // canonical surface under `routing:`. This intentionally skips provider/global
 // cross-reference checks so DSL compile/decompile flows can round-trip fragments.
 func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
+	raw, err := parseRawConfigMap(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
+	}
+	if rejectErr := rejectRemovedStructureFields(raw); rejectErr != nil {
+		return nil, rejectErr
+	}
+
 	doc := &routingFragmentDocument{}
 	if err := yaml.Unmarshal(data, doc); err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
@@ -23,6 +31,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	cfg.Decisions = copyDecisions(doc.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(doc.Routing.Signals, cfg.Decisions)
+	cfg.Projections = normalizeProjections(doc.Routing.Projections)
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(doc.Routing) {
@@ -40,6 +49,19 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
+	}
+
+	if err := validateDomainContracts(&cfg); err != nil {
+		return nil, err
+	}
+	if err := validateProjectionContracts(&cfg); err != nil {
+		return nil, err
+	}
+	if err := validateDecisionContracts(&cfg); err != nil {
+		return nil, err
+	}
+	if err := validateModalityContracts(&cfg); err != nil {
+		return nil, err
 	}
 
 	return &cfg, nil

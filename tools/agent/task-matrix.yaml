@@ -3,6 +3,8 @@ version: 1
 rules:
   - name: repo-docs
     doc_only: true
+    loop_mode: lightweight
+    execution_plan_policy: long_horizon
     paths:
       - docs/**
       - website/**
@@ -13,16 +15,25 @@ rules:
     requires_local_smoke: false
   - name: agent_text
     doc_only: true
+    loop_mode: lightweight
+    execution_plan_policy: long_horizon
     paths:
       - AGENTS.md
       - docs/agent/**
       - tools/agent/skills/**
       - src/fleet-sim/AGENTS.md
+      - src/fleet-sim/fleet_sim/optimizer/AGENTS.md
       - src/vllm-sr/cli/AGENTS.md
       - src/semantic-router/pkg/config/AGENTS.md
+      - src/semantic-router/pkg/classification/AGENTS.md
       - src/semantic-router/pkg/extproc/AGENTS.md
+      - deploy/operator/api/v1alpha1/AGENTS.md
+      - deploy/operator/controllers/AGENTS.md
+      - dashboard/frontend/src/AGENTS.md
       - dashboard/frontend/src/pages/AGENTS.md
       - dashboard/frontend/src/components/AGENTS.md
+      - dashboard/backend/handlers/AGENTS.md
+      - e2e/testcases/AGENTS.md
       - .github/copilot-instructions.md
       - .github/PULL_REQUEST_TEMPLATE.md
       - .github/ISSUE_TEMPLATE/**
@@ -33,6 +44,8 @@ rules:
     requires_local_smoke: false
   - name: agent_exec
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - tools/agent/*.yaml
       - tools/agent/scripts/**
@@ -48,6 +61,8 @@ rules:
     requires_local_smoke: false
   - name: vllm-sr-cli
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - src/vllm-sr/**
       - src/vllm-sr/Dockerfile*
@@ -60,6 +75,8 @@ rules:
     requires_local_smoke: true
   - name: fleet-sim
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - src/fleet-sim/**
     fast_tests:
@@ -68,6 +85,8 @@ rules:
     requires_local_smoke: false
   - name: memory-integration
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/run_memory_integration.sh
@@ -81,6 +100,8 @@ rules:
     requires_local_smoke: false
   - name: router-core
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - src/semantic-router/**
     fast_tests:
@@ -89,6 +110,8 @@ rules:
     requires_local_smoke: true
   - name: rust-bindings
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - candle-binding/**
       - ml-binding/**
@@ -100,6 +123,8 @@ rules:
     requires_local_smoke: false
   - name: dashboard
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - dashboard/**
     fast_tests:
@@ -108,6 +133,8 @@ rules:
     requires_local_smoke: true
   - name: e2e-framework
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - e2e/pkg/**
       - e2e/cmd/**
@@ -120,6 +147,8 @@ rules:
     requires_local_smoke: false
   - name: operator-stack
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - deploy/operator/**
       - deploy/kubernetes/crds/**
@@ -130,6 +159,8 @@ rules:
     requires_local_smoke: false
   - name: training-stack
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - src/training/**
       - tools/make/models.mk
@@ -140,6 +171,8 @@ rules:
     requires_local_smoke: false
   - name: make-and-ci
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - Makefile
       - tools/make/**
@@ -149,6 +182,8 @@ rules:
     requires_local_smoke: true
   - name: ci-general
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - .github/workflows/**
     fast_tests:

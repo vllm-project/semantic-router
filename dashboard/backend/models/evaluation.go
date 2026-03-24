@@ -32,6 +32,9 @@ const (
 	DimensionDomain       EvaluationDimension = "domain"
 	DimensionFactCheck    EvaluationDimension = "fact_check"
 	DimensionUserFeedback EvaluationDimension = "user_feedback"
+
+	// System evaluation dimensions (MoM-level)
+	DimensionAccuracy EvaluationDimension = "accuracy"
 )
 
 // EvaluationConfig holds the configuration for an evaluation task.

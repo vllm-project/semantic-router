@@ -11,11 +11,14 @@ import (
 	"time"
 )
 
+const WorkspaceModelsNodeMountPath = "/mnt/workspace-models"
+
 // KindCluster manages Kind cluster lifecycle
 type KindCluster struct {
-	Name       string
-	Verbose    bool
-	GPUEnabled bool // Enable GPU support for the cluster
+	Name               string
+	Verbose            bool
+	GPUEnabled         bool // Enable GPU support for the cluster
+	WorkspaceModelsDir string
 }
 
 // NewKindCluster creates a new Kind cluster manager
@@ -29,6 +32,11 @@ func NewKindCluster(name string, verbose bool) *KindCluster {
 // SetGPUEnabled enables GPU support for the cluster
 func (k *KindCluster) SetGPUEnabled(enabled bool) {
 	k.GPUEnabled = enabled
+}
+
+// SetWorkspaceModelsDir enables an opt-in host mount for the workspace models directory.
+func (k *KindCluster) SetWorkspaceModelsDir(dir string) {
+	k.WorkspaceModelsDir = dir
 }
 
 // Create creates a new Kind cluster
@@ -53,14 +61,40 @@ func (k *KindCluster) Create(ctx context.Context) error {
 		}
 	}
 
-	// Create cluster config with /mnt mount for storage (and GPU support if enabled)
-	var cmd *exec.Cmd
 	configFile, err := k.createClusterConfig()
 	if err != nil {
 		return fmt.Errorf("failed to create cluster config: %w", err)
 	}
-	defer os.Remove(configFile)
+	defer removeFile(configFile)
 
+	if err := k.runCreateClusterCommand(ctx, configFile); err != nil {
+		return fmt.Errorf("failed to create cluster: %w", err)
+	}
+
+	// Wait for cluster to be ready
+	k.log("Waiting for cluster to be ready...")
+	if err := k.WaitForReady(ctx, 5*time.Minute); err != nil {
+		return fmt.Errorf("cluster failed to become ready: %w", err)
+	}
+
+	// Configure storage provisioner to use /mnt (75GB) instead of /tmp (limited space)
+	if err := k.configureStorageProvisioner(ctx); err != nil {
+		return err
+	}
+
+	// If GPU enabled, setup NVIDIA libraries
+	if k.GPUEnabled {
+		if err := k.setupGPULibraries(ctx); err != nil {
+			return fmt.Errorf("failed to setup GPU libraries: %w", err)
+		}
+	}
+
+	k.log("Cluster %s created successfully", k.Name)
+	return nil
+}
+
+func (k *KindCluster) runCreateClusterCommand(ctx context.Context, configFile string) error {
+	var cmd *exec.Cmd
 	if k.GPUEnabled {
 		k.log("Creating cluster with GPU support and /mnt mount for storage...")
 		cmd = exec.CommandContext(ctx, "kind", "create", "cluster",
@@ -77,42 +111,37 @@ func (k *KindCluster) Create(ctx context.Context) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
+	return cmd.Run()
+}
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create cluster: %w", err)
-	}
-
-	// Wait for cluster to be ready
-	k.log("Waiting for cluster to be ready...")
-	if err := k.WaitForReady(ctx, 5*time.Minute); err != nil {
-		return fmt.Errorf("cluster failed to become ready: %w", err)
-	}
-
-	// Configure storage provisioner to use /mnt (75GB) instead of /tmp (limited space)
+func (k *KindCluster) configureStorageProvisioner(ctx context.Context) error {
 	kubeConfig, err := k.GetKubeConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get kubeconfig: %w", err)
 	}
-	defer os.Remove(kubeConfig)
+	defer removeFile(kubeConfig)
 
-	// Simple one-liner: update ConfigMap and restart provisioner
-	// Models downloaded in pods will be stored in /mnt via PVCs
-	exec.CommandContext(ctx, "kubectl", "--kubeconfig", kubeConfig,
+	k.runBestEffortKubectl(
+		ctx,
+		kubeConfig,
 		"patch", "configmap", "local-path-config", "-n", "local-path-storage",
 		"--type", "merge",
-		"-p", `{"data":{"config.json":"{\"nodePathMap\":[{\"node\":\"DEFAULT_PATH_FOR_NON_LISTED_NODES\",\"paths\":[\"/mnt/local-path-provisioner\"]}]}"}}`).Run()
-	exec.CommandContext(ctx, "kubectl", "--kubeconfig", kubeConfig,
-		"rollout", "restart", "deployment/local-path-provisioner", "-n", "local-path-storage").Run()
-
-	// If GPU enabled, setup NVIDIA libraries
-	if k.GPUEnabled {
-		if err := k.setupGPULibraries(ctx); err != nil {
-			return fmt.Errorf("failed to setup GPU libraries: %w", err)
-		}
-	}
-
-	k.log("Cluster %s created successfully", k.Name)
+		"-p", `{"data":{"config.json":"{\"nodePathMap\":[{\"node\":\"DEFAULT_PATH_FOR_NON_LISTED_NODES\",\"paths\":[\"/mnt/local-path-provisioner\"]}]}"}}`,
+	)
+	k.runBestEffortKubectl(
+		ctx,
+		kubeConfig,
+		"rollout", "restart", "deployment/local-path-provisioner", "-n", "local-path-storage",
+	)
 	return nil
+}
+
+func (k *KindCluster) runBestEffortKubectl(ctx context.Context, kubeConfig string, args ...string) {
+	cmdArgs := append([]string{"--kubeconfig", kubeConfig}, args...)
+	cmd := exec.CommandContext(ctx, "kubectl", cmdArgs...)
+	if err := cmd.Run(); err != nil {
+		k.log("Warning: kubectl %s failed: %v", strings.Join(args, " "), err)
+	}
 }
 
 // Delete deletes the Kind cluster
@@ -189,12 +218,12 @@ func (k *KindCluster) GetKubeConfig(ctx context.Context) (string, error) {
 	}
 
 	if _, err := tmpFile.Write(output); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
+		closeFile(tmpFile)
+		removeFile(tmpFile.Name())
 		return "", fmt.Errorf("failed to write kubeconfig: %w", err)
 	}
 
-	tmpFile.Close()
+	closeFile(tmpFile)
 	return tmpFile.Name(), nil
 }
 
@@ -202,6 +231,14 @@ func (k *KindCluster) log(format string, args ...interface{}) {
 	if k.Verbose {
 		fmt.Printf("[Kind] "+format+"\n", args...)
 	}
+}
+
+func closeFile(file *os.File) {
+	_ = file.Close()
+}
+
+func removeFile(path string) {
+	_ = os.Remove(path)
 }
 
 // verifyNvidiaRuntime checks if Docker's default runtime is nvidia
@@ -270,6 +307,16 @@ func (k *KindCluster) createClusterConfig() (string, error) {
 		k.log("Warning: failed to create ML models directory %s: %v", mlModelsDir, err)
 	}
 
+	workspaceModelsMount := ""
+	if k.WorkspaceModelsDir != "" {
+		if err := os.MkdirAll(k.WorkspaceModelsDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create workspace models directory %s: %w", k.WorkspaceModelsDir, err)
+		}
+		workspaceModelsMount = fmt.Sprintf(`
+      - hostPath: %s
+        containerPath: %s`, k.WorkspaceModelsDir, WorkspaceModelsNodeMountPath)
+	}
+
 	// Base config with host mount for storage (always included)
 	// Also mount /tmp/kind-ml-models for ML model selection E2E tests
 	kindConfig := fmt.Sprintf(`kind: Cluster
@@ -281,7 +328,7 @@ nodes:
       - hostPath: %s
         containerPath: /mnt
       - hostPath: /tmp/kind-ml-models
-        containerPath: /tmp/ml-models`, k.Name, hostPath)
+        containerPath: /tmp/ml-models%s`, k.Name, hostPath, workspaceModelsMount)
 
 	// Add GPU mount to worker if GPU is enabled
 	if k.GPUEnabled {
@@ -291,10 +338,10 @@ nodes:
       - hostPath: %s
         containerPath: /mnt
       - hostPath: /tmp/kind-ml-models
-        containerPath: /tmp/ml-models
+        containerPath: /tmp/ml-models%s
       - hostPath: /dev/null
         containerPath: /var/run/nvidia-container-devices/all
-`, hostPath)
+`, hostPath, workspaceModelsMount)
 	} else {
 		kindConfig += fmt.Sprintf(`
   - role: worker
@@ -302,8 +349,8 @@ nodes:
       - hostPath: %s
         containerPath: /mnt
       - hostPath: /tmp/kind-ml-models
-        containerPath: /tmp/ml-models
-`, hostPath)
+        containerPath: /tmp/ml-models%s
+`, hostPath, workspaceModelsMount)
 	}
 
 	configFile, err := os.CreateTemp("", "kind-config-*.yaml")
@@ -312,11 +359,11 @@ nodes:
 	}
 
 	if _, err := configFile.WriteString(kindConfig); err != nil {
-		configFile.Close()
-		os.Remove(configFile.Name())
+		closeFile(configFile)
+		removeFile(configFile.Name())
 		return "", fmt.Errorf("failed to write config: %w", err)
 	}
-	configFile.Close()
+	closeFile(configFile)
 
 	return configFile.Name(), nil
 }
@@ -459,12 +506,12 @@ spec:
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer removeFile(tmpFile.Name())
 
 	if _, err := tmpFile.WriteString(devicePluginYAML); err != nil {
 		return fmt.Errorf("failed to write device plugin manifest: %w", err)
 	}
-	tmpFile.Close()
+	closeFile(tmpFile)
 
 	applyCmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", tmpFile.Name())
 	if output, err := applyCmd.CombinedOutput(); err != nil {
