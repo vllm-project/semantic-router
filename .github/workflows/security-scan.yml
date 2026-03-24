@@ -48,17 +48,29 @@ jobs:
         id: ast_scan
         continue-on-error: true
         run: |
+          set +e
           python3 tools/security/ast_security_scanner.py \
             scan . --fail-on HIGH --json > /tmp/ast_scan.json
+          EXIT_CODE=$?
+          if [ ! -s /tmp/ast_scan.json ]; then
+            echo '{"findings":[],"counts":{},"error":"scanner produced no output"}' > /tmp/ast_scan.json
+          fi
+          exit $EXIT_CODE
 
       - name: Run AST PR diff scan
         id: diff_scan
         if: github.event_name == 'pull_request_target'
         continue-on-error: true
         run: |
+          set +e
           python3 tools/security/ast_security_scanner.py \
             diff "origin/${{ github.base_ref }}" --fail-on HIGH --json \
             > /tmp/diff_scan.json
+          EXIT_CODE=$?
+          if [ ! -s /tmp/diff_scan.json ]; then
+            echo '{"findings":[],"counts":{},"error":"scanner produced no output"}' > /tmp/diff_scan.json
+          fi
+          exit $EXIT_CODE
 
       - name: Run regex fallback scan
         id: regex_scan
