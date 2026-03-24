@@ -3,7 +3,7 @@
 import { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import { ModelRefConfig } from '../../types'
-import { REASONING_EFFORT_DISPLAY, NODE_COLORS } from '../../constants'
+import { MODEL_NODE_WIDTH, REASONING_EFFORT_DISPLAY, NODE_COLORS } from '../../constants'
 import styles from './CustomNodes.module.css'
 
 interface ModelMode {
@@ -51,7 +51,9 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
       style={{
         background: colors.background,
         border: `2px solid ${colors.border}`,
-        minWidth: hasMultipleModes ? '180px' : '160px',
+        width: `${MODEL_NODE_WIDTH}px`,
+        minWidth: `${MODEL_NODE_WIDTH}px`,
+        maxWidth: `${MODEL_NODE_WIDTH}px`,
       }}
     >
       <Handle type="target" position={Position.Left} />

@@ -1,7 +1,8 @@
 """Pydantic models for vLLM Semantic Router configuration."""
 
-from typing import List, Dict, Any, Optional, Literal
 from enum import Enum
+from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field, model_validator
 
 from .algorithms import AlgorithmConfig, ModelRef
@@ -32,6 +33,70 @@ class EmbeddingSignal(BaseModel):
     threshold: float
     candidates: List[str]
     aggregation_method: str = "max"
+
+
+class ProjectionPartition(BaseModel):
+    """Partition metadata coordinating mutually exclusive routing signals."""
+
+    name: str
+    semantics: str
+    members: List[str]
+    temperature: Optional[float] = None
+    default: Optional[str] = None
+
+
+class ProjectionScoreInput(BaseModel):
+    """One weighted signal contribution to a derived projection score."""
+
+    type: str
+    name: str
+    weight: float
+    value_source: Optional[str] = None
+    match: Optional[float] = None
+    miss: Optional[float] = None
+
+
+class ProjectionScore(BaseModel):
+    """Weighted derived score over existing routing signals."""
+
+    name: str
+    method: str
+    inputs: List[ProjectionScoreInput]
+
+
+class ProjectionMappingCalibration(BaseModel):
+    """Confidence calibration for a projection mapping output band."""
+
+    method: str
+    slope: Optional[float] = None
+
+
+class ProjectionMappingOutput(BaseModel):
+    """One named threshold band emitted by a projection mapping."""
+
+    name: str
+    lt: Optional[float] = None
+    lte: Optional[float] = None
+    gt: Optional[float] = None
+    gte: Optional[float] = None
+
+
+class ProjectionMapping(BaseModel):
+    """Maps a derived score into named routing outputs."""
+
+    name: str
+    source: str
+    method: str
+    calibration: Optional[ProjectionMappingCalibration] = None
+    outputs: List[ProjectionMappingOutput]
+
+
+class Projections(BaseModel):
+    """Derived routing surfaces that sit alongside base signals."""
+
+    partitions: Optional[List[ProjectionPartition]] = []
+    scores: Optional[List[ProjectionScore]] = []
+    mappings: Optional[List[ProjectionMapping]] = []
 
 
 class Domain(BaseModel):
@@ -79,6 +144,53 @@ class ContextRule(BaseModel):
     min_tokens: str  # Supports suffixes: "1K", "1.5M", etc.
     max_tokens: str
     description: Optional[str] = None
+
+
+class StructureSource(BaseModel):
+    """Source selector for structure-based signals."""
+
+    type: str
+    pattern: Optional[str] = None
+    keywords: Optional[List[str]] = None
+    case_sensitive: bool = False
+    sequences: Optional[List[List[str]]] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class StructureFeature(BaseModel):
+    """Typed request-shape feature extractor."""
+
+    type: str
+    source: StructureSource
+
+    class Config:
+        extra = "forbid"
+
+
+class NumericPredicate(BaseModel):
+    """Numeric threshold predicate for structure signals."""
+
+    gt: Optional[float] = None
+    gte: Optional[float] = None
+    lt: Optional[float] = None
+    lte: Optional[float] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class StructureRule(BaseModel):
+    """Request-shape routing signal configuration."""
+
+    name: str
+    description: Optional[str] = None
+    feature: StructureFeature
+    predicate: Optional[NumericPredicate] = None
+
+    class Config:
+        extra = "forbid"
 
 
 class ComplexityCandidates(BaseModel):
@@ -175,6 +287,7 @@ class Signals(BaseModel):
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
     context: Optional[List[ContextRule]] = []
+    structure: Optional[List[StructureRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
     modality: Optional[List[ModalityRule]] = []
     role_bindings: Optional[List[RoleBindingRule]] = []
@@ -599,41 +712,11 @@ class Routing(BaseModel):
 
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     signals: Signals = Field(default_factory=Signals)
+    projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
 
     class Config:
         populate_by_name = True
-
-
-class MemoryMilvusConfig(BaseModel):
-    """Milvus configuration for memory storage."""
-
-    address: str
-    collection: str = "agentic_memory"
-    dimension: int = 384
-
-
-class MemoryConfig(BaseModel):
-    """Agentic Memory configuration for cross-session memory.
-
-    Query rewriting and fact extraction are enabled by adding external_models
-    with role="memory_rewrite" or role="memory_extraction".
-    See global.model_catalog.external configuration for details.
-
-    The embedding_model is auto-detected from global.model_catalog.embeddings.semantic if not specified.
-    Priority: mmbert > bert > multimodal > qwen3 > gemma
-    """
-
-    enabled: bool = True
-    auto_store: bool = False  # Auto-store extracted facts after each response
-    milvus: Optional[MemoryMilvusConfig] = None
-    # Embedding model to use for memory vectors
-    # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
-    # If not set, auto-detected from global.model_catalog.embeddings.semantic (mmbert preferred)
-    embedding_model: Optional[str] = None
-    default_retrieval_limit: int = 5
-    default_similarity_threshold: float = 0.70
-    extraction_batch_size: int = 10  # Extract every N turns
 
 
 class EmbeddingModelsConfig(BaseModel):

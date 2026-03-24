@@ -4,20 +4,20 @@
 
 `modality` detects whether a request should stay in text generation, switch into image generation, or support both. It maps to `config/signal/modality/` and is declared under `routing.signals.modality`.
 
-This family sits under `heuristic` because it usually routes from request form and configured modality behavior, even though deployments can later tune the detector through `global.model_catalog.modules.modality_detector`.
+This family now sits under `learned` because maintained deployments typically rely on the router-owned `modality_detector` module to classify output mode, even when the routing outcome still looks like a simple request-shape decision.
 
 ## Key Advantages
 
 - Keeps image-generation routing separate from text-only routes.
 - Makes multimodal traffic visible in `routing.decisions`.
 - Avoids mixing modality checks into every decision rule.
-- Scales from simple request-shape routing into hybrid detection.
+- Scales from simple request-shape routing into detector-backed multimodal classification.
 
 ## What Problem Does It Solve?
 
 Text chat, image generation, and mixed workflows often share the same entrypoint but should not share the same model path. Without a modality signal, route logic becomes brittle and repetitive.
 
-`modality` solves that by exposing request form as a named routing input.
+`modality` solves that by exposing output mode as a named routing input.
 
 ## When to Use
 
@@ -44,4 +44,4 @@ routing:
         description: Requests that need both text and image generation behavior.
 ```
 
-Keep the rule names aligned with the route behavior you want decisions to reference.
+Keep the rule names aligned with the route behavior you want decisions to reference. In maintained configs, the backing detector is typically configured through `global.model_catalog.modules.modality_detector`.

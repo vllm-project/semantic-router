@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, List
 from cli.config_contract import (
+    build_projection_reference_index,
     build_signal_reference_index,
     is_signal_condition_type,
     signal_reference_exists,
@@ -212,10 +213,21 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
     errors = []
 
     signal_names = build_signal_reference_index(config.signals)
+    projection_names = build_projection_reference_index(config.routing.projections)
 
     # Check decision conditions
     for decision in config.decisions:
         for condition in _iter_condition_nodes(decision.rules.conditions):
+            if (condition.type or "").strip().lower() == "projection":
+                if condition.name in projection_names:
+                    continue
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' references unknown projection '{condition.name}'",
+                        field=f"decisions.{decision.name}.rules.conditions",
+                    )
+                )
+                continue
             if not is_signal_condition_type(condition.type):
                 continue
             if signal_reference_exists(signal_names, condition.type, condition.name):

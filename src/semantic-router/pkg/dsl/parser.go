@@ -16,7 +16,7 @@ var dslLexer = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Float", Pattern: `[+-]?[0-9]+\.[0-9]+`},
 	{Name: "Int", Pattern: `[+-]?[0-9]+`},
 	{Name: "String", Pattern: `"(?:[^"\\]|\\.)*"`},
-	{Name: "Arrow", Pattern: `->`},
+	{Name: "Arrow", Pattern: `->|→`},
 	{Name: "Ident", Pattern: `[a-zA-Z_][a-zA-Z0-9_\-\.\/]*`},
 	{Name: "LBrace", Pattern: `\{`},
 	{Name: "RBrace", Pattern: `\}`},
@@ -43,7 +43,7 @@ var rawParser = participle.MustBuild[rawProgram](
 func Parse(input string) (*Program, []error) {
 	raw, err := rawParser.ParseString("", input)
 	if err == nil {
-		return rawToProgram(raw), nil
+		return rawToProgram(raw)
 	}
 
 	// Error recovery: split input into top-level blocks and parse each
@@ -66,13 +66,16 @@ func Parse(input string) (*Program, []error) {
 			continue
 		}
 		parsedAny = true
-		resolved := rawToProgram(r)
+		resolved, lowerErrs := rawToProgram(r)
 		prog.Signals = append(prog.Signals, resolved.Signals...)
-		prog.SignalGroups = append(prog.SignalGroups, resolved.SignalGroups...)
+		prog.ProjectionPartitions = append(prog.ProjectionPartitions, resolved.ProjectionPartitions...)
+		prog.ProjectionScores = append(prog.ProjectionScores, resolved.ProjectionScores...)
+		prog.ProjectionMappings = append(prog.ProjectionMappings, resolved.ProjectionMappings...)
 		prog.Routes = append(prog.Routes, resolved.Routes...)
 		prog.Models = append(prog.Models, resolved.Models...)
 		prog.Plugins = append(prog.Plugins, resolved.Plugins...)
 		prog.TestBlocks = append(prog.TestBlocks, resolved.TestBlocks...)
+		allErrors = append(allErrors, lowerErrs...)
 	}
 
 	if !parsedAny {
@@ -88,7 +91,7 @@ func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
 	start := 0
-	keywords := []string{"SIGNAL_GROUP", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
+	keywords := []string{"DECISION_TREE", "PROJECTION", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
@@ -146,16 +149,32 @@ func splitTopLevelBlocks(input string) []string {
 
 // ---------- Raw → Resolved Conversion ----------
 
-func rawToProgram(raw *rawProgram) *Program {
+func rawToProgram(raw *rawProgram) (*Program, []error) {
 	prog := &Program{}
+	var errs []error
+	hasDirectRoutes := false
+	treeCount := 0
 	for _, entry := range raw.Entries {
 		switch {
-		case entry.SignalGroup != nil:
-			prog.SignalGroups = append(prog.SignalGroups, rawToSignalGroup(entry.SignalGroup))
 		case entry.Signal != nil:
 			prog.Signals = append(prog.Signals, rawToSignal(entry.Signal))
+		case entry.Projection != nil:
+			switch entry.Projection.Kind {
+			case "partition":
+				prog.ProjectionPartitions = append(prog.ProjectionPartitions, rawToProjectionPartition(entry.Projection))
+			case "score":
+				prog.ProjectionScores = append(prog.ProjectionScores, rawToProjectionScore(entry.Projection))
+			case "mapping":
+				prog.ProjectionMappings = append(prog.ProjectionMappings, rawToProjectionMapping(entry.Projection))
+			}
 		case entry.Route != nil:
+			hasDirectRoutes = true
 			prog.Routes = append(prog.Routes, rawToRoute(entry.Route))
+		case entry.DecisionTree != nil:
+			treeCount++
+			routes, treeErrs := rawDecisionTreeToRoutes(entry.DecisionTree, treeCount-1)
+			prog.Routes = append(prog.Routes, routes...)
+			errs = append(errs, treeErrs...)
 		case entry.Model != nil:
 			prog.Models = append(prog.Models, rawToModelDecl(entry.Model))
 		case entry.Plugin != nil:
@@ -164,43 +183,142 @@ func rawToProgram(raw *rawProgram) *Program {
 			prog.TestBlocks = append(prog.TestBlocks, rawToTestBlock(entry.TestBlock))
 		}
 	}
-	return prog
+	if hasDirectRoutes && treeCount > 0 {
+		errs = append(errs, fmt.Errorf("DECISION_TREE declarations cannot be mixed with ROUTE declarations in the same DSL program"))
+	}
+	return prog, errs
 }
 
-func rawToSignalGroup(r *rawSignalGroupDecl) *SignalGroupDecl {
-	sg := &SignalGroupDecl{
+func rawToProjectionPartition(r *rawProjectionDecl) *ProjectionPartitionDecl {
+	partition := &ProjectionPartitionDecl{
 		Name: unquoteIdent(r.Name),
 		Pos:  posFromLexer(r.Pos),
 	}
 	fields := entriesToMap(r.Fields)
 	if v, ok := fields["semantics"]; ok {
 		if sv, ok := v.(StringValue); ok {
-			sg.Semantics = sv.V
+			partition.Semantics = sv.V
 		}
 	}
 	if v, ok := fields["temperature"]; ok {
 		switch tv := v.(type) {
 		case FloatValue:
-			sg.Temperature = tv.V
+			partition.Temperature = tv.V
 		case IntValue:
-			sg.Temperature = float64(tv.V)
+			partition.Temperature = float64(tv.V)
 		}
 	}
 	if v, ok := fields["members"]; ok {
 		if av, ok := v.(ArrayValue); ok {
 			for _, item := range av.Items {
 				if sv, ok := item.(StringValue); ok {
-					sg.Members = append(sg.Members, sv.V)
+					partition.Members = append(partition.Members, sv.V)
 				}
 			}
 		}
 	}
 	if v, ok := fields["default"]; ok {
 		if sv, ok := v.(StringValue); ok {
-			sg.Default = sv.V
+			partition.Default = sv.V
 		}
 	}
-	return sg
+	return partition
+}
+
+func rawToProjectionScore(r *rawProjectionDecl) *ProjectionScoreDecl {
+	score := &ProjectionScoreDecl{
+		Name:   unquoteIdent(r.Name),
+		Pos:    posFromLexer(r.Pos),
+		Method: "weighted_sum",
+	}
+	fields := entriesToMap(r.Fields)
+	if method, ok := getStringField(fields, "method"); ok {
+		score.Method = method
+	}
+	if rawInputs, ok := fields["inputs"].(ArrayValue); ok {
+		for _, item := range rawInputs.Items {
+			ov, ok := item.(ObjectValue)
+			if !ok {
+				continue
+			}
+			input := &ProjectionScoreInputDecl{}
+			if signalType, ok := getStringField(ov.Fields, "type"); ok {
+				input.SignalType = signalType
+			}
+			if signalName, ok := getStringField(ov.Fields, "name"); ok {
+				input.SignalName = signalName
+			}
+			if weight, ok := getFloat64Field(ov.Fields, "weight"); ok {
+				input.Weight = weight
+			}
+			if valueSource, ok := getStringField(ov.Fields, "value_source"); ok {
+				input.ValueSource = valueSource
+			}
+			if match, ok := getFloat64Field(ov.Fields, "match"); ok {
+				input.Match = match
+			}
+			if miss, ok := getFloat64Field(ov.Fields, "miss"); ok {
+				input.Miss = miss
+			}
+			score.Inputs = append(score.Inputs, input)
+		}
+	}
+	return score
+}
+
+func rawToProjectionMapping(r *rawProjectionDecl) *ProjectionMappingDecl {
+	mapping := &ProjectionMappingDecl{
+		Name:   unquoteIdent(r.Name),
+		Pos:    posFromLexer(r.Pos),
+		Method: "threshold_bands",
+	}
+	fields := entriesToMap(r.Fields)
+	if source, ok := getStringField(fields, "source"); ok {
+		mapping.Source = source
+	}
+	if method, ok := getStringField(fields, "method"); ok {
+		mapping.Method = method
+	}
+	if calibrationObj, ok := fields["calibration"].(ObjectValue); ok {
+		calibration := &ProjectionMappingCalibrationDecl{}
+		if method, ok := getStringField(calibrationObj.Fields, "method"); ok {
+			calibration.Method = method
+		}
+		if slope, ok := getFloat64Field(calibrationObj.Fields, "slope"); ok {
+			calibration.Slope = slope
+		}
+		mapping.Calibration = calibration
+	}
+	if rawOutputs, ok := fields["outputs"].(ArrayValue); ok {
+		for _, item := range rawOutputs.Items {
+			ov, ok := item.(ObjectValue)
+			if !ok {
+				continue
+			}
+			output := &ProjectionMappingOutputDecl{}
+			if name, ok := getStringField(ov.Fields, "name"); ok {
+				output.Name = name
+			}
+			if v, ok := getFloat64Field(ov.Fields, "lt"); ok {
+				output.LT = float64Ptr(v)
+			}
+			if v, ok := getFloat64Field(ov.Fields, "lte"); ok {
+				output.LTE = float64Ptr(v)
+			}
+			if v, ok := getFloat64Field(ov.Fields, "gt"); ok {
+				output.GT = float64Ptr(v)
+			}
+			if v, ok := getFloat64Field(ov.Fields, "gte"); ok {
+				output.GTE = float64Ptr(v)
+			}
+			mapping.Outputs = append(mapping.Outputs, output)
+		}
+	}
+	return mapping
+}
+
+func float64Ptr(v float64) *float64 {
+	return &v
 }
 
 func rawToTestBlock(r *rawTestBlockDecl) *TestBlockDecl {
@@ -512,7 +630,7 @@ func Lex(input string) ([]Token, []error) {
 	}
 
 	keywordMap := map[string]TokenType{
-		"SIGNAL": TOKEN_SIGNAL, "SIGNAL_GROUP": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
+		"SIGNAL": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
 		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
 		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
 		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
@@ -591,7 +709,7 @@ func Lex(input string) ([]Token, []error) {
 // LookupIdent returns the token type for an identifier string.
 func LookupIdent(ident string) TokenType {
 	keywords := map[string]TokenType{
-		"SIGNAL": TOKEN_SIGNAL, "SIGNAL_GROUP": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
+		"SIGNAL": TOKEN_SIGNAL, "ROUTE": TOKEN_ROUTE,
 		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
 		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
 		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,

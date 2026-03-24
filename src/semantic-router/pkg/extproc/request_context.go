@@ -29,6 +29,12 @@ type EnhancedHallucinationInfo struct {
 	Spans      []EnhancedHallucinationSpan `json:"spans"`
 }
 
+// ChatCompletionMessage is role plus plain-text content from a Chat Completions request.
+type ChatCompletionMessage struct {
+	Role    string
+	Content string
+}
+
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
 	Headers             map[string]string
@@ -81,11 +87,13 @@ type RequestContext struct {
 	VSRMatchedLanguage     []string // Matched language signals
 	VSRMatchedContext      []string // Matched context rule names (e.g. "low_token_count")
 	VSRContextTokenCount   int      // Actual token count for the request
+	VSRMatchedStructure    []string // Matched structure rule names
 	VSRMatchedComplexity   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
 	VSRMatchedModality     []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
 	VSRMatchedAuthz        []string // Matched authz rule names for user-level routing
 	VSRMatchedJailbreak    []string // Matched jailbreak rule names (confidence >= threshold)
 	VSRMatchedPII          []string // Matched PII rule names (denied PII types detected)
+	VSRMatchedProjection   []string // Matched projection mapping outputs
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request
@@ -123,6 +131,13 @@ type RequestContext struct {
 
 	// Response API context
 	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
+
+	// Chat Completions messages (parsed for memory and related flows)
+	ChatCompletionMessages []ChatCompletionMessage
+	// ChatCompletionRequestBody is the raw chat-completions JSON (dev: extract user from body).
+	ChatCompletionRequestBody []byte
+	// ChatCompletionUserID is populated in dev builds when parsing the chat-completions body.
+	ChatCompletionUserID string
 
 	// Router replay context
 	RouterReplayID           string                           // ID of the router replay session, if applicable

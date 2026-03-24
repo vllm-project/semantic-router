@@ -32,7 +32,7 @@ type OpenAIRouter struct {
 	// initialized from config.IntelligentRouting.ModelSelection.
 	ModelSelector   *selection.Registry
 	ReplayRecorders map[string]*routerreplay.Recorder
-	MemoryStore     *memory.MilvusStore
+	MemoryStore     memory.Store
 	MemoryExtractor *memory.MemoryExtractor
 
 	// CredentialResolver resolves per-user LLM API keys from multiple sources

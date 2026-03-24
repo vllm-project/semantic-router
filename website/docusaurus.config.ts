@@ -116,13 +116,21 @@ const config: Config = {
             from: '/docs/cli/troubleshooting',
             to: '/docs/troubleshooting/common-errors',
           },
+          {
+            from: '/docs/tutorials/signal/projections',
+            to: '/docs/tutorials/projection/overview',
+          },
+          {
+            from: '/docs/tutorials/signal/heuristic/modality',
+            to: '/docs/tutorials/signal/learned/modality',
+          },
         ],
       },
     ],
   ],
 
   themeConfig: {
-    image: 'img/docusaurus-social-card.jpg',
+    image: 'img/vllm-sr-logo.light.png',
     metadata: [
       { name: 'description', content: 'System Level Intelligent Router for Mixture-of-Models' },
       { name: 'keywords', content: 'LLM, Semantic Router, Mixture of Models, vLLM, Routing, AI Gateway, Envoy, ExtProc' },
@@ -167,10 +175,20 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          to: '/white-paper',
+          type: 'dropdown',
           className: 'nav-primary',
-          label: 'Paper',
+          label: 'About',
           position: 'left',
+          items: [
+            {
+              label: 'White Paper',
+              to: '/white-paper',
+            },
+            {
+              label: 'Vision Paper',
+              to: '/vision-paper',
+            },
+          ],
         },
         {
           to: '/publications',
@@ -287,6 +305,10 @@ const config: Config = {
             {
               label: 'White Paper',
               to: '/white-paper',
+            },
+            {
+              label: 'Vision Paper',
+              to: '/vision-paper',
             },
 
             {

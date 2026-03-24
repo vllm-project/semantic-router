@@ -90,8 +90,10 @@ func TestDecisionWillPersonalize(t *testing.T) {
 func TestUpdateResponseCacheSkipsPersonalizedContext(t *testing.T) {
 	mockCache := &mockStreamingCache{}
 	router := &OpenAIRouter{
-		Cache:  mockCache,
-		Config: &config.RouterConfig{},
+		Cache: mockCache,
+		Config: &config.RouterConfig{
+			SemanticCache: config.SemanticCache{Enabled: true},
+		},
 	}
 
 	tests := []struct {

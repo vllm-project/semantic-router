@@ -75,6 +75,7 @@ SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("preferences", "preferences", "preference", "preference_rules"),
     SignalFamilySpec("language", "language", "language", "language_rules"),
     SignalFamilySpec("context", "context", "context", "context_rules"),
+    SignalFamilySpec("structure", "structure", "structure", "structure_rules"),
     SignalFamilySpec(
         "complexity",
         "complexity",
@@ -130,6 +131,21 @@ def build_signal_reference_index(signals: Any) -> set[str]:
                     names.add(f"{name}:{suffix}")
                 continue
             names.add(name)
+
+    return names
+
+
+def build_projection_reference_index(projections: Any) -> set[str]:
+    """Build the valid decision reference names for declared projection outputs."""
+    names: set[str] = set()
+    if not projections:
+        return names
+
+    for mapping in getattr(projections, "mappings", None) or []:
+        for output in getattr(mapping, "outputs", None) or []:
+            name = getattr(output, "name", None)
+            if name:
+                names.add(name)
 
     return names
 

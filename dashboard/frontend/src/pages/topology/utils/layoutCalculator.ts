@@ -10,6 +10,7 @@ import {
 import {
   TOPOLOGY_LAYER_LAYOUT,
   EDGE_COLORS,
+  MODEL_NODE_WIDTH,
 } from '../constants'
 import { buildLayoutGraph } from './layoutGraphBuilder'
 
@@ -404,7 +405,7 @@ export function calculateFullLayout(
         || nodes.find(n => n.type === 'modelNode' && n.data.modelRef?.model === topology.defaultModel)
 
       if (defaultModelNode) {
-        const modelDim = nodeDimensions.get(defaultModelNode.id) || { width: 180, height: 80 }
+        const modelDim = nodeDimensions.get(defaultModelNode.id) || { width: MODEL_NODE_WIDTH, height: 80 }
         // Only reposition if the default model is NOT shared with other decisions
         // (i.e. only connected from default-route)
         const isShared = defaultModelNode.data.fromDecisions

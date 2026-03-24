@@ -30,11 +30,13 @@ const (
 	SignalTypePreference   = "preference"
 	SignalTypeLanguage     = "language"
 	SignalTypeContext      = "context"
+	SignalTypeStructure    = "structure"
 	SignalTypeComplexity   = "complexity"
 	SignalTypeModality     = "modality"
 	SignalTypeAuthz        = "authz"
 	SignalTypeJailbreak    = "jailbreak"
 	SignalTypePII          = "pii"
+	SignalTypeProjection   = "projection"
 )
 
 // API format constants for model backends.
@@ -171,6 +173,7 @@ type InlineModels struct {
 // IntelligentRouting captures user-facing signal and decision configuration.
 type IntelligentRouting struct {
 	Signals         `yaml:",inline"`
+	Projections     Projections          `yaml:"projections,omitempty"`
 	Decisions       []Decision           `yaml:"decisions,omitempty"`
 	Strategy        string               `yaml:"strategy,omitempty"`
 	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`

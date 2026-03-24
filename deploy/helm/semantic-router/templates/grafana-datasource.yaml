@@ -1,0 +1,20 @@
+{{- if and .Values.dependencies.observability.grafana.enabled .Values.dependencies.observability.prometheus.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-grafana-datasource
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    grafana_datasource: "1"
+    {{- include "semantic-router.labels" . | nindent 4 }}
+data:
+  prometheus-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://{{ .Release.Name }}-prometheus-server:80
+        isDefault: true
+        editable: true
+{{- end }}

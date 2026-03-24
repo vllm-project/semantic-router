@@ -41,11 +41,12 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	if !shouldSearch {
 		return requestBody, nil
 	}
-	memories, err := store.Retrieve(
-		ctx.TraceContext,
-		r.buildMemoryRetrieveOptions(memoryPluginConfig, searchQuery, userID),
-	)
+	retrieveOpts := r.buildMemoryRetrieveOptions(memoryPluginConfig, searchQuery, userID)
+	memories, err := store.Retrieve(ctx.TraceContext, retrieveOpts)
 	if err != nil {
+		metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "retrieval_error", 0)
+		logging.Errorf("Memory: retrieval failed for user=%s decision=%s query=%q: %v",
+			userID, ctx.VSRSelectedDecisionName, truncateForLog(searchQuery, 60), err)
 		return requestBody, fmt.Errorf("memory retrieval failed: %w", err)
 	}
 	memories = r.filterRetrievedMemories(memoryPluginConfig, memories, userID)
@@ -73,6 +74,25 @@ func (r *OpenAIRouter) resolveMemoryPluginConfig(
 	} else if !memoryEnabled {
 		logging.Debugf("Memory: Disabled in global config, skipping retrieval")
 		return nil, false
+	}
+
+	// Check opt-out header (x-disable-router-memory: true)
+	if ctx.Headers["x-disable-router-memory"] == "true" {
+		logging.Debugf("Memory: Disabled via x-disable-router-memory header (SDK-managed memory opt-out)")
+		return memoryPluginConfig, false
+	}
+
+	// Check config-based per-route disable
+	requestPath := ctx.Headers[":path"]
+	if r.isMemoryDisabledForRoute(requestPath) {
+		logging.Debugf("Memory: Disabled for route %s via config (SDK-managed memory opt-out)", requestPath)
+		return memoryPluginConfig, false
+	}
+
+	// Check config-based per-model disable
+	if ctx.RequestModel != "" && r.isMemoryDisabledForModel(ctx.RequestModel) {
+		logging.Debugf("Memory: Disabled for model %s via config (SDK-managed memory opt-out)", ctx.RequestModel)
+		return memoryPluginConfig, false
 	}
 
 	return memoryPluginConfig, true
@@ -198,14 +218,18 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 	injectedBody, err := injectMemoryMessages(requestBody, ctx.MemoryContext)
 	if err != nil {
 		logging.Warnf("Memory: Failed to inject memory context: %v", err)
+		metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "injection_error", 0)
+		ctx.MemoryContext = ""
 		return requestBody
 	}
 
-	logging.Infof("Memory: Injected %d memories into request", len(memories))
+	metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "injected", 0)
+	logging.Infof("Memory: Injected %d memories into request (decision=%s, context_len=%d)",
+		len(memories), ctx.VSRSelectedDecisionName, len(ctx.MemoryContext))
 	return injectedBody
 }
 
-func (r *OpenAIRouter) getMemoryStore() *memory.MilvusStore {
+func (r *OpenAIRouter) getMemoryStore() memory.Store {
 	return r.MemoryStore
 }
 
@@ -295,4 +319,36 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 	metrics.RecordPluginExecution("fast_response", decisionName, "executed", 0)
 
 	return httputil.CreateFastResponse(fastCfg.Message, ctx.ExpectStreamingResponse, decisionName)
+}
+
+// isMemoryDisabledForRoute checks if memory is disabled for the given route path.
+// Returns true if the route is in the Config.Memory.DisabledRoutes list.
+func (r *OpenAIRouter) isMemoryDisabledForRoute(requestPath string) bool {
+	if len(r.Config.Memory.DisabledRoutes) == 0 {
+		return false
+	}
+
+	for _, disabledRoute := range r.Config.Memory.DisabledRoutes {
+		if requestPath == disabledRoute {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isMemoryDisabledForModel checks if memory is disabled for the given model name.
+// Returns true if the model is in the Config.Memory.DisabledModels list.
+func (r *OpenAIRouter) isMemoryDisabledForModel(modelName string) bool {
+	if len(r.Config.Memory.DisabledModels) == 0 {
+		return false
+	}
+
+	for _, disabledModel := range r.Config.Memory.DisabledModels {
+		if modelName == disabledModel {
+			return true
+		}
+	}
+
+	return false
 }

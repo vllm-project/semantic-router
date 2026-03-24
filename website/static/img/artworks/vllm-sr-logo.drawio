@@ -1,0 +1,19 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/28.1.2 Chrome/138.0.7204.243 Electron/37.4.0 Safari/537.36" version="28.1.2">
+  <diagram name="第 1 页" id="EUbu-R_BCY3T9j6Ed6U7">
+    <mxGraphModel dx="1996" dy="1315" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="480" pageHeight="300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="7QP3WNfHmro1-Nz3Sy41-1" value="" style="shape=image;aspect=fixed;image=data:image/svg+xml,PHN2ZyBoZWlnaHQ9IjFlbSIgc3R5bGU9ImZsZXg6bm9uZTtsaW5lLWhlaWdodDoxIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIxZW0iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHRpdGxlPnZMTE08L3RpdGxlPjxwYXRoIGQ9Ik0wIDQuOTczaDkuMzI0VjIzTDAgNC45NzN6IiBmaWxsPSIjRkRCNTE1Ij48L3BhdGg+PHBhdGggZD0iTTEzLjk4NiA0LjM1MUwyMi4zNzggMGwtNi4yMTYgMjNIOS4zMjRsNC42NjItMTguNjQ5eiIgZmlsbD0iIzMwQTJGRiI+PC9wYXRoPjwvc3ZnPg==;" vertex="1" parent="1">
+          <mxGeometry x="593" y="480" width="240" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="7QP3WNfHmro1-Nz3Sy41-2" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=default;verticalAlign=top;aspect=fixed;imageAspect=0;editableCssRules=.*;image=data:image/svg+xml,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjIgMiA0OCAyMCIgc3R5bGU9ImZsZXg6bm9uZTtsaW5lLWhlaWdodDoxIiBoZWlnaHQ9IjIwIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGZpbGw9ImN1cnJlbnRDb2xvciIgd2lkdGg9IjQ4Ij48dGl0bGU+dkxMTTwvdGl0bGU+PHBhdGggZD0iTTQuOCAySDJ2MjBoMTIuNHYtMi40SDQuOFYyek0yMCAyaC0yLjh2MjBoMTIuNHYtMi40SDIwVjJ6TTMyIDIyVjJoMy42TDQxIDEzLjQzNSA0Ni40IDJINTB2MjBoLTIuOFY1LjM4OGwtNS40IDEwLjk4OWgtMS42TDM0LjggNS4zODdWMjJIMzJ6Ii8+PC9zdmc+;" vertex="1" parent="1">
+          <mxGeometry x="883" y="480" width="360" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="7QP3WNfHmro1-Nz3Sy41-3" value="&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 53px;&quot;&gt;&lt;b style=&quot;&quot;&gt;SEMANTIC ROUTER&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="787" y="640" width="540" height="80" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
