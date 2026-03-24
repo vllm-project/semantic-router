@@ -14,6 +14,13 @@ Use mappings when:
 - one score should feed several decisions through reusable named outputs
 - routing policy review should happen over named bands instead of inline numeric comparisons
 
+## Key Advantages
+
+- Converts numeric scores into readable policy names that decisions consume.
+- Centralizes threshold policy in one place instead of duplicating it across routes.
+- Lets one score feed many decisions through reusable named outputs.
+- Supports optional confidence calibration via `sigmoid_distance`.
+
 ## What Problem Does It Solve?
 
 Scores are useful internal signals, but decision rules should not depend on everyone remembering that "0.82 means reasoning tier" or "0.35 means verification required."
@@ -120,6 +127,10 @@ ROUTE reasoning_math {
 
 - `Config -> Projections` edits mappings in canonical config form
 - `Config -> Decisions` can reference mapping outputs with condition type `projection`
+
+## Configuration
+
+Mappings are configured under `routing.projections.mappings`. Each mapping requires a `name`, a `source` score, a `method` (currently `threshold_bands`), and a list of `outputs` with threshold bounds. See the [Canonical YAML](#canonical-yaml) and [Config Fields](#config-fields) sections above for full field reference.
 
 ## When to Use
 

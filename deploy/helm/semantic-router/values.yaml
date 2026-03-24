@@ -475,6 +475,35 @@ env:
         name: hf-token-secret
         key: token
         optional: true # Alternative env var name used by huggingface-cli
+
+# Dashboard configuration
+dashboard:
+  # -- Enable the vLLM-SR dashboard
+  enabled: false
+  image:
+    # -- Dashboard image repository
+    repository: ghcr.io/vllm-project/semantic-router/dashboard
+    # -- Dashboard image tag
+    tag: "latest"
+    # -- Dashboard image pull policy
+    pullPolicy: IfNotPresent
+  # -- Run dashboard in read-only mode
+  readonly: false
+  service:
+    # -- Dashboard service type
+    type: ClusterIP
+    # -- Dashboard service port
+    port: 8700
+    # -- Dashboard target port
+    targetPort: 8700
+  resources:
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+
 dependencies:
   semanticCache:
     redis:
@@ -581,6 +610,9 @@ prometheus:
 grafana:
   image:
     tag: "11.5.1"
+  sidecar:
+    datasources:
+      enabled: true
 ---
 config:
   version: v0.3

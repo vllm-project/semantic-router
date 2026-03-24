@@ -1,0 +1,75 @@
+{{- if .Values.dashboard.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-dashboard
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "semantic-router.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: dashboard
+  template:
+    metadata:
+      labels:
+        {{- include "semantic-router.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: dashboard
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: dashboard
+        image: "{{ .Values.dashboard.image.repository }}:{{ .Values.dashboard.image.tag }}"
+        imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.dashboard.service.targetPort }}
+          name: http
+          protocol: TCP
+        env:
+        - name: ROUTER_API_URL
+          value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
+        {{- if .Values.dashboard.readonly }}
+        - name: DASHBOARD_READONLY
+          value: "true"
+        {{- end }}
+        {{- if .Values.dependencies.observability.prometheus.enabled }}
+        - name: TARGET_PROMETHEUS_URL
+          value: "http://{{ .Release.Name }}-prometheus-server:80"
+        {{- end }}
+        {{- if .Values.dependencies.observability.grafana.enabled }}
+        - name: TARGET_GRAFANA_URL
+          value: "http://{{ .Release.Name }}-grafana:80"
+        {{- end }}
+        {{- if .Values.dependencies.observability.jaeger.enabled }}
+        - name: TARGET_JAEGER_URL
+          value: "http://{{ .Release.Name }}-jaeger-query:16686"
+        {{- end }}
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.dashboard.resources | nindent 10 }}
+      volumes:
+      - name: config-volume
+        configMap:
+          name: {{ include "semantic-router.fullname" . }}-config
+{{- end }}
