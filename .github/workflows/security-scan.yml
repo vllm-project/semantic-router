@@ -1,0 +1,208 @@
+name: Supply Chain Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request_target:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ast-security-scan:
+    if: github.repository == 'vllm-project/semantic-router'
+    runs-on: ubuntu-latest
+    name: AST supply chain security scan
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install tree-sitter dependencies
+        run: |
+          pip install \
+            tree-sitter \
+            tree-sitter-python \
+            tree-sitter-javascript \
+            tree-sitter-typescript \
+            tree-sitter-go \
+            tree-sitter-rust
+
+      - name: Run AST codebase scan
+        id: ast_scan
+        continue-on-error: true
+        run: |
+          python3 tools/security/ast_security_scanner.py \
+            scan . --fail-on HIGH --json > /tmp/ast_scan.json
+
+      - name: Run AST PR diff scan
+        id: diff_scan
+        if: github.event_name == 'pull_request_target'
+        continue-on-error: true
+        run: |
+          python3 tools/security/ast_security_scanner.py \
+            diff "origin/${{ github.base_ref }}" --fail-on HIGH --json \
+            > /tmp/diff_scan.json
+
+      - name: Run regex fallback scan
+        id: regex_scan
+        continue-on-error: true
+        run: |
+          python3 tools/security/scan_malicious_code.py \
+            . --fail-on HIGH 2>&1 \
+            | tee /tmp/regex_report.txt
+
+      - name: Post security report on PR
+        if: github.event_name == 'pull_request_target' && !cancelled()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            let astResult = { findings: [], counts: {} };
+            try {
+              astResult = JSON.parse(fs.readFileSync('/tmp/ast_scan.json', 'utf8'));
+            } catch (e) { console.log('No AST scan JSON:', e.message); }
+
+            let diffResult = { findings: [], counts: {} };
+            try {
+              diffResult = JSON.parse(fs.readFileSync('/tmp/diff_scan.json', 'utf8'));
+            } catch (e) { console.log('No diff scan JSON:', e.message); }
+
+            const astOutcome   = '${{ steps.ast_scan.outcome }}';
+            const diffOutcome  = '${{ steps.diff_scan.outcome }}' || 'skipped';
+            const regexOutcome = '${{ steps.regex_scan.outcome }}';
+
+            const anyFailed = [astOutcome, diffOutcome, regexOutcome]
+              .some(o => o === 'failure');
+
+            function severityCounts(counts) {
+              const total = Object.values(counts).reduce((a, b) => a + b, 0);
+              if (total === 0) return { total: 0, text: 'No issues detected' };
+              const parts = [];
+              for (const sev of ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']) {
+                if (counts[sev]) parts.push(`**${sev}**: ${counts[sev]}`);
+              }
+              return { total, text: `${total} finding(s) — ${parts.join(' · ')}` };
+            }
+
+            function icon(outcome) {
+              return outcome === 'success' ? '✅' : outcome === 'skipped' ? '⏭️' : '🚨';
+            }
+
+            const astCounts  = severityCounts(astResult.counts  || {});
+            const diffCounts = severityCounts(diffResult.counts || {});
+
+            const statusIcon = anyFailed ? '🚨' : '✅';
+            const statusText = anyFailed ? 'Issues Found' : 'All Clear';
+
+            let body = `## ${statusIcon} Supply Chain Security Report — ${statusText}\n\n`;
+            body += `| Scanner | Status | Findings |\n`;
+            body += `|---------|--------|----------|\n`;
+            body += `| AST Codebase Scan (Py, Go, JS/TS, Rust) | ${icon(astOutcome)} | ${astCounts.text} |\n`;
+            body += `| AST PR Diff Scan | ${icon(diffOutcome)} | ${diffOutcome === 'skipped' ? 'Skipped (push event)' : diffCounts.text} |\n`;
+            body += `| Regex Fallback Scan | ${icon(regexOutcome)} | ${regexOutcome === 'success' ? 'No issues detected' : 'Issues found — see logs'} |\n`;
+            body += `\n`;
+
+            if (diffResult.findings && diffResult.findings.length > 0) {
+              body += `### Findings in this PR's diff\n\n`;
+              body += `<details><summary>${diffCounts.total} finding(s) — click to expand</summary>\n\n`;
+              body += `| Severity | File | Line | Description |\n`;
+              body += `|----------|------|------|-------------|\n`;
+              const cap = 25;
+              for (const f of diffResult.findings.slice(0, cap)) {
+                const sev = f.severity === 'CRITICAL' ? '🔴 CRITICAL'
+                          : f.severity === 'HIGH'     ? '🟠 HIGH'
+                          : f.severity === 'MEDIUM'   ? '🟡 MEDIUM' : '🔵 LOW';
+                const file = f.file.length > 50 ? '…' + f.file.slice(-49) : f.file;
+                body += `| ${sev} | \`${file}\` | ${f.line} | ${f.message} |\n`;
+              }
+              if (diffResult.findings.length > cap) {
+                body += `\n_...and ${diffResult.findings.length - cap} more (see workflow logs)_\n`;
+              }
+              body += `\n</details>\n\n`;
+            }
+
+            if (astResult.findings && astResult.findings.length > 0) {
+              const critHigh = astResult.findings.filter(
+                f => f.severity === 'CRITICAL' || f.severity === 'HIGH');
+              if (critHigh.length > 0) {
+                body += `### CRITICAL / HIGH findings in codebase\n\n`;
+                body += `<details><summary>${critHigh.length} finding(s) — click to expand</summary>\n\n`;
+                body += `| Severity | File | Line | Description |\n`;
+                body += `|----------|------|------|-------------|\n`;
+                const cap = 25;
+                for (const f of critHigh.slice(0, cap)) {
+                  const sev = f.severity === 'CRITICAL' ? '🔴 CRITICAL' : '🟠 HIGH';
+                  const file = f.file.length > 50 ? '…' + f.file.slice(-49) : f.file;
+                  body += `| ${sev} | \`${file}\` | ${f.line} | ${f.message} |\n`;
+                }
+                if (critHigh.length > cap) {
+                  body += `\n_...and ${critHigh.length - cap} more_\n`;
+                }
+                body += `\n</details>\n\n`;
+              }
+            }
+
+            if (anyFailed) {
+              body += `> **Action required:** CRITICAL and HIGH severity findings must be resolved before merge.\n\n`;
+            }
+
+            body += `---\n`;
+            body += `_Scanned at \`${new Date().toISOString()}\` · `;
+            body += `[View full workflow logs](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})_\n`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user.login === 'github-actions[bot]' &&
+              c.body.includes('Supply Chain Security Report')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: body,
+              });
+              console.log('Updated existing security report comment');
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body,
+              });
+              console.log('Created new security report comment');
+            }
+
+      - name: Fail if security issues found
+        if: "!cancelled()"
+        run: |
+          if [ "${{ steps.ast_scan.outcome }}" = "failure" ] || \
+             [ "${{ steps.diff_scan.outcome }}" = "failure" ] || \
+             [ "${{ steps.regex_scan.outcome }}" = "failure" ]; then
+            echo "::error::Supply chain security scan detected issues — see PR comment for details."
+            exit 1
+          fi
