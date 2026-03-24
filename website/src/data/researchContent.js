@@ -16,6 +16,22 @@ export const researchPapers = [
     sortOrder: 10,
   },
   {
+    id: 'wrp-vision-paper',
+    type: 'paper',
+    spotlight: true,
+    categoryLabel: 'VISION PAPER',
+    title: 'The Workload-Router-Pool Architecture for LLM Inference Optimization: A Vision Paper from the vLLM Semantic Router Project',
+    authors: 'Huamin Chen, Xunzhuo Liu, Bowei He, Fuyuan Lyu, Yankai Chen, Xue Liu, Yuhan Liu, Junchen Jiang',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We synthesize the project’s recent routing, fleet, multimodal, and governance results into the Workload-Router-Pool (WRP) architecture, connecting signal-driven routing to a full-stack inference optimization framework and outlining future research directions across workload, router, and pool design.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.21354', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 11,
+  },
+  {
     id: 'visual-confused-deputy',
     type: 'paper',
     title: 'Visual Confused Deputy: Exploiting and Defending Perception Failures in Computer-Using Agents',
