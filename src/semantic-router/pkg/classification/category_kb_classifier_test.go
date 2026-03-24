@@ -54,7 +54,7 @@ func TestCategoryKBClassifier_IsCategoryPrivate(t *testing.T) {
 		},
 		privateTiers: map[string]bool{
 			"security_containment": true,
-			"privacy_policy":      true,
+			"privacy_policy":       true,
 		},
 	}
 
@@ -113,7 +113,8 @@ func TestCategoryKBClassifier_LoadTaxonomy(t *testing.T) {
 			"security_categories": ["jailbreak_role"]
 		}
 	}`
-	if err := os.WriteFile(taxonomyPath, []byte(taxonomyJSON), 0644); err != nil {
+
+	if err := os.WriteFile(taxonomyPath, []byte(taxonomyJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -138,7 +139,7 @@ func TestCategoryKBClassifier_LoadTaxonomy(t *testing.T) {
 func TestCategoryKBClassifier_LoadTaxonomyDefaultPath(t *testing.T) {
 	dir := t.TempDir()
 	taxonomyJSON := `{"categories": {"test": {"tier": "local_standard"}}}`
-	if err := os.WriteFile(filepath.Join(dir, "taxonomy.json"), []byte(taxonomyJSON), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "taxonomy.json"), []byte(taxonomyJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -157,22 +158,30 @@ func TestCategoryKBClassifier_LoadTaxonomyDefaultPath(t *testing.T) {
 func TestCategoryKBClassifier_LoadKBs(t *testing.T) {
 	dir := t.TempDir()
 
-	writeKB := func(name string, exemplars []string) {
-		data, _ := json.Marshal(map[string]interface{}{
+	writeKB := func(t *testing.T, name string, exemplars []string) {
+		t.Helper()
+		data, err := json.Marshal(map[string]interface{}{
 			"category":  name,
 			"exemplars": exemplars,
 		})
-		os.WriteFile(filepath.Join(dir, name+".json"), data, 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name+".json"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	writeKB("proprietary_code", []string{"Review our internal SDK", "Debug our pipeline"})
-	writeKB("generic_coding", []string{"How do I sort an array?", "Explain recursion"})
+	writeKB(t, "proprietary_code", []string{"Review our internal SDK", "Debug our pipeline"})
+	writeKB(t, "generic_coding", []string{"How do I sort an array?", "Explain recursion"})
 
 	// taxonomy.json should be skipped
-	os.WriteFile(filepath.Join(dir, "taxonomy.json"), []byte(`{"categories":{}}`), 0644)
+	if err := os.WriteFile(filepath.Join(dir, "taxonomy.json"), []byte(`{"categories":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	// empty exemplars should be skipped
-	writeKB("empty_cat", []string{})
+	writeKB(t, "empty_cat", []string{})
 
 	c := &CategoryKBClassifier{
 		rule: config.CategoryKBRule{KBDir: dir},
@@ -267,7 +276,7 @@ func TestCategoryKBClassifyResult_MatchedRulesThresholding(t *testing.T) {
 		},
 		privateTiers: map[string]bool{
 			"security_containment": true,
-			"privacy_policy":      true,
+			"privacy_policy":       true,
 		},
 	}
 
@@ -332,14 +341,14 @@ func TestCategoryKBClassifier_ContrastiveScoring(t *testing.T) {
 		},
 		privateTiers: map[string]bool{
 			"security_containment": true,
-			"privacy_policy":      true,
+			"privacy_policy":       true,
 		},
 	}
 
 	tests := []struct {
-		name       string
-		catMaxSim  map[string]float64
-		wantSign   string // "positive", "negative", "zero"
+		name      string
+		catMaxSim map[string]float64
+		wantSign  string // "positive", "negative", "zero"
 	}{
 		{
 			name: "privacy dominates",

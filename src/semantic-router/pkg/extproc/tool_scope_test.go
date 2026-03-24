@@ -85,7 +85,7 @@ func TestFilterToolsByDecisionPolicy_EmptyBoth(t *testing.T) {
 
 func TestFilterToolsByDecisionPolicy_EmptyTools(t *testing.T) {
 	filtered := filterToolsByDecisionPolicy(nil, []string{"a"}, nil)
-	assert.Len(t, filtered, 0)
+	assert.Empty(t, filtered)
 }
 
 func TestToolScopeConstants(t *testing.T) {
@@ -103,6 +103,7 @@ func TestDecisionToolScopeFields(t *testing.T) {
 		BlockTools: []string{"exec_cmd"},
 	}
 
+	assert.Equal(t, "test", dec.Name)
 	assert.Equal(t, "local_only", dec.ToolScope)
 	assert.Equal(t, []string{"read_file", "list_dir"}, dec.AllowTools)
 	assert.Equal(t, []string{"exec_cmd"}, dec.BlockTools)

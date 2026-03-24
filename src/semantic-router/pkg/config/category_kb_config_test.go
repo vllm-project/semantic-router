@@ -145,4 +145,3 @@ func TestToolScopeConstants(t *testing.T) {
 		t.Errorf("ToolScopeFull = %q", ToolScopeFull)
 	}
 }
-
