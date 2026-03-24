@@ -18,13 +18,13 @@ import (
 )
 
 // These tests require:
-// 1. A running Valkey instance with search module.
-//    Default: localhost:6379 (standalone / local-only).
-//    Override with VALKEY_HOST / VALKEY_PORT env vars.
-//    In CI (or when Redis already occupies 6379), `make start-valkey`
-//    maps Valkey to port 6380 and the Makefile test targets set
-//    VALKEY_PORT=6380 automatically.
-// 2. BERT model initialized for embeddings
+//  1. A running Valkey instance with search module.
+//     Default: localhost:6379 (standalone / local-only).
+//     Override with VALKEY_HOST / VALKEY_PORT env vars.
+//     In CI (or when Redis already occupies 6379), `make start-valkey`
+//     maps Valkey to port 6380 and the Makefile test targets set
+//     VALKEY_PORT=6380 automatically.
+//  2. BERT model initialized for embeddings
 func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 	// Skip if SKIP_VALKEY_TESTS is set
 	if os.Getenv("SKIP_VALKEY_TESTS") == "true" {

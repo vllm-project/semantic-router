@@ -140,7 +140,6 @@ func TestDistanceToSimilarity(t *testing.T) {
 	}
 }
 
-
 func TestEscapeTagValue(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -164,4 +163,3 @@ func TestEscapeTagValue(t *testing.T) {
 		})
 	}
 }
-
