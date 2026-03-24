@@ -3,7 +3,7 @@ name: Supply Chain Security Scan
 on:
   push:
     branches: [main]
-  pull_request:
+  pull_request_target:
     branches: [main]
   workflow_dispatch:
 
@@ -25,6 +25,8 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
         with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Set up Python
@@ -51,7 +53,7 @@ jobs:
 
       - name: Run AST PR diff scan
         id: diff_scan
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request_target'
         continue-on-error: true
         run: |
           python3 tools/security/ast_security_scanner.py \
@@ -67,13 +69,12 @@ jobs:
             | tee /tmp/regex_report.txt
 
       - name: Post security report on PR
-        if: github.event_name == 'pull_request' && !cancelled()
+        if: github.event_name == 'pull_request_target' && !cancelled()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
 
-            // --- Read structured scanner outputs ---
             let astResult = { findings: [], counts: {} };
             try {
               astResult = JSON.parse(fs.readFileSync('/tmp/ast_scan.json', 'utf8'));
@@ -84,7 +85,6 @@ jobs:
               diffResult = JSON.parse(fs.readFileSync('/tmp/diff_scan.json', 'utf8'));
             } catch (e) { console.log('No diff scan JSON:', e.message); }
 
-            // --- Step outcomes (actual result, ignoring continue-on-error) ---
             const astOutcome   = '${{ steps.ast_scan.outcome }}';
             const diffOutcome  = '${{ steps.diff_scan.outcome }}' || 'skipped';
             const regexOutcome = '${{ steps.regex_scan.outcome }}';
@@ -92,7 +92,6 @@ jobs:
             const anyFailed = [astOutcome, diffOutcome, regexOutcome]
               .some(o => o === 'failure');
 
-            // --- Helpers ---
             function severityCounts(counts) {
               const total = Object.values(counts).reduce((a, b) => a + b, 0);
               if (total === 0) return { total: 0, text: 'No issues detected' };
@@ -107,7 +106,6 @@ jobs:
               return outcome === 'success' ? '✅' : outcome === 'skipped' ? '⏭️' : '🚨';
             }
 
-            // --- Build summary table ---
             const astCounts  = severityCounts(astResult.counts  || {});
             const diffCounts = severityCounts(diffResult.counts || {});
 
@@ -122,7 +120,6 @@ jobs:
             body += `| Regex Fallback Scan | ${icon(regexOutcome)} | ${regexOutcome === 'success' ? 'No issues detected' : 'Issues found — see logs'} |\n`;
             body += `\n`;
 
-            // --- PR diff findings detail (most actionable for PR authors) ---
             if (diffResult.findings && diffResult.findings.length > 0) {
               body += `### Findings in this PR's diff\n\n`;
               body += `<details><summary>${diffCounts.total} finding(s) — click to expand</summary>\n\n`;
@@ -142,7 +139,6 @@ jobs:
               body += `\n</details>\n\n`;
             }
 
-            // --- Codebase scan findings (collapsed, informational) ---
             if (astResult.findings && astResult.findings.length > 0) {
               const critHigh = astResult.findings.filter(
                 f => f.severity === 'CRITICAL' || f.severity === 'HIGH');
@@ -172,7 +168,6 @@ jobs:
             body += `_Scanned at \`${new Date().toISOString()}\` · `;
             body += `[View full workflow logs](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})_\n`;
 
-            // --- Create or update existing bot comment ---
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
