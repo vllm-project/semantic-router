@@ -8,6 +8,13 @@ The maintained assets live here:
 - `privacy-router.dsl`
 - `privacy.probes.yaml`
 
+The current bindings mirror the `balance` recipe's model set:
+
+- local lane: `local/private-qwen` backed by `qwen/qwen3.5-rocm`
+- frontier lane: `cloud/frontier-reasoning` backed by the `anthropic/claude-opus-4.6` alias
+
+Both lanes currently use the same `balance`-style mock alias catalog on the shared `vllm:8000` backend rather than calling a live external provider.
+
 ## Design Goals
 
 - Route PII, private code, and internal documents to `local/private-qwen`.
@@ -39,8 +46,8 @@ This recipe intentionally exaggerates the spread:
 
 | Model | Prompt / 1M | Completion / 1M | Why |
 |---|---|---|---|
-| `local/private-qwen` | `$0.00` | `$0.00` | Self-hosted default and privacy lane |
-| `cloud/frontier-reasoning` | `$1.20` | `$4.80` | Expensive frontier lane for non-sensitive deep reasoning only |
+| `local/private-qwen` | `$0.00` | `$0.00` | Self-hosted default and privacy lane, backed by `qwen/qwen3.5-rocm` |
+| `cloud/frontier-reasoning` | `$1.80` | `$7.20` | Most expensive balance-tier alias, mocked through the shared `vllm:8000` backend as `anthropic/claude-opus-4.6` for non-sensitive deep reasoning only |
 
 These values are example prices for routing economics and Insights demos, not vendor billing quotes.
 
