@@ -31,7 +31,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `routing.modelCards[].loras`
   - `routing.signals`
   - `routing.projections` for partitions plus derived routing outputs
-  - `routing.meta` for optional assess-and-refine rollout policy
+  - `routing.meta` for bounded request-phase meta-routing policy
   - `routing.decisions`
 - `providers` owns deployment and default-selection metadata.
   - `defaults`
@@ -225,6 +225,7 @@ Latest tutorials follow the same taxonomy:
 - `tutorials/algorithm/` for `config/algorithm/`, with one page per algorithm
 - `tutorials/plugin/` for `config/plugin/`, with one page per plugin
 - `tutorials/global/` for sparse router-wide overrides under `global:`
+- `tutorials/meta-routing/` for `routing.meta` assess-and-refine control flow
 
 Repo-owned runtime and harness assets now live outside `config/`:
 
@@ -425,7 +426,7 @@ When `--source` is omitted, the importer checks `OPENCLAW_CONFIG_PATH`, `./openc
 ### Router local
 
 1. Keep provider-wide defaults in `providers.defaults` and deployment bindings in `providers.models[].backend_refs[]`.
-2. Keep routing semantics in `routing.modelCards/signals/decisions`.
+2. Keep routing semantics in `routing.modelCards/signals/projections/meta/decisions`.
 3. Put only runtime overrides you actually need under `global.router/services/stores/integrations/model_catalog`, and keep model-backed module settings under `global.model_catalog.modules`.
 4. Use `global.router.config_source: kubernetes` only when the in-process `IntelligentPool` / `IntelligentRoute` controller is the active source of truth. Leave it as `file` for normal local, CLI, dashboard, Helm, and operator-authored canonical YAML.
 
@@ -443,7 +444,7 @@ When `--source` is omitted, the importer checks `OPENCLAW_CONFIG_PATH`, `./openc
 
 ### DSL
 
-1. Use DSL for `routing.modelCards`, `routing.signals`, and `routing.decisions`.
+1. Use DSL for `routing.modelCards`, `routing.signals`, `routing.projections`, `routing.meta`, and `routing.decisions`.
 2. Importing a full YAML file still works, but only `routing` is decompiled into DSL.
 3. Keep endpoints, API keys, listeners, and `global` in YAML.
 4. Reusable routing fragments now live under `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/`.

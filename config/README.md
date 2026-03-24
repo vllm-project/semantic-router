@@ -63,6 +63,7 @@ Latest official tutorials mirror the same top-level taxonomy:
 - `tutorials/algorithm/` with one page per algorithm
 - `tutorials/plugin/` with one page per plugin
 - `tutorials/global/`
+- `tutorials/meta-routing/` for request-phase assess-and-refine routing control
 
 `config/` no longer carries runtime support files or test manifests.
 
