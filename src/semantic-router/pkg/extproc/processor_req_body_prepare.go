@@ -144,6 +144,9 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 	if memErr != nil {
 		logging.Warnf("Memory retrieval failed: %v, continuing without memory", memErr)
 	}
+	if ctx.MemoryContext != "" {
+		ctx.OriginalRequestBody = requestBody
+	}
 	r.refreshResponseAPITranslatedBody(ctx, requestBody)
 	openAIRequest = r.reparseRequestWithMemory(requestBody, openAIRequest, ctx)
 

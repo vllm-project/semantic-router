@@ -25,26 +25,9 @@ func (r *OpenAIRouter) executeRAGPlugin(ctx *RequestContext, decisionName string
 		return nil
 	}
 
-	// Get decision
-	decision := ctx.VSRSelectedDecision
-	if decision == nil {
-		return nil // No decision, skip RAG
-	}
-
-	// Get RAG config
-	ragConfig := decision.GetRAGConfig()
-	if ragConfig == nil || !ragConfig.Enabled {
-		return nil // RAG not enabled for this decision
-	}
-
-	// Check minimum confidence threshold
-	if ragConfig.MinConfidenceThreshold != nil {
-		confidence := ctx.FactCheckConfidence
-		if confidence < *ragConfig.MinConfidenceThreshold {
-			logging.Debugf("RAG skipped: confidence %.3f < threshold %.3f",
-				confidence, *ragConfig.MinConfidenceThreshold)
-			return nil
-		}
+	ragConfig, shouldExecute := r.resolveRAGPluginConfig(ctx, decisionName)
+	if !shouldExecute {
+		return nil
 	}
 
 	// Start tracing
@@ -123,8 +106,9 @@ func (r *OpenAIRouter) executeRAGPlugin(ctx *RequestContext, decisionName string
 
 	// Inject context into request
 	if err := r.injectRAGContext(ctx, retrievedContext, ragConfig); err != nil {
-		logging.Errorf("Failed to inject RAG context: %v", err)
-		// Don't fail the request, just log the error
+		logging.Errorf("[RAG] Failed to inject context for decision '%s' (backend=%s): %v",
+			decisionName, ragConfig.Backend, err)
+		metrics.RecordPluginExecution("rag", decisionName, "injection_error", 0)
 		return nil
 	}
 
@@ -168,11 +152,16 @@ func (r *OpenAIRouter) retrieveContext(traceCtx context.Context, ctx *RequestCon
 	}
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("backend %q retrieval failed: %w", ragConfig.Backend, err)
 	}
 
 	// Store backend info
 	ctx.RAGBackend = ragConfig.Backend
+
+	if retrievedContext == "" {
+		logging.Debugf("[RAG] Backend '%s' returned empty context for query: %s",
+			ragConfig.Backend, ctx.UserContent[:min(60, len(ctx.UserContent))])
+	}
 
 	// Cache result if enabled
 	if ragConfig.CacheResults && retrievedContext != "" {
@@ -344,6 +333,36 @@ func (r *OpenAIRouter) injectAsSystemPrompt(messages []interface{}, context stri
 
 	logging.Infof("Injected RAG context into system prompt (%d chars)", len(context))
 	return nil
+}
+
+// resolveRAGPluginConfig checks whether RAG should execute for the given
+// decision, performing early-exit checks and backend validation.
+func (r *OpenAIRouter) resolveRAGPluginConfig(ctx *RequestContext, decisionName string) (*config.RAGPluginConfig, bool) {
+	decision := ctx.VSRSelectedDecision
+	if decision == nil {
+		return nil, false
+	}
+
+	ragConfig := decision.GetRAGConfig()
+	if ragConfig == nil || !ragConfig.Enabled {
+		return nil, false
+	}
+
+	if ragConfig.Backend == "" {
+		logging.Warnf("[RAG] Decision '%s' has RAG enabled but no backend configured, skipping", decisionName)
+		metrics.RecordRAGRetrieval("unknown", decisionName, "config_error", 0)
+		return nil, false
+	}
+
+	if ragConfig.MinConfidenceThreshold != nil {
+		if ctx.FactCheckConfidence < *ragConfig.MinConfidenceThreshold {
+			logging.Debugf("RAG skipped: confidence %.3f < threshold %.3f",
+				ctx.FactCheckConfidence, *ragConfig.MinConfidenceThreshold)
+			return nil, false
+		}
+	}
+
+	return ragConfig, true
 }
 
 // Helper function
