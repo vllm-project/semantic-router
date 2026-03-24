@@ -71,6 +71,9 @@ func Parse(input string) (*Program, []error) {
 		prog.ProjectionPartitions = append(prog.ProjectionPartitions, resolved.ProjectionPartitions...)
 		prog.ProjectionScores = append(prog.ProjectionScores, resolved.ProjectionScores...)
 		prog.ProjectionMappings = append(prog.ProjectionMappings, resolved.ProjectionMappings...)
+		if resolved.Meta != nil {
+			prog.Meta = resolved.Meta
+		}
 		prog.Routes = append(prog.Routes, resolved.Routes...)
 		prog.Models = append(prog.Models, resolved.Models...)
 		prog.Plugins = append(prog.Plugins, resolved.Plugins...)
@@ -91,7 +94,7 @@ func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
 	start := 0
-	keywords := []string{"DECISION_TREE", "PROJECTION", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
+	keywords := []string{"DECISION_TREE", "META", "PROJECTION", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
@@ -167,6 +170,8 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 			case "mapping":
 				prog.ProjectionMappings = append(prog.ProjectionMappings, rawToProjectionMapping(entry.Projection))
 			}
+		case entry.Meta != nil:
+			prog.Meta = rawToMeta(entry.Meta)
 		case entry.Route != nil:
 			hasDirectRoutes = true
 			prog.Routes = append(prog.Routes, rawToRoute(entry.Route))
@@ -187,6 +192,13 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 		errs = append(errs, fmt.Errorf("DECISION_TREE declarations cannot be mixed with ROUTE declarations in the same DSL program"))
 	}
 	return prog, errs
+}
+
+func rawToMeta(r *rawMetaDecl) *MetaDecl {
+	return &MetaDecl{
+		Fields: entriesToMap(r.Fields),
+		Pos:    posFromLexer(r.Pos),
+	}
 }
 
 func rawToProjectionPartition(r *rawProjectionDecl) *ProjectionPartitionDecl {

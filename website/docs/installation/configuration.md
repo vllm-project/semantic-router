@@ -31,6 +31,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `routing.modelCards[].loras`
   - `routing.signals`
   - `routing.projections` for partitions plus derived routing outputs
+  - `routing.meta` for bounded request-phase meta-routing policy
   - `routing.decisions`
 - `providers` owns deployment and default-selection metadata.
   - `defaults`
@@ -139,6 +140,23 @@ routing:
           - name: support_escalated
             gte: 0.25
 
+  meta:
+    mode: shadow
+    max_passes: 2
+    trigger_policy:
+      decision_margin_below: 0.18
+      projection_boundary_within: 0.08
+      required_families:
+        - type: preference
+          min_confidence: 0.65
+      family_disagreements:
+        - cheap: keyword
+          expensive: embedding
+    allowed_actions:
+      - type: disable_compression
+      - type: rerun_signal_families
+        signal_families: [preference, jailbreak]
+
   decisions:
     - name: support_route
       description: Route support requests that need an escalated answer
@@ -166,6 +184,25 @@ global:
 
 For `routing.signals.structure`, `feature.type: density` now uses built-in multilingual text-unit normalization. The router counts each CJK character as one unit, counts contiguous runs of other letters and digits as one unit, and ignores punctuation, so the same density rule shape behaves consistently across English, Chinese, and mixed-script prompts without a separate `normalize_by` field.
 
+## Meta-Routing Runtime Notes
+
+`routing.meta` adds a request-phase assess-and-refine seam on top of the normal `signals -> projections -> decisions -> model selection` flow.
+
+- `observe` records pass traces and a `FeedbackRecord`, but never changes the selected route.
+- `shadow` executes one bounded refinement pass for comparison and feedback, but keeps the base-pass route.
+- `active` may adopt the refined result, but only through the declared `allowed_actions` and `max_passes` budget.
+
+The current runtime persists pass-level artifacts through the same replay-store backends already used by router replay and ships offline helpers for calibration prep:
+
+- `tools/agent/scripts/meta_routing_feedback_report.py`
+- `tools/agent/scripts/meta_routing_feedback_features.py`
+
+The dashboard ships the same operator flow directly:
+
+- `Config -> Meta Routing` visually authors `routing.meta`
+- `/meta-routing` shows aggregate rollout health, filters, one-record inspection, and replay cross-links
+- `Insights` remains replay-centric, but now links into matching meta-routing feedback by `request_id`
+
 ## Repository config assets
 
 The repository now separates the exhaustive canonical reference config from reusable routing fragments:
@@ -188,6 +225,7 @@ Latest tutorials follow the same taxonomy:
 - `tutorials/algorithm/` for `config/algorithm/`, with one page per algorithm
 - `tutorials/plugin/` for `config/plugin/`, with one page per plugin
 - `tutorials/global/` for sparse router-wide overrides under `global:`
+- `tutorials/meta-routing/` for `routing.meta` assess-and-refine control flow
 
 Repo-owned runtime and harness assets now live outside `config/`:
 
@@ -216,6 +254,13 @@ Use `routing.projections` when the raw signal catalog is not enough on its own:
 3. `routing.projections.scores` combines learned and heuristic signals into a weighted score.
 4. `routing.projections.mappings` turns that score into named routing bands.
 5. `routing.decisions[*].rules.conditions[*]` can reference those bands with `type: projection`.
+
+Use `routing.meta` when the router should assess whether a first pass is reliable enough:
+
+1. `routing.meta.mode` chooses whether the router only records assessment (`observe`), plans without changing the final route (`shadow`), or allows bounded refinement (`active`).
+2. `routing.meta.max_passes` caps the request-phase reassessment budget.
+3. `routing.meta.trigger_policy` defines deterministic v1 triggers such as low decision margin, projection-boundary pressure, missing families, or cheap-vs-expensive disagreement.
+4. `routing.meta.allowed_actions` bounds what active refinement may do, such as disabling compression or re-running selected signal families.
 
 The dashboard mirrors the same contract:
 
@@ -381,7 +426,7 @@ When `--source` is omitted, the importer checks `OPENCLAW_CONFIG_PATH`, `./openc
 ### Router local
 
 1. Keep provider-wide defaults in `providers.defaults` and deployment bindings in `providers.models[].backend_refs[]`.
-2. Keep routing semantics in `routing.modelCards/signals/decisions`.
+2. Keep routing semantics in `routing.modelCards/signals/projections/meta/decisions`.
 3. Put only runtime overrides you actually need under `global.router/services/stores/integrations/model_catalog`, and keep model-backed module settings under `global.model_catalog.modules`.
 4. Use `global.router.config_source: kubernetes` only when the in-process `IntelligentPool` / `IntelligentRoute` controller is the active source of truth. Leave it as `file` for normal local, CLI, dashboard, Helm, and operator-authored canonical YAML.
 
@@ -399,7 +444,7 @@ When `--source` is omitted, the importer checks `OPENCLAW_CONFIG_PATH`, `./openc
 
 ### DSL
 
-1. Use DSL for `routing.modelCards`, `routing.signals`, and `routing.decisions`.
+1. Use DSL for `routing.modelCards`, `routing.signals`, `routing.projections`, `routing.meta`, and `routing.decisions`.
 2. Importing a full YAML file still works, but only `routing` is decompiled into DSL.
 3. Keep endpoints, API keys, listeners, and `global` in YAML.
 4. Reusable routing fragments now live under `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/`.

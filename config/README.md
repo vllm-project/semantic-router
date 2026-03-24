@@ -16,6 +16,10 @@ Inside canonical `config.yaml`:
 - `routing.projections` carries cross-signal coordination and derived routing outputs
 - `routing.projections.partitions` is the canonical runtime home for exclusive domain or embedding partitions; DSL authoring uses `PROJECTION partition`
 - `routing.projections.scores` and `routing.projections.mappings` let maintained configs turn learned and heuristic signals into named routing bands that decisions can reference with `type: projection`
+- `routing.meta` carries optional request-phase assess-and-refine policy such as rollout mode, pass budget, trigger policy, and allowed refinement actions
+  - runtime emits pass-level `RoutingTrace` / `PassTrace` artifacts and one `FeedbackRecord` per request in `observe`, `shadow`, and `active` modes
+  - the repository ships offline helpers at `tools/agent/scripts/meta_routing_feedback_report.py` and `tools/agent/scripts/meta_routing_feedback_features.py` for replay summaries and calibration feature extraction
+  - the dashboard now exposes the same contract through `Config -> Meta Routing` for authoring and `/meta-routing` for feedback inspection and replay cross-links
 - request-shape detectors such as `routing.signals.structure` stay in the signal layer as typed named facts; numeric thresholds live inside the detector config instead of turning decisions into a free-form expression language
 - structure `density` features now use built-in multilingual text-unit normalization; the contract no longer exposes a per-rule `normalize_by` switch
 - the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/signal/projections.md` and the maintained `deploy/recipes/balance.{yaml,dsl}` pair for end-to-end usage
@@ -59,6 +63,7 @@ Latest official tutorials mirror the same top-level taxonomy:
 - `tutorials/algorithm/` with one page per algorithm
 - `tutorials/plugin/` with one page per plugin
 - `tutorials/global/`
+- `tutorials/meta-routing/` for request-phase assess-and-refine routing control
 
 `config/` no longer carries runtime support files or test manifests.
 

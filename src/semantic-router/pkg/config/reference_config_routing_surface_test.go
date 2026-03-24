@@ -32,6 +32,23 @@ func assertSupportedSignalTypesInReferenceConfig(t testingT, root map[string]int
 	}
 }
 
+func assertSupportedMetaRoutingSurfaceInReferenceConfig(t testingT, root map[string]interface{}) {
+	meta := mustMapAt(t, root, "routing", "meta")
+	mode := mustStringAt(t, meta, "mode")
+	if !IsSupportedMetaRoutingMode(mode) {
+		t.Fatalf("config/config.yaml uses unsupported routing.meta.mode %q", mode)
+	}
+
+	actions := mustSliceAt(t, meta, "allowed_actions")
+	for _, rawAction := range actions {
+		action := mustMapValue(t, rawAction, "routing.meta.allowed_actions")
+		actionType := mustStringAt(t, action, "type")
+		if !IsSupportedMetaRoutingActionType(actionType) {
+			t.Fatalf("config/config.yaml uses unsupported routing.meta.allowed_actions[].type %q", actionType)
+		}
+	}
+}
+
 func assertSupportedAlgorithmsInReferenceConfig(t testingT, decisions []interface{}) {
 	algorithmsByType := referenceAlgorithmsByType(t, decisions)
 	for _, algorithmType := range SupportedDecisionAlgorithmTypes() {

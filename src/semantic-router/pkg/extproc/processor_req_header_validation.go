@@ -29,6 +29,9 @@ func (r *OpenAIRouter) validateRequestHeaders(method string, path string) *ext_p
 	if normalizedPath == routerReplayAPIBasePath || strings.HasPrefix(normalizedPath, routerReplayAPIBasePath+"/") {
 		return nil
 	}
+	if normalizedPath == metaRoutingFeedbackAPIBasePath || strings.HasPrefix(normalizedPath, metaRoutingFeedbackAPIBasePath+"/") {
+		return nil
+	}
 
 	if normalizedPath == "/v1" || strings.HasPrefix(normalizedPath, "/v1/") {
 		return r.createErrorResponse(404, "endpoint not found")

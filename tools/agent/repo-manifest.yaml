@@ -143,6 +143,12 @@ docs:
   - docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md
   - docs/agent/plans/pl-0013-openclaw-vsr-install-import-workstream.md
   - docs/agent/plans/pl-0014-structure-signal-family-implementation.md
+  - docs/agent/plans/pl-0015-meta-routing-refinement-workstream.md
+  - docs/agent/plans/pl-0016-meta-routing-dashboard-ui-workstream.md
+  - docs/agent/plans/pl-0017-meta-routing-learned-policy-enablement.md
+  - docs/agent/plans/pl-0018-meta-routing-operator-productization.md
+  - docs/agent/plans/pl-0019-meta-routing-learning-loop.md
+  - docs/agent/plans/pl-0020-routing-graph-quality-and-optimization-workstream.md
   - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
@@ -182,10 +188,17 @@ docs:
   - docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md
   - docs/agent/tech-debt/td-035-signal-group-default-coverage-contract-gap.md
   - docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md
+  - docs/agent/tech-debt/td-037-meta-routing-learned-policy-provider-follow-on.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
   - docs/agent/adr/adr-0002-tech-debt-index-and-entry-directory.md
+  - docs/agent/adr/adr-0003-meta-routing-refinement-boundary.md
+  - docs/agent/adr/adr-0004-meta-routing-dashboard-ui-surface.md
+  - docs/agent/adr/adr-0005-meta-routing-learned-policy-contract.md
+  - docs/agent/adr/adr-0006-meta-routing-operator-ux-and-apiserver-feedback.md
+  - docs/agent/adr/adr-0007-meta-routing-offline-learning-loop.md
+  - docs/agent/adr/adr-0008-routing-graph-optimization-separate-from-meta-routing.md
   - docs/agent/change-surfaces.md
   - docs/agent/repo-map.md
   - docs/agent/environments.md
@@ -316,6 +329,24 @@ doc_governance:
     - path: docs/agent/plans/pl-0014-structure-signal-family-implementation.md
       steward: agent-contract
       freshness: update at the start and end of each structure-signal-family implementation loop and after each completed loop task
+    - path: docs/agent/plans/pl-0015-meta-routing-refinement-workstream.md
+      steward: agent-contract
+      freshness: update at the start and end of each meta-routing refinement loop and after each completed loop task
+    - path: docs/agent/plans/pl-0016-meta-routing-dashboard-ui-workstream.md
+      steward: agent-contract
+      freshness: update at the start and end of each meta-routing dashboard UI loop and after each completed loop task
+    - path: docs/agent/plans/pl-0017-meta-routing-learned-policy-enablement.md
+      steward: agent-contract
+      freshness: update at the start and end of each meta-routing learned-policy enablement loop and after each completed loop task
+    - path: docs/agent/plans/pl-0018-meta-routing-operator-productization.md
+      steward: agent-contract
+      freshness: update at the start and end of each meta-routing operator productization loop and after each completed loop task
+    - path: docs/agent/plans/pl-0019-meta-routing-learning-loop.md
+      steward: agent-contract
+      freshness: update at the start and end of each meta-routing learning-loop implementation loop and after each completed loop task
+    - path: docs/agent/plans/pl-0020-routing-graph-quality-and-optimization-workstream.md
+      steward: agent-contract
+      freshness: update at the start and end of each routing-graph quality and optimization loop and after each completed loop task
     - path: docs/agent/state-taxonomy-and-inventory.md
       steward: agent-contract
       freshness: update when the runtime or dashboard state inventory, durability taxonomy, or persistence guidance changes materially
@@ -433,6 +464,9 @@ doc_governance:
     - path: docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md
       steward: agent-contract
       freshness: update when the TD036 debt record changes materially
+    - path: docs/agent/tech-debt/td-037-meta-routing-learned-policy-provider-follow-on.md
+      steward: agent-contract
+      freshness: update when the TD037 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change
@@ -445,6 +479,24 @@ doc_governance:
     - path: docs/agent/adr/adr-0002-tech-debt-index-and-entry-directory.md
       steward: agent-contract
       freshness: update only if the tech debt documentation model changes materially
+    - path: docs/agent/adr/adr-0003-meta-routing-refinement-boundary.md
+      steward: agent-contract
+      freshness: update only if the meta-routing boundary decision changes materially
+    - path: docs/agent/adr/adr-0004-meta-routing-dashboard-ui-surface.md
+      steward: agent-contract
+      freshness: update only if the meta-routing dashboard UI surface decision changes materially
+    - path: docs/agent/adr/adr-0005-meta-routing-learned-policy-contract.md
+      steward: agent-contract
+      freshness: update only if the learned meta-routing policy contract decision changes materially
+    - path: docs/agent/adr/adr-0006-meta-routing-operator-ux-and-apiserver-feedback.md
+      steward: agent-contract
+      freshness: update only if the meta-routing operator UX or APIServer feedback ownership decision changes materially
+    - path: docs/agent/adr/adr-0007-meta-routing-offline-learning-loop.md
+      steward: agent-contract
+      freshness: update only if the meta-routing offline learning-loop decision changes materially
+    - path: docs/agent/adr/adr-0008-routing-graph-optimization-separate-from-meta-routing.md
+      steward: agent-contract
+      freshness: update only if the routing-graph optimization boundary decision changes materially
     - path: docs/agent/change-surfaces.md
       steward: agent-contract
       freshness: update when surfaces or their mappings change

@@ -30,7 +30,9 @@ type routerComponents struct {
 	responseAPIFilter    *ResponseAPIFilter
 	replayRecorder       *routerreplay.Recorder
 	replayRecorders      map[string]*routerreplay.Recorder
+	feedbackRecorder     *routerreplay.Recorder
 	modelSelector        *selection.Registry
+	metaRoutingPolicy    metaRoutingPolicyProvider
 	memoryStore          memory.Store
 	memoryExtractor      *memory.MemoryExtractor
 	credentialResolver   *authz.CredentialResolver
@@ -112,7 +114,12 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 
 	responseAPIFilter := createResponseAPIFilter(cfg)
 	replayRecorders, replayRecorder := createReplayRuntime(cfg)
+	feedbackRecorder := createMetaRoutingFeedbackRecorder(cfg)
 	modelSelector := createModelSelectorRegistry(cfg)
+	metaRoutingPolicy, err := createMetaRoutingPolicyProvider(cfg)
+	if err != nil {
+		return nil, err
+	}
 	memoryStore, memoryExtractor := createMemoryRuntime(cfg)
 	credentialResolver := buildCredentialResolver(cfg)
 	rateLimiter := buildRateLimitResolver(cfg)
@@ -133,7 +140,9 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		responseAPIFilter:    responseAPIFilter,
 		replayRecorder:       replayRecorder,
 		replayRecorders:      replayRecorders,
+		feedbackRecorder:     feedbackRecorder,
 		modelSelector:        modelSelector,
+		metaRoutingPolicy:    metaRoutingPolicy,
 		memoryStore:          memoryStore,
 		memoryExtractor:      memoryExtractor,
 		credentialResolver:   credentialResolver,
@@ -143,18 +152,20 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	return &OpenAIRouter{
-		Config:               components.cfg,
-		CategoryDescriptions: components.categoryDescriptions,
-		Classifier:           components.classifier,
-		Cache:                components.semanticCache,
-		ToolsDatabase:        components.toolsDatabase,
-		ResponseAPIFilter:    components.responseAPIFilter,
-		ReplayRecorder:       components.replayRecorder,
-		ModelSelector:        components.modelSelector,
-		ReplayRecorders:      components.replayRecorders,
-		MemoryStore:          components.memoryStore,
-		MemoryExtractor:      components.memoryExtractor,
-		CredentialResolver:   components.credentialResolver,
-		RateLimiter:          components.rateLimiter,
+		Config:                    components.cfg,
+		CategoryDescriptions:      components.categoryDescriptions,
+		Classifier:                components.classifier,
+		Cache:                     components.semanticCache,
+		ToolsDatabase:             components.toolsDatabase,
+		ResponseAPIFilter:         components.responseAPIFilter,
+		ReplayRecorder:            components.replayRecorder,
+		FeedbackRecorder:          components.feedbackRecorder,
+		ModelSelector:             components.modelSelector,
+		MetaRoutingPolicyProvider: components.metaRoutingPolicy,
+		ReplayRecorders:           components.replayRecorders,
+		MemoryStore:               components.memoryStore,
+		MemoryExtractor:           components.memoryExtractor,
+		CredentialResolver:        components.credentialResolver,
+		RateLimiter:               components.rateLimiter,
 	}
 }

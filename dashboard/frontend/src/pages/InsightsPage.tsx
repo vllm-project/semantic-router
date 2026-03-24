@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { DataTable } from '../components/DataTable'
 import InsightsCharts from '../components/InsightsCharts'
@@ -61,6 +62,7 @@ async function fetchInsightsJSON<T>(url: string, label: string): Promise<T> {
 }
 
 export default function InsightsPage() {
+  const [searchParams] = useSearchParams()
   const { isReadonly } = useReadonly()
   const [records, setRecords] = useState<InsightsRecord[]>([])
   const [aggregate, setAggregate] = useState<InsightsAggregateResponse | null>(null)
@@ -77,6 +79,7 @@ export default function InsightsPage() {
   const [modalLoading, setModalLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const requestSequenceRef = useRef(0)
+  const handledReplayRef = useRef<string | null>(null)
   const tableColumns = useMemo(() => createInsightsTableColumns(), [])
 
   const activeFilters = useMemo(
@@ -156,6 +159,34 @@ export default function InsightsPage() {
       setCurrentPage(totalPages)
     }
   }, [currentPage, totalPages])
+
+  useEffect(() => {
+    const replayID = searchParams.get('replay_id')
+    if (!replayID || handledReplayRef.current === replayID) {
+      return
+    }
+
+    handledReplayRef.current = replayID
+    setModalLoading(true)
+    setViewModalOpen(true)
+
+    void fetch(`/api/router/v1/router_replay/${encodeURIComponent(replayID)}`)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Replay ${replayID} not found`)
+        }
+        return (await response.json()) as InsightsRecord
+      })
+      .then((record) => {
+        setSelectedRecordForModal(record)
+      })
+      .catch(() => {
+        setSelectedRecordForModal(null)
+      })
+      .finally(() => {
+        setModalLoading(false)
+      })
+  }, [searchParams])
 
   const availableDecisions = aggregate?.available_decisions ?? []
   const availableModels = aggregate?.available_models ?? []

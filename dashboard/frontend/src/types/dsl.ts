@@ -109,6 +109,11 @@ export interface ASTProjectionMappingDecl {
   pos: ASTPosition
 }
 
+export interface ASTMetaDecl {
+  fields: DSLFieldObject
+  pos: ASTPosition
+}
+
 export interface ASTModelRef {
   model: string
   reasoning?: boolean
@@ -174,6 +179,7 @@ export interface ASTProgram {
   projectionPartitions?: ASTProjectionPartitionDecl[]
   projectionScores?: ASTProjectionScoreDecl[]
   projectionMappings?: ASTProjectionMappingDecl[]
+  meta?: ASTMetaDecl
   routes: ASTRouteDecl[]
   models?: ASTModelDecl[]
   plugins: ASTPluginDecl[]

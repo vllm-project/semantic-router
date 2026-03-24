@@ -5,6 +5,7 @@ import styles from './ConfigNav.module.css'
 export type ConfigSection =
   | 'signals'        // config.yaml: signals (keywords, embeddings, domains, etc.)
   | 'projections'    // config.yaml: routing.projections (partitions, scores, mappings)
+  | 'meta-routing'   // config.yaml: routing.meta (assess-and-refine orchestration)
   | 'decisions'      // config.yaml: decisions (routing rules)
   | 'models'         // config.yaml: providers.models
   | 'global-config'  // config.yaml: global runtime overrides (cache, prompt guard, tools, etc.)
@@ -47,6 +48,12 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       icon: '🧭',
       title: 'Projections',
       description: 'Partitions, scores & derived routing bands'
+    },
+    {
+      id: 'meta-routing' as ConfigSection,
+      icon: '🪄',
+      title: 'Meta Routing',
+      description: 'Assess-and-refine policy, triggers & allowed actions'
     },
     {
       id: 'mcp' as ConfigSection,

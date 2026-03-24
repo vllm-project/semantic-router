@@ -457,6 +457,27 @@ SIGNAL pii pii_relaxed {
   description: "Block high-sensitivity PII while allowing common contact entities."
 }
 
+META {
+  mode: "observe"
+  max_passes: 2
+  trigger_policy: {
+    decision_margin_below: 0.12,
+    projection_boundary_within: 0.06,
+    partition_conflict: true,
+    required_families: [
+      { type: "embedding", min_confidence: 0.74, min_matches: 1 }
+    ],
+    family_disagreements: [
+      { cheap: "keyword", expensive: "embedding" },
+      { cheap: "structure", expensive: "embedding" }
+    ]
+  }
+  allowed_actions: [
+    { type: "disable_compression" },
+    { type: "rerun_signal_families", signal_families: ["embedding", "fact_check", "preference", "complexity"] }
+  ]
+}
+
 PROJECTION partition balance_domain_partition {
   semantics: "softmax_exclusive"
   temperature: 0.1
@@ -609,7 +630,7 @@ ROUTE reasoning_math (description = "Dedicated reasoning tier for proofs, deriva
 ROUTE reasoning_philosophy (description = "Dedicated reasoning tier for philosophy, ethics, and abstract argumentation.") {
   PRIORITY 245
   TIER 3
-  WHEN domain("philosophy") AND (projection("balance_simple") OR projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning")) AND (keyword("reasoning_request_markers") OR embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR embedding("research_synthesis")) AND NOT (keyword("agentic_request_markers") OR keyword("code_request_markers") OR keyword("implementation_markers"))
+  WHEN domain("philosophy") AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning")) AND (keyword("reasoning_request_markers") OR embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR embedding("research_synthesis")) AND NOT (keyword("agentic_request_markers") OR keyword("code_request_markers") OR keyword("implementation_markers"))
   MODEL "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -623,7 +644,7 @@ ROUTE reasoning_philosophy (description = "Dedicated reasoning tier for philosop
 ROUTE complex_agentic (description = "High-structure execution plans, migrations, and workflow orchestration with multi-step constraints.") {
   PRIORITY 243
   TIER 4
-  WHEN (embedding("agentic_workflows") OR keyword("agentic_request_markers")) AND (keyword("multi_step_markers") OR structure("ordered_workflow") OR structure("numbered_steps") OR structure("first_then_flow") OR structure("constraint_dense") OR structure("format_directive_dense")) AND (projection("balance_simple") OR projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning")) AND NOT keyword("architecture_markers")
+  WHEN (embedding("agentic_workflows") OR keyword("agentic_request_markers") OR preference("agentic_execution")) AND (keyword("multi_step_markers") OR structure("ordered_workflow") OR structure("numbered_steps") OR structure("first_then_flow") OR structure("constraint_dense") OR structure("format_directive_dense")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_reasoning")) AND NOT keyword("architecture_markers")
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -679,7 +700,7 @@ ROUTE feedback_wrong_answer_verified (description = "Narrow recovery path for ex
 ROUTE medium_code_general (description = "Low-medium cost coding, debugging, refactoring, and technical Q&A.") {
   PRIORITY 220
   TIER 8
-  WHEN (domain("computer science") OR keyword("code_request_markers") OR keyword("implementation_markers") OR embedding("code_general")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_simple") AND projection("urgency_elevated")) AND NOT (keyword("agentic_request_markers") OR keyword("architecture_markers") OR keyword("creative_request_markers") OR preference("agentic_execution") OR preference("creative_collaboration") OR user_feedback("wrong_answer") OR user_feedback("need_clarification"))
+  WHEN (domain("computer science") OR keyword("code_request_markers") OR keyword("implementation_markers") OR embedding("code_general")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_simple") AND (projection("urgency_elevated") OR keyword("urgency_markers") OR structure("exclamation_emphasis"))) AND NOT (keyword("agentic_request_markers") OR keyword("architecture_markers") OR keyword("creative_request_markers") OR preference("agentic_execution") OR preference("creative_collaboration") OR user_feedback("wrong_answer") OR user_feedback("need_clarification"))
   MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
     enabled: true
@@ -777,7 +798,7 @@ ROUTE medium_psychology (description = "Mid-tier psychology and behavior queries
 ROUTE engaged_general (description = "General and psychology-adjacent prompts with visible emotion or urgency that merit a sturdier mid-tier fallback.") {
   PRIORITY 202
   TIER 15
-  WHEN (projection("emotion_positive") OR projection("emotion_negative") OR projection("urgency_elevated")) AND (domain("other") OR domain("psychology") OR embedding("general_chat_fallback") OR embedding("psychology_support")) AND (context("short_context") OR context("medium_context")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("creative_tasks") OR embedding("business_analysis") OR embedding("health_guidance") OR embedding("history_explainer") OR embedding("code_general") OR embedding("complex_stem") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR keyword("code_request_markers") OR keyword("implementation_markers") OR keyword("creative_request_markers"))
+  WHEN (projection("emotion_positive") OR projection("emotion_negative") OR projection("urgency_elevated")) AND (domain("other") OR domain("psychology") OR embedding("general_chat_fallback") OR embedding("psychology_support")) AND (context("short_context") OR context("medium_context")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("business_analysis") OR embedding("health_guidance") OR embedding("history_explainer") OR embedding("code_general") OR embedding("complex_stem") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR keyword("creative_request_markers"))
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -791,7 +812,7 @@ ROUTE engaged_general (description = "General and psychology-adjacent prompts wi
 ROUTE medium_creative (description = "Mid-tier creative, copywriting, and ideation requests.") {
   PRIORITY 200
   TIER 16
-  WHEN (keyword("creative_request_markers") OR embedding("creative_tasks")) AND (projection("balance_simple") OR projection("balance_medium")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("business_analysis") OR embedding("health_guidance") OR embedding("history_explainer") OR embedding("code_general") OR embedding("complex_stem") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers"))
+  WHEN (keyword("creative_request_markers") OR embedding("creative_tasks") OR preference("creative_collaboration")) AND (projection("balance_simple") OR projection("balance_medium")) AND NOT (embedding("fast_qa_en") OR embedding("fast_qa_zh") OR embedding("business_analysis") OR embedding("health_guidance") OR embedding("history_explainer") OR embedding("code_general") OR embedding("complex_stem") OR embedding("architecture_design") OR embedding("agentic_workflows") OR embedding("premium_legal_analysis") OR embedding("research_synthesis") OR embedding("reasoning_general_en") OR embedding("reasoning_general_zh") OR projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers"))
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -899,4 +920,3 @@ ROUTE simple_general (description = "Lowest-cost fallback for everyday traffic a
     max_body_bytes: 4096
   }
 }
-

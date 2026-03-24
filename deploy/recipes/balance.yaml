@@ -1021,6 +1021,31 @@ routing:
         include_history: false
         description: Block high-sensitivity PII while allowing common contact entities.
 
+  meta:
+    mode: observe
+    max_passes: 2
+    trigger_policy:
+      decision_margin_below: 0.12
+      projection_boundary_within: 0.06
+      partition_conflict: true
+      required_families:
+        - type: embedding
+          min_confidence: 0.74
+          min_matches: 1
+      family_disagreements:
+        - cheap: keyword
+          expensive: embedding
+        - cheap: structure
+          expensive: embedding
+    allowed_actions:
+      - type: disable_compression
+      - type: rerun_signal_families
+        signal_families:
+          - embedding
+          - fact_check
+          - preference
+          - complexity
+
   # Projections turn the raw signal catalog into repo-native routing bands:
   # partitions resolve winners, scores aggregate evidence, and mappings emit
   # named outputs that decisions can reference with `type: projection`.
@@ -1415,8 +1440,6 @@ routing:
           - operator: OR
             conditions:
               - type: projection
-                name: balance_simple
-              - type: projection
                 name: balance_medium
               - type: projection
                 name: balance_complex
@@ -1468,6 +1491,8 @@ routing:
                 name: agentic_workflows
               - type: keyword
                 name: agentic_request_markers
+              - type: preference
+                name: agentic_execution
           - operator: OR
             conditions:
               - type: keyword
@@ -1484,8 +1509,6 @@ routing:
                 name: format_directive_dense
           - operator: OR
             conditions:
-              - type: projection
-                name: balance_simple
               - type: projection
                 name: balance_medium
               - type: projection
@@ -1688,8 +1711,14 @@ routing:
                 conditions:
                   - type: projection
                     name: balance_simple
-                  - type: projection
-                    name: urgency_elevated
+                  - operator: OR
+                    conditions:
+                      - type: projection
+                        name: urgency_elevated
+                      - type: keyword
+                        name: urgency_markers
+                      - type: structure
+                        name: exclamation_emphasis
           - operator: NOT
             conditions:
               - operator: OR
@@ -2007,8 +2036,6 @@ routing:
                   - type: embedding
                     name: fast_qa_zh
                   - type: embedding
-                    name: creative_tasks
-                  - type: embedding
                     name: business_analysis
                   - type: embedding
                     name: health_guidance
@@ -2032,10 +2059,6 @@ routing:
                     name: verification_markers
                   - type: keyword
                     name: reference_heavy_markers
-                  - type: keyword
-                    name: code_request_markers
-                  - type: keyword
-                    name: implementation_markers
                   - type: keyword
                     name: creative_request_markers
       modelRefs:
@@ -2063,6 +2086,8 @@ routing:
                 name: creative_request_markers
               - type: embedding
                 name: creative_tasks
+              - type: preference
+                name: creative_collaboration
           - operator: OR
             conditions:
               - type: projection
@@ -2093,6 +2118,12 @@ routing:
                     name: agentic_workflows
                   - type: embedding
                     name: premium_legal_analysis
+                  - type: embedding
+                    name: research_synthesis
+                  - type: embedding
+                    name: reasoning_general_en
+                  - type: embedding
+                    name: reasoning_general_zh
                   - type: projection
                     name: verification_required
                   - type: fact_check

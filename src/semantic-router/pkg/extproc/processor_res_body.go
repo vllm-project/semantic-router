@@ -25,7 +25,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 
 	responseBody, anthropicTransformed, err := r.normalizeProviderResponseBody(v.ResponseBody.Body, ctx)
 	if err != nil {
-		return r.createErrorResponse(502, fmt.Sprintf("Response transformation error: %v", err)), nil
+		resp := r.createErrorResponse(502, fmt.Sprintf("Response transformation error: %v", err))
+		r.emitMetaRoutingFeedback(ctx, 502)
+		return resp, nil
 	}
 
 	if ctx.IsStreamingResponse {

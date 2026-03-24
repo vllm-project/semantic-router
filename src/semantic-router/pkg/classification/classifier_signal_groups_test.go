@@ -34,6 +34,12 @@ func TestSignalGroupSoftmaxExclusiveChoosesSingleDomainWinner(t *testing.T) {
 	if signals.SignalConfidences["domain:economics"] <= 0.5 {
 		t.Fatalf("expected normalized economics confidence > 0.5, got %+v", signals.SignalConfidences)
 	}
+	if len(signals.ProjectionPartitionConflicts) != 1 {
+		t.Fatalf("expected one partition conflict, got %+v", signals.ProjectionPartitionConflicts)
+	}
+	if signals.ProjectionPartitionConflicts[0].Name != "finance-vs-health" {
+		t.Fatalf("partition conflict name = %q, want finance-vs-health", signals.ProjectionPartitionConflicts[0].Name)
+	}
 
 	result, err := classifier.EvaluateDecisionWithEngine(signals)
 	if err != nil {

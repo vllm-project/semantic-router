@@ -66,6 +66,7 @@ DSL now owns only:
 - `routing.modelCards`
 - `routing.signals`
 - `routing.projections` for signal coordination and derived routing outputs
+- `routing.meta` for bounded request-phase meta routing
 - `routing.decisions`
 
 It no longer owns endpoints, API keys, listeners, or router-global runtime settings.
@@ -117,9 +118,10 @@ The repo no longer ships large full-example trees under `config/intelligent-rout
 
 - `config/config.yaml` is the exhaustive canonical reference config
 - `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/` hold reusable routing fragments
+- `routing.meta` now round-trips through the same canonical routing contract instead of living in runtime-only flags
 - `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
 - `config/algorithm/` is organized by routing policy family (`looper`, `selection`)
-- latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface
+- latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global/meta-routing`, and `tutorials/meta-routing/` documents the request-phase assess-and-refine contract under `routing.meta`
 - runtime support examples such as `deploy/examples/runtime/semantic-cache/`, `deploy/examples/runtime/response-api/`, and `deploy/examples/runtime/tools/` stay separate because they are not part of the user-facing config contract
 - harness-only manifests live under `e2e/config/`
 - `go test ./pkg/config/...` and `make agent-lint` enforce that `config/config.yaml` stays exhaustive and aligned with the public config contract

@@ -34,6 +34,7 @@ type rawTopLevel struct {
 	Pos          lexer.Position
 	Signal       *rawSignalDecl       `parser:"  @@"`
 	Projection   *rawProjectionDecl   `parser:"| @@"`
+	Meta         *rawMetaDecl         `parser:"| @@"`
 	Route        *rawRouteDecl        `parser:"| @@"`
 	DecisionTree *rawDecisionTreeDecl `parser:"| @@"`
 	Model        *rawModelDecl        `parser:"| @@"`
@@ -69,6 +70,12 @@ type rawProjectionDecl struct {
 	Kind   string        `parser:"'PROJECTION' @('partition' | 'score' | 'mapping')"`
 	Name   string        `parser:"@(Ident | String)"`
 	Fields []*FieldEntry `parser:"'{' @@* '}'"`
+}
+
+// rawMetaDecl: META { fields... }
+type rawMetaDecl struct {
+	Pos    lexer.Position
+	Fields []*FieldEntry `parser:"'META' '{' @@* '}'"`
 }
 
 // rawRouteDecl: ROUTE <name> (opts...) { body... }
@@ -242,6 +249,7 @@ type Program struct {
 	ProjectionPartitions []*ProjectionPartitionDecl
 	ProjectionScores     []*ProjectionScoreDecl
 	ProjectionMappings   []*ProjectionMappingDecl
+	Meta                 *MetaDecl
 	Routes               []*RouteDecl
 	Models               []*ModelDecl
 	Plugins              []*PluginDecl
@@ -325,6 +333,12 @@ type SignalDecl struct {
 	Name       string
 	Fields     map[string]Value
 	Pos        Position
+}
+
+// MetaDecl represents a META declaration.
+type MetaDecl struct {
+	Fields map[string]Value
+	Pos    Position
 }
 
 // RouteDecl represents a ROUTE declaration.

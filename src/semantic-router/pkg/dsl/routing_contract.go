@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -54,6 +55,11 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 		d.decompilePluginTemplates()
 	}
 
+	if cfg != nil && cfg.MetaRouting.Enabled() {
+		d.writeSection("META")
+		d.decompileMeta()
+	}
+
 	d.writeSection("ROUTES")
 	d.decompileDecisions()
 
@@ -65,6 +71,7 @@ func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
 	prog := &Program{}
 	d.appendSignalsToProgram(prog)
+	d.appendMetaToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
 	return prog
@@ -77,6 +84,27 @@ func (d *decompiler) appendSignalsToProgram(prog *Program) {
 	d.appendProjectionPartitions(prog)
 	d.appendProjectionScores(prog)
 	d.appendProjectionMappings(prog)
+}
+
+func (d *decompiler) appendMetaToProgram(prog *Program) {
+	if d.cfg == nil || !d.cfg.MetaRouting.Enabled() {
+		return
+	}
+	prog.Meta = &MetaDecl{
+		Fields: metaRoutingToFields(d.cfg.MetaRouting),
+	}
+}
+
+func (d *decompiler) decompileMeta() {
+	fields := metaRoutingToFields(d.cfg.MetaRouting)
+	if len(fields) == 0 {
+		return
+	}
+	d.write("META {\n")
+	for _, key := range sortedFieldKeys(fields) {
+		d.write("  %s: %s\n", key, formatDSLValue(fields[key]))
+	}
+	d.write("}\n\n")
 }
 
 func (d *decompiler) appendProjectionPartitions(prog *Program) {
@@ -303,4 +331,143 @@ func quotedStringArray(values []string) string {
 		quoted = append(quoted, strconv.Quote(value))
 	}
 	return "[" + strings.Join(quoted, ", ") + "]"
+}
+
+func metaRoutingToFields(meta config.MetaRoutingConfig) map[string]Value {
+	fields := make(map[string]Value)
+	if meta.Mode != "" {
+		fields["mode"] = StringValue{V: meta.Mode}
+	}
+	if meta.MaxPasses > 0 {
+		fields["max_passes"] = IntValue{V: meta.MaxPasses}
+	}
+	if triggerFields := metaTriggerPolicyToFields(meta.TriggerPolicy); len(triggerFields) > 0 {
+		fields["trigger_policy"] = ObjectValue{Fields: triggerFields}
+	}
+	if items := metaAllowedActionsToValues(meta.AllowedActions); len(items) > 0 {
+		fields["allowed_actions"] = ArrayValue{Items: items}
+	}
+	return fields
+}
+
+func metaTriggerPolicyToFields(policy *config.MetaTriggerPolicy) map[string]Value {
+	if policy == nil {
+		return nil
+	}
+
+	fields := make(map[string]Value)
+	addMetaTriggerThresholdFields(fields, policy)
+	addMetaRequiredFamiliesField(fields, policy.RequiredFamilies)
+	addMetaFamilyDisagreementsField(fields, policy.FamilyDisagreements)
+	return fields
+}
+
+func addMetaTriggerThresholdFields(fields map[string]Value, policy *config.MetaTriggerPolicy) {
+	if policy.DecisionMarginBelow != nil {
+		fields["decision_margin_below"] = FloatValue{V: *policy.DecisionMarginBelow}
+	}
+	if policy.ProjectionBoundaryWithin != nil {
+		fields["projection_boundary_within"] = FloatValue{V: *policy.ProjectionBoundaryWithin}
+	}
+	if policy.PartitionConflict != nil {
+		fields["partition_conflict"] = BoolValue{V: *policy.PartitionConflict}
+	}
+}
+
+func addMetaRequiredFamiliesField(fields map[string]Value, families []config.MetaRequiredSignalFamily) {
+	if len(families) == 0 {
+		return
+	}
+	items := make([]Value, 0, len(families))
+	for _, family := range families {
+		items = append(items, ObjectValue{Fields: metaRequiredFamilyToFields(family)})
+	}
+	fields["required_families"] = ArrayValue{Items: items}
+}
+
+func metaRequiredFamilyToFields(family config.MetaRequiredSignalFamily) map[string]Value {
+	fields := map[string]Value{
+		"type": StringValue{V: family.Type},
+	}
+	if family.MinConfidence != nil {
+		fields["min_confidence"] = FloatValue{V: *family.MinConfidence}
+	}
+	if family.MinMatches != nil {
+		fields["min_matches"] = IntValue{V: *family.MinMatches}
+	}
+	return fields
+}
+
+func addMetaFamilyDisagreementsField(fields map[string]Value, disagreements []config.MetaSignalFamilyDisagreement) {
+	if len(disagreements) == 0 {
+		return
+	}
+	items := make([]Value, 0, len(disagreements))
+	for _, disagreement := range disagreements {
+		items = append(items, ObjectValue{Fields: map[string]Value{
+			"cheap":     StringValue{V: disagreement.Cheap},
+			"expensive": StringValue{V: disagreement.Expensive},
+		}})
+	}
+	fields["family_disagreements"] = ArrayValue{Items: items}
+}
+
+func metaAllowedActionsToValues(actions []config.MetaRefinementAction) []Value {
+	if len(actions) == 0 {
+		return nil
+	}
+	items := make([]Value, 0, len(actions))
+	for _, action := range actions {
+		items = append(items, ObjectValue{Fields: metaAllowedActionToFields(action)})
+	}
+	return items
+}
+
+func metaAllowedActionToFields(action config.MetaRefinementAction) map[string]Value {
+	fields := map[string]Value{
+		"type": StringValue{V: action.Type},
+	}
+	if len(action.SignalFamilies) > 0 {
+		fields["signal_families"] = stringsToArray(action.SignalFamilies)
+	}
+	return fields
+}
+
+func sortedFieldKeys(fields map[string]Value) []string {
+	keys := make([]string, 0, len(fields))
+	for key := range fields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func formatDSLValue(value Value) string {
+	switch v := value.(type) {
+	case StringValue:
+		return strconv.Quote(v.V)
+	case IntValue:
+		return strconv.Itoa(v.V)
+	case FloatValue:
+		return strconv.FormatFloat(v.V, 'f', -1, 64)
+	case BoolValue:
+		if v.V {
+			return "true"
+		}
+		return "false"
+	case ArrayValue:
+		parts := make([]string, 0, len(v.Items))
+		for _, item := range v.Items {
+			parts = append(parts, formatDSLValue(item))
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	case ObjectValue:
+		parts := make([]string, 0, len(v.Fields))
+		for _, key := range sortedFieldKeys(v.Fields) {
+			parts = append(parts, key+": "+formatDSLValue(v.Fields[key]))
+		}
+		return "{ " + strings.Join(parts, ", ") + " }"
+	default:
+		return "null"
+	}
 }

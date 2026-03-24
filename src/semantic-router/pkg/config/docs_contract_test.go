@@ -29,6 +29,7 @@ var configContractRequiredDocs = []docNeedles{
 			"`config/algorithm/`",
 			"`config/plugin/`",
 			"`tutorials/global/`",
+			"`tutorials/meta-routing/`",
 			"`go test ./pkg/config/...`",
 			"`make agent-lint`",
 		},
@@ -50,6 +51,7 @@ var configContractRequiredDocs = []docNeedles{
 			"`global.model_catalog.modules`",
 			"`config/algorithm/`",
 			"`tutorials/global/`",
+			"`tutorials/meta-routing/`",
 			"`tutorials/signal/heuristic/`",
 			"`tutorials/signal/learned/`",
 			"vllm-sr config migrate --config old-config.yaml",
@@ -70,9 +72,11 @@ var configContractRequiredDocs = []docNeedles{
 			"`providers.defaults`",
 			"`providers.models[].backend_refs[]`",
 			"`lora_name`",
+			"`routing.meta`",
 			"`global.router.config_source`",
 			"vllm-sr init",
 			"exhaustive canonical reference config",
+			"`tutorials/meta-routing/`",
 			"`make agent-lint`",
 		},
 	},
@@ -534,6 +538,8 @@ var latestTutorialOverviewDocs = []docNeedles{
 			"`signal/`",
 		},
 	},
+	metaRoutingTutorialOverviewDoc(),
+	metaRoutingTutorialModesDoc(),
 }
 
 var latestTutorialSidebarRequired = []string{
@@ -549,6 +555,7 @@ var latestTutorialSidebarRequired = []string{
 	"label: 'Retrieval and Memory'",
 	"label: 'Safety and Generation'",
 	"label: 'Global'",
+	"label: 'Meta Routing'",
 	"'tutorials/signal/overview'",
 	"'tutorials/decision/overview'",
 	"'tutorials/algorithm/overview'",
@@ -588,12 +595,13 @@ var latestTutorialRequiredSections = []string{
 }
 
 var latestTutorialAllowedDirectories = map[string]bool{
-	"signal":     true,
-	"decision":   true,
-	"algorithm":  true,
-	"plugin":     true,
-	"global":     true,
-	"projection": true,
+	"signal":       true,
+	"decision":     true,
+	"algorithm":    true,
+	"plugin":       true,
+	"global":       true,
+	"projection":   true,
+	"meta-routing": true,
 }
 
 var retiredCurrentTranslationOverrides = []string{
@@ -661,6 +669,7 @@ func assertTutorialSidebarTaxonomy(t *testing.T, root string) {
 	required = append(required, signalTutorialSidebarEntries()...)
 	required = append(required, algorithmTutorialSidebarEntries()...)
 	required = append(required, pluginTutorialSidebarEntries()...)
+	required = append(required, metaRoutingTutorialSidebarEntries()...)
 	assertStringContainsAll(t, content, sidebarPath, required)
 	assertStringContainsNone(t, content, sidebarPath, latestTutorialSidebarForbidden)
 }

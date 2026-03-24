@@ -394,6 +394,15 @@ routing:
           - engineering
   modelCards:
     - name: qwen3
+  meta:
+    mode: observe
+    max_passes: 2
+    trigger_policy:
+      decision_margin_below: 0.18
+      projection_boundary_within: 0.08
+      partition_conflict: true
+    allowed_actions:
+      - type: disable_compression
 global:
   router:
     strategy: priority

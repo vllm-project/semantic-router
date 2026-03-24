@@ -160,8 +160,10 @@
 
 @media (min-width: 997px) {
   main[class*='docMainContainer'] > .container {
-    width: auto;
+    flex: 1 1 auto;
+    width: 100%;
     max-width: none;
+    min-width: 0;
     margin-left: 1rem;
     margin-right: 1rem;
   }

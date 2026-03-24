@@ -193,6 +193,17 @@ const sidebars: SidebarsConfig = {
             'tutorials/global/safety-models-and-policy',
           ],
         },
+        {
+          type: 'category',
+          label: 'Meta Routing',
+          items: [
+            'tutorials/meta-routing/overview',
+            'tutorials/meta-routing/modes',
+            'tutorials/meta-routing/design',
+            'tutorials/meta-routing/problems',
+            'tutorials/meta-routing/usage',
+          ],
+        },
       ],
     },
     {

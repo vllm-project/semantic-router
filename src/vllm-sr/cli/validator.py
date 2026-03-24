@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, List
 from cli.config_contract import (
+    SIGNAL_FAMILY_SPECS,
     build_projection_reference_index,
     build_signal_reference_index,
     is_signal_condition_type,
@@ -533,6 +534,63 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     return errors
 
 
+def validate_meta_routing_config(config: UserConfig) -> List[ValidationError]:
+    errors = []
+    meta = config.routing.meta
+    if meta is None:
+        return errors
+
+    supported_signal_types = {spec.condition_type for spec in SIGNAL_FAMILY_SPECS}
+
+    trigger_policy = meta.trigger_policy
+    if trigger_policy is not None:
+        for family in trigger_policy.required_families or []:
+            if family.type not in supported_signal_types:
+                errors.append(
+                    ValidationError(
+                        f"routing.meta.trigger_policy.required_families references unsupported signal family '{family.type}'",
+                        field="routing.meta.trigger_policy.required_families",
+                    )
+                )
+
+        for disagreement in trigger_policy.family_disagreements or []:
+            if disagreement.cheap not in supported_signal_types:
+                errors.append(
+                    ValidationError(
+                        f"routing.meta.trigger_policy.family_disagreements uses unsupported cheap signal family '{disagreement.cheap}'",
+                        field="routing.meta.trigger_policy.family_disagreements",
+                    )
+                )
+            if disagreement.expensive not in supported_signal_types:
+                errors.append(
+                    ValidationError(
+                        f"routing.meta.trigger_policy.family_disagreements uses unsupported expensive signal family '{disagreement.expensive}'",
+                        field="routing.meta.trigger_policy.family_disagreements",
+                    )
+                )
+            if disagreement.cheap == disagreement.expensive:
+                errors.append(
+                    ValidationError(
+                        "routing.meta.trigger_policy.family_disagreements must compare two distinct signal families",
+                        field="routing.meta.trigger_policy.family_disagreements",
+                    )
+                )
+
+    for action in meta.allowed_actions or []:
+        if action.type != "rerun_signal_families":
+            continue
+        for family in action.signal_families or []:
+            if family not in supported_signal_types:
+                errors.append(
+                    ValidationError(
+                        f"routing.meta.allowed_actions references unsupported signal family '{family}'",
+                        field="routing.meta.allowed_actions",
+                    )
+                )
+
+    return errors
+
+
 def validate_user_config(config: UserConfig) -> List[ValidationError]:
     """
     Validate user configuration.
@@ -564,6 +622,7 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
 
     # Validate algorithm configurations
     errors.extend(validate_algorithm_configurations(config))
+    errors.extend(validate_meta_routing_config(config))
 
     if errors:
         log.warning(f"Found {len(errors)} validation error(s)")
