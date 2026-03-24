@@ -145,15 +145,19 @@ func (c *CategoryKBClassifier) loadKBs() error {
 	return nil
 }
 
-func (c *CategoryKBClassifier) preloadEmbeddings() error {
-	startTime := time.Now()
+type exemplarRef struct {
+	category string
+	index    int
+	text     string
+}
 
-	// Collect all unique exemplars
-	type exemplarRef struct {
-		category string
-		index    int
-		text     string
-	}
+type embeddingResult struct {
+	ref       exemplarRef
+	embedding []float32
+	err       error
+}
+
+func (c *CategoryKBClassifier) collectExemplarRefs() []exemplarRef {
 	var refs []exemplarRef
 	for cat, kb := range c.kbs {
 		kb.Embeddings = make([][]float32, len(kb.Exemplars))
@@ -161,7 +165,10 @@ func (c *CategoryKBClassifier) preloadEmbeddings() error {
 			refs = append(refs, exemplarRef{category: cat, index: i, text: text})
 		}
 	}
+	return refs
+}
 
+func (c *CategoryKBClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan embeddingResult {
 	numWorkers := runtime.NumCPU() * 2
 	if numWorkers > len(refs) {
 		numWorkers = len(refs)
@@ -170,13 +177,7 @@ func (c *CategoryKBClassifier) preloadEmbeddings() error {
 		numWorkers = 1
 	}
 
-	type result struct {
-		ref       exemplarRef
-		embedding []float32
-		err       error
-	}
-
-	resultChan := make(chan result, len(refs))
+	resultChan := make(chan embeddingResult, len(refs))
 	refChan := make(chan exemplarRef, len(refs))
 	for _, ref := range refs {
 		refChan <- ref
@@ -194,9 +195,9 @@ func (c *CategoryKBClassifier) preloadEmbeddings() error {
 			for ref := range refChan {
 				output, err := getEmbeddingWithModelType(ref.text, modelType, targetDim)
 				if err != nil {
-					resultChan <- result{ref: ref, err: err}
+					resultChan <- embeddingResult{ref: ref, err: err}
 				} else {
-					resultChan <- result{ref: ref, embedding: output.Embedding}
+					resultChan <- embeddingResult{ref: ref, embedding: output.Embedding}
 				}
 			}
 		}()
@@ -206,6 +207,14 @@ func (c *CategoryKBClassifier) preloadEmbeddings() error {
 		wg.Wait()
 		close(resultChan)
 	}()
+
+	return resultChan
+}
+
+func (c *CategoryKBClassifier) preloadEmbeddings() error {
+	startTime := time.Now()
+	refs := c.collectExemplarRefs()
+	resultChan := c.embedExemplarsParallel(refs)
 
 	var failCount int
 	for res := range resultChan {
@@ -228,23 +237,7 @@ func (c *CategoryKBClassifier) preloadEmbeddings() error {
 	return nil
 }
 
-// Classify computes per-category max-cosine-similarity, selects the best
-// category, and produces a contrastive score (max private - max public).
-func (c *CategoryKBClassifier) Classify(text string) (*CategoryKBClassifyResult, error) {
-	if text == "" {
-		return nil, fmt.Errorf("category_kb classification: query must be provided")
-	}
-
-	startTime := time.Now()
-
-	modelType := c.modelType
-	queryOutput, err := getEmbeddingWithModelType(text, modelType, 384)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
-	}
-	queryEmb := queryOutput.Embedding
-
-	// Compute max similarity per category
+func (c *CategoryKBClassifier) computeCategorySimilarities(queryEmb []float32) map[string]float64 {
 	catMaxSim := make(map[string]float64, len(c.kbs))
 	for catName, kb := range c.kbs {
 		var maxSim float32
@@ -252,25 +245,16 @@ func (c *CategoryKBClassifier) Classify(text string) (*CategoryKBClassifyResult,
 			if emb == nil {
 				continue
 			}
-			sim := cosineSimilarity(queryEmb, emb)
-			if sim > maxSim {
+			if sim := cosineSimilarity(queryEmb, emb); sim > maxSim {
 				maxSim = sim
 			}
 		}
 		catMaxSim[catName] = float64(maxSim)
 	}
+	return catMaxSim
+}
 
-	// Find best category
-	var bestCat string
-	var bestSim float64
-	for cat, sim := range catMaxSim {
-		if sim > bestSim {
-			bestSim = sim
-			bestCat = cat
-		}
-	}
-
-	// Build matched rules: categories exceeding applicable threshold
+func (c *CategoryKBClassifier) buildMatchedRules(catMaxSim map[string]float64) ([]string, map[string]float64) {
 	threshold := float64(c.rule.Threshold)
 	secThreshold := float64(c.rule.SecurityThreshold)
 	if secThreshold <= 0 {
@@ -289,21 +273,50 @@ func (c *CategoryKBClassifier) Classify(text string) (*CategoryKBClassifyResult,
 			matchedRules = append(matchedRules, cat)
 		}
 	}
+	return matchedRules, confidences
+}
 
-	// Compute contrastive score: max(private tiers) - max(public tiers)
+func (c *CategoryKBClassifier) contrastiveScore(catMaxSim map[string]float64) float64 {
 	var maxPrivate, maxPublic float64
 	for cat, sim := range catMaxSim {
 		if c.isCategoryPrivate(cat) {
 			if sim > maxPrivate {
 				maxPrivate = sim
 			}
-		} else {
-			if sim > maxPublic {
-				maxPublic = sim
-			}
+		} else if sim > maxPublic {
+			maxPublic = sim
 		}
 	}
-	contrastive := maxPrivate - maxPublic
+	return maxPrivate - maxPublic
+}
+
+// Classify computes per-category max-cosine-similarity, selects the best
+// category, and produces a contrastive score (max private - max public).
+func (c *CategoryKBClassifier) Classify(text string) (*CategoryKBClassifyResult, error) {
+	if text == "" {
+		return nil, fmt.Errorf("category_kb classification: query must be provided")
+	}
+
+	startTime := time.Now()
+
+	queryOutput, err := getEmbeddingWithModelType(text, c.modelType, 384)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
+	}
+
+	catMaxSim := c.computeCategorySimilarities(queryOutput.Embedding)
+
+	var bestCat string
+	var bestSim float64
+	for cat, sim := range catMaxSim {
+		if sim > bestSim {
+			bestSim = sim
+			bestCat = cat
+		}
+	}
+
+	matchedRules, confidences := c.buildMatchedRules(catMaxSim)
+	contrastive := c.contrastiveScore(catMaxSim)
 
 	bestTier := ""
 	if entry, ok := c.taxonomy.Categories[bestCat]; ok {

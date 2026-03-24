@@ -229,7 +229,7 @@ ROUTE local_standard {
 			var kb struct {
 				Exemplars []string `json:"exemplars"`
 			}
-			if err := json.Unmarshal(data, &kb); err != nil {
+			if err = json.Unmarshal(data, &kb); err != nil {
 				t.Errorf("Cannot parse KB file %s: %v", entry.Name(), err)
 				continue
 			}

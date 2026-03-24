@@ -61,6 +61,21 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 			EmbeddingModel:      config.EmbeddingModel,
 		})
 
+	case ValkeyCacheType:
+		if config.Valkey == nil {
+			return nil, fmt.Errorf("valkey configuration is required for Valkey cache backend")
+		}
+		logging.Debugf("Creating Valkey cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+			config.Valkey, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
+		options := ValkeyCacheOptions{
+			Enabled:             config.Enabled,
+			SimilarityThreshold: config.SimilarityThreshold,
+			TTLSeconds:          config.TTLSeconds,
+			Config:              config.Valkey,
+			EmbeddingModel:      config.EmbeddingModel,
+		}
+		return NewValkeyCache(options)
+
 	case HybridCacheType:
 		logging.Debugf("Creating Hybrid cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
 			config.Milvus, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
@@ -127,6 +142,10 @@ func ValidateCacheConfig(config CacheConfig) error {
 		if config.Milvus == nil {
 			return fmt.Errorf("milvus configuration is required for hybrid cache backend")
 		}
+	case ValkeyCacheType:
+		if config.Valkey == nil {
+			return fmt.Errorf("valkey configuration is required for Valkey cache backend")
+		}
 	}
 
 	return nil
@@ -189,6 +208,19 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 				"Scalable with Redis Cluster",
 				"HNSW and FLAT indexing",
 				"Wide ecosystem support",
+				"TTL support",
+			},
+		},
+		{
+			Type:        ValkeyCacheType,
+			Name:        "Valkey Vector Database",
+			Description: "High-performance semantic cache powered by Valkey with vector search",
+			Features: []string{
+				"Fast in-memory performance",
+				"Persistent storage with AOF/RDB",
+				"Scalable with Valkey Cluster",
+				"HNSW and FLAT indexing",
+				"Redis-compatible protocol",
 				"TTL support",
 			},
 		},

@@ -113,6 +113,7 @@ func assertReferenceConfigStoreGlobalCoverage(t testingT, stores map[string]inte
 func assertReferenceConfigSemanticCacheCoverage(t testingT, semanticCache map[string]interface{}) {
 	assertMapCoversStructFields(t, semanticCache, reflect.TypeOf(SemanticCache{}), "global.stores.semantic_cache")
 	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "redis"), reflect.TypeOf(RedisConfig{}), "global.stores.semantic_cache.redis")
+	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "valkey"), reflect.TypeOf(ValkeyConfig{}), "global.stores.semantic_cache.valkey")
 	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.semantic_cache.milvus")
 }
 

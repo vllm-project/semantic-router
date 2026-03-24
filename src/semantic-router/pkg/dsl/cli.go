@@ -27,35 +27,30 @@ func CLICompile(inputPath, outputPath, format, crdName, crdNamespace, basePath s
 		return fmt.Errorf("%d compilation error(s)", len(errs))
 	}
 
-	var output []byte
+	output, err := emitFormat(cfg, format, crdName, crdNamespace, basePath)
+	if err != nil {
+		return err
+	}
+	return writeOutput(output, outputPath)
+}
+
+func emitFormat(cfg *config.RouterConfig, format, crdName, crdNamespace, basePath string) ([]byte, error) {
 	switch format {
 	case "yaml", "":
 		if basePath != "" {
-			output, err = emitMergedConfig(cfg, basePath)
-		} else {
-			output, err = EmitRoutingYAMLFromConfig(cfg)
+			return emitMergedConfig(cfg, basePath)
 		}
-		if err != nil {
-			return fmt.Errorf("YAML emission failed: %w", err)
-		}
+		return EmitRoutingYAMLFromConfig(cfg)
 	case "crd":
 		if crdName == "" {
 			crdName = "router"
 		}
-		output, err = EmitCRD(cfg, crdName, crdNamespace)
-		if err != nil {
-			return fmt.Errorf("CRD emission failed: %w", err)
-		}
+		return EmitCRD(cfg, crdName, crdNamespace)
 	case "helm":
-		output, err = EmitHelm(cfg)
-		if err != nil {
-			return fmt.Errorf("helm emission failed: %w", err)
-		}
+		return EmitHelm(cfg)
 	default:
-		return fmt.Errorf("unsupported output format %q (supported: yaml, crd, helm)", format)
+		return nil, fmt.Errorf("unsupported output format %q (supported: yaml, crd, helm)", format)
 	}
-
-	return writeOutput(output, outputPath)
 }
 
 // emitMergedConfig reads a base YAML (version, listeners, providers) and
