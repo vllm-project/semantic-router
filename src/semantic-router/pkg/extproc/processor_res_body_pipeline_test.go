@@ -90,7 +90,7 @@ func TestUpdateResponseCache_StoresWhenDecisionCacheEnabled(t *testing.T) {
 	assert.True(t, mockCache.updateCalled, "should store response when decision has semantic-cache enabled")
 }
 
-func TestUpdateResponseCache_StoresWhenNoDecisionSelected(t *testing.T) {
+func TestUpdateResponseCache_StoresWhenNoDecisionSelectedAndNoDecisionsConfigured(t *testing.T) {
 	mockCache := &mockStreamingCache{}
 	cfg := &config.RouterConfig{
 		SemanticCache: config.SemanticCache{Enabled: true},
@@ -103,6 +103,29 @@ func TestUpdateResponseCache_StoresWhenNoDecisionSelected(t *testing.T) {
 
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
 	assert.True(t, mockCache.updateCalled, "should store response when no decision is selected (global cache applies)")
+}
+
+func TestUpdateResponseCache_SkipsWhenNoDecisionSelectedButDecisionsConfigured(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	cfg := &config.RouterConfig{
+		SemanticCache: config.SemanticCache{Enabled: true},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name:      "default-route",
+					ModelRefs: []config.ModelRef{{Model: "test"}},
+				},
+			},
+		},
+	}
+	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
+	ctx := &RequestContext{
+		RequestID:               "req-1",
+		VSRSelectedDecisionName: "",
+	}
+
+	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
+	assert.False(t, mockCache.updateCalled, "should not store response when decisions exist but no decision matched")
 }
 
 func TestParseResponseUsage_ExtractsUsageFields(t *testing.T) {

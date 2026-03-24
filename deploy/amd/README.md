@@ -19,7 +19,7 @@ This playbook documents the AMD reference profile for a single real ROCm vLLM ba
   - `routing.decisions` uses tier-prefixed dual-layer families
   - `global.model_catalog.modules` only tightens learned-signal thresholds for conservative overlays
 
-The active AMD profile contains 22 routing decisions:
+The active AMD profile contains 23 routing decisions:
 
 - `simple_*` (3): lowest-cost FAQ and general fallback
 - `medium_*` (5): low-to-mid-cost domain/scenario refinement
@@ -27,6 +27,7 @@ The active AMD profile contains 22 routing decisions:
 - `feedback_*` (2): explicit correction and clarification recovery lanes
 - `complex_*` (3): hard technical, STEM, and agentic synthesis
 - `reasoning_*` (3): high-reasoning escalation
+- `engaged_general` (1): emotion-aware and urgency-aware general fallback above the cheap default lane
 - `premium_*` (1): one premium legal path only
 
 ## Installation
@@ -106,6 +107,7 @@ vLLM Semantic Router (:8899)
   +-- signal evaluation
   |   - keyword
   |   - embedding
+  |   - structure
   |   - fact_check
   |   - user_feedback
   |   - preference
@@ -118,6 +120,8 @@ vLLM Semantic Router (:8899)
   |   - domain partition winner
   |   - intent partition winner
   |   - difficulty band
+  |   - emotion band
+  |   - urgency band
   |   - verification band
   |
   +-- tiered decision selection
@@ -162,27 +166,28 @@ Pricing is intentionally exaggerated for Insights demos so savings are easy to s
 
 | Priority | Decision | Alias | What it is for | Match sketch |
 |---------:|----------|-------|----------------|--------------|
-| 260 | `premium_legal` | `anthropic/claude-opus-4.6` | Highest-risk legal and compliance analysis | `domain:law` + `projection:verification_required` + premium legal embedding or hard legal-risk / hard routing band |
+| 260 | `premium_legal` | `anthropic/claude-opus-4.6` | Highest-risk legal and compliance analysis | law or explicit legal-risk cues + premium legal embedding, verification overlay, or medium/hard `legal_risk` |
 | 250 | `reasoning_math` | `openai/gpt5.4` | Proofs, derivations, and hard math | `domain:math` + `projection:balance_reasoning` |
 | 245 | `reasoning_philosophy` | `openai/gpt5.4` | Philosophy prompts that need deep argumentation | `domain:philosophy` + `projection:balance_reasoning` |
 | 243 | `complex_agentic` | `google/gemini-3.1-pro` | High-structure execution plans, migrations, and workflow orchestration | agentic embedding / preference / markers + `projection:balance_complex` or `projection:balance_reasoning`, excluding architecture markers |
 | 240 | `complex_architecture` | `google/gemini-3.1-pro` | Complex systems and architecture design | CS or engineering + architecture embedding / markers + `projection:balance_complex` or `projection:balance_reasoning` |
 | 235 | `complex_stem` | `google/gemini-3.1-pro` | Complex STEM synthesis outside dedicated math | STEM domain + STEM or research embedding, or high routing band |
 | 232 | `feedback_wrong_answer_verified` | `google/gemini-3.1-pro` | Explicit correction on evidence-sensitive follow-ups | `user_feedback:wrong_answer` + correction markers + short/medium context + verification pressure or evidence-synthesis escalation |
-| 220 | `medium_code_general` | `qwen/qwen3.5-rocm` | Low-medium cost coding, debugging, and technical Q&A | code domain / markers / embedding / coding preference + `projection:balance_medium` or `projection:balance_complex`, excluding agentic, architecture, and creative cues |
+| 220 | `medium_code_general` | `qwen/qwen3.5-rocm` | Low-medium cost coding, debugging, and technical Q&A | code domain / markers / embedding + `projection:balance_medium` or `projection:balance_complex`, or short urgent code prompts with `projection:balance_simple` + `projection:urgency_elevated` |
 | 216 | `verified_business` | `google/gemini-2.5-flash-lite` | Evidence-sensitive business or economics requests | business/economics + `projection:verification_required` or hard evidence synthesis + business embedding or medium/complex routing band |
 | 215 | `medium_business` | `qwen/qwen3.5-rocm` | Mid-tier business and economics analysis | business/economics + `embedding:business_analysis` + `projection:balance_medium` or `projection:balance_complex`, excluding verification overlay |
 | 214 | `verified_health` | `google/gemini-3.1-pro` | Evidence-sensitive health and medical guidance | `domain:health` + `projection:verification_required` + health embedding or medium/complex/reasoning band |
 | 211 | `verified_history` | `google/gemini-2.5-flash-lite` | Source-sensitive history explanation | `domain:history` + `projection:verification_required` or hard evidence synthesis + history embedding or medium/complex routing band |
 | 210 | `medium_history` | `qwen/qwen3.5-rocm` | Mid-tier history explanation and comparison | `domain:history` + `embedding:history_explainer` + `projection:balance_medium` or `projection:balance_complex`, excluding verification overlay |
 | 205 | `medium_psychology` | `qwen/qwen3.5-rocm` | Psychology and behavior queries with nuanced explanation | `domain:psychology` + `embedding:psychology_support` + `projection:balance_medium` or `projection:balance_complex` |
+| 202 | `engaged_general` | `google/gemini-2.5-flash-lite` | General or psychology-adjacent prompts with visible emotion or urgency | `projection:emotion_positive` or `projection:emotion_negative` or `projection:urgency_elevated` + general/psychology cues, excluding specialist and verification-heavy lanes |
 | 200 | `medium_creative` | `google/gemini-2.5-flash-lite` | Creative writing, copywriting, and ideation | creative markers / embedding / collaboration preference + `projection:balance_simple` or `projection:balance_medium` |
 | 190 | `reasoning_general` | `openai/gpt5.4` | Non-specialist deep analysis and multi-step reasoning | reasoning / research / multi-step cues + `projection:balance_complex` or `projection:balance_reasoning`, excluding specialist embeddings and broad technical markers |
 | 185 | `feedback_need_clarification` | `qwen/qwen3.5-rocm` | Cheap clarification follow-up lane | `user_feedback:need_clarification` + clarification markers + short/medium context |
 | 181 | `verified_fast_qa_zh` | `qwen/qwen3.5-rocm` | Chinese short FAQ with explicit verification ask | `embedding:fast_qa_zh` + `language:zh` + `context:short_context` + simple/medium routing band + verification cue or fact-check pressure |
-| 180 | `simple_fast_qa_zh` | `qwen/qwen3.5-rocm` | Cheapest Chinese factual / definitional answers | `embedding:fast_qa_zh` + `language:zh` + `context:short_context` + `projection:balance_simple`, excluding verification overlay |
+| 180 | `simple_fast_qa_zh` | `qwen/qwen3.5-rocm` | Cheapest Chinese factual / definitional answers | `embedding:fast_qa_zh` + `language:zh` + `context:short_context` + `projection:balance_simple`, excluding verification, code, and urgency overlays |
 | 176 | `verified_fast_qa_en` | `qwen/qwen3.5-rocm` | English short FAQ with explicit verification ask | `embedding:fast_qa_en` + `language:en` + `context:short_context` + simple/medium routing band + verification cue or fact-check pressure |
-| 175 | `simple_fast_qa_en` | `qwen/qwen3.5-rocm` | Cheapest English factual / definitional answers | `embedding:fast_qa_en` + `language:en` + `context:short_context` + `projection:balance_simple`, excluding verification overlay |
+| 175 | `simple_fast_qa_en` | `qwen/qwen3.5-rocm` | Cheapest English factual / definitional answers | `embedding:fast_qa_en` + `language:en` + `context:short_context` + `projection:balance_simple`, excluding verification, code, and urgency overlays |
 | 170 | `simple_general` | `qwen/qwen3.5-rocm` | Lowest-cost fallback for non-specialized traffic | short simple traffic, or medium-context `domain:other` traffic with simple/medium band, excluding fast-QA embeddings |
 
 This ordering is intentional:
@@ -200,8 +205,9 @@ The profile uses the standard vSR signal families directly under `routing.signal
 
 | Signal family | Role in this profile | Representative names |
 |---------------|----------------------|----------------------|
-| `keywords` | explicit lexical confirmation for route style, verification asks, feedback cues, and task shape | `verification_markers`, `agentic_request_markers`, `architecture_markers`, `clarification_feedback_markers` |
+| `keywords` | explicit lexical confirmation for route style, verification asks, emotion or urgency cues, feedback cues, and task shape | `verification_markers`, `emotion_negative_markers`, `urgency_markers`, `clarification_feedback_markers` |
 | `embeddings` | learned intent and specialist boundaries | `fast_qa_en`, `architecture_design`, `business_analysis`, `premium_legal_analysis`, `reasoning_general_en` |
+| `structure` | cheap structural overlays for workflow formatting and punctuation emphasis | `ordered_workflow`, `numbered_steps`, `exclamation_emphasis` |
 | `fact_check` | evidence-sensitive detection that feeds verification pressure | `needs_fact_check` |
 | `user_feedbacks` | explicit correction or clarification overlays | `wrong_answer`, `need_clarification` |
 | `preferences` | collaboration style and request framing | `coding_partner`, `creative_collaboration`, `agentic_execution` |
@@ -214,8 +220,9 @@ Notable profile-specific signal details:
 
 - `context` bands are non-overlapping: `short_context` is `0-999`, `medium_context` is `1K-7999`, and `long_context` is `8K-256K`.
 - `complexity` signals are reusable across both route predicates and projection scores through sublevels such as `code_task:hard` or `evidence_synthesis:medium`.
+- the emotion and urgency overlays stay heuristic on purpose: lexical markers and repeated `!` / `！` are used as secondary coordination signals instead of replacing the learned primary-intent lanes.
 - short lexical verification and correction cues are intentionally literal in this profile, so examples that say `verify this`, `answer with citations`, or Chinese `给出处` are more reliable than looser paraphrases.
-- `jailbreak` and `pii` signals are still defined in the profile for safety surfaces, but they are not the primary routing predicates for the 22 active decisions.
+- `jailbreak` and `pii` signals are still defined in the profile for safety surfaces, but they are not the primary routing predicates for the 23 active decisions.
 
 ## Projection Overview
 
@@ -227,6 +234,10 @@ The profile uses `routing.projections` as the coordination layer between raw sig
 | `balance_intent_partition` | partition | resolves one learned-intent winner across the maintained embedding lanes | `agentic_workflows`, `architecture_design`, `code_general`, `creative_tasks`, `fast_qa_en`, `fast_qa_zh`, `general_chat_fallback`, and related specialist embeddings |
 | `difficulty_score` | score | blends context, keywords, embeddings, and complexity sublevels into one difficulty signal | source for the difficulty band mapping |
 | `difficulty_band` | mapping | converts `difficulty_score` into reusable routing bands | `balance_simple`, `balance_medium`, `balance_complex`, `balance_reasoning` |
+| `emotion_valence` | score | blends positive and negative affect markers into one lightweight emotional-overlay score | source for the emotion band mapping |
+| `emotion_band` | mapping | converts `emotion_valence` into reusable emotional overlays | `emotion_positive`, `emotion_negative` |
+| `urgency_pressure` | score | blends urgency markers with exclamation-count emphasis into one urgency overlay | source for the urgency band mapping |
+| `urgency_band` | mapping | converts `urgency_pressure` into reusable urgency overlays | `urgency_standard`, `urgency_elevated` |
 | `verification_pressure` | score | blends `fact_check`, verification cues, high-stakes domains, long-context pressure, and wrong-answer correction pressure | source for the verification mapping |
 | `verification_band` | mapping | converts `verification_pressure` into verification routing outputs | `verification_standard`, `verification_required` |
 
@@ -242,7 +253,7 @@ That lets the profile reuse one difficulty story and one verification story acro
 
 Test these in the dashboard playground at `http://<your-server-ip>:8700`:
 
-The same stable examples are also maintained as machine-readable probes in [`balance.probes.yaml`](./balance.probes.yaml) for live `POST /api/v1/eval` calibration loops. The maintained suite currently covers all 22 decisions with 54 probe variants, so routing changes are checked against a small robustness set instead of one crafted prompt per route.
+The same stable examples are also maintained as machine-readable probes in [`balance.probes.yaml`](./balance.probes.yaml) for live `POST /api/v1/eval` calibration loops. The maintained suite currently covers all 23 decisions with 58 probe variants, so routing changes are checked against a small robustness set instead of one crafted prompt per route.
 
 Each decision below includes every maintained probe variant from the manifest, so the README stays copy-pasteable for playground checks and aligned with the executable eval suite.
 
@@ -408,6 +419,12 @@ A Java unit test is failing after a refactor; explain the most likely cause and 
 After a refactor, an integration test started failing in a Java codebase. Explain the most likely cause and the first code change to inspect.
 ```
 
+#### `urgent_bug_zh`
+
+```text
+这太离谱了！！！马上告诉我该怎么处理这个 bug。
+```
+
 ### `verified_business`
 
 Expected alias: `google/gemini-2.5-flash-lite`
@@ -538,6 +555,30 @@ Why do people fall into confirmation bias, and what strategies usually help redu
 
 ```text
 Why do people procrastinate on important work, and what interventions usually help?
+```
+
+### `engaged_general`
+
+Expected alias: `google/gemini-2.5-flash-lite`
+
+Emotion-aware and urgency-aware general lane for prompts that should avoid brittle specialist or fast-QA misroutes.
+
+#### `celebratory_reply_zh`
+
+```text
+太好了！！！我终于拿到 offer 了，帮我写一段兴奋但得体的回复。
+```
+
+#### `roommate_text`
+
+```text
+I am overwhelmed right now!! Help me write a calm text to my roommate and keep it supportive.
+```
+
+#### `dinner_reschedule`
+
+```text
+This is ridiculous!! Help me write a calm message to reschedule tonight's dinner.
 ```
 
 ### `medium_creative`

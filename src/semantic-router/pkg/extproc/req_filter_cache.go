@@ -61,11 +61,8 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		ctx.RequestModel = requestModel
 		ctx.RequestQuery = requestQuery
 
-		// Add pending request for cache write (if caching is enabled)
-		cacheEnabled := r.Config.SemanticCache.Enabled
-		if categoryName != "" {
-			cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
-		}
+		// Add pending request for cache write only when semantic-cache is in scope.
+		cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
 		r.storePendingCacheRequest(ctx, categoryName, requestModel, requestQuery, cacheEnabled)
 		return nil, false
 	}
@@ -81,11 +78,8 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
 
-	// Check if caching is enabled for this decision
-	cacheEnabled := r.Config.SemanticCache.Enabled
-	if categoryName != "" {
-		cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
-	}
+	// Semantic-cache is decision-scoped when routing decisions exist.
+	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
 
 	logging.Infof("handleCaching: requestQuery='%s' (len=%d), cacheEnabled=%v, r.Cache.IsEnabled()=%v",
 		requestQuery, len(requestQuery), cacheEnabled, r.Cache.IsEnabled())
