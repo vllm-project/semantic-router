@@ -7,7 +7,7 @@ tags: [amd, rocm, deployment, hardware, vllm, semantic-router]
 
 <div align="center">
 
-![](/img/amd-deploy-0.png)
+![AMD Developer Cloud and vLLM Semantic Router overview](/img/amd-deploy-0.png)
 
 </div>
 
@@ -44,7 +44,7 @@ User Request -> Signals -> Projections -> Decisions -> Model Alias -> Backend Re
 
 This is why the system is more expressive than a simple classifier. A query does not have to be “just math” or “just code.” It can simultaneously look urgent, evidence-sensitive, short-context, Chinese-language, and correction-oriented, and the routing policy can respond to that richer state.
 
-![](/img/amd-deploy-1.png)
+![Signal-driven architecture overview for vLLM Semantic Router](/img/amd-deploy-1.png)
 
 ## What You Will Deploy
 
@@ -87,7 +87,7 @@ The third opportunity is personal AI. Once routing, privacy, and reasoning are e
 
 That makes AMD interesting not only for enterprise infrastructure, but also for self-hosted assistants, home-lab AI, and local-first personal workflows. The important point is that Semantic Router lets the system distinguish between “keep this local,” “this is cheap and routine,” and “this needs deeper reasoning,” instead of treating all personal AI traffic as one undifferentiated workload.
 
-![](/img/amd-deploy-2.png)
+![AMD deployment opportunities for routing, privacy, and personal AI](/img/amd-deploy-2.png)
 
 ## Getting Started
 
@@ -162,7 +162,7 @@ With the backend up, install vLLM Semantic Router:
 curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 ```
 
-![](/img/amd-deploy-3.png)
+![vLLM Semantic Router installation step](/img/amd-deploy-3.png)
 
 The router dashboard should then be available at:
 
@@ -170,7 +170,7 @@ The router dashboard should then be available at:
 http://<your-server-ip>:8700
 ```
 
-![](/img/amd-deploy-4.png)
+![vLLM Semantic Router dashboard onboarding](/img/amd-deploy-4.png)
 
 Open the dashboard and complete onboarding.
 
@@ -180,7 +180,7 @@ When prompted to load a routing profile (please skip the model configuration dir
 
 The remote import path applies the full YAML directly during onboarding. If you later inspect the same profile in the DSL editor, the routing surfaces decompile from `routing.modelCards`, `routing.signals`, `routing.projections`, and `routing.decisions`, while `providers` remains YAML-native.
 
-![](/img/amd-deploy-5.png)
+![Reference routing profile import in the dashboard](/img/amd-deploy-5.png)
 
 ## What the Reference Profile Is Doing
 
@@ -206,7 +206,7 @@ That makes the profile easier to reason about when you are testing routing behav
 
 ## Validate the Deployment in the Playground
 
-![](/img/amd-deploy-6.png)
+![Playground view for validating routing behavior](/img/amd-deploy-6.png)
 
 Once onboarding is complete, the fastest way to validate the system is through the dashboard playground. Try a few prompts that represent different routing tiers:
 
@@ -234,29 +234,29 @@ Provide a legal analysis of the indemnity clause, liability cap, and compliance 
 
 This should match the premium legal lane and forward to `anthropic/claude-opus-4.6`.
 
-![](/img/amd-deploy-7.png)
+![Prompt example for premium legal routing](/img/amd-deploy-7.png)
 
 ## Observe the Routing Behavior in Insights
 
 You can also inspect the routing behavior in Insights. The reference profile includes replay, so you can see what actually happened during routing. And also how much money you saved by using the cheaper lanes.
 
-![](/img/amd-deploy-8.png)
+![Insights view showing routing behavior and savings](/img/amd-deploy-8.png)
 
 ## Test the Brain Topology
 
 The router dashboard also includes a brain topology view that shows the high-level structure of the routing graph. This is useful for understanding the overall shape of the policy, and how different decisions are connected. And you can directly test your prompt to see its activation path.
 
-![](/img/amd-deploy-9.png)
+![Brain topology view of the routing graph](/img/amd-deploy-9.png)
 
 ## Design Your Own Routing DSL
 
 The dashboard also includes a full DSL editor that lets you design your own routing policy. The reference profile is a good starting point, but you can also use the editor to try out different ideas.
 
-![](/img/amd-deploy-10.png)
+![DSL editor for designing routing policy](/img/amd-deploy-10.png)
 
 And you can design a very complex boolean expression in a single route, to express very precise routing policy.
 
-![](/img/amd-deploy-11.png)
+![Complex boolean routing expression in the DSL editor](/img/amd-deploy-11.png)
 
 ## Final Thoughts
 
