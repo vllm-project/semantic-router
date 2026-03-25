@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
+	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -270,19 +271,26 @@ func isEvaluationProjectRoot(dir string) bool {
 	return true
 }
 
-func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store) {
 	if !cfg.MLPipelineEnabled {
 		log.Printf("ML Pipeline feature disabled")
 		return
 	}
 
 	trainingDir := resolveMLTrainingDir(cfg)
-	mlRunner := mlpipeline.NewRunner(mlpipeline.RunnerConfig{
+	mlRunner, err := mlpipeline.NewRunner(mlpipeline.RunnerConfig{
 		DataDir:      cfg.MLPipelineDataDir,
 		TrainingDir:  trainingDir,
 		PythonPath:   cfg.PythonPath,
 		MLServiceURL: cfg.MLServiceURL,
+		Workflow:     wf,
 	})
+	if err != nil {
+		log.Fatalf("ML pipeline runner: %v", err)
+	}
+	if err := wf.RecoverInterruptedMLJobs("interrupted by dashboard restart"); err != nil {
+		log.Printf("ML pipeline: recover running jobs: %v", err)
+	}
 	mlHandler := handlers.NewMLPipelineHandler(mlRunner)
 
 	mux.HandleFunc("/api/ml-pipeline/jobs", mlHandler.ListJobsHandler())

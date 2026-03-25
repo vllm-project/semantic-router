@@ -144,7 +144,7 @@ func TestWriteOpenClawConfig_RemoteMemoryUsesCurrentSchema(t *testing.T) {
 }
 
 func TestGatewayTokenForContainer_PrefersConfigTokenOverRegistry(t *testing.T) {
-	h := NewOpenClawHandler(t.TempDir(), false)
+	h := newTestOpenClawHandler(t, t.TempDir(), false)
 	workerName := "worker-a"
 
 	if err := h.saveRegistry([]ContainerEntry{
@@ -170,7 +170,7 @@ func TestGatewayTokenForContainer_PrefersConfigTokenOverRegistry(t *testing.T) {
 }
 
 func TestGatewayTokenForContainer_FallsBackToRegistryToken(t *testing.T) {
-	h := NewOpenClawHandler(t.TempDir(), false)
+	h := newTestOpenClawHandler(t, t.TempDir(), false)
 	workerName := "worker-b"
 
 	if err := h.saveRegistry([]ContainerEntry{
@@ -204,7 +204,7 @@ func TestLoadSkills_UsesEnvOverridePath(t *testing.T) {
 	}
 
 	t.Setenv("OPENCLAW_SKILLS_PATH", skillsPath)
-	h := NewOpenClawHandler(filepath.Join(tempDir, "openclaw-data"), false)
+	h := newTestOpenClawHandler(t, filepath.Join(tempDir, "openclaw-data"), false)
 	skills, err := h.loadSkills()
 	if err != nil {
 		t.Fatalf("loadSkills failed: %v", err)
@@ -440,7 +440,7 @@ listeners:
 		t.Fatalf("failed to write config file: %v", err)
 	}
 
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 	h.SetRouterConfigPath(configPath)
 	t.Setenv("OPENCLAW_MODEL_BASE_URL", "")
 
@@ -462,7 +462,7 @@ api_server:
 		t.Fatalf("failed to write config file: %v", err)
 	}
 
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 	h.SetRouterConfigPath(configPath)
 	t.Setenv("OPENCLAW_MODEL_BASE_URL", "http://localhost:19999/v1")
 
@@ -511,7 +511,7 @@ func TestAgentsMdContent_IncludesIdentityReadStep(t *testing.T) {
 
 func TestTeamsHandler_CreateAndList(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	createReq := httptest.NewRequest(http.MethodPost, "/api/openclaw/teams", strings.NewReader(`{
 		"name":"Research",
@@ -554,7 +554,7 @@ func TestTeamsHandler_CreateAndList(t *testing.T) {
 
 func TestTeamByIDHandler_UpdatePropagatesRegistryTeamName(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	if err := h.saveTeams([]TeamEntry{{
 		ID:        "routing-core",
@@ -602,7 +602,7 @@ func TestTeamByIDHandler_UpdatePropagatesRegistryTeamName(t *testing.T) {
 
 func TestTeamByIDHandler_DeleteRejectsAssignedTeam(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	if err := h.saveTeams([]TeamEntry{{
 		ID:        "alpha",
@@ -634,7 +634,7 @@ func TestTeamByIDHandler_DeleteRejectsAssignedTeam(t *testing.T) {
 
 func TestWorkersHandler_List(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	if err := h.saveRegistry([]ContainerEntry{
 		{
@@ -682,7 +682,7 @@ func TestWorkersHandler_List(t *testing.T) {
 
 func TestWorkerByIDHandler_Update(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	if err := h.saveTeams([]TeamEntry{
 		{ID: "research", Name: "Research", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z"},
@@ -742,7 +742,7 @@ func TestWorkerByIDHandler_Update(t *testing.T) {
 
 func TestWorkerByIDHandler_Delete(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	if err := h.saveRegistry([]ContainerEntry{
 		{
@@ -774,7 +774,7 @@ func TestWorkerByIDHandler_Delete(t *testing.T) {
 
 func TestWorkerByIDHandler_SetLeaderRoleUpdatesTeamAndDemotesOthers(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	if err := h.saveTeams([]TeamEntry{
 		{
@@ -858,7 +858,7 @@ func TestWorkerByIDHandler_SetLeaderRoleUpdatesTeamAndDemotesOthers(t *testing.T
 
 func TestRoomsHandler_CreateAndMessageFlowWithoutAutomation(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 	if err := h.saveTeams([]TeamEntry{{
 		ID:        "team-a",
 		Name:      "Team A",
@@ -936,7 +936,7 @@ func TestRoomsHandler_CreateAndMessageFlowWithoutAutomation(t *testing.T) {
 }
 
 func TestOpenClawReadonlyBlocksManagementMutations(t *testing.T) {
-	h := NewOpenClawHandler(t.TempDir(), true)
+	h := newTestOpenClawHandler(t, t.TempDir(), true)
 
 	testCases := []struct {
 		name    string
@@ -981,7 +981,7 @@ func TestOpenClawReadonlyBlocksManagementMutations(t *testing.T) {
 
 func TestRoomsHandler_CreateRoomAutoSuffixAvoidsConflict(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 	if err := h.saveTeams([]TeamEntry{{
 		ID:        "llm-router-lab",
 		Name:      "LLM Router Lab",
@@ -1039,7 +1039,7 @@ func TestRoomsHandler_CreateRoomAutoSuffixAvoidsConflict(t *testing.T) {
 
 func TestProcessRoomUserMessage_LeaderDelegatesToWorker(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	leaderSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
@@ -1155,7 +1155,7 @@ func TestProcessRoomUserMessage_LeaderDelegatesToWorker(t *testing.T) {
 
 func TestProcessRoomUserMessage_SimultaneousMentionsContinueChain(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	var (
 		callsMu     sync.Mutex
@@ -1308,7 +1308,7 @@ func TestProcessRoomUserMessage_SimultaneousMentionsContinueChain(t *testing.T) 
 
 func TestProcessRoomUserMessage_MentionAllTargetsEntireTeam(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	var (
 		callsMu      sync.Mutex
@@ -1455,7 +1455,7 @@ func TestProcessRoomUserMessage_MentionAllTargetsEntireTeam(t *testing.T) {
 
 func TestProcessRoomUserMessage_DuplicateTriggerDoesNotReprocess(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	var (
 		callsMu    sync.Mutex
@@ -1549,7 +1549,7 @@ func TestProcessRoomUserMessage_DuplicateTriggerDoesNotReprocess(t *testing.T) {
 
 func TestProcessRoomUserMessage_MultiMentionsDispatchInParallel(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	var (
 		startMu sync.Mutex
@@ -1661,7 +1661,7 @@ func TestProcessRoomUserMessage_MultiMentionsDispatchInParallel(t *testing.T) {
 
 func TestQueryWorkerChat_FallsBackToAlternativeEndpoint(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	primaryAttempts := 0
 	fallbackAttempts := 0

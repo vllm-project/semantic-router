@@ -22,9 +22,7 @@ func (r *Runner) runBenchmarkSubprocess(ctx context.Context, modelsYAMLPath, que
 		return "", fmt.Errorf("failed to create job dir: %w", err)
 	}
 
-	r.mu.Lock()
-	job.Status = StatusRunning
-	r.mu.Unlock()
+	r.setJobRunning(job)
 
 	go r.executeBenchmarkSubprocess(ctx, job.ID, jobDir, modelsYAMLPath, queryJSONLPath, req)
 	return job.ID, nil
@@ -176,9 +174,7 @@ func (r *Runner) runTrainSubprocess(ctx context.Context, benchmarkDataPath strin
 		return "", fmt.Errorf("failed to create job dir: %w", err)
 	}
 
-	r.mu.Lock()
-	job.Status = StatusRunning
-	r.mu.Unlock()
+	r.setJobRunning(job)
 
 	go r.executeTrainSubprocess(ctx, job.ID, jobDir, benchmarkDataPath, req)
 	return job.ID, nil

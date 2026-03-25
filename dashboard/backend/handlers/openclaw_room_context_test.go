@@ -82,7 +82,7 @@ func assertStructuredRoomMessages(t *testing.T, messages []openAIChatMessage) {
 
 func TestProcessRoomUserMessage_StripsLeadingMentionsFromPrompt(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	var (
 		promptMu sync.Mutex
@@ -130,7 +130,7 @@ func TestProcessRoomUserMessage_StripsLeadingMentionsFromPrompt(t *testing.T) {
 
 func TestProcessRoomUserMessage_WorkerPromptIncludesLeaderRouting(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	var (
 		promptMu      sync.Mutex
@@ -175,7 +175,7 @@ func TestProcessRoomUserMessage_WorkerPromptIncludesLeaderRouting(t *testing.T) 
 
 func TestProcessRoomUserMessage_UsesRoomScopedSessionAndDirectedHistory(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	var (
 		payloadMu sync.Mutex
@@ -232,7 +232,7 @@ func TestProcessRoomUserMessage_UsesRoomScopedSessionAndDirectedHistory(t *testi
 
 func TestProcessRoomUserMessage_SameWorkerGetsDifferentSessionUsersPerRoom(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	var (
 		payloadMu sync.Mutex
@@ -279,7 +279,7 @@ func TestProcessRoomUserMessage_SameWorkerGetsDifferentSessionUsersPerRoom(t *te
 
 func TestProcessRoomUserMessage_LeaderAndWorkerUseDifferentSessionUsers(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	var (
 		leaderPayload openAIChatRequest
@@ -324,7 +324,7 @@ func TestProcessRoomUserMessage_LeaderAndWorkerUseDifferentSessionUsers(t *testi
 
 func TestProcessRoomUserMessage_NoMentionDoesNotTriggerAutomation(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	var (
 		callMu sync.Mutex

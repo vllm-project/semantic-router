@@ -1,3 +1,5 @@
+// Browser-local conversation list for playground-style UX only — not server-owned
+// or restart-safe. Supported multi-operator chat history lives in OpenClaw room APIs.
 import { useCallback, useEffect, useState } from 'react'
 
 export interface StoredConversation<T> {

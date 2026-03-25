@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -65,56 +64,65 @@ const (
 )
 
 func (h *OpenClawHandler) loadRooms() ([]ClawRoomEntry, error) {
-	data, err := os.ReadFile(h.roomsPath())
+	lines, err := h.wf.ListOpenClawRoomJSON()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []ClawRoomEntry{}, nil
+		return nil, err
+	}
+	out := make([]ClawRoomEntry, 0, len(lines))
+	for _, line := range lines {
+		var r ClawRoomEntry
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			return nil, err
 		}
-		return nil, err
+		out = append(out, r)
 	}
-	var rooms []ClawRoomEntry
-	if err := json.Unmarshal(data, &rooms); err != nil {
-		return nil, err
-	}
-	return rooms, nil
+	return out, nil
 }
 
 func (h *OpenClawHandler) saveRooms(rooms []ClawRoomEntry) error {
-	data, err := json.MarshalIndent(rooms, "", "  ")
-	if err != nil {
-		return err
+	rows := make([][2]string, 0, len(rooms))
+	for i := range rooms {
+		b, err := json.Marshal(rooms[i])
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(rooms[i].ID) == "" {
+			return fmt.Errorf("room entry missing id")
+		}
+		rows = append(rows, [2]string{rooms[i].ID, string(b)})
 	}
-	if err := os.MkdirAll(filepath.Dir(h.roomsPath()), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(h.roomsPath(), data, 0o644)
+	return h.wf.ReplaceOpenClawRooms(rows)
 }
 
 func (h *OpenClawHandler) loadRoomMessages(roomID string) ([]ClawRoomMessage, error) {
-	data, err := os.ReadFile(h.roomMessagesPath(roomID))
+	lines, err := h.wf.ListOpenClawRoomMessages(roomID)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []ClawRoomMessage{}, nil
+		return nil, err
+	}
+	out := make([]ClawRoomMessage, 0, len(lines))
+	for _, line := range lines {
+		var m ClawRoomMessage
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			return nil, err
 		}
-		return nil, err
+		out = append(out, m)
 	}
-	var messages []ClawRoomMessage
-	if err := json.Unmarshal(data, &messages); err != nil {
-		return nil, err
-	}
-	return messages, nil
+	return out, nil
 }
 
 func (h *OpenClawHandler) saveRoomMessages(roomID string, messages []ClawRoomMessage) error {
-	path := h.roomMessagesPath(roomID)
-	data, err := json.MarshalIndent(messages, "", "  ")
-	if err != nil {
-		return err
+	rows := make([][2]string, 0, len(messages))
+	for i := range messages {
+		if strings.TrimSpace(messages[i].ID) == "" {
+			return fmt.Errorf("room message missing id")
+		}
+		b, err := json.Marshal(messages[i])
+		if err != nil {
+			return err
+		}
+		rows = append(rows, [2]string{messages[i].ID, string(b)})
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
+	return h.wf.ReplaceOpenClawRoomMessages(roomID, rows)
 }
 
 func findRoomByID(rooms []ClawRoomEntry, roomID string) *ClawRoomEntry {
@@ -214,6 +222,9 @@ func (h *OpenClawHandler) deleteRoomsForTeamLocked(teamID string) error {
 		return nil
 	}
 	if err := h.saveRooms(filtered); err != nil {
+		return err
+	}
+	if err := h.wf.DeleteOpenClawMessagesForRooms(removedRoomIDs); err != nil {
 		return err
 	}
 	for _, roomID := range removedRoomIDs {
@@ -324,18 +335,16 @@ func writeSSE(w http.ResponseWriter, flusher http.Flusher, eventName string, pay
 }
 
 func (h *OpenClawHandler) appendRoomMessage(roomID string, message ClawRoomMessage) error {
-	h.mu.Lock()
-	messages, err := h.loadRoomMessages(roomID)
+	if strings.TrimSpace(message.ID) == "" {
+		return fmt.Errorf("room message missing id")
+	}
+	b, err := json.Marshal(message)
 	if err != nil {
-		h.mu.Unlock()
 		return err
 	}
-	messages = append(messages, message)
-	if err := h.saveRoomMessages(roomID, messages); err != nil {
-		h.mu.Unlock()
+	if err := h.wf.AppendOpenClawRoomMessage(roomID, message.ID, string(b)); err != nil {
 		return err
 	}
-	h.mu.Unlock()
 
 	// Broadcast to WebSocket clients (also handles SSE backward compatibility)
 	h.publishRoomWSEvent(roomID, WSOutboundMessage{
