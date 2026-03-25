@@ -140,6 +140,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		tracing.EndPluginSpan(span, "error", lookupTime, "lookup_failed")
 	} else if found {
 		ctx.VSRCacheHit = true
+		ctx.VSRCacheSimilarity = r.Cache.LastSimilarity()
 
 		if categoryName != "" {
 			ctx.VSRSelectedDecisionName = categoryName
@@ -156,12 +157,13 @@ func (r *OpenAIRouter) performCacheLookup(
 			"category":   categoryName,
 			"threshold":  threshold,
 		})
-		response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, categoryName, ctx.VSRSelectedDecisionName, ctx.VSRMatchedKeywords)
+		response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, categoryName, ctx.VSRSelectedDecisionName, ctx.VSRMatchedKeywords, ctx.VSRCacheSimilarity)
 		r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
 		r.attachRouterReplayResponse(ctx, cachedResponse, true)
 		ctx.TraceContext = spanCtx
 		return response, true
 	} else {
+		ctx.VSRCacheSimilarity = r.Cache.LastSimilarity()
 		metrics.RecordCachePluginMiss(categoryName, "semantic-cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 	}
