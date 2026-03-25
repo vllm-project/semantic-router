@@ -234,15 +234,29 @@ Provide a legal analysis of the indemnity clause, liability cap, and compliance 
 
 This should match the premium legal lane and forward to `anthropic/claude-opus-4.6`.
 
-### Verified Chinese FAQ
-
-```text
-请给出处，并解释铁缺乏的早期症状。
-```
-
-This is a good probe for the Chinese fast-QA plus verification overlay path.
-
 ![](/img/amd-deploy-7.png)
+
+## Observe the Routing Behavior in Insights
+
+You can also inspect the routing behavior in Insights. The reference profile includes replay, so you can see what actually happened during routing. And also how much money you saved by using the cheaper lanes.
+
+![](/img/amd-deploy-8.png)
+
+## Test the Brain Topology
+
+The router dashboard also includes a brain topology view that shows the high-level structure of the routing graph. This is useful for understanding the overall shape of the policy, and how different decisions are connected. And you can directly test your prompt to see its activation path.
+
+![](/img/amd-deploy-9.png)
+
+## Design Your Own Routing DSL
+
+The dashboard also includes a full DSL editor that lets you design your own routing policy. The reference profile is a good starting point, but you can also use the editor to try out different ideas.
+
+![](/img/amd-deploy-10.png)
+
+And you can design a very complex boolean expression in a single route, to express very precise routing policy.
+
+![](/img/amd-deploy-11.png)
 
 ## Final Thoughts
 
