@@ -30,7 +30,7 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 	return CanonicalServiceGlobal{
 		ResponseAPI: ResponseAPIConfig{
 			Enabled:      true,
-			StoreBackend: "memory",
+			StoreBackend: "redis",
 			TTLSeconds:   86400,
 			MaxResponses: 1000,
 		},

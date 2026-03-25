@@ -303,7 +303,7 @@ global:
 	if !cfg.ResponseAPI.Enabled {
 		t.Fatal("expected sparse global override to preserve default response_api.enabled=true")
 	}
-	if cfg.ResponseAPI.StoreBackend != "memory" {
+	if cfg.ResponseAPI.StoreBackend != "redis" {
 		t.Fatalf("expected response api backend to keep default, got %q", cfg.ResponseAPI.StoreBackend)
 	}
 	if cfg.ResponseAPI.TTLSeconds != 86400 {

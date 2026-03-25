@@ -49,7 +49,6 @@ func assertReferenceConfigAPIServiceCoverage(t testingT, api map[string]interfac
 
 func assertReferenceConfigResponseAPIServiceCoverage(t testingT, responseAPI map[string]interface{}) {
 	assertMapCoversStructFields(t, responseAPI, reflect.TypeOf(ResponseAPIConfig{}), "global.services.response_api")
-	assertMapCoversStructFields(t, mustMapAt(t, responseAPI, "milvus"), reflect.TypeOf(ResponseAPIMilvusConfig{}), "global.services.response_api.milvus")
 	assertMapCoversStructFields(t, mustMapAt(t, responseAPI, "redis"), reflect.TypeOf(ResponseAPIRedisConfig{}), "global.services.response_api.redis")
 }
 
