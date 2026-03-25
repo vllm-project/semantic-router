@@ -15,6 +15,7 @@ import {
   AlgorithmConfig,
   PluginConfig,
   ModelRefConfig,
+  TaxonomySignalConfig,
 } from '../types'
 import { SIGNAL_LATENCY } from '../constants'
 
@@ -476,6 +477,20 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
+  // 15. Taxonomy Rules
+  routingSignals?.taxonomy?.forEach(rule => {
+    addSignal({
+      type: 'taxonomy',
+      name: rule.name,
+      description: rule.description || `Taxonomy bind ${rule.classifier} ${rule.bind.kind}=${rule.bind.value}`,
+      latency: SIGNAL_LATENCY.taxonomy,
+      config: {
+        classifier: rule.classifier,
+        bind: rule.bind,
+      } satisfies TaxonomySignalConfig,
+    })
+  })
+
   extractProjectionSignals(config).forEach(addSignal)
 
   return signals
@@ -709,6 +724,7 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     authz: [],
     jailbreak: [],
     pii: [],
+    taxonomy: [],
     projection: [],
   }
 

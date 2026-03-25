@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useId, useState } from 'react'
 import styles from './EditModal.module.css'
 
 export type EditFormData = Record<string, unknown>
@@ -43,6 +43,7 @@ const EditModal: React.FC<EditModalProps> = ({
   const [formData, setFormData] = useState<EditFormData>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const titleId = useId()
 
   const readField = (fieldName: string): unknown => formData[fieldName]
   const readString = (fieldName: string): string => {
@@ -124,9 +125,15 @@ const EditModal: React.FC<EditModalProps> = ({
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
-          <h2 className={styles.title}>{title}</h2>
+          <h2 id={titleId} className={styles.title}>{title}</h2>
           <button className={styles.closeButton} onClick={onClose}>✕</button>
         </div>
 

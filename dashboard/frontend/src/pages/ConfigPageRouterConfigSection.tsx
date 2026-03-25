@@ -3,7 +3,6 @@ import styles from './ConfigPageRouterConfigSection.module.css'
 import pageStyles from './ConfigPage.module.css'
 import ConfigPageLegacyCategoriesSection from './ConfigPageLegacyCategoriesSection'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
-import ConfigPageTaxonomyClassifiers from './ConfigPageTaxonomyClassifiers'
 import {
   buildEffectiveRouterConfig,
   buildRouterSectionCards,
@@ -279,13 +278,6 @@ export default function ConfigPageRouterConfigSection({
 
         {editorMode === 'visual' ? (
           <>
-            <div className={pageStyles.sectionTableBlock}>
-              <ConfigPageTaxonomyClassifiers
-                isReadonly={isReadonly}
-                openEditModal={openEditModal}
-              />
-            </div>
-
             <div className={pageStyles.sectionTableBlock}>
               <div className={styles.blockHeader}>
                 <div>

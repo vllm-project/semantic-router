@@ -18,6 +18,7 @@ export type SignalType =
   | 'authz'
   | 'jailbreak'
   | 'pii'
+  | 'taxonomy'
   | 'projection'
 
 export interface SignalConfig {
@@ -25,7 +26,7 @@ export interface SignalConfig {
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | StructureSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | GenericSignalConfig
+  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | StructureSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | TaxonomySignalConfig | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -103,6 +104,14 @@ export interface PIISignalConfig {
   threshold?: number
   pii_types_allowed?: string[]
   include_history?: boolean
+}
+
+export interface TaxonomySignalConfig {
+  classifier: string
+  bind: {
+    kind: 'tier' | 'category'
+    value: string
+  }
 }
 
 export interface GenericSignalConfig {
@@ -451,6 +460,15 @@ export interface ConfigData {
     include_history?: boolean
     description?: string
   }>
+  taxonomy?: Array<{
+    name: string
+    classifier: string
+    bind: {
+      kind: 'tier' | 'category'
+      value: string
+    }
+    description?: string
+  }>
   projections?: {
     mappings?: Array<{
       name: string
@@ -556,6 +574,15 @@ export interface ConfigData {
       threshold?: number
       pii_types_allowed?: string[]
       include_history?: boolean
+      description?: string
+    }>
+    taxonomy?: Array<{
+      name: string
+      classifier: string
+      bind: {
+        kind: 'tier' | 'category'
+        value: string
+      }
       description?: string
     }>
   }

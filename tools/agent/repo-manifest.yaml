@@ -144,6 +144,7 @@ docs:
   - docs/agent/plans/pl-0014-structure-signal-family-implementation.md
   - docs/agent/plans/pl-0015-agent-report-local-artifact-loop.md
   - docs/agent/plans/pl-0016-harness-context-and-pr-parity-simplification.md
+  - docs/agent/plans/pl-0017-taxonomy-classifier-platform-loop.md
   - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
@@ -317,12 +318,18 @@ doc_governance:
     - path: docs/agent/plans/pl-0014-structure-signal-family-implementation.md
       steward: agent-contract
       freshness: update at the start and end of each structure-signal-family implementation loop and after each completed loop task
+<<<<<<< HEAD
     - path: docs/agent/plans/pl-0015-agent-report-local-artifact-loop.md
       steward: agent-contract
       freshness: update at the start and end of each agent-report local artifact loop and after each completed loop task
     - path: docs/agent/plans/pl-0016-harness-context-and-pr-parity-simplification.md
       steward: agent-contract
       freshness: update at the start and end of each harness context and PR parity simplification loop and after each completed loop task
+=======
+    - path: docs/agent/plans/pl-0015-taxonomy-classifier-platform-loop.md
+      steward: agent-contract
+      freshness: update at the start and end of each taxonomy-classifier platform loop and after each completed loop task
+>>>>>>> d0ae30b5 (update)
     - path: docs/agent/state-taxonomy-and-inventory.md
       steward: agent-contract
       freshness: update when the runtime or dashboard state inventory, durability taxonomy, or persistence guidance changes materially

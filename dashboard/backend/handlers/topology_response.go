@@ -74,6 +74,7 @@ func topologySignalMappings(matchedSignals *RouterMatchedSignals) []topologySign
 		{signalType: "authz", names: matchedSignals.Authz, defaultConfidence: 1.0, reason: "Authorization signal matched", addPath: true},
 		{signalType: "jailbreak", names: matchedSignals.Jailbreak, defaultConfidence: 1.0, reason: "Jailbreak signal matched", addPath: true},
 		{signalType: "pii", names: matchedSignals.PII, defaultConfidence: 1.0, reason: "PII signal matched", addPath: true},
+		{signalType: "taxonomy", names: matchedSignals.Taxonomy, defaultConfidence: 1.0, reason: "Taxonomy signal matched", addPath: true},
 		{signalType: "projection", names: matchedSignals.Projection, defaultConfidence: 1.0, reason: "Projection mapping matched", addPath: true},
 	}
 }

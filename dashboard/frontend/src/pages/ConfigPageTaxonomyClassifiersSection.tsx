@@ -13,17 +13,18 @@ export default function ConfigPageTaxonomyClassifiersSection({
 }: ConfigPageTaxonomyClassifiersSectionProps) {
   return (
     <ConfigPageManagerLayout
-      eyebrow="Runtime"
+      eyebrow="Manager"
       title="Taxonomy Classifiers"
-      description="Inspect the router's built-in taxonomy package, manage custom classifier directories, and verify which tiers, categories, and taxonomy signals are wired to each classifier."
-      configArea="Global"
-      scope="Router-owned classifier packages and taxonomy signal bindings"
-      panelEyebrow="Runtime"
-      panelTitle="Classifier Catalog"
-      panelDescription="These classifiers live in `global.model_catalog.classifiers[]`. Built-ins stay read-only, while custom classifiers can be created and edited from the dashboard."
+      description="Manage taxonomy classifier packages in a dedicated surface: browse the classifier catalog, inspect tiers and categories, and update custom classifiers without mixing them into Global Config."
+      configArea="Classifiers"
+      scope="Router-owned taxonomy classifier packages and signal bindings"
+      panelEyebrow="Manager"
+      panelTitle="Classifier Manager"
+      panelDescription="This page owns taxonomy classifier CRUD. Built-ins stay visible and read-only; custom classifier directories can be created and updated independently."
       pills={[
-        { label: 'Taxonomy Classifiers', active: true },
-        { label: 'Global Config', active: false },
+        { label: 'Classifiers', active: true },
+        { label: 'Tiers', active: false },
+        { label: 'Categories', active: false },
       ]}
     >
       <ConfigPageTaxonomyClassifiers
