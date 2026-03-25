@@ -66,3 +66,6 @@ Parth
 sav
 # Mathematical/CS terms (not spelling errors)
 disjointness
+# Intentional typos for config unknown-field validation tests (validate_test.go)
+wieght
+naem
