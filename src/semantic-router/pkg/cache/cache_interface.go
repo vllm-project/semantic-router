@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -49,11 +51,33 @@ type CacheBackend interface {
 	// Returns the cached response, match status, and any error
 	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
 
+	// LastSimilarity returns the similarity score from the most recent
+	// FindSimilarWithThreshold call. Returns 0 if no lookup has been performed.
+	// Used by the extproc layer to set the x-vsr-cache-similarity response header.
+	LastSimilarity() float32
+
 	// Close releases all resources held by the cache backend
 	Close() error
 
 	// GetStats provides cache performance and usage metrics
 	GetStats() CacheStats
+}
+
+// SimilarityTracker provides thread-safe storage for the last similarity score.
+// Embed this in cache backends to satisfy the LastSimilarity() interface method.
+type SimilarityTracker struct {
+	lastSimilarity uint64 // atomic; stores float32 bits
+}
+
+// StoreSimilarity records a similarity score (thread-safe).
+func (t *SimilarityTracker) StoreSimilarity(similarity float32) {
+	atomic.StoreUint64(&t.lastSimilarity, uint64(math.Float32bits(similarity)))
+}
+
+// LastSimilarity returns the most recently stored similarity score.
+func (t *SimilarityTracker) LastSimilarity() float32 {
+	bits := atomic.LoadUint64(&t.lastSimilarity)
+	return math.Float32frombits(uint32(bits & 0xFFFFFFFF)) //nolint:gosec // intentional: float32 bits fit in 32 bits
 }
 
 // CacheStats holds performance metrics and usage statistics for cache operations

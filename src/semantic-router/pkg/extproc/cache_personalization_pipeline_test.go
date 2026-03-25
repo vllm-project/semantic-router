@@ -28,6 +28,7 @@ type spyCache struct {
 
 func (s *spyCache) IsEnabled() bool                                            { return true }
 func (s *spyCache) CheckConnection() error                                     { return nil }
+func (s *spyCache) LastSimilarity() float32                                    { return 0 }
 func (s *spyCache) Close() error                                               { return nil }
 func (s *spyCache) GetStats() cache.CacheStats                                 { return cache.CacheStats{} }
 func (s *spyCache) UpdateWithResponse(string, []byte, int) error               { return nil }

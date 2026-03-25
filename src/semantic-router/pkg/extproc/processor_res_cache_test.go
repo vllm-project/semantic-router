@@ -70,6 +70,8 @@ func (m *mockStreamingCache) FindSimilarWithThreshold(
 	return nil, false, nil
 }
 
+func (m *mockStreamingCache) LastSimilarity() float32 { return 0 }
+
 func (m *mockStreamingCache) Close() error { return nil }
 
 func (m *mockStreamingCache) GetStats() cache.CacheStats { return cache.CacheStats{} }
