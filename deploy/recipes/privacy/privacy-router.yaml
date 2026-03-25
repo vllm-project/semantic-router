@@ -432,6 +432,28 @@ routing:
         threshold: 0.85
         description: Detect personally identifiable information that should remain on local infrastructure.
 
+    taxonomy:
+      - name: security_containment
+        classifier: privacy_classifier
+        bind:
+          kind: tier
+          value: security_containment
+      - name: privacy_policy
+        classifier: privacy_classifier
+        bind:
+          kind: tier
+          value: privacy_policy
+      - name: frontier_reasoning
+        classifier: privacy_classifier
+        bind:
+          kind: tier
+          value: frontier_reasoning
+      - name: local_standard
+        classifier: privacy_classifier
+        bind:
+          kind: tier
+          value: local_standard
+
   projections:
     scores:
       - name: security_risk_score
@@ -535,6 +557,15 @@ routing:
             name: code_reasoning:hard
             weight: 0.18
 
+      - name: privacy_contrastive_score
+        method: weighted_sum
+        inputs:
+          - type: taxonomy_metric
+            classifier: privacy_classifier
+            metric: contrastive
+            weight: 1.0
+            value_source: score
+
     mappings:
       - name: security_policy_band
         source: security_risk_score
@@ -569,15 +600,29 @@ routing:
             lt: 0.50
           - name: policy_frontier_reasoning
             gte: 0.50
+      - name: privacy_override_band
+        source: privacy_contrastive_score
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 10.0
+        outputs:
+          - name: privacy_override_inactive
+            lt: 0.55
+          - name: privacy_override_active
+            gte: 0.55
 
   decisions:
     - name: local_security_containment
-      description: Keep suspicious or jailbreak-like prompts on the local safety lane.
+      description: Keep suspicious or jailbreak-like prompts on the local safety lane with restricted capabilities.
       priority: 300
       tier: 1
+      tool_scope: none
       rules:
-        operator: AND
+        operator: OR
         conditions:
+          - type: taxonomy
+            name: security_containment
           - type: projection
             name: policy_security_local_only
       modelRefs:
@@ -591,18 +636,15 @@ routing:
             max_body_bytes: 2048
 
     - name: local_privacy_policy
-      description: Route PII, private code, and internal documents to the local model according to the user policy bands.
+      description: Route PII, private code, and internal documents to the local model with local-only tool access.
       priority: 250
       tier: 2
+      tool_scope: local_only
       rules:
         operator: AND
         conditions:
-          - type: projection
-            name: policy_privacy_local_only
-          - operator: NOT
-            conditions:
-              - type: projection
-                name: policy_security_local_only
+          - type: taxonomy
+            name: privacy_policy
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true
@@ -615,18 +657,15 @@ routing:
             max_body_bytes: 2048
 
     - name: cloud_frontier_reasoning
-      description: Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model.
+      description: Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model with full tool access.
       priority: 200
       tier: 3
+      tool_scope: full
       rules:
         operator: AND
         conditions:
-          - type: projection
-            name: policy_frontier_reasoning
-          - type: projection
-            name: policy_privacy_cloud_allowed
-          - type: projection
-            name: policy_security_standard
+          - type: taxonomy
+            name: frontier_reasoning
       modelRefs:
         - model: cloud/frontier-reasoning
           use_reasoning: true
@@ -642,15 +681,20 @@ routing:
       description: Default local route for non-sensitive tasks that do not justify cloud escalation.
       priority: 100
       tier: 4
+      tool_scope: standard
       rules:
-        operator: AND
+        operator: OR
         conditions:
-          - type: projection
-            name: policy_local_reasoning
-          - type: projection
-            name: policy_privacy_cloud_allowed
-          - type: projection
-            name: policy_security_standard
+          - type: taxonomy
+            name: local_standard
+          - operator: AND
+            conditions:
+              - type: projection
+                name: policy_local_reasoning
+              - type: projection
+                name: policy_privacy_cloud_allowed
+              - type: projection
+                name: policy_security_standard
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true

@@ -49,7 +49,9 @@ class ProjectionScoreInput(BaseModel):
     """One weighted signal contribution to a derived projection score."""
 
     type: str
-    name: str
+    name: Optional[str] = None
+    classifier: Optional[str] = None
+    metric: Optional[str] = None
     weight: float
     value_source: Optional[str] = None
     match: Optional[float] = None
@@ -276,6 +278,21 @@ class RoleBindingRule(BaseModel):
     description: Optional[str] = None
 
 
+class TaxonomySignalBind(BaseModel):
+    """Binding to a taxonomy classifier tier/category result."""
+
+    kind: Literal["tier", "category"]
+    value: str
+
+
+class TaxonomySignal(BaseModel):
+    """Taxonomy signal bound to a named global classifier instance."""
+
+    name: str
+    classifier: str
+    bind: TaxonomySignalBind
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -293,6 +310,7 @@ class Signals(BaseModel):
     role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
     pii: Optional[List[PIIRule]] = []
+    taxonomy: Optional[List[TaxonomySignal]] = []
 
 
 class Condition(BaseModel):

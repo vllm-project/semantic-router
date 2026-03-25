@@ -9,6 +9,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -32,6 +33,14 @@ func (r *OpenAIRouter) handleToolSelectionForRequest(openAIRequest *openai.ChatC
 
 // handleToolSelection handles automatic tool selection based on semantic similarity
 func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionNewParams, userContent string, nonUserMessages []string, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
+	handled, err := r.applyToolScope(openAIRequest, response, ctx)
+	if err != nil {
+		return err
+	}
+	if handled {
+		return nil
+	}
+
 	// Check if tool_choice is set to "auto"
 	if openAIRequest.ToolChoice.OfAuto.Value == "auto" {
 		// Continue with tool selection logic
@@ -57,53 +66,15 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 		return nil
 	}
 
-	// Get configuration for tool selection
-	topK := r.Config.Tools.TopK
-	if topK <= 0 {
-		topK = 3 // Default to 3 tools
-	}
-
-	// Find similar tools based on the query
-	var selectedTools []openai.ChatCompletionToolParam
-	var err error
-
-	advanced := r.Config.Tools.AdvancedFiltering
-	if advanced != nil && advanced.Enabled {
-		candidatePoolSize := topK
-		if advanced.CandidatePoolSize != nil && *advanced.CandidatePoolSize > 0 {
-			candidatePoolSize = *advanced.CandidatePoolSize
-		} else if advanced.CandidatePoolSize == nil {
-			candidatePoolSize = max(topK*candidatePoolMultiplier, candidatePoolMinSize)
-		}
-		if candidatePoolSize < topK {
-			candidatePoolSize = topK
-		}
-
-		candidates, findErr := r.ToolsDatabase.FindSimilarToolsWithScores(classificationText, candidatePoolSize)
-		if findErr != nil {
-			err = findErr
-		} else {
-			selectedCategory := ctx.VSRSelectedCategory
-			if advanced.UseCategoryFilter != nil && *advanced.UseCategoryFilter && selectedCategory != "" {
-				if advanced.CategoryConfidenceThreshold != nil &&
-					ctx.VSRSelectedDecisionConfidence < float64(*advanced.CategoryConfidenceThreshold) {
-					selectedCategory = ""
-				}
-			}
-			selectedTools = tools.FilterAndRankTools(classificationText, candidates, topK, advanced, selectedCategory)
-		}
-	} else {
-		selectedTools, err = r.ToolsDatabase.FindSimilarTools(classificationText, topK)
-	}
-
-	if err != nil {
+	selectedTools, toolErr := r.findToolsForQuery(classificationText, ctx)
+	if toolErr != nil {
 		if r.Config.Tools.FallbackToEmpty {
-			logging.Warnf("Tool selection failed, falling back to no tools: %v", err)
+			logging.Warnf("Tool selection failed, falling back to no tools: %v", toolErr)
 			openAIRequest.Tools = nil
 			return r.updateRequestWithTools(openAIRequest, response, ctx)
 		}
 		metrics.RecordRequestError(getModelFromCtx(ctx), "classification_failed")
-		return err
+		return toolErr
 	}
 
 	if len(selectedTools) == 0 {
@@ -112,30 +83,157 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 			openAIRequest.Tools = nil
 		} else {
 			logging.Infof("No suitable tools found above threshold")
-			openAIRequest.Tools = []openai.ChatCompletionToolParam{} // Empty array
+			openAIRequest.Tools = []openai.ChatCompletionToolParam{}
 		}
 	} else {
-		// Convert selected tools to OpenAI SDK tool format
-		tools := make([]openai.ChatCompletionToolParam, len(selectedTools))
-		for i, tool := range selectedTools {
-			// Convert the tool to OpenAI SDK format
-			toolBytes, err := json.Marshal(tool)
-			if err != nil {
-				metrics.RecordRequestError(getModelFromCtx(ctx), "serialization_error")
-				return err
-			}
-			var sdkTool openai.ChatCompletionToolParam
-			if err := json.Unmarshal(toolBytes, &sdkTool); err != nil {
-				return err
-			}
-			tools[i] = sdkTool
+		sdkTools, err := convertToSDKTools(selectedTools)
+		if err != nil {
+			metrics.RecordRequestError(getModelFromCtx(ctx), "serialization_error")
+			return err
 		}
-
-		openAIRequest.Tools = tools
-		logging.Infof("Auto-selected %d tools for query: %s", len(selectedTools), classificationText)
+		openAIRequest.Tools = sdkTools
+		logging.Infof("Auto-selected %d tools for query: %s", len(sdkTools), classificationText)
 	}
 
 	return r.updateRequestWithTools(openAIRequest, response, ctx)
+}
+
+// findToolsForQuery discovers candidate tools via semantic similarity, applying
+// advanced filtering when configured.
+func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext) ([]openai.ChatCompletionToolParam, error) {
+	topK := r.Config.Tools.TopK
+	if topK <= 0 {
+		topK = 3
+	}
+
+	advanced := r.Config.Tools.AdvancedFiltering
+	if advanced == nil || !advanced.Enabled {
+		return r.ToolsDatabase.FindSimilarTools(query, topK)
+	}
+
+	candidates, err := r.ToolsDatabase.FindSimilarToolsWithScores(query, resolveCandidatePoolSize(advanced, topK))
+	if err != nil {
+		return nil, err
+	}
+
+	return tools.FilterAndRankTools(query, candidates, topK, advanced, resolveCategory(advanced, ctx)), nil
+}
+
+func resolveCandidatePoolSize(advanced *config.AdvancedToolFilteringConfig, topK int) int {
+	var size int
+	switch {
+	case advanced.CandidatePoolSize != nil && *advanced.CandidatePoolSize > 0:
+		size = *advanced.CandidatePoolSize
+	case advanced.CandidatePoolSize == nil:
+		size = max(topK*candidatePoolMultiplier, candidatePoolMinSize)
+	default:
+		size = topK
+	}
+	if size < topK {
+		size = topK
+	}
+	return size
+}
+
+func resolveCategory(advanced *config.AdvancedToolFilteringConfig, ctx *RequestContext) string {
+	cat := ctx.VSRSelectedCategory
+	if advanced.UseCategoryFilter == nil || !*advanced.UseCategoryFilter || cat == "" {
+		return cat
+	}
+	if advanced.CategoryConfidenceThreshold != nil &&
+		ctx.VSRSelectedDecisionConfidence < float64(*advanced.CategoryConfidenceThreshold) {
+		return ""
+	}
+	return cat
+}
+
+// convertToSDKTools re-serializes tool params through JSON to ensure they
+// conform to the OpenAI SDK type.
+func convertToSDKTools(selected []openai.ChatCompletionToolParam) ([]openai.ChatCompletionToolParam, error) {
+	out := make([]openai.ChatCompletionToolParam, len(selected))
+	for i, tool := range selected {
+		b, err := json.Marshal(tool)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(b, &out[i]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// applyToolScope enforces per-decision tool scope restrictions before semantic
+// tool selection runs. Returns (true, nil) when the scope has been fully
+// handled and the caller should skip further tool selection. Returns
+// (false, nil) when tool selection should proceed normally.
+func (r *OpenAIRouter) applyToolScope(openAIRequest *openai.ChatCompletionNewParams, response **ext_proc.ProcessingResponse, ctx *RequestContext) (bool, error) {
+	dec := ctx.VSRSelectedDecision
+	if dec == nil || dec.ToolScope == "" {
+		return false, nil
+	}
+
+	switch dec.ToolScope {
+	case config.ToolScopeNone:
+		logging.Infof("[ToolScope] Decision %q has tool_scope=none, stripping all tools", dec.Name)
+		openAIRequest.Tools = nil
+		if err := r.updateRequestWithTools(openAIRequest, response, ctx); err != nil {
+			return false, err
+		}
+		return true, nil
+
+	case config.ToolScopeLocalOnly, config.ToolScopeStandard:
+		if len(dec.AllowTools) > 0 || len(dec.BlockTools) > 0 {
+			openAIRequest.Tools = filterToolsByDecisionPolicy(openAIRequest.Tools, dec.AllowTools, dec.BlockTools)
+			logging.Infof("[ToolScope] Decision %q tool_scope=%s, filtered to %d tools via allow/block lists",
+				dec.Name, dec.ToolScope, len(openAIRequest.Tools))
+			if err := r.updateRequestWithTools(openAIRequest, response, ctx); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+		return false, nil
+
+	case config.ToolScopeFull:
+		return false, nil
+
+	default:
+		logging.Warnf("[ToolScope] Decision %q has unrecognized tool_scope=%q, stripping all tools as a safety measure",
+			dec.Name, dec.ToolScope)
+		openAIRequest.Tools = nil
+		if err := r.updateRequestWithTools(openAIRequest, response, ctx); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+}
+
+// filterToolsByDecisionPolicy applies per-decision allow/block lists to the
+// request tool set. If allowTools is non-empty, only tools whose function name
+// appears in the allow list are kept. Any tool whose name appears in blockTools
+// is removed regardless.
+func filterToolsByDecisionPolicy(tools []openai.ChatCompletionToolParam, allowTools, blockTools []string) []openai.ChatCompletionToolParam {
+	allowSet := make(map[string]bool, len(allowTools))
+	for _, t := range allowTools {
+		allowSet[t] = true
+	}
+	blockSet := make(map[string]bool, len(blockTools))
+	for _, t := range blockTools {
+		blockSet[t] = true
+	}
+
+	filtered := make([]openai.ChatCompletionToolParam, 0, len(tools))
+	for _, tool := range tools {
+		name := tool.Function.Name
+		if blockSet[name] {
+			continue
+		}
+		if len(allowSet) > 0 && !allowSet[name] {
+			continue
+		}
+		filtered = append(filtered, tool)
+	}
+	return filtered
 }
 
 // updateRequestWithTools updates the request body with the selected tools

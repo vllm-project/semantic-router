@@ -7,20 +7,21 @@ import (
 )
 
 type Signals struct {
-	KeywordRules      []KeywordRule      `yaml:"keyword_rules,omitempty"`
-	EmbeddingRules    []EmbeddingRule    `yaml:"embedding_rules,omitempty"`
-	Categories        []Category         `yaml:"categories"`
-	FactCheckRules    []FactCheckRule    `yaml:"fact_check_rules,omitempty"`
-	UserFeedbackRules []UserFeedbackRule `yaml:"user_feedback_rules,omitempty"`
-	PreferenceRules   []PreferenceRule   `yaml:"preference_rules,omitempty"`
-	LanguageRules     []LanguageRule     `yaml:"language_rules,omitempty"`
-	ContextRules      []ContextRule      `yaml:"context_rules,omitempty"`
-	StructureRules    []StructureRule    `yaml:"structure_rules,omitempty"`
-	ComplexityRules   []ComplexityRule   `yaml:"complexity_rules,omitempty"`
-	ModalityRules     []ModalityRule     `yaml:"modality_rules,omitempty"`
-	RoleBindings      []RoleBinding      `yaml:"role_bindings,omitempty"`
-	JailbreakRules    []JailbreakRule    `yaml:"jailbreak,omitempty"`
-	PIIRules          []PIIRule          `yaml:"pii,omitempty"`
+	KeywordRules      []KeywordRule        `yaml:"keyword_rules,omitempty"`
+	EmbeddingRules    []EmbeddingRule      `yaml:"embedding_rules,omitempty"`
+	Categories        []Category           `yaml:"categories"`
+	FactCheckRules    []FactCheckRule      `yaml:"fact_check_rules,omitempty"`
+	UserFeedbackRules []UserFeedbackRule   `yaml:"user_feedback_rules,omitempty"`
+	PreferenceRules   []PreferenceRule     `yaml:"preference_rules,omitempty"`
+	LanguageRules     []LanguageRule       `yaml:"language_rules,omitempty"`
+	ContextRules      []ContextRule        `yaml:"context_rules,omitempty"`
+	StructureRules    []StructureRule      `yaml:"structure_rules,omitempty"`
+	ComplexityRules   []ComplexityRule     `yaml:"complexity_rules,omitempty"`
+	ModalityRules     []ModalityRule       `yaml:"modality_rules,omitempty"`
+	RoleBindings      []RoleBinding        `yaml:"role_bindings,omitempty"`
+	JailbreakRules    []JailbreakRule      `yaml:"jailbreak,omitempty"`
+	PIIRules          []PIIRule            `yaml:"pii,omitempty"`
+	TaxonomyRules     []TaxonomySignalRule `yaml:"taxonomy,omitempty"`
 }
 
 type KeywordRule struct {

@@ -61,11 +61,15 @@ func Parse(configPath string) (*RouterConfig, error) {
 	}
 	logging.Debugf("[config.Parse] Read config file: size=%d bytes", len(data))
 
-	return ParseYAMLBytes(data)
+	return parseYAMLBytesWithBaseDir(data, filepath.Dir(resolved))
 }
 
 // ParseYAMLBytes parses config YAML content without touching the filesystem.
 func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
+	return parseYAMLBytesWithBaseDir(data, "")
+}
+
+func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, error) {
 	raw, err := parseRawConfigMap(data)
 	if err != nil {
 		return nil, err
@@ -76,6 +80,9 @@ func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
 	if rejectErr := rejectRemovedStructureFields(raw); rejectErr != nil {
 		return nil, rejectErr
 	}
+	if rejectErr := rejectRemovedTaxonomyLegacyFields(raw); rejectErr != nil {
+		return nil, rejectErr
+	}
 
 	// Warn about unknown YAML fields (typos) before parsing into typed structs.
 	WarnUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
@@ -84,6 +91,7 @@ func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	cfg.ConfigBaseDir = baseDir
 	if err := finalizeParsedConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -116,6 +124,17 @@ func rejectRemovedStructureFields(raw map[string]interface{}) error {
 		return fmt.Errorf(
 			"removed config fields are no longer supported: %s; structure density now uses built-in multilingual normalization and no longer accepts feature.normalize_by",
 			strings.Join(removed, ", "),
+		)
+	}
+	return nil
+}
+
+func rejectRemovedTaxonomyLegacyFields(raw map[string]interface{}) error {
+	routing := nestedStringMap(raw["routing"])
+	signals := nestedStringMap(routing["signals"])
+	if _, ok := signals["category_kb"]; ok {
+		return fmt.Errorf(
+			"routing.signals.category_kb is no longer supported; migrate to global.model_catalog.classifiers[] plus routing.signals.taxonomy[]",
 		)
 	}
 	return nil

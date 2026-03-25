@@ -87,6 +87,29 @@ linters:
           - nestif
         path: (^|/)src/semantic-router/pkg/modelselection/selector_test\.go$
 
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/dsl/category_kb_(dsl|e2e)_test\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/dsl/privacy_recipe_roundtrip_test\.go$
+      - linters:
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/classification/category_kb_classifier_test\.go$
+      - linters:
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/decision/engine_category_kb_test\.go$
+
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

@@ -8,6 +8,7 @@ export type ConfigSection =
   | 'decisions'      // config.yaml: decisions (routing rules)
   | 'models'         // config.yaml: providers.models
   | 'global-config'  // config.yaml: global runtime overrides (cache, prompt guard, tools, etc.)
+  | 'classifiers'    // global.model_catalog.classifiers[] taxonomy classifier management
   | 'mcp'            // MCP servers configuration
   | 'topology'       // Separate page for visualization
 
@@ -23,6 +24,12 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       icon: '⚙️',
       title: 'Global Config',
       description: 'Global runtime overrides, services, stores & model catalog'
+    },
+    {
+      id: 'classifiers' as ConfigSection,
+      icon: '🗂️',
+      title: 'Taxonomy Classifiers',
+      description: 'Manage built-in and custom taxonomy classifier packages'
     },
     {
       id: 'models' as ConfigSection,

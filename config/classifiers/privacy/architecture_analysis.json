@@ -1,0 +1,32 @@
+{
+  "category": "architecture_analysis",
+  "tier": "frontier_reasoning",
+  "grounding": {
+    "note": "Complexity-driven routing. Patterns represent multi-step architecture reasoning tasks over public knowledge."
+  },
+  "exemplars": [
+    "Compare multi-region failover architectures: what are the trade-offs between active-active and active-passive for a hypothetical e-commerce platform with 99.99% uptime SLA?",
+    "Design a disaster recovery strategy comparing active-active vs active-passive multi-region failover with cost and latency trade-offs for a generic SaaS platform",
+    "Analyze the CAP theorem trade-offs in distributed systems and design a multi-region fault-tolerant architecture considering consistency and availability trade-offs from first principles",
+    "Compare event-driven vs request-response architectures for a real-time analytics pipeline processing 1M events per second",
+    "Design a zero-downtime database migration strategy for moving from monolithic PostgreSQL to distributed CockroachDB",
+    "Analyze the trade-offs between CQRS and traditional CRUD for a high-throughput order processing system",
+    "Design a multi-tenant SaaS architecture that balances data isolation, performance, and cost efficiency",
+    "Compare service mesh implementations: Istio vs Linkerd vs direct gRPC for a 200-service microservices platform",
+    "Analyze the consistency models of Cassandra, DynamoDB, and CockroachDB for a global inventory system",
+    "Design a data pipeline architecture that handles both real-time streaming and batch processing with exactly-once semantics",
+    "Contrast LSM-trees and B-trees for write-heavy telemetry: quantify write amplification, read tail latency under tiered storage, and compaction storms",
+    "Propose a reference monitoring architecture for eBPF-based runtime security on Linux: event ordering, TOCTOU, and verifier limits",
+    "Analyze trade-offs between columnar vs row-oriented layouts for mixed OLAP/OLTP workloads on NVMe with snapshot isolation",
+    "Outline a correctness argument for serializable snapshot isolation using dependency graphs",
+    "Synthesize guidance for picking CRDT types (PN-counter, OR-set, LWW-register) for collaborative text vs presence features",
+    "Evaluate parameter server architectures for distributed training: synchronous vs asynchronous gradient updates, bandwidth, fault tolerance",
+    "Design a federated learning workflow: Non-IID label skew, differential privacy noise vs model convergence trade-offs",
+    "Compare erasure coding vs replication for object storage across availability zones: bandwidth, repair traffic, durability",
+    "从第一原理分析分布式系统中的CAP定理权衡",
+    "设计一个支持多区域容错的灾难恢复架构",
+    "比较微服务架构和单体架构在大规模系统中的权衡",
+    "设计联邦学习流程：Non-IID标签偏斜下差分隐私噪声与模型收敛的权衡",
+    "比较强一致性边缘缓存和最终一致全局视图在CDN上的用户体验与成本"
+  ]
+}

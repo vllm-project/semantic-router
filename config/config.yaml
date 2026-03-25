@@ -372,6 +372,28 @@ routing:
           - EMAIL_ADDRESS
         description: Sensitive prompts where only low-risk identifiers may pass through.
 
+    taxonomy:
+      - name: privacy_policy
+        classifier: privacy_classifier
+        bind:
+          kind: tier
+          value: privacy_policy
+      - name: security_containment
+        classifier: privacy_classifier
+        bind:
+          kind: tier
+          value: security_containment
+      - name: frontier_reasoning
+        classifier: privacy_classifier
+        bind:
+          kind: tier
+          value: frontier_reasoning
+      - name: local_standard
+        classifier: privacy_classifier
+        bind:
+          kind: tier
+          value: local_standard
+
   projections:
     partitions:
       - name: support_intents
@@ -407,6 +429,14 @@ routing:
           - type: structure
             name: first_then_flow
             weight: 0.12
+      - name: privacy_taxonomy_bias
+        method: weighted_sum
+        inputs:
+          - type: taxonomy_metric
+            classifier: privacy_classifier
+            metric: contrastive
+            weight: 1.0
+            value_source: score
     mappings:
       - name: request_band
         source: request_difficulty
@@ -428,6 +458,11 @@ routing:
       description: Static fallback for standard business traffic.
       priority: 200
       tier: 2
+      tool_scope: standard
+      allow_tools:
+        - search_web
+      block_tools:
+        - exec_cmd
       rules:
         operator: AND
         conditions:
@@ -1533,6 +1568,14 @@ global:
         access_key: external-guardrail-key
         max_tokens: 2048
         temperature: 0.2
+    classifiers:
+      - name: privacy_classifier
+        type: taxonomy
+        source:
+          path: classifiers/privacy/
+          taxonomy_file: taxonomy.json
+        threshold: 0.55
+        security_threshold: 0.7
     modules:
       prompt_compression:
         enabled: true

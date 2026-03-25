@@ -75,6 +75,7 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertReferenceConfigRoleBindingCoverage(t, mustSliceAt(t, signals, "role_bindings"))
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "jailbreak"), reflect.TypeOf(JailbreakRule{}), "routing.signals.jailbreak")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "pii"), reflect.TypeOf(PIIRule{}), "routing.signals.pii")
+	assertReferenceConfigTaxonomySignalCoverage(t, mustSliceAt(t, signals, "taxonomy"))
 }
 
 func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]interface{}) {
@@ -167,6 +168,16 @@ func assertReferenceConfigRoleBindingCoverage(t testingT, roleBindings []interfa
 		collectNestedSliceItems(t, roleBindings, "subjects", "routing.signals.role_bindings"),
 		reflect.TypeOf(Subject{}),
 		"routing.signals.role_bindings[].subjects",
+	)
+}
+
+func assertReferenceConfigTaxonomySignalCoverage(t testingT, taxonomy []interface{}) {
+	assertSliceUnionCoversStructFields(t, taxonomy, reflect.TypeOf(TaxonomySignalRule{}), "routing.signals.taxonomy")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, taxonomy, "bind", "routing.signals.taxonomy"),
+		reflect.TypeOf(TaxonomySignalBind{}),
+		"routing.signals.taxonomy[].bind",
 	)
 }
 

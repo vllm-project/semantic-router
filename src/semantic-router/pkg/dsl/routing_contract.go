@@ -101,6 +101,8 @@ func (d *decompiler) appendProjectionScores(prog *Program) {
 			decl.Inputs = append(decl.Inputs, &ProjectionScoreInputDecl{
 				SignalType:  input.Type,
 				SignalName:  input.Name,
+				Classifier:  input.Classifier,
+				Metric:      input.Metric,
 				Weight:      input.Weight,
 				ValueSource: input.ValueSource,
 				Match:       input.Match,
@@ -185,6 +187,9 @@ func (d *decompiler) appendSafetySignals(prog *Program) {
 	}
 	for _, pii := range d.cfg.PIIRules {
 		prog.Signals = append(prog.Signals, d.piiToSignal(&pii))
+	}
+	for _, taxonomy := range d.cfg.TaxonomyRules {
+		prog.Signals = append(prog.Signals, d.taxonomySignalToDecl(&taxonomy))
 	}
 }
 

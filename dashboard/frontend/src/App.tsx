@@ -59,6 +59,8 @@ const ConfigSectionRoute: React.FC<{
       global: 'global-config',
       'global-config': 'global-config',
       'router-config': 'global-config',
+      classifiers: 'classifiers',
+      'taxonomy-classifiers': 'classifiers',
       signals: 'signals',
       projections: 'projections',
       routes: 'decisions',

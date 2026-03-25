@@ -439,6 +439,7 @@ COPY --from=go-builder /app/bin/ /app/
 COPY --from=go-builder /app/lib/ /app/lib/
 
 COPY config/config.yaml /app/config/
+COPY config/classifiers/ /app/config/classifiers/
 
 ENV LD_LIBRARY_PATH=/app/lib
 # Default to candle binding; set AI_BINDING=onnx for ONNX Runtime backend

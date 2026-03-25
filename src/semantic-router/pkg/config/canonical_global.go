@@ -61,10 +61,11 @@ type CanonicalIntegrationGlobal struct {
 // CanonicalModelCatalog groups router-owned model assets and the module
 // configs that resolve through those assets.
 type CanonicalModelCatalog struct {
-	Embeddings CanonicalEmbeddingModels `yaml:"embeddings"`
-	System     CanonicalSystemModels    `yaml:"system"`
-	External   []ExternalModelConfig    `yaml:"external,omitempty"`
-	Modules    CanonicalModelModules    `yaml:"modules"`
+	Embeddings  CanonicalEmbeddingModels   `yaml:"embeddings"`
+	System      CanonicalSystemModels      `yaml:"system"`
+	External    []ExternalModelConfig      `yaml:"external,omitempty"`
+	Classifiers []TaxonomyClassifierConfig `yaml:"classifiers,omitempty"`
+	Modules     CanonicalModelModules      `yaml:"modules"`
 }
 
 // CanonicalEmbeddingModels groups embedding-related model assets.
@@ -227,6 +228,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), global.ModelCatalog.External...)
 	cfg.EmbeddingModels = global.ModelCatalog.Embeddings.Semantic
+	cfg.TaxonomyClassifiers = append([]TaxonomyClassifierConfig(nil), global.ModelCatalog.Classifiers...)
 
 	cfg.PromptCompression = global.ModelCatalog.Modules.PromptCompression
 	cfg.PromptGuard = global.ModelCatalog.Modules.PromptGuard.PromptGuardConfig

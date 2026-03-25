@@ -13,7 +13,7 @@ This tutorial group maps directly to the fragment tree under `config/signal/`, b
 - `heuristic/` for request-shape, lexical, identity, and lightweight detector signals
 - `learned/` for embedding- or classifier-driven signals that rely on router-owned model assets or maintained detector modules
 
-The current catalog contains 14 maintained signal families: 5 heuristic and 9 learned.
+The current catalog contains 15 maintained signal families: 5 heuristic and 10 learned.
 
 ## Key Advantages
 
@@ -107,7 +107,8 @@ These signals use embeddings or classifier models and typically rely on `global.
 | `jailbreak`     | `config/signal/jailbreak/`     | detect prompt-injection or jailbreak attempts               | [Jailbreak](./learned/jailbreak)         |
 | `pii`           | `config/signal/pii/`           | detect sensitive personal data                              | [PII](./learned/pii)                     |
 | `preference`    | `config/signal/preference/`    | infer response-style preferences                            | [Preference](./learned/preference)       |
-| `user-feedback` | `config/signal/user-feedback/` | detect correction or escalation feedback                    | [User Feedback](./learned/user-feedback) |
+| `taxonomy` | `config/signal/taxonomy/` | bind taxonomy classifier tiers or categories into named routing signals | [Taxonomy](./learned/taxonomy) |
+| `user-feedback` | `config/signal/user-feedback/` | detect correction or escalation feedback | [User Feedback](./learned/user-feedback) |
 
 Keep these rules in mind:
 

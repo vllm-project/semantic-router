@@ -88,6 +88,8 @@ func (c *Compiler) compileProjectionScores() {
 			score.Inputs = append(score.Inputs, config.ProjectionScoreInput{
 				Type:        inputDecl.SignalType,
 				Name:        inputDecl.SignalName,
+				Classifier:  inputDecl.Classifier,
+				Metric:      inputDecl.Metric,
 				Weight:      inputDecl.Weight,
 				ValueSource: inputDecl.ValueSource,
 				Match:       inputDecl.Match,
@@ -158,6 +160,8 @@ func (c *Compiler) compileSignals() {
 			c.compileJailbreakSignal(s)
 		case "pii":
 			c.compilePIISignal(s)
+		case "taxonomy":
+			c.compileTaxonomySignal(s)
 		default:
 			c.addError(s.Pos, "unknown signal type %q", s.SignalType)
 		}
@@ -390,6 +394,22 @@ func (c *Compiler) compilePIISignal(s *SignalDecl) {
 	c.config.PIIRules = append(c.config.PIIRules, rule)
 }
 
+func (c *Compiler) compileTaxonomySignal(s *SignalDecl) {
+	rule := config.TaxonomySignalRule{Name: s.Name}
+	if v, ok := getStringField(s.Fields, "classifier"); ok {
+		rule.Classifier = v
+	}
+	if bind, ok := s.Fields["bind"].(ObjectValue); ok {
+		if kind, ok := getStringField(bind.Fields, "kind"); ok {
+			rule.Bind.Kind = kind
+		}
+		if value, ok := getStringField(bind.Fields, "value"); ok {
+			rule.Bind.Value = value
+		}
+	}
+	c.config.TaxonomyRules = append(c.config.TaxonomyRules, rule)
+}
+
 //nolint:gocognit,nestif // Legacy schema decoding stays localized until the authz signal surface is extracted.
 func (c *Compiler) compileAuthzSignal(s *SignalDecl) {
 	rb := config.RoleBinding{Name: s.Name}
@@ -428,6 +448,7 @@ func (c *Compiler) compileRoutes() {
 			Description: r.Description,
 			Priority:    r.Priority,
 			Tier:        r.Tier,
+			ToolScope:   r.ToolScope,
 		}
 
 		// Compile WHEN expression → RuleNode tree.

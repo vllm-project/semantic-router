@@ -28,20 +28,21 @@ type CanonicalRouting struct {
 
 // CanonicalSignals groups routing signals under routing.signals.
 type CanonicalSignals struct {
-	Keywords      []KeywordRule      `yaml:"keywords,omitempty"`
-	Embeddings    []EmbeddingRule    `yaml:"embeddings,omitempty"`
-	Domains       []Category         `yaml:"domains,omitempty"`
-	FactCheck     []FactCheckRule    `yaml:"fact_check,omitempty"`
-	UserFeedbacks []UserFeedbackRule `yaml:"user_feedbacks,omitempty"`
-	Preferences   []PreferenceRule   `yaml:"preferences,omitempty"`
-	Language      []LanguageRule     `yaml:"language,omitempty"`
-	Context       []ContextRule      `yaml:"context,omitempty"`
-	Structure     []StructureRule    `yaml:"structure,omitempty"`
-	Complexity    []ComplexityRule   `yaml:"complexity,omitempty"`
-	Modality      []ModalityRule     `yaml:"modality,omitempty"`
-	RoleBindings  []RoleBinding      `yaml:"role_bindings,omitempty"`
-	Jailbreak     []JailbreakRule    `yaml:"jailbreak,omitempty"`
-	PII           []PIIRule          `yaml:"pii,omitempty"`
+	Keywords      []KeywordRule        `yaml:"keywords,omitempty"`
+	Embeddings    []EmbeddingRule      `yaml:"embeddings,omitempty"`
+	Domains       []Category           `yaml:"domains,omitempty"`
+	FactCheck     []FactCheckRule      `yaml:"fact_check,omitempty"`
+	UserFeedbacks []UserFeedbackRule   `yaml:"user_feedbacks,omitempty"`
+	Preferences   []PreferenceRule     `yaml:"preferences,omitempty"`
+	Language      []LanguageRule       `yaml:"language,omitempty"`
+	Context       []ContextRule        `yaml:"context,omitempty"`
+	Structure     []StructureRule      `yaml:"structure,omitempty"`
+	Complexity    []ComplexityRule     `yaml:"complexity,omitempty"`
+	Modality      []ModalityRule       `yaml:"modality,omitempty"`
+	RoleBindings  []RoleBinding        `yaml:"role_bindings,omitempty"`
+	Jailbreak     []JailbreakRule      `yaml:"jailbreak,omitempty"`
+	PII           []PIIRule            `yaml:"pii,omitempty"`
+	Taxonomy      []TaxonomySignalRule `yaml:"taxonomy,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -245,6 +246,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		RoleBindings:      append([]RoleBinding(nil), signals.RoleBindings...),
 		JailbreakRules:    append([]JailbreakRule(nil), signals.Jailbreak...),
 		PIIRules:          append([]PIIRule(nil), signals.PII...),
+		TaxonomyRules:     append([]TaxonomySignalRule(nil), signals.Taxonomy...),
 	}
 
 	if len(result.Categories) == 0 {

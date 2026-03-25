@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strings"
@@ -25,6 +26,10 @@ func EmitYAML(input string) ([]byte, []error) {
 
 // EmitYAMLFromConfig marshals a RouterConfig to YAML bytes.
 func EmitYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
+	if cfg != nil && len(cfg.TaxonomyClassifiers) > 0 {
+		canonical := config.CanonicalConfigFromRouterConfig(cfg)
+		return yaml.Marshal(canonical)
+	}
 	return yaml.Marshal(cfg)
 }
 
@@ -32,6 +37,10 @@ func EmitYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
 // that matches the config.yaml format used by vllm-serve.
 // This is the inverse of normalizeYAML.
 func EmitUserYAML(cfg *config.RouterConfig) ([]byte, error) {
+	if cfg != nil && len(cfg.TaxonomyClassifiers) > 0 {
+		canonical := config.CanonicalConfigFromRouterConfig(cfg)
+		return yaml.Marshal(canonical)
+	}
 	// First marshal to flat YAML, then restructure via map manipulation.
 	flatBytes, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -60,11 +69,13 @@ func denormalizeSignals(raw map[string]interface{}) {
 		"preference_rules":    "preferences",
 		"language_rules":      "language",
 		"context_rules":       "context",
+		"structure_rules":     "structure",
 		"complexity_rules":    "complexity",
 		"modality_rules":      "modality",
 		"role_bindings":       "authz",
 		"jailbreak":           "jailbreak",
 		"pii":                 "pii",
+		"taxonomy":            "taxonomy",
 	}
 
 	signals := make(map[string]interface{})
@@ -533,8 +544,9 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	signalKeys := []string{
 		"keyword_rules", "embedding_rules", "categories",
 		"fact_check_rules", "user_feedback_rules", "preference_rules",
-		"language_rules", "context_rules", "modality_rules",
-		"role_bindings", "jailbreak", "pii",
+		"language_rules", "context_rules", "structure_rules",
+		"modality_rules", "role_bindings", "jailbreak", "pii",
+		"taxonomy",
 	}
 	for _, key := range signalKeys {
 		moveKey(flat, configSpec, key)
@@ -626,6 +638,65 @@ func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
 	doc.Content = append(doc.Content, mapNode)
 
 	return yaml.Marshal(doc)
+}
+
+// MergeRoutingIntoBase takes the DSL-compiled RouterConfig and a base YAML
+// document (containing version, listeners, providers), replaces the routing
+// section with the compiled one, and emits a complete canonical config YAML.
+func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, error) {
+	var base map[string]interface{}
+	if err := yaml.Unmarshal(baseYAML, &base); err != nil {
+		return nil, fmt.Errorf("failed to parse base YAML: %w", err)
+	}
+
+	routingBytes, err := yaml.Marshal(config.CanonicalRoutingFromRouterConfig(cfg))
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal routing: %w", err)
+	}
+	var routing interface{}
+	if err := yaml.Unmarshal(routingBytes, &routing); err != nil {
+		return nil, fmt.Errorf("failed to re-parse routing: %w", err)
+	}
+
+	base["routing"] = routing
+
+	doc := &yaml.Node{Kind: yaml.DocumentNode}
+	mapNode := &yaml.Node{Kind: yaml.MappingNode}
+	canonicalOrder := []string{"version", "listeners", "providers", "routing", "global"}
+	added := make(map[string]bool)
+	for _, key := range canonicalOrder {
+		if v, ok := base[key]; ok {
+			addKeyValue(mapNode, key, v)
+			added[key] = true
+		}
+	}
+	var remaining []string
+	for k := range base {
+		if !added[k] {
+			remaining = append(remaining, k)
+		}
+	}
+	sort.Strings(remaining)
+	for _, key := range remaining {
+		addKeyValue(mapNode, key, base[key])
+	}
+	doc.Content = append(doc.Content, mapNode)
+	return marshalYAMLIndent2(doc)
+}
+
+// marshalYAMLIndent2 encodes a yaml.Node with 2-space indentation to match
+// the project's yamllint configuration.
+func marshalYAMLIndent2(node *yaml.Node) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(node); err != nil {
+		return nil, err
+	}
+	if err := enc.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // pruneZeroValues recursively removes zero-value entries from a nested map.

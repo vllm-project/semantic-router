@@ -28,7 +28,9 @@ type ProjectionScore struct {
 // ProjectionScoreInput defines one weighted signal contribution.
 type ProjectionScoreInput struct {
 	Type        string  `yaml:"type"`
-	Name        string  `yaml:"name"`
+	Name        string  `yaml:"name,omitempty"`
+	Classifier  string  `yaml:"classifier,omitempty"`
+	Metric      string  `yaml:"metric,omitempty"`
 	Weight      float64 `yaml:"weight"`
 	ValueSource string  `yaml:"value_source,omitempty"`
 	Match       float64 `yaml:"match,omitempty"`

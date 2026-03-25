@@ -151,6 +151,7 @@ func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[stri
 	assertReferenceConfigEmbeddingCatalogCoverage(t, mustMapAt(t, modelCatalog, "embeddings"))
 	assertMapCoversStructFields(t, mustMapAt(t, modelCatalog, "system"), reflect.TypeOf(CanonicalSystemModels{}), "global.model_catalog.system")
 	assertReferenceConfigExternalCatalogCoverage(t, mustSliceAt(t, modelCatalog, "external"))
+	assertReferenceConfigTaxonomyClassifierCoverage(t, mustSliceAt(t, modelCatalog, "classifiers"))
 	assertReferenceConfigModelModuleCoverage(t, mustMapAt(t, modelCatalog, "modules"))
 }
 
@@ -172,6 +173,16 @@ func assertReferenceConfigExternalCatalogCoverage(t testingT, external []interfa
 		collectChildMapsFromSlice(t, external, "llm_endpoint", "global.model_catalog.external"),
 		reflect.TypeOf(ClassifierVLLMEndpoint{}),
 		"global.model_catalog.external[].llm_endpoint",
+	)
+}
+
+func assertReferenceConfigTaxonomyClassifierCoverage(t testingT, classifiers []interface{}) {
+	assertSliceUnionCoversStructFields(t, classifiers, reflect.TypeOf(TaxonomyClassifierConfig{}), "global.model_catalog.classifiers")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, classifiers, "source", "global.model_catalog.classifiers"),
+		reflect.TypeOf(TaxonomyClassifierSource{}),
+		"global.model_catalog.classifiers[].source",
 	)
 }
 

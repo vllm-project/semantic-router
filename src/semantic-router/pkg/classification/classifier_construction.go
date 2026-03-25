@@ -27,6 +27,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.addComplexityClassifier,
 		b.addContrastiveJailbreakClassifiers,
 		b.addAuthzClassifier,
+		b.addTaxonomyClassifiers,
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
@@ -256,6 +257,31 @@ func (c *Classifier) initializeRequiredRuntimeClassifiers() error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (b *classifierOptionBuilder) addTaxonomyClassifiers() error {
+	if len(b.cfg.TaxonomyClassifiers) == 0 {
+		return nil
+	}
+	modelType := strings.ToLower(strings.TrimSpace(b.cfg.EmbeddingConfig.ModelType))
+	if modelType == "" {
+		modelType = "qwen3"
+	}
+	classifiers := make(map[string]*CategoryKBClassifier, len(b.cfg.TaxonomyClassifiers))
+	for _, rule := range b.cfg.TaxonomyClassifiers {
+		classifier, err := NewCategoryKBClassifier(rule, modelType, b.cfg.ConfigBaseDir)
+		if err != nil {
+			logging.Warnf("[TaxonomyClassifier:%s] Failed to create classifier: %v (taxonomy signals for this classifier disabled)", rule.Name, err)
+			continue
+		}
+		classifiers[rule.Name] = classifier
+		logging.Infof("[TaxonomyClassifier:%s] Initialized with %d categories", rule.Name, classifier.CategoryCount())
+	}
+	if len(classifiers) == 0 {
+		return nil
+	}
+	b.options = append(b.options, withTaxonomyClassifiers(classifiers))
 	return nil
 }
 

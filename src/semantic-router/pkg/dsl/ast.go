@@ -131,6 +131,7 @@ type rawRouteItem struct {
 	Pos       lexer.Position
 	Priority  *int          `parser:"  'PRIORITY' @Int"`
 	Tier      *int          `parser:"| 'TIER' @Int"`
+	ToolScope *string       `parser:"| 'TOOL_SCOPE' @String"`
 	When      *BoolExprTop  `parser:"| 'WHEN' @@"`
 	Model     *rawModelList `parser:"| 'MODEL' @@"`
 	Algorithm *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
@@ -272,6 +273,8 @@ type ProjectionScoreDecl struct {
 type ProjectionScoreInputDecl struct {
 	SignalType  string
 	SignalName  string
+	Classifier  string
+	Metric      string
 	Weight      float64
 	ValueSource string
 	Match       float64
@@ -333,6 +336,7 @@ type RouteDecl struct {
 	Description string
 	Priority    int
 	Tier        int
+	ToolScope   string
 	When        BoolExpr
 	Models      []*ModelRef
 	Algorithm   *AlgoSpec

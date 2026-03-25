@@ -11,7 +11,40 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateDecisionToolScopes(cfg); err != nil {
+		return err
+	}
 	return validateDecisionPluginContracts(cfg)
+}
+
+var validToolScopes = map[string]bool{
+	"":                 true,
+	ToolScopeNone:      true,
+	ToolScopeLocalOnly: true,
+	ToolScopeStandard:  true,
+	ToolScopeFull:      true,
+}
+
+func validateDecisionToolScopes(cfg *RouterConfig) error {
+	for _, decision := range cfg.Decisions {
+		if !validToolScopes[decision.ToolScope] {
+			return fmt.Errorf(
+				"decision '%s': unrecognized tool_scope %q; must be one of: none, local_only, standard, full (or omitted)",
+				decision.Name, decision.ToolScope,
+			)
+		}
+		if decision.ToolScope == ToolScopeNone && (len(decision.AllowTools) > 0 || len(decision.BlockTools) > 0) {
+			logging.Warnf("Decision '%s': tool_scope=none with allow_tools/block_tools has no effect; all tools are already stripped",
+				decision.Name)
+		}
+		if (decision.ToolScope == ToolScopeLocalOnly || decision.ToolScope == ToolScopeStandard) &&
+			len(decision.AllowTools) == 0 && len(decision.BlockTools) == 0 {
+			logging.Warnf("Decision '%s': tool_scope=%s without allow_tools/block_tools has no filtering effect; "+
+				"consider adding explicit tool lists or using tool_scope=full",
+				decision.Name, decision.ToolScope)
+		}
+	}
+	return nil
 }
 
 func validateDecisionModelContracts(cfg *RouterConfig) error {

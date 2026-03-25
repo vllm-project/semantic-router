@@ -10,12 +10,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// Decompile converts runtime config into the routing-only DSL contract.
+// Decompile converts runtime config into the DSL contract.
 func Decompile(cfg *config.RouterConfig) (string, error) {
 	return DecompileRouting(cfg)
 }
 
-// DecompileToAST converts runtime config into a routing-only DSL AST Program.
+// DecompileToAST converts runtime config into a DSL AST Program.
 func DecompileToAST(cfg *config.RouterConfig) *Program {
 	return DecompileRoutingToAST(cfg)
 }
@@ -239,6 +239,15 @@ func (d *decompiler) decompileSignals() {
 		d.write("}\n\n")
 	}
 
+	for _, taxonomy := range d.cfg.TaxonomyRules {
+		d.write("SIGNAL taxonomy %s {\n", quoteName(taxonomy.Name))
+		if taxonomy.Classifier != "" {
+			d.write("  classifier: %q\n", taxonomy.Classifier)
+		}
+		d.write("  bind: { kind: %q, value: %q }\n", taxonomy.Bind.Kind, taxonomy.Bind.Value)
+		d.write("}\n\n")
+	}
+
 	for _, partition := range d.cfg.Projections.Partitions {
 		d.write("PROJECTION partition %s {\n", quoteName(partition.Name))
 		if partition.Semantics != "" {
@@ -341,6 +350,9 @@ func (d *decompiler) decompileDecisions() {
 		d.write("  PRIORITY %d\n", dec.Priority)
 		if dec.Tier != 0 {
 			d.write("  TIER %d\n", dec.Tier)
+		}
+		if dec.ToolScope != "" {
+			d.write("  TOOL_SCOPE %q\n", dec.ToolScope)
 		}
 
 		// WHEN expression
@@ -1120,6 +1132,18 @@ func (d *decompiler) piiToSignal(pii *config.PIIRule) *SignalDecl {
 	return &SignalDecl{SignalType: "pii", Name: pii.Name, Fields: fields}
 }
 
+func (d *decompiler) taxonomySignalToDecl(rule *config.TaxonomySignalRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.Classifier != "" {
+		fields["classifier"] = StringValue{V: rule.Classifier}
+	}
+	fields["bind"] = ObjectValue{Fields: map[string]Value{
+		"kind":  StringValue{V: rule.Bind.Kind},
+		"value": StringValue{V: rule.Bind.Value},
+	}}
+	return &SignalDecl{SignalType: "taxonomy", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	route := &RouteDecl{
 		Name:        dec.Name,
@@ -1351,8 +1375,16 @@ func formatProjectionScoreInputs(inputs []config.ProjectionScoreInput) string {
 	for _, input := range inputs {
 		fields := []string{
 			fmt.Sprintf("type: %q", input.Type),
-			fmt.Sprintf("name: %q", input.Name),
 			fmt.Sprintf("weight: %g", input.Weight),
+		}
+		if input.Name != "" {
+			fields = append(fields, fmt.Sprintf("name: %q", input.Name))
+		}
+		if input.Classifier != "" {
+			fields = append(fields, fmt.Sprintf("classifier: %q", input.Classifier))
+		}
+		if input.Metric != "" {
+			fields = append(fields, fmt.Sprintf("metric: %q", input.Metric))
 		}
 		if input.ValueSource != "" {
 			fields = append(fields, fmt.Sprintf("value_source: %q", input.ValueSource))

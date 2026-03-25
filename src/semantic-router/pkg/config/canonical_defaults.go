@@ -105,7 +105,19 @@ func defaultCanonicalModelCatalog() CanonicalModelCatalog {
 	catalog := CanonicalModelCatalog{
 		Embeddings: defaultCanonicalEmbeddingModels(),
 		System:     DefaultSystemModels(),
-		Modules:    defaultCanonicalModelModules(),
+		Classifiers: []TaxonomyClassifierConfig{
+			{
+				Name: "privacy_classifier",
+				Type: ClassifierTypeTaxonomy,
+				Source: TaxonomyClassifierSource{
+					Path:         "classifiers/privacy/",
+					TaxonomyFile: "taxonomy.json",
+				},
+				Threshold:         0.30,
+				SecurityThreshold: 0.25,
+			},
+		},
+		Modules: defaultCanonicalModelModules(),
 	}
 	enabledSoftMatching := true
 	catalog.Embeddings.Semantic.EmbeddingConfig.EnableSoftMatching = &enabledSoftMatching

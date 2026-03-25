@@ -94,6 +94,7 @@ type RequestContext struct {
 	VSRMatchedAuthz        []string // Matched authz rule names for user-level routing
 	VSRMatchedJailbreak    []string // Matched jailbreak rule names (confidence >= threshold)
 	VSRMatchedPII          []string // Matched PII rule names (denied PII types detected)
+	VSRMatchedTaxonomy     []string // Matched taxonomy signal names
 	VSRMatchedProjection   []string // Matched projection mapping outputs
 
 	// Endpoint tracking for windowed metrics
