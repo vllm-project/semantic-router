@@ -99,6 +99,27 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-precommit-
 
+      - name: Install tree-sitter for security scan
+        run: |
+          pip install \
+            tree-sitter \
+            tree-sitter-python \
+            tree-sitter-javascript \
+            tree-sitter-typescript \
+            tree-sitter-go \
+            tree-sitter-rust
+
+      - name: Run AST supply chain security scan
+        run: |
+          python3 tools/security/ast_security_scanner.py \
+            scan . --fail-on HIGH
+
+      - name: Run AST PR diff security scan
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 tools/security/ast_security_scanner.py \
+            diff "origin/${{ github.base_ref }}" --fail-on HIGH
+
       - name: Run agent CI lint on changed files
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then

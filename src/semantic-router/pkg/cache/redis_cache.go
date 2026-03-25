@@ -23,6 +23,7 @@ import (
 
 // RedisCache provides a scalable semantic cache implementation using Redis with vector search
 type RedisCache struct {
+	SimilarityTracker   // embedded — provides LastSimilarity()
 	client              *redis.Client
 	config              *config.RedisConfig
 	indexName           string
@@ -108,7 +109,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	logging.Debugf("RedisCache: initializing index '%s'", redisConfig.Index.Name)
 	if err := cache.initializeIndex(); err != nil {
 		logging.Debugf("RedisCache: failed to initialize index: %v", err)
-		redisClient.Close()
+		_ = redisClient.Close()
 		return nil, fmt.Errorf("failed to initialize index: %w", err)
 	}
 	logging.Debugf("RedisCache: initialization complete")
@@ -592,20 +593,61 @@ func (c *RedisCache) FindSimilar(model string, query string) ([]byte, bool, erro
 	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
 }
 
+// distanceToSimilarity converts a Redis vector distance to a similarity score [0, 1]
+// based on the configured metric type.
+func (c *RedisCache) distanceToSimilarity(distance float64) float32 {
+	switch c.config.Index.VectorField.MetricType {
+	case "COSINE":
+		return 1.0 - float32(distance)/2.0
+	case "IP":
+		return float32(distance)
+	case "L2":
+		return 1.0 / (1.0 + float32(distance))
+	default:
+		return 1.0 - float32(distance)
+	}
+}
+
+// recordCacheMiss records a cache miss with the given status and logs the event.
+func (c *RedisCache) recordCacheMiss(status string, elapsed time.Duration) {
+	atomic.AddInt64(&c.missCount, 1)
+	metrics.RecordCacheOperation("redis", "find_similar", status, elapsed.Seconds())
+}
+
+// extractSearchResult parses the best match from a search result and returns
+// the similarity score and response body. Returns (0, nil, false) on failure.
+func (c *RedisCache) extractSearchResult(bestDoc redis.Document) (float32, []byte, bool) {
+	distanceVal, ok := bestDoc.Fields["vector_distance"]
+	if !ok {
+		logging.Infof("RedisCache: vector_distance field not found in result")
+		return 0, nil, false
+	}
+
+	var distance float64
+	if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); err != nil {
+		logging.Infof("RedisCache: failed to parse distance value: %v", err)
+		return 0, nil, false
+	}
+
+	similarity := c.distanceToSimilarity(distance)
+
+	responseBodyStr := fmt.Sprint(bestDoc.Fields["response_body"])
+	if responseBodyStr == "" {
+		logging.Infof("RedisCache: response_body is empty - treating as miss")
+		return similarity, nil, false
+	}
+
+	return similarity, []byte(responseBodyStr), true
+}
+
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
 func (c *RedisCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
 	start := time.Now()
 
-	logging.Infof("FindSimilarWithThreshold ENTERED: model=%s, query='%s', threshold=%.2f", model, query, threshold)
-
 	if !c.enabled {
-		logging.Infof("FindSimilarWithThreshold: cache disabled, returning early")
 		return nil, false, nil
 	}
 
-	logging.Infof("FindSimilarWithThreshold: cache enabled, generating embedding for query")
-
-	// Generate semantic embedding for similarity comparison
 	queryEmbedding, err := c.getEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
@@ -613,15 +655,12 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	}
 
 	ctx := context.Background()
-
-	// Convert embedding to bytes for Redis query
 	embeddingBytes := floatsToBytes(queryEmbedding)
 
-	// Build KNN query without model filter (model filtering removed for cross-model cache sharing)
-	knnQuery := fmt.Sprintf("[KNN %d @%s $vec AS vector_distance]",
+	// "*=>" prefix required by Redis DIALECT 2 (without it: "Syntax error at offset 0").
+	knnQuery := fmt.Sprintf("*=>[KNN %d @%s $vec AS vector_distance]",
 		c.config.Search.TopK, c.config.Index.VectorField.Name)
 
-	// Execute vector search
 	searchResult, err := c.client.FTSearchWithArgs(ctx,
 		c.indexName,
 		knnQuery,
@@ -638,67 +677,27 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	).Result()
 	if err != nil {
 		logging.Infof("RedisCache.FindSimilarWithThreshold: search failed: %v", err)
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
+		c.recordCacheMiss("error", time.Since(start))
 		return nil, false, nil
 	}
-
-	logging.Infof("RedisCache.FindSimilarWithThreshold: search returned %d results", searchResult.Total)
 
 	if searchResult.Total == 0 {
-		atomic.AddInt64(&c.missCount, 1)
-		logging.Infof("RedisCache.FindSimilarWithThreshold: no entries found - cache miss")
-		metrics.RecordCacheOperation("redis", "find_similar", "miss", time.Since(start).Seconds())
+		c.recordCacheMiss("miss", time.Since(start))
 		return nil, false, nil
 	}
 
-	// Get best match
-	bestDoc := searchResult.Docs[0]
-
-	logging.Infof("Extracting fields from best match document...")
-
-	// Extract distance and convert to similarity score
-	// Redis returns distance, we need to convert based on metric type
-	distanceVal, ok := bestDoc.Fields["vector_distance"]
+	similarity, responseBody, ok := c.extractSearchResult(searchResult.Docs[0])
+	// Store similarity for callers (e.g., x-vsr-cache-similarity response header)
+	c.StoreSimilarity(similarity)
 	if !ok {
-		logging.Infof("RedisCache.FindSimilarWithThreshold: vector_distance field not found in result")
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
+		c.recordCacheMiss("error", time.Since(start))
 		return nil, false, nil
 	}
 
-	var distance float64
-	if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); err != nil {
-		logging.Infof("RedisCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	// Convert distance to similarity score based on metric type
-	var similarity float32
-	switch c.config.Index.VectorField.MetricType {
-	case "COSINE":
-		// COSINE distance in range [0, 2], convert to similarity [0, 1]
-		similarity = 1.0 - float32(distance)/2.0
-	case "IP":
-		// Inner product: higher is more similar, convert appropriately
-		similarity = float32(distance)
-	case "L2":
-		// L2 distance: lower is more similar, convert to similarity
-		// Assume max distance for normalization (this is dataset dependent)
-		similarity = 1.0 / (1.0 + float32(distance))
-	default:
-		similarity = 1.0 - float32(distance)
-	}
-
-	logging.Infof("Calculated similarity=%.4f, threshold=%.4f, distance=%.4f (metric=%s)",
-		similarity, threshold, distance, c.config.Index.VectorField.MetricType)
+	logging.Infof("Similarity=%.4f, threshold=%.4f (metric=%s)",
+		similarity, threshold, c.config.Index.VectorField.MetricType)
 
 	if similarity < threshold {
-		atomic.AddInt64(&c.missCount, 1)
-		logging.Debugf("RedisCache.FindSimilarWithThreshold: cache miss - similarity %.4f below threshold %.4f",
-			similarity, threshold)
 		logging.LogEvent("cache_miss", map[string]interface{}{
 			"backend":         "redis",
 			"best_similarity": similarity,
@@ -706,35 +705,11 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 			"model":           model,
 			"index":           c.indexName,
 		})
-		metrics.RecordCacheOperation("redis", "find_similar", "miss", time.Since(start).Seconds())
+		c.recordCacheMiss("miss", time.Since(start))
 		return nil, false, nil
 	}
-
-	// Extract response body from cache hit
-	logging.Infof("Attempting to extract response_body field...")
-	responseBodyVal, ok := bestDoc.Fields["response_body"]
-	if !ok {
-		logging.Infof("RedisCache.FindSimilarWithThreshold: cache hit BUT response_body field is MISSING - treating as miss")
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	responseBodyStr := fmt.Sprint(responseBodyVal)
-	if responseBodyStr == "" {
-		logging.Infof("RedisCache.FindSimilarWithThreshold: cache hit BUT response_body is EMPTY - treating as miss")
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	logging.Infof("CACHE HIT: Found cached response, similarity=%.4f, response_size=%d bytes", similarity, len(responseBodyStr))
-
-	responseBody := []byte(responseBodyStr)
 
 	atomic.AddInt64(&c.hitCount, 1)
-	logging.Debugf("RedisCache.FindSimilarWithThreshold: cache hit - similarity=%.4f, response_size=%d bytes",
-		similarity, len(responseBody))
 	logging.LogEvent("cache_hit", map[string]interface{}{
 		"backend":    "redis",
 		"similarity": similarity,

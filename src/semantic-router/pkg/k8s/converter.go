@@ -157,6 +157,7 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 		Embeddings: make([]config.EmbeddingRule, 0, len(signals.Embeddings)),
 		Domains:    make([]config.Category, 0, len(signals.Domains)),
 		Context:    make([]config.ContextRule, 0, len(signals.ContextRules)),
+		Structure:  make([]config.StructureRule, 0, len(signals.Structure)),
 		FactCheck:  make([]config.FactCheckRule, 0, len(signals.FactCheckRules)),
 	}
 
@@ -197,6 +198,24 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 		})
 	}
 
+	for _, rule := range signals.Structure {
+		converted.Structure = append(converted.Structure, config.StructureRule{
+			Name:        rule.Name,
+			Description: rule.Description,
+			Feature: config.StructureFeature{
+				Type: rule.Feature.Type,
+				Source: config.StructureSource{
+					Type:          rule.Feature.Source.Type,
+					Pattern:       rule.Feature.Source.Pattern,
+					Keywords:      append([]string(nil), rule.Feature.Source.Keywords...),
+					CaseSensitive: rule.Feature.Source.CaseSensitive,
+					Sequences:     append([][]string(nil), rule.Feature.Source.Sequences...),
+				},
+			},
+			Predicate: convertNumericPredicate(rule.Predicate),
+		})
+	}
+
 	for _, rule := range signals.FactCheckRules {
 		converted.FactCheck = append(converted.FactCheck, config.FactCheckRule{
 			Name:        rule.Name,
@@ -205,6 +224,18 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 	}
 
 	return converted
+}
+
+func convertNumericPredicate(predicate *v1alpha1.NumericPredicate) *config.NumericPredicate {
+	if predicate == nil {
+		return nil
+	}
+	return &config.NumericPredicate{
+		GT:  predicate.GT,
+		GTE: predicate.GTE,
+		LT:  predicate.LT,
+		LTE: predicate.LTE,
+	}
 }
 
 func convertProviderMetadata(models []v1alpha1.ModelConfig) []config.CanonicalProviderModel {
@@ -300,70 +331,80 @@ func validatePluginConfiguration(pluginType string, rawConfig []byte) error {
 	if len(rawConfig) == 0 {
 		return nil // Empty configuration is allowed
 	}
-
-	switch pluginType {
-	case "semantic-cache":
-		var cfg config.SemanticCachePluginConfig
-		decoder := json.NewDecoder(bytes.NewReader(rawConfig))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&cfg); err != nil {
-			return fmt.Errorf("failed to unmarshal semantic-cache config: %w", err)
-		}
-
-	case "system_prompt":
-		var cfg config.SystemPromptPluginConfig
-		decoder := json.NewDecoder(bytes.NewReader(rawConfig))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&cfg); err != nil {
-			return fmt.Errorf("failed to unmarshal system_prompt config: %w", err)
-		}
-		// Validate mode if present
-		if cfg.Mode != "" && cfg.Mode != "replace" && cfg.Mode != "insert" {
-			return fmt.Errorf("system_prompt mode must be 'replace' or 'insert', got: %s", cfg.Mode)
-		}
-
-	case "header_mutation":
-		var cfg config.HeaderMutationPluginConfig
-		decoder := json.NewDecoder(bytes.NewReader(rawConfig))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&cfg); err != nil {
-			return fmt.Errorf("failed to unmarshal header_mutation config: %w", err)
-		}
-		// Validate that at least one operation is specified
-		if len(cfg.Add) == 0 && len(cfg.Update) == 0 && len(cfg.Delete) == 0 {
-			return fmt.Errorf("header_mutation plugin must specify at least one of: add, update, delete")
-		}
-		// Validate header pairs
-		for _, h := range cfg.Add {
-			if h.Name == "" {
-				return fmt.Errorf("header_mutation add: header name cannot be empty")
-			}
-		}
-		for _, h := range cfg.Update {
-			if h.Name == "" {
-				return fmt.Errorf("header_mutation update: header name cannot be empty")
-			}
-		}
-
-	case "router_replay":
-		var cfg config.RouterReplayPluginConfig
-		decoder := json.NewDecoder(bytes.NewReader(rawConfig))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&cfg); err != nil {
-			return fmt.Errorf("failed to unmarshal router_replay config: %w", err)
-		}
-		if cfg.MaxRecords < 0 {
-			return fmt.Errorf("router_replay max_records cannot be negative")
-		}
-		if cfg.MaxBodyBytes < 0 {
-			return fmt.Errorf("router_replay max_body_bytes cannot be negative")
-		}
-
-	default:
+	validator, ok := pluginConfigurationValidators[pluginType]
+	if !ok {
 		// Unknown plugin types are passed through without schema validation.
 		// This allows extensibility — only well-known types are validated.
 		return nil
 	}
+	return validator(rawConfig)
+}
 
+var pluginConfigurationValidators = map[string]func([]byte) error{
+	"semantic-cache":  validateSemanticCachePluginConfig,
+	"system_prompt":   validateSystemPromptPluginConfig,
+	"header_mutation": validateHeaderMutationPluginConfig,
+	"router_replay":   validateRouterReplayPluginConfig,
+}
+
+func decodePluginConfiguration(rawConfig []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(rawConfig))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(target)
+}
+
+func validateSemanticCachePluginConfig(rawConfig []byte) error {
+	var cfg config.SemanticCachePluginConfig
+	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal semantic-cache config: %w", err)
+	}
+	return nil
+}
+
+func validateSystemPromptPluginConfig(rawConfig []byte) error {
+	var cfg config.SystemPromptPluginConfig
+	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal system_prompt config: %w", err)
+	}
+	if cfg.Mode != "" && cfg.Mode != "replace" && cfg.Mode != "insert" {
+		return fmt.Errorf("system_prompt mode must be 'replace' or 'insert', got: %s", cfg.Mode)
+	}
+	return nil
+}
+
+func validateHeaderMutationPluginConfig(rawConfig []byte) error {
+	var cfg config.HeaderMutationPluginConfig
+	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal header_mutation config: %w", err)
+	}
+	if len(cfg.Add) == 0 && len(cfg.Update) == 0 && len(cfg.Delete) == 0 {
+		return fmt.Errorf("header_mutation plugin must specify at least one of: add, update, delete")
+	}
+	if err := validateHeaderMutationEntries("add", cfg.Add); err != nil {
+		return err
+	}
+	return validateHeaderMutationEntries("update", cfg.Update)
+}
+
+func validateHeaderMutationEntries(operation string, headers []config.HeaderPair) error {
+	for _, header := range headers {
+		if header.Name == "" {
+			return fmt.Errorf("header_mutation %s: header name cannot be empty", operation)
+		}
+	}
+	return nil
+}
+
+func validateRouterReplayPluginConfig(rawConfig []byte) error {
+	var cfg config.RouterReplayPluginConfig
+	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal router_replay config: %w", err)
+	}
+	if cfg.MaxRecords < 0 {
+		return fmt.Errorf("router_replay max_records cannot be negative")
+	}
+	if cfg.MaxBodyBytes < 0 {
+		return fmt.Errorf("router_replay max_body_bytes cannot be negative")
+	}
 	return nil
 }

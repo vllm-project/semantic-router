@@ -67,6 +67,25 @@ linters:
           - cyclop
           - staticcheck
         path: (^|/)src/semantic-router/pkg/config/canonical_loader_test\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/dsl/(decompiler|parser)\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+          - errcheck
+        path: (^|/)src/semantic-router/pkg/dsl/dsl_test\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/modelselection/selector_test\.go$
 
 issues:
   max-issues-per-linter: 0

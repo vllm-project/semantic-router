@@ -21,6 +21,59 @@ VLLM_ENDPOINT=http://localhost:8000/v1 bash run_training.sh
 MODEL=mmbert-32k EPOCHS=10 MAX_SAMPLES=10000 bash run_training.sh
 ```
 
+## Export a Fixed Dataset
+
+The training script builds modality data dynamically. If you want a reproducible
+dataset artifact for review or Hugging Face upload, export the complete
+`train / validation / test` splits first:
+
+```bash
+python src/training/model_classifier/modality_routing_classifier/export_modality_dataset.py \
+  --output-dir ./modality-routing-dataset \
+  --max-samples 6000 \
+  --overwrite
+```
+
+With vLLM-generated BOTH examples:
+
+```bash
+python src/training/model_classifier/modality_routing_classifier/export_modality_dataset.py \
+  --output-dir ./modality-routing-dataset \
+  --max-samples 6000 \
+  --vllm-endpoint http://localhost:8000/v1 \
+  --vllm-model your-model \
+  --synthesize-both 2000 \
+  --overwrite
+```
+
+The exporter writes:
+
+- `train.jsonl`, `validation.jsonl`, `test.jsonl`
+- `README.md` dataset card
+- `label_mapping.json`
+- `dataset_stats.json`
+- `export_config.json`
+- `hf_dataset/` via `DatasetDict.save_to_disk()`
+
+These root files are upload-friendly if you want to create a Hugging Face dataset
+repo locally.
+
+To export and upload in one command:
+
+```bash
+HF_TOKEN=hf_xxx python src/training/model_classifier/modality_routing_classifier/export_modality_dataset.py \
+  --output-dir ./modality-routing-dataset \
+  --max-samples 6000 \
+  --repo-id your-name/modality-routing-dataset \
+  --push-to-hub \
+  --overwrite
+```
+
+Note: the current training script still uses a legacy flow where it materializes
+the full dataset, merges `train + validation`, and then does an internal `80/20`
+re-split for training. The exporter preserves the original deterministic
+`train / validation / test` split from `prepare_datasets()`.
+
 ## Datasets
 
 ### DIFFUSION class (image generation intent)

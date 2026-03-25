@@ -227,6 +227,81 @@ routing:
         max_tokens: 256K
         description: Requests that need larger effective context windows.
 
+    structure:
+      - name: many_questions
+        description: Prompts that contain many explicit questions.
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          gte: 4
+      - name: at_most_one_question
+        description: Prompts with one or fewer explicit questions.
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          lte: 1
+      - name: numbered_steps
+        description: Prompts that contain numbered list items such as "1. ..."
+        feature:
+          type: exists
+          source:
+            type: regex
+            pattern: '(?m)^\s*\d+\.\s+'
+      - name: first_then_flow
+        description: Prompts that express an ordered workflow.
+        feature:
+          type: sequence
+          source:
+            type: sequence
+            case_sensitive: false
+            sequences:
+              - ["first", "then"]
+              - ["first", "next", "finally"]
+              - ["首先", "然后"]
+              - ["先", "再"]
+      - name: constraint_dense
+        description: Prompts with dense explicit constraints relative to multilingual text units.
+        feature:
+          type: density
+          source:
+            type: keyword_set
+            case_sensitive: false
+            keywords:
+              - under
+              - at most
+              - at least
+              - within
+              - no more than
+              - 不超过
+              - 至少
+              - 最多
+        predicate:
+          gt: 0.08
+      - name: format_directive_dense
+        description: Prompts with dense output-format directives relative to multilingual text units.
+        feature:
+          type: density
+          source:
+            type: keyword_set
+            keywords: ["table", "bullet", "json", "markdown", "表格", "列表", "JSON"]
+        predicate:
+          gt: 0.08
+      - name: low_question_density
+        description: Prompts with very low question density relative to multilingual text units.
+        feature:
+          type: density
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          lt: 0.05
+
     complexity:
       - name: needs_reasoning
         threshold: 0.75
@@ -297,22 +372,67 @@ routing:
           - EMAIL_ADDRESS
         description: Sensitive prompts where only low-risk identifiers may pass through.
 
+  projections:
+    partitions:
+      - name: support_intents
+        semantics: exclusive
+        temperature: 0.3
+        members:
+          - technical_support
+          - account_management
+        default: technical_support
+    scores:
+      - name: request_difficulty
+        method: weighted_sum
+        inputs:
+          - type: embedding
+            name: technical_support
+            weight: 0.18
+            value_source: confidence
+            match: 1.0
+            miss: 0.0
+          - type: embedding
+            name: account_management
+            weight: -0.08
+            value_source: confidence
+          - type: complexity
+            name: needs_reasoning:medium
+            weight: 0.18
+          - type: complexity
+            name: needs_reasoning:hard
+            weight: 0.36
+          - type: context
+            name: long_context
+            weight: 0.18
+          - type: structure
+            name: first_then_flow
+            weight: 0.12
+    mappings:
+      - name: request_band
+        source: request_difficulty
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 10.0
+        outputs:
+          - name: support_fast
+            lte: 0.20
+          - name: support_balanced
+            gt: 0.20
+            lt: 0.45
+          - name: support_escalated
+            gte: 0.45
+
   decisions:
     - name: static_business_route
       description: Static fallback for standard business traffic.
       priority: 200
+      tier: 2
       rules:
         operator: AND
         conditions:
           - type: domain
             name: business
-      modelSelectionAlgorithm:
-        enabled: true
-        method: router_dc
-        router_dc:
-          temperature: 0.2
-          dimension_size: 384
-          min_similarity: 0.72
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
@@ -498,13 +618,15 @@ routing:
             message: The primary model is saturated, so a lightweight response was returned immediately.
 
     - name: support_router_dc_route
-      description: Embedding-driven support route with RouterDC selection.
+      description: Embedding-driven support route that escalates only when the derived projection band says the request is not a simple support query.
       priority: 150
       rules:
         operator: AND
         conditions:
           - type: embedding
             name: technical_support
+          - type: projection
+            name: support_escalated
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
@@ -964,6 +1086,9 @@ global:
   services:
     api:
       batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
         metrics:
           sample_rate: 1.0
           batch_size_ranges:
@@ -1119,7 +1244,7 @@ global:
           vector_field:
             name: embedding
             dimension: 768
-            metric_type: cosine
+            metric_type: COSINE
           index_type: HNSW
           params:
             M: 16
@@ -1190,14 +1315,56 @@ global:
           drop_collection_on_startup: false
           auto_create_collection: true
           verbose_errors: true
+      valkey:
+        connection:
+          host: valkey
+          port: 6379
+          database: 0
+          password: valkey-secret
+          timeout: 5
+          tls:
+            enabled: false
+            cert_file: certs/valkey.crt
+            key_file: certs/valkey.key
+            ca_file: certs/ca.crt
+        index:
+          name: semantic_cache_idx
+          prefix: "vsr:cache:"
+          vector_field:
+            name: embedding
+            dimension: 768
+            metric_type: COSINE
+          index_type: HNSW
+          params:
+            M: 16
+            efConstruction: 200
+        search:
+          topk: 10
+        development:
+          drop_index_on_startup: false
+          auto_create_index: true
+          verbose_errors: true
+        logging:
+          level: info
+          enable_query_log: true
+          enable_metrics: true
     memory:
       enabled: true
       auto_store: true
+      disabled_routes: []
+      disabled_models: []
       milvus:
         address: milvus:19530
         collection: agentic_memory
         dimension: 384
         num_partitions: 32
+      redis_cache:
+        enabled: false
+        address: "localhost:6379"
+        ttl_seconds: 300
+        db: 0
+        key_prefix: "memory_cache:"
+        password: ""
       embedding_model: bert
       extraction_batch_size: 16
       default_retrieval_limit: 10

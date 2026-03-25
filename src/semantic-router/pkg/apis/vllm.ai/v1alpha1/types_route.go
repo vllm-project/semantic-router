@@ -57,6 +57,11 @@ type Signals struct {
 	// +optional
 	ContextRules []ContextRule `json:"contextRules,omitempty" yaml:"context_rules,omitempty"`
 
+	// Structure defines request-shape routing signals.
+	// +optional
+	// +kubebuilder:validation:MaxItems=100
+	Structure []StructureSignal `json:"structure,omitempty" yaml:"structure,omitempty"`
+
 	// +optional
 	FactCheckRules []FactCheckRule `json:"factCheckRules,omitempty" yaml:"fact_check_rules,omitempty"`
 }
@@ -97,6 +102,33 @@ type ContextRule struct {
 	// +optional
 	// +kubebuilder:validation:MaxLength=500
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+}
+
+type StructureSignal struct {
+	Name        string            `json:"name" yaml:"name"`
+	Description string            `json:"description,omitempty" yaml:"description,omitempty"`
+	Feature     StructureFeature  `json:"feature" yaml:"feature"`
+	Predicate   *NumericPredicate `json:"predicate,omitempty" yaml:"predicate,omitempty"`
+}
+
+type StructureFeature struct {
+	Type   string          `json:"type" yaml:"type"`
+	Source StructureSource `json:"source" yaml:"source"`
+}
+
+type StructureSource struct {
+	Type          string     `json:"type" yaml:"type"`
+	Pattern       string     `json:"pattern,omitempty" yaml:"pattern,omitempty"`
+	Keywords      []string   `json:"keywords,omitempty" yaml:"keywords,omitempty"`
+	CaseSensitive bool       `json:"caseSensitive,omitempty" yaml:"case_sensitive,omitempty"`
+	Sequences     [][]string `json:"sequences,omitempty" yaml:"sequences,omitempty"`
+}
+
+type NumericPredicate struct {
+	GT  *float64 `json:"gt,omitempty" yaml:"gt,omitempty"`
+	GTE *float64 `json:"gte,omitempty" yaml:"gte,omitempty"`
+	LT  *float64 `json:"lt,omitempty" yaml:"lt,omitempty"`
+	LTE *float64 `json:"lte,omitempty" yaml:"lte,omitempty"`
 }
 
 // DomainSignal defines a domain category for classification
@@ -219,9 +251,9 @@ type SignalCombination struct {
 
 // SignalCondition defines a single signal condition
 type SignalCondition struct {
-	// Type defines the type of signal (keyword/embedding/domain/fact_check/context)
+	// Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;context
+	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;context;structure
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the signal to reference

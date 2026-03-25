@@ -72,6 +72,50 @@ type RedisConfig struct {
 	} `json:"logging" yaml:"logging"`
 }
 
+// ValkeyConfig defines the complete configuration structure for Valkey cache backend.
+type ValkeyConfig struct {
+	Connection struct {
+		Host     string `json:"host" yaml:"host"`
+		Port     int    `json:"port" yaml:"port"`
+		Database int    `json:"database" yaml:"database"`
+		Password string `json:"password" yaml:"password"`
+		Timeout  int    `json:"timeout" yaml:"timeout"`
+		TLS      struct {
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			CertFile string `json:"cert_file" yaml:"cert_file"`
+			KeyFile  string `json:"key_file" yaml:"key_file"`
+			CAFile   string `json:"ca_file" yaml:"ca_file"`
+		} `json:"tls" yaml:"tls"`
+	} `json:"connection" yaml:"connection"`
+	Index struct {
+		Name        string `json:"name" yaml:"name"`
+		Prefix      string `json:"prefix" yaml:"prefix"`
+		VectorField struct {
+			Name       string `json:"name" yaml:"name"`
+			Dimension  int    `json:"dimension" yaml:"dimension"`
+			MetricType string `json:"metric_type" yaml:"metric_type"`
+		} `json:"vector_field" yaml:"vector_field"`
+		IndexType string `json:"index_type" yaml:"index_type"`
+		Params    struct {
+			M              int `json:"M" yaml:"M"`
+			EfConstruction int `json:"efConstruction" yaml:"efConstruction"`
+		} `json:"params" yaml:"params"`
+	} `json:"index" yaml:"index"`
+	Search struct {
+		TopK int `json:"topk" yaml:"topk"`
+	} `json:"search" yaml:"search"`
+	Development struct {
+		DropIndexOnStartup bool `json:"drop_index_on_startup" yaml:"drop_index_on_startup"`
+		AutoCreateIndex    bool `json:"auto_create_index" yaml:"auto_create_index"`
+		VerboseErrors      bool `json:"verbose_errors" yaml:"verbose_errors"`
+	} `json:"development" yaml:"development"`
+	Logging struct {
+		Level          string `json:"level" yaml:"level"`
+		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
+		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
+	} `json:"logging" yaml:"logging"`
+}
+
 // MilvusConfig defines the complete configuration structure for Milvus cache backend.
 type MilvusConfig struct {
 	Connection struct {
@@ -156,6 +200,7 @@ type SemanticCache struct {
 	TTLSeconds          int           `yaml:"ttl_seconds,omitempty"`
 	EvictionPolicy      string        `yaml:"eviction_policy,omitempty"`
 	Redis               *RedisConfig  `yaml:"redis,omitempty"`
+	Valkey              *ValkeyConfig `yaml:"valkey,omitempty"`
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
 }
@@ -163,7 +208,10 @@ type SemanticCache struct {
 type MemoryConfig struct {
 	Enabled                    bool                       `yaml:"enabled,omitempty"`
 	AutoStore                  bool                       `yaml:"auto_store,omitempty"`
+	DisabledRoutes             []string                   `yaml:"disabled_routes,omitempty"`
+	DisabledModels             []string                   `yaml:"disabled_models,omitempty"`
 	Milvus                     MemoryMilvusConfig         `yaml:"milvus,omitempty"`
+	RedisCache                 *MemoryRedisCacheConfig    `yaml:"redis_cache,omitempty"`
 	EmbeddingModel             string                     `yaml:"embedding_model,omitempty"`
 	ExtractionBatchSize        int                        `yaml:"extraction_batch_size,omitempty"`
 	DefaultRetrievalLimit      int                        `yaml:"default_retrieval_limit,omitempty"`
@@ -173,6 +221,16 @@ type MemoryConfig struct {
 	AdaptiveThreshold          bool                       `yaml:"adaptive_threshold,omitempty"`
 	QualityScoring             MemoryQualityScoringConfig `yaml:"quality_scoring,omitempty"`
 	Reflection                 MemoryReflectionConfig     `yaml:"reflection,omitempty"`
+}
+
+// MemoryRedisCacheConfig configures an optional Redis hot cache in front of Milvus retrieval.
+type MemoryRedisCacheConfig struct {
+	Enabled    bool   `yaml:"enabled,omitempty"`
+	Address    string `yaml:"address,omitempty"`
+	TTLSeconds int    `yaml:"ttl_seconds,omitempty"`
+	DB         int    `yaml:"db,omitempty"`
+	KeyPrefix  string `yaml:"key_prefix,omitempty"`
+	Password   string `yaml:"password,omitempty"`
 }
 
 type MemoryQualityScoringConfig struct {

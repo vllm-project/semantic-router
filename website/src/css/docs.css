@@ -158,6 +158,21 @@
   background: rgba(0, 0, 0, 0.16);
 }
 
+@media (min-width: 997px) {
+  main[class*='docMainContainer'] > .container {
+    width: auto;
+    max-width: none;
+    margin-left: 1rem;
+    margin-right: 1rem;
+  }
+
+  .site-doc-masthead .site-shell-container {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+}
+
 @media (max-width: 996px) {
   .site-doc-masthead__row {
     flex-direction: column;

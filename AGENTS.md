@@ -13,7 +13,7 @@ This file is the short entrypoint for coding agents. The detailed human-readable
 ## Native Discovery vs Routed Context
 
 - Root startup should always discover this [AGENTS.md](AGENTS.md) entrypoint and the thin repo-native bridge at [.agents/skills/harness/SKILL.md](.agents/skills/harness/SKILL.md).
-- Full task routing, primary-skill resolution, local-rule surfacing, and validation planning still come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
+- Full task routing, primary-skill resolution, local-rule surfacing, loop-mode guidance, and validation planning still come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
 - `tools/agent/**` remains the canonical harness source; `.agents/skills/**` is only a discovery bridge.
 
 If you need real AMD model deployment details instead of the minimal smoke path, also read [deploy/amd/README.md](deploy/amd/README.md) and [deploy/recipes/balance.yaml](deploy/recipes/balance.yaml).
@@ -29,6 +29,7 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 - Use the local image flow for local-dev behavior. Do not invent another serve path.
 - Start from a project-level primary skill. Fragment skills are support material, not the default entrypoint.
 - Run the smallest relevant gate first: `make agent-validate`, `make agent-lint`, `make agent-ci-gate`, then `make agent-feature-gate`.
+- Drive the active task to its reported completion boundary: fix failures and rerun the applicable gates until the current change or subtask is done, and do not hand off on the first failing run.
 - Treat docs-only and website-only edits as lightweight unless the task matrix says otherwise.
 - Contributor workflow, issue or PR intake rules, and maintainer label taxonomy live in `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/**`, and `.prowlabels.yaml`; commits intended for PRs must use `git commit -s`.
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes need E2E updates unless the change is a pure refactor.
@@ -36,7 +37,7 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 - If the desired architecture and the current implementation still diverge after your change, add or update the durable debt entry indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md) instead of leaving the gap only in chat or PR text.
 - Keep modules narrow: one main responsibility per file, small orchestrators plus helpers, interfaces only at seams.
 - Legacy hotspots are debt, not precedent. Touched hotspot files must not grow in responsibility; prefer extraction-first edits.
-- Read the nearest local `AGENTS.md` before editing hotspot trees under `src/semantic-router/pkg/config/`, `src/semantic-router/pkg/extproc/`, `src/vllm-sr/cli/`, `dashboard/frontend/src/pages/`, and `dashboard/frontend/src/components/`.
+- Read the nearest local `AGENTS.md` before editing hotspot trees under `src/semantic-router/pkg/config/`, `src/semantic-router/pkg/extproc/`, `src/vllm-sr/cli/`, `src/fleet-sim/fleet_sim/optimizer/`, `deploy/operator/api/v1alpha1/`, `deploy/operator/controllers/`, `dashboard/frontend/src/`, `dashboard/frontend/src/pages/`, `dashboard/frontend/src/components/`, and `dashboard/backend/handlers/`.
 
 ## Canonical Commands
 

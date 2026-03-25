@@ -107,6 +107,12 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 		VSRMatchedKeywords:      []string{"python"},
 		VSRMatchedEmbeddings:    []string{"coding"},
 		VSRMatchedContext:       []string{"memory"},
+		VSRMatchedComplexity:    []string{"complexity:medium"},
+		VSRMatchedModality:      []string{"AR"},
+		VSRMatchedAuthz:         []string{"authz:team-a"},
+		VSRMatchedJailbreak:     []string{"jailbreak:block"},
+		VSRMatchedPII:           []string{"pii:email"},
+		VSRMatchedProjection:    []string{"balance_reasoning"},
 		VSRContextTokenCount:    42,
 		VSRSelectedDecisionName: "coding",
 		VSRSelectedCategory:     "programming",
@@ -121,6 +127,12 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 	assert.Equal(t, "2", headerMap[headers.VSRLooperIterations])
 	assert.Equal(t, "elo", headerMap[headers.VSRLooperAlgorithm])
 	assert.Equal(t, "python", headerMap[headers.VSRMatchedKeywords])
+	assert.Equal(t, "complexity:medium", headerMap[headers.VSRMatchedComplexity])
+	assert.Equal(t, "AR", headerMap[headers.VSRMatchedModality])
+	assert.Equal(t, "authz:team-a", headerMap[headers.VSRMatchedAuthz])
+	assert.Equal(t, "jailbreak:block", headerMap[headers.VSRMatchedJailbreak])
+	assert.Equal(t, "pii:email", headerMap[headers.VSRMatchedPII])
+	assert.Equal(t, "balance_reasoning", headerMap[headers.VSRMatchedProjection])
 	assert.Equal(t, "coding", headerMap[headers.VSRSelectedDecision])
 	assert.Equal(t, "programming", headerMap[headers.VSRSelectedCategory])
 	assert.Equal(t, "42", headerMap[headers.VSRContextTokenCount])

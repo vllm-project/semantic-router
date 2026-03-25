@@ -18,6 +18,7 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 RUNTIME_CONFIG_PATH_ENV = "VLLM_SR_RUNTIME_CONFIG_PATH"
+SOURCE_CONFIG_PATH_ENV = "VLLM_SR_SOURCE_CONFIG_PATH"
 RUNTIME_ALGORITHM_OVERRIDE_ENV = "VLLM_SR_ALGORITHM_OVERRIDE"
 
 PASSTHROUGH_ENV_RULES = (
@@ -117,6 +118,10 @@ def _runtime_config_output_path(source_config_path: Path) -> Path:
 
 def _container_runtime_config_path(source_config_path: Path) -> str:
     return f"/app/.vllm-sr/{_runtime_config_output_path(source_config_path).name}"
+
+
+def _container_source_config_path() -> str:
+    return "/app/config.yaml"
 
 
 def _write_runtime_config(source_config_path: Path, config: dict[str, object]) -> Path:
@@ -413,6 +418,8 @@ def configure_runtime_override_env_vars(
     effective_config_path: Path,
 ) -> None:
     """Expose the runtime-only config path to the container when overrides exist."""
+    env_vars[SOURCE_CONFIG_PATH_ENV] = _container_source_config_path()
+
     if source_config_path.resolve() != effective_config_path.resolve() or env_vars.get(
         RUNTIME_ALGORITHM_OVERRIDE_ENV
     ):

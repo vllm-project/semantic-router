@@ -69,6 +69,11 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
    - Commits intended for PRs must use `git commit -s`.
    - Commit messages do not need to repeat the PR title prefixes unless the maintainer explicitly wants them.
 
+## Gotchas
+
+- Do not draft labels, validation summaries, or scope from memory; inspect the current templates, labels, and repo state first.
+- If an issue or PR exposes real architecture debt or multi-loop execution needs, put that state in the indexed debt or plan docs instead of hiding it only in the ticket text.
+
 ## Standard Commands
 
 - `make agent-report ENV=cpu|amd CHANGED_FILES="..."`

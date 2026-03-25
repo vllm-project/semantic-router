@@ -216,9 +216,7 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 			config: &config.RouterConfig{
 				APIServer: config.APIServer{
 					API: config.APIConfig{
-						BatchClassification: struct {
-							Metrics config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
-						}{
+						BatchClassification: config.BatchClassificationConfig{
 							Metrics: config.BatchClassificationMetricsConfig{
 								Enabled: true,
 							},
@@ -252,9 +250,7 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 			config: &config.RouterConfig{
 				APIServer: config.APIServer{
 					API: config.APIConfig{
-						BatchClassification: struct {
-							Metrics config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
-						}{
+						BatchClassification: config.BatchClassificationConfig{
 							Metrics: config.BatchClassificationMetricsConfig{
 								Enabled: true,
 							},

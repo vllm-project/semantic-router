@@ -102,10 +102,16 @@ func buildResponseHeaderMutation(
 	builder.addJoined(headers.VSRMatchedLanguage, ctx.VSRMatchedLanguage)
 	builder.addJoined(headers.VSRMatchedContext, ctx.VSRMatchedContext)
 	builder.addInt(headers.VSRContextTokenCount, ctx.VSRContextTokenCount)
+	builder.addJoined(headers.VSRMatchedStructure, ctx.VSRMatchedStructure)
 	builder.addJoined(headers.VSRMatchedComplexity, ctx.VSRMatchedComplexity)
+	builder.addJoined(headers.VSRMatchedModality, ctx.VSRMatchedModality)
 	builder.addJoined(headers.VSRMatchedAuthz, ctx.VSRMatchedAuthz)
 	builder.addJoined(headers.VSRMatchedJailbreak, ctx.VSRMatchedJailbreak)
 	builder.addJoined(headers.VSRMatchedPII, ctx.VSRMatchedPII)
+	builder.addJoined(headers.VSRMatchedProjection, ctx.VSRMatchedProjection)
 	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
+	if ctx.VSRCacheSimilarity > 0 {
+		builder.addFloat("x-vsr-cache-similarity", float64(ctx.VSRCacheSimilarity))
+	}
 	return builder.mutation()
 }

@@ -37,14 +37,7 @@ func assertReferenceConfigAPIServiceCoverage(t testingT, api map[string]interfac
 	metrics := mustMapAt(t, api, "batch_classification", "metrics")
 
 	assertMapCoversStructFields(t, api, reflect.TypeOf(APIConfig{}), "global.services.api")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, api, "batch_classification"),
-		reflect.TypeOf(struct {
-			Metrics BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
-		}{}),
-		"global.services.api.batch_classification",
-	)
+	assertMapCoversStructFields(t, mustMapAt(t, api, "batch_classification"), reflect.TypeOf(BatchClassificationConfig{}), "global.services.api.batch_classification")
 	assertMapCoversStructFields(t, metrics, reflect.TypeOf(BatchClassificationMetricsConfig{}), "global.services.api.batch_classification.metrics")
 	assertSliceUnionCoversStructFields(
 		t,
@@ -120,6 +113,7 @@ func assertReferenceConfigStoreGlobalCoverage(t testingT, stores map[string]inte
 func assertReferenceConfigSemanticCacheCoverage(t testingT, semanticCache map[string]interface{}) {
 	assertMapCoversStructFields(t, semanticCache, reflect.TypeOf(SemanticCache{}), "global.stores.semantic_cache")
 	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "redis"), reflect.TypeOf(RedisConfig{}), "global.stores.semantic_cache.redis")
+	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "valkey"), reflect.TypeOf(ValkeyConfig{}), "global.stores.semantic_cache.valkey")
 	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.semantic_cache.milvus")
 }
 

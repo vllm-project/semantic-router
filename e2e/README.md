@@ -28,6 +28,7 @@ Standard CI-backed profiles:
 - **multi-endpoint**: Environment-specific routing and safety policy behavior
 - **authz-rbac**: Authz-driven routing and per-user rate limiting
 - **streaming**: Streamed request-body and streaming-cache behavior
+- **dashboard**: Dashboard API surface — health, status, config read, deploy preview, config versions, and input validation
 
 Manual-only profiles:
 
@@ -52,6 +53,7 @@ Manual-only profiles:
 | `multi-endpoint` | `chat-completions-request` | Environment-specific safety policies |
 | `authz-rbac` | `chat-completions-request` | Authz and rate-limiting behavior |
 | `streaming` | none | Streaming request-body and SSE cache behavior |
+| `dashboard` | none | Dashboard HTTP API contract |
 | `dynamo` | none | GPU and batching behavior |
 | `rag-hybrid-search` | none | RAG vector-store and hybrid-search behavior |
 
@@ -214,7 +216,7 @@ make e2e-test-specific E2E_TESTS="chat-completions-request,chat-completions-prog
 ### Run with custom options
 
 ```bash
-# Keep cluster after test
+# Keep cluster and deployed profile after test
 make e2e-test E2E_KEEP_CLUSTER=true
 
 # Use existing cluster
@@ -233,7 +235,7 @@ make e2e-test E2E_PROFILE=ai-gateway E2E_KEEP_CLUSTER=true E2E_VERBOSE=true
 ### Debug mode
 
 ```bash
-# Run tests with debug mode (keeps cluster and enables verbose logging)
+# Run tests with debug mode (keeps cluster, deployed profile, and enables verbose logging)
 make e2e-test-debug
 ```
 
@@ -292,7 +294,7 @@ The following environment variables can be used to customize test execution:
 | `E2E_PROFILE` | Test profile to run | `ai-gateway` | `make e2e-test E2E_PROFILE=ai-gateway` |
 | `E2E_CLUSTER_NAME` | Kind cluster name | `semantic-router-e2e` | `make e2e-test E2E_CLUSTER_NAME=my-cluster` |
 | `E2E_IMAGE_TAG` | Docker image tag | `e2e-test` | `make e2e-test E2E_IMAGE_TAG=v1.0.0` |
-| `E2E_KEEP_CLUSTER` | Keep cluster after tests | `false` | `make e2e-test E2E_KEEP_CLUSTER=true` |
+| `E2E_KEEP_CLUSTER` | Keep cluster and deployed profile after tests | `false` | `make e2e-test E2E_KEEP_CLUSTER=true` |
 | `E2E_USE_EXISTING_CLUSTER` | Use existing cluster | `false` | `make e2e-test E2E_USE_EXISTING_CLUSTER=true` |
 | `E2E_VERBOSE` | Enable verbose logging | `true` | `make e2e-test E2E_VERBOSE=false` |
 | `E2E_PARALLEL` | Run tests in parallel | `false` | `make e2e-test E2E_PARALLEL=true` |
@@ -303,6 +305,7 @@ The following environment variables can be used to customize test execution:
 **Note**:
 
 - When `E2E_SETUP_ONLY=true` is set, the cluster is automatically kept (no need to set `E2E_KEEP_CLUSTER=true`)
+- When `E2E_KEEP_CLUSTER=true` is set, the profile teardown is also skipped so you can reuse the environment with `E2E_USE_EXISTING_CLUSTER=true E2E_SKIP_SETUP=true`
 - When using the binary directly (`./bin/e2e`), use command-line flags instead:
 
 - `-profile` instead of `E2E_PROFILE`

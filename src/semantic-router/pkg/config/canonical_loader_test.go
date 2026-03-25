@@ -115,6 +115,50 @@ global:
 	}
 }
 
+func TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    default_model: qwen2.5:3b
+  models:
+    - name: qwen2.5:3b
+      backend_refs:
+        - endpoint: 127.0.0.1:11434
+routing:
+  modelCards:
+    - name: qwen2.5:3b
+  decisions:
+    - name: support-route
+      description: fallback
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelSelectionAlgorithm:
+        enabled: true
+        method: router_dc
+      modelRefs:
+        - model: qwen2.5:3b
+          use_reasoning: false
+global:
+  router:
+    strategy: priority
+`)
+
+	_, err := ParseYAMLBytes(canonicalYAML)
+	if err == nil {
+		t.Fatal("expected deprecated decision modelSelectionAlgorithm field to be rejected")
+	}
+	if !strings.Contains(err.Error(), "routing.decisions[0].modelSelectionAlgorithm") {
+		t.Fatalf("expected error to mention deprecated decision field, got: %v", err)
+	}
+}
+
 func TestParseYAMLBytesParsesNestedCanonicalModelCatalogModules(t *testing.T) {
 	canonicalYAML := []byte(`
 version: v0.3

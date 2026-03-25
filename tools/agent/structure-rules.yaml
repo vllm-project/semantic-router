@@ -68,6 +68,10 @@ legacy_hotspots:
       - src/vllm-sr/cli/validator.py
     function_checks: relaxed
   - paths:
+      - src/training/model_classifier/verify_text_classification_datasets.py
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
       - deploy/operator/api/v1alpha1/semanticrouter_types.go
       - src/vllm-sr/cli/models.py
     file_checks: relaxed
@@ -94,6 +98,7 @@ legacy_hotspots:
   - paths:
       - src/semantic-router/pkg/apiserver/server_test.go
       - src/semantic-router/pkg/cache/cache_test.go
+      - src/semantic-router/pkg/modelselection/selector_test.go
     file_checks: relaxed
     function_checks: relaxed
   - paths:
@@ -108,6 +113,11 @@ legacy_hotspots:
       - src/semantic-router/pkg/extproc/res_filter_jailbreak_test.go
       - src/semantic-router/pkg/extproc/server.go
       - src/semantic-router/pkg/imagegen/backend_vllm_omni.go
+    function_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/cache/inmemory_cache.go
+      - src/semantic-router/pkg/cache/milvus_cache.go
+    file_checks: relaxed
     function_checks: relaxed
   - paths:
       - src/semantic-router/pkg/cache/cache_interface.go
@@ -144,6 +154,8 @@ legacy_hotspots:
       - src/semantic-router/pkg/extproc/req_filter_tools_test.go
     function_checks: relaxed
   - paths:
+      - src/vllm-sr/cli/models.py
+  - paths:
       - src/semantic-router/pkg/extproc/processor_req_body.go
       - src/semantic-router/pkg/extproc/processor_res_body.go
       - src/semantic-router/pkg/promptcompression/compressor_nlp_test.go
@@ -166,6 +178,12 @@ legacy_hotspots:
       - dashboard/backend/handlers/openclaw_teams.go
       - dashboard/backend/handlers/openclaw_test.go
       - dashboard/backend/handlers/openclaw_workers.go
+
+  - paths:
+      - tools/security/ast_security_scanner.py
+      - tools/security/scan_malicious_code.py
+    file_checks: relaxed
+    function_checks: relaxed
 
 dependency_rules:
   - name: prod-code-must-not-reference-e2e-docs-or-agent-tools

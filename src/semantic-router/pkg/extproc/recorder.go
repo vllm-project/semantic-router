@@ -211,6 +211,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Preference:   ctx.VSRMatchedPreference,
 		Language:     ctx.VSRMatchedLanguage,
 		Context:      ctx.VSRMatchedContext,
+		Structure:    ctx.VSRMatchedStructure,
 		Complexity:   ctx.VSRMatchedComplexity,
 	}
 }

@@ -9,6 +9,7 @@ extraction call). Session chunks are stored every 3 turns (window size 5).
 Test classes live in the memory_tests package:
   - UserIsolationTest: Cross-user memory leak prevention
   - MemoryInjectionPipelineTest: The fundamental store -> inject contract
+  - ChatCompletionsMemoryTest: Memory via /v1/chat/completions
   - MemoryContentIntegrityTest: Content preserved in Milvus (no truncation/corruption)
   - SimilarityThresholdTest: Irrelevant NOT injected, relevant IS injected
   - StaleMemoryTest: Contradicting facts baseline (soft-insert, no contradiction detection)
@@ -38,6 +39,7 @@ import unittest
 
 import requests
 from memory_tests import (
+    ChatCompletionsMemoryTest,
     MemoryContentIntegrityTest,
     MemoryInjectionPipelineTest,
     MemoryStorageTest,
@@ -80,6 +82,7 @@ def run_tests():
         UserIsolationTest,
         # P1: Pipeline correctness
         MemoryInjectionPipelineTest,
+        ChatCompletionsMemoryTest,
         MemoryContentIntegrityTest,
         SimilarityThresholdTest,
         StaleMemoryTest,

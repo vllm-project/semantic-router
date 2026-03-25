@@ -65,6 +65,7 @@ DSL now owns only:
 
 - `routing.modelCards`
 - `routing.signals`
+- `routing.projections` for signal coordination and derived routing outputs
 - `routing.decisions`
 
 It no longer owns endpoints, API keys, listeners, or router-global runtime settings.
@@ -149,6 +150,7 @@ The repo now has one public config story:
 - DSL is the routing-semantic view of that config
 - deployment bindings live in `providers.defaults` and `providers.models[]`
 - runtime overrides live in `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog`, with model-backed modules under `global.model_catalog.modules`
+- structure-signal `density` uses one built-in multilingual normalization path instead of exposing per-rule `normalize_by` choices
 - `global.router.config_source` is the canonical switch between file-backed config and Kubernetes CRD-backed reconciliation
 - built-in defaults live in the router
 - repo-owned sample assets are organized by `signal/decision/algorithm/plugin` fragments instead of parallel full-config examples

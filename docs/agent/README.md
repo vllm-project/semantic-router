@@ -7,7 +7,7 @@ This directory is the human-readable system of record for the repository's agent
 ## Start Here
 
 - [context-management.md](context-management.md)
-  - task-first progressive disclosure and `agent-report` context-pack flow
+  - task-first progressive disclosure, loop-mode guidance, and `agent-report` context-pack flow
 - [repo-map.md](repo-map.md)
   - repo layout, hotspots, entrypoints, and high-risk areas
 - [environments.md](environments.md)
@@ -26,11 +26,13 @@ This directory is the human-readable system of record for the repository's agent
 - [governance.md](governance.md)
   - rule layering, source-of-truth policy, and working-note policy
 - [plans/README.md](plans/README.md)
-  - when to use execution plans, how they differ from ADRs/debt, and the current plan inventory
+  - when to use execution plans for long-horizon completion loops, how they differ from ADRs/debt, and the current plan inventory
 - [tech-debt-register.md](tech-debt-register.md)
   - landing page and policy for repository technical debt
 - [tech-debt/README.md](tech-debt/README.md)
   - per-item debt inventory, template, and current entry set
+- [state-taxonomy-and-inventory.md](state-taxonomy-and-inventory.md)
+  - canonical inventory of runtime and dashboard state surfaces, durability levels, and recovery expectations
 - [glossary.md](glossary.md)
   - shared terminology for skills, surfaces, and harness layers
 - [adr/README.md](adr/README.md)
@@ -65,7 +67,7 @@ This directory is the human-readable system of record for the repository's agent
   - `make agent-validate`
   - `make agent-scorecard`
   - `make agent-report ENV=cpu CHANGED_FILES="..."`
-    - emits validation commands plus a task-first context pack
+    - emits validation commands, loop policy, and a task-first context pack
 
 ## Contributor Interface
 

@@ -7,6 +7,7 @@ export interface Signal {
   preference?: string[]
   language?: string[]
   context?: string[]
+  structure?: string[]
   complexity?: string[]
 }
 

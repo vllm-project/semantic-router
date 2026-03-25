@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import re
+
+import yaml
 from agent_support import (
     CHANGE_SURFACES_DOC,
     REPO_ROOT,
@@ -12,20 +15,43 @@ from agent_support import (
 )
 
 SKILL_REQUIRED_SECTIONS = {
-    "primary": ["## Trigger", "## Must Read", "## Standard Commands", "## Acceptance"],
+    "primary": [
+        "## Trigger",
+        "## Workflow",
+        "## Must Read",
+        "## Standard Commands",
+        "## Gotchas",
+        "## Acceptance",
+    ],
     "fragments": [
         "## Trigger",
+        "## Workflow",
         "## Must Read",
         "## Standard Commands",
         "## Acceptance",
     ],
-    "support": ["## Trigger", "## Must Read", "## Standard Commands", "## Acceptance"],
+    "support": [
+        "## Trigger",
+        "## Workflow",
+        "## Must Read",
+        "## Standard Commands",
+        "## Gotchas",
+        "## Acceptance",
+    ],
     "legacy_reference": [
         "## Trigger",
+        "## Workflow",
         "## Must Read",
         "## Standard Commands",
         "## Acceptance",
     ],
+}
+SKILL_FRONTMATTER_PATTERN = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
+SKILL_CATEGORY_FRONTMATTER = {
+    "primary": "primary",
+    "fragments": "fragment",
+    "support": "support",
+    "legacy_reference": "legacy_reference",
 }
 
 
@@ -106,6 +132,7 @@ def validate_skill_definition(
 ) -> None:
     skill_name = skill["name"]
     category = skill["category"]
+    validate_skill_frontmatter(skill, errors)
     if not skill.get("description"):
         errors.append(f"Skill '{skill_name}' is missing description")
 
@@ -137,6 +164,45 @@ def validate_skill_template(skill: dict, errors: list[str]) -> None:
             errors.append(
                 f"{skill['path']} is missing required section '{section}' for category '{skill['category']}'"
             )
+
+
+def validate_skill_frontmatter(skill: dict, errors: list[str]) -> None:
+    skill_text = (REPO_ROOT / skill["path"]).read_text(encoding="utf-8")
+    match = SKILL_FRONTMATTER_PATTERN.match(skill_text)
+    if match is None:
+        errors.append(f"{skill['path']} is missing YAML frontmatter")
+        return
+
+    try:
+        frontmatter = yaml.safe_load(match.group(1))
+    except yaml.YAMLError as exc:
+        errors.append(f"{skill['path']} has invalid YAML frontmatter: {exc}")
+        return
+
+    if not isinstance(frontmatter, dict):
+        errors.append(f"{skill['path']} frontmatter must decode to a mapping")
+        return
+
+    if frontmatter.get("name") != skill["name"]:
+        errors.append(
+            f"{skill['path']} frontmatter name must match registry name '{skill['name']}'"
+        )
+
+    description = frontmatter.get("description")
+    if not isinstance(description, str) or not description.strip():
+        errors.append(f"{skill['path']} frontmatter is missing a non-empty description")
+    elif "Use when" not in description:
+        errors.append(
+            f"{skill['path']} frontmatter description must include trigger guidance with 'Use when'"
+        )
+
+    expected_category = SKILL_CATEGORY_FRONTMATTER.get(
+        skill["category"], skill["category"]
+    )
+    if frontmatter.get("category") != expected_category:
+        errors.append(
+            f"{skill['path']} frontmatter category must be '{expected_category}'"
+        )
 
 
 def validate_primary_skill(

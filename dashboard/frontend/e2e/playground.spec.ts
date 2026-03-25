@@ -72,11 +72,19 @@ async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): P
 
 test.describe('Playground Chat Component', () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('sr:playground:claw-mode', 'false');
-    });
     await mockPlaygroundBootstrap(page);
     await page.goto('/playground');
+  });
+
+  test('defaults HireClaw mode off for a fresh session', async ({ page }) => {
+    const hireClawToggle = page.getByRole('button', { name: 'Enable HireClaw' });
+
+    await expect(hireClawToggle).toBeVisible();
+    await expect(hireClawToggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('button', { name: /Open ClawRoom view|Exit ClawRoom view/i })).toHaveCount(0);
+
+    const storedValue = await page.evaluate(() => window.localStorage.getItem('sr:playground:claw-mode'));
+    expect(storedValue).toBe('false');
   });
 
   test('renders chat interface', async ({ page }) => {

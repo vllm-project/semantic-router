@@ -588,11 +588,12 @@ var latestTutorialRequiredSections = []string{
 }
 
 var latestTutorialAllowedDirectories = map[string]bool{
-	"signal":    true,
-	"decision":  true,
-	"algorithm": true,
-	"plugin":    true,
-	"global":    true,
+	"signal":     true,
+	"decision":   true,
+	"algorithm":  true,
+	"plugin":     true,
+	"global":     true,
+	"projection": true,
 }
 
 var retiredCurrentTranslationOverrides = []string{

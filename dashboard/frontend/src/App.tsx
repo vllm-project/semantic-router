@@ -60,6 +60,7 @@ const ConfigSectionRoute: React.FC<{
       'global-config': 'global-config',
       'router-config': 'global-config',
       signals: 'signals',
+      projections: 'projections',
       routes: 'decisions',
       decisions: 'decisions',
       endpoints: 'models',
