@@ -154,6 +154,13 @@ async function mockReadonlyOpenClaw(page: Page) {
   });
 }
 
+async function enableHireClaw(page: Page) {
+  const toggle = page.getByRole('button', { name: 'Enable HireClaw' });
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(page.getByRole('button', { name: /Open ClawRoom view|Exit ClawRoom view/i })).toBeVisible();
+}
+
 test.describe('Readonly OpenClaw', () => {
   test('normal playground chat omits claw prompt and tools in readonly mode', async ({ page }) => {
     await mockReadonlyCommon(page);
@@ -194,6 +201,7 @@ test.describe('Readonly OpenClaw', () => {
     await mockReadonlyOpenClaw(page);
 
     await page.goto('/playground');
+    await enableHireClaw(page);
     await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
 
     await expect(page.getByRole('button', { name: 'New room' })).toBeDisabled();
@@ -244,6 +252,7 @@ test.describe('Readonly OpenClaw', () => {
     await mockReadonlyOpenClaw(page);
 
     await page.goto('/playground');
+    await enableHireClaw(page);
     await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
 
     const header = page.getByTestId('claw-room-header');
@@ -292,6 +301,7 @@ test.describe('Readonly OpenClaw', () => {
     await mockReadonlyOpenClaw(page);
 
     await page.goto('/playground');
+    await enableHireClaw(page);
     await page.getByRole('button', { name: 'Open ClawRoom view' }).click();
 
     const accountButton = page.getByTestId('playground-account-control');
