@@ -144,6 +144,20 @@ export const researchPapers = [
     sortOrder: 58,
   },
   {
+    id: 'knowledge-access-beats-model-size',
+    type: 'paper',
+    title: 'Knowledge Access Beats Model Size: Memory Augmented Routing for Persistent AI Agents',
+    authors: 'Xunzhuo Liu, Bowei He, Xue Liu, Andy Luo, Haichen Zhang, Huamin Chen',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We show that conversational memory and retrieval-grounded routing let a lightweight 8B model recover most of a 235B model’s performance on persistent user-specific queries while cutting effective inference cost by 96%.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.23013', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 59,
+  },
+  {
     id: 'when-to-reason',
     type: 'paper',
     title: 'When to Reason: Semantic Router for vLLM',
