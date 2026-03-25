@@ -171,7 +171,7 @@ func TestHandleTaxonomyClassifierLifecycle(t *testing.T) {
 	}
 }
 
-func TestHandleTaxonomyClassifierRejectsBuiltinMutation(t *testing.T) {
+func TestHandleTaxonomyClassifierAllowsBuiltinMutationAndDeletion(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.yaml")
 	if err := os.WriteFile(configPath, mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("default_route")), 0o644); err != nil {
@@ -189,10 +189,20 @@ func TestHandleTaxonomyClassifierRejectsBuiltinMutation(t *testing.T) {
 		configPath:        configPath,
 	}
 
+	restoreRuntimeSync := runtimeConfigSyncRunner
+	runtimeConfigSyncRunner = func(sourceConfigPath string) (string, error) {
+		return sourceConfigPath, nil
+	}
+	defer func() { runtimeConfigSyncRunner = restoreRuntimeSync }()
+
 	updatePayload := taxonomyClassifierUpsertRequest{
 		Name:              "privacy_classifier",
 		Threshold:         0.9,
 		SecurityThreshold: 0.8,
+		Description:       "Updated privacy taxonomy",
+		Tiers: []taxonomyClassifierTierPayload{
+			{Name: "privacy_policy", Description: "Private handling"},
+		},
 		Categories: []taxonomyClassifierCategoryPayload{
 			{Name: "proprietary_code", Tier: "privacy_policy", Exemplars: []string{"Inspect our internal code"}},
 		},
@@ -207,7 +217,46 @@ func TestHandleTaxonomyClassifierRejectsBuiltinMutation(t *testing.T) {
 	rr := httptest.NewRecorder()
 	apiServer.handleUpdateTaxonomyClassifier(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 Forbidden, got %d: %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var updated taxonomyClassifierDocument
+	if err := json.Unmarshal(rr.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("json.Unmarshal update response: %v", err)
+	}
+	if updated.Name != "privacy_classifier" {
+		t.Fatalf("expected updated built-in classifier, got %+v", updated)
+	}
+	if updated.Source.Path != "classifiers/custom/privacy_classifier/" {
+		t.Fatalf("expected built-in mutation to materialize managed source, got %q", updated.Source.Path)
+	}
+	if !updated.Editable {
+		t.Fatalf("expected updated built-in classifier to remain editable, got %+v", updated)
+	}
+
+	customDir := filepath.Join(tempDir, "classifiers", "custom", "privacy_classifier")
+	if _, err := os.Stat(filepath.Join(customDir, "taxonomy.json")); err != nil {
+		t.Fatalf("expected managed classifier assets for built-in update: %v", err)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/config/classifiers/privacy_classifier", nil)
+	deleteReq.SetPathValue("name", "privacy_classifier")
+	deleteRR := httptest.NewRecorder()
+	apiServer.handleDeleteTaxonomyClassifier(deleteRR, deleteReq)
+	if deleteRR.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on delete, got %d: %s", deleteRR.Code, deleteRR.Body.String())
+	}
+
+	if _, err := os.Stat(customDir); !os.IsNotExist(err) {
+		t.Fatalf("expected built-in managed asset dir to be removed, got err=%v", err)
+	}
+
+	reloaded, err := config.Parse(configPath)
+	if err != nil {
+		t.Fatalf("config.Parse after delete: %v", err)
+	}
+	if len(reloaded.TaxonomyClassifiers) != 0 {
+		t.Fatalf("expected deleting built-in classifier to persist removal, got %+v", reloaded.TaxonomyClassifiers)
 	}
 }

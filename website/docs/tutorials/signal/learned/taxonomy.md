@@ -45,8 +45,8 @@ global:
         source:
           path: classifiers/privacy/
           taxonomy_file: taxonomy.json
-        threshold: 0.30
-        security_threshold: 0.25
+        threshold: 0.55
+        security_threshold: 0.7
 
 routing:
   signals:
@@ -64,3 +64,5 @@ routing:
 ```
 
 Keep classifier names stable because taxonomy signals bind to those names directly.
+
+Tier bindings resolve against the classifier's best threshold-qualified tier, not every tier with at least one over-threshold category. Category bindings still match the specific category directly.

@@ -76,8 +76,8 @@ export interface TaxonomyCategoryDraft {
 export function emptyTaxonomyClassifierDraft(): TaxonomyClassifierDraft {
   return {
     name: '',
-    threshold: 0.3,
-    security_threshold: 0.25,
+    threshold: 0.55,
+    security_threshold: 0.7,
     description: '',
     tiers: [],
     categories: [
@@ -187,8 +187,105 @@ export function payloadFromDraft(draft: TaxonomyClassifierDraft) {
   }
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
+
+function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function asBoolean(value: unknown, fallback = false): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.filter((item): item is string => typeof item === 'string')
+}
+
+export function normalizeTaxonomySignalReference(raw: unknown): TaxonomySignalReference {
+  const record = asRecord(raw)
+  const bindRecord = asRecord(record.bind)
+  return {
+    name: asString(record.name),
+    bind: {
+      kind: (asString(bindRecord.kind || bindRecord.Kind) as TaxonomySignalBinding['kind']) || 'tier',
+      value: asString(bindRecord.value || bindRecord.Value),
+    },
+  }
+}
+
+export function normalizeTaxonomyClassifierRecord(raw: unknown): TaxonomyClassifierRecord {
+  const record = asRecord(raw)
+  const source = asRecord(record.source)
+  const bindOptions = asRecord(record.bind_options)
+  const tiers = Array.isArray(record.tiers) ? record.tiers : []
+  const categories = Array.isArray(record.categories) ? record.categories : []
+  const signalReferences = Array.isArray(record.signal_references) ? record.signal_references : []
+  const tierGroups = asRecord(record.tier_groups)
+
+  return {
+    name: asString(record.name),
+    type: asString(record.type),
+    builtin: asBoolean(record.builtin),
+    managed: asBoolean(record.managed),
+    editable: asBoolean(record.editable),
+    threshold: asNumber(record.threshold),
+    security_threshold: typeof record.security_threshold === 'number' ? record.security_threshold : undefined,
+    description: asString(record.description) || undefined,
+    source: {
+      path: asString(source.path || source.Path),
+      taxonomy_file: asString(source.taxonomy_file || source.TaxonomyFile) || undefined,
+    },
+    tiers: tiers.map((tier) => {
+      const tierRecord = asRecord(tier)
+      return {
+        name: asString(tierRecord.name),
+        description: asString(tierRecord.description) || undefined,
+      }
+    }),
+    categories: categories.map((category) => {
+      const categoryRecord = asRecord(category)
+      return {
+        name: asString(categoryRecord.name),
+        tier: asString(categoryRecord.tier),
+        description: asString(categoryRecord.description) || undefined,
+        exemplars: asStringArray(categoryRecord.exemplars),
+      }
+    }),
+    tier_groups: Object.keys(tierGroups).length > 0
+      ? Object.fromEntries(
+          Object.entries(tierGroups).map(([key, value]) => [key, asStringArray(value)])
+        )
+      : undefined,
+    signal_references: signalReferences.map((reference) => normalizeTaxonomySignalReference(reference)),
+    bind_options: {
+      tiers: asStringArray(bindOptions.tiers),
+      categories: asStringArray(bindOptions.categories),
+    },
+    load_error: asString(record.load_error) || undefined,
+  }
+}
+
+export function normalizeTaxonomyClassifierListResponse(raw: unknown): TaxonomyClassifierListResponse {
+  const record = asRecord(raw)
+  const items = Array.isArray(record.items) ? record.items : []
+  return {
+    items: items.map((item) => normalizeTaxonomyClassifierRecord(item)),
+  }
+}
+
 export function formatSignalReference(reference: TaxonomySignalReference): string {
-  return `${reference.name} -> ${reference.bind.kind}:${reference.bind.value}`
+  const bindKind = reference.bind.kind || 'unknown'
+  const bindValue = reference.bind.value || 'unknown'
+  return `${reference.name} -> ${bindKind}:${bindValue}`
 }
 
 export function countSignalsForTier(record: TaxonomyClassifierRecord, tierName: string): number {

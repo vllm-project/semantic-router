@@ -21,14 +21,17 @@ type categoryKBData struct {
 
 // TaxonomyClassifyResult contains the output of taxonomy-backed classification.
 type TaxonomyClassifyResult struct {
-	BestCategory        string
-	BestSimilarity      float64
-	BestTier            string
-	ContrastiveScore    float64
-	MatchedCategories   []string
-	MatchedTiers        []string
-	CategoryTiers       map[string]string
-	CategoryConfidences map[string]float64
+	BestCategory          string
+	BestSimilarity        float64
+	BestTier              string
+	BestMatchedCategory   string
+	BestMatchedSimilarity float64
+	BestMatchedTier       string
+	ContrastiveScore      float64
+	MatchedCategories     []string
+	MatchedTiers          []string
+	CategoryTiers         map[string]string
+	CategoryConfidences   map[string]float64
 }
 
 // CategoryKBClassifier performs contrastive per-category taxonomy
@@ -313,20 +316,28 @@ func (c *CategoryKBClassifier) Classify(text string) (*TaxonomyClassifyResult, e
 		bestTier = entry.Tier
 	}
 	matchedTiers := c.collectMatchedTiers(matchedRules)
+	bestMatchedCategory, bestMatchedSimilarity := bestMatchedCategory(matchedRules, confidences)
+	bestMatchedTier := ""
+	if entry, ok := c.taxonomy.Categories[bestMatchedCategory]; ok {
+		bestMatchedTier = entry.Tier
+	}
 
 	elapsed := time.Since(startTime)
-	logging.Infof("[TaxonomyClassifier:%s] Classified in %v: best=%s (%.3f) tier=%s, contrastive=%.3f, matched=%d categories",
-		c.rule.Name, elapsed, bestCat, bestSim, bestTier, contrastive, len(matchedRules))
+	logging.Infof("[TaxonomyClassifier:%s] Classified in %v: best=%s (%.3f) tier=%s, best_matched=%s (%.3f) tier=%s, contrastive=%.3f, matched=%d categories",
+		c.rule.Name, elapsed, bestCat, bestSim, bestTier, bestMatchedCategory, bestMatchedSimilarity, bestMatchedTier, contrastive, len(matchedRules))
 
 	return &TaxonomyClassifyResult{
-		BestCategory:        bestCat,
-		BestSimilarity:      bestSim,
-		BestTier:            bestTier,
-		ContrastiveScore:    contrastive,
-		MatchedCategories:   matchedRules,
-		MatchedTiers:        matchedTiers,
-		CategoryTiers:       categoryTiers,
-		CategoryConfidences: confidences,
+		BestCategory:          bestCat,
+		BestSimilarity:        bestSim,
+		BestTier:              bestTier,
+		BestMatchedCategory:   bestMatchedCategory,
+		BestMatchedSimilarity: bestMatchedSimilarity,
+		BestMatchedTier:       bestMatchedTier,
+		ContrastiveScore:      contrastive,
+		MatchedCategories:     matchedRules,
+		MatchedTiers:          matchedTiers,
+		CategoryTiers:         categoryTiers,
+		CategoryConfidences:   confidences,
 	}, nil
 }
 
@@ -366,6 +377,22 @@ func (c *CategoryKBClassifier) collectMatchedTiers(categories []string) []string
 		matched = append(matched, entry.Tier)
 	}
 	return matched
+}
+
+func bestMatchedCategory(categories []string, confidences map[string]float64) (string, float64) {
+	bestCategory := ""
+	bestConfidence := 0.0
+	for _, category := range categories {
+		confidence, ok := confidences[category]
+		if !ok {
+			continue
+		}
+		if confidence > bestConfidence {
+			bestCategory = category
+			bestConfidence = confidence
+		}
+	}
+	return bestCategory, bestConfidence
 }
 
 func (c *CategoryKBClassifier) categoryTiers() map[string]string {

@@ -185,6 +185,24 @@ func TestCategoryKBClassifierContrastiveScoring(t *testing.T) {
 	}
 }
 
+func TestBestMatchedCategorySelectsHighestMatchedConfidence(t *testing.T) {
+	category, confidence := bestMatchedCategory(
+		[]string{"security_containment", "privacy_policy", "local_standard"},
+		map[string]float64{
+			"security_containment": 0.74,
+			"privacy_policy":       0.82,
+			"local_standard":       0.79,
+		},
+	)
+
+	if category != "privacy_policy" {
+		t.Fatalf("bestMatchedCategory() category = %q, want privacy_policy", category)
+	}
+	if confidence != 0.82 {
+		t.Fatalf("bestMatchedCategory() confidence = %.2f, want 0.82", confidence)
+	}
+}
+
 func writeTaxonomyClassifierFixture(t *testing.T) string {
 	t.Helper()
 

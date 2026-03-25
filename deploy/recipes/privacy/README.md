@@ -89,7 +89,7 @@ These feed `privacy_risk_score`, which maps into:
 
 - `privacy_classifier` (type: `taxonomy`)
 
-Loads the router built-in taxonomy package from `config/classifiers/privacy/`, computes max-cosine-similarity per category, then binds tier-level routing signals and a contrastive metric. The contrastive score (max private-tier similarity minus max public-tier similarity) feeds `privacy_contrastive_score`, which maps into:
+Loads the router built-in taxonomy package from `config/classifiers/privacy/`, computes max-cosine-similarity per category, then binds the best threshold-qualified tier plus a contrastive metric. The contrastive score (max private-tier similarity minus max public-tier similarity) feeds `privacy_contrastive_score`, which maps into:
 
 - `privacy_override_inactive`
 - `privacy_override_active`

@@ -280,7 +280,7 @@ func buildTaxonomyClassifierDocument(cfg *config.RouterConfig, baseDir string, c
 		Type:              classifier.NormalizedType(),
 		Builtin:           isBuiltinTaxonomyClassifier(classifier),
 		Managed:           isManagedTaxonomyClassifier(classifier),
-		Editable:          isManagedTaxonomyClassifier(classifier),
+		Editable:          existingClassifierEditable(classifier),
 		Threshold:         classifier.Threshold,
 		SecurityThreshold: classifier.SecurityThreshold,
 		Source:            classifier.Source,

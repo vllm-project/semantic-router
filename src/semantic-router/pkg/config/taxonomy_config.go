@@ -20,11 +20,11 @@ const (
 // TaxonomyClassifierConfig declares a reusable taxonomy-backed classifier
 // instance that is loaded at router startup.
 type TaxonomyClassifierConfig struct {
-	Name              string                   `yaml:"name"`
-	Type              string                   `yaml:"type"`
-	Source            TaxonomyClassifierSource `yaml:"source"`
-	Threshold         float32                  `yaml:"threshold"`
-	SecurityThreshold float32                  `yaml:"security_threshold,omitempty"`
+	Name              string                   `json:"name" yaml:"name"`
+	Type              string                   `json:"type" yaml:"type"`
+	Source            TaxonomyClassifierSource `json:"source" yaml:"source"`
+	Threshold         float32                  `json:"threshold" yaml:"threshold"`
+	SecurityThreshold float32                  `json:"security_threshold,omitempty" yaml:"security_threshold,omitempty"`
 }
 
 func (c TaxonomyClassifierConfig) NormalizedType() string {
@@ -36,8 +36,8 @@ func (c TaxonomyClassifierConfig) NormalizedType() string {
 
 // TaxonomyClassifierSource points at the classifier asset directory.
 type TaxonomyClassifierSource struct {
-	Path         string `yaml:"path"`
-	TaxonomyFile string `yaml:"taxonomy_file,omitempty"`
+	Path         string `json:"path" yaml:"path"`
+	TaxonomyFile string `json:"taxonomy_file,omitempty" yaml:"taxonomy_file,omitempty"`
 }
 
 func (s TaxonomyClassifierSource) taxonomyFileName() string {
@@ -90,16 +90,16 @@ func (s TaxonomyClassifierSource) ResolveTaxonomyPath(baseDir string) string {
 
 // TaxonomySignalRule binds one classifier output to a normal routing signal.
 type TaxonomySignalRule struct {
-	Name       string             `yaml:"name"`
-	Classifier string             `yaml:"classifier"`
-	Bind       TaxonomySignalBind `yaml:"bind"`
+	Name       string             `json:"name" yaml:"name"`
+	Classifier string             `json:"classifier" yaml:"classifier"`
+	Bind       TaxonomySignalBind `json:"bind" yaml:"bind"`
 }
 
 // TaxonomySignalBind identifies which classifier namespace a signal should
 // match against.
 type TaxonomySignalBind struct {
-	Kind  string `yaml:"kind"`
-	Value string `yaml:"value"`
+	Kind  string `json:"kind" yaml:"kind"`
+	Value string `json:"value" yaml:"value"`
 }
 
 // TaxonomyDefinition is the taxonomy manifest loaded from taxonomy.json.

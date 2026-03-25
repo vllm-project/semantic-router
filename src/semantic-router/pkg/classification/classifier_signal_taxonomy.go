@@ -67,10 +67,8 @@ func (c *Classifier) evaluateTaxonomySignals(results *SignalResults, mu *sync.Mu
 func taxonomySignalMatchConfidence(rule config.TaxonomySignalRule, result *TaxonomyClassifyResult) (float64, bool) {
 	switch rule.Bind.Kind {
 	case config.TaxonomyBindKindTier:
-		for _, tier := range result.MatchedTiers {
-			if tier == rule.Bind.Value {
-				return taxonomyTierConfidence(rule.Bind.Value, result), true
-			}
+		if result.BestMatchedTier == rule.Bind.Value && result.BestMatchedCategory != "" {
+			return result.BestMatchedSimilarity, true
 		}
 	case config.TaxonomyBindKindCategory:
 		if confidence, ok := result.CategoryConfidences[rule.Bind.Value]; ok {
@@ -82,27 +80,6 @@ func taxonomySignalMatchConfidence(rule config.TaxonomySignalRule, result *Taxon
 		}
 	}
 	return 0, false
-}
-
-func taxonomyTierConfidence(tier string, result *TaxonomyClassifyResult) float64 {
-	best := 0.0
-	for _, category := range result.MatchedCategories {
-		confidence, ok := result.CategoryConfidences[category]
-		if !ok {
-			continue
-		}
-		if confidence > best && matchedCategoryTier(result, category, tier) {
-			best = confidence
-		}
-	}
-	return best
-}
-
-func matchedCategoryTier(result *TaxonomyClassifyResult, category, tier string) bool {
-	if result == nil {
-		return false
-	}
-	return result.CategoryTiers[category] == tier
 }
 
 func signalSetBestConfidence(confidences map[string]float64, signalType string, names []string) float64 {

@@ -17,6 +17,7 @@ import {
   emptyTaxonomyCategoryDraft,
   emptyTaxonomyClassifierDraft,
   emptyTaxonomyTierDraft,
+  normalizeTaxonomyClassifierListResponse,
   payloadFromDraft,
   removeCategoryFromDraft,
   removeTierFromDraft,
@@ -25,7 +26,6 @@ import {
   tierDraftFromTier,
   type TaxonomyCategoryDraft,
   type TaxonomyClassifierDraft,
-  type TaxonomyClassifierListResponse,
   type TaxonomyClassifierRecord,
   type TaxonomyClassifierTier,
   type TaxonomyClassifierCategory,
@@ -85,7 +85,7 @@ export default function ConfigPageTaxonomyClassifiers({
         const message = await response.text()
         throw new Error(message || `HTTP ${response.status}: ${response.statusText}`)
       }
-      const payload = await response.json() as TaxonomyClassifierListResponse
+      const payload = normalizeTaxonomyClassifierListResponse(await response.json())
       const items = payload.items || []
       setClassifiers(items)
       setSelectedClassifierName((current) => {
@@ -180,7 +180,7 @@ export default function ConfigPageTaxonomyClassifiers({
   const counts = useMemo(() => ({
     total: classifiers.length,
     builtin: classifiers.filter((classifier) => classifier.builtin).length,
-    custom: classifiers.filter((classifier) => classifier.editable).length,
+    custom: classifiers.filter((classifier) => !classifier.builtin).length,
   }), [classifiers])
 
   const classifierEditorField = useCallback(
@@ -230,7 +230,7 @@ export default function ConfigPageTaxonomyClassifiers({
   const persistSelectedClassifier = useCallback(
     async (mutate: (draft: TaxonomyClassifierDraft) => TaxonomyClassifierDraft) => {
       if (!selectedClassifier || !selectedClassifier.editable) {
-        throw new Error('Select a custom classifier to edit.')
+        throw new Error('Select a classifier to edit.')
       }
       const currentDraft = classifierDraftFromRecord(selectedClassifier)
       const nextDraft = mutate(currentDraft)
@@ -270,7 +270,7 @@ export default function ConfigPageTaxonomyClassifiers({
   }
 
   const handleDeleteClassifier = async (classifier: TaxonomyClassifierRecord) => {
-    if (!window.confirm(`Delete classifier "${classifier.name}"? This also removes its managed directory.`)) {
+    if (!window.confirm(`Delete classifier "${classifier.name}"? This removes it from the active taxonomy catalog.`)) {
       return
     }
 

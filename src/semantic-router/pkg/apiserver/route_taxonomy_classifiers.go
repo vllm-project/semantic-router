@@ -275,5 +275,5 @@ func taxonomyClassifierByName(
 }
 
 func existingClassifierEditable(classifier config.TaxonomyClassifierConfig) bool {
-	return isManagedTaxonomyClassifier(classifier) && !isBuiltinTaxonomyClassifier(classifier)
+	return classifier.Name != ""
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,6 +49,67 @@ func TestTaxonomyClassifierYAMLRoundTrip(t *testing.T) {
 	}
 	if got.SecurityThreshold != classifier.SecurityThreshold {
 		t.Errorf("SecurityThreshold = %v, want %v", got.SecurityThreshold, classifier.SecurityThreshold)
+	}
+}
+
+func TestTaxonomyConfigJSONUsesLowercaseFieldNames(t *testing.T) {
+	payload := struct {
+		Classifier TaxonomyClassifierConfig `json:"classifier"`
+		Signal     TaxonomySignalRule       `json:"signal"`
+	}{
+		Classifier: TaxonomyClassifierConfig{
+			Name: "privacy_classifier",
+			Type: ClassifierTypeTaxonomy,
+			Source: TaxonomyClassifierSource{
+				Path:         "classifiers/privacy/",
+				TaxonomyFile: "taxonomy.json",
+			},
+			Threshold:         0.55,
+			SecurityThreshold: 0.7,
+		},
+		Signal: TaxonomySignalRule{
+			Name:       "privacy_policy",
+			Classifier: "privacy_classifier",
+			Bind: TaxonomySignalBind{
+				Kind:  TaxonomyBindKindTier,
+				Value: "privacy_policy",
+			},
+		},
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+
+	jsonText := string(data)
+	for _, unexpected := range []string{`"Path"`, `"TaxonomyFile"`, `"Kind"`, `"Value"`} {
+		if strings.Contains(jsonText, unexpected) {
+			t.Fatalf("expected lowercase JSON field names, found %s in %s", unexpected, jsonText)
+		}
+	}
+	for _, expected := range []string{`"path"`, `"taxonomy_file"`, `"kind"`, `"value"`} {
+		if !strings.Contains(jsonText, expected) {
+			t.Fatalf("expected JSON output to contain %s, got %s", expected, jsonText)
+		}
+	}
+}
+
+func TestDefaultCanonicalModelCatalogUsesPrivacyClassifierThresholds(t *testing.T) {
+	catalog := defaultCanonicalModelCatalog()
+	if len(catalog.Classifiers) != 1 {
+		t.Fatalf("expected 1 default taxonomy classifier, got %d", len(catalog.Classifiers))
+	}
+
+	classifier := catalog.Classifiers[0]
+	if classifier.Name != "privacy_classifier" {
+		t.Fatalf("default classifier name = %q, want privacy_classifier", classifier.Name)
+	}
+	if classifier.Threshold != 0.55 {
+		t.Fatalf("default classifier threshold = %.2f, want 0.55", classifier.Threshold)
+	}
+	if classifier.SecurityThreshold != 0.7 {
+		t.Fatalf("default classifier security threshold = %.2f, want 0.7", classifier.SecurityThreshold)
 	}
 }
 
