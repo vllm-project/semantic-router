@@ -601,8 +601,13 @@ test.describe("Dashboard auth flow", () => {
 
     await page.goto("/playground");
     await expect(
-      page.getByRole("button", { name: /Enable ClawOS|Disable ClawOS/i }),
+      page.getByRole("button", { name: /Enable HireClaw|Disable HireClaw/i }),
     ).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: /Open ClawRoom view|Exit ClawRoom view/i }),
+    ).toHaveCount(0);
+
+    await page.getByRole("button", { name: /Enable HireClaw/i }).click();
     await expect(
       page.getByRole("button", { name: /Open ClawRoom view|Exit ClawRoom view/i }),
     ).toBeEnabled();
