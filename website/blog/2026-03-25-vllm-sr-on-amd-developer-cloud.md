@@ -174,7 +174,7 @@ http://<your-server-ip>:8700
 
 Open the dashboard and complete onboarding.
 
-When prompted to load a routing profile (please skip the model configuation directly), import the reference YAML directly from:
+When prompted to load a routing profile (please skip the model configuration directly), import the reference YAML directly from:
 
 > `https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/balance.yaml`
 
