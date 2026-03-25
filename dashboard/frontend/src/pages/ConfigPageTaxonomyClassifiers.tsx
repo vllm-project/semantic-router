@@ -25,16 +25,19 @@ import {
   renameTierInDraft,
   tierDraftFromTier,
   type TaxonomyCategoryDraft,
+  type TaxonomyClassifierCategory,
   type TaxonomyClassifierDraft,
   type TaxonomyClassifierRecord,
   type TaxonomyClassifierTier,
-  type TaxonomyClassifierCategory,
   type TaxonomyTierDraft,
 } from './configPageTaxonomyClassifierSupport'
+
+type TaxonomyManagerView = 'classifiers' | 'tiers' | 'categories' | 'exemplars'
 
 interface ConfigPageTaxonomyClassifiersProps {
   isReadonly: boolean
   openEditModal: OpenEditModal
+  activeView?: TaxonomyManagerView
 }
 
 interface ClassifierRow extends TaxonomyClassifierRecord {
@@ -54,6 +57,19 @@ interface CategoryRow extends TaxonomyClassifierCategory {
   signal_count: number
 }
 
+interface ExemplarRow {
+  key: string
+  category: string
+  tier: string
+  exemplar: string
+  exemplarIndex: number
+}
+
+interface TaxonomyExemplarDraft {
+  category: string
+  exemplar: string
+}
+
 function buildClassifierModeLabel(classifier: TaxonomyClassifierRecord): string {
   if (classifier.builtin) {
     return 'Built-in'
@@ -64,9 +80,78 @@ function buildClassifierModeLabel(classifier: TaxonomyClassifierRecord): string 
   return 'External'
 }
 
+function addExemplarToDraft(
+  draft: TaxonomyClassifierDraft,
+  categoryName: string,
+  exemplar: string
+): TaxonomyClassifierDraft {
+  return {
+    ...draft,
+    categories: draft.categories.map((category) =>
+      category.name === categoryName
+        ? { ...category, exemplars: [...category.exemplars, exemplar] }
+        : category
+    ),
+  }
+}
+
+function updateExemplarInDraft(
+  draft: TaxonomyClassifierDraft,
+  originalCategory: string,
+  originalIndex: number,
+  nextCategory: string,
+  nextExemplar: string
+): TaxonomyClassifierDraft {
+  return {
+    ...draft,
+    categories: draft.categories.map((category) => {
+      if (category.name === originalCategory && category.name === nextCategory) {
+        return {
+          ...category,
+          exemplars: category.exemplars.map((exemplar, index) =>
+            index === originalIndex ? nextExemplar : exemplar
+          ),
+        }
+      }
+      if (category.name === originalCategory) {
+        return {
+          ...category,
+          exemplars: category.exemplars.filter((_, index) => index !== originalIndex),
+        }
+      }
+      if (category.name === nextCategory) {
+        return {
+          ...category,
+          exemplars: [...category.exemplars, nextExemplar],
+        }
+      }
+      return category
+    }),
+  }
+}
+
+function removeExemplarFromDraft(
+  draft: TaxonomyClassifierDraft,
+  categoryName: string,
+  exemplarIndex: number
+): TaxonomyClassifierDraft {
+  return {
+    ...draft,
+    categories: draft.categories.map((category) =>
+      category.name === categoryName
+        ? {
+            ...category,
+            exemplars: category.exemplars.filter((_, index) => index !== exemplarIndex),
+          }
+        : category
+    ),
+  }
+}
+
 export default function ConfigPageTaxonomyClassifiers({
   isReadonly,
   openEditModal,
+  activeView = 'classifiers',
 }: ConfigPageTaxonomyClassifiersProps) {
   const [classifiers, setClassifiers] = useState<TaxonomyClassifierRecord[]>([])
   const [loading, setLoading] = useState(false)
@@ -75,6 +160,7 @@ export default function ConfigPageTaxonomyClassifiers({
   const [classifierSearch, setClassifierSearch] = useState('')
   const [tierSearch, setTierSearch] = useState('')
   const [categorySearch, setCategorySearch] = useState('')
+  const [exemplarSearch, setExemplarSearch] = useState('')
 
   const loadClassifiers = useCallback(async () => {
     setLoading(true)
@@ -177,11 +263,41 @@ export default function ConfigPageTaxonomyClassifiers({
       }))
   }, [categorySearch, selectedClassifier])
 
-  const counts = useMemo(() => ({
-    total: classifiers.length,
-    builtin: classifiers.filter((classifier) => classifier.builtin).length,
-    custom: classifiers.filter((classifier) => !classifier.builtin).length,
-  }), [classifiers])
+  const exemplarRows = useMemo<ExemplarRow[]>(() => {
+    if (!selectedClassifier) {
+      return []
+    }
+    const query = exemplarSearch.trim().toLowerCase()
+    return selectedClassifier.categories.flatMap((category) =>
+      category.exemplars
+        .map((exemplar, exemplarIndex) => ({
+          key: `${category.name}:${exemplarIndex}`,
+          category: category.name,
+          tier: category.tier,
+          exemplar,
+          exemplarIndex,
+        }))
+        .filter((row) => {
+          if (!query) {
+            return true
+          }
+          return (
+            row.category.toLowerCase().includes(query) ||
+            row.tier.toLowerCase().includes(query) ||
+            row.exemplar.toLowerCase().includes(query)
+          )
+        })
+    )
+  }, [exemplarSearch, selectedClassifier])
+
+  const counts = useMemo(
+    () => ({
+      total: classifiers.length,
+      builtin: classifiers.filter((classifier) => classifier.builtin).length,
+      custom: classifiers.filter((classifier) => !classifier.builtin).length,
+    }),
+    [classifiers]
+  )
 
   const classifierEditorField = useCallback(
     (disableName: boolean): FieldConfig[] => [
@@ -253,7 +369,7 @@ export default function ConfigPageTaxonomyClassifiers({
         const nextName = data.draft.name.trim()
         await persistClassifier('/api/router/config/classifiers', 'POST', data.draft, nextName)
       },
-      'add',
+      'add'
     )
   }
 
@@ -265,7 +381,7 @@ export default function ConfigPageTaxonomyClassifiers({
       async (data) => {
         await persistClassifier(`/api/router/config/classifiers/${classifier.name}`, 'PUT', data.draft, classifier.name)
       },
-      'edit',
+      'edit'
     )
   }
 
@@ -310,7 +426,7 @@ export default function ConfigPageTaxonomyClassifiers({
         }
         await persistSelectedClassifier((draft) => addTierToDraft(draft, data))
       },
-      'add',
+      'add'
     )
   }
 
@@ -327,21 +443,15 @@ export default function ConfigPageTaxonomyClassifiers({
       ],
       async (data) => {
         const nextName = data.name.trim()
-        if (
-          nextName !== tier.name &&
-          selectedClassifier.tiers.some((existingTier) => existingTier.name === nextName)
-        ) {
+        if (nextName !== tier.name && selectedClassifier.tiers.some((existingTier) => existingTier.name === nextName)) {
           throw new Error(`Tier "${nextName}" already exists.`)
         }
-        if (
-          nextName !== tier.name &&
-          countSignalsForTier(selectedClassifier, tier.name) > 0
-        ) {
+        if (nextName !== tier.name && countSignalsForTier(selectedClassifier, tier.name) > 0) {
           throw new Error(`Tier "${tier.name}" is referenced by taxonomy signals. Update those signals before renaming it.`)
         }
         await persistSelectedClassifier((draft) => renameTierInDraft(draft, tier.name, data))
       },
-      'edit',
+      'edit'
     )
   }
 
@@ -393,7 +503,7 @@ export default function ConfigPageTaxonomyClassifiers({
         }
         await persistSelectedClassifier((draft) => addCategoryToDraft(draft, data))
       },
-      'add',
+      'add'
     )
   }
 
@@ -418,15 +528,12 @@ export default function ConfigPageTaxonomyClassifiers({
         ) {
           throw new Error(`Category "${nextName}" already exists.`)
         }
-        if (
-          nextName !== category.name &&
-          countSignalsForCategory(selectedClassifier, category.name) > 0
-        ) {
+        if (nextName !== category.name && countSignalsForCategory(selectedClassifier, category.name) > 0) {
           throw new Error(`Category "${category.name}" is referenced by taxonomy signals. Update those signals before renaming it.`)
         }
         await persistSelectedClassifier((draft) => renameCategoryInDraft(draft, category.name, data))
       },
-      'edit',
+      'edit'
     )
   }
 
@@ -446,6 +553,79 @@ export default function ConfigPageTaxonomyClassifiers({
       await persistSelectedClassifier((draft) => removeCategoryFromDraft(draft, category.name))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete category')
+    }
+  }
+
+  const openAddExemplarModal = () => {
+    if (!selectedClassifier) {
+      return
+    }
+    if (selectedClassifier.categories.length === 0) {
+      setError('Add at least one category before creating exemplars.')
+      return
+    }
+    openEditModal<TaxonomyExemplarDraft>(
+      `Add Exemplar · ${selectedClassifier.name}`,
+      {
+        category: selectedClassifier.categories[0]?.name ?? '',
+        exemplar: '',
+      },
+      [
+        { name: 'category', label: 'Category', type: 'select', required: true, options: selectedClassifier.categories.map((category) => category.name) },
+        { name: 'exemplar', label: 'Exemplar', type: 'textarea', required: true, placeholder: 'Representative prompt for this category' },
+      ],
+      async (data) => {
+        const nextCategory = data.category.trim()
+        const nextExemplar = data.exemplar.trim()
+        if (!nextCategory || !nextExemplar) {
+          throw new Error('Category and exemplar are required.')
+        }
+        await persistSelectedClassifier((draft) => addExemplarToDraft(draft, nextCategory, nextExemplar))
+      },
+      'add'
+    )
+  }
+
+  const openEditExemplarModal = (row: ExemplarRow) => {
+    if (!selectedClassifier) {
+      return
+    }
+    openEditModal<TaxonomyExemplarDraft>(
+      `Edit Exemplar · ${row.category}`,
+      {
+        category: row.category,
+        exemplar: row.exemplar,
+      },
+      [
+        { name: 'category', label: 'Category', type: 'select', required: true, options: selectedClassifier.categories.map((category) => category.name) },
+        { name: 'exemplar', label: 'Exemplar', type: 'textarea', required: true, placeholder: 'Representative prompt for this category' },
+      ],
+      async (data) => {
+        const nextCategory = data.category.trim()
+        const nextExemplar = data.exemplar.trim()
+        if (!nextCategory || !nextExemplar) {
+          throw new Error('Category and exemplar are required.')
+        }
+        await persistSelectedClassifier((draft) =>
+          updateExemplarInDraft(draft, row.category, row.exemplarIndex, nextCategory, nextExemplar)
+        )
+      },
+      'edit'
+    )
+  }
+
+  const handleDeleteExemplar = async (row: ExemplarRow) => {
+    if (!selectedClassifier) {
+      return
+    }
+    if (!window.confirm(`Delete this exemplar from "${row.category}"?`)) {
+      return
+    }
+    setError(null)
+    try {
+      await persistSelectedClassifier((draft) => removeExemplarFromDraft(draft, row.category, row.exemplarIndex))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete exemplar')
     }
   }
 
@@ -499,29 +679,15 @@ export default function ConfigPageTaxonomyClassifiers({
       align: 'right',
       render: (row) => (
         <div className={styles.tableActionGroup}>
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={() => setSelectedClassifierName(row.name)}
-          >
+          <button type="button" className={styles.secondaryButton} onClick={() => setSelectedClassifierName(row.name)}>
             {selectedClassifier?.name === row.name ? 'Open' : 'View'}
           </button>
           {row.editable && !isReadonly ? (
             <>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => openEditClassifierModal(row)}
-              >
+              <button type="button" className={styles.secondaryButton} onClick={() => openEditClassifierModal(row)}>
                 Edit
               </button>
-              <button
-                type="button"
-                className={styles.removeButton}
-                onClick={() => {
-                  void handleDeleteClassifier(row)
-                }}
-              >
+              <button type="button" className={styles.removeButton} onClick={() => void handleDeleteClassifier(row)}>
                 Delete
               </button>
             </>
@@ -563,20 +729,10 @@ export default function ConfigPageTaxonomyClassifiers({
         <div className={styles.tableActionGroup}>
           {!isReadonly && selectedClassifier?.editable ? (
             <>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => openEditTierModal(row)}
-              >
+              <button type="button" className={styles.secondaryButton} onClick={() => openEditTierModal(row)}>
                 Edit
               </button>
-              <button
-                type="button"
-                className={styles.removeButton}
-                onClick={() => {
-                  void handleDeleteTier(row)
-                }}
-              >
+              <button type="button" className={styles.removeButton} onClick={() => void handleDeleteTier(row)}>
                 Delete
               </button>
             </>
@@ -626,20 +782,10 @@ export default function ConfigPageTaxonomyClassifiers({
         <div className={styles.tableActionGroup}>
           {!isReadonly && selectedClassifier?.editable ? (
             <>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => openEditCategoryModal(row)}
-              >
+              <button type="button" className={styles.secondaryButton} onClick={() => openEditCategoryModal(row)}>
                 Edit
               </button>
-              <button
-                type="button"
-                className={styles.removeButton}
-                onClick={() => {
-                  void handleDeleteCategory(row)
-                }}
-              >
+              <button type="button" className={styles.removeButton} onClick={() => void handleDeleteCategory(row)}>
                 Delete
               </button>
             </>
@@ -650,6 +796,51 @@ export default function ConfigPageTaxonomyClassifiers({
       ),
     },
   ], [handleDeleteCategory, isReadonly, openEditCategoryModal, selectedClassifier?.editable])
+
+  const exemplarColumns = useMemo<Column<ExemplarRow>[]>(() => [
+    {
+      key: 'category',
+      header: 'Category',
+      sortable: true,
+      render: (row) => <span className={styles.tableBadge}>{row.category}</span>,
+    },
+    {
+      key: 'tier',
+      header: 'Tier',
+      sortable: true,
+      render: (row) => <span className={styles.tableBadge}>{row.tier}</span>,
+    },
+    {
+      key: 'exemplar',
+      header: 'Exemplar',
+      render: (row) => (
+        <div className={styles.primaryCell}>
+          <span className={styles.primaryCellMeta}>{row.exemplar}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (row) => (
+        <div className={styles.tableActionGroup}>
+          {!isReadonly && selectedClassifier?.editable ? (
+            <>
+              <button type="button" className={styles.secondaryButton} onClick={() => openEditExemplarModal(row)}>
+                Edit
+              </button>
+              <button type="button" className={styles.removeButton} onClick={() => void handleDeleteExemplar(row)}>
+                Delete
+              </button>
+            </>
+          ) : (
+            <span className={styles.readOnlyHint}>Read-only</span>
+          )}
+        </div>
+      ),
+    },
+  ], [handleDeleteExemplar, isReadonly, openEditExemplarModal, selectedClassifier?.editable])
 
   return (
     <section id="taxonomy-classifiers" className={styles.section}>
@@ -662,7 +853,7 @@ export default function ConfigPageTaxonomyClassifiers({
         <article className={styles.summaryCard}>
           <span className={styles.summaryLabel}>Built-In</span>
           <strong className={styles.summaryValue}>{counts.builtin}</strong>
-          <span className={styles.summaryHint}>Router-shipped classifiers stay visible but read-only.</span>
+          <span className={styles.summaryHint}>Router-shipped classifiers that can be updated or deleted explicitly.</span>
         </article>
         <article className={styles.summaryCard}>
           <span className={styles.summaryLabel}>Custom Managed</span>
@@ -676,8 +867,7 @@ export default function ConfigPageTaxonomyClassifiers({
 
       <div className={pageStyles.sectionTableBlock}>
         <TableHeader
-          title="Classifier Catalog"
-          icon="🗂️"
+          title={activeView === 'classifiers' ? 'Classifier Catalog' : 'Classifier Context'}
           count={classifierRows.length}
           searchPlaceholder="Search classifier name, description, or source"
           searchValue={classifierSearch}
@@ -701,11 +891,10 @@ export default function ConfigPageTaxonomyClassifiers({
 
       <ConfigPageTaxonomyClassifierDetail selectedClassifier={selectedClassifier} />
 
-      <div className={styles.splitGrid}>
+      {activeView === 'tiers' ? (
         <div className={pageStyles.sectionTableBlock}>
           <TableHeader
             title={selectedClassifier ? `Tiers · ${selectedClassifier.name}` : 'Tiers'}
-            icon="🧭"
             count={tierRows.length}
             searchPlaceholder="Search tiers"
             searchValue={tierSearch}
@@ -722,11 +911,12 @@ export default function ConfigPageTaxonomyClassifiers({
             className={pageStyles.managerTable}
           />
         </div>
+      ) : null}
 
+      {activeView === 'categories' ? (
         <div className={pageStyles.sectionTableBlock}>
           <TableHeader
             title={selectedClassifier ? `Categories · ${selectedClassifier.name}` : 'Categories'}
-            icon="🏷️"
             count={categoryRows.length}
             searchPlaceholder="Search categories"
             searchValue={categorySearch}
@@ -743,7 +933,29 @@ export default function ConfigPageTaxonomyClassifiers({
             className={pageStyles.managerTable}
           />
         </div>
-      </div>
+      ) : null}
+
+      {activeView === 'exemplars' ? (
+        <div className={pageStyles.sectionTableBlock}>
+          <TableHeader
+            title={selectedClassifier ? `Exemplars · ${selectedClassifier.name}` : 'Exemplars'}
+            count={exemplarRows.length}
+            searchPlaceholder="Search exemplar text, category, or tier"
+            searchValue={exemplarSearch}
+            onSearchChange={setExemplarSearch}
+            onAdd={!isReadonly && selectedClassifier?.editable ? openAddExemplarModal : undefined}
+            addButtonText="Add Exemplar"
+            variant="embedded"
+          />
+          <DataTable
+            columns={exemplarColumns}
+            data={exemplarRows}
+            keyExtractor={(row) => row.key}
+            emptyMessage={selectedClassifier ? 'No exemplars defined for this classifier.' : 'Select a classifier first.'}
+            className={pageStyles.managerTable}
+          />
+        </div>
+      ) : null}
     </section>
   )
 }

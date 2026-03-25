@@ -1,6 +1,6 @@
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 
-export type LayoutDropdownKey = 'manager' | 'analysisOps' | 'fleetSim'
+export type LayoutDropdownKey = 'manager' | 'taxonomy' | 'analysisOps' | 'fleetSim'
 
 export type LayoutConfigSection =
   | 'models'
@@ -62,12 +62,23 @@ export const MANAGER_MENU_SECTIONS: LayoutMenuSection[] = [
   },
 ]
 
+export const TAXONOMY_MENU_SECTIONS: LayoutMenuSection[] = [
+  {
+    title: 'Taxonomy',
+    items: [
+      { kind: 'route', label: 'Classifiers', to: '/taxonomy/classifiers' },
+      { kind: 'route', label: 'Tiers', to: '/taxonomy/tiers' },
+      { kind: 'route', label: 'Categories', to: '/taxonomy/categories' },
+      { kind: 'route', label: 'Exemplars', to: '/taxonomy/exemplars' },
+    ],
+  },
+]
+
 export const ANALYSIS_OPERATIONS_MENU_SECTIONS: LayoutMenuSection[] = [
   {
     title: 'Analysis',
     items: [
       { kind: 'config', label: 'Global Config', configSection: 'global-config' },
-      { kind: 'config', label: 'Taxonomy Classifiers', configSection: 'classifiers' },
       { kind: 'route', label: 'Evaluation', to: '/evaluation' },
       { kind: 'route', label: 'Ratings', to: '/ratings' },
     ],

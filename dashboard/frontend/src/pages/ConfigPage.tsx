@@ -10,7 +10,6 @@ import ConfigPageSignalsSection from './ConfigPageSignalsSection'
 import ConfigPageProjectionsSection from './ConfigPageProjectionsSection'
 import ConfigPageDecisionsSection from './ConfigPageDecisionsSection'
 import ConfigPageMCPSection from './ConfigPageMCPSection'
-import ConfigPageTaxonomyClassifiersSection from './ConfigPageTaxonomyClassifiersSection'
 import {
   canonicalizeConfigForManagerSave,
   projectCanonicalConfigForManager,
@@ -368,13 +367,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     />
   )
 
-  const renderClassifiersSection = () => (
-    <ConfigPageTaxonomyClassifiersSection
-      isReadonly={isReadonly}
-      openEditModal={openEditModal}
-    />
-  )
-
   // Global Config section - canonical global override editor backed by effective router defaults
   const renderGlobalConfigSection = () => (
           <ConfigPageRouterConfigSection
@@ -400,8 +392,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         return renderProjectionsSection()
       case 'models':
         return renderModelsSection()
-      case 'classifiers':
-        return renderClassifiersSection()
       case 'global-config':
         return renderGlobalConfigSection()
       case 'mcp':

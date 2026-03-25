@@ -11,6 +11,7 @@ import {
   MANAGER_MENU_SECTIONS,
   PRIMARY_NAV_LINKS,
   SECONDARY_NAV_LINKS,
+  TAXONOMY_MENU_SECTIONS,
   type LayoutDropdownKey,
   type LayoutMenuItem,
   type LayoutMenuSection,
@@ -60,6 +61,12 @@ const Layout: React.FC<LayoutProps> = ({
   const isConfigPage = location.pathname === '/config' || location.pathname.startsWith('/config/')
   const isManagerActive = hasActiveLayoutMenuSection(
     managerMenuSections,
+    location.pathname,
+    isConfigPage,
+    configSection
+  )
+  const isTaxonomyActive = hasActiveLayoutMenuSection(
+    TAXONOMY_MENU_SECTIONS,
     location.pathname,
     isConfigPage,
     configSection
@@ -262,6 +269,34 @@ const Layout: React.FC<LayoutProps> = ({
                   ? renderDropdownMenu(managerMenuSections, styles.dropdownMenu, 'Manager')
                   : null}
               </div>
+              <div className={styles.navDropdown}>
+                <button
+                  type="button"
+                  aria-expanded={openDropdown === 'taxonomy'}
+                  aria-haspopup="menu"
+                  className={`${styles.navLink} ${isTaxonomyActive ? styles.navLinkActive : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleDropdown('taxonomy')
+                  }}
+                >
+                  Taxonomy
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    className={`${styles.dropdownArrow} ${openDropdown === 'taxonomy' ? styles.dropdownArrowOpen : ''}`}
+                  >
+                    <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {openDropdown === 'taxonomy'
+                  ? renderDropdownMenu(TAXONOMY_MENU_SECTIONS, styles.dropdownMenu, 'Taxonomy')
+                  : null}
+              </div>
               {fleetSimEnabled ? (
                 <div className={styles.navDropdown}>
                   <button
@@ -419,6 +454,7 @@ const Layout: React.FC<LayoutProps> = ({
               </NavLink>
             ))}
             {renderMobileMenuSection('Manager', managerMenuSections)}
+            {renderMobileMenuSection('Taxonomy', TAXONOMY_MENU_SECTIONS)}
             {fleetSimEnabled ? renderMobileMenuSection('Simulator', FLEET_SIM_MENU_SECTIONS) : null}
             {renderMobileMenuSection('System', analysisOperationsMenuSections)}
           </div>

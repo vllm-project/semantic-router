@@ -30,6 +30,7 @@ import FleetSimRunsPage from './pages/FleetSimRunsPage'
 import OpenClawPage from './pages/OpenClawPage'
 import UsersPage from './pages/UsersPage'
 import InsightsPage from './pages/InsightsPage'
+import TaxonomyPage, { type TaxonomyView } from './pages/TaxonomyPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { SetupProvider, useSetup } from './contexts/SetupContext'
@@ -45,6 +46,11 @@ const ConfigSectionRoute: React.FC<{
   setConfigSection: (section: ConfigSection) => void
 }> = ({ configSection, setConfigSection }) => {
   const { section } = useParams<{ section: string }>()
+  const normalized = section?.toLowerCase() ?? ''
+
+  if (normalized === 'classifiers' || normalized === 'taxonomy-classifiers') {
+    return <Navigate to="/taxonomy/classifiers" replace />
+  }
 
   useEffect(() => {
     if (!section) {
@@ -54,13 +60,10 @@ const ConfigSectionRoute: React.FC<{
       return
     }
 
-    const normalized = section.toLowerCase()
     const sectionMap: Record<string, ConfigSection> = {
       global: 'global-config',
       'global-config': 'global-config',
       'router-config': 'global-config',
-      classifiers: 'classifiers',
-      'taxonomy-classifiers': 'classifiers',
       signals: 'signals',
       projections: 'projections',
       routes: 'decisions',
@@ -82,6 +85,30 @@ const ConfigSectionRoute: React.FC<{
       onConfigSectionChange={(nextSection) => setConfigSection(nextSection as ConfigSection)}
     >
       <ConfigPage activeSection={configSection} />
+    </Layout>
+  )
+}
+
+const TaxonomyRoute: React.FC<{
+  configSection: ConfigSection
+  setConfigSection: (section: ConfigSection) => void
+}> = ({ configSection, setConfigSection }) => {
+  const { view } = useParams<{ view: string }>()
+  const normalized = (view?.toLowerCase() ?? 'classifiers') as TaxonomyView
+  const activeView: TaxonomyView = ['classifiers', 'tiers', 'categories', 'exemplars'].includes(normalized)
+    ? normalized
+    : 'classifiers'
+
+  if (view && activeView !== normalized) {
+    return <Navigate to={`/taxonomy/${activeView}`} replace />
+  }
+
+  return (
+    <Layout
+      configSection={configSection}
+      onConfigSectionChange={(nextSection) => setConfigSection(nextSection as ConfigSection)}
+    >
+      <TaxonomyPage activeView={activeView} />
     </Layout>
   )
 }
@@ -258,6 +285,16 @@ const AppRouter: React.FC = () => {
               path="/config/:section"
               element={
                 <ConfigSectionRoute
+                  configSection={configSection}
+                  setConfigSection={setConfigSection}
+                />
+              }
+            />
+            <Route path="/taxonomy" element={<Navigate to="/taxonomy/classifiers" replace />} />
+            <Route
+              path="/taxonomy/:view"
+              element={
+                <TaxonomyRoute
                   configSection={configSection}
                   setConfigSection={setConfigSection}
                 />
