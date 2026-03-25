@@ -27,6 +27,33 @@ config:
             weight: 1
   routing:
     decisions:
+      # ── Security layer: block before routing (priority 1000+) ──
+      # These decisions verify that fast_response blocking works correctly
+      # even when the request body arrives in Envoy streamed chunks.
+      - name: block_jailbreak
+        description: Block jailbreak attempts in streamed body mode
+        priority: 1000
+        rules:
+          operator: OR
+          conditions:
+            - type: jailbreak
+              name: jailbreak_standard
+        plugins:
+          - type: fast_response
+            configuration:
+              message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
+      - name: block_pii
+        description: Block requests containing PII in streamed body mode
+        priority: 999
+        rules:
+          operator: OR
+          conditions:
+            - type: pii
+              name: pii_deny_all
+        plugins:
+          - type: fast_response
+            configuration:
+              message: "Your request contains personal information that cannot be processed."
       - name: code_keywords_decision
         description: Code and programming queries (BM25 classified)
         priority: 150
@@ -126,7 +153,7 @@ config:
           description: Standard jailbreak detection for streaming tests
       pii:
         - name: pii_deny_all
-          threshold: 0.7
+          threshold: 0.4
           include_history: false
           description: Block all PII
     modelCards:
