@@ -11,9 +11,9 @@ tags: [amd, rocm, deployment, hardware, vllm, semantic-router]
 
 </div>
 
-Running vLLM Semantic Router on AMD Developer Cloud is not just about bringing up one more inference endpoint. It is about taking a single ROCm-backed model and turning it into a routed multi-tier system that can classify requests, choose a semantic lane, and make replay and Insights immediately useful.
+Running vLLM Semantic Router on AMD Developer Cloud is not just about bringing up one more inference endpoint. It is about turning it into a routed multi-tier system that can classify requests, choose a semantic lane, and make replay and Insights immediately useful.
 
-The AMD reference profile in this repository uses one physical backend, `Qwen/Qwen3.5-122B-A10B-FP8`, and exposes multiple served-model aliases on top of it. That means you can present SIMPLE, MEDIUM, COMPLEX, REASONING, and PREMIUM lanes through one ROCm vLLM container, while vLLM Semantic Router keeps the matched signals, chosen decision, chosen alias, and cost story visible in the dashboard. This post walks through the practical path: start the ROCm backend on an AMD Developer Cloud instance, install vLLM-SR, import the reference profile, and validate the deployment end to end.
+This post walks through the practical path: start the ROCm backend on an AMD Developer Cloud instance, install vLLM-SR, import the reference profile, and validate the deployment end to end.
 
 <!-- truncate -->
 
@@ -21,7 +21,7 @@ The AMD reference profile in this repository uses one physical backend, `Qwen/Qw
 
 vLLM Semantic Router is the system intelligence layer for LLMs. It sits in front of model endpoints, reads each request before generation begins, extracts semantic signals, and decides what should happen next.
 
-That makes it more than a cost router. It is also a control layer for safety, privacy, and policy. The same routing system that sends simple work to cheaper lanes can also detect sensitive traffic, keep private requests on local infrastructure, apply security-oriented plugin chains, and reserve stronger models for tasks that actually need deeper reasoning.
+That makes it more than a cost-saving router. It is also a control layer for safety, privacy, and policy. The same routing system that sends simple work to cheaper lanes can also detect sensitive traffic, keep private requests on local infrastructure, apply security-oriented plugin chains, and reserve stronger models for tasks that actually need deeper reasoning.
 
 This is what makes Semantic Router especially relevant for AMD deployments. It supports intelligent multi-model routing, privacy-first enterprise AI, and local-first personal AI in the same architecture. In practice, one system can decide when to optimize for cost, when to prioritize security or privacy, and when to keep a personal or sensitive workflow close to the user instead of treating every query the same way.
 
@@ -242,12 +242,10 @@ This should match the premium legal lane and forward to `anthropic/claude-opus-4
 
 This is a good probe for the Chinese fast-QA plus verification overlay path.
 
-For more systematic checks, the repository also keeps machine-readable routing probes in `deploy/amd/balance.probes.yaml`, so the README examples can be reused in live evaluation loops instead of staying as one-off manual prompts.
-
 ![](/img/amd-deploy-7.png)
 
 ## Final Thoughts
 
-Deploying vLLM Semantic Router on AMD Developer Cloud gives you more than a working endpoint. It gives you a compact routed system: one ROCm-hosted backend, multiple semantic tiers, visible routing logic, and a dashboard experience that makes the behavior understandable instead of opaque.
+Deploying vLLM Semantic Router on AMD Developer Cloud gives you more than a working endpoint. It gives you a compact routed system: one or more ROCm-hosted backend, multiple semantic tiers, visible routing logic, and a dashboard experience that makes the behavior understandable instead of opaque.
 
 That is what makes this reference profile useful. You can start with a single real AMD backend, import a complete routing policy, inspect how decisions are made, and then iterate from there without first building a large multi-backend fleet. For teams exploring cost-aware routing, replay-driven debugging, or AMD-based MoM patterns, it is a practical and reproducible starting point.
