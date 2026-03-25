@@ -8,7 +8,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: security-${{ github.workflow }}-${{ github.ref }}
+  # `pull_request_target` resolves `github.ref` to the base branch (`refs/heads/main`),
+  # so key PR scans by PR number instead of colliding with main-branch push scans.
+  group: security-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

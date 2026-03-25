@@ -71,6 +71,7 @@ type RequestContext struct {
 	VSRSelectedModel              string           // The model selected by VSR
 	VSRSelectionMethod            string           // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRCacheHit                   bool             // Whether this request hit the cache
+	VSRCacheSimilarity            float32          // Similarity score from last cache lookup (0 = no lookup performed)
 	VSRInjectedSystemPrompt       bool             // Whether a system prompt was injected into the request
 	VSRSelectedDecision           *config.Decision // The decision object selected by DecisionEngine (for plugins)
 

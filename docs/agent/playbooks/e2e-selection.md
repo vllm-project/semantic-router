@@ -34,12 +34,6 @@ Use [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml
   - service-mesh sidecar, mTLS, traffic, and tracing contracts
 - `production-stack`
   - HA, load-balancing, failover, and throughput semantics
-- `response-api`
-  - memory-backed Responses API behavior
-- `response-api-redis`
-  - Redis-backed Responses API behavior and TTL expiry
-- `response-api-redis-cluster`
-  - Redis Cluster-backed Responses API behavior and TTL expiry
 - `ml-model-selection`
   - ML model-selection behavior
 - `multi-endpoint`
@@ -51,6 +45,12 @@ Use [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml
 
 ## Manual-Only Profiles
 
+- `response-api`
+  - memory-backed Responses API behavior, currently kept outside the standard CI matrix
+- `response-api-redis`
+  - Redis-backed Responses API behavior and TTL expiry
+- `response-api-redis-cluster`
+  - Redis Cluster-backed Responses API behavior and TTL expiry
 - `dynamo`
   - GPU- and runtime-specific Dynamo coverage
 - `rag-hybrid-search`

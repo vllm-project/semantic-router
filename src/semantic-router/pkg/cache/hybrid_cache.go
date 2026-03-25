@@ -68,6 +68,7 @@ func putSearchBuffers(buf *searchBuffers) {
 //
 // This provides fast search while supporting millions of entries without storing docs in memory
 type HybridCache struct {
+	SimilarityTracker // embedded — provides LastSimilarity()
 	// In-memory components (search only)
 	hnswIndex  *HNSWIndex
 	embeddings [][]float32
