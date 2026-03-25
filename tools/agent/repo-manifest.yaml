@@ -117,7 +117,6 @@ validation:
       - llm-d
       - istio
       - production-stack
-      - response-api
       - ml-model-selection
       - multi-endpoint
       - authz-rbac
