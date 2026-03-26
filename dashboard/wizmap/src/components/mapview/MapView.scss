@@ -1,0 +1,119 @@
+@import '../../define.scss';
+
+.mapview-page {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+  box-sizing: border-box;
+  overflow-x: hidden;
+
+  position: relative;
+}
+
+.app-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.main-app {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+
+  width: 100%;
+  height: 100%;
+  // border: 1px solid $gray-border;
+  // border-radius: $border-radius;
+  // box-shadow: $shadow-border-light;
+}
+
+.main-app-container {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  height: 100%;
+  background-color: white;
+  opacity: 1;
+  transition: opacity 300ms ease-in-out;
+  border-radius: $border-radius;
+
+  &.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.popper-tooltip {
+  position: absolute;
+  width: max-content;
+  left: 0px;
+  top: 0px;
+  z-index: 20;
+  background: #222;
+  color: white;
+  box-shadow: 0 0 1px hsla(0, 0%, 0%, 0.6), 0 0 3px hsla(0, 0%, 0%, 0.05);
+  padding: 2px 6px 4px 6px;
+  border-radius: 4px;
+  font-size: $font-d2;
+
+  display: flex;
+  justify-content: center;
+  box-sizing: border-box;
+  pointer-events: none;
+  text-align: center;
+
+  opacity: 1;
+  transition: opacity 150ms, visibility 150ms;
+
+  &.hidden {
+    opacity: 0;
+  }
+
+  &#popper-tooltip-bottom {
+    z-index: 19;
+    background: $purple-900;
+
+    .popper-arrow {
+      background: $purple-900;
+    }
+  }
+
+  .popper-content {
+    max-width: 300px;
+    max-height: 200px;
+    line-height: 1.5;
+    overflow: hidden;
+  }
+
+  .popper-arrow {
+    position: absolute;
+    background: #222;
+    width: 8px;
+    height: 8px;
+    transform: rotate(45deg);
+  }
+}
+
+.footer-container {
+  position: absolute;
+  right: 0px;
+  bottom: 0px;
+  z-index: 21;
+  pointer-events: none;
+}
+
+.search-panel-container {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  z-index: 19;
+  pointer-events: none;
+}

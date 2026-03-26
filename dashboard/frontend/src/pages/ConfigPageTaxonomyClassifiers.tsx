@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { FieldConfig } from '../components/EditModal'
 import { DataTable } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
@@ -48,6 +49,7 @@ export default function ConfigPageTaxonomyClassifiers({
   openEditModal,
   activeView = 'bases',
 }: ConfigPageTaxonomyClassifiersProps) {
+  const navigate = useNavigate()
   const pageSize = 10
   const [knowledgeBases, setKnowledgeBases] = useState<TaxonomyClassifierRecord[]>([])
   const [loading, setLoading] = useState(false)
@@ -409,10 +411,11 @@ export default function ConfigPageTaxonomyClassifiers({
       selectedKnowledgeBaseName: selectedKnowledgeBase?.name,
       isReadonly,
       onSelect: setSelectedKnowledgeBaseName,
+      onOpenMap: (name) => navigate(`/knowledge-bases/${encodeURIComponent(name)}/map`),
       onEdit: openEditKnowledgeBaseModal,
       onDelete: handleDeleteKnowledgeBase,
     }),
-    [handleDeleteKnowledgeBase, isReadonly, openEditKnowledgeBaseModal, selectedKnowledgeBase?.name]
+    [handleDeleteKnowledgeBase, isReadonly, navigate, openEditKnowledgeBaseModal, selectedKnowledgeBase?.name]
   )
 
   const groupColumns = useMemo(
@@ -517,7 +520,10 @@ export default function ConfigPageTaxonomyClassifiers({
             />
           </div>
 
-          <ConfigPageTaxonomyClassifierDetail selectedClassifier={selectedKnowledgeBase} />
+          <ConfigPageTaxonomyClassifierDetail
+            selectedClassifier={selectedKnowledgeBase}
+            onOpenMap={(name) => navigate(`/knowledge-bases/${encodeURIComponent(name)}/map`)}
+          />
         </>
       ) : (
         <div className={pageStyles.sectionTableBlock}>

@@ -228,6 +228,14 @@ COPY dashboard/frontend/ ./
 COPY --from=wasm-builder /build/signal-compiler.wasm /build/wasm_exec.js ./public/
 RUN npm run build
 
+FROM node:20-alpine AS wizmap-builder
+WORKDIR /app/wizmap
+COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm ci --include=dev
+COPY dashboard/wizmap/ ./
+RUN npm run build -- --outDir /app/wizmap-dist
+
 # Stage 1c: Build dashboard backend with Go
 FROM --platform=$BUILDPLATFORM golang:1.24 AS dashboard-builder
 ARG TARGETARCH
@@ -324,6 +332,7 @@ COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
 COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
 COPY --from=dashboard-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
+COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 
 # Set library path
 ENV LD_LIBRARY_PATH=/usr/local/lib

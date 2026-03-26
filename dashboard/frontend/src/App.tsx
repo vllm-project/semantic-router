@@ -31,6 +31,7 @@ import OpenClawPage from './pages/OpenClawPage'
 import UsersPage from './pages/UsersPage'
 import InsightsPage from './pages/InsightsPage'
 import TaxonomyPage, { type KnowledgeBaseView } from './pages/TaxonomyPage'
+import KnowledgeMapPage from './pages/KnowledgeMapPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { SetupProvider, useSetup } from './contexts/SetupContext'
@@ -311,6 +312,17 @@ const AppRouter: React.FC = () => {
               }
             />
             <Route path="/knowledge-bases" element={<Navigate to="/knowledge-bases/bases" replace />} />
+            <Route
+              path="/knowledge-bases/:name/map"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <KnowledgeMapPage />
+                </Layout>
+              }
+            />
             <Route
               path="/knowledge-bases/:view"
               element={

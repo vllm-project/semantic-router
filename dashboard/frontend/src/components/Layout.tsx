@@ -73,7 +73,7 @@ const Layout: React.FC<LayoutProps> = ({
     location.pathname,
     isConfigPage,
     configSection
-  )
+  ) || location.pathname.startsWith('/knowledge-bases/')
   const isAnalysisOpsActive = hasActiveLayoutMenuSection(
     systemMenuSections,
     location.pathname,

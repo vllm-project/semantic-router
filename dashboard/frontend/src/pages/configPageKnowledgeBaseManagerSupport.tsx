@@ -254,6 +254,7 @@ interface KnowledgeBaseColumnArgs {
   selectedKnowledgeBaseName?: string
   isReadonly: boolean
   onSelect: (name: string) => void
+  onOpenMap: (name: string) => void
   onEdit: (row: TaxonomyClassifierRecord) => void
   onDelete: (row: TaxonomyClassifierRecord) => void
 }
@@ -262,6 +263,7 @@ export function buildKnowledgeBaseColumns({
   selectedKnowledgeBaseName,
   isReadonly,
   onSelect,
+  onOpenMap,
   onEdit,
   onDelete,
 }: KnowledgeBaseColumnArgs): Column<KnowledgeBaseRow>[] {
@@ -318,6 +320,9 @@ export function buildKnowledgeBaseColumns({
         <div className={styles.tableActionGroup}>
           <button type="button" className={styles.secondaryButton} onClick={() => onSelect(row.name)}>
             {selectedKnowledgeBaseName === row.name ? 'Open' : 'View'}
+          </button>
+          <button type="button" className={styles.secondaryButton} onClick={() => onOpenMap(row.name)}>
+            Map
           </button>
           {row.editable && !isReadonly ? (
             <>

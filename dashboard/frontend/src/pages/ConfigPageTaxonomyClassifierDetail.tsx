@@ -7,6 +7,7 @@ import {
 
 interface ConfigPageTaxonomyClassifierDetailProps {
   selectedClassifier: TaxonomyClassifierRecord | null
+  onOpenMap?: (name: string) => void
 }
 
 function summarizeGroup(labels: string[]): string {
@@ -31,6 +32,7 @@ function formatMetric(metricName: string, selectedClassifier: TaxonomyClassifier
 
 export default function ConfigPageTaxonomyClassifierDetail({
   selectedClassifier,
+  onOpenMap,
 }: ConfigPageTaxonomyClassifierDetailProps) {
   const groupEntries = Object.entries(selectedClassifier?.groups ?? {})
   const thresholdEntries = Object.entries(selectedClassifier?.label_thresholds ?? {})
@@ -58,7 +60,16 @@ export default function ConfigPageTaxonomyClassifierDetail({
                 Start with the base-level contract here, then scan routing bindings and package structure below.
               </p>
             </div>
-            {selectedClassifier.load_error ? <span className={styles.warningBadge}>Load issue</span> : null}
+            <div className={styles.tableActionGroup}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => onOpenMap?.(selectedClassifier.name)}
+              >
+                Open Map
+              </button>
+              {selectedClassifier.load_error ? <span className={styles.warningBadge}>Load issue</span> : null}
+            </div>
           </div>
 
           <div className={styles.detailOverviewGrid}>

@@ -93,3 +93,4 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0016-harness-context-and-pr-parity-simplification.md](pl-0016-harness-context-and-pr-parity-simplification.md)
 - [pl-0017-taxonomy-classifier-platform-loop.md](pl-0017-taxonomy-classifier-platform-loop.md)
 - [pl-0018-generic-embedding-kb-workstream.md](pl-0018-generic-embedding-kb-workstream.md)
+- [pl-0019-wizmap-knowledge-map-integration.md](pl-0019-wizmap-knowledge-map-integration.md)

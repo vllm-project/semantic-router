@@ -1,0 +1,325 @@
+@import '../../define.scss';
+
+$button-border-radius: 8px;
+
+.search-panel-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100vh;
+  font-size: $font-d1;
+}
+
+.svg-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 1em;
+  height: 1em;
+  color: currentColor;
+
+  pointer-events: fill;
+
+  :global(svg) {
+    fill: currentColor;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+$search-h-margin: 10px;
+
+$search-input-width: 250px;
+$search-input-height: 18px;
+
+$logo-icon-width: 24px;
+$cancel-icon-width: 14px;
+$cancel-icon-margin: 8px;
+
+$search-bar-v-padding: 12px;
+$search-bar-h-padding: 12px;
+$search-bar-gap: 8px;
+
+.search-bar {
+  position: absolute;
+  top: $search-h-margin;
+  left: $search-h-margin;
+  color: $gray-600;
+
+  display: flex;
+  flex-direction: row;
+  gap: $search-bar-gap;
+  align-items: center;
+  pointer-events: all;
+
+  padding: 0 $search-bar-h-padding;
+  border-radius: $button-border-radius;
+  background-color: change-color($color: white, $alpha: 1);
+  transition: box-shadow 150ms ease-in-out;
+  box-shadow: 0 2px 4px hsla(0, 0%, 0%, 0.2), 0 -1px 0 hsla(0, 0%, 0%, 0.02);
+
+  &.focused {
+    box-shadow: 0 2px 4px hsla(0, 0%, 0%, 0.1), 0 -1px 0 hsla(0, 0%, 0%, 0.02);
+  }
+
+  &:focus {
+    background-color: red;
+  }
+
+  #search-bar-input {
+    border: none;
+    margin: $search-bar-v-padding 0;
+    width: $search-input-width;
+    height: $search-input-height;
+
+    &:focus {
+      border: none;
+      outline: none;
+    }
+
+    &::placeholder {
+      color: $gray-700;
+    }
+  }
+
+  .logo-icon {
+    width: $logo-icon-width;
+    height: $logo-icon-width;
+  }
+
+  .end-button {
+    position: relative;
+    margin-left: $cancel-icon-margin;
+    width: 1em;
+    height: 1em;
+
+    .search-icon {
+      position: absolute;
+      width: 1em;
+      height: 1em;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+
+      color: currentColor;
+      transition: color 150ms ease-in-out, opacity 150ms ease-in-out;
+      opacity: 1;
+
+      &.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+    }
+
+    .cancel-icon {
+      position: absolute;
+      width: $cancel-icon-width;
+      height: $cancel-icon-width;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+
+      color: $gray-500;
+      transition: color 150ms ease-in-out, opacity 150ms ease-in-out;
+      opacity: 1;
+      cursor: default;
+
+      &:hover {
+        color: adjust-color($color: $gray-500, $lightness: -10%);
+      }
+
+      &:active {
+        color: adjust-color($color: $gray-500, $lightness: 10%);
+      }
+
+      &.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+    }
+  }
+}
+
+$search-panel-width: $search-input-width + $search-bar-gap * 2 +
+  $search-h-margin * 2 + $search-bar-h-padding * 2 + $logo-icon-width +
+  $cancel-icon-margin + $cancel-icon-width;
+
+.search-list-container {
+  display: flex;
+  flex-direction: column;
+
+  background: white;
+  box-shadow: 0 1px 2px hsla(0, 0%, 0%, 0.2),
+    0 2px 6px 2px hsla(0, 0%, 0%, 0.08);
+
+  height: 100%;
+  width: $search-panel-width;
+
+  opacity: 1;
+  transition: opacity 150ms ease-in-out;
+  opacity: 0;
+  pointer-events: none;
+
+  &.shown {
+    opacity: 1;
+    pointer-events: all;
+  }
+}
+
+.search-list {
+  height: 100%;
+  padding: 0;
+  margin-top: $search-input-height + $search-bar-v-padding * 2 +
+    $search-h-margin;
+
+  background-color: white;
+  overflow-y: hidden;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  .header-gap {
+    margin-top: 12px;
+    height: 1px;
+    width: 100%;
+    flex-shrink: 0;
+
+    background: $gray-300;
+    opacity: 1;
+    box-shadow: 0 1px 1px hsla(0, 0%, 0%, 0.05), 0 1px 2px hsla(0, 0%, 0%, 0.05);
+    transition: opacity 300ms ease-in-out, box-shadow 300ms ease-in-out;
+
+    &.hidden {
+      opacity: 0;
+      box-shadow: none;
+    }
+  }
+
+  .result-list {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    flex-grow: 1;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    overscroll-behavior: none;
+
+    .item {
+      line-height: 1.2;
+      width: 100%;
+      padding: 5px ($search-h-margin + $search-bar-h-padding);
+      border-bottom: 1px solid $gray-200;
+      cursor: default;
+      padding-bottom: 3px;
+
+      &.clamp-line {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+        overflow: hidden;
+        flex-shrink: 0;
+        -webkit-box-pack: end;
+      }
+
+      &:hover {
+        background-color: change-color($color: $purple-100, $lightness: 96%);
+      }
+
+      :global(em) {
+        color: $purple-500;
+        font-style: normal;
+        font-weight: 600;
+      }
+    }
+
+    .count-label {
+      font-size: $font-d1;
+      line-height: 1;
+      width: 100%;
+      padding: 5px ($search-h-margin + $search-bar-h-padding);
+      color: $gray-500;
+    }
+
+    .add-more-button {
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      text-align: center;
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      color: $purple-700;
+      background-color: $gray-100;
+
+      user-select: none;
+      -webkit-user-select: none;
+      transition: color 150ms ease-in-out, background-color 150ms ease-in-out;
+
+      &:hover {
+        background-color: $gray-200;
+        color: $purple-600;
+      }
+
+      &:active {
+        color: $purple-800;
+      }
+
+      &.hidden {
+        display: none;
+      }
+
+      span {
+        padding: 12px;
+      }
+    }
+  }
+
+  .scroll-up-button {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+
+    pointer-events: all;
+    cursor: pointer;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+
+    background-color: white;
+    box-shadow: 0 1px 2px hsla(0, 0%, 0%, 0.25),
+      0 1px 3px 1px hsla(0, 0%, 0%, 0.1);
+    border-radius: 8px;
+    padding: 4px 8px;
+    opacity: 1;
+
+    transition: opacity 150ms ease-in-out;
+
+    .svg-icon {
+      width: 16px;
+      height: 16px;
+      color: $gray-700;
+    }
+
+    &.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    &:hover {
+      background-color: $gray-100;
+    }
+
+    &:active {
+      background-color: $gray-200;
+    }
+  }
+}

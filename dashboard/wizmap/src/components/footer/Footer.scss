@@ -1,0 +1,254 @@
+@import '../../define.scss';
+
+.footer-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.footer {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  pointer-events: all;
+
+  font-size: $font-d2;
+  font-variant-numeric: tabular-nums;
+
+  padding: 2px 8px 2px 4px;
+  line-height: 1;
+  border-top-left-radius: 2px;
+  // background-color: change-color($purple-50, $lightness: 94%, $alpha: 0.9);
+  background-color: change-color($gray-50, $alpha: 0.9);
+
+  user-select: none;
+  -webkit-user-select: none;
+
+  a {
+    color: currentColor;
+
+    &:hover {
+      color: $purple-600;
+    }
+  }
+
+  button {
+    &:hover {
+      color: $purple-600;
+      text-decoration: underline;
+    }
+  }
+
+  .name {
+    font-weight: 700;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .splitter {
+    height: 12px;
+    width: 1px;
+    border-right: 1px solid $gray-400;
+  }
+
+  .scale-legend {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 5px;
+
+    .scale-line {
+      height: 8px;
+      border: 1px solid currentColor;
+      border-top: none;
+    }
+  }
+
+  .item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 3px;
+
+    .svg-icon {
+      width: 1em;
+      height: 1em;
+    }
+  }
+
+  .count {
+    position: relative;
+
+    span {
+      &.hidden {
+        visibility: hidden;
+      }
+    }
+
+    .subset-count {
+      position: absolute;
+      right: 0;
+    }
+  }
+}
+
+.svg-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 1em;
+  height: 1em;
+  color: currentColor;
+
+  pointer-events: fill;
+
+  :global(svg) {
+    fill: currentColor;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+$zoom-button-border-radius: 8px;
+
+.zoom-control {
+  pointer-events: all;
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+  box-shadow: 0 1px 4px hsla(0, 0%, 0%, 0.3);
+  margin-right: 10px;
+  margin-bottom: 10px;
+  border-radius: $zoom-button-border-radius;
+  font-size: 14px;
+}
+
+.zoom-button {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4px;
+  color: $gray-700;
+
+  transition: background-color 100ms ease-in-out;
+
+  &.zoom-button-plus {
+    border-top-left-radius: $zoom-button-border-radius;
+    border-top-right-radius: $zoom-button-border-radius;
+  }
+
+  &.zoom-button-minus {
+    border-bottom-left-radius: $zoom-button-border-radius;
+    border-bottom-right-radius: $zoom-button-border-radius;
+  }
+
+  &.zoom-button-reset {
+    font-size: 16px;
+    border-radius: $zoom-button-border-radius;
+  }
+
+  &:hover {
+    background-color: $gray-200;
+  }
+
+  &:active {
+    background-color: adjust-color($color: $gray-200, $lightness: -2%);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+dialog[open] {
+  border-radius: 8px;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 0;
+  pointer-events: all;
+
+  &::backdrop {
+    background-color: hsla(0, 0%, 0%, 0.55);
+    animation: fade-in 300ms;
+  }
+
+  .header {
+    padding: 16px 20px 0 20px;
+    margin: 0;
+    line-height: 1;
+    font-size: $font-u3;
+    font-weight: 600;
+    // background-color: change-color($color: $purple-100, $lightness: 96%);
+    width: 100%;
+  }
+
+  button {
+    background-color: $gray-200;
+    padding: 3px 8px;
+    border-radius: 8px;
+    display: flex;
+    flex-grow: 0;
+    transition: background-color 150ms ease-in-out;
+
+    &:hover {
+      background-color: $gray-300;
+    }
+
+    &:active {
+      background-color: $gray-400;
+    }
+  }
+
+  ul {
+    margin: 0;
+    padding: 0;
+    padding-left: 20px;
+  }
+
+  .row-block {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0px 20px;
+
+    .row-name {
+      color: $gray-500;
+      font-weight: 600;
+    }
+
+    a {
+      color: $purple-500;
+    }
+  }
+
+  .button-block {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+
+    gap: 12px;
+    width: 100%;
+    padding: 0px 20px 16px 20px;
+
+    a {
+      color: currentColor;
+      font-style: normal;
+      text-decoration: none;
+    }
+  }
+}

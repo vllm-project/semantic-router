@@ -5,6 +5,7 @@
 DASHBOARD_DIR := dashboard
 DASHBOARD_FRONTEND_DIR := $(DASHBOARD_DIR)/frontend
 DASHBOARD_BACKEND_DIR := $(DASHBOARD_DIR)/backend
+DASHBOARD_WIZMAP_DIR := $(DASHBOARD_DIR)/wizmap
 
 ##@ Dashboard
 
@@ -14,6 +15,8 @@ dashboard-install: ## Install dashboard dependencies (frontend npm + backend go 
 	@$(LOG_TARGET)
 	@echo "Installing frontend dependencies..."
 	cd $(DASHBOARD_FRONTEND_DIR) && npm install
+	@echo "Installing Knowledge Map dependencies..."
+	cd $(DASHBOARD_WIZMAP_DIR) && npm install
 	@echo "Tidying backend dependencies..."
 	cd $(DASHBOARD_BACKEND_DIR) && go mod tidy
 	@echo "dashboard dependencies installed"
@@ -32,6 +35,7 @@ dashboard-dev-backend: ## Start dashboard backend in dev mode
 dashboard-build-frontend: dashboard-install ## Build dashboard frontend for production
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_FRONTEND_DIR) && npm run build
+	cd $(DASHBOARD_WIZMAP_DIR) && npm run build:embedded
 	@echo "dashboard/frontend build completed"
 
 dashboard-build-backend: ## Build dashboard backend binary
@@ -75,6 +79,7 @@ dashboard-lint-fix: ## Auto-fix lint issues in dashboard (frontend + backend)
 dashboard-type-check: ## Run TypeScript type checking for dashboard frontend
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run type-check
+	cd $(DASHBOARD_WIZMAP_DIR) && npm install 2>/dev/null && npm run build >/dev/null
 	@echo "dashboard/frontend type-check passed"
 
 dashboard-go-mod-tidy: ## Check go mod tidy for dashboard backend
@@ -102,6 +107,8 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 	@$(LOG_TARGET)
 	rm -rf $(DASHBOARD_FRONTEND_DIR)/dist
 	rm -rf $(DASHBOARD_FRONTEND_DIR)/node_modules
+	rm -rf $(DASHBOARD_WIZMAP_DIR)/dist
+	rm -rf $(DASHBOARD_WIZMAP_DIR)/node_modules
 	rm -rf $(DASHBOARD_BACKEND_DIR)/bin
 	@echo "dashboard cleaned"
 
@@ -110,4 +117,3 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 	dashboard-test-backend \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \
 	dashboard-check dashboard-clean
-
