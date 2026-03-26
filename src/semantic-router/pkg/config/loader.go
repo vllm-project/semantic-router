@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -75,6 +76,9 @@ func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
 	if rejectErr := rejectRemovedStructureFields(raw); rejectErr != nil {
 		return nil, rejectErr
 	}
+
+	// Warn about unknown YAML fields (typos) before parsing into typed structs.
+	WarnUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
 
 	cfg, err := parseRouterConfigPayload(data, raw)
 	if err != nil {
