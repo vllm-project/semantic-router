@@ -414,6 +414,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				err = testRouter.handleToolSelection(openAIRequest, "xyzabc nonsense", []string{}, &response, ctx)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(openAIRequest.Tools).To(BeNil())
+				Expect(param.IsOmitted(openAIRequest.ToolChoice.OfAuto)).To(BeFalse())
 			})
 
 			It("should return empty tools on database error", func() {
@@ -454,6 +455,43 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				// Should not be nil but empty array
 				Expect(openAIRequest.Tools).NotTo(BeNil())
 			})
+		})
+	})
+
+	Describe("Tool choice normalization", func() {
+		It("clears auto tool_choice when no tools remain", func() {
+			requestJSON := []byte(`{
+				"model": "test-model",
+				"messages": [{"role": "user", "content": "你好"}],
+				"tool_choice": "auto"
+			}`)
+			openAIRequest, err := parseOpenAIRequest(requestJSON)
+			Expect(err).NotTo(HaveOccurred())
+
+			changed := clearToolChoiceWhenNoTools(openAIRequest)
+
+			Expect(changed).To(BeTrue())
+			Expect(param.IsOmitted(openAIRequest.ToolChoice.OfAuto)).To(BeTrue())
+			Expect(openAIRequest.ToolChoice.OfChatCompletionNamedToolChoice).To(BeNil())
+		})
+
+		It("keeps tool_choice when tools are present", func() {
+			requestJSON := []byte(`{
+				"model": "test-model",
+				"messages": [{"role": "user", "content": "天气如何"}],
+				"tool_choice": "auto",
+				"tools": [{
+					"type": "function",
+					"function": {"name": "lookup_weather"}
+				}]
+			}`)
+			openAIRequest, err := parseOpenAIRequest(requestJSON)
+			Expect(err).NotTo(HaveOccurred())
+
+			changed := clearToolChoiceWhenNoTools(openAIRequest)
+
+			Expect(changed).To(BeFalse())
+			Expect(param.IsOmitted(openAIRequest.ToolChoice.OfAuto)).To(BeFalse())
 		})
 	})
 

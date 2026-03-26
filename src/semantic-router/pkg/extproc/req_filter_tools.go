@@ -8,6 +8,7 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/packages/param"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -27,6 +28,12 @@ func (r *OpenAIRouter) handleToolSelectionForRequest(openAIRequest *openai.ChatC
 	if err := r.handleToolSelection(openAIRequest, userContent, nonUserMessages, &response, ctx); err != nil {
 		logging.Errorf("Error in tool selection: %v", err)
 		// Continue without failing the request
+	}
+
+	if clearToolChoiceWhenNoTools(openAIRequest) {
+		if err := r.updateRequestWithTools(openAIRequest, &response, ctx); err != nil {
+			logging.Errorf("Error clearing invalid tool_choice without tools: %v", err)
+		}
 	}
 }
 
@@ -352,6 +359,25 @@ func ensureHeaderRemoved(mutation *ext_proc.HeaderMutation, key string) {
 		}
 	}
 	mutation.RemoveHeaders = append(mutation.RemoveHeaders, key)
+}
+
+func clearToolChoiceWhenNoTools(openAIRequest *openai.ChatCompletionNewParams) bool {
+	if openAIRequest == nil || len(openAIRequest.Tools) > 0 || !hasToolChoice(openAIRequest) {
+		return false
+	}
+
+	logging.Infof("[ToolsPlugin] Clearing tool_choice because no tools are present in the upstream request")
+	openAIRequest.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{}
+	return true
+}
+
+func hasToolChoice(openAIRequest *openai.ChatCompletionNewParams) bool {
+	if openAIRequest == nil {
+		return false
+	}
+
+	return !param.IsOmitted(openAIRequest.ToolChoice.OfAuto) ||
+		openAIRequest.ToolChoice.OfChatCompletionNamedToolChoice != nil
 }
 
 func setHeaderValue(mutation *ext_proc.HeaderMutation, key, value string) {

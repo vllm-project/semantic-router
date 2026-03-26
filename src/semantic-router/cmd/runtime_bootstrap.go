@@ -353,13 +353,16 @@ func initializeMultiModalEmbeddingModelIfConfigured(cfg *config.RouterConfig, mu
 func logMissingEmbeddingModelsConfig() {
 	logging.Infof("No embedding models configured, skipping initialization")
 	logging.Infof("To enable embedding models, add to config.yaml:")
-	logging.Infof("  embedding_models:")
-	logging.Infof("    qwen3_model_path: 'models/mom-embedding-pro'")
-	logging.Infof("    gemma_model_path: 'models/mom-embedding-flash'")
-	logging.Infof("    mmbert_model_path: 'models/mom-embedding-ultra'")
-	logging.Infof("    multimodal_model_path: 'models/mom-embedding-multimodal'")
-	logging.Infof("    bert_model_path: 'models/all-MiniLM-L12-v2'  # For memory (384-dim)")
-	logging.Infof("    use_cpu: true")
+	logging.Infof("  global:")
+	logging.Infof("    model_catalog:")
+	logging.Infof("      embeddings:")
+	logging.Infof("        semantic:")
+	logging.Infof("          qwen3_model_path: 'models/mom-embedding-pro'")
+	logging.Infof("          gemma_model_path: 'models/mom-embedding-flash'")
+	logging.Infof("          mmbert_model_path: 'models/mom-embedding-ultra'")
+	logging.Infof("          multimodal_model_path: 'models/mom-embedding-multimodal'")
+	logging.Infof("          bert_model_path: 'models/all-MiniLM-L12-v2'  # For memory (384-dim)")
+	logging.Infof("          use_cpu: true")
 }
 
 func initializeSemanticCacheBERTIfNeeded(cfg *config.RouterConfig) {

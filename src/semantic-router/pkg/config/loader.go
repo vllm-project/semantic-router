@@ -306,6 +306,11 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 	if _, ok := global["modules"]; ok {
 		fields = append(fields, "global.modules")
 	}
+	modelCatalog := nestedStringMap(global["model_catalog"])
+	embeddings := nestedStringMap(modelCatalog["embeddings"])
+	if _, ok := embeddings["bert"]; ok {
+		fields = append(fields, "global.model_catalog.embeddings.bert")
+	}
 
 	fields = append(fields, deprecatedDecisionConfigFields(routing)...)
 

@@ -296,11 +296,11 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
       }
 
       &:hover {
-        background-color: change-color($color: $purple-100, $lightness: 96%);
+        background-color: change-color($color: $blue-100, $lightness: 96%);
       }
 
       :global(em) {
-        color: $purple-500;
+        color: $blue-500;
         font-style: normal;
         font-weight: 600;
       }
@@ -324,7 +324,7 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
       justify-content: center;
       align-items: center;
 
-      color: $purple-700;
+      color: $blue-700;
       background-color: $gray-100;
 
       user-select: none;
@@ -333,11 +333,11 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
 
       &:hover {
         background-color: $gray-200;
-        color: $purple-600;
+        color: $blue-600;
       }
 
       &:active {
-        color: $purple-800;
+        color: $blue-800;
       }
 
       &.hidden {

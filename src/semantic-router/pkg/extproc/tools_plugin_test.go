@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/packages/param"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -116,4 +117,41 @@ func TestDecisionGetToolsConfig(t *testing.T) {
 		assert.Equal(t, []string{"read_file", "list_dir"}, cfg.AllowTools)
 		assert.Equal(t, []string{"exec_cmd"}, cfg.BlockTools)
 	}
+}
+
+func TestClearToolChoiceWhenNoTools_RemovesAutoChoice(t *testing.T) {
+	requestJSON := []byte(`{
+		"model": "test-model",
+		"messages": [{"role": "user", "content": "你好"}],
+		"tool_choice": "auto"
+	}`)
+
+	req, err := parseOpenAIRequest(requestJSON)
+	assert.NoError(t, err)
+
+	changed := clearToolChoiceWhenNoTools(req)
+
+	assert.True(t, changed)
+	assert.True(t, param.IsOmitted(req.ToolChoice.OfAuto))
+	assert.Nil(t, req.ToolChoice.OfChatCompletionNamedToolChoice)
+}
+
+func TestClearToolChoiceWhenNoTools_KeepsChoiceWhenToolsPresent(t *testing.T) {
+	requestJSON := []byte(`{
+		"model": "test-model",
+		"messages": [{"role": "user", "content": "天气如何"}],
+		"tool_choice": "auto",
+		"tools": [{
+			"type": "function",
+			"function": {"name": "lookup_weather"}
+		}]
+	}`)
+
+	req, err := parseOpenAIRequest(requestJSON)
+	assert.NoError(t, err)
+
+	changed := clearToolChoiceWhenNoTools(req)
+
+	assert.False(t, changed)
+	assert.False(t, param.IsOmitted(req.ToolChoice.OfAuto))
 }
