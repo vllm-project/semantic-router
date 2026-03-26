@@ -336,7 +336,7 @@ $control-item-height: 42px;
 
       &:hover {
         background-color: $gray-50;
-        border-color: rgba(123, 31, 162, 0.2);
+        border-color: rgba(30, 136, 229, 0.2);
       }
 
       &:active {
@@ -344,16 +344,16 @@ $control-item-height: 42px;
       }
 
       &.activated {
-        background-color: change-color($color: $purple-50, $lightness: 95%);
-        color: $purple-600;
-        border-color: rgba(123, 31, 162, 0.18);
+        background-color: change-color($color: $blue-50, $lightness: 96%);
+        color: $blue-700;
+        border-color: rgba(30, 136, 229, 0.18);
 
         &:hover {
-          background-color: change-color($color: $purple-50, $lightness: 92%);
+          background-color: change-color($color: $blue-50, $lightness: 93%);
         }
 
         &:active {
-          background-color: change-color($color: $purple-50, $lightness: 88%);
+          background-color: change-color($color: $blue-50, $lightness: 89%);
         }
       }
 
@@ -477,7 +477,7 @@ $control-item-height: 42px;
 
     .label-menu {
       gap: 6px;
-      accent-color: $purple-300;
+      accent-color: $blue-400;
 
       .item-header {
         margin-bottom: 12px;
@@ -520,16 +520,16 @@ $control-item-height: 42px;
 
       .play-pause-button {
         position: relative;
-        color: $purple-300;
+        color: $blue-400;
         width: $play-button-width;
         height: $play-button-width;
 
         &:hover {
-          color: $purple-400;
+          color: $blue-500;
         }
 
         &:active {
-          color: $purple-500;
+          color: $blue-600;
         }
 
         .svg-icon {
