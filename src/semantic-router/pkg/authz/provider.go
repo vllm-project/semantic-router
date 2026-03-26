@@ -30,6 +30,7 @@ const (
 	ProviderBedrock     LLMProvider = "bedrock"
 	ProviderGemini      LLMProvider = "gemini"
 	ProviderVertexAI    LLMProvider = "vertex-ai"
+	ProviderMiniMax     LLMProvider = "minimax"
 )
 
 // Credentials holds per-user API keys for all known LLM providers.

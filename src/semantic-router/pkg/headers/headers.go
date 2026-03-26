@@ -240,6 +240,10 @@ const (
 	// UserVertexAIKey carries the user's Vertex AI OAuth token, injected by the auth backend.
 	UserVertexAIKey = "x-user-vertex-ai-key"
 
+	// UserMiniMaxKey carries the user's MiniMax API key, injected by the auth backend.
+	// Used by the ext_proc when routing requests to MiniMax models.
+	UserMiniMaxKey = "x-user-minimax-key"
+
 	// AuthzUserID is the default header for the authenticated user's identity.
 	// Default for Authorino (K8s Secret metadata.name).
 	// Override via authz.identity.user_id_header for other backends:
