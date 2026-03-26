@@ -73,56 +73,42 @@ export default function KnowledgeMapPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.headerMain}>
-          <div className={styles.eyebrow}>Knowledge</div>
-          <div className={styles.titleRow}>
-            <div className={styles.titleStack}>
-              <h1 className={styles.title}>Knowledge Map</h1>
-              <p className={styles.description}>
-                Inspect one base at a time with the self-hosted WizMap viewer.
-              </p>
-            </div>
-            <Link to="/knowledge-bases/bases" className={styles.backLink}>
-              Back to Bases
-            </Link>
-          </div>
-        </div>
+      {error ? <div className={styles.error}>{error}</div> : null}
 
-        {metadata ? (
-          <div className={styles.summaryBar}>
-            <div className={styles.summaryPrimary}>
-              <span className={styles.summaryEyebrow}>Base</span>
-              <strong className={styles.summaryName}>{metadata.name}</strong>
-              {metadata.description ? (
-                <p className={styles.summaryDescription}>{metadata.description}</p>
-              ) : null}
-            </div>
-            <dl className={styles.summaryStats}>
-              <div className={styles.summaryStat}>
+      <section className={styles.mapShell}>
+        <div className={styles.mapChrome}>
+          <div className={styles.mapIdentity}>
+            <span className={styles.eyebrow}>Knowledge</span>
+            <span className={styles.title}>Knowledge Map</span>
+            {metadata ? <span className={styles.baseChip}>{metadata.name}</span> : null}
+          </div>
+
+          {metadata ? (
+            <dl className={styles.metaStrip}>
+              <div className={styles.metaPill}>
                 <dt>Projection</dt>
                 <dd>{metadata.projection}</dd>
               </div>
-              <div className={styles.summaryStat}>
+              <div className={styles.metaPill}>
                 <dt>Model</dt>
                 <dd>{metadata.model_type}</dd>
               </div>
-              <div className={styles.summaryStat}>
+              <div className={styles.metaPill}>
                 <dt>Points</dt>
                 <dd>{metadata.point_count}</dd>
               </div>
-              <div className={styles.summaryStat}>
+              <div className={styles.metaPill}>
                 <dt>Labels</dt>
                 <dd>{metadata.label_count}</dd>
               </div>
             </dl>
-          </div>
-        ) : null}
-      </header>
+          ) : null}
 
-      {error ? <div className={styles.error}>{error}</div> : null}
+          <Link to="/knowledge-bases/bases" className={styles.backLink}>
+            Back to Bases
+          </Link>
+        </div>
 
-      <section className={styles.mapShell}>
         {(loading || !iframeReady) && !error ? (
           <div className={styles.loadingPanel}>
             <div className={styles.spinner} />

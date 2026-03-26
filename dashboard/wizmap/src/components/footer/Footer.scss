@@ -81,18 +81,7 @@
   }
 
   .count {
-    position: relative;
-
-    span {
-      &.hidden {
-        visibility: hidden;
-      }
-    }
-
-    .subset-count {
-      position: absolute;
-      right: 0;
-    }
+    font-variant-numeric: tabular-nums;
   }
 }
 

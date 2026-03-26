@@ -83,8 +83,11 @@ func TestHandleKnowledgeBaseMapEndpoints(t *testing.T) {
 	if err := json.Unmarshal(gridRR.Body.Bytes(), &grid); err != nil {
 		t.Fatalf("json.Unmarshal grid: %v", err)
 	}
-	if len(grid.Grid) == 0 || len(grid.GroupNames) == 0 {
+	if len(grid.Grid) == 0 {
 		t.Fatalf("expected populated grid response, got %+v", grid)
+	}
+	if len(grid.GroupNames) != 0 {
+		t.Fatalf("expected kb map grid to ship without grouped overlays, got %+v", grid.GroupNames)
 	}
 
 	topicReq := httptest.NewRequest(http.MethodGet, "/config/kbs/privacy_kb/map/topic.json", nil)

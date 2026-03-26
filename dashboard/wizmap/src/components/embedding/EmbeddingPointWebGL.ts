@@ -183,16 +183,6 @@ export function drawScatterPlot(this: Embedding) {
     }
   }
 
-  // Update footer count
-  const footerCountElement = d3.select('.footer .count');
-  footerCountElement
-    .select('.total-count')
-    .classed('hidden', pointCount !== this.loadedPointCount);
-  footerCountElement
-    .select('.subset-count')
-    .classed('hidden', pointCount === this.loadedPointCount)
-    .text(`${pointCount} Data Points`);
-
   // Logarithmic regression by fitting the following three points
   // https://keisan.casio.com/exec/system/14059930226691
   // [(6e4, 2), (3e5, 1), [1.8e6, 0.5]]

@@ -1036,6 +1036,8 @@ export class Embedding {
   loaderWorkerMessageHandler = (e: MessageEvent<LoaderWorkerMessage>) => {
     switch (e.data.command) {
       case 'transferLoadData': {
+        this.loadedPointCount = e.data.payload.loadedPointCount;
+
         // Add these points to the quadtree ASAP
         const treeMessage: TreeWorkerMessage = {
           command: 'updateQuadtree',
@@ -1090,11 +1092,8 @@ export class Embedding {
           }
         }
 
-        // Update the data point count
-        this.loadedPointCount = e.data.payload.loadedPointCount;
-
         // Update the footer
-        this.footerStoreValue.numPoints = this.promptPoints.length;
+        this.footerStoreValue.numPoints = this.loadedPointCount;
         this.footerStore.set(this.footerStoreValue);
         break;
       }

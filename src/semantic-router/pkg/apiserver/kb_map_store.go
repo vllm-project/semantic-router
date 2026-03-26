@@ -180,7 +180,7 @@ func buildKnowledgeBaseMapArtifacts(
 	}
 
 	xRange, yRange := knowledgeBaseMapRanges(points)
-	groupGrids, groupTotals, groupNames, grid := buildKnowledgeBaseDensityGrids(points, labelNames, xRange, yRange)
+	_, _, _, grid := buildKnowledgeBaseDensityGrids(points, labelNames, xRange, yRange)
 	topicData := buildKnowledgeBaseTopicResponse(points, labelNames, kb.Groups, xRange, yRange)
 
 	pointData, err := marshalKnowledgeBasePointNDJSON(points)
@@ -188,16 +188,13 @@ func buildKnowledgeBaseMapArtifacts(
 		return nil, err
 	}
 	gridData, err := json.Marshal(knowledgeBaseMapGridResponse{
-		Grid:                 grid,
-		XRange:               xRange,
-		YRange:               yRange,
-		Padded:               false,
-		SampleSize:           len(points),
-		TotalPointSize:       len(points),
-		EmbeddingName:        fmt.Sprintf("%s (%s)", kb.Name, modelType),
-		GroupGrids:           groupGrids,
-		GroupTotalPointSizes: groupTotals,
-		GroupNames:           groupNames,
+		Grid:           grid,
+		XRange:         xRange,
+		YRange:         yRange,
+		Padded:         false,
+		SampleSize:     len(points),
+		TotalPointSize: len(points),
+		EmbeddingName:  fmt.Sprintf("%s (%s)", kb.Name, modelType),
 	})
 	if err != nil {
 		return nil, err

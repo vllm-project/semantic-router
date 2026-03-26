@@ -76,12 +76,7 @@
     <span class="item">{myFooter?.embeddingName}</span>
     <div class="splitter"></div>
 
-    <span class="count">
-      <span class="total-count" class:hidden="{false}"
-        >{myFooter ? myFooter.numPoints : '0'} Data Points
-      </span>
-      <span class="subset-count" class:hidden="{true}">0 Data Points</span>
-    </span>
+    <span class="count">{myFooter ? myFooter.numPoints : '0'} Points</span>
     <div class="splitter"></div>
     <div class="scale-legend">
       <span class="sclae-num"

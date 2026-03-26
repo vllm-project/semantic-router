@@ -27,17 +27,23 @@
   $: groupedNames = myEmbedding?.groupNames ?? [];
   $: hasGroupedEmbedding = groupedNames.length > 0;
 
-  const defaultSetting: EmbeddingInitSetting = {
+  export let datasetName = 'diffusiondb';
+  export let dataURLs: DataURLs | null = null;
+  export let footerStore: Writable<FooterStoreValue>;
+  export let searchBarStore: Writable<SearchBarStoreValue>;
+
+  let defaultSetting: EmbeddingInitSetting = {
     showContour: true,
     showPoint: true,
     showGrid: false,
     showLabel: true
   };
-
-  export let datasetName = 'diffusiondb';
-  export let dataURLs: DataURLs | null = null;
-  export let footerStore: Writable<FooterStoreValue>;
-  export let searchBarStore: Writable<SearchBarStoreValue>;
+  $: defaultSetting = {
+    showContour: dataURLs ? false : true,
+    showPoint: true,
+    showGrid: false,
+    showLabel: true
+  };
 
   const defaultDataURLs = (name: string): DataURLs => {
     let DATA_BASE = `${import.meta.env.BASE_URL}data`;
