@@ -379,7 +379,9 @@ function ClosingBands(): JSX.Element {
                 Install, configure, train, and operate from one dense documentation graph.
               </Translate>
             </p>
-            <PillLink to="/docs/intro">Docs index</PillLink>
+            <PillLink to="/docs/intro">
+              <Translate id="homepage.band.docs.cta">Docs index</Translate>
+            </PillLink>
           </div>
 
           <div className={styles.band}>
@@ -394,7 +396,9 @@ function ClosingBands(): JSX.Element {
                 Papers, working groups, and contributors evolve the same system in public.
               </Translate>
             </p>
-            <PillLink to="/community/team" muted>Community routes</PillLink>
+            <PillLink to="/community/team" muted>
+              <Translate id="homepage.band.community.cta">Community routes</Translate>
+            </PillLink>
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import Head from '@docusaurus/Head'
 import BrowserOnly from '@docusaurus/BrowserOnly'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import { PageIntro, PillLink } from '@site/src/components/site/Chrome'
+import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import styles from './index.module.css'
 
 const MOBILE_BREAKPOINT = 768
@@ -22,7 +23,6 @@ interface PaperViewerPageProps {
   heroDescription: string
   metaDescription: string
   pdfUrl: string
-  shareImagePath: string
   socialTitle?: string
   title: string
 }
@@ -254,12 +254,11 @@ export default function PaperViewerPage({
   heroDescription,
   metaDescription,
   pdfUrl,
-  shareImagePath,
   socialTitle,
   title,
 }: PaperViewerPageProps): JSX.Element {
   const { siteConfig } = useDocusaurusContext()
-  const ogImage = new URL(shareImagePath, siteConfig.url).toString()
+  const ogImage = new URL(SITE_SOCIAL_PREVIEW_IMAGE_PATH, siteConfig.url).toString()
   const resolvedSocialTitle = socialTitle ?? `${title} — vLLM Semantic Router`
 
   return (
