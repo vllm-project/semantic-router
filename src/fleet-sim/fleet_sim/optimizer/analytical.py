@@ -19,6 +19,7 @@ def cdf_eval(cdf: list, t: int) -> float:
         prev_t, prev_f = thresh, frac
     return 1.0
 
+
 # ── Analytical sizing (Erlang-C / Kimura) ────────────────────────────────────
 
 
@@ -145,4 +146,3 @@ def min_gpus_analytical(
     # Minimum from utilisation cap constraint (GPU-level utilisation)
     c_rho = math.ceil(lam / (mu * rho_max)) if rho_max < 1.0 else c_slo
     return max(c_slo, c_rho)
-

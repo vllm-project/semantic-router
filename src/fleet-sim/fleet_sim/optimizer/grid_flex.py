@@ -180,7 +180,9 @@ def grid_flex_analysis(
         # Using a throttled profile here gives the correct M/G/c calibration
         # for the reduced concurrency level.
         capped_gpu = _throttled_profile(gpu, n_max_cap, max_ctx)
-        mu_cap, cv2_cap, _, mean_prefill_cap = analytical.calibrate(cdf, max_ctx, capped_gpu)
+        mu_cap, cv2_cap, _, mean_prefill_cap = analytical.calibrate(
+            cdf, max_ctx, capped_gpu
+        )
         mu_slot_cap = mu_cap / n_max_cap if n_max_cap > 0 else 1e-9
 
         c_slots = n_gpus * n_max_cap

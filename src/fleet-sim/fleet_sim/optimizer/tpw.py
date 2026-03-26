@@ -4,6 +4,7 @@ from . import analytical
 
 # ── Tokens-per-Watt analysis ──────────────────────────────────────────────────
 
+
 @dataclass
 class TpwPoint:
     """Energy-efficiency snapshot for one pool at one utilisation level.
@@ -216,7 +217,9 @@ def _tpw_one_pool(
     mean_l_out = _cdf_mean_l_out(cdf)
 
     if rho_override is None:
-        n_gpus = analytical.min_gpus_analytical(lam, mu_gpu, t_slo_s, cv2, n_slots=n_slots)
+        n_gpus = analytical.min_gpus_analytical(
+            lam, mu_gpu, t_slo_s, cv2, n_slots=n_slots
+        )
         slo_optimal = True
     else:
         rho_c = max(0.05, min(0.95, rho_override))
@@ -501,4 +504,3 @@ def print_fleet_tpw(result: FleetTpwResult, title: str = "") -> None:
         for note in result.power_model_notes:
             print(note)
         print()
-
