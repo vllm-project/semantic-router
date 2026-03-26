@@ -285,48 +285,25 @@ $search-panel-width: 356px;
 
 .control-bar {
   position: absolute;
-  z-index: 19;
-  left: $search-panel-width;
+  z-index: 21;
+  left: calc(#{$search-panel-width} + 18px);
+  right: 18px;
   top: 10px;
   line-height: 1;
-
-  width: calc(100vw - $search-panel-width);
-  height: 42px;
-  padding-left: 16px;
 
   display: flex;
   flex-direction: row;
   align-items: center;
-
-  .flex-gap {
-    flex-grow: 1;
-    max-width: 15px;
-  }
+  gap: 10px;
+  flex-wrap: wrap;
+  pointer-events: none;
 
   .item-wrapper {
-    pointer-events: none;
     position: relative;
     display: flex;
-
-    &:disabled {
-      display: none;
-      .item {
-        background-color: $gray-200;
-        color: $gray-600;
-        cursor: no-drop;
-
-        &:hover {
-          background-color: $gray-200;
-        }
-
-        &:active {
-          background-color: $gray-200;
-        }
-      }
-    }
+    pointer-events: all;
 
     .item {
-      pointer-events: all;
       position: relative;
       display: flex;
       flex-direction: row;
@@ -334,13 +311,13 @@ $search-panel-width: 356px;
       gap: 6px;
       font-size: $font-d1;
       font-weight: 600;
-      // color: $red-400;
+      border: 1px solid rgba(20, 30, 58, 0.08);
 
       background-color: white;
-      box-shadow: 0 1px 2px hsla(0, 9%, 25%, 0.3), 0 0 1px hsla(0, 9%, 25%, 0.3),
-        0 1px 3px 1px hsla(0, 9%, 25%, 0.15);
-      border-radius: 8px;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+      border-radius: 12px;
       padding: 6px 12px;
+      min-height: 38px;
 
       display: flex;
       flex-direction: row;
@@ -349,10 +326,16 @@ $search-panel-width: 356px;
       -webkit-user-select: none;
       cursor: pointer;
 
-      transition: background-color 100ms ease-in-out;
+      transition: background-color 100ms ease-in-out, border-color 100ms ease-in-out,
+        color 100ms ease-in-out;
+
+      &:disabled {
+        display: none;
+      }
 
       &:hover {
-        background-color: $gray-100;
+        background-color: $gray-50;
+        border-color: rgba(123, 31, 162, 0.2);
       }
 
       &:active {
@@ -362,6 +345,7 @@ $search-panel-width: 356px;
       &.activated {
         background-color: change-color($color: $purple-50, $lightness: 95%);
         color: $purple-600;
+        border-color: rgba(123, 31, 162, 0.18);
 
         &:hover {
           background-color: change-color($color: $purple-50, $lightness: 92%);
@@ -370,6 +354,12 @@ $search-panel-width: 356px;
         &:active {
           background-color: change-color($color: $purple-50, $lightness: 88%);
         }
+      }
+
+      &:disabled:hover,
+      &:disabled:active {
+        background-color: white;
+        border-color: rgba(20, 30, 58, 0.08);
       }
 
       // Safe area to avoid trigger point hover
@@ -413,9 +403,9 @@ $search-panel-width: 356px;
       top: calc(100% + 10px);
 
       background-color: white;
-      box-shadow: 0 1px 2px hsla(0, 6%, 25%, 0.3),
-        0 2px 6px 2px hsla(0, 6%, 25%, 0.15);
-      border-radius: 8px;
+      box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
+      border: 1px solid rgba(20, 30, 58, 0.08);
+      border-radius: 12px;
 
       max-width: 600px;
       padding: 6px 12px;
@@ -454,6 +444,7 @@ $search-panel-width: 356px;
         display: flex;
         flex-direction: row;
         gap: 5px;
+        align-items: center;
 
         label {
           white-space: nowrap;
@@ -685,6 +676,20 @@ $search-panel-width: 356px;
           }
         }
       }
+    }
+  }
+}
+
+@media (max-width: 960px) {
+  .control-bar {
+    left: 12px;
+    right: 12px;
+    top: 62px;
+    gap: 8px;
+
+    .item {
+      min-height: 36px;
+      padding: 6px 10px;
     }
   }
 }

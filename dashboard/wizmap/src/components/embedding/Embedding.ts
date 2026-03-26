@@ -109,6 +109,7 @@ export class Embedding {
 
   // Data
   dataURLs: DataURLs;
+  hostedDataMode: boolean;
   promptPoints: PromptPoint[] = [];
   gridData: GridData | null = null;
   tileData: LevelTileMap | null = null;
@@ -200,6 +201,7 @@ export class Embedding {
     component,
     updateEmbedding,
     defaultSetting,
+    hostedDataMode,
     dataURLs,
     footerStore,
     searchBarStore
@@ -207,12 +209,14 @@ export class Embedding {
     component: HTMLElement;
     updateEmbedding: () => void;
     defaultSetting: EmbeddingInitSetting;
+    hostedDataMode: boolean;
     dataURLs: DataURLs;
     footerStore: Writable<FooterStoreValue>;
     searchBarStore: Writable<SearchBarStoreValue>;
   }) {
     this.component = component;
     this.updateEmbedding = updateEmbedding;
+    this.hostedDataMode = hostedDataMode;
     this.dataURLs = dataURLs;
 
     this.footerStore = footerStore;

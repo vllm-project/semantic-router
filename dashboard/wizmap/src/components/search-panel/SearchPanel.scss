@@ -9,6 +9,7 @@ $button-border-radius: 8px;
   align-items: center;
   height: 100vh;
   font-size: $font-d1;
+  pointer-events: none;
 }
 
 .svg-icon {
@@ -54,13 +55,14 @@ $search-bar-gap: 8px;
   pointer-events: all;
 
   padding: 0 $search-bar-h-padding;
-  border-radius: $button-border-radius;
+  border-radius: 12px;
+  border: 1px solid rgba(20, 30, 58, 0.08);
   background-color: change-color($color: white, $alpha: 1);
   transition: box-shadow 150ms ease-in-out;
-  box-shadow: 0 2px 4px hsla(0, 0%, 0%, 0.2), 0 -1px 0 hsla(0, 0%, 0%, 0.02);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
 
   &.focused {
-    box-shadow: 0 2px 4px hsla(0, 0%, 0%, 0.1), 0 -1px 0 hsla(0, 0%, 0%, 0.02);
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
   }
 
   &:focus {

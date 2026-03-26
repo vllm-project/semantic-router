@@ -41,13 +41,14 @@ async function mockKnowledgeMap(page: Page) {
 }
 
 test.describe('knowledge map route', () => {
-  test('renders a full map shell without the old summary bar', async ({ page }) => {
+  test('renders a standalone full-screen map shell without dashboard chrome', async ({ page }) => {
     await mockKnowledgeMap(page)
     await page.goto('/knowledge-bases/privacy_kb/map')
 
     await expect(page.getByRole('link', { name: 'Back to Bases' })).toBeVisible()
     await expect(page.frameLocator('iframe[title="Knowledge map for privacy_kb"]').locator('#wizmap-shell')).toBeVisible()
 
+    await expect(page.getByText('Dashboard')).toHaveCount(0)
     await expect(page.getByText('Projection')).toHaveCount(0)
     await expect(page.getByText('Points')).toHaveCount(0)
     await expect(page.getByText('Labels')).toHaveCount(0)

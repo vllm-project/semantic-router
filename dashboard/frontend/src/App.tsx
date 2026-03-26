@@ -314,14 +314,7 @@ const AppRouter: React.FC = () => {
             <Route path="/knowledge-bases" element={<Navigate to="/knowledge-bases/bases" replace />} />
             <Route
               path="/knowledge-bases/:name/map"
-              element={
-                <Layout
-                  configSection={configSection}
-                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-                >
-                  <KnowledgeMapPage />
-                </Layout>
-              }
+              element={<KnowledgeMapPage />}
             />
             <Route
               path="/knowledge-bases/:view"

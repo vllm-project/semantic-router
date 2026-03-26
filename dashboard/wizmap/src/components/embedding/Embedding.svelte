@@ -112,6 +112,7 @@
         component,
         updateEmbedding,
         defaultSetting,
+        hostedDataMode: Boolean(dataURLs),
         dataURLs: resolveDataURLs(),
         footerStore,
         searchBarStore
@@ -139,29 +140,26 @@
   </div>
 
   <div class="control-bar">
-    <button
-      class="item-wrapper"
-      on:click="{() => {
-        if (!hasGroupedEmbedding) {
-          const nextValue = myEmbedding ? !myEmbedding.showContours[0] : false;
-          myEmbedding?.displayCheckboxChanged('contour', nextValue);
-        } else {
-          if (controlDisplayItem === 'contour') {
-            controlDisplayItem = '';
-          } else {
-            if (controlDisplayItem === 'time') {
-              myEmbedding?.displayCheckboxChanged('time', false);
-            }
-            controlDisplayItem = 'contour';
-          }
-        }
-      }}"
-    >
-      <div
+    <div class="item-wrapper">
+      <button
+        type="button"
         class="item"
-        class:activated="{myEmbedding
-          ? anyTrue(myEmbedding.showContours)
-          : false}"
+        class:activated="{myEmbedding ? anyTrue(myEmbedding.showContours) : false}"
+        on:click="{() => {
+          if (!hasGroupedEmbedding) {
+            const nextValue = myEmbedding ? !myEmbedding.showContours[0] : false;
+            myEmbedding?.displayCheckboxChanged('contour', nextValue);
+          } else {
+            if (controlDisplayItem === 'contour') {
+              controlDisplayItem = '';
+            } else {
+              if (controlDisplayItem === 'time') {
+                myEmbedding?.displayCheckboxChanged('time', false);
+              }
+              controlDisplayItem = 'contour';
+            }
+          }
+        }}"
       >
         <div class="svg-icon">{@html iconContour}</div>
         <div class="name">Contour</div>
@@ -170,19 +168,15 @@
           class:hidden="{!hasGroupedEmbedding}"
           class:activated="{controlDisplayItem === 'contour'}"
         >
-          <div class="svg-icon">
-            {@html iconCaret}
-          </div>
+          <div class="svg-icon">{@html iconCaret}</div>
         </div>
-      </div>
+      </button>
 
       {#if hasGroupedEmbedding}
-        <button
+        <div
           class="menu contour-menu"
           class:hidden="{controlDisplayItem !== 'contour'}"
-          on:click="{e => {
-            e.stopPropagation();
-          }}"
+          on:click|stopPropagation
         >
           {#each groupedNames as groupName, index (groupName)}
             <div class="control-row">
@@ -197,34 +191,30 @@
               <label for={"checkbox-contour-" + index}>{groupName}</label>
             </div>
           {/each}
-        </button>
+        </div>
       {/if}
-    </button>
-    <div class="flex-gap"></div>
+    </div>
 
-    <button
-      class="item-wrapper"
-      on:click="{() => {
-        if (!hasGroupedEmbedding) {
-          const nextValue = myEmbedding ? !myEmbedding.showPoints[0] : false;
-          myEmbedding?.displayCheckboxChanged('point', nextValue);
-        } else {
-          if (controlDisplayItem === 'point') {
-            controlDisplayItem = '';
-          } else {
-            if (controlDisplayItem === 'time') {
-              myEmbedding?.displayCheckboxChanged('time', false);
-            }
-            controlDisplayItem = 'point';
-          }
-        }
-      }}"
-    >
-      <div
+    <div class="item-wrapper">
+      <button
+        type="button"
         class="item"
-        class:activated="{myEmbedding
-          ? anyTrue(myEmbedding.showPoints)
-          : false}"
+        class:activated="{myEmbedding ? anyTrue(myEmbedding.showPoints) : false}"
+        on:click="{() => {
+          if (!hasGroupedEmbedding) {
+            const nextValue = myEmbedding ? !myEmbedding.showPoints[0] : false;
+            myEmbedding?.displayCheckboxChanged('point', nextValue);
+          } else {
+            if (controlDisplayItem === 'point') {
+              controlDisplayItem = '';
+            } else {
+              if (controlDisplayItem === 'time') {
+                myEmbedding?.displayCheckboxChanged('time', false);
+              }
+              controlDisplayItem = 'point';
+            }
+          }
+        }}"
       >
         <div class="svg-icon">{@html iconPoint}</div>
         <div class="name">Point</div>
@@ -233,19 +223,15 @@
           class:hidden="{!hasGroupedEmbedding}"
           class:activated="{controlDisplayItem === 'point'}"
         >
-          <div class="svg-icon">
-            {@html iconCaret}
-          </div>
+          <div class="svg-icon">{@html iconCaret}</div>
         </div>
-      </div>
+      </button>
 
       {#if hasGroupedEmbedding}
-        <button
+        <div
           class="menu point-menu"
           class:hidden="{controlDisplayItem !== 'point'}"
-          on:click="{e => {
-            e.stopPropagation();
-          }}"
+          on:click|stopPropagation
         >
           {#each groupedNames as groupName, index (groupName)}
             <div class="control-row">
@@ -260,59 +246,57 @@
               <label for={"checkbox-point-" + index}>{groupName}</label>
             </div>
           {/each}
-        </button>
+        </div>
       {/if}
-    </button>
-    <div class="flex-gap"></div>
+    </div>
 
-    <button
-      class="item-wrapper"
-      on:click="{() => {
-        if (defaultSetting.showGrid) {
-          defaultSetting.showGrid = false;
-          myEmbedding?.displayCheckboxChanged('grid', false);
-        } else {
-          defaultSetting.showGrid = true;
-          myEmbedding?.displayCheckboxChanged('grid', true);
-        }
-      }}"
-    >
-      <div class="item" class:activated="{defaultSetting.showGrid}">
+    <div class="item-wrapper">
+      <button
+        type="button"
+        class="item"
+        class:activated="{defaultSetting.showGrid}"
+        on:click="{() => {
+          if (defaultSetting.showGrid) {
+            defaultSetting.showGrid = false;
+            myEmbedding?.displayCheckboxChanged('grid', false);
+          } else {
+            defaultSetting.showGrid = true;
+            myEmbedding?.displayCheckboxChanged('grid', true);
+          }
+        }}"
+      >
         <div class="svg-icon">{@html iconGrid}</div>
         <div class="name">Grid</div>
-      </div>
-    </button>
-    <div class="flex-gap"></div>
+      </button>
+    </div>
 
-    <button
-      class="item-wrapper"
-      on:click="{() => {
-        if (controlDisplayItem === 'label') {
-          controlDisplayItem = '';
-        } else {
-          if (controlDisplayItem === 'time') {
-            myEmbedding?.displayCheckboxChanged('time', false);
+    <div class="item-wrapper">
+      <button
+        type="button"
+        class="item"
+        class:activated="{defaultSetting.showLabel}"
+        on:click="{() => {
+          if (controlDisplayItem === 'label') {
+            controlDisplayItem = '';
+          } else {
+            if (controlDisplayItem === 'time') {
+              myEmbedding?.displayCheckboxChanged('time', false);
+            }
+            controlDisplayItem = 'label';
           }
-          controlDisplayItem = 'label';
-        }
-      }}"
-    >
-      <div class="item" class:activated="{defaultSetting.showLabel}">
+        }}"
+      >
         <div class="svg-icon">{@html iconLabel}</div>
         <div class="name">Label</div>
         <div class="caret" class:activated="{controlDisplayItem === 'label'}">
-          <div class="svg-icon">
-            {@html iconCaret}
-          </div>
+          <div class="svg-icon">{@html iconCaret}</div>
         </div>
-      </div>
+      </button>
 
-      <button
+      <div
         class="menu label-menu"
         class:hidden="{controlDisplayItem !== 'label'}"
-        on:click="{e => {
-          e.stopPropagation();
-        }}"
+        on:click|stopPropagation
       >
         <div class="control-item">
           <div class="item-header">Automatic Labeling</div>
@@ -350,55 +334,50 @@
               myEmbedding ? myEmbedding.labelNumSliderChanged(e) : () => {}}"
           />
         </div>
-      </button>
-    </button>
-    <div class="flex-gap"></div>
+      </div>
+    </div>
 
-    <button
-      class="item-wrapper"
-      disabled="{myEmbedding ? myEmbedding.timeCountMap === null : true}"
-      on:click="{() => {
-        if (controlDisplayItem === 'time') {
-          controlDisplayItem = '';
-          myEmbedding?.displayCheckboxChanged('time', false);
-        } else {
-          controlDisplayItem = 'time';
-          myEmbedding?.displayCheckboxChanged('time', true);
-        }
-      }}"
-    >
-      <button class="item" class:activated="{controlDisplayItem === 'time'}">
+    <div class="item-wrapper">
+      <button
+        type="button"
+        class="item"
+        class:activated="{controlDisplayItem === 'time'}"
+        disabled="{myEmbedding ? myEmbedding.timeCountMap === null : true}"
+        on:click="{() => {
+          if (controlDisplayItem === 'time') {
+            controlDisplayItem = '';
+            myEmbedding?.displayCheckboxChanged('time', false);
+          } else {
+            controlDisplayItem = 'time';
+            myEmbedding?.displayCheckboxChanged('time', true);
+          }
+        }}"
+      >
         <div class="svg-icon">{@html iconTime}</div>
         <div class="name">Time</div>
         <div class="caret" class:activated="{controlDisplayItem === 'time'}">
-          <div class="svg-icon">
-            {@html iconCaret}
-          </div>
+          <div class="svg-icon">{@html iconCaret}</div>
         </div>
       </button>
 
-      <button
+      <div
         class="menu time-menu"
         class:hidden="{controlDisplayItem !== 'time'}"
-        on:click="{e => {
-          e.stopPropagation();
-        }}"
+        on:click|stopPropagation
       >
         <div class="control-row">
           <div class="play-pause-button">
             <button
+              type="button"
               class="svg-icon"
-              class:hidden="{myEmbedding
-                ? myEmbedding.playingTimeSlider
-                : false}"
+              class:hidden="{myEmbedding ? myEmbedding.playingTimeSlider : false}"
             >
               {@html iconPlay}
             </button>
             <button
+              type="button"
               class="svg-icon"
-              class:hidden="{myEmbedding
-                ? !myEmbedding.playingTimeSlider
-                : true}"
+              class:hidden="{myEmbedding ? !myEmbedding.playingTimeSlider : true}"
             >
               {@html iconPause}
             </button>
@@ -425,7 +404,7 @@
             </div>
           </div>
         </div>
-      </button>
-    </button>
+      </div>
+    </div>
   </div>
 </div>
