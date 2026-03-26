@@ -1972,6 +1972,87 @@
   "publications.filter.talks": {
     "message": "🎤 演讲"
   },
+  "publications.meta.description": {
+    "message": "vLLM Semantic Router 项目的最新研究论文、演讲与科学贡献。"
+  },
+  "publications.awardType.paper": {
+    "message": "研究论文"
+  },
+  "publications.awardType.talk": {
+    "message": "会议演讲"
+  },
+  "publications.detail.authors": {
+    "message": "作者："
+  },
+  "publications.detail.speakers": {
+    "message": "演讲者："
+  },
+  "publications.detail.venue": {
+    "message": "发表/活动："
+  },
+  "publications.empty.all": {
+    "message": "暂无内容。"
+  },
+  "publications.empty.paper": {
+    "message": "暂无论文。"
+  },
+  "publications.empty.talk": {
+    "message": "暂无演讲。"
+  },
+  "paperViewer.loading": {
+    "message": "正在加载 PDF…"
+  },
+  "paperViewer.error.loadPreview": {
+    "message": "无法加载 PDF 预览。"
+  },
+  "paperViewer.error.openNewTab": {
+    "message": "点击这里在新标签页中打开 PDF"
+  },
+  "paperViewer.pagination.prev": {
+    "message": "上一页"
+  },
+  "paperViewer.pagination.next": {
+    "message": "下一页"
+  },
+  "paperViewer.pagination.prevAria": {
+    "message": "上一页"
+  },
+  "paperViewer.pagination.nextAria": {
+    "message": "下一页"
+  },
+  "paperViewer.hero.label": {
+    "message": "研究文档"
+  },
+  "paperViewer.hero.download": {
+    "message": "下载 PDF"
+  },
+  "paperViewer.hero.backToPublications": {
+    "message": "查看论文与演讲"
+  },
+  "whitePaper.title": {
+    "message": "白皮书"
+  },
+  "whitePaper.metaDescription": {
+    "message": "面向混合模态模型的信号驱动决策路由"
+  },
+  "whitePaper.heroDescription": {
+    "message": "面向混合模态模型的信号驱动决策路由，以站内完整 PDF 阅读器形式呈现。"
+  },
+  "visionPaper.title": {
+    "message": "愿景论文"
+  },
+  "visionPaper.socialTitle": {
+    "message": "我们的愿景 — vLLM Semantic Router"
+  },
+  "visionPaper.metaDescription": {
+    "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构：来自 vLLM Semantic Router 项目的愿景论文"
+  },
+  "visionPaper.heroDescription": {
+    "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
+  },
+  "homepage.meta.description": {
+    "message": "面向混合模型服务的信号驱动决策路由。"
+  },
 
   "homepage.whereItLives.title": {
     "message": "它的位置"

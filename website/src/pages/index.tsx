@@ -408,7 +408,10 @@ export default function Home(): JSX.Element {
   return (
     <Layout
       title={siteConfig.title}
-      description="Signal-driven decision routing for mixture-of-model serving."
+      description={translate({
+        id: 'homepage.meta.description',
+        message: 'Signal-driven decision routing for mixture-of-model serving.',
+      })}
     >
       <main className={styles.page}>
         <DitherHero />

@@ -278,6 +278,38 @@ export const researchTalks = [
   },
 ]
 
+const ZH_HANS_LOCALE = 'zh-Hans'
+
+const RESEARCH_CATEGORY_LABEL_ZH = {
+  'POSITION PAPER': '立场论文',
+  'VISION PAPER': '愿景论文',
+  'RAG VERIFICATION': 'RAG 验证',
+}
+
+const RESEARCH_VENUE_ZH = {
+  'arXiv Technical Report': 'arXiv 技术报告',
+  'Internet Engineering Task Force (IETF)': '互联网工程任务组（IETF）',
+}
+
+export function localizeResearchEntry(entry, locale) {
+  if (locale !== ZH_HANS_LOCALE)
+    return entry
+
+  return {
+    ...entry,
+    categoryLabel: entry.categoryLabel
+      ? (RESEARCH_CATEGORY_LABEL_ZH[entry.categoryLabel] ?? entry.categoryLabel)
+      : entry.categoryLabel,
+    venue: entry.venue
+      ? (RESEARCH_VENUE_ZH[entry.venue] ?? entry.venue)
+      : entry.venue,
+  }
+}
+
+export function localizeResearchEntries(entries, locale) {
+  return entries.map(entry => localizeResearchEntry(entry, locale))
+}
+
 export function sortResearchEntries(entries) {
   return [...entries].sort((a, b) => {
     if (Boolean(a.spotlight) !== Boolean(b.spotlight)) {

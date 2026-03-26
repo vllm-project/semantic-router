@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react'
+import Translate, { translate } from '@docusaurus/Translate'
 import Layout from '@theme/Layout'
 import Head from '@docusaurus/Head'
 import BrowserOnly from '@docusaurus/BrowserOnly'
@@ -128,9 +129,15 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
         {error
           ? (
               <div className={styles.fallback}>
-                <p>Unable to load PDF preview.</p>
+                <p>
+                  <Translate id="paperViewer.error.loadPreview">
+                    Unable to load PDF preview.
+                  </Translate>
+                </p>
                 <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
-                  Click here to open the PDF in a new tab
+                  <Translate id="paperViewer.error.openNewTab">
+                    Click here to open the PDF in a new tab
+                  </Translate>
                 </a>
               </div>
             )
@@ -139,7 +146,11 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
                 file={pdfUrl}
                 onLoadSuccess={onDocumentLoadSuccess}
                 onLoadError={onDocumentLoadError}
-                loading={<div className={styles.loadingText}>Loading PDF…</div>}
+                loading={(
+                  <div className={styles.loadingText}>
+                    <Translate id="paperViewer.loading">Loading PDF…</Translate>
+                  </div>
+                )}
                 className={documentClassName}
               >
                 {isMobile
@@ -202,9 +213,14 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
               className={styles.pageBtn}
               onClick={goToPrev}
               disabled={pageNumber <= 1}
-              aria-label="Previous page"
+              aria-label={translate({
+                id: 'paperViewer.pagination.prevAria',
+                message: 'Previous page',
+              })}
             >
-              ← Prev
+              ←
+              {' '}
+              <Translate id="paperViewer.pagination.prev">Prev</Translate>
             </button>
             <span className={styles.pageInfo}>
               {pageNumber}
@@ -217,9 +233,14 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
               className={styles.pageBtn}
               onClick={goToNext}
               disabled={isNextDisabled}
-              aria-label="Next page"
+              aria-label={translate({
+                id: 'paperViewer.pagination.nextAria',
+                message: 'Next page',
+              })}
             >
-              Next →
+              <Translate id="paperViewer.pagination.next">Next</Translate>
+              {' '}
+              →
             </button>
           </div>
           <div />
@@ -260,16 +281,20 @@ export default function PaperViewerPage({
         <div className="site-shell-container">
           <div className={styles.hero}>
             <PageIntro
-              label="Research document"
+              label={(
+                <Translate id="paperViewer.hero.label">Research document</Translate>
+              )}
               title={title}
               description={heroDescription}
               actions={(
                 <>
                   <PillLink href={pdfUrl} target="_blank" rel="noreferrer">
-                    Download PDF
+                    <Translate id="paperViewer.hero.download">Download PDF</Translate>
                   </PillLink>
                   <PillLink to="/publications" muted>
-                    Research routes
+                    <Translate id="paperViewer.hero.backToPublications">
+                      Research routes
+                    </Translate>
                   </PillLink>
                 </>
               )}
@@ -278,7 +303,13 @@ export default function PaperViewerPage({
         </div>
 
         <div className="site-shell-container">
-          <BrowserOnly fallback={<div className={styles.loadingText}>Loading PDF...</div>}>
+          <BrowserOnly
+            fallback={(
+              <div className={styles.loadingText}>
+                <Translate id="paperViewer.loading">Loading PDF…</Translate>
+              </div>
+            )}
+          >
             {() => <PaperViewerContent pdfUrl={pdfUrl} />}
           </BrowserOnly>
         </div>
