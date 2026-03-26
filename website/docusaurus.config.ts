@@ -1,6 +1,7 @@
 import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 import { themes } from 'prism-react-renderer'
+import { SITE_SOCIAL_PREVIEW_IMAGE } from './src/data/socialPreview'
 
 const lightCodeTheme = themes.vsDark
 const darkCodeTheme = themes.vsDark
@@ -130,7 +131,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/vllm-sr-logo.light.png',
+    image: SITE_SOCIAL_PREVIEW_IMAGE,
     metadata: [
       { name: 'description', content: 'System Level Intelligent Router for Mixture-of-Models' },
       { name: 'keywords', content: 'LLM, Semantic Router, Mixture of Models, vLLM, Routing, AI Gateway, Envoy, ExtProc' },
