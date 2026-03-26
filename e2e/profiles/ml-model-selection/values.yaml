@@ -281,6 +281,8 @@ config:
       - name: codellama-7b
       - name: mistral-7b
   global:
+    model_catalog:
+      kbs: []
     router:
       model_selection:
         enabled: true

@@ -1,0 +1,21 @@
+{
+  "category": "computer_science",
+  "tier": "academic",
+  "exemplars": [
+    "Suppose a convex 3d-object has k pentagonal faces and m hexagonal faces. All faces are regular. What is k?",
+    "What are the port states determined by Nmap?",
+    "What are the rules regarding the specification of a procedure?",
+    "What arePackedarrays? How do they differfrom conventional arrays?",
+    "In the NoNicks operating system, the time required by a single file-read operation has four nonoverlapping components:\ndisk seek time-25 msec\ndisk latency time-8 msec\ndisk transfer time- 1 msec per 1,000 bytes\noperating system overhead-1 msec per 1,000 bytes + 10 msec\nIn version 1 of the system, the file read retrieved blocks of 1,000 bytes. In version 2, the file read (along with the underlying l",
+    "Hash tables can contribute to an efficient average-case solution for all of the problems described below EXCEPT:",
+    "What tool can be used to perform SNMP enumeration?",
+    "_______________ is a popular tool used for network analysis in multiprotocol diverse network.",
+    "Statement 1| RELUs are not monotonic, but sigmoids are monotonic. Statement 2| Neural networks trained with gradient descent with high probability converge to the global optimum.",
+    "Statement 1| As of 2020, some models attain greater than 98% accuracy on CIFAR-10. Statement 2| The original ResNets were not optimized with the Adam optimizer.",
+    "A machine learning problem involves four attributes plus a class. The attributes have 3, 2, 2, and 2 possible values each. The class has 3 possible values. How many maximum possible different examples are there?",
+    "Of the following potential benefits, which is LEAST likely to be provided by the upgraded system?",
+    "Statement 1| Highway networks were introduced after ResNets and eschew max pooling in favor of convolutions. Statement 2| DenseNets usually cost more memory than ResNets.",
+    "Which of the following is LEAST likely to indicate a phishing attack?",
+    "In an IPv4 datagram, the value of the total-length field is $(00 \\mathrm{~A} 0)_{16}$ and the value of the headerlength (HLEN) is (5) $1_{16}$. How many bytes of payload are being carried by the datagram?"
+  ]
+}

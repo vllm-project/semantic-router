@@ -211,3 +211,63 @@ func mustMarshalCanonicalConfigYAML(t *testing.T, cfg *config.RouterConfig) []by
 	}
 	return data
 }
+
+func TestHandleConfigHashReturnsHashAndNoPath(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	apiServer := &ClassificationAPIServer{configPath: configPath}
+
+	req := httptest.NewRequest(http.MethodGet, "/config/hash", nil)
+	rr := httptest.NewRecorder()
+	apiServer.handleConfigHash(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("json.Unmarshal response: %v", err)
+	}
+
+	hash, ok := resp["hash"]
+	if !ok || len(hash) != 64 {
+		t.Fatalf("expected 64-char hex hash, got %q", hash)
+	}
+	if _, hasPath := resp["path"]; hasPath {
+		t.Error("response should not expose filesystem path")
+	}
+}
+
+func TestHandleConfigHashErrorsWithoutConfigPath(t *testing.T) {
+	apiServer := &ClassificationAPIServer{configPath: ""}
+
+	req := httptest.NewRequest(http.MethodGet, "/config/hash", nil)
+	rr := httptest.NewRecorder()
+	apiServer.handleConfigHash(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleConfigHashStableForSameContent(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	apiServer := &ClassificationAPIServer{configPath: configPath}
+
+	hashes := make([]string, 2)
+	for i := range hashes {
+		req := httptest.NewRequest(http.MethodGet, "/config/hash", nil)
+		rr := httptest.NewRecorder()
+		apiServer.handleConfigHash(rr, req)
+
+		var resp map[string]string
+		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("json.Unmarshal: %v", err)
+		}
+		hashes[i] = resp["hash"]
+	}
+
+	if hashes[0] != hashes[1] {
+		t.Fatalf("expected identical hashes for unchanged config, got %q vs %q", hashes[0], hashes[1])
+	}
+}

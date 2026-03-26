@@ -30,6 +30,8 @@ config:
       - name: base-model
     signals: {}
   global:
+    model_catalog:
+      kbs: []
     router:
       config_source: kubernetes
     services:

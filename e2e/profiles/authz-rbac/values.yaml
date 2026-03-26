@@ -154,6 +154,8 @@ config:
           - code
         quality_score: 0.7
   global:
+    model_catalog:
+      kbs: []
     router:
       clear_route_cache: true
       strategy: priority

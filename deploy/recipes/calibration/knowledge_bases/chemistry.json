@@ -1,0 +1,21 @@
+{
+  "category": "chemistry",
+  "tier": "academic",
+  "exemplars": [
+    "Suppose that the junction between two semiconductors can be represented by a barrier of height $2.0 \\mathrm{eV}$ and length $100 \\mathrm{pm}$. Calculate the transmission probability of an electron with energy $1.5 \\mathrm{eV}$.",
+    "Frozen-core $\\mathrm{SCF} / \\mathrm{DZP}$ and CI-SD/DZP calculations on $\\mathrm{H}_2 \\mathrm{O}$ at its equilibrium geometry gave energies of -76.040542 and -76.243772 hartrees. Application of the Davidson correction brought the energy to -76.254549 hartrees. Find the coefficient of $\\Phi_0$ in the normalized CI-SD wave function.",
+    "Calculate the pH of (a) a 0.5 M solution with respect to CH_3COOH and CH_3COONa; (b) the same solution after 0.1 mole HCl per liter has been added to it. Assume that the volume is unchanged. K_a = 1.75 \u00d7 10^-5.",
+    "A sample of a gas exhibiting ideal behavior occupies a volume of 350 ml at 25.0\u00b0C and 600 torr. Determine its volume at 600\u00b0C and 25.0 torr.",
+    "The average concentration of particulate lead in a city with highly polluted air is 5\\mug/m^3. If an adult respires 8500 liters of air daily and if 50 per cent of the particles below 1\\mumin size are retained in the lungs, calculate how much lead is absorbed in the lungs each day. Of the particu-late lead in urban air, 75 per cent is less than 1\\mumin size.",
+    "Ferrous sulfate undergoes a thermal decomposition as follows: 2FeSO_4 (s) = Fe_2O_3 (s) + SO_2 (g) + SO_3 (g) At 929\u00b0K the total gas pressure is 0.9atmwith both solids present. (a) CalculateK_pfor this temperature. (b) Calculate the equilibrium total pressure that will be obtained if excess ferrous sulfate is placed in a flask at 929\u00b0K, which contains an initial SO_2 pressure of 0.6atm.",
+    "Find K_b andpK_bfor the acetate ion CH_3COO^-, The ionization constant of CH_3COOH is K_a = 1.75 \u00d7 10^-5;K_w= 1.00 \u00d7 10^-14.",
+    "Two molecules ^14N_2 and ^14N^15N have the sameinternuclear distance given as 0.1095 nm. Evaluate the molar rotational partition function at 298\u00b0K for both molecules.",
+    "Sulfurylchloride decomposes according to the equation, SO_2CI_2(g) \\rightleftarrows SO_2(g) + CI_2(g) . Given that at 300\u00b0 K and 1atmpressure, the degree of dissociation is .121, find the equilibrium constant,K_p. What will be the degree of dissociation when pressure = 10atm?",
+    "At 25\u00b0C, sucrose and water form an ideal solution and the solu-bility of sucrose in the water is 6.2molal. Calculate the heat of fusion of sucrose given that its molecular weight is 342, melting point is 200\u00b0C and the heat of fusion of water is 1400 cal/mole.",
+    "A gas at $250 \\mathrm{~K}$ and $15 \\mathrm{~atm}$ has a molar volume 12 per cent smaller than that calculated from the perfect gas law. Calculate the molar volume of the gas.",
+    "The equilibrium constant, Kc, for the dissociation of HI into hydrogen gas and iodine vapor is 21 at a certain temperature. What will be the molar concentration of iodine vapor if 15 grams of HI gas is introduced into a 12.0-L flask and allowed to come to equilibrium?",
+    "Consider the water dissociation reaction H_2O \\rightleftarrows H^+ + 0H^- in which the equilibrium is disturbed. It is found that the relaxation time for the return to equilibrium at 25\u00b0C is 37 \\mus. Calculate the rate coefficients for the forward and backward reactions.",
+    "The vapor pressure of benzene at 75\u00b0C is 640 torr. A solution of 3.68 g of a solute in 53.0 g benzene has a vapor pressure of 615 torr. Calculate the molecular weight of the solute. (MW of benzene = 78.0.)",
+    "A 2-liter flask maintained at 700\u00b0K contains 0.1 mole of CO and a catalyst for the reaction CO(g) + 2H_2(g) = CH_3OH(g) Hydrogen is introduced until the equilibrium total pressure is 7atm, at which point 0.06 moles of methanol are formed . (a) CalculateK_pin atm^-2 (b) What would the final pressure be were the same amounts of CO and H_2 used but with no catalyst present so that no reaction occurs?"
+  ]
+}

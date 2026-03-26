@@ -1,0 +1,21 @@
+{
+  "category": "engineering",
+  "tier": "academic",
+  "exemplars": [
+    "A liquid at 90\u00b0F is flowing at a rate of 40 gal/min through a horizontalpipe line of constant diameter 1.61 in. The pipe length is 50 ft. The system con-tains two 90\u00b0 standard elbows, two valves and a tee joint across the flow. The density and viscosity of the fluid flowing at 90\u00b0F are 53lb_m/ft and 0.5 cp respectively. Calculate the pressure loss in the sys-tem with gate valves and then with glob",
+    "The number of output pins in 8085 microprocessors are",
+    "(a) A shunt motor is running at 1200 rpm for a load which requires an armature current of 50 amp from a 230-volt source. At no load the armature current is 5 amp. If the effect of armature reaction has reduced the air-gap flux 2 percent from no load to full load, determine the no-load speed. The armature resistance is 0.15 ohm. (b) The rated line current of a 230-volt shunt motor is 56 amp. If the",
+    "Four identical alternators each are rated for 20 MVA, 11 KV having a subtransient reactance of 16% are working in parallel. The short circuit level at the busbar is",
+    "Find the input impedance of a 50 ohm line terminated in + j50 ohms, for a line length such that \\betal = \\pi radian.",
+    "A D-flip-flop is said to be transparent when",
+    "A 120 V dc shunt motor having an armature circuit resistance of 0.2 ohm and a field circuit resistance of 60 ohms, draws a line current of 40 A at full load. The brush volt drop is 3 V and rated, full load speed is 1800 rpm. Calculate: (a) The speed at half load. (b) The speed at an overload of 125 percent.",
+    "Determine those values of s for which the improper integral G(s) = ^\\infty\\int0e^-st dt converges, and find the Laplace transform of f(t) = 1.",
+    "A piston cylinder arrangement contains saturated Freon - 12 at- 10\u00b0C. The vapor is then compressed to a final pressure of1.6MPa. If the process is assumed to be reversible and adiabaticcalculate the work per kilogram of Freon - 12 for thisprocess.",
+    "Determine the number of belts required to transmit 70 hp by a 3V large capacity belt of length 100 in., running on pulleys 12 in. in diameter and speed 2000 rpm. The maximum life of the belt, before failure, is 15,000 hrs.",
+    "(1/2)CH_4 + O_2 + 3.76N_2 \\rightharpoonup (1/2)CO_2+ H_2O + 3.76N_2 This combustion can happen as a constant pressure or constantvolume process. Calculate the maximum temperaturesof combustion for these two processes. Assume that for the temperature range of interest, the specificheats are constant. Also assume that methane reactswith astoichiometricamount of air and that initially, themethane and",
+    "Air is introduced through a nozzle into a tank of water to form astream of bubbles. If the bubbles are intended to have a diameterof 2 mm, calculate by how much the pressure of theair at the nozzle must exceed that of the surrounding water. Assume that \\sigma = 72.7 \u00d7 10^-3 N m^-1.",
+    "A punch press has a no. 308 spherical roller bearing. The mainshaft runs at 1600 rpm and the bearing experiences a radialload of 2000 lbs. and a thrust of 1400 lbs. Under steadyloading conditions and for outer bearing ring rotation evaluate (a)bearinglife for 90% reliability (b)bearinglife for 96% reliability.",
+    "A coil that has a resistance of 0.05 ohms is connected to a cellthat develops anemfof 1.5 volts. Find the current flowingif the internal resistance of the cell is (a) 0.1ohm,and (b) 0.01 ohm.",
+    "Copper has a conductivity \\sigma = 5.8 \u00d7 10^7 mhos/meter, and \\mu = 1.26 \u00d7 10^-6 Henry/meter. If a plane wave at a frequency of 200 Hz is normally incident on copper find the depth of penetration of this wave."
+  ]
+}

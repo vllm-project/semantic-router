@@ -285,6 +285,8 @@ config:
             description: General-purpose adapter
       - name: general-expert
   global:
+    model_catalog:
+      kbs: []
     router:
       clear_route_cache: true
       strategy: priority
