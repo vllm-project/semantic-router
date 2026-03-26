@@ -1108,10 +1108,10 @@ spec:
           embedding_model: mmbert
           # HNSW in-memory configuration
           hnsw:
-        use_hnsw: true
-        hnsw_m: 32
-        hnsw_ef_construction: 128
-        max_memory_entries: 5000
+            use_hnsw: true
+            hnsw_m: 32
+            hnsw_ef_construction: 128
+            max_memory_entries: 5000
 
       # Milvus persistent storage (same config as milvus backend)
       milvus:

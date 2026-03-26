@@ -1,30 +1,31 @@
-# Admin API Reference
+# Router Apiserver API Reference
 
-The Classification API provides direct access to the Semantic Router's classification models for intent detection, PII identification, and security analysis. This API is useful for testing, debugging, and standalone classification tasks.
+The router apiserver is the HTTP control and utility surface served on port 8080. It exposes health and readiness endpoints, OpenAI-compatible model listing, model introspection, direct classification utilities, and router config management APIs. Use this surface for operational checks, debugging, calibration loops, and config lifecycle actions outside the Envoy data path.
 
 ## API Endpoints
 
 ### Base URL
 
-```
-http://localhost:8080/api/v1/classify
-```
+`http://localhost:8080`
 
 ## Server Status
 
-The Classification API server runs alongside the main Semantic Router ExtProc server:
+The router apiserver runs alongside the main Semantic Router ExtProc server:
 
-- **Classification API**: `http://localhost:8080` (HTTP REST API)
+- **Router Apiserver**: `http://localhost:8080` (HTTP REST API)
 - **ExtProc Server**: `http://localhost:50051` (gRPC for Envoy integration)
 - **Metrics Server**: `http://localhost:9190` (Prometheus metrics)
 
 ### Endpoint-to-port mapping (quick reference)
 
-- Port 8080 (this API)
+- Port 8080 (router apiserver)
+  - `GET /health`, `GET /ready`
+  - `GET /api/v1`, `GET /openapi.json`, `GET /docs`
   - `GET /v1/models` (OpenAI-compatible model list, includes `auto`)
-  - `GET /health`
   - `GET /info/models`, `GET /info/classifier`
   - `POST /api/v1/classify/intent|pii|security|batch`
+  - `GET|PATCH|PUT /config/router`
+  - `GET /config/router/versions`, `POST /config/router/rollback`
 
 - Port 8801 (Envoy public entry)
   - Typically proxies `POST /v1/chat/completions` to upstream LLMs while invoking ExtProc (50051).
@@ -46,22 +47,27 @@ make run-router
 
 ### ✅ Fully Implemented
 
-- `GET /health` - Health check endpoint
+- `GET /health`, `GET /ready` - Health and readiness endpoints
+- `GET /api/v1`, `GET /openapi.json`, `GET /docs` - Discovery and OpenAPI documentation endpoints
+- `GET /v1/models` - OpenAI-compatible model list
 - `POST /api/v1/classify/intent` - Intent classification with real model inference
 - `POST /api/v1/classify/pii` - PII detection with real model inference
 - `POST /api/v1/classify/security` - Security/jailbreak detection with real model inference
 - `POST /api/v1/classify/batch` - Batch classification with configurable processing strategies
 - `GET /info/models` - Model information and system status
 - `GET /info/classifier` - Detailed classifier capabilities and configuration
+- `GET /config/router` - Returns the current router config document
+- `PATCH /config/router` - Merges a router config update
+- `PUT /config/router` - Replaces the router config document
+- `GET /config/router/versions` - Lists backup versions
+- `POST /config/router/rollback` - Restores a backup version
 
 ### 🔄 Placeholder Implementation
 
 - `POST /api/v1/classify/combined` - Returns "not implemented" response
 - `GET /metrics/classification` - Returns "not implemented" response
-- `GET /config/classification` - Returns "not implemented" response
-- `PUT /config/classification` - Returns "not implemented" response
 
-The fully implemented endpoints provide real classification results using the loaded models. Placeholder endpoints return appropriate HTTP 501 responses and can be extended as needed.
+The implemented endpoints cover the active router apiserver contract. Placeholder endpoints currently return HTTP 501 and are called out explicitly above.
 
 ## Quick Start
 
@@ -403,41 +409,56 @@ Process multiple texts in a single request using **high-confidence LoRA models**
 
 **Supported Model Directory Structures:**
 
-**Current Merged mmBERT Models:**
+**High-Confidence LoRA Models (Recommended):**
 
 ```
 ./models/
-├── mmbert32k-intent-classifier-merged/  # Intent classification head
-├── mmbert32k-pii-detector-merged/       # PII classification head
-├── mmbert32k-jailbreak-detector-merged/ # Security classification head
-└── mom-embedding-ultra/                 # Shared similarity model
+├── lora_intent_classifier_bert-base-uncased_model/     # BERT Intent
+├── lora_intent_classifier_roberta-base_model/          # RoBERTa Intent
+├── lora_intent_classifier_modernbert-base_model/       # ModernBERT Intent
+├── lora_pii_detector_bert-base-uncased_model/          # BERT PII Detection
+├── lora_pii_detector_roberta-base_model/               # RoBERTa PII Detection
+├── lora_pii_detector_modernbert-base_model/            # ModernBERT PII Detection
+├── lora_jailbreak_classifier_bert-base-uncased_model/  # BERT Security Detection
+├── lora_jailbreak_classifier_roberta-base_model/       # RoBERTa Security Detection
+└── lora_jailbreak_classifier_modernbert-base_model/    # ModernBERT Security Detection
 ```
 
-> **Auto-Discovery**: The API automatically resolves the current merged mmBERT models first and only falls back to older local assets when the canonical models are absent.
+**Legacy ModernBERT Models (Fallback):**
+
+```
+./models/
+├── modernbert-base/                                     # Shared encoder (auto-discovered)
+├── category_classifier_modernbert-base_model/           # Intent classification head
+├── pii_classifier_modernbert-base_presidio_token_model/ # PII classification head
+└── jailbreak_classifier_modernbert-base_model/          # Security classification head
+```
+
+> **Auto-Discovery**: The API automatically detects and prioritizes LoRA models for superior performance. BERT and RoBERTa LoRA models deliver 0.99+ confidence scores, significantly outperforming legacy ModernBERT models.
 
 ### Model Selection & Performance
 
 **Automatic Model Discovery:**
 The API automatically scans the `./models/` directory and selects the best available models:
 
-1. **Priority Order**: Canonical merged mmBERT models > older local assets
-2. **Architecture Selection**: mmBERT-32K first for routing, safety, and PII tasks
-3. **Task Optimization**: Each task uses its specialized merged model for optimal performance
+1. **Priority Order**: LoRA models > Legacy ModernBERT models
+2. **Architecture Selection**: BERT ≥ RoBERTa > ModernBERT (based on confidence scores)
+3. **Task Optimization**: Each task uses its specialized model for optimal performance
 
 **Performance Characteristics:**
 
 - **Latency**: ~200-400ms per batch (4 texts)
 - **Throughput**: Supports concurrent requests
 - **Memory**: CPU-only inference supported
-- **Accuracy**: High-confidence in-domain predictions with merged mmBERT classifiers
+- **Accuracy**: 0.99+ confidence for in-domain texts with LoRA models
 
 **Model Loading:**
 
 ```
 [INFO] Auto-discovery successful, using unified classifier service
-[INFO] Using merged mmBERT models for batch classification, batch size: 4
-[INFO] Initializing merged models: Intent=models/mmbert32k-intent-classifier-merged, ...
-[INFO] Unified classifier bindings initialized successfully
+[INFO] Using LoRA models for batch classification, batch size: 4
+[INFO] Initializing LoRA models: Intent=models/lora_intent_classifier_bert-base-uncased_model, ...
+[INFO] LoRA C bindings initialized successfully
 ```
 
 ### Error Handling
@@ -497,37 +518,37 @@ Get information about loaded classification models.
       "name": "category_classifier",
       "type": "intent_classification",
       "loaded": true,
-      "model_path": "models/mmbert32k-intent-classifier-merged",
+      "model_path": "models/category_classifier_modernbert-base_model",
       "categories": [
         "business", "law", "psychology", "biology", "chemistry",
         "history", "other", "health", "economics", "math",
         "physics", "computer science", "philosophy", "engineering"
       ],
       "metadata": {
-        "mapping_path": "models/mmbert32k-intent-classifier-merged/category_mapping.json",
-        "model_type": "mmbert_32k",
-        "threshold": "0.50"
+        "mapping_path": "models/category_classifier_modernbert-base_model/category_mapping.json",
+        "model_type": "modernbert",
+        "threshold": "0.60"
       }
     },
     {
       "name": "pii_classifier",
       "type": "pii_detection",
       "loaded": true,
-      "model_path": "models/mmbert32k-pii-detector-merged",
+      "model_path": "models/pii_classifier_modernbert-base_presidio_token_model",
       "metadata": {
-        "mapping_path": "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
-        "model_type": "mmbert_32k",
-        "threshold": "0.90"
+        "mapping_path": "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
+        "model_type": "modernbert_token",
+        "threshold": "0.70"
       }
     },
     {
       "name": "bert_similarity_model",
       "type": "similarity",
       "loaded": true,
-      "model_path": "models/mom-embedding-ultra",
+      "model_path": "sentence-transformers/all-MiniLM-L12-v2",
       "metadata": {
-        "model_type": "mmbert",
-        "threshold": "0.50",
+        "model_type": "sentence_transformer",
+        "threshold": "0.60",
         "use_cpu": "true"
       }
     }
@@ -561,65 +582,63 @@ Example configuration:
 
 ```yaml
 # config/config.yaml (excerpt)
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          model_ref: "domain_classifier"
-          use_mmbert_32k: true
-          threshold: 0.5
-          use_cpu: true
-          category_mapping_path: "models/mmbert32k-intent-classifier-merged/category_mapping.json"
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
 
-routing:
-  signals:
-    domains:
-      - name: tech
-        # Map generic "tech" to multiple MMLU-Pro categories
-        mmlu_categories: ["computer science", "engineering"]
-      - name: finance
-        # Map generic "finance" to MMLU economics
-        mmlu_categories: ["economics"]
-      - name: politics
-        # If mmlu_categories is omitted and the name matches an MMLU category,
-        # the router falls back to identity mapping automatically.
-  decisions:
-    - name: tech
-      description: "Route technical queries"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "tech"
-      modelRefs:
-        - model: phi4
-          use_reasoning: false
-        - model: mistral-small3.1
-          use_reasoning: false
-    - name: finance
-      description: "Route finance queries"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "finance"
-      modelRefs:
-        - model: gemma3:27b
-          use_reasoning: false
-    - name: politics
-      description: "Route politics queries"
-      priority: 10
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "politics"
-      modelRefs:
-        - model: gemma3:27b
-          use_reasoning: false
+categories:
+  - name: tech
+    # Map generic "tech" to multiple MMLU-Pro categories
+    mmlu_categories: ["computer science", "engineering"]
+  - name: finance
+    # Map generic "finance" to MMLU economics
+    mmlu_categories: ["economics"]
+  - name: politics
+    # If mmlu_categories is omitted and the name matches an MMLU category,
+    # the router falls back to identity mapping automatically.
+
+decisions:
+  - name: tech
+    description: "Route technical queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "tech"
+    modelRefs:
+      - model: phi4
+        use_reasoning: false
+      - model: mistral-small3.1
+        use_reasoning: false
+
+  - name: finance
+    description: "Route finance queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "finance"
+    modelRefs:
+      - model: gemma3:27b
+        use_reasoning: false
+
+  - name: politics
+    description: "Route politics queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "politics"
+    modelRefs:
+      - model: gemma3:27b
+        use_reasoning: false
 ```
 
 Notes:
@@ -749,11 +768,11 @@ Get real-time classification performance metrics.
 }
 ```
 
-## Configuration Management
+## Router Configuration Management
 
-### Get Current Configuration
+### Get Current Router Configuration
 
-`GET /config/classification`
+`GET /config/router`
 
 ```json
 {
@@ -763,9 +782,9 @@ Get real-time classification performance metrics.
     "jailbreak_detection": 0.3
   },
   "model_paths": {
-    "intent_classifier": "./models/mmbert32k-intent-classifier-merged",
-    "pii_detector": "./models/mmbert32k-pii-detector-merged",
-    "jailbreak_guard": "./models/mmbert32k-jailbreak-detector-merged"
+    "intent_classifier": "./models/category_classifier_modernbert-base_model",
+    "pii_detector": "./models/pii_classifier_modernbert-base_model",
+    "jailbreak_guard": "./models/jailbreak_classifier_modernbert-base_model"
   },
   "performance_settings": {
     "batch_size": 10,
@@ -775,20 +794,50 @@ Get real-time classification performance metrics.
 }
 ```
 
-### Update Configuration
+### Merge Router Configuration
 
-`PUT /config/classification`
+`PATCH /config/router`
 
 ```json
 {
-  "confidence_thresholds": {
-    "intent_classification": 0.8
-  },
-  "performance_settings": {
-    "batch_size": 16
+  "routing": {
+    "decisions": [
+      {
+        "name": "math_route",
+        "priority": 120
+      }
+    ]
   }
 }
 ```
+
+### Replace Router Configuration
+
+`PUT /config/router`
+
+```json
+{
+  "routing": {
+    "signals": {
+      "domains": [
+        { "name": "math" },
+        { "name": "general", "mmlu_categories": ["other"] }
+      ]
+    },
+    "decisions": [
+      {
+        "name": "general_route",
+        "priority": 50
+      }
+    ]
+  }
+}
+```
+
+### List and Roll Back Versions
+
+- `GET /config/router/versions`
+- `POST /config/router/rollback`
 
 ## Error Handling
 
@@ -1043,4 +1092,4 @@ Development and testing endpoints for model validation:
 }
 ```
 
-This Classification API provides comprehensive access to all the intelligent routing capabilities of the Semantic Router, enabling developers to build sophisticated applications with advanced text understanding and security features.
+The router apiserver provides a single HTTP surface for classifier utilities and router config lifecycle operations, without overloading the Envoy-facing data plane contract.

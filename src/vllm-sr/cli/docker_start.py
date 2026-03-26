@@ -2,7 +2,6 @@
 
 import os
 import shutil
-import socket
 import subprocess
 from contextlib import suppress
 
@@ -50,7 +49,7 @@ def docker_start_vllm_sr(
 
     cmd = _build_base_run_command(runtime, nofile_limit, network_name, stack_layout)
     _append_amd_gpu_passthrough(cmd, normalized_platform)
-    _append_host_gateway(cmd, runtime)
+    _append_host_gateway(cmd)
     _append_listener_and_service_ports(cmd, listeners, minimal, stack_layout)
 
     config_dir, runtime_container_config = _mount_config_and_state_dirs(
@@ -66,7 +65,6 @@ def docker_start_vllm_sr(
         env_vars,
         config_dir,
         openclaw_network_name,
-        runtime,
         stack_layout,
     )
 
@@ -157,21 +155,8 @@ def _append_amd_gpu_passthrough(cmd, normalized_platform):
         )
 
 
-def _append_host_gateway(cmd, runtime):
-    if runtime == "docker":
-        cmd.append("--add-host=host.docker.internal:host-gateway")
-        return
-
-    try:
-        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp_socket.connect(("8.8.8.8", 80))
-        host_ip = udp_socket.getsockname()[0]
-        udp_socket.close()
-        cmd.append(f"--add-host=host.docker.internal:{host_ip}")
-        log.info(f"Using host IP for Podman: {host_ip}")
-    except Exception as exc:
-        log.warning(f"Could not detect host IP for Podman: {exc}")
-        log.info("Podman will use host.containers.internal by default")
+def _append_host_gateway(cmd):
+    cmd.append("--add-host=host.docker.internal:host-gateway")
 
 
 def _append_listener_and_service_ports(cmd, listeners, minimal, stack_layout):
@@ -236,7 +221,6 @@ def _configure_openclaw_support(
     env_vars,
     config_dir,
     openclaw_network_name,
-    runtime,
     stack_layout,
 ):
     default_openclaw_data_dir = os.path.join(config_dir, ".vllm-sr", "openclaw-data")
@@ -260,9 +244,8 @@ def _configure_openclaw_support(
         openclaw_network_name or stack_layout.network_name,
     )
 
-    if runtime == "docker":
-        _attach_docker_socket(cmd)
-        _attach_docker_cli(cmd)
+    _attach_docker_socket(cmd)
+    _attach_docker_cli(cmd)
 
 
 def _attach_docker_socket(cmd):

@@ -221,7 +221,7 @@ routing:
             )
         else:
             self.assertTrue(
-                "daemon" in output or "docker" in output or "podman" in output,
+                "daemon" in output or "docker" in output,
                 f"Should mention container runtime issue. Got: {output[:300]}",
             )
 

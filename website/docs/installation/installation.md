@@ -15,7 +15,7 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 **Requirements:**
 
 - **Python**: 3.10 or higher
-- **Container Runtime**: Docker or Podman (required for running the router container)
+- **Container Runtime**: Docker (required for running the router container)
 
 ## Quick Start
 
@@ -30,7 +30,7 @@ The installer:
 - Detects Python 3.10 or newer
 - Installs `vllm-sr` into `~/.local/share/vllm-sr`
 - Writes a launcher to `~/.local/bin/vllm-sr`
-- Prepares Docker or Podman for `vllm-sr serve` unless you opt out
+- Prepares Docker for `vllm-sr serve` unless you opt out
 - Starts `vllm-sr serve` automatically and opens the dashboard when possible
 - Prints dashboard access and remote-server hints if a browser cannot be opened
 
@@ -40,8 +40,8 @@ Useful variants:
 # Install only the CLI
 curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli
 
-# Pin local serve mode to Podman
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime podman
+# Skip runtime bootstrap and start Docker yourself later
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
 
 # Force the first launch onto the AMD/ROCm path
 curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --platform amd

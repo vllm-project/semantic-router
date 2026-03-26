@@ -39,10 +39,7 @@ def detect_container_runtime() -> str | None:
     if shutil.which("docker"):
         print("✅ Docker is installed")
         return "docker"
-    if shutil.which("podman"):
-        print("✅ Podman is installed")
-        return "podman"
-    print("❌ Neither Docker nor Podman found")
+    print("❌ Docker not found")
     return None
 
 

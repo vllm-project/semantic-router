@@ -18,8 +18,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-// Init starts the API server
-func Init(configPath string, port int, enableSystemPromptAPI bool) error {
+// Init starts the API server.
+func Init(configPath string, port int) error {
 	// Get the global configuration instead of loading from file
 	// This ensures we use the same config as the rest of the application
 	cfg := config.Get()
@@ -76,12 +76,11 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
-		classificationSvc:     liveClassificationSvc,
-		config:                cfg,
-		runtimeConfig:         newLiveRuntimeConfig(cfg, config.Get, liveClassificationSvc.RefreshRuntimeConfig),
-		configPath:            configPath,
-		memoryStore:           memoryStore,
-		enableSystemPromptAPI: enableSystemPromptAPI,
+		classificationSvc: liveClassificationSvc,
+		config:            cfg,
+		runtimeConfig:     newLiveRuntimeConfig(cfg, config.Get, liveClassificationSvc.RefreshRuntimeConfig),
+		configPath:        configPath,
+		memoryStore:       memoryStore,
 	}
 
 	// Create HTTP server with routes
@@ -94,7 +93,7 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	logging.Infof("Classification API server listening on port %d", port)
+	logging.Infof("Router apiserver listening on port %d", port)
 	return server.ListenAndServe()
 }
 
@@ -216,15 +215,11 @@ func (s *ClassificationAPIServer) registerInfoRoutes(mux *http.ServeMux) {
 
 func (s *ClassificationAPIServer) registerConfigRoutes(mux *http.ServeMux) {
 	// Configuration endpoints
-	mux.HandleFunc("GET /config/classification", s.handleGetConfig)
-	mux.HandleFunc("PUT /config/classification", s.handleUpdateConfig)
-
-	// Config deploy/rollback endpoints (Router writes its own config file)
 	mux.HandleFunc("GET /config/router", s.handleConfigGet)
-	mux.HandleFunc("POST /config/deploy", s.handleConfigDeploy)
-	mux.HandleFunc("POST /config/rollback", s.handleConfigRollback)
-	mux.HandleFunc("GET /config/versions", s.handleConfigVersions)
-	s.registerOptionalSystemPromptRoutes(mux)
+	mux.HandleFunc("PATCH /config/router", s.handleConfigPatch)
+	mux.HandleFunc("PUT /config/router", s.handleConfigPut)
+	mux.HandleFunc("POST /config/router/rollback", s.handleConfigRollback)
+	mux.HandleFunc("GET /config/router/versions", s.handleConfigVersions)
 }
 
 func (s *ClassificationAPIServer) registerMemoryRoutes(mux *http.ServeMux) {
@@ -233,17 +228,6 @@ func (s *ClassificationAPIServer) registerMemoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/memory", s.handleListMemories)
 	mux.HandleFunc("DELETE /v1/memory/{id}", s.handleDeleteMemory)
 	mux.HandleFunc("DELETE /v1/memory", s.handleDeleteMemoriesByScope)
-}
-
-func (s *ClassificationAPIServer) registerOptionalSystemPromptRoutes(mux *http.ServeMux) {
-	// System prompt configuration endpoints (only if explicitly enabled)
-	if s.enableSystemPromptAPI {
-		logging.Infof("System prompt configuration endpoints enabled")
-		mux.HandleFunc("GET /config/system-prompts", s.handleGetSystemPrompts)
-		mux.HandleFunc("PUT /config/system-prompts", s.handleUpdateSystemPrompts)
-	} else {
-		logging.Infof("System prompt configuration endpoints disabled for security")
-	}
 }
 
 // handleHealth handles health check requests

@@ -282,85 +282,6 @@ func TestBuildModelsInfoResponseUsesResolvedRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestHandleSystemPromptsUseResolvedRuntimeConfig(t *testing.T) {
-	staleCfg := testSystemPromptConfig("stale", "stale prompt", true, "replace")
-	liveCfg := testSystemPromptConfig("live", "live prompt", true, "insert")
-
-	apiServer := &ClassificationAPIServer{
-		classificationSvc: services.NewPlaceholderClassificationService(),
-		config:            staleCfg,
-		runtimeConfig: newLiveRuntimeConfig(
-			staleCfg,
-			func() *config.RouterConfig { return liveCfg },
-			nil,
-		),
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/config/system-prompts", nil)
-	rr := httptest.NewRecorder()
-	apiServer.handleGetSystemPrompts(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
-	}
-
-	var resp SystemPromptsResponse
-	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if len(resp.SystemPrompts) != 1 {
-		t.Fatalf("expected one system prompt, got %+v", resp.SystemPrompts)
-	}
-	if resp.SystemPrompts[0].Category != "live" || resp.SystemPrompts[0].Prompt != "live prompt" {
-		t.Fatalf("expected live prompt payload, got %+v", resp.SystemPrompts)
-	}
-}
-
-func TestHandleUpdateSystemPromptsUsesResolvedRuntimeConfig(t *testing.T) {
-	staleCfg := testSystemPromptConfig("stale", "stale prompt", true, "replace")
-	liveCfg := testSystemPromptConfig("live", "live prompt", true, "replace")
-	resolvedSvc := &fakeResolvedClassificationService{}
-
-	apiServer := &ClassificationAPIServer{
-		classificationSvc: resolvedSvc,
-		config:            staleCfg,
-		runtimeConfig: newLiveRuntimeConfig(
-			staleCfg,
-			func() *config.RouterConfig { return liveCfg },
-			resolvedSvc.UpdateConfig,
-		),
-	}
-
-	req := httptest.NewRequest(
-		http.MethodPut,
-		"/config/system-prompts",
-		bytes.NewBufferString(`{"category":"live","mode":"insert"}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
-
-	rr := httptest.NewRecorder()
-	apiServer.handleUpdateSystemPrompts(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
-	}
-	if resolvedSvc.updatedConfig == nil {
-		t.Fatalf("expected runtime config update to be forwarded to classification service")
-	}
-
-	updatedDecision := resolvedSvc.updatedConfig.GetDecisionByName("live")
-	if updatedDecision == nil {
-		t.Fatalf("expected update to apply to live decision set")
-	}
-	if updatedDecision.GetSystemPromptMode() != "insert" {
-		t.Fatalf("expected updated mode to come from live config, got %q", updatedDecision.GetSystemPromptMode())
-	}
-	if resolvedSvc.updatedConfig.GetDecisionByName("stale") != nil {
-		t.Fatalf("did not expect stale fallback decision in updated config")
-	}
-}
-
 func testModelListConfig(autoModelName string, includeConfigModels bool, models []string) *config.RouterConfig {
 	modelConfig := make(map[string]config.ModelParams, len(models))
 	for _, model := range models {
@@ -384,28 +305,6 @@ func testModelListConfig(autoModelName string, includeConfigModels bool, models 
 		RouterOptions: config.RouterOptions{
 			AutoModelName:             autoModelName,
 			IncludeConfigModelsInList: includeConfigModels,
-		},
-	}
-}
-
-func testSystemPromptConfig(category string, prompt string, enabled bool, mode string) *config.RouterConfig {
-	return &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
-				{
-					Name: category,
-					Plugins: []config.DecisionPlugin{
-						{
-							Type: "system_prompt",
-							Configuration: config.MustStructuredPayload(map[string]interface{}{
-								"system_prompt": prompt,
-								"enabled":       enabled,
-								"mode":          mode,
-							}),
-						},
-					},
-				},
-			},
 		},
 	}
 }

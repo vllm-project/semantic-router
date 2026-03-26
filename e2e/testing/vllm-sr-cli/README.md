@@ -74,4 +74,3 @@ python run_cli_tests.py --pattern lifecycle
 | Variable | Description |
 |----------|-------------|
 | `RUN_INTEGRATION_TESTS` | Set to `true` to enable integration tests |
-| `CONTAINER_RUNTIME` | Override runtime (`docker` or `podman`) |

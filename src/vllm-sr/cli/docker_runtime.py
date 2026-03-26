@@ -1,6 +1,5 @@
-"""Low-level container runtime helpers for vLLM Semantic Router."""
+"""Low-level Docker runtime helpers for vLLM Semantic Router."""
 
-import os
 import shutil
 import subprocess
 import sys
@@ -12,46 +11,30 @@ log = get_logger(__name__)
 
 
 def get_container_runtime():
-    """Detect and return the active container runtime."""
+    """Detect and return the active Docker runtime."""
     return _detect_container_runtime()
 
 
 @lru_cache(maxsize=1)
 def _detect_container_runtime():
     """
-    Detect and return the available container runtime (docker or podman).
+    Detect and return the available Docker runtime.
 
     Returns:
-        str: 'docker' or 'podman'
+        str: 'docker'
 
     Raises:
-        SystemExit: If neither docker nor podman is available
+        SystemExit: If Docker is not available
     """
-    env_runtime = os.getenv("CONTAINER_RUNTIME")
-    if env_runtime:
-        normalized_runtime = env_runtime.lower()
-        if normalized_runtime in ["docker", "podman"]:
-            if shutil.which(normalized_runtime):
-                log.info(
-                    "Using container runtime from CONTAINER_RUNTIME: "
-                    f"{normalized_runtime}"
-                )
-                return normalized_runtime
-            log.warning(f"CONTAINER_RUNTIME set to {env_runtime} but not found in PATH")
-
     if shutil.which("docker"):
         log.info("Detected container runtime: docker")
         return "docker"
-    if shutil.which("podman"):
-        log.info("Detected container runtime: podman")
-        return "podman"
 
-    log.error("Neither docker nor podman found in PATH")
-    log.error("Please install Docker or Podman to use this tool")
+    log.error("Docker not found in PATH")
+    log.error("Please install Docker to use this tool")
     log.error("")
     log.error("Installation instructions:")
     log.error("  Docker: https://docs.docker.com/get-docker/")
-    log.error("  Podman: https://podman.io/getting-started/installation")
     sys.exit(1)
 
 

@@ -208,9 +208,6 @@ data:
           max_entries: 1000
           ttl_seconds: 3600
           eviction_policy: fifo
-          use_hnsw: true
-          hnsw_m: 16
-          hnsw_ef_construction: 200
           embedding_model: mmbert
       integrations:
         tools:

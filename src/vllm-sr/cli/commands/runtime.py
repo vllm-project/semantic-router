@@ -194,7 +194,7 @@ def serve(
     DEPLOYMENT TARGETS:
 
     \b
-    docker  - Local Docker / Podman deployment (default)
+    docker  - Local Docker deployment (default)
     k8s     - Kubernetes deployment via Helm
 
     MODEL SELECTION ALGORITHMS:
