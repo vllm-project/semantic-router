@@ -10,11 +10,12 @@ import (
 
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
-	classificationSvc classificationService
-	config            *config.RouterConfig
-	runtimeConfig     *liveRuntimeConfig
-	configPath        string // path to the router config file (for read/update/rollback)
-	memoryStore       memory.Store
+	classificationSvc     classificationService
+	config                *config.RouterConfig
+	runtimeConfig         *liveRuntimeConfig
+	configPath            string // path to the router config file (for read/update/rollback)
+	memoryStore           memory.Store
+	knowledgeBaseMapCache *knowledgeBaseMapCache
 }
 
 type (

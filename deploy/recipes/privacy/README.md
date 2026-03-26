@@ -24,17 +24,20 @@ Both lanes currently use the same `balance`-style mock alias catalog on the shar
 - Keep the local lane materially cheaper than the cloud lane so routing also delivers visible cost savings.
 - Keep routing policy-driven rather than preference-driven.
 - Record every decision through `router_replay` on every maintained route.
+- Enforce per-tier tools plugin policy: security containment strips all tools, privacy and standard lanes keep semantic selection enabled, and the frontier lane passes tools through unchanged.
+- Control reasoning mode per tier: security containment disables reasoning, privacy/standard use medium effort, frontier uses high effort.
+- Override frontier routing when contrastive organizational-sensitivity score indicates the request is private, even if individual keyword/embedding signals did not trigger the privacy band.
 
-This recipe intentionally does not use a `global` section. The routing behavior is expressed directly in `routing.signals`, `routing.projections`, and `routing.decisions`, which keeps the recipe smaller and avoids coupling this profile to runtime-wide classifier overlays.
+This recipe now uses a small `global.model_catalog.classifiers[]` section to register the reusable taxonomy classifier package. The routing behavior still lives primarily in `routing.signals`, `routing.projections`, and `routing.decisions`; the global block only owns startup-loaded classifier assets that signals bind to later.
 
 ## Route Order
 
-| Priority | Decision | Target model | Purpose |
-|---|---|---|---|
-| `300` | `local_security_containment` | `local/private-qwen` | Suspicious prompts, jailbreak attempts, prompt leakage, exfiltration |
-| `250` | `local_privacy_policy` | `local/private-qwen` | PII, private code, internal docs, explicit local-only handling |
-| `200` | `cloud_frontier_reasoning` | `cloud/frontier-reasoning` | Non-sensitive architecture, synthesis, deep reasoning |
-| `100` | `local_standard` | `local/private-qwen` | Ordinary non-sensitive default traffic |
+| Priority | Decision | Target model | Tools Plugin | Reasoning | Purpose |
+|---|---|---|---|---|---|
+| `300` | `local_security_containment` | `local/private-qwen` | `mode=none`, semantic selection off | off | Suspicious prompts, jailbreak attempts, prompt leakage, exfiltration |
+| `250` | `local_privacy_policy` | `local/private-qwen` | `mode=passthrough`, semantic selection on | medium | PII, private code, internal docs, explicit local handling, privacy override |
+| `200` | `cloud_frontier_reasoning` | `cloud/frontier-reasoning` | `mode=passthrough`, semantic selection on | high | Non-sensitive architecture, synthesis, deep reasoning |
+| `100` | `local_standard` | `local/private-qwen` | `mode=passthrough`, semantic selection on | medium | Ordinary non-sensitive default traffic |
 
 The route order is the core control surface. Security wins before privacy, privacy wins before cloud escalation, and cloud escalation wins before the ordinary local fallback. That means the recipe pays for the cloud frontier model only when the request is both non-sensitive and reasoning-heavy enough to justify the extra cost.
 
@@ -81,6 +84,17 @@ These feed `privacy_risk_score`, which maps into:
 
 - `policy_privacy_cloud_allowed`
 - `policy_privacy_local_only`
+
+### Knowledge base
+
+- `privacy_kb` (type: `embedding_kb`)
+
+Loads the router built-in privacy knowledge base from `config/kb/privacy/`, computes per-label similarities, then binds the best threshold-qualified group plus a contrastive metric. The contrastive score (max private-group similarity minus max public-group similarity) feeds `privacy_contrastive_score`, which maps into:
+
+- `privacy_override_inactive`
+- `privacy_override_active`
+
+When `privacy_override_active` fires, the frontier decision is blocked and the privacy decision activates, even if the individual keyword/embedding signals did not breach the privacy band. This handles organizational sensitivity that cannot be captured by isolated PII or keyword rules.
 
 ### Reasoning lane
 

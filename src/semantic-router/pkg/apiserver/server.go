@@ -76,11 +76,12 @@ func Init(configPath string, port int) error {
 
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
-		classificationSvc: liveClassificationSvc,
-		config:            cfg,
-		runtimeConfig:     newLiveRuntimeConfig(cfg, config.Get, liveClassificationSvc.RefreshRuntimeConfig),
-		configPath:        configPath,
-		memoryStore:       memoryStore,
+		classificationSvc:     liveClassificationSvc,
+		config:                cfg,
+		runtimeConfig:         newLiveRuntimeConfig(cfg, config.Get, liveClassificationSvc.RefreshRuntimeConfig),
+		configPath:            configPath,
+		memoryStore:           memoryStore,
+		knowledgeBaseMapCache: newKnowledgeBaseMapCache(),
 	}
 
 	// Create HTTP server with routes
@@ -215,6 +216,13 @@ func (s *ClassificationAPIServer) registerInfoRoutes(mux *http.ServeMux) {
 
 func (s *ClassificationAPIServer) registerConfigRoutes(mux *http.ServeMux) {
 	// Configuration endpoints
+	mux.HandleFunc("GET /config/kbs", s.handleListKnowledgeBases)
+	mux.HandleFunc("POST /config/kbs", s.handleCreateKnowledgeBase)
+	mux.HandleFunc("GET /config/kbs/{name}", s.handleGetKnowledgeBase)
+	mux.HandleFunc("GET /config/kbs/{name}/map/metadata", s.handleGetKnowledgeBaseMapMetadata)
+	mux.HandleFunc("GET /config/kbs/{name}/map/data.ndjson", s.handleGetKnowledgeBaseMapData)
+	mux.HandleFunc("PUT /config/kbs/{name}", s.handleUpdateKnowledgeBase)
+	mux.HandleFunc("DELETE /config/kbs/{name}", s.handleDeleteKnowledgeBase)
 	mux.HandleFunc("GET /config/router", s.handleConfigGet)
 	mux.HandleFunc("PATCH /config/router", s.handleConfigPatch)
 	mux.HandleFunc("PUT /config/router", s.handleConfigPut)

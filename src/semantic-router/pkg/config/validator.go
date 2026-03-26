@@ -106,6 +106,9 @@ func validateConfigStructure(cfg *RouterConfig) error {
 	if err := validateProjectionContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateKnowledgeBaseContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateDecisionContracts(cfg); err != nil {
 		return err
 	}

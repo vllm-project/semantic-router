@@ -13,8 +13,6 @@ This tutorial group maps directly to the fragment tree under `config/signal/`, b
 - `heuristic/` for request-shape, lexical, identity, and lightweight detector signals
 - `learned/` for embedding- or classifier-driven signals that rely on router-owned model assets or maintained detector modules
 
-The current catalog contains 14 maintained signal families: 5 heuristic and 9 learned.
-
 ## Key Advantages
 
 - Reuses one detector across multiple decisions.
@@ -97,17 +95,18 @@ These signals route from explicit rules, request form, or lightweight detectors 
 
 These signals use embeddings or classifier models and typically rely on `global.model_catalog` assets or module config.
 
-| Signal family   | Fragment directory             | Purpose                                                     | Doc                                      |
-| --------------- | ------------------------------ | ----------------------------------------------------------- | ---------------------------------------- |
-| `complexity`    | `config/signal/complexity/`    | detect hard vs easy reasoning traffic                       | [Complexity](./learned/complexity)       |
-| `domain`        | `config/signal/domain/`        | classify the request topic family                           | [Domain](./learned/domain)               |
-| `embedding`     | `config/signal/embedding/`     | match by semantic similarity                                | [Embedding](./learned/embedding)         |
-| `modality`      | `config/signal/modality/`      | classify text-only, image-generation, or hybrid output mode | [Modality](./learned/modality)           |
-| `fact-check`    | `config/signal/fact-check/`    | detect prompts that need evidence verification              | [Fact Check](./learned/fact-check)       |
-| `jailbreak`     | `config/signal/jailbreak/`     | detect prompt-injection or jailbreak attempts               | [Jailbreak](./learned/jailbreak)         |
-| `pii`           | `config/signal/pii/`           | detect sensitive personal data                              | [PII](./learned/pii)                     |
-| `preference`    | `config/signal/preference/`    | infer response-style preferences                            | [Preference](./learned/preference)       |
-| `user-feedback` | `config/signal/user-feedback/` | detect correction or escalation feedback                    | [User Feedback](./learned/user-feedback) |
+| Signal family | Fragment directory | Purpose | Doc |
+|---------------|--------------------|---------|-----|
+| `complexity` | `config/signal/complexity/` | detect hard vs easy reasoning traffic | [Complexity](./learned/complexity) |
+| `domain` | `config/signal/domain/` | classify the request topic family | [Domain](./learned/domain) |
+| `embedding` | `config/signal/embedding/` | match by semantic similarity | [Embedding](./learned/embedding) |
+| `modality` | `config/signal/modality/` | classify text-only, image-generation, or hybrid output mode | [Modality](./learned/modality) |
+| `fact-check` | `config/signal/fact-check/` | detect prompts that need evidence verification | [Fact Check](./learned/fact-check) |
+| `jailbreak` | `config/signal/jailbreak/` | detect prompt-injection or jailbreak attempts | [Jailbreak](./learned/jailbreak) |
+| `pii` | `config/signal/pii/` | detect sensitive personal data | [PII](./learned/pii) |
+| `preference` | `config/signal/preference/` | infer response-style preferences | [Preference](./learned/preference) |
+| `kb` | `config/signal/kb/` | bind knowledge base labels or groups into named routing signals | [Knowledge Base](./learned/kb) |
+| `user-feedback` | `config/signal/user-feedback/` | detect correction or escalation feedback | [User Feedback](./learned/user-feedback) |
 
 Keep these rules in mind:
 

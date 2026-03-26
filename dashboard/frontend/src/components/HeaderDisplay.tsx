@@ -106,6 +106,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'PII Signal',
     type: 'warning',
   },
+  'x-vsr-matched-kb': {
+    label: 'Knowledge Base',
+    type: 'info',
+  },
   'x-vsr-matched-projection': {
     label: 'Projection',
     type: 'info',

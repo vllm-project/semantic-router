@@ -49,7 +49,9 @@ class ProjectionScoreInput(BaseModel):
     """One weighted signal contribution to a derived projection score."""
 
     type: str
-    name: str
+    name: Optional[str] = None
+    classifier: Optional[str] = None
+    metric: Optional[str] = None
     weight: float
     value_source: Optional[str] = None
     match: Optional[float] = None
@@ -276,6 +278,22 @@ class RoleBindingRule(BaseModel):
     description: Optional[str] = None
 
 
+class KBSignalTarget(BaseModel):
+    """Binding target for a named knowledge base."""
+
+    kind: Literal["label", "group"]
+    value: str
+
+
+class KBSignal(BaseModel):
+    """Knowledge-base signal bound to a named global KB instance."""
+
+    name: str
+    kb: str
+    target: KBSignalTarget
+    match: Optional[Literal["best", "threshold"]] = None
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -293,6 +311,7 @@ class Signals(BaseModel):
     role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
     pii: Optional[List[PIIRule]] = []
+    kb: Optional[List[KBSignal]] = []
 
 
 class Condition(BaseModel):
@@ -371,6 +390,7 @@ class PluginType(str, Enum):
     MEMORY = "memory"
     RAG = "rag"
     FAST_RESPONSE = "fast_response"
+    TOOLS = "tools"
 
 
 class SemanticCachePluginConfig(BaseModel):
@@ -392,6 +412,16 @@ class FastResponsePluginConfig(BaseModel):
     """Configuration for fast_response plugin."""
 
     message: str
+
+
+class ToolsPluginConfig(BaseModel):
+    """Configuration for tools plugin."""
+
+    enabled: bool
+    mode: Literal["none", "passthrough", "filtered"] = "passthrough"
+    semantic_selection: Optional[bool] = None
+    allow_tools: Optional[List[str]] = None
+    block_tools: Optional[List[str]] = None
 
 
 class SystemPromptPluginConfig(BaseModel):

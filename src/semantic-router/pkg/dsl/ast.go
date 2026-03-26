@@ -272,6 +272,8 @@ type ProjectionScoreDecl struct {
 type ProjectionScoreInputDecl struct {
 	SignalType  string
 	SignalName  string
+	KB          string
+	Metric      string
 	Weight      float64
 	ValueSource string
 	Match       float64

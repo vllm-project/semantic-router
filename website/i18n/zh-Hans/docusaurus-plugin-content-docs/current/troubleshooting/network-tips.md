@@ -38,9 +38,12 @@ translation:
 2) 在 `config/config.yaml` 中，指向本地路径。示例：
 
    ```yaml
-   bert_model:
-     # 指向 /app/models 下的本地文件夹（已由 compose 挂载）
-     model_id: /app/models/all-MiniLM-L12-v2
+   global:
+     model_catalog:
+       embeddings:
+         semantic:
+           # 指向 /app/models 下的本地文件夹（已由 compose 挂载）
+           bert_model_path: /app/models/all-MiniLM-L12-v2
    ```
 
 3) 无需额外环境变量。`deploy/docker-compose/docker-compose.yml` 已挂载 `./models:/app/models:ro`。

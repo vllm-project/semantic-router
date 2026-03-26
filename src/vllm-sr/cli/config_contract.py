@@ -87,6 +87,7 @@ SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("role_bindings", "role_bindings", "authz", "role_bindings"),
     SignalFamilySpec("jailbreak", "jailbreak", "jailbreak", "jailbreak"),
     SignalFamilySpec("pii", "pii", "pii", "pii"),
+    SignalFamilySpec("kb", "kb", "kb", "kb"),
 )
 
 LEGACY_SIGNAL_KEY_TO_CANONICAL = {

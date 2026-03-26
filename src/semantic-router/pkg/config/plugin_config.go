@@ -10,7 +10,7 @@ import (
 type DecisionPlugin struct {
 	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak",
 	// "pii", "system_prompt", "header_mutation", "hallucination",
-	// "response_jailbreak", "router_replay", "memory", "fast_response".
+	// "response_jailbreak", "router_replay", "memory", "fast_response", "tools".
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration stores the plugin payload as normalized structured bytes.

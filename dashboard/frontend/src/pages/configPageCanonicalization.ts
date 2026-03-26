@@ -382,7 +382,6 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
     const embeddings = asRecord(legacyGlobalModels.embeddings)
     if (embeddings) {
       placeBlockIfMissing(['model_catalog', 'embeddings', 'semantic'], embeddings.semantic)
-      placeLegacyBertEmbeddingIfMissing(embeddings.bert)
     }
     placeBlockIfMissing(['model_catalog', 'system'], legacyGlobalModels.system)
     placeBlockIfMissing(['model_catalog', 'external'], legacyGlobalModels.external)

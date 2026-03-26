@@ -143,6 +143,10 @@ const (
 	// Example: "pii_strict,pii_moderate"
 	VSRMatchedPII = "x-vsr-matched-pii"
 
+	// VSRMatchedKB contains comma-separated list of matched knowledge-base signal names.
+	// Example: "privacy_policy,security_containment"
+	VSRMatchedKB = "x-vsr-matched-kb"
+
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"
 	VSRMatchedProjection = "x-vsr-matched-projection"

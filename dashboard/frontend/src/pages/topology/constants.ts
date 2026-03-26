@@ -4,21 +4,22 @@ import { SignalType, PluginType, AlgorithmType } from './types'
 
 // ============== Signal Icons ==============
 export const SIGNAL_ICONS: Record<SignalType, string> = {
-  keyword: '🔑',
-  embedding: '📐',
-  domain: '🎯',
-  fact_check: '✓',
-  user_feedback: '💬',
-  preference: '⚙️',
-  language: '🌐',
-  context: '📏',
-  structure: '🧱',
-  complexity: '🧠',
-  modality: '🖼️',
-  authz: '🔐',
-  jailbreak: '🛡️',
-  pii: '🔒',
-  projection: '🔀',
+  keyword: 'KW',
+  embedding: 'EMB',
+  domain: 'DOM',
+  fact_check: 'FC',
+  user_feedback: 'UF',
+  preference: 'PREF',
+  language: 'LANG',
+  context: 'CTX',
+  structure: 'STR',
+  complexity: 'CPX',
+  modality: 'MOD',
+  authz: 'AUTH',
+  jailbreak: 'JB',
+  pii: 'PII',
+  kb: 'KB',
+  projection: 'PRJ',
 }
 
 // ============== Signal Colors (Gray Nodes, Green Paths) ==============
@@ -37,6 +38,7 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   authz: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
   jailbreak: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
   pii: { background: '#4a5568', border: '#2d3748' },          // Dark Gray
+  kb: { background: '#4a5568', border: '#2d3748' },           // Dark Gray
   projection: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
 }
 
@@ -56,17 +58,19 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   authz: '<1ms',
   jailbreak: '10-50ms',
   pii: '10-50ms',
+  kb: '10-50ms',
   projection: '<1ms',
 }
 
 // ============== Plugin Icons ==============
 export const PLUGIN_ICONS: Record<PluginType, string> = {
-  'semantic-cache': '⚡',
-  'system_prompt': '📝',
-  'header_mutation': '🔧',
-  'hallucination': '🔍',
-  'router_replay': '🔄',
-  'fast_response': '⚡',
+  'semantic-cache': 'SC',
+  'system_prompt': 'SP',
+  'header_mutation': 'HM',
+  'hallucination': 'HAL',
+  'router_replay': 'RR',
+  'fast_response': 'FR',
+  'tools': 'TL',
 }
 
 // ============== Plugin Colors (NVIDIA Dark Theme) ==============
@@ -77,21 +81,22 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   'hallucination': { background: '#556b7d', border: '#3d4a59' },   // Cool Gray
   'router_replay': { background: '#6ba300', border: '#5a8f00' },   // Green (consistent with other plugins)
   'fast_response': { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  'tools': { background: '#5a6c7d', border: '#3d4a59' },
 }
 
 // ============== Algorithm Icons ==============
 export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
-  confidence: '📈',
-  concurrent: '⚡',
-  sequential: '➡️',
-  ratings: '⭐',
-  static: '📌',
-  elo: '🏆',
-  router_dc: '🔀',
-  automix: '🤖',
-  hybrid: '🔄',
-  remom: '🧠',  // Brain icon for reasoning/thinking
-  latency_aware: '⏱️',
+  confidence: 'CF',
+  concurrent: 'CC',
+  sequential: 'SEQ',
+  ratings: 'RT',
+  static: 'ST',
+  elo: 'ELO',
+  router_dc: 'RDC',
+  automix: 'AM',
+  hybrid: 'HY',
+  remom: 'RM',
+  latency_aware: 'LAT',
 }
 
 // ============== Algorithm Colors (NVIDIA Dark Theme) ==============
@@ -111,18 +116,18 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
 
 // ============== Reasoning Effort Display (NVIDIA Dark Theme) ==============
 export const REASONING_EFFORT_DISPLAY: Record<string, { icon: string; label: string; color: string }> = {
-  'low': { icon: '🔋', label: 'Low', color: '#8fd400' },       // Light Green
-  'medium': { icon: '⚡', label: 'Medium', color: '#76b900' },  // NVIDIA Green
-  'high': { icon: '🔥', label: 'High', color: '#5a8f00' },      // Dark Green
+  'low': { icon: 'L', label: 'Low', color: '#8fd400' },       // Light Green
+  'medium': { icon: 'M', label: 'Medium', color: '#76b900' }, // NVIDIA Green
+  'high': { icon: 'H', label: 'High', color: '#5a8f00' },     // Dark Green
 }
 
 export const MODEL_NODE_WIDTH = 220
 
 // ============== Global Plugin Display (NVIDIA Dark Theme) ==============
 export const GLOBAL_PLUGIN_DISPLAY: Record<string, { icon: string; label: string; color: string }> = {
-  'prompt_guard': { icon: '🛡️', label: 'Jailbreak Guard', color: '#718096' },   // Medium Gray
-  'pii_detection': { icon: '🔒', label: 'PII Detection', color: '#5a6c7d' },     // Blue Gray
-  'semantic_cache': { icon: '⚡', label: 'Semantic Cache', color: '#76b900' },   // NVIDIA Green
+  'prompt_guard': { icon: 'PG', label: 'Jailbreak Guard', color: '#718096' },   // Medium Gray
+  'pii_detection': { icon: 'PII', label: 'PII Detection', color: '#5a6c7d' },   // Blue Gray
+  'semantic_cache': { icon: 'SC', label: 'Semantic Cache', color: '#76b900' },  // NVIDIA Green
 }
 
 // ============== Node Colors (Gray Nodes, Green Paths) ==============
@@ -232,6 +237,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'authz',
   'jailbreak',
   'pii',
+  'kb',
   'projection',
 ]
 

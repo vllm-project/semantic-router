@@ -10,6 +10,14 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm install --include=dev  # Ensure TypeScript/Vite are installed regardless of NODE_ENV
 RUN npm run build
 
+FROM node:20-alpine AS wizmap-builder
+WORKDIR /app/wizmap
+COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm ci --include=dev
+COPY dashboard/wizmap/ ./
+RUN npm run build -- --outDir /app/wizmap-dist
+
 # Stage 2: Build backend with Go
 FROM golang:1.24 AS backend-builder
 WORKDIR /app
@@ -44,6 +52,7 @@ RUN apk --no-cache add ca-certificates wget su-exec
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
+COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
 COPY dashboard/backend/skillpacks/ /app/skills/
 # Copy entrypoint script
