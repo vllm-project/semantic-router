@@ -61,32 +61,35 @@
 ## Task List
 
 - [x] `WZM001` Create the indexed execution plan, register `pl-0019`, and link it to the KB platform and generic-KB predecessor workstreams.
-- [ ] `WZM002` Lock the integration contract for hosted `WizMap`: self-hosted static app path, dashboard route shape, data export endpoints, and auth or same-origin behavior.
-- [ ] `WZM003` Implement the backend data-export surface for one selected KB so WizMap can load the required point and grid artifacts from typed repo-owned endpoints.
-- [ ] `WZM004` Add the hosted WizMap static-app packaging path to the dashboard build or image flow so local and packaged environments ship the same app.
-- [ ] `WZM005` Add the dashboard `Knowledge Map` route, base-level entry actions, and page shell around the hosted map.
-- [ ] `WZM006` Validate route behavior, loading states, and map navigation against large or empty KBs without regressing the existing Knowledge manager UX.
-- [ ] `WZM007` Update docs, operator-facing notes, and packaging guidance so contributors know how the hosted map is built, served, and loaded with KB data.
-- [ ] `WZM008` Run the validation ladder, record results and blockers in this plan, and add indexed debt only for gaps that remain after the workstream closes.
+- [x] `WZM002` Lock the integration contract for hosted `WizMap`: self-hosted static app path, dashboard route shape, data export endpoints, and auth or same-origin behavior.
+- [x] `WZM003` Implement the backend data-export surface for one selected KB so WizMap can load the required point and grid artifacts from typed repo-owned endpoints.
+- [x] `WZM004` Add the hosted WizMap static-app packaging path to the dashboard build or image flow so local and packaged environments ship the same app.
+- [x] `WZM005` Add the dashboard `Knowledge Map` route, base-level entry actions, and page shell around the hosted map.
+- [x] `WZM006` Validate route behavior, loading states, and map navigation against large or empty KBs without regressing the existing Knowledge manager UX.
+- [x] `WZM007` Update docs, operator-facing notes, and packaging guidance so contributors know how the hosted map is built, served, and loaded with KB data.
+- [x] `WZM008` Run the validation ladder, record results and blockers in this plan, and add indexed debt only for gaps that remain after the workstream closes.
 
 ## Current Loop
 
 - Date: 2026-03-26
-- Current task: `WZM001` completed
+- Current task: `WZM008` completed
 - Branch: `vsr/pr-1644-analysis`
-- Planned loop order:
-  - `L1` lock the hosted-app and data-export contract
-  - `L2` land backend export endpoints and KB-to-map data shaping
-  - `L3` land dashboard route, navigation, and page shell
-  - `L4` land static-app packaging and environment integration
-  - `L5` close docs, smoke coverage, and validation
-- Initial discovery:
-  - reviewed the current Knowledge Base dashboard routes and manager surfaces
-  - reviewed current dashboard embedded-app patterns such as Grafana under `/embedded/grafana/`
-  - inspected the current KB API surfaces under `src/semantic-router/pkg/apiserver/route_kbs.go`
-  - researched `poloclub/wizmap` and confirmed the primary distribution is a standalone frontend app plus precomputed data files, not a React component library
-  - confirmed the public WizMap demo can load data by URL, but the desired repo direction is self-hosted same-origin integration
-  - registered this execution plan in the canonical plan index and repo manifest so the workstream can resume from the repository alone
+- Completed work:
+  - shipped the router KB map export surface at `/config/kbs/{name}/map/{metadata,data.ndjson,grid.json,topic.json}` with cached projection artifacts
+  - added the dashboard `Knowledge Map` route, base-level `Open Map` actions, and the self-hosted `/embedded/wizmap/` static shell
+  - wired dashboard, backend, and image packaging so the vendored WizMap app builds into `dashboard/frontend/dist/embedded/wizmap` and ships in the dashboard and `vllm-sr` images
+  - adapted the vendored WizMap app to read repo-owned query params and same-origin KB map data instead of the public demo datasets
+  - tightened the map page UX into a compact manager-style summary bar so the map viewport remains the dominant surface
+  - fixed the embedded auth chain so KB map data URLs carry `authToken` explicitly and `/embedded/wizmap/assets/*` no longer relies on the dashboard cookie path to load the static bundle
+- Validation:
+  - `make agent-validate`
+  - `cd dashboard/frontend && npm run type-check`
+  - `cd dashboard/frontend && npm run build`
+  - `cd dashboard/backend && PATH=/usr/local/go/bin:$PATH GOCACHE=/Users/bitliu/.codex/worktrees/eede/vs/.codex-go-cache go test ./auth -run 'Test(RequiresAuthentication|RequiredPermission|ExtractAccessToken)' -count=1`
+  - `cd dashboard/backend && PATH=/usr/local/go/bin:$PATH GOCACHE=/Users/bitliu/.codex/worktrees/eede/vs/.codex-go-cache go test ./handlers -run 'TestWizMapStaticHandler' -count=1`
+  - `cd src/semantic-router && PATH=/usr/local/go/bin:$PATH GOCACHE=/Users/bitliu/.codex/worktrees/eede/vs/.codex-go-cache go test ./pkg/apiserver -run 'TestHandleKnowledgeBaseMap(Endpoints|MissingKnowledgeBase)' -count=1`
+- Recorded blocker:
+  - `PATH=/usr/local/go/bin:$PATH make dashboard-check` still fails in this workstation environment during dashboard backend `golangci-lint` setup with `package unsafe is not in std (/usr/local/go/src/unsafe)`. The feature-specific frontend build and backend/router tests above passed, and the blocker is local-toolchain-specific rather than a WizMap code failure.
 
 ## Decision Log
 
@@ -94,6 +97,8 @@
 - 2026-03-26: `Knowledge Map` is a dedicated route, not a small widget embedded into the existing base detail summary.
 - 2026-03-26: The integration should use same-origin repo-owned endpoints for KB map data rather than public cross-origin URLs.
 - 2026-03-26: This is a new execution workstream because it spans dashboard frontend, dashboard backend, router data export, and image packaging.
+- 2026-03-26: The embedded WizMap shell must not depend on dashboard cookies for its static bundle; KB data endpoints carry explicit `authToken` query params and `/embedded/wizmap/assets/*` is treated as static transport rather than a protected product page.
+- 2026-03-26: The `Knowledge Map` page should keep the base summary compact and reserve most of the vertical space for the map viewport.
 
 ## Follow-up Debt / ADR Links
 

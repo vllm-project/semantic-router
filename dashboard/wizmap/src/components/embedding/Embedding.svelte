@@ -22,6 +22,10 @@
   let initialized = false;
   let myEmbedding: Embedding | null = null;
   let controlDisplayItem = '';
+  let groupedNames: string[] = [];
+  let hasGroupedEmbedding = false;
+  $: groupedNames = myEmbedding?.groupNames ?? [];
+  $: hasGroupedEmbedding = groupedNames.length > 0;
 
   const defaultSetting: EmbeddingInitSetting = {
     showContour: true,
@@ -132,11 +136,9 @@
     <button
       class="item-wrapper"
       on:click="{() => {
-        if (!myEmbedding || myEmbedding.groupNames === null) {
-          myEmbedding?.displayCheckboxChanged(
-            'contour',
-            !myEmbedding.showContours[0]
-          );
+        if (!hasGroupedEmbedding) {
+          const nextValue = myEmbedding ? !myEmbedding.showContours[0] : false;
+          myEmbedding?.displayCheckboxChanged('contour', nextValue);
         } else {
           if (controlDisplayItem === 'contour') {
             controlDisplayItem = '';
@@ -159,7 +161,7 @@
         <div class="name">Contour</div>
         <div
           class="caret"
-          class:hidden="{!myEmbedding || myEmbedding.groupNames === null}"
+          class:hidden="{!hasGroupedEmbedding}"
           class:activated="{controlDisplayItem === 'contour'}"
         >
           <div class="svg-icon">
@@ -168,7 +170,7 @@
         </div>
       </div>
 
-      {#if myEmbedding?.groupNames !== null}
+      {#if hasGroupedEmbedding}
         <button
           class="menu contour-menu"
           class:hidden="{controlDisplayItem !== 'contour'}"
@@ -176,7 +178,7 @@
             e.stopPropagation();
           }}"
         >
-          {#each myEmbedding.groupNames as groupName, index (groupName)}
+          {#each groupedNames as groupName, index (groupName)}
             <div class="control-row">
               <input
                 type="checkbox"
@@ -197,11 +199,9 @@
     <button
       class="item-wrapper"
       on:click="{() => {
-        if (!myEmbedding || myEmbedding.groupNames === null) {
-          myEmbedding?.displayCheckboxChanged(
-            'point',
-            !myEmbedding.showPoints[0]
-          );
+        if (!hasGroupedEmbedding) {
+          const nextValue = myEmbedding ? !myEmbedding.showPoints[0] : false;
+          myEmbedding?.displayCheckboxChanged('point', nextValue);
         } else {
           if (controlDisplayItem === 'point') {
             controlDisplayItem = '';
@@ -224,7 +224,7 @@
         <div class="name">Point</div>
         <div
           class="caret"
-          class:hidden="{!myEmbedding || myEmbedding.groupNames === null}"
+          class:hidden="{!hasGroupedEmbedding}"
           class:activated="{controlDisplayItem === 'point'}"
         >
           <div class="svg-icon">
@@ -233,7 +233,7 @@
         </div>
       </div>
 
-      {#if myEmbedding?.groupNames !== null}
+      {#if hasGroupedEmbedding}
         <button
           class="menu point-menu"
           class:hidden="{controlDisplayItem !== 'point'}"
@@ -241,7 +241,7 @@
             e.stopPropagation();
           }}"
         >
-          {#each myEmbedding.groupNames as groupName, index (groupName)}
+          {#each groupedNames as groupName, index (groupName)}
             <div class="control-row">
               <input
                 type="checkbox"

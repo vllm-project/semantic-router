@@ -134,7 +134,7 @@ const pointStreamFinished = () => {
   const result: LoaderWorkerMessage = {
     command: 'transferLoadData',
     payload: {
-      isFirstBatch: false,
+      isFirstBatch: lastDrawnPoints === null,
       isLastBatch: true,
       points: pendingDataPoints,
       loadedPointCount
