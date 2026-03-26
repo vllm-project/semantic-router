@@ -275,7 +275,7 @@ const Layout: React.FC<LayoutProps> = ({
                     toggleDropdown('knowledgeBase')
                   }}
                 >
-                  KB
+                  Knowledge
                   <svg
                     width="12"
                     height="12"
@@ -289,7 +289,7 @@ const Layout: React.FC<LayoutProps> = ({
                   </svg>
                 </button>
                 {openDropdown === 'knowledgeBase'
-                  ? renderDropdownMenu(KNOWLEDGE_BASE_MENU_SECTIONS, styles.dropdownMenu, 'KB')
+                  ? renderDropdownMenu(KNOWLEDGE_BASE_MENU_SECTIONS, styles.dropdownMenu, 'Knowledge')
                   : null}
               </div>
               <div className={styles.navDropdown}>
@@ -415,7 +415,7 @@ const Layout: React.FC<LayoutProps> = ({
               </NavLink>
             ))}
             {renderMobileMenuSection('Manager', managerMenuSections)}
-            {renderMobileMenuSection('KB', KNOWLEDGE_BASE_MENU_SECTIONS)}
+            {renderMobileMenuSection('Knowledge', KNOWLEDGE_BASE_MENU_SECTIONS)}
             {renderMobileMenuSection('System', systemMenuSections)}
           </div>
         ) : null}

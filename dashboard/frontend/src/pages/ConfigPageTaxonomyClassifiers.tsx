@@ -5,6 +5,7 @@ import TableHeader from '../components/TableHeader'
 import pageStyles from './ConfigPage.module.css'
 import ConfigPageTaxonomyClassifierEditor from './ConfigPageTaxonomyClassifierEditor'
 import ConfigPageTaxonomyClassifierDetail from './ConfigPageTaxonomyClassifierDetail'
+import ConfigPageKnowledgeBasePicker from './ConfigPageKnowledgeBasePicker'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
 import styles from './ConfigPageTaxonomyClassifiers.module.css'
 import {
@@ -494,9 +495,9 @@ export default function ConfigPageTaxonomyClassifiers({
         <>
           <div className={pageStyles.sectionTableBlock}>
             <TableHeader
-              title="Knowledge Base Catalog"
+              title="Knowledge Catalog"
               count={knowledgeBaseRows.length}
-              searchPlaceholder="Search KB name, description, or source"
+              searchPlaceholder="Search knowledge base name, description, or source"
               searchValue={knowledgeBaseSearch}
               onSearchChange={setKnowledgeBaseSearch}
               onSecondaryAction={() => {
@@ -520,43 +521,14 @@ export default function ConfigPageTaxonomyClassifiers({
         </>
       ) : (
         <div className={pageStyles.sectionTableBlock}>
-          <div className={styles.selectorPanel}>
-            <div className={styles.selectorIntro}>
-              <span className={styles.summaryLabel}>Active Base</span>
-              <strong className={styles.selectorTitle}>
-                {selectedKnowledgeBase?.name ?? 'No knowledge base available'}
-              </strong>
-              <span className={styles.summaryHint}>
-                Groups and labels are scoped to one base at a time so large KBs stay readable.
-              </span>
-            </div>
-            <div className={styles.selectorControls}>
-              <label className={styles.editorField}>
-                <span className={styles.editorLabel}>Base</span>
-                <select
-                  className={styles.editorSelect}
-                  value={selectedKnowledgeBase?.name ?? ''}
-                  onChange={(event) => setSelectedKnowledgeBaseName(event.target.value)}
-                  disabled={knowledgeBases.length === 0}
-                >
-                  {knowledgeBases.map((knowledgeBase) => (
-                    <option key={knowledgeBase.name} value={knowledgeBase.name}>
-                      {knowledgeBase.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => {
-                  void loadKnowledgeBases()
-                }}
-              >
-                Refresh
-              </button>
-            </div>
-          </div>
+          <ConfigPageKnowledgeBasePicker
+            knowledgeBases={knowledgeBases}
+            selectedKnowledgeBase={selectedKnowledgeBase}
+            onSelect={setSelectedKnowledgeBaseName}
+            onRefresh={() => {
+              void loadKnowledgeBases()
+            }}
+          />
         </div>
       )}
 

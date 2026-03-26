@@ -15,14 +15,14 @@ interface TaxonomyPageProps {
 const VIEW_META: Record<KnowledgeBaseView, { title: string; description: string }> = {
   bases: {
     title: 'Knowledge Bases',
-    description: 'Manage built-in and custom KB packages, keep the active catalog clean, and inspect only the settings that matter for routing.',
+    description: 'Manage built-in and custom knowledge packages, keep the active catalog clean, and inspect only the settings that matter for routing.',
   },
   groups: {
-    title: 'KB Groups',
-    description: 'Work one base at a time, paginate large group sets, and keep routing groups readable even when a KB carries many labels.',
+    title: 'Knowledge Groups',
+    description: 'Work one base at a time, paginate large group sets, and keep routing groups readable even when a knowledge base carries many labels.',
   },
   labels: {
-    title: 'KB Labels',
+    title: 'Knowledge Labels',
     description: 'Review label definitions, thresholds, and signal references with a paged view instead of exposing raw exemplar CRUD as its own surface.',
   },
 }
@@ -58,14 +58,14 @@ export default function TaxonomyPage({ activeView }: TaxonomyPageProps) {
   return (
     <>
       <ConfigPageManagerLayout
-        eyebrow="Knowledge Base"
+        eyebrow="Knowledge"
         title={meta.title}
         description={meta.description}
-        configArea="KB"
-        scope="Router-owned KB packages, labels, groups, metrics, and signal-facing bindings"
+        configArea="Knowledge"
+        scope="Router-owned knowledge packages, labels, groups, metrics, and signal-facing bindings"
         panelEyebrow="Manager"
-        panelTitle="Knowledge Base Control Plane"
-        panelDescription="This surface owns KB CRUD and the routing-facing resources inside each base. Bases stay as the catalog view, while groups and labels switch to focused paged views."
+        panelTitle="Knowledge Control Plane"
+        panelDescription="This surface owns knowledge-base CRUD and the routing-facing resources inside each base. Bases stay as the catalog view, while groups and labels switch to focused paged views."
         pills={[
           {
             label: 'Bases',

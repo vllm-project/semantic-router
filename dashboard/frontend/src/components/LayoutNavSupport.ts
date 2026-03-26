@@ -63,7 +63,7 @@ export const MANAGER_MENU_SECTIONS: LayoutMenuSection[] = [
 
 export const KNOWLEDGE_BASE_MENU_SECTIONS: LayoutMenuSection[] = [
   {
-    title: 'KB',
+    title: 'Knowledge',
     items: [
       { kind: 'route', label: 'Bases', to: '/knowledge-bases/bases' },
       { kind: 'route', label: 'Groups', to: '/knowledge-bases/groups' },
