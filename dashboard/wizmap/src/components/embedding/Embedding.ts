@@ -924,30 +924,26 @@ export class Embedding {
       .attr('fill', d => colorScale(d.value))
       .attr('d', d3.geoPath());
 
-    if (this.hostedDataMode) {
-      this.initZoomTransform = d3.zoomIdentity;
-    } else {
-      const zoomBounds = this.getInitialZoomBounds(contours);
-      const viewportInsets = this.getViewportInsets();
-      const viewportCenter = this.getViewportCenter();
-      const viewAreaWidth =
-        this.svgFullSize.width - viewportInsets.left - viewportInsets.right;
-      const viewAreaHeight =
-        this.svgFullSize.height - viewportInsets.top - viewportInsets.bottom;
-      const screenPadding = 20;
-      const initZoomK = Math.min(
-        viewAreaWidth / (zoomBounds.width + screenPadding),
-        viewAreaHeight / (zoomBounds.height + screenPadding)
-      );
+    const zoomBounds = this.getInitialZoomBounds(contours);
+    const viewportInsets = this.getViewportInsets();
+    const viewportCenter = this.getViewportCenter();
+    const viewAreaWidth =
+      this.svgFullSize.width - viewportInsets.left - viewportInsets.right;
+    const viewAreaHeight =
+      this.svgFullSize.height - viewportInsets.top - viewportInsets.bottom;
+    const screenPadding = this.hostedDataMode ? 8 : 20;
+    const initZoomK = Math.min(
+      viewAreaWidth / (zoomBounds.width + screenPadding),
+      viewAreaHeight / (zoomBounds.height + screenPadding)
+    );
 
-      this.initZoomTransform = d3.zoomIdentity
-        .translate(viewportCenter.x, viewportCenter.y)
-        .scale(initZoomK)
-        .translate(
-          -(zoomBounds.x + zoomBounds.width / 2),
-          -(zoomBounds.y + zoomBounds.height / 2)
-        );
-    }
+    this.initZoomTransform = d3.zoomIdentity
+      .translate(viewportCenter.x, viewportCenter.y)
+      .scale(initZoomK)
+      .translate(
+        -(zoomBounds.x + zoomBounds.width / 2),
+        -(zoomBounds.y + zoomBounds.height / 2)
+      );
 
     // Trigger the first zoom
     this.topSvg
@@ -1497,29 +1493,6 @@ export class Embedding {
   getInitialZoomBounds = (
     contours: d3.ContourMultiPolygon[]
   ): Rect => {
-    if (this.hostedDataMode && this.promptPoints.length > 0) {
-      let x0 = Infinity;
-      let y0 = Infinity;
-      let x1 = -Infinity;
-      let y1 = -Infinity;
-
-      for (const point of this.promptPoints) {
-        const x = this.xScale(point.x);
-        const y = this.yScale(point.y);
-        if (x < x0) x0 = x;
-        if (y < y0) y0 = y;
-        if (x > x1) x1 = x;
-        if (y > y1) y1 = y;
-      }
-
-      return {
-        x: x0,
-        y: y0,
-        width: Math.max(1, x1 - x0),
-        height: Math.max(1, y1 - y0)
-      };
-    }
-
     let x0 = Infinity;
     let y0 = Infinity;
     let x1 = -Infinity;
@@ -1544,6 +1517,29 @@ export class Embedding {
       !Number.isFinite(x1) ||
       !Number.isFinite(y1)
     ) {
+      if (this.hostedDataMode && this.promptPoints.length > 0) {
+        let pointX0 = Infinity;
+        let pointY0 = Infinity;
+        let pointX1 = -Infinity;
+        let pointY1 = -Infinity;
+
+        for (const point of this.promptPoints) {
+          const x = this.xScale(point.x);
+          const y = this.yScale(point.y);
+          if (x < pointX0) pointX0 = x;
+          if (y < pointY0) pointY0 = y;
+          if (x > pointX1) pointX1 = x;
+          if (y > pointY1) pointY1 = y;
+        }
+
+        return {
+          x: pointX0,
+          y: pointY0,
+          width: Math.max(1, pointX1 - pointX0),
+          height: Math.max(1, pointY1 - pointY0)
+        };
+      }
+
       return {
         x: 0,
         y: 0,

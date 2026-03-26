@@ -15,7 +15,7 @@ const DEFAULT_GROUP_TOPIC_LEVEL = 4;
 const DEFAULT_LABEL_TOPIC_LEVEL = 6;
 const GROUP_TILE_SPACING_RATIO = 0.72;
 const LABEL_TILE_SPACING_RATIO = 0.56;
-const RANGE_PADDING_RATIO = 0.06;
+const RANGE_PADDING_RATIO = 0.1;
 
 export interface HostedKnowledgeMapProjection {
   points: PromptPoint[];
@@ -107,9 +107,12 @@ async function projectKnowledgeMapPoints(
   const vectors = rawPoints.map(point => point.vector);
   const umap = new UMAP({
     nComponents: 2,
-    nNeighbors: Math.max(4, Math.min(24, Math.round(Math.sqrt(rawPoints.length)))),
-    minDist: 0.05,
-    spread: 0.9,
+    nNeighbors: Math.max(
+      12,
+      Math.min(40, Math.round(Math.sqrt(rawPoints.length) * 1.75))
+    ),
+    minDist: 0.01,
+    spread: 0.7,
     random: seededRandom(seedSource)
   });
   const embedding = await umap.fitAsync(vectors, () => true);
@@ -335,30 +338,23 @@ function topicAnchor(points: PromptPoint[]): [number, number] {
   }
 
   const [centerX, centerY] = centroid(points);
-  const neighborCount = Math.min(
-    Math.max(2, Math.ceil(Math.sqrt(points.length))),
-    Math.max(1, points.length - 1),
-    8
-  );
+  const localScale = estimateLocalScale(points);
+  const safeScale = Math.max(localScale, 1e-6);
 
   let bestPoint = points[0];
-  let bestScore = Infinity;
+  let bestScore = -Infinity;
 
   for (const point of points) {
-    const neighborDistances = points
-      .filter(other => other !== point)
-      .map(other => Math.hypot(other.x - point.x, other.y - point.y))
-      .sort((left, right) => left - right)
-      .slice(0, neighborCount);
+    let densityScore = 0;
+    for (const other of points) {
+      const distance = Math.hypot(other.x - point.x, other.y - point.y);
+      densityScore += Math.exp(-Math.pow(distance / safeScale, 2));
+    }
+    const centroidPenalty =
+      Math.hypot(point.x - centerX, point.y - centerY) / safeScale;
+    const score = densityScore - centroidPenalty * 0.08;
 
-    const localDensityScore = neighborDistances.reduce(
-      (sum, distance) => sum + distance,
-      0
-    );
-    const centroidPenalty = Math.hypot(point.x - centerX, point.y - centerY) * 0.15;
-    const score = localDensityScore + centroidPenalty;
-
-    if (score < bestScore) {
+    if (score > bestScore) {
       bestScore = score;
       bestPoint = point;
     }
@@ -401,6 +397,32 @@ function computeTopicLevel(
   );
   const rawLevel = Math.ceil(Math.log2(extentSpan / targetTileWidth));
   return clampTopicLevel(rawLevel);
+}
+
+function estimateLocalScale(points: PromptPoint[]): number {
+  const nearestNeighborDistances = points
+    .map((point, index) => {
+      let nearest = Infinity;
+      for (let otherIndex = 0; otherIndex < points.length; otherIndex += 1) {
+        if (index === otherIndex) {
+          continue;
+        }
+        const other = points[otherIndex];
+        const distance = Math.hypot(other.x - point.x, other.y - point.y);
+        if (distance < nearest) {
+          nearest = distance;
+        }
+      }
+      return nearest;
+    })
+    .filter(distance => Number.isFinite(distance) && distance > 0)
+    .sort((left, right) => left - right);
+
+  if (nearestNeighborDistances.length === 0) {
+    return 1;
+  }
+
+  return Math.max(quantile(nearestNeighborDistances, 0.5), 1e-3);
 }
 
 function computeTopicBounds(topics: [number, number, string][]) {
