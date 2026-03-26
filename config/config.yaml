@@ -1151,10 +1151,6 @@ global:
       store_backend: redis
       ttl_seconds: 86400
       max_responses: 2000
-      milvus:
-        address: milvus:19530
-        database: responses
-        collection: response_records
       redis:
         address: redis:6379
         password: redis-secret

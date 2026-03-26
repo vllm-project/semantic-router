@@ -262,19 +262,16 @@ type MemoryMilvusConfig struct {
 	NumPartitions int    `yaml:"num_partitions,omitempty"`
 }
 
+// ResponseAPIConfig controls response and conversation history storage.
+// StoreBackend defaults to "redis" for durable storage that survives router
+// restarts. Set to "memory" only for local development — all history is lost
+// when the router process exits.
 type ResponseAPIConfig struct {
-	Enabled      bool                    `yaml:"enabled"`
-	StoreBackend string                  `yaml:"store_backend,omitempty"`
-	TTLSeconds   int                     `yaml:"ttl_seconds,omitempty"`
-	MaxResponses int                     `yaml:"max_responses,omitempty"`
-	Milvus       ResponseAPIMilvusConfig `yaml:"milvus,omitempty"`
-	Redis        ResponseAPIRedisConfig  `yaml:"redis,omitempty"`
-}
-
-type ResponseAPIMilvusConfig struct {
-	Address    string `yaml:"address"`
-	Database   string `yaml:"database,omitempty"`
-	Collection string `yaml:"collection,omitempty"`
+	Enabled      bool                   `yaml:"enabled"`
+	StoreBackend string                 `yaml:"store_backend,omitempty"`
+	TTLSeconds   int                    `yaml:"ttl_seconds,omitempty"`
+	MaxResponses int                    `yaml:"max_responses,omitempty"`
+	Redis        ResponseAPIRedisConfig `yaml:"redis,omitempty"`
 }
 
 type ResponseAPIRedisConfig struct {
