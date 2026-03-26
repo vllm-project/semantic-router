@@ -63,7 +63,7 @@ type knowledgeBaseMapGridResponse struct {
 }
 
 type knowledgeBaseMapTopicResponse struct {
-	Extent [2][2]float64          `json:"extent"`
+	Extent [2][2]float64      `json:"extent"`
 	Data   map[string][][]any `json:"data"`
 }
 
@@ -108,10 +108,10 @@ func knowledgeBaseMapSignature(
 	modelType string,
 ) (string, error) {
 	payload := struct {
-		KnowledgeBase config.KnowledgeBaseConfig      `json:"kb"`
-		Definition    config.KnowledgeBaseDefinition  `json:"definition"`
-		ModelType     string                          `json:"model_type"`
-		Projection    string                          `json:"projection"`
+		KnowledgeBase config.KnowledgeBaseConfig     `json:"kb"`
+		Definition    config.KnowledgeBaseDefinition `json:"definition"`
+		ModelType     string                         `json:"model_type"`
+		Projection    string                         `json:"projection"`
 	}{
 		KnowledgeBase: kb,
 		Definition:    definition,

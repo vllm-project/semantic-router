@@ -1,69 +1,38 @@
-# WizMap <a href="https://poloclub.github.io/wizmap/"><img align="right" src="./src/imgs/icon-wizmap.svg" height="38"></img></a>
+# Knowledge Map WizMap Shell
 
-[![build](https://github.com/poloclub/wizmap/actions/workflows/build.yml/badge.svg)](https://github.com/poloclub/wizmap/actions/workflows/build.yml)
-[![npm](https://img.shields.io/npm/v/wizmap?color=red)](https://www.npmjs.com/package/wizmap)
-[![license](https://img.shields.io/badge/License-MIT-blue)](https://github.com/poloclub/wizmap/blob/main/LICENSE)
+This directory vendors the `wizmap` frontend and adapts it for the vLLM Semantic Router dashboard.
 
-<!-- [![arxiv badge](https://img.shields.io/badge/arXiv-2209.09227-red)](https://arxiv.org/abs/2209.09227) -->
-<!-- [![DOI:10.1145/3491101.3519653](https://img.shields.io/badge/DOI-10.1145/3491101.3519653-blue)](https://doi.org/10.1145/3491101.3519653) -->
+## Purpose
 
-Exploring and interpreting large embeddings in your browser!
+- build a self-hosted Knowledge Map app that is served by the dashboard backend at `/embedded/wizmap/`
+- load per-KB data from router-owned same-origin endpoints instead of the public demo datasets
+- keep the WizMap runtime isolated from the main React dashboard bundle
 
-<table>
-  <tr>
-    <td colspan="2"><a href="https://poloclub.github.io/timbertrek"><img src='https://i.imgur.com/U5LqUi4.png'></a></td>
-  </tr>
-  <tr></tr>
-  <tr>
-    <td><a href="https://poloclub.github.io/wizmap">🚀 Live Demo</a></td>
-    <td><a href="https://youtu.be/8fJG87QVceQ">📺 Demo Video</a></td>
-  </tr>
-</table>
-
-
-## What is WizMap?
-
-WizMap is a scalable interactive visualization tool to help you easily explore large machine learning embeddings. With a novel multi-resolution embedding summarization method and a familiar map-like interaction design, WizMap allows you to navigate and interpret embedding spaces with ease.
-
-## Web Demo
-
-For a live web demo, visit: <https://poloclub.github.io/wizmap>.
-
-## Get Started
-
-Clone or download this repository:
+## Build
 
 ```bash
-git clone git@github.com:poloclub/wizmap.git
-```
-
-Install the dependencies:
-
-```bash
+cd dashboard/wizmap
 npm install
+npm run build:embedded
 ```
 
-Then run WizMap:
+The embedded build writes its output to:
 
-```
-npm run dev
-```
+- `dashboard/frontend/dist/embedded/wizmap`
 
-Navigate to localhost:3000. You should see WizMap running in your browser :)
+That matches the dashboard backend static lookup contract and the packaged container layout.
 
-### Use My Dataset
+## Runtime contract
 
-To use WizMap with your dataset, you can check out this [notebook](./example/acl-abstracts.ipynb) to see how to create three JSON files to set up WizMap. These three JSON files contain pre-computed embedding summaries, embedding distributions, and original embedding data in a streamable format.
+The hosted app reads these query parameters:
 
-## Credits
+- `title`
+- `dataURL`
+- `gridURL`
+- `topicURL`
 
-WizMap is created by <a href='https://zijie.wang/' target='_blank'>Jay Wang</a>, <a href='http://fredhohman.com/' target='_blank'>Fred Hohman</a>, and <a href='https://poloclub.github.io/polochau/' target='_blank'>Polo Chau</a>.
+The dashboard Knowledge Map page populates those values for one selected knowledge base and opens the hosted app inside `/knowledge-bases/:name/map`.
 
+## Upstream origin
 
-## License
-
-The software is available under the [MIT License](https://github.com/poloclub/wizmap/blob/master/LICENSE).
-
-## Contact
-
-If you have any questions, feel free to [open an issue](https://github.com/poloclub/wizmap/issues/new) or contact [Jay Wang](https://zijie.wang).
+This shell is derived from the upstream `poloclub/wizmap` project and keeps the upstream `LICENSE` file in this directory.

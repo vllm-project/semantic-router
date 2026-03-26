@@ -330,6 +330,8 @@ func requiresAuthentication(path string) bool {
 		return true
 	case strings.HasPrefix(path, "/api/setup/state"):
 		return false
+	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
+		return false
 	case strings.HasPrefix(path, "/api/"):
 		return true
 	case strings.HasPrefix(path, "/embedded/"):
