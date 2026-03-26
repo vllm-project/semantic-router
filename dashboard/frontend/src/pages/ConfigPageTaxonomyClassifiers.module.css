@@ -151,6 +151,62 @@
   margin-top: 1rem;
 }
 
+.detailShell {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.4fr);
+  gap: 1rem;
+}
+
+.detailSummaryPanel,
+.detailPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(6, 10, 9, 0.78);
+}
+
+.detailPanelsColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.detailPanelGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.detailHeroTitle {
+  margin: 0.2rem 0 0;
+  color: var(--color-text);
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.detailSummaryList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.detailSummaryRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.detailSummaryRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
 .groupBlock {
   display: flex;
   flex-direction: column;
@@ -498,6 +554,11 @@
 @media (max-width: 900px) {
   .detailHeader {
     flex-direction: column;
+  }
+
+  .detailShell,
+  .detailPanelGrid {
+    grid-template-columns: 1fr;
   }
 
   .editorRow {
