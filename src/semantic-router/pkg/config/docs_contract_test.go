@@ -131,14 +131,14 @@ var configContractRequiredDocs = []docNeedles{
 			"`providers.models[].backend_refs[]`",
 		},
 	},
-	{
-		path: repoRel("website", "docs", "api", "apiserver.md"),
-		needles: []string{
-			"global:\n  model_catalog:\n    modules:\n      classifier:",
-			"routing:\n  signals:\n    domains:",
-			"decisions:",
+		{
+			path: repoRel("website", "docs", "api", "apiserver.md"),
+			needles: []string{
+				"`http://localhost:8080`",
+				"`GET /openapi.json`",
+				"`GET /config/router`",
+			},
 		},
-	},
 	{
 		path: repoRel("website", "docs", "troubleshooting", "common-errors.md"),
 		needles: []string{
@@ -208,14 +208,14 @@ var configContractRequiredDocs = []docNeedles{
 			"global:\n  model_catalog:\n    modules:\n      prompt_guard:",
 		},
 	},
-	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
-		needles: []string{
-			"global:\n  model_catalog:\n    modules:\n      classifier:",
-			"routing:\n  signals:\n    domains:",
-			"decisions:",
+		{
+			path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
+			needles: []string{
+				"`http://localhost:8080`",
+				"`GET /openapi.json`",
+				"`GET /config/router`",
+			},
 		},
-	},
 	{
 		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "proposals", "nvidia-dynamo-integration.md"),
 		needles: []string{
@@ -330,14 +330,14 @@ var configContractForbiddenDocs = []docNeedles{
 			"vllm_endpoints[].models",
 		},
 	},
-	{
-		path: repoRel("website", "docs", "api", "apiserver.md"),
-		needles: []string{
-			"\nclassifier:\n",
-			"\ncategories:\n",
-			"\ndecisions:\n",
+		{
+			path: repoRel("website", "docs", "api", "apiserver.md"),
+			needles: []string{
+				"\nclassifier:\n",
+				"\ncategories:\n",
+				"\ndecisions:\n",
+			},
 		},
-	},
 	{
 		path: repoRel("website", "docs", "troubleshooting", "common-errors.md"),
 		needles: []string{
@@ -401,14 +401,14 @@ var configContractForbiddenDocs = []docNeedles{
 			"\nprompt_guard:\n",
 		},
 	},
-	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
-		needles: []string{
-			"\nclassifier:\n",
-			"\ncategories:\n",
-			"\ndecisions:\n",
+		{
+			path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
+			needles: []string{
+				"\nclassifier:\n",
+				"\ncategories:\n",
+				"\ndecisions:\n",
+			},
 		},
-	},
 	{
 		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "proposals", "nvidia-dynamo-integration.md"),
 		needles: []string{
