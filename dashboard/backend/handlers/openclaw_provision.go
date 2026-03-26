@@ -73,18 +73,15 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 		// When using a user-defined bridge network, the OpenClaw container
 		// reaches the SR router via container-name DNS, not localhost.
 		// Automatically rewrite loopback addresses in modelBaseUrl to the
-		// dashboard container name so users don't have to do it manually.
+		// model gateway container name so users don't have to do it manually.
 		if nm := req.Container.NetworkMode; nm != "host" && !strings.HasPrefix(nm, "container:") {
-			dashboardContainer := strings.TrimSpace(os.Getenv("OPENCLAW_DASHBOARD_CONTAINER_NAME"))
-			if dashboardContainer == "" {
-				dashboardContainer = vllmSrContainerName
-			}
+			modelGatewayContainer := openClawModelGatewayContainerName()
 			if req.Container.ModelBaseURL == "" {
 				req.Container.ModelBaseURL = h.resolveOpenClawModelBaseURL()
 			}
-			req.Container.ModelBaseURL = rewriteLoopbackHost(req.Container.ModelBaseURL, dashboardContainer)
+			req.Container.ModelBaseURL = rewriteLoopbackHost(req.Container.ModelBaseURL, modelGatewayContainer)
 			if req.Container.MemoryBaseURL != "" {
-				req.Container.MemoryBaseURL = rewriteLoopbackHost(req.Container.MemoryBaseURL, dashboardContainer)
+				req.Container.MemoryBaseURL = rewriteLoopbackHost(req.Container.MemoryBaseURL, modelGatewayContainer)
 			}
 		} else if req.Container.ModelBaseURL == "" {
 			req.Container.ModelBaseURL = h.resolveOpenClawModelBaseURL()

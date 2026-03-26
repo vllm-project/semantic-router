@@ -10,7 +10,10 @@ import (
 	"time"
 )
 
-const managedContainerSourceConfigPath = "/app/config.yaml"
+const (
+	managedContainerSourceConfigPath = "/app/config.yaml"
+	dashboardVenvPythonPath          = "/opt/vllm-sr-dashboard-venv/bin/python3"
+)
 
 func configuredRuntimeConfigPath(configPath string) string {
 	if runtimePath := strings.TrimSpace(os.Getenv("VLLM_SR_RUNTIME_CONFIG_PATH")); runtimePath != "" {
@@ -24,7 +27,7 @@ func syncRuntimeConfigForCurrentRuntime(configPath string) (string, error) {
 		return syncRuntimeConfigLocally(configPath)
 	}
 
-	if getDockerContainerStatus(vllmSrContainerName) == "running" {
+	if getDockerContainerStatus(managedRuntimeSyncContainerName()) == "running" {
 		return syncRuntimeConfigInManagedContainer()
 	}
 
@@ -59,14 +62,16 @@ func syncRuntimeConfigLocally(configPath string) (string, error) {
 }
 
 func syncRuntimeConfigInManagedContainer() (string, error) {
+	containerName := managedRuntimeSyncContainerName()
 	output, err := execInManagedContainer(
+		containerName,
 		30*time.Second,
 		"python3",
 		"-c",
 		buildRuntimeSyncPythonScript("/app", managedContainerSourceConfigPath),
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to sync runtime config in %s: %w (output: %s)", vllmSrContainerName, err, strings.TrimSpace(output))
+		return "", fmt.Errorf("failed to sync runtime config in %s: %w (output: %s)", containerName, err, strings.TrimSpace(output))
 	}
 	return parseRuntimeSyncOutput(output, configuredRuntimeConfigPath(managedContainerSourceConfigPath)), nil
 }
@@ -104,7 +109,19 @@ func runtimeSyncPythonBinary() (string, error) {
 		return resolveRuntimeSyncPythonBinary(configured)
 	}
 
-	for _, candidate := range []string{"python", "python3"} {
+	if venv := strings.TrimSpace(os.Getenv("VIRTUAL_ENV")); venv != "" {
+		for _, candidate := range []string{
+			filepath.Join(venv, "bin", "python3"),
+			filepath.Join(venv, "bin", "python"),
+		} {
+			resolved, err := resolveRuntimeSyncPythonBinary(candidate)
+			if err == nil {
+				return resolved, nil
+			}
+		}
+	}
+
+	for _, candidate := range []string{dashboardVenvPythonPath, "python", "python3"} {
 		resolved, err := resolveRuntimeSyncPythonBinary(candidate)
 		if err == nil {
 			return resolved, nil

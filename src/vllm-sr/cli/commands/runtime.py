@@ -28,6 +28,8 @@ from cli.consts import (
     IMAGE_PULL_POLICY_ALWAYS,
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
+    RUNTIME_TOPOLOGY_LEGACY,
+    RUNTIME_TOPOLOGY_SPLIT,
     VLLM_SR_DOCKER_IMAGE_DEFAULT,
 )
 from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
@@ -57,10 +59,14 @@ def _build_backend(target: str | None, **k8s_kwargs):
 def _execute_serve(
     config: str,
     image: str | None,
+    router_image: str | None,
+    envoy_image: str | None,
+    dashboard_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
     platform: str | None,
+    topology: str | None,
     algorithm: str | None,
     target: str | None,
     namespace: str | None,
@@ -103,6 +109,10 @@ def _execute_serve(
         runtime_config_file=str(effective_config_path.absolute()),
         env_vars=env_vars,
         image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        dashboard_image=dashboard_image,
+        topology=topology,
         pull_policy=image_pull_policy,
         enable_observability=not minimal and not setup_mode,
     )
@@ -118,6 +128,21 @@ def _execute_serve(
     "--image",
     default=None,
     help=f"Docker image to use (default: {VLLM_SR_DOCKER_IMAGE_DEFAULT})",
+)
+@click.option(
+    "--router-image",
+    default=None,
+    help="Docker image for the router container (Docker target only; defaults to --image or VLLM_SR_IMAGE)",
+)
+@click.option(
+    "--envoy-image",
+    default=None,
+    help="Docker image for the Envoy container (Docker target only; defaults to --image or VLLM_SR_IMAGE)",
+)
+@click.option(
+    "--dashboard-image",
+    default=None,
+    help="Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE)",
 )
 @click.option(
     "--image-pull-policy",
@@ -151,6 +176,19 @@ def _execute_serve(
     "When set to amd, serve defaults to the ROCm image unless --image or VLLM_SR_IMAGE is provided.",
 )
 @click.option(
+    "--topology",
+    type=click.Choice(
+        [RUNTIME_TOPOLOGY_LEGACY, RUNTIME_TOPOLOGY_SPLIT],
+        case_sensitive=False,
+    ),
+    default=None,
+    help=(
+        "Local Docker runtime topology: "
+        f"{RUNTIME_TOPOLOGY_LEGACY} (default) or {RUNTIME_TOPOLOGY_SPLIT}. "
+        "Docker target only; can also be set via VLLM_SR_TOPOLOGY."
+    ),
+)
+@click.option(
     "--algorithm",
     type=click.Choice(ALGORITHM_TYPES, case_sensitive=False),
     default=None,
@@ -177,10 +215,14 @@ def _execute_serve(
 def serve(
     config: str,
     image: str | None,
+    router_image: str | None,
+    envoy_image: str | None,
+    dashboard_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
     platform: str | None,
+    topology: str | None,
     algorithm: str | None,
     target: str | None,
     namespace: str | None,
@@ -241,14 +283,21 @@ def serve(
 
         # Platform branding (for AMD deployments)
         vllm-sr serve --platform amd
+
+        # Opt into split local topology
+        vllm-sr serve --topology split
     """
     _execute_serve(
         config,
         image,
+        router_image,
+        envoy_image,
+        dashboard_image,
         image_pull_policy,
         readonly,
         minimal,
         platform,
+        topology,
         algorithm,
         target,
         namespace,

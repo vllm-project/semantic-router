@@ -13,14 +13,20 @@ log = get_logger(__name__)
 
 
 class DockerBackend:
-    """DeploymentBackend implementation for local Docker."""
+    """DeploymentBackend implementation for local Docker workflows."""
 
     def deploy(
         self,
         config_file: str,
         env_vars: dict[str, str] | None = None,
         *,
+        source_config_file: str | None = None,
+        runtime_config_file: str | None = None,
         image: str | None = None,
+        router_image: str | None = None,
+        envoy_image: str | None = None,
+        dashboard_image: str | None = None,
+        topology: str | None = None,
         pull_policy: str | None = None,
         enable_observability: bool = True,
         **kwargs: Any,
@@ -30,7 +36,13 @@ class DockerBackend:
         start_vllm_sr(
             config_file,
             env_vars=env_vars,
+            source_config_file=source_config_file,
+            runtime_config_file=runtime_config_file,
             image=image,
+            router_image=router_image,
+            envoy_image=envoy_image,
+            dashboard_image=dashboard_image,
+            topology=topology,
             pull_policy=pull_policy,
             enable_observability=enable_observability,
             source_config_file=source_config_file,
@@ -48,10 +60,15 @@ class DockerBackend:
 
     def get_dashboard_url(self) -> str | None:
         stack_layout = resolve_runtime_stack()
+        if docker_container_status(stack_layout.dashboard_container_name) == "running":
+            return stack_layout.dashboard_url
         if docker_container_status(stack_layout.container_name) != "running":
             return None
         return stack_layout.dashboard_url
 
     def is_running(self) -> bool:
         stack_layout = resolve_runtime_stack()
-        return docker_container_status(stack_layout.container_name) == "running"
+        return any(
+            docker_container_status(container_name) == "running"
+            for container_name in stack_layout.runtime_container_names
+        )

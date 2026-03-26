@@ -59,7 +59,8 @@ def ensure_clean_runtime_container(container_name: str) -> None:
     if status == "not found":
         return
     log.info(f"Existing container found (status: {status}), cleaning up...")
-    docker_stop_container(container_name)
+    if status in {"running", "paused"}:
+        docker_stop_container(container_name)
     docker_remove_container(container_name)
 
 
@@ -151,18 +152,26 @@ def connect_runtime_container(
     shared_network_name: str, stack_layout: RuntimeStackLayout
 ) -> None:
     """Attach the runtime container to the shared OpenClaw bridge network."""
-    return_code, _stdout, stderr = docker_network_connect(
-        shared_network_name, stack_layout.container_name
-    )
-    if return_code != 0:
-        log.error(
-            f"Failed to connect {stack_layout.container_name} to "
-            f"{shared_network_name}: {stderr}"
+    connected = []
+    for container_name in stack_layout.runtime_container_names:
+        if docker_container_status(container_name) == "not found":
+            continue
+
+        return_code, _stdout, stderr = docker_network_connect(
+            shared_network_name, container_name
         )
-        docker_stop_container(stack_layout.container_name)
-        docker_remove_container(stack_layout.container_name)
-        raise SystemExit(1)
-    log.info(f"Connected {stack_layout.container_name} to {shared_network_name}")
+        if return_code != 0:
+            log.error(
+                f"Failed to connect {container_name} to {shared_network_name}: {stderr}"
+            )
+            for started_container in reversed(connected):
+                docker_stop_container(started_container)
+                docker_remove_container(started_container)
+            docker_stop_container(container_name)
+            docker_remove_container(container_name)
+            raise SystemExit(1)
+        connected.append(container_name)
+        log.info(f"Connected {container_name} to {shared_network_name}")
 
 
 def maybe_finish_setup_mode(
@@ -179,10 +188,9 @@ def maybe_finish_setup_mode(
 
     log.info("Setup mode detected: skipping Router and Envoy health checks")
     log.info("Waiting for Dashboard to become healthy...")
-    _wait_for_setup_dashboard(stack_layout.container_name)
-    ensure_runtime_container_not_exited(
-        stack_layout.container_name, phase="during setup mode"
-    )
+    dashboard_container = _runtime_service_container_name(stack_layout, "dashboard")
+    _wait_for_setup_dashboard(dashboard_container)
+    ensure_runtime_container_not_exited(dashboard_container, phase="during setup mode")
 
     log.info("=" * 60)
     log.info("vLLM Semantic Router setup mode is running!")
@@ -203,17 +211,18 @@ def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
     log.info("Showing Router logs during startup:")
     log.info("-" * 60)
 
+    router_container = _runtime_service_container_name(stack_layout, "router")
     start_time = time.time()
     last_log_time = start_time
     check_count = 0
 
     while time.time() - start_time < HEALTH_CHECK_TIMEOUT:
         check_count += 1
-        _emit_router_startup_logs(stack_layout.container_name, int(last_log_time))
+        _emit_router_startup_logs(router_container, int(last_log_time))
         last_log_time = time.time()
 
         return_code, _stdout, _stderr = docker_exec(
-            stack_layout.container_name,
+            router_container,
             ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
         )
         if return_code == 0:
@@ -234,7 +243,7 @@ def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
     log.info("-" * 60)
     log.error(f"Router failed to become healthy after {HEALTH_CHECK_TIMEOUT}s")
     log.info("Showing full container logs:")
-    docker_logs(stack_layout.container_name, follow=False, tail=100)
+    docker_logs(router_container, follow=False, tail=100)
     raise SystemExit(1)
 
 
@@ -251,6 +260,15 @@ def ensure_runtime_container_not_exited(
     log.info("Showing container logs:")
     docker_logs(container_name, follow=False)
     raise SystemExit(1)
+
+
+def _runtime_service_container_name(
+    stack_layout: RuntimeStackLayout, service: str
+) -> str:
+    preferred = stack_layout.service_container_name(service)
+    if docker_container_status(preferred) != "not found":
+        return preferred
+    return stack_layout.container_name
 
 
 def recover_openclaw_containers(

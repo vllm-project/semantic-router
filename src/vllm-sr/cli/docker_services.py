@@ -18,7 +18,7 @@ def docker_container_status(container_name):
     Get the status of a container.
 
     Returns:
-        'running', 'exited', 'paused', or 'not found'
+        'running', 'created', 'exited', 'paused', or 'not found'
     """
     runtime = get_container_runtime()
     try:
@@ -41,6 +41,8 @@ def docker_container_status(container_name):
             return "not found"
         if "Up" in status:
             return "running"
+        if "Created" in status:
+            return "created"
         if "Exited" in status:
             return "exited"
         if "Paused" in status:
@@ -433,13 +435,14 @@ def _render_template_copy(
 def render_observability_template(
     template_text: str, stack_layout: RuntimeStackLayout
 ) -> str:
-    replacements = {
-        "vllm-sr-container": stack_layout.container_name,
-        "vllm-sr-prometheus": stack_layout.prometheus_container_name,
-        "vllm-sr-jaeger": stack_layout.jaeger_container_name,
-    }
+    replacements = (
+        ("vllm-sr-container:9190", f"{stack_layout.router_container_name}:9190"),
+        ("vllm-sr-container", stack_layout.container_name),
+        ("vllm-sr-prometheus", stack_layout.prometheus_container_name),
+        ("vllm-sr-jaeger", stack_layout.jaeger_container_name),
+    )
     rendered = template_text
-    for source, target in replacements.items():
+    for source, target in replacements:
         rendered = rendered.replace(source, target)
     return rendered
 

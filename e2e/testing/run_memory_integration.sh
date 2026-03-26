@@ -114,7 +114,8 @@ fi
 
 (
     cd "${TEST_DIR}"
-    vllm-sr serve --config config.yaml --image "${VLLM_SR_IMAGE}" --image-pull-policy never >"${SERVE_LOG}" 2>&1 &
+    VLLM_SR_IMAGE="${VLLM_SR_IMAGE}" \
+    vllm-sr serve --config config.yaml --image-pull-policy never >"${SERVE_LOG}" 2>&1 &
     echo "$!" >"${PID_FILE}"
 )
 
