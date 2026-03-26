@@ -81,6 +81,9 @@
   - adapted the vendored WizMap app to read repo-owned query params and same-origin KB map data instead of the public demo datasets
   - tightened the map page UX into a compact manager-style summary bar so the map viewport remains the dominant surface
   - fixed the embedded auth chain so KB map data URLs carry `authToken` explicitly and `/embedded/wizmap/assets/*` no longer relies on the dashboard cookie path to load the static bundle
+  - follow-up ratchet: removed the outer summary bar entirely so `/knowledge-bases/:name/map` renders as a near-full-screen WizMap shell with only a minimal back affordance
+  - follow-up ratchet: changed KB-mode WizMap defaults to a points-first view (`point` on, `contour` off, `label` off) and removed KB grouped overlays from the exported grid contract so the initial map is directly explorable
+  - follow-up ratchet: simplified the embedded footer count path to show the loaded KB point count consistently instead of stale subset text, and added a Playwright route test to prevent the old summary bar layout from returning
 - Validation:
   - `make agent-validate`
   - `cd dashboard/frontend && npm run type-check`
@@ -88,6 +91,9 @@
   - `cd dashboard/backend && PATH=/usr/local/go/bin:$PATH GOCACHE=/Users/bitliu/.codex/worktrees/eede/vs/.codex-go-cache go test ./auth -run 'Test(RequiresAuthentication|RequiredPermission|ExtractAccessToken)' -count=1`
   - `cd dashboard/backend && PATH=/usr/local/go/bin:$PATH GOCACHE=/Users/bitliu/.codex/worktrees/eede/vs/.codex-go-cache go test ./handlers -run 'TestWizMapStaticHandler' -count=1`
   - `cd src/semantic-router && PATH=/usr/local/go/bin:$PATH GOCACHE=/Users/bitliu/.codex/worktrees/eede/vs/.codex-go-cache go test ./pkg/apiserver -run 'TestHandleKnowledgeBaseMap(Endpoints|MissingKnowledgeBase)' -count=1`
+  - `cd dashboard/wizmap && npm run build:embedded`
+  - `cd dashboard/frontend && npx playwright test e2e/knowledge-map.spec.ts`
+  - `make dashboard-check`
 - Recorded blocker:
   - `PATH=/usr/local/go/bin:$PATH make dashboard-check` still fails in this workstation environment during dashboard backend `golangci-lint` setup with `package unsafe is not in std (/usr/local/go/src/unsafe)`. The feature-specific frontend build and backend/router tests above passed, and the blocker is local-toolchain-specific rather than a WizMap code failure.
 

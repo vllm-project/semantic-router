@@ -28,7 +28,6 @@ function buildKnowledgeMapURL(name: string): string {
 
 export default function KnowledgeMapPage() {
   const { name = '' } = useParams<{ name: string }>()
-  const [metadata, setMetadata] = useState<KnowledgeMapMetadata | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [iframeReady, setIframeReady] = useState(false)
@@ -47,15 +46,14 @@ export default function KnowledgeMapPage() {
         }
         return response.json() as Promise<KnowledgeMapMetadata>
       })
-      .then((nextMetadata) => {
-        if (!cancelled) {
-          setMetadata(nextMetadata)
+      .then(() => {
+        if (cancelled) {
+          return
         }
       })
       .catch((nextError) => {
         if (!cancelled) {
           setError(nextError instanceof Error ? nextError.message : 'Failed to load knowledge map metadata')
-          setMetadata(null)
         }
       })
       .finally(() => {
@@ -76,38 +74,9 @@ export default function KnowledgeMapPage() {
       {error ? <div className={styles.error}>{error}</div> : null}
 
       <section className={styles.mapShell}>
-        <div className={styles.mapChrome}>
-          <div className={styles.mapIdentity}>
-            <span className={styles.eyebrow}>Knowledge</span>
-            <span className={styles.title}>Knowledge Map</span>
-            {metadata ? <span className={styles.baseChip}>{metadata.name}</span> : null}
-          </div>
-
-          {metadata ? (
-            <dl className={styles.metaStrip}>
-              <div className={styles.metaPill}>
-                <dt>Projection</dt>
-                <dd>{metadata.projection}</dd>
-              </div>
-              <div className={styles.metaPill}>
-                <dt>Model</dt>
-                <dd>{metadata.model_type}</dd>
-              </div>
-              <div className={styles.metaPill}>
-                <dt>Points</dt>
-                <dd>{metadata.point_count}</dd>
-              </div>
-              <div className={styles.metaPill}>
-                <dt>Labels</dt>
-                <dd>{metadata.label_count}</dd>
-              </div>
-            </dl>
-          ) : null}
-
-          <Link to="/knowledge-bases/bases" className={styles.backLink}>
-            Back to Bases
-          </Link>
-        </div>
+        <Link to="/knowledge-bases/bases" className={styles.backLink}>
+          Back to Bases
+        </Link>
 
         {(loading || !iframeReady) && !error ? (
           <div className={styles.loadingPanel}>

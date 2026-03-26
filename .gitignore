@@ -197,6 +197,7 @@ FactCHD_dataset/
 *.safetensors
 
 .vllm-sr/
+.codex-go-cache/
 
 # AWS deployment files (contain instance IPs and IDs)
 src/training/cache_embeddings/aws/vllm-instance-*.txt

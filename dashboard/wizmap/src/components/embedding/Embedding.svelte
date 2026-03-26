@@ -42,7 +42,7 @@
     showContour: dataURLs ? false : true,
     showPoint: true,
     showGrid: false,
-    showLabel: true
+    showLabel: dataURLs ? false : true
   };
 
   const defaultDataURLs = (name: string): DataURLs => {
