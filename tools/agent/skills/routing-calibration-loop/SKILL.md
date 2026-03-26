@@ -75,11 +75,8 @@ description: Calibrates routing changes against a live router endpoint with exec
 ## Must Read
 
 - [AGENTS.md](../../../../AGENTS.md)
-- [docs/agent/README.md](../../../../docs/agent/README.md)
-- [docs/agent/feature-complete-checklist.md](../../../../docs/agent/feature-complete-checklist.md)
 - [deploy/amd/README.md](../../../../deploy/amd/README.md)
 - [deploy/amd/balance.probes.yaml](../../../../deploy/amd/balance.probes.yaml)
-- owned routing YAML / DSL assets for the target profile, such as [deploy/recipes/balance.yaml](../../../../deploy/recipes/balance.yaml) and [deploy/recipes/balance.dsl](../../../../deploy/recipes/balance.dsl)
 - [tools/agent/scripts/router_calibration_loop.py](../../../../tools/agent/scripts/router_calibration_loop.py)
 
 ## Standard Commands

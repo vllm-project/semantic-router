@@ -67,7 +67,11 @@ This directory is the human-readable system of record for the repository's agent
   - `make agent-validate`
   - `make agent-scorecard`
   - `make agent-report ENV=cpu CHANGED_FILES="..."`
-    - emits validation commands, loop policy, and a task-first context pack
+    - emits validation commands, loop policy, and a compact task-first context pack by default
+  - `make agent-pr-gate`
+    - reproduces the baseline PR requirements locally
+  - `make test-and-build-local`
+    - reproduces the CI `Test And Build` job locally
 
 ## Contributor Interface
 

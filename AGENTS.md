@@ -29,6 +29,7 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 - Use the local image flow for local-dev behavior. Do not invent another serve path.
 - Start from a project-level primary skill. Fragment skills are support material, not the default entrypoint.
 - Run the smallest relevant gate first: `make agent-validate`, `make agent-lint`, `make agent-ci-gate`, then `make agent-feature-gate`.
+- Use `make agent-pr-gate` when you need a repo-native local reproduction of the baseline PR requirements.
 - Drive the active task to its reported completion boundary: fix failures and rerun the applicable gates until the current change or subtask is done, and do not hand off on the first failing run.
 - Treat docs-only and website-only edits as lightweight unless the task matrix says otherwise.
 - Contributor workflow, issue or PR intake rules, and maintainer label taxonomy live in `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/**`, and `.prowlabels.yaml`; commits intended for PRs must use `git commit -s`.
@@ -49,6 +50,8 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 - `make agent-report ENV=cpu|amd CHANGED_FILES="..."`
 - `make agent-lint CHANGED_FILES="..."`
 - `make agent-ci-gate CHANGED_FILES="..."`
+- `make agent-pr-gate`
+- `make test-and-build-local`
 - `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."`
 - `make agent-e2e-affected CHANGED_FILES="..."`
 

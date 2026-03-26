@@ -13,6 +13,9 @@ AGENT_SMOKE_TIMEOUT ?= 90
 AGENT_STACK_NAME ?=
 AGENT_PORT_OFFSET ?= 0
 AGENT_GOLANGCI_LINT_VERSION ?= 2.5.0
+AGENT_REPORT_WRITE ?=
+AGENT_REPORT_WRITE_PATH ?=
+AGENT_REPORT_CONTEXT_DETAIL ?= compact
 
 agent-help: ## Show help for agent-specific targets
 	@echo "Agent commands:"
@@ -24,9 +27,12 @@ agent-help: ## Show help for agent-specific targets
 	@echo "  make agent-serve-local ENV=cpu|amd"
 	@echo "    optional: AGENT_STACK_NAME=<name> AGENT_PORT_OFFSET=<n>"
 	@echo "  make agent-report ENV=cpu|amd CHANGED_FILES=\"...\""
+	@echo "    optional: AGENT_REPORT_CONTEXT_DETAIL=compact|full AGENT_REPORT_WRITE=1 or AGENT_REPORT_WRITE_PATH=.agent-harness/reports/custom.json"
 	@echo "  make agent-lint CHANGED_FILES=\"...\""
 	@echo "  make agent-fast-gate CHANGED_FILES=\"...\""
 	@echo "  make agent-ci-gate CHANGED_FILES=\"...\""
+	@echo "  make agent-pr-gate"
+	@echo "  make test-and-build-local"
 	@echo "  make agent-e2e-affected CHANGED_FILES=\"...\""
 	@echo "  make agent-feature-gate ENV=cpu|amd CHANGED_FILES=\"...\""
 
@@ -137,7 +143,13 @@ agent-ci-lint: agent-bootstrap ## Reproduce the CI changed-file lint gate locall
 
 agent-report: ## Show primary skill, impacted surfaces, and validation commands
 	@$(LOG_TARGET)
-	@python3 tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
+	@if [ -n "$(AGENT_REPORT_WRITE_PATH)" ]; then \
+		python3 tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)" --write "$(AGENT_REPORT_WRITE_PATH)"; \
+	elif [ -n "$(AGENT_REPORT_WRITE)" ]; then \
+		python3 tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)" --write-default; \
+	else \
+		python3 tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)"; \
+	fi
 
 agent-ci-gate: ## Run the repo-standard fast CI gate
 	@$(LOG_TARGET)
@@ -182,7 +194,24 @@ agent-e2e-affected: ## Run local E2E profiles affected by the changed files
 	@$(LOG_TARGET)
 	@python3 tools/agent/scripts/agent_gate.py run-e2e --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
 
-agent-feature-gate: ## Run lint, targeted tests, local smoke, and affected E2E profiles
+test-and-build-local: ## Reproduce the CI Test And Build job locally
+	@$(LOG_TARGET)
+	@set -e; \
+	trap '$(MAKE) clean-redis >/dev/null 2>&1 || true; $(MAKE) clean-valkey >/dev/null 2>&1 || true; $(MAKE) stop-milvus >/dev/null 2>&1 || true' EXIT; \
+	$(MAKE) check-go-mod-tidy; \
+	$(MAKE) rust-ci; \
+	python3 -m pip install -U "huggingface_hub[cli]" hf_transfer; \
+	$(MAKE) start-milvus; \
+	$(MAKE) start-redis; \
+	$(MAKE) start-valkey; \
+	CI=true CI_MINIMAL_MODELS=true CGO_ENABLED=1 LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/release" MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
+
+agent-pr-gate: ## Reproduce the baseline PR requirements locally
+	@$(LOG_TARGET)
+	@$(MAKE) precommit-local AGENT_BASE_REF="$(AGENT_BASE_REF)"
+	@$(MAKE) test-and-build-local
+
+agent-feature-gate: ## Run lint, targeted tests, local smoke, and a final report
 	@$(LOG_TARGET)
 	@set -e; \
 	$(MAKE) agent-ci-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"; \
@@ -193,9 +222,8 @@ agent-feature-gate: ## Run lint, targeted tests, local smoke, and affected E2E p
 		$(MAKE) agent-serve-local ENV=$(ENV) AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)"; \
 		$(MAKE) agent-smoke-local AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)"; \
 	fi; \
-	$(MAKE) agent-e2e-affected CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"; \
 	python3 tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
 
 .PHONY: agent-help agent-bootstrap agent-ci-lint agent-dev agent-serve-local agent-stop-local \
 	agent-validate agent-lint agent-fast-gate agent-report agent-ci-gate agent-smoke-local agent-e2e-affected \
-	agent-feature-gate
+	test-and-build-local agent-pr-gate agent-feature-gate

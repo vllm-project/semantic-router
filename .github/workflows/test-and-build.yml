@@ -231,6 +231,8 @@ jobs:
         if: failure()
         run: |
           echo "::error::Test and build failed. Check the workflow run for details."
+          echo "To reproduce this job locally: make test-and-build-local"
+          echo "To run the baseline PR parity gate locally: make agent-pr-gate"
 
   # Trigger Docker publishing on successful nightly runs
   publish-docker:

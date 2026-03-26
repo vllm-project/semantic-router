@@ -140,6 +140,9 @@ test-results/
 # augment editor rules
 .augment
 
+# Local agent harness artifacts
+.agent-harness/
+
 # Claude Code configuration (should not be committed)
 CLAUDE.md
 

@@ -31,6 +31,7 @@ Typical examples:
 - private contributor reminders
 - durable architectural decisions that belong in ADRs
 - unresolved architecture gaps that belong in the debt register
+- local generated report or handoff artifacts under `.agent-harness/`
 
 ## Execution Plan Versus Other Governance Files
 
@@ -88,3 +89,5 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0012-dsl-conflict-free-routing-workstream.md](pl-0012-dsl-conflict-free-routing-workstream.md)
 - [pl-0013-openclaw-vsr-install-import-workstream.md](pl-0013-openclaw-vsr-install-import-workstream.md)
 - [pl-0014-structure-signal-family-implementation.md](pl-0014-structure-signal-family-implementation.md)
+- [pl-0015-agent-report-local-artifact-loop.md](pl-0015-agent-report-local-artifact-loop.md)
+- [pl-0016-harness-context-and-pr-parity-simplification.md](pl-0016-harness-context-and-pr-parity-simplification.md)

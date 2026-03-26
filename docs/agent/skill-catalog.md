@@ -3,55 +3,52 @@
 This document is the human-readable index for the repository's skill system.
 Skills stay intentionally concise. Keep deep reference material in the linked playbooks and docs instead of copying it into each skill, and use `## Gotchas` in primary or support skills to capture repeated failure modes that need to stay visible at trigger time.
 
+## Activation Model
+
+- Primary skills pick the task archetype.
+- Fragment skills are a reusable inventory, not an unconditional include list.
+- The harness resolves active fragments from the primary-skill inventory using the impacted surfaces and active environment.
+- The fallback `cross-stack-bugfix` primary resolves fragments directly from impacted surfaces instead of hard-coding the entire fragment inventory.
+- Support skills are manual follow-up tools and should not expand the default context pack unless they are explicitly invoked.
+- The completion checklist remains canonical repo documentation, not a default-loaded support skill.
+
 ## Primary Skills
 
 - `harness-contract-change`
 - `signal-end-to-end`
 - `plugin-end-to-end`
-- `header-contract-change`
 - `config-platform-change`
-- `decision-logic-change`
-- `algorithm-selection-change`
+- `routing-policy-change`
 - `startup-chain-change`
-- `dashboard-surface-change`
-- `dashboard-console-platform-change`
+- `dashboard-platform-change`
 - `router-service-platform-change`
 - `fleet-sim-change`
-- `k8s-operator-change`
-- `deployment-profile-change`
+- `k8s-platform-change`
 - `training-stack-change`
 - `cross-stack-bugfix`
 
 ## Fragment Skills
 
-- `harness-governance`
 - `signal-runtime`
-- `decision-logic`
-- `algorithm-selection`
+- `routing-policy-runtime`
 - `plugin-runtime`
 - `router-service-platform`
 - `binding-ffi`
 - `python-cli-schema`
 - `python-cli-runtime`
-- `dashboard-config-ui`
-- `dashboard-console-backend`
-- `topology-visualization`
-- `playground-reveal`
-- `dsl-crd`
-- `k8s-operator`
-- `deployment-profile-stack`
+- `dashboard-platform-runtime`
+- `k8s-platform-runtime`
 - `fleet-sim-runtime`
 - `training-stack-runtime`
 - `e2e-selection`
 - `local-dev-cpu`
 - `local-dev-amd`
-- `architecture-guardrails`
 
 ## Support Skills
 
 - `routing-calibration-loop`
-- `feature-complete-checklist`
 - `maintainer-issue-pr-management`
+- `architecture-guardrails`
 
 ## Source of Truth
 

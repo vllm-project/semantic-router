@@ -40,12 +40,8 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
 ## Must Read
 
 - [AGENTS.md](../../../../AGENTS.md)
-- [docs/agent/README.md](../../../../docs/agent/README.md)
-- [docs/agent/governance.md](../../../../docs/agent/governance.md)
 - [CONTRIBUTING.md](../../../../CONTRIBUTING.md)
 - [.github/PULL_REQUEST_TEMPLATE.md](../../../../.github/PULL_REQUEST_TEMPLATE.md)
-- [.github/ISSUE_TEMPLATE/001_feature_request.yaml](../../../../.github/ISSUE_TEMPLATE/001_feature_request.yaml)
-- [.github/ISSUE_TEMPLATE/002_bug_report.yaml](../../../../.github/ISSUE_TEMPLATE/002_bug_report.yaml)
 - [.prowlabels.yaml](../../../../.prowlabels.yaml)
 
 ## Workflow
