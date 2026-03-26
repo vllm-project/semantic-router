@@ -27,9 +27,6 @@ import {
 } from '../../stores';
 import type { Writable } from 'svelte/store';
 import {
-  downloadJSON,
-  splitStreamTransform,
-  parseJSONTransform,
   timeit,
   rgbToHex,
   round,
@@ -39,6 +36,7 @@ import {
 import * as Labeler from './EmbeddingLabel';
 import * as PointDrawer from './EmbeddingPointWebGL';
 import * as Controller from './EmbeddingControl';
+import { loadHostedKnowledgeMapProjection } from './hostedKnowledgeMap';
 import createRegl from 'regl';
 import { config } from '../../config/config';
 import LoaderWorker from './workers/loader?worker';
@@ -516,9 +514,14 @@ export class Embedding {
    * Load the UMAP data from json.
    */
   initData = async () => {
+    if (this.hostedDataMode && this.dataURLs.metadata) {
+      await this.initHostedKnowledgeMap();
+      return;
+    }
+
     // Read the grid data for contour background
     // Await the data to load to get the range for x and y
-    const gridData = await d3.json<GridData>(this.dataURLs.grid);
+    const gridData = await d3.json<GridData>(this.dataURLs.grid!);
 
     if (gridData === undefined) {
       throw Error('Fail to load grid data.');
@@ -657,7 +660,7 @@ export class Embedding {
 
     // Read the topic label data
     const topicPromise = d3
-      .json<TopicDataJSON>(this.dataURLs.topic)
+      .json<TopicDataJSON>(this.dataURLs.topic!)
       .then(topicData => {
         if (topicData) {
           // Create a quad tree at each level
@@ -703,6 +706,110 @@ export class Embedding {
     };
     this.searchBarStoreValue.highlightSearchPoint = highlightSearchPoint;
     this.searchBarStore.set(this.searchBarStoreValue);
+
+    this.updateEmbedding();
+  };
+
+  initHostedKnowledgeMap = async () => {
+    const projection = await loadHostedKnowledgeMapProjection(
+      this.dataURLs.metadata!,
+      this.dataURLs.point
+    );
+
+    this.gridData = projection.gridData;
+    const xRange = [...this.gridData.xRange] as [number, number];
+    const yRange = [...this.gridData.yRange] as [number, number];
+
+    let xLength = xRange[1] - xRange[0];
+    let yLength = yRange[1] - yRange[0];
+    if (!this.gridData.padded) {
+      if (xLength < yLength) {
+        yRange[0] -= yLength / 50;
+        yRange[1] += yLength / 50;
+        yLength = yRange[1] - yRange[0];
+
+        xRange[0] -= (yLength - xLength) / 2;
+        xRange[1] += (yLength - xLength) / 2;
+      } else {
+        xRange[0] -= xLength / 50;
+        xRange[1] += xLength / 50;
+        xLength = xRange[1] - xRange[0];
+
+        yRange[0] -= (xLength - yLength) / 2;
+        yRange[1] += (xLength - yLength) / 2;
+      }
+    }
+
+    this.xScale = d3
+      .scaleLinear()
+      .domain(xRange)
+      .range([0, this.svgSize.width]);
+
+    this.yScale = d3
+      .scaleLinear()
+      .domain(yRange)
+      .range([this.svgSize.height, 0]);
+
+    this.contours = this.drawContour();
+
+    for (const level of Object.keys(projection.topicData.data)) {
+      const tree = d3
+        .quadtree<TopicData>()
+        .x(d => d[0])
+        .y(d => d[1])
+        .addAll(projection.topicData.data[level]);
+      this.topicLevelTrees.set(parseInt(level), tree);
+    }
+
+    this.drawTopicGrid();
+    this.layoutTopicLabels(this.userMaxLabelNum, false);
+    setTimeout(() => {
+      const slider = this.component.querySelector(
+        'input#slider-label-num'
+      ) as HTMLInputElement | null;
+      if (slider) {
+        slider.value = `${this.curLabelNum}`;
+      }
+    }, 200);
+
+    this.initWebGLMatrices();
+
+    this.promptPoints = projection.points;
+    this.loadedPointCount = projection.points.length;
+    this.initWebGLBuffers();
+    if (anyTrue(this.showPoints)) {
+      this.drawScatterPlot();
+    }
+
+    const searchMessage: SearchWorkerMessage = {
+      command: 'addPoints',
+      payload: {
+        points: projection.points
+      }
+    };
+    this.searchWorker.postMessage(searchMessage);
+
+    const highlightSearchPoint = (point: PromptPoint | undefined) => {
+      this.highlightPoint({ point, animated: true });
+    };
+    this.searchBarStoreValue.highlightSearchPoint = highlightSearchPoint;
+    this.searchBarStore.set(this.searchBarStoreValue);
+
+    this.footerStoreValue.xScale = this.xScale;
+    this.footerStoreValue.embeddingName = this.gridData.embeddingName;
+    this.footerStoreValue.numPoints = this.loadedPointCount;
+    this.footerStore.set(this.footerStoreValue);
+
+    const treeMessage: TreeWorkerMessage = {
+      command: 'initQuadtree',
+      payload: {
+        xRange,
+        yRange,
+        groupIDs: [],
+        times: []
+      }
+    };
+    this.treeWorker.postMessage(treeMessage);
 
     this.updateEmbedding();
   };
@@ -1117,6 +1224,17 @@ export class Embedding {
   treeWorkerMessageHandler = (e: MessageEvent<TreeWorkerMessage>) => {
     switch (e.data.command) {
       case 'finishInitQuadtree': {
+        if (this.hostedDataMode && this.promptPoints.length > 0) {
+          const hostedMessage: TreeWorkerMessage = {
+            command: 'updateQuadtree',
+            payload: {
+              points: this.promptPoints
+            }
+          };
+          this.treeWorker.postMessage(hostedMessage);
+          break;
+        }
+
         // Tell the loader worker to start loading data
         // (need to wait to set up the quadtree to avoid racing)
         const message: LoaderWorkerMessage = {

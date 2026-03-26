@@ -43,9 +43,8 @@
 - The backend provides one typed way to request WizMap data for a selected KB.
 - The preferred model is:
   - metadata endpoint for the selected KB map
-  - data endpoint for WizMap point records
-  - grid endpoint for WizMap summaries
-- The hosted map loads those endpoints through same-origin URLs rather than public external URLs.
+  - data endpoint for raw KB embedding records
+- The hosted map loads those endpoints through same-origin URLs rather than public external URLs, then computes the `umap_2d` projection and local overlays inside the self-hosted WizMap shell.
 
 ### UX model
 
@@ -75,10 +74,11 @@
 - Current task: `WZM008` completed
 - Branch: `vsr/pr-1644-analysis`
 - Completed work:
-  - shipped the router KB map export surface at `/config/kbs/{name}/map/{metadata,data.ndjson,grid.json,topic.json}` with cached projection artifacts
+  - shipped the router KB map export surface at `/config/kbs/{name}/map/{metadata,data.ndjson}` with cached raw embedding artifacts
   - added the dashboard `Knowledge Map` route, base-level `Open Map` actions, and the self-hosted `/embedded/wizmap/` static shell
   - wired dashboard, backend, and image packaging so the vendored WizMap app builds into `dashboard/frontend/dist/embedded/wizmap` and ships in the dashboard and `vllm-sr` images
   - adapted the vendored WizMap app to read repo-owned query params and same-origin KB map data instead of the public demo datasets
+  - follow-up ratchet: removed backend `pca_2d` projection from the KB map export path and moved KB projection generation to client-side `UMAP` inside the hosted WizMap shell
   - tightened the map page UX into a compact manager-style summary bar so the map viewport remains the dominant surface
   - fixed the embedded auth chain so KB map data URLs carry `authToken` explicitly and `/embedded/wizmap/assets/*` no longer relies on the dashboard cookie path to load the static bundle
   - follow-up ratchet: removed the outer summary bar entirely so `/knowledge-bases/:name/map` renders as a near-full-screen WizMap shell with only a minimal back affordance

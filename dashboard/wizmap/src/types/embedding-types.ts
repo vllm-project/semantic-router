@@ -14,9 +14,10 @@ export interface SearchResult {
  * A collection of data files to set up WizMap
  */
 export interface DataURLs {
+  metadata?: string;
   point: string;
-  grid: string;
-  topic: string;
+  grid?: string;
+  topic?: string;
 }
 
 export interface WebGLMatrices {
@@ -106,6 +107,26 @@ export type LoaderWorkerMessage =
         loadedPointCount: number;
       };
     };
+
+export interface KnowledgeMapMetadata {
+  name: string;
+  description?: string;
+  projection: string;
+  model_type: string;
+  point_count: number;
+  label_count: number;
+  group_count: number;
+  label_names: string[];
+  topic_label_hint?: string[];
+  groups?: Record<string, string[]>;
+}
+
+export interface KBRawPointRecord {
+  text: string;
+  label_name: string;
+  label_index: number;
+  vector: number[];
+}
 
 export interface LabelData {
   tileX: number;
@@ -256,6 +277,7 @@ export interface PromptPoint extends Point {
   id: number;
   time?: string;
   groupID?: number;
+  labelName?: string;
 }
 
 export interface PromptUMAPData {

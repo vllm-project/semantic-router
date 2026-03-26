@@ -28,28 +28,6 @@ func (s *ClassificationAPIServer) handleGetKnowledgeBaseMapData(w http.ResponseW
 	_, _ = w.Write(artifacts.pointData)
 }
 
-func (s *ClassificationAPIServer) handleGetKnowledgeBaseMapGrid(w http.ResponseWriter, r *http.Request) {
-	artifacts, ok := s.loadKnowledgeBaseMapArtifacts(w, r)
-	if !ok {
-		return
-	}
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(artifacts.gridData)
-}
-
-func (s *ClassificationAPIServer) handleGetKnowledgeBaseMapTopic(w http.ResponseWriter, r *http.Request) {
-	artifacts, ok := s.loadKnowledgeBaseMapArtifacts(w, r)
-	if !ok {
-		return
-	}
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(artifacts.topicData)
-}
-
 func (s *ClassificationAPIServer) loadKnowledgeBaseMapArtifacts(
 	w http.ResponseWriter,
 	r *http.Request,

@@ -4,7 +4,7 @@ import { mockAuthenticatedAppShell } from './support/auth'
 const metadataResponse = {
   name: 'privacy_kb',
   description: 'Privacy exemplars',
-  projection: 'pca_2d',
+  projection: 'umap_2d',
   model_type: 'mmbert',
   point_count: 356,
   label_count: 18,

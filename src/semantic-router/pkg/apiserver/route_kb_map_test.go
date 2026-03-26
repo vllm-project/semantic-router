@@ -54,8 +54,14 @@ func TestHandleKnowledgeBaseMapEndpoints(t *testing.T) {
 	if metadata.Name != "privacy_kb" {
 		t.Fatalf("expected privacy_kb metadata, got %+v", metadata)
 	}
+	if metadata.Projection != "umap_2d" {
+		t.Fatalf("expected umap_2d projection, got %+v", metadata)
+	}
 	if metadata.PointCount <= 0 || metadata.LabelCount <= 0 {
 		t.Fatalf("expected populated metadata, got %+v", metadata)
+	}
+	if len(metadata.Groups) == 0 {
+		t.Fatalf("expected kb groups in metadata, got %+v", metadata)
 	}
 
 	dataReq := httptest.NewRequest(http.MethodGet, "/config/kbs/privacy_kb/map/data.ndjson", nil)
@@ -71,38 +77,13 @@ func TestHandleKnowledgeBaseMapEndpoints(t *testing.T) {
 	if !strings.Contains(dataRR.Body.String(), "proprietary_code") && len(strings.TrimSpace(dataRR.Body.String())) == 0 {
 		t.Fatalf("expected non-empty ndjson body, got %q", dataRR.Body.String())
 	}
-
-	gridReq := httptest.NewRequest(http.MethodGet, "/config/kbs/privacy_kb/map/grid.json", nil)
-	gridReq.SetPathValue("name", "privacy_kb")
-	gridRR := httptest.NewRecorder()
-	apiServer.handleGetKnowledgeBaseMapGrid(gridRR, gridReq)
-	if gridRR.Code != http.StatusOK {
-		t.Fatalf("expected grid 200, got %d: %s", gridRR.Code, gridRR.Body.String())
+	firstLine := strings.TrimSpace(strings.Split(dataRR.Body.String(), "\n")[0])
+	var point kbRawPoint
+	if err := json.Unmarshal([]byte(firstLine), &point); err != nil {
+		t.Fatalf("json.Unmarshal point: %v", err)
 	}
-	var grid knowledgeBaseMapGridResponse
-	if err := json.Unmarshal(gridRR.Body.Bytes(), &grid); err != nil {
-		t.Fatalf("json.Unmarshal grid: %v", err)
-	}
-	if len(grid.Grid) == 0 {
-		t.Fatalf("expected populated grid response, got %+v", grid)
-	}
-	if len(grid.GroupNames) != 0 {
-		t.Fatalf("expected kb map grid to ship without grouped overlays, got %+v", grid.GroupNames)
-	}
-
-	topicReq := httptest.NewRequest(http.MethodGet, "/config/kbs/privacy_kb/map/topic.json", nil)
-	topicReq.SetPathValue("name", "privacy_kb")
-	topicRR := httptest.NewRecorder()
-	apiServer.handleGetKnowledgeBaseMapTopic(topicRR, topicReq)
-	if topicRR.Code != http.StatusOK {
-		t.Fatalf("expected topic 200, got %d: %s", topicRR.Code, topicRR.Body.String())
-	}
-	var topic knowledgeBaseMapTopicResponse
-	if err := json.Unmarshal(topicRR.Body.Bytes(), &topic); err != nil {
-		t.Fatalf("json.Unmarshal topic: %v", err)
-	}
-	if len(topic.Data) == 0 {
-		t.Fatalf("expected topic data, got %+v", topic)
+	if point.LabelName == "" || point.Text == "" || len(point.Vector) == 0 {
+		t.Fatalf("expected raw kb point payload, got %+v", point)
 	}
 }
 

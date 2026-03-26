@@ -27,9 +27,8 @@ That matches the dashboard backend static lookup contract and the packaged conta
 The hosted app reads these query parameters:
 
 - `title`
+- `metadataURL`
 - `dataURL`
-- `gridURL`
-- `topicURL`
 
 The dashboard Knowledge Map page populates those values for one selected knowledge base and opens the hosted app inside `/knowledge-bases/:name/map`.
 

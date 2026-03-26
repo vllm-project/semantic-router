@@ -13,14 +13,14 @@ interface KnowledgeMapMetadata {
   group_count: number
   label_names: string[]
   topic_label_hint?: string[]
+  groups?: Record<string, string[]>
 }
 
 function buildKnowledgeMapURL(name: string): string {
   const encodedName = encodeURIComponent(name)
   const params = new URLSearchParams({
+    metadataURL: withAuthQuery(`/api/router/config/kbs/${encodedName}/map/metadata`),
     dataURL: withAuthQuery(`/api/router/config/kbs/${encodedName}/map/data.ndjson`),
-    gridURL: withAuthQuery(`/api/router/config/kbs/${encodedName}/map/grid.json`),
-    topicURL: withAuthQuery(`/api/router/config/kbs/${encodedName}/map/topic.json`),
     title: name,
   })
   return withAuthQuery(`/embedded/wizmap/?${params.toString()}`)

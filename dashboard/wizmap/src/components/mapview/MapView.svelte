@@ -14,17 +14,17 @@
   if (window.location.search !== '') {
     const searchParams = new URLSearchParams(window.location.search);
     const title = searchParams.get('title')?.trim();
+    const metadata = searchParams.get('metadataURL')?.trim();
     const point = searchParams.get('dataURL')?.trim();
-    const grid = searchParams.get('gridURL')?.trim();
-    const topic = searchParams.get('topicURL')?.trim();
     if (title) {
       mapTitle = title;
     }
-    if (point && grid && topic) {
+    if (point) {
       mapDataURLs = {
+        metadata,
         point,
-        grid,
-        topic
+        grid: undefined,
+        topic: undefined
       };
     }
     if (searchParams.has('dataset')) {

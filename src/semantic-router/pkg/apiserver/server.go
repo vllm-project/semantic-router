@@ -222,8 +222,6 @@ func (s *ClassificationAPIServer) registerConfigRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /config/kbs/{name}", s.handleGetKnowledgeBase)
 	mux.HandleFunc("GET /config/kbs/{name}/map/metadata", s.handleGetKnowledgeBaseMapMetadata)
 	mux.HandleFunc("GET /config/kbs/{name}/map/data.ndjson", s.handleGetKnowledgeBaseMapData)
-	mux.HandleFunc("GET /config/kbs/{name}/map/grid.json", s.handleGetKnowledgeBaseMapGrid)
-	mux.HandleFunc("GET /config/kbs/{name}/map/topic.json", s.handleGetKnowledgeBaseMapTopic)
 	mux.HandleFunc("PUT /config/kbs/{name}", s.handleUpdateKnowledgeBase)
 	mux.HandleFunc("DELETE /config/kbs/{name}", s.handleDeleteKnowledgeBase)
 	mux.HandleFunc("GET /config/router", s.handleConfigGet)
