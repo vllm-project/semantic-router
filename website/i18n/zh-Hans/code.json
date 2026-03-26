@@ -429,7 +429,7 @@
     "message": "系统如何工作"
   },
   "homepage.paperFigures.description": {
-    "message": "通过交互式演示理解信号提取、决策逻辑与模型路由行为。"
+    "message": "通过交互式演示理解信号提取、投影协调、决策逻辑与模型路由行为。"
   },
   "homepage.paperFigures.figure1.title": {
     "message": "香农映射"
@@ -444,16 +444,16 @@
     "message": "每增加一个信号都会降低不确定性，直到模型选择趋于确定。"
   },
   "homepage.paperFigures.figure3.title": {
-    "message": "三层架构"
+    "message": "四层架构"
   },
   "homepage.paperFigures.figure3.summary": {
-    "message": "信号提取、决策引擎与插件投影在单一路由前向中协同工作。"
+    "message": "信号提取、投影协调、决策模块与插件执行共同构成完整路由路径。"
   },
   "homepage.paperFigures.figure4.title": {
     "message": "信号分类体系"
   },
   "homepage.paperFigures.figure4.summary": {
-    "message": "完整信号集合由启发式与学习式两类组成，用于路由决策。"
+    "message": "完整的 14 个信号按启发式与学习式两类组织，并汇入 S(r)。"
   },
   "homepage.paperFigures.figure14.title": {
     "message": "智能体策略合成"
@@ -564,25 +564,25 @@
     "message": "决策规则将熵坍缩到近似确定的模型选择。"
   },
   "homepage.paperFigures.figure3.layer.input.tag": {
-    "message": "输入"
+    "message": "信号"
   },
   "homepage.paperFigures.figure3.layer.input.title": {
     "message": "信号提取"
   },
   "homepage.paperFigures.figure3.layer.input.description": {
-    "message": "启发式 + 编码器信号共同生成结构化特征。"
+    "message": "启发式与学习式检测器共同产出可复用的路由事实。"
   },
   "homepage.paperFigures.figure3.layer.input.focus": {
     "message": "并行采集请求特征并输出类型化信号值。"
   },
   "homepage.paperFigures.figure3.layer.hidden.tag": {
-    "message": "隐层"
+    "message": "决策"
   },
   "homepage.paperFigures.figure3.layer.hidden.title": {
     "message": "决策模块"
   },
   "homepage.paperFigures.figure3.layer.hidden.description": {
-    "message": "布尔策略会选出一个作用域明确的路由决策。"
+    "message": "布尔策略读取信号与投影输出，选出唯一生效路由。"
   },
   "homepage.paperFigures.figure3.layer.hidden.focus": {
     "message": "评估规则树并将候选集合坍缩为单一路径。"
@@ -591,13 +591,25 @@
     "message": "投影"
   },
   "homepage.paperFigures.figure3.layer.projection.title": {
-    "message": "插件链"
+    "message": "投影协调"
   },
   "homepage.paperFigures.figure3.layer.projection.description": {
-    "message": "前/后置插件与模型选择按决策执行。"
+    "message": "分区、分数与映射把原始匹配整理成可复用的路由事实。"
   },
   "homepage.paperFigures.figure3.layer.projection.focus": {
-    "message": "按策略应用插件后，将请求分发到目标端点。"
+    "message": "协调竞争信号，并为后续策略发布命名投影输出。"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.tag": {
+    "message": "插件"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.title": {
+    "message": "插件链"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.description": {
+    "message": "按策略绑定前/后置插件，再将请求分发到目标端点。"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.focus": {
+    "message": "围绕选中路由附加缓存、安全、改写或追踪等行为。"
   },
   "homepage.paperFigures.figure3.layerFocus": {
     "message": "层焦点"
@@ -622,6 +634,9 @@
   },
   "homepage.paperFigures.figure4.signal.context": {
     "message": "上下文"
+  },
+  "homepage.paperFigures.figure4.signal.structure": {
+    "message": "结构"
   },
   "homepage.paperFigures.figure4.signal.authz": {
     "message": "鉴权"
@@ -654,7 +669,7 @@
     "message": "偏好"
   },
   "homepage.paperFigures.figure4.summaryText": {
-    "message": "共 13 个信号。当前激活信号：{signal}。{groupNote}"
+    "message": "共 14 个信号。当前激活信号：{signal}。{groupNote}"
   },
   "homepage.paperFigures.figure14.flow.spec.label": {
     "message": "自然语言规范"
@@ -687,7 +702,7 @@
     "message": "推理引擎"
   },
   "homepage.paperFigures.figure14.flow.engine.detail": {
-    "message": "信号-决策-插件执行"
+    "message": "信号-投影-决策-插件执行"
   },
   "homepage.paperFigures.figure14.feedback.label": {
     "message": "路由质量反馈 Q(r, m*)"
@@ -705,7 +720,7 @@
     "message": "生成的 DSL 配置可审计，并可编译为确定性路由行为。"
   },
   "homepage.paperFigures.figure14.note.engine": {
-    "message": "推理阶段在信号提取、决策评估与插件投影上执行策略。"
+    "message": "推理阶段会依次执行信号提取、投影协调、决策评估与插件执行。"
   },
   "homepage.paperFigures.figure14.note.feedback": {
     "message": "运行质量反馈形成闭环，并用于下一轮策略优化。"

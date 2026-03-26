@@ -7,19 +7,22 @@ import InstallQuickStartSection from '@site/src/components/InstallQuickStartSect
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
+import { researchPapers } from '@site/src/data/researchContent'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
 import CapabilityGlyph, { type CapabilityGlyphKind } from '@site/src/components/site/CapabilityGlyph'
 import DitherField from '@site/src/components/site/DitherField'
 import { PageIntro, PillLink, SectionLabel, StatStrip } from '@site/src/components/site/Chrome'
 import styles from './index.module.css'
 
+const paperCount = researchPapers.length
+
 const heroStats = [
   {
     label: translate({ id: 'homepage.stats.signals.label', message: 'Signals' }),
-    value: '13',
+    value: '14',
     description: translate({
       id: 'homepage.stats.signals.description',
-      message: '13 signal families spanning intent, safety, modality, context, and preference.',
+      message: '14 signal families across 5 heuristic and 9 learned detectors.',
     }),
   },
   {
@@ -31,12 +34,15 @@ const heroStats = [
     }),
   },
   {
-    label: translate({ id: 'homepage.stats.modes.label', message: 'Surfaces' }),
-    value: '03',
-    description: translate({
-      id: 'homepage.stats.modes.description',
-      message: 'One architecture across cpu-local, amd-local, and ci-k8s.',
-    }),
+    label: translate({ id: 'homepage.stats.papers.label', message: 'Papers' }),
+    value: String(paperCount).padStart(2, '0'),
+    description: translate(
+      {
+        id: 'homepage.stats.papers.description',
+        message: '{count} research papers spanning routing, systems, safety, and multimodality.',
+      },
+      { count: paperCount },
+    ),
   },
 ]
 
@@ -52,7 +58,15 @@ const capabilityCards: CapabilityCard[] = [
     title: translate({ id: 'homepage.capabilities.signal.title', message: 'Signal extraction' }),
     text: translate({
       id: 'homepage.capabilities.signal.text',
-      message: 'Encoder signals turn raw requests into legible semantic state.',
+      message: 'Heuristic and learned detectors turn raw requests into typed routing state.',
+    }),
+  },
+  {
+    kind: 'projection',
+    title: translate({ id: 'homepage.capabilities.projection.title', message: 'Projection coordination' }),
+    text: translate({
+      id: 'homepage.capabilities.projection.text',
+      message: 'Partitions, scores, and mappings coordinate matched evidence into reusable routing facts.',
     }),
   },
   {
@@ -60,7 +74,7 @@ const capabilityCards: CapabilityCard[] = [
     title: translate({ id: 'homepage.capabilities.decision.title', message: 'Decision engine' }),
     text: translate({
       id: 'homepage.capabilities.decision.text',
-      message: 'Neural signals meet symbolic rules in auditable routing logic.',
+      message: 'Signals and projection outputs meet symbolic rules in auditable routing logic.',
     }),
   },
   {
@@ -69,17 +83,6 @@ const capabilityCards: CapabilityCard[] = [
     text: translate({
       id: 'homepage.capabilities.plugins.text',
       message: 'Cache, safety, rewrite, and tracing attach as composable behaviors.',
-    }),
-  },
-  {
-    kind: 'language',
-    title: translate({
-      id: 'homepage.capabilities.language.title',
-      message: 'Intent-to-policy compile',
-    }),
-    text: translate({
-      id: 'homepage.capabilities.language.text',
-      message: 'Natural language intent compiles into neural-symbolic policy before execution begins.',
     }),
   },
   {
@@ -249,7 +252,7 @@ function CapabilitySection(): JSX.Element {
             <p>
               <Translate id="homepage.capabilities.copy">
                 A research-driven stack for uncharted territory, probing the frontier where signals,
-                policies, and models converge into one intelligence layer.
+                projections, policies, and models converge into one intelligence layer.
               </Translate>
             </p>
           </div>

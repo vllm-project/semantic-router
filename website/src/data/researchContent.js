@@ -158,6 +158,21 @@ export const researchPapers = [
     sortOrder: 59,
   },
   {
+    id: 'fast-and-faithful-rag-verification',
+    type: 'paper',
+    categoryLabel: 'RAG VERIFICATION',
+    title: 'Fast and Faithful: Real-Time Verification for Long-Document Retrieval-Augmented Generation Systems',
+    authors: 'Xunzhuo Liu, Bowei He, Xue Liu, Haichen Zhang, Huamin Chen',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We present a real-time verification component for long-document RAG that processes contexts up to 32K tokens, balancing latency and grounding coverage so interactive systems can detect unsupported answers without falling back to truncated checks.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.23508', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 59.5,
+  },
+  {
     id: 'when-to-reason',
     type: 'paper',
     title: 'When to Reason: Semantic Router for vLLM',

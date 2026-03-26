@@ -26,7 +26,7 @@ User Query → Single LLM → Response
 Semantic Router uses **signal-driven decision making** to route queries intelligently:
 
 ```text
-User Query → Signal Extraction → Decision Engine → Best Model → Response
+User Query → Signal Extraction → Projection Coordination → Decision Engine → Plugins + Model Dispatch → Response
 ```
 
 **Benefits**:
@@ -34,26 +34,51 @@ User Query → Signal Extraction → Decision Engine → Best Model → Response
 - Cost-effective routing (use smaller models for simple tasks)
 - Better quality (use specialized models for their strengths)
 - Built-in security (jailbreak detection, PII filtering)
-- Flexible and extensible (plugin architecture)
+- Flexible and extensible (projection + plugin architecture)
 
 ## How It Works
 
 ### 1. Signal Extraction
 
-The router extracts multiple types of signals from each request:
+The router extracts 14 maintained signal families from each request:
 
-| Signal Type | What It Detects | Example |
-|------------|----------------|---------|
-| **keyword** | Specific terms and patterns | "calculate", "prove", "debug" |
-| **embedding** | Semantic meaning | Math intent, code intent, creative intent |
-| **domain** | Knowledge domain | Mathematics, computer science, history |
-| **fact_check** | Need for verification | Factual claims, medical advice |
-| **user_feedback** | User satisfaction | "That's wrong", "try again" |
-| **preference** | Route preference | Complex intent matching |
+| Signal family group | Families                                                                                                         | Example role                                         |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| **Heuristic**       | `authz`, `context`, `keyword`, `language`, `structure`                                                           | Cheap policy, request-shape, and locale gating       |
+| **Learned**         | `complexity`, `domain`, `embedding`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `user-feedback` | Semantic, safety, and response-quality understanding |
 
-### 2. Decision Making
+### 2. Projection Coordination
 
-Signals are combined using logical rules to make routing decisions:
+Projections coordinate raw signal matches into reusable routing facts:
+
+```yaml
+routing:
+  projections:
+    partitions:
+      - name: support_intents
+        semantics: exclusive
+        members: [technical_support, account_management]
+        default: technical_support
+    scores:
+      - name: request_difficulty
+        method: weighted_sum
+        inputs:
+          - type: complexity
+            name: hard
+            weight: 0.4
+    mappings:
+      - name: difficulty_band
+        source: request_difficulty
+        method: threshold_bands
+        outputs:
+          - name: balance_reasoning
+            gte: 0.6
+```
+
+### 3. Decision Making
+
+Signals and projection outputs are combined using logical rules to make routing
+decisions:
 
 ```yaml
 decisions:
@@ -61,18 +86,19 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "keyword"
-          name: "math_keywords"
         - type: "domain"
           name: "mathematics"
+        - type: "projection"
+          name: "balance_reasoning"
     modelRefs:
       - model: qwen-math
         weight: 1.0
 ```
 
-**How it works**: If the query contains math keywords **AND** is classified as mathematics domain, route to the math model.
+**How it works**: If the query is classified as mathematics **and** the
+projection layer marks it as reasoning-heavy, route to the math model.
 
-### 3. Model Selection
+### 4. Model Selection
 
 Based on the decision, the router selects the best model:
 
@@ -81,7 +107,7 @@ Based on the decision, the router selects the best model:
 - **Creative queries** → Creative model (e.g., Claude)
 - **Simple queries** → Lightweight model (e.g., Llama-3-8B)
 
-### 4. Plugin Chain
+### 5. Plugin Chain
 
 Before and after model execution, plugins process the request/response:
 
@@ -90,11 +116,11 @@ routing:
   decisions:
     - name: "guarded-route"
       plugins:
-        - type: "semantic-cache"    # Check cache first
-        - type: "jailbreak"         # Detect adversarial prompts
-        - type: "pii"               # Filter sensitive data
-        - type: "system_prompt"     # Add context
-        - type: "hallucination"     # Verify facts
+        - type: "semantic-cache" # Check cache first
+        - type: "jailbreak" # Detect adversarial prompts
+        - type: "pii" # Filter sensitive data
+        - type: "system_prompt" # Add context
+        - type: "hallucination" # Verify facts
 ```
 
 ## Key Concepts
@@ -103,13 +129,13 @@ routing:
 
 Unlike Mixture of Experts (MoE) which operates within a single model, Mixture of Models operates at the **system level**:
 
-| Aspect | Mixture of Experts (MoE) | Mixture of Models (MoM) |
-|--------|-------------------------|------------------------|
-| **Scope** | Within a single model | Across multiple models |
-| **Routing** | Internal gating network | External semantic router |
-| **Models** | Shared architecture | Independent models |
-| **Flexibility** | Fixed at training time | Dynamic at runtime |
-| **Use Case** | Model efficiency | System intelligence |
+| Aspect          | Mixture of Experts (MoE) | Mixture of Models (MoM)  |
+| --------------- | ------------------------ | ------------------------ |
+| **Scope**       | Within a single model    | Across multiple models   |
+| **Routing**     | Internal gating network  | External semantic router |
+| **Models**      | Shared architecture      | Independent models       |
+| **Flexibility** | Fixed at training time   | Dynamic at runtime       |
+| **Use Case**    | Model efficiency         | System intelligence      |
 
 ### Signal-Driven Decisions
 
@@ -117,16 +143,14 @@ Traditional routing uses simple rules:
 
 ```yaml
 # Traditional: Simple keyword matching
-if "math" in query:
-    route_to_math_model()
+if "math" in query: route_to_math_model()
 ```
 
 Signal-driven routing uses multiple signals:
 
 ```yaml
 # Signal-driven: Multiple signals combined
-if (has_math_keywords AND is_math_domain) OR has_high_math_embedding:
-    route_to_math_model()
+if (has_math_keywords AND is_math_domain) OR has_high_math_embedding: route_to_math_model()
 ```
 
 **Benefits**:

@@ -40,10 +40,10 @@ const FIGURES: FigureMeta[] = [
     key: 'figure3',
     paperLabel: 'fig:architecture',
     index: '03',
-    title: <Translate id="homepage.paperFigures.figure3.title">Three-Layer Architecture</Translate>,
+    title: <Translate id="homepage.paperFigures.figure3.title">Four-Layer Architecture</Translate>,
     summary: (
       <Translate id="homepage.paperFigures.figure3.summary">
-        Signal extraction, decision engine, and plugin projection with closed-loop feedback.
+        Signal extraction, projection coordination, decision blocks, and plugin execution form the routing path.
       </Translate>
     ),
   },
@@ -54,7 +54,7 @@ const FIGURES: FigureMeta[] = [
     title: <Translate id="homepage.paperFigures.figure4.title">Signal Taxonomy</Translate>,
     summary: (
       <Translate id="homepage.paperFigures.figure4.summary">
-        All 13 signals are grouped into heuristic and learned paths, then merged into S(r).
+        All 14 signals are grouped into heuristic and learned paths, then merged into S(r).
       </Translate>
     ),
   },
@@ -173,7 +173,7 @@ const FIGURE2_STAGES = [
   },
 ] as const
 
-type LayerKey = 'input' | 'hidden' | 'projection'
+type LayerKey = 'input' | 'projection' | 'hidden' | 'plugin'
 
 const FIGURE3_LAYERS: Array<{
   key: LayerKey
@@ -184,11 +184,11 @@ const FIGURE3_LAYERS: Array<{
 }> = [
   {
     key: 'input',
-    tag: translate({ id: 'homepage.paperFigures.figure3.layer.input.tag', message: 'Input' }),
+    tag: translate({ id: 'homepage.paperFigures.figure3.layer.input.tag', message: 'Signals' }),
     title: translate({ id: 'homepage.paperFigures.figure3.layer.input.title', message: 'Signal Extraction' }),
     description: translate({
       id: 'homepage.paperFigures.figure3.layer.input.description',
-      message: 'Heuristic + encoder signals produce structured features.',
+      message: 'Heuristic and learned detectors emit reusable routing facts.',
     }),
     focus: translate({
       id: 'homepage.paperFigures.figure3.layer.input.focus',
@@ -196,12 +196,25 @@ const FIGURE3_LAYERS: Array<{
     }),
   },
   {
+    key: 'projection',
+    tag: translate({ id: 'homepage.paperFigures.figure3.layer.projection.tag', message: 'Projection' }),
+    title: translate({ id: 'homepage.paperFigures.figure3.layer.projection.title', message: 'Projection Coordination' }),
+    description: translate({
+      id: 'homepage.paperFigures.figure3.layer.projection.description',
+      message: 'Partitions, scores, and mappings turn raw matches into reusable routing facts.',
+    }),
+    focus: translate({
+      id: 'homepage.paperFigures.figure3.layer.projection.focus',
+      message: 'Resolve competing signals and publish named projection outputs for downstream policy.',
+    }),
+  },
+  {
     key: 'hidden',
-    tag: translate({ id: 'homepage.paperFigures.figure3.layer.hidden.tag', message: 'Hidden' }),
+    tag: translate({ id: 'homepage.paperFigures.figure3.layer.hidden.tag', message: 'Decision' }),
     title: translate({ id: 'homepage.paperFigures.figure3.layer.hidden.title', message: 'Decision Blocks' }),
     description: translate({
       id: 'homepage.paperFigures.figure3.layer.hidden.description',
-      message: 'Boolean policies choose one scoped routing decision.',
+      message: 'Boolean policies read signals and projection outputs to choose one route.',
     }),
     focus: translate({
       id: 'homepage.paperFigures.figure3.layer.hidden.focus',
@@ -209,16 +222,16 @@ const FIGURE3_LAYERS: Array<{
     }),
   },
   {
-    key: 'projection',
-    tag: translate({ id: 'homepage.paperFigures.figure3.layer.projection.tag', message: 'Projection' }),
-    title: translate({ id: 'homepage.paperFigures.figure3.layer.projection.title', message: 'Plugin Chain' }),
+    key: 'plugin',
+    tag: translate({ id: 'homepage.paperFigures.figure3.layer.plugin.tag', message: 'Plugin' }),
+    title: translate({ id: 'homepage.paperFigures.figure3.layer.plugin.title', message: 'Plugin Chain' }),
     description: translate({
-      id: 'homepage.paperFigures.figure3.layer.projection.description',
-      message: 'Pre/post plugins and model selection execute per decision.',
+      id: 'homepage.paperFigures.figure3.layer.plugin.description',
+      message: 'Policy-bound pre/post plugins run before dispatch to the selected endpoint.',
     }),
     focus: translate({
-      id: 'homepage.paperFigures.figure3.layer.projection.focus',
-      message: 'Apply policy-bound plugins, then dispatch to the selected endpoint.',
+      id: 'homepage.paperFigures.figure3.layer.plugin.focus',
+      message: 'Attach cache, safety, rewrite, or tracing behavior around the chosen route.',
     }),
   },
 ]
@@ -236,6 +249,7 @@ const FIGURE4_GROUPS: Record<SignalGroupKey, { title: string, note: string, sign
       translate({ id: 'homepage.paperFigures.figure4.signal.keyword', message: 'Keyword' }),
       translate({ id: 'homepage.paperFigures.figure4.signal.language', message: 'Language' }),
       translate({ id: 'homepage.paperFigures.figure4.signal.context', message: 'Context' }),
+      translate({ id: 'homepage.paperFigures.figure4.signal.structure', message: 'Structure' }),
       translate({ id: 'homepage.paperFigures.figure4.signal.authz', message: 'Authz' }),
     ],
   },
@@ -291,7 +305,7 @@ const FIGURE14_MAIN_FLOW = [
     label: translate({ id: 'homepage.paperFigures.figure14.flow.engine.label', message: 'Semantics Engine' }),
     detail: translate({
       id: 'homepage.paperFigures.figure14.flow.engine.detail',
-      message: 'Signal-decision-plugin execution',
+      message: 'Signal-projection-decision-plugin execution',
     }),
     edge: '',
   },
@@ -324,7 +338,7 @@ const FIGURE14_NOTES: Record<Figure14NodeKey, string> = {
   }),
   engine: translate({
     id: 'homepage.paperFigures.figure14.note.engine',
-    message: 'Inference executes policy over signal extraction, decision evaluation, and plugin projection.',
+    message: 'Inference executes policy over signal extraction, projection coordination, decision evaluation, and plugin execution.',
   }),
   feedback: translate({
     id: 'homepage.paperFigures.figure14.note.feedback',
@@ -656,7 +670,7 @@ const Figure4Panel: React.FC = () => {
       <p className={styles.taxonomyNote}>
         {translate({
           id: 'homepage.paperFigures.figure4.summaryText',
-          message: '13 total signals. Active signal: {signal}. {groupNote}',
+          message: '14 total signals. Active signal: {signal}. {groupNote}',
           values: {
             signal: activeSignal,
             groupNote: FIGURE4_GROUPS[activeGroup].note,
@@ -924,7 +938,7 @@ const PaperFigureShowcase: React.FC = () => {
           </h2>
           <p className={styles.paperDescription}>
             <Translate id="homepage.paperFigures.description">
-              An interactive walkthrough of signal extraction, decision logic, and model routing behavior.
+              An interactive walkthrough of signal extraction, projection coordination, decision logic, and model routing behavior.
             </Translate>
           </p>
         </div>
