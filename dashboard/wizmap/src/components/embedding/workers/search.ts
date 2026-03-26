@@ -6,9 +6,9 @@ import type {
 import { timeit } from '../../../utils/utils';
 import { config } from '../../../config/config';
 import type * as Flexsearch from 'flexsearch';
-import Index from 'flexsearch';
+import FlexSearch from 'flexsearch';
 
-const index: Flexsearch.Index<string> = new Index() as Flexsearch.Index<string>;
+const index: Flexsearch.Index<string> = new FlexSearch.Index() as Flexsearch.Index<string>;
 const DEBUG = config.debug;
 
 /**
