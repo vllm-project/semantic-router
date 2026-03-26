@@ -216,7 +216,6 @@ func (s *ClassificationAPIServer) registerInfoRoutes(mux *http.ServeMux) {
 
 func (s *ClassificationAPIServer) registerConfigRoutes(mux *http.ServeMux) {
 	// Configuration endpoints
-<<<<<<< HEAD
 	mux.HandleFunc("GET /config/kbs", s.handleListKnowledgeBases)
 	mux.HandleFunc("POST /config/kbs", s.handleCreateKnowledgeBase)
 	mux.HandleFunc("GET /config/kbs/{name}", s.handleGetKnowledgeBase)

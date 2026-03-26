@@ -597,7 +597,12 @@ func persistConfigAndSync(
 			return err
 		}
 	}
-	s.updateRuntimeConfig(newCfg)
+	if s.runtimeConfig != nil {
+		s.runtimeConfig.Update(newCfg)
+	} else {
+		s.config = newCfg
+		config.Replace(newCfg)
+	}
 	return nil
 }
 
