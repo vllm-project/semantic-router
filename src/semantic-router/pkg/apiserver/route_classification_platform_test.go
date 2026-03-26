@@ -7,60 +7,38 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
-func TestHandleGetConfigReturnsRoutingSurface(t *testing.T) {
-	apiServer := &ClassificationAPIServer{
-		classificationSvc: services.NewPlaceholderClassificationService(),
-		config: &config.RouterConfig{
-			IntelligentRouting: config.IntelligentRouting{
-				Signals: config.Signals{
-					Categories: []config.Category{
-						{
-							CategoryMetadata: config.CategoryMetadata{Name: "math"},
-						},
-						{
-							CategoryMetadata: config.CategoryMetadata{
-								Name:           "general",
-								MMLUCategories: []string{"other"},
-							},
-						},
-					},
-				},
-				Projections: config.Projections{
-					Partitions: []config.ProjectionPartition{{
-						Name:        "subject_partition",
-						Semantics:   "softmax_exclusive",
-						Temperature: 0.1,
-						Members:     []string{"math", "general"},
-						Default:     "general",
-					}},
-				},
-				Decisions: []config.Decision{{
-					Name:     "math_route",
-					Tier:     2,
-					Priority: 100,
-					Rules: config.RuleCombination{
-						Operator: "AND",
-						Conditions: []config.RuleNode{{
-							Type: "domain",
-							Name: "math",
-						}},
-					},
-					ModelRefs: []config.ModelRef{{Model: "qwen-math"}},
-				}},
-			},
-		},
+func TestHandleConfigGetReturnsFullRouterConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	cfg := minimalDeployTestConfig("math_route")
+	cfg.Projections.Partitions = []config.ProjectionPartition{{
+		Name:        "subject_partition",
+		Semantics:   "softmax_exclusive",
+		Temperature: 0.1,
+		Members:     []string{"math"},
+		Default:     "math",
+	}}
+	if err := os.WriteFile(configPath, mustMarshalCanonicalConfigYAML(t, cfg), 0o644); err != nil {
+		t.Fatalf("write router config: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/config/classification", nil)
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		configPath:        configPath,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
 	rr := httptest.NewRecorder()
 
-	apiServer.handleGetConfig(rr, req)
+	apiServer.handleConfigGet(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
@@ -73,7 +51,7 @@ func TestHandleGetConfigReturnsRoutingSurface(t *testing.T) {
 
 	routing, ok := payload["routing"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected routing document, got %#v", payload)
+		t.Fatalf("expected routing block, got %#v", payload)
 	}
 	if _, hasSignals := routing["signals"].(map[string]interface{}); !hasSignals {
 		t.Fatalf("expected routing.signals, got %#v", routing)
@@ -84,74 +62,6 @@ func TestHandleGetConfigReturnsRoutingSurface(t *testing.T) {
 	}
 	if _, ok := projections["partitions"]; !ok {
 		t.Fatalf("expected routing.projections.partitions in response, got %#v", projections)
-	}
-}
-
-func TestHandleUpdateConfigMergesRoutingPayload(t *testing.T) {
-	apiServer := &ClassificationAPIServer{
-		classificationSvc: services.NewPlaceholderClassificationService(),
-		config: &config.RouterConfig{
-			IntelligentRouting: config.IntelligentRouting{
-				Signals: config.Signals{
-					Categories: []config.Category{{
-						CategoryMetadata: config.CategoryMetadata{Name: "math"},
-					}},
-				},
-				Decisions: []config.Decision{{
-					Name:     "math_route",
-					Priority: 100,
-					Rules: config.RuleCombination{
-						Operator: "AND",
-						Conditions: []config.RuleNode{{
-							Type: "domain",
-							Name: "math",
-						}},
-					},
-					ModelRefs: []config.ModelRef{{Model: "qwen-math"}},
-				}},
-			},
-		},
-	}
-
-	body, err := json.Marshal(map[string]interface{}{
-		"routing": map[string]interface{}{
-			"signals": map[string]interface{}{
-				"domains": []map[string]interface{}{
-					{"name": "math", "description": "math"},
-					{"name": "general", "description": "general", "mmlu_categories": []string{"other"}},
-				},
-			},
-			"projections": map[string]interface{}{
-				"partitions": []map[string]interface{}{{
-					"name":        "subject_partition",
-					"semantics":   "softmax_exclusive",
-					"temperature": 0.1,
-					"members":     []string{"math", "general"},
-					"default":     "general",
-				}},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("json.Marshal error: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPut, "/config/classification", bytes.NewReader(body))
-	rr := httptest.NewRecorder()
-
-	apiServer.handleUpdateConfig(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
-	}
-	if len(apiServer.config.Projections.Partitions) != 1 {
-		t.Fatalf("expected updated config to include projection partition, got %+v", apiServer.config.Projections.Partitions)
-	}
-	if len(apiServer.config.Categories) != 2 {
-		t.Fatalf("expected updated domains to be applied, got %+v", apiServer.config.Categories)
-	}
-	if len(apiServer.config.Decisions) != 1 {
-		t.Fatalf("expected existing decisions to survive merge, got %+v", apiServer.config.Decisions)
 	}
 }
 

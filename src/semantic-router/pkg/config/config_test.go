@@ -3586,7 +3586,7 @@ model_config:
 
 		Context("ProviderType", func() {
 			It("should return correct provider type", func() {
-				for _, t := range []string{"openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai"} {
+				for _, t := range []string{"openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai", "minimax"} {
 					pt, err := (&ProviderProfile{Type: t}).ProviderType()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(pt).To(Equal(t))
@@ -3634,6 +3634,11 @@ model_config:
 				Expect(err).NotTo(HaveOccurred())
 				Expect(h).To(Equal("Authorization"))
 				Expect(p).To(Equal("Bearer"))
+
+				h, p, err = (&ProviderProfile{Type: "minimax"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("Authorization"))
+				Expect(p).To(Equal("Bearer"))
 			})
 
 			It("should allow explicit overrides", func() {
@@ -3664,6 +3669,10 @@ model_config:
 				path, err = (&ProviderProfile{Type: "anthropic", BaseURL: "https://api.anthropic.com"}).ResolveChatPath()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/messages"))
+
+				path, err = (&ProviderProfile{Type: "minimax", BaseURL: "https://api.minimax.io"}).ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/chat/completions"))
 			})
 
 			It("should append api-version for azure-openai", func() {

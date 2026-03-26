@@ -15,6 +15,7 @@ import {
   AlgorithmConfig,
   PluginConfig,
   ModelRefConfig,
+  KBSignalConfig,
 } from '../types'
 import { SIGNAL_LATENCY } from '../constants'
 
@@ -476,6 +477,21 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
+  // 15. Knowledge-base Rules
+  routingSignals?.kb?.forEach(rule => {
+    addSignal({
+      type: 'kb',
+      name: rule.name,
+      description: rule.description || `KB bind ${rule.kb} ${rule.target.kind}=${rule.target.value}`,
+      latency: SIGNAL_LATENCY.kb,
+      config: {
+        kb: rule.kb,
+        target: rule.target,
+        match: rule.match,
+      } satisfies KBSignalConfig,
+    })
+  })
+
   extractProjectionSignals(config).forEach(addSignal)
 
   return signals
@@ -709,6 +725,7 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     authz: [],
     jailbreak: [],
     pii: [],
+    kb: [],
     projection: [],
   }
 

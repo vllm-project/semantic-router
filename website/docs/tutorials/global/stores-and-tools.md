@@ -37,7 +37,6 @@ global:
   stores:
     semantic_cache:
       similarity_threshold: 0.8
-      use_hnsw: true
 ```
 
 ### Memory

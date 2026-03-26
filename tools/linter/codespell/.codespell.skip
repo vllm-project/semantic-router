@@ -9,12 +9,16 @@
 *.ico
 *.svg
 *.js
+*.pdf
 
 website/public/*
 website/node_modules/*
 website/package-lock.json
 dashboard/frontend/node_modules/*
 dashboard/frontend/package-lock.json
+dashboard/wizmap/package-lock.json
+dashboard/wizmap/src/utils/font-width-data/*
+dashboard/wizmap/src/components/embedding/shaders/point.vert
 candle-binding/target/*
 vendor/*
 

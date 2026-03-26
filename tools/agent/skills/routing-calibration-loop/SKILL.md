@@ -41,7 +41,7 @@ description: Calibrates routing changes against a live router endpoint with exec
    - The manifest should stay profile-generic: point to any owned routing YAML / DSL pair through `routing_assets`, and group probes by decision with multiple variants when robustness matters.
    - Treat each probe as both a test case and a specification fragment.
 2. Baseline the live router before editing policy.
-   - Use [`tools/agent/scripts/router_calibration_loop.py`](../../../../tools/agent/scripts/router_calibration_loop.py) to snapshot `/config/router` and `/config/versions`, then run `/api/v1/eval` across the probe suite.
+   - Use [`tools/agent/scripts/router_calibration_loop.py`](../../../../tools/agent/scripts/router_calibration_loop.py) to snapshot `/config/router` and `/config/router/versions`, then run `/api/v1/eval` across the probe suite.
    - Record which decision actually fired, which signals matched, and which signals were expected but absent.
 3. Classify every failure under one of three buckets before changing anything.
    - `query_quality`: the prompt is not a robust representative of the intended route.
@@ -55,9 +55,8 @@ description: Calibrates routing changes against a live router endpoint with exec
    - Prefer manifest-owned assets as defaults, but allow explicit YAML / DSL overrides for any other routing profile.
    - Keep validation output with the loop artifacts so validator behavior can be reviewed alongside runtime eval output.
 6. Deploy durably and re-evaluate.
-   - Use `/config/deploy` for versioned writes that persist and hot-reload.
-   - After every deploy, wait for `GET /ready` to return `ready=true` before trusting `eval` results. Do not treat a successful deploy response as proof that router initialization has finished.
-   - On current router builds, treat `GET /ready` as necessary but not always sufficient. Echo the live `/config/classification` payload back through `PUT /config/classification` as a runtime refresh barrier, then wait for `GET /ready` again before running probes.
+   - Use `PATCH /config/router` for versioned merge updates that persist and hot-reload. Reserve `PUT /config/router` for explicit full-document replacement work.
+   - After every config update, wait for `GET /ready` to return `ready=true` before trusting `eval` results. Do not treat a successful update response as proof that router initialization has finished.
    - Re-run the same probe suite after deploy and compare before / after success rate and per-probe traces.
 7. Close the loop with structured reflection.
    - `0. Query quality`: Is the probe semantically representative, or is it a brittle phrase trigger?
@@ -67,8 +66,8 @@ description: Calibrates routing changes against a live router endpoint with exec
 
 ## Gotchas
 
-- Do not treat `PUT /config/classification` as the default deploy path for maintained routing work; it is useful for fast memory-only experiments but not for durable config changes.
-- The runtime refresh barrier uses `PUT /config/classification`, but only after `/config/deploy` has already persisted the new config. The barrier is there to force classifier refresh, not to replace durable deploy.
+- Do not default to `PUT /config/router` for maintained routing work. It is a full-document replace and will drop omitted config branches by design.
+- The calibration loop's default durable write path is `PATCH /config/router`, so partial maintained assets only change the branches they own.
 - Do not declare success just because one crafted query passes. Probe quality is part of the task; decision-level robustness should be checked with multiple variants, not just one trigger phrase.
 - If runtime eval looks correct and validation still looks wrong, assume validator semantics may need work rather than forcing a worse route design.
 - If deploy succeeds but success rate regresses, capture the returned version and use the versions endpoint before continuing.
@@ -76,11 +75,8 @@ description: Calibrates routing changes against a live router endpoint with exec
 ## Must Read
 
 - [AGENTS.md](../../../../AGENTS.md)
-- [docs/agent/README.md](../../../../docs/agent/README.md)
-- [docs/agent/feature-complete-checklist.md](../../../../docs/agent/feature-complete-checklist.md)
 - [deploy/amd/README.md](../../../../deploy/amd/README.md)
 - [deploy/amd/balance.probes.yaml](../../../../deploy/amd/balance.probes.yaml)
-- owned routing YAML / DSL assets for the target profile, such as [deploy/recipes/balance.yaml](../../../../deploy/recipes/balance.yaml) and [deploy/recipes/balance.dsl](../../../../deploy/recipes/balance.dsl)
 - [tools/agent/scripts/router_calibration_loop.py](../../../../tools/agent/scripts/router_calibration_loop.py)
 
 ## Standard Commands

@@ -70,7 +70,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
   pluginTypes: [
     'jailbreak', 'pii', 'semantic_cache', 'memory', 'system_prompt',
-    'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen',
+    'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen', 'tools',
   ],
 
   algoTypes: [
@@ -113,7 +113,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Plugin types
       [
-        /\b(jailbreak|pii|semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen)\b/,
+        /\b(jailbreak|pii|semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools)\b/,
         'type.plugin',
       ],
 
@@ -223,6 +223,7 @@ const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'router_replay', detail: 'Request replay plugin' },
   { label: 'rag', detail: 'RAG (Retrieval Augmented Generation) plugin' },
   { label: 'image_gen', detail: 'Image generation plugin' },
+  { label: 'tools', detail: 'Route-local tool policy and semantic selection plugin' },
 ]
 
 const ALGO_TYPE_SUGGESTIONS = [

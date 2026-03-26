@@ -10,7 +10,14 @@
 - Treat `processor_req_body.go`, `processor_res_body.go`, `processor_req_header.go`, `processor_res_header.go`, and `router.go` as orchestration files, not dumping grounds for new helpers.
 - Treat `req_filter_classification.go`, `req_filter_memory.go`, `req_filter_response_api.go`, and `req_filter_modality.go` as request-phase hotspots, not as general-purpose homes for every new pre-routing behavior.
 - Keep the main processor files aligned with runtime phase seams.
-- Keep response normalization, streaming accumulation/finalization, replay/cache persistence, and response-side warning shaping on separate seams instead of letting `processor_res_body*.go` or `res_filter_*.go` absorb everything.
+- Keep response normalization, streaming accumulation/finalization, replay/cache persistence, and response-side warning shaping on separate seams instead of letting `processor_res_body*.go` or `res_filter_*.go` absorb everything. Primary owners:
+  - `processor_res_usage.go` — usage accounting, token metrics, and cost recording for both streaming and non-streaming responses
+  - `processor_res_cache.go` — semantic cache writes and streaming response reconstruction for both streaming and non-streaming responses
+  - `processor_res_memory.go` — memory store scheduling for response-time conversation persistence
+  - `res_filter_hallucination.go` — hallucination detection and unverified-factual-response warnings
+  - `res_filter_jailbreak.go` — response-side jailbreak detection and warning application
+  - `processor_res_body_pipeline.go` — thin non-streaming orchestrator and Response API translation
+  - `processor_res_body_streaming.go` — streaming chunk parsing, TTFT, metadata extraction, and finalization
 - Keep runtime ownership aligned with the project layers:
   - `signal` extracts facts from request or response content
   - `decision` combines signals with boolean control logic

@@ -31,6 +31,7 @@ func registerProxyRoutes(mux *http.ServeMux, cfg *config.Config) {
 	registerSmartAPIRouter(mux, proxies)
 	registerMetricsRoutes(mux, cfg)
 	registerPrometheusRoutes(mux, cfg)
+	registerWizMapRoutes(mux, cfg)
 }
 
 func configureEnvoyProxy(cfg *config.Config) *httputil.ReverseProxy {

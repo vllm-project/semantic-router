@@ -57,6 +57,16 @@ def test_cli_version_matches_project_metadata():
     assert result.output.strip() == f"vllm-sr version: {expected_version}"
 
 
+def test_serve_help_describes_docker_only_runtime():
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["serve", "--help"])
+
+    assert result.exit_code == 0
+    assert "Local Docker deployment" in result.output
+    assert "Podman" not in result.output
+
+
 def test_inject_algorithm_into_config_updates_all_decisions(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -141,5 +151,7 @@ def test_serve_uses_algorithm_translated_config(monkeypatch, tmp_path: Path):
     )
     assert captured["env_vars"]["VLLM_SR_SOURCE_CONFIG_PATH"] == "/app/config.yaml"
     assert captured["env_vars"]["VLLM_SR_ALGORITHM_OVERRIDE"] == "elo"
+    assert captured["source_config_file"] == str(config_path)
+    assert captured["runtime_config_file"] == str(effective_config)
     assert translated["routing"]["decisions"][0]["algorithm"]["type"] == "elo"
     assert captured["pull_policy"] == "never"

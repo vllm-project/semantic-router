@@ -46,8 +46,17 @@ global:
   services:
     response_api:
       enabled: true
-      store_backend: memory
+      store_backend: redis        # default; use "memory" only for local development
+      redis:
+        address: "redis:6379"
 ```
+
+The `store_backend` field controls where response and conversation history is persisted. Available backends:
+
+| Backend | Durability | Use case |
+|---------|-----------|----------|
+| `redis` | Survives router restart, shared across replicas | Production (default) |
+| `memory` | Lost on router restart | Local development only |
 
 ### Observability
 

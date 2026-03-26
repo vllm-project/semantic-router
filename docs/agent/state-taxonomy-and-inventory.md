@@ -51,7 +51,7 @@ Use it to answer three questions before adding or changing a stateful feature:
 
 | Surface | Primary owner | Current backend / default | Current durability class | Restart behavior today | Scale risk | Recommended direction |
 | --- | --- | --- | --- | --- | --- | --- |
-| Response API stored responses and conversations | router runtime, `src/semantic-router/pkg/responsestore/**` | Default `memory`; optional Redis or Milvus via config | `shared_durable_workflow_state` presented as `ephemeral_request_state` by default | Router restart drops retained response history unless operators override the backend | User-visible conversation continuity is implicit, non-HA, and replica-local by default | Keep metadata and conversation chain in a durable server-owned store by default for product use. Prefer relational storage for metadata and queryability; keep large payloads in blob/object storage only if needed later. |
+| Response API stored responses and conversations | router runtime, `src/semantic-router/pkg/responsestore/**` | Default `redis`; optional `memory` for local dev only | `shared_durable_workflow_state` | Response and conversation history survives restart when using the default Redis backend. The `memory` backend emits a startup warning and loses all data on restart. | Replica-local only when `memory` is explicitly selected; Redis backend is shared across replicas | Keep metadata and conversation chain in a durable server-owned store by default for product use. Prefer relational storage for metadata and queryability; keep large payloads in blob/object storage only if needed later. |
 | Router replay records | router runtime, `src/semantic-router/pkg/routerreplay/**`, `src/semantic-router/pkg/extproc/router_replay_setup.go` | Default `memory`; optional Redis, Postgres, Milvus | `audit_analytics_telemetry` presented as `ephemeral_request_state` by default | Restart drops replay history when default backend is used | Debuggability and audit posture degrade under restart and multi-replica routing | Prefer Postgres for durable operator-facing replay history. Keep Redis only for transient debug buffers and Milvus only when semantic replay search is explicitly needed. |
 | Semantic cache entries | router runtime, `src/semantic-router/pkg/cache/**` | Default `memory`; optional Redis, Milvus, hybrid | `ephemeral_request_state` in local dev; shared cache in scaled deploys | Restart flushes cache; replicas do not share hot entries by default | Cold-start latency, inconsistent cache hit rates, and uneven behavior across replicas | Keep this as cache, not a database table. Prefer Redis or hybrid shared backends for scaled deployments; document memory backend as local/dev or single-node only. |
 | RAG retrieval result cache | router runtime, `src/semantic-router/pkg/extproc/req_filter_rag_cache.go` | Process-wide singleton in-memory LRU with TTL | `ephemeral_request_state` | Restart flushes cache; cache is global per process, not per tenant or replica | Hidden shared mutable state, no observability, no durability, and no multi-replica coherence | Keep as optional cache only. Move to a pluggable shared cache backend if this becomes performance-critical, or document as local process optimization. |
@@ -78,7 +78,6 @@ Use it to answer three questions before adding or changing a stateful feature:
 
 ## Default Memory-Backed Surfaces To Treat As High Risk
 
-- `global.services.response_api.store_backend = memory`
 - `global.services.router_replay.store_backend = memory`
 - `global.stores.semantic_cache.backend_type = memory`
 - `global.stores.vector_store.backend_type = memory` in dashboard defaults when enabled
@@ -109,4 +108,4 @@ Use it to answer three questions before adding or changing a stateful feature:
 2. Make router metadata and replay or response history restart-safe where the product already exposes those surfaces.
 3. Move dashboard workflow state off in-memory maps and browser-only storage into server-owned durable records.
 4. Add a persisted deployed-config projection so dashboard and future APIs stop reparsing YAML and DSL for every query path.
-5. Add restart and recovery coverage in E2E for at least one router state surface and one dashboard workflow.
+5. Add restart and recovery coverage in E2E for at least one router state surface and one dashboard workflow. (Response API restart-recovery E2E test added in `e2e/testcases/response_api_restart_recovery.go`, registered in Redis profile.)

@@ -71,8 +71,11 @@ func TestDefaultHeaderMap(t *testing.T) {
 	if m["vertex-ai"] != headers.UserVertexAIKey {
 		t.Errorf("DefaultHeaderMap[vertex-ai] = %q, want %q", m["vertex-ai"], headers.UserVertexAIKey)
 	}
-	if len(m) != 6 {
-		t.Errorf("DefaultHeaderMap has %d entries, want 6", len(m))
+	if m["minimax"] != headers.UserMiniMaxKey {
+		t.Errorf("DefaultHeaderMap[minimax] = %q, want %q", m["minimax"], headers.UserMiniMaxKey)
+	}
+	if len(m) != 7 {
+		t.Errorf("DefaultHeaderMap has %d entries, want 7", len(m))
 	}
 }
 
@@ -555,4 +558,94 @@ func TestMisconfig_HeaderSpoofing_FailClosed(t *testing.T) {
 	// NOTE: Spoofing protection must come from Envoy's ext_authz filter, not the router.
 	// The startup log should warn operators to ensure ext_authz is configured in Envoy
 	// when header-injection is active in the router.
+}
+
+// ===========================================================================
+// MiniMax provider integration
+// ===========================================================================
+
+func TestMiniMaxProvider_HeaderInjection(t *testing.T) {
+	// MiniMax credentials are resolved via header injection, same as other providers.
+	p := NewHeaderInjectionProvider(nil)
+
+	reqHeaders := map[string]string{
+		headers.UserMiniMaxKey: "minimax-api-key-123",
+	}
+
+	got := p.GetKey(ProviderMiniMax, "MiniMax-M2.7", reqHeaders)
+	if got != "minimax-api-key-123" {
+		t.Errorf("GetKey(MiniMax) = %q, want %q", got, "minimax-api-key-123")
+	}
+
+	// MiniMax header should be in strip list
+	strip := p.HeadersToStrip()
+	found := false
+	for _, h := range strip {
+		if h == headers.UserMiniMaxKey {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("HeadersToStrip missing %s", headers.UserMiniMaxKey)
+	}
+}
+
+func TestMiniMaxProvider_CredentialResolver(t *testing.T) {
+	// End-to-end: MiniMax key resolved through the credential chain.
+	headerProvider := NewHeaderInjectionProvider(nil)
+	resolver := NewCredentialResolver(headerProvider)
+
+	reqHeaders := map[string]string{
+		headers.UserMiniMaxKey: "minimax-key-from-authz",
+	}
+
+	key, err := resolver.KeyForProvider(ProviderMiniMax, "MiniMax-M2.7", reqHeaders)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if key != "minimax-key-from-authz" {
+		t.Errorf("KeyForProvider(MiniMax) = %q, want %q", key, "minimax-key-from-authz")
+	}
+}
+
+func TestMiniMaxProvider_FailClosed_NoKey(t *testing.T) {
+	// fail-closed: missing MiniMax key → error
+	resolver := NewCredentialResolver(NewHeaderInjectionProvider(nil))
+
+	_, err := resolver.KeyForProvider(ProviderMiniMax, "MiniMax-M2.7", map[string]string{})
+	if err == nil {
+		t.Fatal("expected error when MiniMax key is missing in fail-closed mode")
+	}
+}
+
+func TestMiniMaxProvider_FailOpen_NoKey(t *testing.T) {
+	// fail-open: missing MiniMax key → no error, empty key
+	resolver := NewCredentialResolver(NewHeaderInjectionProvider(nil))
+	resolver.SetFailOpen(true)
+
+	key, err := resolver.KeyForProvider(ProviderMiniMax, "MiniMax-M2.7", map[string]string{})
+	if err != nil {
+		t.Fatalf("fail-open should not error: %v", err)
+	}
+	if key != "" {
+		t.Errorf("expected empty key in fail-open miss, got %q", key)
+	}
+}
+
+func TestMiniMaxProvider_CustomHeaderMap(t *testing.T) {
+	// Custom header map with MiniMax
+	customMap := map[string]string{
+		"minimax": "x-custom-minimax-token",
+	}
+	p := NewHeaderInjectionProvider(customMap)
+
+	reqHeaders := map[string]string{
+		"x-custom-minimax-token": "custom-minimax-key",
+	}
+
+	got := p.GetKey(ProviderMiniMax, "MiniMax-M2.5", reqHeaders)
+	if got != "custom-minimax-key" {
+		t.Errorf("GetKey(MiniMax, custom) = %q, want %q", got, "custom-minimax-key")
+	}
 }

@@ -580,6 +580,7 @@ var providerTypeRegistry = map[string]providerTypeInfo{
 	"bedrock":      {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
 	"gemini":       {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
 	"vertex-ai":    {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
+	"minimax":      {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/v1/chat/completions"},
 }
 
 // ValidProviderTypes returns the set of recognised type strings (for error messages).

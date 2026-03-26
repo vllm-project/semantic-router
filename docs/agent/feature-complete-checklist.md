@@ -9,9 +9,9 @@ A feature is not done until all applicable checks below are satisfied.
 - Relevant fast tests pass
 - Relevant feature/integration tests pass
 - Local image startup smoke passes for non-doc code changes
-- Affected local E2E profiles pass
 - Behavior-sensitive E2E coverage uses explicit acceptance thresholds instead of report-only metrics
 - CI covers the remaining affected profiles
+- Manual local E2E or workflow-driven integration runs are recorded when they were needed for debugging or risk reduction
 
 ## Loop Completion
 
@@ -36,5 +36,5 @@ A feature is not done until all applicable checks below are satisfied.
 - Fast gate: commands and results
 - Feature gate: commands and results
 - Local smoke: container, status, dashboard, router
-- Local E2E: profiles and results
+- Manual local E2E: profiles and results, if run
 - Follow-up: risks, skipped checks, external blockers, and any durable tech-debt item added or updated because the code still diverges from the desired architecture

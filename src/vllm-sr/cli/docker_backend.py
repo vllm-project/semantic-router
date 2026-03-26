@@ -13,7 +13,7 @@ log = get_logger(__name__)
 
 
 class DockerBackend:
-    """DeploymentBackend implementation for local Docker / Podman."""
+    """DeploymentBackend implementation for local Docker."""
 
     def deploy(
         self,
@@ -25,12 +25,16 @@ class DockerBackend:
         enable_observability: bool = True,
         **kwargs: Any,
     ) -> None:
+        source_config_file = kwargs.get("source_config_file")
+        runtime_config_file = kwargs.get("runtime_config_file")
         start_vllm_sr(
             config_file,
             env_vars=env_vars,
             image=image,
             pull_policy=pull_policy,
             enable_observability=enable_observability,
+            source_config_file=source_config_file,
+            runtime_config_file=runtime_config_file,
         )
 
     def teardown(self) -> None:

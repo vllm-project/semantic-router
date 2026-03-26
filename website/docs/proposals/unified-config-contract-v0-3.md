@@ -91,7 +91,7 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global.services` groups shared APIs and runtime services
 - `global.stores` groups storage-backed services
 - `global.integrations` groups helper runtime integrations
-- `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`
+- `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `classifiers`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`
 - `global.model_catalog.modules` is the home for router-owned module settings such as `prompt_compression`, `prompt_guard`, `classifier`, `hallucination_mitigation`, `feedback_detector`, and `modality_detector`
 - omitted fields keep the built-in default
 

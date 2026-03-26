@@ -115,7 +115,7 @@ The profile uses custom gateway resources in `gateway-resources/` that match the
 │       ↓                                                      │
 │  Decision Engine → Matches "math_decision"                   │
 │       ↓                                                      │
-│  Algorithm Config: type="knn", k=5                           │
+│  Algorithm Config: type="knn"                                │
 │       ↓                                                      │
 │  KNN Selector → Finds similar queries → Weighted voting      │
 │       ↓                                                      │
@@ -213,18 +213,18 @@ health, history, law, math, other, philosophy, physics, psychology
 
 ### Decision with ML Algorithm
 
+Each decision picks an ML selector via `algorithm.type`. Shared selector tuning lives under `global.router.model_selection.ml`.
+
 ```yaml
 decisions:
   - name: "math_decision"
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
-          name: "math"     # Must match VSR category exactly
+          - type: "domain"
+            name: "math"     # Must match VSR category exactly
     algorithm:
       type: "knn"          # Options: knn, kmeans, svm, mlp
-      knn:
-        k: 5               # Number of neighbors
     modelRefs:
       - model: "deepseek-math"
       - model: "mistral-7b"
@@ -234,12 +234,10 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
-          name: "computer science"  # Note: space, not underscore!
+          - type: "domain"
+            name: "computer science"  # Note: space, not underscore!
     algorithm:
       type: "svm"
-    svm:
-      kernel: "rbf"
     modelRefs:
       - model: "codellama-7b"
       - model: "mistral-7b"
@@ -248,12 +246,10 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
-          name: "engineering"
+          - type: "domain"
+            name: "engineering"
     algorithm:
       type: "mlp"
-      mlp:
-        device: "cuda"     # Options: cpu, cuda, metal
     modelRefs:
       - model: "llama-3.2-3b"
       - model: "mistral-7b"

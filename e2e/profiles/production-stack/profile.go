@@ -152,11 +152,17 @@ func (p *Profile) GetTestCases() []string {
 	return testmatrix.Combine(
 		testmatrix.RouterSmoke,
 		[]string{
+			// HA / monitoring
 			"multi-replica-health",
 			"load-balancing-verification",
 			"failover-during-traffic",
 			"performance-throughput",
 			"resource-utilization-monitoring",
+			// Router intelligence layer — all configured in values.yaml
+			"domain-classify",
+			"pii-detection",
+			"jailbreak-detection",
+			"semantic-cache",
 		},
 	)
 }

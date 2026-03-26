@@ -31,6 +31,17 @@ max-statements = 50
 max-nested-blocks = 4
 
 [lint.per-file-ignores]
+"tools/security/*.py" = [
+  "C901",     # complexity is inherent to pattern-matching scanners
+  "N806",     # constant-like variables inside functions (STRING_TYPES)
+  "PLC0415",  # lazy imports for optional tree-sitter
+  "PLR0912",  # many branches for pattern dispatch
+  "PLR0915",  # many statements in orchestrator functions
+  "PLR2004",  # threshold magic numbers are readable inline
+  "PLW0603",  # global for module-level allowlist cache
+  "PLW1510",  # subprocess.run without check= (intentional)
+  "PLW2901",  # loop var reassignment (line = line.strip())
+]
 "src/vllm-sr/cli/models.py" = ["I001", "N815", "PLC0415", "SIM114", "UP006", "UP035", "UP045"]
 "src/vllm-sr/cli/parser.py" = ["B904", "C901", "F541", "I001", "PLR0912", "UP006", "UP015", "UP035"]
 "src/vllm-sr/cli/validator.py" = ["C901", "F401", "I001", "PLR2004", "PLR0912", "RUF013", "SIM102", "UP006", "UP035"]

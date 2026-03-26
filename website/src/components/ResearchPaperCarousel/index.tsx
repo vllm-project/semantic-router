@@ -1,14 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Translate from '@docusaurus/Translate'
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
-import { researchPapers, sortResearchEntries } from '@site/src/data/researchContent'
+import { localizeResearchEntries, researchPapers, sortResearchEntries } from '@site/src/data/researchContent'
 import styles from './index.module.css'
 
-const orderedPapers = sortResearchEntries(researchPapers)
-
 export default function ResearchPaperCarousel(): JSX.Element {
+  const { i18n } = useDocusaurusContext()
   const trackRef = useRef<HTMLDivElement>(null)
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(false)
+  const orderedPapers = localizeResearchEntries(
+    sortResearchEntries(researchPapers),
+    i18n.currentLocale,
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined') {

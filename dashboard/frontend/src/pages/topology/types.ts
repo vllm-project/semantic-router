@@ -18,6 +18,7 @@ export type SignalType =
   | 'authz'
   | 'jailbreak'
   | 'pii'
+  | 'kb'
   | 'projection'
 
 export interface SignalConfig {
@@ -25,7 +26,7 @@ export interface SignalConfig {
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | StructureSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | GenericSignalConfig
+  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | StructureSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | KBSignalConfig | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -103,6 +104,15 @@ export interface PIISignalConfig {
   threshold?: number
   pii_types_allowed?: string[]
   include_history?: boolean
+}
+
+export interface KBSignalConfig {
+  kb: string
+  target: {
+    kind: 'label' | 'group'
+    value: string
+  }
+  match?: 'best' | 'threshold'
 }
 
 export interface GenericSignalConfig {
@@ -198,6 +208,7 @@ export type PluginType =
   | 'hallucination'
   | 'router_replay'
   | 'fast_response'
+  | 'tools'
 
 export interface PluginConfig {
   type: PluginType
@@ -451,6 +462,16 @@ export interface ConfigData {
     include_history?: boolean
     description?: string
   }>
+  kb?: Array<{
+    name: string
+    kb: string
+    target: {
+      kind: 'label' | 'group'
+      value: string
+    }
+    match?: 'best' | 'threshold'
+    description?: string
+  }>
   projections?: {
     mappings?: Array<{
       name: string
@@ -556,6 +577,16 @@ export interface ConfigData {
       threshold?: number
       pii_types_allowed?: string[]
       include_history?: boolean
+      description?: string
+    }>
+    kb?: Array<{
+      name: string
+      kb: string
+      target: {
+        kind: 'label' | 'group'
+        value: string
+      }
+      match?: 'best' | 'threshold'
       description?: string
     }>
   }

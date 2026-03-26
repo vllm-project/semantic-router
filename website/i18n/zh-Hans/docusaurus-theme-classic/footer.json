@@ -19,21 +19,13 @@
     "message": "安装指南",
     "description": "The label of footer link with label=Installation linking to /docs/installation"
   },
-  "link.item.label.Tutorials": {
-    "message": "教程",
-    "description": "The label of footer link with label=Tutorials linking to /docs/tutorials/signal/overview"
+  "link.item.label.Governance": {
+    "message": "治理机制",
+    "description": "The label of footer link with label=Governance linking to /community/team"
   },
-  "link.item.label.API Reference": {
-    "message": "API 参考",
-    "description": "The label of footer link with label=API Reference linking to /docs/api/router"
-  },
-  "link.item.label.CRD Reference": {
-    "message": "CRD 参考",
-    "description": "The label of footer link with label=CRD Reference linking to /docs/api/crd-reference"
-  },
-  "link.item.label.Troubleshooting": {
-    "message": "故障排查",
-    "description": "The label of footer link with label=Troubleshooting linking to /docs/troubleshooting/common-errors"
+  "link.item.label.Contributing": {
+    "message": "参与贡献",
+    "description": "The label of footer link with label=Contributing linking to /community/contributing"
   },
   "link.item.label.GitHub": {
     "message": "GitHub",
@@ -47,36 +39,28 @@
     "message": "GitHub 讨论区",
     "description": "The label of footer link with label=GitHub Discussions linking to https://github.com/vllm-project/semantic-router/discussions"
   },
-  "link.item.label.Team": {
-    "message": "团队",
-    "description": "The label of footer link with label=Team linking to /community/team"
-  },
-  "link.item.label.Contributing": {
-    "message": "贡献指南",
-    "description": "The label of footer link with label=Contributing linking to /community/contributing"
-  },
   "link.item.label.Blog": {
     "message": "博客",
     "description": "The label of footer link with label=Blog linking to /blog"
   },
   "link.item.label.Publications": {
-    "message": "学术成果",
+    "message": "研究成果",
     "description": "The label of footer link with label=Publications linking to /publications"
   },
-  "link.item.label.News": {
-    "message": "新闻动态",
-    "description": "The label of footer link with label=News linking to /news"
+  "link.item.label.White Paper": {
+    "message": "白皮书",
+    "description": "The label of footer link with label=White Paper linking to /white-paper"
   },
-  "link.item.label.Roadmap": {
-    "message": "路线图",
-    "description": "The label of footer link with label=Roadmap linking to /roadmap/v0.1"
+  "link.item.label.Vision Paper": {
+    "message": "愿景论文",
+    "description": "The label of footer link with label=Vision Paper linking to /vision-paper"
   },
   "link.item.label.License": {
     "message": "许可证",
     "description": "The label of footer link with label=License linking to https://github.com/vllm-project/semantic-router/blob/main/LICENSE"
   },
   "copyright": {
-    "message": "版权所有 © 2025 vLLM Semantic Router 团队。基于 Docusaurus 构建。",
+    "message": "版权所有 © 2026 vLLM Semantic Router 团队。由 Docusaurus 构建。",
     "description": "The footer copyright"
   }
 }

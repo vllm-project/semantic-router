@@ -432,6 +432,32 @@ routing:
         threshold: 0.85
         description: Detect personally identifiable information that should remain on local infrastructure.
 
+    kb:
+      - name: security_containment
+        kb: privacy_kb
+        target:
+          kind: group
+          value: security_containment
+        match: best
+      - name: privacy_policy
+        kb: privacy_kb
+        target:
+          kind: group
+          value: privacy_policy
+        match: best
+      - name: frontier_reasoning
+        kb: privacy_kb
+        target:
+          kind: group
+          value: frontier_reasoning
+        match: best
+      - name: local_standard
+        kb: privacy_kb
+        target:
+          kind: group
+          value: local_standard
+        match: best
+
   projections:
     scores:
       - name: security_risk_score
@@ -535,6 +561,15 @@ routing:
             name: code_reasoning:hard
             weight: 0.18
 
+      - name: privacy_contrastive_score
+        method: weighted_sum
+        inputs:
+          - type: kb_metric
+            kb: privacy_kb
+            metric: private_vs_public
+            weight: 1.0
+            value_source: score
+
     mappings:
       - name: security_policy_band
         source: security_risk_score
@@ -569,21 +604,39 @@ routing:
             lt: 0.50
           - name: policy_frontier_reasoning
             gte: 0.50
+      - name: privacy_override_band
+        source: privacy_contrastive_score
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 10.0
+        outputs:
+          - name: privacy_override_inactive
+            lt: 0.55
+          - name: privacy_override_active
+            gte: 0.55
 
   decisions:
     - name: local_security_containment
-      description: Keep suspicious or jailbreak-like prompts on the local safety lane.
+      description: Keep suspicious or jailbreak-like prompts on the local safety lane with restricted capabilities.
       priority: 300
       tier: 1
       rules:
-        operator: AND
+        operator: OR
         conditions:
+          - type: kb
+            name: security_containment
           - type: projection
             name: policy_security_local_only
       modelRefs:
         - model: local/private-qwen
           use_reasoning: false
       plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: none
+            semantic_selection: false
         - type: router_replay
           configuration:
             enabled: true
@@ -591,23 +644,24 @@ routing:
             max_body_bytes: 2048
 
     - name: local_privacy_policy
-      description: Route PII, private code, and internal documents to the local model according to the user policy bands.
+      description: Route PII, private code, and internal documents to the local model with policy-owned tool handling.
       priority: 250
       tier: 2
       rules:
         operator: AND
         conditions:
-          - type: projection
-            name: policy_privacy_local_only
-          - operator: NOT
-            conditions:
-              - type: projection
-                name: policy_security_local_only
+          - type: kb
+            name: privacy_policy
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true
           reasoning_effort: medium
       plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: passthrough
+            semantic_selection: true
         - type: router_replay
           configuration:
             enabled: true
@@ -615,23 +669,24 @@ routing:
             max_body_bytes: 2048
 
     - name: cloud_frontier_reasoning
-      description: Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model.
+      description: Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model with plugin-managed tool access.
       priority: 200
       tier: 3
       rules:
         operator: AND
         conditions:
-          - type: projection
-            name: policy_frontier_reasoning
-          - type: projection
-            name: policy_privacy_cloud_allowed
-          - type: projection
-            name: policy_security_standard
+          - type: kb
+            name: frontier_reasoning
       modelRefs:
         - model: cloud/frontier-reasoning
           use_reasoning: true
           reasoning_effort: high
       plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: passthrough
+            semantic_selection: true
         - type: router_replay
           configuration:
             enabled: true
@@ -643,19 +698,28 @@ routing:
       priority: 100
       tier: 4
       rules:
-        operator: AND
+        operator: OR
         conditions:
-          - type: projection
-            name: policy_local_reasoning
-          - type: projection
-            name: policy_privacy_cloud_allowed
-          - type: projection
-            name: policy_security_standard
+          - type: kb
+            name: local_standard
+          - operator: AND
+            conditions:
+              - type: projection
+                name: policy_local_reasoning
+              - type: projection
+                name: policy_privacy_cloud_allowed
+              - type: projection
+                name: policy_security_standard
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true
           reasoning_effort: medium
       plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: passthrough
+            semantic_selection: true
         - type: router_replay
           configuration:
             enabled: true

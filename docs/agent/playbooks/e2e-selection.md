@@ -34,12 +34,6 @@ Use [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml
   - service-mesh sidecar, mTLS, traffic, and tracing contracts
 - `production-stack`
   - HA, load-balancing, failover, and throughput semantics
-- `response-api`
-  - memory-backed Responses API behavior
-- `response-api-redis`
-  - Redis-backed Responses API behavior and TTL expiry
-- `response-api-redis-cluster`
-  - Redis Cluster-backed Responses API behavior and TTL expiry
 - `ml-model-selection`
   - ML model-selection behavior
 - `multi-endpoint`
@@ -51,6 +45,12 @@ Use [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml
 
 ## Manual-Only Profiles
 
+- `response-api`
+  - memory-backed Responses API behavior, currently kept outside the standard CI matrix
+- `response-api-redis`
+  - Redis-backed Responses API behavior and TTL expiry
+- `response-api-redis-cluster`
+  - Redis Cluster-backed Responses API behavior and TTL expiry
 - `dynamo`
   - GPU- and runtime-specific Dynamo coverage
 - `rag-hybrid-search`
@@ -68,11 +68,13 @@ Use [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml
 ## Selection Rules
 
 - Common E2E framework changes trigger:
-  - local default profile: `ai-gateway`
+  - explicit local default profile: `ai-gateway`
   - CI standard profile matrix from `full_ci_profiles`
 - Standard profile-local changes trigger only the matching local and CI profiles.
 - Manual-only profile changes trigger the matching local profile and stay outside the standard CI profile list.
 - Workflow-driven integration changes trigger the named workflow suite command from `workflow_suite_rules`.
+- `make agent-feature-gate` does not auto-run local E2E.
+- `make agent-e2e-affected CHANGED_FILES="..."` remains the explicit local command when affected profiles need to be run by hand.
 - If a durable suite remains outside the standard profile matrix, document it in `workflow_suite_rules` or `manual_profile_rules` instead of leaving it as an implicit CI-only path.
 
 ## Canonical Commands

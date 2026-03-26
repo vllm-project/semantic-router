@@ -12,7 +12,7 @@ description: Modifies training-stack workflows, selector or embedding pipelines,
 
 ## Workflow
 
-1. Read the repo map and tech debt docs for the affected training area
+1. Read the repo map for the affected training area
 2. Modify training scripts, configurations, or artifact expectations
 3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to verify alignment
 4. Confirm training scripts, docs, and artifact expectations stay aligned
@@ -20,8 +20,6 @@ description: Modifies training-stack workflows, selector or embedding pipelines,
 ## Must Read
 
 - [docs/agent/repo-map.md](../../../../docs/agent/repo-map.md)
-- [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
-- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 
 ## Standard Commands
 

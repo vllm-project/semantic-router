@@ -83,13 +83,13 @@ The latest signal docs still cover every family under `config/signal/`, but they
 
 These signals route from explicit rules, request form, or lightweight detectors without depending on router-owned classifier models.
 
-| Signal family | Fragment directory | Purpose | Doc |
-|---------------|--------------------|---------|-----|
-| `authz` | `config/signal/authz/` | route from identity, role, or tenant policy | [Authz](./heuristic/authz) |
-| `context` | `config/signal/context/` | route by effective token-window needs | [Context](./heuristic/context) |
-| `keyword` | `config/signal/keyword/` | route from lexical or BM25-style matches | [Keyword](./heuristic/keyword) |
-| `language` | `config/signal/language/` | route by detected request language | [Language](./heuristic/language) |
-| `structure` | `config/signal/structure/` | route from request shape such as question counts or ordered workflow markers | [Structure](./heuristic/structure) |
+| Signal family | Fragment directory         | Purpose                                                                      | Doc                                |
+| ------------- | -------------------------- | ---------------------------------------------------------------------------- | ---------------------------------- |
+| `authz`       | `config/signal/authz/`     | route from identity, role, or tenant policy                                  | [Authz](./heuristic/authz)         |
+| `context`     | `config/signal/context/`   | route by effective token-window needs                                        | [Context](./heuristic/context)     |
+| `keyword`     | `config/signal/keyword/`   | route from lexical or BM25-style matches                                     | [Keyword](./heuristic/keyword)     |
+| `language`    | `config/signal/language/`  | route by detected request language                                           | [Language](./heuristic/language)   |
+| `structure`   | `config/signal/structure/` | route from request shape such as question counts or ordered workflow markers | [Structure](./heuristic/structure) |
 
 ### Learned Signals
 
@@ -105,6 +105,7 @@ These signals use embeddings or classifier models and typically rely on `global.
 | `jailbreak` | `config/signal/jailbreak/` | detect prompt-injection or jailbreak attempts | [Jailbreak](./learned/jailbreak) |
 | `pii` | `config/signal/pii/` | detect sensitive personal data | [PII](./learned/pii) |
 | `preference` | `config/signal/preference/` | infer response-style preferences | [Preference](./learned/preference) |
+| `kb` | `config/signal/kb/` | bind knowledge base labels or groups into named routing signals | [Knowledge Base](./learned/kb) |
 | `user-feedback` | `config/signal/user-feedback/` | detect correction or escalation feedback | [User Feedback](./learned/user-feedback) |
 
 Keep these rules in mind:

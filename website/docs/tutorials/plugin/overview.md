@@ -50,6 +50,7 @@ The plugin docs now mirror `config/plugin/` one page at a time.
 - [Header Mutation](./header-mutation)
 - [Image Generation](./image-gen)
 - [System Prompt](./system-prompt)
+- [Tools](./tools)
 
 ### Retrieval and Memory
 

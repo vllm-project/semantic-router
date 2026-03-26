@@ -99,6 +99,8 @@ def _execute_serve(
     )
     backend.deploy(
         config_file=str(effective_config_path.absolute()),
+        source_config_file=str(config_path.absolute()),
+        runtime_config_file=str(effective_config_path.absolute()),
         env_vars=env_vars,
         image=image,
         pull_policy=image_pull_policy,
@@ -194,7 +196,7 @@ def serve(
     DEPLOYMENT TARGETS:
 
     \b
-    docker  - Local Docker / Podman deployment (default)
+    docker  - Local Docker deployment (default)
     k8s     - Kubernetes deployment via Helm
 
     MODEL SELECTION ALGORITHMS:

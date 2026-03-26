@@ -161,6 +161,30 @@ SIGNAL pii pii_strict {
   description: "Detect personally identifiable information that should remain on local infrastructure."
 }
 
+SIGNAL kb security_containment {
+  kb: "privacy_kb"
+  target: { kind: "group", value: "security_containment" }
+  match: "best"
+}
+
+SIGNAL kb privacy_policy {
+  kb: "privacy_kb"
+  target: { kind: "group", value: "privacy_policy" }
+  match: "best"
+}
+
+SIGNAL kb frontier_reasoning {
+  kb: "privacy_kb"
+  target: { kind: "group", value: "frontier_reasoning" }
+  match: "best"
+}
+
+SIGNAL kb local_standard {
+  kb: "privacy_kb"
+  target: { kind: "group", value: "local_standard" }
+  match: "best"
+}
+
 PROJECTION score security_risk_score {
   method: "weighted_sum"
   inputs: [{ type: "jailbreak", name: "jailbreak_strict", weight: 0.82 }, { type: "keyword", name: "prompt_injection_markers", weight: 0.48, value_source: "confidence" }, { type: "keyword", name: "exfiltration_markers", weight: 0.5, value_source: "confidence" }, { type: "structure", name: "override_directive_dense", weight: 0.6 }, { type: "structure", name: "fenced_instruction_blob", weight: 0.35 }]
@@ -197,6 +221,18 @@ PROJECTION mapping reasoning_policy_band {
   outputs: [{ name: "policy_local_reasoning", lt: 0.5 }, { name: "policy_frontier_reasoning", gte: 0.5 }]
 }
 
+PROJECTION score privacy_contrastive_score {
+  method: "weighted_sum"
+  inputs: [{ type: "kb_metric", kb: "privacy_kb", metric: "private_vs_public", weight: 1.0, value_source: "score" }]
+}
+
+PROJECTION mapping privacy_override_band {
+  source: "privacy_contrastive_score"
+  method: "threshold_bands"
+  calibration: { method: "sigmoid_distance", slope: 10 }
+  outputs: [{ name: "privacy_override_inactive", lt: 0.55 }, { name: "privacy_override_active", gte: 0.55 }]
+}
+
 # =============================================================================
 # MODELS
 # =============================================================================
@@ -223,11 +259,16 @@ MODEL cloud/frontier-reasoning {
 # ROUTES
 # =============================================================================
 
-ROUTE local_security_containment (description = "Keep suspicious or jailbreak-like prompts on the local safety lane.") {
+ROUTE local_security_containment (description = "Keep suspicious or jailbreak-like prompts on the local safety lane with restricted capabilities.") {
   PRIORITY 300
   TIER 1
-  WHEN projection("policy_security_local_only")
+  WHEN kb("security_containment") OR projection("policy_security_local_only")
   MODEL "local/private-qwen" (reasoning = false)
+  PLUGIN tools {
+    enabled: true
+    mode: "none"
+    semantic_selection: false
+  }
   PLUGIN router_replay {
     enabled: true
     max_records: 50000
@@ -237,11 +278,16 @@ ROUTE local_security_containment (description = "Keep suspicious or jailbreak-li
   }
 }
 
-ROUTE local_privacy_policy (description = "Route PII, private code, and internal documents to the local model according to the user policy bands.") {
+ROUTE local_privacy_policy (description = "Route PII, private code, and internal documents to the local model with policy-owned tool handling.") {
   PRIORITY 250
   TIER 2
-  WHEN projection("policy_privacy_local_only") AND NOT projection("policy_security_local_only")
+  WHEN kb("privacy_policy")
   MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  PLUGIN tools {
+    enabled: true
+    mode: "passthrough"
+    semantic_selection: true
+  }
   PLUGIN router_replay {
     enabled: true
     max_records: 50000
@@ -251,11 +297,16 @@ ROUTE local_privacy_policy (description = "Route PII, private code, and internal
   }
 }
 
-ROUTE cloud_frontier_reasoning (description = "Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model.") {
+ROUTE cloud_frontier_reasoning (description = "Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model with plugin-managed tool access.") {
   PRIORITY 200
   TIER 3
-  WHEN projection("policy_frontier_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard")
+  WHEN kb("frontier_reasoning")
   MODEL "cloud/frontier-reasoning" (reasoning = true, effort = "high")
+  PLUGIN tools {
+    enabled: true
+    mode: "passthrough"
+    semantic_selection: true
+  }
   PLUGIN router_replay {
     enabled: true
     max_records: 50000
@@ -268,8 +319,13 @@ ROUTE cloud_frontier_reasoning (description = "Send only non-sensitive, non-susp
 ROUTE local_standard (description = "Default local route for non-sensitive tasks that do not justify cloud escalation.") {
   PRIORITY 100
   TIER 4
-  WHEN projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard")
+  WHEN kb("local_standard") OR (projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard"))
   MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  PLUGIN tools {
+    enabled: true
+    mode: "passthrough"
+    semantic_selection: true
+  }
   PLUGIN router_replay {
     enabled: true
     max_records: 50000

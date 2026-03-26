@@ -24,30 +24,30 @@ var deployMu sync.Mutex
 // maxBackups is the maximum number of config backups to keep
 const maxBackups = 10
 
-// ConfigDeployRequest is the JSON body for a config deploy request
-type ConfigDeployRequest struct {
-	// YAML is the compiled config YAML (user-friendly format)
+// RouterConfigUpdateRequest is the JSON body for a router config update request.
+type RouterConfigUpdateRequest struct {
+	// YAML is the router config YAML payload.
 	YAML string `json:"yaml"`
-	// DSL is the original DSL source (archived for audit trail)
+	// DSL is the original DSL source (archived for audit trail).
 	DSL string `json:"dsl,omitempty"`
 }
 
-// ConfigDeployResponse is the JSON response for a deploy operation
-type ConfigDeployResponse struct {
+// RouterConfigUpdateResponse is the JSON response for a router config mutation.
+type RouterConfigUpdateResponse struct {
 	Status  string `json:"status"`
 	Version string `json:"version"`
 	Message string `json:"message,omitempty"`
 }
 
-// ConfigVersionEntry represents a backup version entry
-type ConfigVersionEntry struct {
+// RouterConfigVersionEntry represents a backup version entry.
+type RouterConfigVersionEntry struct {
 	Version   string `json:"version"`
 	Timestamp string `json:"timestamp"`
 	Source    string `json:"source"` // "dsl" or "manual"
 	Filename  string `json:"filename"`
 }
 
-// handleConfigRollback handles POST /config/rollback
+// handleConfigRollback handles POST /config/router/rollback.
 //
 //nolint:cyclop,funlen // Legacy rollback flow still owns validation, backup, and atomic write in one handler.
 func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r *http.Request) {
@@ -125,17 +125,17 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 		paths.runtimePath,
 	)
 
-	s.writeJSONResponse(w, http.StatusOK, ConfigDeployResponse{
+	s.writeJSONResponse(w, http.StatusOK, RouterConfigUpdateResponse{
 		Status:  "success",
 		Version: req.Version,
 		Message: fmt.Sprintf("Rolled back to version %s. Router will reload automatically.", req.Version),
 	})
 }
 
-// handleConfigVersions handles GET /config/versions
+// handleConfigVersions handles GET /config/router/versions.
 func (s *ClassificationAPIServer) handleConfigVersions(w http.ResponseWriter, _ *http.Request) {
 	if s.configPath == "" {
-		s.writeJSONResponse(w, http.StatusOK, []ConfigVersionEntry{})
+		s.writeJSONResponse(w, http.StatusOK, []RouterConfigVersionEntry{})
 		return
 	}
 
@@ -143,7 +143,7 @@ func (s *ClassificationAPIServer) handleConfigVersions(w http.ResponseWriter, _ 
 	configDir := filepath.Dir(paths.sourcePath)
 	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
 
-	versions := []ConfigVersionEntry{}
+	versions := []RouterConfigVersionEntry{}
 
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
@@ -165,7 +165,7 @@ func (s *ClassificationAPIServer) handleConfigVersions(w http.ResponseWriter, _ 
 			timestamp = t.Format("2006-01-02 15:04:05")
 		}
 
-		versions = append(versions, ConfigVersionEntry{
+		versions = append(versions, RouterConfigVersionEntry{
 			Version:   versionStr,
 			Timestamp: timestamp,
 			Source:    "dsl",
@@ -180,7 +180,7 @@ func (s *ClassificationAPIServer) handleConfigVersions(w http.ResponseWriter, _ 
 	s.writeJSONResponse(w, http.StatusOK, versions)
 }
 
-// handleConfigGet handles GET /config/router — returns current config as JSON
+// handleConfigGet handles GET /config/router and returns the current router config as JSON.
 func (s *ClassificationAPIServer) handleConfigGet(w http.ResponseWriter, _ *http.Request) {
 	if s.configPath == "" {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
@@ -201,44 +201,6 @@ func (s *ClassificationAPIServer) handleConfigGet(w http.ResponseWriter, _ *http
 	}
 
 	s.writeJSONResponse(w, http.StatusOK, cfgMap)
-}
-
-// configDeepMerge recursively merges src into dst.
-//
-//nolint:nestif // Canonical config merge accepts mixed YAML map shapes from legacy payloads.
-func configDeepMerge(dst, src map[string]interface{}) map[string]interface{} {
-	for key, srcVal := range src {
-		if dstVal, exists := dst[key]; exists {
-			if dstMap, ok := dstVal.(map[string]interface{}); ok {
-				if srcMap, ok := srcVal.(map[string]interface{}); ok {
-					dst[key] = configDeepMerge(dstMap, srcMap)
-					continue
-				}
-			}
-			if dstMap, ok := configToStringKeyMap(dstVal); ok {
-				if srcMap, ok := configToStringKeyMap(srcVal); ok {
-					dst[key] = configDeepMerge(dstMap, srcMap)
-					continue
-				}
-			}
-		}
-		dst[key] = srcVal
-	}
-	return dst
-}
-
-func configToStringKeyMap(v interface{}) (map[string]interface{}, bool) {
-	switch m := v.(type) {
-	case map[string]interface{}:
-		return m, true
-	case map[interface{}]interface{}:
-		result := make(map[string]interface{}, len(m))
-		for k, val := range m {
-			result[fmt.Sprintf("%v", k)] = val
-		}
-		return result, true
-	}
-	return nil, false
 }
 
 func configCleanupBackups(backupDir string) {

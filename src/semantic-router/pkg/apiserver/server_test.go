@@ -445,76 +445,46 @@ func TestOpenAIModelsEndpointWithConfigModels(t *testing.T) {
 	}
 }
 
-// TestSetupRoutesSecurityBehavior tests that setupRoutes correctly includes/excludes endpoints based on security flag
-func TestSetupRoutesSecurityBehavior(t *testing.T) {
+// TestSetupRoutesConfigEndpoints verifies the config API surface exposed by setupRoutes.
+func TestSetupRoutesConfigEndpoints(t *testing.T) {
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		config:            &config.RouterConfig{},
+	}
+
+	mux := apiServer.setupRoutes()
+
 	tests := []struct {
-		name                  string
-		enableSystemPromptAPI bool
-		expectedEndpoints     map[string]bool // path -> should exist
+		method      string
+		path        string
+		shouldExist bool
 	}{
-		{
-			name:                  "System prompt API disabled",
-			enableSystemPromptAPI: false,
-			expectedEndpoints: map[string]bool{
-				"/health":                true,
-				"/config/classification": true,
-				"/config/system-prompts": false, // Should NOT exist
-			},
-		},
-		{
-			name:                  "System prompt API enabled",
-			enableSystemPromptAPI: true,
-			expectedEndpoints: map[string]bool{
-				"/health":                true,
-				"/config/classification": true,
-				"/config/system-prompts": true, // Should exist
-			},
-		},
+		{method: http.MethodGet, path: "/health", shouldExist: true},
+		{method: http.MethodGet, path: "/config/router", shouldExist: true},
+		{method: http.MethodPatch, path: "/config/router", shouldExist: true},
+		{method: http.MethodPut, path: "/config/router", shouldExist: true},
+		{method: http.MethodPost, path: "/config/router/rollback", shouldExist: true},
+		{method: http.MethodGet, path: "/config/router/versions", shouldExist: true},
+		{method: http.MethodGet, path: "/config/classification", shouldExist: false},
+		{method: http.MethodPut, path: "/config/classification", shouldExist: false},
+		{method: http.MethodGet, path: "/config/system-prompts", shouldExist: false},
+		{method: http.MethodPut, path: "/config/system-prompts", shouldExist: false},
+		{method: http.MethodPost, path: "/config/deploy", shouldExist: false},
+		{method: http.MethodPost, path: "/config/rollback", shouldExist: false},
+		{method: http.MethodGet, path: "/config/versions", shouldExist: false},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create a test mux that simulates the setupRoutes behavior
-			mux := http.NewServeMux()
+		req := httptest.NewRequest(tt.method, tt.path, nil)
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, req)
 
-			// Always add basic endpoints
-			mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			})
-			mux.HandleFunc("GET /config/classification", func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			})
-
-			// Conditionally add system prompt endpoints based on the flag
-			if tt.enableSystemPromptAPI {
-				mux.HandleFunc("GET /config/system-prompts", func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusOK)
-				})
-				mux.HandleFunc("PUT /config/system-prompts", func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusOK)
-				})
-			}
-
-			// Test each endpoint
-			for path, shouldExist := range tt.expectedEndpoints {
-				req := httptest.NewRequest("GET", path, nil)
-				rr := httptest.NewRecorder()
-
-				mux.ServeHTTP(rr, req)
-
-				if shouldExist {
-					// Endpoint should exist (not 404)
-					if rr.Code == http.StatusNotFound {
-						t.Errorf("Expected endpoint %s to exist, but got 404", path)
-					}
-				} else {
-					// Endpoint should NOT exist (404)
-					if rr.Code != http.StatusNotFound {
-						t.Errorf("Expected endpoint %s to return 404, but got %d", path, rr.Code)
-					}
-				}
-			}
-		})
+		if tt.shouldExist && rr.Code == http.StatusNotFound {
+			t.Errorf("expected endpoint %s %s to exist, but got 404", tt.method, tt.path)
+		}
+		if !tt.shouldExist && rr.Code != http.StatusNotFound {
+			t.Errorf("expected endpoint %s %s to return 404, got %d", tt.method, tt.path, rr.Code)
+		}
 	}
 }
 
@@ -590,6 +560,9 @@ func TestAPIOverviewEndpoint(t *testing.T) {
 		"/api/v1/classify/security",
 		"/api/v1/classify/batch",
 		"/health",
+		"/config/router",
+		"/config/router/rollback",
+		"/config/router/versions",
 	}
 
 	for _, path := range requiredPaths {
@@ -598,42 +571,8 @@ func TestAPIOverviewEndpoint(t *testing.T) {
 		}
 	}
 
-	// Verify system prompt endpoints are not included when disabled (default)
-	if endpointPaths["/config/system-prompts"] {
-		t.Error("Expected system prompt endpoints to be excluded when enableSystemPromptAPI is false")
-	}
-}
-
-// TestAPIOverviewEndpointWithSystemPrompts tests API discovery with system prompts enabled
-func TestAPIOverviewEndpointWithSystemPrompts(t *testing.T) {
-	apiServer := &ClassificationAPIServer{
-		classificationSvc:     services.NewPlaceholderClassificationService(),
-		config:                &config.RouterConfig{},
-		enableSystemPromptAPI: true,
-	}
-
-	req := httptest.NewRequest("GET", "/api/v1", nil)
-	rr := httptest.NewRecorder()
-
-	apiServer.handleAPIOverview(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("Expected 200 OK, got %d", rr.Code)
-	}
-
-	var response APIOverviewResponse
-	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	// Verify system prompt endpoints are included when enabled
-	endpointPaths := make(map[string]bool)
-	for _, endpoint := range response.Endpoints {
-		endpointPaths[endpoint.Path] = true
-	}
-
-	if !endpointPaths["/config/system-prompts"] {
-		t.Error("Expected system prompt endpoints to be included when enableSystemPromptAPI is true")
+	if endpointPaths["/config/classification"] || endpointPaths["/config/system-prompts"] || endpointPaths["/config/deploy"] {
+		t.Errorf("expected legacy config endpoints to be absent, got %+v", endpointPaths)
 	}
 }
 
@@ -690,6 +629,9 @@ func TestOpenAPISpecEndpoint(t *testing.T) {
 		"/api/v1/classify/batch",
 		"/openapi.json",
 		"/docs",
+		"/config/router",
+		"/config/router/rollback",
+		"/config/router/versions",
 	}
 
 	for _, path := range requiredPaths {
@@ -698,37 +640,18 @@ func TestOpenAPISpecEndpoint(t *testing.T) {
 		}
 	}
 
-	// Verify system prompt endpoints are not included when disabled
+	routerPath, exists := spec.Paths["/config/router"]
+	if !exists {
+		t.Fatalf("expected /config/router to be documented in OpenAPI spec")
+	}
+	if routerPath.Patch == nil || routerPath.Put == nil || routerPath.Get == nil {
+		t.Fatalf("expected /config/router to document GET, PATCH, and PUT, got %+v", routerPath)
+	}
+	if _, exists := spec.Paths["/config/classification"]; exists {
+		t.Error("expected legacy /config/classification path to be absent from OpenAPI spec")
+	}
 	if _, exists := spec.Paths["/config/system-prompts"]; exists {
-		t.Error("Expected system prompt endpoints to be excluded from OpenAPI spec when disabled")
-	}
-}
-
-// TestOpenAPISpecWithSystemPrompts tests OpenAPI spec generation with system prompts enabled
-func TestOpenAPISpecWithSystemPrompts(t *testing.T) {
-	apiServer := &ClassificationAPIServer{
-		classificationSvc:     services.NewPlaceholderClassificationService(),
-		config:                &config.RouterConfig{},
-		enableSystemPromptAPI: true,
-	}
-
-	req := httptest.NewRequest("GET", "/openapi.json", nil)
-	rr := httptest.NewRecorder()
-
-	apiServer.handleOpenAPISpec(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("Expected 200 OK, got %d", rr.Code)
-	}
-
-	var spec OpenAPISpec
-	if err := json.Unmarshal(rr.Body.Bytes(), &spec); err != nil {
-		t.Fatalf("Failed to unmarshal OpenAPI spec: %v", err)
-	}
-
-	// Verify system prompt endpoints are included when enabled
-	if _, exists := spec.Paths["/config/system-prompts"]; !exists {
-		t.Error("Expected system prompt endpoints to be included in OpenAPI spec when enabled")
+		t.Error("expected legacy /config/system-prompts path to be absent from OpenAPI spec")
 	}
 }
 

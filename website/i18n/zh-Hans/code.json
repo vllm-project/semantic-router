@@ -371,14 +371,110 @@
   "homepage.hero.publicBeta": {
     "message": "抢先体验"
   },
+  "homepage.hero.label": {
+    "message": "系统级智能"
+  },
+  "homepage.hero.line1": {
+    "message": "先懂信号"
+  },
+  "homepage.hero.line2": {
+    "message": "再谈规模"
+  },
+  "homepage.hero.manifesto": {
+    "message": "先把请求看明白，再把系统做大；以信号驱动，以不确定性为标尺，让决策足够清晰。"
+  },
+  "homepage.hero.secondaryCta": {
+    "message": "阅读白皮书"
+  },
+  "homepage.stats.signals.label": {
+    "message": "信号"
+  },
+  "homepage.stats.signals.description": {
+    "message": "14 类核心信号，覆盖 5 种启发式检测与 9 种学习式检测。"
+  },
+  "homepage.stats.algorithms.label": {
+    "message": "选择器"
+  },
+  "homepage.stats.algorithms.description": {
+    "message": "12 种选择器，覆盖符号策略、时延启发式、强化学习与机器学习路由。"
+  },
+  "homepage.stats.papers.label": {
+    "message": "论文"
+  },
+  "homepage.stats.papers.description": {
+    "message": "{count} 篇研究论文，覆盖路由、系统、安全与多模态。"
+  },
+  "homepage.capabilities.label": {
+    "message": "核心架构"
+  },
+  "homepage.capabilities.heading": {
+    "message": "LLM 系统的大脑，怎么搭起来。"
+  },
+  "homepage.capabilities.copy": {
+    "message": "从信号、投影到策略与模型选择，这是一套面向真实系统的研究型路由栈。"
+  },
+  "homepage.capabilities.signal.title": {
+    "message": "信号提取"
+  },
+  "homepage.capabilities.signal.text": {
+    "message": "启发式规则和学习式检测器把原始请求转成可计算的路由状态。"
+  },
+  "homepage.capabilities.projection.title": {
+    "message": "投影协调"
+  },
+  "homepage.capabilities.projection.text": {
+    "message": "把分桶、打分和映射结果整理成可复用的路由事实，供后续决策复用。"
+  },
+  "homepage.capabilities.decision.title": {
+    "message": "决策引擎"
+  },
+  "homepage.capabilities.decision.text": {
+    "message": "信号与投影结果在可审计的符号规则里汇合，形成明确的路由决策。"
+  },
+  "homepage.capabilities.plugins.title": {
+    "message": "插件链"
+  },
+  "homepage.capabilities.plugins.text": {
+    "message": "缓存、安全、改写和链路追踪作为可组合能力挂接在同一条链路上。"
+  },
+  "homepage.capabilities.research.title": {
+    "message": "前沿系统研究"
+  },
+  "homepage.capabilities.research.text": {
+    "message": "这不是套壳式路由，而是一套围绕下一代 LLM 系统持续演进的研究栈。"
+  },
+  "homepage.capabilities.docs.title": {
+    "message": "控制台与运维"
+  },
+  "homepage.capabilities.docs.text": {
+    "message": "拓扑、路由、控制面与运行反馈都能在同一个控制台里观测和操作。"
+  },
   "homepage.aiTech.label": {
-    "message": "基于编码器模型"
+    "message": "编码器模型驱动"
   },
   "homepage.aiTech.title": {
-    "message": "编码器驱动的智能"
+    "message": "先理解，再生成"
   },
   "homepage.aiTech.description": {
-    "message": "专用编码器模型从每个请求中提取语义 — 理解意图、排序相关性、跨模态实时分类内容。"
+    "message": "专门训练的编码器先读懂意图、排序相关性、识别模态，再把结果交给生成模型。"
+  },
+  "homepage.aiTech.leadLabel": {
+    "message": "信号入口面"
+  },
+  "homepage.aiTech.leadCopy": {
+    "message": "序列分类、token 标注、嵌入检索和重排序，最终汇合成同一层系统智能。"
+  },
+  "homepage.aiTech.primaryCta": {
+    "message": "查看 Hugging Face 模型"
+  },
+  "homepage.aiTech.track.sequence": {
+    "message": "序列分类负责领域识别、越狱检测、事实核查与反馈路由。"
+  },
+  "homepage.aiTech.track.token": {
+    "message": "Token 标注负责定位 PII 与高风险片段，便于做局部干预。"
+  },
+  "homepage.aiTech.track.embedding": {
+    "message": "嵌入与重排序链路支撑语义缓存、相似检索和候选打分。"
   },
   "homepage.aiTech.cap.multiModality": {
     "message": "多模态"
@@ -422,6 +518,81 @@
   "homepage.aiTech.cap.mrl.desc": {
     "message": "无需重训即可截断嵌入向量到任意维度 — 按请求平衡精度与速度。"
   },
+  "homepage.install.label": {
+    "message": "快速上手"
+  },
+  "homepage.install.meta": {
+    "message": "只保留一条官方支持的本地启动路径：复制安装命令，执行后即可进入控制台。"
+  },
+  "homepage.install.title.human": {
+    "message": "一条命令，本地跑起来。"
+  },
+  "homepage.install.description.human": {
+    "message": "首跑路径收敛为一个安装脚本，负责在 macOS 和 Linux 上配置 CLI 与本地服务流程。"
+  },
+  "homepage.install.frameLabel.human": {
+    "message": "一键安装"
+  },
+  "homepage.install.footer.human": {
+    "message": "默认安装到 ~/.local/share/vllm-sr，写入 ~/.local/bin/vllm-sr；Windows 仍按文档中的手动 pip 方式安装。"
+  },
+  "homepage.install.primaryCta": {
+    "message": "查看完整安装指南"
+  },
+  "homepage.install.copy.idle": {
+    "message": "复制命令"
+  },
+  "homepage.install.copy.copied": {
+    "message": "已复制"
+  },
+  "homepage.install.copy.error": {
+    "message": "复制失败"
+  },
+  "homepage.researchCarousel.label": {
+    "message": "研究"
+  },
+  "homepage.researchCarousel.title": {
+    "message": "这些论文，构成了路由器的底层思路。"
+  },
+  "homepage.researchCarousel.subtitle": {
+    "message": "从安全、多模态到编排与系统设计，这些研究线索持续塑造 vLLM Semantic Router 的演进方向。"
+  },
+  "homepage.researchCarousel.cardType": {
+    "message": "论文"
+  },
+  "homepage.researchCarousel.paperLink": {
+    "message": "查看论文"
+  },
+  "homepage.researchCarousel.footer": {
+    "message": "它们决定路由器如何感知、如何判断，以及如何扩展。"
+  },
+  "homepage.researchCarousel.cta": {
+    "message": "查看全部论文与分享"
+  },
+  "homepage.band.docs.label": {
+    "message": "文档"
+  },
+  "homepage.band.docs.title": {
+    "message": "架构、配置与运行方式，都写清楚了。"
+  },
+  "homepage.band.docs.text": {
+    "message": "从安装、配置到训练和运维，整套路径都收进一张连贯的文档图谱里。"
+  },
+  "homepage.band.docs.cta": {
+    "message": "查看文档目录"
+  },
+  "homepage.band.community.label": {
+    "message": "社区"
+  },
+  "homepage.band.community.title": {
+    "message": "研究者和构建者，在同一条反馈回路里。"
+  },
+  "homepage.band.community.text": {
+    "message": "论文、工作组和贡献者围绕同一套系统公开协作、持续迭代。"
+  },
+  "homepage.band.community.cta": {
+    "message": "查看社区入口"
+  },
   "homepage.paperFigures.label": {
     "message": "路由蓝图"
   },
@@ -429,7 +600,7 @@
     "message": "系统如何工作"
   },
   "homepage.paperFigures.description": {
-    "message": "通过交互式演示理解信号提取、决策逻辑与模型路由行为。"
+    "message": "通过交互式演示理解信号提取、投影协调、决策逻辑与模型路由行为。"
   },
   "homepage.paperFigures.figure1.title": {
     "message": "香农映射"
@@ -444,16 +615,16 @@
     "message": "每增加一个信号都会降低不确定性，直到模型选择趋于确定。"
   },
   "homepage.paperFigures.figure3.title": {
-    "message": "三层架构"
+    "message": "四层架构"
   },
   "homepage.paperFigures.figure3.summary": {
-    "message": "信号提取、决策引擎与插件投影在单一路由前向中协同工作。"
+    "message": "信号提取、投影协调、决策模块与插件执行共同构成完整路由路径。"
   },
   "homepage.paperFigures.figure4.title": {
     "message": "信号分类体系"
   },
   "homepage.paperFigures.figure4.summary": {
-    "message": "完整信号集合由启发式与学习式两类组成，用于路由决策。"
+    "message": "完整的 14 个信号按启发式与学习式两类组织，并汇入 S(r)。"
   },
   "homepage.paperFigures.figure14.title": {
     "message": "智能体策略合成"
@@ -564,25 +735,25 @@
     "message": "决策规则将熵坍缩到近似确定的模型选择。"
   },
   "homepage.paperFigures.figure3.layer.input.tag": {
-    "message": "输入"
+    "message": "信号"
   },
   "homepage.paperFigures.figure3.layer.input.title": {
     "message": "信号提取"
   },
   "homepage.paperFigures.figure3.layer.input.description": {
-    "message": "启发式 + 编码器信号共同生成结构化特征。"
+    "message": "启发式与学习式检测器共同产出可复用的路由事实。"
   },
   "homepage.paperFigures.figure3.layer.input.focus": {
     "message": "并行采集请求特征并输出类型化信号值。"
   },
   "homepage.paperFigures.figure3.layer.hidden.tag": {
-    "message": "隐层"
+    "message": "决策"
   },
   "homepage.paperFigures.figure3.layer.hidden.title": {
     "message": "决策模块"
   },
   "homepage.paperFigures.figure3.layer.hidden.description": {
-    "message": "布尔策略会选出一个作用域明确的路由决策。"
+    "message": "布尔策略读取信号与投影输出，选出唯一生效路由。"
   },
   "homepage.paperFigures.figure3.layer.hidden.focus": {
     "message": "评估规则树并将候选集合坍缩为单一路径。"
@@ -591,13 +762,25 @@
     "message": "投影"
   },
   "homepage.paperFigures.figure3.layer.projection.title": {
-    "message": "插件链"
+    "message": "投影协调"
   },
   "homepage.paperFigures.figure3.layer.projection.description": {
-    "message": "前/后置插件与模型选择按决策执行。"
+    "message": "分区、分数与映射把原始匹配整理成可复用的路由事实。"
   },
   "homepage.paperFigures.figure3.layer.projection.focus": {
-    "message": "按策略应用插件后，将请求分发到目标端点。"
+    "message": "协调竞争信号，并为后续策略发布命名投影输出。"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.tag": {
+    "message": "插件"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.title": {
+    "message": "插件链"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.description": {
+    "message": "按策略绑定前/后置插件，再将请求分发到目标端点。"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.focus": {
+    "message": "围绕选中路由附加缓存、安全、改写或追踪等行为。"
   },
   "homepage.paperFigures.figure3.layerFocus": {
     "message": "层焦点"
@@ -622,6 +805,9 @@
   },
   "homepage.paperFigures.figure4.signal.context": {
     "message": "上下文"
+  },
+  "homepage.paperFigures.figure4.signal.structure": {
+    "message": "结构"
   },
   "homepage.paperFigures.figure4.signal.authz": {
     "message": "鉴权"
@@ -654,7 +840,7 @@
     "message": "偏好"
   },
   "homepage.paperFigures.figure4.summaryText": {
-    "message": "共 13 个信号。当前激活信号：{signal}。{groupNote}"
+    "message": "共 14 个信号。当前激活信号：{signal}。{groupNote}"
   },
   "homepage.paperFigures.figure14.flow.spec.label": {
     "message": "自然语言规范"
@@ -687,7 +873,7 @@
     "message": "推理引擎"
   },
   "homepage.paperFigures.figure14.flow.engine.detail": {
-    "message": "信号-决策-插件执行"
+    "message": "信号-投影-决策-插件执行"
   },
   "homepage.paperFigures.figure14.feedback.label": {
     "message": "路由质量反馈 Q(r, m*)"
@@ -705,7 +891,7 @@
     "message": "生成的 DSL 配置可审计，并可编译为确定性路由行为。"
   },
   "homepage.paperFigures.figure14.note.engine": {
-    "message": "推理阶段在信号提取、决策评估与插件投影上执行策略。"
+    "message": "推理阶段会依次执行信号提取、投影协调、决策评估与插件执行。"
   },
   "homepage.paperFigures.figure14.note.feedback": {
     "message": "运行质量反馈形成闭环，并用于下一轮策略优化。"
@@ -1957,6 +2143,87 @@
   "publications.filter.talks": {
     "message": "🎤 演讲"
   },
+  "publications.meta.description": {
+    "message": "vLLM Semantic Router 项目的最新研究论文、演讲与科学贡献。"
+  },
+  "publications.awardType.paper": {
+    "message": "研究论文"
+  },
+  "publications.awardType.talk": {
+    "message": "会议演讲"
+  },
+  "publications.detail.authors": {
+    "message": "作者："
+  },
+  "publications.detail.speakers": {
+    "message": "演讲者："
+  },
+  "publications.detail.venue": {
+    "message": "发表/活动："
+  },
+  "publications.empty.all": {
+    "message": "暂无内容。"
+  },
+  "publications.empty.paper": {
+    "message": "暂无论文。"
+  },
+  "publications.empty.talk": {
+    "message": "暂无演讲。"
+  },
+  "paperViewer.loading": {
+    "message": "正在加载 PDF…"
+  },
+  "paperViewer.error.loadPreview": {
+    "message": "无法加载 PDF 预览。"
+  },
+  "paperViewer.error.openNewTab": {
+    "message": "点击这里在新标签页中打开 PDF"
+  },
+  "paperViewer.pagination.prev": {
+    "message": "上一页"
+  },
+  "paperViewer.pagination.next": {
+    "message": "下一页"
+  },
+  "paperViewer.pagination.prevAria": {
+    "message": "上一页"
+  },
+  "paperViewer.pagination.nextAria": {
+    "message": "下一页"
+  },
+  "paperViewer.hero.label": {
+    "message": "研究文档"
+  },
+  "paperViewer.hero.download": {
+    "message": "下载 PDF"
+  },
+  "paperViewer.hero.backToPublications": {
+    "message": "查看论文与演讲"
+  },
+  "whitePaper.title": {
+    "message": "白皮书"
+  },
+  "whitePaper.metaDescription": {
+    "message": "面向混合模态模型的信号驱动决策路由"
+  },
+  "whitePaper.heroDescription": {
+    "message": "面向混合模态模型的信号驱动决策路由，以站内完整 PDF 阅读器形式呈现。"
+  },
+  "visionPaper.title": {
+    "message": "愿景论文"
+  },
+  "visionPaper.socialTitle": {
+    "message": "我们的愿景 — vLLM Semantic Router"
+  },
+  "visionPaper.metaDescription": {
+    "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构：来自 vLLM Semantic Router 项目的愿景论文"
+  },
+  "visionPaper.heroDescription": {
+    "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
+  },
+  "homepage.meta.description": {
+    "message": "面向混合模型服务的信号驱动路由系统。"
+  },
 
   "homepage.whereItLives.title": {
     "message": "它的位置"
@@ -1989,18 +2256,33 @@
     "message": "贡献者"
   },
   "teamCarousel.title": {
-    "message": "认识我们的团队"
+    "message": "谁在把这套系统做成现实"
   },
   "teamCarousel.subtitle": {
-    "message": "vLLM Semantic Router 背后的优秀成员"
+    "message": "从研究到基础设施，这个项目由一群持续交付的人共同推进。"
+  },
+  "teamCarousel.label": {
+    "message": "贡献者"
+  },
+  "teamCarousel.footer": {
+    "message": "维护者、提交者与贡献者共同覆盖研究、基础设施和开源协作。"
   },
   "teamCarousel.viewAll": {
-    "message": "查看所有团队成员"
+    "message": "查看团队名单"
+  },
+  "acknowledgements.label": {
+    "message": "开源生态"
   },
   "acknowledgements.title": {
     "message": "致谢"
   },
   "acknowledgements.subtitle": {
-    "message": "vLLM Semantic Router 诞生于开源，构建于开源"
+    "message": "vLLM Semantic Router 站在开源生态之上，也持续回馈开源。"
+  },
+  "acknowledgements.projectMeta": {
+    "message": "基础依赖"
+  },
+  "acknowledgements.projectLink": {
+    "message": "查看项目"
   }
 }

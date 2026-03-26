@@ -49,7 +49,7 @@ cases:
   - name: deployment-profile-response-api
     changed_files:
       - deploy/kubernetes/response-api/redis.yaml
-    expected_primary_skill: deployment-profile-change
+    expected_primary_skill: k8s-platform-change
   - name: training-stack-model-selection
     changed_files:
       - src/training/model_selection/ml_model_selection/train.py

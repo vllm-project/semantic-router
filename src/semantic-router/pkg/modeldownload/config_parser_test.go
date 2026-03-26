@@ -394,8 +394,6 @@ global:
     embeddings:
       semantic:
         use_cpu: false
-      bert:
-        use_cpu: false
     modules:
       prompt_guard:
         use_cpu: false

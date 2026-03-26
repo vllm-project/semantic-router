@@ -85,8 +85,8 @@ func Parse(input string) (*Program, []error) {
 }
 
 // splitTopLevelBlocks splits DSL source into top-level blocks by finding
-// top-level keywords (SIGNAL, ROUTE, MODEL, PLUGIN) that appear
-// outside of braces.
+// top-level keywords (SIGNAL, ROUTE, MODEL, PLUGIN) that appear outside of
+// braces.
 func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
@@ -247,6 +247,12 @@ func rawToProjectionScore(r *rawProjectionDecl) *ProjectionScoreDecl {
 			}
 			if signalName, ok := getStringField(ov.Fields, "name"); ok {
 				input.SignalName = signalName
+			}
+			if kb, ok := getStringField(ov.Fields, "kb"); ok {
+				input.KB = kb
+			}
+			if metric, ok := getStringField(ov.Fields, "metric"); ok {
+				input.Metric = metric
 			}
 			if weight, ok := getFloat64Field(ov.Fields, "weight"); ok {
 				input.Weight = weight

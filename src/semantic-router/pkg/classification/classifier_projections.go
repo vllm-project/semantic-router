@@ -25,6 +25,7 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeAuthz:        func(results *SignalResults) []string { return results.MatchedAuthzRules },
 	config.SignalTypeJailbreak:    func(results *SignalResults) []string { return results.MatchedJailbreakRules },
 	config.SignalTypePII:          func(results *SignalResults) []string { return results.MatchedPIIRules },
+	config.SignalTypeKB:           func(results *SignalResults) []string { return results.MatchedKBRules },
 }
 
 func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
@@ -71,6 +72,12 @@ func projectionScoreValue(score config.ProjectionScore, results *SignalResults) 
 }
 
 func projectionInputValue(input config.ProjectionScoreInput, results *SignalResults) float64 {
+	if strings.EqualFold(strings.TrimSpace(input.Type), config.ProjectionInputKBMetric) {
+		if results.KBMetricValues == nil {
+			return 0
+		}
+		return results.KBMetricValues[kbMetricKey(input.KB, input.Metric)]
+	}
 	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
 	case "confidence":
 		if !projectionInputMatched(input.Type, input.Name, results) {
@@ -94,6 +101,10 @@ func projectionInputValue(input config.ProjectionScoreInput, results *SignalResu
 		}
 		return missValue
 	}
+}
+
+func kbMetricKey(kbName, metric string) string {
+	return strings.ToLower(config.ProjectionInputKBMetric + ":" + kbName + ":" + metric)
 }
 
 func projectionInputMatched(signalType string, name string, results *SignalResults) bool {

@@ -20,6 +20,12 @@ This document defines the project-level surfaces used by skills, reports, and va
 - Typical paths: `src/semantic-router/pkg/decision/**`, `req_filter_decision*.go`
 - Task rules: `router-core`
 
+## `routing_policy`
+
+- Router-side policy after signal extraction, covering matched-decision logic plus downstream candidate-model selection.
+- Typical paths: `src/semantic-router/pkg/decision/**`, `src/semantic-router/pkg/modelselection/**`, `src/semantic-router/pkg/selection/**`, `req_filter_looper*.go`
+- Task rules: `router-core`
+
 ## `algorithm_selection`
 
 - Per-decision candidate-model selection after a decision matches.
@@ -62,6 +68,12 @@ This document defines the project-level surfaces used by skills, reports, and va
 - Typical paths: `src/vllm-sr/cli/main.py`, `core.py`, `docker_cli.py`, `commands/**`
 - Task rules: `vllm-sr-cli`
 
+## `dashboard_platform`
+
+- Dashboard frontend and backend surfaces that present, configure, or manage router behavior through the console UI.
+- Typical paths: `dashboard/frontend/**`, `dashboard/backend/**`, `dashboard/README.md`
+- Task rules: `dashboard`
+
 ## `dashboard_config_ui`
 
 - Dashboard config editing, schema-driven forms, builder flows, and config-oriented frontend state.
@@ -103,6 +115,12 @@ This document defines the project-level surfaces used by skills, reports, and va
 - Kubernetes deployment profiles, stack manifests, and profile-owned platform resources outside operator CRDs.
 - Typical paths: `deploy/kubernetes/response-api/**`, `deploy/kubernetes/ai-gateway/**`, `deploy/kubernetes/observability/**`, `deploy/kubernetes/streaming/**`
 - Task rules: `e2e-framework`
+
+## `k8s_platform`
+
+- Kubernetes-facing operator, CRD, deployment-profile, and DSL translation surfaces for semantic-router platform integration.
+- Typical paths: `deploy/operator/**`, `deploy/kubernetes/**`, `src/semantic-router/pkg/apis/**`, `src/semantic-router/pkg/dsl/**`, `src/semantic-router/pkg/k8s/**`
+- Task rules: `operator-stack`, `e2e-framework`
 
 ## `fleet_sim_runtime`
 

@@ -499,13 +499,8 @@ def _normalize_global_layout(global_config: dict[str, Any]) -> dict[str, Any]:
     legacy_models = _as_dict(normalized.pop("models", {}))
     if legacy_models:
         embeddings = _as_dict(legacy_models.get("embeddings"))
-        if embeddings:
-            if "semantic" in embeddings:
-                _place_global_block(
-                    normalized, "embedding_models", embeddings["semantic"]
-                )
-            if "bert" in embeddings:
-                _place_global_block(normalized, "bert_model", embeddings["bert"])
+        if embeddings and "semantic" in embeddings:
+            _place_global_block(normalized, "embedding_models", embeddings["semantic"])
         if "system" in legacy_models:
             _place_global_block(normalized, "system_models", legacy_models["system"])
         if "external" in legacy_models:

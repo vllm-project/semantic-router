@@ -372,6 +372,32 @@ routing:
           - EMAIL_ADDRESS
         description: Sensitive prompts where only low-risk identifiers may pass through.
 
+    kb:
+      - name: privacy_policy
+        kb: privacy_kb
+        target:
+          kind: group
+          value: privacy_policy
+        match: best
+      - name: security_containment
+        kb: privacy_kb
+        target:
+          kind: group
+          value: security_containment
+        match: best
+      - name: frontier_reasoning
+        kb: privacy_kb
+        target:
+          kind: group
+          value: frontier_reasoning
+        match: best
+      - name: local_standard
+        kb: privacy_kb
+        target:
+          kind: group
+          value: local_standard
+        match: best
+
   projections:
     partitions:
       - name: support_intents
@@ -407,6 +433,14 @@ routing:
           - type: structure
             name: first_then_flow
             weight: 0.12
+      - name: privacy_kb_bias
+        method: weighted_sum
+        inputs:
+          - type: kb_metric
+            kb: privacy_kb
+            metric: private_vs_public
+            weight: 1.0
+            value_source: score
     mappings:
       - name: request_band
         source: request_difficulty
@@ -455,6 +489,15 @@ routing:
             enabled: true
             similarity_threshold: 0.82
             ttl_seconds: 7200
+        - type: tools
+          configuration:
+            enabled: true
+            mode: filtered
+            semantic_selection: true
+            allow_tools:
+              - search_web
+            block_tools:
+              - exec_cmd
 
     - name: legal_confidence_route
       description: Confidence-routed legal and factual traffic.
@@ -1108,10 +1151,6 @@ global:
       store_backend: redis
       ttl_seconds: 86400
       max_responses: 2000
-      milvus:
-        address: milvus:19530
-        database: responses
-        collection: response_records
       redis:
         address: redis:6379
         password: redis-secret
@@ -1243,7 +1282,7 @@ global:
           vector_field:
             name: embedding
             dimension: 768
-            metric_type: cosine
+            metric_type: COSINE
           index_type: HNSW
           params:
             M: 16
@@ -1314,6 +1353,39 @@ global:
           drop_collection_on_startup: false
           auto_create_collection: true
           verbose_errors: true
+      valkey:
+        connection:
+          host: valkey
+          port: 6379
+          database: 0
+          password: valkey-secret
+          timeout: 5
+          tls:
+            enabled: false
+            cert_file: certs/valkey.crt
+            key_file: certs/valkey.key
+            ca_file: certs/ca.crt
+        index:
+          name: semantic_cache_idx
+          prefix: "vsr:cache:"
+          vector_field:
+            name: embedding
+            dimension: 768
+            metric_type: COSINE
+          index_type: HNSW
+          params:
+            M: 16
+            efConstruction: 200
+        search:
+          topk: 10
+        development:
+          drop_index_on_startup: false
+          auto_create_index: true
+          verbose_errors: true
+        logging:
+          level: info
+          enable_query_log: true
+          enable_metrics: true
     memory:
       enabled: true
       auto_store: true
@@ -1500,6 +1572,62 @@ global:
         access_key: external-guardrail-key
         max_tokens: 2048
         temperature: 0.2
+    kbs:
+      - name: privacy_kb
+        source:
+          path: kb/privacy/
+          manifest: labels.json
+        threshold: 0.55
+        label_thresholds:
+          prompt_injection: 0.7
+        groups:
+          security_containment:
+            - prompt_injection
+            - credential_exfiltration
+            - jailbreak_role
+            - system_prompt_extraction
+          privacy_policy:
+            - proprietary_code
+            - internal_document
+            - pii
+            - business_strategy
+            - trade_secret_ip
+            - operational_infrastructure
+            - locality_directive
+            - customer_data
+          frontier_reasoning:
+            - architecture_analysis
+            - root_cause_analysis
+            - multi_step_tradeoffs
+          local_standard:
+            - generic_coding
+            - simple_task
+            - general_knowledge
+          private:
+            - prompt_injection
+            - credential_exfiltration
+            - jailbreak_role
+            - system_prompt_extraction
+            - proprietary_code
+            - internal_document
+            - pii
+            - business_strategy
+            - trade_secret_ip
+            - operational_infrastructure
+            - locality_directive
+            - customer_data
+          public:
+            - architecture_analysis
+            - root_cause_analysis
+            - multi_step_tradeoffs
+            - generic_coding
+            - simple_task
+            - general_knowledge
+        metrics:
+          - name: private_vs_public
+            type: group_margin
+            positive_group: private
+            negative_group: public
     modules:
       prompt_compression:
         enabled: true

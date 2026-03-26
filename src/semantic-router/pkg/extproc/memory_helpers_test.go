@@ -797,6 +797,33 @@ func TestExtractTextFromContentParts_EmptySlice(t *testing.T) {
 }
 
 // =============================================================================
+// extractCurrentUserMessage Tests
+// =============================================================================
+
+func TestExtractCurrentUserMessage_ResponseAPIPath(t *testing.T) {
+	reqCtx := &RequestContext{
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				Input: json.RawMessage(`"What is our deployment target?"`),
+			},
+		},
+	}
+
+	msg := extractCurrentUserMessage(reqCtx)
+	assert.Equal(t, "What is our deployment target?", msg)
+}
+
+func TestExtractCurrentUserMessage_EmptyForChatCompletions(t *testing.T) {
+	reqCtx := &RequestContext{
+		OriginalRequestBody: []byte(`{"model":"auto","messages":[{"role":"user","content":"hello"}]}`),
+	}
+
+	msg := extractCurrentUserMessage(reqCtx)
+	assert.Empty(t, msg)
+}
+
+// =============================================================================
 // Integration Tests
 // =============================================================================
 
