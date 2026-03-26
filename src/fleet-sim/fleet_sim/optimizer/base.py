@@ -34,9 +34,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from ..core.fleet import Fleet, FleetConfig, PoolConfig
 from ..gpu_profiles.profiles import A100_80GB, GpuProfile
-from ..workload.synthetic import CdfWorkload, PoissonWorkload
+from ..workload.synthetic import CdfWorkload
 from . import analytical
 
 # ── ThresholdResult (Pareto sweep over B_short candidates) ────────────────────
@@ -92,7 +91,9 @@ def threshold_pareto(
     cdf_toks = [t for t, _ in cdf]
     # Exclude breakpoints where virtually all traffic is already in the short pool
     # (alpha > 0.999) or where the short pool would receive < 1% of traffic.
-    candidates = [t for t in cdf_toks[:-1] if 0.01 <= analytical.cdf_eval(cdf, t) <= 0.999]
+    candidates = [
+        t for t in cdf_toks[:-1] if 0.01 <= analytical.cdf_eval(cdf, t) <= 0.999
+    ]
 
     # Homo baseline: B_short = long_max_ctx (single pool, no split)
     homo_opt = FleetOptimizer(
@@ -387,7 +388,9 @@ class FleetOptimizer:
             lam_s = alpha_prime * lam
             lam_l = (1.0 - alpha_prime) * lam
 
-            n_s_raw = analytical.min_gpus_analytical(lam_s, mu_s, self.t_slo, cv2_s, n_slots=ns_s)
+            n_s_raw = analytical.min_gpus_analytical(
+                lam_s, mu_s, self.t_slo, cv2_s, n_slots=ns_s
+            )
             # Reliability margin: inflate so SLO still holds when (1-A) nodes are
             # under repair.  node_avail=1.0 (default) → no change.
             n_s = math.ceil(n_s_raw / self.node_avail)
@@ -413,16 +416,21 @@ class FleetOptimizer:
                 mu_l, cv2_l, ns_l, pref_l = 0.01, 1.0, 1, 0.0
 
             n_l_raw = (
-                analytical.min_gpus_analytical(lam_l, mu_l, self.t_slo, cv2_l, n_slots=ns_l)
+                analytical.min_gpus_analytical(
+                    lam_l, mu_l, self.t_slo, cv2_l, n_slots=ns_l
+                )
                 if lam_l > 0.01
                 else 0
             )
             n_l = math.ceil(n_l_raw / self.node_avail)
 
             # P99 TTFT = P99 slot wait + mean prefill time
-            p99_s = (analytical.p99_wait(n_s * ns_s, lam_s, mu_s / ns_s, cv2_s) + pref_s) * 1000
+            p99_s = (
+                analytical.p99_wait(n_s * ns_s, lam_s, mu_s / ns_s, cv2_s) + pref_s
+            ) * 1000
             p99_l = (
-                (analytical.p99_wait(n_l * ns_l, lam_l, mu_l / ns_l, cv2_l) + pref_l) * 1000
+                (analytical.p99_wait(n_l * ns_l, lam_l, mu_l / ns_l, cv2_l) + pref_l)
+                * 1000
                 if lam_l > 0.01
                 else 0.0
             )
@@ -657,6 +665,7 @@ class FleetOptimizer:
 
 
 # ── OptimizationReport ────────────────────────────────────────────────────────
+
 
 class OptimizationReport:
     """Results of a full FleetOptimizer run."""
