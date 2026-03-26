@@ -128,6 +128,11 @@ export class SearchPanel {
     this.searchBarStore.set(this.searchBarStoreValue);
   };
 
+  selectPoint = (point: PromptPoint | null) => {
+    this.searchBarStoreValue.selectedPoint = point;
+    this.searchBarStore.set(this.searchBarStoreValue);
+  };
+
   mouseenterHandler = (point: PromptPoint) => {
     this.searchBarStoreValue.highlightSearchPoint(point);
   };

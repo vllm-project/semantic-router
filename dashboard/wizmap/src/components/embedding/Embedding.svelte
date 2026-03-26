@@ -176,7 +176,7 @@
         <div
           class="menu contour-menu"
           class:hidden="{controlDisplayItem !== 'contour'}"
-          on:click|stopPropagation
+          on:mousedown|stopPropagation
         >
           {#each groupedNames as groupName, index (groupName)}
             <div class="control-row">
@@ -231,7 +231,7 @@
         <div
           class="menu point-menu"
           class:hidden="{controlDisplayItem !== 'point'}"
-          on:click|stopPropagation
+          on:mousedown|stopPropagation
         >
           {#each groupedNames as groupName, index (groupName)}
             <div class="control-row">
@@ -296,7 +296,7 @@
       <div
         class="menu label-menu"
         class:hidden="{controlDisplayItem !== 'label'}"
-        on:click|stopPropagation
+        on:mousedown|stopPropagation
       >
         <div class="control-item">
           <div class="item-header">Automatic Labeling</div>
@@ -363,7 +363,7 @@
       <div
         class="menu time-menu"
         class:hidden="{controlDisplayItem !== 'time'}"
-        on:click|stopPropagation
+        on:mousedown|stopPropagation
       >
         <div class="control-row">
           <div class="play-pause-button">

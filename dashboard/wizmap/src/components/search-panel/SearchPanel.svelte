@@ -59,6 +59,29 @@
 </style>
 
 <div class="search-panel-wrapper" bind:this="{component}">
+  {#if mySearchPanel?.searchBarStoreValue.selectedPoint}
+    <div class="selected-point-card">
+      <div class="selected-point-header">
+        <span>Point {mySearchPanel.searchBarStoreValue.selectedPoint.id}</span>
+        <button
+          type="button"
+          class="selected-point-close"
+          on:click="{() => mySearchPanel?.selectPoint(null)}"
+          aria-label="Close point detail"
+        >
+          {@html iconCancel}
+        </button>
+      </div>
+
+      <div class="selected-point-body">
+        <div class="selected-point-label">text</div>
+        <div class="selected-point-value">
+          {mySearchPanel.searchBarStoreValue.selectedPoint.prompt}
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <div
     class="search-list-container"
     class:shown="{mySearchPanel?.searchBarStoreValue.shown}"
@@ -92,6 +115,7 @@
               }}"
               on:click="{() => {
                 result.isSummary = !result.isSummary;
+                mySearchPanel?.selectPoint(result.point);
               }}"
               on:mouseenter="{() => {
                 mySearchPanel?.mouseenterHandler(result.point);

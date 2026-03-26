@@ -361,6 +361,7 @@ export class Embedding {
       .attr('width', `${this.svgFullSize.width}px`)
       .attr('height', `${this.svgFullSize.height}px`)
       .on('pointermove', e => this.mousemoveHandler(e as MouseEvent))
+      .on('click', e => this.clickHandler(e as MouseEvent))
       .on('mouseleave', () => {
         this.highlightPoint({ point: undefined, animated: false });
         this.mouseoverLabel(null, null);
@@ -1265,6 +1266,11 @@ export class Embedding {
     if (!this.hideHighlights) {
       this.mouseoverLabel(x, y);
     }
+  };
+
+  clickHandler = (_e: MouseEvent) => {
+    this.searchBarStoreValue.selectedPoint = this.hoverPoint;
+    this.searchBarStore.set(this.searchBarStoreValue);
   };
 
   /**

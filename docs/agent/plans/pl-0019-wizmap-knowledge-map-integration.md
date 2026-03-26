@@ -84,6 +84,8 @@
   - follow-up ratchet: removed the outer summary bar entirely so `/knowledge-bases/:name/map` renders as a near-full-screen WizMap shell with only a minimal back affordance
   - follow-up ratchet: changed KB-mode WizMap defaults to a points-first view (`point` on, `contour` off, `label` off) and removed KB grouped overlays from the exported grid contract so the initial map is directly explorable
   - follow-up ratchet: simplified the embedded footer count path to show the loaded KB point count consistently instead of stale subset text, and added a Playwright route test to prevent the old summary bar layout from returning
+  - follow-up ratchet: made `/knowledge-bases/:name/map` a standalone full-screen route outside the dashboard layout chrome so the hosted map owns the viewport
+  - follow-up ratchet: refactored the embedded top controls into valid button/menu structure, removed KB-mode topic tile boxes from label rendering, and added a fixed selected-point card so click-on-point matches the hosted product expectation
 - Validation:
   - `make agent-validate`
   - `cd dashboard/frontend && npm run type-check`
@@ -95,7 +97,7 @@
   - `cd dashboard/frontend && npx playwright test e2e/knowledge-map.spec.ts`
   - `make dashboard-check`
 - Recorded blocker:
-  - `PATH=/usr/local/go/bin:$PATH make dashboard-check` still fails in this workstation environment during dashboard backend `golangci-lint` setup with `package unsafe is not in std (/usr/local/go/src/unsafe)`. The feature-specific frontend build and backend/router tests above passed, and the blocker is local-toolchain-specific rather than a WizMap code failure.
+  - none
 
 ## Decision Log
 
@@ -105,6 +107,8 @@
 - 2026-03-26: This is a new execution workstream because it spans dashboard frontend, dashboard backend, router data export, and image packaging.
 - 2026-03-26: The embedded WizMap shell must not depend on dashboard cookies for its static bundle; KB data endpoints carry explicit `authToken` query params and `/embedded/wizmap/assets/*` is treated as static transport rather than a protected product page.
 - 2026-03-26: The `Knowledge Map` page should keep the base summary compact and reserve most of the vertical space for the map viewport.
+- 2026-03-26: The final route should drop dashboard header chrome entirely and behave like a standalone full-screen WizMap surface with only a local back affordance.
+- 2026-03-26: KB-mode label overlays should prefer plain labels and selected-point cards over dense tile rectangles because PCA-style KB projections cluster much more tightly than the public demo datasets.
 
 ## Follow-up Debt / ADR Links
 

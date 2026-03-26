@@ -12,6 +12,73 @@ $button-border-radius: 8px;
   pointer-events: none;
 }
 
+.selected-point-card {
+  position: absolute;
+  top: 78px;
+  left: 12px;
+  width: min(420px, calc(100vw - 24px));
+  pointer-events: all;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(20, 30, 58, 0.12);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.16);
+}
+
+.selected-point-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(26, 31, 43, 0.94);
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.selected-point-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.16);
+  }
+}
+
+.selected-point-body {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: start;
+}
+
+.selected-point-label {
+  padding: 0.8rem 0.7rem;
+  border-right: 1px solid rgba(20, 30, 58, 0.08);
+  color: $gray-600;
+  font-size: 0.82rem;
+  text-transform: lowercase;
+}
+
+.selected-point-value {
+  padding: 0.8rem 0.9rem;
+  color: $gray-900;
+  line-height: 1.45;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .svg-icon {
   display: flex;
   justify-content: center;

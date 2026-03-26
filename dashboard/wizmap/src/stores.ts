@@ -7,6 +7,7 @@ export interface SearchBarStoreValue {
   results: PromptPoint[];
   query: string;
   queryID: number;
+  selectedPoint: PromptPoint | null;
   highlightSearchPoint: (point: PromptPoint | undefined) => void;
 }
 
@@ -37,6 +38,7 @@ export const getSearchBarStoreDefaultValue = (): SearchBarStoreValue => {
     results: [],
     query: '',
     queryID: 0,
+    selectedPoint: null,
     highlightSearchPoint: (point: PromptPoint | undefined) => {
       // pass
     }
