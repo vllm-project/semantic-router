@@ -167,7 +167,6 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  SKIP_COMPAT_IMAGE - set to 1 only when the local router compatibility image is already up to date"
 	@echo "  SERVED_NAME       - Served model name for custom runs"
 	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd to use ROCm defaults)"
-	@echo "  VLLM_SR_TOPOLOGY  - local runtime topology (legacy default, split for router/envoy/dashboard containers)"
 	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
 	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm)"
 	@echo "  VLLM_SR_DOCKERFILE_AMD - Dockerfile used when VLLM_SR_PLATFORM=amd"
@@ -195,13 +194,10 @@ VLLM_SR_DASHBOARD_CONTAINER ?= vllm-sr-dashboard-container
 VLLM_SR_RUNTIME_CONTAINERS ?= $(VLLM_SR_CONTAINER) $(VLLM_SR_ROUTER_CONTAINER) $(VLLM_SR_ENVOY_CONTAINER) $(VLLM_SR_DASHBOARD_CONTAINER)
 VLLM_SR_PLATFORM ?=
 VLLM_SR_PLATFORM_NORMALIZED := $(shell echo "$(VLLM_SR_PLATFORM)" | tr '[:upper:]' '[:lower:]')
-VLLM_SR_TOPOLOGY ?= legacy
+VLLM_SR_TOPOLOGY ?= split
 VLLM_SR_TOPOLOGY_NORMALIZED := $(shell echo "$(VLLM_SR_TOPOLOGY)" | tr '[:upper:]' '[:lower:]')
 VLLM_SR_DOCKERFILE ?= src/vllm-sr/Dockerfile
 VLLM_SR_DOCKERFILE_AMD ?= src/vllm-sr/Dockerfile.rocm
-VLLM_SR_ROUTER_DOCKERFILE ?= src/vllm-sr/Dockerfile.router
-VLLM_SR_ROUTER_DOCKERFILE_AMD ?= src/vllm-sr/Dockerfile.router.rocm
-VLLM_SR_ENVOY_DOCKERFILE ?= src/vllm-sr/Dockerfile.envoy
 VLLM_SR_DASHBOARD_DOCKERFILE ?= dashboard/backend/Dockerfile
 VLLM_SR_SIM_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest
 VLLM_SR_SIM_CONTAINER ?= vllm-sr-sim-container
@@ -237,9 +233,6 @@ VLLM_SR_ROUTER_IMAGE := $(VLLM_SR_ROUTER_IMAGE_ROCM)
 endif
 ifeq ($(origin VLLM_SR_DOCKERFILE),file)
 VLLM_SR_DOCKERFILE := $(VLLM_SR_DOCKERFILE_AMD)
-endif
-ifeq ($(origin VLLM_SR_ROUTER_DOCKERFILE),file)
-VLLM_SR_ROUTER_DOCKERFILE := $(VLLM_SR_ROUTER_DOCKERFILE_AMD)
 endif
 ifeq ($(origin VLLM_SR_TARGETARCH),file)
 VLLM_SR_TARGETARCH := amd64
@@ -340,11 +333,7 @@ vllm-sr-dev:
 	@echo "=========================================="
 	@echo ""
 	@echo "Next steps:"
-	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
-		echo "  Start service: cd src/vllm-sr && vllm-sr serve --topology split --config config.yaml"; \
-	else \
-		echo "  Start service: cd src/vllm-sr && vllm-sr serve --config config.yaml"; \
-	fi
+	@echo "  Start service: cd src/vllm-sr && vllm-sr serve --config config.yaml"
 	@echo "  Or use:        make vllm-sr-start"
 	@echo ""
 

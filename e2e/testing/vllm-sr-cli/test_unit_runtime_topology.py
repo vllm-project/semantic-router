@@ -52,6 +52,21 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
         self.assertEqual(self.base.container_status(), "running")
 
     @mock.patch.object(CLITestBase, "_run_subprocess")
+    def test_container_status_reports_legacy_runtime_residue_as_running(
+        self, run_subprocess
+    ):
+        run_subprocess.side_effect = self._mock_statuses(
+            {
+                self.base.CONTAINER_NAME: "Up 5 seconds",
+                self.base.ROUTER_CONTAINER_NAME: "",
+                self.base.ENVOY_CONTAINER_NAME: "",
+                self.base.DASHBOARD_CONTAINER_NAME: "",
+            }
+        )
+
+        self.assertEqual(self.base.container_status(), "running")
+
+    @mock.patch.object(CLITestBase, "_run_subprocess")
     def test_inspect_defaults_to_router_container_for_split_runtime(
         self, run_subprocess
     ):
@@ -68,6 +83,23 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
         self.assertEqual(return_code, 0)
         self.assertEqual(stderr, "")
         self.assertEqual(stdout, self.base.ROUTER_CONTAINER_NAME)
+
+    @mock.patch.object(CLITestBase, "_run_subprocess")
+    def test_inspect_falls_back_to_legacy_runtime_residue(self, run_subprocess):
+        run_subprocess.side_effect = self._mock_statuses(
+            {
+                self.base.CONTAINER_NAME: "Up 5 seconds",
+                self.base.ROUTER_CONTAINER_NAME: "",
+                self.base.ENVOY_CONTAINER_NAME: "",
+                self.base.DASHBOARD_CONTAINER_NAME: "",
+            }
+        )
+
+        return_code, stdout, stderr = self.base.inspect_container("{{.Name}}")
+
+        self.assertEqual(return_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(stdout, self.base.CONTAINER_NAME)
 
     @mock.patch.object(CLITestBase, "_run_subprocess")
     def test_cleanup_removes_split_runtime_and_observability_containers(

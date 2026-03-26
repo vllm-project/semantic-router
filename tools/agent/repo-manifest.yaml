@@ -147,8 +147,8 @@ docs:
   - docs/agent/plans/pl-0017-taxonomy-classifier-platform-loop.md
   - docs/agent/plans/pl-0018-generic-embedding-kb-workstream.md
   - docs/agent/plans/pl-0019-wizmap-knowledge-map-integration.md
-  - docs/agent/plans/pl-0015-local-runtime-topology-separation.md
-  - docs/agent/plans/pl-0016-local-runtime-three-image-rollout.md
+  - docs/agent/plans/pl-0020-local-runtime-topology-separation.md
+  - docs/agent/plans/pl-0021-local-runtime-three-image-rollout.md
   - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
@@ -337,10 +337,10 @@ doc_governance:
     - path: docs/agent/plans/pl-0019-wizmap-knowledge-map-integration.md
       steward: agent-contract
       freshness: update at the start and end of each WizMap knowledge-map integration loop and after each completed loop task
-    - path: docs/agent/plans/pl-0015-local-runtime-topology-separation.md
+    - path: docs/agent/plans/pl-0020-local-runtime-topology-separation.md
       steward: agent-contract
       freshness: update at the start and end of each local runtime topology-separation loop and after each completed loop task
-    - path: docs/agent/plans/pl-0016-local-runtime-three-image-rollout.md
+    - path: docs/agent/plans/pl-0021-local-runtime-three-image-rollout.md
       steward: agent-contract
       freshness: update at the start and end of each local runtime three-image rollout loop and after each completed loop task
     - path: docs/agent/state-taxonomy-and-inventory.md

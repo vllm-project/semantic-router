@@ -10,7 +10,9 @@ markdown-lint: ## Lint all markdown files in the project
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
+		--ignore dashboard/wizmap/node_modules \
 		--ignore bench \
+		--ignore e2e/config/models \
 		--ignore website/docs/api/crd-reference.md \
 		--ignore models \
 		--ignore vsr
@@ -21,7 +23,9 @@ markdown-lint-fix: ## Auto-fix markdown lint issues
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
+		--ignore dashboard/wizmap/node_modules \
 		--ignore bench \
+		--ignore e2e/config/models \
 		--ignore models \
 		--ignore vsr \
 		--fix

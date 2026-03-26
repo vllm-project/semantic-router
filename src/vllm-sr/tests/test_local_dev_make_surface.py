@@ -15,26 +15,21 @@ def test_split_topology_defaults_to_rebuilding_router_compat_image() -> None:
     assert 'if [ "$(SKIP_COMPAT_IMAGE_EFFECTIVE)" = "1" ]; then \\' in content
 
 
-def test_agent_help_documents_split_override() -> None:
+def test_agent_help_hides_legacy_topology_override() -> None:
     content = AGENT_MK_PATH.read_text(encoding="utf-8")
 
-    assert "VLLM_SR_TOPOLOGY=split" in content
-    assert "SKIP_COMPAT_IMAGE=1" in content
-    assert "router compatibility image is already up to date" in content
+    assert "VLLM_SR_TOPOLOGY=legacy" not in content
+    assert "compatibility fallback" not in content
 
 
-def test_environment_docs_explain_split_override_skip_behavior() -> None:
+def test_environment_docs_explain_default_split_without_user_topology_flags() -> None:
     content = ENVIRONMENTS_DOC_PATH.read_text(encoding="utf-8")
 
     assert (
-        "Build with `make vllm-sr-dev VLLM_SR_TOPOLOGY=split` to use the split local runtime"
-        in content
+        "Local runtime defaults to the split router/envoy/dashboard topology" in content
     )
     assert (
         "Split local runtime still uses the router compatibility image by default"
         in content
     )
-    assert (
-        "Only if that local router compatibility image is already up to date" in content
-    )
-    assert "SKIP_COMPAT_IMAGE=1" in content
+    assert "VLLM_SR_TOPOLOGY=legacy" not in content

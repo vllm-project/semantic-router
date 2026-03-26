@@ -70,8 +70,6 @@ class TestDockerBackend:
             topology="split",
             pull_policy="always",
             enable_observability=False,
-            source_config_file="/tmp/source-config.yaml",
-            runtime_config_file="/tmp/runtime-config.yaml",
         )
 
         assert captured["source_config_file"] == "/tmp/source-config.yaml"
@@ -83,8 +81,6 @@ class TestDockerBackend:
         assert captured["topology"] == "split"
         assert captured["pull_policy"] == "always"
         assert captured["enable_observability"] is False
-        assert captured["source_config_file"] == "/tmp/source-config.yaml"
-        assert captured["runtime_config_file"] == "/tmp/runtime-config.yaml"
 
     def test_teardown_delegates_to_stop_vllm_sr(self, monkeypatch):
         called = []

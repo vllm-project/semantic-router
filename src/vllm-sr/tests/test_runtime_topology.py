@@ -18,11 +18,11 @@ resolve_runtime_topology = runtime_topology.resolve_runtime_topology
 split_runtime_enabled = runtime_topology.split_runtime_enabled
 
 
-def test_runtime_topology_defaults_to_legacy(monkeypatch):
+def test_runtime_topology_defaults_to_split(monkeypatch):
     monkeypatch.delenv(RUNTIME_TOPOLOGY_ENV, raising=False)
 
-    assert resolve_runtime_topology() == RUNTIME_TOPOLOGY_LEGACY
-    assert split_runtime_enabled() is False
+    assert resolve_runtime_topology() == RUNTIME_TOPOLOGY_SPLIT
+    assert split_runtime_enabled() is True
 
 
 def test_runtime_topology_accepts_split_env(monkeypatch):

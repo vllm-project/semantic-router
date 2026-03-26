@@ -31,8 +31,10 @@ class DockerBackend:
         enable_observability: bool = True,
         **kwargs: Any,
     ) -> None:
-        source_config_file = kwargs.get("source_config_file")
-        runtime_config_file = kwargs.get("runtime_config_file")
+        if source_config_file is None:
+            source_config_file = kwargs.get("source_config_file")
+        if runtime_config_file is None:
+            runtime_config_file = kwargs.get("runtime_config_file")
         start_vllm_sr(
             config_file,
             env_vars=env_vars,
@@ -45,8 +47,6 @@ class DockerBackend:
             topology=topology,
             pull_policy=pull_policy,
             enable_observability=enable_observability,
-            source_config_file=source_config_file,
-            runtime_config_file=runtime_config_file,
         )
 
     def teardown(self) -> None:

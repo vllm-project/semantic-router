@@ -49,7 +49,7 @@
 - Commands run:
   - startup doc reads for `AGENTS.md`, `docs/agent/{README.md,repo-map.md,environments.md,change-surfaces.md,feature-complete-checklist.md,plans/README.md}`, `.agents/skills/harness/SKILL.md`, `src/vllm-sr/cli/AGENTS.md`, and `dashboard/backend/handlers/AGENTS.md`
   - broad repository retrieval with `rg` and focused file reads across `src/vllm-sr/**`, `dashboard/backend/**`, `src/semantic-router/pkg/extproc/server.go`, Dockerfiles, tests, and OpenClaw runtime files because the dedicated `codebase-retrieval` tool was not available in this session
-  - `make agent-report ENV=cpu CHANGED_FILES="src/vllm-sr/cli/docker_cli.py src/vllm-sr/supervisord.conf src/vllm-sr/start-dashboard.sh dashboard/backend/handlers/deploy.go dashboard/backend/handlers/config.go dashboard/backend/handlers/status.go docs/agent/plans/pl-0015-local-runtime-topology-separation.md"`
+  - `make agent-report ENV=cpu CHANGED_FILES="src/vllm-sr/cli/docker_cli.py src/vllm-sr/supervisord.conf src/vllm-sr/start-dashboard.sh dashboard/backend/handlers/deploy.go dashboard/backend/handlers/config.go dashboard/backend/handlers/status.go docs/agent/plans/pl-0020-local-runtime-topology-separation.md"`
   - `go test ./handlers -run 'Test(ManagedContainerNameForService|ManagedRuntimeUsesSplitContainers|ManagedContainerNamesForComponentAll|ManagedServiceForContainerName|ConfiguredRuntimeConfigPathUsesEnvOverride|SyncRuntimeConfigLocallyWritesInternalRuntimeConfig|RuntimeSyncPythonBinaryRejectsNonPythonOverride|DefaultOpenClawModelBaseURL|ResolveOpenClawModelBaseURL|DetectRouterRuntimeStatus)'` from `dashboard/backend`
   - `python3 -m pytest tests/test_openclaw_shared_network.py -q` from `src/vllm-sr`
   - `python3 -m pytest tests/test_deployment_backend.py -q` from `src/vllm-sr`
@@ -58,7 +58,7 @@
   - `make dashboard-check`
   - `go test ./handlers -run 'Test(RuntimeContainerStatusForLogsPrefersSplitManagedRuntimeOverLegacyContainerResidue|CollectHostStatusPrefersSplitManagedRuntimeOverLegacyContainerResidue|OpenClawModelGatewayContainerNamePrefersExplicitOverride|OpenClawModelGatewayContainerNameDerivesFromTargetEnvoyURL|OpenClawModelGatewayContainerNameFallsBackToManagedEnvoyContainer|ManagedContainerNameForService|ManagedRuntimeUsesSplitContainers|ManagedContainerNamesForComponentAll|ManagedServiceForContainerName|ConfiguredRuntimeConfigPathUsesEnvOverride|SyncRuntimeConfigLocallyWritesInternalRuntimeConfig|RuntimeSyncPythonBinaryRejectsNonPythonOverride|DefaultOpenClawModelBaseURL|ResolveOpenClawModelBaseURL|DetectRouterRuntimeStatus)'` from `dashboard/backend`
   - `make dashboard-check`
-  - `make agent-ci-gate CHANGED_FILES="dashboard/backend/handlers/logs.go dashboard/backend/handlers/logs_test.go dashboard/backend/handlers/openclaw_helpers.go dashboard/backend/handlers/openclaw_provision.go dashboard/backend/handlers/openclaw_test.go dashboard/backend/handlers/status_collectors.go dashboard/backend/handlers/status_collectors_test.go docs/agent/plans/pl-0015-local-runtime-topology-separation.md"` (blocked by unrelated existing `src/semantic-router` binding type-check failures in `ml-binding` and `candle-binding`)
+  - `make agent-ci-gate CHANGED_FILES="dashboard/backend/handlers/logs.go dashboard/backend/handlers/logs_test.go dashboard/backend/handlers/openclaw_helpers.go dashboard/backend/handlers/openclaw_provision.go dashboard/backend/handlers/openclaw_test.go dashboard/backend/handlers/status_collectors.go dashboard/backend/handlers/status_collectors_test.go docs/agent/plans/pl-0020-local-runtime-topology-separation.md"` (blocked by unrelated existing `src/semantic-router` binding type-check failures in `ml-binding` and `candle-binding`)
   - manual local image rebuild for `ghcr.io/vllm-project/semantic-router/vllm-sr:latest` after updating split-runtime entrypoints and Envoy DNS-aware config generation
   - `python3 -m pytest tests/test_openclaw_shared_network.py tests/test_docker_runtime.py tests/test_deployment_backend.py tests/test_config_generator.py -q` from `src/vllm-sr`
   - `go test ./pkg/modeldownload -run 'TestBuildModelSpecs(SkipsRouterOwnedDefaultsForAgentSmokeConfigs|IncludesRouterOwnedDefaultsForScratchCanonicalConfig|IncludesAllAMDDeployModels|SkipsDisabledHallucinationFeatureModels|SkipsUnusedFeedbackDetectorDefaults)' -count=1` from `src/semantic-router`
@@ -124,7 +124,7 @@
 - 2026-03-24: Router reload and Envoy reload must stay distinct in the split design: router keeps file-driven hot reload semantics, while Envoy keeps generated-config plus process-restart semantics until a narrower cross-container control seam exists.
 - 2026-03-24: OpenClaw, dashboard proxies, and runtime status helpers should move toward explicit service-name configuration instead of relying on fallback assumptions that the dashboard and routed model endpoint live in the same container namespace.
 - 2026-03-25: The repo-native smoke configs should stay API-only and avoid router-owned default model downloads; startup-chain validation for this workstream is about split-topology orchestration and connectivity, not cold-starting default local classifiers or semantic-cache BERT models.
-- 2026-03-25: Three-image packaging is now tracked separately in [PL-0016](pl-0016-local-runtime-three-image-rollout.md) so the completed topology split can remain the compatibility baseline while packaging and publish contracts evolve independently.
+- 2026-03-25: Three-image packaging is now tracked separately in [PL-0021](pl-0021-local-runtime-three-image-rollout.md) so the completed topology split can remain the compatibility baseline while packaging and publish contracts evolve independently.
 
 ## Follow-up Debt / ADR Links
 
@@ -133,5 +133,5 @@
   - [TD031](../tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md)
   - [TD034](../tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
 - Follow-on execution plan:
-  - [PL-0016](pl-0016-local-runtime-three-image-rollout.md)
+  - [PL-0021](pl-0021-local-runtime-three-image-rollout.md)
 - No new durable debt entry was added in this loop; reopen or add one only if the split lands with unresolved architecture divergence that cannot be retired in the same workstream.

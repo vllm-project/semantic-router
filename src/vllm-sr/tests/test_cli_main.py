@@ -65,6 +65,7 @@ def test_serve_help_describes_docker_only_runtime():
     assert result.exit_code == 0
     assert "Local Docker deployment" in result.output
     assert "Podman" not in result.output
+    assert "--topology" not in result.output
 
 
 def test_inject_algorithm_into_config_updates_all_decisions(tmp_path: Path):
@@ -198,8 +199,6 @@ def test_serve_passes_role_specific_images_to_backend(monkeypatch, tmp_path: Pat
             "serve",
             "--config",
             str(config_path),
-            "--topology",
-            "split",
             "--router-image",
             "test/router:latest",
             "--envoy-image",
@@ -212,7 +211,7 @@ def test_serve_passes_role_specific_images_to_backend(monkeypatch, tmp_path: Pat
     )
 
     assert result.exit_code == 0
-    assert captured["topology"] == "split"
+    assert "topology" not in captured
     assert captured["router_image"] == "test/router:latest"
     assert captured["envoy_image"] == "test/envoy:latest"
     assert captured["dashboard_image"] == "test/dashboard:latest"

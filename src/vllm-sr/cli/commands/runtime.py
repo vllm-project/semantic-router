@@ -28,8 +28,6 @@ from cli.consts import (
     IMAGE_PULL_POLICY_ALWAYS,
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
-    RUNTIME_TOPOLOGY_LEGACY,
-    RUNTIME_TOPOLOGY_SPLIT,
     VLLM_SR_DOCKER_IMAGE_DEFAULT,
 )
 from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
@@ -66,7 +64,6 @@ def _execute_serve(
     readonly: bool,
     minimal: bool,
     platform: str | None,
-    topology: str | None,
     algorithm: str | None,
     target: str | None,
     namespace: str | None,
@@ -112,7 +109,6 @@ def _execute_serve(
         router_image=router_image,
         envoy_image=envoy_image,
         dashboard_image=dashboard_image,
-        topology=topology,
         pull_policy=image_pull_policy,
         enable_observability=not minimal and not setup_mode,
     )
@@ -176,19 +172,6 @@ def _execute_serve(
     "When set to amd, serve defaults to the ROCm image unless --image or VLLM_SR_IMAGE is provided.",
 )
 @click.option(
-    "--topology",
-    type=click.Choice(
-        [RUNTIME_TOPOLOGY_LEGACY, RUNTIME_TOPOLOGY_SPLIT],
-        case_sensitive=False,
-    ),
-    default=None,
-    help=(
-        "Local Docker runtime topology: "
-        f"{RUNTIME_TOPOLOGY_LEGACY} (default) or {RUNTIME_TOPOLOGY_SPLIT}. "
-        "Docker target only; can also be set via VLLM_SR_TOPOLOGY."
-    ),
-)
-@click.option(
     "--algorithm",
     type=click.Choice(ALGORITHM_TYPES, case_sensitive=False),
     default=None,
@@ -222,7 +205,6 @@ def serve(
     readonly: bool,
     minimal: bool,
     platform: str | None,
-    topology: str | None,
     algorithm: str | None,
     target: str | None,
     namespace: str | None,
@@ -284,8 +266,6 @@ def serve(
         # Platform branding (for AMD deployments)
         vllm-sr serve --platform amd
 
-        # Opt into split local topology
-        vllm-sr serve --topology split
     """
     _execute_serve(
         config,
@@ -297,7 +277,6 @@ def serve(
         readonly,
         minimal,
         platform,
-        topology,
         algorithm,
         target,
         namespace,

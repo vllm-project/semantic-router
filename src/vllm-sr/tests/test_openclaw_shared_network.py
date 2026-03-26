@@ -46,7 +46,7 @@ def _stub_valid_docker_cli(monkeypatch, tmp_path):
     return docker_bin
 
 
-def test_docker_start_vllm_sr_defaults_to_legacy_monolith(tmp_path, monkeypatch):
+def test_docker_start_vllm_sr_honors_legacy_override(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
