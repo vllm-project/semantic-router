@@ -56,6 +56,7 @@
 }
 
 .primaryButton,
+.mapCtaButton,
 .secondaryButton,
 .removeButton {
   border-radius: 999px;
@@ -70,6 +71,21 @@
 .primaryButton {
   background: var(--color-primary);
   color: #081000;
+}
+
+.mapCtaButton {
+  position: relative;
+  border-color: rgba(118, 185, 0, 0.32);
+  background:
+    linear-gradient(135deg, rgba(118, 185, 0, 0.24), rgba(24, 34, 17, 0.92));
+  color: #f4ffe7;
+  box-shadow: 0 10px 26px rgba(118, 185, 0, 0.18);
+}
+
+.mapCtaButton:hover {
+  transform: translateY(-1px);
+  border-color: rgba(118, 185, 0, 0.5);
+  box-shadow: 0 14px 30px rgba(118, 185, 0, 0.22);
 }
 
 .secondaryButton {
@@ -421,6 +437,7 @@
 }
 
 .tableActionGroup .primaryButton,
+.tableActionGroup .mapCtaButton,
 .tableActionGroup .secondaryButton,
 .tableActionGroup .removeButton {
   padding: 0.45rem 0.8rem;

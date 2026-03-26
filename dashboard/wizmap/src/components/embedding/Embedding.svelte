@@ -33,7 +33,7 @@
   export let searchBarStore: Writable<SearchBarStoreValue>;
 
   const buildDefaultSetting = (): EmbeddingInitSetting => ({
-    showContour: dataURLs ? false : true,
+    showContour: true,
     showPoint: true,
     showGrid: false,
     showLabel: dataURLs ? false : true

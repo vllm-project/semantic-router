@@ -321,8 +321,8 @@ export function buildKnowledgeBaseColumns({
           <button type="button" className={styles.secondaryButton} onClick={() => onSelect(row.name)}>
             {selectedKnowledgeBaseName === row.name ? 'Open' : 'View'}
           </button>
-          <button type="button" className={styles.secondaryButton} onClick={() => onOpenMap(row.name)}>
-            Map
+          <button type="button" className={styles.mapCtaButton} onClick={() => onOpenMap(row.name)}>
+            Knowledge Map
           </button>
           {row.editable && !isReadonly ? (
             <>
