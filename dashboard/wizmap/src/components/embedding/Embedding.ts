@@ -882,26 +882,30 @@ export class Embedding {
       .attr('fill', d => colorScale(d.value))
       .attr('d', d3.geoPath());
 
-    const zoomBounds = this.getInitialZoomBounds(contours);
-    const viewportInsets = this.getViewportInsets();
-    const viewportCenter = this.getViewportCenter();
-    const viewAreaWidth =
-      this.svgFullSize.width - viewportInsets.left - viewportInsets.right;
-    const viewAreaHeight =
-      this.svgFullSize.height - viewportInsets.top - viewportInsets.bottom;
-    const screenPadding = this.hostedDataMode ? 36 : 20;
-    const initZoomK = Math.min(
-      viewAreaWidth / (zoomBounds.width + screenPadding),
-      viewAreaHeight / (zoomBounds.height + screenPadding)
-    );
-
-    this.initZoomTransform = d3.zoomIdentity
-      .translate(viewportCenter.x, viewportCenter.y)
-      .scale(initZoomK)
-      .translate(
-        -(zoomBounds.x + zoomBounds.width / 2),
-        -(zoomBounds.y + zoomBounds.height / 2)
+    if (this.hostedDataMode) {
+      this.initZoomTransform = d3.zoomIdentity;
+    } else {
+      const zoomBounds = this.getInitialZoomBounds(contours);
+      const viewportInsets = this.getViewportInsets();
+      const viewportCenter = this.getViewportCenter();
+      const viewAreaWidth =
+        this.svgFullSize.width - viewportInsets.left - viewportInsets.right;
+      const viewAreaHeight =
+        this.svgFullSize.height - viewportInsets.top - viewportInsets.bottom;
+      const screenPadding = 20;
+      const initZoomK = Math.min(
+        viewAreaWidth / (zoomBounds.width + screenPadding),
+        viewAreaHeight / (zoomBounds.height + screenPadding)
       );
+
+      this.initZoomTransform = d3.zoomIdentity
+        .translate(viewportCenter.x, viewportCenter.y)
+        .scale(initZoomK)
+        .translate(
+          -(zoomBounds.x + zoomBounds.width / 2),
+          -(zoomBounds.y + zoomBounds.height / 2)
+        );
+    }
 
     // Trigger the first zoom
     this.topSvg
@@ -1383,10 +1387,10 @@ export class Embedding {
   getViewportInsets = (): Padding => {
     if (this.hostedDataMode) {
       return {
-        top: 72,
-        right: 20,
-        bottom: 20,
-        left: 20
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0
       };
     }
 

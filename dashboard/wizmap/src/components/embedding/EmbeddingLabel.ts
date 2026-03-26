@@ -92,25 +92,23 @@ export function drawLabels(
       .text(d => (d.lines.length > 1 ? d.lines[1] : ''));
 
     // Draw the topic region
-    if (!this.hostedDataMode) {
-      labelGroup
-        .append('rect')
-        .attr('class', 'topic-tile')
-        .attr('x', d => this.xScale(d.tileX))
-        .attr('y', d => this.yScale(d.tileY))
-        .attr('rx', 4 / this.curZoomTransform.k)
-        .attr('ry', 4 / this.curZoomTransform.k)
-        .attr('width', tileScreenWidth)
-        .attr('height', tileScreenWidth)
-        .style('stroke-width', 1.6 / this.curZoomTransform.k);
+    labelGroup
+      .append('rect')
+      .attr('class', 'topic-tile')
+      .attr('x', d => this.xScale(d.tileX))
+      .attr('y', d => this.yScale(d.tileY))
+      .attr('rx', 4 / this.curZoomTransform.k)
+      .attr('ry', 4 / this.curZoomTransform.k)
+      .attr('width', tileScreenWidth)
+      .attr('height', tileScreenWidth)
+      .style('stroke-width', 1.6 / this.curZoomTransform.k);
 
-      // Add a dot to indicate the label direction
-      labelGroup
-        .append('path')
-        .attr('class', 'direction-indicator')
-        .attr('transform-origin', 'center')
-        .each((d, i, g) => this.addTileIndicatorPath(d, i, g, tileScreenWidth));
-    }
+    // Add a dot to indicate the label direction
+    labelGroup
+      .append('path')
+      .attr('class', 'direction-indicator')
+      .attr('transform-origin', 'center')
+      .each((d, i, g) => this.addTileIndicatorPath(d, i, g, tileScreenWidth));
 
     // // For debugging: show the label bounding box
     // labelGroup
@@ -191,22 +189,20 @@ export function drawLabels(
       });
 
     // Update the tile region
-    if (!this.hostedDataMode) {
-      labelGroup
-        .select('rect.topic-tile')
-        .attr('x', d => this.xScale(d.tileX))
-        .attr('y', d => this.yScale(d.tileY))
-        .attr('rx', 4 / this.curZoomTransform.k)
-        .attr('ry', 4 / this.curZoomTransform.k)
-        .attr('width', tileScreenWidth)
-        .attr('height', tileScreenWidth)
-        .style('stroke-width', 1.6 / this.curZoomTransform.k);
+    labelGroup
+      .select('rect.topic-tile')
+      .attr('x', d => this.xScale(d.tileX))
+      .attr('y', d => this.yScale(d.tileY))
+      .attr('rx', 4 / this.curZoomTransform.k)
+      .attr('ry', 4 / this.curZoomTransform.k)
+      .attr('width', tileScreenWidth)
+      .attr('height', tileScreenWidth)
+      .style('stroke-width', 1.6 / this.curZoomTransform.k);
 
-      // Update the dot orientation
-      labelGroup
-        .select<SVGPathElement>('path.direction-indicator')
-        .each((d, i, g) => this.addTileIndicatorPath(d, i, g, tileScreenWidth));
-    }
+    // Update the dot orientation
+    labelGroup
+      .select<SVGPathElement>('path.direction-indicator')
+      .each((d, i, g) => this.addTileIndicatorPath(d, i, g, tileScreenWidth));
     return update;
   };
 
