@@ -90,6 +90,7 @@ var _ = Describe("Signal Skip Optimization", func() {
 									{Type: config.SignalTypeDomain, Name: "test_domain"},
 									{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"},
 									{Type: config.SignalTypeUserFeedback, Name: "satisfied"},
+									{Type: config.SignalTypeReask, Name: "likely_dissatisfied"},
 									{Type: config.SignalTypePreference, Name: "test_preference"},
 								},
 							},

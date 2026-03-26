@@ -208,6 +208,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Domain:       ctx.VSRMatchedDomains,
 		FactCheck:    ctx.VSRMatchedFactCheck,
 		UserFeedback: ctx.VSRMatchedUserFeedback,
+		Reask:        ctx.VSRMatchedReask,
 		Preference:   ctx.VSRMatchedPreference,
 		Language:     ctx.VSRMatchedLanguage,
 		Context:      ctx.VSRMatchedContext,

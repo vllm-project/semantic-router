@@ -40,6 +40,8 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(
 		signalInput.compressedText,
 		signalInput.allMessagesText,
+		signalInput.currentUserText,
+		signalInput.priorUserMessages,
 		nonUserMessages,
 		ctx.Headers,
 		false,
@@ -63,12 +65,13 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 }
 
 func logSignalEvaluationResults(signals *classification.SignalResults) {
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, projection=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, projection=%v",
 		signals.MatchedKeywordRules,
 		signals.MatchedEmbeddingRules,
 		signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules,
 		signals.MatchedUserFeedbackRules,
+		signals.MatchedReaskRules,
 		signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules,
 		signals.MatchedContextRules,

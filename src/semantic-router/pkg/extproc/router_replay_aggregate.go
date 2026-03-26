@@ -165,6 +165,9 @@ func buildRouterReplaySignalDistribution(
 		if n := len(record.Signals.UserFeedback); n > 0 {
 			counts["user_feedback"] += n
 		}
+		if n := len(record.Signals.Reask); n > 0 {
+			counts["reask"] += n
+		}
 		if n := len(record.Signals.Preference); n > 0 {
 			counts["preference"] += n
 		}

@@ -66,6 +66,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'User Feedback',
     type: 'info',
   },
+  'x-vsr-matched-reask': {
+    label: 'Reask',
+    type: 'info',
+  },
   'x-vsr-matched-preference': {
     label: 'Preference',
     type: 'info',

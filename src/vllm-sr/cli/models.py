@@ -294,6 +294,15 @@ class KBSignal(BaseModel):
     match: Optional[Literal["best", "threshold"]] = None
 
 
+class Reask(BaseModel):
+    """History-aware repeated-question dissatisfaction signal."""
+
+    name: str
+    description: Optional[str] = None
+    threshold: Optional[float] = None
+    lookback_turns: Optional[int] = None
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -302,6 +311,7 @@ class Signals(BaseModel):
     domains: Optional[List[Domain]] = []
     fact_check: Optional[List[FactCheck]] = []
     user_feedbacks: Optional[List[UserFeedback]] = []
+    reasks: Optional[List[Reask]] = []
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
     context: Optional[List[ContextRule]] = []

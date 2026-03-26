@@ -4,6 +4,7 @@ export interface Signal {
   domain?: string[]
   fact_check?: string[]
   user_feedback?: string[]
+  reask?: string[]
   preference?: string[]
   language?: string[]
   context?: string[]

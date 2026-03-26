@@ -44,6 +44,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeDomain:       c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil,
 		config.SignalTypeFactCheck:    len(c.Config.FactCheckRules) > 0 && c.IsFactCheckEnabled(),
 		config.SignalTypeUserFeedback: len(c.Config.UserFeedbackRules) > 0 && c.IsFeedbackDetectorEnabled(),
+		config.SignalTypeReask:        c.reaskClassifier != nil,
 		config.SignalTypePreference:   len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled(),
 		config.SignalTypeLanguage:     len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
 		config.SignalTypeContext:      c.contextClassifier != nil,
@@ -67,7 +68,7 @@ func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map
 	}
 }
 
-func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, nonUserMessages []string, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, imageURL ...string) *SignalResults {
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, imageURL ...string) *SignalResults {
 	defer c.enterSignalEvaluationLoadGate()()
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
@@ -94,7 +95,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		imgArg = imageURL[0]
 	}
 
-	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, nonUserMessages, imgArg)
+	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, currentUserText, priorUserMessages, nonUserMessages, imgArg)
 	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
 
 	wg.Wait()
@@ -299,6 +300,38 @@ func (c *Classifier) evaluateUserFeedbackSignal(results *SignalResults, mu *sync
 			}
 		}
 	}
+}
+
+func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
+	start := time.Now()
+	matchedRules, err := c.reaskClassifier.Classify(currentUserText, priorUserMessages)
+	elapsed := time.Since(start)
+
+	results.Metrics.Reask.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+
+	logging.Debugf("[Signal Computation] Reask signal evaluation completed in %v", elapsed)
+	if err != nil {
+		logging.Errorf("reask rule evaluation failed: %v", err)
+		return
+	}
+	if len(matchedRules) == 0 {
+		return
+	}
+
+	bestConfidence := 0.0
+	mu.Lock()
+	for _, match := range matchedRules {
+		if match.MinSimilarity > bestConfidence {
+			bestConfidence = match.MinSimilarity
+		}
+		metrics.RecordSignalExtraction(config.SignalTypeReask, match.RuleName, elapsed.Seconds())
+		metrics.RecordSignalMatch(config.SignalTypeReask, match.RuleName)
+		results.MatchedReaskRules = append(results.MatchedReaskRules, match.RuleName)
+		results.SignalConfidences["reask:"+match.RuleName] = match.MinSimilarity
+		results.SignalValues["reask:"+match.RuleName] = float64(match.MatchedTurns)
+	}
+	results.Metrics.Reask.Confidence = bestConfidence
+	mu.Unlock()
 }
 
 func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.Mutex, text string) {

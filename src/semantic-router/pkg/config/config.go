@@ -27,6 +27,7 @@ const (
 	SignalTypeDomain       = "domain"
 	SignalTypeFactCheck    = "fact_check"
 	SignalTypeUserFeedback = "user_feedback"
+	SignalTypeReask        = "reask"
 	SignalTypePreference   = "preference"
 	SignalTypeLanguage     = "language"
 	SignalTypeContext      = "context"

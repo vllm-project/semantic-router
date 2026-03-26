@@ -238,7 +238,35 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 6. Preference Rules
+  // 6. Reask Rules
+  // From reask_rules (Go/Router format)
+  config.reask_rules?.forEach(rule => {
+    addSignal({
+      type: 'reask',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.reask,
+      config: {
+        threshold: rule.threshold,
+        lookback_turns: rule.lookback_turns,
+      },
+    })
+  })
+  // From signals.reasks (Python CLI format)
+  routingSignals?.reasks?.forEach(rule => {
+    addSignal({
+      type: 'reask',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.reask,
+      config: {
+        threshold: rule.threshold,
+        lookback_turns: rule.lookback_turns,
+      },
+    })
+  })
+
+  // 7. Preference Rules
   // From preference_rules (Go/Router format)
   config.preference_rules?.forEach(rule => {
     addSignal({
@@ -716,6 +744,7 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     domain: [],
     fact_check: [],
     user_feedback: [],
+    reask: [],
     preference: [],
     language: [],
     context: [],

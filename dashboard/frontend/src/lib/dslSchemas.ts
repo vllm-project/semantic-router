@@ -10,6 +10,7 @@ export interface FieldSchema {
 
 export const SIGNAL_TYPES = [
   'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
+  'reask',
   'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
   'jailbreak', 'pii', 'kb',
 ] as const
@@ -49,6 +50,12 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
     case 'user_feedback':
       return [
         { key: 'description', label: 'Description', type: 'string', required: true },
+      ]
+    case 'reask':
+      return [
+        { key: 'description', label: 'Description', type: 'string' },
+        { key: 'threshold', label: 'Threshold', type: 'number', placeholder: '0.80' },
+        { key: 'lookback_turns', label: 'Lookback Turns', type: 'number', placeholder: '1' },
       ]
     case 'preference':
       return [

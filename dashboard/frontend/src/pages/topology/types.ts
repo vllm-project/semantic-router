@@ -9,6 +9,7 @@ export type SignalType =
   | 'domain'
   | 'fact_check'
   | 'user_feedback'
+  | 'reask'
   | 'preference'
   | 'language'
   | 'context'
@@ -406,6 +407,12 @@ export interface ConfigData {
     name: string
     description?: string
   }>
+  reask_rules?: Array<{
+    name: string
+    description?: string
+    threshold?: number
+    lookback_turns?: number
+  }>
   preference_rules?: Array<{
     name: string
     description?: string
@@ -525,6 +532,12 @@ export interface ConfigData {
     user_feedbacks?: Array<{
       name: string
       description?: string
+    }>
+    reasks?: Array<{
+      name: string
+      description?: string
+      threshold?: number
+      lookback_turns?: number
     }>
     preferences?: Array<{
       name: string

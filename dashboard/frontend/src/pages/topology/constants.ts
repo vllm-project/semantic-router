@@ -9,6 +9,7 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   domain: 'DOM',
   fact_check: 'FC',
   user_feedback: 'UF',
+  reask: 'RA',
   preference: 'PREF',
   language: 'LANG',
   context: 'CTX',
@@ -29,6 +30,7 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   domain: { background: '#4a5568', border: '#2d3748' },       // Dark Gray
   fact_check: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
   user_feedback: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  reask: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
   preference: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
   language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
   context: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
@@ -49,6 +51,7 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   domain: '10-50ms',
   fact_check: '10-50ms',
   user_feedback: '10-50ms',
+  reask: '10-50ms',
   preference: '200-500ms',
   language: '<1ms',
   context: '<1ms',
@@ -228,6 +231,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'domain',
   'fact_check',
   'user_feedback',
+  'reask',
   'preference',
   'language',
   'context',

@@ -15,6 +15,7 @@ var referenceSignalKeyByType = map[string]string{
 	SignalTypeModality:     "modality",
 	SignalTypePII:          "pii",
 	SignalTypePreference:   "preferences",
+	SignalTypeReask:        "reasks",
 	SignalTypeStructure:    "structure",
 	SignalTypeKB:           "kb",
 	SignalTypeUserFeedback: "user_feedbacks",

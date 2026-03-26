@@ -254,6 +254,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       case 'User Feedback':
         cfg.signals.user_feedbacks = (cfg.signals.user_feedbacks || []).filter(s => s.name !== targetName)
         break
+      case 'Reask':
+        cfg.signals.reasks = (cfg.signals.reasks || []).filter(s => s.name !== targetName)
+        break
       case 'Language':
         cfg.signals.language = (cfg.signals.language || []).filter(s => s.name !== targetName)
         break

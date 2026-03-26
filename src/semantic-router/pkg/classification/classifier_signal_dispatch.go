@@ -18,6 +18,8 @@ func (c *Classifier) buildSignalDispatchers(
 	mu *sync.Mutex,
 	textForSignal func(string) string,
 	contextText string,
+	currentUserText string,
+	priorUserMessages []string,
 	nonUserMessages []string,
 	imgArg string,
 ) []signalDispatch {
@@ -41,6 +43,10 @@ func (c *Classifier) buildSignalDispatchers(
 		{
 			config.SignalTypeUserFeedback, "User feedback",
 			func() { c.evaluateUserFeedbackSignal(results, mu, textForSignal(config.SignalTypeUserFeedback)) },
+		},
+		{
+			config.SignalTypeReask, "Reask",
+			func() { c.evaluateReaskSignal(results, mu, currentUserText, priorUserMessages) },
 		},
 		{
 			config.SignalTypePreference, "Preference",

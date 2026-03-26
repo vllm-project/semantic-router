@@ -66,6 +66,7 @@ func denormalizeSignals(raw map[string]interface{}) {
 		"categories":          "domains",
 		"fact_check_rules":    "fact_check",
 		"user_feedback_rules": "user_feedbacks",
+		"reask_rules":         "reasks",
 		"preference_rules":    "preferences",
 		"language_rules":      "language",
 		"context_rules":       "context",
@@ -543,7 +544,7 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	// Include them in config so the CR is self-contained
 	signalKeys := []string{
 		"keyword_rules", "embedding_rules", "categories",
-		"fact_check_rules", "user_feedback_rules", "preference_rules",
+		"fact_check_rules", "user_feedback_rules", "reask_rules", "preference_rules",
 		"language_rules", "context_rules", "structure_rules",
 		"modality_rules", "role_bindings", "jailbreak", "pii",
 		"kb",

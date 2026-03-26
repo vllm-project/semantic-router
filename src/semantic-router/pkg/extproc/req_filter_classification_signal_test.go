@@ -15,7 +15,10 @@ func TestPrepareSignalEvaluationInput_CombinesMessagesWithoutCompression(t *test
 		Config: &config.RouterConfig{},
 	}
 
-	input := router.prepareSignalEvaluationInput("user question", []string{"system setup", "assistant reply"})
+	input := router.prepareSignalEvaluationInput(signalConversationHistory{
+		currentUserMessage: "user question",
+		nonUserMessages:    []string{"system setup", "assistant reply"},
+	})
 
 	assert.Equal(t, "user question", input.evaluationText)
 	assert.Equal(t, "system setup assistant reply user question", input.allMessagesText)
@@ -28,7 +31,9 @@ func TestPrepareSignalEvaluationInput_UsesNonUserMessagesWhenUserContentMissing(
 		Config: &config.RouterConfig{},
 	}
 
-	input := router.prepareSignalEvaluationInput("", []string{"system setup", "assistant reply"})
+	input := router.prepareSignalEvaluationInput(signalConversationHistory{
+		nonUserMessages: []string{"system setup", "assistant reply"},
+	})
 
 	assert.Equal(t, "system setup assistant reply", input.evaluationText)
 	assert.Equal(t, "system setup assistant reply", input.allMessagesText)
@@ -44,6 +49,7 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 		MatchedDomainRules:       []string{"domain:math"},
 		MatchedFactCheckRules:    []string{"needs_fact_check"},
 		MatchedUserFeedbackRules: []string{"satisfied"},
+		MatchedReaskRules:        []string{"likely_dissatisfied"},
 		MatchedPreferenceRules:   []string{"pref:code"},
 		MatchedLanguageRules:     []string{"en"},
 		MatchedContextRules:      []string{"context:short"},
@@ -68,6 +74,7 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 	assert.Equal(t, []string{"domain:math"}, ctx.VSRMatchedDomains)
 	assert.Equal(t, []string{"needs_fact_check"}, ctx.VSRMatchedFactCheck)
 	assert.Equal(t, []string{"satisfied"}, ctx.VSRMatchedUserFeedback)
+	assert.Equal(t, []string{"likely_dissatisfied"}, ctx.VSRMatchedReask)
 	assert.Equal(t, []string{"pref:code"}, ctx.VSRMatchedPreference)
 	assert.Equal(t, []string{"en"}, ctx.VSRMatchedLanguage)
 	assert.Equal(t, []string{"context:short"}, ctx.VSRMatchedContext)
@@ -95,6 +102,7 @@ func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
 		MatchedDomainRules:       []string{"domain:c"},
 		MatchedFactCheckRules:    []string{"fact:d"},
 		MatchedUserFeedbackRules: []string{"feedback:e"},
+		MatchedReaskRules:        []string{"reask:f"},
 		MatchedPreferenceRules:   []string{"pref:f"},
 		MatchedLanguageRules:     []string{"lang:g"},
 		MatchedContextRules:      []string{"context:h"},
@@ -112,6 +120,7 @@ func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
 		"domain:c",
 		"fact:d",
 		"feedback:e",
+		"reask:f",
 		"pref:f",
 		"lang:g",
 		"context:h",

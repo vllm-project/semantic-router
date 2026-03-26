@@ -29,6 +29,7 @@ type Classifier struct {
 	factCheckClassifier   *FactCheckClassifier
 	hallucinationDetector *HallucinationDetector
 	feedbackDetector      *FeedbackDetector
+	reaskClassifier       *ReaskClassifier
 
 	// Preference classifier for route matching via external LLM
 	preferenceClassifier *PreferenceClassifier
@@ -110,6 +111,12 @@ func withKeywordEmbeddingClassifier(keywordEmbeddingInitializer EmbeddingClassif
 	return func(c *Classifier) {
 		c.keywordEmbeddingInitializer = keywordEmbeddingInitializer
 		c.keywordEmbeddingClassifier = keywordEmbeddingClassifier
+	}
+}
+
+func withReaskClassifier(reaskClassifier *ReaskClassifier) option {
+	return func(c *Classifier) {
+		c.reaskClassifier = reaskClassifier
 	}
 }
 

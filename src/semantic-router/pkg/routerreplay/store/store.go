@@ -13,6 +13,7 @@ type Signal struct {
 	Domain       []string `json:"domain,omitempty"`
 	FactCheck    []string `json:"fact_check,omitempty"`
 	UserFeedback []string `json:"user_feedback,omitempty"`
+	Reask        []string `json:"reask,omitempty"`
 	Preference   []string `json:"preference,omitempty"`
 	Language     []string `json:"language,omitempty"`
 	Context      []string `json:"context,omitempty"`

@@ -209,6 +209,7 @@ const SIGNAL_DESCRIPTIONS: Record<string, string> = {
   domain: 'MMLU-based academic domain detection',
   fact_check: 'Flag queries requiring factual verification',
   user_feedback: 'Route based on user feedback signals',
+  reask: 'Detect repeated user questions as implicit dissatisfaction',
   preference: 'User preference-based routing',
   language: 'Detect query language',
   context: 'Context window length requirements',

@@ -722,6 +722,7 @@ export interface ConfigSignals {
   domains?: DomainSignal[]
   fact_check?: FactCheckSignal[]
   user_feedbacks?: UserFeedbackSignal[]
+  reasks?: ReaskSignal[]
   preferences?: PreferenceSignal[]
   language?: LanguageSignal[]
   context?: ContextSignal[]
@@ -1017,6 +1018,13 @@ export interface UserFeedbackSignal {
   description: string
 }
 
+export interface ReaskSignal {
+  name: string
+  description?: string
+  threshold?: number
+  lookback_turns?: number
+}
+
 export interface PreferenceSignal {
   name: string
   description: string
@@ -1133,6 +1141,7 @@ export interface ConfigData {
   embedding_rules?: EmbeddingSignal[]
   fact_check_rules?: FactCheckSignal[]
   user_feedback_rules?: UserFeedbackSignal[]
+  reask_rules?: ReaskSignal[]
   preference_rules?: PreferenceSignal[]
   language_rules?: LanguageSignal[]
   context_rules?: ContextSignal[]
@@ -1149,6 +1158,7 @@ export type SignalType =
   | 'Preference'
   | 'Fact Check'
   | 'User Feedback'
+  | 'Reask'
   | 'Language'
   | 'Context'
   | 'Structure'
@@ -1183,6 +1193,7 @@ export interface AddSignalFormState {
   max_tokens?: string
   preference_examples?: string
   preference_threshold?: number
+  lookback_turns?: number
   complexity_threshold?: number
   structure_feature?: string
   structure_predicate?: string

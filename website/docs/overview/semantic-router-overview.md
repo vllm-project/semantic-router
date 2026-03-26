@@ -40,12 +40,12 @@ User Query → Signal Extraction → Projection Coordination → Decision Engine
 
 ### 1. Signal Extraction
 
-The router extracts 14 maintained signal families from each request:
+The router extracts 16 maintained signal families from each request:
 
 | Signal family group | Families                                                                                                         | Example role                                         |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | **Heuristic**       | `authz`, `context`, `keyword`, `language`, `structure`                                                           | Cheap policy, request-shape, and locale gating       |
-| **Learned**         | `complexity`, `domain`, `embedding`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `user-feedback` | Semantic, safety, and response-quality understanding |
+| **Learned**         | `complexity`, `domain`, `embedding`, `kb`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `reask`, `user-feedback` | Semantic, safety, follow-up, and response-quality understanding |
 
 ### 2. Projection Coordination
 

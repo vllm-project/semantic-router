@@ -19,6 +19,7 @@ import type {
   ModalitySignal,
   PIISignal,
   PreferenceSignal,
+  ReaskSignal,
   RoleBindingSignal,
   SignalType,
   StructureSignal,
@@ -50,6 +51,7 @@ type UnifiedSignalData = Partial<
   PreferenceSignal &
   FactCheckSignal &
   UserFeedbackSignal &
+  ReaskSignal &
   LanguageSignal &
   ContextSignal &
   StructureSignal &
@@ -90,6 +92,7 @@ export default function ConfigPageSignalsSection({
     })),
     fact_check: config?.fact_check_rules,
     user_feedbacks: config?.user_feedback_rules,
+    reasks: config?.reask_rules,
     preferences: config?.preference_rules,
     language: config?.language_rules,
     context: config?.context_rules,
@@ -159,6 +162,17 @@ export default function ConfigPageSignalsSection({
       type: 'User Feedback',
       summary: uf.description || 'No description',
       rawData: uf
+    })
+  })
+
+  effectiveSignals?.reasks?.forEach(reask => {
+    const lookback = reask.lookback_turns ?? 1
+    const threshold = reask.threshold ?? 0.8
+    allSignals.push({
+      name: reask.name,
+      type: 'Reask',
+      summary: `${reask.description || 'No description'} • lookback ${lookback} • threshold ${formatThreshold(threshold)}`,
+      rawData: reask
     })
   })
 
@@ -388,6 +402,15 @@ export default function ConfigPageSignalsSection({
           }
         ]
       })
+    } else if (signal.type === 'Reask') {
+      sections.push({
+        title: 'Reask Signal',
+        fields: [
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+          { label: 'Threshold', value: signal.rawData.threshold !== undefined ? formatThreshold(signal.rawData.threshold) : 'Default (80%)' },
+          { label: 'Lookback Turns', value: signal.rawData.lookback_turns?.toString() || '1' },
+        ]
+      })
     } else if (signal.type === 'Language') {
       sections.push({
         title: 'Language Signal',
@@ -595,6 +618,7 @@ export default function ConfigPageSignalsSection({
       mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
       preference_examples: (signal.rawData.examples || []).join('\n'),
       preference_threshold: signal.rawData.threshold,
+      lookback_turns: signal.rawData.lookback_turns,
       min_tokens: signal.rawData.min_tokens || '0',
       max_tokens: signal.rawData.max_tokens || '8K',
       structure_feature: signal.type === 'Structure' ? JSON.stringify(signal.rawData.feature || {}, null, 2) : defaultForm.structure_feature,
@@ -627,7 +651,7 @@ export default function ConfigPageSignalsSection({
         name: 'type',
         label: 'Type',
         type: 'select',
-        options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Context', 'Structure', 'Complexity', 'Modality', 'Authz', 'Jailbreak', 'PII'],
+        options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Reask', 'Language', 'Context', 'Structure', 'Complexity', 'Modality', 'Authz', 'Jailbreak', 'PII'],
         required: true,
         description: 'Fields are validated based on the selected type.'
       },
@@ -662,6 +686,25 @@ export default function ConfigPageSignalsSection({
         placeholder: 'e.g., 0.35',
         description: 'Override the global preference threshold for this specific rule.',
         shouldHide: conditionallyHideFieldExceptType('Preference')
+      },
+      {
+        name: 'threshold',
+        label: 'Threshold (reask only)',
+        type: 'number',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        placeholder: '0.80',
+        shouldHide: conditionallyHideFieldExceptType('Reask')
+      },
+      {
+        name: 'lookback_turns',
+        label: 'Lookback Turns (reask only)',
+        type: 'number',
+        min: 1,
+        step: 1,
+        placeholder: '1',
+        shouldHide: conditionallyHideFieldExceptType('Reask')
       },
       {
         name: 'operator',
@@ -980,6 +1023,21 @@ export default function ConfigPageSignalsSection({
             {
               name,
               description: formData.description
+            }
+          ]
+          break
+        }
+        case 'Reask': {
+          const threshold = Number.isFinite(formData.threshold) ? Math.max(0, Math.min(1, Number(formData.threshold))) : undefined
+          const lookback_turns = Number.isFinite(formData.lookback_turns) ? Math.max(1, Math.trunc(Number(formData.lookback_turns))) : undefined
+
+          newConfig.signals.reasks = [
+            ...(newConfig.signals.reasks || []),
+            {
+              name,
+              description: formData.description || undefined,
+              threshold,
+              lookback_turns,
             }
           ]
           break

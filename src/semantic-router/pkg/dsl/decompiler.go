@@ -108,6 +108,20 @@ func (d *decompiler) decompileSignals() {
 		d.write("}\n\n")
 	}
 
+	for _, rule := range d.cfg.ReaskRules {
+		d.write("SIGNAL reask %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		if rule.Threshold != 0 {
+			d.write("  threshold: %g\n", rule.Threshold)
+		}
+		if rule.LookbackTurns != 0 {
+			d.write("  lookback_turns: %d\n", rule.LookbackTurns)
+		}
+		d.write("}\n\n")
+	}
+
 	for _, pref := range d.cfg.PreferenceRules {
 		d.write("SIGNAL preference %s {\n", quoteName(pref.Name))
 		if pref.Description != "" {
@@ -1035,6 +1049,20 @@ func (d *decompiler) userFeedbackToSignal(uf *config.UserFeedbackRule) *SignalDe
 		fields["description"] = StringValue{V: uf.Description}
 	}
 	return &SignalDecl{SignalType: "user_feedback", Name: uf.Name, Fields: fields}
+}
+
+func (d *decompiler) reaskToSignal(rule *config.ReaskRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	if rule.Threshold != 0 {
+		fields["threshold"] = FloatValue{V: float64(rule.Threshold)}
+	}
+	if rule.LookbackTurns != 0 {
+		fields["lookback_turns"] = IntValue{V: rule.LookbackTurns}
+	}
+	return &SignalDecl{SignalType: "reask", Name: rule.Name, Fields: fields}
 }
 
 func (d *decompiler) preferenceToSignal(pref *config.PreferenceRule) *SignalDecl {
