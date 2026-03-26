@@ -241,7 +241,7 @@ const sidebars: SidebarsConfig = {
       label: 'API Reference',
       items: [
         'api/router',
-        'api/classification',
+        'api/apiserver',
         'api/crd-reference',
       ],
     },

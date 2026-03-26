@@ -185,7 +185,7 @@ PII detection is automatically integrated into the routing process. When a reque
 
 ### Classification Endpoint
 
-You can also check PII detection directly using the classification API:
+You can also check PII detection directly using the router apiserver classification endpoints:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/classify \

@@ -79,12 +79,8 @@ def fetch_router_snapshot(router_url: str) -> dict[str, Any]:
         action="GET /config/router",
     )
     versions = ensure_success(
-        *http_json("GET", f"{base}/config/versions"),
-        action="GET /config/versions",
-    )
-    classification_cfg = ensure_success(
-        *http_json("GET", f"{base}/config/classification"),
-        action="GET /config/classification",
+        *http_json("GET", f"{base}/config/router/versions"),
+        action="GET /config/router/versions",
     )
     ready_status, ready_payload = http_json("GET", f"{base}/ready")
     health_status, health_payload = http_json("GET", f"{base}/health")
@@ -93,7 +89,6 @@ def fetch_router_snapshot(router_url: str) -> dict[str, Any]:
         "captured_at": utc_now(),
         "config_router": router_cfg,
         "config_versions": versions,
-        "config_classification": classification_cfg,
         "ready": {"status_code": ready_status, "payload": ready_payload},
         "health": {"status_code": health_status, "payload": health_payload},
     }
@@ -128,23 +123,6 @@ def wait_for_router_ready(
         "router did not become ready after deploy: "
         f"status={last_status}, payload={json.dumps(last_payload, ensure_ascii=False)}"
     )
-
-
-def refresh_runtime_classification(router_url: str) -> dict[str, Any]:
-    base = normalize_router_url(router_url)
-    current_cfg = ensure_success(
-        *http_json("GET", f"{base}/config/classification"),
-        action="GET /config/classification",
-    )
-    updated_cfg = ensure_success(
-        *http_json("PUT", f"{base}/config/classification", current_cfg),
-        action="PUT /config/classification",
-    )
-    return {
-        "router_url": base,
-        "refreshed_at": utc_now(),
-        "config_classification": updated_cfg,
-    }
 
 
 def evaluate_probe(router_url: str, probe: Probe) -> dict[str, Any]:
@@ -300,11 +278,11 @@ def deploy_config(
     if dsl_path is not None:
         payload["dsl"] = dsl_path.read_text(encoding="utf-8")
     status, response = http_json(
-        "POST",
-        f"{normalize_router_url(router_url)}/config/deploy",
+        "PATCH",
+        f"{normalize_router_url(router_url)}/config/router",
         payload,
     )
-    return ensure_success(status, response, "POST /config/deploy")
+    return ensure_success(status, response, "PATCH /config/router")
 
 
 def write_json(path: Path, payload: Any) -> None:

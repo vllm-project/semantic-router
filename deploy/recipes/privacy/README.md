@@ -259,6 +259,6 @@ Validated against a live router endpoint.
 
 ## Runtime Note
 
-On this endpoint, `POST /config/deploy` created a new durable version but did not immediately make the latest routing surface active in memory. For validation, the live routing surface was explicitly refreshed with `PUT /config/classification` using the maintained local `routing` block before the final probe run.
+The calibration loop now uses `PATCH /config/router` as its default durable merge path. That keeps unrelated router config branches intact while still creating a versioned backup and triggering the normal reload path.
 
 This is a runtime behavior note, not part of the recipe contract itself. The maintained recipe still lives in the YAML and DSL assets above.

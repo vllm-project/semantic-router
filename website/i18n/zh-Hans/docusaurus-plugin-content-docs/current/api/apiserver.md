@@ -1,30 +1,31 @@
-# 管理 API 参考
+# Router Apiserver API 参考
 
-Classification API 提供对 Semantic Router 分类模型的直接访问，用于 intent 检测、PII 识别和安全分析。此 API 对于测试、调试和独立分类任务非常有用。
+Router Apiserver 是运行在 8080 端口上的 HTTP 控制与工具面。它暴露健康与就绪检查、OpenAI 兼容模型列表、模型信息、直接分类工具，以及 Router 配置管理 API。对于运维检查、调试、calibration loop 和 Envoy 数据面之外的配置生命周期操作，都应使用这一组接口。
 
 ## API 端点
 
 ### 基础 URL
 
-```
-http://localhost:8080/api/v1/classify
-```
+`http://localhost:8080`
 
 ## 服务器状态
 
-Classification API 服务器与主 Semantic Router ExtProc 服务器一起运行：
+Router Apiserver 与主 Semantic Router ExtProc 服务器一起运行：
 
-- **Classification API**：`http://localhost:8080`（HTTP REST API）
+- **Router Apiserver**：`http://localhost:8080`（HTTP REST API）
 - **ExtProc 服务器**：`http://localhost:50051`（用于 Envoy 集成的 gRPC）
 - **指标服务器**：`http://localhost:9190`（Prometheus 指标）
 
 ### 端点到端口映射（快速参考）
 
-- 端口 8080（本 API）
+- 端口 8080（Router Apiserver）
+  - `GET /health`、`GET /ready`
+  - `GET /api/v1`、`GET /openapi.json`、`GET /docs`
   - `GET /v1/models`（OpenAI 兼容模型列表，包含 `auto`）
-  - `GET /health`
   - `GET /info/models`、`GET /info/classifier`
   - `POST /api/v1/classify/intent|pii|security|batch`
+  - `GET|PATCH|PUT /config/router`
+  - `GET /config/router/versions`、`POST /config/router/rollback`
 
 - 端口 8801（Envoy 公共入口）
   - 通常将 `POST /v1/chat/completions` 代理到上游 LLM，同时调用 ExtProc（50051）。
@@ -46,22 +47,27 @@ make run-router
 
 ### ✅ 完全实现
 
-- `GET /health` - 健康检查端点
+- `GET /health`、`GET /ready` - 健康与就绪检查端点
+- `GET /api/v1`、`GET /openapi.json`、`GET /docs` - API 发现与 OpenAPI 文档端点
+- `GET /v1/models` - OpenAI 兼容模型列表
 - `POST /api/v1/classify/intent` - 使用真实模型推理的意图分类
 - `POST /api/v1/classify/pii` - 使用真实模型推理的 PII 检测
 - `POST /api/v1/classify/security` - 使用真实模型推理的 security/jailbreak 检测
 - `POST /api/v1/classify/batch` - 支持可配置处理策略的批量分类
 - `GET /info/models` - 模型信息和系统状态
 - `GET /info/classifier` - 详细分类器能力和配置
+- `GET /config/router` - 返回当前 Router 配置文档
+- `PATCH /config/router` - 以 merge 语义更新 Router 配置
+- `PUT /config/router` - 以 replace 语义替换 Router 配置文档
+- `GET /config/router/versions` - 列出备份版本
+- `POST /config/router/rollback` - 恢复指定备份版本
 
 ### 🔄 占位符实现
 
 - `POST /api/v1/classify/combined` - 返回"未实现"响应
 - `GET /metrics/classification` - 返回"未实现"响应
-- `GET /config/classification` - 返回"未实现"响应
-- `PUT /config/classification` - 返回"未实现"响应
 
-完全实现的端点使用加载的模型提供真实分类结果。占位符端点返回适当的 HTTP 501 响应，可根据需要扩展。
+已实现的端点覆盖了当前 Router Apiserver 的有效 contract。占位符端点目前会显式返回 HTTP 501。
 
 ## 快速开始
 
@@ -576,63 +582,65 @@ API 自动扫描 `./models/` 目录并选择最佳可用模型：
 
 ```yaml
 # config/config.yaml（摘录）
-classifier:
-  category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+global:
+  model_catalog:
+    modules:
+      classifier:
+        domain:
+          model_id: "models/category_classifier_modernbert-base_model"
+          use_modernbert: true
+          threshold: 0.6
+          use_cpu: true
+          category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
 
-categories:
-  - name: tech
-    # 将通用 "tech" 映射到多个 MMLU-Pro 类别
-    mmlu_categories: ["computer science", "engineering"]
-  - name: finance
-    # 将通用 "finance" 映射到 MMLU economics
-    mmlu_categories: ["economics"]
-  - name: politics
-    # 如果省略 mmlu_categories 且名称与 MMLU 类别匹配，
-    # 路由器会自动回退到恒等映射。
-
-decisions:
-  - name: tech
-    description: "路由技术查询"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "tech"
-    modelRefs:
-      - model: phi4
-        use_reasoning: false
-      - model: mistral-small3.1
-        use_reasoning: false
-
-  - name: finance
-    description: "路由财务查询"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "finance"
-    modelRefs:
-      - model: gemma3:27b
-        use_reasoning: false
-
-  - name: politics
-    description: "路由政治查询"
-    priority: 10
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "politics"
-    modelRefs:
-      - model: gemma3:27b
-        use_reasoning: false
+routing:
+  signals:
+    domains:
+      - name: tech
+        # 将通用 "tech" 映射到多个 MMLU-Pro 类别
+        mmlu_categories: ["computer science", "engineering"]
+      - name: finance
+        # 将通用 "finance" 映射到 MMLU economics
+        mmlu_categories: ["economics"]
+      - name: politics
+        # 如果省略 mmlu_categories 且名称与 MMLU 类别匹配，
+        # 路由器会自动回退到恒等映射。
+  decisions:
+    - name: tech
+      description: "路由技术查询"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "tech"
+      modelRefs:
+        - model: phi4
+          use_reasoning: false
+        - model: mistral-small3.1
+          use_reasoning: false
+    - name: finance
+      description: "路由财务查询"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "finance"
+      modelRefs:
+        - model: gemma3:27b
+          use_reasoning: false
+    - name: politics
+      description: "路由政治查询"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "politics"
+      modelRefs:
+        - model: gemma3:27b
+          use_reasoning: false
 ```
 
 注意：
@@ -762,46 +770,74 @@ decisions:
 }
 ```
 
-## 配置管理
+## Router 配置管理
 
-### 获取当前配置
+### 获取当前 Router 配置
 
-`GET /config/classification`
+`GET /config/router`
 
 ```json
 {
-  "confidence_thresholds": {
-    "intent_classification": 0.75,
-    "pii_detection": 0.8,
-    "jailbreak_detection": 0.3
-  },
-  "model_paths": {
-    "intent_classifier": "./models/category_classifier_modernbert-base_model",
-    "pii_detector": "./models/pii_classifier_modernbert-base_model",
-    "jailbreak_guard": "./models/jailbreak_classifier_modernbert-base_model"
-  },
-  "performance_settings": {
-    "batch_size": 10,
-    "max_sequence_length": 512,
-    "enable_gpu": true
+  "routing": {
+    "signals": {
+      "domains": [
+        { "name": "math" }
+      ]
+    },
+    "decisions": [
+      {
+        "name": "math_route",
+        "priority": 100
+      }
+    ]
   }
 }
 ```
 
-### 更新配置
+### 合并 Router 配置
 
-`PUT /config/classification`
+`PATCH /config/router`
 
 ```json
 {
-  "confidence_thresholds": {
-    "intent_classification": 0.8
-  },
-  "performance_settings": {
-    "batch_size": 16
+  "routing": {
+    "decisions": [
+      {
+        "name": "math_route",
+        "priority": 120
+      }
+    ]
   }
 }
 ```
+
+### 替换 Router 配置
+
+`PUT /config/router`
+
+```json
+{
+  "routing": {
+    "signals": {
+      "domains": [
+        { "name": "math" },
+        { "name": "general", "mmlu_categories": ["other"] }
+      ]
+    },
+    "decisions": [
+      {
+        "name": "general_route",
+        "priority": 50
+      }
+    ]
+  }
+}
+```
+
+### 查看与回滚版本
+
+- `GET /config/router/versions`
+- `POST /config/router/rollback`
 
 ## 错误处理
 
@@ -1056,4 +1092,4 @@ const api = new ClassificationAPI();
 }
 ```
 
-此 Classification API 提供对 Semantic Router 所有智能路由能力的全面访问，使开发人员能够构建具有高级文本理解和安全功能的复杂应用程序。
+Router Apiserver 为分类工具与 Router 配置生命周期操作提供了一致的 HTTP 面，而不会挤占 Envoy 面向数据路径的 contract。

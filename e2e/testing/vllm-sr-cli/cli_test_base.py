@@ -3,7 +3,7 @@
 Provides common utilities for testing CLI commands including:
 - Subprocess execution helpers
 - Temporary directory management
-- Docker/Podman container cleanup
+- Docker container cleanup
 - Logging and assertion helpers
 
 Signed-off-by: vLLM-SR Team
@@ -23,7 +23,6 @@ from urllib import request as urllib_request
 import yaml
 
 HTTP_STATUS_OK = 200
-SUPPORTED_CONTAINER_RUNTIMES = ("docker", "podman")
 
 
 class CLITestBase(unittest.TestCase):
@@ -74,21 +73,10 @@ class CLITestBase(unittest.TestCase):
 
     @classmethod
     def _detect_container_runtime(cls) -> str:
-        """Detect available container runtime (docker or podman)."""
-        # Check for explicit environment variable
-        env_runtime = os.getenv("CONTAINER_RUNTIME")
-        normalized_runtime = (env_runtime or "").lower()
-        if normalized_runtime in SUPPORTED_CONTAINER_RUNTIMES and shutil.which(
-            normalized_runtime
-        ):
-            return normalized_runtime
-
-        # Auto-detect
+        """Detect the available Docker runtime."""
         if shutil.which("docker"):
             return "docker"
-        if shutil.which("podman"):
-            return "podman"
-        raise RuntimeError("Neither docker nor podman found in PATH")
+        raise RuntimeError("Docker not found in PATH")
 
     @staticmethod
     def _run_subprocess(

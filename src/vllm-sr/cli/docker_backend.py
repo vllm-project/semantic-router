@@ -13,7 +13,7 @@ log = get_logger(__name__)
 
 
 class DockerBackend:
-    """DeploymentBackend implementation for local Docker / Podman."""
+    """DeploymentBackend implementation for local Docker."""
 
     def deploy(
         self,

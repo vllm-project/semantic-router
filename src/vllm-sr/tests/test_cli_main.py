@@ -57,6 +57,16 @@ def test_cli_version_matches_project_metadata():
     assert result.output.strip() == f"vllm-sr version: {expected_version}"
 
 
+def test_serve_help_describes_docker_only_runtime():
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["serve", "--help"])
+
+    assert result.exit_code == 0
+    assert "Local Docker deployment" in result.output
+    assert "Podman" not in result.output
+
+
 def test_inject_algorithm_into_config_updates_all_decisions(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

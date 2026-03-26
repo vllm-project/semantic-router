@@ -6,7 +6,7 @@ The Semantic Router provides a gRPC-based API that integrates seamlessly with En
 
 The Semantic Router operates as an ExtProc server that processes HTTP requests through Envoy Proxy. It doesn't expose direct REST endpoints but rather processes OpenAI-compatible API requests routed through Envoy.
 
-> Note: In addition to the ExtProc path, this project also starts a lightweight HTTP Classification API on port 8080 for health/info and classification utilities. The OpenAI-compatible `/v1/models` endpoint is provided by this HTTP API (8080) and can be optionally exposed through Envoy (8801) via routing rules.
+> Note: In addition to the ExtProc path, this project also starts a lightweight HTTP router apiserver on port 8080 for health, model info, classification utilities, and router config management. The OpenAI-compatible `/v1/models` endpoint is provided by this HTTP API (8080) and can be optionally exposed through Envoy (8801) via routing rules.
 
 ### Ports and endpoint mapping
 
@@ -14,12 +14,13 @@ The Semantic Router operates as an ExtProc server that processes HTTP requests t
   - Typical client entry for OpenAI-compatible requests like `POST /v1/chat/completions`.
   - Can proxy `GET /v1/models` to Router 8080 if you add an Envoy route; otherwise `/v1/models` at 8801 may return “no healthy upstream”.
 
-- 8080 (HTTP, Classification API)
+- 8080 (HTTP, router apiserver)
   - `GET /v1/models`  → OpenAI-compatible model list (includes synthetic `MoM`)
-  - `GET /health`      → Classification API health
+  - `GET /health`      → Router apiserver health
   - `GET /info/models` → Loaded classifier models + system info
   - `GET /info/classifier` → Classifier configuration details
   - `POST /api/v1/classify/intent|pii|security|batch` → Direct classification utilities
+  - `GET|PATCH|PUT /config/router`, `GET /config/router/versions`, `POST /config/router/rollback` → Router config APIs
 
 - 50051 (gRPC, ExtProc)
   - Envoy External Processing (ExtProc) for in-path classification/routing of `/v1/chat/completions`.
@@ -677,7 +678,7 @@ logger.info(f"Request routed to {routing_info.get('selected_model')} "
 
 ## Next Steps
 
-- **[Classification API](./classification)**: Detailed classification endpoints
+- **[Router Apiserver API](./apiserver)**: HTTP health, classification, and router config endpoints
 - **[Quick Start Guide](../installation/installation.md)**: Real-world integration examples
 - **[Configuration Guide](../installation/configuration.md)**: Production configuration
 
