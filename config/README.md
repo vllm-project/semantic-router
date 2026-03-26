@@ -45,6 +45,7 @@ Each supported algorithm now has its own tutorial page under `website/docs/tutor
 `config/plugin/` is organized by route-local plugin or reusable plugin bundle:
 
 - one directory per plugin or bundle, such as `semantic-cache/`, `rag/`, `memory/`, or `content-safety/`
+- route-local tool policy examples live under `tools/`
 - one fragment example per directory in the current catalog
 
 Each supported plugin now has its own tutorial page under `website/docs/tutorials/plugin/`.

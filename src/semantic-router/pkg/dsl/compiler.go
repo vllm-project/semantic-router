@@ -451,7 +451,6 @@ func (c *Compiler) compileRoutes() {
 			Description: r.Description,
 			Priority:    r.Priority,
 			Tier:        r.Tier,
-			ToolScope:   r.ToolScope,
 		}
 
 		// Compile WHEN expression → RuleNode tree.
@@ -960,6 +959,25 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		cfg := config.FastResponsePluginConfig{}
 		if v, ok := getStringField(fields, "message"); ok {
 			cfg.Message = v
+		}
+		setPluginConfig(cfg)
+
+	case "tools":
+		cfg := config.ToolsPluginConfig{}
+		if v, ok := getBoolField(fields, "enabled"); ok {
+			cfg.Enabled = v
+		}
+		if v, ok := getStringField(fields, "mode"); ok {
+			cfg.Mode = v
+		}
+		if v, ok := getBoolField(fields, "semantic_selection"); ok {
+			cfg.SemanticSelection = &v
+		}
+		if values, ok := getStringArrayField(fields, "allow_tools"); ok {
+			cfg.AllowTools = values
+		}
+		if values, ok := getStringArrayField(fields, "block_tools"); ok {
+			cfg.BlockTools = values
 		}
 		setPluginConfig(cfg)
 

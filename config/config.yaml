@@ -462,11 +462,6 @@ routing:
       description: Static fallback for standard business traffic.
       priority: 200
       tier: 2
-      tool_scope: standard
-      allow_tools:
-        - search_web
-      block_tools:
-        - exec_cmd
       rules:
         operator: AND
         conditions:
@@ -494,6 +489,15 @@ routing:
             enabled: true
             similarity_threshold: 0.82
             ttl_seconds: 7200
+        - type: tools
+          configuration:
+            enabled: true
+            mode: filtered
+            semantic_selection: true
+            allow_tools:
+              - search_web
+            block_tools:
+              - exec_cmd
 
     - name: legal_confidence_route
       description: Confidence-routed legal and factual traffic.

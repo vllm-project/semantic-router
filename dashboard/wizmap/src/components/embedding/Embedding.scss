@@ -77,7 +77,8 @@
   top: 0px;
   left: 0px;
   z-index: 3;
-  background: hsla(0, 100%, 100%, 0.6);
+  background: transparent;
+  pointer-events: none;
 }
 
 :global(.search-point-canvas.hidden) {

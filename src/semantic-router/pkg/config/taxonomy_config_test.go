@@ -320,14 +320,22 @@ func TestValidateKnowledgeBaseContractsRejectsUnknownTargetValue(t *testing.T) {
 	}
 }
 
-func TestDecisionToolScopeYAMLRoundTrip(t *testing.T) {
+func TestDecisionToolsPluginYAMLRoundTrip(t *testing.T) {
 	dec := Decision{
-		Name:       "security_containment",
-		Priority:   300,
-		ToolScope:  "none",
-		AllowTools: []string{"read_file"},
-		BlockTools: []string{"exec_cmd"},
-		ModelRefs:  []ModelRef{{Model: "local-guard"}},
+		Name:     "security_containment",
+		Priority: 300,
+		ModelRefs: []ModelRef{
+			{Model: "local-guard"},
+		},
+		Plugins: []DecisionPlugin{
+			mustDecisionPlugin(t, DecisionPluginTools, ToolsPluginConfig{
+				Enabled:           true,
+				Mode:              ToolsPluginModeFiltered,
+				AllowTools:        []string{"read_file"},
+				BlockTools:        []string{"exec_cmd"},
+				SemanticSelection: toolsBoolPtr(true),
+			}),
+		},
 	}
 
 	data, err := yaml.Marshal(dec)
@@ -340,12 +348,19 @@ func TestDecisionToolScopeYAMLRoundTrip(t *testing.T) {
 		t.Fatalf("Unmarshal: %v", err)
 	}
 
-	if got.ToolScope != "none" {
-		t.Errorf("ToolScope = %q, want none", got.ToolScope)
+	cfg := got.GetToolsConfig()
+	if cfg == nil {
+		t.Fatal("expected tools plugin config after round-trip")
+	}
+	if cfg.Mode != ToolsPluginModeFiltered {
+		t.Errorf("Mode = %q, want %q", cfg.Mode, ToolsPluginModeFiltered)
+	}
+	if len(cfg.AllowTools) != 1 || cfg.AllowTools[0] != "read_file" {
+		t.Errorf("AllowTools = %v", cfg.AllowTools)
 	}
 }
 
-func TestDecisionToolScopeOmitsWhenEmpty(t *testing.T) {
+func TestDecisionToolsPluginOmitsLegacyToolFields(t *testing.T) {
 	dec := Decision{Name: "test", Priority: 100}
 	data, err := yaml.Marshal(dec)
 	if err != nil {
@@ -353,49 +368,73 @@ func TestDecisionToolScopeOmitsWhenEmpty(t *testing.T) {
 	}
 
 	raw := string(data)
-	if strings.Contains(raw, "tool_scope") {
-		t.Errorf("expected tool_scope to be omitted in YAML, got:\n%s", raw)
-	}
-}
-
-func TestToolScopeConstants(t *testing.T) {
-	if ToolScopeNone != "none" {
-		t.Errorf("ToolScopeNone = %q", ToolScopeNone)
-	}
-	if ToolScopeLocalOnly != "local_only" {
-		t.Errorf("ToolScopeLocalOnly = %q", ToolScopeLocalOnly)
-	}
-	if ToolScopeStandard != "standard" {
-		t.Errorf("ToolScopeStandard = %q", ToolScopeStandard)
-	}
-	if ToolScopeFull != "full" {
-		t.Errorf("ToolScopeFull = %q", ToolScopeFull)
-	}
-}
-
-func makeRouterConfigWithToolScope(name, scope string) *RouterConfig {
-	return &RouterConfig{
-		IntelligentRouting: IntelligentRouting{
-			Decisions: []Decision{{Name: name, ToolScope: scope}},
-		},
-	}
-}
-
-func TestValidateDecisionToolScopesRejectsUnknown(t *testing.T) {
-	cfg := makeRouterConfigWithToolScope("test_decision", "bogus_scope")
-	err := validateDecisionToolScopes(cfg)
-	if err == nil {
-		t.Fatal("expected error for unrecognized tool_scope, got nil")
-	}
-}
-
-func TestValidateDecisionToolScopesAcceptsValid(t *testing.T) {
-	for _, scope := range []string{"", "none", "local_only", "standard", "full"} {
-		cfg := makeRouterConfigWithToolScope("d", scope)
-		if err := validateDecisionToolScopes(cfg); err != nil {
-			t.Errorf("tool_scope=%q should be valid, got: %v", scope, err)
+	for _, forbidden := range []string{"tool_scope", "allow_tools", "block_tools"} {
+		if strings.Contains(raw, forbidden) {
+			t.Errorf("expected %s to be omitted in YAML, got:\n%s", forbidden, raw)
 		}
 	}
+}
+
+func TestToolsPluginConfigValidate(t *testing.T) {
+	valid := &ToolsPluginConfig{Enabled: true, Mode: ToolsPluginModePassthrough}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("Validate() unexpected error: %v", err)
+	}
+
+	invalidMode := &ToolsPluginConfig{Enabled: true, Mode: "bogus"}
+	if err := invalidMode.Validate(); err == nil {
+		t.Fatal("expected invalid mode to fail validation")
+	}
+
+	filteredWithoutLists := &ToolsPluginConfig{Enabled: true, Mode: ToolsPluginModeFiltered}
+	if err := filteredWithoutLists.Validate(); err == nil {
+		t.Fatal("expected filtered mode without allow/block lists to fail validation")
+	}
+}
+
+func TestParseYAMLBytesRejectsLegacyDecisionToolFields(t *testing.T) {
+	legacyYAML := `
+version: v0.3
+listeners: []
+providers:
+  defaults: {}
+  models: []
+routing:
+  signals: {}
+  decisions:
+    - name: local_policy
+      priority: 10
+      tool_scope: standard
+      allow_tools: [search_web]
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+global: {}
+`
+
+	_, err := ParseYAMLBytes([]byte(legacyYAML))
+	if err == nil {
+		t.Fatal("expected legacy decision tool fields to be rejected")
+	}
+	if !strings.Contains(err.Error(), "plugins[type=tools].configuration") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func mustDecisionPlugin(t *testing.T, pluginType string, cfg interface{}) DecisionPlugin {
+	t.Helper()
+	payload, err := NewStructuredPayload(cfg)
+	if err != nil {
+		t.Fatalf("NewStructuredPayload: %v", err)
+	}
+	return DecisionPlugin{Type: pluginType, Configuration: payload}
+}
+
+func toolsBoolPtr(v bool) *bool {
+	return &v
 }
 
 func writeKnowledgeBaseFixture(t *testing.T) string {

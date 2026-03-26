@@ -70,6 +70,7 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   'hallucination': 'HAL',
   'router_replay': 'RR',
   'fast_response': 'FR',
+  'tools': 'TL',
 }
 
 // ============== Plugin Colors (NVIDIA Dark Theme) ==============
@@ -80,6 +81,7 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   'hallucination': { background: '#556b7d', border: '#3d4a59' },   // Cool Gray
   'router_replay': { background: '#6ba300', border: '#5a8f00' },   // Green (consistent with other plugins)
   'fast_response': { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  'tools': { background: '#5a6c7d', border: '#3d4a59' },
 }
 
 // ============== Algorithm Icons ==============

@@ -46,6 +46,7 @@ import SearchWorker from './workers/search?worker';
 
 const DEBUG = config.debug;
 const HOVER_RADIUS = 3;
+const HOSTED_INITIAL_FIT_PADDING_RATIO = 0.12;
 let handledFooterMessageID = 0;
 
 let DATA_BASE = `${import.meta.env.BASE_URL}data`;
@@ -1469,8 +1470,14 @@ export class Embedding {
     let x1 = -Infinity;
     let y1 = -Infinity;
 
-    if (contours.length > 1) {
-      for (const coord of contours[1].coordinates) {
+    const contourBoundsSource = this.hostedDataMode
+      ? contours.slice(1)
+      : contours.length > 1
+        ? [contours[1]]
+        : [];
+
+    for (const contour of contourBoundsSource) {
+      for (const coord of contour.coordinates) {
         for (const coordPoints of coord) {
           for (const point of coordPoints) {
             if (point[0] < x0) x0 = point[0];
@@ -1503,27 +1510,46 @@ export class Embedding {
           if (y > pointY1) pointY1 = y;
         }
 
-        return {
+        return this.padHostedInitialBounds({
           x: pointX0,
           y: pointY0,
           width: Math.max(1, pointX1 - pointX0),
           height: Math.max(1, pointY1 - pointY0)
-        };
+        });
       }
 
-      return {
+      return this.padHostedInitialBounds({
         x: 0,
         y: 0,
         width: Math.max(1, this.svgSize.width),
         height: Math.max(1, this.svgSize.height)
-      };
+      });
     }
 
-    return {
+    return this.padHostedInitialBounds({
       x: x0,
       y: y0,
       width: Math.max(1, x1 - x0),
       height: Math.max(1, y1 - y0)
+    });
+  };
+
+  padHostedInitialBounds = (rect: Rect): Rect => {
+    if (!this.hostedDataMode) {
+      return rect;
+    }
+
+    const paddingX = Math.max(24, rect.width * HOSTED_INITIAL_FIT_PADDING_RATIO);
+    const paddingY = Math.max(
+      24,
+      rect.height * HOSTED_INITIAL_FIT_PADDING_RATIO
+    );
+
+    return {
+      x: rect.x - paddingX,
+      y: rect.y - paddingY,
+      width: rect.width + paddingX * 2,
+      height: rect.height + paddingY * 2
     };
   };
 

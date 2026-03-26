@@ -262,9 +262,13 @@ MODEL cloud/frontier-reasoning {
 ROUTE local_security_containment (description = "Keep suspicious or jailbreak-like prompts on the local safety lane with restricted capabilities.") {
   PRIORITY 300
   TIER 1
-  TOOL_SCOPE "none"
   WHEN kb("security_containment") OR projection("policy_security_local_only")
   MODEL "local/private-qwen" (reasoning = false)
+  PLUGIN tools {
+    enabled: true
+    mode: "none"
+    semantic_selection: false
+  }
   PLUGIN router_replay {
     enabled: true
     max_records: 50000
@@ -274,12 +278,16 @@ ROUTE local_security_containment (description = "Keep suspicious or jailbreak-li
   }
 }
 
-ROUTE local_privacy_policy (description = "Route PII, private code, and internal documents to the local model with local-only tool access.") {
+ROUTE local_privacy_policy (description = "Route PII, private code, and internal documents to the local model with policy-owned tool handling.") {
   PRIORITY 250
   TIER 2
-  TOOL_SCOPE "local_only"
   WHEN kb("privacy_policy")
   MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  PLUGIN tools {
+    enabled: true
+    mode: "passthrough"
+    semantic_selection: true
+  }
   PLUGIN router_replay {
     enabled: true
     max_records: 50000
@@ -289,12 +297,16 @@ ROUTE local_privacy_policy (description = "Route PII, private code, and internal
   }
 }
 
-ROUTE cloud_frontier_reasoning (description = "Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model with full tool access.") {
+ROUTE cloud_frontier_reasoning (description = "Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model with plugin-managed tool access.") {
   PRIORITY 200
   TIER 3
-  TOOL_SCOPE "full"
   WHEN kb("frontier_reasoning")
   MODEL "cloud/frontier-reasoning" (reasoning = true, effort = "high")
+  PLUGIN tools {
+    enabled: true
+    mode: "passthrough"
+    semantic_selection: true
+  }
   PLUGIN router_replay {
     enabled: true
     max_records: 50000
@@ -307,9 +319,13 @@ ROUTE cloud_frontier_reasoning (description = "Send only non-sensitive, non-susp
 ROUTE local_standard (description = "Default local route for non-sensitive tasks that do not justify cloud escalation.") {
   PRIORITY 100
   TIER 4
-  TOOL_SCOPE "standard"
   WHEN kb("local_standard") OR (projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard"))
   MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  PLUGIN tools {
+    enabled: true
+    mode: "passthrough"
+    semantic_selection: true
+  }
   PLUGIN router_replay {
     enabled: true
     max_records: 50000

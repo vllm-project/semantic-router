@@ -621,7 +621,6 @@ routing:
       description: Keep suspicious or jailbreak-like prompts on the local safety lane with restricted capabilities.
       priority: 300
       tier: 1
-      tool_scope: none
       rules:
         operator: OR
         conditions:
@@ -633,6 +632,11 @@ routing:
         - model: local/private-qwen
           use_reasoning: false
       plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: none
+            semantic_selection: false
         - type: router_replay
           configuration:
             enabled: true
@@ -640,10 +644,9 @@ routing:
             max_body_bytes: 2048
 
     - name: local_privacy_policy
-      description: Route PII, private code, and internal documents to the local model with local-only tool access.
+      description: Route PII, private code, and internal documents to the local model with policy-owned tool handling.
       priority: 250
       tier: 2
-      tool_scope: local_only
       rules:
         operator: AND
         conditions:
@@ -654,6 +657,11 @@ routing:
           use_reasoning: true
           reasoning_effort: medium
       plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: passthrough
+            semantic_selection: true
         - type: router_replay
           configuration:
             enabled: true
@@ -661,10 +669,9 @@ routing:
             max_body_bytes: 2048
 
     - name: cloud_frontier_reasoning
-      description: Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model with full tool access.
+      description: Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model with plugin-managed tool access.
       priority: 200
       tier: 3
-      tool_scope: full
       rules:
         operator: AND
         conditions:
@@ -675,6 +682,11 @@ routing:
           use_reasoning: true
           reasoning_effort: high
       plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: passthrough
+            semantic_selection: true
         - type: router_replay
           configuration:
             enabled: true
@@ -685,7 +697,6 @@ routing:
       description: Default local route for non-sensitive tasks that do not justify cloud escalation.
       priority: 100
       tier: 4
-      tool_scope: standard
       rules:
         operator: OR
         conditions:
@@ -704,6 +715,11 @@ routing:
           use_reasoning: true
           reasoning_effort: medium
       plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: passthrough
+            semantic_selection: true
         - type: router_replay
           configuration:
             enabled: true

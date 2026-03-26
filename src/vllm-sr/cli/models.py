@@ -390,6 +390,7 @@ class PluginType(str, Enum):
     MEMORY = "memory"
     RAG = "rag"
     FAST_RESPONSE = "fast_response"
+    TOOLS = "tools"
 
 
 class SemanticCachePluginConfig(BaseModel):
@@ -411,6 +412,16 @@ class FastResponsePluginConfig(BaseModel):
     """Configuration for fast_response plugin."""
 
     message: str
+
+
+class ToolsPluginConfig(BaseModel):
+    """Configuration for tools plugin."""
+
+    enabled: bool
+    mode: Literal["none", "passthrough", "filtered"] = "passthrough"
+    semantic_selection: Optional[bool] = None
+    allow_tools: Optional[List[str]] = None
+    block_tools: Optional[List[str]] = None
 
 
 class SystemPromptPluginConfig(BaseModel):

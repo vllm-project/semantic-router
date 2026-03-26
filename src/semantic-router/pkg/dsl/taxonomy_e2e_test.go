@@ -8,7 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func taxonomyConfigFixture() *config.RouterConfig {
+func taxonomyConfigFixture(t *testing.T) *config.RouterConfig {
 	return &config.RouterConfig{
 		KnowledgeBases: []config.KnowledgeBaseConfig{
 			{
@@ -65,9 +65,8 @@ func taxonomyConfigFixture() *config.RouterConfig {
 			},
 			Decisions: []config.Decision{
 				{
-					Name:      "local_privacy_policy",
-					Priority:  250,
-					ToolScope: "local_only",
+					Name:     "local_privacy_policy",
+					Priority: 250,
 					Rules: config.RuleCombination{
 						Operator: "AND",
 						Conditions: []config.RuleCondition{
@@ -75,6 +74,12 @@ func taxonomyConfigFixture() *config.RouterConfig {
 						},
 					},
 					ModelRefs: []config.ModelRef{{Model: "local/private-qwen"}},
+					Plugins: []config.DecisionPlugin{
+						mustKBDecisionPlugin(t, config.DecisionPluginTools, config.ToolsPluginConfig{
+							Enabled: true,
+							Mode:    config.ToolsPluginModePassthrough,
+						}),
+					},
 				},
 			},
 		},
@@ -82,7 +87,7 @@ func taxonomyConfigFixture() *config.RouterConfig {
 }
 
 func TestEmitYAMLFromConfigIncludesKnowledgeBaseAndSignals(t *testing.T) {
-	yamlBytes, err := EmitYAMLFromConfig(taxonomyConfigFixture())
+	yamlBytes, err := EmitYAMLFromConfig(taxonomyConfigFixture(t))
 	if err != nil {
 		t.Fatalf("EmitYAMLFromConfig: %v", err)
 	}
@@ -108,7 +113,7 @@ func TestEmitYAMLFromConfigIncludesKnowledgeBaseAndSignals(t *testing.T) {
 }
 
 func TestDecompileRoutingToASTIncludesKnowledgeBaseSignal(t *testing.T) {
-	prog := DecompileRoutingToAST(taxonomyConfigFixture())
+	prog := DecompileRoutingToAST(taxonomyConfigFixture(t))
 
 	if len(prog.Signals) == 0 {
 		t.Fatal("expected at least one signal in AST")
@@ -141,4 +146,13 @@ func mustSlice(t *testing.T, raw interface{}, path string) []interface{} {
 		t.Fatalf("%s is not a slice", path)
 	}
 	return typed
+}
+
+func mustKBDecisionPlugin(t *testing.T, pluginType string, cfg interface{}) config.DecisionPlugin {
+	t.Helper()
+	payload, err := config.NewStructuredPayload(cfg)
+	if err != nil {
+		t.Fatalf("NewStructuredPayload: %v", err)
+	}
+	return config.DecisionPlugin{Type: pluginType, Configuration: payload}
 }

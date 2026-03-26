@@ -371,8 +371,6 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			route.Priority = *item.Priority
 		case item.Tier != nil:
 			route.Tier = *item.Tier
-		case item.ToolScope != nil:
-			route.ToolScope = unquote(*item.ToolScope)
 		case item.When != nil:
 			route.When = toBoolExpr(item.When)
 		case item.Model != nil:

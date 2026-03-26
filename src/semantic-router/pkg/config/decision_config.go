@@ -10,17 +10,7 @@ type Decision struct {
 	ModelRefs   []ModelRef       `yaml:"modelRefs,omitempty"`
 	Algorithm   *AlgorithmConfig `yaml:"algorithm,omitempty"`
 	Plugins     []DecisionPlugin `yaml:"plugins,omitempty"`
-	ToolScope   string           `yaml:"tool_scope,omitempty"`
-	AllowTools  []string         `yaml:"allow_tools,omitempty"`
-	BlockTools  []string         `yaml:"block_tools,omitempty"`
 }
-
-const (
-	ToolScopeNone      = "none"
-	ToolScopeLocalOnly = "local_only"
-	ToolScopeStandard  = "standard"
-	ToolScopeFull      = "full"
-)
 
 // AlgorithmConfig defines how multiple models should be executed and aggregated.
 type AlgorithmConfig struct {

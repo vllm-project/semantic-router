@@ -48,6 +48,7 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginRouterReplay,
 	DecisionPluginSemanticCache,
 	DecisionPluginSystemPrompt,
+	DecisionPluginTools,
 }
 
 var supportedDecisionAlgorithmTypes = []string{

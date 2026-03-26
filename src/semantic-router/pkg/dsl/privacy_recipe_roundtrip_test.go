@@ -24,8 +24,8 @@ func TestMaintainedPrivacyRecipeParsesAndDecompilesWithoutError(t *testing.T) {
 	if !strings.Contains(dslText, "SIGNAL kb") {
 		t.Error("decompiled DSL missing kb signal")
 	}
-	if !strings.Contains(dslText, "TOOL_SCOPE") {
-		t.Error("decompiled DSL missing TOOL_SCOPE directives")
+	if !strings.Contains(dslText, "PLUGIN tools") {
+		t.Error("decompiled DSL missing tools plugin directives")
 	}
 }
 
@@ -47,15 +47,15 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 		t.Error("expected at least one kb rule from privacy recipe")
 	}
 
-	hasToolScope := false
+	hasToolsPlugin := false
 	for _, dec := range cfg.Decisions {
-		if dec.ToolScope != "" {
-			hasToolScope = true
+		if dec.GetToolsConfig() != nil {
+			hasToolsPlugin = true
 			break
 		}
 	}
-	if !hasToolScope {
-		t.Error("expected at least one decision with ToolScope from privacy recipe")
+	if !hasToolsPlugin {
+		t.Error("expected at least one decision with tools plugin from privacy recipe")
 	}
 
 	// Decompile back to DSL
@@ -80,9 +80,16 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 	}
 
 	for i, dec := range cfg.Decisions {
-		if i < len(cfg2.Decisions) && dec.ToolScope != cfg2.Decisions[i].ToolScope {
-			t.Errorf("round-trip decision %q ToolScope: %q → %q",
-				dec.Name, dec.ToolScope, cfg2.Decisions[i].ToolScope)
+		if i >= len(cfg2.Decisions) {
+			continue
+		}
+		left := dec.GetToolsConfig()
+		right := cfg2.Decisions[i].GetToolsConfig()
+		switch {
+		case (left == nil) != (right == nil):
+			t.Errorf("round-trip decision %q tools plugin presence mismatch", dec.Name)
+		case left != nil && right != nil && left.EffectiveMode() != right.EffectiveMode():
+			t.Errorf("round-trip decision %q tools mode: %q → %q", dec.Name, left.EffectiveMode(), right.EffectiveMode())
 		}
 	}
 }

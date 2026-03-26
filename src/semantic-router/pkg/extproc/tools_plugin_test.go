@@ -88,23 +88,32 @@ func TestFilterToolsByDecisionPolicy_EmptyTools(t *testing.T) {
 	assert.Empty(t, filtered)
 }
 
-func TestToolScopeConstants(t *testing.T) {
-	assert.Equal(t, "none", config.ToolScopeNone)
-	assert.Equal(t, "local_only", config.ToolScopeLocalOnly)
-	assert.Equal(t, "standard", config.ToolScopeStandard)
-	assert.Equal(t, "full", config.ToolScopeFull)
+func TestToolsPluginModeConstants(t *testing.T) {
+	assert.Equal(t, "none", config.ToolsPluginModeNone)
+	assert.Equal(t, "passthrough", config.ToolsPluginModePassthrough)
+	assert.Equal(t, "filtered", config.ToolsPluginModeFiltered)
 }
 
-func TestDecisionToolScopeFields(t *testing.T) {
-	dec := config.Decision{
-		Name:       "test",
-		ToolScope:  "local_only",
+func TestDecisionGetToolsConfig(t *testing.T) {
+	payload, err := config.NewStructuredPayload(config.ToolsPluginConfig{
+		Enabled:    true,
+		Mode:       config.ToolsPluginModeFiltered,
 		AllowTools: []string{"read_file", "list_dir"},
 		BlockTools: []string{"exec_cmd"},
+	})
+	assert.NoError(t, err)
+
+	dec := config.Decision{
+		Name: "test",
+		Plugins: []config.DecisionPlugin{
+			{Type: config.DecisionPluginTools, Configuration: payload},
+		},
 	}
 
-	assert.Equal(t, "test", dec.Name)
-	assert.Equal(t, "local_only", dec.ToolScope)
-	assert.Equal(t, []string{"read_file", "list_dir"}, dec.AllowTools)
-	assert.Equal(t, []string{"exec_cmd"}, dec.BlockTools)
+	cfg := dec.GetToolsConfig()
+	if assert.NotNil(t, cfg) {
+		assert.Equal(t, config.ToolsPluginModeFiltered, cfg.EffectiveMode())
+		assert.Equal(t, []string{"read_file", "list_dir"}, cfg.AllowTools)
+		assert.Equal(t, []string{"exec_cmd"}, cfg.BlockTools)
+	}
 }

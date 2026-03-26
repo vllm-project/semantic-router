@@ -22,9 +22,13 @@ PROJECTION score privacy_contrastive_score {
 
 ROUTE local_privacy_policy {
   PRIORITY 250
-  TOOL_SCOPE "local_only"
   WHEN kb("privacy_policy")
   MODEL "local-model"
+  PLUGIN tools {
+    enabled: true
+    mode: "passthrough"
+    semantic_selection: true
+  }
 }
 `
 }
@@ -104,6 +108,13 @@ func assertCompiledKBDecision(t *testing.T, cfg *config.RouterConfig) {
 	if cond.Type != "kb" || cond.Name != "privacy_policy" {
 		t.Errorf("WHEN condition = %+v", cond)
 	}
+	toolsCfg := cfg.Decisions[0].GetToolsConfig()
+	if toolsCfg == nil {
+		t.Fatal("expected tools plugin on compiled decision")
+	}
+	if toolsCfg.EffectiveMode() != config.ToolsPluginModePassthrough {
+		t.Errorf("tools mode = %q", toolsCfg.EffectiveMode())
+	}
 }
 
 func TestDecompileTaxonomyClassifierAndSignal(t *testing.T) {
@@ -127,6 +138,7 @@ func TestDecompileTaxonomyClassifierAndSignal(t *testing.T) {
 		`metric: "private_vs_public"`,
 		`value_source: "score"`,
 		`WHEN kb("privacy_policy")`,
+		`PLUGIN tools`,
 	} {
 		if !strings.Contains(output, needle) {
 			t.Fatalf("missing %q in decompiled DSL:\n%s", needle, output)
@@ -186,30 +198,30 @@ func TestTaxonomyDSLRoundTrip(t *testing.T) {
 	}
 }
 
-func TestCompileToolScope(t *testing.T) {
+func TestCompileToolsPlugin(t *testing.T) {
 	input := `
 ROUTE security_containment {
   PRIORITY 300
-  TOOL_SCOPE "none"
+  PLUGIN tools { enabled: true, mode: "none", semantic_selection: false }
   MODEL "local-guard"
 }
 
 ROUTE privacy_policy {
   PRIORITY 250
-  TOOL_SCOPE "local_only"
+  PLUGIN tools { enabled: true, mode: "passthrough", semantic_selection: true }
   WHEN keyword("sensitive_kw")
   MODEL "local-model"
 }
 
 ROUTE frontier_reasoning {
   PRIORITY 200
-  TOOL_SCOPE "standard"
+  PLUGIN tools { enabled: true, mode: "filtered", semantic_selection: true, allow_tools: ["search_web"], block_tools: ["exec_cmd"] }
   MODEL "frontier-model"
 }
 
 ROUTE local_standard {
   PRIORITY 100
-  TOOL_SCOPE "full"
+  PLUGIN tools { enabled: true, mode: "passthrough", semantic_selection: false }
   MODEL "default-model"
 }
 `
@@ -221,16 +233,18 @@ ROUTE local_standard {
 	if len(cfg.Decisions) != 4 {
 		t.Fatalf("expected 4 decisions, got %d", len(cfg.Decisions))
 	}
-	if cfg.Decisions[0].ToolScope != "none" {
-		t.Errorf("ToolScope = %q, want none", cfg.Decisions[0].ToolScope)
+	assertToolsMode := func(index int, want string) {
+		t.Helper()
+		cfg := cfg.Decisions[index].GetToolsConfig()
+		if cfg == nil {
+			t.Fatalf("decision[%d] missing tools plugin", index)
+		}
+		if cfg.EffectiveMode() != want {
+			t.Errorf("decision[%d] tools mode = %q, want %q", index, cfg.EffectiveMode(), want)
+		}
 	}
-	if cfg.Decisions[1].ToolScope != "local_only" {
-		t.Errorf("ToolScope = %q, want local_only", cfg.Decisions[1].ToolScope)
-	}
-	if cfg.Decisions[2].ToolScope != "standard" {
-		t.Errorf("ToolScope = %q, want standard", cfg.Decisions[2].ToolScope)
-	}
-	if cfg.Decisions[3].ToolScope != "full" {
-		t.Errorf("ToolScope = %q, want full", cfg.Decisions[3].ToolScope)
-	}
+	assertToolsMode(0, config.ToolsPluginModeNone)
+	assertToolsMode(1, config.ToolsPluginModePassthrough)
+	assertToolsMode(2, config.ToolsPluginModeFiltered)
+	assertToolsMode(3, config.ToolsPluginModePassthrough)
 }

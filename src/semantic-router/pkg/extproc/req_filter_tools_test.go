@@ -18,6 +18,27 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
+func testToolsDecision(mode string, semanticSelection *bool, allowTools, blockTools []string) *config.Decision {
+	payload, err := config.NewStructuredPayload(config.ToolsPluginConfig{
+		Enabled:           true,
+		Mode:              mode,
+		SemanticSelection: semanticSelection,
+		AllowTools:        allowTools,
+		BlockTools:        blockTools,
+	})
+	Expect(err).NotTo(HaveOccurred())
+	return &config.Decision{
+		Name: "test_tools_route",
+		Plugins: []config.DecisionPlugin{
+			{Type: config.DecisionPluginTools, Configuration: payload},
+		},
+	}
+}
+
+func toolsBoolPtr(v bool) *bool {
+	return &v
+}
+
 var _ = Describe("Tool Selection Request Filter", func() {
 	var (
 		tempDir     string
@@ -378,6 +399,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 			ctx = &RequestContext{
 				ExpectStreamingResponse: false,
+				VSRSelectedDecision:     testToolsDecision(config.ToolsPluginModePassthrough, toolsBoolPtr(true), nil, nil),
 			}
 		})
 
@@ -530,6 +552,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 			ctx = &RequestContext{
 				ExpectStreamingResponse: false,
+				VSRSelectedDecision:     testToolsDecision(config.ToolsPluginModePassthrough, toolsBoolPtr(true), nil, nil),
 			}
 		})
 

@@ -83,6 +83,9 @@ func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, erro
 	if rejectErr := rejectRemovedTaxonomyLegacyFields(raw); rejectErr != nil {
 		return nil, rejectErr
 	}
+	if rejectErr := rejectRemovedDecisionToolFields(raw); rejectErr != nil {
+		return nil, rejectErr
+	}
 
 	// Warn about unknown YAML fields (typos) before parsing into typed structs.
 	WarnUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
@@ -150,6 +153,32 @@ func rejectRemovedTaxonomyLegacyFields(raw map[string]interface{}) error {
 		)
 	}
 	return nil
+}
+
+func rejectRemovedDecisionToolFields(raw map[string]interface{}) error {
+	routing := nestedStringMap(raw["routing"])
+	decisions, ok := routing["decisions"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	removed := make([]string, 0)
+	for index, rawDecision := range decisions {
+		decision := nestedStringMap(rawDecision)
+		for _, field := range []string{"tool_scope", "allow_tools", "block_tools"} {
+			if _, ok := decision[field]; ok {
+				removed = append(removed, fmt.Sprintf("routing.decisions[%d].%s", index, field))
+			}
+		}
+	}
+	if len(removed) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"removed config fields are no longer supported: %s; migrate to routing.decisions[].plugins[type=tools].configuration",
+		strings.Join(removed, ", "),
+	)
 }
 
 func parseRouterConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {

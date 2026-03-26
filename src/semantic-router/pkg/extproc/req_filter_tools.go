@@ -10,7 +10,6 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
@@ -33,19 +32,33 @@ func (r *OpenAIRouter) handleToolSelectionForRequest(openAIRequest *openai.ChatC
 
 // handleToolSelection handles automatic tool selection based on semantic similarity
 func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionNewParams, userContent string, nonUserMessages []string, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
-	handled, err := r.applyToolScope(openAIRequest, response, ctx)
-	if err != nil {
-		return err
-	}
-	if handled {
+	toolsCfg := resolveDecisionToolsConfig(ctx)
+	if toolsCfg == nil || !toolsCfg.Enabled {
 		return nil
 	}
 
-	// Check if tool_choice is set to "auto"
-	if openAIRequest.ToolChoice.OfAuto.Value == "auto" {
-		// Continue with tool selection logic
-	} else {
-		return nil // Not auto tool selection
+	switch toolsCfg.EffectiveMode() {
+	case config.ToolsPluginModeNone:
+		logging.Infof("[ToolsPlugin] Decision %q has mode=none, stripping all tools", ctx.VSRSelectedDecision.Name)
+		openAIRequest.Tools = nil
+		return r.updateRequestWithTools(openAIRequest, response, ctx)
+	case config.ToolsPluginModeFiltered:
+		openAIRequest.Tools = filterToolsByDecisionPolicy(openAIRequest.Tools, toolsCfg.AllowTools, toolsCfg.BlockTools)
+		if openAIRequest.ToolChoice.OfAuto.Value != "auto" {
+			logging.Infof("[ToolsPlugin] Decision %q filtered explicit tools to %d entries", ctx.VSRSelectedDecision.Name, len(openAIRequest.Tools))
+			return r.updateRequestWithTools(openAIRequest, response, ctx)
+		}
+	case config.ToolsPluginModePassthrough:
+		// No explicit-tool filtering; semantic selection may still run below.
+	default:
+		return fmt.Errorf("tools plugin: unsupported mode %q", toolsCfg.Mode)
+	}
+
+	if openAIRequest.ToolChoice.OfAuto.Value != "auto" {
+		return nil
+	}
+	if !toolsCfg.SelectionEnabled() {
+		return r.updateRequestWithTools(openAIRequest, response, ctx)
 	}
 
 	// Get text for tools classification
@@ -66,7 +79,7 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 		return nil
 	}
 
-	selectedTools, toolErr := r.findToolsForQuery(classificationText, ctx)
+	selectedTools, toolErr := r.findToolsForQuery(classificationText, ctx, toolsCfg)
 	if toolErr != nil {
 		if r.Config.Tools.FallbackToEmpty {
 			logging.Warnf("Tool selection failed, falling back to no tools: %v", toolErr)
@@ -100,13 +113,13 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 
 // findToolsForQuery discovers candidate tools via semantic similarity, applying
 // advanced filtering when configured.
-func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext) ([]openai.ChatCompletionToolParam, error) {
+func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig) ([]openai.ChatCompletionToolParam, error) {
 	topK := r.Config.Tools.TopK
 	if topK <= 0 {
 		topK = 3
 	}
 
-	advanced := r.Config.Tools.AdvancedFiltering
+	advanced := mergeAdvancedToolFiltering(r.Config.Tools.AdvancedFiltering, toolsCfg)
 	if advanced == nil || !advanced.Enabled {
 		return r.ToolsDatabase.FindSimilarTools(query, topK)
 	}
@@ -120,6 +133,9 @@ func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext) ([]o
 }
 
 func resolveCandidatePoolSize(advanced *config.AdvancedToolFilteringConfig, topK int) int {
+	if advanced == nil {
+		return max(topK*candidatePoolMultiplier, candidatePoolMinSize)
+	}
 	var size int
 	switch {
 	case advanced.CandidatePoolSize != nil && *advanced.CandidatePoolSize > 0:
@@ -147,6 +163,95 @@ func resolveCategory(advanced *config.AdvancedToolFilteringConfig, ctx *RequestC
 	return cat
 }
 
+func resolveDecisionToolsConfig(ctx *RequestContext) *config.ToolsPluginConfig {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return nil
+	}
+	return ctx.VSRSelectedDecision.GetToolsConfig()
+}
+
+func mergeAdvancedToolFiltering(base *config.AdvancedToolFilteringConfig, toolsCfg *config.ToolsPluginConfig) *config.AdvancedToolFilteringConfig {
+	if toolsCfg == nil || toolsCfg.EffectiveMode() != config.ToolsPluginModeFiltered {
+		return base
+	}
+
+	allowTools, blockTools := mergeToolFilters(base, toolsCfg)
+	if base == nil {
+		return &config.AdvancedToolFilteringConfig{
+			Enabled:    true,
+			AllowTools: allowTools,
+			BlockTools: blockTools,
+		}
+	}
+
+	merged := *base
+	merged.AllowTools = allowTools
+	merged.BlockTools = blockTools
+	return &merged
+}
+
+func mergeToolFilters(base *config.AdvancedToolFilteringConfig, toolsCfg *config.ToolsPluginConfig) ([]string, []string) {
+	globalAllow := []string(nil)
+	globalBlock := []string(nil)
+	if base != nil {
+		globalAllow = append(globalAllow, base.AllowTools...)
+		globalBlock = append(globalBlock, base.BlockTools...)
+	}
+	pluginAllow := append([]string(nil), toolsCfg.AllowTools...)
+	pluginBlock := append([]string(nil), toolsCfg.BlockTools...)
+
+	return intersectToolAllowLists(globalAllow, pluginAllow), unionToolBlockLists(globalBlock, pluginBlock)
+}
+
+func intersectToolAllowLists(left, right []string) []string {
+	switch {
+	case len(left) == 0:
+		return append([]string(nil), right...)
+	case len(right) == 0:
+		return append([]string(nil), left...)
+	}
+
+	rightSet := make(map[string]struct{}, len(right))
+	for _, value := range right {
+		rightSet[strings.ToLower(strings.TrimSpace(value))] = struct{}{}
+	}
+
+	result := make([]string, 0, min(len(left), len(right)))
+	seen := make(map[string]struct{})
+	for _, value := range left {
+		key := strings.ToLower(strings.TrimSpace(value))
+		if key == "" {
+			continue
+		}
+		if _, ok := rightSet[key]; !ok {
+			continue
+		}
+		if _, duplicated := seen[key]; duplicated {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func unionToolBlockLists(left, right []string) []string {
+	result := make([]string, 0, len(left)+len(right))
+	seen := make(map[string]struct{}, len(left)+len(right))
+	for _, value := range append(append([]string(nil), left...), right...) {
+		key := strings.ToLower(strings.TrimSpace(value))
+		if key == "" {
+			continue
+		}
+		if _, duplicated := seen[key]; duplicated {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
 // convertToSDKTools re-serializes tool params through JSON to ensure they
 // conform to the OpenAI SDK type.
 func convertToSDKTools(selected []openai.ChatCompletionToolParam) ([]openai.ChatCompletionToolParam, error) {
@@ -161,51 +266,6 @@ func convertToSDKTools(selected []openai.ChatCompletionToolParam) ([]openai.Chat
 		}
 	}
 	return out, nil
-}
-
-// applyToolScope enforces per-decision tool scope restrictions before semantic
-// tool selection runs. Returns (true, nil) when the scope has been fully
-// handled and the caller should skip further tool selection. Returns
-// (false, nil) when tool selection should proceed normally.
-func (r *OpenAIRouter) applyToolScope(openAIRequest *openai.ChatCompletionNewParams, response **ext_proc.ProcessingResponse, ctx *RequestContext) (bool, error) {
-	dec := ctx.VSRSelectedDecision
-	if dec == nil || dec.ToolScope == "" {
-		return false, nil
-	}
-
-	switch dec.ToolScope {
-	case config.ToolScopeNone:
-		logging.Infof("[ToolScope] Decision %q has tool_scope=none, stripping all tools", dec.Name)
-		openAIRequest.Tools = nil
-		if err := r.updateRequestWithTools(openAIRequest, response, ctx); err != nil {
-			return false, err
-		}
-		return true, nil
-
-	case config.ToolScopeLocalOnly, config.ToolScopeStandard:
-		if len(dec.AllowTools) > 0 || len(dec.BlockTools) > 0 {
-			openAIRequest.Tools = filterToolsByDecisionPolicy(openAIRequest.Tools, dec.AllowTools, dec.BlockTools)
-			logging.Infof("[ToolScope] Decision %q tool_scope=%s, filtered to %d tools via allow/block lists",
-				dec.Name, dec.ToolScope, len(openAIRequest.Tools))
-			if err := r.updateRequestWithTools(openAIRequest, response, ctx); err != nil {
-				return false, err
-			}
-			return true, nil
-		}
-		return false, nil
-
-	case config.ToolScopeFull:
-		return false, nil
-
-	default:
-		logging.Warnf("[ToolScope] Decision %q has unrecognized tool_scope=%q, stripping all tools as a safety measure",
-			dec.Name, dec.ToolScope)
-		openAIRequest.Tools = nil
-		if err := r.updateRequestWithTools(openAIRequest, response, ctx); err != nil {
-			return false, err
-		}
-		return true, nil
-	}
 }
 
 // filterToolsByDecisionPolicy applies per-decision allow/block lists to the
@@ -251,68 +311,15 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 		},
 	}
 
-	// Create header mutation with content-length removal AND all necessary routing headers
-	// (body phase HeaderMutation replaces header phase completely)
-
-	// Get the headers that should have been set in the main routing
-	var selectedEndpoint, actualModel string
-
-	// These should be available from the existing response
-	if (*response).GetRequestBody() != nil && (*response).GetRequestBody().GetResponse() != nil &&
-		(*response).GetRequestBody().GetResponse().GetHeaderMutation() != nil &&
-		(*response).GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders() != nil {
-		for _, header := range (*response).GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders() {
-			switch header.Header.Key {
-			case headers.GatewayDestinationEndpoint:
-				selectedEndpoint = header.Header.Value
-			case headers.SelectedModel:
-				actualModel = header.Header.Value
-			}
-		}
+	commonResponse := ensureRequestBodyCommonResponse(response)
+	commonResponse.Status = ext_proc.CommonResponse_CONTINUE
+	commonResponse.BodyMutation = bodyMutation
+	if commonResponse.HeaderMutation == nil {
+		commonResponse.HeaderMutation = &ext_proc.HeaderMutation{}
 	}
 
-	setHeaders := []*core.HeaderValueOption{}
-
-	// Add new content-length for the modified body
-	if len(modifiedBody) > 0 {
-		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:      "content-length",
-				RawValue: []byte(fmt.Sprintf("%d", len(modifiedBody))),
-			},
-		})
-	}
-
-	if selectedEndpoint != "" {
-		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:      headers.GatewayDestinationEndpoint,
-				RawValue: []byte(selectedEndpoint),
-			},
-		})
-	}
-	if actualModel != "" {
-		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:      headers.SelectedModel,
-				RawValue: []byte(actualModel),
-			},
-		})
-	}
-
-	// Intentionally do not mutate Authorization header here
-
-	headerMutation := &ext_proc.HeaderMutation{
-		RemoveHeaders: []string{"content-length"},
-		SetHeaders:    setHeaders,
-	}
-
-	// Create CommonResponse
-	commonResponse := &ext_proc.CommonResponse{
-		Status:         ext_proc.CommonResponse_CONTINUE,
-		HeaderMutation: headerMutation,
-		BodyMutation:   bodyMutation,
-	}
+	ensureHeaderRemoved(commonResponse.HeaderMutation, "content-length")
+	setHeaderValue(commonResponse.HeaderMutation, "content-length", fmt.Sprintf("%d", len(modifiedBody)))
 
 	// Check if route cache should be cleared
 	if r.shouldClearRouteCache() {
@@ -320,14 +327,46 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 		logging.Debugf("Setting ClearRouteCache=true (feature enabled) in updateRequestWithTools")
 	}
 
-	// Update the response with body mutation and content-length removal
-	*response = &ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_RequestBody{
-			RequestBody: &ext_proc.BodyResponse{
-				Response: commonResponse,
-			},
-		},
-	}
-
 	return nil
+}
+
+func ensureRequestBodyCommonResponse(response **ext_proc.ProcessingResponse) *ext_proc.CommonResponse {
+	if *response == nil {
+		*response = &ext_proc.ProcessingResponse{}
+	}
+	if (*response).GetRequestBody() == nil {
+		(*response).Response = &ext_proc.ProcessingResponse_RequestBody{
+			RequestBody: &ext_proc.BodyResponse{},
+		}
+	}
+	if (*response).GetRequestBody().GetResponse() == nil {
+		(*response).GetRequestBody().Response = &ext_proc.CommonResponse{}
+	}
+	return (*response).GetRequestBody().GetResponse()
+}
+
+func ensureHeaderRemoved(mutation *ext_proc.HeaderMutation, key string) {
+	for _, existing := range mutation.RemoveHeaders {
+		if existing == key {
+			return
+		}
+	}
+	mutation.RemoveHeaders = append(mutation.RemoveHeaders, key)
+}
+
+func setHeaderValue(mutation *ext_proc.HeaderMutation, key, value string) {
+	for _, option := range mutation.SetHeaders {
+		if option.Header != nil && option.Header.Key == key {
+			option.Header.RawValue = []byte(value)
+			option.Header.Value = value
+			return
+		}
+	}
+	mutation.SetHeaders = append(mutation.SetHeaders, &core.HeaderValueOption{
+		Header: &core.HeaderValue{
+			Key:      key,
+			Value:    value,
+			RawValue: []byte(value),
+		},
+	})
 }

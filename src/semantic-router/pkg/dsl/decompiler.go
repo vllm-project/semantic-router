@@ -354,9 +354,6 @@ func (d *decompiler) decompileDecisions() {
 		if dec.Tier != 0 {
 			d.write("  TIER %d\n", dec.Tier)
 		}
-		if dec.ToolScope != "" {
-			d.write("  TOOL_SCOPE %q\n", dec.ToolScope)
-		}
 
 		// WHEN expression
 		ruleExpr := decompileRuleNode(&dec.Rules)
@@ -557,6 +554,26 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		}
 		if cfg.Message != "" {
 			fmt.Fprintf(&sb, "    message: %q\n", cfg.Message)
+		}
+	case "tools":
+		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
+		if !ok {
+			break
+		}
+		if cfg.Enabled {
+			fmt.Fprintf(&sb, "    enabled: true\n")
+		}
+		if cfg.Mode != "" {
+			fmt.Fprintf(&sb, "    mode: %q\n", cfg.Mode)
+		}
+		if cfg.SemanticSelection != nil {
+			fmt.Fprintf(&sb, "    semantic_selection: %v\n", *cfg.SemanticSelection)
+		}
+		if len(cfg.AllowTools) > 0 {
+			fmt.Fprintf(&sb, "    allow_tools: %s\n", formatStringArray(cfg.AllowTools))
+		}
+		if len(cfg.BlockTools) > 0 {
+			fmt.Fprintf(&sb, "    block_tools: %s\n", formatStringArray(cfg.BlockTools))
 		}
 	case "rag":
 		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
@@ -1612,6 +1629,26 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		}
 		if cfg.Message != "" {
 			fields["message"] = StringValue{V: cfg.Message}
+		}
+	case "tools":
+		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
+		if !ok {
+			return fields
+		}
+		if cfg.Enabled {
+			fields["enabled"] = BoolValue{V: true}
+		}
+		if cfg.Mode != "" {
+			fields["mode"] = StringValue{V: cfg.Mode}
+		}
+		if cfg.SemanticSelection != nil {
+			fields["semantic_selection"] = BoolValue{V: *cfg.SemanticSelection}
+		}
+		if len(cfg.AllowTools) > 0 {
+			fields["allow_tools"] = stringsToArray(cfg.AllowTools)
+		}
+		if len(cfg.BlockTools) > 0 {
+			fields["block_tools"] = stringsToArray(cfg.BlockTools)
 		}
 	case "rag":
 		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)

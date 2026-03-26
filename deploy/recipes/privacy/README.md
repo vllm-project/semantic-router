@@ -24,7 +24,7 @@ Both lanes currently use the same `balance`-style mock alias catalog on the shar
 - Keep the local lane materially cheaper than the cloud lane so routing also delivers visible cost savings.
 - Keep routing policy-driven rather than preference-driven.
 - Record every decision through `router_replay` on every maintained route.
-- Enforce per-tier tool scope: security containment strips all tools, privacy tier restricts to local-only tools, frontier tier allows full tool access.
+- Enforce per-tier tools plugin policy: security containment strips all tools, privacy and standard lanes keep semantic selection enabled, and the frontier lane passes tools through unchanged.
 - Control reasoning mode per tier: security containment disables reasoning, privacy/standard use medium effort, frontier uses high effort.
 - Override frontier routing when contrastive organizational-sensitivity score indicates the request is private, even if individual keyword/embedding signals did not trigger the privacy band.
 
@@ -32,12 +32,12 @@ This recipe now uses a small `global.model_catalog.classifiers[]` section to reg
 
 ## Route Order
 
-| Priority | Decision | Target model | Tool Scope | Reasoning | Purpose |
+| Priority | Decision | Target model | Tools Plugin | Reasoning | Purpose |
 |---|---|---|---|---|---|
-| `300` | `local_security_containment` | `local/private-qwen` | `none` | off | Suspicious prompts, jailbreak attempts, prompt leakage, exfiltration |
-| `250` | `local_privacy_policy` | `local/private-qwen` | `local_only` | medium | PII, private code, internal docs, explicit local-only handling, privacy override |
-| `200` | `cloud_frontier_reasoning` | `cloud/frontier-reasoning` | `full` | high | Non-sensitive architecture, synthesis, deep reasoning |
-| `100` | `local_standard` | `local/private-qwen` | `standard` | medium | Ordinary non-sensitive default traffic |
+| `300` | `local_security_containment` | `local/private-qwen` | `mode=none`, semantic selection off | off | Suspicious prompts, jailbreak attempts, prompt leakage, exfiltration |
+| `250` | `local_privacy_policy` | `local/private-qwen` | `mode=passthrough`, semantic selection on | medium | PII, private code, internal docs, explicit local handling, privacy override |
+| `200` | `cloud_frontier_reasoning` | `cloud/frontier-reasoning` | `mode=passthrough`, semantic selection on | high | Non-sensitive architecture, synthesis, deep reasoning |
+| `100` | `local_standard` | `local/private-qwen` | `mode=passthrough`, semantic selection on | medium | Ordinary non-sensitive default traffic |
 
 The route order is the core control surface. Security wins before privacy, privacy wins before cloud escalation, and cloud escalation wins before the ordinary local fallback. That means the recipe pays for the cloud frontier model only when the request is both non-sensitive and reasoning-heavy enough to justify the extra cost.
 

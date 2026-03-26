@@ -159,6 +159,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/header-mutation',
                 'tutorials/plugin/image-gen',
                 'tutorials/plugin/system-prompt',
+                'tutorials/plugin/tools',
               ],
             },
             {

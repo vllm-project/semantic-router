@@ -208,6 +208,7 @@ export type PluginType =
   | 'hallucination'
   | 'router_replay'
   | 'fast_response'
+  | 'tools'
 
 export interface PluginConfig {
   type: PluginType
