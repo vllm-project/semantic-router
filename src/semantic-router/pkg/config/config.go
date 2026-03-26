@@ -36,7 +36,7 @@ const (
 	SignalTypeAuthz        = "authz"
 	SignalTypeJailbreak    = "jailbreak"
 	SignalTypePII          = "pii"
-	SignalTypeTaxonomy     = "taxonomy"
+	SignalTypeKB           = "kb"
 	SignalTypeProjection   = "projection"
 )
 
@@ -72,9 +72,9 @@ type RouterConfig struct {
 	Authz     AuthzConfig     `yaml:"authz,omitempty"`
 	RateLimit RateLimitConfig `yaml:"ratelimit,omitempty"`
 
-	// Runtime-only routing classifiers loaded from global.model_catalog.
-	TaxonomyClassifiers []TaxonomyClassifierConfig `yaml:"taxonomy_classifiers,omitempty"`
-	ConfigBaseDir       string                     `yaml:"-"`
+	// Runtime-only knowledge bases loaded from global.model_catalog.
+	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
+	ConfigBaseDir  string                `yaml:"-"`
 }
 
 // AuthzConfig configures how the router resolves per-user LLM API keys.

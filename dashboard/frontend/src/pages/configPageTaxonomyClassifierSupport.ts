@@ -1,23 +1,29 @@
 export interface TaxonomySignalBinding {
-  kind: 'tier' | 'category'
+  kind: 'label' | 'group'
   value: string
 }
 
 export interface TaxonomySignalReference {
   name: string
-  bind: TaxonomySignalBinding
+  target: TaxonomySignalBinding
+  match?: 'best' | 'threshold'
 }
 
 export interface TaxonomyClassifierTier {
   name: string
-  description?: string
 }
 
 export interface TaxonomyClassifierCategory {
   name: string
-  tier: string
   description?: string
   exemplars: string[]
+}
+
+export interface TaxonomyClassifierMetric {
+  name: string
+  type: string
+  positive_group?: string
+  negative_group?: string
 }
 
 export interface TaxonomyClassifierRecord {
@@ -27,19 +33,20 @@ export interface TaxonomyClassifierRecord {
   managed: boolean
   editable: boolean
   threshold: number
-  security_threshold?: number
+  label_thresholds?: Record<string, number>
   description?: string
   source: {
     path: string
-    taxonomy_file?: string
+    manifest?: string
   }
-  tiers: TaxonomyClassifierTier[]
-  categories: TaxonomyClassifierCategory[]
-  tier_groups?: Record<string, string[]>
+  labels: TaxonomyClassifierCategory[]
+  groups?: Record<string, string[]>
+  metrics?: TaxonomyClassifierMetric[]
   signal_references: TaxonomySignalReference[]
   bind_options: {
-    tiers: string[]
-    categories: string[]
+    labels: string[]
+    groups: string[]
+    metrics: string[]
   }
   load_error?: string
 }
@@ -51,24 +58,25 @@ export interface TaxonomyClassifierListResponse {
 export interface TaxonomyClassifierDraft {
   name: string
   threshold: number
-  security_threshold: number
   description: string
-  tiers: TaxonomyClassifierTier[]
-  categories: TaxonomyClassifierCategory[]
-  tier_groups: Array<{
+  labels: TaxonomyClassifierCategory[]
+  groups: Array<{
     name: string
-    categories: string
+    labels: string
+  }>
+  metrics: TaxonomyClassifierMetric[]
+  label_thresholds: Array<{
+    label: string
+    threshold: number
   }>
 }
 
 export interface TaxonomyTierDraft {
   name: string
-  description: string
 }
 
 export interface TaxonomyCategoryDraft {
   name: string
-  tier: string
   description: string
   exemplars: string
 }
@@ -77,32 +85,29 @@ export function emptyTaxonomyClassifierDraft(): TaxonomyClassifierDraft {
   return {
     name: '',
     threshold: 0.55,
-    security_threshold: 0.7,
     description: '',
-    tiers: [],
-    categories: [
+    labels: [
       {
         name: '',
-        tier: '',
         description: '',
         exemplars: [''],
       },
     ],
-    tier_groups: [],
+    groups: [],
+    metrics: [],
+    label_thresholds: [],
   }
 }
 
 export function emptyTaxonomyTierDraft(): TaxonomyTierDraft {
   return {
     name: '',
-    description: '',
   }
 }
 
-export function emptyTaxonomyCategoryDraft(defaultTier = ''): TaxonomyCategoryDraft {
+export function emptyTaxonomyCategoryDraft(): TaxonomyCategoryDraft {
   return {
     name: '',
-    tier: defaultTier,
     description: '',
     exemplars: '',
   }
@@ -112,21 +117,25 @@ export function classifierDraftFromRecord(record: TaxonomyClassifierRecord): Tax
   return {
     name: record.name,
     threshold: record.threshold,
-    security_threshold: record.security_threshold ?? record.threshold,
     description: record.description ?? '',
-    tiers: record.tiers.map((tier) => ({
-      name: tier.name,
-      description: tier.description ?? '',
+    labels: record.labels.map((label) => ({
+      name: label.name,
+      description: label.description ?? '',
+      exemplars: label.exemplars.length > 0 ? [...label.exemplars] : [''],
     })),
-    categories: record.categories.map((category) => ({
-      name: category.name,
-      tier: category.tier,
-      description: category.description ?? '',
-      exemplars: category.exemplars.length > 0 ? [...category.exemplars] : [''],
-    })),
-    tier_groups: Object.entries(record.tier_groups ?? {}).map(([name, categories]) => ({
+    groups: Object.entries(record.groups ?? {}).map(([name, labels]) => ({
       name,
-      categories: categories.join(', '),
+      labels: labels.join(', '),
+    })),
+    metrics: (record.metrics ?? []).map((metric) => ({
+      name: metric.name,
+      type: metric.type,
+      positive_group: metric.positive_group,
+      negative_group: metric.negative_group,
+    })),
+    label_thresholds: Object.entries(record.label_thresholds ?? {}).map(([label, threshold]) => ({
+      label,
+      threshold,
     })),
   }
 }
@@ -134,56 +143,66 @@ export function classifierDraftFromRecord(record: TaxonomyClassifierRecord): Tax
 export function tierDraftFromTier(tier: TaxonomyClassifierTier): TaxonomyTierDraft {
   return {
     name: tier.name,
-    description: tier.description ?? '',
   }
 }
 
 export function categoryDraftFromCategory(category: TaxonomyClassifierCategory): TaxonomyCategoryDraft {
   return {
     name: category.name,
-    tier: category.tier,
     description: category.description ?? '',
     exemplars: category.exemplars.join('\n'),
   }
 }
 
 export function payloadFromDraft(draft: TaxonomyClassifierDraft) {
-  const tierGroups = draft.tier_groups.reduce<Record<string, string[]>>((acc, group) => {
+  const groups = draft.groups.reduce<Record<string, string[]>>((acc, group) => {
     const name = group.name.trim()
     if (!name) {
       return acc
     }
 
-    const categories = group.categories
+    const labels = group.labels
       .split(',')
       .map((item) => item.trim())
       .filter(Boolean)
 
-    if (categories.length > 0) {
-      acc[name] = categories
+    if (labels.length > 0) {
+      acc[name] = labels
     }
 
+    return acc
+  }, {})
+
+  const labelThresholds = draft.label_thresholds.reduce<Record<string, number>>((acc, entry) => {
+    const label = entry.label.trim()
+    if (!label) {
+      return acc
+    }
+    acc[label] = entry.threshold
     return acc
   }, {})
 
   return {
     name: draft.name.trim(),
     threshold: draft.threshold,
-    security_threshold: draft.security_threshold,
     description: draft.description.trim(),
-    tiers: draft.tiers.map((tier) => ({
-      name: tier.name.trim(),
-      description: tier.description?.trim() || '',
-    })),
-    categories: draft.categories.map((category) => ({
-      name: category.name.trim(),
-      tier: category.tier.trim(),
-      description: category.description?.trim() || '',
-      exemplars: category.exemplars
+    labels: draft.labels.map((label) => ({
+      name: label.name.trim(),
+      description: label.description?.trim() || '',
+      exemplars: label.exemplars
         .map((exemplar) => exemplar.trim())
         .filter(Boolean),
     })),
-    tier_groups: tierGroups,
+    groups,
+    metrics: draft.metrics
+      .map((metric) => ({
+        name: metric.name.trim(),
+        type: metric.type.trim(),
+        positive_group: metric.positive_group?.trim() || '',
+        negative_group: metric.negative_group?.trim() || '',
+      }))
+      .filter((metric) => metric.name.length > 0 && metric.type.length > 0),
+    label_thresholds: Object.keys(labelThresholds).length > 0 ? labelThresholds : undefined,
   }
 }
 
@@ -212,13 +231,15 @@ function asStringArray(value: unknown): string[] {
 
 export function normalizeTaxonomySignalReference(raw: unknown): TaxonomySignalReference {
   const record = asRecord(raw)
-  const bindRecord = asRecord(record.bind)
+  const targetRecord = asRecord(record.target)
+  const match = asString(record.match || record.Match)
   return {
     name: asString(record.name),
-    bind: {
-      kind: (asString(bindRecord.kind || bindRecord.Kind) as TaxonomySignalBinding['kind']) || 'tier',
-      value: asString(bindRecord.value || bindRecord.Value),
+    target: {
+      kind: (asString(targetRecord.kind || targetRecord.Kind) as TaxonomySignalBinding['kind']) || 'group',
+      value: asString(targetRecord.value || targetRecord.Value),
     },
+    match: match === 'best' || match === 'threshold' ? match : undefined,
   }
 }
 
@@ -226,10 +247,11 @@ export function normalizeTaxonomyClassifierRecord(raw: unknown): TaxonomyClassif
   const record = asRecord(raw)
   const source = asRecord(record.source)
   const bindOptions = asRecord(record.bind_options)
-  const tiers = Array.isArray(record.tiers) ? record.tiers : []
-  const categories = Array.isArray(record.categories) ? record.categories : []
+  const labels = Array.isArray(record.labels) ? record.labels : []
   const signalReferences = Array.isArray(record.signal_references) ? record.signal_references : []
-  const tierGroups = asRecord(record.tier_groups)
+  const groups = asRecord(record.groups)
+  const metrics = Array.isArray(record.metrics) ? record.metrics : []
+  const labelThresholds = asRecord(record.label_thresholds)
 
   return {
     name: asString(record.name),
@@ -238,37 +260,45 @@ export function normalizeTaxonomyClassifierRecord(raw: unknown): TaxonomyClassif
     managed: asBoolean(record.managed),
     editable: asBoolean(record.editable),
     threshold: asNumber(record.threshold),
-    security_threshold: typeof record.security_threshold === 'number' ? record.security_threshold : undefined,
+    label_thresholds: Object.keys(labelThresholds).length > 0
+      ? Object.fromEntries(
+          Object.entries(labelThresholds)
+            .filter(([, value]) => typeof value === 'number')
+            .map(([key, value]) => [key, value as number])
+        )
+      : undefined,
     description: asString(record.description) || undefined,
     source: {
       path: asString(source.path || source.Path),
-      taxonomy_file: asString(source.taxonomy_file || source.TaxonomyFile) || undefined,
+      manifest: asString(source.manifest || source.Manifest) || undefined,
     },
-    tiers: tiers.map((tier) => {
-      const tierRecord = asRecord(tier)
+    labels: labels.map((label) => {
+      const labelRecord = asRecord(label)
       return {
-        name: asString(tierRecord.name),
-        description: asString(tierRecord.description) || undefined,
+        name: asString(labelRecord.name),
+        description: asString(labelRecord.description) || undefined,
+        exemplars: asStringArray(labelRecord.exemplars),
       }
     }),
-    categories: categories.map((category) => {
-      const categoryRecord = asRecord(category)
-      return {
-        name: asString(categoryRecord.name),
-        tier: asString(categoryRecord.tier),
-        description: asString(categoryRecord.description) || undefined,
-        exemplars: asStringArray(categoryRecord.exemplars),
-      }
-    }),
-    tier_groups: Object.keys(tierGroups).length > 0
+    groups: Object.keys(groups).length > 0
       ? Object.fromEntries(
-          Object.entries(tierGroups).map(([key, value]) => [key, asStringArray(value)])
+          Object.entries(groups).map(([key, value]) => [key, asStringArray(value)])
         )
       : undefined,
+    metrics: metrics.map((metric) => {
+      const metricRecord = asRecord(metric)
+      return {
+        name: asString(metricRecord.name),
+        type: asString(metricRecord.type),
+        positive_group: asString(metricRecord.positive_group) || undefined,
+        negative_group: asString(metricRecord.negative_group) || undefined,
+      }
+    }),
     signal_references: signalReferences.map((reference) => normalizeTaxonomySignalReference(reference)),
     bind_options: {
-      tiers: asStringArray(bindOptions.tiers),
-      categories: asStringArray(bindOptions.categories),
+      labels: asStringArray(bindOptions.labels),
+      groups: asStringArray(bindOptions.groups),
+      metrics: asStringArray(bindOptions.metrics),
     },
     load_error: asString(record.load_error) || undefined,
   }
@@ -283,21 +313,89 @@ export function normalizeTaxonomyClassifierListResponse(raw: unknown): TaxonomyC
 }
 
 export function formatSignalReference(reference: TaxonomySignalReference): string {
-  const bindKind = reference.bind.kind || 'unknown'
-  const bindValue = reference.bind.value || 'unknown'
-  return `${reference.name} -> ${bindKind}:${bindValue}`
+  const targetKind = reference.target.kind || 'unknown'
+  const targetValue = reference.target.value || 'unknown'
+  const match = reference.match ? ` (${reference.match})` : ''
+  return `${reference.name} -> ${targetKind}:${targetValue}${match}`
 }
 
-export function countSignalsForTier(record: TaxonomyClassifierRecord, tierName: string): number {
+export function countSignalsForTier(record: TaxonomyClassifierRecord, groupName: string): number {
   return record.signal_references.filter(
-    (reference) => reference.bind.kind === 'tier' && reference.bind.value === tierName
+    (reference) => reference.target.kind === 'group' && reference.target.value === groupName
   ).length
 }
 
-export function countSignalsForCategory(record: TaxonomyClassifierRecord, categoryName: string): number {
+export function countSignalsForCategory(record: TaxonomyClassifierRecord, labelName: string): number {
   return record.signal_references.filter(
-    (reference) => reference.bind.kind === 'category' && reference.bind.value === categoryName
+    (reference) => reference.target.kind === 'label' && reference.target.value === labelName
   ).length
+}
+
+export function countMetricsForGroup(record: TaxonomyClassifierRecord, groupName: string): number {
+  return (record.metrics ?? []).filter(
+    (metric) => metric.positive_group === groupName || metric.negative_group === groupName
+  ).length
+}
+
+function rewriteGroupsOnLabelRename(
+  groups: TaxonomyClassifierDraft['groups'],
+  originalName: string,
+  nextName: string
+) {
+  return groups.map((group) => ({
+    ...group,
+    labels: group.labels
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => (item === originalName ? nextName : item))
+      .join(', '),
+  }))
+}
+
+function rewriteGroupsOnLabelDelete(
+  groups: TaxonomyClassifierDraft['groups'],
+  labelName: string
+) {
+  return groups
+    .map((group) => ({
+      ...group,
+      labels: group.labels
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item && item !== labelName)
+        .join(', '),
+    }))
+    .filter((group) => group.name.trim())
+}
+
+function rewriteThresholdsOnLabelRename(
+  thresholds: TaxonomyClassifierDraft['label_thresholds'],
+  originalName: string,
+  nextName: string
+) {
+  return thresholds.map((entry) =>
+    entry.label === originalName ? { ...entry, label: nextName } : entry
+  )
+}
+
+function rewriteThresholdsOnLabelDelete(
+  thresholds: TaxonomyClassifierDraft['label_thresholds'],
+  labelName: string
+) {
+  return thresholds.filter((entry) => entry.label !== labelName)
+}
+
+function rewriteMetricsOnGroupRename(
+  metrics: TaxonomyClassifierDraft['metrics'],
+  originalName: string,
+  nextName: string
+) {
+  return metrics.map((metric) => ({
+    ...metric,
+    positive_group: metric.positive_group === originalName ? nextName : metric.positive_group,
+    negative_group: metric.negative_group === originalName ? nextName : metric.negative_group,
+  }))
 }
 
 export function renameTierInDraft(
@@ -308,16 +406,12 @@ export function renameTierInDraft(
   const nextName = nextTier.name.trim()
   return {
     ...draft,
-    tiers: draft.tiers.map((tier) =>
-      tier.name === originalName
-        ? { name: nextName, description: nextTier.description.trim() }
-        : tier
+    groups: draft.groups.map((group) =>
+      group.name === originalName
+        ? { ...group, name: nextName }
+        : group
     ),
-    categories: draft.categories.map((category) =>
-      category.tier === originalName
-        ? { ...category, tier: nextName }
-        : category
-    ),
+    metrics: rewriteMetricsOnGroupRename(draft.metrics, originalName, nextName),
   }
 }
 
@@ -327,11 +421,11 @@ export function addTierToDraft(
 ): TaxonomyClassifierDraft {
   return {
     ...draft,
-    tiers: [
-      ...draft.tiers,
+    groups: [
+      ...draft.groups,
       {
         name: nextTier.name.trim(),
-        description: nextTier.description.trim(),
+        labels: '',
       },
     ],
   }
@@ -343,40 +437,8 @@ export function removeTierFromDraft(
 ): TaxonomyClassifierDraft {
   return {
     ...draft,
-    tiers: draft.tiers.filter((tier) => tier.name !== tierName),
+    groups: draft.groups.filter((group) => group.name !== tierName),
   }
-}
-
-function rewriteTierGroupsOnCategoryRename(
-  tierGroups: TaxonomyClassifierDraft['tier_groups'],
-  originalName: string,
-  nextName: string
-) {
-  return tierGroups.map((group) => ({
-    ...group,
-    categories: group.categories
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .map((item) => (item === originalName ? nextName : item))
-      .join(', '),
-  }))
-}
-
-function rewriteTierGroupsOnCategoryDelete(
-  tierGroups: TaxonomyClassifierDraft['tier_groups'],
-  categoryName: string
-) {
-  return tierGroups
-    .map((group) => ({
-      ...group,
-      categories: group.categories
-        .split(',')
-        .map((item) => item.trim())
-        .filter((item) => item && item !== categoryName)
-        .join(', '),
-    }))
-    .filter((group) => group.name.trim())
 }
 
 export function renameCategoryInDraft(
@@ -387,20 +449,20 @@ export function renameCategoryInDraft(
   const nextName = nextCategory.name.trim()
   return {
     ...draft,
-    categories: draft.categories.map((category) =>
-      category.name === originalName
+    labels: draft.labels.map((label) =>
+      label.name === originalName
         ? {
             name: nextName,
-            tier: nextCategory.tier.trim(),
             description: nextCategory.description.trim(),
             exemplars: nextCategory.exemplars
               .split('\n')
               .map((item) => item.trim())
               .filter(Boolean),
           }
-        : category
+        : label
     ),
-    tier_groups: rewriteTierGroupsOnCategoryRename(draft.tier_groups, originalName, nextName),
+    groups: rewriteGroupsOnLabelRename(draft.groups, originalName, nextName),
+    label_thresholds: rewriteThresholdsOnLabelRename(draft.label_thresholds, originalName, nextName),
   }
 }
 
@@ -410,11 +472,10 @@ export function addCategoryToDraft(
 ): TaxonomyClassifierDraft {
   return {
     ...draft,
-    categories: [
-      ...draft.categories,
+    labels: [
+      ...draft.labels,
       {
         name: nextCategory.name.trim(),
-        tier: nextCategory.tier.trim(),
         description: nextCategory.description.trim(),
         exemplars: nextCategory.exemplars
           .split('\n')
@@ -431,7 +492,8 @@ export function removeCategoryFromDraft(
 ): TaxonomyClassifierDraft {
   return {
     ...draft,
-    categories: draft.categories.filter((category) => category.name !== categoryName),
-    tier_groups: rewriteTierGroupsOnCategoryDelete(draft.tier_groups, categoryName),
+    labels: draft.labels.filter((label) => label.name !== categoryName),
+    groups: rewriteGroupsOnLabelDelete(draft.groups, categoryName),
+    label_thresholds: rewriteThresholdsOnLabelDelete(draft.label_thresholds, categoryName),
   }
 }

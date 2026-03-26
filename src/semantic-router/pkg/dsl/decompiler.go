@@ -239,12 +239,15 @@ func (d *decompiler) decompileSignals() {
 		d.write("}\n\n")
 	}
 
-	for _, taxonomy := range d.cfg.TaxonomyRules {
-		d.write("SIGNAL taxonomy %s {\n", quoteName(taxonomy.Name))
-		if taxonomy.Classifier != "" {
-			d.write("  classifier: %q\n", taxonomy.Classifier)
+	for _, kb := range d.cfg.KBRules {
+		d.write("SIGNAL kb %s {\n", quoteName(kb.Name))
+		if kb.KB != "" {
+			d.write("  kb: %q\n", kb.KB)
 		}
-		d.write("  bind: { kind: %q, value: %q }\n", taxonomy.Bind.Kind, taxonomy.Bind.Value)
+		d.write("  target: { kind: %q, value: %q }\n", kb.Target.Kind, kb.Target.Value)
+		if kb.Match != "" {
+			d.write("  match: %q\n", kb.Match)
+		}
 		d.write("}\n\n")
 	}
 
@@ -1132,16 +1135,19 @@ func (d *decompiler) piiToSignal(pii *config.PIIRule) *SignalDecl {
 	return &SignalDecl{SignalType: "pii", Name: pii.Name, Fields: fields}
 }
 
-func (d *decompiler) taxonomySignalToDecl(rule *config.TaxonomySignalRule) *SignalDecl {
+func (d *decompiler) kbSignalToDecl(rule *config.KBSignalRule) *SignalDecl {
 	fields := make(map[string]Value)
-	if rule.Classifier != "" {
-		fields["classifier"] = StringValue{V: rule.Classifier}
+	if rule.KB != "" {
+		fields["kb"] = StringValue{V: rule.KB}
 	}
-	fields["bind"] = ObjectValue{Fields: map[string]Value{
-		"kind":  StringValue{V: rule.Bind.Kind},
-		"value": StringValue{V: rule.Bind.Value},
+	fields["target"] = ObjectValue{Fields: map[string]Value{
+		"kind":  StringValue{V: rule.Target.Kind},
+		"value": StringValue{V: rule.Target.Value},
 	}}
-	return &SignalDecl{SignalType: "taxonomy", Name: rule.Name, Fields: fields}
+	if rule.Match != "" {
+		fields["match"] = StringValue{V: rule.Match}
+	}
+	return &SignalDecl{SignalType: "kb", Name: rule.Name, Fields: fields}
 }
 
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
@@ -1380,8 +1386,8 @@ func formatProjectionScoreInputs(inputs []config.ProjectionScoreInput) string {
 		if input.Name != "" {
 			fields = append(fields, fmt.Sprintf("name: %q", input.Name))
 		}
-		if input.Classifier != "" {
-			fields = append(fields, fmt.Sprintf("classifier: %q", input.Classifier))
+		if input.KB != "" {
+			fields = append(fields, fmt.Sprintf("kb: %q", input.KB))
 		}
 		if input.Metric != "" {
 			fields = append(fields, fmt.Sprintf("metric: %q", input.Metric))

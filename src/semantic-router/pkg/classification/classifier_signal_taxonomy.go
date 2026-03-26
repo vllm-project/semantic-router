@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"slices"
 	"sync"
 	"time"
 
@@ -9,20 +10,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// evaluateTaxonomySignals runs all configured taxonomy classifiers, records
-// structured classifier results, and maps routing.signals.taxonomy bindings
-// into normal matched signals.
-func (c *Classifier) evaluateTaxonomySignals(results *SignalResults, mu *sync.Mutex, text string) {
-	if len(c.taxonomyClassifiers) == 0 {
+// evaluateKBSignals runs all configured knowledge bases, records structured KB
+// results, and maps routing.signals.kb bindings into normal matched signals.
+func (c *Classifier) evaluateKBSignals(results *SignalResults, mu *sync.Mutex, text string) {
+	if len(c.kbClassifiers) == 0 {
 		return
 	}
 
 	start := time.Now()
-	classifierResults := make(map[string]*TaxonomyClassifyResult, len(c.taxonomyClassifiers))
-	for name, classifier := range c.taxonomyClassifiers {
+	classifierResults := make(map[string]*KBClassifyResult, len(c.kbClassifiers))
+	for name, classifier := range c.kbClassifiers {
 		classifyResult, err := classifier.Classify(text)
 		if err != nil {
-			logging.Warnf("[Taxonomy Signal] classifier %q failed: %v", name, err)
+			logging.Warnf("[KB Signal] KB %q failed: %v", name, err)
 			continue
 		}
 		classifierResults[name] = classifyResult
@@ -31,51 +31,72 @@ func (c *Classifier) evaluateTaxonomySignals(results *SignalResults, mu *sync.Mu
 	mu.Lock()
 	defer mu.Unlock()
 
-	if results.TaxonomyClassifierResults == nil {
-		results.TaxonomyClassifierResults = make(map[string]*TaxonomyClassifyResult, len(classifierResults))
+	if results.KBClassifierResults == nil {
+		results.KBClassifierResults = make(map[string]*KBClassifyResult, len(classifierResults))
 	}
-	if results.TaxonomyMetricValues == nil {
-		results.TaxonomyMetricValues = make(map[string]float64, len(classifierResults))
-	}
-
-	for classifierName, classifyResult := range classifierResults {
-		results.TaxonomyClassifierResults[classifierName] = classifyResult
-		metricKey := taxonomyMetricKey(classifierName, config.TaxonomyMetricContrastive)
-		results.TaxonomyMetricValues[metricKey] = classifyResult.ContrastiveScore
-		results.SignalValues[metricKey] = classifyResult.ContrastiveScore
+	if results.KBMetricValues == nil {
+		results.KBMetricValues = make(map[string]float64, len(classifierResults))
 	}
 
-	for _, rule := range c.Config.TaxonomyRules {
-		classifyResult, ok := classifierResults[rule.Classifier]
+	for kbName, classifyResult := range classifierResults {
+		results.KBClassifierResults[kbName] = classifyResult
+		for metricName, value := range classifyResult.MetricValues {
+			metricKey := kbMetricKey(kbName, metricName)
+			results.KBMetricValues[metricKey] = value
+			results.SignalValues[metricKey] = value
+		}
+	}
+
+	for _, rule := range c.Config.KBRules {
+		classifyResult, ok := classifierResults[rule.KB]
 		if !ok {
 			continue
 		}
-		confidence, matched := taxonomySignalMatchConfidence(rule, classifyResult)
+		confidence, matched := kbSignalMatchConfidence(rule, classifyResult)
 		if !matched {
 			continue
 		}
-		results.MatchedTaxonomyRules = append(results.MatchedTaxonomyRules, rule.Name)
-		results.SignalConfidences[config.SignalTypeTaxonomy+":"+rule.Name] = confidence
-		metrics.RecordSignalMatch(config.SignalTypeTaxonomy, rule.Name)
+		results.MatchedKBRules = append(results.MatchedKBRules, rule.Name)
+		results.SignalConfidences[config.SignalTypeKB+":"+rule.Name] = confidence
+		metrics.RecordSignalMatch(config.SignalTypeKB, rule.Name)
 	}
 
-	results.Metrics.Taxonomy.ExecutionTimeMs = float64(time.Since(start).Microseconds()) / 1000.0
-	results.Metrics.Taxonomy.Confidence = signalSetBestConfidence(results.SignalConfidences, config.SignalTypeTaxonomy, results.MatchedTaxonomyRules)
-	metrics.RecordSignalExtraction(config.SignalTypeTaxonomy, "taxonomy", time.Since(start).Seconds())
+	results.Metrics.KB.ExecutionTimeMs = float64(time.Since(start).Microseconds()) / 1000.0
+	results.Metrics.KB.Confidence = signalSetBestConfidence(results.SignalConfidences, config.SignalTypeKB, results.MatchedKBRules)
+	metrics.RecordSignalExtraction(config.SignalTypeKB, "kb", time.Since(start).Seconds())
 }
 
-func taxonomySignalMatchConfidence(rule config.TaxonomySignalRule, result *TaxonomyClassifyResult) (float64, bool) {
-	switch rule.Bind.Kind {
-	case config.TaxonomyBindKindTier:
-		if result.BestMatchedTier == rule.Bind.Value && result.BestMatchedCategory != "" {
-			return result.BestMatchedSimilarity, true
+func kbSignalMatchConfidence(rule config.KBSignalRule, result *KBClassifyResult) (float64, bool) {
+	matchMode := config.KBMatchThreshold
+	if rule.Match != "" {
+		matchMode = rule.Match
+	}
+
+	switch rule.Target.Kind {
+	case config.KBTargetKindLabel:
+		switch matchMode {
+		case config.KBMatchBest:
+			if result.BestLabel == rule.Target.Value && result.BestLabel != "" {
+				return result.BestSimilarity, true
+			}
+		default:
+			if confidence, ok := result.LabelConfidences[rule.Target.Value]; ok && slices.Contains(result.MatchedLabels, rule.Target.Value) {
+				return confidence, true
+			}
 		}
-	case config.TaxonomyBindKindCategory:
-		if confidence, ok := result.CategoryConfidences[rule.Bind.Value]; ok {
-			for _, category := range result.MatchedCategories {
-				if category == rule.Bind.Value {
-					return confidence, true
-				}
+	case config.KBTargetKindGroup:
+		confidence, ok := result.GroupScores[rule.Target.Value]
+		if !ok {
+			return 0, false
+		}
+		switch matchMode {
+		case config.KBMatchBest:
+			if result.BestGroup == rule.Target.Value && result.BestGroup != "" {
+				return confidence, true
+			}
+		default:
+			if slices.Contains(result.MatchedGroups, rule.Target.Value) {
+				return confidence, true
 			}
 		}
 	}

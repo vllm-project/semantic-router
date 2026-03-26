@@ -6,75 +6,80 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestTaxonomySignalMatchConfidenceTierUsesBestMatchedTier(t *testing.T) {
-	result := &TaxonomyClassifyResult{
-		BestCategory:          "generic_coding",
+func TestKBSignalMatchConfidenceGroupBestUsesBestGroup(t *testing.T) {
+	result := &KBClassifyResult{
+		BestLabel:             "generic_coding",
 		BestSimilarity:        0.99,
-		BestTier:              "local_standard",
-		BestMatchedCategory:   "generic_coding",
+		BestMatchedLabel:      "generic_coding",
 		BestMatchedSimilarity: 0.99,
-		BestMatchedTier:       "local_standard",
-		MatchedCategories:     []string{"prompt_injection", "generic_coding"},
-		MatchedTiers:          []string{"security_containment", "local_standard"},
-		CategoryTiers: map[string]string{
-			"prompt_injection": "security_containment",
-			"generic_coding":   "local_standard",
-		},
-		CategoryConfidences: map[string]float64{
+		BestGroup:             "local_standard",
+		BestMatchedGroup:      "local_standard",
+		MatchedLabels:         []string{"prompt_injection", "generic_coding"},
+		MatchedGroups:         []string{"security_containment", "local_standard"},
+		LabelConfidences: map[string]float64{
 			"prompt_injection": 0.80,
 			"generic_coding":   0.99,
 		},
+		GroupScores: map[string]float64{
+			"security_containment": 0.80,
+			"local_standard":       0.99,
+		},
 	}
 
-	securityRule := config.TaxonomySignalRule{
-		Name:       "security_containment",
-		Classifier: "privacy_classifier",
-		Bind: config.TaxonomySignalBind{
-			Kind:  config.TaxonomyBindKindTier,
+	securityRule := config.KBSignalRule{
+		Name: "security_containment",
+		KB:   "privacy_kb",
+		Target: config.KBSignalTarget{
+			Kind:  config.KBTargetKindGroup,
 			Value: "security_containment",
 		},
+		Match: config.KBMatchBest,
 	}
-	if confidence, matched := taxonomySignalMatchConfidence(securityRule, result); matched || confidence != 0 {
-		t.Fatalf("security tier should not match when best matched tier is local_standard, got matched=%v confidence=%.2f", matched, confidence)
+	if confidence, matched := kbSignalMatchConfidence(securityRule, result); matched || confidence != 0 {
+		t.Fatalf("security group should not match when best group is local_standard, got matched=%v confidence=%.2f", matched, confidence)
 	}
 
-	localRule := config.TaxonomySignalRule{
-		Name:       "local_standard",
-		Classifier: "privacy_classifier",
-		Bind: config.TaxonomySignalBind{
-			Kind:  config.TaxonomyBindKindTier,
+	localRule := config.KBSignalRule{
+		Name: "local_standard",
+		KB:   "privacy_kb",
+		Target: config.KBSignalTarget{
+			Kind:  config.KBTargetKindGroup,
 			Value: "local_standard",
 		},
+		Match: config.KBMatchBest,
 	}
-	confidence, matched := taxonomySignalMatchConfidence(localRule, result)
+	confidence, matched := kbSignalMatchConfidence(localRule, result)
 	if !matched {
-		t.Fatal("local_standard tier should match when it is the best matched tier")
+		t.Fatal("local_standard group should match when it is the best group")
 	}
 	if confidence != 0.99 {
 		t.Fatalf("local_standard confidence = %.2f, want 0.99", confidence)
 	}
 }
 
-func TestTaxonomySignalMatchConfidenceTierRequiresThresholdMatchedCategory(t *testing.T) {
-	result := &TaxonomyClassifyResult{
-		BestCategory:        "generic_coding",
-		BestSimilarity:      0.42,
-		BestTier:            "local_standard",
-		MatchedCategories:   nil,
-		MatchedTiers:        nil,
-		CategoryTiers:       map[string]string{"generic_coding": "local_standard"},
-		CategoryConfidences: map[string]float64{"generic_coding": 0.42},
+func TestKBSignalMatchConfidenceThresholdRequiresMatchedTarget(t *testing.T) {
+	result := &KBClassifyResult{
+		BestLabel:             "generic_coding",
+		BestSimilarity:        0.42,
+		BestMatchedLabel:      "",
+		BestMatchedSimilarity: 0,
+		BestGroup:             "local_standard",
+		MatchedLabels:         nil,
+		MatchedGroups:         nil,
+		LabelConfidences:      map[string]float64{"generic_coding": 0.42},
+		GroupScores:           map[string]float64{"local_standard": 0.42},
 	}
 
-	rule := config.TaxonomySignalRule{
-		Name:       "local_standard",
-		Classifier: "privacy_classifier",
-		Bind: config.TaxonomySignalBind{
-			Kind:  config.TaxonomyBindKindTier,
-			Value: "local_standard",
+	labelRule := config.KBSignalRule{
+		Name: "generic_coding",
+		KB:   "privacy_kb",
+		Target: config.KBSignalTarget{
+			Kind:  config.KBTargetKindLabel,
+			Value: "generic_coding",
 		},
+		Match: config.KBMatchThreshold,
 	}
-	if confidence, matched := taxonomySignalMatchConfidence(rule, result); matched || confidence != 0 {
-		t.Fatalf("tier match should require a threshold-qualified best matched category, got matched=%v confidence=%.2f", matched, confidence)
+	if confidence, matched := kbSignalMatchConfidence(labelRule, result); matched || confidence != 0 {
+		t.Fatalf("threshold label match should require a matched label, got matched=%v confidence=%.2f", matched, confidence)
 	}
 }

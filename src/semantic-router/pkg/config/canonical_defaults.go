@@ -105,16 +105,33 @@ func defaultCanonicalModelCatalog() CanonicalModelCatalog {
 	catalog := CanonicalModelCatalog{
 		Embeddings: defaultCanonicalEmbeddingModels(),
 		System:     DefaultSystemModels(),
-		Classifiers: []TaxonomyClassifierConfig{
+		KBs: []KnowledgeBaseConfig{
 			{
-				Name: "privacy_classifier",
-				Type: ClassifierTypeTaxonomy,
-				Source: TaxonomyClassifierSource{
-					Path:         "classifiers/privacy/",
-					TaxonomyFile: "taxonomy.json",
+				Name: "privacy_kb",
+				Source: KnowledgeBaseSource{
+					Path:     "classifiers/privacy/",
+					Manifest: "labels.json",
 				},
-				Threshold:         0.55,
-				SecurityThreshold: 0.7,
+				Threshold: 0.55,
+				LabelThresholds: map[string]float32{
+					"prompt_injection": 0.7,
+				},
+				Groups: map[string][]string{
+					"security_containment": {"prompt_injection", "credential_exfiltration", "jailbreak_role", "system_prompt_extraction"},
+					"privacy_policy":       {"proprietary_code", "internal_document", "pii", "business_strategy", "trade_secret_ip", "operational_infrastructure", "locality_directive", "customer_data"},
+					"frontier_reasoning":   {"architecture_analysis", "root_cause_analysis", "multi_step_tradeoffs"},
+					"local_standard":       {"generic_coding", "simple_task", "general_knowledge"},
+					"private":              {"prompt_injection", "credential_exfiltration", "jailbreak_role", "system_prompt_extraction", "proprietary_code", "internal_document", "pii", "business_strategy", "trade_secret_ip", "operational_infrastructure", "locality_directive", "customer_data"},
+					"public":               {"architecture_analysis", "root_cause_analysis", "multi_step_tradeoffs", "generic_coding", "simple_task", "general_knowledge"},
+				},
+				Metrics: []KnowledgeBaseMetricConfig{
+					{
+						Name:          "private_vs_public",
+						Type:          KBMetricTypeGroupMargin,
+						PositiveGroup: "private",
+						NegativeGroup: "public",
+					},
+				},
 			},
 		},
 		Modules: defaultCanonicalModelModules(),

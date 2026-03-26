@@ -2,9 +2,8 @@ package classification
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -13,133 +12,84 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// categoryKBData holds the loaded exemplars for one category.
-type categoryKBData struct {
-	Exemplars  []string    `json:"exemplars"`
-	Embeddings [][]float32 // pre-computed at init
+type kbLabelData struct {
+	Description string
+	Exemplars   []string
+	Embeddings  [][]float32
 }
 
-// TaxonomyClassifyResult contains the output of taxonomy-backed classification.
-type TaxonomyClassifyResult struct {
-	BestCategory          string
+// KBClassifyResult contains the structured output of one embedding KB evaluation.
+type KBClassifyResult struct {
+	BestLabel             string
 	BestSimilarity        float64
-	BestTier              string
-	BestMatchedCategory   string
+	BestMatchedLabel      string
 	BestMatchedSimilarity float64
-	BestMatchedTier       string
-	ContrastiveScore      float64
-	MatchedCategories     []string
-	MatchedTiers          []string
-	CategoryTiers         map[string]string
-	CategoryConfidences   map[string]float64
+	BestGroup             string
+	BestMatchedGroup      string
+	MatchedLabels         []string
+	MatchedGroups         []string
+	LabelConfidences      map[string]float64
+	GroupScores           map[string]float64
+	MetricValues          map[string]float64
 }
 
-// CategoryKBClassifier performs contrastive per-category taxonomy
-// classification. It loads JSON KB files from a directory (one per category),
-// pre-embeds all exemplars at init, and at classify time computes max-cosine
-// similarity per category plus a contrastive score between private and public
-// tier groups.
-type CategoryKBClassifier struct {
-	rule      config.TaxonomyClassifierConfig
-	taxonomy  config.TaxonomyDefinition
-	kbs       map[string]*categoryKBData
-	modelType string
-	baseDir   string
-
-	privateTiers map[string]bool // tiers treated as "private" for contrastive scoring
+// KnowledgeBaseClassifier performs exemplar-based KB classification.
+type KnowledgeBaseClassifier struct {
+	rule       config.KnowledgeBaseConfig
+	definition config.KnowledgeBaseDefinition
+	labels     map[string]*kbLabelData
+	modelType  string
+	baseDir    string
 }
 
-// NewCategoryKBClassifier creates a classifier from a taxonomy classifier config.
-// It loads KB JSONs, taxonomy, and pre-embeds all exemplars.
-func NewCategoryKBClassifier(rule config.TaxonomyClassifierConfig, modelType string, baseDir string) (*CategoryKBClassifier, error) {
-	c := &CategoryKBClassifier{
-		rule:         rule,
-		kbs:          make(map[string]*categoryKBData),
-		modelType:    modelType,
-		baseDir:      baseDir,
-		privateTiers: make(map[string]bool),
+func NewKnowledgeBaseClassifier(rule config.KnowledgeBaseConfig, modelType string, baseDir string) (*KnowledgeBaseClassifier, error) {
+	c := &KnowledgeBaseClassifier{
+		rule:      rule,
+		labels:    make(map[string]*kbLabelData),
+		modelType: modelType,
+		baseDir:   baseDir,
 	}
 
-	if err := c.loadTaxonomy(); err != nil {
-		logging.Warnf("[TaxonomyClassifier:%s] No taxonomy loaded (%v), contrastive scoring will be disabled", rule.Name, err)
-	} else {
-		c.populatePrivateTiers()
+	if err := c.loadDefinition(); err != nil {
+		return nil, fmt.Errorf("failed to load KB manifest from %s: %w", rule.Source.Path, err)
 	}
-
-	if err := c.loadKBs(); err != nil {
-		return nil, fmt.Errorf("failed to load taxonomy classifier assets from %s: %w", rule.Source.Path, err)
-	}
-
 	if err := c.preloadEmbeddings(); err != nil {
-		return nil, fmt.Errorf("failed to preload taxonomy classifier embeddings: %w", err)
+		return nil, fmt.Errorf("failed to preload KB embeddings: %w", err)
 	}
-
 	return c, nil
 }
 
-func (c *CategoryKBClassifier) loadTaxonomy() error {
-	path := c.rule.Source.ResolveTaxonomyPath(c.baseDir)
-	data, err := os.ReadFile(path)
+func (c *KnowledgeBaseClassifier) loadDefinition() error {
+	if c.labels == nil {
+		c.labels = make(map[string]*kbLabelData)
+	}
+	definition, err := config.LoadKnowledgeBaseDefinition(c.baseDir, c.rule.Source)
 	if err != nil {
 		return err
 	}
-	return config.UnmarshalTaxonomyDefinition(data, &c.taxonomy)
-}
-
-func (c *CategoryKBClassifier) loadKBs() error {
-	root := c.rule.Source.ResolvePath(c.baseDir)
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return err
+	if len(definition.Labels) == 0 {
+		return fmt.Errorf("KB manifest contains no labels")
 	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+	c.definition = definition
+	for name, label := range definition.Labels {
+		if len(label.Exemplars) == 0 {
 			continue
 		}
-		if entry.Name() == c.rule.Source.ResolveTaxonomyBaseName() {
-			continue
+		c.labels[name] = &kbLabelData{
+			Description: label.Description,
+			Exemplars:   append([]string(nil), label.Exemplars...),
 		}
-
-		categoryName := strings.TrimSuffix(entry.Name(), ".json")
-		data, err := os.ReadFile(filepath.Join(root, entry.Name()))
-		if err != nil {
-			logging.Warnf("[TaxonomyClassifier:%s] Failed to read %s: %v", c.rule.Name, entry.Name(), err)
-			continue
-		}
-
-		var kb categoryKBData
-		if err := config.UnmarshalTaxonomyExemplars(data, &kb); err != nil {
-			logging.Warnf("[TaxonomyClassifier:%s] Failed to parse %s: %v", c.rule.Name, entry.Name(), err)
-			continue
-		}
-
-		if len(kb.Exemplars) == 0 {
-			logging.Warnf("[TaxonomyClassifier:%s] Skipping %s: no exemplars", c.rule.Name, categoryName)
-			continue
-		}
-
-		c.kbs[categoryName] = &kb
 	}
-
-	if len(c.kbs) == 0 {
-		return fmt.Errorf("no valid taxonomy classifier category files found in %s", root)
+	if len(c.labels) == 0 {
+		return fmt.Errorf("no valid labels found in KB manifest")
 	}
-
-	totalExemplars := 0
-	for _, kb := range c.kbs {
-		totalExemplars += len(kb.Exemplars)
-	}
-	logging.Infof("[TaxonomyClassifier:%s] Loaded %d categories with %d total exemplars from %s",
-		c.rule.Name, len(c.kbs), totalExemplars, root)
-
 	return nil
 }
 
 type exemplarRef struct {
-	category string
-	index    int
-	text     string
+	label string
+	index int
+	text  string
 }
 
 type embeddingResult struct {
@@ -148,18 +98,18 @@ type embeddingResult struct {
 	err       error
 }
 
-func (c *CategoryKBClassifier) collectExemplarRefs() []exemplarRef {
-	var refs []exemplarRef
-	for cat, kb := range c.kbs {
-		kb.Embeddings = make([][]float32, len(kb.Exemplars))
-		for i, text := range kb.Exemplars {
-			refs = append(refs, exemplarRef{category: cat, index: i, text: text})
+func (c *KnowledgeBaseClassifier) collectExemplarRefs() []exemplarRef {
+	refs := make([]exemplarRef, 0)
+	for label, data := range c.labels {
+		data.Embeddings = make([][]float32, len(data.Exemplars))
+		for i, text := range data.Exemplars {
+			refs = append(refs, exemplarRef{label: label, index: i, text: text})
 		}
 	}
 	return refs
 }
 
-func (c *CategoryKBClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan embeddingResult {
+func (c *KnowledgeBaseClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan embeddingResult {
 	numWorkers := runtime.NumCPU() * 2
 	if numWorkers > len(refs) {
 		numWorkers = len(refs)
@@ -176,7 +126,7 @@ func (c *CategoryKBClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan
 	close(refChan)
 
 	modelType := c.modelType
-	targetDim := 0 // use model default dimension for consistency with other classifiers
+	targetDim := 0
 
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
@@ -187,9 +137,9 @@ func (c *CategoryKBClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan
 				output, err := getEmbeddingWithModelType(ref.text, modelType, targetDim)
 				if err != nil {
 					resultChan <- embeddingResult{ref: ref, err: err}
-				} else {
-					resultChan <- embeddingResult{ref: ref, embedding: output.Embedding}
+					continue
 				}
+				resultChan <- embeddingResult{ref: ref, embedding: output.Embedding}
 			}
 		}()
 	}
@@ -202,38 +152,31 @@ func (c *CategoryKBClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan
 	return resultChan
 }
 
-func (c *CategoryKBClassifier) preloadEmbeddings() error {
+func (c *KnowledgeBaseClassifier) preloadEmbeddings() error {
 	startTime := time.Now()
 	refs := c.collectExemplarRefs()
 	resultChan := c.embedExemplarsParallel(refs)
 
-	var failCount int
+	failCount := 0
 	for res := range resultChan {
 		if res.err != nil {
 			failCount++
-			logging.Warnf("[TaxonomyClassifier:%s] Failed to embed exemplar %q in %s: %v",
-				c.rule.Name,
-				res.ref.text, res.ref.category, res.err)
+			logging.Warnf("[KnowledgeBase:%s] Failed to embed exemplar %q in %s: %v", c.rule.Name, res.ref.text, res.ref.label, res.err)
 			continue
 		}
-		c.kbs[res.ref.category].Embeddings[res.ref.index] = res.embedding
+		c.labels[res.ref.label].Embeddings[res.ref.index] = res.embedding
 	}
 
-	if failCount > 0 {
-		logging.Warnf("[TaxonomyClassifier:%s] %d/%d exemplar embeddings failed", c.rule.Name, failCount, len(refs))
-	}
-
-	logging.Infof("[TaxonomyClassifier:%s] Preloaded embeddings for %d exemplars across %d categories in %v",
-		c.rule.Name, len(refs)-failCount, len(c.kbs), time.Since(startTime))
-
+	logging.Infof("[KnowledgeBase:%s] Preloaded embeddings for %d exemplars across %d labels in %v",
+		c.rule.Name, len(refs)-failCount, len(c.labels), time.Since(startTime))
 	return nil
 }
 
-func (c *CategoryKBClassifier) computeCategorySimilarities(queryEmb []float32) map[string]float64 {
-	catMaxSim := make(map[string]float64, len(c.kbs))
-	for catName, kb := range c.kbs {
-		var maxSim float32
-		for _, emb := range kb.Embeddings {
+func (c *KnowledgeBaseClassifier) computeLabelSimilarities(queryEmb []float32) map[string]float64 {
+	labelScores := make(map[string]float64, len(c.labels))
+	for labelName, data := range c.labels {
+		maxSim := float32(0)
+		for _, emb := range data.Embeddings {
 			if emb == nil {
 				continue
 			}
@@ -241,187 +184,147 @@ func (c *CategoryKBClassifier) computeCategorySimilarities(queryEmb []float32) m
 				maxSim = sim
 			}
 		}
-		catMaxSim[catName] = float64(maxSim)
+		labelScores[labelName] = float64(maxSim)
 	}
-	return catMaxSim
+	return labelScores
 }
 
-func (c *CategoryKBClassifier) buildMatchedRules(catMaxSim map[string]float64) ([]string, map[string]float64) {
-	threshold := float64(c.rule.Threshold)
-	secThreshold := float64(c.rule.SecurityThreshold)
-	if secThreshold <= 0 {
-		secThreshold = threshold
+func (c *KnowledgeBaseClassifier) effectiveThreshold(label string) float64 {
+	if threshold, ok := c.rule.LabelThresholds[label]; ok {
+		return float64(threshold)
 	}
-
-	matchedRules := make([]string, 0)
-	confidences := make(map[string]float64, len(catMaxSim))
-	for cat, sim := range catMaxSim {
-		confidences[cat] = sim
-		appliedThreshold := threshold
-		if c.isCategoryInTier(cat, "security_containment") {
-			appliedThreshold = secThreshold
-		}
-		if sim >= appliedThreshold {
-			matchedRules = append(matchedRules, cat)
-		}
-	}
-	return matchedRules, confidences
+	return float64(c.rule.Threshold)
 }
 
-func (c *CategoryKBClassifier) contrastiveScore(catMaxSim map[string]float64) float64 {
-	var maxPrivate, maxPublic float64
-	for cat, sim := range catMaxSim {
-		if c.isCategoryPrivate(cat) {
-			if sim > maxPrivate {
-				maxPrivate = sim
+func (c *KnowledgeBaseClassifier) buildMatchedLabels(labelScores map[string]float64) []string {
+	matched := make([]string, 0, len(labelScores))
+	for label, score := range labelScores {
+		if score >= c.effectiveThreshold(label) {
+			matched = append(matched, label)
+		}
+	}
+	sort.Strings(matched)
+	return matched
+}
+
+func (c *KnowledgeBaseClassifier) computeGroupScores(labelScores map[string]float64) map[string]float64 {
+	groupScores := make(map[string]float64, len(c.rule.Groups))
+	for group, labels := range c.rule.Groups {
+		best := 0.0
+		for _, label := range labels {
+			if score := labelScores[label]; score > best {
+				best = score
 			}
-		} else if sim > maxPublic {
-			maxPublic = sim
 		}
+		groupScores[group] = best
 	}
-	return maxPrivate - maxPublic
+	return groupScores
 }
 
-// Classify computes per-category max-cosine-similarity, selects the best
-// category, and produces a contrastive score (max private - max public).
-func (c *CategoryKBClassifier) Classify(text string) (*TaxonomyClassifyResult, error) {
-	if text == "" {
-		return nil, fmt.Errorf("taxonomy classification: query must be provided")
+func (c *KnowledgeBaseClassifier) collectMatchedGroups(matchedLabels []string) []string {
+	if len(c.rule.Groups) == 0 || len(matchedLabels) == 0 {
+		return nil
+	}
+	labelSet := make(map[string]struct{}, len(matchedLabels))
+	for _, label := range matchedLabels {
+		labelSet[label] = struct{}{}
+	}
+	groups := make([]string, 0, len(c.rule.Groups))
+	for group, labels := range c.rule.Groups {
+		for _, label := range labels {
+			if _, ok := labelSet[label]; ok {
+				groups = append(groups, group)
+				break
+			}
+		}
+	}
+	sort.Strings(groups)
+	return groups
+}
+
+func bestScoredName(scores map[string]float64) (string, float64) {
+	if len(scores) == 0 {
+		return "", 0
+	}
+	names := make([]string, 0, len(scores))
+	for name := range scores {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	bestName := ""
+	bestScore := 0.0
+	for _, name := range names {
+		score := scores[name]
+		if bestName == "" || score > bestScore {
+			bestName = name
+			bestScore = score
+		}
+	}
+	return bestName, bestScore
+}
+
+func (c *KnowledgeBaseClassifier) computeMetricValues(labelScores, groupScores map[string]float64, bestScore, bestMatchedScore float64) map[string]float64 {
+	values := map[string]float64{
+		config.KBMetricBestScore:        bestScore,
+		config.KBMetricBestMatchedScore: bestMatchedScore,
+	}
+	for _, metric := range c.rule.Metrics {
+		if metric.Type != config.KBMetricTypeGroupMargin {
+			continue
+		}
+		values[metric.Name] = groupScores[metric.PositiveGroup] - groupScores[metric.NegativeGroup]
+	}
+	return values
+}
+
+func (c *KnowledgeBaseClassifier) Classify(text string) (*KBClassifyResult, error) {
+	if strings.TrimSpace(text) == "" {
+		return nil, fmt.Errorf("KB classification: query must be provided")
 	}
 
 	startTime := time.Now()
-
 	queryOutput, err := getEmbeddingWithModelType(text, c.modelType, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
 	}
 
-	catMaxSim := c.computeCategorySimilarities(queryOutput.Embedding)
-
-	var bestCat string
-	var bestSim float64
-	for cat, sim := range catMaxSim {
-		if sim > bestSim {
-			bestSim = sim
-			bestCat = cat
-		}
+	labelScores := c.computeLabelSimilarities(queryOutput.Embedding)
+	bestLabel, bestScore := bestScoredName(labelScores)
+	matchedLabels := c.buildMatchedLabels(labelScores)
+	matchedLabelScores := make(map[string]float64, len(matchedLabels))
+	for _, label := range matchedLabels {
+		matchedLabelScores[label] = labelScores[label]
 	}
-
-	matchedRules, confidences := c.buildMatchedRules(catMaxSim)
-	contrastive := c.contrastiveScore(catMaxSim)
-	categoryTiers := c.categoryTiers()
-
-	bestTier := ""
-	if entry, ok := c.taxonomy.Categories[bestCat]; ok {
-		bestTier = entry.Tier
+	bestMatchedLabel, bestMatchedScore := bestScoredName(matchedLabelScores)
+	groupScores := c.computeGroupScores(labelScores)
+	bestGroup, _ := bestScoredName(groupScores)
+	matchedGroups := c.collectMatchedGroups(matchedLabels)
+	matchedGroupScores := make(map[string]float64, len(matchedGroups))
+	for _, group := range matchedGroups {
+		matchedGroupScores[group] = groupScores[group]
 	}
-	matchedTiers := c.collectMatchedTiers(matchedRules)
-	bestMatchedCategory, bestMatchedSimilarity := bestMatchedCategory(matchedRules, confidences)
-	bestMatchedTier := ""
-	if entry, ok := c.taxonomy.Categories[bestMatchedCategory]; ok {
-		bestMatchedTier = entry.Tier
-	}
+	bestMatchedGroup, _ := bestScoredName(matchedGroupScores)
+	metricValues := c.computeMetricValues(labelScores, groupScores, bestScore, bestMatchedScore)
 
 	elapsed := time.Since(startTime)
-	logging.Infof("[TaxonomyClassifier:%s] Classified in %v: best=%s (%.3f) tier=%s, best_matched=%s (%.3f) tier=%s, contrastive=%.3f, matched=%d categories",
-		c.rule.Name, elapsed, bestCat, bestSim, bestTier, bestMatchedCategory, bestMatchedSimilarity, bestMatchedTier, contrastive, len(matchedRules))
+	logging.Infof("[KnowledgeBase:%s] Classified in %v: best_label=%s (%.3f), best_matched_label=%s (%.3f), best_group=%s, best_matched_group=%s",
+		c.rule.Name, elapsed, bestLabel, bestScore, bestMatchedLabel, bestMatchedScore, bestGroup, bestMatchedGroup)
 
-	return &TaxonomyClassifyResult{
-		BestCategory:          bestCat,
-		BestSimilarity:        bestSim,
-		BestTier:              bestTier,
-		BestMatchedCategory:   bestMatchedCategory,
-		BestMatchedSimilarity: bestMatchedSimilarity,
-		BestMatchedTier:       bestMatchedTier,
-		ContrastiveScore:      contrastive,
-		MatchedCategories:     matchedRules,
-		MatchedTiers:          matchedTiers,
-		CategoryTiers:         categoryTiers,
-		CategoryConfidences:   confidences,
+	return &KBClassifyResult{
+		BestLabel:             bestLabel,
+		BestSimilarity:        bestScore,
+		BestMatchedLabel:      bestMatchedLabel,
+		BestMatchedSimilarity: bestMatchedScore,
+		BestGroup:             bestGroup,
+		BestMatchedGroup:      bestMatchedGroup,
+		MatchedLabels:         matchedLabels,
+		MatchedGroups:         matchedGroups,
+		LabelConfidences:      labelScores,
+		GroupScores:           groupScores,
+		MetricValues:          metricValues,
 	}, nil
 }
 
-func (c *CategoryKBClassifier) isCategoryPrivate(category string) bool {
-	entry, ok := c.taxonomy.Categories[category]
-	if !ok {
-		return false
-	}
-	return c.privateTiers[entry.Tier]
-}
-
-func (c *CategoryKBClassifier) isCategoryInTier(category, tier string) bool {
-	entry, ok := c.taxonomy.Categories[category]
-	if !ok {
-		return false
-	}
-	return entry.Tier == tier
-}
-
-// CategoryCount returns the number of loaded categories.
-func (c *CategoryKBClassifier) CategoryCount() int {
-	return len(c.kbs)
-}
-
-func (c *CategoryKBClassifier) collectMatchedTiers(categories []string) []string {
-	tierSet := make(map[string]struct{}, len(categories))
-	matched := make([]string, 0, len(categories))
-	for _, category := range categories {
-		entry, ok := c.taxonomy.Categories[category]
-		if !ok || entry.Tier == "" {
-			continue
-		}
-		if _, exists := tierSet[entry.Tier]; exists {
-			continue
-		}
-		tierSet[entry.Tier] = struct{}{}
-		matched = append(matched, entry.Tier)
-	}
-	return matched
-}
-
-func bestMatchedCategory(categories []string, confidences map[string]float64) (string, float64) {
-	bestCategory := ""
-	bestConfidence := 0.0
-	for _, category := range categories {
-		confidence, ok := confidences[category]
-		if !ok {
-			continue
-		}
-		if confidence > bestConfidence {
-			bestCategory = category
-			bestConfidence = confidence
-		}
-	}
-	return bestCategory, bestConfidence
-}
-
-func (c *CategoryKBClassifier) categoryTiers() map[string]string {
-	tiers := make(map[string]string, len(c.taxonomy.Categories))
-	for category, entry := range c.taxonomy.Categories {
-		tiers[category] = entry.Tier
-	}
-	for category, tier := range c.taxonomy.CategoryToTier {
-		if _, exists := tiers[category]; !exists {
-			tiers[category] = tier
-		}
-	}
-	return tiers
-}
-
-func (c *CategoryKBClassifier) populatePrivateTiers() {
-	if c.taxonomy.TierGroups != nil {
-		for _, groupName := range []string{"privacy_categories", "security_categories"} {
-			for _, category := range c.taxonomy.TierGroups[groupName] {
-				if entry, ok := c.taxonomy.Categories[category]; ok && entry.Tier != "" {
-					c.privateTiers[entry.Tier] = true
-				}
-			}
-		}
-	}
-	if len(c.privateTiers) > 0 {
-		return
-	}
-	for _, tier := range []string{"security_containment", "privacy_policy"} {
-		c.privateTiers[tier] = true
-	}
+func (c *KnowledgeBaseClassifier) LabelCount() int {
+	return len(c.labels)
 }

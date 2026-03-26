@@ -25,7 +25,7 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeAuthz:        func(target *MatchedSignals) *[]string { return &target.Authz },
 	config.SignalTypeJailbreak:    func(target *MatchedSignals) *[]string { return &target.Jailbreak },
 	config.SignalTypePII:          func(target *MatchedSignals) *[]string { return &target.PII },
-	config.SignalTypeTaxonomy:     func(target *MatchedSignals) *[]string { return &target.Taxonomy },
+	config.SignalTypeKB:           func(target *MatchedSignals) *[]string { return &target.KB },
 	config.SignalTypeProjection:   func(target *MatchedSignals) *[]string { return &target.Projection },
 }
 
@@ -59,7 +59,7 @@ type MatchedSignals struct {
 	Authz        []string `json:"authz,omitempty"`
 	Jailbreak    []string `json:"jailbreak,omitempty"`
 	PII          []string `json:"pii,omitempty"`
-	Taxonomy     []string `json:"taxonomy,omitempty"`
+	KB           []string `json:"kb,omitempty"`
 	Projection   []string `json:"projection,omitempty"`
 }
 
@@ -186,7 +186,7 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		Authz:        signals.MatchedAuthzRules,
 		Jailbreak:    signals.MatchedJailbreakRules,
 		PII:          signals.MatchedPIIRules,
-		Taxonomy:     signals.MatchedTaxonomyRules,
+		KB:           signals.MatchedKBRules,
 		Projection:   signals.MatchedProjectionRules,
 	}
 }

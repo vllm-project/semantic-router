@@ -77,8 +77,8 @@ func (c *Classifier) buildSignalDispatchers(
 			func() { c.evaluatePIISignal(results, mu, textForSignal(config.SignalTypePII), nonUserMessages) },
 		},
 		{
-			config.SignalTypeTaxonomy, "Taxonomy",
-			func() { c.evaluateTaxonomySignals(results, mu, textForSignal(config.SignalTypeTaxonomy)) },
+			config.SignalTypeKB, "KB",
+			func() { c.evaluateKBSignals(results, mu, textForSignal(config.SignalTypeKB)) },
 		},
 	}
 }

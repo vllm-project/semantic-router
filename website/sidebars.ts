@@ -85,7 +85,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/learned/jailbreak',
                 'tutorials/signal/learned/pii',
                 'tutorials/signal/learned/preference',
-                'tutorials/signal/learned/taxonomy',
+                'tutorials/signal/learned/kb',
                 'tutorials/signal/learned/user-feedback',
               ],
             },

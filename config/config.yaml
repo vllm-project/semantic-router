@@ -372,27 +372,31 @@ routing:
           - EMAIL_ADDRESS
         description: Sensitive prompts where only low-risk identifiers may pass through.
 
-    taxonomy:
+    kb:
       - name: privacy_policy
-        classifier: privacy_classifier
-        bind:
-          kind: tier
+        kb: privacy_kb
+        target:
+          kind: group
           value: privacy_policy
+        match: best
       - name: security_containment
-        classifier: privacy_classifier
-        bind:
-          kind: tier
+        kb: privacy_kb
+        target:
+          kind: group
           value: security_containment
+        match: best
       - name: frontier_reasoning
-        classifier: privacy_classifier
-        bind:
-          kind: tier
+        kb: privacy_kb
+        target:
+          kind: group
           value: frontier_reasoning
+        match: best
       - name: local_standard
-        classifier: privacy_classifier
-        bind:
-          kind: tier
+        kb: privacy_kb
+        target:
+          kind: group
           value: local_standard
+        match: best
 
   projections:
     partitions:
@@ -429,12 +433,12 @@ routing:
           - type: structure
             name: first_then_flow
             weight: 0.12
-      - name: privacy_taxonomy_bias
+      - name: privacy_kb_bias
         method: weighted_sum
         inputs:
-          - type: taxonomy_metric
-            classifier: privacy_classifier
-            metric: contrastive
+          - type: kb_metric
+            kb: privacy_kb
+            metric: private_vs_public
             weight: 1.0
             value_source: score
     mappings:
@@ -1568,14 +1572,62 @@ global:
         access_key: external-guardrail-key
         max_tokens: 2048
         temperature: 0.2
-    classifiers:
-      - name: privacy_classifier
-        type: taxonomy
+    kbs:
+      - name: privacy_kb
         source:
           path: classifiers/privacy/
-          taxonomy_file: taxonomy.json
+          manifest: labels.json
         threshold: 0.55
-        security_threshold: 0.7
+        label_thresholds:
+          prompt_injection: 0.7
+        groups:
+          security_containment:
+            - prompt_injection
+            - credential_exfiltration
+            - jailbreak_role
+            - system_prompt_extraction
+          privacy_policy:
+            - proprietary_code
+            - internal_document
+            - pii
+            - business_strategy
+            - trade_secret_ip
+            - operational_infrastructure
+            - locality_directive
+            - customer_data
+          frontier_reasoning:
+            - architecture_analysis
+            - root_cause_analysis
+            - multi_step_tradeoffs
+          local_standard:
+            - generic_coding
+            - simple_task
+            - general_knowledge
+          private:
+            - prompt_injection
+            - credential_exfiltration
+            - jailbreak_role
+            - system_prompt_extraction
+            - proprietary_code
+            - internal_document
+            - pii
+            - business_strategy
+            - trade_secret_ip
+            - operational_infrastructure
+            - locality_directive
+            - customer_data
+          public:
+            - architecture_analysis
+            - root_cause_analysis
+            - multi_step_tradeoffs
+            - generic_coding
+            - simple_task
+            - general_knowledge
+        metrics:
+          - name: private_vs_public
+            type: group_margin
+            positive_group: private
+            negative_group: public
     modules:
       prompt_compression:
         enabled: true

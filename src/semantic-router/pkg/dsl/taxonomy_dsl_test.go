@@ -9,20 +9,21 @@ import (
 
 func taxonomyDSLFixture() string {
 	return `
-SIGNAL taxonomy privacy_policy {
-  classifier: "privacy_classifier"
-  bind: { kind: "tier", value: "privacy_policy" }
+SIGNAL kb privacy_policy {
+  kb: "privacy_kb"
+  target: { kind: "group", value: "privacy_policy" }
+  match: "best"
 }
 
 PROJECTION score privacy_contrastive_score {
   method: "weighted_sum"
-  inputs: [{ type: "taxonomy_metric", classifier: "privacy_classifier", metric: "contrastive", weight: 1.0, value_source: "score" }]
+  inputs: [{ type: "kb_metric", kb: "privacy_kb", metric: "private_vs_public", weight: 1.0, value_source: "score" }]
 }
 
 ROUTE local_privacy_policy {
   PRIORITY 250
   TOOL_SCOPE "local_only"
-  WHEN taxonomy("privacy_policy")
+  WHEN kb("privacy_policy")
   MODEL "local-model"
 }
 `
@@ -35,11 +36,11 @@ func TestParseTaxonomyClassifierAndSignal(t *testing.T) {
 	}
 
 	if len(prog.Signals) == 0 {
-		t.Fatal("expected taxonomy signal in AST")
+		t.Fatal("expected kb signal in AST")
 	}
 	sig := prog.Signals[0]
-	if sig.SignalType != "taxonomy" {
-		t.Errorf("signal type = %q, want taxonomy", sig.SignalType)
+	if sig.SignalType != "kb" {
+		t.Errorf("signal type = %q, want kb", sig.SignalType)
 	}
 	if sig.Name != "privacy_policy" {
 		t.Errorf("signal name = %q, want privacy_policy", sig.Name)
@@ -52,32 +53,35 @@ func TestCompileTaxonomyClassifierAndSignal(t *testing.T) {
 		t.Fatalf("Compile errors: %v", errs)
 	}
 
-	if len(cfg.TaxonomyClassifiers) != 0 {
-		t.Fatalf("expected routing DSL compile to omit global taxonomy classifiers, got %d", len(cfg.TaxonomyClassifiers))
+	if len(cfg.KnowledgeBases) != 0 {
+		t.Fatalf("expected routing DSL compile to omit global knowledge bases, got %d", len(cfg.KnowledgeBases))
 	}
 
-	if len(cfg.TaxonomyRules) != 1 {
-		t.Fatalf("expected 1 taxonomy signal, got %d", len(cfg.TaxonomyRules))
+	if len(cfg.KBRules) != 1 {
+		t.Fatalf("expected 1 kb signal, got %d", len(cfg.KBRules))
 	}
-	rule := cfg.TaxonomyRules[0]
-	if rule.Classifier != "privacy_classifier" {
-		t.Errorf("signal classifier = %q", rule.Classifier)
+	rule := cfg.KBRules[0]
+	if rule.KB != "privacy_kb" {
+		t.Errorf("signal kb = %q", rule.KB)
 	}
-	if rule.Bind.Kind != "tier" || rule.Bind.Value != "privacy_policy" {
-		t.Errorf("bind = %+v", rule.Bind)
+	if rule.Target.Kind != "group" || rule.Target.Value != "privacy_policy" {
+		t.Errorf("target = %+v", rule.Target)
+	}
+	if rule.Match != "best" {
+		t.Errorf("match = %q", rule.Match)
 	}
 
 	if len(cfg.Projections.Scores) != 1 {
 		t.Fatalf("expected 1 projection score, got %d", len(cfg.Projections.Scores))
 	}
 	input := cfg.Projections.Scores[0].Inputs[0]
-	if input.Type != "taxonomy_metric" {
+	if input.Type != "kb_metric" {
 		t.Errorf("projection input type = %q", input.Type)
 	}
-	if input.Classifier != "privacy_classifier" {
-		t.Errorf("projection input classifier = %q", input.Classifier)
+	if input.KB != "privacy_kb" {
+		t.Errorf("projection input kb = %q", input.KB)
 	}
-	if input.Metric != "contrastive" {
+	if input.Metric != "private_vs_public" {
 		t.Errorf("projection input metric = %q", input.Metric)
 	}
 
@@ -85,7 +89,7 @@ func TestCompileTaxonomyClassifierAndSignal(t *testing.T) {
 		t.Fatalf("expected 1 decision, got %d", len(cfg.Decisions))
 	}
 	cond := cfg.Decisions[0].Rules.Conditions[0]
-	if cond.Type != "taxonomy" || cond.Name != "privacy_policy" {
+	if cond.Type != "kb" || cond.Name != "privacy_policy" {
 		t.Errorf("WHEN condition = %+v", cond)
 	}
 }
@@ -102,14 +106,15 @@ func TestDecompileTaxonomyClassifierAndSignal(t *testing.T) {
 	}
 
 	for _, needle := range []string{
-		"SIGNAL taxonomy privacy_policy",
-		`classifier: "privacy_classifier"`,
-		`bind: { kind: "tier", value: "privacy_policy" }`,
-		`type: "taxonomy_metric"`,
-		`classifier: "privacy_classifier"`,
-		`metric: "contrastive"`,
+		"SIGNAL kb privacy_policy",
+		`kb: "privacy_kb"`,
+		`target: { kind: "group", value: "privacy_policy" }`,
+		`match: "best"`,
+		`type: "kb_metric"`,
+		`kb: "privacy_kb"`,
+		`metric: "private_vs_public"`,
 		`value_source: "score"`,
-		`WHEN taxonomy("privacy_policy")`,
+		`WHEN kb("privacy_policy")`,
 	} {
 		if !strings.Contains(output, needle) {
 			t.Fatalf("missing %q in decompiled DSL:\n%s", needle, output)
@@ -122,16 +127,26 @@ func TestTaxonomyDSLRoundTrip(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("Compile errors: %v", errs)
 	}
-	cfg.TaxonomyClassifiers = []config.TaxonomyClassifierConfig{
+	cfg.KnowledgeBases = []config.KnowledgeBaseConfig{
 		{
-			Name: "privacy_classifier",
-			Type: config.ClassifierTypeTaxonomy,
-			Source: config.TaxonomyClassifierSource{
-				Path:         "classifiers/privacy/",
-				TaxonomyFile: "taxonomy.json",
+			Name: "privacy_kb",
+			Source: config.KnowledgeBaseSource{
+				Path:     "classifiers/privacy/",
+				Manifest: "labels.json",
 			},
-			Threshold:         0.55,
-			SecurityThreshold: 0.7,
+			Threshold: 0.55,
+			Groups: map[string][]string{
+				"privacy_policy": {"proprietary_code"},
+				"public":         {"generic_coding"},
+			},
+			Metrics: []config.KnowledgeBaseMetricConfig{
+				{
+					Name:          "private_vs_public",
+					Type:          config.KBMetricTypeGroupMargin,
+					PositiveGroup: "privacy_policy",
+					NegativeGroup: "public",
+				},
+			},
 		},
 	}
 
@@ -145,11 +160,11 @@ func TestTaxonomyDSLRoundTrip(t *testing.T) {
 		t.Fatalf("Round-trip compile errors: %v", errs2)
 	}
 
-	if len(cfg2.TaxonomyClassifiers) != 0 {
-		t.Fatalf("round-trip routing DSL should not carry classifiers, got %d", len(cfg2.TaxonomyClassifiers))
+	if len(cfg2.KnowledgeBases) != 0 {
+		t.Fatalf("round-trip routing DSL should not carry knowledge bases, got %d", len(cfg2.KnowledgeBases))
 	}
-	if len(cfg2.TaxonomyRules) != 1 {
-		t.Fatalf("round-trip taxonomy rules = %d", len(cfg2.TaxonomyRules))
+	if len(cfg2.KBRules) != 1 {
+		t.Fatalf("round-trip kb rules = %d", len(cfg2.KBRules))
 	}
 	if len(cfg2.Projections.Scores) != 1 {
 		t.Fatalf("round-trip projection scores = %d", len(cfg2.Projections.Scores))

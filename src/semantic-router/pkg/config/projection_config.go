@@ -29,7 +29,7 @@ type ProjectionScore struct {
 type ProjectionScoreInput struct {
 	Type        string  `yaml:"type"`
 	Name        string  `yaml:"name,omitempty"`
-	Classifier  string  `yaml:"classifier,omitempty"`
+	KB          string  `yaml:"kb,omitempty"`
 	Metric      string  `yaml:"metric,omitempty"`
 	Weight      float64 `yaml:"weight"`
 	ValueSource string  `yaml:"value_source,omitempty"`

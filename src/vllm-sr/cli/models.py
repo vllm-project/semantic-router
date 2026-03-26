@@ -278,19 +278,20 @@ class RoleBindingRule(BaseModel):
     description: Optional[str] = None
 
 
-class TaxonomySignalBind(BaseModel):
-    """Binding to a taxonomy classifier tier/category result."""
+class KBSignalTarget(BaseModel):
+    """Binding target for a named knowledge base."""
 
-    kind: Literal["tier", "category"]
+    kind: Literal["label", "group"]
     value: str
 
 
-class TaxonomySignal(BaseModel):
-    """Taxonomy signal bound to a named global classifier instance."""
+class KBSignal(BaseModel):
+    """Knowledge-base signal bound to a named global KB instance."""
 
     name: str
-    classifier: str
-    bind: TaxonomySignalBind
+    kb: str
+    target: KBSignalTarget
+    match: Optional[Literal["best", "threshold"]] = None
 
 
 class Signals(BaseModel):
@@ -310,7 +311,7 @@ class Signals(BaseModel):
     role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
     pii: Optional[List[PIIRule]] = []
-    taxonomy: Optional[List[TaxonomySignal]] = []
+    kb: Optional[List[KBSignal]] = []
 
 
 class Condition(BaseModel):

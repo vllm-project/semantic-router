@@ -26,7 +26,7 @@ func EmitYAML(input string) ([]byte, []error) {
 
 // EmitYAMLFromConfig marshals a RouterConfig to YAML bytes.
 func EmitYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
-	if cfg != nil && len(cfg.TaxonomyClassifiers) > 0 {
+	if cfg != nil && len(cfg.KnowledgeBases) > 0 {
 		canonical := config.CanonicalConfigFromRouterConfig(cfg)
 		return yaml.Marshal(canonical)
 	}
@@ -37,7 +37,7 @@ func EmitYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
 // that matches the config.yaml format used by vllm-serve.
 // This is the inverse of normalizeYAML.
 func EmitUserYAML(cfg *config.RouterConfig) ([]byte, error) {
-	if cfg != nil && len(cfg.TaxonomyClassifiers) > 0 {
+	if cfg != nil && len(cfg.KnowledgeBases) > 0 {
 		canonical := config.CanonicalConfigFromRouterConfig(cfg)
 		return yaml.Marshal(canonical)
 	}
@@ -75,7 +75,7 @@ func denormalizeSignals(raw map[string]interface{}) {
 		"role_bindings":       "authz",
 		"jailbreak":           "jailbreak",
 		"pii":                 "pii",
-		"taxonomy":            "taxonomy",
+		"kb":                  "kb",
 	}
 
 	signals := make(map[string]interface{})
@@ -546,7 +546,7 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 		"fact_check_rules", "user_feedback_rules", "preference_rules",
 		"language_rules", "context_rules", "structure_rules",
 		"modality_rules", "role_bindings", "jailbreak", "pii",
-		"taxonomy",
+		"kb",
 	}
 	for _, key := range signalKeys {
 		moveKey(flat, configSpec, key)

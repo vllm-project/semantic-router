@@ -6,28 +6,28 @@ import ConfigPageTaxonomyClassifiers from './ConfigPageTaxonomyClassifiers'
 import EditModal, { type EditFormData, type FieldConfig } from '../components/EditModal'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
 
-export type TaxonomyView = 'classifiers' | 'tiers' | 'categories' | 'exemplars'
+export type KnowledgeBaseView = 'knowledge-bases' | 'groups' | 'labels' | 'exemplars'
 
 interface TaxonomyPageProps {
-  activeView: TaxonomyView
+  activeView: KnowledgeBaseView
 }
 
-const VIEW_META: Record<TaxonomyView, { title: string; description: string }> = {
-  classifiers: {
-    title: 'Taxonomy Classifiers',
-    description: 'Manage built-in and custom taxonomy classifier packages, inspect signal bindings, and curate the router taxonomy catalog.',
+const VIEW_META: Record<KnowledgeBaseView, { title: string; description: string }> = {
+  'knowledge-bases': {
+    title: 'Knowledge Bases',
+    description: 'Manage built-in and custom embedding KB packages, inspect signal bindings, and curate the active router KB catalog.',
   },
-  tiers: {
-    title: 'Taxonomy Tiers',
-    description: 'Review and edit tier definitions per classifier, keeping tier-level routing semantics aligned with the active taxonomy package.',
+  groups: {
+    title: 'Knowledge Base Groups',
+    description: 'Review and edit group definitions per KB, keeping higher-level routing semantics aligned with the active label package.',
   },
-  categories: {
-    title: 'Taxonomy Categories',
-    description: 'Curate category definitions, tier assignments, and category-level bindings without mixing taxonomy management into Global Config.',
+  labels: {
+    title: 'Knowledge Base Labels',
+    description: 'Curate label definitions, threshold overrides, and signal-facing label bindings without mixing KB management into Global Config.',
   },
   exemplars: {
-    title: 'Taxonomy Exemplars',
-    description: 'Edit the exemplar text that powers classifier embeddings and inspect how each category package is grounded on disk.',
+    title: 'Knowledge Base Exemplars',
+    description: 'Edit exemplar text that grounds KB embedding scores and inspect how each label package is represented on disk.',
   },
 }
 
@@ -62,34 +62,34 @@ export default function TaxonomyPage({ activeView }: TaxonomyPageProps) {
   return (
     <>
       <ConfigPageManagerLayout
-        eyebrow="Taxonomy"
+        eyebrow="Knowledge Base"
         title={meta.title}
         description={meta.description}
-        configArea="Taxonomy"
-        scope="Classifier packages, tiers, categories, and exemplar corpora"
+        configArea="Knowledge Base"
+        scope="Router-owned KB packages, labels, groups, metrics, and exemplar corpora"
         panelEyebrow="Manager"
-        panelTitle="Taxonomy Control Plane"
-        panelDescription="This surface owns taxonomy classifier CRUD and the classifier-local resources that drive routing. Use the top navbar dropdown or the pills below to move across classifier, tier, category, and exemplar views."
+        panelTitle="Knowledge Base Control Plane"
+        panelDescription="This surface owns knowledge base CRUD and the KB-local resources that drive routing. Use the top navbar dropdown or the pills below to move across knowledge base, group, label, and exemplar views."
         pills={[
           {
-            label: 'Classifiers',
-            active: activeView === 'classifiers',
-            onClick: () => navigate('/taxonomy/classifiers'),
+            label: 'Knowledge Bases',
+            active: activeView === 'knowledge-bases',
+            onClick: () => navigate('/knowledge-bases/knowledge-bases'),
           },
           {
-            label: 'Tiers',
-            active: activeView === 'tiers',
-            onClick: () => navigate('/taxonomy/tiers'),
+            label: 'Groups',
+            active: activeView === 'groups',
+            onClick: () => navigate('/knowledge-bases/groups'),
           },
           {
-            label: 'Categories',
-            active: activeView === 'categories',
-            onClick: () => navigate('/taxonomy/categories'),
+            label: 'Labels',
+            active: activeView === 'labels',
+            onClick: () => navigate('/knowledge-bases/labels'),
           },
           {
             label: 'Exemplars',
             active: activeView === 'exemplars',
-            onClick: () => navigate('/taxonomy/exemplars'),
+            onClick: () => navigate('/knowledge-bases/exemplars'),
           },
         ]}
       >

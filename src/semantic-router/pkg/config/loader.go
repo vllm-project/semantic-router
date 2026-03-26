@@ -134,7 +134,19 @@ func rejectRemovedTaxonomyLegacyFields(raw map[string]interface{}) error {
 	signals := nestedStringMap(routing["signals"])
 	if _, ok := signals["category_kb"]; ok {
 		return fmt.Errorf(
-			"routing.signals.category_kb is no longer supported; migrate to global.model_catalog.classifiers[] plus routing.signals.taxonomy[]",
+			"routing.signals.category_kb is no longer supported; migrate to global.model_catalog.kbs[] plus routing.signals.kb[]",
+		)
+	}
+	if _, ok := signals["taxonomy"]; ok {
+		return fmt.Errorf(
+			"routing.signals.taxonomy is no longer supported; migrate to routing.signals.kb[]",
+		)
+	}
+	global := nestedStringMap(raw["global"])
+	modelCatalog := nestedStringMap(global["model_catalog"])
+	if _, ok := modelCatalog["classifiers"]; ok {
+		return fmt.Errorf(
+			"global.model_catalog.classifiers is no longer supported; migrate to global.model_catalog.kbs[]",
 		)
 	}
 	return nil

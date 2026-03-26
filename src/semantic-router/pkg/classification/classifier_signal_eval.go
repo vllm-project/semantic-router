@@ -52,7 +52,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeAuthz, c.Config.GetRoleBindings(), func(rb config.RoleBinding) string { return rb.Role })
 	collectSignalKeys(allSignals, config.SignalTypeJailbreak, c.Config.JailbreakRules, func(r config.JailbreakRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
-	collectSignalKeys(allSignals, config.SignalTypeTaxonomy, c.Config.TaxonomyRules, func(r config.TaxonomySignalRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeKB, c.Config.KBRules, func(r config.KBSignalRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true
@@ -71,27 +71,27 @@ type SignalMetrics struct {
 
 // SignalResults contains all evaluated signal results
 type SignalResults struct {
-	MatchedKeywordRules       []string
-	MatchedKeywords           []string // The actual keywords that matched (not rule names)
-	MatchedEmbeddingRules     []string
-	MatchedDomainRules        []string
-	MatchedFactCheckRules     []string // "needs_fact_check" or "no_fact_check_needed"
-	MatchedUserFeedbackRules  []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
-	MatchedPreferenceRules    []string // Route preference names matched via external LLM
-	MatchedLanguageRules      []string // Language codes: "en", "es", "zh", "fr", etc.
-	MatchedContextRules       []string // Matched context rule names (e.g. "low_token_count")
-	TokenCount                int      // Total token count
-	MatchedStructureRules     []string // Matched structure rule names (e.g. "many_questions")
-	MatchedComplexityRules    []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
-	MatchedModalityRules      []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
-	MatchedAuthzRules         []string // Matched authz role names for user-level RBAC routing
-	MatchedJailbreakRules     []string // Matched jailbreak rule names (confidence >= threshold)
-	MatchedPIIRules           []string // Matched PII rule names (denied PII types detected)
-	MatchedTaxonomyRules      []string
-	TaxonomyClassifierResults map[string]*TaxonomyClassifyResult
-	TaxonomyMetricValues      map[string]float64
-	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
-	ProjectionScores          map[string]float64
+	MatchedKeywordRules      []string
+	MatchedKeywords          []string // The actual keywords that matched (not rule names)
+	MatchedEmbeddingRules    []string
+	MatchedDomainRules       []string
+	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
+	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
+	MatchedPreferenceRules   []string // Route preference names matched via external LLM
+	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
+	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
+	TokenCount               int      // Total token count
+	MatchedStructureRules    []string // Matched structure rule names (e.g. "many_questions")
+	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
+	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
+	MatchedJailbreakRules    []string // Matched jailbreak rule names (confidence >= threshold)
+	MatchedPIIRules          []string // Matched PII rule names (denied PII types detected)
+	MatchedKBRules           []string
+	KBClassifierResults      map[string]*KBClassifyResult
+	KBMetricValues           map[string]float64
+	MatchedProjectionRules   []string // Matched derived routing outputs from routing.projections.mappings
+	ProjectionScores         map[string]float64
 
 	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
 	JailbreakDetected   bool    // Whether any jailbreak was detected (across all rules)
@@ -125,7 +125,7 @@ type SignalMetricsCollection struct {
 	Authz        SignalMetrics `json:"authz"`
 	Jailbreak    SignalMetrics `json:"jailbreak"`
 	PII          SignalMetrics `json:"pii"`
-	Taxonomy     SignalMetrics `json:"taxonomy"`
+	KB           SignalMetrics `json:"kb"`
 }
 
 // analyzeRuleCombination recursively traverses a rule tree to collect all referenced signals.
@@ -172,8 +172,8 @@ func (c *Classifier) expandProjectionDependencies(usedSignals map[string]bool) {
 			continue
 		}
 		for _, input := range score.Inputs {
-			if strings.EqualFold(input.Type, config.ProjectionInputTaxonomyMetric) {
-				usedSignals[strings.ToLower(config.SignalTypeTaxonomy+":"+input.Classifier)] = true
+			if strings.EqualFold(input.Type, config.ProjectionInputKBMetric) {
+				usedSignals[strings.ToLower(config.SignalTypeKB+":"+input.KB)] = true
 				continue
 			}
 			usedSignals[strings.ToLower(input.Type+":"+input.Name)] = true
@@ -285,12 +285,12 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, taxonomy=%v",
+	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules, signals.MatchedContextRules, signals.MatchedStructureRules,
 		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedAuthzRules,
-		signals.MatchedJailbreakRules, signals.MatchedPIIRules, signals.MatchedTaxonomyRules)
+		signals.MatchedJailbreakRules, signals.MatchedPIIRules, signals.MatchedKBRules)
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -317,7 +317,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		AuthzRules:        signals.MatchedAuthzRules,
 		JailbreakRules:    signals.MatchedJailbreakRules,
 		PIIRules:          signals.MatchedPIIRules,
-		TaxonomyRules:     signals.MatchedTaxonomyRules,
+		KBRules:           signals.MatchedKBRules,
 		ProjectionRules:   signals.MatchedProjectionRules,
 	})
 	if err != nil {

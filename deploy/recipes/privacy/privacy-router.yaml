@@ -432,27 +432,31 @@ routing:
         threshold: 0.85
         description: Detect personally identifiable information that should remain on local infrastructure.
 
-    taxonomy:
+    kb:
       - name: security_containment
-        classifier: privacy_classifier
-        bind:
-          kind: tier
+        kb: privacy_kb
+        target:
+          kind: group
           value: security_containment
+        match: best
       - name: privacy_policy
-        classifier: privacy_classifier
-        bind:
-          kind: tier
+        kb: privacy_kb
+        target:
+          kind: group
           value: privacy_policy
+        match: best
       - name: frontier_reasoning
-        classifier: privacy_classifier
-        bind:
-          kind: tier
+        kb: privacy_kb
+        target:
+          kind: group
           value: frontier_reasoning
+        match: best
       - name: local_standard
-        classifier: privacy_classifier
-        bind:
-          kind: tier
+        kb: privacy_kb
+        target:
+          kind: group
           value: local_standard
+        match: best
 
   projections:
     scores:
@@ -560,9 +564,9 @@ routing:
       - name: privacy_contrastive_score
         method: weighted_sum
         inputs:
-          - type: taxonomy_metric
-            classifier: privacy_classifier
-            metric: contrastive
+          - type: kb_metric
+            kb: privacy_kb
+            metric: private_vs_public
             weight: 1.0
             value_source: score
 
@@ -621,7 +625,7 @@ routing:
       rules:
         operator: OR
         conditions:
-          - type: taxonomy
+          - type: kb
             name: security_containment
           - type: projection
             name: policy_security_local_only
@@ -643,7 +647,7 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: taxonomy
+          - type: kb
             name: privacy_policy
       modelRefs:
         - model: local/private-qwen
@@ -664,7 +668,7 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: taxonomy
+          - type: kb
             name: frontier_reasoning
       modelRefs:
         - model: cloud/frontier-reasoning
@@ -685,7 +689,7 @@ routing:
       rules:
         operator: OR
         conditions:
-          - type: taxonomy
+          - type: kb
             name: local_standard
           - operator: AND
             conditions:

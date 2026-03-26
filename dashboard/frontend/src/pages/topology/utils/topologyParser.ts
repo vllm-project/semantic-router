@@ -15,7 +15,7 @@ import {
   AlgorithmConfig,
   PluginConfig,
   ModelRefConfig,
-  TaxonomySignalConfig,
+  KBSignalConfig,
 } from '../types'
 import { SIGNAL_LATENCY } from '../constants'
 
@@ -477,17 +477,18 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 15. Taxonomy Rules
-  routingSignals?.taxonomy?.forEach(rule => {
+  // 15. Knowledge-base Rules
+  routingSignals?.kb?.forEach(rule => {
     addSignal({
-      type: 'taxonomy',
+      type: 'kb',
       name: rule.name,
-      description: rule.description || `Taxonomy bind ${rule.classifier} ${rule.bind.kind}=${rule.bind.value}`,
-      latency: SIGNAL_LATENCY.taxonomy,
+      description: rule.description || `KB bind ${rule.kb} ${rule.target.kind}=${rule.target.value}`,
+      latency: SIGNAL_LATENCY.kb,
       config: {
-        classifier: rule.classifier,
-        bind: rule.bind,
-      } satisfies TaxonomySignalConfig,
+        kb: rule.kb,
+        target: rule.target,
+        match: rule.match,
+      } satisfies KBSignalConfig,
     })
   })
 
@@ -724,7 +725,7 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     authz: [],
     jailbreak: [],
     pii: [],
-    taxonomy: [],
+    kb: [],
     projection: [],
   }
 

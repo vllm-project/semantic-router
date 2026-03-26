@@ -21,8 +21,8 @@ func TestMaintainedPrivacyRecipeParsesAndDecompilesWithoutError(t *testing.T) {
 		t.Fatalf("DecompileRouting error: %v", err)
 	}
 
-	if !strings.Contains(dslText, "SIGNAL taxonomy") {
-		t.Error("decompiled DSL missing taxonomy signal")
+	if !strings.Contains(dslText, "SIGNAL kb") {
+		t.Error("decompiled DSL missing kb signal")
 	}
 	if !strings.Contains(dslText, "TOOL_SCOPE") {
 		t.Error("decompiled DSL missing TOOL_SCOPE directives")
@@ -43,8 +43,8 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 		t.Fatalf("Compile errors: %v", errs)
 	}
 
-	if len(cfg.TaxonomyRules) == 0 {
-		t.Error("expected at least one taxonomy rule from privacy recipe")
+	if len(cfg.KBRules) == 0 {
+		t.Error("expected at least one kb rule from privacy recipe")
 	}
 
 	hasToolScope := false
@@ -70,9 +70,9 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 		t.Fatalf("Round-trip compile errors: %v", errs2)
 	}
 
-	if len(cfg2.TaxonomyRules) != len(cfg.TaxonomyRules) {
-		t.Errorf("round-trip taxonomy rules: %d → %d",
-			len(cfg.TaxonomyRules), len(cfg2.TaxonomyRules))
+	if len(cfg2.KBRules) != len(cfg.KBRules) {
+		t.Errorf("round-trip kb rules: %d → %d",
+			len(cfg.KBRules), len(cfg2.KBRules))
 	}
 	if len(cfg2.Decisions) != len(cfg.Decisions) {
 		t.Errorf("round-trip Decisions: %d → %d",

@@ -68,7 +68,7 @@ func appendLooperSignalHeaders(
 	appendJoinedHeader(setHeaders, headers.VSRMatchedAuthz, reqCtx.VSRMatchedAuthz)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedJailbreak, reqCtx.VSRMatchedJailbreak)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedPII, reqCtx.VSRMatchedPII)
-	appendJoinedHeader(setHeaders, headers.VSRMatchedTaxonomy, reqCtx.VSRMatchedTaxonomy)
+	appendJoinedHeader(setHeaders, headers.VSRMatchedKB, reqCtx.VSRMatchedKB)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedProjection, reqCtx.VSRMatchedProjection)
 
 	if reqCtx.VSRContextTokenCount > 0 {

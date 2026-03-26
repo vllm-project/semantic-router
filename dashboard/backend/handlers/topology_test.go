@@ -242,7 +242,7 @@ func TestTopologyTestQueryHandler_ProjectionAndExtendedSignals(t *testing.T) {
 				Authz:      []string{"premium_tier"},
 				Jailbreak:  []string{"jailbreak:block"},
 				PII:        []string{"pii:email"},
-				Taxonomy:   []string{"privacy_policy"},
+				KB:         []string{"privacy_policy"},
 				Projection: []string{"balance_reasoning"},
 			},
 		},
@@ -270,10 +270,10 @@ func TestTopologyTestQueryHandler_ProjectionAndExtendedSignals(t *testing.T) {
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "authz", Name: "premium_tier", Confidence: 1.0, Reason: "Authorization signal matched"})
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "jailbreak", Name: "jailbreak:block", Confidence: 1.0, Reason: "Jailbreak signal matched"})
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "pii", Name: "pii:email", Confidence: 1.0, Reason: "PII signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "taxonomy", Name: "privacy_policy", Confidence: 1.0, Reason: "Taxonomy signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "kb", Name: "privacy_policy", Confidence: 1.0, Reason: "Knowledge base signal matched"})
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "projection", Name: "balance_reasoning", Confidence: 1.0, Reason: "Projection mapping matched"})
-	assert.Contains(t, result.HighlightedPath, "signal-group-taxonomy")
-	assert.Contains(t, result.HighlightedPath, "signal-taxonomy-privacy_policy")
+	assert.Contains(t, result.HighlightedPath, "signal-group-kb")
+	assert.Contains(t, result.HighlightedPath, "signal-kb-privacy_policy")
 	assert.Contains(t, result.HighlightedPath, "signal-group-projection")
 	assert.Contains(t, result.HighlightedPath, "signal-projection-balance_reasoning")
 }

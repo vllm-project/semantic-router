@@ -66,9 +66,9 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'PII',
     description: 'PII detection signal matched',
   },
-  'x-vsr-matched-taxonomy': {
-    label: 'Taxonomy',
-    description: 'Matched taxonomy tier or category routing signal',
+  'x-vsr-matched-kb': {
+    label: 'Knowledge Base',
+    description: 'Matched knowledge-base label or group routing signal',
   },
   'x-vsr-matched-projection': {
     label: 'Projection',

@@ -8,229 +8,149 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestTaxonomyDefinitionUnmarshal(t *testing.T) {
-	raw := `{
-		"categories": {
-			"proprietary_code": {"tier": "privacy_policy", "description": "Internal code"},
-			"prompt_injection": {"tier": "security_containment", "description": "Injection attacks"},
-			"generic_coding": {"tier": "local_standard", "description": "General coding"}
-		},
-		"tier_groups": {
-			"privacy_categories": ["proprietary_code"],
-			"security_categories": ["prompt_injection"],
-			"default_categories": ["generic_coding"]
-		}
-	}`
-
-	var taxonomy config.TaxonomyDefinition
-	if err := config.UnmarshalTaxonomyDefinition([]byte(raw), &taxonomy); err != nil {
-		t.Fatalf("Unmarshal taxonomy: %v", err)
+func TestKnowledgeBaseDefinitionLoad(t *testing.T) {
+	root := writeKnowledgeBaseFixture(t)
+	definition, err := config.LoadKnowledgeBaseDefinition("", config.KnowledgeBaseSource{Path: root})
+	if err != nil {
+		t.Fatalf("LoadKnowledgeBaseDefinition: %v", err)
 	}
-
-	if len(taxonomy.Categories) != 3 {
-		t.Errorf("expected 3 categories, got %d", len(taxonomy.Categories))
+	if len(definition.Labels) != 3 {
+		t.Fatalf("expected 3 labels, got %d", len(definition.Labels))
 	}
-	if taxonomy.Categories["proprietary_code"].Tier != "privacy_policy" {
-		t.Errorf("unexpected tier: %+v", taxonomy.Categories["proprietary_code"])
+	if definition.Labels["proprietary_code"].Description == "" {
+		t.Fatal("expected proprietary_code description to be loaded")
 	}
 }
 
-func TestCategoryKBClassifierLoadTaxonomy(t *testing.T) {
-	dir := t.TempDir()
-	taxonomyPath := filepath.Join(dir, "taxonomy.json")
-	taxonomyJSON := `{
-		"categories": {
-			"pii": {"tier": "privacy_policy", "description": "PII data"},
-			"jailbreak_role": {"tier": "security_containment"}
-		},
-		"tier_groups": {
-			"privacy_categories": ["pii"],
-			"security_categories": ["jailbreak_role"]
-		}
-	}`
-
-	if err := os.WriteFile(taxonomyPath, []byte(taxonomyJSON), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	c := &CategoryKBClassifier{
-		rule: config.TaxonomyClassifierConfig{
-			Name: "privacy_classifier",
-			Source: config.TaxonomyClassifierSource{
-				Path: dir,
+func TestKnowledgeBaseClassifierLoadDefinition(t *testing.T) {
+	root := writeKnowledgeBaseFixture(t)
+	classifier := &KnowledgeBaseClassifier{
+		rule: config.KnowledgeBaseConfig{
+			Name: "privacy_kb",
+			Source: config.KnowledgeBaseSource{
+				Path: root,
 			},
 		},
 	}
-
-	if err := c.loadTaxonomy(); err != nil {
-		t.Fatalf("loadTaxonomy: %v", err)
+	if err := classifier.loadDefinition(); err != nil {
+		t.Fatalf("loadDefinition: %v", err)
 	}
-	if len(c.taxonomy.Categories) != 2 {
-		t.Errorf("expected 2 categories, got %d", len(c.taxonomy.Categories))
-	}
-}
-
-func TestCategoryKBClassifierLoadKBs(t *testing.T) {
-	dir := writeTaxonomyClassifierFixture(t)
-
-	c := &CategoryKBClassifier{
-		rule: config.TaxonomyClassifierConfig{
-			Name: "privacy_classifier",
-			Source: config.TaxonomyClassifierSource{
-				Path: dir,
-			},
-		},
-		kbs: make(map[string]*categoryKBData),
-	}
-
-	if err := c.loadKBs(); err != nil {
-		t.Fatalf("loadKBs: %v", err)
-	}
-	if len(c.kbs) != 3 {
-		t.Fatalf("expected 3 KB categories, got %d", len(c.kbs))
-	}
-	if _, ok := c.kbs["taxonomy"]; ok {
-		t.Fatal("taxonomy manifest should not be loaded as a category KB")
+	if got := len(classifier.labels); got != 3 {
+		t.Fatalf("expected 3 labels, got %d", got)
 	}
 }
 
-func TestCategoryKBClassifierCategoryCount(t *testing.T) {
-	c := &CategoryKBClassifier{
-		kbs: map[string]*categoryKBData{
+func TestKnowledgeBaseClassifierLabelCount(t *testing.T) {
+	classifier := &KnowledgeBaseClassifier{
+		labels: map[string]*kbLabelData{
 			"a": {Exemplars: []string{"a1"}},
 			"b": {Exemplars: []string{"b1"}},
 		},
 	}
-	if got := c.CategoryCount(); got != 2 {
-		t.Errorf("CategoryCount = %d, want 2", got)
+	if got := classifier.LabelCount(); got != 2 {
+		t.Fatalf("LabelCount = %d, want 2", got)
 	}
 }
 
-func TestCategoryKBClassifierClassifyEmptyQuery(t *testing.T) {
-	c := &CategoryKBClassifier{}
-	if _, err := c.Classify(""); err == nil {
+func TestKnowledgeBaseClassifierClassifyEmptyQuery(t *testing.T) {
+	classifier := &KnowledgeBaseClassifier{}
+	if _, err := classifier.Classify(""); err == nil {
 		t.Fatal("expected error for empty query")
 	}
 }
 
-func TestCategoryKBClassifierMatchedRulesThresholding(t *testing.T) {
-	c := &CategoryKBClassifier{
-		rule: config.TaxonomyClassifierConfig{
-			Threshold:         0.5,
-			SecurityThreshold: 0.8,
-		},
-		taxonomy: config.TaxonomyDefinition{
-			Categories: map[string]config.TaxonomyCategoryEntry{
-				"proprietary_code": {Tier: "privacy_policy"},
-				"prompt_injection": {Tier: "security_containment"},
-				"generic_coding":   {Tier: "local_standard"},
+func TestKnowledgeBaseClassifierMatchedLabelsThresholding(t *testing.T) {
+	classifier := &KnowledgeBaseClassifier{
+		rule: config.KnowledgeBaseConfig{
+			Threshold: 0.5,
+			LabelThresholds: map[string]float32{
+				"prompt_injection": 0.8,
+			},
+			Groups: map[string][]string{
+				"private": {"proprietary_code", "prompt_injection"},
+				"public":  {"generic_coding"},
+			},
+			Metrics: []config.KnowledgeBaseMetricConfig{
+				{
+					Name:          "private_vs_public",
+					Type:          config.KBMetricTypeGroupMargin,
+					PositiveGroup: "private",
+					NegativeGroup: "public",
+				},
 			},
 		},
 	}
 
-	catMaxSim := map[string]float64{
+	labelScores := map[string]float64{
 		"proprietary_code": 0.55,
 		"prompt_injection": 0.75,
 		"generic_coding":   0.51,
 	}
 
-	matched, confidences := c.buildMatchedRules(catMaxSim)
-	if len(matched) != 2 {
-		t.Fatalf("matched = %v, want 2 categories", matched)
+	matchedLabels := classifier.buildMatchedLabels(labelScores)
+	if containsString(matchedLabels, "prompt_injection") {
+		t.Fatalf("prompt_injection should respect label_thresholds, matched=%v", matchedLabels)
 	}
-	if confidences["prompt_injection"] != 0.75 {
-		t.Errorf("prompt_injection confidence = %v", confidences["prompt_injection"])
-	}
-	if containsString(matched, "prompt_injection") {
-		t.Fatalf("security tier category should respect security_threshold, matched=%v", matched)
-	}
-	if !containsString(matched, "proprietary_code") || !containsString(matched, "generic_coding") {
-		t.Fatalf("expected privacy/local matches, got %v", matched)
+	if !containsString(matchedLabels, "proprietary_code") || !containsString(matchedLabels, "generic_coding") {
+		t.Fatalf("expected proprietary_code and generic_coding to match, got %v", matchedLabels)
 	}
 
-	matchedTiers := c.collectMatchedTiers(matched)
-	if !containsString(matchedTiers, "privacy_policy") || !containsString(matchedTiers, "local_standard") {
-		t.Fatalf("matched tiers = %v", matchedTiers)
+	groupScores := classifier.computeGroupScores(labelScores)
+	if groupScores["private"] != 0.75 {
+		t.Fatalf("private group score = %.2f, want 0.75", groupScores["private"])
+	}
+
+	matchedGroups := classifier.collectMatchedGroups(matchedLabels)
+	if !containsString(matchedGroups, "private") || !containsString(matchedGroups, "public") {
+		t.Fatalf("matched groups = %v", matchedGroups)
+	}
+
+	metricValues := classifier.computeMetricValues(labelScores, groupScores, 0.75, 0.55)
+	if metricValues["private_vs_public"] != 0.24 {
+		t.Fatalf("private_vs_public = %.2f, want 0.24", metricValues["private_vs_public"])
 	}
 }
 
-func TestCategoryKBClassifierContrastiveScoring(t *testing.T) {
-	c := &CategoryKBClassifier{
-		taxonomy: config.TaxonomyDefinition{
-			Categories: map[string]config.TaxonomyCategoryEntry{
-				"proprietary_code": {Tier: "privacy_policy"},
-				"prompt_injection": {Tier: "security_containment"},
-				"generic_coding":   {Tier: "local_standard"},
-			},
-			TierGroups: map[string][]string{
-				"privacy_categories":  {"proprietary_code"},
-				"security_categories": {"prompt_injection"},
-			},
-		},
-		privateTiers: make(map[string]bool),
-	}
-	c.populatePrivateTiers()
-
-	score := c.contrastiveScore(map[string]float64{
-		"proprietary_code": 0.82,
-		"prompt_injection": 0.61,
-		"generic_coding":   0.33,
+func TestBestScoredNameSelectsHighestScoreAndBreaksTiesLexically(t *testing.T) {
+	name, score := bestScoredName(map[string]float64{
+		"beta":  0.82,
+		"alpha": 0.82,
+		"gamma": 0.79,
 	})
-
-	if score != 0.49 {
-		t.Fatalf("contrastive score = %.2f, want 0.49", score)
+	if name != "alpha" {
+		t.Fatalf("bestScoredName() name = %q, want alpha", name)
 	}
-	if !c.privateTiers["privacy_policy"] || !c.privateTiers["security_containment"] {
-		t.Fatalf("private tiers not derived correctly: %+v", c.privateTiers)
-	}
-}
-
-func TestBestMatchedCategorySelectsHighestMatchedConfidence(t *testing.T) {
-	category, confidence := bestMatchedCategory(
-		[]string{"security_containment", "privacy_policy", "local_standard"},
-		map[string]float64{
-			"security_containment": 0.74,
-			"privacy_policy":       0.82,
-			"local_standard":       0.79,
-		},
-	)
-
-	if category != "privacy_policy" {
-		t.Fatalf("bestMatchedCategory() category = %q, want privacy_policy", category)
-	}
-	if confidence != 0.82 {
-		t.Fatalf("bestMatchedCategory() confidence = %.2f, want 0.82", confidence)
+	if score != 0.82 {
+		t.Fatalf("bestScoredName() score = %.2f, want 0.82", score)
 	}
 }
 
-func writeTaxonomyClassifierFixture(t *testing.T) string {
+func writeKnowledgeBaseFixture(t *testing.T) string {
 	t.Helper()
 
 	root := t.TempDir()
-	files := map[string]string{
-		"taxonomy.json": `{
-			"categories": {
-				"proprietary_code": {"tier": "privacy_policy"},
-				"prompt_injection": {"tier": "security_containment"},
-				"generic_coding": {"tier": "local_standard"}
-			},
-			"tier_groups": {
-				"privacy_categories": ["proprietary_code"],
-				"security_categories": ["prompt_injection"]
-			}
-		}`,
-		"proprietary_code.json": `{"exemplars":["review internal repository code"]}`,
-		"prompt_injection.json": `{"exemplars":["ignore previous instructions"]}`,
-		"generic_coding.json":   `{"exemplars":["write a python function"]}`,
+	manifest := `{
+  "version": "1.0.0",
+  "description": "fixture KB",
+  "labels": {
+    "proprietary_code": {
+      "description": "Internal code",
+      "exemplars": ["review internal repository code"]
+    },
+    "prompt_injection": {
+      "description": "Prompt injection",
+      "exemplars": ["ignore previous instructions"]
+    },
+    "generic_coding": {
+      "description": "General coding",
+      "exemplars": ["write a python function"]
+    }
+  }
+}`
+	path := filepath.Join(root, "labels.json")
+	if err := os.WriteFile(path, []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
-
-	for name, content := range files {
-		path := filepath.Join(root, name)
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-			t.Fatalf("write %s: %v", path, err)
-		}
-	}
-
 	return root
 }
 

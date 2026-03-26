@@ -30,7 +30,7 @@ import FleetSimRunsPage from './pages/FleetSimRunsPage'
 import OpenClawPage from './pages/OpenClawPage'
 import UsersPage from './pages/UsersPage'
 import InsightsPage from './pages/InsightsPage'
-import TaxonomyPage, { type TaxonomyView } from './pages/TaxonomyPage'
+import TaxonomyPage, { type KnowledgeBaseView } from './pages/TaxonomyPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { SetupProvider, useSetup } from './contexts/SetupContext'
@@ -47,10 +47,11 @@ const ConfigSectionRoute: React.FC<{
 }> = ({ configSection, setConfigSection }) => {
   const { section } = useParams<{ section: string }>()
   const normalized = section?.toLowerCase() ?? ''
-
-  if (normalized === 'classifiers' || normalized === 'taxonomy-classifiers') {
-    return <Navigate to="/taxonomy/classifiers" replace />
-  }
+  const redirectToKnowledgeBases =
+    normalized === 'classifiers' ||
+    normalized === 'taxonomy-classifiers' ||
+    normalized === 'knowledge-bases' ||
+    normalized === 'kbs'
 
   useEffect(() => {
     if (!section) {
@@ -77,7 +78,11 @@ const ConfigSectionRoute: React.FC<{
     if (mapped && mapped !== configSection) {
       setConfigSection(mapped)
     }
-  }, [section, configSection, setConfigSection])
+  }, [section, normalized, configSection, setConfigSection])
+
+  if (redirectToKnowledgeBases) {
+    return <Navigate to="/knowledge-bases/knowledge-bases" replace />
+  }
 
   return (
     <Layout
@@ -89,18 +94,18 @@ const ConfigSectionRoute: React.FC<{
   )
 }
 
-const TaxonomyRoute: React.FC<{
+const KnowledgeBaseRoute: React.FC<{
   configSection: ConfigSection
   setConfigSection: (section: ConfigSection) => void
 }> = ({ configSection, setConfigSection }) => {
   const { view } = useParams<{ view: string }>()
-  const normalized = (view?.toLowerCase() ?? 'classifiers') as TaxonomyView
-  const activeView: TaxonomyView = ['classifiers', 'tiers', 'categories', 'exemplars'].includes(normalized)
+  const normalized = (view?.toLowerCase() ?? 'knowledge-bases') as KnowledgeBaseView
+  const activeView: KnowledgeBaseView = ['knowledge-bases', 'groups', 'labels', 'exemplars'].includes(normalized)
     ? normalized
-    : 'classifiers'
+    : 'knowledge-bases'
 
   if (view && activeView !== normalized) {
-    return <Navigate to={`/taxonomy/${activeView}`} replace />
+    return <Navigate to={`/knowledge-bases/${activeView}`} replace />
   }
 
   return (
@@ -111,6 +116,19 @@ const TaxonomyRoute: React.FC<{
       <TaxonomyPage activeView={activeView} />
     </Layout>
   )
+}
+
+const LegacyTaxonomyRedirect: React.FC = () => {
+  const { view } = useParams<{ view: string }>()
+  const normalized = view?.toLowerCase() ?? 'classifiers'
+  const viewMap: Record<string, KnowledgeBaseView> = {
+    classifiers: 'knowledge-bases',
+    tiers: 'groups',
+    categories: 'labels',
+    exemplars: 'exemplars',
+  }
+  const nextView = viewMap[normalized] ?? 'knowledge-bases'
+  return <Navigate to={`/knowledge-bases/${nextView}`} replace />
 }
 
 const SetupStatusPage: React.FC<{
@@ -290,16 +308,18 @@ const AppRouter: React.FC = () => {
                 />
               }
             />
-            <Route path="/taxonomy" element={<Navigate to="/taxonomy/classifiers" replace />} />
+            <Route path="/knowledge-bases" element={<Navigate to="/knowledge-bases/knowledge-bases" replace />} />
             <Route
-              path="/taxonomy/:view"
+              path="/knowledge-bases/:view"
               element={
-                <TaxonomyRoute
+                <KnowledgeBaseRoute
                   configSection={configSection}
                   setConfigSection={setConfigSection}
                 />
               }
             />
+            <Route path="/taxonomy" element={<Navigate to="/knowledge-bases/knowledge-bases" replace />} />
+            <Route path="/taxonomy/:view" element={<LegacyTaxonomyRedirect />} />
             <Route
               path="/playground"
               element={

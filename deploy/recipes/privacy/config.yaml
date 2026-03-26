@@ -57,7 +57,7 @@ routing:
       rules:
         conditions:
           - name: security_containment
-            type: taxonomy
+            type: kb
           - name: policy_security_local_only
             type: projection
         operator: OR
@@ -79,7 +79,7 @@ routing:
       rules:
         conditions:
           - name: privacy_policy
-            type: taxonomy
+            type: kb
         operator: AND
       tier: 2
       tool_scope: local_only
@@ -99,7 +99,7 @@ routing:
       rules:
         conditions:
           - name: frontier_reasoning
-            type: taxonomy
+            type: kb
         operator: AND
       tier: 3
       tool_scope: full
@@ -119,7 +119,7 @@ routing:
       rules:
         conditions:
           - name: local_standard
-            type: taxonomy
+            type: kb
           - conditions:
               - name: policy_local_reasoning
                 type: projection
@@ -311,34 +311,38 @@ routing:
         method: weighted_sum
         name: reasoning_pressure
       - inputs:
-          - classifier: privacy_classifier
-            metric: contrastive
-            type: taxonomy_metric
+          - kb: privacy_kb
+            metric: private_vs_public
+            type: kb_metric
             value_source: score
             weight: 1
         method: weighted_sum
         name: privacy_contrastive_score
   signals:
-    taxonomy:
-      - bind:
-          kind: tier
+    kb:
+      - target:
+          kind: group
           value: security_containment
-        classifier: privacy_classifier
+        kb: privacy_kb
+        match: best
         name: security_containment
-      - bind:
-          kind: tier
+      - target:
+          kind: group
           value: privacy_policy
-        classifier: privacy_classifier
+        kb: privacy_kb
+        match: best
         name: privacy_policy
-      - bind:
-          kind: tier
+      - target:
+          kind: group
           value: frontier_reasoning
-        classifier: privacy_classifier
+        kb: privacy_kb
+        match: best
         name: frontier_reasoning
-      - bind:
-          kind: tier
+      - target:
+          kind: group
           value: local_standard
-        classifier: privacy_classifier
+        kb: privacy_kb
+        match: best
         name: local_standard
     complexity:
       - description: General reasoning boundary between local handling and frontier-cloud escalation.

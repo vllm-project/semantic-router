@@ -140,7 +140,6 @@ const EditModal: React.FC<EditModalProps> = ({
         <form onSubmit={handleSubmit} className={styles.form}>
           {error && (
             <div className={styles.error}>
-              <span className={styles.errorIcon}>⚠️</span>
               {error}
             </div>
           )}

@@ -92,3 +92,4 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0015-agent-report-local-artifact-loop.md](pl-0015-agent-report-local-artifact-loop.md)
 - [pl-0016-harness-context-and-pr-parity-simplification.md](pl-0016-harness-context-and-pr-parity-simplification.md)
 - [pl-0017-taxonomy-classifier-platform-loop.md](pl-0017-taxonomy-classifier-platform-loop.md)
+- [pl-0018-generic-embedding-kb-workstream.md](pl-0018-generic-embedding-kb-workstream.md)

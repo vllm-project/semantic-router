@@ -1,6 +1,6 @@
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 
-export type LayoutDropdownKey = 'manager' | 'taxonomy' | 'analysisOps' | 'fleetSim'
+export type LayoutDropdownKey = 'manager' | 'knowledgeBase' | 'analysisOps' | 'fleetSim'
 
 export type LayoutConfigSection =
   | 'models'
@@ -8,7 +8,6 @@ export type LayoutConfigSection =
   | 'projections'
   | 'decisions'
   | 'global-config'
-  | 'classifiers'
   | 'mcp'
 
 type LayoutRouteMenuItem = {
@@ -62,14 +61,14 @@ export const MANAGER_MENU_SECTIONS: LayoutMenuSection[] = [
   },
 ]
 
-export const TAXONOMY_MENU_SECTIONS: LayoutMenuSection[] = [
+export const KNOWLEDGE_BASE_MENU_SECTIONS: LayoutMenuSection[] = [
   {
-    title: 'Taxonomy',
+    title: 'Knowledge Base',
     items: [
-      { kind: 'route', label: 'Classifiers', to: '/taxonomy/classifiers' },
-      { kind: 'route', label: 'Tiers', to: '/taxonomy/tiers' },
-      { kind: 'route', label: 'Categories', to: '/taxonomy/categories' },
-      { kind: 'route', label: 'Exemplars', to: '/taxonomy/exemplars' },
+      { kind: 'route', label: 'Knowledge Bases', to: '/knowledge-bases/knowledge-bases' },
+      { kind: 'route', label: 'Groups', to: '/knowledge-bases/groups' },
+      { kind: 'route', label: 'Labels', to: '/knowledge-bases/labels' },
+      { kind: 'route', label: 'Exemplars', to: '/knowledge-bases/exemplars' },
     ],
   },
 ]

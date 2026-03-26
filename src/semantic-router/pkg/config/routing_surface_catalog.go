@@ -31,7 +31,7 @@ var supportedSignalTypes = []string{
 	SignalTypePII,
 	SignalTypePreference,
 	SignalTypeStructure,
-	SignalTypeTaxonomy,
+	SignalTypeKB,
 	SignalTypeUserFeedback,
 }
 

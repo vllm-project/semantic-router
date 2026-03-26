@@ -169,8 +169,8 @@ func validateProjectionScores(cfg *RouterConfig) (map[string]struct{}, error) {
 					input.Type,
 				)
 			}
-			if strings.EqualFold(input.Type, ProjectionInputTaxonomyMetric) {
-				if err := validateTaxonomyMetricProjectionInput(cfg, score.Name, input); err != nil {
+			if strings.EqualFold(input.Type, ProjectionInputKBMetric) {
+				if err := validateKBMetricProjectionInput(cfg, score.Name, input); err != nil {
 					return nil, err
 				}
 				continue
@@ -215,8 +215,8 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		SignalTypeAuthz,
 		SignalTypeJailbreak,
 		SignalTypePII,
-		SignalTypeTaxonomy,
-		ProjectionInputTaxonomyMetric:
+		SignalTypeKB,
+		ProjectionInputKBMetric:
 		return true
 	default:
 		return false
@@ -239,7 +239,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeAuthz:        collectRoleBindingNames(cfg.GetRoleBindings()),
 		SignalTypeJailbreak:    collectJailbreakRuleNames(cfg.JailbreakRules),
 		SignalTypePII:          collectPIIRuleNames(cfg.PIIRules),
-		SignalTypeTaxonomy:     collectTaxonomyRuleNames(cfg.TaxonomyRules),
+		SignalTypeKB:           collectKBRuleNames(cfg.KBRules),
 	}
 	return declared
 }
@@ -474,7 +474,7 @@ func collectPIIRuleNames(rules []PIIRule) map[string]struct{} {
 	return names
 }
 
-func collectTaxonomyRuleNames(rules []TaxonomySignalRule) map[string]struct{} {
+func collectKBRuleNames(rules []KBSignalRule) map[string]struct{} {
 	names := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {
 		names[rule.Name] = struct{}{}
@@ -482,31 +482,32 @@ func collectTaxonomyRuleNames(rules []TaxonomySignalRule) map[string]struct{} {
 	return names
 }
 
-func validateTaxonomyMetricProjectionInput(
+func validateKBMetricProjectionInput(
 	cfg *RouterConfig,
 	scoreName string,
 	input ProjectionScoreInput,
 ) error {
-	if input.Classifier == "" {
-		return fmt.Errorf("routing.projections.scores[%q]: taxonomy_metric inputs require classifier", scoreName)
+	if input.KB == "" {
+		return fmt.Errorf("routing.projections.scores[%q]: kb_metric inputs require kb", scoreName)
 	}
-	if input.Metric != TaxonomyMetricContrastive {
-		return fmt.Errorf(
-			"routing.projections.scores[%q]: taxonomy_metric input for classifier %q uses unsupported metric %q (supported: contrastive)",
-			scoreName,
-			input.Classifier,
-			input.Metric,
-		)
-	}
-	classifiers, _, err := taxonomyClassifierDefinitions(cfg)
+	kbs, _, err := knowledgeBaseDefinitions(cfg)
 	if err != nil {
 		return err
 	}
-	if _, ok := classifiers[input.Classifier]; !ok {
+	kb, ok := kbs[input.KB]
+	if !ok {
 		return fmt.Errorf(
-			"routing.projections.scores[%q]: taxonomy_metric input references unknown classifier %q",
+			"routing.projections.scores[%q]: kb_metric input references unknown kb %q",
 			scoreName,
-			input.Classifier,
+			input.KB,
+		)
+	}
+	if input.Metric != KBMetricBestScore && input.Metric != KBMetricBestMatchedScore && !kbMetricDeclared(kb, input.Metric) {
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: kb_metric input for kb %q uses unsupported metric %q",
+			scoreName,
+			input.KB,
+			input.Metric,
 		)
 	}
 	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
@@ -514,12 +515,21 @@ func validateTaxonomyMetricProjectionInput(
 		return nil
 	default:
 		return fmt.Errorf(
-			"routing.projections.scores[%q]: taxonomy_metric input for classifier %q has unsupported value_source %q (supported: score)",
+			"routing.projections.scores[%q]: kb_metric input for kb %q has unsupported value_source %q (supported: score)",
 			scoreName,
-			input.Classifier,
+			input.KB,
 			input.ValueSource,
 		)
 	}
+}
+
+func kbMetricDeclared(kb KnowledgeBaseConfig, metricName string) bool {
+	for _, metric := range kb.Metrics {
+		if metric.Name == metricName {
+			return true
+		}
+	}
+	return false
 }
 
 func validateDecisionProjectionReferences(decisionName string, node *RuleNode, outputs map[string]struct{}) error {

@@ -10,28 +10,39 @@ import (
 
 func taxonomyConfigFixture() *config.RouterConfig {
 	return &config.RouterConfig{
-		TaxonomyClassifiers: []config.TaxonomyClassifierConfig{
+		KnowledgeBases: []config.KnowledgeBaseConfig{
 			{
-				Name: "privacy_classifier",
-				Type: config.ClassifierTypeTaxonomy,
-				Source: config.TaxonomyClassifierSource{
-					Path:         "classifiers/privacy/",
-					TaxonomyFile: "taxonomy.json",
+				Name: "privacy_kb",
+				Source: config.KnowledgeBaseSource{
+					Path:     "classifiers/privacy/",
+					Manifest: "labels.json",
 				},
-				Threshold:         0.55,
-				SecurityThreshold: 0.7,
+				Threshold: 0.55,
+				Groups: map[string][]string{
+					"privacy_policy": {"proprietary_code"},
+					"public":         {"generic_coding"},
+				},
+				Metrics: []config.KnowledgeBaseMetricConfig{
+					{
+						Name:          "private_vs_public",
+						Type:          config.KBMetricTypeGroupMargin,
+						PositiveGroup: "privacy_policy",
+						NegativeGroup: "public",
+					},
+				},
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
 			Signals: config.Signals{
-				TaxonomyRules: []config.TaxonomySignalRule{
+				KBRules: []config.KBSignalRule{
 					{
-						Name:       "privacy_policy",
-						Classifier: "privacy_classifier",
-						Bind: config.TaxonomySignalBind{
-							Kind:  config.TaxonomyBindKindTier,
+						Name: "privacy_policy",
+						KB:   "privacy_kb",
+						Target: config.KBSignalTarget{
+							Kind:  config.KBTargetKindGroup,
 							Value: "privacy_policy",
 						},
+						Match: config.KBMatchBest,
 					},
 				},
 			},
@@ -42,9 +53,9 @@ func taxonomyConfigFixture() *config.RouterConfig {
 						Method: "weighted_sum",
 						Inputs: []config.ProjectionScoreInput{
 							{
-								Type:        config.ProjectionInputTaxonomyMetric,
-								Classifier:  "privacy_classifier",
-								Metric:      config.TaxonomyMetricContrastive,
+								Type:        config.ProjectionInputKBMetric,
+								KB:          "privacy_kb",
+								Metric:      "private_vs_public",
 								Weight:      1.0,
 								ValueSource: "score",
 							},
@@ -60,7 +71,7 @@ func taxonomyConfigFixture() *config.RouterConfig {
 					Rules: config.RuleCombination{
 						Operator: "AND",
 						Conditions: []config.RuleCondition{
-							{Type: "taxonomy", Name: "privacy_policy"},
+							{Type: "kb", Name: "privacy_policy"},
 						},
 					},
 					ModelRefs: []config.ModelRef{{Model: "local/private-qwen"}},
@@ -70,7 +81,7 @@ func taxonomyConfigFixture() *config.RouterConfig {
 	}
 }
 
-func TestEmitYAMLFromConfigIncludesTaxonomyClassifierAndSignals(t *testing.T) {
+func TestEmitYAMLFromConfigIncludesKnowledgeBaseAndSignals(t *testing.T) {
 	yamlBytes, err := EmitYAMLFromConfig(taxonomyConfigFixture())
 	if err != nil {
 		t.Fatalf("EmitYAMLFromConfig: %v", err)
@@ -83,20 +94,20 @@ func TestEmitYAMLFromConfigIncludesTaxonomyClassifierAndSignals(t *testing.T) {
 
 	global := mustMap(t, raw["global"], "global")
 	modelCatalog := mustMap(t, global["model_catalog"], "global.model_catalog")
-	classifiers := mustSlice(t, modelCatalog["classifiers"], "global.model_catalog.classifiers")
-	if len(classifiers) != 1 {
-		t.Fatalf("expected 1 classifier, got %d", len(classifiers))
+	kbs := mustSlice(t, modelCatalog["kbs"], "global.model_catalog.kbs")
+	if len(kbs) != 1 {
+		t.Fatalf("expected 1 knowledge base, got %d", len(kbs))
 	}
 
 	routing := mustMap(t, raw["routing"], "routing")
 	signals := mustMap(t, routing["signals"], "routing.signals")
-	taxonomy := mustSlice(t, signals["taxonomy"], "routing.signals.taxonomy")
-	if len(taxonomy) != 1 {
-		t.Fatalf("expected 1 taxonomy signal, got %d", len(taxonomy))
+	kbSignals := mustSlice(t, signals["kb"], "routing.signals.kb")
+	if len(kbSignals) != 1 {
+		t.Fatalf("expected 1 kb signal, got %d", len(kbSignals))
 	}
 }
 
-func TestDecompileRoutingToASTIncludesTaxonomyClassifierAndSignal(t *testing.T) {
+func TestDecompileRoutingToASTIncludesKnowledgeBaseSignal(t *testing.T) {
 	prog := DecompileRoutingToAST(taxonomyConfigFixture())
 
 	if len(prog.Signals) == 0 {
@@ -104,13 +115,13 @@ func TestDecompileRoutingToASTIncludesTaxonomyClassifierAndSignal(t *testing.T) 
 	}
 	found := false
 	for _, sig := range prog.Signals {
-		if sig.SignalType == config.SignalTypeTaxonomy && sig.Name == "privacy_policy" {
+		if sig.SignalType == config.SignalTypeKB && sig.Name == "privacy_policy" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatal("DecompileRoutingToAST should include taxonomy signal")
+		t.Fatal("DecompileRoutingToAST should include kb signal")
 	}
 }
 

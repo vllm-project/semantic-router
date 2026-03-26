@@ -8,10 +8,10 @@ import {
   filterLayoutMenuSections,
   hasActiveLayoutMenuSection,
   isLayoutMenuItemActive,
+  KNOWLEDGE_BASE_MENU_SECTIONS,
   MANAGER_MENU_SECTIONS,
   PRIMARY_NAV_LINKS,
   SECONDARY_NAV_LINKS,
-  TAXONOMY_MENU_SECTIONS,
   type LayoutDropdownKey,
   type LayoutMenuItem,
   type LayoutMenuSection,
@@ -65,8 +65,8 @@ const Layout: React.FC<LayoutProps> = ({
     isConfigPage,
     configSection
   )
-  const isTaxonomyActive = hasActiveLayoutMenuSection(
-    TAXONOMY_MENU_SECTIONS,
+  const isKnowledgeBaseActive = hasActiveLayoutMenuSection(
+    KNOWLEDGE_BASE_MENU_SECTIONS,
     location.pathname,
     isConfigPage,
     configSection
@@ -272,15 +272,15 @@ const Layout: React.FC<LayoutProps> = ({
               <div className={styles.navDropdown}>
                 <button
                   type="button"
-                  aria-expanded={openDropdown === 'taxonomy'}
+                  aria-expanded={openDropdown === 'knowledgeBase'}
                   aria-haspopup="menu"
-                  className={`${styles.navLink} ${isTaxonomyActive ? styles.navLinkActive : ''}`}
+                  className={`${styles.navLink} ${isKnowledgeBaseActive ? styles.navLinkActive : ''}`}
                   onClick={(e) => {
                     e.stopPropagation()
-                    toggleDropdown('taxonomy')
+                    toggleDropdown('knowledgeBase')
                   }}
                 >
-                  Taxonomy
+                  Knowledge Base
                   <svg
                     width="12"
                     height="12"
@@ -288,13 +288,13 @@ const Layout: React.FC<LayoutProps> = ({
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="1.5"
-                    className={`${styles.dropdownArrow} ${openDropdown === 'taxonomy' ? styles.dropdownArrowOpen : ''}`}
+                    className={`${styles.dropdownArrow} ${openDropdown === 'knowledgeBase' ? styles.dropdownArrowOpen : ''}`}
                   >
                     <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-                {openDropdown === 'taxonomy'
-                  ? renderDropdownMenu(TAXONOMY_MENU_SECTIONS, styles.dropdownMenu, 'Taxonomy')
+                {openDropdown === 'knowledgeBase'
+                  ? renderDropdownMenu(KNOWLEDGE_BASE_MENU_SECTIONS, styles.dropdownMenu, 'Knowledge Base')
                   : null}
               </div>
               {fleetSimEnabled ? (
@@ -454,7 +454,7 @@ const Layout: React.FC<LayoutProps> = ({
               </NavLink>
             ))}
             {renderMobileMenuSection('Manager', managerMenuSections)}
-            {renderMobileMenuSection('Taxonomy', TAXONOMY_MENU_SECTIONS)}
+            {renderMobileMenuSection('Knowledge Base', KNOWLEDGE_BASE_MENU_SECTIONS)}
             {fleetSimEnabled ? renderMobileMenuSection('Simulator', FLEET_SIM_MENU_SECTIONS) : null}
             {renderMobileMenuSection('System', analysisOperationsMenuSections)}
           </div>

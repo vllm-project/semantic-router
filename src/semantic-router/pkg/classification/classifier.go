@@ -52,8 +52,8 @@ type Classifier struct {
 	// Authz classifier for user-level authorization signal classification
 	authzClassifier *AuthzClassifier
 
-	// Taxonomy classifiers keyed by configured classifier name.
-	taxonomyClassifiers map[string]*CategoryKBClassifier
+	// Knowledge-base classifiers keyed by configured KB name.
+	kbClassifiers map[string]*KnowledgeBaseClassifier
 
 	// Identity header names resolved from authz.identity config (or defaults).
 	// Used by EvaluateAllSignalsWithHeaders to read user identity from requests.
@@ -111,9 +111,9 @@ func withKeywordEmbeddingClassifier(keywordEmbeddingInitializer EmbeddingClassif
 	}
 }
 
-func withTaxonomyClassifiers(classifiers map[string]*CategoryKBClassifier) option {
+func withKBClassifiers(classifiers map[string]*KnowledgeBaseClassifier) option {
 	return func(c *Classifier) {
-		c.taxonomyClassifiers = classifiers
+		c.kbClassifiers = classifiers
 	}
 }
 

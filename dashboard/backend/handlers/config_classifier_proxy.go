@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// RouterClassifierProxyHandler forwards taxonomy-classifier management traffic
+// RouterClassifierProxyHandler forwards knowledge-base management traffic
 // to the router apiserver while keeping dashboard readonly enforcement intact.
 func RouterClassifierProxyHandler(routerAPIURL string, readonlyMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

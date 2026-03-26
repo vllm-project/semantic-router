@@ -6,30 +6,30 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-var taxonomyMatchTests = []struct {
+var kbMatchTests = []struct {
 	name             string
 	decisions        []config.Decision
-	taxonomyRules    []string
+	kbRules          []string
 	expectedDecision string
 }{
 	{
-		name: "taxonomy match triggers route",
+		name: "kb match triggers route",
 		decisions: []config.Decision{
-			taxonomyDecision("privacy-route", 200, "AND", "privacy_policy"),
+			kbDecision("privacy-route", 200, "AND", "privacy_policy"),
 		},
-		taxonomyRules:    []string{"privacy_policy"},
+		kbRules:          []string{"privacy_policy"},
 		expectedDecision: "privacy-route",
 	},
 	{
-		name: "taxonomy no match",
+		name: "kb no match",
 		decisions: []config.Decision{
-			taxonomyDecision("privacy-route", 200, "AND", "privacy_policy"),
+			kbDecision("privacy-route", 200, "AND", "privacy_policy"),
 		},
-		taxonomyRules:    []string{"local_standard"},
+		kbRules:          []string{"local_standard"},
 		expectedDecision: "",
 	},
 	{
-		name: "taxonomy with OR keyword",
+		name: "kb with OR keyword",
 		decisions: []config.Decision{{
 			Name:     "security-route",
 			Priority: 300,
@@ -37,50 +37,50 @@ var taxonomyMatchTests = []struct {
 				Operator: "OR",
 				Conditions: []config.RuleCondition{
 					{Type: "keyword", Name: "threat_kw"},
-					{Type: "taxonomy", Name: "security_containment"},
+					{Type: "kb", Name: "security_containment"},
 				},
 			},
 			ModelRefs: []config.ModelRef{{Model: "guard-model"}},
 		}},
-		taxonomyRules:    []string{"security_containment"},
+		kbRules:          []string{"security_containment"},
 		expectedDecision: "security-route",
 	},
 	{
-		name: "taxonomy AND keyword both required - keyword missing",
+		name: "kb AND keyword both required - keyword missing",
 		decisions: []config.Decision{{
 			Name:     "strict-route",
 			Priority: 200,
 			Rules: config.RuleCombination{
 				Operator: "AND",
 				Conditions: []config.RuleCondition{
-					{Type: "taxonomy", Name: "privacy_policy"},
+					{Type: "kb", Name: "privacy_policy"},
 					{Type: "keyword", Name: "sensitive"},
 				},
 			},
 			ModelRefs: []config.ModelRef{{Model: "local-model"}},
 		}},
-		taxonomyRules:    []string{"privacy_policy"},
+		kbRules:          []string{"privacy_policy"},
 		expectedDecision: "",
 	},
 	{
-		name: "taxonomy priority ordering",
+		name: "kb priority ordering",
 		decisions: []config.Decision{
-			taxonomyDecision("low-priority", 100, "AND", "local_standard"),
-			taxonomyDecision("high-priority", 300, "AND", "security_containment"),
+			kbDecision("low-priority", 100, "AND", "local_standard"),
+			kbDecision("high-priority", 300, "AND", "security_containment"),
 		},
-		taxonomyRules:    []string{"security_containment", "local_standard"},
+		kbRules:          []string{"security_containment", "local_standard"},
 		expectedDecision: "high-priority",
 	},
 }
 
-func taxonomyDecision(name string, priority int, op string, taxonomyName string) config.Decision {
+func kbDecision(name string, priority int, op string, kbName string) config.Decision {
 	return config.Decision{
 		Name:     name,
 		Priority: priority,
 		Rules: config.RuleCombination{
 			Operator: op,
 			Conditions: []config.RuleCondition{
-				{Type: "taxonomy", Name: taxonomyName},
+				{Type: "kb", Name: kbName},
 			},
 		},
 		ModelRefs: []config.ModelRef{{Model: "model"}},
@@ -106,25 +106,25 @@ func assertDecisionResult(t *testing.T, result *DecisionResult, err error, expec
 	}
 }
 
-func TestDecisionEngineTaxonomySignalMatching(t *testing.T) {
-	for _, tt := range taxonomyMatchTests {
+func TestDecisionEngineKBSignalMatching(t *testing.T) {
+	for _, tt := range kbMatchTests {
 		t.Run(tt.name, func(t *testing.T) {
 			engine := NewDecisionEngine(nil, nil, nil, tt.decisions, "priority")
-			signals := &SignalMatches{TaxonomyRules: tt.taxonomyRules}
+			signals := &SignalMatches{KBRules: tt.kbRules}
 			result, err := engine.EvaluateDecisionsWithSignals(signals)
 			assertDecisionResult(t, result, err, tt.expectedDecision)
 		})
 	}
 }
 
-func TestDecisionEngineTaxonomyWithProjectionRules(t *testing.T) {
+func TestDecisionEngineKBWithProjectionRules(t *testing.T) {
 	decisions := []config.Decision{{
 		Name:     "override-route",
 		Priority: 250,
 		Rules: config.RuleCombination{
 			Operator: "OR",
 			Conditions: []config.RuleCondition{
-				{Type: "taxonomy", Name: "privacy_policy"},
+				{Type: "kb", Name: "privacy_policy"},
 				{Type: "projection", Name: "privacy_override_active"},
 			},
 		},
@@ -139,15 +139,15 @@ func TestDecisionEngineTaxonomyWithProjectionRules(t *testing.T) {
 		assertDecisionResult(t, result, err, "override-route")
 	})
 
-	t.Run("taxonomy match alone", func(t *testing.T) {
-		signals := &SignalMatches{TaxonomyRules: []string{"privacy_policy"}}
+	t.Run("kb match alone", func(t *testing.T) {
+		signals := &SignalMatches{KBRules: []string{"privacy_policy"}}
 		result, err := engine.EvaluateDecisionsWithSignals(signals)
 		assertDecisionResult(t, result, err, "override-route")
 	})
 
 	t.Run("neither matches", func(t *testing.T) {
 		signals := &SignalMatches{
-			TaxonomyRules:   []string{"local_standard"},
+			KBRules:         []string{"local_standard"},
 			ProjectionRules: []string{"some_other"},
 		}
 		result, err := engine.EvaluateDecisionsWithSignals(signals)

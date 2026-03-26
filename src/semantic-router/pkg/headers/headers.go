@@ -143,9 +143,9 @@ const (
 	// Example: "pii_strict,pii_moderate"
 	VSRMatchedPII = "x-vsr-matched-pii"
 
-	// VSRMatchedTaxonomy contains comma-separated list of matched taxonomy signal names.
+	// VSRMatchedKB contains comma-separated list of matched knowledge-base signal names.
 	// Example: "privacy_policy,security_containment"
-	VSRMatchedTaxonomy = "x-vsr-matched-taxonomy"
+	VSRMatchedKB = "x-vsr-matched-kb"
 
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"

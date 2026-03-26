@@ -161,24 +161,28 @@ SIGNAL pii pii_strict {
   description: "Detect personally identifiable information that should remain on local infrastructure."
 }
 
-SIGNAL taxonomy security_containment {
-  classifier: "privacy_classifier"
-  bind: { kind: "tier", value: "security_containment" }
+SIGNAL kb security_containment {
+  kb: "privacy_kb"
+  target: { kind: "group", value: "security_containment" }
+  match: "best"
 }
 
-SIGNAL taxonomy privacy_policy {
-  classifier: "privacy_classifier"
-  bind: { kind: "tier", value: "privacy_policy" }
+SIGNAL kb privacy_policy {
+  kb: "privacy_kb"
+  target: { kind: "group", value: "privacy_policy" }
+  match: "best"
 }
 
-SIGNAL taxonomy frontier_reasoning {
-  classifier: "privacy_classifier"
-  bind: { kind: "tier", value: "frontier_reasoning" }
+SIGNAL kb frontier_reasoning {
+  kb: "privacy_kb"
+  target: { kind: "group", value: "frontier_reasoning" }
+  match: "best"
 }
 
-SIGNAL taxonomy local_standard {
-  classifier: "privacy_classifier"
-  bind: { kind: "tier", value: "local_standard" }
+SIGNAL kb local_standard {
+  kb: "privacy_kb"
+  target: { kind: "group", value: "local_standard" }
+  match: "best"
 }
 
 PROJECTION score security_risk_score {
@@ -219,7 +223,7 @@ PROJECTION mapping reasoning_policy_band {
 
 PROJECTION score privacy_contrastive_score {
   method: "weighted_sum"
-  inputs: [{ type: "taxonomy_metric", classifier: "privacy_classifier", metric: "contrastive", weight: 1.0, value_source: "score" }]
+  inputs: [{ type: "kb_metric", kb: "privacy_kb", metric: "private_vs_public", weight: 1.0, value_source: "score" }]
 }
 
 PROJECTION mapping privacy_override_band {
@@ -259,7 +263,7 @@ ROUTE local_security_containment (description = "Keep suspicious or jailbreak-li
   PRIORITY 300
   TIER 1
   TOOL_SCOPE "none"
-  WHEN taxonomy("security_containment") OR projection("policy_security_local_only")
+  WHEN kb("security_containment") OR projection("policy_security_local_only")
   MODEL "local/private-qwen" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -274,7 +278,7 @@ ROUTE local_privacy_policy (description = "Route PII, private code, and internal
   PRIORITY 250
   TIER 2
   TOOL_SCOPE "local_only"
-  WHEN taxonomy("privacy_policy")
+  WHEN kb("privacy_policy")
   MODEL "local/private-qwen" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
     enabled: true
@@ -289,7 +293,7 @@ ROUTE cloud_frontier_reasoning (description = "Send only non-sensitive, non-susp
   PRIORITY 200
   TIER 3
   TOOL_SCOPE "full"
-  WHEN taxonomy("frontier_reasoning")
+  WHEN kb("frontier_reasoning")
   MODEL "cloud/frontier-reasoning" (reasoning = true, effort = "high")
   PLUGIN router_replay {
     enabled: true
@@ -304,7 +308,7 @@ ROUTE local_standard (description = "Default local route for non-sensitive tasks
   PRIORITY 100
   TIER 4
   TOOL_SCOPE "standard"
-  WHEN taxonomy("local_standard") OR (projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard"))
+  WHEN kb("local_standard") OR (projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard"))
   MODEL "local/private-qwen" (reasoning = true, effort = "medium")
   PLUGIN router_replay {
     enabled: true

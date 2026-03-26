@@ -140,7 +140,7 @@ type RouterMatchedSignals struct {
 	Authz        []string `json:"authz,omitempty"`
 	Jailbreak    []string `json:"jailbreak,omitempty"`
 	PII          []string `json:"pii,omitempty"`
-	Taxonomy     []string `json:"taxonomy,omitempty"`
+	KB           []string `json:"kb,omitempty"`
 	Projection   []string `json:"projection,omitempty"`
 }
 

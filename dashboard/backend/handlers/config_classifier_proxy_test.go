@@ -10,7 +10,7 @@ import (
 
 func TestRouterClassifierProxyHandlerForwardsRouterRequests(t *testing.T) {
 	routerAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/config/classifiers/example" {
+		if r.URL.Path != "/config/kbs/example" {
 			t.Fatalf("unexpected proxied path: %s", r.URL.Path)
 		}
 		if got := r.Header.Get("X-Test-Header"); got != "present" {
@@ -23,7 +23,7 @@ func TestRouterClassifierProxyHandlerForwardsRouterRequests(t *testing.T) {
 
 	handler := RouterClassifierProxyHandler(routerAPI.URL, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/router/config/classifiers/example", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/router/config/kbs/example", nil)
 	req.Header.Set("X-Test-Header", "present")
 	rr := httptest.NewRecorder()
 	handler(rr, req)
@@ -38,7 +38,7 @@ func TestRouterClassifierProxyHandlerForwardsRouterRequests(t *testing.T) {
 
 func TestRouterClassifierProxyHandlerBlocksReadonlyMutations(t *testing.T) {
 	handler := RouterClassifierProxyHandler("http://router.internal", true)
-	req := httptest.NewRequest(http.MethodDelete, "/api/router/config/classifiers/example", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/router/config/kbs/example", nil)
 	rr := httptest.NewRecorder()
 
 	handler(rr, req)
