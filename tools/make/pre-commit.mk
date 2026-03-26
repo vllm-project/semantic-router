@@ -39,6 +39,7 @@ precommit-local:
 		echo "Image found locally. Skipping pull."; \
 	fi; \
 	$$CONTAINER_CMD run --rm \
+	    -e AGENT_BASE_REF="$(AGENT_BASE_REF)" \
 	    -v $(shell pwd):/app \
 	    -w /app \
 	    ${PRECOMMIT_CONTAINER} bash -c 'make agent-ci-lint && make precommit-check'

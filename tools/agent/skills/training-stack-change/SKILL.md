@@ -13,7 +13,7 @@ description: Modifies training-stack workflows, selector or embedding pipelines,
 
 ## Workflow
 
-1. Read change surfaces, repo map, and tech debt docs for the current training stack context
+1. Read change surfaces and the repo map for the current training stack context
 2. Modify the training workflow, artifact expectation, or runtime-facing output
 3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to verify surface alignment
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate all constraints
@@ -28,8 +28,6 @@ description: Modifies training-stack workflows, selector or embedding pipelines,
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
 - [docs/agent/repo-map.md](../../../../docs/agent/repo-map.md)
-- [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
-- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 
 ## Standard Commands
 

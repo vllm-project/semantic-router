@@ -25,6 +25,7 @@ This document defines how the repository's agent rules are layered and maintaine
 - Put durable prose guidance in `docs/agent/*`.
 - Put important repeated rules into executable checks when possible.
 - Keep task-first context disclosure executable through `tools/agent/context-map.yaml` and `make agent-report`, not as a second prose-only handbook.
+- Keep gitignored local harness outputs under `.agent-harness/` as derived helper artifacts only; they must not replace canonical plans, ADRs, debt entries, or indexed docs.
 - If prose and executable rules disagree, fix them in the same change.
 - Record durable unresolved gaps in the debt entry files indexed from [tech-debt/README.md](tech-debt/README.md), and keep [tech-debt-register.md](tech-debt-register.md) as the landing page for that workflow.
 - If desired architecture and current implementation still diverge after a change, promote that gap there instead of leaving it only in PR text or chat.
@@ -47,6 +48,7 @@ This document defines how the repository's agent rules are layered and maintaine
 - branch-local cleanup backlogs
 - temporary migration checklists
 - notes that only make sense for one contributor or one PR
+- raw generated report or handoff files under `.agent-harness/`
 
 These can exist as PR descriptions, issue notes, or temporary working docs, but they must not be listed as default entrypoints in `AGENTS.md`, `repo-manifest.yaml`, or `task-matrix.yaml`.
 

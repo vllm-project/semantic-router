@@ -174,9 +174,8 @@ jobs:
           echo "=== Full git diff ==="
           git diff || true
           echo ""
-          echo "To reproduce the changed-file CI lint locally:"
-          echo "  make agent-ci-lint CHANGED_FILES=\"path/one,path/two\""
+          echo "To reproduce the full PR pre-commit baseline locally:"
+          echo "  make agent-pr-gate"
           echo ""
-          echo "To run full pre-commit locally:"
-          echo "  make precommit-install"
-          echo "  make precommit-check"
+          echo "To run only the pre-commit workflow locally:"
+          echo "  make precommit-local"
