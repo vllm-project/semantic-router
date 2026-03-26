@@ -7,9 +7,11 @@ import type {
   LevelTileDataItem,
   UMAPPointStreamData,
   LevelTileMap,
-  TopicData,
-  TopicDataJSON,
-  DrawnLabel,
+    TopicData,
+    TopicDataJSON,
+    TopicLevelKind,
+    TopicLevelMode,
+    DrawnLabel,
   LabelData,
   DataURLs,
   Direction,
@@ -147,6 +149,10 @@ export class Embedding {
     number,
     d3.Quadtree<TopicData>
   >();
+  topicLevelKinds: Map<number, TopicLevelKind> = new Map();
+  topicLevelMode: TopicLevelMode = 'auto';
+  activeTopicLevel: number | null = null;
+  activeTopicLevelKind: TopicLevelKind | null = null;
   maxLabelNum = 0;
   curLabelNum = 0;
   userMaxLabelNum = 20;
@@ -516,6 +522,32 @@ export class Embedding {
     });
   };
 
+  setTopicLevelMode = (mode: TopicLevelMode) => {
+    if (this.topicLevelMode === mode) {
+      return;
+    }
+
+    this.topicLevelMode = mode;
+    this.lastLabelNames = new Map();
+    this.lastLabelTreeLevel = null;
+    this.lastGridTreeLevels = [];
+    this.activeTopicLevel = null;
+    this.activeTopicLevelKind = null;
+
+    this.getIdealTopicTreeLevel();
+
+    if (this.showGrid) {
+      this.redrawTopicGrid();
+    }
+
+    if (this.showLabel) {
+      this.layoutTopicLabels(this.userMaxLabelNum, false);
+    }
+
+    this.mouseoverLabel(null, null);
+    this.updateEmbedding();
+  };
+
   /**
    * Load the UMAP data from json.
    */
@@ -654,7 +686,12 @@ export class Embedding {
               .x(d => d[0])
               .y(d => d[1])
               .addAll(topicData!.data[level]);
-            this.topicLevelTrees.set(parseInt(level), tree);
+            const parsedLevel = parseInt(level);
+            this.topicLevelTrees.set(parsedLevel, tree);
+            const levelKind = topicData.levelKinds?.[level];
+            if (levelKind) {
+              this.topicLevelKinds.set(parsedLevel, levelKind);
+            }
           }
         } else {
           console.error('Fail to read topic data.');
@@ -724,7 +761,12 @@ export class Embedding {
         .x(d => d[0])
         .y(d => d[1])
         .addAll(projection.topicData.data[level]);
-      this.topicLevelTrees.set(parseInt(level), tree);
+      const parsedLevel = parseInt(level);
+      this.topicLevelTrees.set(parsedLevel, tree);
+      const levelKind = projection.topicData.levelKinds?.[level];
+      if (levelKind) {
+        this.topicLevelKinds.set(parsedLevel, levelKind);
+      }
     }
 
     this.drawTopicGrid();

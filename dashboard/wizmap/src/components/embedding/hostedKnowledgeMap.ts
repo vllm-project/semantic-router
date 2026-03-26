@@ -4,7 +4,8 @@ import type {
   KBRawPointRecord,
   KnowledgeMapMetadata,
   PromptPoint,
-  TopicDataJSON
+  TopicDataJSON,
+  TopicLevelKind
 } from '../../types/embedding-types';
 
 const KB_GRID_SIZE = 64;
@@ -14,6 +15,7 @@ const DEFAULT_GROUP_TOPIC_LEVEL = 4;
 const DEFAULT_LABEL_TOPIC_LEVEL = 6;
 const GROUP_TILE_SPACING_RATIO = 0.72;
 const LABEL_TILE_SPACING_RATIO = 0.56;
+const RANGE_PADDING_RATIO = 0.06;
 
 export interface HostedKnowledgeMapProjection {
   points: PromptPoint[];
@@ -105,9 +107,9 @@ async function projectKnowledgeMapPoints(
   const vectors = rawPoints.map(point => point.vector);
   const umap = new UMAP({
     nComponents: 2,
-    nNeighbors: Math.max(2, Math.min(15, rawPoints.length-1)),
-    minDist: 0.12,
-    spread: 1.4,
+    nNeighbors: Math.max(4, Math.min(24, Math.round(Math.sqrt(rawPoints.length)))),
+    minDist: 0.05,
+    spread: 0.9,
     random: seededRandom(seedSource)
   });
   const embedding = await umap.fitAsync(vectors, () => true);
@@ -151,9 +153,11 @@ function computePointRanges(points: PromptPoint[]): [[number, number], [number, 
     minY -= 1;
     maxY += 1;
   }
+  const xPadding = (maxX - minX || 1) * RANGE_PADDING_RATIO;
+  const yPadding = (maxY - minY || 1) * RANGE_PADDING_RATIO;
   return [
-    [minX, maxX],
-    [minY, maxY]
+    [minX - xPadding, maxX + xPadding],
+    [minY - yPadding, maxY + yPadding]
   ];
 }
 
@@ -249,6 +253,7 @@ function buildTopicData(
   }
 
   const data: Record<string, [number, number, string][]> = {};
+  const levelKinds: Record<string, TopicLevelKind> = {};
   const groupTopics: [number, number, string][] = [];
   for (const [groupName, memberLabels] of Object.entries(groups).sort((left, right) =>
     left[0].localeCompare(right[0])
@@ -258,7 +263,7 @@ function buildTopicData(
       memberPoints.push(...(labelBuckets.get(labelName) ?? []));
     }
     if (memberPoints.length > 0) {
-      groupTopics.push([...centroid(memberPoints), groupName]);
+      groupTopics.push([...topicAnchor(memberPoints), groupName]);
     }
   }
 
@@ -266,7 +271,7 @@ function buildTopicData(
   for (const labelName of labelNames) {
     const memberPoints = labelBuckets.get(labelName) ?? [];
     if (memberPoints.length > 0) {
-      labelTopics.push([...centroid(memberPoints), labelName]);
+      labelTopics.push([...topicAnchor(memberPoints), labelName]);
     }
   }
 
@@ -290,13 +295,16 @@ function buildTopicData(
 
   if (groupTopics.length > 0) {
     data[`${groupLevel}`] = groupTopics;
+    levelKinds[`${groupLevel}`] = 'group';
   }
   if (labelTopics.length > 0) {
     data[`${labelLevel}`] = labelTopics;
+    levelKinds[`${labelLevel}`] = 'label';
   }
 
   if (Object.keys(data).length === 0) {
     data[`${DEFAULT_LABEL_TOPIC_LEVEL}`] = [[0, 0, 'knowledge']];
+    levelKinds[`${DEFAULT_LABEL_TOPIC_LEVEL}`] = 'label';
   }
 
   return {
@@ -304,7 +312,8 @@ function buildTopicData(
       [xRange[0], yRange[0]],
       [xRange[1], yRange[1]]
     ],
-    data
+    data,
+    levelKinds
   };
 }
 
@@ -318,6 +327,44 @@ function centroid(points: PromptPoint[]): [number, number] {
     { x: 0, y: 0 }
   );
   return [totals.x / points.length, totals.y / points.length];
+}
+
+function topicAnchor(points: PromptPoint[]): [number, number] {
+  if (points.length === 1) {
+    return [points[0].x, points[0].y];
+  }
+
+  const [centerX, centerY] = centroid(points);
+  const neighborCount = Math.min(
+    Math.max(2, Math.ceil(Math.sqrt(points.length))),
+    Math.max(1, points.length - 1),
+    8
+  );
+
+  let bestPoint = points[0];
+  let bestScore = Infinity;
+
+  for (const point of points) {
+    const neighborDistances = points
+      .filter(other => other !== point)
+      .map(other => Math.hypot(other.x - point.x, other.y - point.y))
+      .sort((left, right) => left - right)
+      .slice(0, neighborCount);
+
+    const localDensityScore = neighborDistances.reduce(
+      (sum, distance) => sum + distance,
+      0
+    );
+    const centroidPenalty = Math.hypot(point.x - centerX, point.y - centerY) * 0.15;
+    const score = localDensityScore + centroidPenalty;
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestPoint = point;
+    }
+  }
+
+  return [bestPoint.x, bestPoint.y];
 }
 
 function computeTopicLevel(

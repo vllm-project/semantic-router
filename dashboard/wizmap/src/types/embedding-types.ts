@@ -196,11 +196,19 @@ export enum Direction {
 export interface TopicDataJSON {
   extent: [[number, number], [number, number]];
   data: TopicDataMap;
+  levelKinds?: TopicLevelKindMap;
 }
 
 interface TopicDataMap {
   [level: string]: TopicData[];
 }
+
+export interface TopicLevelKindMap {
+  [level: string]: TopicLevelKind;
+}
+
+export type TopicLevelKind = 'group' | 'label';
+export type TopicLevelMode = 'auto' | TopicLevelKind;
 
 /**
  * A topic center point (x, y, topic label)
