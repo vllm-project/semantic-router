@@ -49,7 +49,7 @@ Adjust hyperparameters via the **Advanced Settings** panel, then click **Train M
 
 Define routing decisions — each with a name, priority, algorithm, domain conditions, and target model names. Click **Generate Config** to produce a deployment-ready `ml-model-selection-values.yaml`.
 
-The generated YAML follows the semantic-router config schema. Merge the `model_selection` and `decisions` sections into your main `config.yaml`, or use it as a standalone config file for the router.
+The generated YAML follows the semantic-router config schema. Merge `global.router.model_selection` and `routing.decisions` into your main `config.yaml`, or use it as a standalone config file for the router.
 
 ### Example Generated Config
 
@@ -100,11 +100,26 @@ global:
       embedding_model: mmbert  # uses models/mom-embedding-ultra by default
 ```
 
-### Per-Decision Algorithm Configuration
+### Per-Decision Algorithm Selection
 
-Configure different algorithms for different decision types:
+Use `routing.decisions[].algorithm.type` to choose which trained ML selector a decision should use. Shared selector tuning belongs under `global.router.model_selection.ml`, not under the decision itself.
 
 ```yaml
+global:
+  router:
+    model_selection:
+      enabled: true
+      ml:
+        models_path: ".cache/ml-models"
+        knn:
+          k: 5
+        svm:
+          kernel: "rbf"
+          gamma: 1.0
+        kmeans:
+          num_clusters: 8
+        mlp:
+          device: "cuda"
 routing:
   decisions:
   # Math queries - use KNN for quality-weighted selection
@@ -118,8 +133,6 @@ routing:
             name: "math"
       algorithm:
         type: "knn"
-        knn:
-          k: 5
       modelRefs:
         - model: "llama-3.2-1b"
         - model: "llama-3.2-3b"
@@ -136,9 +149,6 @@ routing:
             name: "computer science"
       algorithm:
         type: "svm"
-        svm:
-          kernel: "rbf"
-          gamma: 1.0
       modelRefs:
         - model: "codellama-7b"
         - model: "llama-3.2-3b"
@@ -155,8 +165,6 @@ routing:
             name: "other"
       algorithm:
         type: "kmeans"
-        kmeans:
-          num_clusters: 8
       modelRefs:
         - model: "llama-3.2-1b"
         - model: "llama-3.2-3b"
@@ -173,8 +181,6 @@ routing:
             name: "engineering"
       algorithm:
         type: "mlp"
-        mlp:
-          device: "cuda"  # or "cpu", "metal"
       modelRefs:
         - model: "llama-3.2-1b"
         - model: "llama-3.2-3b"
@@ -187,38 +193,46 @@ routing:
 #### KNN Parameters
 
 ```yaml
-algorithm:
-  type: "knn"
-  knn:
-    k: 5  # Number of neighbors (default: 5)
+global:
+  router:
+    model_selection:
+      ml:
+        knn:
+          k: 5  # Number of neighbors (default: 5)
 ```
 
 #### KMeans Parameters
 
 ```yaml
-algorithm:
-  type: "kmeans"
-  kmeans:
-    num_clusters: 8  # Number of clusters (default: 8)
+global:
+  router:
+    model_selection:
+      ml:
+        kmeans:
+          num_clusters: 8  # Number of clusters (default: 8)
 ```
 
 #### SVM Parameters
 
 ```yaml
-algorithm:
-  type: "svm"
-  svm:
-    kernel: "rbf"   # Kernel type: rbf, linear (default: rbf)
-    gamma: 1.0      # RBF kernel gamma (default: 1.0)
+global:
+  router:
+    model_selection:
+      ml:
+        svm:
+          kernel: "rbf"   # Kernel type: rbf, linear (default: rbf)
+          gamma: 1.0      # RBF kernel gamma (default: 1.0)
 ```
 
 #### MLP Parameters
 
 ```yaml
-algorithm:
-  type: "mlp"
-  mlp:
-    device: "cuda"  # Device: cpu, cuda, metal (default: cpu)
+global:
+  router:
+    model_selection:
+      ml:
+        mlp:
+          device: "cuda"  # Device: cpu, cuda, metal (default: cpu)
 ```
 
 The MLP (Multi-Layer Perceptron) algorithm uses a neural network classifier with GPU acceleration via the [Candle](https://github.com/huggingface/candle) Rust framework. It provides high-throughput inference suitable for production deployments with GPU resources.

@@ -3,6 +3,9 @@
 {{- $stores := (get $global "stores") | default (dict) -}}
 {{- $services := (get $global "services") | default (dict) -}}
 {{- $semanticCache := (get $stores "semantic_cache") | default (dict) -}}
+{{- $_ := unset $semanticCache "use_hnsw" -}}
+{{- $_ := unset $semanticCache "hnsw_m" -}}
+{{- $_ := unset $semanticCache "hnsw_ef_construction" -}}
 {{- $responseAPI := (get $services "response_api") | default (dict) -}}
 {{- $observability := (get $services "observability") | default (dict) -}}
 {{- $tracing := (get $observability "tracing") | default (dict) -}}
