@@ -3,12 +3,12 @@
 .mapview-page {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  justify-content: flex-start;
+  align-items: stretch;
   height: 100vh;
   width: 100vw;
   box-sizing: border-box;
-  overflow-x: hidden;
+  overflow: hidden;
 
   position: relative;
 }
@@ -16,15 +16,15 @@
 .app-wrapper {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   width: 100%;
   height: 100%;
 }
 
 .main-app {
   display: flex;
-  justify-content: center;
-  align-items: center;
+  justify-content: stretch;
+  align-items: stretch;
   position: relative;
 
   width: 100%;
@@ -36,14 +36,13 @@
 
 .main-app-container {
   position: absolute;
-  left: 0px;
-  top: 0px;
+  inset: 0px;
   width: 100%;
   height: 100%;
   background-color: white;
   opacity: 1;
   transition: opacity 300ms ease-in-out;
-  border-radius: $border-radius;
+  overflow: hidden;
 
   &.hidden {
     opacity: 0;

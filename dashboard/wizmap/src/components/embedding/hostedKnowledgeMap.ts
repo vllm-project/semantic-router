@@ -8,6 +8,8 @@ import type {
 } from '../../types/embedding-types';
 
 const KB_GRID_SIZE = 64;
+const KB_GROUP_TOPIC_LEVEL = 4;
+const KB_LABEL_TOPIC_LEVEL = 6;
 
 export interface HostedKnowledgeMapProjection {
   points: PromptPoint[];
@@ -256,7 +258,7 @@ function buildTopicData(
     }
   }
   if (levelOne.length > 0) {
-    data['1'] = levelOne;
+    data[`${KB_GROUP_TOPIC_LEVEL}`] = levelOne;
   }
 
   const levelTwo: [number, number, string][] = [];
@@ -267,11 +269,11 @@ function buildTopicData(
     }
   }
   if (levelTwo.length > 0) {
-    data['2'] = levelTwo;
+    data[`${KB_LABEL_TOPIC_LEVEL}`] = levelTwo;
   }
 
   if (Object.keys(data).length === 0) {
-    data['1'] = [[0, 0, 'knowledge']];
+    data[`${KB_LABEL_TOPIC_LEVEL}`] = [[0, 0, 'knowledge']];
   }
 
   return {

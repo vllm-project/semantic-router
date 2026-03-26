@@ -18,7 +18,6 @@
 .embedding-svg {
   width: 100%;
   height: 100%;
-  border-radius: $border-radius;
 }
 
 :global(.embedding-svg .contour-group) {
@@ -118,7 +117,6 @@
   position: absolute;
   top: 0px;
   left: 0px;
-  border-radius: $border-radius;
   z-index: 4;
 }
 
