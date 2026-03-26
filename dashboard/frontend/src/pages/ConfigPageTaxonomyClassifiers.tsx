@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FieldConfig } from '../components/EditModal'
-import { DataTable, type Column } from '../components/DataTable'
+import { DataTable } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 import pageStyles from './ConfigPage.module.css'
 import ConfigPageTaxonomyClassifierEditor from './ConfigPageTaxonomyClassifierEditor'
@@ -9,9 +9,6 @@ import type { OpenEditModal } from './configPageRouterSectionSupport'
 import styles from './ConfigPageTaxonomyClassifiers.module.css'
 import {
   classifierDraftFromRecord,
-  countMetricsForGroup,
-  countSignalsForCategory,
-  countSignalsForTier,
   emptyTaxonomyClassifierDraft,
   normalizeTaxonomyClassifierListResponse,
   payloadFromDraft,
@@ -19,8 +16,25 @@ import {
   type TaxonomyClassifierDraft,
   type TaxonomyClassifierRecord,
 } from './configPageTaxonomyClassifierSupport'
-
-export type KnowledgeBaseManagerView = 'knowledge-bases' | 'groups' | 'labels' | 'exemplars'
+import {
+  addGroupToDraft,
+  addLabelToDraft,
+  buildGroupColumns,
+  buildGroupRows,
+  buildKnowledgeBaseColumns,
+  buildKnowledgeBaseCounts,
+  buildKnowledgeBaseRows,
+  buildLabelColumns,
+  buildLabelRows,
+  type GroupRow,
+  type KnowledgeBaseGroupDraft,
+  type KnowledgeBaseLabelDraft,
+  type KnowledgeBaseManagerView,
+  removeGroupFromDraft,
+  removeLabelFromDraft,
+  renameGroupInDraft,
+  renameLabelInDraft,
+} from './configPageKnowledgeBaseManagerSupport'
 
 interface ConfigPageTaxonomyClassifiersProps {
   isReadonly: boolean
@@ -28,256 +42,12 @@ interface ConfigPageTaxonomyClassifiersProps {
   activeView?: KnowledgeBaseManagerView
 }
 
-interface KnowledgeBaseRow extends TaxonomyClassifierRecord {
-  modeLabel: string
-  label_count: number
-  group_count: number
-  metric_count: number
-  signal_count: number
-  exemplar_count: number
-}
-
-interface GroupRow {
-  name: string
-  labels: string[]
-  label_count: number
-  signal_count: number
-  metric_count: number
-}
-
-interface LabelRow extends TaxonomyClassifierCategory {
-  exemplar_count: number
-  signal_count: number
-  threshold_value?: number
-}
-
-interface ExemplarRow {
-  key: string
-  label: string
-  exemplar: string
-  exemplarIndex: number
-}
-
-interface KnowledgeBaseGroupDraft {
-  name: string
-  labels: string[]
-}
-
-interface KnowledgeBaseLabelDraft {
-  name: string
-  description: string
-  exemplars: string
-}
-
-interface KnowledgeBaseExemplarDraft {
-  label: string
-  exemplar: string
-}
-
-function buildKnowledgeBaseModeLabel(knowledgeBase: TaxonomyClassifierRecord): string {
-  if (knowledgeBase.builtin) {
-    return 'Built-in'
-  }
-  if (knowledgeBase.editable) {
-    return 'Managed'
-  }
-  return 'External'
-}
-
-function addExemplarToDraft(
-  draft: TaxonomyClassifierDraft,
-  labelName: string,
-  exemplar: string
-): TaxonomyClassifierDraft {
-  return {
-    ...draft,
-    labels: draft.labels.map((label) =>
-      label.name === labelName
-        ? { ...label, exemplars: [...label.exemplars, exemplar] }
-        : label
-    ),
-  }
-}
-
-function updateExemplarInDraft(
-  draft: TaxonomyClassifierDraft,
-  originalLabel: string,
-  originalIndex: number,
-  nextLabel: string,
-  nextExemplar: string
-): TaxonomyClassifierDraft {
-  return {
-    ...draft,
-    labels: draft.labels.map((label) => {
-      if (label.name === originalLabel && label.name === nextLabel) {
-        return {
-          ...label,
-          exemplars: label.exemplars.map((exemplar, index) =>
-            index === originalIndex ? nextExemplar : exemplar
-          ),
-        }
-      }
-      if (label.name === originalLabel) {
-        return {
-          ...label,
-          exemplars: label.exemplars.filter((_, index) => index !== originalIndex),
-        }
-      }
-      if (label.name === nextLabel) {
-        return {
-          ...label,
-          exemplars: [...label.exemplars, nextExemplar],
-        }
-      }
-      return label
-    }),
-  }
-}
-
-function removeExemplarFromDraft(
-  draft: TaxonomyClassifierDraft,
-  labelName: string,
-  exemplarIndex: number
-): TaxonomyClassifierDraft {
-  return {
-    ...draft,
-    labels: draft.labels.map((label) =>
-      label.name === labelName
-        ? {
-            ...label,
-            exemplars: label.exemplars.filter((_, index) => index !== exemplarIndex),
-          }
-        : label
-    ),
-  }
-}
-
-function renameGroupInDraft(
-  draft: TaxonomyClassifierDraft,
-  originalName: string,
-  nextGroup: KnowledgeBaseGroupDraft
-): TaxonomyClassifierDraft {
-  const nextName = nextGroup.name.trim()
-  return {
-    ...draft,
-    groups: draft.groups.map((group) =>
-      group.name === originalName
-        ? { name: nextName, labels: nextGroup.labels.join(', ') }
-        : group
-    ),
-    metrics: draft.metrics.map((metric) => ({
-      ...metric,
-      positive_group: metric.positive_group === originalName ? nextName : metric.positive_group,
-      negative_group: metric.negative_group === originalName ? nextName : metric.negative_group,
-    })),
-  }
-}
-
-function addGroupToDraft(
-  draft: TaxonomyClassifierDraft,
-  nextGroup: KnowledgeBaseGroupDraft
-): TaxonomyClassifierDraft {
-  return {
-    ...draft,
-    groups: [
-      ...draft.groups,
-      {
-        name: nextGroup.name.trim(),
-        labels: nextGroup.labels.join(', '),
-      },
-    ],
-  }
-}
-
-function removeGroupFromDraft(
-  draft: TaxonomyClassifierDraft,
-  groupName: string
-): TaxonomyClassifierDraft {
-  return {
-    ...draft,
-    groups: draft.groups.filter((group) => group.name !== groupName),
-  }
-}
-
-function renameLabelInDraft(
-  draft: TaxonomyClassifierDraft,
-  originalName: string,
-  nextLabel: KnowledgeBaseLabelDraft
-): TaxonomyClassifierDraft {
-  const nextName = nextLabel.name.trim()
-  return {
-    ...draft,
-    labels: draft.labels.map((label) =>
-      label.name === originalName
-        ? {
-            name: nextName,
-            description: nextLabel.description.trim(),
-            exemplars: nextLabel.exemplars
-              .split('\n')
-              .map((item) => item.trim())
-              .filter(Boolean),
-          }
-        : label
-    ),
-    groups: draft.groups.map((group) => ({
-      ...group,
-      labels: group.labels
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .map((item) => (item === originalName ? nextName : item))
-        .join(', '),
-    })),
-    label_thresholds: draft.label_thresholds.map((entry) =>
-      entry.label === originalName ? { ...entry, label: nextName } : entry
-    ),
-  }
-}
-
-function addLabelToDraft(
-  draft: TaxonomyClassifierDraft,
-  nextLabel: KnowledgeBaseLabelDraft
-): TaxonomyClassifierDraft {
-  return {
-    ...draft,
-    labels: [
-      ...draft.labels,
-      {
-        name: nextLabel.name.trim(),
-        description: nextLabel.description.trim(),
-        exemplars: nextLabel.exemplars
-          .split('\n')
-          .map((item) => item.trim())
-          .filter(Boolean),
-      },
-    ],
-  }
-}
-
-function removeLabelFromDraft(
-  draft: TaxonomyClassifierDraft,
-  labelName: string
-): TaxonomyClassifierDraft {
-  return {
-    ...draft,
-    labels: draft.labels.filter((label) => label.name !== labelName),
-    groups: draft.groups.map((group) => ({
-      ...group,
-      labels: group.labels
-        .split(',')
-        .map((item) => item.trim())
-        .filter((item) => item && item !== labelName)
-        .join(', '),
-    })),
-    label_thresholds: draft.label_thresholds.filter((entry) => entry.label !== labelName),
-  }
-}
-
 export default function ConfigPageTaxonomyClassifiers({
   isReadonly,
   openEditModal,
-  activeView = 'knowledge-bases',
+  activeView = 'bases',
 }: ConfigPageTaxonomyClassifiersProps) {
+  const pageSize = 10
   const [knowledgeBases, setKnowledgeBases] = useState<TaxonomyClassifierRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -285,7 +55,8 @@ export default function ConfigPageTaxonomyClassifiers({
   const [knowledgeBaseSearch, setKnowledgeBaseSearch] = useState('')
   const [groupSearch, setGroupSearch] = useState('')
   const [labelSearch, setLabelSearch] = useState('')
-  const [exemplarSearch, setExemplarSearch] = useState('')
+  const [groupPage, setGroupPage] = useState(1)
+  const [labelPage, setLabelPage] = useState(1)
 
   const loadKnowledgeBases = useCallback(async () => {
     setLoading(true)
@@ -316,29 +87,10 @@ export default function ConfigPageTaxonomyClassifiers({
     void loadKnowledgeBases()
   }, [loadKnowledgeBases])
 
-  const knowledgeBaseRows = useMemo<KnowledgeBaseRow[]>(() => {
-    return knowledgeBases
-      .filter((knowledgeBase) => {
-        const query = knowledgeBaseSearch.trim().toLowerCase()
-        if (!query) {
-          return true
-        }
-        return (
-          knowledgeBase.name.toLowerCase().includes(query) ||
-          (knowledgeBase.description ?? '').toLowerCase().includes(query) ||
-          knowledgeBase.source.path.toLowerCase().includes(query)
-        )
-      })
-      .map((knowledgeBase) => ({
-        ...knowledgeBase,
-        modeLabel: buildKnowledgeBaseModeLabel(knowledgeBase),
-        label_count: knowledgeBase.labels.length,
-        group_count: Object.keys(knowledgeBase.groups ?? {}).length,
-        metric_count: knowledgeBase.metrics?.length ?? 0,
-        signal_count: knowledgeBase.signal_references.length,
-        exemplar_count: knowledgeBase.labels.reduce((count, label) => count + label.exemplars.length, 0),
-      }))
-  }, [knowledgeBaseSearch, knowledgeBases])
+  const knowledgeBaseRows = useMemo(
+    () => buildKnowledgeBaseRows(knowledgeBases, knowledgeBaseSearch),
+    [knowledgeBases, knowledgeBaseSearch]
+  )
 
   const selectedKnowledgeBase = useMemo(
     () =>
@@ -348,86 +100,42 @@ export default function ConfigPageTaxonomyClassifiers({
     [knowledgeBaseRows, knowledgeBases, selectedKnowledgeBaseName]
   )
 
-  const groupRows = useMemo<GroupRow[]>(() => {
-    if (!selectedKnowledgeBase) {
-      return []
-    }
-    const query = groupSearch.trim().toLowerCase()
-    return Object.entries(selectedKnowledgeBase.groups ?? {})
-      .map(([name, labels]) => ({
-        name,
-        labels,
-        label_count: labels.length,
-        signal_count: countSignalsForTier(selectedKnowledgeBase, name),
-        metric_count: countMetricsForGroup(selectedKnowledgeBase, name),
-      }))
-      .filter((group) => {
-        if (!query) {
-          return true
-        }
-        return (
-          group.name.toLowerCase().includes(query) ||
-          group.labels.some((label) => label.toLowerCase().includes(query))
-        )
-      })
-  }, [groupSearch, selectedKnowledgeBase])
+  const groupRows = useMemo(
+    () => buildGroupRows(selectedKnowledgeBase, groupSearch),
+    [groupSearch, selectedKnowledgeBase]
+  )
 
-  const labelRows = useMemo<LabelRow[]>(() => {
-    if (!selectedKnowledgeBase) {
-      return []
-    }
-    const query = labelSearch.trim().toLowerCase()
-    return selectedKnowledgeBase.labels
-      .filter((label) => {
-        if (!query) {
-          return true
-        }
-        return (
-          label.name.toLowerCase().includes(query) ||
-          (label.description ?? '').toLowerCase().includes(query)
-        )
-      })
-      .map((label) => ({
-        ...label,
-        exemplar_count: label.exemplars.length,
-        signal_count: countSignalsForCategory(selectedKnowledgeBase, label.name),
-        threshold_value: selectedKnowledgeBase.label_thresholds?.[label.name],
-      }))
-  }, [labelSearch, selectedKnowledgeBase])
-
-  const exemplarRows = useMemo<ExemplarRow[]>(() => {
-    if (!selectedKnowledgeBase) {
-      return []
-    }
-    const query = exemplarSearch.trim().toLowerCase()
-    return selectedKnowledgeBase.labels.flatMap((label) =>
-      label.exemplars
-        .map((exemplar, exemplarIndex) => ({
-          key: `${label.name}:${exemplarIndex}`,
-          label: label.name,
-          exemplar,
-          exemplarIndex,
-        }))
-        .filter((row) => {
-          if (!query) {
-            return true
-          }
-          return (
-            row.label.toLowerCase().includes(query) ||
-            row.exemplar.toLowerCase().includes(query)
-          )
-        })
-    )
-  }, [exemplarSearch, selectedKnowledgeBase])
+  const labelRows = useMemo(
+    () => buildLabelRows(selectedKnowledgeBase, labelSearch),
+    [labelSearch, selectedKnowledgeBase]
+  )
 
   const counts = useMemo(
-    () => ({
-      total: knowledgeBases.length,
-      builtin: knowledgeBases.filter((knowledgeBase) => knowledgeBase.builtin).length,
-      managed: knowledgeBases.filter((knowledgeBase) => !knowledgeBase.builtin).length,
-    }),
+    () => buildKnowledgeBaseCounts(knowledgeBases),
     [knowledgeBases]
   )
+
+  const totalGroupPages = Math.max(1, Math.ceil(groupRows.length / pageSize))
+  const currentGroupPage = Math.min(groupPage, totalGroupPages)
+  const paginatedGroupRows = useMemo(
+    () => groupRows.slice((currentGroupPage - 1) * pageSize, currentGroupPage * pageSize),
+    [currentGroupPage, groupRows, pageSize]
+  )
+
+  const totalLabelPages = Math.max(1, Math.ceil(labelRows.length / pageSize))
+  const currentLabelPage = Math.min(labelPage, totalLabelPages)
+  const paginatedLabelRows = useMemo(
+    () => labelRows.slice((currentLabelPage - 1) * pageSize, currentLabelPage * pageSize),
+    [currentLabelPage, labelRows, pageSize]
+  )
+
+  useEffect(() => {
+    setGroupPage(1)
+  }, [groupSearch, selectedKnowledgeBaseName])
+
+  useEffect(() => {
+    setLabelPage(1)
+  }, [labelSearch, selectedKnowledgeBaseName])
 
   const knowledgeBaseEditorField = useCallback(
     (disableName: boolean): FieldConfig[] => [
@@ -490,7 +198,7 @@ export default function ConfigPageTaxonomyClassifiers({
     [persistKnowledgeBase, selectedKnowledgeBase]
   )
 
-  const openCreateModal = () => {
+  const openCreateModal = useCallback(() => {
     openEditModal<{ draft: TaxonomyClassifierDraft }>(
       'Add Knowledge Base',
       { draft: emptyTaxonomyClassifierDraft() },
@@ -501,9 +209,9 @@ export default function ConfigPageTaxonomyClassifiers({
       },
       'add'
     )
-  }
+  }, [knowledgeBaseEditorField, openEditModal, persistKnowledgeBase])
 
-  const openEditKnowledgeBaseModal = (knowledgeBase: TaxonomyClassifierRecord) => {
+  const openEditKnowledgeBaseModal = useCallback((knowledgeBase: TaxonomyClassifierRecord) => {
     openEditModal<{ draft: TaxonomyClassifierDraft }>(
       `Edit ${knowledgeBase.name}`,
       { draft: classifierDraftFromRecord(knowledgeBase) },
@@ -513,13 +221,12 @@ export default function ConfigPageTaxonomyClassifiers({
       },
       'edit'
     )
-  }
+  }, [knowledgeBaseEditorField, openEditModal, persistKnowledgeBase])
 
-  const handleDeleteKnowledgeBase = async (knowledgeBase: TaxonomyClassifierRecord) => {
+  const handleDeleteKnowledgeBase = useCallback(async (knowledgeBase: TaxonomyClassifierRecord) => {
     if (!window.confirm(`Delete knowledge base "${knowledgeBase.name}"?`)) {
       return
     }
-
     setError(null)
     try {
       const response = await fetch(`/api/router/config/kbs/${knowledgeBase.name}`, {
@@ -536,9 +243,9 @@ export default function ConfigPageTaxonomyClassifiers({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete knowledge base')
     }
-  }
+  }, [loadKnowledgeBases, selectedKnowledgeBaseName])
 
-  const openAddGroupModal = () => {
+  const openAddGroupModal = useCallback(() => {
     if (!selectedKnowledgeBase) {
       return
     }
@@ -564,9 +271,9 @@ export default function ConfigPageTaxonomyClassifiers({
       },
       'add'
     )
-  }
+  }, [groupRows, openEditModal, persistSelectedKnowledgeBase, selectedKnowledgeBase])
 
-  const openEditGroupModal = (group: GroupRow) => {
+  const openEditGroupModal = useCallback((group: GroupRow) => {
     if (!selectedKnowledgeBase) {
       return
     }
@@ -588,16 +295,16 @@ export default function ConfigPageTaxonomyClassifiers({
         if (nextName !== group.name && groupRows.some((existingGroup) => existingGroup.name === nextName)) {
           throw new Error(`Group "${nextName}" already exists.`)
         }
-        if (nextName !== group.name && countSignalsForTier(selectedKnowledgeBase, group.name) > 0) {
+        if (nextName !== group.name && group.signal_count > 0) {
           throw new Error(`Group "${group.name}" is referenced by KB signals. Update those signals before renaming it.`)
         }
         await persistSelectedKnowledgeBase((draft) => renameGroupInDraft(draft, group.name, data))
       },
       'edit'
     )
-  }
+  }, [groupRows, openEditModal, persistSelectedKnowledgeBase, selectedKnowledgeBase])
 
-  const handleDeleteGroup = async (group: GroupRow) => {
+  const handleDeleteGroup = useCallback(async (group: GroupRow) => {
     if (!selectedKnowledgeBase) {
       return
     }
@@ -618,9 +325,9 @@ export default function ConfigPageTaxonomyClassifiers({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete group')
     }
-  }
+  }, [persistSelectedKnowledgeBase, selectedKnowledgeBase])
 
-  const openAddLabelModal = () => {
+  const openAddLabelModal = useCallback(() => {
     if (!selectedKnowledgeBase) {
       return
     }
@@ -641,9 +348,9 @@ export default function ConfigPageTaxonomyClassifiers({
       },
       'add'
     )
-  }
+  }, [openEditModal, persistSelectedKnowledgeBase, selectedKnowledgeBase])
 
-  const openEditLabelModal = (label: TaxonomyClassifierCategory) => {
+  const openEditLabelModal = useCallback((label: TaxonomyClassifierCategory) => {
     if (!selectedKnowledgeBase) {
       return
     }
@@ -667,20 +374,21 @@ export default function ConfigPageTaxonomyClassifiers({
         ) {
           throw new Error(`Label "${nextName}" already exists.`)
         }
-        if (nextName !== label.name && countSignalsForCategory(selectedKnowledgeBase, label.name) > 0) {
+        if (nextName !== label.name && labelRows.some((entry) => entry.name === label.name && entry.signal_count > 0)) {
           throw new Error(`Label "${label.name}" is referenced by KB signals. Update those signals before renaming it.`)
         }
         await persistSelectedKnowledgeBase((draft) => renameLabelInDraft(draft, label.name, data))
       },
       'edit'
     )
-  }
+  }, [labelRows, openEditModal, persistSelectedKnowledgeBase, selectedKnowledgeBase])
 
-  const handleDeleteLabel = async (label: TaxonomyClassifierCategory) => {
+  const handleDeleteLabel = useCallback(async (label: TaxonomyClassifierCategory) => {
     if (!selectedKnowledgeBase) {
       return
     }
-    if (countSignalsForCategory(selectedKnowledgeBase, label.name) > 0) {
+    const signalCount = labelRows.find((entry) => entry.name === label.name)?.signal_count ?? 0
+    if (signalCount > 0) {
       setError(`Label "${label.name}" is referenced by KB signals. Remove those signals first.`)
       return
     }
@@ -693,355 +401,164 @@ export default function ConfigPageTaxonomyClassifiers({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete label')
     }
-  }
+  }, [labelRows, persistSelectedKnowledgeBase, selectedKnowledgeBase])
 
-  const openAddExemplarModal = () => {
-    if (!selectedKnowledgeBase) {
-      return
+  const knowledgeBaseColumns = useMemo(
+    () => buildKnowledgeBaseColumns({
+      selectedKnowledgeBaseName: selectedKnowledgeBase?.name,
+      isReadonly,
+      onSelect: setSelectedKnowledgeBaseName,
+      onEdit: openEditKnowledgeBaseModal,
+      onDelete: handleDeleteKnowledgeBase,
+    }),
+    [handleDeleteKnowledgeBase, isReadonly, openEditKnowledgeBaseModal, selectedKnowledgeBase?.name]
+  )
+
+  const groupColumns = useMemo(
+    () => buildGroupColumns({
+      isReadonly,
+      editable: selectedKnowledgeBase?.editable,
+      onEdit: openEditGroupModal,
+      onDelete: handleDeleteGroup,
+    }),
+    [handleDeleteGroup, isReadonly, openEditGroupModal, selectedKnowledgeBase?.editable]
+  )
+
+  const labelColumns = useMemo(
+    () => buildLabelColumns({
+      isReadonly,
+      editable: selectedKnowledgeBase?.editable,
+      onEdit: openEditLabelModal,
+      onDelete: handleDeleteLabel,
+    }),
+    [handleDeleteLabel, isReadonly, openEditLabelModal, selectedKnowledgeBase?.editable]
+  )
+
+  const groupOverview = useMemo(
+    () => ({
+      total: groupRows.length,
+      referenced: groupRows.filter((group) => group.signal_count > 0).length,
+      metricBacked: groupRows.filter((group) => group.metric_count > 0).length,
+    }),
+    [groupRows]
+  )
+
+  const labelOverview = useMemo(
+    () => ({
+      total: labelRows.length,
+      referenced: labelRows.filter((label) => label.signal_count > 0).length,
+      overrides: labelRows.filter((label) => typeof label.threshold_value === 'number').length,
+      exemplars: labelRows.reduce((count, label) => count + label.exemplar_count, 0),
+    }),
+    [labelRows]
+  )
+
+  const activeSummaryCards = useMemo(() => {
+    if (activeView === 'groups') {
+      return [
+        { label: 'Groups', value: groupOverview.total, hint: 'Groups defined in the active knowledge base.' },
+        { label: 'Signal-backed', value: groupOverview.referenced, hint: 'Groups currently referenced by routing signals.' },
+        { label: 'Metric-backed', value: groupOverview.metricBacked, hint: 'Groups used by KB metrics.' },
+      ]
     }
-    if (selectedKnowledgeBase.labels.length === 0) {
-      setError('Add at least one label before creating exemplars.')
-      return
+    if (activeView === 'labels') {
+      return [
+        { label: 'Labels', value: labelOverview.total, hint: 'Labels available in the active knowledge base.' },
+        { label: 'Signal-backed', value: labelOverview.referenced, hint: 'Labels currently referenced by routing signals.' },
+        { label: 'Threshold Overrides', value: labelOverview.overrides, hint: 'Labels overriding the base threshold.' },
+      ]
     }
-    openEditModal<KnowledgeBaseExemplarDraft>(
-      `Add Exemplar · ${selectedKnowledgeBase.name}`,
-      {
-        label: selectedKnowledgeBase.labels[0]?.name ?? '',
-        exemplar: '',
-      },
-      [
-        { name: 'label', label: 'Label', type: 'select', required: true, options: selectedKnowledgeBase.labels.map((label) => label.name) },
-        { name: 'exemplar', label: 'Exemplar', type: 'textarea', required: true, placeholder: 'Representative prompt for this label' },
-      ],
-      async (data) => {
-        const nextLabel = data.label.trim()
-        const nextExemplar = data.exemplar.trim()
-        if (!nextLabel || !nextExemplar) {
-          throw new Error('Label and exemplar are required.')
-        }
-        await persistSelectedKnowledgeBase((draft) => addExemplarToDraft(draft, nextLabel, nextExemplar))
-      },
-      'add'
-    )
-  }
-
-  const openEditExemplarModal = (row: ExemplarRow) => {
-    if (!selectedKnowledgeBase) {
-      return
-    }
-    openEditModal<KnowledgeBaseExemplarDraft>(
-      `Edit Exemplar · ${row.label}`,
-      {
-        label: row.label,
-        exemplar: row.exemplar,
-      },
-      [
-        { name: 'label', label: 'Label', type: 'select', required: true, options: selectedKnowledgeBase.labels.map((label) => label.name) },
-        { name: 'exemplar', label: 'Exemplar', type: 'textarea', required: true, placeholder: 'Representative prompt for this label' },
-      ],
-      async (data) => {
-        const nextLabel = data.label.trim()
-        const nextExemplar = data.exemplar.trim()
-        if (!nextLabel || !nextExemplar) {
-          throw new Error('Label and exemplar are required.')
-        }
-        await persistSelectedKnowledgeBase((draft) =>
-          updateExemplarInDraft(draft, row.label, row.exemplarIndex, nextLabel, nextExemplar)
-        )
-      },
-      'edit'
-    )
-  }
-
-  const handleDeleteExemplar = async (row: ExemplarRow) => {
-    if (!selectedKnowledgeBase) {
-      return
-    }
-    if (!window.confirm(`Delete this exemplar from "${row.label}"?`)) {
-      return
-    }
-    setError(null)
-    try {
-      await persistSelectedKnowledgeBase((draft) => removeExemplarFromDraft(draft, row.label, row.exemplarIndex))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete exemplar')
-    }
-  }
-
-  const knowledgeBaseColumns = useMemo<Column<KnowledgeBaseRow>[]>(() => [
-    {
-      key: 'name',
-      header: 'Knowledge Base',
-      sortable: true,
-      render: (row) => (
-        <div className={styles.primaryCell}>
-          <div className={styles.primaryCellTitleRow}>
-            <span className={styles.primaryCellTitle}>{row.name}</span>
-            {selectedKnowledgeBase?.name === row.name ? <span className={styles.selectedBadge}>Selected</span> : null}
-          </div>
-          <span className={styles.primaryCellMeta}>{row.description || 'No description provided.'}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'modeLabel',
-      header: 'Mode',
-      sortable: true,
-      render: (row) => <span className={styles.tableBadge}>{row.modeLabel}</span>,
-    },
-    {
-      key: 'label_count',
-      header: 'Labels',
-      sortable: true,
-      align: 'center',
-    },
-    {
-      key: 'group_count',
-      header: 'Groups',
-      sortable: true,
-      align: 'center',
-    },
-    {
-      key: 'metric_count',
-      header: 'Metrics',
-      sortable: true,
-      align: 'center',
-    },
-    {
-      key: 'signal_count',
-      header: 'Signals',
-      sortable: true,
-      align: 'center',
-    },
-    {
-      key: 'source',
-      header: 'Source',
-      render: (row) => <code className={styles.inlineCode}>{row.source.path}</code>,
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      align: 'right',
-      render: (row) => (
-        <div className={styles.tableActionGroup}>
-          <button type="button" className={styles.secondaryButton} onClick={() => setSelectedKnowledgeBaseName(row.name)}>
-            {selectedKnowledgeBase?.name === row.name ? 'Open' : 'View'}
-          </button>
-          {row.editable && !isReadonly ? (
-            <>
-              <button type="button" className={styles.secondaryButton} onClick={() => openEditKnowledgeBaseModal(row)}>
-                Edit
-              </button>
-              <button type="button" className={styles.removeButton} onClick={() => void handleDeleteKnowledgeBase(row)}>
-                Delete
-              </button>
-            </>
-          ) : null}
-        </div>
-      ),
-    },
-  ], [handleDeleteKnowledgeBase, isReadonly, openEditKnowledgeBaseModal, selectedKnowledgeBase?.name])
-
-  const groupColumns = useMemo<Column<GroupRow>[]>(() => [
-    {
-      key: 'name',
-      header: 'Group',
-      sortable: true,
-      render: (row) => (
-        <div className={styles.primaryCell}>
-          <span className={styles.primaryCellTitle}>{row.name}</span>
-          <span className={styles.primaryCellMeta}>
-            {row.labels.length > 0 ? row.labels.join(', ') : 'No labels assigned.'}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: 'label_count',
-      header: 'Labels',
-      sortable: true,
-      align: 'center',
-    },
-    {
-      key: 'signal_count',
-      header: 'Signals',
-      sortable: true,
-      align: 'center',
-    },
-    {
-      key: 'metric_count',
-      header: 'Metrics',
-      sortable: true,
-      align: 'center',
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      align: 'right',
-      render: (row) => (
-        <div className={styles.tableActionGroup}>
-          {!isReadonly && selectedKnowledgeBase?.editable ? (
-            <>
-              <button type="button" className={styles.secondaryButton} onClick={() => openEditGroupModal(row)}>
-                Edit
-              </button>
-              <button type="button" className={styles.removeButton} onClick={() => void handleDeleteGroup(row)}>
-                Delete
-              </button>
-            </>
-          ) : (
-            <span className={styles.readOnlyHint}>Read-only</span>
-          )}
-        </div>
-      ),
-    },
-  ], [handleDeleteGroup, isReadonly, openEditGroupModal, selectedKnowledgeBase?.editable])
-
-  const labelColumns = useMemo<Column<LabelRow>[]>(() => [
-    {
-      key: 'name',
-      header: 'Label',
-      sortable: true,
-      render: (row) => (
-        <div className={styles.primaryCell}>
-          <span className={styles.primaryCellTitle}>{row.name}</span>
-          <span className={styles.primaryCellMeta}>{row.description || 'No label description provided.'}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'threshold_value',
-      header: 'Threshold',
-      sortable: true,
-      align: 'center',
-      render: (row) => (
-        <span className={styles.tableBadge}>
-          {typeof row.threshold_value === 'number' ? row.threshold_value : 'Default'}
-        </span>
-      ),
-    },
-    {
-      key: 'exemplar_count',
-      header: 'Exemplars',
-      sortable: true,
-      align: 'center',
-    },
-    {
-      key: 'signal_count',
-      header: 'Signals',
-      sortable: true,
-      align: 'center',
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      align: 'right',
-      render: (row) => (
-        <div className={styles.tableActionGroup}>
-          {!isReadonly && selectedKnowledgeBase?.editable ? (
-            <>
-              <button type="button" className={styles.secondaryButton} onClick={() => openEditLabelModal(row)}>
-                Edit
-              </button>
-              <button type="button" className={styles.removeButton} onClick={() => void handleDeleteLabel(row)}>
-                Delete
-              </button>
-            </>
-          ) : (
-            <span className={styles.readOnlyHint}>Read-only</span>
-          )}
-        </div>
-      ),
-    },
-  ], [handleDeleteLabel, isReadonly, openEditLabelModal, selectedKnowledgeBase?.editable])
-
-  const exemplarColumns = useMemo<Column<ExemplarRow>[]>(() => [
-    {
-      key: 'label',
-      header: 'Label',
-      sortable: true,
-      render: (row) => <span className={styles.tableBadge}>{row.label}</span>,
-    },
-    {
-      key: 'exemplar',
-      header: 'Exemplar',
-      render: (row) => (
-        <div className={styles.primaryCell}>
-          <span className={styles.primaryCellMeta}>{row.exemplar}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      align: 'right',
-      render: (row) => (
-        <div className={styles.tableActionGroup}>
-          {!isReadonly && selectedKnowledgeBase?.editable ? (
-            <>
-              <button type="button" className={styles.secondaryButton} onClick={() => openEditExemplarModal(row)}>
-                Edit
-              </button>
-              <button type="button" className={styles.removeButton} onClick={() => void handleDeleteExemplar(row)}>
-                Delete
-              </button>
-            </>
-          ) : (
-            <span className={styles.readOnlyHint}>Read-only</span>
-          )}
-        </div>
-      ),
-    },
-  ], [handleDeleteExemplar, isReadonly, openEditExemplarModal, selectedKnowledgeBase?.editable])
+    return [
+      { label: 'Total Knowledge Bases', value: counts.total, hint: 'All KB packages currently discoverable by the router.' },
+      { label: 'Built-In', value: counts.builtin, hint: 'Router-shipped bases managed through the same control plane.' },
+      { label: 'Custom', value: counts.custom, hint: 'User-managed bases stored alongside router config.' },
+    ]
+  }, [activeView, counts.builtin, counts.custom, counts.total, groupOverview, labelOverview])
 
   return (
     <section id="knowledge-bases" className={styles.section}>
       <div className={styles.summaryGrid}>
-        <article className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>Total Knowledge Bases</span>
-          <strong className={styles.summaryValue}>{counts.total}</strong>
-          <span className={styles.summaryHint}>All embedding-backed KB packages currently discoverable by the router.</span>
-        </article>
-        <article className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>Built-In</span>
-          <strong className={styles.summaryValue}>{counts.builtin}</strong>
-          <span className={styles.summaryHint}>Router-shipped KBs that stay editable through the same CRUD surface.</span>
-        </article>
-        <article className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>Managed</span>
-          <strong className={styles.summaryValue}>{counts.managed}</strong>
-          <span className={styles.summaryHint}>Config-managed KB packages currently tracked in `global.model_catalog.kbs[]`.</span>
-        </article>
+        {activeSummaryCards.map((card) => (
+          <article key={card.label} className={styles.summaryCard}>
+            <span className={styles.summaryLabel}>{card.label}</span>
+            <strong className={styles.summaryValue}>{card.value}</strong>
+            <span className={styles.summaryHint}>{card.hint}</span>
+          </article>
+        ))}
       </div>
 
       {loading ? <div className={styles.notice}>Loading knowledge base catalog...</div> : null}
       {error ? <div className={styles.error}>{error}</div> : null}
 
-      <div className={pageStyles.sectionTableBlock}>
-        <TableHeader
-          title={activeView === 'knowledge-bases' ? 'Knowledge Base Catalog' : 'Knowledge Base Context'}
-          count={knowledgeBaseRows.length}
-          searchPlaceholder="Search KB name, description, or source"
-          searchValue={knowledgeBaseSearch}
-          onSearchChange={setKnowledgeBaseSearch}
-          onSecondaryAction={() => {
-            void loadKnowledgeBases()
-          }}
-          secondaryActionText="Refresh"
-          onAdd={!isReadonly ? openCreateModal : undefined}
-          addButtonText="Add Knowledge Base"
-          variant="embedded"
-        />
-        <DataTable
-          columns={knowledgeBaseColumns}
-          data={knowledgeBaseRows}
-          keyExtractor={(row) => row.name}
-          emptyMessage="No knowledge bases found."
-          className={pageStyles.managerTable}
-        />
-      </div>
+      {activeView === 'bases' ? (
+        <>
+          <div className={pageStyles.sectionTableBlock}>
+            <TableHeader
+              title="Knowledge Base Catalog"
+              count={knowledgeBaseRows.length}
+              searchPlaceholder="Search KB name, description, or source"
+              searchValue={knowledgeBaseSearch}
+              onSearchChange={setKnowledgeBaseSearch}
+              onSecondaryAction={() => {
+                void loadKnowledgeBases()
+              }}
+              secondaryActionText="Refresh"
+              onAdd={!isReadonly ? openCreateModal : undefined}
+              addButtonText="Add Knowledge Base"
+              variant="embedded"
+            />
+            <DataTable
+              columns={knowledgeBaseColumns}
+              data={knowledgeBaseRows}
+              keyExtractor={(row) => row.name}
+              emptyMessage="No knowledge bases found."
+              className={pageStyles.managerTable}
+            />
+          </div>
 
-      <ConfigPageTaxonomyClassifierDetail selectedClassifier={selectedKnowledgeBase} />
+          <ConfigPageTaxonomyClassifierDetail selectedClassifier={selectedKnowledgeBase} />
+        </>
+      ) : (
+        <div className={pageStyles.sectionTableBlock}>
+          <div className={styles.selectorPanel}>
+            <div className={styles.selectorIntro}>
+              <span className={styles.summaryLabel}>Active Base</span>
+              <strong className={styles.selectorTitle}>
+                {selectedKnowledgeBase?.name ?? 'No knowledge base available'}
+              </strong>
+              <span className={styles.summaryHint}>
+                Groups and labels are scoped to one base at a time so large KBs stay readable.
+              </span>
+            </div>
+            <div className={styles.selectorControls}>
+              <label className={styles.editorField}>
+                <span className={styles.editorLabel}>Base</span>
+                <select
+                  className={styles.editorSelect}
+                  value={selectedKnowledgeBase?.name ?? ''}
+                  onChange={(event) => setSelectedKnowledgeBaseName(event.target.value)}
+                  disabled={knowledgeBases.length === 0}
+                >
+                  {knowledgeBases.map((knowledgeBase) => (
+                    <option key={knowledgeBase.name} value={knowledgeBase.name}>
+                      {knowledgeBase.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => {
+                  void loadKnowledgeBases()
+                }}
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeView === 'groups' ? (
         <div className={pageStyles.sectionTableBlock}>
@@ -1057,11 +574,36 @@ export default function ConfigPageTaxonomyClassifiers({
           />
           <DataTable
             columns={groupColumns}
-            data={groupRows}
+            data={paginatedGroupRows}
             keyExtractor={(row) => row.name}
             emptyMessage={selectedKnowledgeBase ? 'No groups defined for this knowledge base.' : 'Select a knowledge base first.'}
             className={pageStyles.managerTable}
           />
+          {groupRows.length > 0 ? (
+            <div className={styles.paginationBar}>
+              <span className={styles.paginationInfo}>
+                Page {currentGroupPage} / {totalGroupPages} · {groupRows.length} groups
+              </span>
+              <div className={styles.paginationActions}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setGroupPage(Math.max(1, currentGroupPage - 1))}
+                  disabled={currentGroupPage <= 1}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setGroupPage(Math.min(totalGroupPages, currentGroupPage + 1))}
+                  disabled={currentGroupPage >= totalGroupPages}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -1079,33 +621,36 @@ export default function ConfigPageTaxonomyClassifiers({
           />
           <DataTable
             columns={labelColumns}
-            data={labelRows}
+            data={paginatedLabelRows}
             keyExtractor={(row) => row.name}
             emptyMessage={selectedKnowledgeBase ? 'No labels defined for this knowledge base.' : 'Select a knowledge base first.'}
             className={pageStyles.managerTable}
           />
-        </div>
-      ) : null}
-
-      {activeView === 'exemplars' ? (
-        <div className={pageStyles.sectionTableBlock}>
-          <TableHeader
-            title={selectedKnowledgeBase ? `Exemplars · ${selectedKnowledgeBase.name}` : 'Exemplars'}
-            count={exemplarRows.length}
-            searchPlaceholder="Search exemplar text or label"
-            searchValue={exemplarSearch}
-            onSearchChange={setExemplarSearch}
-            onAdd={!isReadonly && selectedKnowledgeBase?.editable ? openAddExemplarModal : undefined}
-            addButtonText="Add Exemplar"
-            variant="embedded"
-          />
-          <DataTable
-            columns={exemplarColumns}
-            data={exemplarRows}
-            keyExtractor={(row) => row.key}
-            emptyMessage={selectedKnowledgeBase ? 'No exemplars defined for this knowledge base.' : 'Select a knowledge base first.'}
-            className={pageStyles.managerTable}
-          />
+          {labelRows.length > 0 ? (
+            <div className={styles.paginationBar}>
+              <span className={styles.paginationInfo}>
+                Page {currentLabelPage} / {totalLabelPages} · {labelRows.length} labels · {labelOverview.exemplars} exemplars
+              </span>
+              <div className={styles.paginationActions}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setLabelPage(Math.max(1, currentLabelPage - 1))}
+                  disabled={currentLabelPage <= 1}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setLabelPage(Math.min(totalLabelPages, currentLabelPage + 1))}
+                  disabled={currentLabelPage >= totalLabelPages}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

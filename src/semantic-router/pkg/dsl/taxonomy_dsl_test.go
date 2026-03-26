@@ -56,7 +56,13 @@ func TestCompileTaxonomyClassifierAndSignal(t *testing.T) {
 	if len(cfg.KnowledgeBases) != 0 {
 		t.Fatalf("expected routing DSL compile to omit global knowledge bases, got %d", len(cfg.KnowledgeBases))
 	}
+	assertCompiledKBRule(t, cfg)
+	assertCompiledKBProjection(t, cfg)
+	assertCompiledKBDecision(t, cfg)
+}
 
+func assertCompiledKBRule(t *testing.T, cfg *config.RouterConfig) {
+	t.Helper()
 	if len(cfg.KBRules) != 1 {
 		t.Fatalf("expected 1 kb signal, got %d", len(cfg.KBRules))
 	}
@@ -70,7 +76,10 @@ func TestCompileTaxonomyClassifierAndSignal(t *testing.T) {
 	if rule.Match != "best" {
 		t.Errorf("match = %q", rule.Match)
 	}
+}
 
+func assertCompiledKBProjection(t *testing.T, cfg *config.RouterConfig) {
+	t.Helper()
 	if len(cfg.Projections.Scores) != 1 {
 		t.Fatalf("expected 1 projection score, got %d", len(cfg.Projections.Scores))
 	}
@@ -84,7 +93,10 @@ func TestCompileTaxonomyClassifierAndSignal(t *testing.T) {
 	if input.Metric != "private_vs_public" {
 		t.Errorf("projection input metric = %q", input.Metric)
 	}
+}
 
+func assertCompiledKBDecision(t *testing.T, cfg *config.RouterConfig) {
+	t.Helper()
 	if len(cfg.Decisions) != 1 {
 		t.Fatalf("expected 1 decision, got %d", len(cfg.Decisions))
 	}

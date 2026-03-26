@@ -171,6 +171,42 @@
   gap: 0.5rem;
 }
 
+.detailList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.detailListItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.detailListLabel {
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.detailListValue,
+.detailListEmpty {
+  color: var(--color-text);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.detailListEmpty {
+  color: var(--color-text-secondary);
+}
+
 .tag,
 .emptyTag {
   display: inline-flex;
@@ -255,6 +291,19 @@
   color: var(--color-text);
 }
 
+.mutedBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--color-text-secondary);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 .inlineCode {
   font-family: var(--font-mono);
   font-size: 0.78rem;
@@ -279,6 +328,55 @@
 .readOnlyHint {
   color: var(--color-text-muted);
   font-size: 0.78rem;
+}
+
+.selectorPanel {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.selectorIntro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: min(100%, 420px);
+}
+
+.selectorTitle {
+  color: var(--color-text);
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.selectorControls {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.paginationBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.9rem;
+}
+
+.paginationInfo {
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+
+.paginationActions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .editor {
@@ -404,5 +502,9 @@
 
   .editorRow {
     grid-template-columns: 1fr;
+  }
+
+  .selectorPanel {
+    align-items: stretch;
   }
 }

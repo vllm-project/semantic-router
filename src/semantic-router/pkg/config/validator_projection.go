@@ -146,57 +146,82 @@ func validateProjectionScores(cfg *RouterConfig) (map[string]struct{}, error) {
 	names := make(map[string]struct{}, len(cfg.Projections.Scores))
 	declaredSignals := projectionDeclaredSignals(cfg)
 	for _, score := range cfg.Projections.Scores {
-		if score.Name == "" {
-			return nil, fmt.Errorf("routing.projections.scores: name cannot be empty")
-		}
-		if _, exists := names[score.Name]; exists {
-			return nil, fmt.Errorf("routing.projections.scores[%q]: duplicate score name", score.Name)
-		}
-		names[score.Name] = struct{}{}
-		if score.Method != "weighted_sum" {
-			return nil, fmt.Errorf("routing.projections.scores[%q]: unsupported method %q (supported: weighted_sum)", score.Name, score.Method)
-		}
-		if len(score.Inputs) == 0 {
-			return nil, fmt.Errorf("routing.projections.scores[%q]: inputs cannot be empty", score.Name)
-		}
-		for _, input := range score.Inputs {
-			if !isProjectionInputTypeSupported(input.Type) {
-				return nil, fmt.Errorf(
-					"routing.projections.scores[%q]: input %s(%q) uses unsupported type %q",
-					score.Name,
-					input.Type,
-					input.Name,
-					input.Type,
-				)
-			}
-			if strings.EqualFold(input.Type, ProjectionInputKBMetric) {
-				if err := validateKBMetricProjectionInput(cfg, score.Name, input); err != nil {
-					return nil, err
-				}
-				continue
-			}
-			if !projectionInputDeclared(declaredSignals, input.Type, input.Name) {
-				return nil, fmt.Errorf(
-					"routing.projections.scores[%q]: input %s(%q) is not declared in routing.signals",
-					score.Name,
-					input.Type,
-					input.Name,
-				)
-			}
-			switch input.ValueSource {
-			case "", "binary", "confidence":
-			default:
-				return nil, fmt.Errorf(
-					"routing.projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence)",
-					score.Name,
-					input.Type,
-					input.Name,
-					input.ValueSource,
-				)
-			}
+		if err := validateProjectionScore(score, names, declaredSignals, cfg); err != nil {
+			return nil, err
 		}
 	}
 	return names, nil
+}
+
+func validateProjectionScore(
+	score ProjectionScore,
+	names map[string]struct{},
+	declaredSignals map[string]map[string]struct{},
+	cfg *RouterConfig,
+) error {
+	if score.Name == "" {
+		return fmt.Errorf("routing.projections.scores: name cannot be empty")
+	}
+	if _, exists := names[score.Name]; exists {
+		return fmt.Errorf("routing.projections.scores[%q]: duplicate score name", score.Name)
+	}
+	names[score.Name] = struct{}{}
+	if score.Method != "weighted_sum" {
+		return fmt.Errorf("routing.projections.scores[%q]: unsupported method %q (supported: weighted_sum)", score.Name, score.Method)
+	}
+	if len(score.Inputs) == 0 {
+		return fmt.Errorf("routing.projections.scores[%q]: inputs cannot be empty", score.Name)
+	}
+	for _, input := range score.Inputs {
+		if err := validateProjectionScoreInput(score.Name, input, declaredSignals, cfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateProjectionScoreInput(
+	scoreName string,
+	input ProjectionScoreInput,
+	declaredSignals map[string]map[string]struct{},
+	cfg *RouterConfig,
+) error {
+	if !isProjectionInputTypeSupported(input.Type) {
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: input %s(%q) uses unsupported type %q",
+			scoreName,
+			input.Type,
+			input.Name,
+			input.Type,
+		)
+	}
+	if strings.EqualFold(input.Type, ProjectionInputKBMetric) {
+		return validateKBMetricProjectionInput(cfg, scoreName, input)
+	}
+	if !projectionInputDeclared(declaredSignals, input.Type, input.Name) {
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: input %s(%q) is not declared in routing.signals",
+			scoreName,
+			input.Type,
+			input.Name,
+		)
+	}
+	return validateProjectionInputValueSource(scoreName, input)
+}
+
+func validateProjectionInputValueSource(scoreName string, input ProjectionScoreInput) error {
+	switch input.ValueSource {
+	case "", "binary", "confidence":
+		return nil
+	default:
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence)",
+			scoreName,
+			input.Type,
+			input.Name,
+			input.ValueSource,
+		)
+	}
 }
 
 func isProjectionInputTypeSupported(signalType string) bool {

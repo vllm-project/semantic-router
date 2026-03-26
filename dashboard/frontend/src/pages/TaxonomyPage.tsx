@@ -1,33 +1,29 @@
-import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageTaxonomyClassifiers from './ConfigPageTaxonomyClassifiers'
 import EditModal, { type EditFormData, type FieldConfig } from '../components/EditModal'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
 
-export type KnowledgeBaseView = 'knowledge-bases' | 'groups' | 'labels' | 'exemplars'
+export type KnowledgeBaseView = 'bases' | 'groups' | 'labels'
 
 interface TaxonomyPageProps {
   activeView: KnowledgeBaseView
 }
 
 const VIEW_META: Record<KnowledgeBaseView, { title: string; description: string }> = {
-  'knowledge-bases': {
+  bases: {
     title: 'Knowledge Bases',
-    description: 'Manage built-in and custom embedding KB packages, inspect signal bindings, and curate the active router KB catalog.',
+    description: 'Manage built-in and custom KB packages, keep the active catalog clean, and inspect only the settings that matter for routing.',
   },
   groups: {
-    title: 'Knowledge Base Groups',
-    description: 'Review and edit group definitions per KB, keeping higher-level routing semantics aligned with the active label package.',
+    title: 'KB Groups',
+    description: 'Work one base at a time, paginate large group sets, and keep routing groups readable even when a KB carries many labels.',
   },
   labels: {
-    title: 'Knowledge Base Labels',
-    description: 'Curate label definitions, threshold overrides, and signal-facing label bindings without mixing KB management into Global Config.',
-  },
-  exemplars: {
-    title: 'Knowledge Base Exemplars',
-    description: 'Edit exemplar text that grounds KB embedding scores and inspect how each label package is represented on disk.',
+    title: 'KB Labels',
+    description: 'Review label definitions, thresholds, and signal references with a paged view instead of exposing raw exemplar CRUD as its own surface.',
   },
 }
 
@@ -65,16 +61,16 @@ export default function TaxonomyPage({ activeView }: TaxonomyPageProps) {
         eyebrow="Knowledge Base"
         title={meta.title}
         description={meta.description}
-        configArea="Knowledge Base"
-        scope="Router-owned KB packages, labels, groups, metrics, and exemplar corpora"
+        configArea="KB"
+        scope="Router-owned KB packages, labels, groups, metrics, and signal-facing bindings"
         panelEyebrow="Manager"
         panelTitle="Knowledge Base Control Plane"
-        panelDescription="This surface owns knowledge base CRUD and the KB-local resources that drive routing. Use the top navbar dropdown or the pills below to move across knowledge base, group, label, and exemplar views."
+        panelDescription="This surface owns KB CRUD and the routing-facing resources inside each base. Bases stay as the catalog view, while groups and labels switch to focused paged views."
         pills={[
           {
-            label: 'Knowledge Bases',
-            active: activeView === 'knowledge-bases',
-            onClick: () => navigate('/knowledge-bases/knowledge-bases'),
+            label: 'Bases',
+            active: activeView === 'bases',
+            onClick: () => navigate('/knowledge-bases/bases'),
           },
           {
             label: 'Groups',
@@ -85,11 +81,6 @@ export default function TaxonomyPage({ activeView }: TaxonomyPageProps) {
             label: 'Labels',
             active: activeView === 'labels',
             onClick: () => navigate('/knowledge-bases/labels'),
-          },
-          {
-            label: 'Exemplars',
-            active: activeView === 'exemplars',
-            onClick: () => navigate('/knowledge-bases/exemplars'),
           },
         ]}
       >

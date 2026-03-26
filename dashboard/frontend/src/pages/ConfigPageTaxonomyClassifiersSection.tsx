@@ -22,7 +22,7 @@ export default function ConfigPageTaxonomyClassifiersSection({
       panelTitle="Knowledge Base Manager"
       panelDescription="This page owns knowledge base CRUD. Built-ins and custom KB packages can be updated through the same manager surface."
       pills={[
-        { label: 'Knowledge Bases', active: true },
+        { label: 'Bases', active: true },
         { label: 'Groups', active: false },
         { label: 'Labels', active: false },
       ]}
@@ -30,7 +30,7 @@ export default function ConfigPageTaxonomyClassifiersSection({
       <ConfigPageTaxonomyClassifiers
         isReadonly={isReadonly}
         openEditModal={openEditModal}
-        activeView="knowledge-bases"
+        activeView="bases"
       />
     </ConfigPageManagerLayout>
   )

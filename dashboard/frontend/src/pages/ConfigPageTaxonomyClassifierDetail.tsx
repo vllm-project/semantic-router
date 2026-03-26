@@ -23,6 +23,9 @@ function formatMetric(metricName: string, selectedClassifier: TaxonomyClassifier
 export default function ConfigPageTaxonomyClassifierDetail({
   selectedClassifier,
 }: ConfigPageTaxonomyClassifierDetailProps) {
+  const groupEntries = Object.entries(selectedClassifier?.groups ?? {})
+  const thresholdEntries = Object.entries(selectedClassifier?.label_thresholds ?? {})
+
   return (
     <div className={pageStyles.sectionTableBlock}>
       <div className={styles.detailHeader}>
@@ -32,8 +35,8 @@ export default function ConfigPageTaxonomyClassifierDetail({
           </h3>
           <p className={styles.detailDescription}>
             {selectedClassifier
-              ? 'Inspect the active knowledge base package, its labels, groups, metrics, and signal bindings before editing.'
-              : 'Pick a knowledge base from the catalog to inspect its package, bindings, and metric outputs.'}
+              ? 'Review the essential KB settings and routing bindings without expanding every label and group into one long wall of tags.'
+              : 'Pick a knowledge base from the catalog to inspect its routing-facing settings.'}
           </p>
         </div>
         {selectedClassifier?.load_error ? (
@@ -45,22 +48,19 @@ export default function ConfigPageTaxonomyClassifierDetail({
         <>
           <div className={styles.detailGrid}>
             <article className={styles.detailCard}>
-              <span className={styles.summaryLabel}>Threshold</span>
-              <strong className={styles.summaryValueSmall}>{selectedClassifier.threshold}</strong>
-              <span className={styles.summaryHint}>Default threshold for label threshold matching.</span>
+              <span className={styles.summaryLabel}>Labels</span>
+              <strong className={styles.summaryValueSmall}>{selectedClassifier.labels.length}</strong>
+              <span className={styles.summaryHint}>Labels currently stored in this base.</span>
             </article>
             <article className={styles.detailCard}>
-              <span className={styles.summaryLabel}>Source</span>
-              <strong className={styles.summaryValueSmall}>
-                {selectedClassifier.source.path}
-                {selectedClassifier.source.manifest ? `/${selectedClassifier.source.manifest}` : ''}
-              </strong>
-              <span className={styles.summaryHint}>Knowledge base asset package on disk.</span>
+              <span className={styles.summaryLabel}>Groups</span>
+              <strong className={styles.summaryValueSmall}>{groupEntries.length}</strong>
+              <span className={styles.summaryHint}>Routing groups defined on top of the label set.</span>
             </article>
             <article className={styles.detailCard}>
               <span className={styles.summaryLabel}>Signal References</span>
               <strong className={styles.summaryValueSmall}>{selectedClassifier.signal_references.length}</strong>
-              <span className={styles.summaryHint}>KB signals currently bound to this knowledge base.</span>
+              <span className={styles.summaryHint}>Signals currently bound to this knowledge base.</span>
             </article>
             <article className={styles.detailCard}>
               <span className={styles.summaryLabel}>Metrics</span>
@@ -71,91 +71,93 @@ export default function ConfigPageTaxonomyClassifierDetail({
 
           <div className={styles.detailMetaGrid}>
             <div className={styles.groupBlock}>
-              <div className={styles.groupTitle}>Bindable Labels</div>
-              <div className={styles.tagList}>
-                {selectedClassifier.bind_options.labels.length > 0 ? (
-                  selectedClassifier.bind_options.labels.map((label) => (
-                    <span key={`${selectedClassifier.name}-label-${label}`} className={styles.tag}>
-                      {label}
-                    </span>
-                  ))
-                ) : (
-                  <span className={styles.emptyTag}>No bindable labels discovered.</span>
-                )}
-              </div>
-            </div>
-
-            <div className={styles.groupBlock}>
-              <div className={styles.groupTitle}>Bindable Groups</div>
-              <div className={styles.tagList}>
-                {selectedClassifier.bind_options.groups.length > 0 ? (
-                  selectedClassifier.bind_options.groups.map((group) => (
-                    <span key={`${selectedClassifier.name}-group-${group}`} className={styles.tag}>
-                      {group}
-                    </span>
-                  ))
-                ) : (
-                  <span className={styles.emptyTag}>No bindable groups discovered.</span>
-                )}
-              </div>
-            </div>
-
-            <div className={styles.groupBlock}>
-              <div className={styles.groupTitle}>Bindable Metrics</div>
-              <div className={styles.tagList}>
-                {selectedClassifier.bind_options.metrics.length > 0 ? (
-                  selectedClassifier.bind_options.metrics.map((metricName) => (
-                    <span key={`${selectedClassifier.name}-metric-${metricName}`} className={styles.tag}>
-                      {formatMetric(metricName, selectedClassifier)}
-                    </span>
-                  ))
-                ) : (
-                  <span className={styles.emptyTag}>No metrics configured.</span>
-                )}
+              <div className={styles.groupTitle}>Core Settings</div>
+              <div className={styles.detailList}>
+                <div className={styles.detailListItem}>
+                  <span className={styles.detailListLabel}>Default threshold</span>
+                  <span className={styles.detailListValue}>{selectedClassifier.threshold}</span>
+                </div>
+                <div className={styles.detailListItem}>
+                  <span className={styles.detailListLabel}>Source</span>
+                  <code className={styles.inlineCode}>
+                    {selectedClassifier.source.path}
+                    {selectedClassifier.source.manifest ? `/${selectedClassifier.source.manifest}` : ''}
+                  </code>
+                </div>
+                <div className={styles.detailListItem}>
+                  <span className={styles.detailListLabel}>Threshold overrides</span>
+                  <span className={styles.detailListValue}>{thresholdEntries.length}</span>
+                </div>
+                <div className={styles.detailListItem}>
+                  <span className={styles.detailListLabel}>Bindable groups</span>
+                  <span className={styles.detailListValue}>{selectedClassifier.bind_options.groups.length}</span>
+                </div>
               </div>
             </div>
 
             <div className={styles.groupBlock}>
               <div className={styles.groupTitle}>Signal References</div>
-              <div className={styles.tagList}>
+              <div className={styles.detailList}>
                 {selectedClassifier.signal_references.length > 0 ? (
                   selectedClassifier.signal_references.map((reference) => (
-                    <span key={`${selectedClassifier.name}-signal-${reference.name}`} className={styles.tag}>
-                      {formatSignalReference(reference)}
-                    </span>
+                    <div key={`${selectedClassifier.name}-signal-${reference.name}`} className={styles.detailListItem}>
+                      <span className={styles.detailListLabel}>{reference.name}</span>
+                      <span className={styles.detailListValue}>{formatSignalReference(reference)}</span>
+                    </div>
                   ))
                 ) : (
-                  <span className={styles.emptyTag}>No KB signals reference this knowledge base yet.</span>
+                  <div className={styles.detailListEmpty}>No KB signals reference this knowledge base yet.</div>
+                )}
+              </div>
+            </div>
+
+            <div className={styles.groupBlock}>
+              <div className={styles.groupTitle}>Metrics</div>
+              <div className={styles.detailList}>
+                {(selectedClassifier.metrics ?? []).length > 0 ? (
+                  (selectedClassifier.metrics ?? []).map((metric) => (
+                    <div key={`${selectedClassifier.name}-metric-${metric.name}`} className={styles.detailListItem}>
+                      <span className={styles.detailListLabel}>{metric.name}</span>
+                      <span className={styles.detailListValue}>{formatMetric(metric.name, selectedClassifier)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className={styles.detailListEmpty}>No metrics configured.</div>
                 )}
               </div>
             </div>
 
             <div className={styles.groupBlock}>
               <div className={styles.groupTitle}>Groups</div>
-              <div className={styles.tagList}>
-                {Object.entries(selectedClassifier.groups ?? {}).length > 0 ? (
-                  Object.entries(selectedClassifier.groups ?? {}).map(([name, labels]) => (
-                    <span key={`${selectedClassifier.name}-configured-group-${name}`} className={styles.tag}>
-                      {name}: {labels.join(', ')}
-                    </span>
+              <div className={styles.detailList}>
+                {groupEntries.length > 0 ? (
+                  groupEntries.map(([name, labels]) => (
+                    <div key={`${selectedClassifier.name}-group-${name}`} className={styles.detailListItem}>
+                      <span className={styles.detailListLabel}>{name}</span>
+                      <span className={styles.detailListValue}>
+                        {labels.length} labels
+                        {labels.length > 0 ? ` · ${labels.slice(0, 3).join(', ')}${labels.length > 3 ? ` +${labels.length - 3}` : ''}` : ''}
+                      </span>
+                    </div>
                   ))
                 ) : (
-                  <span className={styles.emptyTag}>No groups configured.</span>
+                  <div className={styles.detailListEmpty}>No groups configured.</div>
                 )}
               </div>
             </div>
 
             <div className={styles.groupBlock}>
-              <div className={styles.groupTitle}>Label Threshold Overrides</div>
-              <div className={styles.tagList}>
-                {Object.entries(selectedClassifier.label_thresholds ?? {}).length > 0 ? (
-                  Object.entries(selectedClassifier.label_thresholds ?? {}).map(([label, threshold]) => (
-                    <span key={`${selectedClassifier.name}-threshold-${label}`} className={styles.tag}>
-                      {label}: {threshold}
-                    </span>
+              <div className={styles.groupTitle}>Threshold Overrides</div>
+              <div className={styles.detailList}>
+                {thresholdEntries.length > 0 ? (
+                  thresholdEntries.map(([label, threshold]) => (
+                    <div key={`${selectedClassifier.name}-threshold-${label}`} className={styles.detailListItem}>
+                      <span className={styles.detailListLabel}>{label}</span>
+                      <span className={styles.detailListValue}>{threshold}</span>
+                    </div>
                   ))
                 ) : (
-                  <span className={styles.emptyTag}>No label-specific thresholds configured.</span>
+                  <div className={styles.detailListEmpty}>No label-specific thresholds configured.</div>
                 )}
               </div>
             </div>

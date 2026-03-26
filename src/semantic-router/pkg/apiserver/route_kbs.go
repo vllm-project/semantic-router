@@ -175,40 +175,40 @@ func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWrite
 		s.writeErrorResponse(w, http.StatusInternalServerError, "ASSET_STAGE_ERROR", err.Error())
 		return
 	}
+	committed := false
+	defer rollbackManagedKnowledgeBaseRemoval(removeTxn, &committed)
 
 	updatedYAML, err := knowledgeBaseOverrideYAML(existingData, removeKnowledgeBase(cfg.KnowledgeBases, name))
 	if err != nil {
-		if removeTxn != nil {
-			removeTxn.Rollback()
-		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "CONFIG_PATCH_ERROR", err.Error())
 		return
 	}
 
 	newCfg, err := validateConfigWithBaseDir(baseDir, updatedYAML)
 	if err != nil {
-		if removeTxn != nil {
-			removeTxn.Rollback()
-		}
 		s.writeErrorResponse(w, http.StatusBadRequest, "CONFIG_PARSE_ERROR", err.Error())
 		return
 	}
 
-	persistErr := persistConfigAndSync(s, paths, existingData, updatedYAML, newCfg)
-	if persistErr != nil {
-		if removeTxn != nil {
-			removeTxn.Rollback()
-		}
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CONFIG_PERSIST_ERROR", persistErr.Error())
+	if err := persistConfigAndSync(s, paths, existingData, updatedYAML, newCfg); err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "CONFIG_PERSIST_ERROR", err.Error())
 		return
 	}
 	if removeTxn != nil {
 		removeTxn.Commit()
+		committed = true
 	}
 	s.writeJSONResponse(w, http.StatusOK, knowledgeBaseDeleteResponse{
 		Status: "deleted",
 		Name:   name,
 	})
+}
+
+func rollbackManagedKnowledgeBaseRemoval(txn *managedKnowledgeBaseAssetsTxn, committed *bool) {
+	if txn == nil || committed == nil || *committed {
+		return
+	}
+	txn.Rollback()
 }
 
 func (s *ClassificationAPIServer) persistManagedKnowledgeBase(

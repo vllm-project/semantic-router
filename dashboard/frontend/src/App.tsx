@@ -81,7 +81,7 @@ const ConfigSectionRoute: React.FC<{
   }, [section, normalized, configSection, setConfigSection])
 
   if (redirectToKnowledgeBases) {
-    return <Navigate to="/knowledge-bases/knowledge-bases" replace />
+    return <Navigate to="/knowledge-bases/bases" replace />
   }
 
   return (
@@ -99,10 +99,10 @@ const KnowledgeBaseRoute: React.FC<{
   setConfigSection: (section: ConfigSection) => void
 }> = ({ configSection, setConfigSection }) => {
   const { view } = useParams<{ view: string }>()
-  const normalized = (view?.toLowerCase() ?? 'knowledge-bases') as KnowledgeBaseView
-  const activeView: KnowledgeBaseView = ['knowledge-bases', 'groups', 'labels', 'exemplars'].includes(normalized)
+  const normalized = (view?.toLowerCase() ?? 'bases') as KnowledgeBaseView
+  const activeView: KnowledgeBaseView = ['bases', 'groups', 'labels'].includes(normalized)
     ? normalized
-    : 'knowledge-bases'
+    : 'bases'
 
   if (view && activeView !== normalized) {
     return <Navigate to={`/knowledge-bases/${activeView}`} replace />
@@ -122,12 +122,14 @@ const LegacyTaxonomyRedirect: React.FC = () => {
   const { view } = useParams<{ view: string }>()
   const normalized = view?.toLowerCase() ?? 'classifiers'
   const viewMap: Record<string, KnowledgeBaseView> = {
-    classifiers: 'knowledge-bases',
+    classifiers: 'bases',
+    bases: 'bases',
+    'knowledge-bases': 'bases',
     tiers: 'groups',
     categories: 'labels',
-    exemplars: 'exemplars',
+    exemplars: 'labels',
   }
-  const nextView = viewMap[normalized] ?? 'knowledge-bases'
+  const nextView = viewMap[normalized] ?? 'bases'
   return <Navigate to={`/knowledge-bases/${nextView}`} replace />
 }
 
@@ -308,7 +310,7 @@ const AppRouter: React.FC = () => {
                 />
               }
             />
-            <Route path="/knowledge-bases" element={<Navigate to="/knowledge-bases/knowledge-bases" replace />} />
+            <Route path="/knowledge-bases" element={<Navigate to="/knowledge-bases/bases" replace />} />
             <Route
               path="/knowledge-bases/:view"
               element={
@@ -318,7 +320,7 @@ const AppRouter: React.FC = () => {
                 />
               }
             />
-            <Route path="/taxonomy" element={<Navigate to="/knowledge-bases/knowledge-bases" replace />} />
+            <Route path="/taxonomy" element={<Navigate to="/knowledge-bases/bases" replace />} />
             <Route path="/taxonomy/:view" element={<LegacyTaxonomyRedirect />} />
             <Route
               path="/playground"

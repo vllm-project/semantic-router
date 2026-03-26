@@ -1,6 +1,6 @@
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 
-export type LayoutDropdownKey = 'manager' | 'knowledgeBase' | 'analysisOps' | 'fleetSim'
+export type LayoutDropdownKey = 'manager' | 'knowledgeBase' | 'analysisOps'
 
 export type LayoutConfigSection =
   | 'models'
@@ -63,12 +63,11 @@ export const MANAGER_MENU_SECTIONS: LayoutMenuSection[] = [
 
 export const KNOWLEDGE_BASE_MENU_SECTIONS: LayoutMenuSection[] = [
   {
-    title: 'Knowledge Base',
+    title: 'KB',
     items: [
-      { kind: 'route', label: 'Knowledge Bases', to: '/knowledge-bases/knowledge-bases' },
+      { kind: 'route', label: 'Bases', to: '/knowledge-bases/bases' },
       { kind: 'route', label: 'Groups', to: '/knowledge-bases/groups' },
       { kind: 'route', label: 'Labels', to: '/knowledge-bases/labels' },
-      { kind: 'route', label: 'Exemplars', to: '/knowledge-bases/exemplars' },
     ],
   },
 ]

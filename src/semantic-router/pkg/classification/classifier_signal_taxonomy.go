@@ -67,40 +67,56 @@ func (c *Classifier) evaluateKBSignals(results *SignalResults, mu *sync.Mutex, t
 }
 
 func kbSignalMatchConfidence(rule config.KBSignalRule, result *KBClassifyResult) (float64, bool) {
-	matchMode := config.KBMatchThreshold
-	if rule.Match != "" {
-		matchMode = rule.Match
-	}
-
+	matchMode := kbSignalMatchMode(rule)
 	switch rule.Target.Kind {
 	case config.KBTargetKindLabel:
-		switch matchMode {
-		case config.KBMatchBest:
-			if result.BestLabel == rule.Target.Value && result.BestLabel != "" {
-				return result.BestSimilarity, true
-			}
-		default:
-			if confidence, ok := result.LabelConfidences[rule.Target.Value]; ok && slices.Contains(result.MatchedLabels, rule.Target.Value) {
-				return confidence, true
-			}
-		}
+		return kbLabelMatchConfidence(rule.Target.Value, matchMode, result)
 	case config.KBTargetKindGroup:
-		confidence, ok := result.GroupScores[rule.Target.Value]
-		if !ok {
-			return 0, false
-		}
-		switch matchMode {
-		case config.KBMatchBest:
-			if result.BestGroup == rule.Target.Value && result.BestGroup != "" {
-				return confidence, true
-			}
-		default:
-			if slices.Contains(result.MatchedGroups, rule.Target.Value) {
-				return confidence, true
-			}
-		}
+		return kbGroupMatchConfidence(rule.Target.Value, matchMode, result)
 	}
 	return 0, false
+}
+
+func kbSignalMatchMode(rule config.KBSignalRule) string {
+	if rule.Match == "" {
+		return config.KBMatchThreshold
+	}
+	return rule.Match
+}
+
+func kbLabelMatchConfidence(labelName string, matchMode string, result *KBClassifyResult) (float64, bool) {
+	switch matchMode {
+	case config.KBMatchBest:
+		if result.BestLabel == labelName && result.BestLabel != "" {
+			return result.BestSimilarity, true
+		}
+		return 0, false
+	default:
+		confidence, ok := result.LabelConfidences[labelName]
+		if !ok || !slices.Contains(result.MatchedLabels, labelName) {
+			return 0, false
+		}
+		return confidence, true
+	}
+}
+
+func kbGroupMatchConfidence(groupName string, matchMode string, result *KBClassifyResult) (float64, bool) {
+	confidence, ok := result.GroupScores[groupName]
+	if !ok {
+		return 0, false
+	}
+	switch matchMode {
+	case config.KBMatchBest:
+		if result.BestGroup == groupName && result.BestGroup != "" {
+			return confidence, true
+		}
+		return 0, false
+	default:
+		if slices.Contains(result.MatchedGroups, groupName) {
+			return confidence, true
+		}
+		return 0, false
+	}
 }
 
 func signalSetBestConfidence(confidences map[string]float64, signalType string, names []string) float64 {
