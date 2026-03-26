@@ -42,7 +42,7 @@ global:
     kbs:
       - name: privacy_kb
         source:
-          path: classifiers/privacy/
+          path: kb/privacy/
           manifest: labels.json
         threshold: 0.55
         label_thresholds:

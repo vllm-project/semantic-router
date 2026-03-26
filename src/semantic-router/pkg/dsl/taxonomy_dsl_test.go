@@ -143,7 +143,7 @@ func TestTaxonomyDSLRoundTrip(t *testing.T) {
 		{
 			Name: "privacy_kb",
 			Source: config.KnowledgeBaseSource{
-				Path:     "classifiers/privacy/",
+				Path:     "kb/privacy/",
 				Manifest: "labels.json",
 			},
 			Threshold: 0.55,

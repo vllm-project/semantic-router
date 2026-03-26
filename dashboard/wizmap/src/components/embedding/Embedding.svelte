@@ -1,11 +1,7 @@
 <script lang="ts">
   import { Embedding } from './Embedding';
   import { onMount } from 'svelte';
-  import type {
-    EmbeddingInitSetting,
-    DataURLs,
-    TopicLevelMode
-  } from '../../types/embedding-types';
+  import type { EmbeddingInitSetting, DataURLs } from '../../types/embedding-types';
   import type { Writable } from 'svelte/store';
   import type { FooterStoreValue, SearchBarStoreValue } from '../../stores';
   import iconContour2 from '../../imgs/icon-contour.svg?raw';
@@ -25,18 +21,8 @@
   let controlDisplayItem = '';
   let groupedNames: string[] = [];
   let hasGroupedEmbedding = false;
-  let activeTopicLevelStatus = '';
-  let hasGroupTopicLevel = false;
-  let hasLabelTopicLevel = false;
-  let canSwitchTopicLevel = false;
   $: groupedNames = myEmbedding?.groupNames ?? [];
   $: hasGroupedEmbedding = groupedNames.length > 0;
-  $: activeTopicLevelStatus = myEmbedding?.activeTopicLevelKind
-    ? `${myEmbedding.activeTopicLevelKind === 'group' ? 'Group' : 'Label'} level`
-    : '';
-  $: hasGroupTopicLevel = [...(myEmbedding?.topicLevelKinds.values() ?? [])].includes('group');
-  $: hasLabelTopicLevel = [...(myEmbedding?.topicLevelKinds.values() ?? [])].includes('label');
-  $: canSwitchTopicLevel = Boolean(dataURLs && hasGroupTopicLevel && hasLabelTopicLevel);
 
   export let datasetName = 'diffusiondb';
   export let dataURLs: DataURLs | null = null;
@@ -91,7 +77,6 @@
   };
 
   const anyTrue = (items: boolean[]) => items.reduce((a, b) => a || b);
-  const allTrue = (items: boolean[]) => items.reduce((a, b) => a && b);
 
   onMount(() => {
     mounted = true;
@@ -108,10 +93,6 @@
   ) => {
     const newValue = (e.target as HTMLInputElement).checked;
     myEmbedding?.displayCheckboxChanged(checkbox, newValue, group);
-  };
-
-  const setTopicLevelMode = (mode: TopicLevelMode) => {
-    myEmbedding?.setTopicLevelMode(mode);
   };
 
   /**
@@ -153,43 +134,6 @@
   </div>
 
   <div class="control-bar">
-    {#if canSwitchTopicLevel}
-      <div class="item-wrapper mode-wrapper">
-        <div class="item mode-item">
-          <div class="status-label">View</div>
-          <div class="mode-switch">
-            <button
-              type="button"
-              class="mode-chip"
-              class:activated={myEmbedding?.topicLevelMode === 'auto'}
-              on:click={() => setTopicLevelMode('auto')}
-            >
-              Auto
-            </button>
-            <button
-              type="button"
-              class="mode-chip"
-              class:activated={myEmbedding?.topicLevelMode === 'group'}
-              on:click={() => setTopicLevelMode('group')}
-            >
-              Group
-            </button>
-            <button
-              type="button"
-              class="mode-chip"
-              class:activated={myEmbedding?.topicLevelMode === 'label'}
-              on:click={() => setTopicLevelMode('label')}
-            >
-              Label
-            </button>
-          </div>
-          {#if activeTopicLevelStatus}
-            <div class="status-value">{activeTopicLevelStatus}</div>
-          {/if}
-        </div>
-      </div>
-    {/if}
-
     <div class="item-wrapper">
       <button
         type="button"

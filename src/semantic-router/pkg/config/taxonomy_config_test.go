@@ -14,7 +14,7 @@ func TestKnowledgeBaseYAMLRoundTrip(t *testing.T) {
 	kb := KnowledgeBaseConfig{
 		Name: "privacy_kb",
 		Source: KnowledgeBaseSource{
-			Path:     "classifiers/privacy/",
+			Path:     "kb/privacy/",
 			Manifest: "labels.json",
 		},
 		Threshold: 0.55,
@@ -70,7 +70,7 @@ func TestKBConfigJSONUsesLowercaseFieldNames(t *testing.T) {
 		KB: KnowledgeBaseConfig{
 			Name: "privacy_kb",
 			Source: KnowledgeBaseSource{
-				Path:     "classifiers/privacy/",
+				Path:     "kb/privacy/",
 				Manifest: "labels.json",
 			},
 			Threshold: 0.55,
@@ -124,13 +124,13 @@ func TestDefaultCanonicalModelCatalogUsesPrivacyKBDefaults(t *testing.T) {
 
 func TestKnowledgeBaseSourceResolvePathFallsBackToBundledAssets(t *testing.T) {
 	source := KnowledgeBaseSource{
-		Path:     "classifiers/privacy/",
+		Path:     "kb/privacy/",
 		Manifest: "labels.json",
 	}
 
 	resolved := source.ResolvePath(t.TempDir())
-	if !strings.HasSuffix(filepath.ToSlash(resolved), "config/classifiers/privacy") {
-		t.Fatalf("ResolvePath() = %q, want bundled config/classifiers/privacy fallback", resolved)
+	if !strings.HasSuffix(filepath.ToSlash(resolved), "config/kb/privacy") {
+		t.Fatalf("ResolvePath() = %q, want bundled config/kb/privacy fallback", resolved)
 	}
 	if _, err := os.Stat(filepath.Join(resolved, source.Manifest)); err != nil {
 		t.Fatalf("expected bundled manifest to exist: %v", err)

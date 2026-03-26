@@ -109,7 +109,7 @@ func defaultCanonicalModelCatalog() CanonicalModelCatalog {
 			{
 				Name: "privacy_kb",
 				Source: KnowledgeBaseSource{
-					Path:     "classifiers/privacy/",
+					Path:     "kb/privacy/",
 					Manifest: "labels.json",
 				},
 				Threshold: 0.55,

@@ -7,11 +7,10 @@ import type {
   LevelTileDataItem,
   UMAPPointStreamData,
   LevelTileMap,
-    TopicData,
-    TopicDataJSON,
-    TopicLevelKind,
-    TopicLevelMode,
-    DrawnLabel,
+  TopicData,
+  TopicDataJSON,
+  TopicLevelKind,
+  DrawnLabel,
   LabelData,
   DataURLs,
   Direction,
@@ -150,9 +149,7 @@ export class Embedding {
     d3.Quadtree<TopicData>
   >();
   topicLevelKinds: Map<number, TopicLevelKind> = new Map();
-  topicLevelMode: TopicLevelMode = 'auto';
   activeTopicLevel: number | null = null;
-  activeTopicLevelKind: TopicLevelKind | null = null;
   maxLabelNum = 0;
   curLabelNum = 0;
   userMaxLabelNum = 20;
@@ -520,32 +517,6 @@ export class Embedding {
         this.searchPointResults = [];
       }
     });
-  };
-
-  setTopicLevelMode = (mode: TopicLevelMode) => {
-    if (this.topicLevelMode === mode) {
-      return;
-    }
-
-    this.topicLevelMode = mode;
-    this.lastLabelNames = new Map();
-    this.lastLabelTreeLevel = null;
-    this.lastGridTreeLevels = [];
-    this.activeTopicLevel = null;
-    this.activeTopicLevelKind = null;
-
-    this.getIdealTopicTreeLevel();
-
-    if (this.showGrid) {
-      this.redrawTopicGrid();
-    }
-
-    if (this.showLabel) {
-      this.layoutTopicLabels(this.userMaxLabelNum, false);
-    }
-
-    this.mouseoverLabel(null, null);
-    this.updateEmbedding();
   };
 
   /**

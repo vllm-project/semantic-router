@@ -15,15 +15,15 @@ interface TaxonomyPageProps {
 const VIEW_META: Record<KnowledgeBaseView, { title: string; description: string }> = {
   bases: {
     title: 'Knowledge Bases',
-    description: 'Manage built-in and custom knowledge packages, keep the active catalog clean, and inspect only the settings that matter for routing.',
+    description: 'Manage the active knowledge base catalog.',
   },
   groups: {
     title: 'Knowledge Groups',
-    description: 'Work one base at a time, paginate large group sets, and keep routing groups readable even when a knowledge base carries many labels.',
+    description: 'Review paged group bindings for one base at a time.',
   },
   labels: {
     title: 'Knowledge Labels',
-    description: 'Review label definitions, thresholds, and signal references with a paged view instead of exposing raw exemplar CRUD as its own surface.',
+    description: 'Review label definitions and thresholds with a paged view.',
   },
 }
 
@@ -62,10 +62,10 @@ export default function TaxonomyPage({ activeView }: TaxonomyPageProps) {
         title={meta.title}
         description={meta.description}
         configArea="Knowledge"
-        scope="Router-owned knowledge packages, labels, groups, metrics, and signal-facing bindings"
+        scope="Router-owned bases, groups, labels, and metrics"
         panelEyebrow="Manager"
         panelTitle="Knowledge Control Plane"
-        panelDescription="This surface owns knowledge-base CRUD and the routing-facing resources inside each base. Bases stay as the catalog view, while groups and labels switch to focused paged views."
+        panelDescription="Manage the catalog and its routing-facing resources."
         pills={[
           {
             label: 'Bases',

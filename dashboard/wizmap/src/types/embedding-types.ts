@@ -208,7 +208,6 @@ export interface TopicLevelKindMap {
 }
 
 export type TopicLevelKind = 'group' | 'label';
-export type TopicLevelMode = 'auto' | TopicLevelKind;
 
 /**
  * A topic center point (x, y, topic label)

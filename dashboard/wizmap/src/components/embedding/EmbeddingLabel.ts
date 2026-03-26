@@ -915,12 +915,11 @@ export function getIdealTopicTreeLevel(this: Embedding) {
 
   let bestLevel = -1;
   let bestDistance = Infinity;
-  const candidateLevels = [...this.topicLevelTrees.keys()].filter(level => {
-    if (this.topicLevelMode === 'auto') {
-      return true;
-    }
-    return this.topicLevelKinds.get(level) === this.topicLevelMode;
-  });
+  const candidateLevels = this.hostedDataMode
+    ? [...this.topicLevelTrees.keys()].filter(
+        level => this.topicLevelKinds.get(level) === 'label'
+      )
+    : [...this.topicLevelTrees.keys()];
   const levelsToSearch =
     candidateLevels.length > 0 ? candidateLevels : [...this.topicLevelTrees.keys()];
 
@@ -943,7 +942,6 @@ export function getIdealTopicTreeLevel(this: Embedding) {
 
   if (bestLevel !== this.activeTopicLevel) {
     this.activeTopicLevel = bestLevel;
-    this.activeTopicLevelKind = this.topicLevelKinds.get(bestLevel) ?? null;
     this.updateEmbedding();
   }
 

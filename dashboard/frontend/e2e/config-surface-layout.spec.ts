@@ -127,7 +127,7 @@ const taxonomyClassifierResponse = {
       security_threshold: 0.25,
       description: 'Built-in privacy routing taxonomy',
       source: {
-        path: 'config/classifiers/privacy/',
+        path: 'kb/privacy/',
         taxonomy_file: 'taxonomy.json',
       },
       tiers: [

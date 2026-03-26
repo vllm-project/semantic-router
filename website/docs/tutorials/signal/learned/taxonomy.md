@@ -43,7 +43,7 @@ global:
       - name: privacy_classifier
         type: taxonomy
         source:
-          path: classifiers/privacy/
+          path: kb/privacy/
           taxonomy_file: taxonomy.json
         threshold: 0.55
         security_threshold: 0.7
