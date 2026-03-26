@@ -8,8 +8,12 @@ import type {
 } from '../../types/embedding-types';
 
 const KB_GRID_SIZE = 64;
-const KB_GROUP_TOPIC_LEVEL = 4;
-const KB_LABEL_TOPIC_LEVEL = 6;
+const MIN_TOPIC_LEVEL = 2;
+const MAX_TOPIC_LEVEL = 9;
+const DEFAULT_GROUP_TOPIC_LEVEL = 4;
+const DEFAULT_LABEL_TOPIC_LEVEL = 6;
+const GROUP_TILE_SPACING_RATIO = 0.72;
+const LABEL_TILE_SPACING_RATIO = 0.56;
 
 export interface HostedKnowledgeMapProjection {
   points: PromptPoint[];
@@ -245,7 +249,7 @@ function buildTopicData(
   }
 
   const data: Record<string, [number, number, string][]> = {};
-  const levelOne: [number, number, string][] = [];
+  const groupTopics: [number, number, string][] = [];
   for (const [groupName, memberLabels] of Object.entries(groups).sort((left, right) =>
     left[0].localeCompare(right[0])
   )) {
@@ -254,26 +258,45 @@ function buildTopicData(
       memberPoints.push(...(labelBuckets.get(labelName) ?? []));
     }
     if (memberPoints.length > 0) {
-      levelOne.push([...centroid(memberPoints), groupName]);
+      groupTopics.push([...centroid(memberPoints), groupName]);
     }
   }
-  if (levelOne.length > 0) {
-    data[`${KB_GROUP_TOPIC_LEVEL}`] = levelOne;
-  }
 
-  const levelTwo: [number, number, string][] = [];
+  const labelTopics: [number, number, string][] = [];
   for (const labelName of labelNames) {
     const memberPoints = labelBuckets.get(labelName) ?? [];
     if (memberPoints.length > 0) {
-      levelTwo.push([...centroid(memberPoints), labelName]);
+      labelTopics.push([...centroid(memberPoints), labelName]);
     }
   }
-  if (levelTwo.length > 0) {
-    data[`${KB_LABEL_TOPIC_LEVEL}`] = levelTwo;
+
+  let groupLevel = computeTopicLevel(
+    groupTopics,
+    DEFAULT_GROUP_TOPIC_LEVEL,
+    GROUP_TILE_SPACING_RATIO
+  );
+  let labelLevel = computeTopicLevel(
+    labelTopics,
+    DEFAULT_LABEL_TOPIC_LEVEL,
+    LABEL_TILE_SPACING_RATIO
+  );
+
+  if (groupTopics.length > 0 && labelTopics.length > 0) {
+    labelLevel = clampTopicLevel(Math.max(labelLevel, groupLevel + 1));
+    if (groupLevel >= labelLevel) {
+      groupLevel = clampTopicLevel(labelLevel - 1);
+    }
+  }
+
+  if (groupTopics.length > 0) {
+    data[`${groupLevel}`] = groupTopics;
+  }
+  if (labelTopics.length > 0) {
+    data[`${labelLevel}`] = labelTopics;
   }
 
   if (Object.keys(data).length === 0) {
-    data[`${KB_LABEL_TOPIC_LEVEL}`] = [[0, 0, 'knowledge']];
+    data[`${DEFAULT_LABEL_TOPIC_LEVEL}`] = [[0, 0, 'knowledge']];
   }
 
   return {
@@ -295,4 +318,99 @@ function centroid(points: PromptPoint[]): [number, number] {
     { x: 0, y: 0 }
   );
   return [totals.x / points.length, totals.y / points.length];
+}
+
+function computeTopicLevel(
+  topics: [number, number, string][],
+  fallbackLevel: number,
+  spacingRatio: number
+): number {
+  if (topics.length <= 1) {
+    return fallbackLevel;
+  }
+
+  const bounds = computeTopicBounds(topics);
+  const extentSpan = Math.max(
+    bounds.maxX - bounds.minX,
+    bounds.maxY - bounds.minY
+  );
+  if (!Number.isFinite(extentSpan) || extentSpan <= 0) {
+    return fallbackLevel;
+  }
+
+  const nearestNeighborDistances = topics
+    .map((topic, index) => nearestNeighborDistance(topics, index))
+    .filter(distance => Number.isFinite(distance) && distance > 0)
+    .sort((left, right) => left - right);
+
+  if (nearestNeighborDistances.length === 0) {
+    return fallbackLevel;
+  }
+
+  const spacing = quantile(nearestNeighborDistances, 0.35);
+  const targetTileWidth = Math.max(
+    extentSpan / Math.pow(2, MAX_TOPIC_LEVEL),
+    spacing * spacingRatio
+  );
+  const rawLevel = Math.ceil(Math.log2(extentSpan / targetTileWidth));
+  return clampTopicLevel(rawLevel);
+}
+
+function computeTopicBounds(topics: [number, number, string][]) {
+  let minX = topics[0][0];
+  let maxX = topics[0][0];
+  let minY = topics[0][1];
+  let maxY = topics[0][1];
+
+  for (const topic of topics.slice(1)) {
+    minX = Math.min(minX, topic[0]);
+    maxX = Math.max(maxX, topic[0]);
+    minY = Math.min(minY, topic[1]);
+    maxY = Math.max(maxY, topic[1]);
+  }
+
+  return { minX, maxX, minY, maxY };
+}
+
+function nearestNeighborDistance(
+  topics: [number, number, string][],
+  index: number
+): number {
+  let nearest = Infinity;
+  const [x, y] = topics[index];
+
+  for (let otherIndex = 0; otherIndex < topics.length; otherIndex += 1) {
+    if (otherIndex === index) {
+      continue;
+    }
+    const [otherX, otherY] = topics[otherIndex];
+    const distance = Math.hypot(otherX - x, otherY - y);
+    if (distance < nearest) {
+      nearest = distance;
+    }
+  }
+
+  return nearest;
+}
+
+function quantile(values: number[], q: number): number {
+  if (values.length === 1) {
+    return values[0];
+  }
+  const clampedQ = Math.min(Math.max(q, 0), 1);
+  const position = (values.length - 1) * clampedQ;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  if (lower === upper) {
+    return values[lower];
+  }
+  const weight = position - lower;
+  return values[lower] * (1 - weight) + values[upper] * weight;
+}
+
+function clampTopicLevel(level: number): number {
+  if (!Number.isFinite(level)) {
+    return DEFAULT_LABEL_TOPIC_LEVEL;
+  }
+  return Math.max(MIN_TOPIC_LEVEL, Math.min(MAX_TOPIC_LEVEL, level));
 }
