@@ -46,7 +46,7 @@ import SearchWorker from './workers/search?worker';
 
 const DEBUG = config.debug;
 const HOVER_RADIUS = 3;
-const HOSTED_INITIAL_FIT_PADDING_RATIO = 0.12;
+const HOSTED_INITIAL_FIT_PADDING_RATIO = 0.18;
 let handledFooterMessageID = 0;
 
 let DATA_BASE = `${import.meta.env.BASE_URL}data`;
@@ -768,6 +768,7 @@ export class Embedding {
       }
     };
     this.searchWorker.postMessage(searchMessage);
+    this.restartSearchIfNeeded();
 
     const highlightSearchPoint = (point: PromptPoint | undefined) => {
       this.highlightPoint({ point, animated: true });
@@ -1136,6 +1137,7 @@ export class Embedding {
             }
           };
           this.searchWorker.postMessage(searchMessage);
+          this.restartSearchIfNeeded();
         } else {
           // Batches after the first batch
           // Add the points to the the prompt point list
@@ -1152,6 +1154,7 @@ export class Embedding {
             }
           };
           this.searchWorker.postMessage(searchMessage);
+          this.restartSearchIfNeeded();
 
           // Add the new points to the WebGL buffers
           this.updateWebGLBuffers(newPoints);
@@ -1283,6 +1286,22 @@ export class Embedding {
         break;
       }
     }
+  };
+
+  restartSearchIfNeeded = () => {
+    const query = this.searchBarStoreValue.query.trim();
+    if (query === '') {
+      return;
+    }
+
+    const message: SearchWorkerMessage = {
+      command: 'startQuery',
+      payload: {
+        query,
+        queryID: this.searchBarStoreValue.queryID
+      }
+    };
+    this.searchWorker.postMessage(message);
   };
 
   /**
