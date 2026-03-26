@@ -49,13 +49,8 @@ func (s *ClassificationAPIServer) handleGetKnowledgeBase(w http.ResponseWriter, 
 }
 
 func (s *ClassificationAPIServer) handleCreateKnowledgeBase(w http.ResponseWriter, r *http.Request) {
-	cfg := s.currentConfig()
-	if cfg == nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CONFIG_UNAVAILABLE", "Classification config not available")
-		return
-	}
-	if s.configPath == "" {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
+	cfg, ok := s.writableKnowledgeBaseConfig(w)
+	if !ok {
 		return
 	}
 
@@ -92,13 +87,8 @@ func (s *ClassificationAPIServer) handleCreateKnowledgeBase(w http.ResponseWrite
 }
 
 func (s *ClassificationAPIServer) handleUpdateKnowledgeBase(w http.ResponseWriter, r *http.Request) {
-	cfg := s.currentConfig()
-	if cfg == nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CONFIG_UNAVAILABLE", "Classification config not available")
-		return
-	}
-	if s.configPath == "" {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
+	cfg, ok := s.writableKnowledgeBaseConfig(w)
+	if !ok {
 		return
 	}
 
@@ -141,13 +131,8 @@ func (s *ClassificationAPIServer) handleUpdateKnowledgeBase(w http.ResponseWrite
 }
 
 func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWriter, r *http.Request) {
-	cfg := s.currentConfig()
-	if cfg == nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CONFIG_UNAVAILABLE", "Classification config not available")
-		return
-	}
-	if s.configPath == "" {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
+	cfg, ok := s.writableKnowledgeBaseConfig(w)
+	if !ok {
 		return
 	}
 
@@ -209,6 +194,19 @@ func rollbackManagedKnowledgeBaseRemoval(txn *managedKnowledgeBaseAssetsTxn, com
 		return
 	}
 	txn.Rollback()
+}
+
+func (s *ClassificationAPIServer) writableKnowledgeBaseConfig(w http.ResponseWriter) (*config.RouterConfig, bool) {
+	cfg := s.currentConfig()
+	if cfg == nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "CONFIG_UNAVAILABLE", "Classification config not available")
+		return nil, false
+	}
+	if s.configPath == "" {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
+		return nil, false
+	}
+	return cfg, true
 }
 
 func (s *ClassificationAPIServer) persistManagedKnowledgeBase(

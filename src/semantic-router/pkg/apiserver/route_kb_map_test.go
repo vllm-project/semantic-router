@@ -34,7 +34,7 @@ func stubKnowledgeBaseMapEmbeddings(t *testing.T) {
 	})
 }
 
-func TestHandleKnowledgeBaseMapEndpoints(t *testing.T) {
+func TestHandleKnowledgeBaseMapMetadataEndpoint(t *testing.T) {
 	apiServer, _, _ := newTestKnowledgeBaseAPIServer(t)
 	stubKnowledgeBaseMapEmbeddings(t)
 
@@ -63,6 +63,11 @@ func TestHandleKnowledgeBaseMapEndpoints(t *testing.T) {
 	if len(metadata.Groups) == 0 {
 		t.Fatalf("expected kb groups in metadata, got %+v", metadata)
 	}
+}
+
+func TestHandleKnowledgeBaseMapDataEndpoint(t *testing.T) {
+	apiServer, _, _ := newTestKnowledgeBaseAPIServer(t)
+	stubKnowledgeBaseMapEmbeddings(t)
 
 	dataReq := httptest.NewRequest(http.MethodGet, "/config/kbs/privacy_kb/map/data.ndjson", nil)
 	dataReq.SetPathValue("name", "privacy_kb")
