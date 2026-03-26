@@ -29,6 +29,12 @@ providers:
           extra_headers:
             anthropic-version: '2023-06-01'
           type: anthropic
+    - name: MiniMax-M2.7
+      backend_refs:
+        - name: minimax
+          base_url: https://api.minimax.io
+          provider: minimax
+          type: minimax
     - name: Qwen/Qwen2.5-14B-Instruct
       external_model_ids:
         vllm: Qwen/Qwen2.5-14B-Instruct
@@ -92,6 +98,8 @@ routing:
       description: GPT-4o Mini — OpenAI only
     - name: claude-sonnet-4-20250514
       description: Claude Sonnet 4 — Anthropic
+    - name: MiniMax-M2.7
+      description: MiniMax M2.7 — MiniMax (OpenAI-compatible)
     - name: Qwen/Qwen2.5-14B-Instruct
       description: Qwen2.5 14B — local vLLM (no auth needed)
 global:
@@ -107,6 +115,7 @@ global:
             openai: x-user-openai-key
             anthropic: x-user-anthropic-key
             azure-openai: x-user-azure-openai-key
+            minimax: x-user-minimax-key
         - type: static-config
   stores:
     semantic_cache:
