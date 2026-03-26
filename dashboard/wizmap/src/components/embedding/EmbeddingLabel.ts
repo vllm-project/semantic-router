@@ -607,7 +607,7 @@ export function layoutTopicLabels(
   let inViewLabelNum = 0;
 
   for (const label of sortedLabelData) {
-    const twoLine = label.name.length > 12;
+    const twoLine = !this.hostedDataMode && label.name.length > 12;
     let line1 = label.name.slice(0, Math.floor(label.name.length / 2));
     let line2 = label.name.slice(Math.floor(label.name.length / 2));
 

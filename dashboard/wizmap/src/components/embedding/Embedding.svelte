@@ -32,18 +32,16 @@
   export let footerStore: Writable<FooterStoreValue>;
   export let searchBarStore: Writable<SearchBarStoreValue>;
 
-  let defaultSetting: EmbeddingInitSetting = {
-    showContour: true,
-    showPoint: true,
-    showGrid: false,
-    showLabel: true
-  };
-  $: defaultSetting = {
+  const buildDefaultSetting = (): EmbeddingInitSetting => ({
     showContour: dataURLs ? false : true,
     showPoint: true,
     showGrid: false,
     showLabel: dataURLs ? false : true
-  };
+  });
+  let defaultSetting: EmbeddingInitSetting = buildDefaultSetting();
+  $: if (!initialized) {
+    defaultSetting = buildDefaultSetting();
+  }
 
   const defaultDataURLs = (name: string): DataURLs => {
     let DATA_BASE = `${import.meta.env.BASE_URL}data`;

@@ -267,16 +267,24 @@ export class Embedding {
       right: 0
     };
 
-    // We keep the initial drawing region as a square
-    const squareCanvasWidth = Math.min(
-      this.svgFullSize.width - this.svgPadding.left - this.svgPadding.right,
-      this.svgFullSize.height - this.svgPadding.top - this.svgPadding.bottom
-    );
+    const drawableWidth =
+      this.svgFullSize.width - this.svgPadding.left - this.svgPadding.right;
+    const drawableHeight =
+      this.svgFullSize.height - this.svgPadding.top - this.svgPadding.bottom;
 
-    this.svgSize = {
-      width: squareCanvasWidth,
-      height: squareCanvasWidth
-    };
+    if (this.hostedDataMode) {
+      this.svgSize = {
+        width: drawableWidth,
+        height: drawableHeight
+      };
+    } else {
+      // The upstream demo keeps the initial drawing region square.
+      const squareCanvasWidth = Math.min(drawableWidth, drawableHeight);
+      this.svgSize = {
+        width: squareCanvasWidth,
+        height: squareCanvasWidth
+      };
+    }
 
     this.xScale = d3.scaleLinear();
     this.yScale = d3.scaleLinear();
@@ -321,7 +329,10 @@ export class Embedding {
       .zoom<HTMLElement, unknown>()
       .extent([
         [0, 0],
-        [this.svgSize.width, this.svgSize.height]
+        [
+          this.hostedDataMode ? this.svgFullSize.width : this.svgSize.width,
+          this.hostedDataMode ? this.svgFullSize.height : this.svgSize.height
+        ]
       ])
       .scaleExtent([config.layout.zoomScale[0], config.layout.zoomScale[1]])
       .interpolate(d3.interpolate)
@@ -400,15 +411,13 @@ export class Embedding {
         const zoomBox = this.getCurViewingZoomBox();
         const centerX = zoomBox.x + zoomBox.width / 2;
         const centerY = zoomBox.y + zoomBox.height / 2;
+        const viewportCenter = this.getViewportCenter();
 
         switch (this.footerStoreValue.messageCommand) {
           case 'zoomIn': {
             // Create a zoomIn transform matrix
             const transform = d3.zoomIdentity
-              .translate(
-                (this.svgFullSize.width + config.layout.searchPanelWidth) / 2,
-                (this.svgFullSize.height + config.layout.topBarHeight) / 2
-              )
+              .translate(viewportCenter.x, viewportCenter.y)
               .scale(
                 Math.min(
                   config.layout.zoomScale[1],
@@ -432,10 +441,7 @@ export class Embedding {
           case 'zoomOut': {
             // Create a zoomIn transform matrix
             const transform = d3.zoomIdentity
-              .translate(
-                (this.svgFullSize.width + config.layout.searchPanelWidth) / 2,
-                (this.svgFullSize.height + config.layout.topBarHeight) / 2
-              )
+              .translate(viewportCenter.x, viewportCenter.y)
               .scale(
                 Math.max(
                   config.layout.zoomScale[0],
@@ -532,29 +538,7 @@ export class Embedding {
     const xRange = this.gridData.xRange;
     const yRange = this.gridData.yRange;
 
-    // Force the plot to be a square
-    let xLength = xRange[1] - xRange[0];
-    let yLength = yRange[1] - yRange[0];
-
-    if (!this.gridData.padded) {
-      // Add padding for the data
-      if (xLength < yLength) {
-        yRange[0] -= yLength / 50;
-        yRange[1] += yLength / 50;
-        yLength = yRange[1] - yRange[0];
-
-        xRange[0] -= (yLength - xLength) / 2;
-        xRange[1] += (yLength - xLength) / 2;
-      } else {
-        // Add padding for the data
-        xRange[0] -= xLength / 50;
-        xRange[1] += xLength / 50;
-        xLength = xRange[1] - xRange[0];
-
-        yRange[0] -= (xLength - yLength) / 2;
-        yRange[1] += (xLength - yLength) / 2;
-      }
-    }
+    this.normalizeRangesForViewport(xRange, yRange, false);
 
     this.xScale = d3
       .scaleLinear()
@@ -720,25 +704,7 @@ export class Embedding {
     const xRange = [...this.gridData.xRange] as [number, number];
     const yRange = [...this.gridData.yRange] as [number, number];
 
-    let xLength = xRange[1] - xRange[0];
-    let yLength = yRange[1] - yRange[0];
-    if (!this.gridData.padded) {
-      if (xLength < yLength) {
-        yRange[0] -= yLength / 50;
-        yRange[1] += yLength / 50;
-        yLength = yRange[1] - yRange[0];
-
-        xRange[0] -= (yLength - xLength) / 2;
-        xRange[1] += (yLength - xLength) / 2;
-      } else {
-        xRange[0] -= xLength / 50;
-        xRange[1] += xLength / 50;
-        xLength = xRange[1] - xRange[0];
-
-        yRange[0] -= (xLength - yLength) / 2;
-        yRange[1] += (xLength - yLength) / 2;
-      }
-    }
+    this.normalizeRangesForViewport(xRange, yRange, true);
 
     this.xScale = d3
       .scaleLinear()
@@ -916,46 +882,26 @@ export class Embedding {
       .attr('fill', d => colorScale(d.value))
       .attr('d', d3.geoPath());
 
-    // Zoom in to focus on the second level of the contour
-    // The first level is at 0
-    let x0 = Infinity;
-    let y0 = Infinity;
-    let x1 = -Infinity;
-    let y1 = -Infinity;
-
-    if (contours.length > 1) {
-      for (const coord of contours[1].coordinates) {
-        for (const coordPoints of coord) {
-          for (const point of coordPoints) {
-            if (point[0] < x0) x0 = point[0];
-            if (point[1] < y0) y0 = point[1];
-            if (point[0] > x1) x1 = point[0];
-            if (point[1] > y1) y1 = point[1];
-          }
-        }
-      }
-    }
-
-    const screenPadding = 20;
+    const zoomBounds = this.getInitialZoomBounds(contours);
+    const viewportInsets = this.getViewportInsets();
+    const viewportCenter = this.getViewportCenter();
     const viewAreaWidth =
-      this.svgFullSize.width - config.layout.searchPanelWidth;
+      this.svgFullSize.width - viewportInsets.left - viewportInsets.right;
     const viewAreaHeight =
-      this.svgFullSize.height -
-      config.layout.topBarHeight -
-      config.layout.footerHeight;
-
+      this.svgFullSize.height - viewportInsets.top - viewportInsets.bottom;
+    const screenPadding = this.hostedDataMode ? 36 : 20;
     const initZoomK = Math.min(
-      viewAreaWidth / (x1 - x0 + screenPadding),
-      viewAreaHeight / (y1 - y0 + screenPadding)
+      viewAreaWidth / (zoomBounds.width + screenPadding),
+      viewAreaHeight / (zoomBounds.height + screenPadding)
     );
 
     this.initZoomTransform = d3.zoomIdentity
-      .translate(
-        (this.svgFullSize.width + config.layout.searchPanelWidth) / 2,
-        (this.svgFullSize.height + config.layout.topBarHeight) / 2
-      )
+      .translate(viewportCenter.x, viewportCenter.y)
       .scale(initZoomK)
-      .translate(-(x0 + (x1 - x0) / 2), -(y0 + (y1 - y0) / 2));
+      .translate(
+        -(zoomBounds.x + zoomBounds.width / 2),
+        -(zoomBounds.y + zoomBounds.height / 2)
+      );
 
     // Trigger the first zoom
     this.topSvg
@@ -1416,19 +1362,156 @@ export class Embedding {
    * @returns Current zoom view box
    */
   getCurViewingZoomBox = () => {
+    const viewportInsets = this.getViewportInsets();
+    const viewportRight = this.svgFullSize.width - viewportInsets.right;
+    const viewportBottom = this.svgFullSize.height - viewportInsets.bottom;
     const box: Rect = {
-      x: this.curZoomTransform.invertX(config.layout.searchPanelWidth),
-      y: this.curZoomTransform.invertY(config.layout.topBarHeight),
+      x: this.curZoomTransform.invertX(viewportInsets.left),
+      y: this.curZoomTransform.invertY(viewportInsets.top),
       width: Math.abs(
-        this.curZoomTransform.invertX(this.svgFullSize.width) -
-          this.curZoomTransform.invertX(config.layout.searchPanelWidth)
+        this.curZoomTransform.invertX(viewportRight) -
+          this.curZoomTransform.invertX(viewportInsets.left)
       ),
       height: Math.abs(
-        this.curZoomTransform.invertY(this.svgFullSize.height) -
-          this.curZoomTransform.invertY(config.layout.topBarHeight)
+        this.curZoomTransform.invertY(viewportBottom) -
+          this.curZoomTransform.invertY(viewportInsets.top)
       )
     };
     return box;
+  };
+
+  getViewportInsets = (): Padding => {
+    if (this.hostedDataMode) {
+      return {
+        top: 72,
+        right: 20,
+        bottom: 20,
+        left: 20
+      };
+    }
+
+    return {
+      top: config.layout.topBarHeight,
+      right: 0,
+      bottom: config.layout.footerHeight,
+      left: config.layout.searchPanelWidth
+    };
+  };
+
+  getViewportCenter = (): Point => {
+    const viewportInsets = this.getViewportInsets();
+    return {
+      x:
+        viewportInsets.left +
+        (this.svgFullSize.width - viewportInsets.left - viewportInsets.right) /
+          2,
+      y:
+        viewportInsets.top +
+        (this.svgFullSize.height - viewportInsets.top - viewportInsets.bottom) /
+          2
+    };
+  };
+
+  normalizeRangesForViewport = (
+    xRange: [number, number],
+    yRange: [number, number],
+    allowRectangularViewport: boolean
+  ) => {
+    let xLength = xRange[1] - xRange[0];
+    let yLength = yRange[1] - yRange[0];
+    if (this.gridData?.padded) {
+      return;
+    }
+
+    if (allowRectangularViewport) {
+      xRange[0] -= xLength / 50;
+      xRange[1] += xLength / 50;
+      yRange[0] -= yLength / 50;
+      yRange[1] += yLength / 50;
+      return;
+    }
+
+    if (xLength < yLength) {
+      yRange[0] -= yLength / 50;
+      yRange[1] += yLength / 50;
+      yLength = yRange[1] - yRange[0];
+
+      xRange[0] -= (yLength - xLength) / 2;
+      xRange[1] += (yLength - xLength) / 2;
+    } else {
+      xRange[0] -= xLength / 50;
+      xRange[1] += xLength / 50;
+      xLength = xRange[1] - xRange[0];
+
+      yRange[0] -= (xLength - yLength) / 2;
+      yRange[1] += (xLength - yLength) / 2;
+    }
+  };
+
+  getInitialZoomBounds = (
+    contours: d3.ContourMultiPolygon[]
+  ): Rect => {
+    if (this.hostedDataMode && this.promptPoints.length > 0) {
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+
+      for (const point of this.promptPoints) {
+        const x = this.xScale(point.x);
+        const y = this.yScale(point.y);
+        if (x < x0) x0 = x;
+        if (y < y0) y0 = y;
+        if (x > x1) x1 = x;
+        if (y > y1) y1 = y;
+      }
+
+      return {
+        x: x0,
+        y: y0,
+        width: Math.max(1, x1 - x0),
+        height: Math.max(1, y1 - y0)
+      };
+    }
+
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+
+    if (contours.length > 1) {
+      for (const coord of contours[1].coordinates) {
+        for (const coordPoints of coord) {
+          for (const point of coordPoints) {
+            if (point[0] < x0) x0 = point[0];
+            if (point[1] < y0) y0 = point[1];
+            if (point[0] > x1) x1 = point[0];
+            if (point[1] > y1) y1 = point[1];
+          }
+        }
+      }
+    }
+
+    if (
+      !Number.isFinite(x0) ||
+      !Number.isFinite(y0) ||
+      !Number.isFinite(x1) ||
+      !Number.isFinite(y1)
+    ) {
+      return {
+        x: 0,
+        y: 0,
+        width: Math.max(1, this.svgSize.width),
+        height: Math.max(1, this.svgSize.height)
+      };
+    }
+
+    return {
+      x: x0,
+      y: y0,
+      width: Math.max(1, x1 - x0),
+      height: Math.max(1, y1 - y0)
+    };
   };
 
   /**
