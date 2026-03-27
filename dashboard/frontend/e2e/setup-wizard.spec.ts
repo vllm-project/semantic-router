@@ -129,8 +129,8 @@ test.describe("Setup wizard routing import", () => {
           providers: {
             models: [
               {
-                name: "openai/gpt-oss-120b",
-                provider_model_id: "openai/gpt-oss-120b",
+                name: "qwen/qwen3.5-rocm",
+                provider_model_id: "qwen/qwen3.5-rocm",
                 backend_refs: [
                   {
                     name: "primary",
@@ -141,12 +141,12 @@ test.describe("Setup wizard routing import", () => {
                 ],
               },
             ],
-            default_model: "openai/gpt-oss-120b",
+            default_model: "qwen/qwen3.5-rocm",
           },
           routing: {
             modelCards: [
               {
-                name: "openai/gpt-oss-120b",
+                name: "qwen/qwen3.5-rocm",
                 modality: "text",
               },
             ],
@@ -158,7 +158,7 @@ test.describe("Setup wizard routing import", () => {
                 priority: 100,
                 rules: { operator: "AND", conditions: [] },
                 modelRefs: [
-                  { model: "openai/gpt-oss-120b", use_reasoning: false },
+                  { model: "qwen/qwen3.5-rocm", use_reasoning: false },
                 ],
               },
             ],
