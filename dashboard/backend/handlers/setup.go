@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -163,6 +162,8 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 			return
 		}
 
+		ensureSetupGlobalDefaults(candidate)
+
 		if !deployMu.TryLock() {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusConflict)
@@ -214,11 +215,20 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 		if err := json.NewEncoder(w).Encode(SetupActivateResponse{
 			Status:    "success",
 			SetupMode: false,
-			Message:   "Setup activated successfully. Router and Envoy are restarting.",
+			Message:   "Setup activated successfully. Router and Envoy are starting.",
 		}); err != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		}
 	}
+}
+
+func ensureSetupGlobalDefaults(configFile *setupConfigFile) {
+	if configFile == nil || configFile.Global != nil {
+		return
+	}
+
+	defaults := routerconfig.DefaultCanonicalGlobal()
+	configFile.Global = &defaults
 }
 
 func SetupImportRemoteHandler(configPath string) http.HandlerFunc {
@@ -551,17 +561,9 @@ func backupCurrentConfig(configPath string, configDir string) error {
 }
 
 func restartSetupManagedServices() error {
-	if _, err := exec.LookPath("supervisorctl"); err != nil {
-		return nil
-	}
-
 	for _, service := range []string{"router", "envoy"} {
-		cmd := exec.Command("supervisorctl", "restart", service)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			startCmd := exec.Command("supervisorctl", "start", service)
-			if startOutput, startErr := startCmd.CombinedOutput(); startErr != nil {
-				return fmt.Errorf("%s restart failed: %s / start failed: %s", service, string(output), string(startOutput))
-			}
+		if err := restartManagedService(service, 20*time.Second); err != nil {
+			return err
 		}
 	}
 
@@ -573,14 +575,10 @@ func restartSetupRuntimeServices(configPath string) error {
 		return restartSetupManagedServices()
 	}
 
-	if getDockerContainerStatus(vllmSrContainerName) != "running" {
+	if getDockerContainerStatus(managedContainerNameForService("router")) == "not found" &&
+		getDockerContainerStatus(managedContainerNameForService("envoy")) == "not found" {
 		return nil
 	}
 
-	for _, service := range []string{"router", "envoy"} {
-		if err := restartOrStartManagedContainerService(service, 20*time.Second); err != nil {
-			return err
-		}
-	}
-	return nil
+	return restartSetupManagedServices()
 }

@@ -72,7 +72,12 @@ spec:
               containerPort: 8700
           volumeMounts:
             - name: router-config
-              mountPath: /app/config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: router-config
+              mountPath: /app/config/tools_db.json
+              subPath: tools_db.json
               readOnly: true
             - name: ml-data
               mountPath: /app/data/ml-pipeline

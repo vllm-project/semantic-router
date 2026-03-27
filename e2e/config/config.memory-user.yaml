@@ -13,7 +13,7 @@ providers:
       backend_refs:
         - name: llm_katan
           weight: 1
-          endpoint: 172.17.0.1:8000
+          endpoint: host.docker.internal:8000
           protocol: http
 routing:
   modelCards:
@@ -107,7 +107,7 @@ global:
       enabled: true
       auto_store: true
       milvus:
-        address: 172.17.0.1:19530
+        address: host.docker.internal:19530
         collection: memory_test_ci
         dimension: 384
       embedding_model: mmbert

@@ -324,6 +324,10 @@ func cleanModelPath(value string) string {
 }
 
 func readRouterLogContentInContainer() string {
+	if managedRuntimeUsesSplitContainers() && !managedServiceCanBeControlledLocally("router") {
+		return getContainerLogsTailForContainer(managedContainerNameForService("router"), 400)
+	}
+
 	var parts []string
 	for _, path := range []string{"/var/log/supervisor/router.log", "/var/log/supervisor/router-error.log"} {
 		data, err := os.ReadFile(path)
@@ -336,9 +340,13 @@ func readRouterLogContentInContainer() string {
 }
 
 func getContainerLogsTail(lines int) string {
-	// #nosec G204 -- vllmSrContainerName is a compile-time constant, lines is converted from int.
+	return getContainerLogsTailForContainer(vllmSrContainerName, lines)
+}
+
+func getContainerLogsTailForContainer(containerName string, lines int) string {
+	// #nosec G204 -- containerName is repository-managed and lines is converted from int.
 	tailArg := strconv.Itoa(lines)
-	cmd := exec.Command("docker", "logs", "--tail", tailArg, vllmSrContainerName)
+	cmd := exec.Command("docker", "logs", "--tail", tailArg, containerName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return ""

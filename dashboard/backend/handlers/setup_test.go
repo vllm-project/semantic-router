@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -313,7 +314,79 @@ func TestSetupActivateHandler(t *testing.T) {
 		t.Fatalf("setup marker should be removed after activation")
 	}
 
+	globalConfig, ok := configMap["global"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected activated config to include explicit global defaults, got %#v", configMap["global"])
+	}
+	modelCatalog, ok := globalConfig["model_catalog"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected global.model_catalog in activated config, got %#v", globalConfig["model_catalog"])
+	}
+	embeddings, ok := modelCatalog["embeddings"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected global.model_catalog.embeddings in activated config, got %#v", modelCatalog["embeddings"])
+	}
+	semantic, ok := embeddings["semantic"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected global.model_catalog.embeddings.semantic in activated config, got %#v", embeddings["semantic"])
+	}
+	if semantic["mmbert_model_path"] != "models/mom-embedding-ultra" {
+		t.Fatalf("expected explicit mmbert default path, got %#v", semantic["mmbert_model_path"])
+	}
+
 	if info, err := os.Stat(filepath.Join(tempDir, ".vllm-sr")); err != nil || !info.IsDir() {
 		t.Fatalf(".vllm-sr output directory should exist after activation: %v", err)
+	}
+}
+
+func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+	fakeDocker := writeFakeLifecycleDockerCLI(t)
+
+	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+":"+os.Getenv("PATH"))
+	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
+	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
+	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
+	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
+	t.Setenv("TEST_ROUTER_CONTAINER", "lane-a-vllm-sr-router-container")
+	t.Setenv("TEST_ROUTER_STATUS_FILE", fakeDocker.routerStatusPath)
+	t.Setenv("TEST_ENVOY_CONTAINER", "lane-a-vllm-sr-envoy-container")
+	t.Setenv("TEST_ENVOY_STATUS_FILE", fakeDocker.envoyStatusPath)
+
+	if err := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); err != nil {
+		t.Fatalf("failed to seed router status: %v", err)
+	}
+	if err := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); err != nil {
+		t.Fatalf("failed to seed envoy status: %v", err)
+	}
+
+	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	SetupActivateHandler(configPath, false, tempDir)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	logData, err := os.ReadFile(fakeDocker.logPath)
+	if err != nil {
+		t.Fatalf("failed to read docker log: %v", err)
+	}
+	logText := string(logData)
+	if !strings.Contains(logText, "start lane-a-vllm-sr-router-container") {
+		t.Fatalf("expected router start, got %q", logText)
+	}
+	if !strings.Contains(logText, "start lane-a-vllm-sr-envoy-container") {
+		t.Fatalf("expected envoy start, got %q", logText)
+	}
+	if strings.Contains(logText, "supervisorctl") {
+		t.Fatalf("split runtime should not use supervisorctl, got %q", logText)
 	}
 }

@@ -94,3 +94,5 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0017-taxonomy-classifier-platform-loop.md](pl-0017-taxonomy-classifier-platform-loop.md)
 - [pl-0018-generic-embedding-kb-workstream.md](pl-0018-generic-embedding-kb-workstream.md)
 - [pl-0019-wizmap-knowledge-map-integration.md](pl-0019-wizmap-knowledge-map-integration.md)
+- [pl-0020-local-runtime-topology-separation.md](pl-0020-local-runtime-topology-separation.md)
+- [pl-0021-local-runtime-three-image-rollout.md](pl-0021-local-runtime-three-image-rollout.md)

@@ -512,6 +512,40 @@ func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
 	}
 }
 
+func TestBuildModelSpecsSkipsRouterOwnedDefaultsForAgentSmokeConfigs(t *testing.T) {
+	for _, relParts := range [][]string{
+		{"..", "..", "..", "..", "e2e", "config", "config.agent-smoke.cpu.yaml"},
+		{"..", "..", "..", "..", "e2e", "config", "config.agent-smoke.amd.yaml"},
+	} {
+		rel := filepath.Join(relParts...)
+		t.Run(rel, func(t *testing.T) {
+			_, file, _, ok := runtime.Caller(0)
+			if !ok {
+				t.Fatal("failed to resolve smoke config path")
+			}
+
+			configPath := filepath.Clean(filepath.Join(filepath.Dir(file), rel))
+			data, err := os.ReadFile(configPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", configPath, err)
+			}
+
+			cfg, err := config.ParseYAMLBytes(data)
+			if err != nil {
+				t.Fatalf("ParseYAMLBytes() error = %v", err)
+			}
+
+			specs, err := BuildModelSpecs(cfg)
+			if err != nil {
+				t.Fatalf("BuildModelSpecs() error = %v", err)
+			}
+			if len(specs) != 0 {
+				t.Fatalf("BuildModelSpecs() returned %d specs, want 0: %#v", len(specs), specs)
+			}
+		})
+	}
+}
+
 func assertContainsAllModelSpecs(t *testing.T, specs []ModelSpec, wantPaths ...string) {
 	t.Helper()
 
