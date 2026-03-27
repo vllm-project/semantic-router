@@ -90,6 +90,7 @@ Keep the numeric index unique within `docs/agent/tech-debt/`.
 - [TD034 Runtime and Dashboard State Surfaces Still Lack a Coherent Durability, Recovery, and Telemetry Contract](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
 - [TD035 Projection Partition Default Coverage Contract Is No Longer Declarative Only](td-035-signal-group-default-coverage-contract-gap.md)
 - [TD036 Decision Tree Authoring Cannot Round-Trip Through Runtime Config](td-036-decision-tree-authoring-roundtrip-gap.md)
+- [TD037 Dev Integration Environment Ownership and Shared-Suite Topology Still Diverge Across CLI, Kind, and CI](td-037-dev-integration-env-ownership-and-shared-suite-topology.md)
 
 ## Architecture Review Coverage Map
 
@@ -108,9 +109,12 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
   - cross-stack console state durability, recovery, and telemetry semantics: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
 - Python CLI
   - local Docker versus Kubernetes workflow split: [TD004](td-004-python-cli-kubernetes-workflow-separation.md)
+  - dev integration environment ownership and shared-suite topology across Docker, Kind, and CI: [TD037](td-037-dev-integration-env-ownership-and-shared-suite-topology.md)
   - remaining config-adapter and weak-typing seams shared with dashboard/DSL helpers: [TD015](td-015-weakly-typed-config-and-dsl-contracts.md)
   - prior CLI config-contract consolidation work: [TD022](td-022-cli-config-contract-boundary-collapse.md)
   - workspace-backed local state versus durable product-state ownership: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
+- Test architecture and CI
+  - default dev integration flow, environment ownership, and PR matrix reduction for shared dashboard/core-routing coverage: [TD037](td-037-dev-integration-env-ownership-and-shared-suite-topology.md)
 - Training src
   - training or evaluation artifact drift across dashboard, runtime, and scripts: [TD032](td-032-training-evaluation-artifact-contract-drift.md)
 - Candle binding and ONNX binding

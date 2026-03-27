@@ -1,15 +1,12 @@
 package testcases
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
@@ -19,7 +16,7 @@ import (
 func init() {
 	pkgtestcases.Register("entropy-routing", pkgtestcases.TestCase{
 		Description: "Test entropy-based routing decisions and verify uncertainty-aware model selection",
-		Tags:        []string{"ai-gateway", "routing", "entropy", "uncertainty"},
+		Tags:        []string{"kubernetes", "routing", "entropy", "uncertainty"},
 		Fn:          testEntropyRouting,
 	})
 }
@@ -168,92 +165,41 @@ func testSingleEntropyRouting(ctx context.Context, testCase EntropyRoutingCase, 
 		MaxConfidence:       testCase.MaxConfidence,
 	}
 
-	// Create chat completion request with MoM model to trigger decision engine
-	requestBody := map[string]interface{}{
-		"model": "MoM",
-		"messages": []map[string]string{
-			{"role": "user", "content": testCase.Query},
-		},
-	}
-
-	jsonData, err := json.Marshal(requestBody)
+	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Query, 30*time.Second)
 	if err != nil {
-		result.Error = fmt.Sprintf("failed to marshal request: %v", err)
+		result.Error = err.Error()
 		return result
 	}
 
-	// Send request
-	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to create request: %v", err)
-		return result
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to send request: %v", err)
-		return result
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-
-		// Log detailed error information including headers
-		var errorMsg strings.Builder
-		errorMsg.WriteString(fmt.Sprintf("Unexpected status code: %d\n", resp.StatusCode))
-		errorMsg.WriteString(fmt.Sprintf("Response body: %s\n", string(bodyBytes)))
-		errorMsg.WriteString("Response headers:\n")
-		errorMsg.WriteString(formatResponseHeaders(resp.Header))
-
-		result.Error = errorMsg.String()
-
-		// Print detailed error to console for debugging
-		if verbose {
-			fmt.Printf("[Test] ✗ HTTP %d Error for test case: %s\n", resp.StatusCode, testCase.Name)
-			fmt.Printf("  Query: %s\n", testCase.Query)
-			fmt.Printf("  Response Headers:\n%s", formatResponseHeaders(resp.Header))
-			fmt.Printf("  Response Body: %s\n", string(bodyBytes))
-		}
-
+	if response.StatusCode != http.StatusOK {
+		result.Error = formatUnexpectedChatCompletionStatus(response)
+		logUnexpectedChatCompletionStatus(verbose, response, "test case: "+testCase.Name,
+			"Query: "+testCase.Query)
 		return result
 	}
 
-	// Extract entropy-related headers
-	result.ActualUncertainty = resp.Header.Get("x-vsr-uncertainty-level")
-	result.ActualCategory = resp.Header.Get("x-vsr-selected-category")
+	result.ActualUncertainty = response.Headers.Get("x-vsr-uncertainty-level")
+	result.ActualCategory = response.Headers.Get("x-vsr-selected-category")
 
-	// Parse reasoning flag
-	reasoningHeader := resp.Header.Get("x-vsr-selected-reasoning")
-	result.ActualReasoning = (reasoningHeader == "true" || reasoningHeader == "True" || reasoningHeader == "1")
+	reasoningHeader := response.Headers.Get("x-vsr-selected-reasoning")
+	result.ActualReasoning = reasoningHeader == "true" || reasoningHeader == "True" || reasoningHeader == "1"
 
-	// Parse confidence
-	confidenceHeader := resp.Header.Get("x-vsr-confidence")
+	confidenceHeader := response.Headers.Get("x-vsr-confidence")
 	if confidenceHeader != "" {
 		if conf, err := strconv.ParseFloat(confidenceHeader, 64); err == nil {
 			result.ActualConfidence = conf
 		}
 	}
 
-	// Check if uncertainty level matches
-	result.UncertaintyMatch = (result.ActualUncertainty == testCase.ExpectedUncertaintyLevel)
+	result.UncertaintyMatch = result.ActualUncertainty == testCase.ExpectedUncertaintyLevel
+	result.ReasoningMatch = result.ActualReasoning == testCase.ExpectedUseReasoning
+	result.ConfidenceInRange = result.ActualConfidence >= testCase.MinConfidence &&
+		result.ActualConfidence <= testCase.MaxConfidence
 
-	// Check if reasoning decision matches
-	result.ReasoningMatch = (result.ActualReasoning == testCase.ExpectedUseReasoning)
-
-	// Check if confidence is in expected range
-	result.ConfidenceInRange = (result.ActualConfidence >= testCase.MinConfidence &&
-		result.ActualConfidence <= testCase.MaxConfidence)
-
-	// Check if category matches (if expected category is specified)
 	if testCase.ExpectedTopCategory != "" {
-		result.CategoryMatch = (result.ActualCategory == testCase.ExpectedTopCategory)
+		result.CategoryMatch = result.ActualCategory == testCase.ExpectedTopCategory
 	} else {
-		result.CategoryMatch = true // Skip category check if not specified
+		result.CategoryMatch = true
 	}
 
 	if verbose && (!result.UncertaintyMatch || !result.ReasoningMatch || !result.ConfidenceInRange) {

@@ -158,6 +158,36 @@ func regenerateAndReloadManagedSplitEnvoyLocally(configPath string) error {
 	return nil
 }
 
+func refreshManagedSplitEnvoyConfig(configPath string) error {
+	if !managedRuntimeUsesSplitContainers() {
+		return nil
+	}
+	if getDockerContainerStatus(managedContainerNameForService("envoy")) == "not found" {
+		return nil
+	}
+
+	envoyConfigPath := splitEnvoyConfigPathForRuntimeConfig(configPath)
+	if envoyConfigPath == "" {
+		log.Printf("Config propagation: split Envoy config path not found, skipping setup-time refresh")
+		return nil
+	}
+
+	output, err := generateEnvoyConfigWithPython(configPath, envoyConfigPath)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to regenerate split Envoy config: %w (output: %s)",
+			err,
+			strings.TrimSpace(output),
+		)
+	}
+
+	if trimmed := strings.TrimSpace(output); trimmed != "" {
+		log.Printf("Config propagation: %s", trimmed)
+	}
+
+	return nil
+}
+
 func propagateConfigToManagedContainer() error {
 	effectiveConfigPath, err := syncRuntimeConfigInManagedContainer()
 	if err != nil {
@@ -233,6 +263,14 @@ func detectEnvoyConfigPath() string {
 	}
 
 	return ""
+}
+
+func splitEnvoyConfigPathForRuntimeConfig(configPath string) string {
+	configDir := filepath.Dir(filepath.Clean(configPath))
+	if filepath.Base(configDir) == ".vllm-sr" {
+		return filepath.Join(configDir, "envoy.yaml")
+	}
+	return detectEnvoyConfigPath()
 }
 
 func generateEnvoyConfigInManagedContainer(configPath string) (string, error) {

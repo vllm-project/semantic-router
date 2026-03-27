@@ -1,0 +1,27 @@
+{
+  "profile": "kubernetes",
+  "start_time": "2026-03-27T21:34:46.204825+08:00",
+  "end_time": "2026-03-27T21:34:46.479254+08:00",
+  "duration": "0s",
+  "status": "FAILED",
+  "exit_code": 1,
+  "cluster_name": "semantic-router-e2e",
+  "test_results": null,
+  "total_tests": 0,
+  "passed_tests": 0,
+  "failed_tests": 0,
+  "cluster_info": {
+    "total_pods": 0,
+    "running_pods": 0,
+    "pending_pods": 0,
+    "failed_pods": 0,
+    "namespaces": null,
+    "pods_by_namespace": null
+  },
+  "environment": {
+    "go_version": "1.24",
+    "parallel": "false",
+    "use_workspace_models": "false",
+    "verbose": "true"
+  }
+}
