@@ -339,7 +339,12 @@ spec:
           value: "/tmp/home"
         volumeMounts:
         - name: config-volume
-          mountPath: /app/config
+          mountPath: /app/config/config.yaml
+          subPath: config.yaml
+          readOnly: true
+        - name: config-volume
+          mountPath: /app/config/tools_db.json
+          subPath: tools_db.json
           readOnly: true
         - name: models-volume
           mountPath: /app/models
