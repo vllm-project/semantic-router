@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -12,7 +13,13 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/models"
 )
 
-func newTestEvaluationHandler(t *testing.T) *EvaluationHandler {
+type testEvaluationHarness struct {
+	handler *EvaluationHandler
+	db      *evaluation.DB
+	rootDir string
+}
+
+func newTestEvaluationHarness(t *testing.T) *testEvaluationHarness {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "eval.db")
@@ -26,7 +33,16 @@ func newTestEvaluationHandler(t *testing.T) *EvaluationHandler {
 		ProjectRoot: dir,
 		ResultsDir:  filepath.Join(dir, "results"),
 	})
-	return NewEvaluationHandler(evalDB, runner, false, "http://router:8080", "http://envoy:8801")
+	return &testEvaluationHarness{
+		handler: NewEvaluationHandler(evalDB, runner, false, "http://router:8080", "http://envoy:8801"),
+		db:      evalDB,
+		rootDir: dir,
+	}
+}
+
+func newTestEvaluationHandler(t *testing.T) *EvaluationHandler {
+	t.Helper()
+	return newTestEvaluationHarness(t).handler
 }
 
 func TestCreateTaskHandler_MoMWithAccuracyReturns201(t *testing.T) {
@@ -203,5 +219,66 @@ func TestGetDatasetsHandler_ReturnsDatasets(t *testing.T) {
 	}
 	if out["domain"] == nil || out["accuracy"] == nil {
 		t.Errorf("expected domain and accuracy keys in datasets; got %v", out)
+	}
+}
+
+func TestRunTaskHandlerMarksRerunTaskRunningBeforeBackgroundExecution(t *testing.T) {
+	harness := newTestEvaluationHarness(t)
+
+	scriptPath := filepath.Join(harness.rootDir, "src", "training", "model_eval", "mmlu_pro_vllm_eval.py")
+	if err := os.MkdirAll(filepath.Dir(scriptPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll(script dir): %v", err)
+	}
+	if err := os.WriteFile(scriptPath, []byte("import time\ntime.sleep(1)\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(script): %v", err)
+	}
+
+	task := &models.EvaluationTask{
+		Name: "rerun-system-eval",
+		Config: models.EvaluationConfig{
+			Level:         models.LevelMoM,
+			Dimensions:    []models.EvaluationDimension{models.DimensionAccuracy},
+			Endpoint:      "http://localhost:8801",
+			SamplesPerCat: 1,
+		},
+	}
+	if err := harness.db.CreateTask(task); err != nil {
+		t.Fatalf("CreateTask(): %v", err)
+	}
+	if err := harness.db.UpdateTaskStatus(task.ID, models.StatusFailed, "previous failure"); err != nil {
+		t.Fatalf("UpdateTaskStatus(failed): %v", err)
+	}
+	if err := harness.db.UpdateTaskProgress(task.ID, 100, "Failed"); err != nil {
+		t.Fatalf("UpdateTaskProgress(): %v", err)
+	}
+
+	bodyBytes, _ := json.Marshal(map[string]string{"task_id": task.ID})
+	req := httptest.NewRequest(http.MethodPost, "/api/evaluation/run", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	harness.handler.RunTaskHandler().ServeHTTP(rec, req)
+	t.Cleanup(func() {
+		_ = harness.handler.runner.CancelTask(task.ID)
+	})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	updatedTask, err := harness.db.GetTask(task.ID)
+	if err != nil {
+		t.Fatalf("GetTask(): %v", err)
+	}
+	if updatedTask == nil {
+		t.Fatal("expected task to exist")
+	}
+	if updatedTask.Status != models.StatusRunning {
+		t.Fatalf("task status = %s, want %s", updatedTask.Status, models.StatusRunning)
+	}
+	if updatedTask.ProgressPercent != 0 {
+		t.Fatalf("task progress = %d, want 0", updatedTask.ProgressPercent)
+	}
+	if updatedTask.CurrentStep != "Starting evaluation" {
+		t.Fatalf("task current_step = %q, want %q", updatedTask.CurrentStep, "Starting evaluation")
 	}
 }

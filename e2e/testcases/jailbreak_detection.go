@@ -1,11 +1,9 @@
 package testcases
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -132,95 +130,35 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 		ExpectedBlocked: testCase.ExpectedBlocked,
 	}
 
-	// Create chat completion request
-	requestBody := map[string]interface{}{
-		"model": "MoM",
-		"messages": []map[string]string{
-			{"role": "user", "content": testCase.Question},
-		},
-	}
-
-	jsonData, err := json.Marshal(requestBody)
+	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Question, 30*time.Second)
 	if err != nil {
-		result.Error = fmt.Sprintf("failed to marshal request: %v", err)
+		result.Error = err.Error()
 		return result
 	}
 
-	// Send request
-	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to create request: %v", err)
-		return result
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to send request: %v", err)
-		return result
-	}
-	defer resp.Body.Close()
-
-	// Check response status (should be 200 OK even when blocked)
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-
-		// Log detailed error information including headers
-		var errorMsg strings.Builder
-		errorMsg.WriteString(fmt.Sprintf("Unexpected status code: %d\n", resp.StatusCode))
-		errorMsg.WriteString(fmt.Sprintf("Response body: %s\n", string(bodyBytes)))
-		errorMsg.WriteString("Response headers:\n")
-		errorMsg.WriteString(formatResponseHeaders(resp.Header))
-
-		result.Error = errorMsg.String()
-
-		// Print detailed error to console for debugging
-		if verbose {
-			fmt.Printf("[Test] ✗ HTTP %d Error for: %s\n", resp.StatusCode, testCase.Description)
-			fmt.Printf("  Question: %s\n", testCase.Question)
-			fmt.Printf("  Response Headers:\n%s", formatResponseHeaders(resp.Header))
-			fmt.Printf("  Response Body: %s\n", string(bodyBytes))
-		}
-
+	if response.StatusCode != http.StatusOK {
+		result.Error = formatUnexpectedChatCompletionStatus(response)
+		logUnexpectedChatCompletionStatus(verbose, response, testCase.Description,
+			"Question: "+testCase.Question)
 		return result
 	}
 
-	// Check for jailbreak blocked using new signal-driven headers
-	// New architecture: when jailbreak is detected and blocked, the fast_response plugin
-	// returns an ImmediateResponse with x-vsr-fast-response: true and
-	// x-vsr-selected-decision: <decision-name>.
-	// Note: x-vsr-matched-jailbreak is only set in the response header phase (non-blocking path),
-	// it is NOT present in fast_response ImmediateResponse.
-	fastResponse := resp.Header.Get("x-vsr-fast-response")
-	selectedDecision := resp.Header.Get("x-vsr-selected-decision")
-	matchedJailbreak := resp.Header.Get("x-vsr-matched-jailbreak")
-	jailbreakBlockedLegacy := resp.Header.Get("x-vsr-jailbreak-blocked")
-	// Jailbreak is blocked when: fast_response was triggered (ImmediateResponse),
-	// or legacy jailbreak-blocked header is set
+	fastResponse := response.Headers.Get("x-vsr-fast-response")
+	selectedDecision := response.Headers.Get("x-vsr-selected-decision")
+	matchedJailbreak := response.Headers.Get("x-vsr-matched-jailbreak")
+	jailbreakBlockedLegacy := response.Headers.Get("x-vsr-jailbreak-blocked")
 	result.ActuallyBlocked = fastResponse == "true" || jailbreakBlockedLegacy == "true"
-	result.DetectedType = selectedDecision // decision name from fast_response
+	result.DetectedType = selectedDecision
 	if result.DetectedType == "" {
-		result.DetectedType = matchedJailbreak // non-blocking path
+		result.DetectedType = matchedJailbreak
 	}
 	if result.DetectedType == "" {
-		result.DetectedType = resp.Header.Get("x-vsr-jailbreak-type") // legacy fallback
+		result.DetectedType = response.Headers.Get("x-vsr-jailbreak-type")
 	}
-	result.Confidence = resp.Header.Get("x-vsr-jailbreak-confidence") // legacy only
-
-	// Verify response body contains expected message
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to read response body: %v", err)
-		return result
-	}
+	result.Confidence = response.Headers.Get("x-vsr-jailbreak-confidence")
 
 	if result.ActuallyBlocked {
-		// Verify the response contains jailbreak violation message
-		// In the new signal-driven architecture, the fast_response plugin message
-		// is configurable, so we check for common patterns
-		bodyStr := string(bodyBytes)
+		bodyStr := string(response.Body)
 		hasExpectedText := strings.Contains(bodyStr, "jailbreak attempt") ||
 			strings.Contains(bodyStr, "jailbreak") ||
 			strings.Contains(bodyStr, "security") ||
@@ -230,8 +168,7 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 		}
 	}
 
-	// Check if result matches expectation
-	result.Correct = (result.ActuallyBlocked == result.ExpectedBlocked)
+	result.Correct = result.ActuallyBlocked == result.ExpectedBlocked
 
 	if verbose {
 		if result.Correct {

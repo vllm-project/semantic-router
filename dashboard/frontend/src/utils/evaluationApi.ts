@@ -113,6 +113,7 @@ export function subscribeToProgress(
   onError: (error: Error) => void
 ): () => void {
   const eventSource = new EventSource(`${API_BASE}/stream/${taskId}`);
+  let closed = false;
 
   eventSource.addEventListener('connected', () => {
     console.log(`Connected to progress stream for task ${taskId}`);
@@ -128,18 +129,27 @@ export function subscribeToProgress(
   });
 
   eventSource.addEventListener('completed', () => {
+    if (closed) {
+      return;
+    }
+    closed = true;
     eventSource.close();
     onComplete();
   });
 
   eventSource.onerror = (event) => {
+    if (closed || eventSource.readyState === EventSource.CLOSED) {
+      return;
+    }
     console.error('SSE error:', event);
+    closed = true;
     eventSource.close();
     onError(new Error('Connection to progress stream lost'));
   };
 
   // Return cleanup function
   return () => {
+    closed = true;
     eventSource.close();
   };
 }
