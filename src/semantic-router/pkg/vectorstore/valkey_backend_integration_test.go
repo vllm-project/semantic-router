@@ -60,7 +60,7 @@ func newIntegBackend() (*ValkeyBackend, context.Context) {
 // CRUD
 // ---------------------------------------------------------------------------
 
-var _ = Describe("ValkeyBackend integ CRUD", func() {
+var _ = Describe("ValkeyBackend integ collection ops", func() {
 	var (
 		backend *ValkeyBackend
 		ctx     context.Context
@@ -109,6 +109,24 @@ var _ = Describe("ValkeyBackend integ CRUD", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(exists).To(BeFalse())
 	})
+	It("close", func() {
+		b, _ := newIntegBackend()
+		Expect(b.Close()).NotTo(HaveOccurred())
+	})
+})
+
+var _ = Describe("ValkeyBackend integ insert and delete", func() {
+	var (
+		backend *ValkeyBackend
+		ctx     context.Context
+	)
+	BeforeEach(func() { backend, ctx = newIntegBackend() })
+	AfterEach(func() {
+		if backend != nil {
+			_ = backend.Close()
+		}
+	})
+
 	It("insert and search", func() {
 		vsID := "integ_insert_" + uniqueSuffix()
 		Expect(backend.CreateCollection(ctx, vsID, 3)).NotTo(HaveOccurred())
@@ -159,10 +177,6 @@ var _ = Describe("ValkeyBackend integ CRUD", func() {
 		Expect(backend.CreateCollection(ctx, vsID, 3)).NotTo(HaveOccurred())
 		defer cleanupCollection(ctx, backend, vsID)
 		Expect(backend.DeleteByFileID(ctx, vsID, "bad;chars")).To(HaveOccurred())
-	})
-	It("close", func() {
-		b, _ := newIntegBackend()
-		Expect(b.Close()).NotTo(HaveOccurred())
 	})
 })
 
@@ -283,16 +297,13 @@ var _ = Describe("ValkeyBackend integ Search filter", func() {
 // Advanced
 // ---------------------------------------------------------------------------
 
-var _ = Describe("ValkeyBackend integ advanced", func() {
-	var (
-		backend *ValkeyBackend
-		ctx     context.Context
-	)
-	BeforeEach(func() { backend, ctx = newIntegBackend() })
-	AfterEach(func() {
-		if backend != nil {
-			_ = backend.Close()
+var _ = Describe("ValkeyBackend integ config variants", func() {
+	var ctx context.Context
+	BeforeEach(func() {
+		if os.Getenv("SKIP_VALKEY_TESTS") != "false" {
+			Skip("Skipping Valkey tests (set SKIP_VALKEY_TESTS=false to enable)")
 		}
+		ctx = context.Background()
 	})
 
 	It("custom prefix and L2 metric", func() {
@@ -348,6 +359,19 @@ var _ = Describe("ValkeyBackend integ advanced", func() {
 		r, err := b.Search(ctx, vsID, normalizeVec([]float32{1, 0, 0}), 5, 0, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(r)).To(BeNumerically(">=", 1))
+	})
+})
+
+var _ = Describe("ValkeyBackend integ edge cases", func() {
+	var (
+		backend *ValkeyBackend
+		ctx     context.Context
+	)
+	BeforeEach(func() { backend, ctx = newIntegBackend() })
+	AfterEach(func() {
+		if backend != nil {
+			_ = backend.Close()
+		}
 	})
 
 	It("concurrent operations", func() {
