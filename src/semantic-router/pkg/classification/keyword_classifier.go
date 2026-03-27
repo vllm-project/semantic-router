@@ -46,6 +46,14 @@ type ruleRef struct {
 	name   string // rule name for logging
 }
 
+type ruleMatch struct {
+	matched       bool
+	ruleName      string
+	keywords      []string
+	matchCount    int
+	totalKeywords int
+}
+
 // NewKeywordClassifier creates a new KeywordClassifier.
 // Rules with method "bm25" or "ngram" are dispatched to Rust-backed classifiers;
 // all others (including default/empty method) use the original regex engine.
@@ -269,156 +277,193 @@ func (c *KeywordClassifier) ClassifyWithKeywordsAndCount(text string) (string, [
 	regexIdx := 0
 
 	for _, ref := range c.ruleOrder {
-		switch ref.method {
-		case "bm25":
-			result := c.bm25Classifier.Classify(text)
-			if result.Matched && result.RuleName == ref.name {
-				if len(result.MatchedKeywords) > 0 {
-					logging.Infof("BM25 keyword classification matched rule %q with keywords: %v (%d/%d matched)",
-						ref.name, result.MatchedKeywords, result.MatchCount, result.TotalKeywords)
-				} else {
-					logging.Infof("BM25 keyword classification matched rule %q with a NOR rule.", ref.name)
-				}
-				return result.RuleName, result.MatchedKeywords, result.MatchCount, result.TotalKeywords, nil
-			}
-
-		case "ngram":
-			result := c.ngramClassifier.Classify(text)
-			if result.Matched && result.RuleName == ref.name {
-				if len(result.MatchedKeywords) > 0 {
-					logging.Infof("N-gram keyword classification matched rule %q with keywords: %v (%d/%d matched)",
-						ref.name, result.MatchedKeywords, result.MatchCount, result.TotalKeywords)
-				} else {
-					logging.Infof("N-gram keyword classification matched rule %q with a NOR rule.", ref.name)
-				}
-				return result.RuleName, result.MatchedKeywords, result.MatchCount, result.TotalKeywords, nil
-			}
-
-		case "regex":
-			if regexIdx < len(c.regexRules) {
-				rule := c.regexRules[regexIdx]
-				regexIdx++
-				matched, keywords, matchCount, err := c.matchesWithCount(text, rule)
-				if err != nil {
-					return "", nil, 0, 0, err
-				}
-				if matched {
-					totalKeywords := len(rule.OriginalKeywords)
-					if len(keywords) > 0 {
-						logging.Infof("Keyword-based classification matched rule %q with keywords: %v (%d/%d matched)",
-							rule.Name, keywords, matchCount, totalKeywords)
-					} else {
-						logging.Infof("Keyword-based classification matched rule %q with a NOR rule.", rule.Name)
-					}
-					return rule.Name, keywords, matchCount, totalKeywords, nil
-				}
-			}
+		match, err := c.classifyRule(text, ref, &regexIdx)
+		if err != nil {
+			return "", nil, 0, 0, err
+		}
+		if match.matched {
+			logRuleMatch(ref.method, match.ruleName, match.keywords, match.matchCount, match.totalKeywords)
+			return match.ruleName, match.keywords, match.matchCount, match.totalKeywords, nil
 		}
 	}
 	return "", nil, 0, 0, nil
 }
 
+func (c *KeywordClassifier) classifyRule(text string, ref ruleRef, regexIdx *int) (ruleMatch, error) {
+	switch ref.method {
+	case "bm25":
+		result := c.bm25Classifier.Classify(text)
+		if !result.Matched || result.RuleName != ref.name {
+			return ruleMatch{}, nil
+		}
+		return ruleMatch{
+			matched:       true,
+			ruleName:      result.RuleName,
+			keywords:      result.MatchedKeywords,
+			matchCount:    result.MatchCount,
+			totalKeywords: result.TotalKeywords,
+		}, nil
+	case "ngram":
+		result := c.ngramClassifier.Classify(text)
+		if !result.Matched || result.RuleName != ref.name {
+			return ruleMatch{}, nil
+		}
+		return ruleMatch{
+			matched:       true,
+			ruleName:      result.RuleName,
+			keywords:      result.MatchedKeywords,
+			matchCount:    result.MatchCount,
+			totalKeywords: result.TotalKeywords,
+		}, nil
+	case "regex":
+		return c.classifyRegexRule(text, regexIdx)
+	default:
+		return ruleMatch{}, nil
+	}
+}
+
+func (c *KeywordClassifier) classifyRegexRule(text string, regexIdx *int) (ruleMatch, error) {
+	if *regexIdx >= len(c.regexRules) {
+		return ruleMatch{}, nil
+	}
+	rule := c.regexRules[*regexIdx]
+	*regexIdx++
+	matched, keywords, matchCount, err := c.matchesWithCount(text, rule)
+	if err != nil {
+		return ruleMatch{}, err
+	}
+	if !matched {
+		return ruleMatch{}, nil
+	}
+	return ruleMatch{
+		matched:       true,
+		ruleName:      rule.Name,
+		keywords:      keywords,
+		matchCount:    matchCount,
+		totalKeywords: len(rule.OriginalKeywords),
+	}, nil
+}
+
+func logRuleMatch(method, ruleName string, keywords []string, matchCount, totalKeywords int) {
+	prefix := "Keyword-based"
+	switch method {
+	case "bm25":
+		prefix = "BM25 keyword"
+	case "ngram":
+		prefix = "N-gram keyword"
+	}
+	if len(keywords) > 0 {
+		logging.Infof("%s classification matched rule %q with keywords: %v (%d/%d matched)",
+			prefix, ruleName, keywords, matchCount, totalKeywords)
+		return
+	}
+	logging.Infof("%s classification matched rule %q with a NOR rule.", prefix, ruleName)
+}
+
 // matchesWithCount checks if the text matches the given keyword rule.
 func (c *KeywordClassifier) matchesWithCount(text string, rule preppedKeywordRule) (bool, []string, int, error) {
-	var matchedKeywords []string
-	var regexpsToUse []*regexp.Regexp
+	regexpsToUse := regexpsForRule(rule)
+	lowerTextWords := lowerWordsForRule(rule, text)
 
-	if rule.CaseSensitive {
-		regexpsToUse = rule.CompiledRegexpsCS
-	} else {
-		regexpsToUse = rule.CompiledRegexpsCI
-	}
-
-	// Pre-extract and lowercase words for fuzzy matching (only if enabled)
-	var lowerTextWords []string
-	if rule.FuzzyMatch {
-		lowerTextWords = extractLowerWords(text)
-	}
-
-	// Check for matches based on the operator
 	switch rule.Operator {
 	case "AND":
-		for i, re := range regexpsToUse {
-			if re == nil {
-				return false, nil, 0, fmt.Errorf("nil regular expression found in rule %q at index %d. This indicates a failed compilation during initialization", rule.Name, i)
-			}
-
-			// Try exact regex match first
-			if re.MatchString(text) {
-				matchedKeywords = append(matchedKeywords, rule.OriginalKeywords[i])
-				continue
-			}
-
-			// Try fuzzy match if enabled
-			if rule.FuzzyMatch && i < len(rule.LowercaseKeywords) {
-				if fuzzyMatch(rule.LowercaseKeywords[i], lowerTextWords, rule.FuzzyThreshold) {
-					matchedKeywords = append(matchedKeywords, rule.OriginalKeywords[i]+" (fuzzy)")
-					continue
-				}
-			}
-
-			return false, nil, 0, nil // One keyword missing = no match for AND
-		}
-		return true, matchedKeywords, len(matchedKeywords), nil
-
+		return matchAND(text, rule, regexpsToUse, lowerTextWords)
 	case "OR":
-		// Collect ALL matching keywords for confidence calculation
-		matchedSet := make(map[string]bool) // Avoid duplicates
-
-		for i, re := range regexpsToUse {
-			if re == nil {
-				return false, nil, 0, fmt.Errorf("nil regular expression found in rule for category %q at index %d. This indicates a failed compilation during initialization", rule.Name, i)
-			}
-
-			keyword := rule.OriginalKeywords[i]
-
-			// Try exact regex match first
-			if re.MatchString(text) {
-				if !matchedSet[keyword] {
-					matchedSet[keyword] = true
-					matchedKeywords = append(matchedKeywords, keyword)
-				}
-				continue
-			}
-
-			// Try fuzzy match if enabled
-			if rule.FuzzyMatch && i < len(rule.LowercaseKeywords) {
-				if fuzzyMatch(rule.LowercaseKeywords[i], lowerTextWords, rule.FuzzyThreshold) {
-					fuzzyKeyword := keyword + " (fuzzy)"
-					if !matchedSet[keyword] && !matchedSet[fuzzyKeyword] {
-						matchedSet[fuzzyKeyword] = true
-						matchedKeywords = append(matchedKeywords, fuzzyKeyword)
-					}
-				}
-			}
-		}
-
-		if len(matchedKeywords) > 0 {
-			return true, matchedKeywords, len(matchedKeywords), nil
-		}
-		return false, nil, 0, nil
-
+		return matchOR(text, rule, regexpsToUse, lowerTextWords)
 	case "NOR":
-		for i, re := range regexpsToUse {
-			if re == nil {
-				return false, nil, 0, fmt.Errorf("nil regular expression found in rule for category %q at index %d. This indicates a failed compilation during initialization", rule.Name, i)
-			}
-			if re.MatchString(text) {
-				return false, nil, 0, nil // Forbidden keyword found
-			}
-
-			// Check fuzzy match if enabled
-			if rule.FuzzyMatch && i < len(rule.LowercaseKeywords) {
-				if fuzzyMatch(rule.LowercaseKeywords[i], lowerTextWords, rule.FuzzyThreshold) {
-					return false, nil, 0, nil // Forbidden keyword found via fuzzy
-				}
-			}
-		}
-		return true, nil, 0, nil // None of the forbidden keywords found
-
+		return matchNOR(text, rule, regexpsToUse, lowerTextWords)
 	default:
 		return false, nil, 0, fmt.Errorf("unsupported keyword rule operator: %q", rule.Operator)
 	}
+}
+
+func regexpsForRule(rule preppedKeywordRule) []*regexp.Regexp {
+	if rule.CaseSensitive {
+		return rule.CompiledRegexpsCS
+	}
+	return rule.CompiledRegexpsCI
+}
+
+func lowerWordsForRule(rule preppedKeywordRule, text string) []string {
+	if !rule.FuzzyMatch {
+		return nil
+	}
+	return extractLowerWords(text)
+}
+
+func validateRegexp(ruleName string, idx int, re *regexp.Regexp) error {
+	if re != nil {
+		return nil
+	}
+	return fmt.Errorf("nil regular expression found in rule %q at index %d. This indicates a failed compilation during initialization", ruleName, idx)
+}
+
+func matchAND(text string, rule preppedKeywordRule, regexpsToUse []*regexp.Regexp, lowerTextWords []string) (bool, []string, int, error) {
+	matchedKeywords := make([]string, 0, len(rule.OriginalKeywords))
+	for i, re := range regexpsToUse {
+		if err := validateRegexp(rule.Name, i, re); err != nil {
+			return false, nil, 0, err
+		}
+		if re.MatchString(text) {
+			matchedKeywords = append(matchedKeywords, rule.OriginalKeywords[i])
+			continue
+		}
+		if hasFuzzyMatch(rule, i, lowerTextWords) {
+			matchedKeywords = append(matchedKeywords, rule.OriginalKeywords[i]+" (fuzzy)")
+			continue
+		}
+		return false, nil, 0, nil
+	}
+	return true, matchedKeywords, len(matchedKeywords), nil
+}
+
+func matchOR(text string, rule preppedKeywordRule, regexpsToUse []*regexp.Regexp, lowerTextWords []string) (bool, []string, int, error) {
+	matchedKeywords := make([]string, 0, len(rule.OriginalKeywords))
+	matchedSet := make(map[string]bool)
+	for i, re := range regexpsToUse {
+		if err := validateRegexp(rule.Name, i, re); err != nil {
+			return false, nil, 0, err
+		}
+		keyword := rule.OriginalKeywords[i]
+		if re.MatchString(text) {
+			addMatchedKeyword(keyword, matchedSet, &matchedKeywords)
+			continue
+		}
+		if hasFuzzyMatch(rule, i, lowerTextWords) {
+			addMatchedKeyword(keyword+" (fuzzy)", matchedSet, &matchedKeywords)
+		}
+	}
+	if len(matchedKeywords) == 0 {
+		return false, nil, 0, nil
+	}
+	return true, matchedKeywords, len(matchedKeywords), nil
+}
+
+func matchNOR(text string, rule preppedKeywordRule, regexpsToUse []*regexp.Regexp, lowerTextWords []string) (bool, []string, int, error) {
+	for i, re := range regexpsToUse {
+		if err := validateRegexp(rule.Name, i, re); err != nil {
+			return false, nil, 0, err
+		}
+		if re.MatchString(text) || hasFuzzyMatch(rule, i, lowerTextWords) {
+			return false, nil, 0, nil
+		}
+	}
+	return true, nil, 0, nil
+}
+
+func hasFuzzyMatch(rule preppedKeywordRule, idx int, lowerTextWords []string) bool {
+	if !rule.FuzzyMatch || idx >= len(rule.LowercaseKeywords) {
+		return false
+	}
+	return fuzzyMatch(rule.LowercaseKeywords[idx], lowerTextWords, rule.FuzzyThreshold)
+}
+
+func addMatchedKeyword(keyword string, matchedSet map[string]bool, matchedKeywords *[]string) {
+	if matchedSet[keyword] {
+		return
+	}
+	matchedSet[keyword] = true
+	*matchedKeywords = append(*matchedKeywords, keyword)
 }
 
 // ----------- Fuzzy Matching -----------
