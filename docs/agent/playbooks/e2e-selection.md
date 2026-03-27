@@ -19,9 +19,12 @@ Use [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml
 
 ## Standard Profiles
 
-- `ai-gateway`
+- `kubernetes`
   - baseline router contract
   - default local profile and part of the full CI matrix
+- `dashboard`
+  - dashboard API contract
+  - part of the full CI matrix
 - `aibrix`
   - AIBrix gateway/control-plane health plus smoke routing
 - `routing-strategies`
@@ -68,7 +71,7 @@ Use [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml
 ## Selection Rules
 
 - Common E2E framework changes trigger:
-  - explicit local default profile: `ai-gateway`
+  - explicit local default profile: `kubernetes`
   - CI standard profile matrix from `full_ci_profiles`
 - Standard profile-local changes trigger only the matching local and CI profiles.
 - Manual-only profile changes trigger the matching local profile and stay outside the standard CI profile list.

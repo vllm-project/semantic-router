@@ -366,8 +366,9 @@ RUN if [ "$GIT_SSL_NO_VERIFY" = "1" ]; then PIP_EXTRA="--trusted-host pypi.org -
 
 # Copy start scripts
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
+COPY src/vllm-sr/start-envoy.sh /app/start-envoy.sh
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
-RUN chmod +x /app/start-router.sh /app/start-dashboard.sh
+RUN chmod +x /app/start-router.sh /app/start-envoy.sh /app/start-dashboard.sh
 
 # Copy supervisord configuration
 COPY src/vllm-sr/supervisord.conf /etc/supervisor/conf.d/supervisord.conf

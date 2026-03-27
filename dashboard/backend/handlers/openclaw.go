@@ -222,13 +222,9 @@ func detectContainerRuntime() (string, error) {
 		strings.TrimSpace(os.Getenv("OPENCLAW_CONTAINER_RUNTIME")),
 		strings.TrimSpace(os.Getenv("CONTAINER_RUNTIME")),
 		"docker",
-		"podman",
 		"/usr/local/bin/docker",
 		"/usr/bin/docker",
 		"/bin/docker",
-		"/usr/local/bin/podman",
-		"/usr/bin/podman",
-		"/bin/podman",
 	}
 
 	seen := make(map[string]bool)
@@ -239,6 +235,12 @@ func detectContainerRuntime() (string, error) {
 		}
 		seen[candidate] = true
 		checked = append(checked, candidate)
+
+		if containerRuntimeLooksLikePodman(candidate) {
+			return "", fmt.Errorf(
+				"podman is not supported for local OpenClaw provisioning; use Docker inside the dashboard runtime",
+			)
+		}
 
 		if filepath.IsAbs(candidate) {
 			info, err := os.Stat(candidate)
@@ -254,9 +256,14 @@ func detectContainerRuntime() (string, error) {
 	}
 
 	return "", fmt.Errorf(
-		"container runtime not available (checked: %s). PATH=%q. OpenClaw requires docker/podman in dashboard runtime. If you use `vllm-sr serve`, ensure vllm-sr image includes Docker CLI and mount /var/run/docker.sock",
+		"container runtime not available (checked: %s). PATH=%q. OpenClaw requires Docker in the dashboard runtime. If you use `vllm-sr serve`, ensure the vllm-sr image includes the Docker CLI and mounts /var/run/docker.sock",
 		strings.Join(checked, ", "), os.Getenv("PATH"),
 	)
+}
+
+func containerRuntimeLooksLikePodman(candidate string) bool {
+	base := strings.ToLower(filepath.Base(strings.TrimSpace(candidate)))
+	return strings.HasPrefix(base, "podman")
 }
 
 func defaultOpenClawBaseImage() string {
@@ -268,6 +275,9 @@ func defaultOpenClawBaseImage() string {
 
 func defaultOpenClawModelBaseURL() string {
 	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_MODEL_BASE_URL")); candidate != "" {
+		return candidate
+	}
+	if candidate := openClawModelBaseURLFromTargetEnvoy(); candidate != "" {
 		return candidate
 	}
 	return "http://127.0.0.1:8801/v1"
@@ -293,10 +303,20 @@ func (h *OpenClawHandler) resolveOpenClawModelBaseURL() string {
 	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_MODEL_BASE_URL")); candidate != "" {
 		return candidate
 	}
+	if candidate := openClawModelBaseURLFromTargetEnvoy(); candidate != "" {
+		return candidate
+	}
 	if candidate := h.discoverOpenClawModelBaseURLFromRouterConfig(); candidate != "" {
 		return candidate
 	}
 	return defaultOpenClawModelBaseURL()
+}
+
+func openClawModelBaseURLFromTargetEnvoy() string {
+	if candidate := strings.TrimSpace(os.Getenv("TARGET_ENVOY_URL")); candidate != "" {
+		return appendOpenClawV1Path(candidate)
+	}
+	return ""
 }
 
 func (h *OpenClawHandler) discoverOpenClawModelBaseURLFromRouterConfig() string {

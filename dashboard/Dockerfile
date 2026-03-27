@@ -27,6 +27,7 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=backend-builder /app/backend/dashboard-server .
 COPY --from=frontend-builder /app/frontend/dist ./frontend
+COPY config/kb/ /app/config/kb/
 ENV DASHBOARD_STATIC_DIR=./frontend
 EXPOSE 8700
 CMD ["./dashboard-server"]

@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -108,7 +107,7 @@ func SetupValidateHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		if validationErr := validateSetupCandidate(candidate); validationErr != nil {
+		if validationErr := validateSetupCandidate(configPath, candidate); validationErr != nil {
 			http.Error(w, fmt.Sprintf("Setup validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
@@ -158,10 +157,12 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 			return
 		}
 
-		if validationErr := validateSetupCandidate(candidate); validationErr != nil {
+		if validationErr := validateSetupCandidate(configPath, candidate); validationErr != nil {
 			http.Error(w, fmt.Sprintf("Setup activation validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
+
+		ensureSetupGlobalDefaults(candidate)
 
 		if !deployMu.TryLock() {
 			w.Header().Set("Content-Type", "application/json")
@@ -180,33 +181,34 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 			return
 		}
 
-		if err := backupCurrentConfig(configPath, configDir); err != nil {
-			log.Printf("Warning: failed to back up current config before setup activation: %v", err)
+		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {
+			log.Printf("Warning: failed to back up current config before setup activation: %v", backupErr)
 		}
 
 		tmpConfigFile := configPath + ".tmp"
-		if err := os.WriteFile(tmpConfigFile, yamlData, 0o644); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
+		if writeErr := os.WriteFile(tmpConfigFile, yamlData, 0o644); writeErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
 			return
 		}
-		if err := os.Rename(tmpConfigFile, configPath); err != nil {
-			if writeErr := os.WriteFile(configPath, yamlData, 0o644); writeErr != nil {
-				http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
+		if renameErr := os.Rename(tmpConfigFile, configPath); renameErr != nil {
+			if fallbackWriteErr := os.WriteFile(configPath, yamlData, 0o644); fallbackWriteErr != nil {
+				http.Error(w, fmt.Sprintf("Failed to write config: %v", fallbackWriteErr), http.StatusInternalServerError)
 				return
 			}
 		}
 
-		if _, err := routerconfig.Parse(configPath); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to validate activated config: %v", err), http.StatusInternalServerError)
+		if _, parseErr := routerconfig.Parse(configPath); parseErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to validate activated config: %v", parseErr), http.StatusInternalServerError)
 			return
 		}
 
-		if _, err := syncRuntimeConfigForCurrentRuntime(configPath); err != nil {
+		effectiveConfigPath, err := syncRuntimeConfigForCurrentRuntime(configPath)
+		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to sync runtime config: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		if err := restartSetupRuntimeServices(configPath); err != nil {
+		if err := restartSetupRuntimeServices(configPath, effectiveConfigPath); err != nil {
 			log.Printf("Warning: failed to restart router/envoy after activation: %v", err)
 		}
 
@@ -214,11 +216,20 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 		if err := json.NewEncoder(w).Encode(SetupActivateResponse{
 			Status:    "success",
 			SetupMode: false,
-			Message:   "Setup activated successfully. Router and Envoy are restarting.",
+			Message:   "Setup activated successfully. Router and Envoy are starting.",
 		}); err != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		}
 	}
+}
+
+func ensureSetupGlobalDefaults(configFile *setupConfigFile) {
+	if configFile == nil || configFile.Global != nil {
+		return
+	}
+
+	defaults := routerconfig.DefaultCanonicalGlobal()
+	configFile.Global = &defaults
 }
 
 func SetupImportRemoteHandler(configPath string) http.HandlerFunc {
@@ -277,7 +288,7 @@ func SetupImportRemoteHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		if validationErr := validateSetupCandidate(remoteConfig); validationErr != nil {
+		if validationErr := validateSetupCandidate(configPath, remoteConfig); validationErr != nil {
 			http.Error(w, fmt.Sprintf("remote config validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
@@ -458,7 +469,7 @@ func parseSetupCanonicalConfig(raw []byte) (*setupConfigFile, error) {
 	return &parsed, nil
 }
 
-func validateSetupCandidate(configData *setupConfigFile) error {
+func validateSetupCandidate(configPath string, configData *setupConfigFile) error {
 	if configData == nil {
 		return fmt.Errorf("config is required")
 	}
@@ -471,7 +482,11 @@ func validateSetupCandidate(configData *setupConfigFile) error {
 		return err
 	}
 
-	tempConfigFile, err := os.CreateTemp("", "vllm-sr-setup-*.yaml")
+	tempDir := filepath.Dir(filepath.Clean(configPath))
+	if tempDir == "." || tempDir == "" {
+		tempDir = ""
+	}
+	tempConfigFile, err := os.CreateTemp(tempDir, "vllm-sr-setup-*.yaml")
 	if err != nil {
 		return err
 	}
@@ -550,37 +565,29 @@ func backupCurrentConfig(configPath string, configDir string) error {
 	return nil
 }
 
-func restartSetupManagedServices() error {
-	if _, err := exec.LookPath("supervisorctl"); err != nil {
-		return nil
+func restartSetupManagedServices(effectiveConfigPath string) error {
+	if err := refreshManagedSplitEnvoyConfig(effectiveConfigPath); err != nil {
+		return err
 	}
 
 	for _, service := range []string{"router", "envoy"} {
-		cmd := exec.Command("supervisorctl", "restart", service)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			startCmd := exec.Command("supervisorctl", "start", service)
-			if startOutput, startErr := startCmd.CombinedOutput(); startErr != nil {
-				return fmt.Errorf("%s restart failed: %s / start failed: %s", service, string(output), string(startOutput))
-			}
+		if err := restartManagedService(service, 20*time.Second); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-func restartSetupRuntimeServices(configPath string) error {
+func restartSetupRuntimeServices(configPath string, effectiveConfigPath string) error {
 	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
-		return restartSetupManagedServices()
+		return restartSetupManagedServices(effectiveConfigPath)
 	}
 
-	if getDockerContainerStatus(vllmSrContainerName) != "running" {
+	if getDockerContainerStatus(managedContainerNameForService("router")) == "not found" &&
+		getDockerContainerStatus(managedContainerNameForService("envoy")) == "not found" {
 		return nil
 	}
 
-	for _, service := range []string{"router", "envoy"} {
-		if err := restartOrStartManagedContainerService(service, 20*time.Second); err != nil {
-			return err
-		}
-	}
-	return nil
+	return restartSetupManagedServices(effectiveConfigPath)
 }

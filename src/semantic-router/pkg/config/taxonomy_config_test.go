@@ -137,6 +137,26 @@ func TestKnowledgeBaseSourceResolvePathFallsBackToBundledAssets(t *testing.T) {
 	}
 }
 
+func TestKnowledgeBaseSourceResolveManifestPathFallsBackWhenLocalManifestMissing(t *testing.T) {
+	baseDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(baseDir, "kb", "privacy"), 0o755); err != nil {
+		t.Fatalf("mkdir local kb dir: %v", err)
+	}
+
+	source := KnowledgeBaseSource{
+		Path:     "kb/privacy/",
+		Manifest: "labels.json",
+	}
+
+	manifestPath := source.ResolveManifestPath(baseDir)
+	if !strings.HasSuffix(filepath.ToSlash(manifestPath), "config/kb/privacy/labels.json") {
+		t.Fatalf(
+			"ResolveManifestPath() = %q, want bundled config/kb/privacy/labels.json fallback",
+			manifestPath,
+		)
+	}
+}
+
 func TestCanonicalSignalsKBRoundTrip(t *testing.T) {
 	signals := CanonicalSignals{
 		KB: []KBSignalRule{

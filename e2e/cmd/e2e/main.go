@@ -18,7 +18,7 @@ const version = "v1.0.0"
 func main() {
 	// Parse command line flags
 	var (
-		profile            = flag.String("profile", "ai-gateway", fmt.Sprintf("Test profile to run (%s)", strings.Join(framework.RegisteredProfileNames(), ", ")))
+		profile            = flag.String("profile", "kubernetes", fmt.Sprintf("Test profile to run (%s)", strings.Join(framework.RegisteredProfileNames(), ", ")))
 		clusterName        = flag.String("cluster", "semantic-router-e2e", "Kind cluster name")
 		imageTag           = flag.String("image-tag", "e2e-test", "Docker image tag")
 		keepCluster        = flag.Bool("keep-cluster", false, "Keep cluster after tests complete")

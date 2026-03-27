@@ -66,9 +66,9 @@ agent-scorecard: agent-bootstrap ## Show the current harness governance scorecar
 agent-dev: ## Build the canonical local development image for the selected environment
 	@$(LOG_TARGET)
 	@if [ "$(ENV)" = "amd" ]; then \
-		$(MAKE) vllm-sr-dev VLLM_SR_PLATFORM=amd; \
+		$(MAKE) vllm-sr-dev VLLM_SR_PLATFORM=amd VLLM_SR_TOPOLOGY=$(VLLM_SR_TOPOLOGY); \
 	else \
-		$(MAKE) vllm-sr-dev; \
+		$(MAKE) vllm-sr-dev VLLM_SR_TOPOLOGY=$(VLLM_SR_TOPOLOGY); \
 	fi
 
 agent-serve-local: ## Start vllm-sr with the canonical local image flow
@@ -84,11 +84,11 @@ agent-serve-local: ## Start vllm-sr with the canonical local image flow
 	fi; \
 	if [ "$(ENV)" = "amd" ]; then \
 		echo "Starting local AMD workflow..."; \
-		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" \
+		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" VLLM_SR_STATE_ROOT_DIR="$$(pwd)" VLLM_SR_TOPOLOGY="$(VLLM_SR_TOPOLOGY)" \
 		vllm-sr serve --image-pull-policy never --platform amd $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
 	else \
 		echo "Starting local CPU workflow..."; \
-		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" \
+		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" VLLM_SR_STATE_ROOT_DIR="$$(pwd)" VLLM_SR_TOPOLOGY="$(VLLM_SR_TOPOLOGY)" \
 		vllm-sr serve --image-pull-policy never $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
 	fi
 
@@ -160,8 +160,14 @@ agent-ci-gate: ## Run the repo-standard fast CI gate
 agent-smoke-local: ## Validate local container, router, envoy, and dashboard health
 	@$(LOG_TARGET)
 	@STACK_CONTAINER="$(VLLM_SR_CONTAINER)"; \
+	STACK_ROUTER_CONTAINER="vllm-sr-router-container"; \
+	STACK_ENVOY_CONTAINER="vllm-sr-envoy-container"; \
+	STACK_DASHBOARD_CONTAINER="vllm-sr-dashboard-container"; \
 	if [ -n "$(AGENT_STACK_NAME)" ] && [ "$(AGENT_STACK_NAME)" != "vllm-sr" ]; then \
 		STACK_CONTAINER="$(AGENT_STACK_NAME)-vllm-sr-container"; \
+		STACK_ROUTER_CONTAINER="$(AGENT_STACK_NAME)-vllm-sr-router-container"; \
+		STACK_ENVOY_CONTAINER="$(AGENT_STACK_NAME)-vllm-sr-envoy-container"; \
+		STACK_DASHBOARD_CONTAINER="$(AGENT_STACK_NAME)-vllm-sr-dashboard-container"; \
 	fi; \
 	STACK_DASHBOARD_PORT=$$((8700 + $(AGENT_PORT_OFFSET))); \
 	START_TIME="$$(date +%s)"; \
@@ -183,11 +189,30 @@ agent-smoke-local: ## Validate local container, router, envoy, and dashboard hea
 		sleep 5; \
 	done; \
 	curl -fsS "http://localhost:$$STACK_DASHBOARD_PORT" >/dev/null; \
-	$(CONTAINER_RUNTIME) ps --filter "name=$$STACK_CONTAINER" --format '{{.Names}}' | grep -q "^$$STACK_CONTAINER$$"; \
-	if $(CONTAINER_RUNTIME) logs $$STACK_CONTAINER 2>&1 | grep -E "Image not found locally|Failed to pull image|Container exited unexpectedly" >/dev/null; then \
-		echo "Detected startup failure in container logs"; \
+	if ! ( \
+		$(CONTAINER_RUNTIME) ps --filter "name=$$STACK_CONTAINER" --format '{{.Names}}' | grep -q "^$$STACK_CONTAINER$$" || \
+		( \
+			$(CONTAINER_RUNTIME) ps --filter "name=$$STACK_ROUTER_CONTAINER" --format '{{.Names}}' | grep -q "^$$STACK_ROUTER_CONTAINER$$" && \
+			$(CONTAINER_RUNTIME) ps --filter "name=$$STACK_ENVOY_CONTAINER" --format '{{.Names}}' | grep -q "^$$STACK_ENVOY_CONTAINER$$" && \
+			$(CONTAINER_RUNTIME) ps --filter "name=$$STACK_DASHBOARD_CONTAINER" --format '{{.Names}}' | grep -q "^$$STACK_DASHBOARD_CONTAINER$$" \
+		) \
+	); then \
+		echo "Managed runtime containers were not found"; \
 		exit 1; \
 	fi; \
+	for RUNTIME_CONTAINER in \
+		"$$STACK_CONTAINER" \
+		"$$STACK_ROUTER_CONTAINER" \
+		"$$STACK_ENVOY_CONTAINER" \
+		"$$STACK_DASHBOARD_CONTAINER"; do \
+		if ! $(CONTAINER_RUNTIME) ps -a --filter "name=$$RUNTIME_CONTAINER" --format '{{.Names}}' | grep -q "^$$RUNTIME_CONTAINER$$"; then \
+			continue; \
+		fi; \
+		if $(CONTAINER_RUNTIME) logs "$$RUNTIME_CONTAINER" 2>&1 | grep -E "Image not found locally|Failed to pull image|Container exited unexpectedly" >/dev/null; then \
+			echo "Detected startup failure in container logs: $$RUNTIME_CONTAINER"; \
+			exit 1; \
+		fi; \
+	done; \
 	echo "Local smoke checks passed"
 
 agent-e2e-affected: ## Run local E2E profiles affected by the changed files
@@ -200,6 +225,7 @@ test-and-build-local: ## Reproduce the CI Test And Build job locally
 	trap '$(MAKE) clean-redis >/dev/null 2>&1 || true; $(MAKE) clean-valkey >/dev/null 2>&1 || true; $(MAKE) stop-milvus >/dev/null 2>&1 || true' EXIT; \
 	$(MAKE) check-go-mod-tidy; \
 	$(MAKE) rust-ci; \
+	$(MAKE) helm-ci-validate HELM_NAMESPACE=test-namespace; \
 	python3 -m pip install -U "huggingface_hub[cli]" hf_transfer; \
 	$(MAKE) start-milvus; \
 	$(MAKE) start-redis; \

@@ -57,48 +57,10 @@ func LogsHandler(routerAPIURL string) http.HandlerFunc {
 			Logs:           []LogEntry{},
 		}
 
-		// Check if we're running inside a container
-		runningInContainer := isRunningInContainer()
-
-		if runningInContainer {
-			// Running inside container - use supervisorctl to get logs
-			response.DeploymentType = "docker"
-			logs, err := responseLogs(component, lines)
-
-			if err != nil {
-				response.Error = err.Error()
-			} else {
-				response.Logs = logs
-			}
+		if isRunningInContainer() {
+			populateRunningContainerLogs(&response, component, lines)
 		} else {
-			// Running outside container - check Docker container status
-			containerStatus := getDockerContainerStatus(vllmSrContainerName)
-
-			switch containerStatus {
-			case "running", "exited":
-				response.DeploymentType = "docker"
-				logs, err := responseLogs(component, lines)
-
-				if err != nil {
-					response.Error = err.Error()
-				} else {
-					response.Logs = logs
-				}
-
-			case "not found":
-				// Check if router is running directly (not via Docker)
-				if routerAPIURL != "" && checkRouterHealth(routerAPIURL) {
-					response.DeploymentType = "local (direct)"
-					response.Message = "Logs are available for Docker deployments started with 'vllm-sr serve'. " +
-						"For the current deployment, logs are written to the process stdout/stderr."
-				} else {
-					response.Error = "No running deployment detected. Start with: vllm-sr serve"
-				}
-
-			default:
-				response.DeploymentType = "docker"
-				response.Error = "Container status: " + containerStatus
-			}
+			populateExternalLogs(&response, component, lines, routerAPIURL)
 		}
 
 		response.Count = len(response.Logs)
@@ -110,18 +72,101 @@ func LogsHandler(routerAPIURL string) http.HandlerFunc {
 	}
 }
 
+func populateRunningContainerLogs(
+	response *LogsResponse, component string, lines int,
+) {
+	response.DeploymentType = "docker"
+	populateFetchedLogs(response, component, lines)
+}
+
+func populateExternalLogs(
+	response *LogsResponse, component string, lines int, routerAPIURL string,
+) {
+	switch containerStatus := runtimeContainerStatusForLogs(); containerStatus {
+	case "running", "exited":
+		response.DeploymentType = "docker"
+		populateFetchedLogs(response, component, lines)
+	case "not found":
+		populateDirectRuntimeMessage(response, routerAPIURL)
+	default:
+		response.DeploymentType = "docker"
+		response.Error = "Container status: " + containerStatus
+	}
+}
+
+func populateFetchedLogs(response *LogsResponse, component string, lines int) {
+	logs, err := fetchContainerLogs(component, lines)
+	if err != nil {
+		response.Error = err.Error()
+		return
+	}
+	response.Logs = append(response.Logs, buildLogEntries(component, logs)...)
+}
+
+func buildLogEntries(component string, logs []string) []LogEntry {
+	entries := make([]LogEntry, 0, len(logs))
+	for _, line := range logs {
+		if line == "" {
+			continue
+		}
+		entries = append(entries, LogEntry{
+			Line:    line,
+			Service: component,
+		})
+	}
+	return entries
+}
+
+func populateDirectRuntimeMessage(response *LogsResponse, routerAPIURL string) {
+	if routerAPIURL != "" && checkRouterHealth(routerAPIURL) {
+		response.DeploymentType = "local (direct)"
+		response.Message = "Logs are available for Docker deployments started with 'vllm-sr serve'. " +
+			"For the current deployment, logs are written to the process stdout/stderr."
+		return
+	}
+	response.Error = "No running deployment detected. Start with: vllm-sr serve"
+}
+
+func runtimeContainerStatusForLogs() string {
+	if managedRuntimeUsesSplitContainers() {
+		if status := managedRuntimeContainerStatus(); status != "not found" {
+			return status
+		}
+	}
+	return getDockerContainerStatus(vllmSrContainerName)
+}
+
 // fetchContainerLogs gets logs from supervisor-managed services
 // When running inside the container, use supervisorctl to get logs
 // When running outside, use docker logs
 func fetchContainerLogs(component string, lines int) ([]string, error) {
-	// First, try to use supervisorctl (when running inside container)
-	logs, err := fetchLogsFromSupervisor(component, lines)
-	if err == nil && len(logs) > 0 {
-		return logs, nil
+	// First, try to use supervisorctl when the requested service is local to this container.
+	if shouldReadLocalSupervisorLogs(component) {
+		logs, err := fetchLogsFromSupervisor(component, lines)
+		if err == nil && len(logs) > 0 {
+			return logs, nil
+		}
 	}
 
 	// Fallback: try docker logs (when running outside container)
 	return fetchLogsFromDocker(component, lines)
+}
+
+func shouldReadLocalSupervisorLogs(component string) bool {
+	if !isRunningInContainer() {
+		return false
+	}
+
+	switch component {
+	case "router", "envoy", "dashboard":
+		return managedServiceCanBeControlledLocally(component)
+	case "all":
+		return managedServiceCanBeControlledLocally("router") &&
+			managedServiceCanBeControlledLocally("envoy") &&
+			managedServiceCanBeControlledLocally("dashboard")
+	default:
+		return false
+	}
 }
 
 // fetchLogsFromSupervisor gets logs by reading supervisor log files directly
@@ -173,6 +218,41 @@ func fetchLogsFromSupervisor(component string, lines int) ([]string, error) {
 
 // fetchLogsFromDocker gets logs from Docker container (fallback for external access)
 func fetchLogsFromDocker(component string, lines int) ([]string, error) {
+	if managedRuntimeUsesSplitContainers() {
+		return fetchLogsFromManagedDocker(component, lines)
+	}
+	return fetchLogsFromLegacyDocker(component, lines)
+}
+
+func fetchLogsFromManagedDocker(component string, lines int) ([]string, error) {
+	var result []string
+
+	for _, containerName := range managedContainerNamesForComponent(component) {
+		// #nosec G204 -- containerName is repository-managed and lines is converted from int.
+		cmd := exec.Command("docker", "logs", "--tail", strconv.Itoa(lines), containerName)
+		output, err := cmd.CombinedOutput()
+		if err != nil && len(output) == 0 {
+			continue
+		}
+
+		logLines := splitLogLines(string(output))
+		service := managedServiceForContainerName(containerName)
+		if component == "all" && service != "" {
+			for _, line := range logLines {
+				result = append(result, "["+service+"] "+line)
+			}
+			continue
+		}
+		result = append(result, logLines...)
+	}
+
+	if len(result) > lines {
+		return result[len(result)-lines:], nil
+	}
+	return result, nil
+}
+
+func fetchLogsFromLegacyDocker(component string, lines int) ([]string, error) {
 	// Get logs directly from Docker without shell interpolation
 	// #nosec G204 -- vllmSrContainerName is a compile-time constant, lines is validated integer
 	tailArg := strconv.Itoa(lines * 2) // Get more lines for filtering
@@ -264,26 +344,4 @@ func splitLogLines(output string) []string {
 		}
 	}
 	return result
-}
-
-// responseLogs returns logs for a component
-func responseLogs(component string, lines int) ([]LogEntry, error) {
-	logs, err := fetchContainerLogs(component, lines)
-	logEntries := []LogEntry{}
-
-	if err != nil {
-		return nil, err
-	}
-
-	for _, line := range logs {
-		if line == "" {
-			continue
-		}
-		logEntries = append(logEntries, LogEntry{
-			Line:    line,
-			Service: component,
-		})
-	}
-
-	return logEntries, nil
 }
