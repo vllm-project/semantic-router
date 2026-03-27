@@ -3,6 +3,8 @@
 package apiserver
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -233,4 +235,25 @@ func configCleanupBackups(backupDir string) {
 			logging.Infof("Removed old backup: %s", backups[i].Name())
 		}
 	}
+}
+
+// handleConfigHash handles GET /config/hash — returns SHA256 of the active config file.
+// Used by the tuning pipeline to confirm a reload completed.
+func (s *ClassificationAPIServer) handleConfigHash(w http.ResponseWriter, _ *http.Request) {
+	if s.configPath == "" {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
+		return
+	}
+
+	paths := resolveConfigPersistencePaths(s.configPath)
+	data, err := os.ReadFile(paths.sourcePath)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read config: %v", err))
+		return
+	}
+
+	hash := sha256.Sum256(data)
+	s.writeJSONResponse(w, http.StatusOK, map[string]string{
+		"hash": hex.EncodeToString(hash[:]),
+	})
 }

@@ -228,6 +228,7 @@ func (s *ClassificationAPIServer) registerConfigRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /config/router", s.handleConfigPut)
 	mux.HandleFunc("POST /config/router/rollback", s.handleConfigRollback)
 	mux.HandleFunc("GET /config/router/versions", s.handleConfigVersions)
+	mux.HandleFunc("GET /config/hash", s.handleConfigHash)
 }
 
 func (s *ClassificationAPIServer) registerMemoryRoutes(mux *http.ServeMux) {

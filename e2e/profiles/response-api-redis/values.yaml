@@ -78,6 +78,7 @@ config:
         embedding_model: mmbert
     integrations: {}
     model_catalog:
+      kbs: []
       modules:
         prompt_guard:
           enabled: false

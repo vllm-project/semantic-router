@@ -46,6 +46,27 @@ providers:
           protocol: http
           weight: 1
 
+global:
+  model_catalog:
+    kbs:
+      - name: privacy_kb
+        source:
+          path: knowledge_bases/
+          manifest: labels.json
+        threshold: 0.30
+        groups:
+          security_containment: [prompt_injection, credential_exfiltration, jailbreak_role, system_prompt_extraction]
+          privacy_policy: [proprietary_code, internal_document, pii, business_strategy, trade_secret_ip, operational_infrastructure, locality_directive, customer_data]
+          frontier_reasoning: [architecture_analysis, root_cause_analysis, multi_step_tradeoffs]
+          local_standard: [generic_coding, simple_task, general_knowledge]
+          private: [prompt_injection, credential_exfiltration, jailbreak_role, system_prompt_extraction, proprietary_code, internal_document, pii, business_strategy, trade_secret_ip, operational_infrastructure, locality_directive, customer_data]
+          public: [architecture_analysis, root_cause_analysis, multi_step_tradeoffs, generic_coding, simple_task, general_knowledge]
+        metrics:
+          - name: private_vs_public
+            type: group_margin
+            positive_group: private
+            negative_group: public
+
 routing:
   modelCards:
     - name: local/private-qwen
@@ -433,29 +454,11 @@ routing:
         description: Detect personally identifiable information that should remain on local infrastructure.
 
     kb:
-      - name: security_containment
-        kb: privacy_kb
-        target:
-          kind: group
-          value: security_containment
-        match: best
       - name: privacy_policy
         kb: privacy_kb
         target:
           kind: group
           value: privacy_policy
-        match: best
-      - name: frontier_reasoning
-        kb: privacy_kb
-        target:
-          kind: group
-          value: frontier_reasoning
-        match: best
-      - name: local_standard
-        kb: privacy_kb
-        target:
-          kind: group
-          value: local_standard
         match: best
 
   projections:
@@ -622,10 +625,8 @@ routing:
       priority: 300
       tier: 1
       rules:
-        operator: OR
+        operator: AND
         conditions:
-          - type: kb
-            name: security_containment
           - type: projection
             name: policy_security_local_only
       modelRefs:
@@ -636,7 +637,6 @@ routing:
           configuration:
             enabled: true
             mode: none
-            semantic_selection: false
         - type: router_replay
           configuration:
             enabled: true
@@ -644,14 +644,22 @@ routing:
             max_body_bytes: 2048
 
     - name: local_privacy_policy
-      description: Route PII, private code, and internal documents to the local model with policy-owned tool handling.
+      description: Route PII, private code, and internal documents to the local model with local-only tool access.
       priority: 250
       tier: 2
       rules:
         operator: AND
         conditions:
-          - type: kb
-            name: privacy_policy
+          - operator: OR
+            conditions:
+              - type: projection
+                name: policy_privacy_local_only
+              - type: projection
+                name: privacy_override_active
+          - operator: NOT
+            conditions:
+              - type: projection
+                name: policy_security_local_only
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true
@@ -660,8 +668,8 @@ routing:
         - type: tools
           configuration:
             enabled: true
-            mode: passthrough
-            semantic_selection: true
+            mode: filtered
+            allow_tools: [local_search, local_read]
         - type: router_replay
           configuration:
             enabled: true
@@ -669,14 +677,22 @@ routing:
             max_body_bytes: 2048
 
     - name: cloud_frontier_reasoning
-      description: Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model with plugin-managed tool access.
+      description: Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model with full tool access.
       priority: 200
       tier: 3
       rules:
         operator: AND
         conditions:
-          - type: kb
-            name: frontier_reasoning
+          - type: projection
+            name: policy_frontier_reasoning
+          - type: projection
+            name: policy_privacy_cloud_allowed
+          - type: projection
+            name: policy_security_standard
+          - operator: NOT
+            conditions:
+              - type: projection
+                name: privacy_override_active
       modelRefs:
         - model: cloud/frontier-reasoning
           use_reasoning: true
@@ -686,7 +702,6 @@ routing:
           configuration:
             enabled: true
             mode: passthrough
-            semantic_selection: true
         - type: router_replay
           configuration:
             enabled: true
@@ -698,18 +713,14 @@ routing:
       priority: 100
       tier: 4
       rules:
-        operator: OR
+        operator: AND
         conditions:
-          - type: kb
-            name: local_standard
-          - operator: AND
-            conditions:
-              - type: projection
-                name: policy_local_reasoning
-              - type: projection
-                name: policy_privacy_cloud_allowed
-              - type: projection
-                name: policy_security_standard
+          - type: projection
+            name: policy_local_reasoning
+          - type: projection
+            name: policy_privacy_cloud_allowed
+          - type: projection
+            name: policy_security_standard
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true
@@ -719,7 +730,6 @@ routing:
           configuration:
             enabled: true
             mode: passthrough
-            semantic_selection: true
         - type: router_replay
           configuration:
             enabled: true

@@ -434,6 +434,8 @@ config:
   global:
     router:
       strategy: priority
+    model_catalog:
+      kbs: []
     services:
       api:
         batch_classification:
