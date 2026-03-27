@@ -440,7 +440,7 @@ var _ = Describe("ValkeyBackend integration tests", func() {
 
 	AfterEach(func() {
 		if backend != nil {
-			backend.Close()
+			_ = backend.Close()
 		}
 	})
 
@@ -818,7 +818,7 @@ var _ = Describe("ValkeyBackend integration tests", func() {
 				ConnectTimeout:   5,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			defer b.Close()
+			defer func() { _ = b.Close() }()
 
 			Expect(b.collectionPrefix).To(Equal("custom_pfx_"))
 			Expect(b.metricType).To(Equal("L2"))
@@ -863,7 +863,7 @@ var _ = Describe("ValkeyBackend integration tests", func() {
 				ConnectTimeout:   5,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			defer b.Close()
+			defer func() { _ = b.Close() }()
 
 			vsID := "integ_ip_" + uniqueSuffix()
 			err = b.CreateCollection(ctx, vsID, 3)

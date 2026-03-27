@@ -63,8 +63,10 @@ type ValkeyBackend struct {
 	metricType       string
 }
 
-// NewValkeyBackend creates a new Valkey vector store backend.
-func NewValkeyBackend(cfg ValkeyBackendConfig) (*ValkeyBackend, error) {
+// valkeyDefaults applies default values to a ValkeyBackendConfig, returning
+// the resolved host, port, prefix, indexM, indexEf, metricType, and timeout.
+// Returns an error if the metric type is unsupported.
+func valkeyDefaults(cfg ValkeyBackendConfig) (string, int, string, int, int, string, int, error) {
 	host := cfg.Host
 	if host == "" {
 		host = "localhost"
@@ -93,11 +95,20 @@ func NewValkeyBackend(cfg ValkeyBackendConfig) (*ValkeyBackend, error) {
 	case "COSINE", "L2", "IP":
 		// valid
 	default:
-		return nil, fmt.Errorf("unsupported metric type: %s (supported: COSINE, L2, IP)", metricType)
+		return "", 0, "", 0, 0, "", 0, fmt.Errorf("unsupported metric type: %s (supported: COSINE, L2, IP)", metricType)
 	}
 	timeout := cfg.ConnectTimeout
 	if timeout <= 0 {
 		timeout = 10
+	}
+	return host, port, prefix, indexM, indexEf, metricType, timeout, nil
+}
+
+// NewValkeyBackend creates a new Valkey vector store backend.
+func NewValkeyBackend(cfg ValkeyBackendConfig) (*ValkeyBackend, error) {
+	host, port, prefix, indexM, indexEf, metricType, timeout, err := valkeyDefaults(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	clientConfig := glideconfig.NewClientConfiguration().
