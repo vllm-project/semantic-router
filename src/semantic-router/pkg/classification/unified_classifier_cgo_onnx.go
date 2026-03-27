@@ -6,6 +6,6 @@ package classification
 // Build with: go build -tags=onnx
 
 /*
-#cgo LDFLAGS: -L../../../../../onnx-binding/target/release -lonnx_semantic_router
+#cgo LDFLAGS: -L../../../../onnx-binding/target/release -lonnx_semantic_router
 */
 import "C"

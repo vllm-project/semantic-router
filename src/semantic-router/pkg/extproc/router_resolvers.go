@@ -3,6 +3,8 @@ package extproc
 import (
 	"fmt"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -19,6 +21,7 @@ var knownAuthzProviderTypes = map[string]bool{
 var knownRateLimitProviderTypes = map[string]bool{
 	"envoy-ratelimit": true,
 	"local-limiter":   true,
+	"redis-limiter":   true,
 }
 
 // buildCredentialResolver constructs the credential provider chain from config.
@@ -147,7 +150,7 @@ func buildRateLimitResolver(cfg *config.RouterConfig) *ratelimit.RateLimitResolv
 		return nil
 	}
 
-	providers := createRateLimitProviders(rlCfg.Providers)
+	providers := createRateLimitProviders(cfg, rlCfg.Providers)
 	if len(providers) == 0 {
 		logging.Warnf("RateLimit: no valid providers after construction, rate limiting disabled")
 		return nil
@@ -176,7 +179,7 @@ func validateRateLimitProvider(index int, provider config.RateLimitProviderConfi
 		validationErrors = append(
 			validationErrors,
 			fmt.Sprintf(
-				"ratelimit.providers[%d]: unknown type %q (valid types: envoy-ratelimit, local-limiter)",
+				"ratelimit.providers[%d]: unknown type %q (valid types: envoy-ratelimit, local-limiter, redis-limiter)",
 				index,
 				provider.Type,
 			),
@@ -194,13 +197,27 @@ func validateRateLimitProvider(index int, provider config.RateLimitProviderConfi
 			fmt.Sprintf("ratelimit.providers[%d]: local-limiter requires at least one rule", index),
 		)
 	}
+	if provider.Type == "redis-limiter" {
+		if provider.Address == "" {
+			validationErrors = append(
+				validationErrors,
+				fmt.Sprintf("ratelimit.providers[%d]: redis-limiter requires 'address'", index),
+			)
+		}
+		if len(provider.Rules) == 0 {
+			validationErrors = append(
+				validationErrors,
+				fmt.Sprintf("ratelimit.providers[%d]: redis-limiter requires at least one rule", index),
+			)
+		}
+	}
 	return validationErrors
 }
 
-func createRateLimitProviders(providersCfg []config.RateLimitProviderConfig) []ratelimit.Provider {
+func createRateLimitProviders(cfg *config.RouterConfig, providersCfg []config.RateLimitProviderConfig) []ratelimit.Provider {
 	providers := make([]ratelimit.Provider, 0, len(providersCfg))
 	for _, providerCfg := range providersCfg {
-		provider := buildRateLimitProvider(providerCfg)
+		provider := buildRateLimitProvider(cfg, providerCfg)
 		if provider != nil {
 			providers = append(providers, provider)
 		}
@@ -208,12 +225,14 @@ func createRateLimitProviders(providersCfg []config.RateLimitProviderConfig) []r
 	return providers
 }
 
-func buildRateLimitProvider(providerCfg config.RateLimitProviderConfig) ratelimit.Provider {
+func buildRateLimitProvider(cfg *config.RouterConfig, providerCfg config.RateLimitProviderConfig) ratelimit.Provider {
 	switch providerCfg.Type {
 	case "envoy-ratelimit":
 		return buildEnvoyRateLimitProvider(providerCfg)
 	case "local-limiter":
 		return buildLocalRateLimitProvider(providerCfg)
+	case "redis-limiter":
+		return buildRedisLimiterProvider(cfg, providerCfg)
 	default:
 		return nil
 	}
@@ -256,4 +275,31 @@ func buildLocalRateLimitRules(rulesCfg []config.RateLimitRule) []ratelimit.Rule 
 		})
 	}
 	return rules
+}
+
+func buildRedisLimiterProvider(cfg *config.RouterConfig, providerCfg config.RateLimitProviderConfig) ratelimit.Provider {
+	client := redis.NewClient(&redis.Options{
+		Addr: providerCfg.Address,
+	})
+
+	rules := make([]ratelimit.RedisLimiterRule, 0, len(providerCfg.Rules))
+	for _, rule := range providerCfg.Rules {
+		rules = append(rules, ratelimit.RedisLimiterRule{
+			Name: rule.Name,
+			Match: ratelimit.RuleMatch{
+				User:  rule.Match.User,
+				Group: rule.Match.Group,
+				Model: rule.Match.Model,
+			},
+			TokensPerUnit: int64(rule.TokensPerUnit),
+			Unit:          ratelimit.ParseUnit(rule.Unit),
+		})
+	}
+
+	pricingFunc := func(model string) (float64, float64, string, bool) {
+		return cfg.GetModelPricing(model)
+	}
+
+	logging.Infof("RateLimit: redis-limiter provider at %s with %d rules", providerCfg.Address, len(rules))
+	return ratelimit.NewRedisLimiterProvider(client, rules, pricingFunc)
 }

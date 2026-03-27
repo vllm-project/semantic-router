@@ -1,0 +1,117 @@
+# Anthropic pricing table (as of 2026-03-27)
+# Model                              Input/1M   Output/1M  Batch In/1M  Batch Out/1M  5m Cache Write/1M  1h Cache Write/1M  Cache Read/1M
+# Claude Sonnet 4.6                  $3.30      $16.50     $1.65        $8.25         $4.125             $6.60              $0.33
+# Claude Sonnet 4.6 - Long Context   $3.30      $16.50     $1.65        $8.25         $4.125             $6.60              $0.33
+# Claude Opus 4.6                    $5.50      $27.50     $2.75        $13.75        $6.875             $11.00             $0.55
+# Claude Opus 4.6 - Long Context     $5.50      $27.50     $2.75        $13.75        $6.875             $11.00             $0.55
+# Claude Sonnet 4.5                  $3.30      $16.50     $1.65        $8.25         $4.125             $6.60              $0.33
+# Claude Sonnet 4.5 - Long Context   $6.60      $24.75     $3.30        $12.375       $8.25              $13.20             $0.66
+# Claude Opus 4.5                    $5.50      $27.50     $2.75        $13.75        $6.875             $11.00             $0.55
+# Claude Sonnet 4                    $3.00      $15.00     N/A          N/A           $3.75              N/A                $0.30
+# Claude 3.7 Sonnet                  $3.00      $15.00     $1.50        $7.50         $3.75              N/A                $0.30
+
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 300s
+
+providers:
+  defaults:
+    default_model: claude-haiku-4-5
+  models:
+    - name: claude-opus-4-6
+      provider_model_id: eu.anthropic.claude-opus-4-6-v1
+      pricing:
+        currency: USD
+        prompt_per_1m: 5.50
+        completion_per_1m: 27.50
+    - name: claude-sonnet-4-6
+      provider_model_id: eu.anthropic.claude-sonnet-4-6-v1
+      pricing:
+        currency: USD
+        prompt_per_1m: 3.30
+        completion_per_1m: 16.50
+    - name: claude-haiku-4-5
+      provider_model_id: eu.anthropic.claude-haiku-4-5-v1
+      pricing:
+        currency: USD
+        prompt_per_1m: 1.00
+        completion_per_1m: 5.00
+
+routing:
+  modelCards:
+    - name: claude-opus-4-6
+      description: Most capable model.
+      capabilities: [chat, reasoning]
+      quality_score: 0.98
+      modality: ar
+    - name: claude-sonnet-4-6
+      description: Balanced cost and quality.
+      capabilities: [chat, reasoning]
+      quality_score: 0.92
+      modality: ar
+    - name: claude-haiku-4-5
+      description: Fast and cost-effective.
+      capabilities: [chat]
+      quality_score: 0.83
+      modality: ar
+
+  decisions:
+    - name: default_route
+      description: Default static route for all traffic.
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: claude-haiku-4-5
+          use_reasoning: false
+      algorithm:
+        type: static
+      plugins:
+        - type: semantic-cache
+          configuration:
+            enabled: true
+            similarity_threshold: 0.82
+            ttl_seconds: 7200
+
+global:
+  router:
+    config_source: file
+    strategy: priority
+
+  services:
+    authz:
+      fail_open: false
+      identity:
+        user_id_header: x-user-id
+        user_groups_header: x-user-groups
+    ratelimit:
+      fail_open: false
+      providers:
+        - type: redis-limiter
+          address: "redis.default.svc.cluster.local:6379"
+          rules:
+            - name: power-user-budget
+              match:
+                group: ai-power-user
+              tokens_per_unit: 1500000000    # $15.00/day in CEL units
+              unit: day
+            - name: standard-user-budget
+              match:
+                group: ai-standard-user
+              tokens_per_unit: 500000000     # $5.00/day in CEL units
+              unit: day
+
+  stores:
+    semantic_cache:
+      backend_type: memory
+      enabled: true
+      similarity_threshold: 0.86
+      max_entries: 50000
+      ttl_seconds: 7200
+      eviction_policy: lru
+      embedding_model: mmbert

@@ -24,6 +24,7 @@ ENVOY_VERSION=${ENVOY_VERSION:-"1.35.4"}
 
 # Router settings
 ROUTER_API_PORT=${ROUTER_API_PORT:-"8080"}
+ROUTER_PORT=${ROUTER_PORT:-"50051"}
 ROUTER_CONFIG=${ROUTER_CONFIG:-"config/config.yaml"}
 
 # Script settings
@@ -139,6 +140,7 @@ function start_router {
   echo "Starting router..."
   ROUTER_LOG=${LOG_DIR}/router.log
   run "router" "${ROUTER_LOG}" "${BIN_OUT}/router" \
+    --port "${ROUTER_PORT}" \
     --api-port "${ROUTER_API_PORT}" \
     --config "${ROUTER_CONFIG}" &
   ROUTER_PID=$!
