@@ -191,9 +191,16 @@ def _resolve_runtime_service_image(
         source_name = f"{service_name} image"
         log.info(f"Using {service_name} image from explicit override: {selected_image}")
     elif base_image_is_explicit:
-        selected_image, source_name = _resolve_explicit_base_runtime_service_image(
-            service_name, base_image
-        )
+        if service_name == "router":
+            selected_image = base_image
+            source_name = "explicit vllm-sr image"
+            log.info(
+                f"Using {service_name} image from explicit --image override: {selected_image}"
+            )
+        else:
+            selected_image, source_name = _resolve_nonrouter_explicit_base_image(
+                service_name, base_image
+            )
     else:
         service_env_var = RUNTIME_SERVICE_IMAGE_ENV_VARS[service_name]
         env_image = os.getenv(service_env_var, "").strip()
@@ -233,26 +240,38 @@ def _resolve_runtime_service_image(
     return selected_image
 
 
-def _resolve_explicit_base_runtime_service_image(service_name, base_image):
+def _resolve_nonrouter_explicit_base_image(service_name, base_image):
+    service_env_var = RUNTIME_SERVICE_IMAGE_ENV_VARS[service_name]
+    env_image = os.getenv(service_env_var, "").strip()
+    if env_image:
+        log.info(f"Using {service_name} image from {service_env_var}: {env_image}")
+        return env_image, f"{service_name} image in {service_env_var}"
+
     derived_image = ""
     if service_name == "envoy":
         derived_image = _derive_envoy_variant(base_image)
     elif service_name == "dashboard":
         derived_image = _derive_dashboard_variant(base_image)
 
-    selected_image = derived_image or base_image
     if derived_image:
+        selected_image = derived_image
         log.info(
             f"Using {service_name} image derived from explicit --image override: {selected_image}"
         )
         source_name = (
             f"derived official {service_name} image from explicit --image override"
         )
+        return selected_image, source_name
+
+    if service_name == "envoy":
+        selected_image = VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT
     else:
-        log.info(
-            f"Using {service_name} image from explicit --image override: {selected_image}"
-        )
-        source_name = "explicit vllm-sr image"
+        selected_image = VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT
+
+    log.info(
+        f"Using default {service_name} image alongside explicit --image override: {selected_image}"
+    )
+    source_name = f"default {service_name} image"
 
     return selected_image, source_name
 

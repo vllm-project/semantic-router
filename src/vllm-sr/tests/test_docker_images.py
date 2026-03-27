@@ -186,7 +186,7 @@ def test_get_runtime_images_derives_official_dashboard_image_from_official_tag(
     ]
 
 
-def test_get_runtime_images_prefers_explicit_base_image_over_service_env(monkeypatch):
+def test_get_runtime_images_prefers_explicit_base_image_only_for_router(monkeypatch):
     ensured = []
     monkeypatch.setattr(
         docker_images,
@@ -207,10 +207,49 @@ def test_get_runtime_images_prefers_explicit_base_image_over_service_env(monkeyp
 
     assert images == {
         "router": "base:explicit",
-        "envoy": "base:explicit",
-        "dashboard": "base:explicit",
+        "envoy": VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT,
+        "dashboard": VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT,
     }
-    assert ensured == [("base:explicit", "never")]
+    assert ensured == [
+        ("base:explicit", "never"),
+        (VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT, "never"),
+        (VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT, "never"),
+    ]
+
+
+def test_get_runtime_images_prefers_service_env_over_explicit_base_for_nonrouter(
+    monkeypatch,
+):
+    ensured = []
+    monkeypatch.setattr(
+        docker_images,
+        "_resolve_selected_image",
+        lambda image, normalized_platform: image,
+    )
+    monkeypatch.setattr(
+        docker_images,
+        "_ensure_image_available",
+        lambda image, pull_policy: ensured.append((image, pull_policy)),
+    )
+    monkeypatch.setenv("VLLM_SR_ROUTER_IMAGE", "router:from-env")
+    monkeypatch.setenv("VLLM_SR_ENVOY_IMAGE", "envoy:from-env")
+    monkeypatch.setenv("VLLM_SR_DASHBOARD_IMAGE", "dashboard:from-env")
+
+    images = docker_images.get_runtime_images(
+        image="base:explicit",
+        pull_policy="never",
+    )
+
+    assert images == {
+        "router": "base:explicit",
+        "envoy": "envoy:from-env",
+        "dashboard": "dashboard:from-env",
+    }
+    assert ensured == [
+        ("base:explicit", "never"),
+        ("envoy:from-env", "never"),
+        ("dashboard:from-env", "never"),
+    ]
 
 
 def test_get_runtime_images_derives_official_service_images_from_explicit_base_image(
@@ -270,11 +309,12 @@ def test_get_runtime_images_prefers_explicit_service_image_over_explicit_base_im
     assert images == {
         "router": "base:explicit",
         "envoy": "envoy:explicit",
-        "dashboard": "base:explicit",
+        "dashboard": VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT,
     }
     assert ensured == [
         ("base:explicit", "never"),
         ("envoy:explicit", "never"),
+        (VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT, "never"),
     ]
 
 
