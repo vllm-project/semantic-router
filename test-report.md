@@ -25,9 +25,7 @@
 | Failed Pods | 0 |
 | Namespaces | 0 |
 
-
 ### 📝 Test Cases
-
 
 ### 📦 Deployed Components
 
@@ -38,4 +36,3 @@
 - Review failed test cases in the Test Cases section
 - Check pod status in the Deployed Components section
 - Verify all pods are in Running state
-
