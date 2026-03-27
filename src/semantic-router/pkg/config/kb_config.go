@@ -52,15 +52,7 @@ func (s KnowledgeBaseSource) ResolvePath(baseDir string) string {
 		return filepath.Clean(s.Path)
 	}
 
-	candidates := make([]string, 0, 4)
-	if baseDir != "" {
-		candidates = append(candidates, filepath.Join(baseDir, s.Path))
-	}
-	for _, root := range builtinConfigAssetRoots() {
-		candidates = append(candidates, filepath.Join(root, s.Path))
-	}
-
-	for _, candidate := range candidates {
+	for _, candidate := range s.candidateRoots(baseDir) {
 		cleaned := filepath.Clean(candidate)
 		if pathExists(cleaned) {
 			return cleaned
@@ -74,15 +66,34 @@ func (s KnowledgeBaseSource) ResolvePath(baseDir string) string {
 }
 
 func (s KnowledgeBaseSource) ResolveManifestPath(baseDir string) string {
+	manifestFile := s.manifestFileName()
+	for _, candidate := range s.candidateRoots(baseDir) {
+		manifestPath := filepath.Join(filepath.Clean(candidate), manifestFile)
+		if pathExists(manifestPath) {
+			return manifestPath
+		}
+	}
+
 	root := s.ResolvePath(baseDir)
 	if root == "" {
 		return ""
 	}
-	return filepath.Join(root, s.manifestFileName())
+	return filepath.Join(root, manifestFile)
 }
 
 func (s KnowledgeBaseSource) ResolveManifestBaseName() string {
 	return filepath.Base(s.manifestFileName())
+}
+
+func (s KnowledgeBaseSource) candidateRoots(baseDir string) []string {
+	candidates := make([]string, 0, 4)
+	if baseDir != "" {
+		candidates = append(candidates, filepath.Join(baseDir, s.Path))
+	}
+	for _, root := range builtinConfigAssetRoots() {
+		candidates = append(candidates, filepath.Join(root, s.Path))
+	}
+	return candidates
 }
 
 // KBSignalRule binds one KB output to a normal routing signal.
