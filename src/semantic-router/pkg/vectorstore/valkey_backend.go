@@ -229,8 +229,7 @@ func (v *ValkeyBackend) deleteKeysByPrefix(ctx context.Context, prefix string) {
 		cursor = fmt.Sprint(arr[0])
 
 		var keys []string
-		switch keyList := arr[1].(type) {
-		case []interface{}:
+		if keyList, ok := arr[1].([]interface{}); ok {
 			for _, k := range keyList {
 				if s, ok := k.(string); ok {
 					keys = append(keys, s)
@@ -238,7 +237,7 @@ func (v *ValkeyBackend) deleteKeysByPrefix(ctx context.Context, prefix string) {
 			}
 		}
 		if len(keys) > 0 {
-			v.client.Del(ctx, keys)
+			_, _ = v.client.Del(ctx, keys)
 		}
 		if cursor == "0" {
 			return
@@ -509,7 +508,6 @@ func parseScoreFromMap(fields map[string]interface{}, key string, metricType str
 	}
 	return distanceToSimilarity(metricType, distance)
 }
-
 
 // distanceToSimilarity converts a vector distance to a similarity score based on the metric type.
 // Follows the same conversion as the Valkey cache backend (PR #1540).

@@ -34,7 +34,6 @@ import (
 // ---------------------------------------------------------------------------
 
 var _ = Describe("ValkeyBackend unit tests", func() {
-
 	Context("float32SliceToBytes", func() {
 		It("should produce correct little-endian bytes", func() {
 			input := []float32{1.0, 2.0, 3.0}
@@ -261,7 +260,6 @@ var _ = Describe("ValkeyBackend unit tests", func() {
 		})
 	})
 
-
 	Context("parseSearchResults", func() {
 		var vb *ValkeyBackend
 
@@ -294,11 +292,11 @@ var _ = Describe("ValkeyBackend unit tests", func() {
 				int64(1),
 				map[string]interface{}{
 					"key:1": map[string]interface{}{
-						"file_id":          "f1",
-						"filename":         "doc.txt",
-						"content":          "hello",
-						"vector_distance":  "0.2",
-						"chunk_index":      "0",
+						"file_id":         "f1",
+						"filename":        "doc.txt",
+						"content":         "hello",
+						"vector_distance": "0.2",
+						"chunk_index":     "0",
 					},
 				},
 			}
