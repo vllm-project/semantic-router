@@ -236,6 +236,8 @@ config:
     modelCards:
       - name: base-model
   global:
+    model_catalog:
+      kbs: []
     router:
       strategy: priority
     services:

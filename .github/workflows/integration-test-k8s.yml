@@ -92,6 +92,30 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
+      - name: Free disk space and relocate Docker to /mnt
+        run: |
+          echo "=== Before cleanup ==="
+          df -h / /mnt
+
+          # Remove large pre-installed toolchains that E2E tests don't need
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/share/boost /usr/local/graalvm /usr/local/.ghcup \
+            /usr/share/swift /usr/local/lib/node_modules 2>/dev/null || true
+          sudo docker image prune -af 2>/dev/null || true
+
+          # Move Docker data root to /mnt (75 GB+ free vs ~14 GB on /)
+          sudo systemctl stop docker
+          sudo mv /var/lib/docker /mnt/docker
+          sudo ln -s /mnt/docker /var/lib/docker
+          sudo systemctl start docker
+
+          # Redirect temp dir so `kind load docker-image` tarballs land on /mnt
+          sudo mkdir -p /mnt/tmp
+          sudo chmod 1777 /mnt/tmp
+
+          echo "=== After cleanup ==="
+          df -h / /mnt
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -122,6 +146,23 @@ jobs:
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
 
+      - name: Pre-pull Kind node image
+        run: |
+          KIND_NODE_IMAGE="kindest/node:v1.29.2"
+          echo "Pre-pulling ${KIND_NODE_IMAGE} with retries..."
+          for attempt in 1 2 3 4 5; do
+            if docker pull "${KIND_NODE_IMAGE}"; then
+              echo "Successfully pulled ${KIND_NODE_IMAGE}"
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "ERROR: Failed to pull ${KIND_NODE_IMAGE} after 5 attempts"
+              exit 1
+            fi
+            echo "Pull attempt ${attempt} failed, retrying in $((attempt * 15))s..."
+            sleep $((attempt * 15))
+          done
+
       - name: Download E2E test dependencies
         run: |
           cd e2e && go mod download
@@ -134,9 +175,7 @@ jobs:
       - name: Run Integration E2E tests (${{ matrix.profile }})
         id: e2e-test
         env:
-          # HF_TOKEN is required for downloading gated models (e.g., embeddinggemma-300m)
-          # For PRs from forks, this will be empty and the E2E framework will gracefully skip gated model downloads
-          # The hf CLI uses HUGGINGFACE_HUB_TOKEN, so we set both for compatibility
+          TMPDIR: /mnt/tmp
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |

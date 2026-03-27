@@ -370,6 +370,8 @@ config:
           - name: general-expert
             description: General-purpose adapter for diverse topics
   global:
+    model_catalog:
+      kbs: []
     router:
       strategy: priority
     services:

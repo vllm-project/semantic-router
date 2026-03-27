@@ -158,6 +158,22 @@ jobs:
       - name: Start Milvus service
         run: |
           echo "Starting Milvus vector database..."
+
+          # Pre-pull with retries to handle Docker Hub rate limits
+          MILVUS_IMAGE="milvusdb/milvus:v2.3.3"
+          for attempt in 1 2 3 4 5; do
+            if docker pull "${MILVUS_IMAGE}"; then
+              echo "Successfully pulled ${MILVUS_IMAGE}"
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "ERROR: Failed to pull ${MILVUS_IMAGE} after 5 attempts"
+              exit 1
+            fi
+            echo "Pull attempt ${attempt} failed, retrying in $((attempt * 15))s..."
+            sleep $((attempt * 15))
+          done
+
           docker run -d \
             --name milvus-semantic-cache \
             --security-opt seccomp:unconfined \
@@ -168,7 +184,7 @@ jobs:
             -e CLUSTER_ENABLED=false \
             -p 19530:19530 \
             -p 9091:9091 \
-            milvusdb/milvus:v2.3.3 \
+            "${MILVUS_IMAGE}" \
             milvus run standalone
 
           echo "Waiting for Milvus to be ready..."
