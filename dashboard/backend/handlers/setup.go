@@ -181,24 +181,24 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 			return
 		}
 
-		if err := backupCurrentConfig(configPath, configDir); err != nil {
-			log.Printf("Warning: failed to back up current config before setup activation: %v", err)
+		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {
+			log.Printf("Warning: failed to back up current config before setup activation: %v", backupErr)
 		}
 
 		tmpConfigFile := configPath + ".tmp"
-		if err := os.WriteFile(tmpConfigFile, yamlData, 0o644); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
+		if writeErr := os.WriteFile(tmpConfigFile, yamlData, 0o644); writeErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
 			return
 		}
-		if err := os.Rename(tmpConfigFile, configPath); err != nil {
-			if writeErr := os.WriteFile(configPath, yamlData, 0o644); writeErr != nil {
-				http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
+		if renameErr := os.Rename(tmpConfigFile, configPath); renameErr != nil {
+			if fallbackWriteErr := os.WriteFile(configPath, yamlData, 0o644); fallbackWriteErr != nil {
+				http.Error(w, fmt.Sprintf("Failed to write config: %v", fallbackWriteErr), http.StatusInternalServerError)
 				return
 			}
 		}
 
-		if _, err := routerconfig.Parse(configPath); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to validate activated config: %v", err), http.StatusInternalServerError)
+		if _, parseErr := routerconfig.Parse(configPath); parseErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to validate activated config: %v", parseErr), http.StatusInternalServerError)
 			return
 		}
 

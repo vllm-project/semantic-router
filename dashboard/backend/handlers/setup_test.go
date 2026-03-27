@@ -479,11 +479,11 @@ func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {
 	t.Setenv("TEST_ENVOY_CONTAINER", "lane-a-vllm-sr-envoy-container")
 	t.Setenv("TEST_ENVOY_STATUS_FILE", fakeDocker.envoyStatusPath)
 
-	if err := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); err != nil {
-		t.Fatalf("failed to seed router status: %v", err)
+	if writeErr := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); writeErr != nil {
+		t.Fatalf("failed to seed router status: %v", writeErr)
 	}
-	if err := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); err != nil {
-		t.Fatalf("failed to seed envoy status: %v", err)
+	if writeErr := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); writeErr != nil {
+		t.Fatalf("failed to seed envoy status: %v", writeErr)
 	}
 
 	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
@@ -555,11 +555,11 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 	}
 	t.Setenv("VLLM_SR_CLI_PATH", filepath.Join(repoRoot, "src", "vllm-sr"))
 
-	if err := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); err != nil {
-		t.Fatalf("failed to seed router status: %v", err)
+	if writeErr := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); writeErr != nil {
+		t.Fatalf("failed to seed router status: %v", writeErr)
 	}
-	if err := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); err != nil {
-		t.Fatalf("failed to seed envoy status: %v", err)
+	if writeErr := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); writeErr != nil {
+		t.Fatalf("failed to seed envoy status: %v", writeErr)
 	}
 
 	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
