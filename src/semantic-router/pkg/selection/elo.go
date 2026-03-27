@@ -516,30 +516,12 @@ func (e *EloSelector) updateRatingLocked(feedback *Feedback, ratings map[string]
 	// This is used for automatic signal-based feedback where we only know
 	// if one model did well or poorly, not compared to another
 	if feedback.LoserModel == "" && feedback.WinnerModel != "" {
-		// Positive self-feedback: model did well
-		winnerRating := ratings[feedback.WinnerModel]
-		if winnerRating == nil {
-			winnerRating = &ModelRating{Model: feedback.WinnerModel, Rating: e.config.InitialRating}
-		}
-		// Apply small positive adjustment (reward)
-		winnerRating.Rating += e.config.KFactor * 0.1 // 10% of K-factor for self-feedback
-		winnerRating.Comparisons++
-		winnerRating.Wins++
-		ratings[feedback.WinnerModel] = winnerRating
+		e.applyWinnerOnlyFeedbackLocked(feedback.WinnerModel, ratings)
 		return
 	}
 
 	if feedback.WinnerModel == "" && feedback.LoserModel != "" {
-		// Negative self-feedback: model did poorly
-		loserRating := ratings[feedback.LoserModel]
-		if loserRating == nil {
-			loserRating = &ModelRating{Model: feedback.LoserModel, Rating: e.config.InitialRating}
-		}
-		// Apply small negative adjustment (penalty)
-		loserRating.Rating -= e.config.KFactor * 0.1 // 10% of K-factor for self-feedback
-		loserRating.Comparisons++
-		loserRating.Losses++
-		ratings[feedback.LoserModel] = loserRating
+		e.applyLoserOnlyFeedbackLocked(feedback.LoserModel, ratings)
 		return
 	}
 
@@ -548,6 +530,36 @@ func (e *EloSelector) updateRatingLocked(feedback *Feedback, ratings map[string]
 		return // No valid feedback
 	}
 
+	e.applyPairwiseFeedbackLocked(feedback, ratings)
+}
+
+func (e *EloSelector) applyWinnerOnlyFeedbackLocked(model string, ratings map[string]*ModelRating) {
+	// Positive self-feedback: model did well
+	rating := ratings[model]
+	if rating == nil {
+		rating = &ModelRating{Model: model, Rating: e.config.InitialRating}
+	}
+	// Apply small positive adjustment (reward)
+	rating.Rating += e.config.KFactor * 0.1 // 10% of K-factor for self-feedback
+	rating.Comparisons++
+	rating.Wins++
+	ratings[model] = rating
+}
+
+func (e *EloSelector) applyLoserOnlyFeedbackLocked(model string, ratings map[string]*ModelRating) {
+	// Negative self-feedback: model did poorly
+	rating := ratings[model]
+	if rating == nil {
+		rating = &ModelRating{Model: model, Rating: e.config.InitialRating}
+	}
+	// Apply small negative adjustment (penalty)
+	rating.Rating -= e.config.KFactor * 0.1 // 10% of K-factor for self-feedback
+	rating.Comparisons++
+	rating.Losses++
+	ratings[model] = rating
+}
+
+func (e *EloSelector) applyPairwiseFeedbackLocked(feedback *Feedback, ratings map[string]*ModelRating) {
 	winnerRating := ratings[feedback.WinnerModel]
 	if winnerRating == nil {
 		winnerRating = &ModelRating{Model: feedback.WinnerModel, Rating: e.config.InitialRating}
@@ -564,13 +576,10 @@ func (e *EloSelector) updateRatingLocked(feedback *Feedback, ratings map[string]
 	expectedLoser := 1.0 - expectedWinner
 
 	// Determine actual scores
-	var actualWinner, actualLoser float64
+	actualWinner, actualLoser := 1.0, 0.0
 	if feedback.Tie {
 		actualWinner = 0.5
 		actualLoser = 0.5
-	} else {
-		actualWinner = 1.0
-		actualLoser = 0.0
 	}
 
 	// Update ratings: R' = R + K * (actual - expected)
