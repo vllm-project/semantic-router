@@ -42,13 +42,14 @@ func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter
 		return
 	}
 
-	// Force evaluate all signals for eval scenarios
 	if req.Options == nil {
 		req.Options = &services.IntentOptions{}
 	}
 	req.Options.EvaluateAllSignals = true
+	if r.URL.Query().Get("trace") == "true" {
+		req.Options.Trace = true
+	}
 
-	// Use signal-driven classification with all signals evaluated
 	response, err := s.classificationSvc.ClassifyIntentForEval(req)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
