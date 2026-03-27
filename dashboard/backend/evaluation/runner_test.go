@@ -58,8 +58,9 @@ func TestRunTaskMarksTaskFailedWhenSystemEvaluationCommandFails(t *testing.T) {
 			SamplesPerCat: 1,
 		},
 	}
-	if err := evalDB.CreateTask(task); err != nil {
-		t.Fatalf("CreateTask() error = %v", err)
+	createErr := evalDB.CreateTask(task)
+	if createErr != nil {
+		t.Fatalf("CreateTask() error = %v", createErr)
 	}
 
 	runner := NewRunner(RunnerConfig{

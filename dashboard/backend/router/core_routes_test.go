@@ -29,20 +29,31 @@ func TestResolveEvaluationProjectRootFallsBackToWorkingDirectoryRepo(t *testing.
 	if err != nil {
 		t.Fatalf("Getwd(): %v", err)
 	}
-	if err := os.Chdir(workDir); err != nil {
-		t.Fatalf("Chdir(%s): %v", workDir, err)
+	chdirErr := os.Chdir(workDir)
+	if chdirErr != nil {
+		t.Fatalf("Chdir(%s): %v", workDir, chdirErr)
 	}
 	t.Cleanup(func() {
 		_ = os.Chdir(previousWD)
 	})
 
 	externalConfigDir := filepath.Join(t.TempDir(), "config")
-	if err := os.MkdirAll(externalConfigDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll(config dir): %v", err)
+	mkdirErr := os.MkdirAll(externalConfigDir, 0o755)
+	if mkdirErr != nil {
+		t.Fatalf("MkdirAll(config dir): %v", mkdirErr)
 	}
 
 	cfg := &config.Config{ConfigDir: externalConfigDir}
-	if got := resolveEvaluationProjectRoot(cfg); got != repoRoot {
+	got := resolveEvaluationProjectRoot(cfg)
+	gotResolved, err := filepath.EvalSymlinks(got)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(got): %v", err)
+	}
+	wantResolved, err := filepath.EvalSymlinks(repoRoot)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(repoRoot): %v", err)
+	}
+	if gotResolved != wantResolved {
 		t.Fatalf("resolveEvaluationProjectRoot() = %q, want %q", got, repoRoot)
 	}
 }
