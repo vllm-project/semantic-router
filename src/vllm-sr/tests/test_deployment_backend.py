@@ -60,19 +60,27 @@ class TestDockerBackend:
         backend = DockerBackend()
         backend.deploy(
             config_file="/tmp/config.yaml",
-            env_vars={"A": "B"},
-            image="test:img",
-            pull_policy="always",
-            enable_observability=False,
             source_config_file="/tmp/source-config.yaml",
             runtime_config_file="/tmp/runtime-config.yaml",
+            env_vars={"A": "B"},
+            image="test:img",
+            router_image="test:router",
+            envoy_image="test:envoy",
+            dashboard_image="test:dashboard",
+            topology="split",
+            pull_policy="always",
+            enable_observability=False,
         )
 
-        assert captured["image"] == "test:img"
-        assert captured["pull_policy"] == "always"
-        assert captured["enable_observability"] is False
         assert captured["source_config_file"] == "/tmp/source-config.yaml"
         assert captured["runtime_config_file"] == "/tmp/runtime-config.yaml"
+        assert captured["image"] == "test:img"
+        assert captured["router_image"] == "test:router"
+        assert captured["envoy_image"] == "test:envoy"
+        assert captured["dashboard_image"] == "test:dashboard"
+        assert captured["topology"] == "split"
+        assert captured["pull_policy"] == "always"
+        assert captured["enable_observability"] is False
 
     def test_teardown_delegates_to_stop_vllm_sr(self, monkeypatch):
         called = []
@@ -89,6 +97,20 @@ class TestDockerBackend:
             lambda _: "not found",
         )
         assert DockerBackend().is_running() is False
+
+    def test_is_running_true_when_split_dashboard_container_running(self, monkeypatch):
+        monkeypatch.setattr(
+            "cli.docker_backend.docker_container_status",
+            lambda name: "running" if "dashboard" in name else "not found",
+        )
+        assert DockerBackend().is_running() is True
+
+    def test_get_dashboard_url_prefers_split_dashboard_container(self, monkeypatch):
+        monkeypatch.setattr(
+            "cli.docker_backend.docker_container_status",
+            lambda name: "running" if "dashboard" in name else "not found",
+        )
+        assert DockerBackend().get_dashboard_url() == "http://localhost:8700"
 
 
 # ---------------------------------------------------------------------------

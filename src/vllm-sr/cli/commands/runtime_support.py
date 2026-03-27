@@ -327,7 +327,7 @@ def apply_runtime_mode_env_vars(
         env_vars[SETUP_MODE_ENV] = "true"
         env_vars[DASHBOARD_SETUP_MODE_ENV] = "true"
         log.info(
-            "Setup mode: starting dashboard-first bootstrap flow without router/envoy"
+            "Setup mode: starting dashboard-first bootstrap flow with router/envoy on standby"
         )
 
     if platform:

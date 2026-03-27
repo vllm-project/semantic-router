@@ -191,10 +191,24 @@ def generate_envoy_config_from_user_config(
             }
         )
 
+    extproc_host = os.getenv("ENVOY_EXTPROC_ADDRESS", "127.0.0.1")
+    router_api_host = os.getenv("ENVOY_ROUTER_API_ADDRESS", "127.0.0.1")
+    extproc_host_is_domain = not _is_ip_address(extproc_host)
+    router_api_host_is_domain = not _is_ip_address(router_api_host)
+
     # Prepare template data
     template_data = {
         "listeners": listeners,
+        "extproc_host": extproc_host,
         "extproc_port": 50051,
+        "extproc_cluster_type": "LOGICAL_DNS" if extproc_host_is_domain else "STATIC",
+        "extproc_host_is_domain": extproc_host_is_domain,
+        "router_api_host": router_api_host,
+        "router_api_port": 8080,
+        "router_api_cluster_type": (
+            "LOGICAL_DNS" if router_api_host_is_domain else "STATIC"
+        ),
+        "router_api_host_is_domain": router_api_host_is_domain,
         "models": models,
         "anthropic_models": anthropic_models,  # Anthropic models for shared cluster
         "use_original_dst": False,  # Use static clusters for now

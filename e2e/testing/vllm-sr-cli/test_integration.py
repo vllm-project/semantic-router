@@ -59,7 +59,13 @@ class TestServeIntegration(CLITestBase):
 
         if serve_process.poll() is not None:
             stdout, stderr = serve_process.communicate()
-            self.fail(f"Serve crashed: {stderr[:500] or stdout[:500]}")
+            if self.wait_for_container_running(timeout=self.CONTAINER_STARTUP_TIMEOUT):
+                print("  ✓ Serve command completed after launching the runtime")
+                return
+            self.fail(
+                "Serve exited before the runtime was ready: "
+                f"{stderr[:500] or stdout[:500]}"
+            )
 
         print(
             f"  Waiting for container (timeout: {self.CONTAINER_STARTUP_TIMEOUT}s)..."
@@ -230,7 +236,7 @@ class TestServeIntegration(CLITestBase):
 
             return_code, stdout, stderr = self.inspect_container(
                 "{{.Config.Env}}",
-                container_name=self.CONTAINER_NAME,
+                container_name=self.resolve_runtime_inspect_container_name(),
             )
             if return_code != 0:
                 self.fail(f"router container inspect failed: {stderr}")

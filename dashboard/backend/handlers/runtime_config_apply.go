@@ -13,7 +13,10 @@ import (
 	"time"
 )
 
-const defaultEnvoyConfigPath = "/etc/envoy/envoy.yaml"
+const (
+	defaultEnvoyConfigPath      = "/etc/envoy/envoy.yaml"
+	defaultSplitEnvoyConfigPath = "/app/.vllm-sr/envoy.yaml"
+)
 
 type runtimeConfigApplyError struct {
 	applyErr   error
@@ -93,10 +96,13 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 	}
 
 	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
+		if !managedServiceCanBeControlledLocally("envoy") && getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
+			return regenerateAndReloadManagedSplitEnvoyLocally(effectiveConfigPath)
+		}
 		return regenerateAndReloadEnvoyLocally(effectiveConfigPath)
 	}
 
-	if getDockerContainerStatus(vllmSrContainerName) == "running" {
+	if getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
 		return propagateConfigToManagedContainer()
 	}
 
@@ -132,20 +138,44 @@ func regenerateAndReloadEnvoyLocally(configPath string) error {
 	return nil
 }
 
+func regenerateAndReloadManagedSplitEnvoyLocally(configPath string) error {
+	envoyConfigPath := detectEnvoyConfigPath()
+	if envoyConfigPath == "" {
+		log.Printf("Config propagation: Envoy config path not found, skipping managed Envoy reload")
+		return nil
+	}
+
+	output, err := generateEnvoyConfigWithPython(configPath, envoyConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to regenerate Envoy config: %w (output: %s)", err, strings.TrimSpace(output))
+	}
+	log.Printf("Config propagation: %s", strings.TrimSpace(output))
+
+	if err := restartManagedService("envoy", 20*time.Second); err != nil {
+		return fmt.Errorf("failed to restart Envoy in %s: %w", managedContainerNameForService("envoy"), err)
+	}
+
+	return nil
+}
+
 func propagateConfigToManagedContainer() error {
 	effectiveConfigPath, err := syncRuntimeConfigInManagedContainer()
 	if err != nil {
 		return err
 	}
 
-	if output, err := generateEnvoyConfigInManagedContainer(effectiveConfigPath); err != nil {
-		return fmt.Errorf("failed to regenerate Envoy config in %s: %w (output: %s)", vllmSrContainerName, err, strings.TrimSpace(output))
+	return regenerateAndReloadEnvoyInManagedContainer(effectiveConfigPath)
+}
+
+func regenerateAndReloadEnvoyInManagedContainer(configPath string) error {
+	if output, err := generateEnvoyConfigInManagedContainer(configPath); err != nil {
+		return fmt.Errorf("failed to regenerate Envoy config in %s: %w (output: %s)", managedContainerNameForService("envoy"), err, strings.TrimSpace(output))
 	} else {
 		log.Printf("Config propagation: %s", strings.TrimSpace(output))
 	}
 
-	if err := restartOrStartManagedContainerService("envoy", 20*time.Second); err != nil {
-		return fmt.Errorf("failed to restart Envoy in %s: %w", vllmSrContainerName, err)
+	if err := restartManagedService("envoy", 20*time.Second); err != nil {
+		return fmt.Errorf("failed to restart Envoy in %s: %w", managedContainerNameForService("envoy"), err)
 	}
 
 	return nil
@@ -157,26 +187,27 @@ func generateEnvoyConfigWithPython(configPath string, outputPath string) (string
 		return "SKIP: Python CLI not available, skipping Envoy config regeneration", nil
 	}
 
+	pythonBinary, err := runtimeSyncPythonBinary()
+	if err != nil {
+		return "", fmt.Errorf("python interpreter not found for Envoy config regeneration: %w", err)
+	}
+
 	pythonScript := fmt.Sprintf(`
 import sys
 sys.path.insert(0, %q)
-try:
-    from cli.config_generator import generate_envoy_config_from_user_config
-    from cli.parser import parse_user_config
-    user_config = parse_user_config(%q)
-    generate_envoy_config_from_user_config(user_config, %q)
-    print("Regenerated Envoy config: %s")
-except ImportError:
-    print("SKIP: Python CLI not available, skipping Envoy config regeneration")
-except Exception as e:
-    print(f"ERROR: Failed to regenerate Envoy config: {e}", file=sys.stderr)
-    sys.exit(1)
+
+from cli.config_generator import generate_envoy_config_from_user_config
+from cli.parser import parse_user_config
+
+user_config = parse_user_config(%q)
+generate_envoy_config_from_user_config(user_config, %q)
+print("Regenerated Envoy config: %s")
 `, cliRoot, configPath, outputPath, outputPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "python3", "-c", pythonScript)
+	cmd := exec.CommandContext(ctx, pythonBinary, "-c", pythonScript)
 	cmd.Dir = filepath.Dir(configPath)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
@@ -186,6 +217,9 @@ func detectEnvoyConfigPath() string {
 	candidates := []string{}
 	if envPath := strings.TrimSpace(os.Getenv("VLLM_SR_ENVOY_CONFIG_PATH")); envPath != "" {
 		candidates = append(candidates, envPath)
+	}
+	if isRunningInContainer() && managedRuntimeUsesSplitContainers() {
+		candidates = append(candidates, defaultSplitEnvoyConfigPath)
 	}
 	candidates = append(candidates, defaultEnvoyConfigPath)
 
@@ -202,6 +236,14 @@ func detectEnvoyConfigPath() string {
 }
 
 func generateEnvoyConfigInManagedContainer(configPath string) (string, error) {
+	containerName := managedContainerNameForService("envoy")
+	outputPath := defaultEnvoyConfigPath
+	pythonBinary := "python3"
+	if managedRuntimeUsesSplitContainers() {
+		containerName = managedRuntimeSyncContainerName()
+		outputPath = defaultSplitEnvoyConfigPath
+		pythonBinary = dashboardVenvPythonPath
+	}
 	pythonScript := fmt.Sprintf(`
 from cli.config_generator import generate_envoy_config_from_user_config
 from cli.parser import parse_user_config
@@ -209,12 +251,12 @@ from cli.parser import parse_user_config
 user_config = parse_user_config(%q)
 generate_envoy_config_from_user_config(user_config, %q)
 print("Regenerated Envoy config: %s")
-`, configPath, defaultEnvoyConfigPath, defaultEnvoyConfigPath)
+`, configPath, outputPath, outputPath)
 
-	return execInManagedContainer(30*time.Second, "python3", "-c", pythonScript)
+	return execInManagedContainer(containerName, 30*time.Second, pythonBinary, "-c", pythonScript)
 }
 
-func execInManagedContainer(timeout time.Duration, args ...string) (string, error) {
+func execInManagedContainer(containerName string, timeout time.Duration, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -222,7 +264,7 @@ func execInManagedContainer(timeout time.Duration, args ...string) (string, erro
 		return "", err
 	}
 
-	commandArgs := append([]string{"exec", vllmSrContainerName}, args...)
+	commandArgs := append([]string{"exec", containerName}, args...)
 	// #nosec G204 -- commandArgs are validated against a strict allowlist above and the container name is constant.
 	cmd := exec.CommandContext(ctx, "docker", commandArgs...)
 	output, err := cmd.CombinedOutput()
@@ -234,9 +276,11 @@ func validateManagedContainerExecArgs(args []string) error {
 		return fmt.Errorf("managed container command is required")
 	}
 
-	switch args[0] {
-	case "python3":
+	if isPythonCommand(args[0]) {
 		return validateManagedContainerPythonArgs(args)
+	}
+
+	switch args[0] {
 	case "supervisorctl":
 		return validateManagedContainerSupervisorArgs(args)
 	default:
@@ -250,6 +294,11 @@ func validateManagedContainerPythonArgs(args []string) error {
 	}
 
 	return fmt.Errorf("unsupported python3 invocation in managed container")
+}
+
+func isPythonCommand(command string) bool {
+	base := strings.ToLower(filepath.Base(strings.TrimSpace(command)))
+	return base != "" && strings.HasPrefix(base, "python")
 }
 
 func validateManagedContainerSupervisorArgs(args []string) error {
@@ -284,14 +333,25 @@ func restartOrStartSupervisorService(service string, timeout time.Duration) erro
 }
 
 func restartOrStartManagedContainerService(service string, timeout time.Duration) error {
-	if output, err := execInManagedContainer(15*time.Second, "supervisorctl", "restart", service); err != nil {
-		startOutput, startErr := execInManagedContainer(15*time.Second, "supervisorctl", "start", service)
+	containerName := managedContainerNameForService(service)
+	if output, err := execInManagedContainer(containerName, 15*time.Second, "supervisorctl", "restart", service); err != nil {
+		startOutput, startErr := execInManagedContainer(containerName, 15*time.Second, "supervisorctl", "start", service)
 		if startErr != nil {
 			return fmt.Errorf("%s restart failed: %s / start failed: %s", service, strings.TrimSpace(output), strings.TrimSpace(startOutput))
 		}
 	}
 
-	return waitForManagedContainerService(service, timeout)
+	return waitForManagedContainerService(containerName, service, timeout)
+}
+
+func restartManagedService(service string, timeout time.Duration) error {
+	if managedServiceCanBeControlledLocally(service) {
+		return restartOrStartSupervisorService(service, timeout)
+	}
+	if managedServiceUsesContainerLifecycle(service) {
+		return restartOrStartManagedSplitContainerService(service, timeout)
+	}
+	return restartOrStartManagedContainerService(service, timeout)
 }
 
 func waitForSupervisorService(service string, timeout time.Duration) error {
@@ -313,12 +373,12 @@ func waitForSupervisorService(service string, timeout time.Duration) error {
 	return fmt.Errorf("timed out waiting for %s to become RUNNING (last status: %s)", service, lastStatus)
 }
 
-func waitForManagedContainerService(service string, timeout time.Duration) error {
+func waitForManagedContainerService(containerName string, service string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	lastStatus := ""
 
 	for time.Now().Before(deadline) {
-		output, err := execInManagedContainer(10*time.Second, "supervisorctl", "status", service)
+		output, err := execInManagedContainer(containerName, 10*time.Second, "supervisorctl", "status", service)
 		lastStatus = strings.TrimSpace(output)
 		if err == nil && strings.Contains(lastStatus, "RUNNING") {
 			return nil
@@ -329,7 +389,7 @@ func waitForManagedContainerService(service string, timeout time.Duration) error
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	return fmt.Errorf("timed out waiting for %s in %s to become RUNNING (last status: %s)", service, vllmSrContainerName, lastStatus)
+	return fmt.Errorf("timed out waiting for %s in %s to become RUNNING (last status: %s)", service, containerName, lastStatus)
 }
 
 func detectPythonCLIRoot() string {
