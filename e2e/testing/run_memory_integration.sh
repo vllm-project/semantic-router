@@ -15,6 +15,7 @@ PID_FILE="${TEST_DIR}/serve.pid"
 SERVE_LOG="${TEST_DIR}/serve.log"
 CONFIG_FILE="${TEST_DIR}/config.yaml"
 KEEP_TEST_DIR="${KEEP_MEMORY_TEST_DIR:-0}"
+ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-http://localhost:8080/health}"
 
 VLLM_SR_PID=""
 
@@ -127,9 +128,9 @@ fi
 VLLM_SR_PID="$(cat "${PID_FILE}")"
 
 for _ in $(seq 1 180); do
-    http_code="$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/health 2>/dev/null || echo "000")"
+    http_code="$(curl -s -o /dev/null -w "%{http_code}" "${ROUTER_API_HEALTH_URL}" 2>/dev/null || echo "000")"
     if [[ "${http_code}" == "200" ]]; then
-        echo "vllm-sr ready"
+        echo "vllm-sr router API ready"
         break
     fi
 
@@ -142,9 +143,9 @@ for _ in $(seq 1 180); do
     sleep 2
 done
 
-http_code="$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/health 2>/dev/null || echo "000")"
+http_code="$(curl -s -o /dev/null -w "%{http_code}" "${ROUTER_API_HEALTH_URL}" 2>/dev/null || echo "000")"
 if [[ "${http_code}" != "200" ]]; then
-    echo "vllm-sr did not become healthy"
+    echo "vllm-sr router API did not become healthy"
     cat "${SERVE_LOG}" || true
     exit 1
 fi
