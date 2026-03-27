@@ -23,7 +23,7 @@ type VectorStoreConfig struct {
 	// Enabled controls whether vector store functionality is active.
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
-	// BackendType selects the storage backend: "memory", "milvus", or "llama_stack".
+	// BackendType selects the storage backend: "memory", "milvus", "llama_stack", or "valkey".
 	BackendType string `json:"backend_type" yaml:"backend_type"`
 
 	// FileStorageDir is the base directory for uploaded file storage.

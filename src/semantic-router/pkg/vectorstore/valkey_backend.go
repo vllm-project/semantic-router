@@ -85,9 +85,15 @@ func NewValkeyBackend(cfg ValkeyBackendConfig) (*ValkeyBackend, error) {
 	if indexEf <= 0 {
 		indexEf = 200
 	}
-	metricType := cfg.MetricType
+	metricType := strings.ToUpper(cfg.MetricType)
 	if metricType == "" {
 		metricType = "COSINE"
+	}
+	switch metricType {
+	case "COSINE", "L2", "IP":
+		// valid
+	default:
+		return nil, fmt.Errorf("unsupported metric type: %s (supported: COSINE, L2, IP)", metricType)
 	}
 	timeout := cfg.ConnectTimeout
 	if timeout <= 0 {
@@ -502,8 +508,8 @@ func parseScoreFromMap(fields map[string]interface{}, key string, metricType str
 	if !exists {
 		return 0
 	}
-	var distance float64
-	if _, err := fmt.Sscanf(fmt.Sprint(raw), "%f", &distance); err != nil {
+	distance, err := strconv.ParseFloat(fmt.Sprint(raw), 64)
+	if err != nil {
 		return 0
 	}
 	return distanceToSimilarity(metricType, distance)
@@ -514,13 +520,13 @@ func parseScoreFromMap(fields map[string]interface{}, key string, metricType str
 func distanceToSimilarity(metricType string, distance float64) float64 {
 	switch strings.ToUpper(metricType) {
 	case "COSINE":
-		return float64(1.0 - float32(distance)/2.0)
+		return 1.0 - distance/2.0
 	case "L2":
-		return float64(1.0 / (1.0 + float32(distance)))
+		return 1.0 / (1.0 + distance)
 	case "IP":
 		return distance
 	default:
-		return float64(1.0 - float32(distance))
+		return 1.0 - distance
 	}
 }
 

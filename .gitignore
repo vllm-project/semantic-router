@@ -208,3 +208,6 @@ src/training/cache_embeddings/aws/vllm-inventory-*.ini
 grafana/
 grafana-data/
 prometheus-data/
+
+# Local dev makefile (not committed)
+Makefile.local
