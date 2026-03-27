@@ -113,6 +113,7 @@ COPY src/vllm-sr/requirements.txt /app/requirements.txt
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
+COPY config/kb/ /app/config/kb/
 COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
 COPY dashboard/backend/skillpacks/ /app/skills/
 # Copy entrypoint script
