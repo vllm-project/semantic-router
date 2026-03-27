@@ -204,19 +204,21 @@ func (e *EloSelector) getAllRatingsForStorage() map[string]map[string]*ModelRati
 
 	result := make(map[string]map[string]*ModelRating)
 
-	// Add global ratings
+	// Add global ratings (deep copy to avoid data races with concurrent updates)
 	if len(e.globalRatings) > 0 {
-		result["_global"] = make(map[string]*ModelRating)
+		result["_global"] = make(map[string]*ModelRating, len(e.globalRatings))
 		for k, v := range e.globalRatings {
-			result["_global"][k] = v
+			copied := *v
+			result["_global"][k] = &copied
 		}
 	}
 
-	// Add category ratings
+	// Add category ratings (deep copy)
 	for cat, ratings := range e.categoryRatings {
-		result[cat] = make(map[string]*ModelRating)
+		result[cat] = make(map[string]*ModelRating, len(ratings))
 		for k, v := range ratings {
-			result[cat][k] = v
+			copied := *v
+			result[cat][k] = &copied
 		}
 	}
 
@@ -399,105 +401,92 @@ func (e *EloSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) er
 		return fmt.Errorf("either winner_model or loser_model is required")
 	}
 
-	// Capture old ratings for metrics
-	oldWinnerRating := e.getGlobalRating(feedback.WinnerModel)
-	oldLoserRating := e.getGlobalRating(feedback.LoserModel)
+	// Update global ratings under a single lock hold to prevent data races.
+	// The entire read-old, update, read-new cycle must be atomic.
 	var winnerOldElo, loserOldElo float64
-	if oldWinnerRating != nil {
-		winnerOldElo = oldWinnerRating.Rating
+	var globalWinnerStats, globalLoserStats ModelRating
+	var hasGlobalWinner bool
+	e.globalMu.Lock()
+	if r := e.globalRatings[feedback.WinnerModel]; r != nil {
+		winnerOldElo = r.Rating
 	} else {
 		winnerOldElo = e.config.InitialRating
 	}
-	if oldLoserRating != nil {
-		loserOldElo = oldLoserRating.Rating
+	if r := e.globalRatings[feedback.LoserModel]; r != nil {
+		loserOldElo = r.Rating
 	} else {
 		loserOldElo = e.config.InitialRating
 	}
+	e.updateRatingLocked(feedback, e.globalRatings)
+	if r := e.globalRatings[feedback.WinnerModel]; r != nil {
+		hasGlobalWinner = true
+		globalWinnerStats = *r
+	}
+	if r := e.globalRatings[feedback.LoserModel]; r != nil {
+		globalLoserStats = *r
+	}
+	e.globalMu.Unlock()
 
-	// Update global ratings
-	e.updateRating(feedback, e.getGlobalRating, e.setGlobalRating)
-
-	// Capture new ratings after update
-	newWinnerRating := e.getGlobalRating(feedback.WinnerModel)
-	newLoserRating := e.getGlobalRating(feedback.LoserModel)
-
-	// Record metrics for global ratings
-	if newWinnerRating != nil {
+	// Record metrics for global ratings (outside lock)
+	if hasGlobalWinner {
 		RecordFeedbackMetrics(&FeedbackMetrics{
 			Winner:       feedback.WinnerModel,
 			Loser:        feedback.LoserModel,
 			Category:     "_global",
 			IsTie:        feedback.Tie,
 			WinnerOldElo: winnerOldElo,
-			WinnerNewElo: newWinnerRating.Rating,
+			WinnerNewElo: globalWinnerStats.Rating,
 			LoserOldElo:  loserOldElo,
-			LoserNewElo: func() float64 {
-				if newLoserRating != nil {
-					return newLoserRating.Rating
-				}
-				return loserOldElo
-			}(),
-			WinnerStats: *newWinnerRating,
-			LoserStats: func() ModelRating {
-				if newLoserRating != nil {
-					return *newLoserRating
-				}
-				return ModelRating{}
-			}(),
+			LoserNewElo:  globalLoserStats.Rating,
+			WinnerStats:  globalWinnerStats,
+			LoserStats:   globalLoserStats,
 		})
 	}
 
 	// Update category ratings if applicable
 	if e.config.CategoryWeighted && feedback.DecisionName != "" {
-		// Capture old category ratings
-		oldCatWinner := e.getCategoryRating(feedback.DecisionName, feedback.WinnerModel)
-		oldCatLoser := e.getCategoryRating(feedback.DecisionName, feedback.LoserModel)
 		var catWinnerOldElo, catLoserOldElo float64
-		if oldCatWinner != nil {
-			catWinnerOldElo = oldCatWinner.Rating
+		var catWinnerStats, catLoserStats ModelRating
+		var hasCatWinner bool
+
+		e.categoryMu.Lock()
+		catRatings := e.categoryRatings[feedback.DecisionName]
+		if catRatings == nil {
+			catRatings = make(map[string]*ModelRating)
+			e.categoryRatings[feedback.DecisionName] = catRatings
+		}
+		if r := catRatings[feedback.WinnerModel]; r != nil {
+			catWinnerOldElo = r.Rating
 		} else {
 			catWinnerOldElo = e.config.InitialRating
 		}
-		if oldCatLoser != nil {
-			catLoserOldElo = oldCatLoser.Rating
+		if r := catRatings[feedback.LoserModel]; r != nil {
+			catLoserOldElo = r.Rating
 		} else {
 			catLoserOldElo = e.config.InitialRating
 		}
+		e.updateRatingLocked(feedback, catRatings)
+		if r := catRatings[feedback.WinnerModel]; r != nil {
+			hasCatWinner = true
+			catWinnerStats = *r
+		}
+		if r := catRatings[feedback.LoserModel]; r != nil {
+			catLoserStats = *r
+		}
+		e.categoryMu.Unlock()
 
-		e.updateRating(feedback,
-			func(model string) *ModelRating {
-				return e.getCategoryRating(feedback.DecisionName, model)
-			},
-			func(model string, rating *ModelRating) {
-				e.setCategoryRating(feedback.DecisionName, model, rating)
-			})
-
-		// Capture new category ratings and record metrics
-		newCatWinner := e.getCategoryRating(feedback.DecisionName, feedback.WinnerModel)
-		newCatLoser := e.getCategoryRating(feedback.DecisionName, feedback.LoserModel)
-
-		if newCatWinner != nil {
+		if hasCatWinner {
 			RecordFeedbackMetrics(&FeedbackMetrics{
 				Winner:       feedback.WinnerModel,
 				Loser:        feedback.LoserModel,
 				Category:     feedback.DecisionName,
 				IsTie:        feedback.Tie,
 				WinnerOldElo: catWinnerOldElo,
-				WinnerNewElo: newCatWinner.Rating,
+				WinnerNewElo: catWinnerStats.Rating,
 				LoserOldElo:  catLoserOldElo,
-				LoserNewElo: func() float64 {
-					if newCatLoser != nil {
-						return newCatLoser.Rating
-					}
-					return catLoserOldElo
-				}(),
-				WinnerStats: *newCatWinner,
-				LoserStats: func() ModelRating {
-					if newCatLoser != nil {
-						return *newCatLoser
-					}
-					return ModelRating{}
-				}(),
+				LoserNewElo:  catLoserStats.Rating,
+				WinnerStats:  catWinnerStats,
+				LoserStats:   catLoserStats,
 			})
 		}
 	}
@@ -520,17 +509,15 @@ func (e *EloSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) er
 	return nil
 }
 
-// updateRating performs the actual Elo rating update
-func (e *EloSelector) updateRating(feedback *Feedback,
-	getRating func(string) *ModelRating,
-	setRating func(string, *ModelRating),
-) {
+// updateRatingLocked performs the actual Elo rating update directly on the given ratings map.
+// The caller must hold the appropriate write lock for the duration of this call.
+func (e *EloSelector) updateRatingLocked(feedback *Feedback, ratings map[string]*ModelRating) {
 	// Handle self-feedback (single model, no comparison)
 	// This is used for automatic signal-based feedback where we only know
 	// if one model did well or poorly, not compared to another
 	if feedback.LoserModel == "" && feedback.WinnerModel != "" {
 		// Positive self-feedback: model did well
-		winnerRating := getRating(feedback.WinnerModel)
+		winnerRating := ratings[feedback.WinnerModel]
 		if winnerRating == nil {
 			winnerRating = &ModelRating{Model: feedback.WinnerModel, Rating: e.config.InitialRating}
 		}
@@ -538,13 +525,13 @@ func (e *EloSelector) updateRating(feedback *Feedback,
 		winnerRating.Rating += e.config.KFactor * 0.1 // 10% of K-factor for self-feedback
 		winnerRating.Comparisons++
 		winnerRating.Wins++
-		setRating(feedback.WinnerModel, winnerRating)
+		ratings[feedback.WinnerModel] = winnerRating
 		return
 	}
 
 	if feedback.WinnerModel == "" && feedback.LoserModel != "" {
 		// Negative self-feedback: model did poorly
-		loserRating := getRating(feedback.LoserModel)
+		loserRating := ratings[feedback.LoserModel]
 		if loserRating == nil {
 			loserRating = &ModelRating{Model: feedback.LoserModel, Rating: e.config.InitialRating}
 		}
@@ -552,7 +539,7 @@ func (e *EloSelector) updateRating(feedback *Feedback,
 		loserRating.Rating -= e.config.KFactor * 0.1 // 10% of K-factor for self-feedback
 		loserRating.Comparisons++
 		loserRating.Losses++
-		setRating(feedback.LoserModel, loserRating)
+		ratings[feedback.LoserModel] = loserRating
 		return
 	}
 
@@ -561,12 +548,12 @@ func (e *EloSelector) updateRating(feedback *Feedback,
 		return // No valid feedback
 	}
 
-	winnerRating := getRating(feedback.WinnerModel)
+	winnerRating := ratings[feedback.WinnerModel]
 	if winnerRating == nil {
 		winnerRating = &ModelRating{Model: feedback.WinnerModel, Rating: e.config.InitialRating}
 	}
 
-	loserRating := getRating(feedback.LoserModel)
+	loserRating := ratings[feedback.LoserModel]
 	if loserRating == nil {
 		loserRating = &ModelRating{Model: feedback.LoserModel, Rating: e.config.InitialRating}
 	}
@@ -601,8 +588,8 @@ func (e *EloSelector) updateRating(feedback *Feedback,
 		loserRating.Losses++
 	}
 
-	setRating(feedback.WinnerModel, winnerRating)
-	setRating(feedback.LoserModel, loserRating)
+	ratings[feedback.WinnerModel] = winnerRating
+	ratings[feedback.LoserModel] = loserRating
 }
 
 // getRatingsForCandidates retrieves ratings for all candidate models
