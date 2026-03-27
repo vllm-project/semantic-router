@@ -107,7 +107,7 @@ func SetupValidateHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		if validationErr := validateSetupCandidate(candidate); validationErr != nil {
+		if validationErr := validateSetupCandidate(configPath, candidate); validationErr != nil {
 			http.Error(w, fmt.Sprintf("Setup validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
@@ -157,7 +157,7 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 			return
 		}
 
-		if validationErr := validateSetupCandidate(candidate); validationErr != nil {
+		if validationErr := validateSetupCandidate(configPath, candidate); validationErr != nil {
 			http.Error(w, fmt.Sprintf("Setup activation validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
@@ -287,7 +287,7 @@ func SetupImportRemoteHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		if validationErr := validateSetupCandidate(remoteConfig); validationErr != nil {
+		if validationErr := validateSetupCandidate(configPath, remoteConfig); validationErr != nil {
 			http.Error(w, fmt.Sprintf("remote config validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
@@ -468,7 +468,7 @@ func parseSetupCanonicalConfig(raw []byte) (*setupConfigFile, error) {
 	return &parsed, nil
 }
 
-func validateSetupCandidate(configData *setupConfigFile) error {
+func validateSetupCandidate(configPath string, configData *setupConfigFile) error {
 	if configData == nil {
 		return fmt.Errorf("config is required")
 	}
@@ -481,7 +481,11 @@ func validateSetupCandidate(configData *setupConfigFile) error {
 		return err
 	}
 
-	tempConfigFile, err := os.CreateTemp("", "vllm-sr-setup-*.yaml")
+	tempDir := filepath.Dir(filepath.Clean(configPath))
+	if tempDir == "." || tempDir == "" {
+		tempDir = ""
+	}
+	tempConfigFile, err := os.CreateTemp(tempDir, "vllm-sr-setup-*.yaml")
 	if err != nil {
 		return err
 	}

@@ -198,6 +198,56 @@ func TestSetupValidateHandler(t *testing.T) {
 	}
 }
 
+func TestSetupValidateHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+
+	kbDir := filepath.Join(tempDir, "custom-kb")
+	if err := os.MkdirAll(kbDir, 0o755); err != nil {
+		t.Fatalf("failed to create custom kb directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(kbDir, "labels.json"), []byte(`{
+  "labels": {
+    "safe": {
+      "description": "Safe content",
+      "exemplars": ["hello world"]
+    }
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("failed to write custom kb labels manifest: %v", err)
+	}
+
+	patch := createValidSetupPatch()
+	patch["global"] = map[string]interface{}{
+		"model_catalog": map[string]interface{}{
+			"kbs": []map[string]interface{}{
+				{
+					"name": "custom_kb",
+					"source": map[string]interface{}{
+						"path":     "custom-kb/",
+						"manifest": "labels.json",
+					},
+					"threshold": 0.55,
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, patch)})
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/validate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	SetupValidateHandler(configPath)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestSetupImportRemoteHandler(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
@@ -279,6 +329,80 @@ routing:
 	}
 	if routing, ok := importedConfig["routing"].(map[string]interface{}); !ok || routing["modelCards"] == nil {
 		t.Fatalf("expected imported config routing.modelCards to be preserved, got %#v", importedConfig["routing"])
+	}
+}
+
+func TestSetupImportRemoteHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+
+	kbDir := filepath.Join(tempDir, "remote-kb")
+	if err := os.MkdirAll(kbDir, 0o755); err != nil {
+		t.Fatalf("failed to create remote kb directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(kbDir, "labels.json"), []byte(`{
+  "labels": {
+    "safe": {
+      "description": "Safe content",
+      "exemplars": ["hello world"]
+    }
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("failed to write remote kb labels manifest: %v", err)
+	}
+
+	remoteConfigServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-yaml")
+		_, _ = w.Write([]byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: remote-model
+  models:
+    - name: remote-model
+      backend_refs:
+        - name: primary
+          endpoint: remote.example.com
+          protocol: https
+          weight: 100
+routing:
+  modelCards:
+    - name: remote-model
+      modality: text
+  decisions:
+    - name: remote-route
+      description: Remote route
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: remote-model
+          use_reasoning: false
+global:
+  model_catalog:
+    kbs:
+      - name: remote_kb
+        source:
+          path: remote-kb/
+          manifest: labels.json
+        threshold: 0.55
+`))
+	}))
+	defer remoteConfigServer.Close()
+
+	body, err := json.Marshal(SetupImportRemoteRequest{URL: remoteConfigServer.URL})
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	SetupImportRemoteHandler(configPath)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
