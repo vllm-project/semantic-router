@@ -58,6 +58,7 @@ func (s *evalCaptureClassificationService) HasHallucinationExplainer() bool { re
 func (s *evalCaptureClassificationService) HasFeedbackDetector() bool       { return true }
 func (s *evalCaptureClassificationService) UpdateConfig(_ *config.RouterConfig) {
 }
+
 func (s *evalCaptureClassificationService) RefreshRuntimeConfig(_ *config.RouterConfig) {
 }
 
