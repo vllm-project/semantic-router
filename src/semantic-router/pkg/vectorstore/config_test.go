@@ -69,7 +69,42 @@ var _ = Describe("VectorStoreConfig", func() {
 			}
 			err := cfg.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must be 'memory', 'milvus', or 'llama_stack'"))
+			Expect(err.Error()).To(ContainSubstring("must be 'memory', 'milvus', 'llama_stack', or 'valkey'"))
+		})
+
+		It("should pass with valkey backend and config", func() {
+			cfg := &config.VectorStoreConfig{
+				Enabled:     true,
+				BackendType: "valkey",
+				Valkey: &config.ValkeyVectorStoreConfig{
+					Host: "localhost",
+					Port: 6379,
+				},
+			}
+			Expect(cfg.Validate()).NotTo(HaveOccurred())
+		})
+
+		It("should fail with valkey backend but no valkey config", func() {
+			cfg := &config.VectorStoreConfig{
+				Enabled:     true,
+				BackendType: "valkey",
+			}
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("valkey configuration is required"))
+		})
+
+		It("should fail with valkey backend but no host", func() {
+			cfg := &config.VectorStoreConfig{
+				Enabled:     true,
+				BackendType: "valkey",
+				Valkey: &config.ValkeyVectorStoreConfig{
+					Port: 6379,
+				},
+			}
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("valkey.host is required"))
 		})
 
 		It("should pass with llama_stack backend and valid search_type", func() {

@@ -1,0 +1,102 @@
+# Valkey Vector Store Configuration
+# This configuration file contains settings for using Valkey as the vector store backend.
+# To use this configuration:
+# 1. Set backend_type: "valkey" in your main config.yaml under global.stores.vector_store
+# 2. Inline the Valkey settings from this file into your canonical config.yaml
+# 3. Ensure Valkey is running with the valkey-search module enabled
+# 4. The valkey-bundle:latest image includes the valkey-search module
+#
+# Quick start:
+#   docker run -d --name valkey -p 6379:6379 valkey/valkey-bundle:latest
+#
+# Note: CI and local dev targets use valkey-bundle:unstable because
+# valkey-search 1.2.0-rc3+ (text search support) is only in that tag for now.
+
+# Valkey connection settings
+connection:
+  # Valkey server host (change for production deployment)
+  host: "localhost"
+
+  # Valkey server port
+  port: 6379
+
+  # Database number (0-15)
+  database: 0
+
+  # Password for Valkey authentication (empty for no auth)
+  password: ""
+
+  # Connection timeout in seconds
+  timeout: 5
+
+# Index settings for HNSW vector index
+index:
+  # Prefix for all vector store keys/indexes in Valkey
+  collection_prefix: "vsr_vs_"
+
+  # Metric type for similarity calculation
+  # Options: COSINE (default), L2, IP (Inner Product)
+  metric_type: COSINE
+
+  # HNSW index parameters
+  params:
+    M: 16               # Number of bi-directional links per node
+    efConstruction: 200  # Search scope during index construction
+
+# Search configuration
+search:
+  # Number of top results to retrieve
+  topk: 10
+
+# Development and debugging settings
+development:
+  # Drop indexes on startup (WARNING: deletes all indexed data)
+  drop_index_on_startup: false
+
+  # Create indexes automatically if they don't exist
+  auto_create_index: true
+
+  # Print detailed error messages
+  verbose_errors: true
+
+# Logging settings
+logging:
+  # Log level for Valkey client operations (debug, info, warn, error)
+  level: info
+
+  # Enable query/search logging for debugging
+  enable_query_log: false
+
+  # Enable performance metrics collection
+  enable_metrics: true
+
+# Example configurations for different environments:
+#
+# Local Development (Docker):
+#   docker run -d --name valkey -p 6379:6379 valkey/valkey-bundle:latest
+#   connection:
+#     host: "localhost"
+#     port: 6379
+#   development:
+#     drop_index_on_startup: true
+#     verbose_errors: true
+#
+# Production:
+#   connection:
+#     host: "valkey.production.svc.cluster.local"
+#     port: 6379
+#     password: "${VALKEY_PASSWORD}"
+#     timeout: 10
+#   development:
+#     drop_index_on_startup: false
+#     auto_create_index: false
+#     verbose_errors: false
+#   logging:
+#     level: warn
+#     enable_query_log: false
+#
+# Kubernetes Deployment:
+#   connection:
+#     host: "valkey-service.valkey-system.svc.cluster.local"
+#     port: 6379
+#     timeout: 10

@@ -62,6 +62,11 @@ type VectorStoreConfig struct {
 	// Llama Stack handles embedding internally, so vSR's CandleEmbedder is
 	// not used for insert/search — only Llama Stack's configured model is used.
 	LlamaStack *LlamaStackVectorStoreConfig `json:"llama_stack,omitempty" yaml:"llama_stack,omitempty"`
+
+	// Valkey holds Valkey vector store backend configuration.
+	// When backend_type is "valkey", vSR uses Valkey with the valkey-search
+	// module for vector storage via the valkey-glide Go client.
+	Valkey *ValkeyVectorStoreConfig `json:"valkey,omitempty" yaml:"valkey,omitempty"`
 }
 
 // VectorStoreMemoryConfig holds configuration for the in-memory backend.
@@ -93,6 +98,37 @@ type LlamaStackVectorStoreConfig struct {
 	SearchType string `json:"search_type,omitempty" yaml:"search_type,omitempty"`
 }
 
+// ValkeyVectorStoreConfig holds configuration for the Valkey vector store backend.
+// Flat structure matching the pattern of MilvusConfig and LlamaStackVectorStoreConfig.
+type ValkeyVectorStoreConfig struct {
+	// Host is the Valkey server hostname (default "localhost").
+	Host string `json:"host" yaml:"host"`
+
+	// Port is the Valkey server port (default 6379).
+	Port int `json:"port" yaml:"port"`
+
+	// Database number (default 0).
+	Database int `json:"database" yaml:"database"`
+
+	// Password for Valkey authentication (optional).
+	Password string `json:"password,omitempty" yaml:"password,omitempty"`
+
+	// ConnectTimeout in seconds (default 10).
+	ConnectTimeout int `json:"connect_timeout" yaml:"connect_timeout"`
+
+	// CollectionPrefix is the prefix for hash keys and index names (default "vsr_vs_").
+	CollectionPrefix string `json:"collection_prefix" yaml:"collection_prefix"`
+
+	// MetricType is the distance metric: "COSINE", "L2", or "IP" (default "COSINE").
+	MetricType string `json:"metric_type" yaml:"metric_type"`
+
+	// IndexM is the HNSW M parameter (default 16).
+	IndexM int `json:"index_m" yaml:"index_m"`
+
+	// IndexEfConstruction is the HNSW efConstruction parameter (default 200).
+	IndexEfConstruction int `json:"index_ef_construction" yaml:"index_ef_construction"`
+}
+
 // Validate checks the vector store configuration for errors.
 func (c *VectorStoreConfig) Validate() error {
 	if !c.Enabled {
@@ -100,16 +136,25 @@ func (c *VectorStoreConfig) Validate() error {
 	}
 
 	switch c.BackendType {
-	case "memory", "milvus", "llama_stack":
+	case "memory", "milvus", "llama_stack", "valkey":
 		// valid
 	case "":
 		return fmt.Errorf("vector_store.backend_type is required when enabled")
 	default:
-		return fmt.Errorf("vector_store.backend_type must be 'memory', 'milvus', or 'llama_stack', got '%s'", c.BackendType)
+		return fmt.Errorf("vector_store.backend_type must be 'memory', 'milvus', 'llama_stack', or 'valkey', got '%s'", c.BackendType)
 	}
 
 	if c.BackendType == "milvus" && c.Milvus == nil {
 		return fmt.Errorf("vector_store.milvus configuration is required when backend_type is 'milvus'")
+	}
+
+	if c.BackendType == "valkey" {
+		if c.Valkey == nil {
+			return fmt.Errorf("vector_store.valkey configuration is required when backend_type is 'valkey'")
+		}
+		if c.Valkey.Host == "" {
+			return fmt.Errorf("vector_store.valkey.host is required")
+		}
 	}
 
 	if c.BackendType == "llama_stack" {
