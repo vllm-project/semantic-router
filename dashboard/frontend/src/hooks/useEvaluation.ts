@@ -56,7 +56,7 @@ export function useTasks(autoRefresh = false, refreshInterval = 5000) {
 }
 
 // Hook for a single task with progress tracking
-export function useTask(taskId: string | null) {
+export function useTask(taskId: string | null, autoRefresh = false, refreshInterval = 1000) {
   const [task, setTask] = useState<EvaluationTask | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +77,14 @@ export function useTask(taskId: string | null) {
 
   useEffect(() => {
     fetchTask();
-  }, [fetchTask]);
+
+    if (!autoRefresh) {
+      return;
+    }
+
+    const interval = window.setInterval(fetchTask, refreshInterval);
+    return () => window.clearInterval(interval);
+  }, [fetchTask, autoRefresh, refreshInterval]);
 
   return { task, loading, error, refresh: fetchTask };
 }
@@ -94,6 +101,10 @@ export function useProgress(taskId: string | null, enabled = true) {
     if (!taskId || !enabled) {
       return;
     }
+
+    setCompleted(false);
+    setConnected(false);
+    setError(null);
 
     const cleanup = api.subscribeToProgress(
       taskId,

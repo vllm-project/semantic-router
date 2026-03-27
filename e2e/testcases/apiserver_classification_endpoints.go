@@ -17,7 +17,7 @@ import (
 func init() {
 	pkgtestcases.Register("apiserver-classification-endpoints", pkgtestcases.TestCase{
 		Description: "Verify router config, metrics, and combined-classification endpoints against the live router runtime",
-		Tags:        []string{"ai-gateway", "apiserver", "classification", "config", "api"},
+		Tags:        []string{"kubernetes", "apiserver", "classification", "config", "api"},
 		Fn:          testAPIServerClassificationEndpoints,
 	})
 }

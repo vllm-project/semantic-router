@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -198,6 +199,56 @@ func TestSetupValidateHandler(t *testing.T) {
 	}
 }
 
+func TestSetupValidateHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+
+	kbDir := filepath.Join(tempDir, "custom-kb")
+	if err := os.MkdirAll(kbDir, 0o755); err != nil {
+		t.Fatalf("failed to create custom kb directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(kbDir, "labels.json"), []byte(`{
+  "labels": {
+    "safe": {
+      "description": "Safe content",
+      "exemplars": ["hello world"]
+    }
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("failed to write custom kb labels manifest: %v", err)
+	}
+
+	patch := createValidSetupPatch()
+	patch["global"] = map[string]interface{}{
+		"model_catalog": map[string]interface{}{
+			"kbs": []map[string]interface{}{
+				{
+					"name": "custom_kb",
+					"source": map[string]interface{}{
+						"path":     "custom-kb/",
+						"manifest": "labels.json",
+					},
+					"threshold": 0.55,
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, patch)})
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/validate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	SetupValidateHandler(configPath)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestSetupImportRemoteHandler(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
@@ -282,6 +333,80 @@ routing:
 	}
 }
 
+func TestSetupImportRemoteHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+
+	kbDir := filepath.Join(tempDir, "remote-kb")
+	if err := os.MkdirAll(kbDir, 0o755); err != nil {
+		t.Fatalf("failed to create remote kb directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(kbDir, "labels.json"), []byte(`{
+  "labels": {
+    "safe": {
+      "description": "Safe content",
+      "exemplars": ["hello world"]
+    }
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("failed to write remote kb labels manifest: %v", err)
+	}
+
+	remoteConfigServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-yaml")
+		_, _ = w.Write([]byte(`
+version: v0.3
+providers:
+  defaults:
+    default_model: remote-model
+  models:
+    - name: remote-model
+      backend_refs:
+        - name: primary
+          endpoint: remote.example.com
+          protocol: https
+          weight: 100
+routing:
+  modelCards:
+    - name: remote-model
+      modality: text
+  decisions:
+    - name: remote-route
+      description: Remote route
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: remote-model
+          use_reasoning: false
+global:
+  model_catalog:
+    kbs:
+      - name: remote_kb
+        source:
+          path: remote-kb/
+          manifest: labels.json
+        threshold: 0.55
+`))
+	}))
+	defer remoteConfigServer.Close()
+
+	body, err := json.Marshal(SetupImportRemoteRequest{URL: remoteConfigServer.URL})
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	SetupImportRemoteHandler(configPath)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestSetupActivateHandler(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
@@ -354,11 +479,11 @@ func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {
 	t.Setenv("TEST_ENVOY_CONTAINER", "lane-a-vllm-sr-envoy-container")
 	t.Setenv("TEST_ENVOY_STATUS_FILE", fakeDocker.envoyStatusPath)
 
-	if err := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); err != nil {
-		t.Fatalf("failed to seed router status: %v", err)
+	if writeErr := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); writeErr != nil {
+		t.Fatalf("failed to seed router status: %v", writeErr)
 	}
-	if err := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); err != nil {
-		t.Fatalf("failed to seed envoy status: %v", err)
+	if writeErr := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); writeErr != nil {
+		t.Fatalf("failed to seed envoy status: %v", writeErr)
 	}
 
 	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
@@ -388,5 +513,81 @@ func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {
 	}
 	if strings.Contains(logText, "supervisorctl") {
 		t.Fatalf("split runtime should not use supervisorctl, got %q", logText)
+	}
+}
+
+func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedContainers(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+	fakeDocker := writeFakeLifecycleDockerCLI(t)
+
+	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+":"+os.Getenv("PATH"))
+	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
+	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
+	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
+	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
+	t.Setenv("TEST_ROUTER_CONTAINER", "lane-a-vllm-sr-router-container")
+	t.Setenv("TEST_ROUTER_STATUS_FILE", fakeDocker.routerStatusPath)
+	t.Setenv("TEST_ENVOY_CONTAINER", "lane-a-vllm-sr-envoy-container")
+	t.Setenv("TEST_ENVOY_STATUS_FILE", fakeDocker.envoyStatusPath)
+
+	runtimeDir := filepath.Join(tempDir, ".vllm-sr")
+	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
+		t.Fatalf("failed to create runtime dir: %v", err)
+	}
+
+	runtimeConfigPath := filepath.Join(runtimeDir, "runtime-config.yaml")
+	envoyConfigPath := filepath.Join(runtimeDir, "envoy.yaml")
+	if err := os.WriteFile(envoyConfigPath, []byte("# stale bootstrap config\nbootstrap_only: true\n"), 0o644); err != nil {
+		t.Fatalf("failed to seed stale envoy config: %v", err)
+	}
+
+	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", runtimeConfigPath)
+	t.Setenv("VLLM_SR_ENVOY_CONFIG_PATH", envoyConfigPath)
+	pythonBinary := "python3"
+	if _, err := exec.LookPath(pythonBinary); err != nil {
+		pythonBinary = "python"
+	}
+	t.Setenv("VLLM_SR_PYTHON_BIN", pythonBinary)
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	t.Setenv("VLLM_SR_CLI_PATH", filepath.Join(repoRoot, "src", "vllm-sr"))
+
+	if writeErr := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); writeErr != nil {
+		t.Fatalf("failed to seed router status: %v", writeErr)
+	}
+	if writeErr := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); writeErr != nil {
+		t.Fatalf("failed to seed envoy status: %v", writeErr)
+	}
+
+	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	SetupActivateHandler(configPath, false, tempDir)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	envoyConfigData, err := os.ReadFile(envoyConfigPath)
+	if err != nil {
+		t.Fatalf("failed to read envoy config: %v", err)
+	}
+	envoyConfigText := string(envoyConfigData)
+	if strings.Contains(envoyConfigText, "bootstrap_only") {
+		t.Fatalf("expected setup activation to replace stale envoy config, got:\n%s", envoyConfigText)
+	}
+	if !strings.Contains(envoyConfigText, "host.docker.internal") {
+		t.Fatalf("expected refreshed envoy config to include activated backend endpoint, got:\n%s", envoyConfigText)
+	}
+	if !strings.Contains(envoyConfigText, "test_model_cluster") {
+		t.Fatalf("expected refreshed envoy config to include activated model cluster, got:\n%s", envoyConfigText)
 	}
 }

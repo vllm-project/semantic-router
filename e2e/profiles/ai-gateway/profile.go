@@ -17,12 +17,12 @@ var resourceManifests = []string{
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
 }
 
-// Profile implements the AI Gateway test profile.
+// Profile implements the default Kubernetes baseline test profile.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
 
-// NewProfile creates a new AI Gateway profile.
+// NewProfile creates the default Kubernetes profile backed by the shared AI Gateway stack.
 func NewProfile() *Profile {
 	return &Profile{
 		stack: gatewaystack.New(gatewaystack.Config{
@@ -35,12 +35,12 @@ func NewProfile() *Profile {
 
 // Name returns the profile name.
 func (p *Profile) Name() string {
-	return "ai-gateway"
+	return "kubernetes"
 }
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests Semantic Router with Envoy AI Gateway integration"
+	return "Tests Semantic Router through the default Kubernetes baseline powered by Envoy AI Gateway"
 }
 
 // Setup deploys the shared gateway stack.

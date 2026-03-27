@@ -106,9 +106,11 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
 
-	// Update status to running
-	if err := r.db.UpdateTaskStatus(taskID, models.StatusRunning, ""); err != nil {
-		return fmt.Errorf("failed to update task status: %w", err)
+	// Update status to running when the caller has not already transitioned the task.
+	if task.Status != models.StatusRunning {
+		if err := r.db.UpdateTaskStatus(taskID, models.StatusRunning, ""); err != nil {
+			return fmt.Errorf("failed to update task status: %w", err)
+		}
 	}
 
 	r.sendProgress(taskID, 0, "Starting evaluation", "Initializing evaluation task")
@@ -122,6 +124,7 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 
 	totalDimensions := len(task.Config.Dimensions)
 	completedDimensions := 0
+	var runErrors []string
 
 	for _, dimension := range task.Config.Dimensions {
 		select {
@@ -159,6 +162,7 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 
 			if runErr != nil {
 				log.Printf("Error running %s evaluation on dataset %s: %v", dimension, dataset, runErr)
+				runErrors = append(runErrors, fmt.Sprintf("%s/%s: %v", dimension, dataset, runErr))
 				// Continue with other datasets
 				continue
 			}
@@ -176,6 +180,14 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 		completedDimensions++
 		progress := (completedDimensions * 100) / totalDimensions
 		r.sendProgress(taskID, progress, step, fmt.Sprintf("Completed %s evaluation", dimension))
+	}
+
+	if len(runErrors) > 0 {
+		errorMessage := strings.Join(runErrors, "\n")
+		if err := r.db.UpdateTaskStatus(taskID, models.StatusFailed, errorMessage); err != nil {
+			return fmt.Errorf("failed to update task status after evaluation errors: %w", err)
+		}
+		return fmt.Errorf("evaluation task failed:\n%s", errorMessage)
 	}
 
 	r.sendProgress(taskID, 100, "Completed", "All evaluations finished")
@@ -226,7 +238,7 @@ func (r *Runner) runSignalEvaluation(ctx context.Context, taskID string, cfg mod
 
 	// Build command arguments
 	args := []string{
-		"src/training/model_eval/signal_eval.py",
+		r.modelEvalScriptPath("signal_eval.py"),
 		"--dataset", datasetID,
 		"--endpoint", endpoint,
 		"--output", outputPath,
@@ -243,7 +255,7 @@ func (r *Runner) runSignalEvaluation(ctx context.Context, taskID string, cfg mod
 
 	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath is configured at startup, not user input
 	cmd.Dir = r.projectRoot
-	cmd.Env = append(os.Environ(), "PYTHONPATH="+r.projectRoot)
+	cmd.Env = r.pythonEnv()
 
 	r.activeProcesses.Store(taskID, cmd)
 	defer r.activeProcesses.Delete(taskID)
@@ -287,7 +299,7 @@ func (r *Runner) runSystemEvaluation(ctx context.Context, taskID string, cfg mod
 		samplesPerCat = 5
 	}
 	args := []string{
-		"src/training/model_eval/mmlu_pro_vllm_eval.py",
+		r.modelEvalScriptPath("mmlu_pro_vllm_eval.py"),
 		"--endpoint", endpoint,
 		"--output-dir", outDir,
 		"--samples-per-category", fmt.Sprintf("%d", samplesPerCat),
@@ -301,7 +313,7 @@ func (r *Runner) runSystemEvaluation(ctx context.Context, taskID string, cfg mod
 
 	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath is configured at startup
 	cmd.Dir = r.projectRoot
-	cmd.Env = append(os.Environ(), "PYTHONPATH="+r.projectRoot)
+	cmd.Env = r.pythonEnv()
 
 	r.activeProcesses.Store(taskID, cmd)
 	defer r.activeProcesses.Delete(taskID)
@@ -376,6 +388,19 @@ func (r *Runner) runCommandWithProgress(ctx context.Context, cmd *exec.Cmd, task
 	}
 
 	return output.String(), nil
+}
+
+func (r *Runner) modelEvalScriptPath(scriptName string) string {
+	return filepath.Join(r.projectRoot, "src", "training", "model_eval", scriptName)
+}
+
+func (r *Runner) pythonEnv() []string {
+	pythonPath := r.projectRoot
+	if existing := os.Getenv("PYTHONPATH"); existing != "" {
+		pythonPath += string(os.PathListSeparator) + existing
+	}
+
+	return append(os.Environ(), "PYTHONPATH="+pythonPath)
 }
 
 // saveHistoricalMetrics saves key metrics to the history table.

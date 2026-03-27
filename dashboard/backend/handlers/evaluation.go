@@ -248,6 +248,18 @@ func (h *EvaluationHandler) RunTaskHandler() http.HandlerFunc {
 			return
 		}
 
+		// Transition the task before returning so reruns do not briefly show the previous failed state.
+		if err := h.db.UpdateTaskStatus(req.TaskID, models.StatusRunning, ""); err != nil {
+			log.Printf("Failed to mark task %s as running: %v", req.TaskID, err)
+			http.Error(w, fmt.Sprintf("Failed to start task: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if err := h.db.UpdateTaskProgress(req.TaskID, 0, "Starting evaluation"); err != nil {
+			log.Printf("Failed to reset task %s progress: %v", req.TaskID, err)
+			http.Error(w, fmt.Sprintf("Failed to initialize task progress: %v", err), http.StatusInternalServerError)
+			return
+		}
+
 		// Create cancellation context
 		ctx, cancel := context.WithCancel(context.Background())
 		h.cancelFuncs.Store(req.TaskID, cancel)

@@ -17,6 +17,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  HELM_VERSION: v3.14.0
+
 jobs:
   # use changes as filter
   changes:
@@ -55,6 +58,14 @@ jobs:
             make \
             build-essential \
             pkg-config
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Validate Helm chart
+        run: make helm-ci-validate HELM_NAMESPACE=test-namespace
 
       - name: Set up golangci-lint
         uses: golangci/golangci-lint-action@v7
@@ -225,6 +236,7 @@ jobs:
           path: |
             **/*.log
             **/test-output.*
+            dist/helm/*.yaml
           retention-days: 7
 
       - name: Notify on failure
