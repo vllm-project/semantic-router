@@ -191,10 +191,8 @@ def _resolve_runtime_service_image(
         source_name = f"{service_name} image"
         log.info(f"Using {service_name} image from explicit override: {selected_image}")
     elif base_image_is_explicit:
-        selected_image = base_image
-        source_name = "explicit vllm-sr image"
-        log.info(
-            f"Using {service_name} image from explicit --image override: {selected_image}"
+        selected_image, source_name = _resolve_explicit_base_runtime_service_image(
+            service_name, base_image
         )
     else:
         service_env_var = RUNTIME_SERVICE_IMAGE_ENV_VARS[service_name]
@@ -233,6 +231,30 @@ def _resolve_runtime_service_image(
             source_name,
         )
     return selected_image
+
+
+def _resolve_explicit_base_runtime_service_image(service_name, base_image):
+    derived_image = ""
+    if service_name == "envoy":
+        derived_image = _derive_envoy_variant(base_image)
+    elif service_name == "dashboard":
+        derived_image = _derive_dashboard_variant(base_image)
+
+    selected_image = derived_image or base_image
+    if derived_image:
+        log.info(
+            f"Using {service_name} image derived from explicit --image override: {selected_image}"
+        )
+        source_name = (
+            f"derived official {service_name} image from explicit --image override"
+        )
+    else:
+        log.info(
+            f"Using {service_name} image from explicit --image override: {selected_image}"
+        )
+        source_name = "explicit vllm-sr image"
+
+    return selected_image, source_name
 
 
 def _ensure_image_available(selected_image, pull_policy):

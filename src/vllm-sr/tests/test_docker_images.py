@@ -213,6 +213,39 @@ def test_get_runtime_images_prefers_explicit_base_image_over_service_env(monkeyp
     assert ensured == [("base:explicit", "never")]
 
 
+def test_get_runtime_images_derives_official_service_images_from_explicit_base_image(
+    monkeypatch,
+):
+    ensured = []
+    explicit_base = "ghcr.io/vllm-project/semantic-router/vllm-sr:v9.9.9"
+    monkeypatch.setattr(
+        docker_images,
+        "_resolve_selected_image",
+        lambda image, normalized_platform: image,
+    )
+    monkeypatch.setattr(
+        docker_images,
+        "_ensure_image_available",
+        lambda image, pull_policy: ensured.append((image, pull_policy)),
+    )
+
+    images = docker_images.get_runtime_images(
+        image=explicit_base,
+        pull_policy="never",
+    )
+
+    assert images == {
+        "router": explicit_base,
+        "envoy": VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT,
+        "dashboard": "ghcr.io/vllm-project/semantic-router/dashboard:v9.9.9",
+    }
+    assert ensured == [
+        (explicit_base, "never"),
+        (VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT, "never"),
+        ("ghcr.io/vllm-project/semantic-router/dashboard:v9.9.9", "never"),
+    ]
+
+
 def test_get_runtime_images_prefers_explicit_service_image_over_explicit_base_image(
     monkeypatch,
 ):
