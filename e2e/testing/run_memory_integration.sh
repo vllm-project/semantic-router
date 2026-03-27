@@ -153,6 +153,7 @@ fi
 cd "${REPO_ROOT}/e2e/testing"
 PYTHONUNBUFFERED=1 \
 ROUTER_ENDPOINT=http://localhost:8888 \
+ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
 MILVUS_ADDRESS=localhost:19530 \
 MILVUS_COLLECTION=memory_test_ci \
 python3 09-memory-features-test.py
