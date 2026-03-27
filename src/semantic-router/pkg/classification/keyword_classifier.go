@@ -179,30 +179,10 @@ func prepRegexRule(rule config.KeywordRule) (preppedKeywordRule, error) {
 
 	preppedRule.CompiledRegexpsCS = make([]*regexp.Regexp, len(rule.Keywords))
 	preppedRule.CompiledRegexpsCI = make([]*regexp.Regexp, len(rule.Keywords))
+	useExplicitRegex := strings.EqualFold(rule.Method, "regex")
 
 	for j, keyword := range rule.Keywords {
-		quotedKeyword := regexp.QuoteMeta(keyword)
-		hasWordChar := false
-		hasChinese := false
-		for _, r := range keyword {
-			if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
-				hasWordChar = true
-			}
-			if unicode.Is(unicode.Han, r) {
-				hasChinese = true
-			}
-			if hasWordChar && hasChinese {
-				break
-			}
-		}
-
-		patternCS := quotedKeyword
-		patternCI := "(?i)" + quotedKeyword
-
-		if hasWordChar && !hasChinese {
-			patternCS = "\\b" + patternCS + "\\b"
-			patternCI = "(?i)\\b" + quotedKeyword + "\\b"
-		}
+		patternCS, patternCI := regexPatterns(keyword, useExplicitRegex)
 
 		var err error
 		preppedRule.CompiledRegexpsCS[j], err = regexp.Compile(patternCS)
@@ -219,6 +199,35 @@ func prepRegexRule(rule config.KeywordRule) (preppedKeywordRule, error) {
 	}
 
 	return preppedRule, nil
+}
+
+func regexPatterns(keyword string, useExplicitRegex bool) (string, string) {
+	if useExplicitRegex {
+		return keyword, "(?i)" + keyword
+	}
+
+	quotedKeyword := regexp.QuoteMeta(keyword)
+	hasWordChar := false
+	hasChinese := false
+	for _, r := range keyword {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
+			hasWordChar = true
+		}
+		if unicode.Is(unicode.Han, r) {
+			hasChinese = true
+		}
+		if hasWordChar && hasChinese {
+			break
+		}
+	}
+
+	patternCS := quotedKeyword
+	patternCI := "(?i)" + quotedKeyword
+	if hasWordChar && !hasChinese {
+		patternCS = "\\b" + patternCS + "\\b"
+		patternCI = "(?i)\\b" + quotedKeyword + "\\b"
+	}
+	return patternCS, patternCI
 }
 
 // Classify performs keyword-based classification on the given text.

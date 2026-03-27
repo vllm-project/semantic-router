@@ -115,6 +115,20 @@ var keywordClassifierTests = []keywordClassifierTestCase{
 		},
 	},
 	{
+		name:     "Explicit regex method matches AWS key pattern",
+		text:     "My AWS key is AKIAIOSFODNN7EXAMPLE and it should be caught",
+		expected: "secrets",
+		rules: []config.KeywordRule{
+			{
+				Name:          "secrets",
+				Operator:      "OR",
+				Method:        "regex",
+				Keywords:      []string{`AKIA[0-9A-Z]{16}`},
+				CaseSensitive: false,
+			},
+		},
+	},
+	{
 		name: "Unsupported operator should return error",
 		rules: []config.KeywordRule{
 			{Name: "bad-operator", Operator: "UNKNOWN", Keywords: []string{"test"}},
