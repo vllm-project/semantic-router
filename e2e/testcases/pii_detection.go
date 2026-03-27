@@ -19,7 +19,7 @@ import (
 func init() {
 	pkgtestcases.Register("pii-detection", pkgtestcases.TestCase{
 		Description: "Test PII detection and blocking functionality",
-		Tags:        []string{"ai-gateway", "security", "pii"},
+		Tags:        []string{"kubernetes", "security", "pii"},
 		Fn:          testPIIDetection,
 	})
 }

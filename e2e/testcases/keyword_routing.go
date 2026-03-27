@@ -20,7 +20,7 @@ import (
 func init() {
 	pkgtestcases.Register("keyword-routing", pkgtestcases.TestCase{
 		Description: "Test keyword routing accuracy and verify matched keywords",
-		Tags:        []string{"ai-gateway", "routing", "keyword"},
+		Tags:        []string{"kubernetes", "routing", "keyword"},
 		Fn:          testKeywordRouting,
 	})
 }

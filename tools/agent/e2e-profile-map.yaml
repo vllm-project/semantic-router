@@ -1,20 +1,11 @@
 version: 2
 
 default_local_profiles:
-  - ai-gateway
+  - kubernetes
 
 full_ci_profiles:
-  - ai-gateway
-  - aibrix
-  - routing-strategies
-  - dynamic-config
-  - llm-d
-  - istio
-  - production-stack
-  - ml-model-selection
-  - multi-endpoint
-  - authz-rbac
-  - streaming
+  - kubernetes
+  - dashboard
 
 full_ci_triggers:
   - src/semantic-router/**
@@ -33,7 +24,7 @@ full_ci_triggers:
   - e2e/config/**
 
 profile_rules:
-  ai-gateway:
+  kubernetes:
     owner: e2e
     coverage_role: baseline-router-contract
     selection_mode: default-local,full-ci

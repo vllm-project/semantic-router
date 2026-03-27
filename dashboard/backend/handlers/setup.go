@@ -202,12 +202,13 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 			return
 		}
 
-		if _, err := syncRuntimeConfigForCurrentRuntime(configPath); err != nil {
+		effectiveConfigPath, err := syncRuntimeConfigForCurrentRuntime(configPath)
+		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to sync runtime config: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		if err := restartSetupRuntimeServices(configPath); err != nil {
+		if err := restartSetupRuntimeServices(configPath, effectiveConfigPath); err != nil {
 			log.Printf("Warning: failed to restart router/envoy after activation: %v", err)
 		}
 
@@ -564,7 +565,11 @@ func backupCurrentConfig(configPath string, configDir string) error {
 	return nil
 }
 
-func restartSetupManagedServices() error {
+func restartSetupManagedServices(effectiveConfigPath string) error {
+	if err := refreshManagedSplitEnvoyConfig(effectiveConfigPath); err != nil {
+		return err
+	}
+
 	for _, service := range []string{"router", "envoy"} {
 		if err := restartManagedService(service, 20*time.Second); err != nil {
 			return err
@@ -574,9 +579,9 @@ func restartSetupManagedServices() error {
 	return nil
 }
 
-func restartSetupRuntimeServices(configPath string) error {
+func restartSetupRuntimeServices(configPath string, effectiveConfigPath string) error {
 	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
-		return restartSetupManagedServices()
+		return restartSetupManagedServices(effectiveConfigPath)
 	}
 
 	if getDockerContainerStatus(managedContainerNameForService("router")) == "not found" &&
@@ -584,5 +589,5 @@ func restartSetupRuntimeServices(configPath string) error {
 		return nil
 	}
 
-	return restartSetupManagedServices()
+	return restartSetupManagedServices(effectiveConfigPath)
 }

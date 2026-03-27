@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -512,5 +513,81 @@ func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {
 	}
 	if strings.Contains(logText, "supervisorctl") {
 		t.Fatalf("split runtime should not use supervisorctl, got %q", logText)
+	}
+}
+
+func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedContainers(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, tempDir)
+	fakeDocker := writeFakeLifecycleDockerCLI(t)
+
+	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+":"+os.Getenv("PATH"))
+	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
+	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
+	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
+	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
+	t.Setenv("TEST_ROUTER_CONTAINER", "lane-a-vllm-sr-router-container")
+	t.Setenv("TEST_ROUTER_STATUS_FILE", fakeDocker.routerStatusPath)
+	t.Setenv("TEST_ENVOY_CONTAINER", "lane-a-vllm-sr-envoy-container")
+	t.Setenv("TEST_ENVOY_STATUS_FILE", fakeDocker.envoyStatusPath)
+
+	runtimeDir := filepath.Join(tempDir, ".vllm-sr")
+	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
+		t.Fatalf("failed to create runtime dir: %v", err)
+	}
+
+	runtimeConfigPath := filepath.Join(runtimeDir, "runtime-config.yaml")
+	envoyConfigPath := filepath.Join(runtimeDir, "envoy.yaml")
+	if err := os.WriteFile(envoyConfigPath, []byte("# stale bootstrap config\nbootstrap_only: true\n"), 0o644); err != nil {
+		t.Fatalf("failed to seed stale envoy config: %v", err)
+	}
+
+	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", runtimeConfigPath)
+	t.Setenv("VLLM_SR_ENVOY_CONFIG_PATH", envoyConfigPath)
+	pythonBinary := "python3"
+	if _, err := exec.LookPath(pythonBinary); err != nil {
+		pythonBinary = "python"
+	}
+	t.Setenv("VLLM_SR_PYTHON_BIN", pythonBinary)
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	t.Setenv("VLLM_SR_CLI_PATH", filepath.Join(repoRoot, "src", "vllm-sr"))
+
+	if err := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); err != nil {
+		t.Fatalf("failed to seed router status: %v", err)
+	}
+	if err := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); err != nil {
+		t.Fatalf("failed to seed envoy status: %v", err)
+	}
+
+	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	SetupActivateHandler(configPath, false, tempDir)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	envoyConfigData, err := os.ReadFile(envoyConfigPath)
+	if err != nil {
+		t.Fatalf("failed to read envoy config: %v", err)
+	}
+	envoyConfigText := string(envoyConfigData)
+	if strings.Contains(envoyConfigText, "bootstrap_only") {
+		t.Fatalf("expected setup activation to replace stale envoy config, got:\n%s", envoyConfigText)
+	}
+	if !strings.Contains(envoyConfigText, "host.docker.internal") {
+		t.Fatalf("expected refreshed envoy config to include activated backend endpoint, got:\n%s", envoyConfigText)
+	}
+	if !strings.Contains(envoyConfigText, "test_model_cluster") {
+		t.Fatalf("expected refreshed envoy config to include activated model cluster, got:\n%s", envoyConfigText)
 	}
 }

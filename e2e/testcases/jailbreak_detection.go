@@ -19,7 +19,7 @@ import (
 func init() {
 	pkgtestcases.Register("jailbreak-detection", pkgtestcases.TestCase{
 		Description: "Test jailbreak detection and blocking functionality",
-		Tags:        []string{"ai-gateway", "security", "jailbreak"},
+		Tags:        []string{"kubernetes", "security", "jailbreak"},
 		Fn:          testJailbreakDetection,
 	})
 }

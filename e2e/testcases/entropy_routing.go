@@ -19,7 +19,7 @@ import (
 func init() {
 	pkgtestcases.Register("entropy-routing", pkgtestcases.TestCase{
 		Description: "Test entropy-based routing decisions and verify uncertainty-aware model selection",
-		Tags:        []string{"ai-gateway", "routing", "entropy", "uncertainty"},
+		Tags:        []string{"kubernetes", "routing", "entropy", "uncertainty"},
 		Fn:          testEntropyRouting,
 	})
 }

@@ -33,7 +33,7 @@ jobs:
     steps:
       - id: set-matrix
         run: |
-          # Run all profiles if common e2e code, core code changes, or manual/scheduled trigger
+          # Run the default PR baseline profiles if common e2e code, core code changes, or manual/scheduled trigger
           if [[ "${{ needs.changes.outputs.e2e_common }}" == "true" ]] || \
              [[ "${{ needs.changes.outputs.core }}" == "true" ]] || \
              [[ "${{ needs.changes.outputs.docker }}" == "true" ]] || \
@@ -42,16 +42,16 @@ jobs:
              [[ "${{ needs.changes.outputs.agent_exec }}" == "true" ]] || \
              [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo 'profiles=["ai-gateway", "aibrix", "dashboard", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack", "ml-model-selection", "multi-endpoint", "authz-rbac", "streaming"]' >> $GITHUB_OUTPUT
+            echo 'profiles=["kubernetes", "dashboard"]' >> $GITHUB_OUTPUT
             echo 'should_run=true' >> $GITHUB_OUTPUT
-            echo "Running all profiles due to common/core changes or push/schedule/manual trigger"
+            echo "Running default baseline profiles due to common/core changes or push/schedule/manual trigger"
             exit 0
           fi
 
           # Only run affected profiles for PRs
           profiles=()
           [[ "${{ needs.changes.outputs.e2e_istio }}" == "true" ]] && profiles+=("istio")
-          [[ "${{ needs.changes.outputs.e2e_ai_gateway }}" == "true" ]] && profiles+=("ai-gateway")
+          [[ "${{ needs.changes.outputs.e2e_kubernetes }}" == "true" ]] && profiles+=("kubernetes")
           [[ "${{ needs.changes.outputs.e2e_aibrix }}" == "true" ]] && profiles+=("aibrix")
           [[ "${{ needs.changes.outputs.e2e_dashboard }}" == "true" ]] && profiles+=("dashboard")
           [[ "${{ needs.changes.outputs.e2e_llm_d }}" == "true" ]] && profiles+=("llm-d")
@@ -152,10 +152,10 @@ jobs:
           trap cleanup_router_log_stream EXIT
 
           set +e
-          if [ "${{ matrix.profile }}" = "ai-gateway" ]; then
+          if [ "${{ matrix.profile }}" = "kubernetes" ]; then
             # Temporarily skip the stress / pressure coverage until the suite is stable again.
-            AI_GATEWAY_CI_TESTS="chat-completions-request,apiserver-runtime-config-endpoints,domain-classify,semantic-cache,pii-detection,jailbreak-detection,decision-priority-selection,plugin-chain-execution,rule-condition-logic,decision-fallback-behavior,plugin-config-variations"
-            make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_TESTS="${AI_GATEWAY_CI_TESTS}" E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
+            KUBERNETES_CI_TESTS="chat-completions-request,apiserver-runtime-config-endpoints,domain-classify,semantic-cache,pii-detection,jailbreak-detection,decision-priority-selection,plugin-chain-execution,rule-condition-logic,decision-fallback-behavior,plugin-config-variations"
+            make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_TESTS="${KUBERNETES_CI_TESTS}" E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
             TEST_EXIT_CODE=$?
             set -e
             echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT
