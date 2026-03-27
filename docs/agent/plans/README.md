@@ -96,3 +96,4 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0019-wizmap-knowledge-map-integration.md](pl-0019-wizmap-knowledge-map-integration.md)
 - [pl-0020-local-runtime-topology-separation.md](pl-0020-local-runtime-topology-separation.md)
 - [pl-0021-local-runtime-three-image-rollout.md](pl-0021-local-runtime-three-image-rollout.md)
+- [pl-0022-dev-integration-consolidation-loop.md](pl-0022-dev-integration-consolidation-loop.md)

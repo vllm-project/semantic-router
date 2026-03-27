@@ -140,6 +140,7 @@ docs:
   - docs/agent/plans/pl-0019-wizmap-knowledge-map-integration.md
   - docs/agent/plans/pl-0020-local-runtime-topology-separation.md
   - docs/agent/plans/pl-0021-local-runtime-three-image-rollout.md
+  - docs/agent/plans/pl-0022-dev-integration-consolidation-loop.md
   - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
@@ -335,6 +336,9 @@ doc_governance:
     - path: docs/agent/plans/pl-0021-local-runtime-three-image-rollout.md
       steward: agent-contract
       freshness: update at the start and end of each local runtime three-image rollout loop and after each completed loop task
+    - path: docs/agent/plans/pl-0022-dev-integration-consolidation-loop.md
+      steward: agent-contract
+      freshness: update at the start and end of each dev integration consolidation loop and after each completed loop task
     - path: docs/agent/state-taxonomy-and-inventory.md
       steward: agent-contract
       freshness: update when the runtime or dashboard state inventory, durability taxonomy, or persistence guidance changes materially
