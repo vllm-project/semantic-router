@@ -146,6 +146,23 @@ jobs:
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
 
+      - name: Pre-pull Kind node image
+        run: |
+          KIND_NODE_IMAGE="kindest/node:v1.29.2"
+          echo "Pre-pulling ${KIND_NODE_IMAGE} with retries..."
+          for attempt in 1 2 3 4 5; do
+            if docker pull "${KIND_NODE_IMAGE}"; then
+              echo "Successfully pulled ${KIND_NODE_IMAGE}"
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "ERROR: Failed to pull ${KIND_NODE_IMAGE} after 5 attempts"
+              exit 1
+            fi
+            echo "Pull attempt ${attempt} failed, retrying in $((attempt * 15))s..."
+            sleep $((attempt * 15))
+          done
+
       - name: Download E2E test dependencies
         run: |
           cd e2e && go mod download
