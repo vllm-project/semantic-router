@@ -1,6 +1,10 @@
 package handlers
 
 func collectInContainerStatus(runtimePath, routerAPIURL string) SystemStatus {
+	if managedRuntimeUsesSplitContainers() {
+		return collectManagedDockerStatus(runtimePath, routerAPIURL)
+	}
+
 	status := baseSystemStatus()
 	status.DeploymentType = "docker"
 	status.Overall = "healthy"
@@ -25,6 +29,10 @@ func collectInContainerStatus(runtimePath, routerAPIURL string) SystemStatus {
 }
 
 func collectHostStatus(runtimePath, routerAPIURL string) SystemStatus {
+	if status, ok := collectSplitManagedHostStatus(runtimePath, routerAPIURL); ok {
+		return status
+	}
+
 	switch containerStatus := getDockerContainerStatus(vllmSrContainerName); containerStatus {
 	case "running":
 		return collectRunningDockerStatus(runtimePath, routerAPIURL)
@@ -38,6 +46,45 @@ func collectHostStatus(runtimePath, routerAPIURL string) SystemStatus {
 	default:
 		return unknownContainerStatus(containerStatus)
 	}
+}
+
+func collectSplitManagedHostStatus(runtimePath, routerAPIURL string) (SystemStatus, bool) {
+	if !managedRuntimeUsesSplitContainers() {
+		return SystemStatus{}, false
+	}
+
+	switch managedStatus := managedRuntimeContainerStatus(); managedStatus {
+	case "running", "exited":
+		return collectManagedDockerStatus(runtimePath, routerAPIURL), true
+	case "not found":
+		return SystemStatus{}, false
+	default:
+		return unknownContainerStatus(managedStatus), true
+	}
+}
+
+func collectManagedDockerStatus(runtimePath, routerAPIURL string) SystemStatus {
+	status := baseSystemStatus()
+	status.DeploymentType = "docker"
+	status.Overall = "healthy"
+	status.Endpoints = []string{"http://localhost:8899"}
+
+	routerLogContent := getContainerLogsTailForContainer(managedContainerNameForService("router"), 500)
+	routerHealthy, routerMsg := resolveManagedRouterStatus(routerAPIURL, routerLogContent)
+	envoyHealthy, envoyMsg := resolveManagedEnvoyStatus()
+	dashboardHealthy, dashboardMsg := resolveManagedDashboardStatus()
+
+	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy, routerLogContent)
+	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
+	status.Models = fetchModelsWhenReady(routerAPIURL, routerHealthy)
+	status.Services = append(status.Services,
+		buildServiceStatus("Router", boolToStatus(routerHealthy), routerHealthy, routerMsg, "container"),
+		buildServiceStatus("Envoy", boolToStatus(envoyHealthy), envoyHealthy, envoyMsg, "container"),
+		buildServiceStatus("Dashboard", boolToStatus(dashboardHealthy), dashboardHealthy, dashboardMsg, "container"),
+	)
+	setManagedDockerOverall(&status, routerHealthy, envoyHealthy, dashboardHealthy)
+
+	return status
 }
 
 func collectRunningDockerStatus(runtimePath, routerAPIURL string) SystemStatus {
@@ -142,6 +189,63 @@ func setDegradedWhenUnhealthy(status *SystemStatus, checks ...bool) {
 			status.Overall = "degraded"
 			return
 		}
+	}
+}
+
+func setManagedDockerOverall(status *SystemStatus, checks ...bool) {
+	for _, healthy := range checks {
+		if healthy {
+			setDegradedWhenUnhealthy(status, checks...)
+			return
+		}
+	}
+	status.Overall = "stopped"
+}
+
+func resolveManagedRouterStatus(routerAPIURL string, logContent string) (bool, string) {
+	containerStatus := getDockerContainerStatus(managedContainerNameForService("router"))
+	if routerAPIURL != "" {
+		if healthy, msg := checkHTTPHealth(routerAPIURL + "/health"); healthy {
+			return healthy, msg
+		}
+		if containerStatus == "running" {
+			return false, "Starting"
+		}
+	}
+	return resolveManagedServiceStatus("router", containerStatus, logContent)
+}
+
+func resolveManagedEnvoyStatus() (bool, string) {
+	if readyURL := managedEnvoyReadyURL(); readyURL != "" {
+		if running, healthy, msg := checkEnvoyHealth(readyURL); running {
+			return healthy, msg
+		}
+	}
+	return resolveManagedServiceStatus("envoy", getDockerContainerStatus(managedContainerNameForService("envoy")), "")
+}
+
+func resolveManagedDashboardStatus() (bool, string) {
+	if isRunningInContainer() {
+		return true, "Running"
+	}
+	return resolveManagedServiceStatus("dashboard", getDockerContainerStatus(managedContainerNameForService("dashboard")), "")
+}
+
+func resolveManagedServiceStatus(service string, containerStatus string, logContent string) (bool, string) {
+	switch containerStatus {
+	case "running":
+		if logContent != "" && serviceLogLooksHealthy(service, logContent) {
+			return true, "Running"
+		}
+		return true, "Running"
+	case "created":
+		return false, "Standby (setup mode)"
+	case "exited":
+		return false, "Exited"
+	case "not found":
+		return false, "Not found"
+	default:
+		return false, containerStatus
 	}
 }
 

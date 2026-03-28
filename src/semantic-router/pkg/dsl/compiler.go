@@ -88,6 +88,8 @@ func (c *Compiler) compileProjectionScores() {
 			score.Inputs = append(score.Inputs, config.ProjectionScoreInput{
 				Type:        inputDecl.SignalType,
 				Name:        inputDecl.SignalName,
+				KB:          inputDecl.KB,
+				Metric:      inputDecl.Metric,
 				Weight:      inputDecl.Weight,
 				ValueSource: inputDecl.ValueSource,
 				Match:       inputDecl.Match,
@@ -158,6 +160,8 @@ func (c *Compiler) compileSignals() {
 			c.compileJailbreakSignal(s)
 		case "pii":
 			c.compilePIISignal(s)
+		case "kb":
+			c.compileKBSignal(s)
 		default:
 			c.addError(s.Pos, "unknown signal type %q", s.SignalType)
 		}
@@ -388,6 +392,25 @@ func (c *Compiler) compilePIISignal(s *SignalDecl) {
 		rule.Description = v
 	}
 	c.config.PIIRules = append(c.config.PIIRules, rule)
+}
+
+func (c *Compiler) compileKBSignal(s *SignalDecl) {
+	rule := config.KBSignalRule{Name: s.Name}
+	if v, ok := getStringField(s.Fields, "kb"); ok {
+		rule.KB = v
+	}
+	if target, ok := s.Fields["target"].(ObjectValue); ok {
+		if kind, ok := getStringField(target.Fields, "kind"); ok {
+			rule.Target.Kind = kind
+		}
+		if value, ok := getStringField(target.Fields, "value"); ok {
+			rule.Target.Value = value
+		}
+	}
+	if v, ok := getStringField(s.Fields, "match"); ok {
+		rule.Match = v
+	}
+	c.config.KBRules = append(c.config.KBRules, rule)
 }
 
 //nolint:gocognit,nestif // Legacy schema decoding stays localized until the authz signal surface is extracted.
@@ -952,6 +975,25 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		}
 		if v, ok := getBoolField(fields, "strip_unknown"); ok {
 			cfg.StripUnknown = v
+		}
+		setPluginConfig(cfg)
+
+	case "tools":
+		cfg := config.ToolsPluginConfig{}
+		if v, ok := getBoolField(fields, "enabled"); ok {
+			cfg.Enabled = v
+		}
+		if v, ok := getStringField(fields, "mode"); ok {
+			cfg.Mode = v
+		}
+		if v, ok := getBoolField(fields, "semantic_selection"); ok {
+			cfg.SemanticSelection = &v
+		}
+		if values, ok := getStringArrayField(fields, "allow_tools"); ok {
+			cfg.AllowTools = values
+		}
+		if values, ok := getStringArrayField(fields, "block_tools"); ok {
+			cfg.BlockTools = values
 		}
 		setPluginConfig(cfg)
 

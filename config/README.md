@@ -21,6 +21,7 @@ Inside canonical `config.yaml`:
 - the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/signal/projections.md` and the maintained `deploy/recipes/balance.{yaml,dsl}` pair for end-to-end usage
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
 - embedding fallback tuning such as `global.model_catalog.embeddings.semantic.embedding_config.top_k` lives under the router-owned model catalog, not under individual signal rules
+- reusable startup-loaded knowledge bases live under `global.model_catalog.kbs[]`, while `routing.signals.kb[]` binds label/group matches into normal routing signals
 - `global.router.config_source` selects the router's steady-state config source; the exhaustive reference uses `file`, while Kubernetes CRD reconciliation uses `kubernetes`
 - router-owned model-backed module config lives under `global.model_catalog.modules`
 
@@ -44,6 +45,7 @@ Each supported algorithm now has its own tutorial page under `website/docs/tutor
 `config/plugin/` is organized by route-local plugin or reusable plugin bundle:
 
 - one directory per plugin or bundle, such as `semantic-cache/`, `rag/`, `memory/`, or `content-safety/`
+- route-local tool policy examples live under `tools/`
 - one fragment example per directory in the current catalog
 
 Each supported plugin now has its own tutorial page under `website/docs/tutorials/plugin/`.

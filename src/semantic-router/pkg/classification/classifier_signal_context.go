@@ -52,6 +52,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeModality:     len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
 		config.SignalTypeJailbreak:    len(c.Config.JailbreakRules) > 0 && c.IsJailbreakEnabled(),
 		config.SignalTypePII:          len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
+		config.SignalTypeKB:           len(c.kbClassifiers) > 0,
 	}
 }
 

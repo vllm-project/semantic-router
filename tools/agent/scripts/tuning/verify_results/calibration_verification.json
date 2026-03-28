@@ -1,0 +1,1792 @@
+{
+  "scenario": "calibration_tuning",
+  "method": "analytical_trace_diagnosis",
+  "pipeline": "engine.py \u2014 observe \u2192 diagnose \u2192 fix \u2192 verify",
+  "timestamp": "2026-03-26T18:15:51",
+  "router_endpoint": "http://localhost:8080",
+  "config_path": "deploy/recipes/calibration/config-broken.yaml",
+  "num_probes": 140,
+  "iterations": [
+    {
+      "iteration": 0,
+      "accuracy": 70,
+      "total": 140,
+      "pct": 50.0,
+      "severity_weighted_loss": 190,
+      "num_diagnoses": 70,
+      "selected_fix": {
+        "fix_type": "structural_rule_change",
+        "decision": "escalate_72b",
+        "action": "remove_false_positive_branches",
+        "description": "Batch-remove 5 false-positive categories from 'escalate_72b' OR condition.",
+        "remove_signals": [
+          {
+            "type": "category_kb",
+            "name": "__best__:engineering"
+          },
+          {
+            "type": "category_kb",
+            "name": "__best__:physics"
+          },
+          {
+            "type": "category_kb",
+            "name": "__best__:chemistry"
+          },
+          {
+            "type": "category_kb",
+            "name": "__best__:health"
+          },
+          {
+            "type": "category_kb",
+            "name": "__best__:law"
+          }
+        ]
+      },
+      "probe_details": [
+        {
+          "id": "biology_3445",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3139",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_2845",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3341",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3309",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_2884",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3231",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3398",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3463",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3015",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_283",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_425",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_271",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_373",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_644",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_109",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_290",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_862",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_619",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_93",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "chemistry_3941",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "chemistry_3635",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "chemistry_4277",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "chemistry_4348",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "chemistry_4052",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "chemistry_4437",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "chemistry_3627",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "chemistry_3955",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "chemistry_4556",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "chemistry_4498",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "computer_science_10485",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10431",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10587",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10491",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10670",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10600",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10436",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10563",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10432",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10747",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "economics_7077",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_6893",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_6857",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7047",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7199",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7633",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7090",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7383",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7041",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7338",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_12193",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_11862",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_11355",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_11782",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_12243",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_11631",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_11315",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_12081",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_11857",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_12196",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6089",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6503",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6537",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6604",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6196",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6543",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6501",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6764",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6067",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6290",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4715",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4724",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4708",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4886",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4751",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_5019",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4923",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4878",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4797",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4684",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1200",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1286",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1601",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_962",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1979",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1422",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1271",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1360",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1815",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1009",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "math_8269",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_8992",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_8474",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_7763",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_7996",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_7730",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_8068",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_7736",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_8139",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_8476",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5354",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5123",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5275",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5622",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5596",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5299",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5473",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5983",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5412",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5913",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_11245",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10850",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10932",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_11104",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10878",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_11192",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10806",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_11279",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10783",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10952",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "physics_10219",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "physics_10287",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "physics_10167",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "physics_9940",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "physics_9663",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "physics_9582",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "physics_10250",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "physics_9922",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "physics_9409",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "physics_9891",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "psychology_2337",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2483",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2643",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2054",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2056",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2234",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2519",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2654",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2616",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2721",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        }
+      ]
+    },
+    {
+      "iteration": 1,
+      "accuracy": 108,
+      "total": 140,
+      "pct": 77.1,
+      "severity_weighted_loss": 104,
+      "num_diagnoses": 32,
+      "selected_fix": null,
+      "probe_details": [
+        {
+          "id": "biology_3445",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3139",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_2845",
+          "expected": "escalate_72b",
+          "actual": "keep_7b",
+          "correct": false
+        },
+        {
+          "id": "biology_3341",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3309",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_2884",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3231",
+          "expected": "escalate_72b",
+          "actual": "keep_7b",
+          "correct": false
+        },
+        {
+          "id": "biology_3398",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3463",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "biology_3015",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_283",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_425",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_271",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_373",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_644",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_109",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_290",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_862",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_619",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "business_93",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "chemistry_3941",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "chemistry_3635",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "chemistry_4277",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "chemistry_4348",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "chemistry_4052",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "chemistry_4437",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "chemistry_3627",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "chemistry_3955",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "chemistry_4556",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "chemistry_4498",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10485",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10431",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10587",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10491",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10670",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10600",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10436",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10563",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10432",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "computer_science_10747",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "economics_7077",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_6893",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_6857",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7047",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7199",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7633",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7090",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7383",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7041",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "economics_7338",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_12193",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "engineering_11862",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "engineering_11355",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "engineering_11782",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "engineering_12243",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "engineering_11631",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "engineering_11315",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "engineering_12081",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "engineering_11857",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "engineering_12196",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "health_6089",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "health_6503",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "health_6537",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6604",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "health_6196",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "health_6543",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "health_6501",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "health_6764",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "health_6067",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "health_6290",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4715",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4724",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4708",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4886",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4751",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_5019",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4923",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4878",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4797",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "history_4684",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1200",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1286",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1601",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "law_962",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "law_1979",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "law_1422",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "law_1271",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "law_1360",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "law_1815",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "law_1009",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "math_8269",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_8992",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_8474",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_7763",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_7996",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_7730",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_8068",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_7736",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_8139",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "math_8476",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5354",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5123",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5275",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5622",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5596",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5299",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5473",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5983",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5412",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "other_5913",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_11245",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10850",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10932",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_11104",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10878",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_11192",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10806",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_11279",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10783",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "philosophy_10952",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "physics_10219",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "physics_10287",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "physics_10167",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "physics_9940",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "physics_9663",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "physics_9582",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "physics_10250",
+          "expected": "keep_7b",
+          "actual": "escalate_72b",
+          "correct": false
+        },
+        {
+          "id": "physics_9922",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "physics_9409",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "physics_9891",
+          "expected": "keep_7b",
+          "actual": "keep_7b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2337",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2483",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2643",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2054",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2056",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2234",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2519",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        },
+        {
+          "id": "psychology_2654",
+          "expected": "escalate_72b",
+          "actual": "keep_7b",
+          "correct": false
+        },
+        {
+          "id": "psychology_2616",
+          "expected": "escalate_72b",
+          "actual": "keep_7b",
+          "correct": false
+        },
+        {
+          "id": "psychology_2721",
+          "expected": "escalate_72b",
+          "actual": "escalate_72b",
+          "correct": true
+        }
+      ]
+    }
+  ],
+  "final_verification": {
+    "accuracy": 108,
+    "total": 140,
+    "pct": 77.1,
+    "severity_weighted_loss": 104
+  },
+  "all_fixes_applied": [
+    {
+      "fix_type": "structural_rule_change",
+      "decision": "escalate_72b",
+      "action": "remove_false_positive_branches",
+      "description": "Batch-remove 5 false-positive categories from 'escalate_72b' OR condition.",
+      "remove_signals": [
+        {
+          "type": "category_kb",
+          "name": "__best__:engineering"
+        },
+        {
+          "type": "category_kb",
+          "name": "__best__:physics"
+        },
+        {
+          "type": "category_kb",
+          "name": "__best__:chemistry"
+        },
+        {
+          "type": "category_kb",
+          "name": "__best__:health"
+        },
+        {
+          "type": "category_kb",
+          "name": "__best__:law"
+        }
+      ]
+    }
+  ],
+  "trajectory": [
+    {
+      "iteration": 0,
+      "accuracy": 70,
+      "total": 140,
+      "pct": 50.0,
+      "severity_weighted_loss": 190
+    },
+    {
+      "iteration": 1,
+      "accuracy": 108,
+      "total": 140,
+      "pct": 77.1,
+      "severity_weighted_loss": 104
+    }
+  ]
+}

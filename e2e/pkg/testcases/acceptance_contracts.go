@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	// Conservative floors for the baseline ai-gateway contract.
+	// Conservative floors for the baseline kubernetes contract.
 	// These catch severe behavioral regressions without turning E2E into
 	// a model-benchmark gate.
 	minBaselineDomainClassificationAccuracy = 60.0
@@ -49,7 +49,7 @@ type progressiveStressFloor struct {
 	minimum float64
 }
 
-const baselineRouterContractProfile = "ai-gateway"
+const baselineRouterContractProfile = "kubernetes"
 
 var baselineAcceptanceContracts = map[string]acceptanceContract{
 	"domain-classify": applyFlatRateContract(flatRateContract{

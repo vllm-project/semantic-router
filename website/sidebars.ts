@@ -85,6 +85,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/learned/jailbreak',
                 'tutorials/signal/learned/pii',
                 'tutorials/signal/learned/preference',
+                'tutorials/signal/learned/kb',
                 'tutorials/signal/learned/user-feedback',
               ],
             },
@@ -159,6 +160,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/image-gen',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
+                'tutorials/plugin/tools',
               ],
             },
             {
@@ -242,7 +244,7 @@ const sidebars: SidebarsConfig = {
       label: 'API Reference',
       items: [
         'api/router',
-        'api/classification',
+        'api/apiserver',
         'api/crd-reference',
       ],
     },

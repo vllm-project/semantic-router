@@ -141,7 +141,24 @@ done
 log_info "Note: Namespace is managed by Helm's --create-namespace flag"
 echo ""
 
-# Test 6: Validate Chart.yaml
+# Test 6: Validate config file mount contract
+log_info "Validating config file mount contract..."
+if grep -qE 'mountPath: /app/config$' "$TEMP_DIR/default-template.yaml"; then
+    log_error "Rendered templates still mount the full /app/config directory and would hide bundled KB assets"
+    exit 1
+fi
+
+for expected in 'subPath: config.yaml' 'subPath: tools_db.json'; do
+    if grep -q "$expected" "$TEMP_DIR/default-template.yaml"; then
+        log_success "Found expected file mount: $expected"
+    else
+        log_error "Missing expected file mount: $expected"
+        exit 1
+    fi
+done
+echo ""
+
+# Test 7: Validate Chart.yaml
 log_info "Validating Chart.yaml..."
 if [ -f "$CHART_PATH/Chart.yaml" ]; then
     chart_name=$(grep "^name:" "$CHART_PATH/Chart.yaml" | awk '{print $2}')
@@ -157,7 +174,7 @@ else
 fi
 echo ""
 
-# Test 7: Check for common Helm best practices
+# Test 8: Check for common Helm best practices
 log_info "Checking Helm best practices..."
 best_practices_passed=true
 
@@ -191,7 +208,7 @@ if [ "$best_practices_passed" = false ]; then
 fi
 echo ""
 
-# Test 8: Dry-run install (requires cluster)
+# Test 9: Dry-run install (requires cluster)
 if kubectl cluster-info &> /dev/null; then
     log_info "Testing dry-run install..."
     if helm install test-release "$CHART_PATH" --dry-run --debug > "$TEMP_DIR/dry-run.log" 2>&1; then
@@ -206,7 +223,7 @@ else
 fi
 echo ""
 
-# Test 9: Package the chart
+# Test 10: Package the chart
 log_info "Testing chart packaging..."
 if helm package "$CHART_PATH" --destination "$TEMP_DIR" > /dev/null 2>&1; then
     log_success "Chart packaged successfully"

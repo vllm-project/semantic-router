@@ -194,6 +194,8 @@ config:
       - name: llama3-8b
       - name: phi4-mini
   global:
+    model_catalog:
+      kbs: []
     router:
       clear_route_cache: true
     stores:

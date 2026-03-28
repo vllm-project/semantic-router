@@ -21,6 +21,7 @@ import (
 
 // MilvusCache provides a scalable semantic cache implementation using Milvus vector database
 type MilvusCache struct {
+	SimilarityTracker   // embedded — provides LastSimilarity()
 	client              client.Client
 	config              *config.MilvusConfig
 	collectionName      string
@@ -812,6 +813,7 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	}
 
 	bestScore := searchResult[0].Scores[0]
+	c.StoreSimilarity(bestScore)
 	if bestScore < threshold {
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f",

@@ -31,20 +31,20 @@ func TestResolveConfigPersistencePathsUsesRuntimeOverrideSourcePath(t *testing.T
 	}
 }
 
-func TestHandleConfigDeployWritesSourceConfigAndSyncsRuntimeOverride(t *testing.T) {
+func TestHandleConfigPutWritesSourceConfigAndSyncsRuntimeOverride(t *testing.T) {
 	tempDir, sourcePath, runtimePath := setupRuntimeOverrideConfigFiles(t, "old_route", "old_route")
 	deployYAML := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("new_route"))
-	body, err := json.Marshal(ConfigDeployRequest{YAML: string(deployYAML), DSL: "ROUTE new_route"})
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(deployYAML), DSL: "ROUTE new_route"})
 	if err != nil {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
 
 	apiServer := &ClassificationAPIServer{configPath: runtimePath}
-	req := httptest.NewRequest(http.MethodPost, "/config/deploy", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/config/router", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	apiServer.handleConfigDeploy(rr, req)
+	apiServer.handleConfigPut(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
@@ -115,7 +115,7 @@ func TestHandleConfigRollbackReadsSourceBackupDirAndSyncsRuntimeOverride(t *test
 
 	body := []byte(`{"version":"20260323-120000"}`)
 	apiServer := &ClassificationAPIServer{configPath: runtimePath}
-	req := httptest.NewRequest(http.MethodPost, "/config/rollback", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/config/router/rollback", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 

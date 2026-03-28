@@ -144,6 +144,35 @@ export const researchPapers = [
     sortOrder: 58,
   },
   {
+    id: 'knowledge-access-beats-model-size',
+    type: 'paper',
+    title: 'Knowledge Access Beats Model Size: Memory Augmented Routing for Persistent AI Agents',
+    authors: 'Xunzhuo Liu, Bowei He, Xue Liu, Andy Luo, Haichen Zhang, Huamin Chen',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We show that conversational memory and retrieval-grounded routing let a lightweight 8B model recover most of a 235B model’s performance on persistent user-specific queries while cutting effective inference cost by 96%.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.23013', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 59,
+  },
+  {
+    id: 'fast-and-faithful-rag-verification',
+    type: 'paper',
+    categoryLabel: 'RAG VERIFICATION',
+    title: 'Fast and Faithful: Real-Time Verification for Long-Document Retrieval-Augmented Generation Systems',
+    authors: 'Xunzhuo Liu, Bowei He, Xue Liu, Haichen Zhang, Huamin Chen',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We present a real-time verification component for long-document RAG that processes contexts up to 32K tokens, balancing latency and grounding coverage so interactive systems can detect unsupported answers without falling back to truncated checks.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.23508', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 59.5,
+  },
+  {
     id: 'when-to-reason',
     type: 'paper',
     title: 'When to Reason: Semantic Router for vLLM',
@@ -248,6 +277,38 @@ export const researchTalks = [
     sortOrder: 30,
   },
 ]
+
+const ZH_HANS_LOCALE = 'zh-Hans'
+
+const RESEARCH_CATEGORY_LABEL_ZH = {
+  'POSITION PAPER': '立场论文',
+  'VISION PAPER': '愿景论文',
+  'RAG VERIFICATION': 'RAG 验证',
+}
+
+const RESEARCH_VENUE_ZH = {
+  'arXiv Technical Report': 'arXiv 技术报告',
+  'Internet Engineering Task Force (IETF)': '互联网工程任务组（IETF）',
+}
+
+export function localizeResearchEntry(entry, locale) {
+  if (locale !== ZH_HANS_LOCALE)
+    return entry
+
+  return {
+    ...entry,
+    categoryLabel: entry.categoryLabel
+      ? (RESEARCH_CATEGORY_LABEL_ZH[entry.categoryLabel] ?? entry.categoryLabel)
+      : entry.categoryLabel,
+    venue: entry.venue
+      ? (RESEARCH_VENUE_ZH[entry.venue] ?? entry.venue)
+      : entry.venue,
+  }
+}
+
+export function localizeResearchEntries(entries, locale) {
+  return entries.map(entry => localizeResearchEntry(entry, locale))
+}
 
 export function sortResearchEntries(entries) {
   return [...entries].sort((a, b) => {

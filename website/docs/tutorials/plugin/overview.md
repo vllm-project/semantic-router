@@ -51,6 +51,7 @@ The plugin docs now mirror `config/plugin/` one page at a time.
 - [Image Generation](./image-gen)
 - [Request Parameters](./request-params)
 - [System Prompt](./system-prompt)
+- [Tools](./tools)
 
 ### Retrieval and Memory
 

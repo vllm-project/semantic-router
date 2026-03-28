@@ -57,6 +57,9 @@ func (p *Profile) GetTestCases() []string {
 		"streaming-cache-roundtrip",
 		"streaming-large-body",
 		"streaming-sse-cache",
+		// Safety: verify fast_response blocking works with streamed body chunks
+		"streaming-pii-blocked",
+		"streaming-jailbreak-blocked",
 	}
 }
 

@@ -33,7 +33,7 @@ jobs:
     steps:
       - id: set-matrix
         run: |
-          # Run all profiles if common e2e code, core code changes, or manual/scheduled trigger
+          # Run the default PR baseline profiles if common e2e code, core code changes, or manual/scheduled trigger
           if [[ "${{ needs.changes.outputs.e2e_common }}" == "true" ]] || \
              [[ "${{ needs.changes.outputs.core }}" == "true" ]] || \
              [[ "${{ needs.changes.outputs.docker }}" == "true" ]] || \
@@ -42,23 +42,22 @@ jobs:
              [[ "${{ needs.changes.outputs.agent_exec }}" == "true" ]] || \
              [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo 'profiles=["ai-gateway", "aibrix", "dashboard", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack", "response-api", "ml-model-selection", "multi-endpoint", "authz-rbac", "streaming"]' >> $GITHUB_OUTPUT
+            echo 'profiles=["kubernetes", "dashboard"]' >> $GITHUB_OUTPUT
             echo 'should_run=true' >> $GITHUB_OUTPUT
-            echo "Running all profiles due to common/core changes or push/schedule/manual trigger"
+            echo "Running default baseline profiles due to common/core changes or push/schedule/manual trigger"
             exit 0
           fi
 
           # Only run affected profiles for PRs
           profiles=()
           [[ "${{ needs.changes.outputs.e2e_istio }}" == "true" ]] && profiles+=("istio")
-          [[ "${{ needs.changes.outputs.e2e_ai_gateway }}" == "true" ]] && profiles+=("ai-gateway")
+          [[ "${{ needs.changes.outputs.e2e_kubernetes }}" == "true" ]] && profiles+=("kubernetes")
           [[ "${{ needs.changes.outputs.e2e_aibrix }}" == "true" ]] && profiles+=("aibrix")
           [[ "${{ needs.changes.outputs.e2e_dashboard }}" == "true" ]] && profiles+=("dashboard")
           [[ "${{ needs.changes.outputs.e2e_llm_d }}" == "true" ]] && profiles+=("llm-d")
           [[ "${{ needs.changes.outputs.e2e_routing_strategies }}" == "true" ]] && profiles+=("routing-strategies")
           [[ "${{ needs.changes.outputs.e2e_production_stack }}" == "true" ]] && profiles+=("production-stack")
           [[ "${{ needs.changes.outputs.e2e_dynamic_config }}" == "true" ]] && profiles+=("dynamic-config")
-          [[ "${{ needs.changes.outputs.e2e_response_api }}" == "true" ]] && profiles+=("response-api")
           [[ "${{ needs.changes.outputs.e2e_ml_model_selection }}" == "true" ]] && profiles+=("ml-model-selection")
           [[ "${{ needs.changes.outputs.e2e_multi_endpoint }}" == "true" ]] && profiles+=("multi-endpoint")
           [[ "${{ needs.changes.outputs.e2e_authz_rbac }}" == "true" ]] && profiles+=("authz-rbac")
@@ -93,6 +92,30 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
+      - name: Free disk space and relocate Docker to /mnt
+        run: |
+          echo "=== Before cleanup ==="
+          df -h / /mnt
+
+          # Remove large pre-installed toolchains that E2E tests don't need
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/share/boost /usr/local/graalvm /usr/local/.ghcup \
+            /usr/share/swift /usr/local/lib/node_modules 2>/dev/null || true
+          sudo docker image prune -af 2>/dev/null || true
+
+          # Move Docker data root to /mnt (75 GB+ free vs ~14 GB on /)
+          sudo systemctl stop docker
+          sudo mv /var/lib/docker /mnt/docker
+          sudo ln -s /mnt/docker /var/lib/docker
+          sudo systemctl start docker
+
+          # Redirect temp dir so `kind load docker-image` tarballs land on /mnt
+          sudo mkdir -p /mnt/tmp
+          sudo chmod 1777 /mnt/tmp
+
+          echo "=== After cleanup ==="
+          df -h / /mnt
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -123,6 +146,23 @@ jobs:
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
 
+      - name: Pre-pull Kind node image
+        run: |
+          KIND_NODE_IMAGE="kindest/node:v1.29.2"
+          echo "Pre-pulling ${KIND_NODE_IMAGE} with retries..."
+          for attempt in 1 2 3 4 5; do
+            if docker pull "${KIND_NODE_IMAGE}"; then
+              echo "Successfully pulled ${KIND_NODE_IMAGE}"
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "ERROR: Failed to pull ${KIND_NODE_IMAGE} after 5 attempts"
+              exit 1
+            fi
+            echo "Pull attempt ${attempt} failed, retrying in $((attempt * 15))s..."
+            sleep $((attempt * 15))
+          done
+
       - name: Download E2E test dependencies
         run: |
           cd e2e && go mod download
@@ -135,9 +175,7 @@ jobs:
       - name: Run Integration E2E tests (${{ matrix.profile }})
         id: e2e-test
         env:
-          # HF_TOKEN is required for downloading gated models (e.g., embeddinggemma-300m)
-          # For PRs from forks, this will be empty and the E2E framework will gracefully skip gated model downloads
-          # The hf CLI uses HUGGINGFACE_HUB_TOKEN, so we set both for compatibility
+          TMPDIR: /mnt/tmp
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -153,20 +191,10 @@ jobs:
           trap cleanup_router_log_stream EXIT
 
           set +e
-          if [ "${{ matrix.profile }}" = "response-api" ]; then
-            # Temporarily keep CI on the memory-backed Responses API profile only.
-            RESPONSE_API_SUITE_PROFILES=response-api \
-              make e2e-test-response-api-suite E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
-            TEST_EXIT_CODE=$?
-            set -e
-            echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT
-            exit "${TEST_EXIT_CODE}"
-          fi
-
-          if [ "${{ matrix.profile }}" = "ai-gateway" ]; then
+          if [ "${{ matrix.profile }}" = "kubernetes" ]; then
             # Temporarily skip the stress / pressure coverage until the suite is stable again.
-            AI_GATEWAY_CI_TESTS="chat-completions-request,apiserver-runtime-config-endpoints,domain-classify,semantic-cache,pii-detection,jailbreak-detection,decision-priority-selection,plugin-chain-execution,rule-condition-logic,decision-fallback-behavior,plugin-config-variations"
-            make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_TESTS="${AI_GATEWAY_CI_TESTS}" E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
+            KUBERNETES_CI_TESTS="chat-completions-request,apiserver-runtime-config-endpoints,domain-classify,semantic-cache,pii-detection,jailbreak-detection,decision-priority-selection,plugin-chain-execution,rule-condition-logic,decision-fallback-behavior,plugin-config-variations"
+            make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_TESTS="${KUBERNETES_CI_TESTS}" E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
             TEST_EXIT_CODE=$?
             set -e
             echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT

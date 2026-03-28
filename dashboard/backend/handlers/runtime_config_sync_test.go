@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,7 +40,11 @@ global:
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/.vllm-sr/runtime-config.yaml")
 	t.Setenv("DASHBOARD_PLATFORM", "amd")
-	t.Setenv("VLLM_SR_PYTHON_BIN", "python")
+	pythonBinary := "python3"
+	if _, err := exec.LookPath(pythonBinary); err != nil {
+		pythonBinary = "python"
+	}
+	t.Setenv("VLLM_SR_PYTHON_BIN", pythonBinary)
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -82,5 +87,30 @@ func TestRuntimeSyncPythonBinaryRejectsNonPythonOverride(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unsupported runtime sync python binary") {
 		t.Fatalf("expected unsupported binary error, got %v", err)
+	}
+}
+
+func TestRuntimeSyncPythonBinaryPrefersVirtualEnvPython(t *testing.T) {
+	venvDir := t.TempDir()
+	pythonDir := filepath.Join(venvDir, "bin")
+	if err := os.MkdirAll(pythonDir, 0o755); err != nil {
+		t.Fatalf("create venv bin dir: %v", err)
+	}
+
+	pythonPath := filepath.Join(pythonDir, "python3")
+	script := "#!/bin/sh\nexit 0\n"
+	if err := os.WriteFile(pythonPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write venv python shim: %v", err)
+	}
+
+	t.Setenv("VIRTUAL_ENV", venvDir)
+	t.Setenv("VLLM_SR_PYTHON_BIN", "")
+
+	resolved, err := runtimeSyncPythonBinary()
+	if err != nil {
+		t.Fatalf("runtimeSyncPythonBinary returned error: %v", err)
+	}
+	if resolved != pythonPath {
+		t.Fatalf("expected virtualenv python %q, got %q", pythonPath, resolved)
 	}
 }

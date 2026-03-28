@@ -65,9 +65,9 @@ const ChatComponent = ({
   const [isFullscreen] = useState(isFullscreenMode)
   const [enableWebSearch, setEnableWebSearch] = useState(true)
   const [enableClawMode, setEnableClawMode] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true
+    if (typeof window === 'undefined') return false
     const saved = window.localStorage.getItem(CLAW_MODE_STORAGE_KEY)
-    if (saved === null) return true
+    if (saved === null) return false
     return saved === 'true'
   })
   const [isTogglingClawMode, setIsTogglingClawMode] = useState(false)

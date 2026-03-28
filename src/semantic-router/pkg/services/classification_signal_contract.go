@@ -25,6 +25,7 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeAuthz:        func(target *MatchedSignals) *[]string { return &target.Authz },
 	config.SignalTypeJailbreak:    func(target *MatchedSignals) *[]string { return &target.Jailbreak },
 	config.SignalTypePII:          func(target *MatchedSignals) *[]string { return &target.PII },
+	config.SignalTypeKB:           func(target *MatchedSignals) *[]string { return &target.KB },
 	config.SignalTypeProjection:   func(target *MatchedSignals) *[]string { return &target.Projection },
 }
 
@@ -40,6 +41,7 @@ type IntentOptions struct {
 	ConfidenceThreshold float64 `json:"confidence_threshold,omitempty"`
 	IncludeExplanation  bool    `json:"include_explanation,omitempty"`
 	EvaluateAllSignals  bool    `json:"evaluate_all_signals,omitempty"` // Force evaluate all configured signals (for eval scenarios)
+	Trace               bool    `json:"trace,omitempty"`                // Return per-decision evaluation trace trees
 }
 
 // MatchedSignals represents all matched signals from signal evaluation
@@ -58,6 +60,7 @@ type MatchedSignals struct {
 	Authz        []string `json:"authz,omitempty"`
 	Jailbreak    []string `json:"jailbreak,omitempty"`
 	PII          []string `json:"pii,omitempty"`
+	KB           []string `json:"kb,omitempty"`
 	Projection   []string `json:"projection,omitempty"`
 }
 
@@ -80,6 +83,7 @@ type EvalDecisionResult struct {
 type EvalResponse struct {
 	OriginalText      string                                  `json:"original_text"` // The original query text
 	DecisionResult    *EvalDecisionResult                     `json:"decision_result,omitempty"`
+	EvalTrace         []decision.DecisionTrace                `json:"eval_trace,omitempty"`         // Per-decision evaluation trace (when ?trace=true)
 	RecommendedModels []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs
 	RoutingDecision   string                                  `json:"routing_decision,omitempty"`
 	Metrics           *classification.SignalMetricsCollection `json:"metrics"`                      // Performance and confidence for each signal
@@ -150,18 +154,30 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 		}, nil
 	}
 
+	wantTrace := req.Options != nil && req.Options.Trace
 	signals := s.classifier.EvaluateAllSignalsWithForceOption(req.Text, true)
 
 	var decisionResult *decision.DecisionResult
-	var err error
+	var traces []decision.DecisionTrace
 	if s.config != nil && len(s.config.Decisions) > 0 {
-		decisionResult, err = s.classifier.EvaluateDecisionWithEngine(signals)
-		if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
-			logging.Warnf("Decision evaluation failed: %v", err)
+		if wantTrace {
+			var err error
+			decisionResult, traces, err = s.classifier.EvaluateDecisionWithEngineAndTrace(signals)
+			if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
+				logging.Warnf("Decision evaluation failed: %v", err)
+			}
+		} else {
+			var err error
+			decisionResult, err = s.classifier.EvaluateDecisionWithEngine(signals)
+			if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
+				logging.Warnf("Decision evaluation failed: %v", err)
+			}
 		}
 	}
 
-	return s.buildEvalResponse(req.Text, signals, decisionResult), nil
+	resp := s.buildEvalResponse(req.Text, signals, decisionResult)
+	resp.EvalTrace = traces
+	return resp, nil
 }
 
 func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals {
@@ -184,6 +200,7 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		Authz:        signals.MatchedAuthzRules,
 		Jailbreak:    signals.MatchedJailbreakRules,
 		PII:          signals.MatchedPIIRules,
+		KB:           signals.MatchedKBRules,
 		Projection:   signals.MatchedProjectionRules,
 	}
 }

@@ -46,6 +46,12 @@ func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
 
 func validateDecisionPluginContracts(cfg *RouterConfig) error {
 	for _, decision := range cfg.Decisions {
+		if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
+			if err := toolsCfg.Validate(); err != nil {
+				return fmt.Errorf("decision '%s': %w", decision.Name, err)
+			}
+		}
+
 		if imageGenCfg := decision.GetImageGenConfig(); imageGenCfg != nil {
 			if err := imageGenCfg.Validate(); err != nil {
 				return fmt.Errorf("decision '%s': %w", decision.Name, err)

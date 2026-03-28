@@ -423,29 +423,38 @@ toolsDb:
 #   - knn: K-Nearest Neighbors (semantic similarity)
 #   - kmeans: KMeans clustering (pattern-based routing)
 #   - svm: Support Vector Machine (classification-based)
+#   - mlp: Multi-Layer Perceptron (neural selector)
 #
 # Example configuration:
 #
 # config:
-#   decisions:
-#     - name: "multi_model_routing"
-#       description: "Route to best model using ML"
-#       priority: 100
-#       rules:
-#         operator: "OR"
-#         conditions:
-#           - type: "domain"
-#             name: "general"
-#       algorithm:
-#         type: "knn"         # Per-decision selection method
-#       # Tune shared ML selector settings under global.router.model_selection.ml
-#       #   knn.k
-#       #   kmeans.num_clusters
-#       #   svm.kernel
-#       #   mlp.device
-#       modelRefs:
-#         - model: "model-small"
-#           use_reasoning: false
+#   routing:
+#     decisions:
+#       - name: "multi_model_routing"
+#         description: "Route to best model using ML"
+#         priority: 100
+#         rules:
+#           operator: "OR"
+#           conditions:
+#             - type: "domain"
+#               name: "general"
+#         algorithm:
+#           type: "knn"       # Per-decision selector choice
+#         modelRefs:
+#           - model: "model-small"
+#             use_reasoning: false
+#   global:
+#     router:
+#       model_selection:
+#         ml:
+#           knn:
+#             k: 5
+#           kmeans:
+#             num_clusters: 8
+#           svm:
+#             kernel: "rbf"
+#           mlp:
+#             device: "cpu"
 #         - model: "model-medium"
 #           use_reasoning: false
 #         - model: "model-large"
@@ -1050,9 +1059,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -1463,9 +1469,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -1811,9 +1814,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -2189,9 +2189,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -2567,9 +2564,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -3091,9 +3085,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -3538,9 +3529,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -3860,9 +3848,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -4170,8 +4155,6 @@ config:
               name: math
         algorithm:
           type: mlp
-          mlp:
-            device: cpu
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -4191,8 +4174,6 @@ config:
               name: computer science
         algorithm:
           type: mlp
-          mlp:
-            device: cpu
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -4214,8 +4195,6 @@ config:
               name: biology
         algorithm:
           type: knn
-          knn:
-            k: 5
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -4235,8 +4214,6 @@ config:
               name: health
         algorithm:
           type: kmeans
-          kmeans:
-            num_clusters: 4
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -4256,8 +4233,6 @@ config:
               name: physics
         algorithm:
           type: kmeans
-          kmeans:
-            num_clusters: 4
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -4279,8 +4254,6 @@ config:
               name: economics
         algorithm:
           type: svm
-          svm:
-            kernel: rbf
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -4300,8 +4273,6 @@ config:
               name: law
         algorithm:
           type: knn
-          knn:
-            k: 5
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -4321,8 +4292,6 @@ config:
               name: engineering
         algorithm:
           type: kmeans
-          kmeans:
-            num_clusters: 4
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -4346,8 +4315,6 @@ config:
               name: psychology
         algorithm:
           type: knn
-          knn:
-            k: 5
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -4367,8 +4334,6 @@ config:
               name: other
         algorithm:
           type: knn
-          knn:
-            k: 5
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -5052,9 +5017,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -5580,9 +5542,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -5890,9 +5849,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -6072,9 +6028,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -6524,9 +6477,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -6937,9 +6887,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -7285,9 +7232,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -7663,9 +7607,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -8041,9 +7982,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -8565,9 +8503,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -9012,9 +8947,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -9334,9 +9266,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -9644,8 +9573,6 @@ config:
               name: math
         algorithm:
           type: mlp
-          mlp:
-            device: cpu
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -9665,8 +9592,6 @@ config:
               name: computer science
         algorithm:
           type: mlp
-          mlp:
-            device: cpu
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -9688,8 +9613,6 @@ config:
               name: biology
         algorithm:
           type: knn
-          knn:
-            k: 5
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -9709,8 +9632,6 @@ config:
               name: health
         algorithm:
           type: kmeans
-          kmeans:
-            num_clusters: 4
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -9730,8 +9651,6 @@ config:
               name: physics
         algorithm:
           type: kmeans
-          kmeans:
-            num_clusters: 4
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -9753,8 +9672,6 @@ config:
               name: economics
         algorithm:
           type: svm
-          svm:
-            kernel: rbf
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -9774,8 +9691,6 @@ config:
               name: law
         algorithm:
           type: knn
-          knn:
-            k: 5
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -9795,8 +9710,6 @@ config:
               name: engineering
         algorithm:
           type: kmeans
-          kmeans:
-            num_clusters: 4
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -9820,8 +9733,6 @@ config:
               name: psychology
         algorithm:
           type: knn
-          knn:
-            k: 5
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -9841,8 +9752,6 @@ config:
               name: other
         algorithm:
           type: knn
-          knn:
-            k: 5
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -10526,9 +10435,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -11054,9 +10960,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -11364,9 +11267,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -11546,9 +11446,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert

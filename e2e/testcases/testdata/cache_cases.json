@@ -1,6 +1,6 @@
 [
   {
-    "description": "Psychology question - ai-gateway cache threshold (0.8)",
+    "description": "Psychology question - kubernetes cache threshold (0.8)",
     "category": "psychology",
     "original_question": "What is cognitive dissonance?",
     "similar_questions": [
@@ -12,7 +12,7 @@
     ]
   },
   {
-    "description": "Health question - ai-gateway cache threshold (0.8)",
+    "description": "Health question - kubernetes cache threshold (0.8)",
     "category": "health",
     "original_question": "What are the benefits of regular exercise?",
     "similar_questions": [

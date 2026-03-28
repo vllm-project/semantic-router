@@ -19,7 +19,7 @@ providers:
       backend_refs:
         - name: llm_katan
           weight: 1
-          endpoint: 172.17.0.1:8000
+          endpoint: host.docker.internal:8000
           protocol: http
 routing:
   modelCards:
@@ -60,7 +60,7 @@ global:
       enabled: true
       auto_store: false
       milvus:
-        address: 172.17.0.1:19530
+        address: host.docker.internal:19530
         collection: memory_test_ci
         dimension: 384
       embedding_model: bert
@@ -79,7 +79,7 @@ global:
       - llm_provider: vllm
         model_role: memory_rewrite
         llm_endpoint:
-          address: 172.17.0.1
+          address: host.docker.internal
           port: 8000
           protocol: http
         llm_model_name: qwen3
@@ -87,7 +87,7 @@ global:
       - llm_provider: vllm
         model_role: memory_extraction
         llm_endpoint:
-          address: 172.17.0.1
+          address: host.docker.internal
           port: 8000
           protocol: http
         llm_model_name: qwen3

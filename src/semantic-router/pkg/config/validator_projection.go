@@ -146,51 +146,82 @@ func validateProjectionScores(cfg *RouterConfig) (map[string]struct{}, error) {
 	names := make(map[string]struct{}, len(cfg.Projections.Scores))
 	declaredSignals := projectionDeclaredSignals(cfg)
 	for _, score := range cfg.Projections.Scores {
-		if score.Name == "" {
-			return nil, fmt.Errorf("routing.projections.scores: name cannot be empty")
-		}
-		if _, exists := names[score.Name]; exists {
-			return nil, fmt.Errorf("routing.projections.scores[%q]: duplicate score name", score.Name)
-		}
-		names[score.Name] = struct{}{}
-		if score.Method != "weighted_sum" {
-			return nil, fmt.Errorf("routing.projections.scores[%q]: unsupported method %q (supported: weighted_sum)", score.Name, score.Method)
-		}
-		if len(score.Inputs) == 0 {
-			return nil, fmt.Errorf("routing.projections.scores[%q]: inputs cannot be empty", score.Name)
-		}
-		for _, input := range score.Inputs {
-			if !isProjectionInputTypeSupported(input.Type) {
-				return nil, fmt.Errorf(
-					"routing.projections.scores[%q]: input %s(%q) uses unsupported type %q",
-					score.Name,
-					input.Type,
-					input.Name,
-					input.Type,
-				)
-			}
-			if !projectionInputDeclared(declaredSignals, input.Type, input.Name) {
-				return nil, fmt.Errorf(
-					"routing.projections.scores[%q]: input %s(%q) is not declared in routing.signals",
-					score.Name,
-					input.Type,
-					input.Name,
-				)
-			}
-			switch input.ValueSource {
-			case "", "binary", "confidence":
-			default:
-				return nil, fmt.Errorf(
-					"routing.projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence)",
-					score.Name,
-					input.Type,
-					input.Name,
-					input.ValueSource,
-				)
-			}
+		if err := validateProjectionScore(score, names, declaredSignals, cfg); err != nil {
+			return nil, err
 		}
 	}
 	return names, nil
+}
+
+func validateProjectionScore(
+	score ProjectionScore,
+	names map[string]struct{},
+	declaredSignals map[string]map[string]struct{},
+	cfg *RouterConfig,
+) error {
+	if score.Name == "" {
+		return fmt.Errorf("routing.projections.scores: name cannot be empty")
+	}
+	if _, exists := names[score.Name]; exists {
+		return fmt.Errorf("routing.projections.scores[%q]: duplicate score name", score.Name)
+	}
+	names[score.Name] = struct{}{}
+	if score.Method != "weighted_sum" {
+		return fmt.Errorf("routing.projections.scores[%q]: unsupported method %q (supported: weighted_sum)", score.Name, score.Method)
+	}
+	if len(score.Inputs) == 0 {
+		return fmt.Errorf("routing.projections.scores[%q]: inputs cannot be empty", score.Name)
+	}
+	for _, input := range score.Inputs {
+		if err := validateProjectionScoreInput(score.Name, input, declaredSignals, cfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateProjectionScoreInput(
+	scoreName string,
+	input ProjectionScoreInput,
+	declaredSignals map[string]map[string]struct{},
+	cfg *RouterConfig,
+) error {
+	if !isProjectionInputTypeSupported(input.Type) {
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: input %s(%q) uses unsupported type %q",
+			scoreName,
+			input.Type,
+			input.Name,
+			input.Type,
+		)
+	}
+	if strings.EqualFold(input.Type, ProjectionInputKBMetric) {
+		return validateKBMetricProjectionInput(cfg, scoreName, input)
+	}
+	if !projectionInputDeclared(declaredSignals, input.Type, input.Name) {
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: input %s(%q) is not declared in routing.signals",
+			scoreName,
+			input.Type,
+			input.Name,
+		)
+	}
+	return validateProjectionInputValueSource(scoreName, input)
+}
+
+func validateProjectionInputValueSource(scoreName string, input ProjectionScoreInput) error {
+	switch input.ValueSource {
+	case "", "binary", "confidence":
+		return nil
+	default:
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence)",
+			scoreName,
+			input.Type,
+			input.Name,
+			input.ValueSource,
+		)
+	}
 }
 
 func isProjectionInputTypeSupported(signalType string) bool {
@@ -208,7 +239,9 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		SignalTypeModality,
 		SignalTypeAuthz,
 		SignalTypeJailbreak,
-		SignalTypePII:
+		SignalTypePII,
+		SignalTypeKB,
+		ProjectionInputKBMetric:
 		return true
 	default:
 		return false
@@ -231,6 +264,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeAuthz:        collectRoleBindingNames(cfg.GetRoleBindings()),
 		SignalTypeJailbreak:    collectJailbreakRuleNames(cfg.JailbreakRules),
 		SignalTypePII:          collectPIIRuleNames(cfg.PIIRules),
+		SignalTypeKB:           collectKBRuleNames(cfg.KBRules),
 	}
 	return declared
 }
@@ -463,6 +497,64 @@ func collectPIIRuleNames(rules []PIIRule) map[string]struct{} {
 		names[rule.Name] = struct{}{}
 	}
 	return names
+}
+
+func collectKBRuleNames(rules []KBSignalRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
+func validateKBMetricProjectionInput(
+	cfg *RouterConfig,
+	scoreName string,
+	input ProjectionScoreInput,
+) error {
+	if input.KB == "" {
+		return fmt.Errorf("routing.projections.scores[%q]: kb_metric inputs require kb", scoreName)
+	}
+	kbs, _, err := knowledgeBaseDefinitions(cfg)
+	if err != nil {
+		return err
+	}
+	kb, ok := kbs[input.KB]
+	if !ok {
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: kb_metric input references unknown kb %q",
+			scoreName,
+			input.KB,
+		)
+	}
+	if input.Metric != KBMetricBestScore && input.Metric != KBMetricBestMatchedScore && !kbMetricDeclared(kb, input.Metric) {
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: kb_metric input for kb %q uses unsupported metric %q",
+			scoreName,
+			input.KB,
+			input.Metric,
+		)
+	}
+	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
+	case "", "score":
+		return nil
+	default:
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: kb_metric input for kb %q has unsupported value_source %q (supported: score)",
+			scoreName,
+			input.KB,
+			input.ValueSource,
+		)
+	}
+}
+
+func kbMetricDeclared(kb KnowledgeBaseConfig, metricName string) bool {
+	for _, metric := range kb.Metrics {
+		if metric.Name == metricName {
+			return true
+		}
+	}
+	return false
 }
 
 func validateDecisionProjectionReferences(decisionName string, node *RuleNode, outputs map[string]struct{}) error {

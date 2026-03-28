@@ -12,6 +12,7 @@ from cli.models import (
     PluginType,
     SemanticCachePluginConfig,
     FastResponsePluginConfig,
+    ToolsPluginConfig,
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
     HallucinationPluginConfig,
@@ -401,6 +402,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
+        PluginType.TOOLS.value: ToolsPluginConfig,
     }
 
     for decision in config.decisions:

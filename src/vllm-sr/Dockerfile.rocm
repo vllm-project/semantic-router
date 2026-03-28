@@ -4,9 +4,16 @@
 ARG TARGETARCH
 ARG BUILDPLATFORM
 ARG GIT_SSL_NO_VERIFY=0
+ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye
+ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=rust:1.90-bullseye
+ARG GO_RUNTIME_COMPAT_IMAGE=golang:1.24-bullseye
 
 # Stage 1: Build Rust candle-binding (CPU-only, cross-compiled for TARGETARCH)
-FROM --platform=$BUILDPLATFORM rustlang/rust:nightly AS rust-builder
+#
+# ROCm runtime is pinned to Ubuntu 22.04 (glibc 2.35). Keep runtime-linked build
+# stages on an older libc baseline so the copied binaries and shared objects do
+# not fail to start with GLIBC_2.39+/2.41+ loader errors.
+FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS rust-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
@@ -27,7 +34,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 # Configure cross-compilation environment for arm64
 # NOTE: Do NOT set OPENSSL_DIR globally — it breaks amd64 pkg-config discovery.
-# The rustlang/rust:nightly image (Debian) has libssl-dev pre-installed and
+# The pinned runtime-compatible Rust image (Debian bullseye) has libssl-dev pre-installed and
 # pkg-config finds it automatically for amd64. For arm64, we set OPENSSL_LIB_DIR
 # per-command below.
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
@@ -80,7 +87,7 @@ RUN mkdir -p /build/out && \
     nm -D /build/out/libcandle_semantic_router.so 2>/dev/null | grep -c " T " || true
 
 # Stage 1a: Build Rust ml-binding (Linfa ML algorithms, cross-compiled for TARGETARCH)
-FROM --platform=$BUILDPLATFORM rustlang/rust:nightly AS ml-builder
+FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS ml-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
@@ -139,7 +146,7 @@ RUN mkdir -p /build/out && \
     file /build/out/libml_semantic_router.so
 
 # Stage 1b: Build Rust nlp-binding (BM25 + N-gram keyword classification, cross-compiled)
-FROM --platform=$BUILDPLATFORM rustlang/rust:nightly AS nlp-builder
+FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS nlp-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
@@ -191,7 +198,7 @@ RUN mkdir -p /build/out && \
     ls -la /build/out/
 
 # Stage 1r: Build Rust onnx-binding (ROCm dynamic, amd64 only)
-FROM --platform=$BUILDPLATFORM rust:1.90 AS onnx-builder
+FROM --platform=$BUILDPLATFORM ${ONNX_RUST_RUNTIME_COMPAT_IMAGE} AS onnx-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
@@ -234,7 +241,7 @@ RUN mkdir -p /build/out && \
 # The WASM target only uses pkg/dsl (pure Go), but go.mod has replace directives
 # pointing to ../../candle-binding etc. We create stub go.mod files so go mod
 # download succeeds without copying the full binding source trees.
-FROM --platform=$BUILDPLATFORM golang:1.24 AS wasm-builder
+FROM --platform=$BUILDPLATFORM ${GO_RUNTIME_COMPAT_IMAGE} AS wasm-builder
 WORKDIR /build
 COPY src/semantic-router/ ./
 # Create stub modules for local replace directives (not needed by WASM build)
@@ -267,8 +274,16 @@ COPY dashboard/frontend/ ./
 COPY --from=wasm-builder /build/signal-compiler.wasm /build/wasm_exec.js ./public/
 RUN npm run build
 
+FROM node:20-alpine AS wizmap-builder
+WORKDIR /app/wizmap
+COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm ci --include=dev
+COPY dashboard/wizmap/ ./
+RUN npm run build -- --outDir /app/wizmap-dist
+
 # Stage 1c: Build dashboard backend with Go
-FROM --platform=$BUILDPLATFORM golang:1.24 AS dashboard-builder
+FROM --platform=$BUILDPLATFORM ${GO_RUNTIME_COMPAT_IMAGE} AS dashboard-builder
 ARG TARGETARCH
 WORKDIR /app
 
@@ -293,7 +308,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     fi
 
 # Stage 2: Build Go semantic router
-FROM --platform=$BUILDPLATFORM golang:1.24 AS go-builder
+FROM --platform=$BUILDPLATFORM ${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
 ARG TARGETARCH
 WORKDIR /build
 
@@ -379,6 +394,7 @@ COPY onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* /usr/local
 COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
 COPY --from=dashboard-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
+COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 
 # Set library path and ORT dynamic library path for onnx-binding.
 # When FA models are present, the ONNX binding will auto-register the CK Flash
@@ -397,6 +413,7 @@ COPY src/vllm-sr/requirements.txt /app/requirements.txt
 
 # Copy tools database to config directory
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
+COPY config/kb/ /app/config/kb/
 # Copy packaged OpenClaw skill catalog and skill packs consumed by dashboard /api/openclaw/skills
 COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
 COPY dashboard/backend/skillpacks/ /app/skills/
@@ -415,8 +432,9 @@ RUN if [ "$GIT_SSL_NO_VERIFY" = "1" ]; then PIP_EXTRA="--trusted-host pypi.org -
 
 # Copy start scripts
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
+COPY src/vllm-sr/start-envoy.sh /app/start-envoy.sh
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
-RUN chmod +x /app/start-router.sh /app/start-dashboard.sh
+RUN chmod +x /app/start-router.sh /app/start-envoy.sh /app/start-dashboard.sh
 
 # Copy supervisord configuration
 COPY src/vllm-sr/supervisord.conf /etc/supervisor/conf.d/supervisord.conf

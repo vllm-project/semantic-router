@@ -132,11 +132,11 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "docs", "api", "classification.md"),
+		path: repoRel("website", "docs", "api", "apiserver.md"),
 		needles: []string{
-			"global:\n  model_catalog:\n    modules:\n      classifier:",
-			"routing:\n  signals:\n    domains:",
-			"decisions:",
+			"`http://localhost:8080`",
+			"`GET /openapi.json`",
+			"`GET /config/router`",
 		},
 	},
 	{
@@ -209,11 +209,11 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "classification.md"),
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
 		needles: []string{
-			"global:\n  model_catalog:\n    modules:\n      classifier:",
-			"routing:\n  signals:\n    domains:",
-			"decisions:",
+			"`http://localhost:8080`",
+			"`GET /openapi.json`",
+			"`GET /config/router`",
 		},
 	},
 	{
@@ -331,7 +331,7 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "docs", "api", "classification.md"),
+		path: repoRel("website", "docs", "api", "apiserver.md"),
 		needles: []string{
 			"\nclassifier:\n",
 			"\ncategories:\n",
@@ -402,7 +402,7 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "classification.md"),
+		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
 		needles: []string{
 			"\nclassifier:\n",
 			"\ncategories:\n",

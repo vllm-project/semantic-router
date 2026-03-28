@@ -31,6 +31,17 @@ max-statements = 50
 max-nested-blocks = 4
 
 [lint.per-file-ignores]
+"tools/security/*.py" = [
+  "C901",     # complexity is inherent to pattern-matching scanners
+  "N806",     # constant-like variables inside functions (STRING_TYPES)
+  "PLC0415",  # lazy imports for optional tree-sitter
+  "PLR0912",  # many branches for pattern dispatch
+  "PLR0915",  # many statements in orchestrator functions
+  "PLR2004",  # threshold magic numbers are readable inline
+  "PLW0603",  # global for module-level allowlist cache
+  "PLW1510",  # subprocess.run without check= (intentional)
+  "PLW2901",  # loop var reassignment (line = line.strip())
+]
 "src/vllm-sr/cli/models.py" = ["I001", "N815", "PLC0415", "SIM114", "UP006", "UP035", "UP045"]
 "src/vllm-sr/cli/parser.py" = ["B904", "C901", "F541", "I001", "PLR0912", "UP006", "UP015", "UP035"]
 "src/vllm-sr/cli/validator.py" = ["C901", "F401", "I001", "PLR2004", "PLR0912", "RUF013", "SIM102", "UP006", "UP035"]
@@ -72,6 +83,21 @@ max-nested-blocks = 4
   "SIM108",
   "SIM115",
 ]
+"tools/agent/scripts/tuning/engine.py" = [
+  "C901",     # check_regression_weight complexity is inherent
+  "E402",     # re-exports at bottom of module (after all definitions)
+  "F401",     # re-exported names appear unused locally
+  "PLR0912",  # many branches in regression checking
+  "PLR2004",  # threshold/weight magic numbers are readable inline
+  "SIM102",   # nested ifs mirror the trace-tree dispatch pattern
+]
+"tools/agent/scripts/tuning/engine_selection.py" = [
+  "C901",     # complexity is inherent to batch fix & selection logic
+  "PLR0912",  # many branches in batch structural fix and selection
+  "PLR2004",  # threshold/weight magic numbers are readable inline
+]
+"tools/agent/scripts/tuning/scenarios/*.py" = ["PLR2004"]
+"tools/agent/scripts/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
 "src/vllm-sr/tests/test_config_template.py" = ["E402", "UP015"]
 "src/vllm-sr/tests/test_latency_validation.py" = ["I001"]

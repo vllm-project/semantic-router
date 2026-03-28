@@ -24,17 +24,20 @@ Both lanes currently use the same `balance`-style mock alias catalog on the shar
 - Keep the local lane materially cheaper than the cloud lane so routing also delivers visible cost savings.
 - Keep routing policy-driven rather than preference-driven.
 - Record every decision through `router_replay` on every maintained route.
+- Enforce per-tier tool scope: security containment strips all tools, privacy tier restricts to local-only tools, frontier tier allows full tool access.
+- Control reasoning mode per tier: security containment disables reasoning, privacy/standard use medium effort, frontier uses high effort.
+- Override frontier routing when contrastive organizational-sensitivity score indicates the request is private, even if individual keyword/embedding signals did not trigger the privacy band.
 
-This recipe intentionally does not use a `global` section. The routing behavior is expressed directly in `routing.signals`, `routing.projections`, and `routing.decisions`, which keeps the recipe smaller and avoids coupling this profile to runtime-wide classifier overlays.
+This recipe uses only a minimal `global` section (for `model_catalog.kbs` used in KB-backed routing). The routing behavior itself is expressed in `routing.signals`, `routing.projections`, and `routing.decisions`, which keeps the recipe smaller and avoids coupling this profile to runtime-wide classifier overlays.
 
 ## Route Order
 
-| Priority | Decision | Target model | Purpose |
-|---|---|---|---|
-| `300` | `local_security_containment` | `local/private-qwen` | Suspicious prompts, jailbreak attempts, prompt leakage, exfiltration |
-| `250` | `local_privacy_policy` | `local/private-qwen` | PII, private code, internal docs, explicit local-only handling |
-| `200` | `cloud_frontier_reasoning` | `cloud/frontier-reasoning` | Non-sensitive architecture, synthesis, deep reasoning |
-| `100` | `local_standard` | `local/private-qwen` | Ordinary non-sensitive default traffic |
+| Priority | Decision | Target model | Tool Scope | Reasoning | Purpose |
+|---|---|---|---|---|---|
+| `300` | `local_security_containment` | `local/private-qwen` | `none` | off | Suspicious prompts, jailbreak attempts, prompt leakage, exfiltration |
+| `250` | `local_privacy_policy` | `local/private-qwen` | `local_only` | medium | PII, private code, internal docs, explicit local-only handling, privacy override |
+| `200` | `cloud_frontier_reasoning` | `cloud/frontier-reasoning` | `full` | high | Non-sensitive architecture, synthesis, deep reasoning |
+| `100` | `local_standard` | `local/private-qwen` | `standard` | medium | Ordinary non-sensitive default traffic |
 
 The route order is the core control surface. Security wins before privacy, privacy wins before cloud escalation, and cloud escalation wins before the ordinary local fallback. That means the recipe pays for the cloud frontier model only when the request is both non-sensitive and reasoning-heavy enough to justify the extra cost.
 
@@ -81,6 +84,17 @@ These feed `privacy_risk_score`, which maps into:
 
 - `policy_privacy_cloud_allowed`
 - `policy_privacy_local_only`
+
+### Knowledge base classification
+
+- `privacy_policy` (type: `kb`, backed by `privacy_kb`)
+
+Uses the `privacy_kb` knowledge base declared in `global.model_catalog.kbs` with a `labels.json` manifest. Computes best-match similarity per group and a `private_vs_public` group-margin metric that feeds `privacy_contrastive_score`, which maps into:
+
+- `privacy_override_inactive`
+- `privacy_override_active`
+
+When `privacy_override_active` fires, the frontier decision is blocked and the privacy decision activates, even if the individual keyword/embedding signals did not breach the privacy band. This handles organizational sensitivity that cannot be captured by isolated PII or keyword rules.
 
 ### Reasoning lane
 
@@ -259,6 +273,6 @@ Validated against a live router endpoint.
 
 ## Runtime Note
 
-On this endpoint, `POST /config/deploy` created a new durable version but did not immediately make the latest routing surface active in memory. For validation, the live routing surface was explicitly refreshed with `PUT /config/classification` using the maintained local `routing` block before the final probe run.
+Router configuration is managed via the `/config/router` APIs, with durable versions tracked under `/config/router/versions`. During validation, the durable recipe version was created through that workflow but did not automatically refresh the in-memory routing surface, so the live routing surface was explicitly updated with a `PUT /config/router` call using the maintained local `routing` block before the final probe run.
 
 This is a runtime behavior note, not part of the recipe contract itself. The maintained recipe still lives in the YAML and DSL assets above.

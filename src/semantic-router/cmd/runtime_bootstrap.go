@@ -25,17 +25,16 @@ import (
 )
 
 type runtimeOptions struct {
-	configPath            string
-	certPath              string
-	kubeconfig            string
-	namespace             string
-	port                  int
-	apiPort               int
-	metricsPort           int
-	enableAPI             bool
-	enableSystemPromptAPI bool
-	secure                bool
-	downloadOnly          bool
+	configPath   string
+	certPath     string
+	kubeconfig   string
+	namespace    string
+	port         int
+	apiPort      int
+	metricsPort  int
+	enableAPI    bool
+	secure       bool
+	downloadOnly bool
 }
 
 type embeddingPaths struct {
@@ -48,32 +47,30 @@ type embeddingPaths struct {
 
 func parseRuntimeOptions() runtimeOptions {
 	var (
-		configPath            = flag.String("config", "config/config.yaml", "Path to the configuration file")
-		port                  = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
-		apiPort               = flag.Int("api-port", 8080, "Port to listen on for Classification API")
-		metricsPort           = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
-		enableAPI             = flag.Bool("enable-api", true, "Enable Classification API server")
-		enableSystemPromptAPI = flag.Bool("enable-system-prompt-api", false, "Enable system prompt configuration endpoints (SECURITY: only enable in trusted environments)")
-		secure                = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
-		certPath              = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
-		kubeconfig            = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
-		namespace             = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
-		downloadOnly          = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
+		configPath   = flag.String("config", "config/config.yaml", "Path to the configuration file")
+		port         = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
+		apiPort      = flag.Int("api-port", 8080, "Port to listen on for the router apiserver")
+		metricsPort  = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
+		enableAPI    = flag.Bool("enable-api", true, "Enable the router apiserver")
+		secure       = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
+		certPath     = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
+		kubeconfig   = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
+		namespace    = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
+		downloadOnly = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
 	)
 	flag.Parse()
 
 	return runtimeOptions{
-		configPath:            *configPath,
-		certPath:              *certPath,
-		kubeconfig:            *kubeconfig,
-		namespace:             *namespace,
-		port:                  *port,
-		apiPort:               *apiPort,
-		metricsPort:           *metricsPort,
-		enableAPI:             *enableAPI,
-		enableSystemPromptAPI: *enableSystemPromptAPI,
-		secure:                *secure,
-		downloadOnly:          *downloadOnly,
+		configPath:   *configPath,
+		certPath:     *certPath,
+		kubeconfig:   *kubeconfig,
+		namespace:    *namespace,
+		port:         *port,
+		apiPort:      *apiPort,
+		metricsPort:  *metricsPort,
+		enableAPI:    *enableAPI,
+		secure:       *secure,
+		downloadOnly: *downloadOnly,
 	}
 }
 
@@ -356,13 +353,16 @@ func initializeMultiModalEmbeddingModelIfConfigured(cfg *config.RouterConfig, mu
 func logMissingEmbeddingModelsConfig() {
 	logging.Infof("No embedding models configured, skipping initialization")
 	logging.Infof("To enable embedding models, add to config.yaml:")
-	logging.Infof("  embedding_models:")
-	logging.Infof("    qwen3_model_path: 'models/mom-embedding-pro'")
-	logging.Infof("    gemma_model_path: 'models/mom-embedding-flash'")
-	logging.Infof("    mmbert_model_path: 'models/mom-embedding-ultra'")
-	logging.Infof("    multimodal_model_path: 'models/mom-embedding-multimodal'")
-	logging.Infof("    bert_model_path: 'models/all-MiniLM-L12-v2'  # For memory (384-dim)")
-	logging.Infof("    use_cpu: true")
+	logging.Infof("  global:")
+	logging.Infof("    model_catalog:")
+	logging.Infof("      embeddings:")
+	logging.Infof("        semantic:")
+	logging.Infof("          qwen3_model_path: 'models/mom-embedding-pro'")
+	logging.Infof("          gemma_model_path: 'models/mom-embedding-flash'")
+	logging.Infof("          mmbert_model_path: 'models/mom-embedding-ultra'")
+	logging.Infof("          multimodal_model_path: 'models/mom-embedding-multimodal'")
+	logging.Infof("          bert_model_path: 'models/all-MiniLM-L12-v2'  # For memory (384-dim)")
+	logging.Infof("          use_cpu: true")
 }
 
 func initializeSemanticCacheBERTIfNeeded(cfg *config.RouterConfig) {
@@ -582,7 +582,7 @@ func startAPIServerIfEnabled(opts runtimeOptions) {
 
 	go func() {
 		logging.Infof("Starting API server on port %d", opts.apiPort)
-		if err := apiserver.Init(opts.configPath, opts.apiPort, opts.enableSystemPromptAPI); err != nil {
+		if err := apiserver.Init(opts.configPath, opts.apiPort); err != nil {
 			logging.Errorf("Start API server error: %v", err)
 		}
 	}()
