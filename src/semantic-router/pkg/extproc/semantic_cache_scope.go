@@ -1,5 +1,22 @@
 package extproc
 
+// decisionNameForCacheScope returns the decision name used for per-decision cache
+// settings (semanticCacheEnabledForScope, TTL). Prefer VSRSelectedDecisionName
+// when set by trackVSRDecision; fall back to the resolved Decision when routing
+// took the early "no model change" path (trackVSRDecision is not called).
+func decisionNameForCacheScope(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	if ctx.VSRSelectedDecisionName != "" {
+		return ctx.VSRSelectedDecisionName
+	}
+	if ctx.VSRSelectedDecision != nil {
+		return ctx.VSRSelectedDecision.Name
+	}
+	return ""
+}
+
 // semanticCacheEnabledForScope resolves whether semantic cache should be active
 // for the current request/response path.
 //

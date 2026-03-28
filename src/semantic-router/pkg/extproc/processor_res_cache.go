@@ -21,7 +21,8 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if ctx.RequestID == "" || responseBody == nil {
 		return
 	}
-	if !r.semanticCacheEnabledForScope(ctx.VSRSelectedDecisionName) {
+	decisionName := decisionNameForCacheScope(ctx)
+	if !r.semanticCacheEnabledForScope(decisionName) {
 		return
 	}
 
@@ -36,7 +37,7 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 
 	ttlSeconds := -1
 	if r != nil && r.Config != nil {
-		ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(ctx.VSRSelectedDecisionName)
+		ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(decisionName)
 	}
 	if err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody, ttlSeconds); err != nil {
 		logging.Errorf("Error updating cache: %v", err)
@@ -144,13 +145,14 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 	ctx *RequestContext,
 	reconstructedJSON []byte,
 ) error {
-	if !r.semanticCacheEnabledForScope(ctx.VSRSelectedDecisionName) {
+	decisionName := decisionNameForCacheScope(ctx)
+	if !r.semanticCacheEnabledForScope(decisionName) {
 		return nil
 	}
 
 	ttlSeconds := -1
 	if r != nil && r.Config != nil {
-		ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(ctx.VSRSelectedDecisionName)
+		ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(decisionName)
 	}
 
 	if ctx.RequestID == "" {
