@@ -121,7 +121,7 @@ func (r *OpenAIRouter) performCacheLookup(
 	}
 
 	logging.Infof("handleCaching: Performing cache lookup - model=%s, query='%s', threshold=%.2f",
-		requestModel, cacheQuery, threshold)
+		requestModel, ctx.RequestQuery, threshold)
 
 	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
 
@@ -132,7 +132,7 @@ func (r *OpenAIRouter) performCacheLookup(
 	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
 
 	tracing.SetSpanAttributes(span,
-		attribute.String(tracing.AttrCacheKey, cacheQuery),
+		attribute.String(tracing.AttrCacheKey, ctx.RequestQuery),
 		attribute.Bool(tracing.AttrCacheHit, found),
 		attribute.Int64(tracing.AttrCacheLookupTimeMs, lookupTime),
 		attribute.String(tracing.AttrCategoryName, categoryName),
@@ -157,7 +157,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		logging.LogEvent("cache_hit", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"model":      requestModel,
-			"query":      cacheQuery,
+			"query":      ctx.RequestQuery,
 			"category":   categoryName,
 			"threshold":  threshold,
 		})

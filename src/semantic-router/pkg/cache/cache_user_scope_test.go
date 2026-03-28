@@ -62,7 +62,7 @@ func TestScopeQueryToUserRepeatsNamespaceMarker(t *testing.T) {
 	if strings.Count(scoped, "cache-scope") != 1 {
 		t.Fatalf("expected a single cache scope prefix block, got %q", scoped)
 	}
-	if strings.Count(scoped, userScopeNamespace("user-a")) != 3 {
+	if strings.Count(scoped, userScopeNamespace("user-a")) != scopeNamespaceRepeat {
 		t.Fatalf("expected repeated namespace marker, got %q", scoped)
 	}
 }

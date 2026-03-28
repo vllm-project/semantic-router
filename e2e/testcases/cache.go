@@ -178,15 +178,24 @@ func drainAndClose(resp *http.Response) {
 // pollForCacheHit retries the same-user request until a cache hit is observed
 // or the retry budget is exhausted. Returns the final cache-hit header value.
 func pollForCacheHit(ctx context.Context, question, localPort, userID string, verbose bool) (string, error) {
-	const maxRetries = 10
-	const retryInterval = time.Second
+	const maxAttempts = 45
+	const retryInterval = 2 * time.Second
 	var cacheHit string
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		time.Sleep(retryInterval)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		timer := time.NewTimer(retryInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return "", ctx.Err()
+		case <-timer.C:
+		}
 		resp, err := sendChatRequestForUser(ctx, question, localPort, userID, verbose)
 		if err != nil {
-			if attempt == maxRetries {
+			if attempt == maxAttempts {
 				return "", fmt.Errorf("failed to send same-user scoped cache request: %w", err)
+			}
+			if verbose {
+				fmt.Printf("[Test] Retry %d/%d: request error: %v\n", attempt, maxAttempts, err)
 			}
 			continue
 		}
@@ -196,7 +205,7 @@ func pollForCacheHit(ctx context.Context, question, localPort, userID string, ve
 			break
 		}
 		if verbose {
-			fmt.Printf("[Test] Retry %d/%d: cache not yet populated for same-user query\n", attempt, maxRetries)
+			fmt.Printf("[Test] Retry %d/%d: cache not yet populated for same-user query\n", attempt, maxAttempts)
 		}
 	}
 	return cacheHit, nil

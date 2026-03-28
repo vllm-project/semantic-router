@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 )
 
 // ChatMessage represents a message in the OpenAI chat format with role and content.
@@ -99,8 +100,14 @@ func ScopeQueryToUser(query string, userID string) string {
 	for i := range tokens {
 		tokens[i] = namespace
 	}
-	return fmt.Sprintf("cache-scope %s\n%s", strings.Join(tokens, " "), query)
+	// Single-line prefix so log/trace consumers never see raw newlines from user text.
+	return fmt.Sprintf("cache-scope %s %s", strings.Join(tokens, " "), query)
 }
+
+var (
+	userScopeSecretOnce   sync.Once
+	cachedUserScopeSecret string
+)
 
 func userScopeNamespace(userID string) string {
 	// Use a keyed construction (HMAC-SHA256) to avoid exposing a plain hash
@@ -110,7 +117,10 @@ func userScopeNamespace(userID string) string {
 	// The secret key is expected to be provided via environment variable
 	// USER_SCOPE_NAMESPACE_SECRET so that it is not hard-coded in source
 	// and can be managed per deployment.
-	secret := os.Getenv("USER_SCOPE_NAMESPACE_SECRET")
+	userScopeSecretOnce.Do(func() {
+		cachedUserScopeSecret = os.Getenv("USER_SCOPE_NAMESPACE_SECRET")
+	})
+	secret := cachedUserScopeSecret
 	if secret != "" {
 		mac := hmac.New(sha256.New, []byte(secret))
 		_, _ = mac.Write([]byte(userID))
