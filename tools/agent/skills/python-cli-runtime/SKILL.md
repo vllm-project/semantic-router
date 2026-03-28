@@ -20,7 +20,6 @@ description: Manages Python CLI command orchestration including startup, serve, 
 
 ## Must Read
 
-- [docs/agent/environments.md](../../../../docs/agent/environments.md)
 - [docs/agent/playbooks/vllm-sr-cli-docker.md](../../../../docs/agent/playbooks/vllm-sr-cli-docker.md)
 - [../../../../src/vllm-sr/cli/AGENTS.md](../../../../src/vllm-sr/cli/AGENTS.md)
 

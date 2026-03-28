@@ -77,12 +77,18 @@ jobs:
         run: |
           echo "=== Container Status ==="
           docker ps -a
-          echo "=== vllm-sr Container Logs ==="
+          echo "=== Router Logs ==="
+          docker logs vllm-sr-router-container 2>&1 | tail -200 || true
+          echo "=== Envoy Logs ==="
+          docker logs vllm-sr-envoy-container 2>&1 | tail -200 || true
+          echo "=== Dashboard Logs ==="
+          docker logs vllm-sr-dashboard-container 2>&1 | tail -200 || true
+          echo "=== Legacy Single-Container Logs ==="
           docker logs vllm-sr-container 2>&1 | tail -200 || true
 
       - name: Clean up
         if: always()
         run: |
-          docker stop vllm-sr-container 2>/dev/null || true
-          docker rm vllm-sr-container 2>/dev/null || true
+          docker stop vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-grafana vllm-sr-prometheus vllm-sr-jaeger 2>/dev/null || true
+          docker rm vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-grafana vllm-sr-prometheus vllm-sr-jaeger 2>/dev/null || true
           docker system prune -f || true

@@ -10,7 +10,7 @@ import (
 type DecisionPlugin struct {
 	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak",
 	// "pii", "system_prompt", "header_mutation", "hallucination",
-	// "response_jailbreak", "router_replay", "memory", "fast_response".
+	// "response_jailbreak", "router_replay", "memory", "fast_response", "tools".
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration stores the plugin payload as normalized structured bytes.
@@ -154,6 +154,40 @@ func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
 func (d *Decision) GetFastResponseConfig() *FastResponsePluginConfig {
 	result := &FastResponsePluginConfig{}
 	return decodeDecisionPlugin(d, "fast_response", result)
+}
+
+// IsRAGEnabledForDecision returns whether RAG is enabled for a specific decision.
+// Checks the per-decision RAG plugin config (enabled: true).
+func (c *RouterConfig) IsRAGEnabledForDecision(decisionName string) bool {
+	decision := c.GetDecisionByName(decisionName)
+	if decision == nil {
+		return false
+	}
+	ragConfig := decision.GetRAGConfig()
+	return ragConfig != nil && ragConfig.Enabled
+}
+
+// IsMemoryEnabledForDecision returns whether memory is enabled for a specific decision.
+// A decision has memory enabled if:
+//   - It has a per-decision memory plugin with enabled: true, OR
+//   - Global memory is enabled and the decision does NOT have a per-decision
+//     memory plugin that explicitly disables it.
+func (c *RouterConfig) IsMemoryEnabledForDecision(decisionName string) bool {
+	decision := c.GetDecisionByName(decisionName)
+	if decision == nil {
+		return c.Memory.Enabled
+	}
+	memConfig := decision.GetMemoryConfig()
+	if memConfig != nil {
+		return memConfig.Enabled
+	}
+	return c.Memory.Enabled
+}
+
+// HasPersonalizationPlugins returns true if the decision has RAG or memory
+// enabled, meaning cached responses would miss personalized context.
+func (c *RouterConfig) HasPersonalizationPlugins(decisionName string) bool {
+	return c.IsRAGEnabledForDecision(decisionName) || c.IsMemoryEnabledForDecision(decisionName)
 }
 
 func decodeDecisionPlugin[T any](d *Decision, pluginType string, result *T) *T {

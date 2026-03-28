@@ -5,19 +5,18 @@ Addresses @Xunzhuo's comment: "we should have a detailed test in the CLI PR"
 """
 
 import pytest
-from pydantic import ValidationError as PydanticValidationError
-
-from cli.models import (
+from cli.algorithms import (
     AlgorithmConfig,
-    EloSelectionConfig,
-    RouterDCSelectionConfig,
     AutoMixSelectionConfig,
-    HybridSelectionConfig,
-    ThompsonSamplingConfig,
+    EloSelectionConfig,
     GMTRouterConfig,
-    RouterR1Config,
+    HybridSelectionConfig,
     ReMoMAlgorithmConfig,
+    RouterDCSelectionConfig,
+    RouterR1Config,
+    ThompsonSamplingConfig,
 )
+from pydantic import ValidationError as PydanticValidationError
 
 
 class TestAlgorithmConfigTypes:

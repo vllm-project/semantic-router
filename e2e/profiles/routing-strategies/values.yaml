@@ -165,12 +165,8 @@ config:
             - "computer science"
         - name: urgent_request
           description: Urgent and time-sensitive requests
-          mmlu_categories:
-            - urgent_request
         - name: sensitive_data
           description: Requests involving sensitive personal data
-          mmlu_categories:
-            - sensitive_data
         - name: business
           description: Business and management related queries
           mmlu_categories:
@@ -240,6 +236,8 @@ config:
     modelCards:
       - name: base-model
   global:
+    model_catalog:
+      kbs: []
     router:
       strategy: priority
     services:
@@ -299,9 +297,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert

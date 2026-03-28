@@ -16,6 +16,22 @@ export const researchPapers = [
     sortOrder: 10,
   },
   {
+    id: 'wrp-vision-paper',
+    type: 'paper',
+    spotlight: true,
+    categoryLabel: 'VISION PAPER',
+    title: 'The Workload-Router-Pool Architecture for LLM Inference Optimization: A Vision Paper from the vLLM Semantic Router Project',
+    authors: 'Huamin Chen, Xunzhuo Liu, Bowei He, Fuyuan Lyu, Yankai Chen, Xue Liu, Yuhan Liu, Junchen Jiang',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We synthesize the project’s recent routing, fleet, multimodal, and governance results into the Workload-Router-Pool (WRP) architecture, connecting signal-driven routing to a full-stack inference optimization framework and outlining future research directions across workload, router, and pool design.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.21354', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 11,
+  },
+  {
     id: 'visual-confused-deputy',
     type: 'paper',
     title: 'Visual Confused Deputy: Exploiting and Defending Perception Failures in Computer-Using Agents',
@@ -98,6 +114,63 @@ export const researchPapers = [
     ],
     featured: true,
     sortOrder: 56,
+  },
+  {
+    id: 'one-over-w-law',
+    type: 'paper',
+    title: 'The 1/W Law: An Analytical Study of Context-Length Routing Topology and GPU Generation Gains for LLM Inference Energy Efficiency',
+    authors: 'Huamin Chen, Xunzhuo Liu, Yuhan Liu, Junchen Jiang, Bowei He, Xue Liu',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We derive the 1/W law showing that tokens per watt roughly halve whenever the serving context window doubles, making context-length routing topology a larger energy-efficiency lever than a pure GPU generation upgrade.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.17280', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 57,
+  },
+  {
+    id: 'conflict-free-policy-languages',
+    type: 'paper',
+    title: 'Conflict-Free Policy Languages for Probabilistic ML Predicates: A Framework and Case Study with the Semantic Router DSL',
+    authors: 'Xunzhuo Liu, Hao Wu, Huamin Chen, Bowei He, Xue Liu',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We show how probabilistic ML predicates in policy languages can silently co-fire on the same query, and implement conflict detection plus a softmax-based prevention mechanism in the Semantic Router DSL.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.18174', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 58,
+  },
+  {
+    id: 'knowledge-access-beats-model-size',
+    type: 'paper',
+    title: 'Knowledge Access Beats Model Size: Memory Augmented Routing for Persistent AI Agents',
+    authors: 'Xunzhuo Liu, Bowei He, Xue Liu, Andy Luo, Haichen Zhang, Huamin Chen',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We show that conversational memory and retrieval-grounded routing let a lightweight 8B model recover most of a 235B model’s performance on persistent user-specific queries while cutting effective inference cost by 96%.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.23013', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 59,
+  },
+  {
+    id: 'fast-and-faithful-rag-verification',
+    type: 'paper',
+    categoryLabel: 'RAG VERIFICATION',
+    title: 'Fast and Faithful: Real-Time Verification for Long-Document Retrieval-Augmented Generation Systems',
+    authors: 'Xunzhuo Liu, Bowei He, Xue Liu, Haichen Zhang, Huamin Chen',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We present a real-time verification component for long-document RAG that processes contexts up to 32K tokens, balancing latency and grounding coverage so interactive systems can detect unsupported answers without falling back to truncated checks.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.23508', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 59.5,
   },
   {
     id: 'when-to-reason',
@@ -204,6 +277,38 @@ export const researchTalks = [
     sortOrder: 30,
   },
 ]
+
+const ZH_HANS_LOCALE = 'zh-Hans'
+
+const RESEARCH_CATEGORY_LABEL_ZH = {
+  'POSITION PAPER': '立场论文',
+  'VISION PAPER': '愿景论文',
+  'RAG VERIFICATION': 'RAG 验证',
+}
+
+const RESEARCH_VENUE_ZH = {
+  'arXiv Technical Report': 'arXiv 技术报告',
+  'Internet Engineering Task Force (IETF)': '互联网工程任务组（IETF）',
+}
+
+export function localizeResearchEntry(entry, locale) {
+  if (locale !== ZH_HANS_LOCALE)
+    return entry
+
+  return {
+    ...entry,
+    categoryLabel: entry.categoryLabel
+      ? (RESEARCH_CATEGORY_LABEL_ZH[entry.categoryLabel] ?? entry.categoryLabel)
+      : entry.categoryLabel,
+    venue: entry.venue
+      ? (RESEARCH_VENUE_ZH[entry.venue] ?? entry.venue)
+      : entry.venue,
+  }
+}
+
+export function localizeResearchEntries(entries, locale) {
+  return entries.map(entry => localizeResearchEntry(entry, locale))
+}
 
 export function sortResearchEntries(entries) {
   return [...entries].sort((a, b) => {

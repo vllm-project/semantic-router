@@ -49,6 +49,7 @@ func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{
 		"routing.modelCards[].loras",
 	)
 	assertReferenceConfigSignalCoverage(t, mustMapAt(t, routing, "signals"))
+	assertReferenceConfigProjectionCoverage(t, mustMapAt(t, routing, "projections"))
 	assertReferenceConfigDecisionCoverage(t, mustSliceAt(t, routing, "decisions"))
 }
 
@@ -68,11 +69,53 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "preferences"), reflect.TypeOf(PreferenceRule{}), "routing.signals.preferences")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "language"), reflect.TypeOf(LanguageRule{}), "routing.signals.language")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "context"), reflect.TypeOf(ContextRule{}), "routing.signals.context")
+	assertReferenceConfigStructureCoverage(t, mustSliceAt(t, signals, "structure"))
 	assertReferenceConfigComplexityCoverage(t, mustSliceAt(t, signals, "complexity"))
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "modality"), reflect.TypeOf(ModalityRule{}), "routing.signals.modality")
 	assertReferenceConfigRoleBindingCoverage(t, mustSliceAt(t, signals, "role_bindings"))
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "jailbreak"), reflect.TypeOf(JailbreakRule{}), "routing.signals.jailbreak")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "pii"), reflect.TypeOf(PIIRule{}), "routing.signals.pii")
+	assertReferenceConfigKBSignalCoverage(t, mustSliceAt(t, signals, "kb"))
+}
+
+func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]interface{}) {
+	assertMapCoversStructFields(t, projections, reflect.TypeOf(CanonicalProjections{}), "routing.projections")
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, projections, "partitions"),
+		reflect.TypeOf(ProjectionPartition{}),
+		"routing.projections.partitions",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, projections, "scores"),
+		reflect.TypeOf(ProjectionScore{}),
+		"routing.projections.scores",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectNestedSliceItems(t, mustSliceAt(t, projections, "scores"), "inputs", "routing.projections.scores"),
+		reflect.TypeOf(ProjectionScoreInput{}),
+		"routing.projections.scores[].inputs",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, projections, "mappings"),
+		reflect.TypeOf(ProjectionMapping{}),
+		"routing.projections.mappings",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, mustSliceAt(t, projections, "mappings"), "calibration", "routing.projections.mappings"),
+		reflect.TypeOf(ProjectionMappingCalibration{}),
+		"routing.projections.mappings[].calibration",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectNestedSliceItems(t, mustSliceAt(t, projections, "mappings"), "outputs", "routing.projections.mappings"),
+		reflect.TypeOf(ProjectionMappingOutput{}),
+		"routing.projections.mappings[].outputs",
+	)
 }
 
 func assertReferenceConfigComplexityCoverage(t testingT, complexity []interface{}) {
@@ -91,6 +134,33 @@ func assertReferenceConfigComplexityCoverage(t testingT, complexity []interface{
 	)
 }
 
+func assertReferenceConfigStructureCoverage(t testingT, structure []interface{}) {
+	assertSliceUnionCoversStructFields(t, structure, reflect.TypeOf(StructureRule{}), "routing.signals.structure")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, structure, "feature", "routing.signals.structure"),
+		reflect.TypeOf(StructureFeature{}),
+		"routing.signals.structure[].feature",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, structure, "predicate", "routing.signals.structure"),
+		reflect.TypeOf(NumericPredicate{}),
+		"routing.signals.structure[].predicate",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(
+			t,
+			collectChildMapsFromSlice(t, structure, "feature", "routing.signals.structure"),
+			"source",
+			"routing.signals.structure[].feature",
+		),
+		reflect.TypeOf(StructureSource{}),
+		"routing.signals.structure[].feature.source",
+	)
+}
+
 func assertReferenceConfigRoleBindingCoverage(t testingT, roleBindings []interface{}) {
 	assertSliceUnionCoversStructFields(t, roleBindings, reflect.TypeOf(RoleBinding{}), "routing.signals.role_bindings")
 	assertSliceUnionCoversStructFields(
@@ -98,6 +168,16 @@ func assertReferenceConfigRoleBindingCoverage(t testingT, roleBindings []interfa
 		collectNestedSliceItems(t, roleBindings, "subjects", "routing.signals.role_bindings"),
 		reflect.TypeOf(Subject{}),
 		"routing.signals.role_bindings[].subjects",
+	)
+}
+
+func assertReferenceConfigKBSignalCoverage(t testingT, kb []interface{}) {
+	assertSliceUnionCoversStructFields(t, kb, reflect.TypeOf(KBSignalRule{}), "routing.signals.kb")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, kb, "target", "routing.signals.kb"),
+		reflect.TypeOf(KBSignalTarget{}),
+		"routing.signals.kb[].target",
 	)
 }
 

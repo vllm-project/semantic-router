@@ -182,6 +182,16 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(
 		logging.Infof("Model name rewriting: %s -> %s in request body", model, upstreamModel)
 	}
 
+	// RAG/memory injection modifies ctx.OriginalRequestBody. Without a body
+	// mutation Envoy forwards the original (pre-injection) body, silently
+	// dropping the personalized context. Force the mutation so the modified
+	// body actually reaches the upstream model.
+	if !needsBodyMutation && (ctx.RAGRetrievedContext != "" || ctx.MemoryContext != "") {
+		logging.Infof("Forcing body mutation: personalized context injected (RAG=%d, memory=%d chars) for specified model %s",
+			len(ctx.RAGRetrievedContext), len(ctx.MemoryContext), model)
+		needsBodyMutation = true
+	}
+
 	pathMutatesBody, errorResponse := r.applyRoutingPathHeader(state, endpointName, ctx, true)
 	if errorResponse != nil {
 		return errorResponse

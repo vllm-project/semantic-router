@@ -69,6 +69,7 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"chat-completions-request-authz",
 		"ratelimit-limitor",
+		"authz-rbac-routing",
 	}
 }
 

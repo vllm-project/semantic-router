@@ -1,0 +1,118 @@
+@import '../../define.scss';
+
+.packing-wrapper {
+  display: flex;
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.packing {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.packing-svg {
+  width: 100%;
+  height: 100%;
+  border-radius: $border-radius;
+}
+
+:global(.packing-svg) {
+  font-family: 'Lato';
+}
+
+:global(.packing-svg rect.back-rect) {
+  stroke: none;
+  fill: hsla(0, 0%, 100%, 0);
+}
+
+:global(.packing-svg) {
+  :global(text.phrase-label) {
+    text-anchor: middle;
+    pointer-events: none;
+  }
+
+  :global(tspan) {
+    dominant-baseline: middle;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+:global(.packing-svg text.phrase-label-1) {
+  fill: $gray-900;
+}
+
+:global(.packing-svg text.phrase-label-2) {
+  fill: white;
+}
+
+:global(.packing-svg .circle-group) {
+  --base-stroke: 1px;
+}
+
+:global(.packing-svg .circle-group.no-pointer) {
+  pointer-events: none;
+}
+
+:global(.packing-svg .circle-group circle) {
+  stroke-width: 0px;
+  stroke: $teal-700;
+  transition: stroke 100ms linear, stroke-width 100ms linear;
+}
+
+:global(.packing-svg .circle-group-1 circle) {
+  fill: $teal-200;
+}
+
+:global(.packing-svg .circle-group-1 circle.hovered) {
+  stroke: $teal-600;
+  stroke-width: calc(var(--base-stroke) * 2);
+}
+
+:global(.packing-svg .circle-group-2 circle) {
+  fill: $teal-600;
+  stroke: $teal-600;
+}
+
+:global(.packing-svg .circle-group-2 circle.hovered) {
+  stroke-width: calc(var(--base-stroke) * 2);
+  stroke: $teal-600;
+}
+
+:global(.packing-svg .circle-group-3 circle) {
+  fill: $teal-900;
+  stroke: $teal-900;
+}
+
+:global(.packing-svg .circle-group-3 circle.hovered) {
+  stroke-width: calc(var(--base-stroke) * 2);
+  stroke: $teal-900;
+}
+
+:global(.packing-tooltip) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+:global(.packing-tooltip .top) {
+  font-weight: 600;
+}
+
+:global(.packing-tooltip .top .parent-label) {
+  color: $teal-300;
+}
+
+:global(.packing-tooltip .splitter) {
+  margin: 3px 0 2px 0;
+  border-bottom: 1px solid hsla(0, 100%, 100%, 0.3);
+  width: 100%;
+}
+
+:global(.packing-tooltip .bottom) {
+}

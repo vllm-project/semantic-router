@@ -1,11 +1,20 @@
-.PHONY: help build install test clean docker-build docker-run docker-stop dev-setup dev-serve dev-test rebuild-and-test config-router config-envoy
+.PHONY: help build install test clean docker-build docker-build-router docker-build-envoy docker-build-dashboard docker-run docker-stop dev-setup dev-serve dev-test rebuild-and-test config-router config-envoy
 
 # Configuration
 IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/vllm-sr
+ROUTER_IMAGE_NAME ?= $(IMAGE_NAME)
+ENVOY_IMAGE ?= envoyproxy/envoy:v1.34-latest
+DASHBOARD_IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/dashboard
 IMAGE_TAG ?= latest
 FULL_IMAGE = $(IMAGE_NAME):$(IMAGE_TAG)
+FULL_ROUTER_IMAGE = $(ROUTER_IMAGE_NAME):$(IMAGE_TAG)
+FULL_ENVOY_IMAGE = $(ENVOY_IMAGE)
+FULL_DASHBOARD_IMAGE = $(DASHBOARD_IMAGE_NAME):$(IMAGE_TAG)
+VLLM_SR_TOPOLOGY ?= split
+VLLM_SR_TOPOLOGY_NORMALIZED = $(shell echo "$(VLLM_SR_TOPOLOGY)" | tr '[:upper:]' '[:lower:]')
 CONFIG_FILE ?= config.yaml
 OUTPUT_DIR ?= .vllm-sr
+RUNTIME_CONTAINER ?= vllm-sr-router-container
 PLATFORMS ?= linux/amd64,linux/arm64
 BUILDX_BUILDER ?= vllm-sr-builder
 
@@ -19,7 +28,10 @@ help:
 	@echo "  make rebuild-and-test - Full rebuild and test workflow"
 	@echo ""
 	@echo "Build & Install:"
-	@echo "  make build        - Build Docker image ($(FULL_IMAGE))"
+	@echo "  make build        - Build Docker images ($(FULL_IMAGE), $(FULL_ROUTER_IMAGE), $(FULL_ENVOY_IMAGE), $(FULL_DASHBOARD_IMAGE))"
+	@echo "  make docker-build-router - Build router runtime image ($(FULL_ROUTER_IMAGE))"
+	@echo "  make docker-build-envoy - Build Envoy runtime image ($(FULL_ENVOY_IMAGE))"
+	@echo "  make docker-build-dashboard - Build dashboard runtime image ($(FULL_DASHBOARD_IMAGE))"
 	@echo "  make install      - Install CLI in development mode"
 	@echo "  make dev-setup    - Complete setup (build + install)"
 	@echo ""
@@ -30,6 +42,9 @@ help:
 	@echo ""
 	@echo "Docker Operations:"
 	@echo "  make docker-build       - Build Docker image (local)"
+	@echo "  make docker-build-router - Build router runtime image (local)"
+	@echo "  make docker-build-envoy - Build Envoy runtime image (local)"
+	@echo "  make docker-build-dashboard - Build dashboard runtime image (local)"
 	@echo "  make docker-buildx      - Build multi-platform image with buildx"
 	@echo "  make docker-buildx-push - Build and push multi-platform image"
 	@echo "  make docker-run         - Run container with $(CONFIG_FILE)"
@@ -46,14 +61,29 @@ help:
 	@echo ""
 	@echo "Variables:"
 	@echo "  IMAGE_NAME=$(IMAGE_NAME)"
+	@echo "  ROUTER_IMAGE_NAME=$(ROUTER_IMAGE_NAME)"
+	@echo "  ENVOY_IMAGE=$(ENVOY_IMAGE)"
+	@echo "  DASHBOARD_IMAGE_NAME=$(DASHBOARD_IMAGE_NAME)"
+	@echo "  VLLM_SR_TOPOLOGY=$(VLLM_SR_TOPOLOGY_NORMALIZED)"
 	@echo "  IMAGE_TAG=$(IMAGE_TAG)"
 	@echo "  CONFIG_FILE=$(CONFIG_FILE)"
 	@echo "  OUTPUT_DIR=$(OUTPUT_DIR)"
+	@echo "  RUNTIME_CONTAINER=$(RUNTIME_CONTAINER)"
 	@echo "  PLATFORMS=$(PLATFORMS)"
 	@echo ""
 
 # Quick development setup
-dev-setup: docker-build install
+ifeq ($(VLLM_SR_TOPOLOGY_NORMALIZED),split)
+DEV_SETUP_DEPS := docker-build docker-build-envoy docker-build-dashboard
+BUILD_DEPS := docker-build docker-build-envoy docker-build-dashboard
+DOCKER_RUN_DEPS := docker-build docker-build-envoy docker-build-dashboard
+else
+DEV_SETUP_DEPS := docker-build
+BUILD_DEPS := docker-build
+DOCKER_RUN_DEPS := docker-build
+endif
+
+dev-setup: $(DEV_SETUP_DEPS) install
 	@echo ""
 	@echo "Development setup complete!"
 	@echo ""
@@ -64,19 +94,33 @@ dev-setup: docker-build install
 
 # Development serve - builds image if needed, then starts service
 dev-serve:
-	@echo "Checking Docker image..."
-	@if ! docker images -q $(FULL_IMAGE) 2>/dev/null | grep -q .; then \
-		echo "Docker image not found. Building..."; \
-		$(MAKE) docker-build; \
+	@echo "Checking Docker runtime images..."
+	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+		if ! docker images -q $(FULL_IMAGE) 2>/dev/null | grep -q . || ! docker images -q $(FULL_ENVOY_IMAGE) 2>/dev/null | grep -q . || ! docker images -q $(FULL_DASHBOARD_IMAGE) 2>/dev/null | grep -q .; then \
+			echo "One or more split runtime images are missing. Preparing..."; \
+			$(MAKE) docker-build docker-build-envoy docker-build-dashboard; \
+		else \
+			echo "Docker images exist: $(FULL_IMAGE), $(FULL_ENVOY_IMAGE), $(FULL_DASHBOARD_IMAGE)"; \
+		fi; \
 	else \
-		echo "Docker image exists: $(FULL_IMAGE)"; \
+		if ! docker images -q $(FULL_IMAGE) 2>/dev/null | grep -q .; then \
+			echo "Legacy runtime image not found. Building..."; \
+			$(MAKE) docker-build; \
+		else \
+			echo "Docker image exists: $(FULL_IMAGE)"; \
+		fi; \
 	fi
 	@echo ""
 	@echo "Starting vLLM Semantic Router service..."
 	@echo "Using config: $(CONFIG_FILE)"
-	@echo "Docker image: $(FULL_IMAGE)"
+	@echo "Topology: $(VLLM_SR_TOPOLOGY_NORMALIZED)"
+	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+		echo "Router image: $(FULL_ROUTER_IMAGE)"; \
+		echo "Envoy image: $(FULL_ENVOY_IMAGE)"; \
+		echo "Dashboard image: $(FULL_DASHBOARD_IMAGE)"; \
+	fi
 	@echo ""
-	python -m cli.main serve --config $(CONFIG_FILE) --image $(FULL_IMAGE)
+	VLLM_SR_IMAGE=$(FULL_IMAGE) VLLM_SR_ROUTER_IMAGE=$(FULL_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(FULL_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(FULL_DASHBOARD_IMAGE) VLLM_SR_TOPOLOGY=$(if $(filter legacy,$(VLLM_SR_TOPOLOGY_NORMALIZED)),legacy,) python -m cli.main serve --config $(CONFIG_FILE)
 
 # Development test - validate config and render router/envoy outputs
 dev-test: install
@@ -89,7 +133,7 @@ dev-test: install
 	@echo "  Router and Envoy config render path succeeded for: $(CONFIG_FILE)"
 	@echo ""
 
-build: docker-build
+build: $(BUILD_DEPS)
 
 docker-build:
 	@echo "Building vLLM Semantic Router Docker image (local platform)..."
@@ -99,6 +143,35 @@ docker-build:
 	cd ../.. && docker build -t $(FULL_IMAGE) -f src/vllm-sr/Dockerfile .
 	@echo ""
 	@echo "Docker image built: $(FULL_IMAGE)"
+	@echo ""
+
+docker-build-router:
+	@echo "Building vLLM Semantic Router router Docker image (local platform)..."
+	@echo "Image: $(FULL_ROUTER_IMAGE)"
+	@echo "This may take a few minutes..."
+	@echo ""
+	cd ../.. && docker build -t $(FULL_ROUTER_IMAGE) -f src/vllm-sr/Dockerfile .
+	@echo ""
+	@echo "Docker image built: $(FULL_ROUTER_IMAGE)"
+	@echo ""
+
+docker-build-envoy:
+	@echo "Ensuring official Envoy image is available locally..."
+	@echo "Image: $(FULL_ENVOY_IMAGE)"
+	@echo ""
+	@docker image inspect $(FULL_ENVOY_IMAGE) >/dev/null 2>&1 || docker pull $(FULL_ENVOY_IMAGE)
+	@echo ""
+	@echo "Docker image available: $(FULL_ENVOY_IMAGE)"
+	@echo ""
+
+docker-build-dashboard:
+	@echo "Building vLLM Semantic Router dashboard Docker image (local platform)..."
+	@echo "Image: $(FULL_DASHBOARD_IMAGE)"
+	@echo "This may take a few minutes..."
+	@echo ""
+	cd ../.. && docker build -t $(FULL_DASHBOARD_IMAGE) -f dashboard/backend/Dockerfile .
+	@echo ""
+	@echo "Docker image built: $(FULL_DASHBOARD_IMAGE)"
 	@echo ""
 
 # Setup buildx builder
@@ -167,23 +240,28 @@ config-envoy: install
 	python -m cli.main config envoy --config $(CONFIG_FILE)
 
 # Docker operations
-docker-run: docker-build
+docker-run: $(DOCKER_RUN_DEPS)
 	@echo "Starting vLLM Semantic Router container..."
 	@echo "Config: $(CONFIG_FILE)"
-	@echo "Image: $(FULL_IMAGE)"
-	python -m cli.main serve --config $(CONFIG_FILE) --image $(FULL_IMAGE)
+	@echo "Topology: $(VLLM_SR_TOPOLOGY_NORMALIZED)"
+	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+		echo "Router image: $(FULL_ROUTER_IMAGE)"; \
+		echo "Envoy image: $(FULL_ENVOY_IMAGE)"; \
+		echo "Dashboard image: $(FULL_DASHBOARD_IMAGE)"; \
+	fi
+	VLLM_SR_IMAGE=$(FULL_IMAGE) VLLM_SR_ROUTER_IMAGE=$(FULL_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(FULL_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(FULL_DASHBOARD_IMAGE) VLLM_SR_TOPOLOGY=$(if $(filter legacy,$(VLLM_SR_TOPOLOGY_NORMALIZED)),legacy,) python -m cli.main serve --config $(CONFIG_FILE)
 
 docker-stop:
 	@echo "Stopping vLLM Semantic Router..."
 	python -m cli.main stop
 
 docker-logs:
-	@echo "Showing container logs..."
-	docker logs -f vllm-sr-container
+	@echo "Showing router logs..."
+	python -m cli.main logs router --follow
 
 docker-shell:
-	@echo "Opening shell in container..."
-	docker exec -it vllm-sr-container /bin/bash
+	@echo "Opening shell in $(RUNTIME_CONTAINER)..."
+	docker exec -it $(RUNTIME_CONTAINER) /bin/bash
 
 test:
 	@echo "Running tests..."
@@ -206,6 +284,22 @@ check-image:
 		echo "  Run: make docker-build"; \
 		exit 1; \
 	fi
+	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+		if docker images -q $(FULL_ENVOY_IMAGE) 2>/dev/null | grep -q .; then \
+			echo "Envoy image exists: $(FULL_ENVOY_IMAGE)"; \
+		else \
+			echo "✗ Envoy image not found: $(FULL_ENVOY_IMAGE)"; \
+			echo "  Run: make docker-build-envoy"; \
+			exit 1; \
+		fi; \
+		if docker images -q $(FULL_DASHBOARD_IMAGE) 2>/dev/null | grep -q .; then \
+			echo "Dashboard image exists: $(FULL_DASHBOARD_IMAGE)"; \
+		else \
+			echo "✗ Dashboard image not found: $(FULL_DASHBOARD_IMAGE)"; \
+			echo "  Run: make docker-build-dashboard"; \
+			exit 1; \
+		fi; \
+	fi
 
 # Rebuild and test - Full workflow from rebuild-and-test.sh
 rebuild-and-test: install
@@ -215,7 +309,7 @@ rebuild-and-test: install
 	@echo ""
 	@echo "This will:"
 	@echo "  1. Clean up old containers"
-	@echo "  2. Rebuild Docker image with all dependencies"
+	@echo "  2. Rebuild Docker images with all dependencies"
 	@echo "  3. Start the service"
 	@echo "  4. Verify multi-listener support"
 	@echo ""
@@ -227,15 +321,23 @@ rebuild-and-test: install
 	@read -p "Press Enter to continue or Ctrl+C to cancel..." dummy
 	@echo ""
 	@echo "1. Cleaning up old containers..."
-	@docker rm -f vllm-sr-container 2>/dev/null || echo "  No container to remove"
+	@docker rm -f vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-prometheus vllm-sr-grafana vllm-sr-jaeger 2>/dev/null || echo "  No containers to remove"
 	@echo ""
-	@echo "2. Rebuilding Docker image..."
+	@echo "2. Rebuilding Docker images..."
 	@echo "  Building from: $$(cd ../.. && pwd)"
 	@echo "  Note: Use 'make docker-buildx' for multi-platform builds"
 	@echo ""
-	@$(MAKE) docker-build
+	@$(MAKE) docker-build docker-build-envoy docker-build-dashboard
 	@echo ""
-	@echo "3. Verifying dependencies in image..."
+	@echo "3. Verifying dependencies in images..."
+	@docker run --rm --entrypoint /bin/sh $(FULL_ROUTER_IMAGE) -c " \
+		echo '  Checking router binary...'; \
+		test -x /usr/local/bin/router && echo '    router binary present'; \
+		echo '  Checking setup helper yaml import...'; \
+		python3 -c 'import yaml; print(\"    yaml import ok\")'; \
+		echo '  Checking curl...'; \
+		curl --version | head -1 | sed 's/^/    /'; \
+	"
 	@docker run --rm $(FULL_IMAGE) /bin/sh -c " \
 		echo '  Checking pydantic...'; \
 		python -c 'import pydantic; print(f\"    pydantic {pydantic.__version__}\")'; \
@@ -243,6 +345,31 @@ rebuild-and-test: install
 		python -c 'import huggingface_hub; print(f\"    huggingface_hub {huggingface_hub.__version__}\")'; \
 		echo '  Checking huggingface-cli...'; \
 		huggingface-cli --version | sed 's/^/    /'; \
+	"
+	@docker run --rm --entrypoint /bin/sh $(FULL_ENVOY_IMAGE) -c " \
+		echo '  Checking envoy binary...'; \
+		envoy --version | head -1 | sed 's/^/    /'; \
+	"
+	@docker run --rm --entrypoint /bin/sh $(FULL_DASHBOARD_IMAGE) -c " \
+		echo '  Checking dashboard backend...'; \
+		/usr/local/bin/dashboard-backend -help >/dev/null && echo '    dashboard backend present'; \
+		echo '  Checking auth bootstrap endpoint...'; \
+		mkdir -p /tmp/static /tmp/data; \
+		printf '<!doctype html><title>ok</title>' > /tmp/static/index.html; \
+		printf 'version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n' > /tmp/config.yaml; \
+		/usr/local/bin/dashboard-backend -port=8700 -static=/tmp/static -config=/tmp/config.yaml -auth-db /tmp/data/auth.db -auth-jwt-secret test-secret >/tmp/dashboard.log 2>&1 & \
+		pid=\$$!; \
+		for i in 1 2 3 4 5; do \
+			if curl -fsS http://127.0.0.1:8700/api/auth/bootstrap/can-register >/tmp/auth.json 2>/dev/null; then break; fi; \
+			sleep 1; \
+		done; \
+		grep -q '\"canRegister\":true' /tmp/auth.json && echo '    auth bootstrap endpoint ok' || { cat /tmp/dashboard.log; exit 1; }; \
+		kill \$$pid >/dev/null 2>&1 || true; \
+		wait \$$pid >/dev/null 2>&1 || true; \
+		echo '  Checking Docker CLI...'; \
+		docker --version | sed 's/^/    /'; \
+		echo '  Checking runtime helper import...'; \
+		python3 -c 'import cli.commands.runtime_support; print(\"    runtime helper import ok\")'; \
 	"
 	@echo ""
 	@echo "4. Checking config.yaml listeners..."
@@ -255,17 +382,20 @@ with open('$(CONFIG_FILE)', 'r') as f: \
     [print(f\"    - {l.get('name', 'unknown')}: port {l.get('port', 'unknown')}\") for l in listeners]; \
 	"
 	@echo ""
-	@echo "5. Starting service with local image..."
-	@python -m cli.main serve --config $(CONFIG_FILE) --image $(FULL_IMAGE) --image-pull-policy never &
+	@echo "5. Starting service with local images..."
+	@VLLM_SR_IMAGE=$(FULL_IMAGE) VLLM_SR_ROUTER_IMAGE=$(FULL_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(FULL_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(FULL_DASHBOARD_IMAGE) python -m cli.main serve --config $(CONFIG_FILE) --image-pull-policy never &
 	@echo ""
 	@echo "6. Waiting for services to start (30 seconds)..."
 	@sleep 30
 	@echo ""
-	@echo "7. Container status:"
-	@docker ps --filter name=vllm-sr-container --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+	@echo "7. Service status:"
+	@python -m cli.main status || true
 	@echo ""
-	@echo "8. Recent logs:"
-	@docker logs vllm-sr-container --tail 100
+	@echo "8. Managed containers:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep 'vllm-sr-' || true
+	@echo ""
+	@echo "9. Recent router logs:"
+	@python -m cli.main logs router || true
 	@echo ""
 	@echo "=========================================="
 	@echo "Next Steps"
@@ -276,7 +406,10 @@ with open('$(CONFIG_FILE)', 'r') as f: \
 	@echo "  curl http://localhost:8080/healthz"
 	@echo ""
 	@echo "View logs:"
-	@echo "  docker logs -f vllm-sr-container"
+	@echo "  python -m cli.main logs router --follow"
+	@echo ""
+	@echo "Open shell:"
+	@echo "  make docker-shell RUNTIME_CONTAINER=vllm-sr-router-container"
 	@echo ""
 	@echo "Stop service:"
 	@echo "  make docker-stop"

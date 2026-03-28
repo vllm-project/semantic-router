@@ -5,6 +5,12 @@ from cli import __version__
 # Docker image configuration
 VLLM_SR_DOCKER_IMAGE_DEFAULT = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
 VLLM_SR_DOCKER_IMAGE_ROCM = "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest"
+VLLM_SR_ROUTER_DOCKER_IMAGE_DEFAULT = VLLM_SR_DOCKER_IMAGE_DEFAULT
+VLLM_SR_ROUTER_DOCKER_IMAGE_ROCM = VLLM_SR_DOCKER_IMAGE_ROCM
+VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT = "envoyproxy/envoy:v1.34-latest"
+VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT = (
+    "ghcr.io/vllm-project/semantic-router/dashboard:latest"
+)
 VLLM_SR_DOCKER_IMAGE_DEV = "vllm-sr:dev"
 VLLM_SR_DOCKER_IMAGE_RELEASE = f"vllm-sr:{__version__}"
 VLLM_SR_SIM_DOCKER_IMAGE_DEFAULT = (
@@ -14,6 +20,10 @@ VLLM_SR_DOCKER_NAME = "vllm-sr-container"
 VLLM_SR_SIM_DOCKER_NAME = "vllm-sr-sim-container"
 DEFAULT_STACK_NAME = "vllm-sr"
 PLATFORM_AMD = "amd"
+RUNTIME_TOPOLOGY_ENV = "VLLM_SR_TOPOLOGY"
+RUNTIME_TOPOLOGY_LEGACY = "legacy"
+RUNTIME_TOPOLOGY_SPLIT = "split"
+DEFAULT_RUNTIME_TOPOLOGY = RUNTIME_TOPOLOGY_SPLIT
 
 # Image pull policies
 IMAGE_PULL_POLICY_ALWAYS = "always"

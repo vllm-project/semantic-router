@@ -40,12 +40,8 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
 ## Must Read
 
 - [AGENTS.md](../../../../AGENTS.md)
-- [docs/agent/README.md](../../../../docs/agent/README.md)
-- [docs/agent/governance.md](../../../../docs/agent/governance.md)
 - [CONTRIBUTING.md](../../../../CONTRIBUTING.md)
 - [.github/PULL_REQUEST_TEMPLATE.md](../../../../.github/PULL_REQUEST_TEMPLATE.md)
-- [.github/ISSUE_TEMPLATE/001_feature_request.yaml](../../../../.github/ISSUE_TEMPLATE/001_feature_request.yaml)
-- [.github/ISSUE_TEMPLATE/002_bug_report.yaml](../../../../.github/ISSUE_TEMPLATE/002_bug_report.yaml)
 - [.prowlabels.yaml](../../../../.prowlabels.yaml)
 
 ## Workflow
@@ -68,6 +64,11 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
    - PR titles must use the classified prefixes from `.github/PULL_REQUEST_TEMPLATE.md`, adding multiple prefixes when the change spans categories.
    - Commits intended for PRs must use `git commit -s`.
    - Commit messages do not need to repeat the PR title prefixes unless the maintainer explicitly wants them.
+
+## Gotchas
+
+- Do not draft labels, validation summaries, or scope from memory; inspect the current templates, labels, and repo state first.
+- If an issue or PR exposes real architecture debt or multi-loop execution needs, put that state in the indexed debt or plan docs instead of hiding it only in the ticket text.
 
 ## Standard Commands
 

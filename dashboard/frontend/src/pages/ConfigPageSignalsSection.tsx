@@ -21,6 +21,7 @@ import type {
   PreferenceSignal,
   RoleBindingSignal,
   SignalType,
+  StructureSignal,
   Subject,
   UserFeedbackSignal,
 } from './configPageSupport'
@@ -51,6 +52,7 @@ type UnifiedSignalData = Partial<
   UserFeedbackSignal &
   LanguageSignal &
   ContextSignal &
+  StructureSignal &
   ComplexitySignal &
   ModalitySignal &
   RoleBindingSignal &
@@ -91,6 +93,7 @@ export default function ConfigPageSignalsSection({
     preferences: config?.preference_rules,
     language: config?.language_rules,
     context: config?.context_rules,
+    structure: config?.structure_rules,
     complexity: config?.complexity_rules,
     modality: undefined,
     role_bindings: undefined,
@@ -174,6 +177,15 @@ export default function ConfigPageSignalsSection({
       type: 'Context',
       summary: `${ctx.min_tokens} to ${ctx.max_tokens} tokens`,
       rawData: ctx
+    })
+  })
+
+  effectiveSignals?.structure?.forEach(structure => {
+    allSignals.push({
+      name: structure.name,
+      type: 'Structure',
+      summary: `${structure.feature?.type || 'unknown'} from ${structure.feature?.source?.type || 'unknown'}`,
+      rawData: structure,
     })
   })
 
@@ -393,6 +405,17 @@ export default function ConfigPageSignalsSection({
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
         ]
       })
+    } else if (signal.type === 'Structure') {
+      sections.push({
+        title: 'Structure Signal',
+        fields: [
+          { label: 'Feature Type', value: signal.rawData.feature?.type || 'N/A' },
+          { label: 'Source Type', value: signal.rawData.feature?.source?.type || 'N/A' },
+          { label: 'Feature', value: JSON.stringify(signal.rawData.feature || {}, null, 2), fullWidth: true },
+          { label: 'Predicate', value: signal.rawData.predicate ? JSON.stringify(signal.rawData.predicate, null, 2) : 'None', fullWidth: true },
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+        ]
+      })
     } else if (signal.type === 'Complexity') {
       const fields: Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> = [
         { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true }
@@ -532,6 +555,16 @@ export default function ConfigPageSignalsSection({
       preference_threshold: undefined,
       min_tokens: '0',
       max_tokens: '8K',
+      structure_feature: JSON.stringify({
+        type: 'count',
+        source: {
+          type: 'regex',
+          pattern: '[?？]'
+        }
+      }, null, 2),
+      structure_predicate: JSON.stringify({
+        gte: 3
+      }, null, 2),
       complexity_threshold: 0.1,
       role: '',
       subjects: '',
@@ -564,6 +597,8 @@ export default function ConfigPageSignalsSection({
       preference_threshold: signal.rawData.threshold,
       min_tokens: signal.rawData.min_tokens || '0',
       max_tokens: signal.rawData.max_tokens || '8K',
+      structure_feature: signal.type === 'Structure' ? JSON.stringify(signal.rawData.feature || {}, null, 2) : defaultForm.structure_feature,
+      structure_predicate: signal.type === 'Structure' && signal.rawData.predicate ? JSON.stringify(signal.rawData.predicate, null, 2) : '',
       complexity_threshold: signal.rawData.threshold ?? 0.1,
       role: signal.type === 'Authz' ? signal.rawData.role || '' : '',
       subjects: signal.type === 'Authz'
@@ -592,7 +627,7 @@ export default function ConfigPageSignalsSection({
         name: 'type',
         label: 'Type',
         type: 'select',
-        options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Context', 'Complexity', 'Modality', 'Authz', 'Jailbreak', 'PII'],
+        options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Context', 'Structure', 'Complexity', 'Modality', 'Authz', 'Jailbreak', 'PII'],
         required: true,
         description: 'Fields are validated based on the selected type.'
       },
@@ -696,6 +731,22 @@ export default function ConfigPageSignalsSection({
         placeholder: 'e.g., 8K, 1024K',
         description: 'Maximum token count (supports K/M suffixes)',
         shouldHide: conditionallyHideFieldExceptType('Context')
+      },
+      {
+        name: 'structure_feature',
+        label: 'Feature (structure only)',
+        type: 'textarea',
+        placeholder: '{\n  "type": "count",\n  "source": { "type": "regex", "pattern": "[?？]" }\n}',
+        description: 'JSON object for structure.feature',
+        shouldHide: conditionallyHideFieldExceptType('Structure')
+      },
+      {
+        name: 'structure_predicate',
+        label: 'Predicate (structure only)',
+        type: 'textarea',
+        placeholder: '{\n  "gte": 3\n}',
+        description: 'Optional JSON object for structure.predicate',
+        shouldHide: conditionallyHideFieldExceptType('Structure')
       },
       {
         name: 'complexity_threshold',
@@ -955,6 +1006,40 @@ export default function ConfigPageSignalsSection({
               min_tokens,
               max_tokens,
               description: formData.description || undefined
+            }
+          ]
+          break
+        }
+        case 'Structure': {
+          const featureText = (formData.structure_feature || '').trim()
+          if (!featureText) {
+            throw new Error('structure.feature is required.')
+          }
+
+          let feature
+          try {
+            feature = JSON.parse(featureText)
+          } catch (error) {
+            throw new Error(`Invalid structure.feature JSON: ${String(error)}`)
+          }
+
+          let predicate
+          const predicateText = (formData.structure_predicate || '').trim()
+          if (predicateText) {
+            try {
+              predicate = JSON.parse(predicateText)
+            } catch (error) {
+              throw new Error(`Invalid structure.predicate JSON: ${String(error)}`)
+            }
+          }
+
+          newConfig.signals.structure = [
+            ...(newConfig.signals.structure || []),
+            {
+              name,
+              description: formData.description || undefined,
+              feature,
+              ...(predicate ? { predicate } : {})
             }
           ]
           break

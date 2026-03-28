@@ -277,85 +277,87 @@ export default function ConfigPageRouterConfigSection({
         </div>
 
         {editorMode === 'visual' ? (
-          <div className={pageStyles.sectionTableBlock}>
-            <div className={styles.blockHeader}>
-              <div>
-                <h2 className={styles.blockTitle}>Runtime Global Sections</h2>
-                <p className={styles.blockDescription}>
-                  Cards mirror the layered canonical `global` block. Each editor writes back to the matching `global.router`, `global.services`, `global.stores`, `global.integrations`, or `global.model_catalog` path.
-                </p>
-              </div>
-            </div>
-
-            {sectionGroups.map((group) => (
-              <section key={group.layer} className={styles.sectionGroup}>
-                <div className={styles.groupHeader}>
-                  <div>
-                    <h3 className={styles.groupTitle}>{group.meta.title}</h3>
-                    <p className={styles.groupDescription}>{group.meta.description}</p>
-                  </div>
+          <>
+            <div className={pageStyles.sectionTableBlock}>
+              <div className={styles.blockHeader}>
+                <div>
+                  <h2 className={styles.blockTitle}>Runtime Global Sections</h2>
+                  <p className={styles.blockDescription}>
+                    Cards mirror the layered canonical `global` block. Each editor writes back to the matching `global.router`, `global.services`, `global.stores`, `global.integrations`, or `global.model_catalog` path.
+                  </p>
                 </div>
-                <div className={styles.sectionGrid}>
-                  {group.cards.map((card) => (
-                    <article key={card.key} className={styles.systemCard}>
-                      <div className={styles.cardHeader}>
-                        <div className={styles.cardCopy}>
-                          <span className={styles.cardEyebrow}>{card.eyebrow}</span>
-                          <h3 className={styles.cardTitle}>{card.title}</h3>
-                          <p className={styles.cardDescription}>{card.description}</p>
-                        </div>
-                        <div className={styles.cardBadges}>
-                          <span className={`${styles.badge} ${badgeClassName({ label: card.sourceLabel, tone: card.sourceTone })}`}>
-                            {card.sourceLabel}
-                          </span>
-                          <span className={`${styles.badge} ${badgeClassName(card.status)}`}>
-                            {card.status.label}
-                          </span>
-                        </div>
-                      </div>
+              </div>
 
-                      <div className={styles.summaryList}>
-                        {card.summary.map((item) => (
-                          <div key={`${card.key}-${item.label}`} className={styles.summaryRow}>
-                            <span className={styles.summaryLabel}>{item.label}</span>
-                            <span className={styles.summaryValue} title={item.value}>
-                              {item.value}
+              {sectionGroups.map((group) => (
+                <section key={group.layer} className={styles.sectionGroup}>
+                  <div className={styles.groupHeader}>
+                    <div>
+                      <h3 className={styles.groupTitle}>{group.meta.title}</h3>
+                      <p className={styles.groupDescription}>{group.meta.description}</p>
+                    </div>
+                  </div>
+                  <div className={styles.sectionGrid}>
+                    {group.cards.map((card) => (
+                      <article key={card.key} className={styles.systemCard}>
+                        <div className={styles.cardHeader}>
+                          <div className={styles.cardCopy}>
+                            <span className={styles.cardEyebrow}>{card.eyebrow}</span>
+                            <h3 className={styles.cardTitle}>{card.title}</h3>
+                            <p className={styles.cardDescription}>{card.description}</p>
+                          </div>
+                          <div className={styles.cardBadges}>
+                            <span className={`${styles.badge} ${badgeClassName({ label: card.sourceLabel, tone: card.sourceTone })}`}>
+                              {card.sourceLabel}
+                            </span>
+                            <span className={`${styles.badge} ${badgeClassName(card.status)}`}>
+                              {card.status.label}
                             </span>
                           </div>
-                        ))}
-                      </div>
+                        </div>
 
-                      {card.badges.length > 0 && (
-                        <div className={styles.tagRow}>
-                          {card.badges.map((badge) => (
-                            <span key={`${card.key}-${badge.label}`} className={`${styles.badge} ${badgeClassName(badge)}`}>
-                              {badge.label}
-                            </span>
+                        <div className={styles.summaryList}>
+                          {card.summary.map((item) => (
+                            <div key={`${card.key}-${item.label}`} className={styles.summaryRow}>
+                              <span className={styles.summaryLabel}>{item.label}</span>
+                              <span className={styles.summaryValue} title={item.value}>
+                                {item.value}
+                              </span>
+                            </div>
                           ))}
                         </div>
-                      )}
 
-                      <div className={styles.cardFooter}>
-                        <code className={styles.sectionKey}>{`global.${card.path.join('.')}`}</code>
-                        {!isReadonly ? (
-                          <div className={styles.cardActions}>
-                            <button
-                              className={pageStyles.sectionEditButton}
-                              onClick={() => {
-                                handleEditSection(card)
-                              }}
-                            >
-                              {card.data !== undefined ? 'Edit Section' : 'Add Section'}
-                            </button>
+                        {card.badges.length > 0 && (
+                          <div className={styles.tagRow}>
+                            {card.badges.map((badge) => (
+                              <span key={`${card.key}-${badge.label}`} className={`${styles.badge} ${badgeClassName(badge)}`}>
+                                {badge.label}
+                              </span>
+                            ))}
                           </div>
-                        ) : null}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
+                        )}
+
+                        <div className={styles.cardFooter}>
+                          <code className={styles.sectionKey}>{`global.${card.path.join('.')}`}</code>
+                          {!isReadonly ? (
+                            <div className={styles.cardActions}>
+                              <button
+                                className={pageStyles.sectionEditButton}
+                                onClick={() => {
+                                  handleEditSection(card)
+                                }}
+                              >
+                                {card.data !== undefined ? 'Edit Section' : 'Add Section'}
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </>
         ) : (
           <div className={pageStyles.sectionTableBlock}>
             <div className={styles.blockHeader}>

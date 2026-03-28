@@ -46,6 +46,33 @@ vllm-sr status
 vllm-sr stop
 ```
 
+### Kubernetes Deployment
+
+The same CLI deploys to Kubernetes via Helm:
+
+```bash
+# Deploy to Kubernetes (uses your existing config.yaml)
+HF_TOKEN=hf_xxx vllm-sr serve --target k8s --profile dev --config config.yaml
+
+# Deploy to a specific namespace and context
+HF_TOKEN=hf_xxx vllm-sr serve --target k8s --namespace production --context prod-cluster
+
+# Check status / logs / stop
+vllm-sr status --target k8s
+vllm-sr logs router --target k8s -f
+vllm-sr stop --target k8s
+```
+
+**Credential handling:** Sensitive environment variables (`HF_TOKEN`, `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`) are automatically stored in a Kubernetes Secret
+(`vllm-sr-env-secrets`) and mounted via `envFrom`. They never appear as
+plain-text values in Helm overrides or the Deployment spec. Non-sensitive
+variables (`HF_ENDPOINT`, `HF_HOME`, etc.) are passed as standard `env`
+entries.
+
+The secret is created before `helm upgrade --install` and cleaned up by
+`vllm-sr stop --target k8s`.
+
 If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspace and opens the dashboard in setup mode. Configure your first model there, then activate routing.
 
 Local dashboard state is persisted under `.vllm-sr/dashboard-data/` and bind-mounted into the container at `/app/data`. User accounts, evaluation history, and ML pipeline artifacts survive `vllm-sr stop` followed by a new `vllm-sr serve` as long as that workspace directory is kept.
@@ -61,7 +88,7 @@ To run parallel local stacks from the same machine or multiple worktrees, set `V
 vllm-sr validate config.yaml
 ```
 
-`vllm-sr init` was removed in v0.3. Author `config.yaml` directly using the canonical `version/listeners/providers/routing/global` layout, or migrate an older file with `vllm-sr config migrate --config old-config.yaml`. Router-wide defaults come from the router itself and can be overridden under `global:`.
+`vllm-sr init` was removed in v0.3. Author `config.yaml` directly using the canonical `version/listeners/providers/routing/global` layout, migrate an older file with `vllm-sr config migrate --config old-config.yaml`, or import supported OpenClaw model providers with `vllm-sr config import --from openclaw`. Router-wide defaults come from the router itself and can be overridden under `global:`.
 
 ## Features
 
@@ -249,6 +276,9 @@ vllm-sr validate
 
 # Migrate older configs to the canonical contract
 vllm-sr config migrate --config old-config.yaml
+
+# Import supported OpenClaw model providers into canonical config.yaml
+vllm-sr config import --from openclaw --source openclaw.json --target config.yaml
 ```
 
 ### File Descriptor Limits

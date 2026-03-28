@@ -12,7 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func createMemoryRuntime(cfg *config.RouterConfig) (*memory.MilvusStore, *memory.MemoryExtractor) {
+func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.MemoryExtractor) {
 	if !isMemoryEnabled(cfg) {
 		return nil, nil
 	}
@@ -24,7 +24,11 @@ func createMemoryRuntime(cfg *config.RouterConfig) (*memory.MilvusStore, *memory
 	}
 
 	memory.SetGlobalMemoryStore(memoryStore)
-	logging.Infof("Memory enabled with Milvus backend")
+	if rc := cfg.Memory.RedisCache; rc != nil && rc.Enabled && rc.Address != "" {
+		logging.Infof("Memory enabled with Milvus backend and Redis hot cache")
+	} else {
+		logging.Infof("Memory enabled with Milvus backend")
+	}
 
 	memoryExtractor := memory.NewMemoryChunkStore(memoryStore)
 	if memoryExtractor != nil {
@@ -50,7 +54,7 @@ func isMemoryEnabled(cfg *config.RouterConfig) bool {
 }
 
 // createMemoryStore creates a memory store based on configuration.
-func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
+func createMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 	milvusAddress := cfg.Memory.Milvus.Address
 	if milvusAddress == "" {
 		milvusAddress = "localhost:19530"
@@ -105,7 +109,25 @@ func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
 		collectionName,
 		embeddingConfig.Model,
 	)
-	return store, nil
+
+	var result memory.Store = store
+	if rc := cfg.Memory.RedisCache; rc != nil && rc.Enabled && rc.Address != "" {
+		cacheCfg := &memory.RedisCacheConfig{
+			Address:    rc.Address,
+			Password:   rc.Password,
+			DB:         rc.DB,
+			KeyPrefix:  rc.KeyPrefix,
+			TTLSeconds: rc.TTLSeconds,
+		}
+		redisCache, err := memory.NewRedisCache(ctx, cacheCfg)
+		if err != nil {
+			logging.Warnf("Memory: Redis cache disabled (connection failed: %v), using Milvus only", err)
+		} else {
+			result = memory.NewCachingStore(store, redisCache)
+		}
+	}
+
+	return result, nil
 }
 
 func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {

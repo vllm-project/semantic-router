@@ -97,7 +97,7 @@ export function createSetupConfigCounts(
 export function createModelDraft(seed: number): ModelDraft {
   return {
     id: `model-${Date.now()}-${seed}`,
-    name: "openai/gpt-oss-120b",
+    name: "qwen/qwen3.5-rocm",
     providerKind: "vllm",
     baseUrl: "vllm:8000",
     accessKey: "",

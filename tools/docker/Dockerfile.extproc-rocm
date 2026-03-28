@@ -167,7 +167,8 @@ COPY --from=nlp-builder /app/nlp-binding/target/x86_64-unknown-linux-gnu/release
 
 ENV CGO_ENABLED=1 \
     LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/onnx-binding/target/release:/app/ml-binding/target/release:/app/nlp-binding/target/release \
-    GOOS=linux GOARCH=amd64
+    GOOS=linux GOARCH=amd64 \
+    GOFLAGS=-buildvcs=false
 
 # Verify libraries
 RUN echo "=== Verifying libraries ===" && \
@@ -228,6 +229,7 @@ COPY --from=go-builder /app/lib/ /app/lib/
 COPY onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* /app/lib/
 
 COPY config/config.yaml /app/config/
+COPY config/kb/ /app/config/kb/
 COPY scripts/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 

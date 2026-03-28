@@ -115,6 +115,97 @@ model_catalog:
       use_cpu: true
 `;
 
+const taxonomyClassifierResponse = {
+  items: [
+    {
+      name: 'privacy_classifier',
+      type: 'taxonomy',
+      builtin: true,
+      managed: true,
+      editable: false,
+      threshold: 0.3,
+      security_threshold: 0.25,
+      description: 'Built-in privacy routing taxonomy',
+      source: {
+        path: 'kb/privacy/',
+        taxonomy_file: 'taxonomy.json',
+      },
+      tiers: [
+        { name: 'privacy_policy', description: 'Sensitive company content' },
+        { name: 'frontier_reasoning', description: 'General frontier reasoning' },
+      ],
+      categories: [
+        {
+          name: 'proprietary_code',
+          tier: 'privacy_policy',
+          description: 'Internal code and repositories',
+          exemplars: ['Review our private codebase'],
+        },
+        {
+          name: 'general_research',
+          tier: 'frontier_reasoning',
+          description: 'Open research requests',
+          exemplars: ['Summarize this public paper'],
+        },
+      ],
+      tier_groups: {
+        privacy_categories: ['proprietary_code'],
+      },
+      signal_references: [
+        {
+          name: 'privacy_policy',
+          bind: {
+            kind: 'tier',
+            value: 'privacy_policy',
+          },
+        },
+      ],
+      bind_options: {
+        tiers: ['privacy_policy', 'frontier_reasoning'],
+        categories: ['proprietary_code', 'general_research'],
+      },
+    },
+    {
+      name: 'research_classifier',
+      type: 'taxonomy',
+      builtin: false,
+      managed: true,
+      editable: true,
+      threshold: 0.41,
+      security_threshold: 0.28,
+      description: 'Custom research classifier',
+      source: {
+        path: 'classifiers/custom/research_classifier/',
+        taxonomy_file: 'taxonomy.json',
+      },
+      tiers: [
+        { name: 'internal', description: 'Private research assets' },
+        { name: 'external', description: 'Public artifacts' },
+      ],
+      categories: [
+        {
+          name: 'lab_notes',
+          tier: 'internal',
+          description: 'Private notes',
+          exemplars: ['Review our lab notes'],
+        },
+        {
+          name: 'papers',
+          tier: 'external',
+          description: 'Published papers',
+          exemplars: ['Summarize this paper'],
+        },
+      ],
+      tier_groups: {},
+      signal_references: [],
+      bind_options: {
+        tiers: ['internal', 'external'],
+        categories: ['lab_notes', 'papers'],
+      },
+    },
+  ],
+};
+
 async function mockConfigSurface(page: Page) {
   await mockAuthenticatedSession(page);
 
@@ -179,6 +270,14 @@ async function mockConfigSurface(page: Page) {
     await route.fulfill({ status: 200, contentType: 'text/yaml', body: rawGlobalYaml });
   });
 
+  await page.route('**/api/router/config/classifiers', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(taxonomyClassifierResponse),
+    });
+  });
+
   await page.route('**/api/status', async route => {
     await route.fulfill({
       status: 200,
@@ -194,6 +293,8 @@ async function mockConfigSurface(page: Page) {
 }
 
 async function expectInside(container: Locator, child: Locator) {
+  await child.scrollIntoViewIfNeeded();
+
   const [containerBox, childBox] = await Promise.all([
     container.boundingBox(),
     child.boundingBox(),
@@ -219,9 +320,7 @@ test.describe('Config surface layout regressions', () => {
     await page.goto('/config/decisions');
     await page.getByRole('button', { name: 'Add Decision' }).click();
 
-    const modal = page.locator('[class*="EditModal_modal"]').filter({
-      has: page.getByRole('heading', { name: 'Add Decision' }),
-    }).first();
+    const modal = page.getByRole('dialog', { name: 'Add Decision' });
     const form = modal.locator('form').first();
     await expect(modal).toBeVisible();
     await expect(form).toBeVisible();
@@ -280,5 +379,25 @@ test.describe('Config surface layout regressions', () => {
       expect(buttonBox).not.toBeNull();
       expect(buttonBox!.y).toBeGreaterThan(pathBox!.y + pathBox!.height - 1);
     }
+
+    await expect(page.getByRole('heading', { name: 'Classifier Catalog' })).toHaveCount(0);
+  });
+
+  test('renders taxonomy classifiers as a standalone manager surface with classifier, tier, and category lists', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1200 });
+    await mockConfigSurface(page);
+
+    await page.goto('/config/classifiers');
+
+    await expect(page.getByRole('heading', { name: 'Taxonomy Classifiers' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Classifier Catalog' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'research_classifier Details' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Tiers · research_classifier' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Categories · research_classifier' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add Classifier' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add Tier' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add Category' })).toBeVisible();
+    await expect(page.getByText('lab_notes')).toBeVisible();
+    await expect(page.getByText('private notes', { exact: false })).toBeVisible();
   });
 });

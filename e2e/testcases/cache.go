@@ -18,7 +18,7 @@ import (
 func init() {
 	pkgtestcases.Register("semantic-cache", pkgtestcases.TestCase{
 		Description: "Test semantic cache hit rate with similar questions",
-		Tags:        []string{"ai-gateway", "semantic-cache", "performance"},
+		Tags:        []string{"kubernetes", "semantic-cache", "performance"},
 		Fn:          testCache,
 	})
 }

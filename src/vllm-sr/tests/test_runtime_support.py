@@ -202,6 +202,7 @@ def test_configure_runtime_override_env_vars_sets_internal_runtime_path(tmp_path
 
     configure_runtime_override_env_vars(env_vars, source_config, effective_config)
 
+    assert env_vars["VLLM_SR_SOURCE_CONFIG_PATH"] == "/app/config.yaml"
     assert (
         env_vars["VLLM_SR_RUNTIME_CONFIG_PATH"] == "/app/.vllm-sr/runtime-config.yaml"
     )

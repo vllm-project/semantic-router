@@ -18,6 +18,7 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 RUNTIME_CONFIG_PATH_ENV = "VLLM_SR_RUNTIME_CONFIG_PATH"
+SOURCE_CONFIG_PATH_ENV = "VLLM_SR_SOURCE_CONFIG_PATH"
 RUNTIME_ALGORITHM_OVERRIDE_ENV = "VLLM_SR_ALGORITHM_OVERRIDE"
 
 PASSTHROUGH_ENV_RULES = (
@@ -54,7 +55,6 @@ ALGORITHM_HINTS = {
 AMD_OVERRIDE_PREVIEW_LIMIT = 8
 AMD_GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
     ("global", "model_catalog", "embeddings", "semantic", "use_cpu"),
-    ("global", "model_catalog", "embeddings", "bert", "use_cpu"),
     ("global", "model_catalog", "modules", "prompt_guard", "use_cpu"),
     ("global", "model_catalog", "modules", "classifier", "domain", "use_cpu"),
     ("global", "model_catalog", "modules", "classifier", "pii", "use_cpu"),
@@ -117,6 +117,10 @@ def _runtime_config_output_path(source_config_path: Path) -> Path:
 
 def _container_runtime_config_path(source_config_path: Path) -> str:
     return f"/app/.vllm-sr/{_runtime_config_output_path(source_config_path).name}"
+
+
+def _container_source_config_path() -> str:
+    return "/app/config.yaml"
 
 
 def _write_runtime_config(source_config_path: Path, config: dict[str, object]) -> Path:
@@ -323,7 +327,7 @@ def apply_runtime_mode_env_vars(
         env_vars[SETUP_MODE_ENV] = "true"
         env_vars[DASHBOARD_SETUP_MODE_ENV] = "true"
         log.info(
-            "Setup mode: starting dashboard-first bootstrap flow without router/envoy"
+            "Setup mode: starting dashboard-first bootstrap flow with router/envoy on standby"
         )
 
     if platform:
@@ -413,6 +417,8 @@ def configure_runtime_override_env_vars(
     effective_config_path: Path,
 ) -> None:
     """Expose the runtime-only config path to the container when overrides exist."""
+    env_vars[SOURCE_CONFIG_PATH_ENV] = _container_source_config_path()
+
     if source_config_path.resolve() != effective_config_path.resolve() or env_vars.get(
         RUNTIME_ALGORITHM_OVERRIDE_ENV
     ):

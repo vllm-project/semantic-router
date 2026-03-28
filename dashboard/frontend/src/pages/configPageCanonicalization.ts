@@ -16,6 +16,7 @@ const LEGACY_SIGNAL_SECTIONS = [
   ['preference_rules', 'preferences'],
   ['language_rules', 'language'],
   ['context_rules', 'context'],
+  ['structure_rules', 'structure'],
   ['complexity_rules', 'complexity'],
   ['jailbreak', 'jailbreak'],
   ['pii', 'pii'],
@@ -381,7 +382,6 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
     const embeddings = asRecord(legacyGlobalModels.embeddings)
     if (embeddings) {
       placeBlockIfMissing(['model_catalog', 'embeddings', 'semantic'], embeddings.semantic)
-      placeLegacyBertEmbeddingIfMissing(embeddings.bert)
     }
     placeBlockIfMissing(['model_catalog', 'system'], legacyGlobalModels.system)
     placeBlockIfMissing(['model_catalog', 'external'], legacyGlobalModels.external)
@@ -480,6 +480,10 @@ export const canonicalizeConfigForManagerSave = (updatedConfig: ConfigData): Con
     routing.signals = cloneUnknown(next.signals)
     delete next.signals
   }
+  if (next.projections) {
+    routing.projections = cloneUnknown(next.projections)
+    delete next.projections
+  }
   if (next.decisions) {
     routing.decisions = cloneUnknown(next.decisions)
     delete next.decisions
@@ -501,6 +505,9 @@ export const projectCanonicalConfigForManager = (data: ConfigData): ConfigData =
   const next = canonicalizeConfigForManagerSave(data)
   if (next.routing?.signals) {
     next.signals = cloneUnknown(next.routing.signals)
+  }
+  if (next.routing?.projections) {
+    next.projections = cloneUnknown(next.routing.projections)
   }
   if (next.routing?.decisions) {
     next.decisions = cloneUnknown(next.routing.decisions)

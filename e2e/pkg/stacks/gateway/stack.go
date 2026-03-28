@@ -7,10 +7,11 @@ import (
 	"os/exec"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -266,11 +267,16 @@ func (s *Stack) semanticRouterInstallOptions(opts *framework.SetupOptions) helm.
 		setValues[key] = value
 	}
 
+	valuesFiles := []string{s.config.SemanticRouterValuesFile}
+	if extraValuesFile, ok := opts.ValuesFiles[releaseSemanticRouter]; ok && extraValuesFile != "" {
+		valuesFiles = append(valuesFiles, extraValuesFile)
+	}
+
 	return helm.InstallOptions{
 		ReleaseName: releaseSemanticRouter,
 		Chart:       chartPathSemanticRouter,
 		Namespace:   namespaceSemanticRouter,
-		ValuesFiles: []string{s.config.SemanticRouterValuesFile},
+		ValuesFiles: valuesFiles,
 		Set:         setValues,
 		Wait:        true,
 		Timeout:     timeoutSemanticRouterInstall,

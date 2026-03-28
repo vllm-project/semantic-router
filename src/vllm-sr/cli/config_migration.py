@@ -5,40 +5,14 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-_CANONICAL_VERSION = "v0.3"
-_TOP_LEVEL_KEYS = {
-    "version",
-    "listeners",
-    "providers",
-    "routing",
-    "global",
-    "setup",
-}
-_LEGACY_ROUTING_KEYS = {
-    "signals",
-    "decisions",
-    "keyword_rules",
-    "embedding_rules",
-    "categories",
-    "fact_check_rules",
-    "user_feedback_rules",
-    "preference_rules",
-    "language_rules",
-    "context_rules",
-    "complexity_rules",
-    "modality_rules",
-    "role_bindings",
-    "jailbreak",
-    "pii",
-}
-_LEGACY_PROVIDER_KEYS = {
-    "default_model",
-    "reasoning_families",
-    "default_reasoning_effort",
-    "model_config",
-    "vllm_endpoints",
-    "provider_profiles",
-}
+from cli.config_contract import (
+    CANONICAL_TOP_LEVEL_KEYS,
+    CANONICAL_VERSION,
+    LEGACY_PROVIDER_DEFAULT_KEYS,
+    LEGACY_PROVIDER_KEYS,
+    LEGACY_ROUTING_KEYS,
+    LEGACY_SIGNAL_KEY_TO_CANONICAL,
+)
 
 
 def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -68,7 +42,7 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
     _persist_provider_models(providers, provider_models)
 
     canonical: dict[str, Any] = {
-        "version": _CANONICAL_VERSION,
+        "version": CANONICAL_VERSION,
         "listeners": _clone_list(source.get("listeners")),
         "providers": providers,
         "routing": routing,
@@ -115,23 +89,7 @@ def _move_legacy_flat_signal_blocks(
     source: dict[str, Any], routing: dict[str, Any]
 ) -> None:
     signals = _ensure_dict(routing, "signals")
-    key_map = {
-        "keyword_rules": "keywords",
-        "embedding_rules": "embeddings",
-        "categories": "domains",
-        "fact_check_rules": "fact_check",
-        "user_feedback_rules": "user_feedbacks",
-        "preference_rules": "preferences",
-        "language_rules": "language",
-        "context_rules": "context",
-        "complexity_rules": "complexity",
-        "modality_rules": "modality",
-        "role_bindings": "role_bindings",
-        "jailbreak": "jailbreak",
-        "pii": "pii",
-    }
-
-    for legacy_key, canonical_key in key_map.items():
+    for legacy_key, canonical_key in LEGACY_SIGNAL_KEY_TO_CANONICAL.items():
         if canonical_key in signals:
             continue
         legacy_value = _clone_list(source.get(legacy_key))
@@ -143,11 +101,7 @@ def _move_legacy_provider_defaults(
     source: dict[str, Any], providers: dict[str, Any]
 ) -> None:
     defaults = _as_dict(providers.get("defaults"))
-    for key in (
-        "default_model",
-        "reasoning_families",
-        "default_reasoning_effort",
-    ):
+    for key in LEGACY_PROVIDER_DEFAULT_KEYS:
         if key not in defaults:
             _set_if_missing(defaults, key, source.get(key))
     if defaults:
@@ -307,9 +261,9 @@ def _move_legacy_global_blocks(
 
     for key, value in source.items():
         if (
-            key in _TOP_LEVEL_KEYS
-            or key in _LEGACY_ROUTING_KEYS
-            or key in _LEGACY_PROVIDER_KEYS
+            key in CANONICAL_TOP_LEVEL_KEYS
+            or key in LEGACY_ROUTING_KEYS
+            or key in LEGACY_PROVIDER_KEYS
         ):
             continue
         if value in (None, "", [], {}):
@@ -545,13 +499,8 @@ def _normalize_global_layout(global_config: dict[str, Any]) -> dict[str, Any]:
     legacy_models = _as_dict(normalized.pop("models", {}))
     if legacy_models:
         embeddings = _as_dict(legacy_models.get("embeddings"))
-        if embeddings:
-            if "semantic" in embeddings:
-                _place_global_block(
-                    normalized, "embedding_models", embeddings["semantic"]
-                )
-            if "bert" in embeddings:
-                _place_global_block(normalized, "bert_model", embeddings["bert"])
+        if embeddings and "semantic" in embeddings:
+            _place_global_block(normalized, "embedding_models", embeddings["semantic"])
         if "system" in legacy_models:
             _place_global_block(normalized, "system_models", legacy_models["system"])
         if "external" in legacy_models:

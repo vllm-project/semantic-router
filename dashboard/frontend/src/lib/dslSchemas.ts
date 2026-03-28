@@ -10,7 +10,7 @@ export interface FieldSchema {
 
 export const SIGNAL_TYPES = [
   'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
-  'preference', 'language', 'context', 'complexity', 'modality', 'authz',
+  'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
   'jailbreak', 'pii',
 ] as const
 
@@ -64,6 +64,12 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'max_tokens', label: 'Max Tokens', type: 'string', required: true, placeholder: '32K' },
         { key: 'description', label: 'Description', type: 'string' },
       ]
+    case 'structure':
+      return [
+        { key: 'description', label: 'Description', type: 'string' },
+        { key: 'feature', label: 'Feature', type: 'json', required: true, description: 'Typed structure feature object, e.g. { type: "count", source: { type: "regex", pattern: "[?？]" } }' },
+        { key: 'predicate', label: 'Predicate', type: 'json', description: 'Optional numeric predicate, e.g. { gte: 4 }' },
+      ]
     case 'complexity':
       return [
         { key: 'threshold', label: 'Threshold', type: 'number', required: true, placeholder: '0.1' },
@@ -108,7 +114,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
 export const PLUGIN_TYPES = [
   'semantic_cache', 'memory', 'system_prompt',
   'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen',
-  'fast_response',
+  'fast_response', 'tools',
 ] as const
 
 export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
@@ -121,6 +127,7 @@ export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
   rag: 'Retrieval-Augmented Generation — inject retrieved context into prompts',
   image_gen: 'Route to image generation backends',
   fast_response: 'Short-circuit and return a fixed response without calling upstream models',
+  tools: 'Route-local tool filtering and semantic tool selection',
 }
 
 export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
@@ -180,6 +187,14 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
     case 'fast_response':
       return [
         { key: 'message', label: 'Message', type: 'string', required: true, placeholder: 'I cannot help with that request.', description: 'The response message returned directly to the client' },
+      ]
+    case 'tools':
+      return [
+        { key: 'enabled', label: 'Enabled', type: 'boolean' },
+        { key: 'mode', label: 'Mode', type: 'select', options: ['passthrough', 'filtered', 'none'], required: true },
+        { key: 'semantic_selection', label: 'Semantic Selection', type: 'boolean', description: 'Run semantic tool selection from the global tools database' },
+        { key: 'allow_tools', label: 'Allow Tools', type: 'string[]', placeholder: 'Tool name to allow' },
+        { key: 'block_tools', label: 'Block Tools', type: 'string[]', placeholder: 'Tool name to block' },
       ]
     default:
       return [

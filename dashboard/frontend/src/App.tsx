@@ -30,6 +30,8 @@ import FleetSimRunsPage from './pages/FleetSimRunsPage'
 import OpenClawPage from './pages/OpenClawPage'
 import UsersPage from './pages/UsersPage'
 import InsightsPage from './pages/InsightsPage'
+import TaxonomyPage, { type KnowledgeBaseView } from './pages/TaxonomyPage'
+import KnowledgeMapPage from './pages/KnowledgeMapPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { SetupProvider, useSetup } from './contexts/SetupContext'
@@ -45,6 +47,12 @@ const ConfigSectionRoute: React.FC<{
   setConfigSection: (section: ConfigSection) => void
 }> = ({ configSection, setConfigSection }) => {
   const { section } = useParams<{ section: string }>()
+  const normalized = section?.toLowerCase() ?? ''
+  const redirectToKnowledgeBases =
+    normalized === 'classifiers' ||
+    normalized === 'taxonomy-classifiers' ||
+    normalized === 'knowledge-bases' ||
+    normalized === 'kbs'
 
   useEffect(() => {
     if (!section) {
@@ -54,12 +62,12 @@ const ConfigSectionRoute: React.FC<{
       return
     }
 
-    const normalized = section.toLowerCase()
     const sectionMap: Record<string, ConfigSection> = {
       global: 'global-config',
       'global-config': 'global-config',
       'router-config': 'global-config',
       signals: 'signals',
+      projections: 'projections',
       routes: 'decisions',
       decisions: 'decisions',
       endpoints: 'models',
@@ -71,7 +79,11 @@ const ConfigSectionRoute: React.FC<{
     if (mapped && mapped !== configSection) {
       setConfigSection(mapped)
     }
-  }, [section, configSection, setConfigSection])
+  }, [section, normalized, configSection, setConfigSection])
+
+  if (redirectToKnowledgeBases) {
+    return <Navigate to="/knowledge-bases/bases" replace />
+  }
 
   return (
     <Layout
@@ -81,6 +93,45 @@ const ConfigSectionRoute: React.FC<{
       <ConfigPage activeSection={configSection} />
     </Layout>
   )
+}
+
+const KnowledgeBaseRoute: React.FC<{
+  configSection: ConfigSection
+  setConfigSection: (section: ConfigSection) => void
+}> = ({ configSection, setConfigSection }) => {
+  const { view } = useParams<{ view: string }>()
+  const normalized = (view?.toLowerCase() ?? 'bases') as KnowledgeBaseView
+  const activeView: KnowledgeBaseView = ['bases', 'groups', 'labels'].includes(normalized)
+    ? normalized
+    : 'bases'
+
+  if (view && activeView !== normalized) {
+    return <Navigate to={`/knowledge-bases/${activeView}`} replace />
+  }
+
+  return (
+    <Layout
+      configSection={configSection}
+      onConfigSectionChange={(nextSection) => setConfigSection(nextSection as ConfigSection)}
+    >
+      <TaxonomyPage activeView={activeView} />
+    </Layout>
+  )
+}
+
+const LegacyTaxonomyRedirect: React.FC = () => {
+  const { view } = useParams<{ view: string }>()
+  const normalized = view?.toLowerCase() ?? 'classifiers'
+  const viewMap: Record<string, KnowledgeBaseView> = {
+    classifiers: 'bases',
+    bases: 'bases',
+    'knowledge-bases': 'bases',
+    tiers: 'groups',
+    categories: 'labels',
+    exemplars: 'labels',
+  }
+  const nextView = viewMap[normalized] ?? 'bases'
+  return <Navigate to={`/knowledge-bases/${nextView}`} replace />
 }
 
 const SetupStatusPage: React.FC<{
@@ -260,6 +311,22 @@ const AppRouter: React.FC = () => {
                 />
               }
             />
+            <Route path="/knowledge-bases" element={<Navigate to="/knowledge-bases/bases" replace />} />
+            <Route
+              path="/knowledge-bases/:name/map"
+              element={<KnowledgeMapPage />}
+            />
+            <Route
+              path="/knowledge-bases/:view"
+              element={
+                <KnowledgeBaseRoute
+                  configSection={configSection}
+                  setConfigSection={setConfigSection}
+                />
+              }
+            />
+            <Route path="/taxonomy" element={<Navigate to="/knowledge-bases/bases" replace />} />
+            <Route path="/taxonomy/:view" element={<LegacyTaxonomyRedirect />} />
             <Route
               path="/playground"
               element={

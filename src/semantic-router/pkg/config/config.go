@@ -30,11 +30,14 @@ const (
 	SignalTypePreference   = "preference"
 	SignalTypeLanguage     = "language"
 	SignalTypeContext      = "context"
+	SignalTypeStructure    = "structure"
 	SignalTypeComplexity   = "complexity"
 	SignalTypeModality     = "modality"
 	SignalTypeAuthz        = "authz"
 	SignalTypeJailbreak    = "jailbreak"
 	SignalTypePII          = "pii"
+	SignalTypeKB           = "kb"
+	SignalTypeProjection   = "projection"
 )
 
 // API format constants for model backends.
@@ -68,6 +71,10 @@ type RouterConfig struct {
 
 	Authz     AuthzConfig     `yaml:"authz,omitempty"`
 	RateLimit RateLimitConfig `yaml:"ratelimit,omitempty"`
+
+	// Runtime-only knowledge bases loaded from global.model_catalog.
+	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
+	ConfigBaseDir  string                `yaml:"-"`
 }
 
 // AuthzConfig configures how the router resolves per-user LLM API keys.
@@ -171,6 +178,7 @@ type InlineModels struct {
 // IntelligentRouting captures user-facing signal and decision configuration.
 type IntelligentRouting struct {
 	Signals         `yaml:",inline"`
+	Projections     Projections          `yaml:"projections,omitempty"`
 	Decisions       []Decision           `yaml:"decisions,omitempty"`
 	Strategy        string               `yaml:"strategy,omitempty"`
 	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`

@@ -53,7 +53,7 @@ perf-e2e: ## Run E2E performance tests
 perf-e2e: build-e2e ensure-reports-dir
 	@$(LOG_TARGET)
 	@echo "Running E2E performance tests..."
-	@./bin/e2e -profile=ai-gateway \
+	@./bin/e2e -profile=kubernetes \
 	  -tests=performance-throughput,performance-latency,performance-resource
 
 # Compare against baseline

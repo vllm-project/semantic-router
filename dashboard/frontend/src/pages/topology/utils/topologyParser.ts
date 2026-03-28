@@ -15,6 +15,7 @@ import {
   AlgorithmConfig,
   PluginConfig,
   ModelRefConfig,
+  KBSignalConfig,
 } from '../types'
 import { SIGNAL_LATENCY } from '../constants'
 
@@ -312,7 +313,35 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 9. Complexity Rules
+  // 9. Structure Rules
+  // From structure_rules (Go/Router format)
+  config.structure_rules?.forEach(rule => {
+    addSignal({
+      type: 'structure',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.structure,
+      config: {
+        feature: rule.feature,
+        predicate: rule.predicate,
+      },
+    })
+  })
+  // From signals.structure (Python CLI format)
+  routingSignals?.structure?.forEach(rule => {
+    addSignal({
+      type: 'structure',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.structure,
+      config: {
+        feature: rule.feature,
+        predicate: rule.predicate,
+      },
+    })
+  })
+
+  // 10. Complexity Rules
   // From complexity_rules (Go/Router format)
   config.complexity_rules?.forEach(rule => {
     addSignal({
@@ -342,7 +371,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 10. Modality Rules
+  // 11. Modality Rules
   // From modality_rules (Go/Router format)
   config.modality_rules?.forEach(rule => {
     addSignal({
@@ -364,7 +393,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 11. Authz / RBAC Role Bindings
+  // 12. Authz / RBAC Role Bindings
   // From role_bindings (Go/Router format)
   config.role_bindings?.forEach(rule => {
     addSignal({
@@ -390,7 +419,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 12. Jailbreak Rules
+  // 13. Jailbreak Rules
   // From jailbreak (Go/Router format - top-level due to yaml:",inline")
   config.jailbreak?.forEach(rule => {
     addSignal({
@@ -418,7 +447,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 13. PII Rules
+  // 14. PII Rules
   // From pii (Go/Router format - top-level due to yaml:",inline")
   config.pii?.forEach(rule => {
     addSignal({
@@ -448,7 +477,47 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
+  // 15. Knowledge-base Rules
+  routingSignals?.kb?.forEach(rule => {
+    addSignal({
+      type: 'kb',
+      name: rule.name,
+      description: rule.description || `KB bind ${rule.kb} ${rule.target.kind}=${rule.target.value}`,
+      latency: SIGNAL_LATENCY.kb,
+      config: {
+        kb: rule.kb,
+        target: rule.target,
+        match: rule.match,
+      } satisfies KBSignalConfig,
+    })
+  })
+
+  extractProjectionSignals(config).forEach(addSignal)
+
   return signals
+}
+
+function extractProjectionSignals(config: ConfigData): SignalConfig[] {
+  const projectionSignals: SignalConfig[] = []
+  const projections = config.routing?.projections ?? config.projections
+
+  projections?.mappings?.forEach(mapping => {
+    mapping.outputs?.forEach(output => {
+      projectionSignals.push({
+        type: 'projection',
+        name: output.name,
+        description: `Projection output from ${mapping.name}`,
+        latency: SIGNAL_LATENCY.projection,
+        config: {
+          source: mapping.source,
+          method: mapping.method || 'threshold_bands',
+          mapping: mapping.name,
+        },
+      })
+    })
+  })
+
+  return projectionSignals
 }
 
 /**
@@ -650,11 +719,14 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     preference: [],
     language: [],
     context: [],
+    structure: [],
     complexity: [],
     modality: [],
     authz: [],
     jailbreak: [],
     pii: [],
+    kb: [],
+    projection: [],
   }
 
   signals.forEach(signal => {

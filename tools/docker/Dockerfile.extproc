@@ -359,6 +359,7 @@ RUN mkdir -p /app/nlp-binding/target/release && \
 ENV CGO_ENABLED=1
 ENV LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/onnx-binding/target/release:/app/ml-binding/target/release:/app/nlp-binding/target/release
 ENV GOOS=linux
+ENV GOFLAGS=-buildvcs=false
 
 # Verify the libraries exist before Go build
 RUN echo "Verifying Rust libraries for TARGETARCH=$TARGETARCH..." && \
@@ -438,6 +439,7 @@ COPY --from=go-builder /app/bin/ /app/
 COPY --from=go-builder /app/lib/ /app/lib/
 
 COPY config/config.yaml /app/config/
+COPY config/kb/ /app/config/kb/
 
 ENV LD_LIBRARY_PATH=/app/lib
 # Default to candle binding; set AI_BINDING=onnx for ONNX Runtime backend

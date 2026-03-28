@@ -1,8 +1,14 @@
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 
-export type LayoutDropdownKey = 'manager' | 'analysisOps' | 'fleetSim'
+export type LayoutDropdownKey = 'manager' | 'knowledgeBase' | 'analysisOps'
 
-export type LayoutConfigSection = 'models' | 'signals' | 'decisions' | 'global-config' | 'mcp'
+export type LayoutConfigSection =
+  | 'models'
+  | 'signals'
+  | 'projections'
+  | 'decisions'
+  | 'global-config'
+  | 'mcp'
 
 type LayoutRouteMenuItem = {
   kind: 'route'
@@ -50,6 +56,18 @@ export const MANAGER_MENU_SECTIONS: LayoutMenuSection[] = [
       { kind: 'config', label: 'Models', configSection: 'models' },
       { kind: 'config', label: 'Decisions', configSection: 'decisions' },
       { kind: 'config', label: 'Signals', configSection: 'signals' },
+      { kind: 'config', label: 'Projections', configSection: 'projections' },
+    ],
+  },
+]
+
+export const KNOWLEDGE_BASE_MENU_SECTIONS: LayoutMenuSection[] = [
+  {
+    title: 'Knowledge',
+    items: [
+      { kind: 'route', label: 'Bases', to: '/knowledge-bases/bases' },
+      { kind: 'route', label: 'Groups', to: '/knowledge-bases/groups' },
+      { kind: 'route', label: 'Labels', to: '/knowledge-bases/labels' },
     ],
   },
 ]
