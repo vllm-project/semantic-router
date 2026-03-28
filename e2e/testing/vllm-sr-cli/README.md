@@ -33,7 +33,8 @@ These tests start real containers and verify with `docker inspect`:
 
 | Test | What it verifies |
 |------|------------------|
-| `test_running_container_contracts` | canonical config → serve → container running → health |
+| `test_running_container_contracts` | canonical config → serve → router container running → health |
+| `test_fleet_sim_sidecar_contracts` | `vllm-sr serve` starts the simulator sidecar and exposes `/healthz` |
 | `test_env_var_passed_to_container` | HF_TOKEN inside container |
 | `test_volume_mounting` | config.yaml + models/ mounted |
 | `test_status_shows_running_container` | `status` reports running |
@@ -47,8 +48,8 @@ These tests start real containers and verify with `docker inspect`:
 | Command | Options Tested |
 |---------|----------------|
 | `serve` | `--config`, `--image`, `--image-pull-policy`, `--readonly-dashboard` |
-| `status` | `all`, `envoy`, `router`, `dashboard` |
-| `logs` | `envoy`, `router`, `dashboard`, `-f/--follow` |
+| `status` | `all`, `envoy`, `router`, `dashboard`, `simulator` |
+| `logs` | `envoy`, `router`, `dashboard`, `simulator`, `-f/--follow` |
 | `stop` | default |
 | `dashboard` | default, `--no-open` |
 | `config` | `envoy`, `router` |
@@ -73,4 +74,4 @@ python run_cli_tests.py --pattern lifecycle
 | Variable | Description |
 |----------|-------------|
 | `RUN_INTEGRATION_TESTS` | Set to `true` to enable integration tests |
-| `CONTAINER_RUNTIME` | Override runtime (`docker` or `podman`) |
+| `CONTAINER_RUNTIME` | Override runtime (`docker` only; `podman` is rejected) |

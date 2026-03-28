@@ -11,6 +11,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+var expectedAMDModelSpecs = []string{
+	"models/mom-embedding-ultra",
+	"models/mmbert32k-intent-classifier-merged",
+	"models/mmbert32k-pii-detector-merged",
+	"models/mmbert32k-jailbreak-detector-merged",
+	"models/mmbert32k-factcheck-classifier-merged",
+	"models/mmbert32k-feedback-detector-merged",
+}
+
 func TestExtractModelPaths(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -385,8 +394,6 @@ global:
     embeddings:
       semantic:
         use_cpu: false
-      bert:
-        use_cpu: false
     modules:
       prompt_guard:
         use_cpu: false
@@ -481,7 +488,7 @@ func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
 		t.Fatal("failed to resolve amd config path")
 	}
 
-	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../deploy/amd/config.yaml"))
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../deploy/recipes/balance.yaml"))
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("read %s: %v", configPath, err)
@@ -498,15 +505,44 @@ func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
 	}
 
 	assertContainsAllModelSpecs(t, specs,
-		"models/mom-embedding-ultra",
-		"models/mmbert32k-intent-classifier-merged",
-		"models/mmbert32k-pii-detector-merged",
-		"models/mmbert32k-jailbreak-detector-merged",
-		"models/mmbert32k-factcheck-classifier-merged",
-		"models/mmbert32k-feedback-detector-merged",
+		expectedAMDModelSpecs...,
 	)
-	if len(specs) != 6 {
-		t.Fatalf("BuildModelSpecs() returned %d specs, want 6", len(specs))
+	if len(specs) != len(expectedAMDModelSpecs) {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want %d", len(specs), len(expectedAMDModelSpecs))
+	}
+}
+
+func TestBuildModelSpecsSkipsRouterOwnedDefaultsForAgentSmokeConfigs(t *testing.T) {
+	for _, relParts := range [][]string{
+		{"..", "..", "..", "..", "e2e", "config", "config.agent-smoke.cpu.yaml"},
+		{"..", "..", "..", "..", "e2e", "config", "config.agent-smoke.amd.yaml"},
+	} {
+		rel := filepath.Join(relParts...)
+		t.Run(rel, func(t *testing.T) {
+			_, file, _, ok := runtime.Caller(0)
+			if !ok {
+				t.Fatal("failed to resolve smoke config path")
+			}
+
+			configPath := filepath.Clean(filepath.Join(filepath.Dir(file), rel))
+			data, err := os.ReadFile(configPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", configPath, err)
+			}
+
+			cfg, err := config.ParseYAMLBytes(data)
+			if err != nil {
+				t.Fatalf("ParseYAMLBytes() error = %v", err)
+			}
+
+			specs, err := BuildModelSpecs(cfg)
+			if err != nil {
+				t.Fatalf("BuildModelSpecs() error = %v", err)
+			}
+			if len(specs) != 0 {
+				t.Fatalf("BuildModelSpecs() returned %d specs, want 0: %#v", len(specs), specs)
+			}
+		})
 	}
 }
 

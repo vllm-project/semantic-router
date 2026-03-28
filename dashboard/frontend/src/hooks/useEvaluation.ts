@@ -12,6 +12,13 @@ import type {
 } from '../types/evaluation';
 import * as api from '../utils/evaluationApi';
 import { useReadonly } from '../contexts/ReadonlyContext';
+import {
+  DEFAULT_ROUTER_EVAL_ENDPOINT,
+  filterSelectedDatasetsByDimensions,
+  getDefaultDimensionsForLevel,
+  getDefaultEndpointForLevel,
+  normalizeDimensionsForLevel,
+} from '../utils/evaluationConfig';
 
 // Hook for managing tasks list
 export function useTasks(autoRefresh = false, refreshInterval = 5000) {
@@ -49,7 +56,7 @@ export function useTasks(autoRefresh = false, refreshInterval = 5000) {
 }
 
 // Hook for a single task with progress tracking
-export function useTask(taskId: string | null) {
+export function useTask(taskId: string | null, autoRefresh = false, refreshInterval = 1000) {
   const [task, setTask] = useState<EvaluationTask | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +77,14 @@ export function useTask(taskId: string | null) {
 
   useEffect(() => {
     fetchTask();
-  }, [fetchTask]);
+
+    if (!autoRefresh) {
+      return;
+    }
+
+    const interval = window.setInterval(fetchTask, refreshInterval);
+    return () => window.clearInterval(interval);
+  }, [fetchTask, autoRefresh, refreshInterval]);
 
   return { task, loading, error, refresh: fetchTask };
 }
@@ -87,6 +101,10 @@ export function useProgress(taskId: string | null, enabled = true) {
     if (!taskId || !enabled) {
       return;
     }
+
+    setCompleted(false);
+    setConnected(false);
+    setError(null);
 
     const cleanup = api.subscribeToProgress(
       taskId,
@@ -253,25 +271,32 @@ export function useTaskMutations() {
 export function useTaskCreationForm() {
   const { envoyUrl } = useReadonly();
   const [step, setStep] = useState(1);
-  const [level, setLevel] = useState<EvaluationLevel>('router');
+  const [level, setLevelState] = useState<EvaluationLevel>('router');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [dimensions, setDimensions] = useState<EvaluationDimension[]>(['domain']);
+  const [dimensions, setDimensions] = useState<EvaluationDimension[]>(getDefaultDimensionsForLevel('router'));
   const [selectedDatasets, setSelectedDatasets] = useState<Record<string, string[]>>({});
   const [maxSamples, setMaxSamples] = useState(50);
-  const [endpoint, setEndpoint] = useState('');
+  const [endpoint, setEndpoint] = useState(DEFAULT_ROUTER_EVAL_ENDPOINT);
   const [model, setModel] = useState('MoM');
   const [concurrent, setConcurrent] = useState(1);
   const [samplesPerCat, setSamplesPerCat] = useState(10);
 
   // Update endpoint based on level
   useEffect(() => {
-    if (level === 'router') {
-      setEndpoint('http://localhost:8080/api/v1/eval');
-    } else if (level === 'mom') {
-      setEndpoint(envoyUrl || 'http://localhost:8801');
-    }
+    setEndpoint(getDefaultEndpointForLevel(level, envoyUrl));
   }, [level, envoyUrl]);
+
+  const setLevel = useCallback((nextLevel: EvaluationLevel) => {
+    setLevelState(nextLevel);
+    setDimensions((prevDimensions) => {
+      const nextDimensions = normalizeDimensionsForLevel(nextLevel, prevDimensions);
+      setSelectedDatasets((prevSelectedDatasets) =>
+        filterSelectedDatasetsByDimensions(prevSelectedDatasets, nextDimensions)
+      );
+      return nextDimensions;
+    });
+  }, []);
 
   const toggleDimension = useCallback((dim: EvaluationDimension) => {
     setDimensions((prev) => {
@@ -297,10 +322,12 @@ export function useTaskCreationForm() {
   const goToStep = useCallback((s: number) => setStep(s), []);
 
   const getConfig = useCallback((): CreateTaskRequest => {
-    // Ensure all selected dimensions have at least default datasets
+    const normalizedDimensions = normalizeDimensionsForLevel(level, dimensions);
+
     const datasets: Record<string, string[]> = {};
-    for (const dim of dimensions) {
-      datasets[dim] = selectedDatasets[dim]?.length > 0 ? selectedDatasets[dim] : ['default'];
+    const filteredSelectedDatasets = filterSelectedDatasetsByDimensions(selectedDatasets, normalizedDimensions);
+    for (const dim of normalizedDimensions) {
+      datasets[dim] = filteredSelectedDatasets[dim] ?? [];
     }
 
     return {
@@ -308,7 +335,7 @@ export function useTaskCreationForm() {
       description,
       config: {
         level,
-        dimensions,
+        dimensions: normalizedDimensions,
         datasets,
         max_samples: maxSamples,
         endpoint,
@@ -321,13 +348,13 @@ export function useTaskCreationForm() {
 
   const reset = useCallback(() => {
     setStep(1);
-    setLevel('router');
+    setLevelState('router');
     setName('');
     setDescription('');
-    setDimensions(['domain']);
+    setDimensions(getDefaultDimensionsForLevel('router'));
     setSelectedDatasets({});
     setMaxSamples(50);
-    setEndpoint('http://localhost:8080/v1/eval');
+    setEndpoint(DEFAULT_ROUTER_EVAL_ENDPOINT);
     setModel('MoM');
     setConcurrent(1);
     setSamplesPerCat(10);

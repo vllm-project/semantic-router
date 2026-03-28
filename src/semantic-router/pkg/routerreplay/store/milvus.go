@@ -452,6 +452,28 @@ func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, 
 	return m.upsertRecord(ctx, record)
 }
 
+// UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
+func (m *MilvusStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
+	record, found, err := m.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	record.PromptTokens = cloneIntPtr(usage.PromptTokens)
+	record.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
+	record.TotalTokens = cloneIntPtr(usage.TotalTokens)
+	record.ActualCost = cloneFloat64Ptr(usage.ActualCost)
+	record.BaselineCost = cloneFloat64Ptr(usage.BaselineCost)
+	record.CostSavings = cloneFloat64Ptr(usage.CostSavings)
+	record.Currency = cloneStringPtr(usage.Currency)
+	record.BaselineModel = cloneStringPtr(usage.BaselineModel)
+
+	return m.upsertRecord(ctx, record)
+}
+
 // upsertRecord updates a record by deleting and reinserting.
 func (m *MilvusStore) upsertRecord(ctx context.Context, record Record) error {
 	// Marshal record

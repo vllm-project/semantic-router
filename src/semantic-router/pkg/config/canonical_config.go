@@ -20,9 +20,10 @@ type CanonicalConfig struct {
 
 // CanonicalRouting contains the DSL-owned routing surface.
 type CanonicalRouting struct {
-	ModelCards []RoutingModel   `yaml:"modelCards,omitempty"`
-	Signals    CanonicalSignals `yaml:"signals,omitempty"`
-	Decisions  []Decision       `yaml:"decisions,omitempty"`
+	ModelCards  []RoutingModel       `yaml:"modelCards,omitempty"`
+	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
+	Projections CanonicalProjections `yaml:"projections,omitempty"`
+	Decisions   []Decision           `yaml:"decisions,omitempty"`
 }
 
 // CanonicalSignals groups routing signals under routing.signals.
@@ -35,11 +36,20 @@ type CanonicalSignals struct {
 	Preferences   []PreferenceRule   `yaml:"preferences,omitempty"`
 	Language      []LanguageRule     `yaml:"language,omitempty"`
 	Context       []ContextRule      `yaml:"context,omitempty"`
+	Structure     []StructureRule    `yaml:"structure,omitempty"`
 	Complexity    []ComplexityRule   `yaml:"complexity,omitempty"`
 	Modality      []ModalityRule     `yaml:"modality,omitempty"`
 	RoleBindings  []RoleBinding      `yaml:"role_bindings,omitempty"`
 	Jailbreak     []JailbreakRule    `yaml:"jailbreak,omitempty"`
 	PII           []PIIRule          `yaml:"pii,omitempty"`
+	KB            []KBSignalRule     `yaml:"kb,omitempty"`
+}
+
+// CanonicalProjections groups derived routing outputs under routing.projections.
+type CanonicalProjections struct {
+	Partitions []ProjectionPartition `yaml:"partitions,omitempty"`
+	Scores     []ProjectionScore     `yaml:"scores,omitempty"`
+	Mappings   []ProjectionMapping   `yaml:"mappings,omitempty"`
 }
 
 // RoutingModel defines the logical model catalog available to routing decisions.
@@ -76,15 +86,24 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 		return nil, applyErr
 	}
 
+	applyCanonicalRoutingState(&cfg, canonical)
+	if err := applyCanonicalProviderState(&cfg, canonical.Providers); err != nil {
+		return nil, err
+	}
+
+	if cfg.VectorStore != nil {
+		cfg.VectorStore.ApplyDefaults()
+	}
+
+	return &cfg, nil
+}
+
+func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
 	cfg.Decisions = copyDecisions(canonical.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
-
-	providerDefaults := canonicalProviderDefaults(canonical.Providers)
-	cfg.DefaultModel = providerDefaults.DefaultModel
-	cfg.DefaultReasoningEffort = providerDefaults.DefaultReasoningEffort
-	cfg.ReasoningFamilies = copyReasoningFamilies(providerDefaults.ReasoningFamilies)
+	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {
@@ -99,15 +118,30 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 			Modality:          model.Modality,
 		}
 	}
+}
 
-	profiles, endpoints, modelParams, err := normalizeCanonicalProviderModels(canonical.Providers.Models)
+func applyCanonicalProviderState(cfg *RouterConfig, providers CanonicalProviders) error {
+	providerDefaults := canonicalProviderDefaults(providers)
+	cfg.DefaultModel = providerDefaults.DefaultModel
+	cfg.DefaultReasoningEffort = providerDefaults.DefaultReasoningEffort
+	cfg.ReasoningFamilies = copyReasoningFamilies(providerDefaults.ReasoningFamilies)
+
+	profiles, endpoints, modelParams, err := normalizeCanonicalProviderModels(providers.Models)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	cfg.ProviderProfiles = profiles
 	cfg.VLLMEndpoints = endpoints
+	mergeCanonicalProviderModelParams(cfg.ModelConfig, modelParams)
+	return nil
+}
+
+func mergeCanonicalProviderModelParams(modelConfig map[string]ModelParams, modelParams map[string]ModelParams) {
 	for modelName, providerParams := range modelParams {
-		params := cfg.ModelConfig[modelName]
+		params := modelConfig[modelName]
+		if params.Pricing == (ModelPricing{}) {
+			params.Pricing = providerParams.Pricing
+		}
 		if params.ReasoningFamily == "" {
 			params.ReasoningFamily = providerParams.ReasoningFamily
 		}
@@ -123,14 +157,8 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 		if params.APIFormat == "" {
 			params.APIFormat = providerParams.APIFormat
 		}
-		cfg.ModelConfig[modelName] = params
+		modelConfig[modelName] = params
 	}
-
-	if cfg.VectorStore != nil {
-		cfg.VectorStore.ApplyDefaults()
-	}
-
-	return &cfg, nil
 }
 
 func validateCanonicalContract(canonical *CanonicalConfig) error {
@@ -212,11 +240,13 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		PreferenceRules:   append([]PreferenceRule(nil), signals.Preferences...),
 		LanguageRules:     append([]LanguageRule(nil), signals.Language...),
 		ContextRules:      append([]ContextRule(nil), signals.Context...),
+		StructureRules:    append([]StructureRule(nil), signals.Structure...),
 		ComplexityRules:   append([]ComplexityRule(nil), signals.Complexity...),
 		ModalityRules:     append([]ModalityRule(nil), signals.Modality...),
 		RoleBindings:      append([]RoleBinding(nil), signals.RoleBindings...),
 		JailbreakRules:    append([]JailbreakRule(nil), signals.Jailbreak...),
 		PIIRules:          append([]PIIRule(nil), signals.PII...),
+		KBRules:           append([]KBSignalRule(nil), signals.KB...),
 	}
 
 	if len(result.Categories) == 0 {
@@ -224,6 +254,14 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 	}
 
 	return result
+}
+
+func normalizeProjections(projections CanonicalProjections) Projections {
+	return Projections{
+		Partitions: append([]ProjectionPartition(nil), projections.Partitions...),
+		Scores:     append([]ProjectionScore(nil), projections.Scores...),
+		Mappings:   append([]ProjectionMapping(nil), projections.Mappings...),
+	}
 }
 
 func canonicalRoutingModels(routing CanonicalRouting) []RoutingModel {

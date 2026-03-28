@@ -57,3 +57,21 @@ routing:
 ```
 
 Tune the threshold and candidate list together; that matters more than adding many low-quality examples.
+
+Ranked fallback behavior is tuned separately under the router-owned embedding catalog:
+
+```yaml
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        embedding_config:
+          enable_soft_matching: true
+          top_k: 1
+          min_score_threshold: 0.5
+```
+
+The router sorts embedding rules by aggregated similarity and emits at most `top_k`
+matches into routing. The default is `1`, so only the strongest embedding signal is
+returned unless you explicitly raise the limit. Set `top_k: 0` if you need the
+legacy "return every matched embedding rule" behavior.

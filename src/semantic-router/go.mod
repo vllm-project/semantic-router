@@ -33,6 +33,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
+	github.com/valkey-io/valkey-glide/go/v2 v2.2.7
 	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000
 	github.com/vllm-project/semantic-router/ml-binding v0.0.0-00010101000000-000000000000
 	github.com/vllm-project/semantic-router/nlp-binding v0.0.0-00010101000000-000000000000
@@ -45,6 +46,7 @@ require (
 	golang.org/x/net v0.43.0
 	golang.org/x/sys v0.37.0
 	google.golang.org/grpc v1.75.0
+	google.golang.org/protobuf v1.36.9
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.34.2
@@ -123,7 +125,6 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250929231259-57b25ae835d4 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250922171735-9219d122eba9 // indirect
-	google.golang.org/protobuf v1.36.9 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/api v0.34.2 // indirect

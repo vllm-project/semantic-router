@@ -1,0 +1,148 @@
+version: v0.3
+listeners:
+- address: 0.0.0.0
+  name: http-8899
+  port: 8899
+  timeout: 1200s
+providers:
+  defaults:
+    default_model: local/small-7b
+    default_reasoning_effort: medium
+  models:
+  - name: local/small-7b
+    api_format: openai
+    provider_model_id: qwen/qwen3.5-rocm
+    backend_refs:
+    - name: local-vllm
+      endpoint: localhost:8000
+      protocol: http
+      type: vllm
+      weight: 1
+    pricing:
+      prompt_per_1m: 0.04
+      completion_per_1m: 0.1
+      currency: USD
+  - name: cloud/frontier-72b
+    api_format: openai
+    provider_model_id: anthropic/claude-opus-4.6
+    backend_refs:
+    - name: vllm_primary
+      endpoint: localhost:8000
+      protocol: http
+      weight: 1
+    pricing:
+      prompt_per_1m: 0.12
+      completion_per_1m: 0.39
+      currency: USD
+global:
+  model_catalog:
+    kbs:
+    - name: privacy_kb
+      source:
+        path: knowledge_bases/
+        manifest: labels.json
+      threshold: 0.30
+      groups:
+        security_containment: [prompt_injection, credential_exfiltration, jailbreak_role, system_prompt_extraction]
+        privacy_policy: [proprietary_code, internal_document, pii, business_strategy, trade_secret_ip, operational_infrastructure, locality_directive, customer_data]
+        frontier_reasoning: [architecture_analysis, root_cause_analysis, multi_step_tradeoffs]
+        local_standard: [generic_coding, simple_task, general_knowledge]
+        private: [prompt_injection, credential_exfiltration, jailbreak_role, system_prompt_extraction, proprietary_code, internal_document, pii, business_strategy, trade_secret_ip, operational_infrastructure, locality_directive, customer_data]
+        public: [architecture_analysis, root_cause_analysis, multi_step_tradeoffs, generic_coding, simple_task, general_knowledge]
+      metrics:
+      - name: private_vs_public
+        type: group_margin
+        positive_group: private
+        negative_group: public
+routing:
+  decisions:
+  - name: local_security_containment
+    priority: 300
+    tier: 1
+    modelRefs:
+    - model: local/small-7b
+    rules:
+      operator: AND
+      conditions:
+      - type: kb
+        name: security_containment
+  - name: local_privacy_policy
+    priority: 250
+    tier: 2
+    modelRefs:
+    - model: local/small-7b
+    rules:
+      operator: AND
+      conditions:
+      - type: kb
+        name: privacy_policy
+  - name: cloud_frontier_reasoning
+    priority: 200
+    tier: 3
+    modelRefs:
+    - model: cloud/frontier-72b
+    rules:
+      operator: AND
+      conditions:
+      - type: kb
+        name: frontier_reasoning
+  - name: local_standard
+    priority: 100
+    tier: 4
+    modelRefs:
+    - model: local/small-7b
+    rules:
+      operator: AND
+      conditions:
+      - type: projection
+        name: no_escalation
+  modelCards:
+  - name: local/small-7b
+    context_window_size: 131072
+  - name: cloud/frontier-72b
+    context_window_size: 262144
+  projections:
+    scores:
+    - name: escalation_pressure
+      method: weighted_sum
+      inputs:
+      - type: kb_metric
+        kb: privacy_kb
+        metric: private_vs_public
+        value_source: score
+        weight: 1.0
+    mappings:
+    - name: escalation_band
+      source: escalation_pressure
+      method: threshold_bands
+      outputs:
+      - name: no_escalation
+        lt: 0.55
+      - name: escalation_signal
+        gte: 0.55
+  signals:
+    kb:
+    - name: security_containment
+      kb: privacy_kb
+      target:
+        kind: group
+        value: security_containment
+      match: best
+    - name: privacy_policy
+      kb: privacy_kb
+      target:
+        kind: group
+        value: privacy_policy
+      match: best
+    - name: frontier_reasoning
+      kb: privacy_kb
+      target:
+        kind: group
+        value: frontier_reasoning
+      match: best
+    - name: local_standard
+      kb: privacy_kb
+      target:
+        kind: group
+        value: local_standard
+      match: best

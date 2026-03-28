@@ -30,6 +30,8 @@ var supportedSignalTypes = []string{
 	SignalTypeModality,
 	SignalTypePII,
 	SignalTypePreference,
+	SignalTypeStructure,
+	SignalTypeKB,
 	SignalTypeUserFeedback,
 }
 
@@ -46,6 +48,7 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginRouterReplay,
 	DecisionPluginSemanticCache,
 	DecisionPluginSystemPrompt,
+	DecisionPluginTools,
 }
 
 var supportedDecisionAlgorithmTypes = []string{

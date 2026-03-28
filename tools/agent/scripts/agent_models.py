@@ -20,6 +20,8 @@ class ResolvedContext:
     workflow_integration_suites: list[str] = field(default_factory=list)
     ci_e2e_mode: str = "none"
     doc_only: bool = False
+    loop_mode: str = "completion"
+    execution_plan_policy: str = "long_horizon"
 
     def to_json(self) -> str:
         return json.dumps(self.__dict__, indent=2, sort_keys=True)
@@ -38,21 +40,57 @@ class ResolvedContext:
             ),
             "AGENT_CI_E2E_MODE": self.ci_e2e_mode,
             "AGENT_DOC_ONLY": str(self.doc_only).lower(),
+            "AGENT_LOOP_MODE": self.loop_mode,
+            "AGENT_EXECUTION_PLAN_POLICY": self.execution_plan_policy,
         }
         return "\n".join(f"{key}={shlex.quote(value)}" for key, value in values.items())
+
+    def execution_plan_summary(self) -> str:
+        policy_labels = {
+            "none": "not required by default",
+            "long_horizon": "required for long-horizon multi-loop work",
+            "always": "required",
+        }
+        return policy_labels.get(self.execution_plan_policy, self.execution_plan_policy)
+
+    def failure_policy_summary(self) -> str:
+        if self.loop_mode == "lightweight":
+            return (
+                "fix failures and rerun the smallest applicable gate until the current "
+                "change passes or a real blocker is recorded"
+            )
+        return (
+            "fix failures and rerun the smallest applicable gate until the active "
+            "subtask passes; continue across subtasks until the task boundary is met "
+            "or a real blocker is recorded"
+        )
+
+    def stop_condition_summary(self) -> str:
+        if self.loop_mode == "lightweight":
+            return "applicable gates pass for the current change"
+        if self.execution_plan_policy == "always":
+            return "all execution-plan tasks and exit criteria pass"
+        return (
+            "active subtask passes its applicable gates; when the work becomes "
+            "long-horizon or cross-session, keep an execution plan current"
+        )
 
     def to_summary(self) -> str:
         lines = [
             "Agent Context",
             f"  Changed files: {len(self.changed_files)}",
             f"  Matched rules: {', '.join(self.matched_rules) or 'none'}",
+            f"  Loop mode: {self.loop_mode}",
+            f"  Execution plan: {self.execution_plan_summary()}",
             f"  Fast tests: {', '.join(self.fast_tests) or 'none'}",
             f"  Feature tests: {', '.join(self.feature_tests) or 'none'}",
             f"  Local smoke: {'required' if self.requires_local_smoke else 'not required'}",
-            f"  Local E2E profiles: {', '.join(self.local_e2e_profiles) or 'none'}",
-            "  Workflow integration suites: "
+            f"  Local E2E profiles (manual): {', '.join(self.local_e2e_profiles) or 'none'}",
+            "  Workflow integration suites (manual): "
             + (", ".join(self.workflow_integration_suites) or "none"),
             f"  CI E2E mode: {self.ci_e2e_mode}",
+            f"  Failure policy: {self.failure_policy_summary()}",
+            f"  Stop condition: {self.stop_condition_summary()}",
         ]
         if self.ci_e2e_profiles:
             lines.append(f"  CI E2E profiles: {', '.join(self.ci_e2e_profiles)}")
@@ -134,7 +172,7 @@ class SkillResolution:
         lines = [
             "Agent Skill",
             f"  Primary skill: {self.primary_skill}",
-            f"  Fragment skills: {', '.join(self.fragment_skills) or 'none'}",
+            f"  Active fragments: {', '.join(self.fragment_skills) or 'none'}",
             f"  Impacted surfaces: {', '.join(self.impacted_surfaces) or 'none'}",
             f"  Required surfaces: {', '.join(self.required_surfaces) or 'none'}",
             "  Conditional surfaces hit: "
@@ -162,7 +200,30 @@ class ContextPack:
     local_rules: list[ContextReference] = field(default_factory=list)
     resume_refs: list[ContextReference] = field(default_factory=list)
 
-    def to_summary(self) -> str:
+    def to_summary(self, detail: str = "compact") -> str:
+        if detail == "full":
+            return self.to_full_summary()
+        return self.to_compact_summary()
+
+    def to_compact_summary(self) -> str:
+        lines = ["Context Pack"]
+        append_context_refs(lines, "Start here", self.start_here, limit=3)
+        append_context_refs(lines, "Must read", self.must_read, limit=4)
+        append_context_refs(lines, "Local rules", self.local_rules, limit=2)
+        hidden_sections: list[str] = []
+        if self.read_if_applicable:
+            hidden_sections.append("read-if-applicable")
+        if self.resume_refs:
+            hidden_sections.append("resume")
+        if hidden_sections:
+            lines.append(
+                "  Additional refs: "
+                + ", ".join(hidden_sections)
+                + " (use --context-detail full or --format json)"
+            )
+        return "\n".join(lines)
+
+    def to_full_summary(self) -> str:
         lines = ["Context Pack"]
         append_context_refs(lines, "Start here", self.start_here)
         append_context_refs(lines, "Must read", self.must_read)
@@ -173,13 +234,17 @@ class ContextPack:
 
 
 def append_context_refs(
-    lines: list[str], label: str, refs: list[ContextReference]
+    lines: list[str], label: str, refs: list[ContextReference], limit: int | None = None
 ) -> None:
     if not refs:
         return
     lines.append(f"  {label}:")
-    for ref in refs:
+    visible_refs = refs if limit is None else refs[:limit]
+    for ref in visible_refs:
         lines.append(f"    - {ref.path} :: {ref.reason}")
+    hidden_count = len(refs) - len(visible_refs)
+    if hidden_count > 0:
+        lines.append(f"    - ... {hidden_count} more")
 
 
 @dataclass
@@ -193,7 +258,7 @@ class AgentReport:
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
 
-    def to_summary(self) -> str:
+    def to_summary(self, context_detail: str = "compact") -> str:
         lines = [
             self.env.to_summary(),
             "",
@@ -201,7 +266,7 @@ class AgentReport:
             "",
             self.context.to_summary(),
             "",
-            self.context_pack.to_summary(),
+            self.context_pack.to_summary(detail=context_detail),
             "",
             "Validation Commands",
         ]

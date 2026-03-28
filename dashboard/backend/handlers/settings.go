@@ -10,10 +10,11 @@ import (
 
 // SettingsResponse represents the dashboard settings returned to frontend
 type SettingsResponse struct {
-	ReadonlyMode bool   `json:"readonlyMode"`
-	SetupMode    bool   `json:"setupMode"`
-	Platform     string `json:"platform"`
-	EnvoyURL     string `json:"envoyUrl"` // Envoy proxy URL for evaluation endpoint
+	ReadonlyMode    bool   `json:"readonlyMode"`
+	SetupMode       bool   `json:"setupMode"`
+	Platform        string `json:"platform"`
+	EnvoyURL        string `json:"envoyUrl"` // Envoy proxy URL for evaluation endpoint
+	FleetSimEnabled bool   `json:"fleetSimEnabled"`
 }
 
 // SettingsHandler returns dashboard settings for frontend consumption
@@ -32,10 +33,11 @@ func SettingsHandler(cfg *config.Config) http.HandlerFunc {
 		}
 
 		response := SettingsResponse{
-			ReadonlyMode: readOnlyMode,
-			SetupMode:    cfg.SetupMode,
-			Platform:     cfg.Platform,
-			EnvoyURL:     cfg.EnvoyURL,
+			ReadonlyMode:    readOnlyMode,
+			SetupMode:       cfg.SetupMode,
+			Platform:        cfg.Platform,
+			EnvoyURL:        cfg.EnvoyURL,
+			FleetSimEnabled: cfg.FleetSimURL != "",
 		}
 
 		w.Header().Set("Content-Type", "application/json")

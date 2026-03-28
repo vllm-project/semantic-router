@@ -1,7 +1,7 @@
 ---
 name: local-dev-amd
 category: fragment
-description: Builds Docker images, starts local servers, and runs smoke tests for the AMD/ROCm development environment. Use when validating changes locally on AMD hardware, building AMD container images, or running AMD-specific smoke and E2E tests.
+description: Builds Docker images, starts local servers, and runs smoke tests for the AMD/ROCm development environment. Use when validating changes locally on AMD hardware, building AMD container images, or running AMD-specific smoke and explicit runtime checks.
 ---
 
 # Local Dev AMD
@@ -22,6 +22,10 @@ description: Builds Docker images, starts local servers, and runs smoke tests fo
 
 - AMD-local smoke cannot be run or platform image mapping is unavailable
 
+## Gotchas
+
+- Keep real AMD deployment references out of the default context path unless the task actually needs real-model deployment details.
+
 ## Workflow
 
 1. Read AMD-local docs and environment config to understand the AMD build setup
@@ -34,18 +38,16 @@ description: Builds Docker images, starts local servers, and runs smoke tests fo
 
 - [docs/agent/amd-local.md](../../../../docs/agent/amd-local.md)
 - [docs/agent/environments.md](../../../../docs/agent/environments.md)
-- [deploy/amd/README.md](../../../../deploy/amd/README.md)
-- [deploy/amd/config.yaml](../../../../deploy/amd/config.yaml)
 
 ## Standard Commands
 
 - `make agent-dev ENV=amd`
 - `make agent-serve-local ENV=amd`
 - `make agent-smoke-local`
-- `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=deploy/amd/config.yaml`
+- `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=deploy/recipes/balance.yaml`
 
 ## Acceptance
 
 - The default AMD smoke config starts successfully
 - AMD image/platform behavior does not fall back unexpectedly
-- When real AMD model deployment is in scope, the agent uses `deploy/amd/README.md` and `deploy/amd/config.yaml` as the primary reference instead of inventing a new ROCm setup path
+- When real AMD model deployment is in scope, the agent uses `deploy/amd/README.md` and `deploy/recipes/balance.yaml` as the primary reference instead of inventing a new ROCm setup path

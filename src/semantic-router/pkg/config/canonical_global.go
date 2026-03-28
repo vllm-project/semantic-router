@@ -64,6 +64,7 @@ type CanonicalModelCatalog struct {
 	Embeddings CanonicalEmbeddingModels `yaml:"embeddings"`
 	System     CanonicalSystemModels    `yaml:"system"`
 	External   []ExternalModelConfig    `yaml:"external,omitempty"`
+	KBs        []KnowledgeBaseConfig    `yaml:"kbs,omitempty"`
 	Modules    CanonicalModelModules    `yaml:"modules"`
 }
 
@@ -154,7 +155,7 @@ func (m CanonicalClassifierModule) runtimeConfig() Classifier {
 		CategoryModel:    m.Domain.CategoryModel,
 		MCPCategoryModel: m.MCP,
 		PIIModel:         m.PII.PIIModel,
-		PreferenceModel:  m.Preference,
+		PreferenceModel:  m.Preference.WithDefaults(),
 	}
 }
 
@@ -227,6 +228,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), global.ModelCatalog.External...)
 	cfg.EmbeddingModels = global.ModelCatalog.Embeddings.Semantic
+	cfg.KnowledgeBases = append([]KnowledgeBaseConfig(nil), global.ModelCatalog.KBs...)
 
 	cfg.PromptCompression = global.ModelCatalog.Modules.PromptCompression
 	cfg.PromptGuard = global.ModelCatalog.Modules.PromptGuard.PromptGuardConfig

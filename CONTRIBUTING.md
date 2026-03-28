@@ -79,9 +79,15 @@ make agent-bootstrap
 make agent-validate
 make agent-scorecard
 make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+make agent-ci-lint CHANGED_FILES="path/one,path/two"
 make agent-ci-gate CHANGED_FILES="path/one,path/two"
+make agent-pr-gate
+make test-and-build-local
 make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
 ```
+
+Use `make agent-ci-lint` when you want to reproduce the same changed-file lint path that the CI pre-commit workflow runs, including the shared agent bootstrap toolchain and tracked-file codespell check.
+Use `make agent-pr-gate` when you want the repo-native local baseline for the PR jobs contributors most often miss: `Pre-commit / Run pre-commit hooks` and `Test And Build`.
 
 `ENV=amd` is required when platform-specific behavior changed.
 

@@ -20,11 +20,22 @@ func init() {
 }
 
 func testFailoverDuringTraffic(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	if err := ensureServiceHasAtLeastNEndpoints(ctx, client, "default", "vllm-llama3-8b-instruct", 2, opts.Verbose); err != nil {
+		return fmt.Errorf("service endpoints check failed before failover test: %w", err)
+	}
+
 	session, chatClient, err := openProductionStackChatSession(ctx, client, opts, 20*time.Second)
 	if err != nil {
 		return err
 	}
 	defer session.Close()
+
+	requestID := 1
+	var warmup productionStackWarmupSummary
+	requestID, warmup, err = warmProductionStackBackend(ctx, chatClient, requestID, 5, 12)
+	if err != nil {
+		return fmt.Errorf("backend warmup failed before failover traffic: %w", err)
+	}
 
 	// Start sending requests in background
 	total := 100
@@ -35,7 +46,7 @@ func testFailoverDuringTraffic(ctx context.Context, client *kubernetes.Clientset
 	fastResponseDecisions := map[string]int{}
 	go func() {
 		for i := 0; i < total; i++ {
-			result, err := sendProductionStackChatRequest(ctx, chatClient, i+1)
+			result, err := sendProductionStackChatRequest(ctx, chatClient, requestID+i)
 			switch {
 			case err != nil:
 				atomic.AddInt32(&requestErrors, 1)
@@ -50,8 +61,19 @@ func testFailoverDuringTraffic(ctx context.Context, client *kubernetes.Clientset
 		close(done)
 	}()
 
-	// Wait a short moment then delete one vLLM pod
-	time.Sleep(2 * time.Second)
+	// Wait until backend traffic is flowing before deleting a pod.
+	deleteDeadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deleteDeadline) {
+		if atomic.LoadInt32(&backendSuccessCount) >= 10 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+
 	pods, err := client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{LabelSelector: "app=vllm-llama3-8b-instruct"})
 	if err == nil && len(pods.Items) > 0 {
 		if err := client.CoreV1().Pods("default").Delete(ctx, pods.Items[0].Name, metav1.DeleteOptions{}); err != nil {
@@ -71,6 +93,10 @@ func testFailoverDuringTraffic(ctx context.Context, client *kubernetes.Clientset
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"total":                   total,
+			"warmup_attempts":         warmup.Attempts,
+			"warmup_successes":        warmup.Successes,
+			"warmup_fast_responses":   warmup.FastResponses,
+			"warmup_request_errors":   warmup.RequestErrors,
 			"errors":                  errCount,
 			"fast_responses":          fastResponseCount,
 			"success_count":           successCount,

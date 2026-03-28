@@ -65,12 +65,12 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
   signalTypes: [
     'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
-    'preference', 'language', 'context', 'complexity', 'modality', 'authz',
+    'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
   ],
 
   pluginTypes: [
     'jailbreak', 'pii', 'semantic_cache', 'memory', 'system_prompt',
-    'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen',
+    'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen', 'tools',
   ],
 
   algoTypes: [
@@ -107,13 +107,13 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Signal types (after SIGNAL keyword)
       [
-        /\b(keyword|embedding|domain|fact_check|user_feedback|preference|language|context|complexity|modality|authz)\b/,
+        /\b(keyword|embedding|domain|fact_check|user_feedback|preference|language|context|structure|complexity|modality|authz)\b/,
         'type',
       ],
 
       // Plugin types
       [
-        /\b(jailbreak|pii|semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen)\b/,
+        /\b(jailbreak|pii|semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools)\b/,
         'type.plugin',
       ],
 
@@ -206,6 +206,7 @@ const SIGNAL_TYPE_SUGGESTIONS = [
   { label: 'preference', detail: 'User preference signal' },
   { label: 'language', detail: 'Language detection signal' },
   { label: 'context', detail: 'Context length signal' },
+  { label: 'structure', detail: 'Request-shape and structural heuristic signal' },
   { label: 'complexity', detail: 'Query complexity signal' },
   { label: 'modality', detail: 'Input modality signal' },
   { label: 'authz', detail: 'Authorization signal' },
@@ -222,6 +223,7 @@ const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'router_replay', detail: 'Request replay plugin' },
   { label: 'rag', detail: 'RAG (Retrieval Augmented Generation) plugin' },
   { label: 'image_gen', detail: 'Image generation plugin' },
+  { label: 'tools', detail: 'Route-local tool policy and semantic selection plugin' },
 ]
 
 const ALGO_TYPE_SUGGESTIONS = [

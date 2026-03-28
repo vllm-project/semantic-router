@@ -30,3 +30,27 @@ cases:
       - src/vllm-sr/cli/models.py
       - dashboard/frontend/src/pages/ConfigPage.tsx
     expected_primary_skill: signal-end-to-end
+  - name: router-service-apiserver
+    changed_files:
+      - src/semantic-router/pkg/apiserver/server.go
+    expected_primary_skill: router-service-platform-change
+  - name: router-service-memory
+    changed_files:
+      - src/semantic-router/pkg/memory/extractor.go
+    expected_primary_skill: router-service-platform-change
+  - name: router-service-authz
+    changed_files:
+      - src/semantic-router/pkg/authz/chain.go
+    expected_primary_skill: router-service-platform-change
+  - name: fleet-sim-runtime
+    changed_files:
+      - src/fleet-sim/fleet_sim/api/app.py
+    expected_primary_skill: fleet-sim-change
+  - name: deployment-profile-response-api
+    changed_files:
+      - deploy/kubernetes/response-api/redis.yaml
+    expected_primary_skill: k8s-platform-change
+  - name: training-stack-model-selection
+    changed_files:
+      - src/training/model_selection/ml_model_selection/train.py
+    expected_primary_skill: training-stack-change

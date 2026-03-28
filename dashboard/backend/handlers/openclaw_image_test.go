@@ -113,3 +113,43 @@ func TestEnsureImageAvailable_LocalTagStillRequiresLocalImage(t *testing.T) {
 		t.Fatalf("local-only image should not be pulled, got log:\n%s", logOutput)
 	}
 }
+
+func TestDetectContainerRuntimeUsesExplicitRuntimePath(t *testing.T) {
+	runtimePath, _ := writeFakeOpenClawRuntime(t)
+	t.Setenv("OPENCLAW_CONTAINER_RUNTIME", runtimePath)
+	t.Setenv("CONTAINER_RUNTIME", "")
+
+	got, err := detectContainerRuntime()
+	if err != nil {
+		t.Fatalf("detectContainerRuntime failed: %v", err)
+	}
+	if got != runtimePath {
+		t.Fatalf("runtime path = %q, want %q", got, runtimePath)
+	}
+}
+
+func TestDetectContainerRuntimeRejectsPodmanOverride(t *testing.T) {
+	t.Setenv("OPENCLAW_CONTAINER_RUNTIME", "podman")
+	t.Setenv("CONTAINER_RUNTIME", "")
+
+	_, err := detectContainerRuntime()
+	if err == nil {
+		t.Fatalf("expected podman override to be rejected")
+	}
+	if !strings.Contains(err.Error(), "podman is not supported") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDetectContainerRuntimeRejectsPodmanContainerRuntimeEnv(t *testing.T) {
+	t.Setenv("OPENCLAW_CONTAINER_RUNTIME", "")
+	t.Setenv("CONTAINER_RUNTIME", "podman")
+
+	_, err := detectContainerRuntime()
+	if err == nil {
+		t.Fatalf("expected podman CONTAINER_RUNTIME to be rejected")
+	}
+	if !strings.Contains(err.Error(), "podman is not supported") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

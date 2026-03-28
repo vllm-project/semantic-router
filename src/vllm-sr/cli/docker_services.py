@@ -5,6 +5,7 @@ import os
 import subprocess
 from pathlib import Path
 
+from cli.docker_images import get_fleet_sim_docker_image
 from cli.docker_runtime import get_container_runtime
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
@@ -17,7 +18,7 @@ def docker_container_status(container_name):
     Get the status of a container.
 
     Returns:
-        'running', 'exited', 'paused', or 'not found'
+        'running', 'created', 'exited', 'paused', or 'not found'
     """
     runtime = get_container_runtime()
     try:
@@ -40,6 +41,8 @@ def docker_container_status(container_name):
             return "not found"
         if "Up" in status:
             return "running"
+        if "Created" in status:
+            return "created"
         if "Exited" in status:
             return "exited"
         if "Paused" in status:
@@ -309,6 +312,48 @@ def docker_start_grafana(
     return _run_service_start(cmd, "Grafana")
 
 
+def docker_start_fleet_sim(
+    *,
+    image: str | None = None,
+    pull_policy: str | None = None,
+    network_name: str | None = None,
+    config_dir: str | None = None,
+    stack_layout: RuntimeStackLayout | None = None,
+):
+    """Start the vllm-sr-sim sidecar container."""
+    runtime = get_container_runtime()
+    stack_layout = stack_layout or resolve_runtime_stack()
+    container_name = stack_layout.fleet_sim_container_name
+    network_name = network_name or stack_layout.network_name
+    sim_image = get_fleet_sim_docker_image(image=image, pull_policy=pull_policy)
+    _replace_existing_container(container_name)
+
+    sim_state_dir = os.path.join(
+        _ensure_hidden_config_dir(config_dir), "fleet-sim-state"
+    )
+    os.makedirs(sim_state_dir, exist_ok=True)
+
+    cmd = [
+        runtime,
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "--network",
+        network_name,
+        "-e",
+        "PYTHONUNBUFFERED=1",
+        "-e",
+        "VLLM_SR_SIM_STATE_DIR=/state",
+        "-v",
+        f"{os.path.abspath(sim_state_dir)}:/state",
+        "-p",
+        f"{stack_layout.fleet_sim_port}:8000",
+        sim_image,
+    ]
+    return _run_service_start(cmd, "vllm-sr-sim")
+
+
 def docker_network_disconnect(network_name, container_name):
     """Disconnect a container from a Docker network."""
     runtime = get_container_runtime()
@@ -390,13 +435,14 @@ def _render_template_copy(
 def render_observability_template(
     template_text: str, stack_layout: RuntimeStackLayout
 ) -> str:
-    replacements = {
-        "vllm-sr-container": stack_layout.container_name,
-        "vllm-sr-prometheus": stack_layout.prometheus_container_name,
-        "vllm-sr-jaeger": stack_layout.jaeger_container_name,
-    }
+    replacements = (
+        ("vllm-sr-container:9190", f"{stack_layout.router_container_name}:9190"),
+        ("vllm-sr-container", stack_layout.container_name),
+        ("vllm-sr-prometheus", stack_layout.prometheus_container_name),
+        ("vllm-sr-jaeger", stack_layout.jaeger_container_name),
+    )
     rendered = template_text
-    for source, target in replacements.items():
+    for source, target in replacements:
         rendered = rendered.replace(source, target)
     return rendered
 

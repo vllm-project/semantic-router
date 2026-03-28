@@ -40,6 +40,8 @@ config:
             description: General-purpose adapter
       - name: general-expert
   global:
+    model_catalog:
+      kbs: []
     router:
       strategy: priority
     services: {}

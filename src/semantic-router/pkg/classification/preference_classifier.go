@@ -32,9 +32,15 @@ type PreferenceClassifier struct {
 
 // NewPreferenceClassifier creates a new preference classifier
 func NewPreferenceClassifier(externalCfg *config.ExternalModelConfig, rules []config.PreferenceRule, localCfg *config.PreferenceModelConfig) (*PreferenceClassifier, error) {
+	resolvedLocalCfg := config.PreferenceModelConfig{}
+	if localCfg != nil {
+		resolvedLocalCfg = *localCfg
+	}
+	resolvedLocalCfg = resolvedLocalCfg.WithDefaults()
+
 	// Contrastive few-shot preference routing
-	if localCfg != nil && localCfg.UseContrastive {
-		modelType := localCfg.EmbeddingModel
+	if resolvedLocalCfg.ContrastiveEnabled() {
+		modelType := resolvedLocalCfg.EmbeddingModel
 		contrastive, err := NewContrastivePreferenceClassifier(rules, modelType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize contrastive preference classifier: %w", err)

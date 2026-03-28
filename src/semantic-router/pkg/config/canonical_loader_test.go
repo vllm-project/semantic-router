@@ -115,6 +115,94 @@ global:
 	}
 }
 
+func TestParseYAMLBytesRejectsDeprecatedGlobalModelCatalogEmbeddingsBertLayout(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    default_model: qwen2.5:3b
+  models:
+    - name: qwen2.5:3b
+      backend_refs:
+        - endpoint: 127.0.0.1:11434
+routing:
+  modelCards:
+    - name: qwen2.5:3b
+  decisions:
+    - name: default-route
+      description: fallback
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: qwen2.5:3b
+global:
+  model_catalog:
+    embeddings:
+      bert:
+        model_id: models/mom-embedding-light
+        threshold: 0.6
+        use_cpu: true
+`)
+
+	_, err := ParseYAMLBytes(canonicalYAML)
+	if err == nil {
+		t.Fatal("expected deprecated global.model_catalog.embeddings.bert layout to be rejected")
+	}
+	if !strings.Contains(err.Error(), "global.model_catalog.embeddings.bert") {
+		t.Fatalf("expected error to mention global.model_catalog.embeddings.bert, got: %v", err)
+	}
+}
+
+func TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    default_model: qwen2.5:3b
+  models:
+    - name: qwen2.5:3b
+      backend_refs:
+        - endpoint: 127.0.0.1:11434
+routing:
+  modelCards:
+    - name: qwen2.5:3b
+  decisions:
+    - name: support-route
+      description: fallback
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelSelectionAlgorithm:
+        enabled: true
+        method: router_dc
+      modelRefs:
+        - model: qwen2.5:3b
+          use_reasoning: false
+global:
+  router:
+    strategy: priority
+`)
+
+	_, err := ParseYAMLBytes(canonicalYAML)
+	if err == nil {
+		t.Fatal("expected deprecated decision modelSelectionAlgorithm field to be rejected")
+	}
+	if !strings.Contains(err.Error(), "routing.decisions[0].modelSelectionAlgorithm") {
+		t.Fatalf("expected error to mention deprecated decision field, got: %v", err)
+	}
+}
+
 func TestParseYAMLBytesParsesNestedCanonicalModelCatalogModules(t *testing.T) {
 	canonicalYAML := []byte(`
 version: v0.3
@@ -259,7 +347,7 @@ global:
 	if !cfg.ResponseAPI.Enabled {
 		t.Fatal("expected sparse global override to preserve default response_api.enabled=true")
 	}
-	if cfg.ResponseAPI.StoreBackend != "memory" {
+	if cfg.ResponseAPI.StoreBackend != "redis" {
 		t.Fatalf("expected response api backend to keep default, got %q", cfg.ResponseAPI.StoreBackend)
 	}
 	if cfg.ResponseAPI.TTLSeconds != 86400 {
@@ -344,6 +432,97 @@ global:
 	}
 	if !cfg.PromptGuard.UseMmBERT32K {
 		t.Fatal("expected sparse prompt-guard override to keep mmBERT-32K enabled")
+	}
+	if !cfg.Classifier.PreferenceModel.ContrastiveEnabled() {
+		t.Fatal("expected sparse classifier override to preserve default preference contrastive mode")
+	}
+}
+
+func TestParseYAMLBytesPreservesProviderModelPricing(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: qwen3
+  models:
+    - name: qwen3
+      provider_model_id: qwen3
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.24
+        completion_per_1m: 0.96
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: qwen3
+      modality: text
+  decisions:
+    - name: default_route
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: general
+      modelRefs:
+        - model: qwen3
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	pricing := cfg.ModelConfig["qwen3"].Pricing
+	if pricing.PromptPer1M != 0.24 || pricing.CompletionPer1M != 0.96 || pricing.Currency != "USD" {
+		t.Fatalf("expected provider pricing to be preserved in model config, got %#v", pricing)
+	}
+
+	promptPer1M, completionPer1M, currency, ok := cfg.GetModelPricing("qwen3")
+	if !ok {
+		t.Fatal("expected GetModelPricing to resolve provider pricing")
+	}
+	if promptPer1M != 0.24 || completionPer1M != 0.96 || currency != "USD" {
+		t.Fatalf(
+			"expected GetModelPricing to return provider pricing, got prompt=%v completion=%v currency=%q",
+			promptPer1M,
+			completionPer1M,
+			currency,
+		)
+	}
+}
+
+func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
+	cfg := &RouterConfig{
+		BackendModels: BackendModels{
+			ModelConfig: map[string]ModelParams{
+				"qwen-rocm": {
+					Pricing: ModelPricing{
+						Currency:        "USD",
+						PromptPer1M:     0,
+						CompletionPer1M: 0,
+					},
+				},
+			},
+		},
+	}
+
+	promptPer1M, completionPer1M, currency, ok := cfg.GetModelPricing("qwen-rocm")
+	if !ok {
+		t.Fatal("expected explicit zero pricing to be treated as configured")
+	}
+	if promptPer1M != 0 || completionPer1M != 0 || currency != "USD" {
+		t.Fatalf(
+			"expected zero pricing with USD currency, got prompt=%v completion=%v currency=%q",
+			promptPer1M,
+			completionPer1M,
+			currency,
+		)
 	}
 }
 

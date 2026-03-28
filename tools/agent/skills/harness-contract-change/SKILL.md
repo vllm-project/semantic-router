@@ -28,19 +28,22 @@ description: Modifies the repository's agent contract including AGENTS.md, docs 
 
 ## Workflow
 
-1. Read agent README, governance docs, and tech debt register for current contract state
+1. Read agent README, governance docs, and execution-plan guidance for current contract state
 2. Modify agent contract docs, manifests, validation scripts, or contributor wrappers
 3. Run `make agent-validate` to check alignment between docs and manifests
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to verify all surfaces pass
 5. Record any durable code/spec divergence as indexed debt entries
+
+## Gotchas
+
+- Do not add a prose-only harness rule when the same invariant can be enforced in manifests, scripts, or CI.
+- When routing, validation, or contributor workflow changes, update the executable layer and the human-readable layer in the same patch.
 
 ## Must Read
 
 - [docs/agent/README.md](../../../../docs/agent/README.md)
 - [docs/agent/governance.md](../../../../docs/agent/governance.md)
 - [docs/agent/plans/README.md](../../../../docs/agent/plans/README.md)
-- [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
-- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 
 ## Standard Commands
 

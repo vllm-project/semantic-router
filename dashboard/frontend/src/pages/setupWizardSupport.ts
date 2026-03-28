@@ -80,7 +80,7 @@ export const SETUP_STEP_LABELS: ReadonlyArray<[string, string]> = [
 ];
 
 export const DEFAULT_REMOTE_SETUP_CONFIG_URL =
-  "https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/amd/config.yaml";
+  "https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/balance.yaml";
 
 export function createSetupConfigCounts(
   overrides: Partial<SetupConfigCounts> = {},
@@ -97,7 +97,7 @@ export function createSetupConfigCounts(
 export function createModelDraft(seed: number): ModelDraft {
   return {
     id: `model-${Date.now()}-${seed}`,
-    name: "openai/gpt-oss-120b",
+    name: "qwen/qwen3.5-rocm",
     providerKind: "vllm",
     baseUrl: "vllm:8000",
     accessKey: "",

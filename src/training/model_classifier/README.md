@@ -143,6 +143,69 @@ LD_LIBRARY_PATH=~/candle-binding/target/release \
 go run ft_linear_lora_verifier.go --model models/lora_intent_classifier_bert-base-uncased_r16_model_rust
 ```
 
+### Dataset Verification With LLM Voting
+
+For multilingual mmBERT-32K text classifiers, you can audit dataset labels with
+multiple LLM judges and majority voting. This now supports `modality` too, either
+from a Hugging Face repo or a local exported `hf_dataset/` directory:
+
+```bash
+python src/training/model_classifier/verify_text_classification_datasets.py \
+  --task feedback intent jailbreak fact-check modality \
+  --judge-model minimax2.5 glm5 qwen3.5-397b \
+  --api-url http://localhost:8000/v1/chat/completions \
+  --sample 500 \
+  --correct \
+  --confidence high
+```
+
+This script writes one report per task under
+`src/training/model_classifier/verified_datasets_vote/` and can optionally save
+corrected datasets for the reviewed split.
+
+For a locally exported modality dataset before uploading:
+
+```bash
+python src/training/model_classifier/verify_text_classification_datasets.py \
+  --task modality \
+  --dataset-id-override modality=./modality-routing-dataset/hf_dataset \
+  --split all-splits \
+  --stage1-model your-stage1-model \
+  --judge-model your-judge-model-a your-judge-model-b your-judge-model-c your-judge-model-d \
+  --api-url https://your-openai-compatible-endpoint/v1/chat/completions \
+  --all
+```
+
+For faster full-dataset review, use two-stage mode:
+
+```bash
+python src/training/model_classifier/verify_text_classification_datasets.py \
+  --task all-text \
+  --stage1-model your-stage1-model \
+  --judge-model your-judge-model-a your-judge-model-b your-judge-model-c your-judge-model-d \
+  --api-url https://your-openai-compatible-endpoint/v1/chat/completions \
+  --all \
+  --correct \
+  --confidence high
+```
+
+In two-stage mode, the stage1 model scans every sample once. Only low-confidence
+or likely-mislabeled examples are escalated to the multi-judge stage2 vote.
+`all-text` now includes `modality`; if your modality dataset lives in a different
+repo or only exists locally, add `--dataset-id-override modality=...`.
+
+To review every available split for a task instead of the registry default split:
+
+```bash
+python src/training/model_classifier/verify_text_classification_datasets.py \
+  --task all-text \
+  --split all-splits \
+  --stage1-model your-stage1-model \
+  --judge-model your-judge-model-a your-judge-model-b your-judge-model-c your-judge-model-d \
+  --api-url https://your-openai-compatible-endpoint/v1/chat/completions \
+  --all
+```
+
 ## 📊 Performance Results
 
 ### Key Findings

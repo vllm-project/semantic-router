@@ -87,6 +87,32 @@ var (
 		},
 		[]string{"backend", "user_id"},
 	)
+
+	// MemoryCacheHits counts retrieval requests served from Redis hot cache.
+	MemoryCacheHits = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_memory_cache_hits_total",
+			Help: "Total number of memory retrieval requests served from Redis cache",
+		},
+		[]string{"backend"},
+	)
+	// MemoryCacheMisses counts retrieval requests that missed the Redis cache (went to Milvus).
+	MemoryCacheMisses = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_memory_cache_misses_total",
+			Help: "Total number of memory retrieval requests that missed the cache",
+		},
+		[]string{"backend"},
+	)
+	// MemoryCacheLatencySeconds records latency of cache get operations (hit path).
+	MemoryCacheLatencySeconds = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_memory_cache_latency_seconds",
+			Help:    "Latency of memory cache get operations (cache hit path)",
+			Buckets: []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1},
+		},
+		[]string{"backend"},
+	)
 )
 
 // =============================================================================
@@ -160,4 +186,23 @@ func UpdateMemoryStoreSize(backend, userID string, count int) {
 	}
 
 	MemoryStoreSize.WithLabelValues(backend, userID).Set(float64(count))
+}
+
+// RecordMemoryCacheHit records a cache hit and optional latency for the cache get.
+func RecordMemoryCacheHit(backend string, latencySeconds float64) {
+	if backend == "" {
+		backend = consts.UnknownLabel
+	}
+	MemoryCacheHits.WithLabelValues(backend).Inc()
+	if latencySeconds >= 0 {
+		MemoryCacheLatencySeconds.WithLabelValues(backend).Observe(latencySeconds)
+	}
+}
+
+// RecordMemoryCacheMiss records a cache miss (request went to backend).
+func RecordMemoryCacheMiss(backend string) {
+	if backend == "" {
+		backend = consts.UnknownLabel
+	}
+	MemoryCacheMisses.WithLabelValues(backend).Inc()
 }

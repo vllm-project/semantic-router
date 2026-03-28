@@ -294,8 +294,11 @@ failed to load model: <path>
 - Ensure path is accessible inside container
 
 ```yaml
-bert_model:
-  model_id: /app/models/all-MiniLM-L12-v2 # Use absolute path in container
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        bert_model_path: /app/models/all-MiniLM-L12-v2 # Use absolute path in container
 ```
 
 ---

@@ -914,18 +914,6 @@ func ClassifyFeedbackText(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
 }
 
-// InitQwen3PreferenceClassifier is not supported in ONNX binding (Qwen3 is Candle-only).
-// Returns an error so callers can disable or fall back when using ONNX config.
-func InitQwen3PreferenceClassifier(modelPath string, useCPU bool) error {
-	return errors.New("Qwen3 preference classifier is not supported in ONNX binding; use Candle binding or disable preference routing")
-}
-
-// ClassifyQwen3Preference is not supported in ONNX binding (Qwen3 is Candle-only).
-// Returns an error so callers can disable or fall back when using ONNX config.
-func ClassifyQwen3Preference(text string, labels []string) (ClassResult, error) {
-	return ClassResult{}, errors.New("Qwen3 preference classifier is not supported in ONNX binding; use Candle binding or disable preference routing")
-}
-
 // ============================================================================
 // Modality Classification (stub — Candle-only)
 // ============================================================================

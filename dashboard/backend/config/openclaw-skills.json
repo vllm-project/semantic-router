@@ -36,6 +36,15 @@
     "requires": ["oracle"]
   },
   {
+    "id": "openclaw-vsr-bridge",
+    "name": "OpenClaw VSR Bridge",
+    "description": "Install vLLM Semantic Router in agent-safe mode, import supported OpenClaw model providers into canonical config.yaml, and rewrite OpenClaw to target VSR.",
+    "emoji": "🧭",
+    "category": "development",
+    "builtin": true,
+    "requires": ["curl", "bash", "python3"]
+  },
+  {
     "id": "canvas",
     "name": "Canvas",
     "description": "Display HTML content on connected OpenClaw nodes (games, visualizations, dashboards, interactive demos).",

@@ -2,6 +2,7 @@ import React from 'react'
 
 export type CapabilityGlyphKind =
   | 'signal'
+  | 'projection'
   | 'decision'
   | 'plugin'
   | 'language'
@@ -60,6 +61,25 @@ function DecisionGlyph(): JSX.Element {
       <rect x="40" y="70" width="24" height="10" rx="5" {...strokeProps} opacity="0.55" />
       <rect x="80" y="70" width="24" height="10" rx="5" {...strokeProps} />
       <circle cx="92" cy="75" r="2.6" fill="currentColor" opacity="0.24" />
+    </>
+  )
+}
+
+function ProjectionGlyph(): JSX.Element {
+  return (
+    <>
+      <circle cx="22" cy="28" r="4.5" {...strokeProps} opacity="0.72" />
+      <circle cx="22" cy="48" r="4.5" {...strokeProps} />
+      <circle cx="22" cy="68" r="4.5" {...strokeProps} opacity="0.72" />
+      <path d="M27 28h16m-16 20h16m-16 20h16" {...strokeProps} opacity="0.72" />
+      <rect x="48" y="20" width="28" height="56" rx="10" {...strokeProps} />
+      <path d="M56 32h12m-12 12h12m-12 12h12" {...strokeProps} opacity="0.52" />
+      <circle cx="62" cy="60" r="3" fill="currentColor" opacity="0.2" />
+      <path d="M76 48h14" {...strokeProps} />
+      <path d="M90 48l10-12m-10 12 10 12" {...strokeProps} />
+      <rect x="102" y="24" width="20" height="12" rx="6" {...strokeProps} opacity="0.82" />
+      <rect x="102" y="42" width="24" height="12" rx="6" {...strokeProps} />
+      <rect x="102" y="60" width="18" height="12" rx="6" {...strokeProps} opacity="0.82" />
     </>
   )
 }
@@ -149,6 +169,8 @@ function renderGlyph(kind: CapabilityGlyphKind): JSX.Element {
   switch (kind) {
     case 'signal':
       return <SignalGlyph />
+    case 'projection':
+      return <ProjectionGlyph />
     case 'decision':
       return <DecisionGlyph />
     case 'plugin':

@@ -211,6 +211,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Preference:   ctx.VSRMatchedPreference,
 		Language:     ctx.VSRMatchedLanguage,
 		Context:      ctx.VSRMatchedContext,
+		Structure:    ctx.VSRMatchedStructure,
 		Complexity:   ctx.VSRMatchedComplexity,
 	}
 }
@@ -328,5 +329,23 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 	)
 	if err != nil {
 		logging.Errorf("Failed to update router replay hallucination status: %v", err)
+	}
+}
+
+func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {
+	if ctx == nil || ctx.RouterReplayID == "" || usage.TotalTokens == nil {
+		return
+	}
+
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+
+	if err := recorder.UpdateUsageCost(ctx.RouterReplayID, usage); err != nil {
+		logging.Errorf("Failed to update router replay usage cost: %v", err)
 	}
 }

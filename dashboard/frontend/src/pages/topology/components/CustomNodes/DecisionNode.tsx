@@ -3,7 +3,8 @@
 import { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import { DecisionConfig } from '../../types'
-import { SIGNAL_ICONS, NODE_COLORS } from '../../constants'
+import { NODE_COLORS } from '../../constants'
+import { buildRulePreviewLines, summarizeRuleNode } from '../../utils/ruleTree'
 import styles from './CustomNodes.module.css'
 
 interface DecisionNodeData {
@@ -35,6 +36,14 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
   const hasReasoning = modelRefs.some(m => m.use_reasoning)
   const hasPlugins = plugins && plugins.length > 0
   const hasAlgorithm = algorithm && algorithm.type !== 'static'
+  const previewConditions = rules.conditions.slice(0, 4).map((condition, index) => ({
+    key: `condition-${index}`,
+    title: summarizeRuleNode(condition),
+    lines: buildRulePreviewLines(condition, {
+      includeRootOperator: true,
+      maxLines: 3,
+    }),
+  }))
   
   // Use warning colors for unreachable decisions
   const colors = isUnreachable 
@@ -86,17 +95,43 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
           </span>
         </div>
 
-        {!rulesCollapsed && rules.conditions.length > 0 && (
+        {!rulesCollapsed && previewConditions.length > 0 && (
           <div className={styles.conditionsList}>
-            {rules.conditions.slice(0, 4).map((cond, idx) => (
-              <span key={idx} className={styles.condition}>
-                {SIGNAL_ICONS[cond.type] || '❓'} {cond.type}: {cond.name}
-              </span>
-            ))}
+            {previewConditions.map((condition) => {
+              return (
+                <div
+                  key={condition.key}
+                  className={styles.conditionTree}
+                  title={condition.title}
+                >
+                  {condition.lines.map((line) => {
+                    const rowClassName = line.kind === 'operator'
+                      ? styles.conditionOperatorRow
+                      : line.kind === 'more'
+                        ? styles.conditionMoreRow
+                        : styles.conditionLeafRow
+
+                    return (
+                      <div
+                        key={line.key}
+                        className={`${styles.conditionRow} ${rowClassName}`}
+                        style={{ paddingInlineStart: `${Math.min(line.depth, 2) * 10}px` }}
+                      >
+                        <span className={line.kind === 'operator' ? styles.conditionOperatorBadge : styles.conditionText}>
+                          {line.text}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
             {rules.conditions.length > 4 && (
-              <span className={styles.condition} style={{ opacity: 0.7 }}>
-                +{rules.conditions.length - 4} more
-              </span>
+              <div className={styles.conditionTree}>
+                <div className={`${styles.conditionRow} ${styles.conditionMoreRow}`}>
+                  <span className={styles.conditionText}>+{rules.conditions.length - 4} more</span>
+                </div>
+              </div>
             )}
           </div>
         )}

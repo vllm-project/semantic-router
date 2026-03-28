@@ -59,16 +59,3 @@ func (s *ClassificationAPIServer) currentConfig() *config.RouterConfig {
 	}
 	return s.config
 }
-
-func (s *ClassificationAPIServer) updateRuntimeConfig(newCfg *config.RouterConfig) {
-	if s.runtimeConfig != nil {
-		s.runtimeConfig.Update(newCfg)
-		return
-	}
-	s.config = newCfg
-	if s.classificationSvc != nil {
-		s.classificationSvc.UpdateConfig(newCfg)
-		return
-	}
-	config.Replace(newCfg)
-}

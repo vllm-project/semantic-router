@@ -113,7 +113,7 @@ const OnboardingGuide: React.FC = () => {
   const step = GUIDE_STEPS[stepIndex]
   const isOnTargetRoute = location.pathname === step.route
 
-  const handleReplay = () => {
+  const handleOpenGuide = () => {
     markOnboardingPending()
     setStatus('pending')
     setStepIndex(0)
@@ -151,7 +151,7 @@ const OnboardingGuide: React.FC = () => {
     }
 
     return (
-      <button className={styles.replayButton} onClick={handleReplay}>
+      <button className={styles.replayButton} onClick={handleOpenGuide}>
         Guide
       </button>
     )

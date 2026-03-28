@@ -20,7 +20,7 @@ pip install -e .
 ### Usage
 
 ```bash
-# Start the router (includes dashboard and first-run setup)
+# Start the router (includes dashboard, simulator sidecar, and first-run setup)
 HF_TOKEN=hf_xxx vllm-sr serve
 
 # Start an isolated second local stack on offset host ports
@@ -37,6 +37,7 @@ vllm-sr dashboard
 vllm-sr logs router
 vllm-sr logs envoy
 vllm-sr logs dashboard
+vllm-sr logs simulator
 
 # Check status
 vllm-sr status
@@ -45,9 +46,38 @@ vllm-sr status
 vllm-sr stop
 ```
 
+### Kubernetes Deployment
+
+The same CLI deploys to Kubernetes via Helm:
+
+```bash
+# Deploy to Kubernetes (uses your existing config.yaml)
+HF_TOKEN=hf_xxx vllm-sr serve --target k8s --profile dev --config config.yaml
+
+# Deploy to a specific namespace and context
+HF_TOKEN=hf_xxx vllm-sr serve --target k8s --namespace production --context prod-cluster
+
+# Check status / logs / stop
+vllm-sr status --target k8s
+vllm-sr logs router --target k8s -f
+vllm-sr stop --target k8s
+```
+
+**Credential handling:** Sensitive environment variables (`HF_TOKEN`, `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`) are automatically stored in a Kubernetes Secret
+(`vllm-sr-env-secrets`) and mounted via `envFrom`. They never appear as
+plain-text values in Helm overrides or the Deployment spec. Non-sensitive
+variables (`HF_ENDPOINT`, `HF_HOME`, etc.) are passed as standard `env`
+entries.
+
+The secret is created before `helm upgrade --install` and cleaned up by
+`vllm-sr stop --target k8s`.
+
 If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspace and opens the dashboard in setup mode. Configure your first model there, then activate routing.
 
 Local dashboard state is persisted under `.vllm-sr/dashboard-data/` and bind-mounted into the container at `/app/data`. User accounts, evaluation history, and ML pipeline artifacts survive `vllm-sr stop` followed by a new `vllm-sr serve` as long as that workspace directory is kept.
+
+The fleet simulator sidecar is started on the same runtime network by default. The dashboard backend proxies it at `/api/fleet-sim/*`, and the dashboard exposes its workflows under the `Fleet Sim` top-bar dropdown.
 
 To run parallel local stacks from the same machine or multiple worktrees, set `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET` before `vllm-sr serve`, `vllm-sr status`, `vllm-sr dashboard`, and `vllm-sr stop`. The stack name isolates container and network names, and the port offset shifts the published host ports while keeping internal container ports unchanged.
 
@@ -58,7 +88,7 @@ To run parallel local stacks from the same machine or multiple worktrees, set `V
 vllm-sr validate config.yaml
 ```
 
-`vllm-sr init` was removed in v0.3. Author `config.yaml` directly using the canonical `version/listeners/providers/routing/global` layout, or migrate an older file with `vllm-sr config migrate --config old-config.yaml`. Router-wide defaults come from the router itself and can be overridden under `global:`.
+`vllm-sr init` was removed in v0.3. Author `config.yaml` directly using the canonical `version/listeners/providers/routing/global` layout, migrate an older file with `vllm-sr config migrate --config old-config.yaml`, or import supported OpenClaw model providers with `vllm-sr config import --from openclaw`. Router-wide defaults come from the router itself and can be overridden under `global:`.
 
 ## Features
 
@@ -219,6 +249,14 @@ routing:
             max_body_bytes: 4096  # Optional: max bytes to capture (default: 4096)
 ```
 
+Router replay records are exposed through:
+
+- `GET /v1/router_replay?limit=20&offset=0&search=req-123&decision=foo&model=bar&cache_status=cached` - List recent records with pagination metadata. Default page size is `20`; larger `limit` values are capped at `100`.
+- `GET /v1/router_replay/aggregate?search=req-123&decision=foo&model=bar&cache_status=cached` - Return summary and chart aggregates for the filtered replay set.
+- `GET /v1/router_replay/{id}` - Fetch a single replay record.
+
+If a replay page would exceed the ext-proc gRPC message budget, the router returns `413 Payload Too Large` instead of failing the stream.
+
 **Validation Rules:**
 
 - **Plugin Type**: Must be one of: `semantic-cache`, `jailbreak`, `pii`, `system_prompt`, `header_mutation`, `hallucination`, `router_replay`
@@ -238,6 +276,9 @@ vllm-sr validate
 
 # Migrate older configs to the canonical contract
 vllm-sr config migrate --config old-config.yaml
+
+# Import supported OpenClaw model providers into canonical config.yaml
+vllm-sr config import --from openclaw --source openclaw.json --target config.yaml
 ```
 
 ### File Descriptor Limits

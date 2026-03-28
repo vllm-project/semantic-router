@@ -61,6 +61,7 @@ func (h *HybridCache) findSimilar(
 
 	responseBody, candidate, found := h.fetchResponseFromCandidates(logPrefix, candidatesWithIDs)
 	if found {
+		h.StoreSimilarity(candidate.similarity)
 		h.recordLookupHit(start, metricOp, threshold, model, candidate)
 		return responseBody, true, nil
 	}
