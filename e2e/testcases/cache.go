@@ -126,8 +126,11 @@ func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestca
 }
 
 func verifyUserScopedCacheBehavior(ctx context.Context, localPort string, verbose bool) error {
+	// Keep the prompt free of long digit strings: request-side PII classification can set
+	// PIIDetected and skip semantic-cache writes (HasPersonalizedContext), which breaks
+	// same-user hit expectations. Uniqueness is carried in x-authz-user-id only.
 	queryID := time.Now().UnixNano()
-	question := fmt.Sprintf("User scoped semantic cache isolation probe %d: explain mitosis versus meiosis.", queryID)
+	question := "Explain mitosis versus meiosis in one sentence."
 	firstUserID := fmt.Sprintf("cache-user-a-%d", queryID)
 	secondUserID := fmt.Sprintf("cache-user-b-%d", queryID)
 
