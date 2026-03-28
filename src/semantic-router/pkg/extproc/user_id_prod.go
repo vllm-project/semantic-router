@@ -16,8 +16,7 @@ import (
 // The auth header is injected by the external auth service (Authorino, Envoy Gateway JWT,
 // oauth2-proxy, etc.) and is the only trusted source for user identity.
 func extractUserID(ctx *RequestContext) string {
-	// Check auth header (trusted source, injected by auth backend)
-	if userID, ok := ctx.Headers[headers.AuthzUserID]; ok && userID != "" {
+	if userID := authHeaderUserID(ctx); userID != "" {
 		logging.Debugf("Memory: Using user_id from auth header (%s)", headers.AuthzUserID)
 		return userID
 	}

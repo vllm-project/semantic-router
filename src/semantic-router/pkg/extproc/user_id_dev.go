@@ -23,8 +23,7 @@ import (
 //   - metadata["user_id"] (consistent with Response API)
 //   - "user" field (deprecated by OpenAI, kept for backward compatibility)
 func extractUserID(ctx *RequestContext) string {
-	// Check auth header first (trusted source, injected by auth backend)
-	if userID, ok := ctx.Headers[headers.AuthzUserID]; ok && userID != "" {
+	if userID := authHeaderUserID(ctx); userID != "" {
 		logging.Debugf("Memory: Using user_id from auth header (%s)", headers.AuthzUserID)
 		return userID
 	}
