@@ -485,6 +485,9 @@ env:
         key: token
         optional: true # Alternative env var name used by huggingface-cli
 
+# Additional container env entries merged after `env` (e.g. E2E-only toggles).
+extraEnv: []
+
 # Dashboard configuration
 dashboard:
   # -- Enable the vLLM-SR dashboard

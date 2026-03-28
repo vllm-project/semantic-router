@@ -8,6 +8,27 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
+func TestCacheScopeUserID_PrefersAuthHeaderOverFallback(t *testing.T) {
+	t.Setenv("SEMANTIC_CACHE_FALLBACK_USER_HEADER", "x-vsr-e2e-cache-user")
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			headers.AuthzUserID:    "auth-user",
+			"x-vsr-e2e-cache-user": "other",
+		},
+	}
+	assert.Equal(t, "auth-user", cacheScopeUserID(ctx))
+}
+
+func TestCacheScopeUserID_UsesFallbackWhenAuthMissing(t *testing.T) {
+	t.Setenv("SEMANTIC_CACHE_FALLBACK_USER_HEADER", "x-vsr-e2e-cache-user")
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			"x-vsr-e2e-cache-user": "fallback-user",
+		},
+	}
+	assert.Equal(t, "fallback-user", cacheScopeUserID(ctx))
+}
+
 // =============================================================================
 // extractUserID Tests (Common to both dev and prod builds)
 // =============================================================================

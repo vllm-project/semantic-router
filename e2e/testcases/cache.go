@@ -17,6 +17,10 @@ import (
 
 const authzUserIDHeader = "x-authz-user-id"
 
+// Non-authz-prefixed header forwarded to extproc for cache user scoping in kubernetes E2E
+// when SEMANTIC_CACHE_FALLBACK_USER_HEADER is set on the router (see ai-gateway profile).
+const e2eSemanticCacheUserHeader = "x-vsr-e2e-cache-user"
+
 func init() {
 	pkgtestcases.Register("semantic-cache", pkgtestcases.TestCase{
 		Description: "Test semantic cache hit rate with similar questions",
@@ -289,6 +293,7 @@ func sendChatRequestForUser(ctx context.Context, question, localPort, userID str
 	req.Header.Set("Content-Type", "application/json")
 	if userID != "" {
 		req.Header.Set(authzUserIDHeader, userID)
+		req.Header.Set(e2eSemanticCacheUserHeader, userID)
 	}
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}

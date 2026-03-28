@@ -61,7 +61,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
-	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, extractUserID(ctx))
+	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
 
 	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
 
@@ -86,7 +86,7 @@ func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName s
 	}
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
-	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, extractUserID(ctx))
+	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
 
 	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
 	r.storePendingCacheRequest(ctx, categoryName, requestModel, cacheEnabled)

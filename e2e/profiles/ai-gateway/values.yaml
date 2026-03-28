@@ -512,3 +512,9 @@ resources:
   requests:
     cpu: "1"
     memory: "5Gi"
+
+# Envoy AI Gateway may strip x-authz-* before extproc; E2E sends x-vsr-e2e-cache-user and
+# the router reads it only when this env is set (never enable in production).
+extraEnv:
+  - name: SEMANTIC_CACHE_FALLBACK_USER_HEADER
+    value: "x-vsr-e2e-cache-user"
