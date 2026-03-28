@@ -1,6 +1,3 @@
-% sections/abstract.tex
-
-\begin{abstract}
 As large language models (LLMs) diversify across modalities, capabilities, and cost profiles, the problem of \emph{intelligent request routing}---selecting the right model for each query at inference time---has become a critical systems challenge.
 We present \textbf{\sysname{}}, a signal-driven decision routing framework for Mixture-of-Modality (MoM) model deployments.
 
@@ -13,4 +10,3 @@ The central innovation is \emph{composable signal orchestration}: thirteen heter
 Matched decisions drive \emph{semantic model routing} via thirteen selection algorithms, while per-decision plugin chains enforce safety constraints including a three-stage \emph{HaluGate} hallucination detection pipeline and a lightweight episodic memory system with \emph{ReflectionGate} for personalized multi-turn context.
 A typed neural-symbolic DSL specifies these routing policies and compiles them to multiple deployment targets, enabling configuration-first adaptation without code changes.
 Together, these components show that composable signal orchestration enables a single framework to serve diverse deployment scenarios with differentiated cost, privacy, and safety policies.
-\end{abstract}

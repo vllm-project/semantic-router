@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // TestQueryMode represents the test query mode
@@ -29,10 +27,11 @@ type TestQueryRequest struct {
 
 // MatchedSignal represents a matched signal
 type MatchedSignal struct {
-	Type       string  `json:"type"`
-	Name       string  `json:"name"`
-	Confidence float64 `json:"confidence"`
-	Reason     string  `json:"reason,omitempty"`
+	Type       string   `json:"type"`
+	Name       string   `json:"name"`
+	Confidence float64  `json:"confidence"`
+	Value      *float64 `json:"value,omitempty"`
+	Reason     string   `json:"reason,omitempty"`
 }
 
 // EvaluatedRule represents an evaluated decision rule
@@ -126,32 +125,40 @@ type RouterIntentOptions struct {
 	ReturnProbabilities bool `json:"return_probabilities,omitempty"`
 }
 
-// RouterIntentResponse is the response from Router's /api/v1/classify/intent
-type RouterIntentResponse struct {
-	Classification struct {
-		Category         string  `json:"category"`
-		Confidence       float64 `json:"confidence"`
-		ProcessingTimeMs int64   `json:"processing_time_ms"`
-	} `json:"classification"`
-	Probabilities    map[string]float64 `json:"probabilities,omitempty"`
-	RecommendedModel string             `json:"recommended_model,omitempty"`
-	RoutingDecision  string             `json:"routing_decision,omitempty"`
-	MatchedSignals   *struct {
-		Keywords     []string `json:"keywords,omitempty"`
-		Embeddings   []string `json:"embeddings,omitempty"`
-		Domains      []string `json:"domains,omitempty"`
-		FactCheck    []string `json:"fact_check,omitempty"`
-		UserFeedback []string `json:"user_feedback,omitempty"`
-		Preferences  []string `json:"preferences,omitempty"`
-		Language     []string `json:"language,omitempty"`
-		Context      []string `json:"context,omitempty"`
-		Complexity   []string `json:"complexity,omitempty"`
-	} `json:"matched_signals,omitempty"`
-	DecisionResult *struct {
-		DecisionName string   `json:"decision_name"`
-		Confidence   float64  `json:"confidence"`
-		MatchedRules []string `json:"matched_rules"`
-	} `json:"decision_result,omitempty"`
+type RouterMatchedSignals struct {
+	Keywords     []string `json:"keywords,omitempty"`
+	Embeddings   []string `json:"embeddings,omitempty"`
+	Domains      []string `json:"domains,omitempty"`
+	FactCheck    []string `json:"fact_check,omitempty"`
+	UserFeedback []string `json:"user_feedback,omitempty"`
+	Preferences  []string `json:"preferences,omitempty"`
+	Language     []string `json:"language,omitempty"`
+	Context      []string `json:"context,omitempty"`
+	Structure    []string `json:"structure,omitempty"`
+	Complexity   []string `json:"complexity,omitempty"`
+	Modality     []string `json:"modality,omitempty"`
+	Authz        []string `json:"authz,omitempty"`
+	Jailbreak    []string `json:"jailbreak,omitempty"`
+	PII          []string `json:"pii,omitempty"`
+	KB           []string `json:"kb,omitempty"`
+	Projection   []string `json:"projection,omitempty"`
+}
+
+type RouterEvalDecisionResult struct {
+	DecisionName     string                `json:"decision_name"`
+	UsedSignals      *RouterMatchedSignals `json:"used_signals,omitempty"`
+	MatchedSignals   *RouterMatchedSignals `json:"matched_signals,omitempty"`
+	UnmatchedSignals *RouterMatchedSignals `json:"unmatched_signals,omitempty"`
+}
+
+// RouterEvalResponse is the response from Router's /api/v1/eval endpoint.
+type RouterEvalResponse struct {
+	OriginalText      string                    `json:"original_text,omitempty"`
+	DecisionResult    *RouterEvalDecisionResult `json:"decision_result,omitempty"`
+	RecommendedModels []string                  `json:"recommended_models,omitempty"`
+	RoutingDecision   string                    `json:"routing_decision,omitempty"`
+	SignalConfidences map[string]float64        `json:"signal_confidences,omitempty"`
+	SignalValues      map[string]float64        `json:"signal_values,omitempty"`
 }
 
 // callRouterAPI calls the real Router API for classification
@@ -174,8 +181,8 @@ func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQ
 		}
 	}
 
-	// Call Router API
-	apiURL := fmt.Sprintf("%s/api/v1/classify/intent", strings.TrimSuffix(routerAPIURL, "/"))
+	// Call Router eval API so topology can inspect all matched signals and signal scores.
+	apiURL := fmt.Sprintf("%s/api/v1/eval", strings.TrimSuffix(routerAPIURL, "/"))
 	httpReq, err := http.NewRequest("POST", apiURL, bytes.NewReader(reqBody))
 	if err != nil {
 		return &TestQueryResult{
@@ -214,7 +221,7 @@ func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQ
 	}
 
 	// Parse response
-	var routerResp RouterIntentResponse
+	var routerResp RouterEvalResponse
 	if err := json.NewDecoder(resp.Body).Decode(&routerResp); err != nil {
 		log.Printf("Failed to decode Router API response: %v", err)
 		return &TestQueryResult{
@@ -228,202 +235,6 @@ func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQ
 
 	// Convert Router response to TestQueryResult
 	return convertRouterResponse(req, &routerResp, configPath)
-}
-
-// convertRouterResponse converts Router API response to TestQueryResult
-func convertRouterResponse(req TestQueryRequest, routerResp *RouterIntentResponse, configPath string) *TestQueryResult {
-	result := &TestQueryResult{
-		Query:           req.Query,
-		Mode:            req.Mode,
-		MatchedSignals:  []MatchedSignal{},
-		MatchedModels:   []string{},
-		HighlightedPath: []string{"client"},
-		IsAccurate:      true,
-		EvaluatedRules:  []EvaluatedRule{},
-	}
-
-	// Convert matched signals
-	if routerResp.MatchedSignals != nil {
-		for _, kw := range routerResp.MatchedSignals.Keywords {
-			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
-				Type:       "keyword",
-				Name:       kw,
-				Confidence: 1.0,
-				Reason:     "Keyword rule matched",
-			})
-			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-keyword-%s", kw))
-		}
-		for _, emb := range routerResp.MatchedSignals.Embeddings {
-			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
-				Type:       "embedding",
-				Name:       emb,
-				Confidence: 0.85,
-				Reason:     "Embedding similarity matched",
-			})
-			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-embedding-%s", emb))
-		}
-		for _, domain := range routerResp.MatchedSignals.Domains {
-			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
-				Type:       "domain",
-				Name:       domain,
-				Confidence: routerResp.Classification.Confidence,
-				Reason:     "Domain classification matched",
-			})
-			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-domain-%s", domain))
-		}
-		for _, fc := range routerResp.MatchedSignals.FactCheck {
-			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
-				Type:       "fact_check",
-				Name:       fc,
-				Confidence: 0.9,
-				Reason:     "Fact check signal matched",
-			})
-		}
-		for _, pref := range routerResp.MatchedSignals.Preferences {
-			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
-				Type:       "preference",
-				Name:       pref,
-				Confidence: 1.0,
-				Reason:     "User preference matched",
-			})
-			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-preference-%s", pref))
-		}
-		for _, uf := range routerResp.MatchedSignals.UserFeedback {
-			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
-				Type:       "user_feedback",
-				Name:       uf,
-				Confidence: 1.0,
-				Reason:     "User feedback matched",
-			})
-			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-user_feedback-%s", uf))
-		}
-		for _, lang := range routerResp.MatchedSignals.Language {
-			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
-				Type:       "language",
-				Name:       lang,
-				Confidence: 0.95,
-				Reason:     "Language detected",
-			})
-			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-language-%s", lang))
-		}
-		for _, ctx := range routerResp.MatchedSignals.Context {
-			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
-				Type:       "context",
-				Name:       ctx,
-				Confidence: 1.0,
-				Reason:     "Context token count matched",
-			})
-			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-context-%s", ctx))
-		}
-		for _, comp := range routerResp.MatchedSignals.Complexity {
-			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
-				Type:       "complexity",
-				Name:       comp,
-				Confidence: 0.9,
-				Reason:     "Complexity level matched",
-			})
-			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-complexity-%s", comp))
-		}
-	}
-
-	// Add signal group nodes if signals matched
-	if len(result.MatchedSignals) > 0 {
-		signalTypes := make(map[string]bool)
-		for _, s := range result.MatchedSignals {
-			signalTypes[s.Type] = true
-		}
-		for st := range signalTypes {
-			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-group-%s", st))
-		}
-	}
-
-	// Set decision result
-	if routerResp.DecisionResult != nil {
-		result.MatchedDecision = routerResp.DecisionResult.DecisionName
-		result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("decision-%s", routerResp.DecisionResult.DecisionName))
-
-		// Add evaluated rule
-		result.EvaluatedRules = append(result.EvaluatedRules, EvaluatedRule{
-			DecisionName: routerResp.DecisionResult.DecisionName,
-			Conditions:   routerResp.DecisionResult.MatchedRules,
-			MatchedCount: len(routerResp.DecisionResult.MatchedRules),
-			TotalCount:   len(routerResp.DecisionResult.MatchedRules),
-			IsMatch:      true,
-		})
-	} else if routerResp.RoutingDecision != "" {
-		result.MatchedDecision = routerResp.RoutingDecision
-		result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("decision-%s", routerResp.RoutingDecision))
-
-		// Check if this is a system fallback decision
-		if isSystemFallbackDecision(routerResp.RoutingDecision) {
-			result.IsFallbackDecision = true
-			result.FallbackReason = getFallbackReason(routerResp.RoutingDecision)
-			// Add fallback decision node to highlighted path
-			result.HighlightedPath = append(result.HighlightedPath, "fallback-decision")
-		}
-	}
-
-	// Set matched model
-	if routerResp.RecommendedModel != "" {
-		result.MatchedModels = append(result.MatchedModels, routerResp.RecommendedModel)
-		// Normalize model ID to match frontend format (replace non-alphanumeric with -)
-		normalizedModel := normalizeModelName(routerResp.RecommendedModel)
-		result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("model-%s", normalizedModel))
-	}
-
-	// Build normalized matched signal names map for decision evaluation
-	matchedSignalNames := make(map[string]bool)
-	for _, signal := range result.MatchedSignals {
-		// Store both original and normalized versions for matching
-		key := fmt.Sprintf("%s:%s", signal.Type, signal.Name)
-		normalizedKey := fmt.Sprintf("%s:%s", signal.Type, normalizeSignalName(signal.Name))
-		matchedSignalNames[key] = true
-		matchedSignalNames[normalizedKey] = true
-	}
-
-	// Load config to get evaluated rules (for showing all decisions)
-	if parsedConfig, err := routerconfig.Parse(configPath); err == nil && parsedConfig != nil {
-		for _, decision := range parsedConfig.IntelligentRouting.Decisions {
-			if result.MatchedDecision != "" && decision.Name == result.MatchedDecision {
-				continue // Already added
-			}
-			rule := EvaluatedRule{
-				DecisionName: decision.Name,
-				RuleOperator: strings.ToUpper(decision.Rules.Operator),
-				IsMatch:      false,
-				Priority:     decision.Priority,
-			}
-			if rule.RuleOperator == "" {
-				rule.RuleOperator = "AND"
-			}
-
-			// Evaluate each condition against matched signals
-			for _, cond := range decision.Rules.Conditions {
-				condKey := fmt.Sprintf("%s:%s", cond.Type, cond.Name)
-				normalizedCondKey := fmt.Sprintf("%s:%s", cond.Type, normalizeSignalName(cond.Name))
-				rule.Conditions = append(rule.Conditions, condKey)
-				rule.TotalCount++
-
-				// Check if condition matches (using both original and normalized)
-				if matchedSignalNames[condKey] || matchedSignalNames[normalizedCondKey] {
-					rule.MatchedCount++
-				}
-			}
-
-			// Determine if decision matches based on operator
-			if rule.TotalCount == 0 {
-				rule.IsMatch = true // No conditions = always match
-			} else if rule.RuleOperator == "OR" {
-				rule.IsMatch = rule.MatchedCount > 0
-			} else { // AND
-				rule.IsMatch = rule.MatchedCount == rule.TotalCount
-			}
-
-			result.EvaluatedRules = append(result.EvaluatedRules, rule)
-		}
-	}
-
-	return result
 }
 
 // System fallback decisions - these are hardcoded in the router, not from config

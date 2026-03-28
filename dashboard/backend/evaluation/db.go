@@ -108,6 +108,18 @@ func (d *DB) Close() error {
 	return d.db.Close()
 }
 
+// RecoverRunningTasks marks all tasks with status "running" as "failed" with the given message.
+// Call this on dashboard startup so that flows survive restart and UI state is consistent.
+func (d *DB) RecoverRunningTasks(message string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	_, err := d.db.Exec(
+		`UPDATE evaluation_tasks SET status = ?, completed_at = CURRENT_TIMESTAMP, error_message = ? WHERE status = ?`,
+		models.StatusFailed, message, models.StatusRunning,
+	)
+	return err
+}
+
 // CreateTask creates a new evaluation task.
 func (d *DB) CreateTask(task *models.EvaluationTask) error {
 	d.mu.Lock()

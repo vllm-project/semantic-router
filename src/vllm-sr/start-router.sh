@@ -8,6 +8,20 @@ CONFIG_FILE="${1:-/app/config.yaml}"
 echo "Starting router from canonical config..."
 echo "  Config file: $CONFIG_FILE"
 
+# Preserve setup-mode behavior from the legacy supervisord entrypoint.
+if python3 -c "
+import sys, yaml
+try:
+    data = yaml.safe_load(open('$CONFIG_FILE')) or {}
+    setup = data.get('setup')
+    sys.exit(0 if isinstance(setup, dict) and setup.get('mode') else 1)
+except Exception:
+    sys.exit(1)
+"; then
+    echo "Setup mode enabled: router disabled"
+    exec sleep infinity
+fi
+
 # Start router
 echo "Starting router..."
 exec /usr/local/bin/router \

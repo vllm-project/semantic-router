@@ -25,6 +25,7 @@ This document defines how the repository's agent rules are layered and maintaine
 - Put durable prose guidance in `docs/agent/*`.
 - Put important repeated rules into executable checks when possible.
 - Keep task-first context disclosure executable through `tools/agent/context-map.yaml` and `make agent-report`, not as a second prose-only handbook.
+- Keep gitignored local harness outputs under `.agent-harness/` as derived helper artifacts only; they must not replace canonical plans, ADRs, debt entries, or indexed docs.
 - If prose and executable rules disagree, fix them in the same change.
 - Record durable unresolved gaps in the debt entry files indexed from [tech-debt/README.md](tech-debt/README.md), and keep [tech-debt-register.md](tech-debt-register.md) as the landing page for that workflow.
 - If desired architecture and current implementation still diverge after a change, promote that gap there instead of leaving it only in PR text or chat.
@@ -32,12 +33,22 @@ This document defines how the repository's agent rules are layered and maintaine
 - Record durable harness decisions in [adr/README.md](adr/README.md) and the ADR files it indexes.
 - Do not use ADRs for temporary execution plans, one-off migrations, or debt items that have not yet reached a durable decision.
 
+## Default Task Loop
+
+- Every task follows the canonical loop surfaced by `make agent-report`.
+- Start from the resolved skill and context, make the smallest viable change, run the applicable gate, and treat failing runs as continuation signals instead of handoff points.
+- `tools/agent/task-matrix.yaml` classifies rule sets as `lightweight` or `completion`.
+- `lightweight` tasks close when the applicable gates for the current change pass or a real external blocker is recorded.
+- `completion` tasks close when the active subtask and its applicable gates pass; if the work spans multiple ordered loops or must resume across sessions, create or update an execution plan.
+- Stop a loop early only for real external blockers or when another unfinished in-scope subtask can advance while the blocker is pending.
+
 ## What Does Not Belong in the Canonical Harness
 
 - one-off CI repair loops
 - branch-local cleanup backlogs
 - temporary migration checklists
 - notes that only make sense for one contributor or one PR
+- raw generated report or handoff files under `.agent-harness/`
 
 These can exist as PR descriptions, issue notes, or temporary working docs, but they must not be listed as default entrypoints in `AGENTS.md`, `repo-manifest.yaml`, or `task-matrix.yaml`.
 

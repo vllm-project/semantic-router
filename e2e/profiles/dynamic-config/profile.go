@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
@@ -226,12 +227,9 @@ func (p *Profile) deployCRDs(ctx context.Context, opts *framework.SetupOptions) 
 		return fmt.Errorf("failed to apply IntelligentRoute CRD: %w", err)
 	}
 
-	// Wait for CRDs to be processed by the controller
-	time.Sleep(15 * time.Second)
-
-	// Verify CRDs are visible
-	if err := p.verifyCRDsExist(ctx, opts.KubeConfig); err != nil {
-		return fmt.Errorf("CRD verification failed: %w", err)
+	// Wait for the semantic-router reconciler to mark the route Ready
+	if err := p.waitForCRDReady(ctx, opts.KubeConfig); err != nil {
+		return fmt.Errorf("CRD readiness check failed: %w", err)
 	}
 
 	return nil
@@ -244,20 +242,25 @@ func (p *Profile) kubectlApply(ctx context.Context, kubeconfig, manifestPath str
 	return cmd.Run()
 }
 
-func (p *Profile) verifyCRDsExist(ctx context.Context, kubeconfig string) error {
-	// Verify IntelligentPool exists
-	cmd := exec.CommandContext(ctx, "kubectl", "get", "intelligentpool", "ai-gateway-pool", "-n", "default", "--kubeconfig", kubeconfig)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("IntelligentPool 'ai-gateway-pool' not found: %w", err)
+func (p *Profile) waitForCRDReady(ctx context.Context, kubeconfig string) error {
+	p.log("Waiting for IntelligentRoute to be reconciled (Ready condition)...")
+
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		cmd := exec.CommandContext(ctx, "kubectl", "get", "intelligentroute", "ai-gateway-route",
+			"-n", "default", "--kubeconfig", kubeconfig,
+			"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
+		output, err := cmd.Output()
+		if err == nil && strings.TrimSpace(string(output)) == "True" {
+			p.log("IntelligentRoute is Ready")
+			return nil
+		}
+
+		p.log("IntelligentRoute not yet Ready, retrying in 5s...")
+		time.Sleep(5 * time.Second)
 	}
 
-	// Verify IntelligentRoute exists
-	cmd = exec.CommandContext(ctx, "kubectl", "get", "intelligentroute", "ai-gateway-route", "-n", "default", "--kubeconfig", kubeconfig)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("IntelligentRoute 'ai-gateway-route' not found: %w", err)
-	}
-
-	return nil
+	return fmt.Errorf("timed out waiting for IntelligentRoute Ready condition (2m)")
 }
 
 func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOptions) error {

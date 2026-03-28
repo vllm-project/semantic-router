@@ -35,14 +35,27 @@ def print_section_header(title: str) -> None:
 
 
 def detect_container_runtime() -> str | None:
-    """Return the available container runtime, printing the detection result."""
+    """Return the required Docker runtime, printing the detection result."""
+    env_runtime = (os.getenv("CONTAINER_RUNTIME") or "").strip().lower()
+    if env_runtime:
+        if env_runtime != "docker":
+            print(f"❌ CONTAINER_RUNTIME={env_runtime} is unsupported")
+            print("   vllm-sr CLI tests require Docker")
+            return None
+        if not shutil.which("docker"):
+            print("❌ CONTAINER_RUNTIME=docker was requested but docker is not in PATH")
+            return None
+        print("✅ Docker is installed")
+        return "docker"
+
     if shutil.which("docker"):
         print("✅ Docker is installed")
         return "docker"
     if shutil.which("podman"):
-        print("✅ Podman is installed")
-        return "podman"
-    print("❌ Neither Docker nor Podman found")
+        print("❌ Podman is installed but unsupported")
+        print("   vllm-sr CLI tests require Docker")
+        return None
+    print("❌ Docker not found")
     return None
 
 

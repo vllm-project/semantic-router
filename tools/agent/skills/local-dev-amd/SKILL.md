@@ -1,7 +1,7 @@
 ---
 name: local-dev-amd
 category: fragment
-description: Builds Docker images, starts local servers, and runs smoke tests for the AMD/ROCm development environment. Use when validating changes locally on AMD hardware, building AMD container images, or running AMD-specific smoke and E2E tests.
+description: Builds Docker images, starts local servers, and runs smoke tests for the AMD/ROCm development environment. Use when validating changes locally on AMD hardware, building AMD container images, or running AMD-specific smoke and explicit runtime checks.
 ---
 
 # Local Dev AMD
@@ -22,6 +22,10 @@ description: Builds Docker images, starts local servers, and runs smoke tests fo
 
 - AMD-local smoke cannot be run or platform image mapping is unavailable
 
+## Gotchas
+
+- Keep real AMD deployment references out of the default context path unless the task actually needs real-model deployment details.
+
 ## Workflow
 
 1. Read AMD-local docs and environment config to understand the AMD build setup
@@ -34,8 +38,6 @@ description: Builds Docker images, starts local servers, and runs smoke tests fo
 
 - [docs/agent/amd-local.md](../../../../docs/agent/amd-local.md)
 - [docs/agent/environments.md](../../../../docs/agent/environments.md)
-- [deploy/amd/README.md](../../../../deploy/amd/README.md)
-- [deploy/recipes/balance.yaml](../../../../deploy/recipes/balance.yaml)
 
 ## Standard Commands
 

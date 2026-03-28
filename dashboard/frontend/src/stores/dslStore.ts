@@ -20,6 +20,12 @@ import {
   updateSignal,
   addSignal as addSignalMut,
   deleteSignal as deleteSignalMut,
+  updateProjectionPartition as updateProjectionPartitionMut,
+  addProjectionPartition as addProjectionPartitionMut,
+  deleteProjectionPartition as deleteProjectionPartitionMut,
+  updateProjection as updateProjectionMut,
+  addProjection as addProjectionMut,
+  deleteProjection as deleteProjectionMut,
   updatePlugin,
   addPlugin as addPluginMut,
   deletePlugin as deletePluginMut,
@@ -29,17 +35,12 @@ import {
 } from '@/lib/dslMutations'
 import type { RouteInput } from '@/lib/dslMutations'
 import type {
-  Diagnostic,
   EditorMode,
   CompileResult,
   ValidateResult,
-  SymbolTable,
-  ASTProgram,
-  DeployStep,
-  DeployResult,
-  ConfigVersion,
   DSLFieldObject,
 } from '@/types/dsl'
+import type { DSLState, DSLStore } from './dslStoreTypes'
 
 interface DeployStatusService {
   name?: string
@@ -50,141 +51,6 @@ interface DeployStatusResponse {
   overall?: string
   services?: DeployStatusService[]
 }
-
-// ---------- Store State ----------
-
-interface DSLState {
-  // --- Editor content ---
-  dslSource: string
-  yamlOutput: string
-  crdOutput: string
-  diagnostics: Diagnostic[]
-  symbols: SymbolTable | null
-  /** Parsed AST from last successful parse (for Visual Builder) */
-  ast: ASTProgram | null
-  baseConfigYaml: string
-
-  // --- Runtime ---
-  wasmReady: boolean
-  wasmError: string | null
-  loading: boolean
-  compileError: string | null
-
-  // --- UI ---
-  mode: EditorMode
-  dirty: boolean
-  lastCompileAt: number | null
-
-  // --- Deploy ---
-  deploying: boolean
-  deployStep: DeployStep | null
-  deployResult: DeployResult | null
-  showDeployConfirm: boolean
-  configVersions: ConfigVersion[]
-
-  // --- Deploy Preview (diff) ---
-  deployPreviewCurrent: string
-  deployPreviewMerged: string
-  deployPreviewLoading: boolean
-  deployPreviewError: string | null
-}
-
-// ---------- Store Actions ----------
-
-interface DSLActions {
-  /** Initialize WASM runtime. Call once at app startup. */
-  initWasm(): Promise<void>
-
-  /** Update DSL source (e.g., on editor keystroke). Triggers debounced validation. */
-  setDslSource(source: string): void
-
-  /** Run full compile: DSL → YAML + CRD + diagnostics. */
-  compile(): void
-
-  /** Validate only (faster than compile, for real-time feedback). */
-  validate(): void
-
-  /** Parse DSL → AST + diagnostics + symbols (for Visual Builder). */
-  parseAST(): void
-
-  /** Decompile YAML → routing-only DSL (for import from existing config). */
-  decompile(yaml: string): string | null
-
-  /** Format the current DSL source. */
-  format(): void
-
-  /** Switch editor mode. */
-  setMode(mode: EditorMode): void
-
-  /** Reset editor state to initial values. */
-  reset(): void
-
-  /** Load DSL source without preserving an imported full-config deploy base. */
-  loadDsl(source: string): void
-
-  /** Load YAML and decompile only its routing section to DSL. */
-  importYaml(yaml: string): void
-
-  /** Fetch current router config YAML and decompile only its routing section to DSL. */
-  loadFromRouter(): Promise<void>
-
-  // --- Visual Builder mutations (Phase 2) ---
-
-  /** Update a model's fields in DSL source text, then re-parse AST. */
-  mutateModel(name: string, fields: DSLFieldObject): void
-
-  /** Add a new model to DSL source text, then re-parse AST. */
-  addModel(name: string, fields: DSLFieldObject): void
-
-  /** Delete a model from DSL source text, then re-parse AST. */
-  deleteModel(name: string): void
-
-  /** Update a signal's fields in DSL source text, then re-parse AST. */
-  mutateSignal(signalType: string, name: string, fields: DSLFieldObject): void
-
-  /** Add a new signal to DSL source text, then re-parse AST. */
-  addSignal(signalType: string, name: string, fields: DSLFieldObject): void
-
-  /** Delete a signal from DSL source text, then re-parse AST. */
-  deleteSignal(signalType: string, name: string): void
-
-  /** Update a plugin declaration's fields, then re-parse AST. */
-  mutatePlugin(name: string, pluginType: string, fields: DSLFieldObject): void
-
-  /** Add a new plugin declaration, then re-parse AST. */
-  addPlugin(name: string, pluginType: string, fields: DSLFieldObject): void
-
-  /** Delete a plugin declaration, then re-parse AST. */
-  deletePlugin(name: string, pluginType: string): void
-
-  /** Delete a route declaration, then re-parse AST. */
-  deleteRoute(name: string): void
-
-  /** Update a route declaration, then re-parse AST. */
-  mutateRoute(name: string, input: RouteInput): void
-
-  /** Add a new route, then re-parse AST. */
-  addRoute(name: string, input: RouteInput): void
-
-  // --- Deploy actions ---
-
-  /** Show deploy confirmation dialog. Compiles first if needed. Fetches preview diff. */
-  requestDeploy(): void
-
-  /** Execute the deploy (called after user confirms). */
-  executeDeploy(): Promise<void>
-
-  /** Cancel/dismiss deploy dialog. */
-  dismissDeploy(): void
-
-  /** Rollback to a specific version. */
-  rollback(version: string): Promise<void>
-
-  /** Fetch available config versions. */
-  fetchVersions(): Promise<void>
-}
-
-export type DSLStore = DSLState & DSLActions
 
 // ---------- Debounce helper ----------
 
@@ -466,6 +332,75 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   deleteSignal(signalType: string, name: string) {
     const { dslSource, wasmReady } = get()
     const newSrc = deleteSignalMut(dslSource, signalType, name)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  mutateProjectionPartition(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = updateProjectionPartitionMut(dslSource, name, fields)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  addProjectionPartition(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = addProjectionPartitionMut(dslSource, name, fields)
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  deleteProjectionPartition(name: string) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = deleteProjectionPartitionMut(dslSource, name)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  mutateProjectionScore(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = updateProjectionMut(dslSource, 'score', name, fields)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  addProjectionScore(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = addProjectionMut(dslSource, 'score', name, fields)
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  deleteProjectionScore(name: string) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = deleteProjectionMut(dslSource, 'score', name)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  mutateProjectionMapping(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = updateProjectionMut(dslSource, 'mapping', name, fields)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  addProjectionMapping(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = addProjectionMut(dslSource, 'mapping', name, fields)
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  deleteProjectionMapping(name: string) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = deleteProjectionMut(dslSource, 'mapping', name)
     if (newSrc === dslSource) return
     set({ dslSource: newSrc, dirty: true })
     if (wasmReady) get().parseAST()

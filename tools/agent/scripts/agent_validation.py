@@ -24,6 +24,9 @@ from agent_support import (
     validate_glob,
 )
 
+VALID_LOOP_MODES = {"lightweight", "completion"}
+VALID_EXECUTION_PLAN_POLICIES = {"none", "long_horizon", "always"}
+
 
 def validate_supported_envs(
     repo_manifest: dict, skill_registry: dict, make_targets: set[str], errors: list[str]
@@ -82,6 +85,26 @@ def validate_task_matrix(
     task_matrix: dict, make_targets: set[str], errors: list[str]
 ) -> None:
     for rule in task_matrix["rules"]:
+        loop_mode = rule.get("loop_mode")
+        execution_plan_policy = rule.get("execution_plan_policy")
+        if loop_mode not in VALID_LOOP_MODES:
+            errors.append(
+                f"Task rule '{rule['name']}' has invalid loop_mode '{loop_mode}'"
+            )
+        if execution_plan_policy not in VALID_EXECUTION_PLAN_POLICIES:
+            errors.append(
+                "Task rule "
+                f"'{rule['name']}' has invalid execution_plan_policy "
+                f"'{execution_plan_policy}'"
+            )
+        if rule.get("doc_only", False) and loop_mode != "lightweight":
+            errors.append(
+                f"Documentation-only task rule '{rule['name']}' must use loop_mode 'lightweight'"
+            )
+        if execution_plan_policy == "always" and loop_mode != "completion":
+            errors.append(
+                f"Task rule '{rule['name']}' cannot require execution plans outside completion mode"
+            )
         commands = [*rule.get("fast_tests", []), *rule.get("feature_tests", [])]
         for command in commands:
             append_missing_make_target(

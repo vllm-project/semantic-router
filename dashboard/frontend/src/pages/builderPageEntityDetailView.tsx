@@ -2,6 +2,9 @@ import React from "react";
 
 import type {
   ASTModelDecl,
+  ASTProjectionPartitionDecl,
+  ASTProjectionMappingDecl,
+  ASTProjectionScoreDecl,
   ASTPluginDecl,
   ASTRouteDecl,
   ASTSignalDecl,
@@ -21,6 +24,11 @@ import {
   PluginSchemaEditor,
   SignalEditorForm,
 } from "./builderPageEntityForms";
+import {
+  ProjectionMappingEditorForm,
+  ProjectionPartitionEditorForm,
+  ProjectionScoreEditorForm,
+} from "./builderPageProjectionEditors";
 import { RouteEditorForm } from "./builderPageRouteForms";
 import type {
   AvailablePlugin,
@@ -36,6 +44,18 @@ interface EntityDetailViewProps {
   onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void;
   onUpdateSignalFields: (
     signalType: string,
+    name: string,
+    fields: DSLFieldObject,
+  ) => void;
+  onUpdateProjectionPartitionFields: (
+    name: string,
+    fields: DSLFieldObject,
+  ) => void;
+  onUpdateProjectionScoreFields: (
+    name: string,
+    fields: DSLFieldObject,
+  ) => void;
+  onUpdateProjectionMappingFields: (
     name: string,
     fields: DSLFieldObject,
   ) => void;
@@ -58,6 +78,9 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
   onDeleteEntity,
   onUpdateModelFields,
   onUpdateSignalFields,
+  onUpdateProjectionPartitionFields,
+  onUpdateProjectionScoreFields,
+  onUpdateProjectionMappingFields,
   onUpdatePluginFields,
   onUpdateRoute,
   availableSignals,
@@ -127,6 +150,15 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
           {"signalType" in entity && (
             <span className={styles.editorBadge}>{entity.signalType}</span>
           )}
+          {"semantics" in entity && (
+            <span className={styles.editorBadge}>projection partition</span>
+          )}
+          {"source" in entity && !("signalType" in entity) && !("pluginType" in entity) && (
+            <span className={styles.editorBadge}>projection mapping</span>
+          )}
+          {"inputs" in entity && !("signalType" in entity) && (
+            <span className={styles.editorBadge}>projection score</span>
+          )}
           {"pluginType" in entity && (
             <span className={styles.editorBadge}>{entity.pluginType}</span>
           )}
@@ -160,6 +192,42 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
             onUpdateSignalFields(
               (entity as ASTSignalDecl).signalType,
               (entity as ASTSignalDecl).name,
+              fields,
+            )
+          }
+        />
+      )}
+
+      {selection.kind === "projection-partition" && "members" in entity && (
+        <ProjectionPartitionEditorForm
+          partition={entity as ASTProjectionPartitionDecl}
+          onUpdate={(fields) =>
+            onUpdateProjectionPartitionFields(
+              (entity as ASTProjectionPartitionDecl).name,
+              fields,
+            )
+          }
+        />
+      )}
+
+      {selection.kind === "projection-score" && (
+        <ProjectionScoreEditorForm
+          score={entity as ASTProjectionScoreDecl}
+          onUpdate={(fields) =>
+            onUpdateProjectionScoreFields(
+              (entity as ASTProjectionScoreDecl).name,
+              fields,
+            )
+          }
+        />
+      )}
+
+      {selection.kind === "projection-mapping" && (
+        <ProjectionMappingEditorForm
+          mapping={entity as ASTProjectionMappingDecl}
+          onUpdate={(fields) =>
+            onUpdateProjectionMappingFields(
+              (entity as ASTProjectionMappingDecl).name,
               fields,
             )
           }

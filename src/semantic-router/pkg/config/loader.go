@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -60,11 +61,15 @@ func Parse(configPath string) (*RouterConfig, error) {
 	}
 	logging.Debugf("[config.Parse] Read config file: size=%d bytes", len(data))
 
-	return ParseYAMLBytes(data)
+	return parseYAMLBytesWithBaseDir(data, filepath.Dir(resolved))
 }
 
 // ParseYAMLBytes parses config YAML content without touching the filesystem.
 func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
+	return parseYAMLBytesWithBaseDir(data, "")
+}
+
+func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, error) {
 	raw, err := parseRawConfigMap(data)
 	if err != nil {
 		return nil, err
@@ -72,11 +77,24 @@ func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
 	if rejectErr := rejectDeprecatedUserConfigFields(raw); rejectErr != nil {
 		return nil, rejectErr
 	}
+	if rejectErr := rejectRemovedStructureFields(raw); rejectErr != nil {
+		return nil, rejectErr
+	}
+	if rejectErr := rejectRemovedTaxonomyLegacyFields(raw); rejectErr != nil {
+		return nil, rejectErr
+	}
+	if rejectErr := rejectRemovedDecisionToolFields(raw); rejectErr != nil {
+		return nil, rejectErr
+	}
+
+	// Warn about unknown YAML fields (typos) before parsing into typed structs.
+	WarnUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
 
 	cfg, err := parseRouterConfigPayload(data, raw)
 	if err != nil {
 		return nil, err
 	}
+	cfg.ConfigBaseDir = baseDir
 	if err := finalizeParsedConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -102,6 +120,65 @@ func rejectDeprecatedUserConfigFields(raw map[string]interface{}) error {
 		)
 	}
 	return nil
+}
+
+func rejectRemovedStructureFields(raw map[string]interface{}) error {
+	if removed := removedStructureFields(raw); len(removed) > 0 {
+		return fmt.Errorf(
+			"removed config fields are no longer supported: %s; structure density now uses built-in multilingual normalization and no longer accepts feature.normalize_by",
+			strings.Join(removed, ", "),
+		)
+	}
+	return nil
+}
+
+func rejectRemovedTaxonomyLegacyFields(raw map[string]interface{}) error {
+	routing := nestedStringMap(raw["routing"])
+	signals := nestedStringMap(routing["signals"])
+	if _, ok := signals["category_kb"]; ok {
+		return fmt.Errorf(
+			"routing.signals.category_kb is no longer supported; migrate to global.model_catalog.kbs[] plus routing.signals.kb[]",
+		)
+	}
+	if _, ok := signals["taxonomy"]; ok {
+		return fmt.Errorf(
+			"routing.signals.taxonomy is no longer supported; migrate to routing.signals.kb[]",
+		)
+	}
+	global := nestedStringMap(raw["global"])
+	modelCatalog := nestedStringMap(global["model_catalog"])
+	if _, ok := modelCatalog["classifiers"]; ok {
+		return fmt.Errorf(
+			"global.model_catalog.classifiers is no longer supported; migrate to global.model_catalog.kbs[]",
+		)
+	}
+	return nil
+}
+
+func rejectRemovedDecisionToolFields(raw map[string]interface{}) error {
+	routing := nestedStringMap(raw["routing"])
+	decisions, ok := routing["decisions"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	removed := make([]string, 0)
+	for index, rawDecision := range decisions {
+		decision := nestedStringMap(rawDecision)
+		for _, field := range []string{"tool_scope", "allow_tools", "block_tools"} {
+			if _, ok := decision[field]; ok {
+				removed = append(removed, fmt.Sprintf("routing.decisions[%d].%s", index, field))
+			}
+		}
+	}
+	if len(removed) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"removed config fields are no longer supported: %s; migrate to routing.decisions[].plugins[type=tools].configuration",
+		strings.Join(removed, ", "),
+	)
 }
 
 func parseRouterConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
@@ -229,7 +306,49 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 	if _, ok := global["modules"]; ok {
 		fields = append(fields, "global.modules")
 	}
+	modelCatalog := nestedStringMap(global["model_catalog"])
+	embeddings := nestedStringMap(modelCatalog["embeddings"])
+	if _, ok := embeddings["bert"]; ok {
+		fields = append(fields, "global.model_catalog.embeddings.bert")
+	}
 
+	fields = append(fields, deprecatedDecisionConfigFields(routing)...)
+
+	return fields
+}
+
+func deprecatedDecisionConfigFields(routing map[string]interface{}) []string {
+	decisions, ok := routing["decisions"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	fields := make([]string, 0)
+	for index, rawDecision := range decisions {
+		decision := nestedStringMap(rawDecision)
+		if _, ok := decision["modelSelectionAlgorithm"]; ok {
+			fields = append(fields, fmt.Sprintf("routing.decisions[%d].modelSelectionAlgorithm", index))
+		}
+	}
+	return fields
+}
+
+func removedStructureFields(raw map[string]interface{}) []string {
+	routing := nestedStringMap(raw["routing"])
+	signals := nestedStringMap(routing["signals"])
+	structureRules, ok := signals["structure"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	fields := make([]string, 0)
+	for index, rawRule := range structureRules {
+		rule := nestedStringMap(rawRule)
+		feature := nestedStringMap(rule["feature"])
+		if _, ok := feature["normalize_by"]; ok {
+			fields = append(fields, fmt.Sprintf("routing.signals.structure[%d].feature.normalize_by", index))
+		}
+	}
 	return fields
 }
 

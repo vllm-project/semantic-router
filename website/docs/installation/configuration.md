@@ -30,6 +30,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `routing.modelCards`
   - `routing.modelCards[].loras`
   - `routing.signals`
+  - `routing.projections` for partitions plus derived routing outputs
   - `routing.decisions`
 - `providers` owns deployment and default-selection metadata.
   - `defaults`
@@ -42,8 +43,9 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `global.services` groups shared APIs and control-plane services such as `response_api`, `router_replay`, `observability`, `authz`, and `ratelimit`
   - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`
 - `global.integrations` groups helper runtime integrations such as `tools` and `looper`
-- `global.model_catalog` groups router-owned model assets such as embeddings, system models, external models, and model-backed modules
+- `global.model_catalog` groups router-owned model assets such as embeddings, system models, external models, reusable classifiers, and model-backed modules
 - `global.model_catalog.embeddings.semantic.embedding_config.top_k` limits how many ranked embedding rules are emitted for routing after scoring; the built-in default is `1`
+- `global.model_catalog.classifiers[]` is the reusable registry for startup-loaded classifier packages such as taxonomy classifiers
 - `global.model_catalog.modules` groups capability modules such as `prompt_guard`, `classifier`, and `hallucination_mitigation`
 
 ## Canonical example
@@ -90,16 +92,65 @@ routing:
       - name: math_terms
         operator: OR
         keywords: ["algebra", "calculus"]
+    structure:
+      - name: many_questions
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          gte: 3
+    embeddings:
+      - name: technical_support
+        threshold: 0.75
+        candidates: ["installation guide", "troubleshooting steps"]
+      - name: account_management
+        threshold: 0.72
+        candidates: ["billing information", "subscription management"]
+
+  projections:
+    partitions:
+      - name: support_intents
+        semantics: exclusive
+        temperature: 0.3
+        members: [technical_support, account_management]
+        default: technical_support
+    scores:
+      - name: request_difficulty
+        method: weighted_sum
+        inputs:
+          - type: embedding
+            name: technical_support
+            weight: 0.18
+            value_source: confidence
+          - type: context
+            name: long_context
+            weight: 0.18
+          - type: structure
+            name: many_questions
+            weight: 0.12
+    mappings:
+      - name: request_band
+        source: request_difficulty
+        method: threshold_bands
+        outputs:
+          - name: support_fast
+            lt: 0.25
+          - name: support_escalated
+            gte: 0.25
 
   decisions:
-    - name: math_route
-      description: Route math requests
+    - name: support_route
+      description: Route support requests that need an escalated answer
       priority: 100
       rules:
         operator: AND
         conditions:
-          - type: keyword
-            name: math_terms
+          - type: embedding
+            name: technical_support
+          - type: projection
+            name: support_escalated
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
@@ -113,6 +164,8 @@ global:
       metrics:
         enabled: true
 ```
+
+For `routing.signals.structure`, `feature.type: density` now uses built-in multilingual text-unit normalization. The router counts each CJK character as one unit, counts contiguous runs of other letters and digits as one unit, and ignores punctuation, so the same density rule shape behaves consistently across English, Chinese, and mixed-script prompts without a separate `normalize_by` field.
 
 ## Repository config assets
 
@@ -154,6 +207,27 @@ Those directories are support assets, not the main user-facing config contract. 
 - `go test ./pkg/config/...` checks that it stays aligned to the canonical schema and routing surface catalog
 - `make agent-lint` runs the same reference-config contract check at lint level, so config/schema drift is blocked before merge
 - maintained `deploy/` and `e2e/` router config assets are checked against the same canonical contract, so repo-owned examples and harness profiles cannot drift back to legacy steady-state fields
+
+## Projection Workflow
+
+Use `routing.projections` when the raw signal catalog is not enough on its own:
+
+1. `routing.signals` defines reusable detectors.
+2. `routing.projections.partitions` resolves one winner inside an exclusive domain or embedding family.
+3. `routing.projections.scores` combines learned and heuristic signals into a weighted score.
+4. `routing.projections.mappings` turns that score into named routing bands.
+5. `routing.decisions[*].rules.conditions[*]` can reference those bands with `type: projection`.
+
+The dashboard mirrors the same contract:
+
+- `Config -> Projections` edits partitions, scores, and mappings
+- `Config -> Decisions` can reference mapping outputs with condition type `projection`
+- `DSL -> Visual` manages `PROJECTION partition`, `PROJECTION score`, and `PROJECTION mapping` entities directly
+
+For a focused tutorial, read [Projections](../tutorials/projection/overview). For a maintained end-to-end example, use:
+
+- [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
+- [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)
 
 ## How to use it
 
@@ -286,6 +360,16 @@ This migrates legacy shapes such as:
 - inline `access_key`
 
 into canonical `providers/routing/global`.
+
+### Import OpenClaw model providers
+
+Use the CLI import command when you already have an `openclaw.json` with supported OpenAI-compatible provider endpoints and want VSR to take over model routing while rewriting OpenClaw to the first VSR listener:
+
+```bash
+vllm-sr config import --from openclaw --source openclaw.json --target config.yaml
+```
+
+When `--source` is omitted, the importer checks `OPENCLAW_CONFIG_PATH`, `./openclaw.json`, and `~/.openclaw/openclaw.json` in that order.
 
 ## Quick guides by environment
 

@@ -20,6 +20,11 @@ description: Implements end-to-end plugin changes spanning router config, post-d
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate all constraints
 5. Verify plugin config, runtime behavior, tests, and E2E cover the changed plugin path
 
+## Gotchas
+
+- Plugin behavior spans config and runtime; changing one side without the other creates immediate drift.
+- User-visible plugin metadata often affects headers, dashboard display, or E2E expectations even when the core hook code is small.
+
 ## Must Read
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)

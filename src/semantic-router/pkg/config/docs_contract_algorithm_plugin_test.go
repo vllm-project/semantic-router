@@ -44,6 +44,7 @@ var pluginTutorialBuckets = map[string]string{
 	"router-replay":      "retrieval-and-memory",
 	"semantic-cache":     "retrieval-and-memory",
 	"system-prompt":      "response-and-mutation",
+	"tools":              "response-and-mutation",
 }
 
 var retiredPluginTutorialDocs = []string{

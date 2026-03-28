@@ -9,6 +9,7 @@ extraction call). Session chunks are stored every 3 turns (window size 5).
 Test classes live in the memory_tests package:
   - UserIsolationTest: Cross-user memory leak prevention
   - MemoryInjectionPipelineTest: The fundamental store -> inject contract
+  - ChatCompletionsMemoryTest: Memory via /v1/chat/completions
   - MemoryContentIntegrityTest: Content preserved in Milvus (no truncation/corruption)
   - SimilarityThresholdTest: Irrelevant NOT injected, relevant IS injected
   - StaleMemoryTest: Contradicting facts baseline (soft-insert, no contradiction detection)
@@ -38,6 +39,7 @@ import unittest
 
 import requests
 from memory_tests import (
+    ChatCompletionsMemoryTest,
     MemoryContentIntegrityTest,
     MemoryInjectionPipelineTest,
     MemoryStorageTest,
@@ -58,10 +60,14 @@ def run_tests():
     print("=" * 60)
 
     router_endpoint = os.environ.get("ROUTER_ENDPOINT", "http://localhost:8888")
+    router_health_endpoint = os.environ.get(
+        "ROUTER_HEALTH_ENDPOINT", f"{router_endpoint}/health"
+    )
     print(f"Router endpoint: {router_endpoint}")
+    print(f"Router health endpoint: {router_health_endpoint}")
 
     try:
-        response = requests.get(f"{router_endpoint}/health", timeout=10)
+        response = requests.get(router_health_endpoint, timeout=10)
         if response.status_code == HTTP_OK:
             print("✅ Router is healthy")
         else:
@@ -80,6 +86,7 @@ def run_tests():
         UserIsolationTest,
         # P1: Pipeline correctness
         MemoryInjectionPipelineTest,
+        ChatCompletionsMemoryTest,
         MemoryContentIntegrityTest,
         SimilarityThresholdTest,
         StaleMemoryTest,

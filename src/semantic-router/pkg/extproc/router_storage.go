@@ -14,11 +14,6 @@ func createResponseStore(cfg *config.RouterConfig) (responsestore.ResponseStore,
 		Memory: responsestore.MemoryStoreConfig{
 			MaxResponses: cfg.ResponseAPI.MaxResponses,
 		},
-		Milvus: responsestore.MilvusStoreConfig{
-			Address:            cfg.ResponseAPI.Milvus.Address,
-			Database:           cfg.ResponseAPI.Milvus.Database,
-			ResponseCollection: cfg.ResponseAPI.Milvus.Collection,
-		},
 		Redis: responsestore.RedisStoreConfig{
 			Address:          cfg.ResponseAPI.Redis.Address,
 			Password:         cfg.ResponseAPI.Redis.Password,

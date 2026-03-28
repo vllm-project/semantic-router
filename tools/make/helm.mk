@@ -11,6 +11,7 @@ HELM_CHART_PATH ?= deploy/helm/semantic-router
 HELM_VALUES_FILE ?=
 HELM_SET_VALUES ?=
 HELM_TIMEOUT ?= 10m
+HELM_TEMPLATE_OUTPUT ?= dist/helm/default-template.yaml
 
 # Colors for output (reuse from common.mk if available, otherwise define)
 BLUE ?= \033[0;34m
@@ -19,7 +20,7 @@ YELLOW ?= \033[1;33m
 RED ?= \033[0;31m
 NC ?= \033[0m
 
-.PHONY: helm-lint helm-template helm-install helm-upgrade helm-install-or-upgrade \
+.PHONY: helm-lint helm-template helm-ci-setup helm-ci-validate helm-install helm-upgrade helm-install-or-upgrade \
 	helm-uninstall helm-status helm-list helm-history helm-rollback helm-test \
 	helm-package helm-dev helm-prod helm-values helm-manifest \
 	helm-port-forward-api helm-port-forward-grpc helm-port-forward-metrics \
@@ -38,6 +39,39 @@ helm-template:
 		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
 		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
 		--namespace $(HELM_NAMESPACE)
+
+helm-ci-setup: ## Prepare Helm repositories and chart dependencies for CI-style validation
+helm-ci-setup:
+	@$(LOG_TARGET)
+	@helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
+	@helm repo add milvus https://milvus-io.github.io/milvus-helm/ --force-update
+	@helm repo add jaegertracing https://jaegertracing.github.io/helm-charts --force-update
+	@helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
+	@helm repo add grafana https://grafana.github.io/helm-charts --force-update
+	@helm repo update
+	@helm dependency build $(HELM_CHART_PATH)
+
+helm-ci-validate: ## Run the CI Helm lint and template validation flow
+helm-ci-validate: helm-ci-setup
+	@$(LOG_TARGET)
+	@$(MAKE) helm-lint
+	@mkdir -p "$$(dirname "$(HELM_TEMPLATE_OUTPUT)")"
+	@helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
+		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
+		--namespace $(HELM_NAMESPACE) > "$(HELM_TEMPLATE_OUTPUT)"
+	@python3 -c "import yamllint" >/dev/null 2>&1 || python3 -m pip install --user yamllint
+	@python3 -m yamllint -d '{extends: default, rules: {line-length: {max: 120}, indentation: {spaces: 2}}}' "$(HELM_TEMPLATE_OUTPUT)" || echo "Some yamllint warnings are expected for Helm templates"
+	@required_resources="ServiceAccount PersistentVolumeClaim ConfigMap Deployment Service"; \
+	for resource in $$required_resources; do \
+		if grep -q "kind: $$resource" "$(HELM_TEMPLATE_OUTPUT)"; then \
+			echo "Found resource: $$resource"; \
+		else \
+			echo "Missing resource: $$resource"; \
+			exit 1; \
+		fi; \
+	done
+	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
 
 helm-install: ## Install the Helm chart
 helm-install: _check-k8s

@@ -116,7 +116,10 @@ static_resources:
   # ExtProc service (semantic router)
   - name: extproc_service
     connect_timeout: 1200s
-    type: STATIC
+    type: {{ extproc_cluster_type }}
+    {% if extproc_cluster_type == 'LOGICAL_DNS' %}
+    dns_lookup_family: V4_ONLY
+    {% endif %}
     lb_policy: ROUND_ROBIN
     http2_protocol_options: {}
     load_assignment:
@@ -126,15 +129,21 @@ static_resources:
         - endpoint:
             address:
               socket_address:
-                address: 127.0.0.1
+                address: {{ extproc_host }}
                 port_value: {{ extproc_port }}
+            {% if extproc_host_is_domain %}
+            hostname: "{{ extproc_host }}"
+            {% endif %}
 
   {% if not models %}
   # Fallback cluster for API-only configs (not actually used, but required for valid Envoy config)
   # When all models are API-based, the router handles requests directly without routing through Envoy clusters
   - name: vllm_static_cluster
     connect_timeout: 30s
-    type: STATIC
+    type: {{ router_api_cluster_type }}
+    {% if router_api_cluster_type == 'LOGICAL_DNS' %}
+    dns_lookup_family: V4_ONLY
+    {% endif %}
     lb_policy: ROUND_ROBIN
     load_assignment:
       cluster_name: vllm_static_cluster
@@ -143,8 +152,11 @@ static_resources:
         - endpoint:
             address:
               socket_address:
-                address: 127.0.0.1
-                port_value: 8080
+                address: {{ router_api_host }}
+                port_value: {{ router_api_port }}
+            {% if router_api_host_is_domain %}
+            hostname: "{{ router_api_host }}"
+            {% endif %}
   {% endif %}
 
   {% for model in models %}

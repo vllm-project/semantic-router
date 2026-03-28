@@ -35,6 +35,7 @@ func DefaultHeaderMap() map[string]string {
 		string(ProviderBedrock):     headers.UserBedrockKey,
 		string(ProviderGemini):      headers.UserGeminiKey,
 		string(ProviderVertexAI):    headers.UserVertexAIKey,
+		string(ProviderMiniMax):     headers.UserMiniMaxKey,
 	}
 }
 

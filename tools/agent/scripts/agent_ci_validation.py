@@ -149,12 +149,7 @@ def parse_runnable_profiles(errors: list[str]) -> set[str] | None:
         errors.append("Missing e2e/profiles/all/imports.go")
         return None
     text = imports_path.read_text(encoding="utf-8")
-    return set(
-        re.findall(
-            r'github\.com/vllm-project/semantic-router/e2e/profiles/([a-z0-9-]+)"',
-            text,
-        )
-    )
+    return set(re.findall(r'register\(\s*"([a-z0-9-]+)"', text))
 
 
 def parse_readme_profiles(errors: list[str]) -> set[str] | None:

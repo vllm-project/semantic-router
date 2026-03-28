@@ -17,6 +17,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  HELM_VERSION: v3.14.0
+
 jobs:
   # use changes as filter
   changes:
@@ -55,6 +58,14 @@ jobs:
             make \
             build-essential \
             pkg-config
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Validate Helm chart
+        run: make helm-ci-validate HELM_NAMESPACE=test-namespace
 
       - name: Set up golangci-lint
         uses: golangci/golangci-lint-action@v7
@@ -147,6 +158,22 @@ jobs:
       - name: Start Milvus service
         run: |
           echo "Starting Milvus vector database..."
+
+          # Pre-pull with retries to handle Docker Hub rate limits
+          MILVUS_IMAGE="milvusdb/milvus:v2.3.3"
+          for attempt in 1 2 3 4 5; do
+            if docker pull "${MILVUS_IMAGE}"; then
+              echo "Successfully pulled ${MILVUS_IMAGE}"
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "ERROR: Failed to pull ${MILVUS_IMAGE} after 5 attempts"
+              exit 1
+            fi
+            echo "Pull attempt ${attempt} failed, retrying in $((attempt * 15))s..."
+            sleep $((attempt * 15))
+          done
+
           docker run -d \
             --name milvus-semantic-cache \
             --security-opt seccomp:unconfined \
@@ -157,7 +184,7 @@ jobs:
             -e CLUSTER_ENABLED=false \
             -p 19530:19530 \
             -p 9091:9091 \
-            milvusdb/milvus:v2.3.3 \
+            "${MILVUS_IMAGE}" \
             milvus run standalone
 
           echo "Waiting for Milvus to be ready..."
@@ -174,6 +201,11 @@ jobs:
           echo "Starting Redis Stack..."
           make start-redis
 
+      - name: Start Valkey service
+        run: |
+          echo "Starting Valkey bundle..."
+          make start-valkey
+
       - name: Run semantic router tests
         run: make test
         env:
@@ -184,6 +216,9 @@ jobs:
           MILVUS_URI: localhost:19530
           SKIP_MILVUS_TESTS: false
           SKIP_REDIS_TESTS: false
+          SKIP_VALKEY_TESTS: false
+          VALKEY_HOST: localhost
+          VALKEY_PORT: 6380
           # HF_TOKEN is required for downloading gated models (e.g., embeddinggemma-300m)
           # For PRs from forks, this will be empty and gated models will gracefully skip
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -194,6 +229,12 @@ jobs:
         run: |
           echo "Stopping Redis container and cleaning data..."
           make clean-redis
+
+      - name: Clean Valkey service
+        if: always()
+        run: |
+          echo "Stopping Valkey container and cleaning data..."
+          make clean-valkey
 
       - name: Stop Milvus service
         if: always()
@@ -211,12 +252,15 @@ jobs:
           path: |
             **/*.log
             **/test-output.*
+            dist/helm/*.yaml
           retention-days: 7
 
       - name: Notify on failure
         if: failure()
         run: |
           echo "::error::Test and build failed. Check the workflow run for details."
+          echo "To reproduce this job locally: make test-and-build-local"
+          echo "To run the baseline PR parity gate locally: make agent-pr-gate"
 
   # Trigger Docker publishing on successful nightly runs
   publish-docker:

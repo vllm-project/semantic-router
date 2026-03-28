@@ -156,9 +156,12 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 		ChunkingStrategy:  strategy,
 	}
 
+	// Snapshot before enqueuing so the caller always sees "in_progress",
+	// even if the worker completes the job before we return.
+	snapshot := *vsf
+
 	select {
 	case p.jobQueue <- job:
-		snapshot := *vsf
 		return &snapshot, nil
 	default:
 		// Queue is full.

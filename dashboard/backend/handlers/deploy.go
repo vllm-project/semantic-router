@@ -6,11 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -254,30 +251,10 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	}
 
 	// Step 3: Create backup of current config
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
-		log.Printf("Warning: failed to create backup directory: %v", err)
-	}
-
-	version := time.Now().Format("20060102-150405")
-
-	if len(existingData) > 0 {
-		backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-		if err := os.WriteFile(backupFile, existingData, 0o644); err != nil {
-			log.Printf("Warning: failed to create backup: %v", err)
-		} else {
-			log.Printf("[Deploy] Config backup created: %s", backupFile)
-		}
-	}
+	version := createConfigBackup(configDir, existingData)
 
 	// Step 4: Archive DSL source (for audit trail)
-	if req.DSL != "" {
-		dslDir := filepath.Join(configDir, ".vllm-sr")
-		dslFile := filepath.Join(dslDir, "config.dsl")
-		if err := os.WriteFile(dslFile, []byte(req.DSL), 0o644); err != nil {
-			log.Printf("Warning: failed to archive DSL source: %v", err)
-		}
-	}
+	archiveDeployDSL(configDir, req.DSL)
 
 	// Step 5: Atomic write to config.yaml
 	if err := writeConfigAtomically(configPath, yamlBytes); err != nil {
@@ -288,17 +265,13 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	log.Printf("[Deploy] Config written to %s: version=%s, size=%d bytes", configPath, version, len(yamlBytes))
 
 	// Step 6: Propagate the new config to the managed runtime before returning.
-	if err := propagateConfigToRuntime(configPath, configDir); err != nil {
-		if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, existingData); restoreErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to apply deployed config to runtime: %v. Failed to restore previous config: %v", err, restoreErr), http.StatusInternalServerError)
-			return
-		}
-		http.Error(w, fmt.Sprintf("Failed to apply deployed config to runtime: %v. Previous config restored.", err), http.StatusInternalServerError)
+	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
+		http.Error(w, formatRuntimeApplyError("Failed to apply deployed config to runtime", err), http.StatusInternalServerError)
 		return
 	}
 
 	// Step 7: Clean up old backups (keep only maxBackups most recent)
-	cleanupBackups(backupDir)
+	cleanupBackups(configBackupDir(configDir))
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(DeployResponse{
@@ -446,10 +419,7 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 	defer deployMu.Unlock()
 
 	// Find backup file
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-
-	backupData, err := os.ReadFile(backupFile)
+	backupData, err := readConfigBackup(configDir, version)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -472,12 +442,7 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 	}
 
 	// Back up current config before rollback
-	currentVersion := time.Now().Format("20060102-150405")
-	existingData, err := os.ReadFile(configPath)
-	if err == nil && len(existingData) > 0 {
-		preRollbackFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", currentVersion))
-		_ = os.WriteFile(preRollbackFile, existingData, 0o644)
-	}
+	existingData := snapshotCurrentConfigBeforeRollback(configPath, configDir)
 
 	// Atomic write to config.yaml
 	if err := writeConfigAtomically(configPath, backupData); err != nil {
@@ -487,12 +452,8 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 
 	log.Printf("[Rollback] Config rolled back to version %s, written to %s", version, configPath)
 
-	if err := propagateConfigToRuntime(configPath, configDir); err != nil {
-		if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, existingData); restoreErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to apply rolled back config to runtime: %v. Failed to restore previous config: %v", err, restoreErr), http.StatusInternalServerError)
-			return
-		}
-		http.Error(w, fmt.Sprintf("Failed to apply rolled back config to runtime: %v. Previous config restored.", err), http.StatusInternalServerError)
+	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
+		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -502,54 +463,6 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 		Version: version,
 		Message: fmt.Sprintf("Rolled back to version %s. Router and Envoy have been updated.", version),
 	})
-}
-
-func versionsLocalList(w http.ResponseWriter, configPath string) {
-	configDir := filepath.Dir(configPath)
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-
-	versions := []ConfigVersion{}
-
-	entries, err := os.ReadDir(backupDir)
-	if err != nil {
-		// No backups yet, return empty list
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(versions)
-		return
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "config.") || !strings.HasSuffix(entry.Name(), ".yaml") {
-			continue
-		}
-
-		// Extract version from filename: config.20060102-150405.yaml
-		name := entry.Name()
-		versionStr := strings.TrimPrefix(name, "config.")
-		versionStr = strings.TrimSuffix(versionStr, ".yaml")
-
-		// Parse timestamp for display
-		t, err := time.Parse("20060102-150405", versionStr)
-		timestamp := versionStr
-		if err == nil {
-			timestamp = t.Format("2006-01-02 15:04:05")
-		}
-
-		versions = append(versions, ConfigVersion{
-			Version:   versionStr,
-			Timestamp: timestamp,
-			Source:    "dsl",
-			Filename:  name,
-		})
-	}
-
-	// Sort by version descending (newest first)
-	sort.Slice(versions, func(i, j int) bool {
-		return versions[i].Version > versions[j].Version
-	})
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(versions)
 }
 
 // canonicalizeYAMLForDiff converts YAML into a normalized representation so
@@ -576,40 +489,4 @@ func canonicalizeYAMLForDiff(raw []byte) string {
 		}
 	}
 	return text
-}
-
-// cleanupBackups removes old backups beyond maxBackups
-func cleanupBackups(backupDir string) {
-	entries, err := os.ReadDir(backupDir)
-	if err != nil {
-		return
-	}
-
-	// Filter yaml backup files
-	var backups []os.DirEntry
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "config.") && strings.HasSuffix(entry.Name(), ".yaml") {
-			backups = append(backups, entry)
-		}
-	}
-
-	if len(backups) <= maxBackups {
-		return
-	}
-
-	// Sort by name ascending (oldest first since names contain timestamps)
-	sort.Slice(backups, func(i, j int) bool {
-		return backups[i].Name() < backups[j].Name()
-	})
-
-	// Remove oldest backups
-	toRemove := len(backups) - maxBackups
-	for i := 0; i < toRemove; i++ {
-		path := filepath.Join(backupDir, backups[i].Name())
-		if err := os.Remove(path); err != nil {
-			log.Printf("Warning: failed to remove old backup %s: %v", path, err)
-		} else {
-			log.Printf("Removed old backup: %s", backups[i].Name())
-		}
-	}
 }

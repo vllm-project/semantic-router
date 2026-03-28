@@ -324,33 +324,18 @@ routing:
     domains:
       - name: urgent_request
         description: Urgent and time-sensitive requests
-        mmlu_categories:
-          - urgent_request
       - name: sensitive_data
         description: Requests involving sensitive personal data
-        mmlu_categories:
-          - sensitive_data
       - name: exclude_spam
         description: Potential spam or suspicious requests
-        mmlu_categories:
-          - exclude_spam
       - name: regex_pattern_match
         description: Structured data and pattern-based requests
-        mmlu_categories:
-          - regex_pattern_match
       - name: ai
         description: Artificial intelligence and machine learning topics
-        mmlu_categories:
-          - ai
-          - machine_learning
       - name: data_science
         description: Data science and analytics
-        mmlu_categories:
-          - data_science
       - name: programming
         description: Programming and software development
-        mmlu_categories:
-          - programming
       - name: business
         description: Business and management related queries
         mmlu_categories:
@@ -436,9 +421,6 @@ global:
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
-      use_hnsw: true
-      hnsw_m: 16
-      hnsw_ef_construction: 200
       embedding_model: mmbert
     memory:
       embedding_model: mmbert

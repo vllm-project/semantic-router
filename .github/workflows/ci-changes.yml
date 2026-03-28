@@ -27,10 +27,12 @@ on:
       # Per-profile e2e change detection
       e2e_istio:
         value: ${{ jobs.filter.outputs.e2e_istio }}
-      e2e_ai_gateway:
-        value: ${{ jobs.filter.outputs.e2e_ai_gateway }}
+      e2e_kubernetes:
+        value: ${{ jobs.filter.outputs.e2e_kubernetes }}
       e2e_aibrix:
         value: ${{ jobs.filter.outputs.e2e_aibrix }}
+      e2e_dashboard:
+        value: ${{ jobs.filter.outputs.e2e_dashboard }}
       e2e_dynamic_config:
         value: ${{ jobs.filter.outputs.e2e_dynamic_config }}
       e2e_llm_d:
@@ -73,8 +75,9 @@ jobs:
       agent_exec: ${{ steps.changes.outputs.agent_exec }}
       # Per-profile e2e outputs
       e2e_istio: ${{ steps.changes.outputs.e2e_istio }}
-      e2e_ai_gateway: ${{ steps.changes.outputs.e2e_ai_gateway }}
+      e2e_kubernetes: ${{ steps.changes.outputs.e2e_kubernetes }}
       e2e_aibrix: ${{ steps.changes.outputs.e2e_aibrix }}
+      e2e_dashboard: ${{ steps.changes.outputs.e2e_dashboard }}
       e2e_dynamic_config: ${{ steps.changes.outputs.e2e_dynamic_config }}
       e2e_llm_d: ${{ steps.changes.outputs.e2e_llm_d }}
       e2e_routing_strategies: ${{ steps.changes.outputs.e2e_routing_strategies }}
@@ -141,11 +144,18 @@ jobs:
               - 'docs/agent/**'
               - 'tools/agent/skills/**'
               - 'src/fleet-sim/AGENTS.md'
+              - 'src/fleet-sim/fleet_sim/optimizer/AGENTS.md'
               - 'src/vllm-sr/cli/AGENTS.md'
               - 'src/semantic-router/pkg/config/AGENTS.md'
+              - 'src/semantic-router/pkg/classification/AGENTS.md'
               - 'src/semantic-router/pkg/extproc/AGENTS.md'
+              - 'deploy/operator/api/v1alpha1/AGENTS.md'
+              - 'deploy/operator/controllers/AGENTS.md'
+              - 'dashboard/frontend/src/AGENTS.md'
               - 'dashboard/frontend/src/pages/AGENTS.md'
               - 'dashboard/frontend/src/components/AGENTS.md'
+              - 'dashboard/backend/handlers/AGENTS.md'
+              - 'e2e/testcases/AGENTS.md'
               - '.github/copilot-instructions.md'
               - '.github/PULL_REQUEST_TEMPLATE.md'
               - '.github/ISSUE_TEMPLATE/**'
@@ -163,12 +173,16 @@ jobs:
             e2e_istio:
               - 'e2e/profiles/istio/**'
               - 'deploy/kubernetes/istio/**'
-            e2e_ai_gateway:
+            e2e_kubernetes:
               - 'e2e/profiles/ai-gateway/**'
               - 'deploy/kubernetes/ai-gateway/**'
             e2e_aibrix:
               - 'e2e/profiles/aibrix/**'
               - 'deploy/kubernetes/aibrix/**'
+            e2e_dashboard:
+              - 'e2e/profiles/dashboard/**'
+              - 'e2e/testcases/dashboard_*.go'
+              - 'deploy/kubernetes/observability/dashboard/**'
             e2e_dynamic_config:
               - 'e2e/profiles/dynamic-config/**'
             e2e_llm_d:
