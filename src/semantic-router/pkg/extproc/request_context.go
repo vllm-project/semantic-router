@@ -29,6 +29,12 @@ type EnhancedHallucinationInfo struct {
 	Spans      []EnhancedHallucinationSpan `json:"spans"`
 }
 
+// ChatCompletionMessage is role plus plain-text content from a Chat Completions request.
+type ChatCompletionMessage struct {
+	Role    string
+	Content string
+}
+
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
 	Headers             map[string]string
@@ -36,6 +42,7 @@ type RequestContext struct {
 	OriginalRequestBody []byte
 	RequestModel        string
 	RequestQuery        string
+	// CacheQuery is the semantic-cache lookup key (may include user scope); empty means fall back to RequestQuery.
 	CacheQuery          string
 	StartTime           time.Time
 	ProcessingStartTime time.Time
@@ -66,6 +73,7 @@ type RequestContext struct {
 	VSRSelectedModel              string           // The model selected by VSR
 	VSRSelectionMethod            string           // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRCacheHit                   bool             // Whether this request hit the cache
+	VSRCacheSimilarity            float32          // Similarity score from last cache lookup (0 = no lookup performed)
 	VSRInjectedSystemPrompt       bool             // Whether a system prompt was injected into the request
 	VSRSelectedDecision           *config.Decision // The decision object selected by DecisionEngine (for plugins)
 
@@ -82,11 +90,14 @@ type RequestContext struct {
 	VSRMatchedLanguage     []string // Matched language signals
 	VSRMatchedContext      []string // Matched context rule names (e.g. "low_token_count")
 	VSRContextTokenCount   int      // Actual token count for the request
+	VSRMatchedStructure    []string // Matched structure rule names
 	VSRMatchedComplexity   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
 	VSRMatchedModality     []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
 	VSRMatchedAuthz        []string // Matched authz rule names for user-level routing
 	VSRMatchedJailbreak    []string // Matched jailbreak rule names (confidence >= threshold)
 	VSRMatchedPII          []string // Matched PII rule names (denied PII types detected)
+	VSRMatchedKB           []string // Matched knowledge-base signal names
+	VSRMatchedProjection   []string // Matched projection mapping outputs
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request
@@ -125,6 +136,13 @@ type RequestContext struct {
 	// Response API context
 	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
 
+	// Chat Completions messages (parsed for memory and related flows)
+	ChatCompletionMessages []ChatCompletionMessage
+	// ChatCompletionRequestBody is the raw chat-completions JSON (dev: extract user from body).
+	ChatCompletionRequestBody []byte
+	// ChatCompletionUserID is populated in dev builds when parsing the chat-completions body.
+	ChatCompletionUserID string
+
 	// Router replay context
 	RouterReplayID           string                           // ID of the router replay session, if applicable
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
@@ -156,8 +174,13 @@ type RequestContext struct {
 	RateLimitCtx *ratelimit.Context
 }
 
-// HasPersonalizedContext reports whether the request carries any user-specific
-// context that makes the response unsuitable for shared caching.
+// HasPersonalizedContext returns true if the request/response is tainted with user-specific
+// context (RAG, memory, PII) that should prevent caching the response.
+// The second return value is the canonical reason for observability (metrics/tracing).
+//
+// Note: VSRInjectedSystemPrompt is intentionally excluded. System prompts are
+// per-decision, not per-user — all users hitting the same decision get the same
+// system prompt, so the response is not "personalized" in the cross-user-leak sense.
 func (ctx *RequestContext) HasPersonalizedContext() (bool, string) {
 	if ctx == nil {
 		return false, ""
@@ -170,9 +193,6 @@ func (ctx *RequestContext) HasPersonalizedContext() (bool, string) {
 	}
 	if ctx.PIIDetected {
 		return true, "pii_detected"
-	}
-	if ctx.VSRInjectedSystemPrompt {
-		return true, "system_prompt_injected"
 	}
 	return false, ""
 }

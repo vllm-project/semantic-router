@@ -168,4 +168,4 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 
 ## Reference
 
-See [keyword.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword.yaml) for complete configuration.
+Use the snippet on this page as the v0.1 reference configuration. The main branch no longer carries the old full example file.

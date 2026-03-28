@@ -31,12 +31,28 @@ type rawProgram struct {
 
 // rawTopLevel is a union for top-level declarations.
 type rawTopLevel struct {
+	Pos          lexer.Position
+	Signal       *rawSignalDecl       `parser:"  @@"`
+	Projection   *rawProjectionDecl   `parser:"| @@"`
+	Route        *rawRouteDecl        `parser:"| @@"`
+	DecisionTree *rawDecisionTreeDecl `parser:"| @@"`
+	Model        *rawModelDecl        `parser:"| @@"`
+	Plugin       *rawPluginDecl       `parser:"| @@"`
+	TestBlock    *rawTestBlockDecl    `parser:"| @@"`
+}
+
+// rawTestBlockDecl: TEST <name> { entries... }
+type rawTestBlockDecl struct {
 	Pos     lexer.Position
-	Signal  *rawSignalDecl  `parser:"  @@"`
-	Route   *rawRouteDecl   `parser:"| @@"`
-	Plugin  *rawPluginDecl  `parser:"| @@"`
-	Backend *rawBackendDecl `parser:"| @@"`
-	Global  *rawGlobalDecl  `parser:"| @@"`
+	Name    string              `parser:"'TEST' @(Ident | String)"`
+	Entries []*rawTestEntryDecl `parser:"'{' @@* '}'"`
+}
+
+// rawTestEntryDecl: "query" -> route_name
+type rawTestEntryDecl struct {
+	Pos       lexer.Position
+	Query     string `parser:"@String"`
+	RouteName string `parser:"Arrow @(Ident | String)"`
 }
 
 // rawSignalDecl: SIGNAL <type> <name> { fields... }
@@ -47,12 +63,60 @@ type rawSignalDecl struct {
 	Fields     []*FieldEntry `parser:"'{' @@* '}'"`
 }
 
+// rawProjectionDecl: PROJECTION <partition|score|mapping> <name> { fields... }
+type rawProjectionDecl struct {
+	Pos    lexer.Position
+	Kind   string        `parser:"'PROJECTION' @('partition' | 'score' | 'mapping')"`
+	Name   string        `parser:"@(Ident | String)"`
+	Fields []*FieldEntry `parser:"'{' @@* '}'"`
+}
+
 // rawRouteDecl: ROUTE <name> (opts...) { body... }
 type rawRouteDecl struct {
 	Pos  lexer.Position
 	Name string          `parser:"'ROUTE' @(Ident | String)"`
 	Opts []*RouteOpt     `parser:"( '(' @@* ')' )?"`
 	Body []*rawRouteItem `parser:"'{' @@* '}'"`
+}
+
+// rawDecisionTreeDecl: DECISION_TREE <name> { IF ... ELSE IF ... ELSE ... }
+type rawDecisionTreeDecl struct {
+	Pos     lexer.Position
+	Name    string                     `parser:"'DECISION_TREE' @(Ident | String)"`
+	If      *rawDecisionTreeIfBranch   `parser:"'{' @@"`
+	ElseIfs []*rawDecisionTreeIfBranch `parser:"@@*"`
+	Else    *rawDecisionTreeElseBranch `parser:"@@ '}'"`
+}
+
+// rawDecisionTreeIfBranch represents IF/ELSE IF branches inside DECISION_TREE.
+type rawDecisionTreeIfBranch struct {
+	Pos       lexer.Position
+	Condition *BoolExprTop           `parser:"( 'IF' | 'ELSE' 'IF' ) @@"`
+	Body      []*rawDecisionTreeItem `parser:"'{' @@* '}'"`
+}
+
+// rawDecisionTreeElseBranch represents the terminal ELSE branch.
+type rawDecisionTreeElseBranch struct {
+	Pos  lexer.Position
+	Body []*rawDecisionTreeItem `parser:"'ELSE' '{' @@* '}'"`
+}
+
+// rawDecisionTreeItem is a route-like statement inside one DECISION_TREE branch.
+type rawDecisionTreeItem struct {
+	Pos         lexer.Position
+	Name        *string       `parser:"  'NAME' @(Ident | String)"`
+	Description *string       `parser:"| 'DESCRIPTION' @String"`
+	Tier        *int          `parser:"| 'TIER' @Int"`
+	Model       *rawModelList `parser:"| 'MODEL' @@"`
+	Algorithm   *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
+	Plugin      *rawPluginRef `parser:"| 'PLUGIN' @@"`
+}
+
+// rawModelDecl: MODEL <name> { fields... }
+type rawModelDecl struct {
+	Pos    lexer.Position
+	Name   string        `parser:"'MODEL' @(Ident | String)"`
+	Fields []*FieldEntry `parser:"'{' @@* '}'"`
 }
 
 // RouteOpt: key = value inside route header parens
@@ -66,6 +130,7 @@ type RouteOpt struct {
 type rawRouteItem struct {
 	Pos       lexer.Position
 	Priority  *int          `parser:"  'PRIORITY' @Int"`
+	Tier      *int          `parser:"| 'TIER' @Int"`
 	When      *BoolExprTop  `parser:"| 'WHEN' @@"`
 	Model     *rawModelList `parser:"| 'MODEL' @@"`
 	Algorithm *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
@@ -85,20 +150,6 @@ type rawPluginRef struct {
 	Pos    lexer.Position
 	Name   string        `parser:"@(Ident | String)"`
 	Fields []*FieldEntry `parser:"( '{' @@* '}' )?"`
-}
-
-// rawBackendDecl: BACKEND <type> <name> { fields... }
-type rawBackendDecl struct {
-	Pos         lexer.Position
-	BackendType string        `parser:"'BACKEND' @Ident"`
-	Name        string        `parser:"@(Ident | String)"`
-	Fields      []*FieldEntry `parser:"'{' @@* '}'"`
-}
-
-// rawGlobalDecl: GLOBAL { fields... }
-type rawGlobalDecl struct {
-	Pos    lexer.Position
-	Fields []*FieldEntry `parser:"'GLOBAL' '{' @@* '}'"`
 }
 
 // rawModelList: comma-separated model refs
@@ -187,11 +238,87 @@ type ArrayVal struct {
 
 // Program is the root AST node, representing a complete DSL file.
 type Program struct {
-	Signals  []*SignalDecl
-	Routes   []*RouteDecl
-	Plugins  []*PluginDecl
-	Backends []*BackendDecl
-	Global   *GlobalDecl
+	Signals              []*SignalDecl
+	ProjectionPartitions []*ProjectionPartitionDecl
+	ProjectionScores     []*ProjectionScoreDecl
+	ProjectionMappings   []*ProjectionMappingDecl
+	Routes               []*RouteDecl
+	Models               []*ModelDecl
+	Plugins              []*PluginDecl
+	TestBlocks           []*TestBlockDecl
+}
+
+// ProjectionPartitionDecl declares a mutually exclusive partition of signals.
+// When Semantics is "softmax_exclusive", the runtime applies Voronoi
+// normalization so that at most one member fires per query.
+type ProjectionPartitionDecl struct {
+	Name        string
+	Semantics   string
+	Temperature float64
+	Members     []string
+	Default     string
+	Pos         Position
+}
+
+// ProjectionScoreDecl defines a weighted derived score over base signals.
+type ProjectionScoreDecl struct {
+	Name   string
+	Method string
+	Inputs []*ProjectionScoreInputDecl
+	Pos    Position
+}
+
+// ProjectionScoreInputDecl is one weighted contribution to a projection score.
+type ProjectionScoreInputDecl struct {
+	SignalType  string
+	SignalName  string
+	KB          string
+	Metric      string
+	Weight      float64
+	ValueSource string
+	Match       float64
+	Miss        float64
+}
+
+// ProjectionMappingDecl maps one score into named routing outputs.
+type ProjectionMappingDecl struct {
+	Name        string
+	Source      string
+	Method      string
+	Calibration *ProjectionMappingCalibrationDecl
+	Outputs     []*ProjectionMappingOutputDecl
+	Pos         Position
+}
+
+// ProjectionMappingCalibrationDecl controls confidence derived from the mapped band.
+type ProjectionMappingCalibrationDecl struct {
+	Method string
+	Slope  float64
+}
+
+// ProjectionMappingOutputDecl defines one threshold band emitted by a mapping.
+type ProjectionMappingOutputDecl struct {
+	Name string
+	LT   *float64
+	LTE  *float64
+	GT   *float64
+	GTE  *float64
+}
+
+// TestBlockDecl declares expected routing outcomes for specific queries.
+// Native validation paths can run them through the routing signal pipeline
+// to catch conflicts that static checks cannot find.
+type TestBlockDecl struct {
+	Name    string
+	Entries []*TestEntry
+	Pos     Position
+}
+
+// TestEntry is a single query → expected route mapping inside a TEST block.
+type TestEntry struct {
+	Query     string
+	RouteName string
+	Pos       Position
 }
 
 // SignalDecl represents a SIGNAL declaration.
@@ -207,11 +334,19 @@ type RouteDecl struct {
 	Name        string
 	Description string
 	Priority    int
+	Tier        int
 	When        BoolExpr
 	Models      []*ModelRef
 	Algorithm   *AlgoSpec
 	Plugins     []*PluginRef
 	Pos         Position
+}
+
+// ModelDecl represents a top-level model catalog entry.
+type ModelDecl struct {
+	Name   string
+	Fields map[string]Value
+	Pos    Position
 }
 
 // PluginDecl represents a top-level PLUGIN template declaration.
@@ -225,20 +360,6 @@ type PluginDecl struct {
 // PluginRef represents a plugin reference inside a ROUTE.
 type PluginRef struct {
 	Name   string
-	Fields map[string]Value
-	Pos    Position
-}
-
-// BackendDecl represents a BACKEND declaration.
-type BackendDecl struct {
-	BackendType string
-	Name        string
-	Fields      map[string]Value
-	Pos         Position
-}
-
-// GlobalDecl represents the GLOBAL settings block.
-type GlobalDecl struct {
 	Fields map[string]Value
 	Pos    Position
 }
@@ -294,14 +415,13 @@ func (s *SignalRefExpr) GetPos() Position { return s.Pos }
 
 // ModelRef represents a model reference in a ROUTE.
 type ModelRef struct {
-	Model           string
-	Reasoning       *bool
-	Effort          string
-	LoRA            string
-	ParamSize       string
-	Weight          float64
-	ReasoningFamily string
-	Pos             Position
+	Model     string
+	Reasoning *bool
+	Effort    string
+	LoRA      string
+	ParamSize string
+	Weight    float64
+	Pos       Position
 }
 
 // ---------- Algorithm Specification ----------

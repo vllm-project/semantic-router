@@ -11,16 +11,18 @@ precommit-check:
 	@echo "Running pre-commit on all tracked files..."
 	@pre-commit run --all-files
 
-# Run pre-commit hooks in a Docker container,
-# and you can exec container to run bash for debug.
-# export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
-# docker run --rm -it \
-#     -v $(pwd):/app \
-#     -w /app \
-#     --name precommit-container ${PRECOMMIT_CONTAINER} \
-#     bash
-# and then, run `pre-commit install && pre-commit run --all-files` command
-precommit-local: ## Run pre-commit hooks in a Docker/Podman container
+# Run the full CI pre-commit pipeline in a Docker container.
+# This mirrors .github/workflows/pre-commit.yml by running both
+# `make agent-ci-lint` and `make precommit-check`.
+#
+# For interactive debugging:
+#   export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
+#   docker run --rm -it \
+#       -v $(pwd):/app \
+#       -w /app \
+#       --name precommit-container ${PRECOMMIT_CONTAINER} \
+#       bash
+precommit-local: ## Run full CI pre-commit pipeline in a Docker/Podman container
 precommit-local:
 	@if command -v docker > /dev/null 2>&1; then \
 		CONTAINER_CMD=docker; \
@@ -37,6 +39,7 @@ precommit-local:
 		echo "Image found locally. Skipping pull."; \
 	fi; \
 	$$CONTAINER_CMD run --rm \
+	    -e AGENT_BASE_REF="$(AGENT_BASE_REF)" \
 	    -v $(shell pwd):/app \
 	    -w /app \
-	    ${PRECOMMIT_CONTAINER} bash -c 'pre-commit install && pre-commit run --all-files'
+	    ${PRECOMMIT_CONTAINER} bash -c 'make agent-ci-lint && make precommit-check'

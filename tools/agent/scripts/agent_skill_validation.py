@@ -3,6 +3,10 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import PurePosixPath
+
+import yaml
 from agent_support import (
     CHANGE_SURFACES_DOC,
     REPO_ROOT,
@@ -12,21 +16,57 @@ from agent_support import (
 )
 
 SKILL_REQUIRED_SECTIONS = {
-    "primary": ["## Trigger", "## Must Read", "## Standard Commands", "## Acceptance"],
+    "primary": [
+        "## Trigger",
+        "## Workflow",
+        "## Must Read",
+        "## Standard Commands",
+        "## Gotchas",
+        "## Acceptance",
+    ],
     "fragments": [
         "## Trigger",
+        "## Workflow",
         "## Must Read",
         "## Standard Commands",
         "## Acceptance",
     ],
-    "support": ["## Trigger", "## Must Read", "## Standard Commands", "## Acceptance"],
+    "support": [
+        "## Trigger",
+        "## Workflow",
+        "## Must Read",
+        "## Standard Commands",
+        "## Gotchas",
+        "## Acceptance",
+    ],
     "legacy_reference": [
         "## Trigger",
+        "## Workflow",
         "## Must Read",
         "## Standard Commands",
         "## Acceptance",
     ],
 }
+SKILL_FRONTMATTER_PATTERN = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
+SKILL_CATEGORY_FRONTMATTER = {
+    "primary": "primary",
+    "fragments": "fragment",
+    "support": "support",
+    "legacy_reference": "legacy_reference",
+}
+MAX_MUST_READ_LINKS_BY_CATEGORY = {
+    "primary": 3,
+    "fragments": 3,
+    "support": 4,
+    "legacy_reference": 4,
+}
+
+DEFERRED_MUST_READ_PATHS = {
+    "docs/agent/feature-complete-checklist.md": (
+        "close-out checklist docs belong in workflow or acceptance, not Must Read"
+    ),
+}
+MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
 
 def validate_skill_registry(
@@ -106,6 +146,7 @@ def validate_skill_definition(
 ) -> None:
     skill_name = skill["name"]
     category = skill["category"]
+    validate_skill_frontmatter(skill, errors)
     if not skill.get("description"):
         errors.append(f"Skill '{skill_name}' is missing description")
 
@@ -137,6 +178,106 @@ def validate_skill_template(skill: dict, errors: list[str]) -> None:
             errors.append(
                 f"{skill['path']} is missing required section '{section}' for category '{skill['category']}'"
             )
+    validate_must_read_budget(skill, skill_text, errors)
+
+
+def validate_must_read_budget(skill: dict, skill_text: str, errors: list[str]) -> None:
+    max_links = MAX_MUST_READ_LINKS_BY_CATEGORY.get(skill["category"])
+    if max_links is None:
+        return
+    must_read_links = collect_must_read_links(skill_text)
+    link_count = len(must_read_links)
+    validate_deferred_must_read_links(skill, must_read_links, errors)
+    if link_count > max_links:
+        errors.append(
+            f"{skill['path']} exceeds the Must Read budget for category "
+            f"'{skill['category']}' ({link_count} > {max_links})"
+        )
+
+
+def validate_deferred_must_read_links(
+    skill: dict, must_read_links: list[str], errors: list[str]
+) -> None:
+    skill_path = REPO_ROOT / skill["path"]
+    for link_target in must_read_links:
+        if "://" in link_target:
+            continue
+        normalized = normalize_skill_link(skill_path, link_target)
+        if normalized is None:
+            continue
+        reason = DEFERRED_MUST_READ_PATHS.get(normalized)
+        if reason:
+            errors.append(
+                f"{skill['path']} must not include '{normalized}' in Must Read: {reason}"
+            )
+
+
+def collect_must_read_links(skill_text: str) -> list[str]:
+    in_section = False
+    links: list[str] = []
+    for line in skill_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            if stripped == "## Must Read":
+                in_section = True
+                continue
+            if in_section:
+                break
+        if in_section:
+            links.extend(MARKDOWN_LINK_PATTERN.findall(line))
+    return links
+
+
+def count_must_read_links(skill_text: str) -> int:
+    return len(collect_must_read_links(skill_text))
+
+
+def normalize_skill_link(skill_path, link_target: str) -> str | None:
+    try:
+        resolved = (skill_path.parent / link_target).resolve()
+        return resolved.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        normalized = PurePosixPath(link_target).as_posix()
+        return normalized if not normalized.startswith("../") else None
+
+
+def validate_skill_frontmatter(skill: dict, errors: list[str]) -> None:
+    skill_text = (REPO_ROOT / skill["path"]).read_text(encoding="utf-8")
+    match = SKILL_FRONTMATTER_PATTERN.match(skill_text)
+    if match is None:
+        errors.append(f"{skill['path']} is missing YAML frontmatter")
+        return
+
+    try:
+        frontmatter = yaml.safe_load(match.group(1))
+    except yaml.YAMLError as exc:
+        errors.append(f"{skill['path']} has invalid YAML frontmatter: {exc}")
+        return
+
+    if not isinstance(frontmatter, dict):
+        errors.append(f"{skill['path']} frontmatter must decode to a mapping")
+        return
+
+    if frontmatter.get("name") != skill["name"]:
+        errors.append(
+            f"{skill['path']} frontmatter name must match registry name '{skill['name']}'"
+        )
+
+    description = frontmatter.get("description")
+    if not isinstance(description, str) or not description.strip():
+        errors.append(f"{skill['path']} frontmatter is missing a non-empty description")
+    elif "Use when" not in description:
+        errors.append(
+            f"{skill['path']} frontmatter description must include trigger guidance with 'Use when'"
+        )
+
+    expected_category = SKILL_CATEGORY_FRONTMATTER.get(
+        skill["category"], skill["category"]
+    )
+    if frontmatter.get("category") != expected_category:
+        errors.append(
+            f"{skill['path']} frontmatter category must be '{expected_category}'"
+        )
 
 
 def validate_primary_skill(
@@ -146,8 +287,15 @@ def validate_primary_skill(
     priority = skill.get("priority")
     if not isinstance(priority, int):
         errors.append(f"Primary skill '{skill_name}' is missing integer priority")
-    if not skill.get("fragments"):
-        errors.append(f"Primary skill '{skill_name}' has no fragment refs")
+    auto_surface_fragments = skill.get("auto_surface_fragments")
+    if auto_surface_fragments not in (None, True, False):
+        errors.append(
+            f"Primary skill '{skill_name}' has non-boolean auto_surface_fragments"
+        )
+    if not skill.get("fragments") and not auto_surface_fragments:
+        errors.append(
+            f"Primary skill '{skill_name}' has no fragment refs or auto-surface fragment resolution"
+        )
     if not skill.get("required_surfaces"):
         errors.append(f"Primary skill '{skill_name}' has no required_surfaces")
     if not skill.get("stop_conditions"):

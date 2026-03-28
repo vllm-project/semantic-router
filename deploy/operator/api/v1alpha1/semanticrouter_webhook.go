@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,27 +34,36 @@ var semanticrouterlog = logf.Log.WithName("semanticrouter-resource")
 func (r *SemanticRouter) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
+		WithValidator(r).
 		Complete()
 }
 
 // +kubebuilder:webhook:path=/validate-vllm-ai-v1alpha1-semanticrouter,mutating=false,failurePolicy=fail,sideEffects=None,groups=vllm.ai,resources=semanticrouters,verbs=create;update,versions=v1alpha1,name=vsemanticrouter.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Validator = &SemanticRouter{}
+var _ webhook.CustomValidator = &SemanticRouter{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *SemanticRouter) ValidateCreate() (admission.Warnings, error) {
+func (r *SemanticRouter) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
 	semanticrouterlog.Info("validate create", "name", r.Name)
-	return nil, r.validateSemanticRouter()
+	semanticRouter, ok := obj.(*SemanticRouter)
+	if !ok {
+		return nil, fmt.Errorf("expected SemanticRouter for create validation, got %T", obj)
+	}
+	return nil, semanticRouter.validateSemanticRouter()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *SemanticRouter) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
+func (r *SemanticRouter) ValidateUpdate(_ context.Context, _ runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
 	semanticrouterlog.Info("validate update", "name", r.Name)
-	return nil, r.validateSemanticRouter()
+	semanticRouter, ok := newObj.(*SemanticRouter)
+	if !ok {
+		return nil, fmt.Errorf("expected SemanticRouter for update validation, got %T", newObj)
+	}
+	return nil, semanticRouter.validateSemanticRouter()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *SemanticRouter) ValidateDelete() (admission.Warnings, error) {
+func (r *SemanticRouter) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
 	semanticrouterlog.Info("validate delete", "name", r.Name)
 	// No validation needed on delete
 	return nil, nil

@@ -1,0 +1,14 @@
+routing:
+  decisions:
+    - name: business_route
+      description: Route business and management questions.
+      priority: 110
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+      modelRefs:
+        - model: qwen2.5:3b
+          use_reasoning: false
+

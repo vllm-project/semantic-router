@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -15,7 +16,20 @@ type Signal struct {
 	Preference   []string `json:"preference,omitempty"`
 	Language     []string `json:"language,omitempty"`
 	Context      []string `json:"context,omitempty"`
+	Structure    []string `json:"structure,omitempty"`
 	Complexity   []string `json:"complexity,omitempty"`
+}
+
+// UsageCost captures token usage and pricing-derived cost details for a record.
+type UsageCost struct {
+	PromptTokens     *int     `json:"prompt_tokens,omitempty"`
+	CompletionTokens *int     `json:"completion_tokens,omitempty"`
+	TotalTokens      *int     `json:"total_tokens,omitempty"`
+	ActualCost       *float64 `json:"actual_cost,omitempty"`
+	BaselineCost     *float64 `json:"baseline_cost,omitempty"`
+	CostSavings      *float64 `json:"cost_savings,omitempty"`
+	Currency         *string  `json:"currency,omitempty"`
+	BaselineModel    *string  `json:"baseline_model,omitempty"`
 }
 
 // Record represents a routing decision record with metadata and captured payloads.
@@ -70,18 +84,22 @@ type Record struct {
 	HallucinationDetected   bool     `json:"hallucination_detected,omitempty"`
 	HallucinationConfidence float32  `json:"hallucination_confidence,omitempty"`
 	HallucinationSpans      []string `json:"hallucination_spans,omitempty"`
+
+	// Usage & Cost
+	PromptTokens     *int     `json:"prompt_tokens,omitempty"`
+	CompletionTokens *int     `json:"completion_tokens,omitempty"`
+	TotalTokens      *int     `json:"total_tokens,omitempty"`
+	ActualCost       *float64 `json:"actual_cost,omitempty"`
+	BaselineCost     *float64 `json:"baseline_cost,omitempty"`
+	CostSavings      *float64 `json:"cost_savings,omitempty"`
+	Currency         *string  `json:"currency,omitempty"`
+	BaselineModel    *string  `json:"baseline_model,omitempty"`
 }
 
-// Storage is the interface that all storage backends must implement.
-type Storage interface {
+// Writer mutates router replay records.
+type Writer interface {
 	// Add inserts a new record. Returns the record ID.
 	Add(ctx context.Context, record Record) (string, error)
-
-	// Get retrieves a record by ID. Returns false if not found.
-	Get(ctx context.Context, id string) (Record, bool, error)
-
-	// List retrieves all records, ordered by timestamp descending.
-	List(ctx context.Context) ([]Record, error)
 
 	// UpdateStatus updates the response status and flags for an existing record.
 	UpdateStatus(ctx context.Context, id string, status int, fromCache bool, streaming bool) error
@@ -91,12 +109,56 @@ type Storage interface {
 
 	// AttachResponse updates the response body for an existing record.
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
+}
 
+// Reader retrieves router replay records.
+type Reader interface {
+	// Get retrieves a record by ID. Returns false if not found.
+	Get(ctx context.Context, id string) (Record, bool, error)
+
+	// List retrieves all records, ordered by timestamp descending.
+	List(ctx context.Context) ([]Record, error)
+}
+
+// Enricher updates derived signal analysis fields after the initial record write.
+type Enricher interface {
 	// UpdateHallucinationStatus updates hallucination detection results for an existing record.
 	UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error
 
-	// Close releases resources held by the storage backend.
-	Close() error
+	// UpdateUsageCost updates token usage and pricing-derived cost fields for an existing record.
+	UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error
+}
+
+// Storage is the interface that all storage backends must implement.
+type Storage interface {
+	Writer
+	Reader
+	Enricher
+	io.Closer
+}
+
+func cloneIntPtr(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneFloat64Ptr(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneStringPtr(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 // Config holds common configuration options for all storage backends.

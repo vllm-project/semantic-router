@@ -10,15 +10,30 @@ interface ProgressTrackerProps {
 }
 
 export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTrackerProps) {
-  const { task, refresh: refreshTask } = useTask(taskId);
-  const { progress, connected, completed, error } = useProgress(taskId, task?.status === 'running');
+  const { task, refresh: refreshTask } = useTask(taskId, true, 1000);
+  const { progress, connected, completed, error, disconnect } = useProgress(taskId, true);
 
   useEffect(() => {
     if (completed) {
       refreshTask();
-      onComplete?.();
     }
-  }, [completed, refreshTask, onComplete]);
+  }, [completed, refreshTask]);
+
+  useEffect(() => {
+    if (!task) {
+      return;
+    }
+
+    if (task.status === 'completed') {
+      disconnect();
+      onComplete?.();
+      return;
+    }
+
+    if (task.status === 'failed' || task.status === 'cancelled') {
+      disconnect();
+    }
+  }, [task, disconnect, onComplete]);
 
   if (!task) {
     return (

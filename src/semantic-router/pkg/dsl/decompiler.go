@@ -2,22 +2,22 @@ package dsl
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// Decompile converts a RouterConfig back into DSL source text.
+// Decompile converts runtime config into the DSL contract.
 func Decompile(cfg *config.RouterConfig) (string, error) {
-	d := &decompiler{cfg: cfg}
-	return d.decompile()
+	return DecompileRouting(cfg)
 }
 
-// DecompileToAST converts a RouterConfig into a DSL AST Program.
+// DecompileToAST converts runtime config into a DSL AST Program.
 func DecompileToAST(cfg *config.RouterConfig) *Program {
-	d := &decompiler{cfg: cfg}
-	return d.buildAST()
+	return DecompileRoutingToAST(cfg)
 }
 
 type decompiler struct {
@@ -30,111 +30,6 @@ type pluginTemplate struct {
 	name       string
 	pluginType string
 	usageCount int
-}
-
-// ---------- Main Flow ----------
-
-func (d *decompiler) decompile() (string, error) {
-	d.pluginTemplates = make(map[string]*pluginTemplate)
-	d.extractPluginTemplates()
-
-	d.writeSection("SIGNALS")
-	d.decompileSignals()
-
-	if len(d.pluginTemplates) > 0 {
-		d.writeSection("PLUGINS")
-		d.decompilePluginTemplates()
-	}
-
-	d.writeSection("ROUTES")
-	d.decompileDecisions()
-
-	d.writeSection("BACKENDS")
-	d.decompileBackends()
-
-	d.writeSection("GLOBAL")
-	d.decompileGlobal()
-
-	return d.sb.String(), nil
-}
-
-func (d *decompiler) buildAST() *Program {
-	prog := &Program{}
-
-	// Signals
-	for _, cat := range d.cfg.Categories {
-		prog.Signals = append(prog.Signals, d.categoryToSignal(&cat))
-	}
-	for _, kw := range d.cfg.KeywordRules {
-		prog.Signals = append(prog.Signals, d.keywordToSignal(&kw))
-	}
-	for _, emb := range d.cfg.EmbeddingRules {
-		prog.Signals = append(prog.Signals, d.embeddingToSignal(&emb))
-	}
-	for _, fc := range d.cfg.FactCheckRules {
-		prog.Signals = append(prog.Signals, d.factCheckToSignal(&fc))
-	}
-	for _, uf := range d.cfg.UserFeedbackRules {
-		prog.Signals = append(prog.Signals, d.userFeedbackToSignal(&uf))
-	}
-	for _, pref := range d.cfg.PreferenceRules {
-		prog.Signals = append(prog.Signals, d.preferenceToSignal(&pref))
-	}
-	for _, lang := range d.cfg.LanguageRules {
-		prog.Signals = append(prog.Signals, d.languageToSignal(&lang))
-	}
-	for _, ctx := range d.cfg.ContextRules {
-		prog.Signals = append(prog.Signals, d.contextToSignal(&ctx))
-	}
-	for _, comp := range d.cfg.ComplexityRules {
-		prog.Signals = append(prog.Signals, d.complexityToSignal(&comp))
-	}
-	for _, mod := range d.cfg.ModalityRules {
-		prog.Signals = append(prog.Signals, d.modalityToSignal(&mod))
-	}
-	for _, rb := range d.cfg.RoleBindings {
-		prog.Signals = append(prog.Signals, d.roleBindingToSignal(&rb))
-	}
-	for _, jb := range d.cfg.JailbreakRules {
-		prog.Signals = append(prog.Signals, d.jailbreakToSignal(&jb))
-	}
-	for _, pii := range d.cfg.PIIRules {
-		prog.Signals = append(prog.Signals, d.piiToSignal(&pii))
-	}
-
-	// Routes
-	for _, dec := range d.cfg.Decisions {
-		prog.Routes = append(prog.Routes, d.decisionToRoute(&dec))
-	}
-
-	// Backends
-	for _, ep := range d.cfg.VLLMEndpoints {
-		prog.Backends = append(prog.Backends, d.vllmEndpointToBackend(&ep))
-	}
-	if d.cfg.ProviderProfiles != nil {
-		names := sortedKeys(d.cfg.ProviderProfiles)
-		for _, name := range names {
-			pp := d.cfg.ProviderProfiles[name]
-			prog.Backends = append(prog.Backends, d.providerProfileToBackend(name, &pp))
-		}
-	}
-	if d.cfg.EmbeddingModels.MmBertModelPath != "" || d.cfg.EmbeddingModels.BertModelPath != "" {
-		prog.Backends = append(prog.Backends, d.embeddingModelToBackend())
-	}
-	if d.cfg.SemanticCache.Enabled {
-		prog.Backends = append(prog.Backends, d.semanticCacheToBackend())
-	}
-	if d.cfg.Memory.Enabled {
-		prog.Backends = append(prog.Backends, d.memoryToBackend())
-	}
-	if d.cfg.ResponseAPI.Enabled {
-		prog.Backends = append(prog.Backends, d.responseAPIToBackend())
-	}
-
-	// Global
-	prog.Global = d.buildGlobalDecl()
-
-	return prog
 }
 
 // ---------- Signal Decompilation ----------
@@ -218,6 +113,12 @@ func (d *decompiler) decompileSignals() {
 		if pref.Description != "" {
 			d.write("  description: %q\n", pref.Description)
 		}
+		if len(pref.Examples) > 0 {
+			d.write("  examples: %s\n", formatStringArray(pref.Examples))
+		}
+		if pref.Threshold != 0 {
+			d.write("  threshold: %g\n", pref.Threshold)
+		}
 		d.write("}\n\n")
 	}
 
@@ -236,6 +137,18 @@ func (d *decompiler) decompileSignals() {
 		}
 		if ctx.MaxTokens != "" {
 			d.write("  max_tokens: %q\n", string(ctx.MaxTokens))
+		}
+		d.write("}\n\n")
+	}
+
+	for _, structure := range d.cfg.StructureRules {
+		d.write("SIGNAL structure %s {\n", quoteName(structure.Name))
+		if structure.Description != "" {
+			d.write("  description: %q\n", structure.Description)
+		}
+		d.write("  feature: %s\n", formatPluginConfigValue(structureFeatureToMap(structure.Feature)))
+		if structure.Predicate != nil {
+			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(structure.Predicate)))
 		}
 		d.write("}\n\n")
 	}
@@ -325,6 +238,63 @@ func (d *decompiler) decompileSignals() {
 		}
 		d.write("}\n\n")
 	}
+
+	for _, kb := range d.cfg.KBRules {
+		d.write("SIGNAL kb %s {\n", quoteName(kb.Name))
+		if kb.KB != "" {
+			d.write("  kb: %q\n", kb.KB)
+		}
+		d.write("  target: { kind: %q, value: %q }\n", kb.Target.Kind, kb.Target.Value)
+		if kb.Match != "" {
+			d.write("  match: %q\n", kb.Match)
+		}
+		d.write("}\n\n")
+	}
+
+	for _, partition := range d.cfg.Projections.Partitions {
+		d.write("PROJECTION partition %s {\n", quoteName(partition.Name))
+		if partition.Semantics != "" {
+			d.write("  semantics: %q\n", partition.Semantics)
+		}
+		if partition.Temperature != 0 {
+			d.write("  temperature: %v\n", partition.Temperature)
+		}
+		if len(partition.Members) > 0 {
+			d.write("  members: %s\n", formatStringArray(partition.Members))
+		}
+		if partition.Default != "" {
+			d.write("  default: %q\n", partition.Default)
+		}
+		d.write("}\n\n")
+	}
+
+	for _, score := range d.cfg.Projections.Scores {
+		d.write("PROJECTION score %s {\n", quoteName(score.Name))
+		if score.Method != "" {
+			d.write("  method: %q\n", score.Method)
+		}
+		if len(score.Inputs) > 0 {
+			d.write("  inputs: %s\n", formatProjectionScoreInputs(score.Inputs))
+		}
+		d.write("}\n\n")
+	}
+
+	for _, mapping := range d.cfg.Projections.Mappings {
+		d.write("PROJECTION mapping %s {\n", quoteName(mapping.Name))
+		if mapping.Source != "" {
+			d.write("  source: %q\n", mapping.Source)
+		}
+		if mapping.Method != "" {
+			d.write("  method: %q\n", mapping.Method)
+		}
+		if mapping.Calibration != nil {
+			d.write("  calibration: %s\n", formatProjectionMappingCalibration(mapping.Calibration))
+		}
+		if len(mapping.Outputs) > 0 {
+			d.write("  outputs: %s\n", formatProjectionMappingOutputs(mapping.Outputs))
+		}
+		d.write("}\n\n")
+	}
 }
 
 // ---------- Plugin Template Extraction ----------
@@ -381,6 +351,9 @@ func (d *decompiler) decompileDecisions() {
 		}
 
 		d.write("  PRIORITY %d\n", dec.Priority)
+		if dec.Tier != 0 {
+			d.write("  TIER %d\n", dec.Tier)
+		}
 
 		// WHEN expression
 		ruleExpr := decompileRuleNode(&dec.Rules)
@@ -482,8 +455,12 @@ func flattenRuleNode(node *config.RuleCombination, op string) []string {
 // decompilePluginConfig emits field lines for a DecisionPlugin's Configuration.
 func decompilePluginConfig(p *config.DecisionPlugin) string {
 	var sb strings.Builder
-	switch cfg := p.Configuration.(type) {
-	case config.SystemPromptPluginConfig:
+	switch p.Type {
+	case "system_prompt":
+		cfg, ok := decodePluginConfig[config.SystemPromptPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled != nil {
 			if *cfg.Enabled {
 				fmt.Fprintf(&sb, "    enabled: true\n")
@@ -497,14 +474,22 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.Mode != "" {
 			fmt.Fprintf(&sb, "    mode: %q\n", cfg.Mode)
 		}
-	case config.SemanticCachePluginConfig:
+	case "semantic-cache":
+		cfg, ok := decodePluginConfig[config.SemanticCachePluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
 		if cfg.SimilarityThreshold != nil {
 			fmt.Fprintf(&sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
 		}
-	case config.RouterReplayPluginConfig:
+	case "router_replay":
+		cfg, ok := decodePluginConfig[config.RouterReplayPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
@@ -520,7 +505,11 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.MaxBodyBytes != 0 {
 			fmt.Fprintf(&sb, "    max_body_bytes: %d\n", cfg.MaxBodyBytes)
 		}
-	case config.MemoryPluginConfig:
+	case "memory":
+		cfg, ok := decodePluginConfig[config.MemoryPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
@@ -533,7 +522,11 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.AutoStore != nil {
 			fmt.Fprintf(&sb, "    auto_store: %v\n", *cfg.AutoStore)
 		}
-	case config.HallucinationPluginConfig:
+	case "hallucination":
+		cfg, ok := decodePluginConfig[config.HallucinationPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
@@ -543,18 +536,50 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.HallucinationAction != "" {
 			fmt.Fprintf(&sb, "    hallucination_action: %q\n", cfg.HallucinationAction)
 		}
-	case config.ImageGenPluginConfig:
+	case "image_gen":
+		cfg, ok := decodePluginConfig[config.ImageGenPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
 		if cfg.Backend != "" {
 			fmt.Fprintf(&sb, "    backend: %q\n", cfg.Backend)
 		}
-	case config.FastResponsePluginConfig:
+	case "fast_response":
+		cfg, ok := decodePluginConfig[config.FastResponsePluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Message != "" {
 			fmt.Fprintf(&sb, "    message: %q\n", cfg.Message)
 		}
-	case config.RAGPluginConfig:
+	case "tools":
+		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
+		if !ok {
+			break
+		}
+		if cfg.Enabled {
+			fmt.Fprintf(&sb, "    enabled: true\n")
+		}
+		if cfg.Mode != "" {
+			fmt.Fprintf(&sb, "    mode: %q\n", cfg.Mode)
+		}
+		if cfg.SemanticSelection != nil {
+			fmt.Fprintf(&sb, "    semantic_selection: %v\n", *cfg.SemanticSelection)
+		}
+		if len(cfg.AllowTools) > 0 {
+			fmt.Fprintf(&sb, "    allow_tools: %s\n", formatStringArray(cfg.AllowTools))
+		}
+		if len(cfg.BlockTools) > 0 {
+			fmt.Fprintf(&sb, "    block_tools: %s\n", formatStringArray(cfg.BlockTools))
+		}
+	case "rag":
+		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
+		if !ok {
+			break
+		}
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
 		}
@@ -573,7 +598,11 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.InjectionMode != "" {
 			fmt.Fprintf(&sb, "    injection_mode: %q\n", cfg.InjectionMode)
 		}
-	case config.HeaderMutationPluginConfig:
+	case "header_mutation":
+		cfg, ok := decodePluginConfig[config.HeaderMutationPluginConfig](p)
+		if !ok {
+			break
+		}
 		if len(cfg.Add) > 0 {
 			fmt.Fprintf(&sb, "    add: [")
 			for i, h := range cfg.Add {
@@ -598,28 +627,186 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 			fmt.Fprintf(&sb, "    delete: %s\n", formatStringArray(cfg.Delete))
 		}
 	}
-	// Also handle map[string]interface{} from raw YAML deserialization
-	if m, ok := p.Configuration.(map[string]interface{}); ok {
-		for k, v := range m {
-			switch val := v.(type) {
-			case bool:
-				fmt.Fprintf(&sb, "    %s: %v\n", k, val)
-			case string:
-				if val != "" {
-					fmt.Fprintf(&sb, "    %s: %q\n", k, val)
-				}
-			case int:
-				if val != 0 {
-					fmt.Fprintf(&sb, "    %s: %d\n", k, val)
-				}
-			case float64:
-				if val != 0 {
-					fmt.Fprintf(&sb, "    %s: %v\n", k, val)
-				}
-			}
+	// Preserve raw-only plugin keys, but do not duplicate typed fields that were
+	// already emitted above for known plugin contracts.
+	if rawMap, ok := normalizePluginConfigMap(p.Configuration); ok {
+		extraFields := filterPluginConfigMap(rawMap, knownPluginConfigKeys(p))
+		if len(extraFields) > 0 {
+			writePluginConfigMap(&sb, extraFields, "    ")
 		}
 	}
 	return sb.String()
+}
+
+func knownPluginConfigKeys(p *config.DecisionPlugin) map[string]struct{} {
+	fields := pluginConfigToFields(p)
+	if len(fields) == 0 {
+		return nil
+	}
+	keys := make(map[string]struct{}, len(fields))
+	for key := range fields {
+		keys[key] = struct{}{}
+	}
+	return keys
+}
+
+func filterPluginConfigMap(raw map[string]interface{}, omit map[string]struct{}) map[string]interface{} {
+	if len(raw) == 0 {
+		return nil
+	}
+	filtered := make(map[string]interface{}, len(raw))
+	for key, value := range raw {
+		if _, skip := omit[key]; skip {
+			continue
+		}
+		filtered[key] = value
+	}
+	return filtered
+}
+
+func decodePluginConfig[T any](p *config.DecisionPlugin) (*T, bool) {
+	if p == nil || p.Configuration == nil {
+		return nil, false
+	}
+	var result T
+	if err := p.Configuration.DecodeInto(&result); err != nil {
+		return nil, false
+	}
+	return &result, true
+}
+
+func writePluginConfigMap(sb *strings.Builder, raw map[string]interface{}, indent string) {
+	keys := make([]string, 0, len(raw))
+	for key := range raw {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Fprintf(sb, "%s%s: %s\n", indent, key, formatPluginConfigValue(raw[key]))
+	}
+}
+
+func normalizePluginConfigMap(raw *config.StructuredPayload) (map[string]interface{}, bool) {
+	if raw == nil {
+		return nil, false
+	}
+	typed, err := raw.AsStringMap()
+	if err != nil {
+		return nil, false
+	}
+	normalized := make(map[string]interface{}, len(typed))
+	for key, value := range typed {
+		normalized[key] = normalizePluginConfigValue(value)
+	}
+	return normalized, true
+}
+
+func normalizePluginConfigValue(raw interface{}) interface{} {
+	switch typed := raw.(type) {
+	case map[string]interface{}:
+		normalized := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			normalized[key] = normalizePluginConfigValue(value)
+		}
+		return normalized
+	case map[interface{}]interface{}:
+		normalized := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			normalized[fmt.Sprintf("%v", key)] = normalizePluginConfigValue(value)
+		}
+		return normalized
+	case []interface{}:
+		normalized := make([]interface{}, len(typed))
+		for index, value := range typed {
+			normalized[index] = normalizePluginConfigValue(value)
+		}
+		return normalized
+	default:
+		return normalizePluginConfigReflectValue(raw)
+	}
+}
+
+func normalizePluginConfigReflectValue(raw interface{}) interface{} {
+	if raw == nil {
+		return nil
+	}
+	value := reflect.ValueOf(raw)
+	switch value.Kind() {
+	case reflect.Array, reflect.Slice:
+		normalized := make([]interface{}, value.Len())
+		for index := 0; index < value.Len(); index++ {
+			normalized[index] = normalizePluginConfigValue(value.Index(index).Interface())
+		}
+		return normalized
+	case reflect.Map:
+		normalized := make(map[string]interface{}, value.Len())
+		iter := value.MapRange()
+		for iter.Next() {
+			normalized[fmt.Sprintf("%v", iter.Key().Interface())] = normalizePluginConfigValue(iter.Value().Interface())
+		}
+		return normalized
+	default:
+		return raw
+	}
+}
+
+func formatPluginConfigValue(raw interface{}) string {
+	normalized := normalizePluginConfigValue(raw)
+	if scalar, ok := formatPluginConfigScalar(normalized); ok {
+		return scalar
+	}
+
+	switch typed := normalized.(type) {
+	case []interface{}:
+		return formatPluginConfigList(typed)
+	case map[string]interface{}:
+		return formatPluginConfigMap(typed)
+	case nil:
+		return "null"
+	default:
+		return fmt.Sprintf("%v", normalized)
+	}
+}
+
+func formatPluginConfigScalar(raw interface{}) (string, bool) {
+	switch typed := raw.(type) {
+	case string:
+		return fmt.Sprintf("%q", typed), true
+	case bool:
+		return strconv.FormatBool(typed), true
+	case int:
+		return fmt.Sprintf("%d", typed), true
+	case int64:
+		return fmt.Sprintf("%d", typed), true
+	case float32:
+		return fmt.Sprintf("%v", typed), true
+	case float64:
+		return fmt.Sprintf("%v", typed), true
+	default:
+		return "", false
+	}
+}
+
+func formatPluginConfigList(items []interface{}) string {
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		parts = append(parts, formatPluginConfigValue(item))
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+func formatPluginConfigMap(values map[string]interface{}) string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s: %s", key, formatPluginConfigValue(values[key])))
+	}
+	return "{ " + strings.Join(parts, ", ") + " }"
 }
 
 func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelParams) string {
@@ -640,13 +827,10 @@ func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelPar
 	if mr.Weight != 0 {
 		opts = append(opts, fmt.Sprintf("weight = %g", mr.Weight))
 	}
-	// Pull param_size and reasoning_family from model_config
+	// Pull param_size from model_config.
 	if mc, ok := modelConfig[mr.Model]; ok {
 		if mc.ParamSize != "" {
 			opts = append(opts, fmt.Sprintf("param_size = %q", mc.ParamSize))
-		}
-		if mc.ReasoningFamily != "" {
-			opts = append(opts, fmt.Sprintf("reasoning_family = %q", mc.ReasoningFamily))
 		}
 	}
 	return strings.Join(opts, ", ")
@@ -776,313 +960,6 @@ func (d *decompiler) decompileAlgorithmFields(algo *config.AlgorithmConfig) stri
 	return sb.String()
 }
 
-// ---------- Backend Decompilation ----------
-
-func (d *decompiler) decompileBackends() {
-	for _, ep := range d.cfg.VLLMEndpoints {
-		d.write("BACKEND vllm_endpoint %s {\n", quoteName(ep.Name))
-		if ep.Address != "" {
-			d.write("  address: %q\n", ep.Address)
-		}
-		if ep.Port != 0 {
-			d.write("  port: %d\n", ep.Port)
-		}
-		if ep.Weight != 0 {
-			d.write("  weight: %d\n", ep.Weight)
-		}
-		if ep.Type != "" {
-			d.write("  type: %q\n", ep.Type)
-		}
-		if ep.APIKey != "" {
-			d.write("  api_key: %q\n", ep.APIKey)
-		}
-		if ep.ProviderProfileName != "" {
-			d.write("  provider_profile: %q\n", ep.ProviderProfileName)
-		}
-		if ep.Model != "" {
-			d.write("  model: %q\n", ep.Model)
-		}
-		if ep.Protocol != "" {
-			d.write("  protocol: %q\n", ep.Protocol)
-		}
-		d.write("}\n\n")
-	}
-
-	if d.cfg.ProviderProfiles != nil {
-		names := sortedKeys(d.cfg.ProviderProfiles)
-		for _, name := range names {
-			pp := d.cfg.ProviderProfiles[name]
-			d.write("BACKEND provider_profile %s {\n", quoteName(name))
-			if pp.Type != "" {
-				d.write("  type: %q\n", pp.Type)
-			}
-			if pp.BaseURL != "" {
-				d.write("  base_url: %q\n", pp.BaseURL)
-			}
-			if pp.AuthHeader != "" {
-				d.write("  auth_header: %q\n", pp.AuthHeader)
-			}
-			if pp.APIVersion != "" {
-				d.write("  api_version: %q\n", pp.APIVersion)
-			}
-			if pp.ChatPath != "" {
-				d.write("  chat_path: %q\n", pp.ChatPath)
-			}
-			if len(pp.ExtraHeaders) > 0 {
-				d.write("  extra_headers: {\n")
-				for k, v := range pp.ExtraHeaders {
-					d.write("    %s: %q\n", k, v)
-				}
-				d.write("  }\n")
-			}
-			d.write("}\n\n")
-		}
-	}
-
-	if d.cfg.EmbeddingModels.MmBertModelPath != "" || d.cfg.EmbeddingModels.BertModelPath != "" {
-		d.write("BACKEND embedding_model main {\n")
-		if d.cfg.EmbeddingModels.MmBertModelPath != "" {
-			d.write("  mmbert_model_path: %q\n", d.cfg.EmbeddingModels.MmBertModelPath)
-		}
-		if d.cfg.EmbeddingModels.BertModelPath != "" {
-			d.write("  bert_model_path: %q\n", d.cfg.EmbeddingModels.BertModelPath)
-		}
-		if d.cfg.EmbeddingModels.UseCPU {
-			d.write("  use_cpu: true\n")
-		}
-		hnsw := d.cfg.EmbeddingModels.HNSWConfig
-		if hnsw.ModelType != "" || hnsw.PreloadEmbeddings || hnsw.TargetDimension != 0 {
-			d.write("  hnsw_config: {\n")
-			if hnsw.ModelType != "" {
-				d.write("    model_type: %q\n", hnsw.ModelType)
-			}
-			if hnsw.PreloadEmbeddings {
-				d.write("    preload_embeddings: true\n")
-			}
-			if hnsw.TargetDimension != 0 {
-				d.write("    target_dimension: %d\n", hnsw.TargetDimension)
-			}
-			if hnsw.MinScoreThreshold != 0 {
-				d.write("    min_score_threshold: %v\n", hnsw.MinScoreThreshold)
-			}
-			d.write("  }\n")
-		}
-		d.write("}\n\n")
-	}
-
-	if d.cfg.SemanticCache.Enabled {
-		d.write("BACKEND semantic_cache main {\n")
-		d.write("  enabled: true\n")
-		if d.cfg.SemanticCache.BackendType != "" {
-			d.write("  backend_type: %q\n", d.cfg.SemanticCache.BackendType)
-		}
-		if d.cfg.SemanticCache.SimilarityThreshold != nil {
-			d.write("  similarity_threshold: %v\n", *d.cfg.SemanticCache.SimilarityThreshold)
-		}
-		if d.cfg.SemanticCache.MaxEntries != 0 {
-			d.write("  max_entries: %d\n", d.cfg.SemanticCache.MaxEntries)
-		}
-		if d.cfg.SemanticCache.TTLSeconds != 0 {
-			d.write("  ttl_seconds: %d\n", d.cfg.SemanticCache.TTLSeconds)
-		}
-		if d.cfg.SemanticCache.EvictionPolicy != "" {
-			d.write("  eviction_policy: %q\n", d.cfg.SemanticCache.EvictionPolicy)
-		}
-		d.write("}\n\n")
-	}
-
-	if d.cfg.Memory.Enabled {
-		d.write("BACKEND memory mem {\n")
-		d.write("  enabled: true\n")
-		if d.cfg.Memory.AutoStore {
-			d.write("  auto_store: true\n")
-		}
-		if d.cfg.Memory.DefaultRetrievalLimit != 0 {
-			d.write("  default_retrieval_limit: %d\n", d.cfg.Memory.DefaultRetrievalLimit)
-		}
-		if d.cfg.Memory.DefaultSimilarityThreshold != 0 {
-			d.write("  default_similarity_threshold: %v\n", d.cfg.Memory.DefaultSimilarityThreshold)
-		}
-		d.write("}\n\n")
-	}
-
-	if d.cfg.ResponseAPI.Enabled {
-		d.write("BACKEND response_api resp {\n")
-		d.write("  enabled: true\n")
-		if d.cfg.ResponseAPI.StoreBackend != "" {
-			d.write("  store_backend: %q\n", d.cfg.ResponseAPI.StoreBackend)
-		}
-		if d.cfg.ResponseAPI.TTLSeconds != 0 {
-			d.write("  ttl_seconds: %d\n", d.cfg.ResponseAPI.TTLSeconds)
-		}
-		if d.cfg.ResponseAPI.MaxResponses != 0 {
-			d.write("  max_responses: %d\n", d.cfg.ResponseAPI.MaxResponses)
-		}
-		d.write("}\n\n")
-	}
-}
-
-// ---------- Global Decompilation ----------
-
-func (d *decompiler) decompileGlobal() {
-	d.write("GLOBAL {\n")
-	if len(d.cfg.Listeners) > 0 {
-		d.write("  listeners: [\n")
-		for i, listener := range d.cfg.Listeners {
-			d.write("    {\n")
-			d.write("      name: %q\n", listener.Name)
-			d.write("      address: %q\n", listener.Address)
-			d.write("      port: %d\n", listener.Port)
-			if listener.Timeout != "" {
-				d.write("      timeout: %q\n", listener.Timeout)
-			}
-			d.write("    }")
-			if i < len(d.cfg.Listeners)-1 {
-				d.write(",")
-			}
-			d.write("\n")
-		}
-		d.write("  ]\n")
-	}
-	if d.cfg.DefaultModel != "" {
-		d.write("  default_model: %q\n", d.cfg.DefaultModel)
-	}
-	if d.cfg.Strategy != "" {
-		d.write("  strategy: %q\n", d.cfg.Strategy)
-	}
-	if d.cfg.DefaultReasoningEffort != "" {
-		d.write("  default_reasoning_effort: %q\n", d.cfg.DefaultReasoningEffort)
-	}
-
-	// reasoning_families
-	if len(d.cfg.ReasoningFamilies) > 0 {
-		d.write("\n  reasoning_families: {\n")
-		for name, rfc := range d.cfg.ReasoningFamilies {
-			d.write("    %s: { type: %q, parameter: %q }\n", name, rfc.Type, rfc.Parameter)
-		}
-		d.write("  }\n")
-	}
-
-	// prompt_guard
-	if d.cfg.PromptGuard.Enabled || d.cfg.PromptGuard.Threshold != 0 {
-		d.write("\n  prompt_guard: {\n")
-		if d.cfg.PromptGuard.Enabled {
-			d.write("    enabled: true\n")
-		}
-		if d.cfg.PromptGuard.Threshold != 0 {
-			d.write("    threshold: %v\n", d.cfg.PromptGuard.Threshold)
-		}
-		d.write("  }\n")
-	}
-
-	// hallucination_mitigation
-	hm := d.cfg.HallucinationMitigation
-	if hm.Enabled || hm.FactCheckModel.Threshold != 0 || hm.HallucinationModel.Threshold != 0 {
-		d.write("\n  hallucination_mitigation: {\n")
-		if hm.Enabled {
-			d.write("    enabled: true\n")
-		}
-		if hm.OnHallucinationDetected != "" {
-			d.write("    on_hallucination_detected: %q\n", hm.OnHallucinationDetected)
-		}
-		if hm.FactCheckModel.Threshold != 0 {
-			d.write("    fact_check_model: { threshold: %v }\n", hm.FactCheckModel.Threshold)
-		}
-		if hm.HallucinationModel.Threshold != 0 {
-			d.write("    hallucination_model: { threshold: %v }\n", hm.HallucinationModel.Threshold)
-		}
-		if hm.NLIModel.Threshold != 0 {
-			d.write("    nli_model: { threshold: %v }\n", hm.NLIModel.Threshold)
-		}
-		d.write("  }\n")
-	}
-
-	// model_selection
-	if d.cfg.ModelSelection.Enabled || d.cfg.ModelSelection.Method != "" {
-		d.write("\n  model_selection: {\n")
-		if d.cfg.ModelSelection.Enabled {
-			d.write("    enabled: true\n")
-		}
-		if d.cfg.ModelSelection.Method != "" {
-			d.write("    method: %q\n", d.cfg.ModelSelection.Method)
-		}
-		d.write("  }\n")
-	}
-
-	// looper
-	if d.cfg.Looper.Endpoint != "" {
-		d.write("\n  looper: {\n")
-		d.write("    endpoint: %q\n", d.cfg.Looper.Endpoint)
-		if d.cfg.Looper.TimeoutSeconds != 0 {
-			d.write("    timeout_seconds: %d\n", d.cfg.Looper.TimeoutSeconds)
-		}
-		d.write("  }\n")
-	}
-
-	// observability
-	if d.cfg.Observability.Tracing.Enabled || (d.cfg.Observability.Metrics.Enabled != nil && *d.cfg.Observability.Metrics.Enabled) {
-		d.write("\n  observability: {\n")
-		if d.cfg.Observability.Metrics.Enabled != nil && *d.cfg.Observability.Metrics.Enabled {
-			d.write("    metrics: { enabled: true }\n")
-		}
-		if d.cfg.Observability.Tracing.Enabled {
-			d.write("    tracing: {\n")
-			d.write("      enabled: true\n")
-			if d.cfg.Observability.Tracing.Provider != "" {
-				d.write("      provider: %q\n", d.cfg.Observability.Tracing.Provider)
-			}
-			exp := d.cfg.Observability.Tracing.Exporter
-			if exp.Type != "" || exp.Endpoint != "" {
-				d.write("      exporter: {\n")
-				if exp.Type != "" {
-					d.write("        type: %q\n", exp.Type)
-				}
-				if exp.Endpoint != "" {
-					d.write("        endpoint: %q\n", exp.Endpoint)
-				}
-				if exp.Insecure {
-					d.write("        insecure: true\n")
-				}
-				d.write("      }\n")
-			}
-			samp := d.cfg.Observability.Tracing.Sampling
-			if samp.Type != "" {
-				d.write("      sampling: { type: %q, rate: %v }\n", samp.Type, samp.Rate)
-			}
-			res := d.cfg.Observability.Tracing.Resource
-			if res.ServiceName != "" {
-				d.write("      resource: {\n")
-				d.write("        service_name: %q\n", res.ServiceName)
-				if res.ServiceVersion != "" {
-					d.write("        service_version: %q\n", res.ServiceVersion)
-				}
-				if res.DeploymentEnvironment != "" {
-					d.write("        deployment_environment: %q\n", res.DeploymentEnvironment)
-				}
-				d.write("      }\n")
-			}
-			d.write("    }\n")
-		}
-		d.write("  }\n")
-	}
-
-	// authz
-	if d.cfg.Authz.FailOpen {
-		d.write("\n  authz: {\n")
-		d.write("    fail_open: true\n")
-		d.write("  }\n")
-	}
-
-	// ratelimit
-	if d.cfg.RateLimit.FailOpen {
-		d.write("\n  ratelimit: {\n")
-		d.write("    fail_open: true\n")
-		d.write("  }\n")
-	}
-
-	d.write("}\n")
-}
-
 // ---------- AST Building Helpers (for DecompileToAST) ----------
 
 func (d *decompiler) categoryToSignal(cat *config.Category) *SignalDecl {
@@ -1148,6 +1025,12 @@ func (d *decompiler) preferenceToSignal(pref *config.PreferenceRule) *SignalDecl
 	if pref.Description != "" {
 		fields["description"] = StringValue{V: pref.Description}
 	}
+	if len(pref.Examples) > 0 {
+		fields["examples"] = stringsToArray(pref.Examples)
+	}
+	if pref.Threshold != 0 {
+		fields["threshold"] = FloatValue{V: float64(pref.Threshold)}
+	}
 	return &SignalDecl{SignalType: "preference", Name: pref.Name, Fields: fields}
 }
 
@@ -1168,6 +1051,18 @@ func (d *decompiler) contextToSignal(ctx *config.ContextRule) *SignalDecl {
 		fields["max_tokens"] = StringValue{V: string(ctx.MaxTokens)}
 	}
 	return &SignalDecl{SignalType: "context", Name: ctx.Name, Fields: fields}
+}
+
+func (d *decompiler) structureToSignal(rule *config.StructureRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	fields["feature"] = structureFeatureValue(rule.Feature)
+	if rule.Predicate != nil {
+		fields["predicate"] = structurePredicateValue(rule.Predicate)
+	}
+	return &SignalDecl{SignalType: "structure", Name: rule.Name, Fields: fields}
 }
 
 func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl {
@@ -1257,11 +1152,27 @@ func (d *decompiler) piiToSignal(pii *config.PIIRule) *SignalDecl {
 	return &SignalDecl{SignalType: "pii", Name: pii.Name, Fields: fields}
 }
 
+func (d *decompiler) kbSignalToDecl(rule *config.KBSignalRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.KB != "" {
+		fields["kb"] = StringValue{V: rule.KB}
+	}
+	fields["target"] = ObjectValue{Fields: map[string]Value{
+		"kind":  StringValue{V: rule.Target.Kind},
+		"value": StringValue{V: rule.Target.Value},
+	}}
+	if rule.Match != "" {
+		fields["match"] = StringValue{V: rule.Match}
+	}
+	return &SignalDecl{SignalType: "kb", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	route := &RouteDecl{
 		Name:        dec.Name,
 		Description: dec.Description,
 		Priority:    dec.Priority,
+		Tier:        dec.Tier,
 	}
 
 	// WHEN
@@ -1276,10 +1187,9 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 			LoRA:      mr.LoRAName,
 			Weight:    mr.Weight,
 		}
-		// Pull param_size and reasoning_family from model_config
+		// Pull param_size from model_config.
 		if mc, ok := d.cfg.ModelConfig[mr.Model]; ok {
 			ref.ParamSize = mc.ParamSize
-			ref.ReasoningFamily = mc.ReasoningFamily
 		}
 		route.Models = append(route.Models, ref)
 	}
@@ -1352,166 +1262,6 @@ func flattenRuleNodeToExprs(node *config.RuleCombination, op string) []BoolExpr 
 	return []BoolExpr{decompileRuleNodeToExpr(node)}
 }
 
-// ---------- Backend AST Helpers ----------
-
-func (d *decompiler) vllmEndpointToBackend(ep *config.VLLMEndpoint) *BackendDecl {
-	fields := make(map[string]Value)
-	if ep.Address != "" {
-		fields["address"] = StringValue{V: ep.Address}
-	}
-	if ep.Port != 0 {
-		fields["port"] = IntValue{V: ep.Port}
-	}
-	if ep.Weight != 0 {
-		fields["weight"] = IntValue{V: ep.Weight}
-	}
-	if ep.Type != "" {
-		fields["type"] = StringValue{V: ep.Type}
-	}
-	if ep.Model != "" {
-		fields["model"] = StringValue{V: ep.Model}
-	}
-	if ep.Protocol != "" {
-		fields["protocol"] = StringValue{V: ep.Protocol}
-	}
-	return &BackendDecl{BackendType: "vllm_endpoint", Name: ep.Name, Fields: fields}
-}
-
-func (d *decompiler) providerProfileToBackend(name string, pp *config.ProviderProfile) *BackendDecl {
-	fields := make(map[string]Value)
-	if pp.Type != "" {
-		fields["type"] = StringValue{V: pp.Type}
-	}
-	if pp.BaseURL != "" {
-		fields["base_url"] = StringValue{V: pp.BaseURL}
-	}
-	return &BackendDecl{BackendType: "provider_profile", Name: name, Fields: fields}
-}
-
-func (d *decompiler) embeddingModelToBackend() *BackendDecl {
-	fields := make(map[string]Value)
-	em := d.cfg.EmbeddingModels
-	if em.MmBertModelPath != "" {
-		fields["mmbert_model_path"] = StringValue{V: em.MmBertModelPath}
-	}
-	if em.BertModelPath != "" {
-		fields["bert_model_path"] = StringValue{V: em.BertModelPath}
-	}
-	if em.UseCPU {
-		fields["use_cpu"] = BoolValue{V: true}
-	}
-	return &BackendDecl{BackendType: "embedding_model", Name: "main", Fields: fields}
-}
-
-func (d *decompiler) semanticCacheToBackend() *BackendDecl {
-	fields := make(map[string]Value)
-	fields["enabled"] = BoolValue{V: true}
-	if d.cfg.SemanticCache.BackendType != "" {
-		fields["backend_type"] = StringValue{V: d.cfg.SemanticCache.BackendType}
-	}
-	return &BackendDecl{BackendType: "semantic_cache", Name: "main", Fields: fields}
-}
-
-func (d *decompiler) memoryToBackend() *BackendDecl {
-	fields := make(map[string]Value)
-	fields["enabled"] = BoolValue{V: true}
-	return &BackendDecl{BackendType: "memory", Name: "mem", Fields: fields}
-}
-
-func (d *decompiler) responseAPIToBackend() *BackendDecl {
-	fields := make(map[string]Value)
-	fields["enabled"] = BoolValue{V: true}
-	return &BackendDecl{BackendType: "response_api", Name: "resp", Fields: fields}
-}
-
-func (d *decompiler) buildGlobalDecl() *GlobalDecl {
-	fields := make(map[string]Value)
-	if len(d.cfg.Listeners) > 0 {
-		items := make([]Value, 0, len(d.cfg.Listeners))
-		for _, listener := range d.cfg.Listeners {
-			listenerFields := map[string]Value{
-				"name":    StringValue{V: listener.Name},
-				"address": StringValue{V: listener.Address},
-				"port":    IntValue{V: listener.Port},
-			}
-			if listener.Timeout != "" {
-				listenerFields["timeout"] = StringValue{V: listener.Timeout}
-			}
-			items = append(items, ObjectValue{Fields: listenerFields})
-		}
-		fields["listeners"] = ArrayValue{Items: items}
-	}
-	if d.cfg.DefaultModel != "" {
-		fields["default_model"] = StringValue{V: d.cfg.DefaultModel}
-	}
-	if d.cfg.Strategy != "" {
-		fields["strategy"] = StringValue{V: d.cfg.Strategy}
-	}
-	if d.cfg.DefaultReasoningEffort != "" {
-		fields["default_reasoning_effort"] = StringValue{V: d.cfg.DefaultReasoningEffort}
-	}
-
-	// reasoning_families
-	if len(d.cfg.ReasoningFamilies) > 0 {
-		familyFields := make(map[string]Value)
-		for name, rfc := range d.cfg.ReasoningFamilies {
-			entryFields := make(map[string]Value)
-			if rfc.Type != "" {
-				entryFields["type"] = StringValue{V: rfc.Type}
-			}
-			if rfc.Parameter != "" {
-				entryFields["parameter"] = StringValue{V: rfc.Parameter}
-			}
-			familyFields[name] = ObjectValue{Fields: entryFields}
-		}
-		fields["reasoning_families"] = ObjectValue{Fields: familyFields}
-	}
-
-	// hallucination_mitigation
-	hm := d.cfg.HallucinationMitigation
-	if hm.Enabled || hm.FactCheckModel.Threshold != 0 || hm.HallucinationModel.Threshold != 0 {
-		hmFields := make(map[string]Value)
-		if hm.Enabled {
-			hmFields["enabled"] = BoolValue{V: true}
-		}
-		if hm.OnHallucinationDetected != "" {
-			hmFields["on_hallucination_detected"] = StringValue{V: hm.OnHallucinationDetected}
-		}
-		if hm.FactCheckModel.Threshold != 0 {
-			hmFields["fact_check_model"] = ObjectValue{Fields: map[string]Value{
-				"threshold": FloatValue{V: float64(hm.FactCheckModel.Threshold)},
-			}}
-		}
-		if hm.HallucinationModel.Threshold != 0 {
-			hmFields["hallucination_model"] = ObjectValue{Fields: map[string]Value{
-				"threshold": FloatValue{V: float64(hm.HallucinationModel.Threshold)},
-			}}
-		}
-		if hm.NLIModel.Threshold != 0 {
-			hmFields["nli_model"] = ObjectValue{Fields: map[string]Value{
-				"threshold": FloatValue{V: float64(hm.NLIModel.Threshold)},
-			}}
-		}
-		fields["hallucination_mitigation"] = ObjectValue{Fields: hmFields}
-	}
-
-	// authz
-	if d.cfg.Authz.FailOpen {
-		fields["authz"] = ObjectValue{Fields: map[string]Value{
-			"fail_open": BoolValue{V: true},
-		}}
-	}
-
-	// ratelimit
-	if d.cfg.RateLimit.FailOpen {
-		fields["ratelimit"] = ObjectValue{Fields: map[string]Value{
-			"fail_open": BoolValue{V: true},
-		}}
-	}
-
-	return &GlobalDecl{Fields: fields}
-}
-
 // ---------- Formatting Helpers ----------
 
 func (d *decompiler) write(format string, args ...interface{}) {
@@ -1546,6 +1296,166 @@ func stringsToArray(items []string) ArrayValue {
 		vals[i] = StringValue{V: s}
 	}
 	return ArrayValue{Items: vals}
+}
+
+func structureFeatureValue(feature config.StructureFeature) ObjectValue {
+	fields := map[string]Value{
+		"type":   StringValue{V: feature.Type},
+		"source": structureSourceValue(feature.Source),
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func structureSourceValue(source config.StructureSource) ObjectValue {
+	fields := map[string]Value{
+		"type": StringValue{V: source.Type},
+	}
+	if source.Pattern != "" {
+		fields["pattern"] = StringValue{V: source.Pattern}
+	}
+	if len(source.Keywords) > 0 {
+		fields["keywords"] = stringsToArray(source.Keywords)
+	}
+	if source.CaseSensitive {
+		fields["case_sensitive"] = BoolValue{V: true}
+	}
+	if len(source.Sequences) > 0 {
+		items := make([]Value, 0, len(source.Sequences))
+		for _, sequence := range source.Sequences {
+			items = append(items, stringsToArray(sequence))
+		}
+		fields["sequences"] = ArrayValue{Items: items}
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func structurePredicateValue(predicate *config.NumericPredicate) ObjectValue {
+	fields := make(map[string]Value)
+	if predicate.GT != nil {
+		fields["gt"] = FloatValue{V: *predicate.GT}
+	}
+	if predicate.GTE != nil {
+		fields["gte"] = FloatValue{V: *predicate.GTE}
+	}
+	if predicate.LT != nil {
+		fields["lt"] = FloatValue{V: *predicate.LT}
+	}
+	if predicate.LTE != nil {
+		fields["lte"] = FloatValue{V: *predicate.LTE}
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func structureFeatureToMap(feature config.StructureFeature) map[string]interface{} {
+	values := map[string]interface{}{
+		"type":   feature.Type,
+		"source": structureSourceToMap(feature.Source),
+	}
+	return values
+}
+
+func structureSourceToMap(source config.StructureSource) map[string]interface{} {
+	values := map[string]interface{}{
+		"type": source.Type,
+	}
+	if source.Pattern != "" {
+		values["pattern"] = source.Pattern
+	}
+	if len(source.Keywords) > 0 {
+		values["keywords"] = source.Keywords
+	}
+	if source.CaseSensitive {
+		values["case_sensitive"] = true
+	}
+	if len(source.Sequences) > 0 {
+		values["sequences"] = source.Sequences
+	}
+	return values
+}
+
+func structurePredicateToMap(predicate *config.NumericPredicate) map[string]interface{} {
+	values := make(map[string]interface{})
+	if predicate == nil {
+		return values
+	}
+	if predicate.GT != nil {
+		values["gt"] = *predicate.GT
+	}
+	if predicate.GTE != nil {
+		values["gte"] = *predicate.GTE
+	}
+	if predicate.LT != nil {
+		values["lt"] = *predicate.LT
+	}
+	if predicate.LTE != nil {
+		values["lte"] = *predicate.LTE
+	}
+	return values
+}
+
+func formatProjectionScoreInputs(inputs []config.ProjectionScoreInput) string {
+	parts := make([]string, 0, len(inputs))
+	for _, input := range inputs {
+		fields := []string{
+			fmt.Sprintf("type: %q", input.Type),
+			fmt.Sprintf("weight: %g", input.Weight),
+		}
+		if input.Name != "" {
+			fields = append(fields, fmt.Sprintf("name: %q", input.Name))
+		}
+		if input.KB != "" {
+			fields = append(fields, fmt.Sprintf("kb: %q", input.KB))
+		}
+		if input.Metric != "" {
+			fields = append(fields, fmt.Sprintf("metric: %q", input.Metric))
+		}
+		if input.ValueSource != "" {
+			fields = append(fields, fmt.Sprintf("value_source: %q", input.ValueSource))
+		}
+		if input.Match != 0 {
+			fields = append(fields, fmt.Sprintf("match: %g", input.Match))
+		}
+		if input.Miss != 0 {
+			fields = append(fields, fmt.Sprintf("miss: %g", input.Miss))
+		}
+		parts = append(parts, "{ "+strings.Join(fields, ", ")+" }")
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+func formatProjectionMappingCalibration(calibration *config.ProjectionMappingCalibration) string {
+	if calibration == nil {
+		return "{}"
+	}
+	fields := make([]string, 0, 2)
+	if calibration.Method != "" {
+		fields = append(fields, fmt.Sprintf("method: %q", calibration.Method))
+	}
+	if calibration.Slope != 0 {
+		fields = append(fields, fmt.Sprintf("slope: %g", calibration.Slope))
+	}
+	return "{ " + strings.Join(fields, ", ") + " }"
+}
+
+func formatProjectionMappingOutputs(outputs []config.ProjectionMappingOutput) string {
+	parts := make([]string, 0, len(outputs))
+	for _, output := range outputs {
+		fields := []string{fmt.Sprintf("name: %q", output.Name)}
+		if output.GT != nil {
+			fields = append(fields, fmt.Sprintf("gt: %g", *output.GT))
+		}
+		if output.GTE != nil {
+			fields = append(fields, fmt.Sprintf("gte: %g", *output.GTE))
+		}
+		if output.LT != nil {
+			fields = append(fields, fmt.Sprintf("lt: %g", *output.LT))
+		}
+		if output.LTE != nil {
+			fields = append(fields, fmt.Sprintf("lte: %g", *output.LTE))
+		}
+		parts = append(parts, "{ "+strings.Join(fields, ", ")+" }")
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 // algorithmToFields converts an AlgorithmConfig into a map[string]Value for the AST.
@@ -1630,8 +1540,12 @@ func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]
 // a map[string]Value suitable for the AST PluginRef.Fields.
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 	fields := make(map[string]Value)
-	switch cfg := p.Configuration.(type) {
-	case config.SystemPromptPluginConfig:
+	switch p.Type {
+	case "system_prompt":
+		cfg, ok := decodePluginConfig[config.SystemPromptPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled != nil {
 			fields["enabled"] = BoolValue{V: *cfg.Enabled}
 		}
@@ -1641,14 +1555,22 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.Mode != "" {
 			fields["mode"] = StringValue{V: cfg.Mode}
 		}
-	case config.SemanticCachePluginConfig:
+	case "semantic-cache":
+		cfg, ok := decodePluginConfig[config.SemanticCachePluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
 		if cfg.SimilarityThreshold != nil {
 			fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
 		}
-	case config.RouterReplayPluginConfig:
+	case "router_replay":
+		cfg, ok := decodePluginConfig[config.RouterReplayPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
@@ -1664,7 +1586,11 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.MaxBodyBytes != 0 {
 			fields["max_body_bytes"] = IntValue{V: cfg.MaxBodyBytes}
 		}
-	case config.MemoryPluginConfig:
+	case "memory":
+		cfg, ok := decodePluginConfig[config.MemoryPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
@@ -1677,22 +1603,58 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.AutoStore != nil {
 			fields["auto_store"] = BoolValue{V: *cfg.AutoStore}
 		}
-	case config.HallucinationPluginConfig:
+	case "hallucination":
+		cfg, ok := decodePluginConfig[config.HallucinationPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
-	case config.ImageGenPluginConfig:
+	case "image_gen":
+		cfg, ok := decodePluginConfig[config.ImageGenPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
 		if cfg.Backend != "" {
 			fields["backend"] = StringValue{V: cfg.Backend}
 		}
-	case config.FastResponsePluginConfig:
+	case "fast_response":
+		cfg, ok := decodePluginConfig[config.FastResponsePluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Message != "" {
 			fields["message"] = StringValue{V: cfg.Message}
 		}
-	case config.RAGPluginConfig:
+	case "tools":
+		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
+		if !ok {
+			return fields
+		}
+		if cfg.Enabled {
+			fields["enabled"] = BoolValue{V: true}
+		}
+		if cfg.Mode != "" {
+			fields["mode"] = StringValue{V: cfg.Mode}
+		}
+		if cfg.SemanticSelection != nil {
+			fields["semantic_selection"] = BoolValue{V: *cfg.SemanticSelection}
+		}
+		if len(cfg.AllowTools) > 0 {
+			fields["allow_tools"] = stringsToArray(cfg.AllowTools)
+		}
+		if len(cfg.BlockTools) > 0 {
+			fields["block_tools"] = stringsToArray(cfg.BlockTools)
+		}
+	case "rag":
+		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
 		}
@@ -1711,7 +1673,11 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.InjectionMode != "" {
 			fields["injection_mode"] = StringValue{V: cfg.InjectionMode}
 		}
-	case config.HeaderMutationPluginConfig:
+	case "header_mutation":
+		cfg, ok := decodePluginConfig[config.HeaderMutationPluginConfig](p)
+		if !ok {
+			return fields
+		}
 		if len(cfg.Add) > 0 {
 			var items []Value
 			for _, h := range cfg.Add {
@@ -1779,7 +1745,7 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// Formatter formats a DSL AST into canonical DSL text with consistent indentation.
+// Formatter formats DSL input into canonical routing-only DSL text.
 func Format(input string) (string, error) {
 	prog, errs := Parse(input)
 	if len(errs) > 0 {
@@ -1791,5 +1757,12 @@ func Format(input string) (string, error) {
 		return "", fmt.Errorf("compile errors: %v", compileErrs)
 	}
 
-	return Decompile(cfg)
+	formatted, err := DecompileRouting(cfg)
+	if err != nil {
+		return "", err
+	}
+	if len(prog.TestBlocks) == 0 {
+		return formatted, nil
+	}
+	return appendFormattedTestBlocks(formatted, prog.TestBlocks), nil
 }

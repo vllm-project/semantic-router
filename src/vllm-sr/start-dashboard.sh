@@ -25,7 +25,13 @@ except Exception as e:
     print(8888)
 ")
 
-echo "Starting dashboard with Envoy at http://localhost:${ENVOY_PORT}"
+ROUTER_API_URL="${TARGET_ROUTER_API_URL:-http://localhost:8080}"
+ROUTER_METRICS_URL="${TARGET_ROUTER_METRICS_URL:-http://localhost:9190/metrics}"
+ENVOY_URL="${TARGET_ENVOY_URL:-http://localhost:${ENVOY_PORT}}"
+
+echo "Starting dashboard with Router API at ${ROUTER_API_URL}"
+echo "Starting dashboard with Router metrics at ${ROUTER_METRICS_URL}"
+echo "Starting dashboard with Envoy at ${ENVOY_URL}"
 
 # Check for read-only mode
 READONLY_ARG=""
@@ -52,10 +58,9 @@ fi
 exec /usr/local/bin/dashboard-backend \
     -port=8700 \
     -static=/app/frontend \
-    -config=/app/config.yaml \
-    -router_api=http://localhost:8080 \
-    -router_metrics=http://localhost:9190/metrics \
-    -envoy="http://localhost:${ENVOY_PORT}" \
+    -config="$CONFIG_FILE" \
+    -router_api="${ROUTER_API_URL}" \
+    -router_metrics="${ROUTER_METRICS_URL}" \
+    -envoy="${ENVOY_URL}" \
     ${READONLY_ARG} \
     "${OBSERVABILITY_ARGS}"
-

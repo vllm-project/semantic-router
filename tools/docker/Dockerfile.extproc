@@ -359,6 +359,7 @@ RUN mkdir -p /app/nlp-binding/target/release && \
 ENV CGO_ENABLED=1
 ENV LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/onnx-binding/target/release:/app/ml-binding/target/release:/app/nlp-binding/target/release
 ENV GOOS=linux
+ENV GOFLAGS=-buildvcs=false
 
 # Verify the libraries exist before Go build
 RUN echo "Verifying Rust libraries for TARGETARCH=$TARGETARCH..." && \
@@ -382,12 +383,12 @@ RUN mkdir -p bin && cd src/semantic-router && \
         CGO_CFLAGS="-I/app/candle-binding" \
         CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -L/usr/lib/aarch64-linux-gnu -lcandle_semantic_router -lml_semantic_router -lnlp_binding -lssl -lcrypto" \
         GOOS=linux GOARCH=arm64 \
-        go build -ldflags="-w -s" -o ../../bin/router-candle cmd/main.go; \
+        go build -ldflags="-w -s" -o ../../bin/router-candle ./cmd; \
     else \
         echo "Building candle binary for AMD64..." && \
         CGO_CFLAGS="-I/app/candle-binding" \
         CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lcandle_semantic_router -lml_semantic_router -lnlp_binding" \
-        go build -ldflags="-w -s" -o ../../bin/router-candle cmd/main.go; \
+        go build -ldflags="-w -s" -o ../../bin/router-candle ./cmd; \
     fi
 
 # Collect all shared libraries into a single staging directory for the final image
@@ -411,7 +412,7 @@ RUN cd src/semantic-router && \
         echo "Building onnx binary for AMD64..." && \
         CGO_CFLAGS="-I/app/onnx-binding" \
         CGO_LDFLAGS="-L/app/onnx-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
-        go build -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o ../../bin/router-onnx cmd/main.go; \
+        go build -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o ../../bin/router-onnx ./cmd; \
     fi
 
 # ============================================================================
@@ -438,6 +439,7 @@ COPY --from=go-builder /app/bin/ /app/
 COPY --from=go-builder /app/lib/ /app/lib/
 
 COPY config/config.yaml /app/config/
+COPY config/kb/ /app/config/kb/
 
 ENV LD_LIBRARY_PATH=/app/lib
 # Default to candle binding; set AI_BINDING=onnx for ONNX Runtime backend

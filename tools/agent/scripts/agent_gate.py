@@ -4,7 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
+from agent_artifacts import (
+    ReportArtifactWriteResult,
+    display_artifact_path,
+    write_default_report_artifacts,
+    write_explicit_report_artifact,
+)
 from agent_resolution import (
     build_report,
     get_changed_files,
@@ -18,6 +25,7 @@ from agent_scorecard import build_harness_scorecard
 from agent_support import (
     run_go_lint,
     run_python_lint,
+    run_reference_config_lint,
     run_rust_lint,
     run_test_commands,
 )
@@ -70,10 +78,17 @@ def handle_resolve_skill(args: argparse.Namespace, changed_files: list[str]) -> 
 
 def handle_report(args: argparse.Namespace, changed_files: list[str]) -> int:
     report = build_report(changed_files, args.env)
+    report_json = report.to_json()
+    if args.write:
+        write_result = write_explicit_report_artifact(args.write, report_json)
+        _emit_written_artifact_paths(write_result)
+    elif args.write_default:
+        write_result = write_default_report_artifacts(report_json)
+        _emit_written_artifact_paths(write_result)
     if args.format == "json":
-        print(report.to_json())
+        print(report_json)
     else:
-        print(report.to_summary())
+        print(report.to_summary(context_detail=args.context_detail))
     return 0
 
 
@@ -101,29 +116,66 @@ def handle_run_tests(args: argparse.Namespace, changed_files: list[str]) -> int:
     return run_test_commands(commands, args.mode)
 
 
+def _emit_written_artifact_paths(write_result: ReportArtifactWriteResult) -> None:
+    for path in write_result.written_paths():
+        print(
+            f"Wrote agent-report artifact: {display_artifact_path(path)}",
+            file=sys.stderr,
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Agent gate helper")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    _add_changed_files_subparser(subparsers)
+    _add_resolve_subparser(subparsers)
+    _add_resolve_skill_subparser(subparsers)
+    _add_resolve_env_subparser(subparsers)
+    _add_report_subparser(subparsers)
+    _add_scorecard_subparser(subparsers)
+    _add_needs_smoke_subparser(subparsers)
+    _add_run_tests_subparser(subparsers)
+    _add_simple_changed_file_subparser(subparsers, "run-e2e")
+    _add_simple_changed_file_subparser(subparsers, "run-go-lint")
+    _add_simple_changed_file_subparser(subparsers, "run-rust-lint")
+    _add_simple_changed_file_subparser(subparsers, "run-python-lint")
+    _add_simple_changed_file_subparser(subparsers, "run-config-contract-lint")
+    subparsers.add_parser("validate")
+    return parser
 
+
+def _add_changed_file_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--base-ref", default=None)
+    parser.add_argument("--changed-files", default=None)
+
+
+def _add_format_arg(
+    parser: argparse.ArgumentParser, *, choices: list[str], default: str
+) -> None:
+    parser.add_argument("--format", choices=choices, default=default)
+
+
+def _add_changed_files_subparser(subparsers) -> None:
     changed = subparsers.add_parser("changed-files")
-    changed.add_argument("--base-ref", default=None)
-    changed.add_argument("--changed-files", default=None)
+    _add_changed_file_args(changed)
 
+
+def _add_resolve_subparser(subparsers) -> None:
     resolve = subparsers.add_parser("resolve")
-    resolve.add_argument("--base-ref", default=None)
-    resolve.add_argument("--changed-files", default=None)
-    resolve.add_argument(
-        "--format", choices=["json", "env", "summary"], default="summary"
-    )
+    _add_changed_file_args(resolve)
+    _add_format_arg(resolve, choices=["json", "env", "summary"], default="summary")
 
+
+def _add_resolve_skill_subparser(subparsers) -> None:
     resolve_skill = subparsers.add_parser("resolve-skill")
-    resolve_skill.add_argument("--base-ref", default=None)
-    resolve_skill.add_argument("--changed-files", default=None)
+    _add_changed_file_args(resolve_skill)
     resolve_skill.add_argument("--env", default=None)
-    resolve_skill.add_argument(
-        "--format", choices=["json", "env", "summary"], default="summary"
+    _add_format_arg(
+        resolve_skill, choices=["json", "env", "summary"], default="summary"
     )
 
+
+def _add_resolve_env_subparser(subparsers) -> None:
     resolve_env = subparsers.add_parser("resolve-env")
     resolve_env.add_argument("--env", required=True)
     resolve_env.add_argument(
@@ -131,48 +183,57 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["build_target", "serve_command", "smoke_config", "local_dev_fragment"],
         default=None,
     )
-    resolve_env.add_argument(
-        "--format", choices=["json", "env", "summary"], default="summary"
+    _add_format_arg(resolve_env, choices=["json", "env", "summary"], default="summary")
+
+
+def _add_report_subparser(subparsers) -> None:
+    report = subparsers.add_parser("report")
+    _add_changed_file_args(report)
+    report.add_argument("--env", required=True)
+    _add_format_arg(report, choices=["json", "summary"], default="summary")
+    report.add_argument(
+        "--context-detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="Control how much of the context pack is printed in summary mode.",
+    )
+    report_write = report.add_mutually_exclusive_group()
+    report_write.add_argument(
+        "--write",
+        default=None,
+        help="Write the JSON agent-report payload to a path (repo-root relative unless absolute).",
+    )
+    report_write.add_argument(
+        "--write-default",
+        action="store_true",
+        help=(
+            "Write the JSON agent-report payload to .agent-harness/reports/latest-report.json "
+            "and a timestamped session copy."
+        ),
     )
 
-    report = subparsers.add_parser("report")
-    report.add_argument("--base-ref", default=None)
-    report.add_argument("--changed-files", default=None)
-    report.add_argument("--env", required=True)
-    report.add_argument("--format", choices=["json", "summary"], default="summary")
 
+def _add_scorecard_subparser(subparsers) -> None:
     scorecard = subparsers.add_parser("scorecard")
-    scorecard.add_argument("--format", choices=["json", "summary"], default="summary")
+    _add_format_arg(scorecard, choices=["json", "summary"], default="summary")
 
+
+def _add_needs_smoke_subparser(subparsers) -> None:
     needs_smoke = subparsers.add_parser("needs-smoke")
-    needs_smoke.add_argument("--base-ref", default=None)
-    needs_smoke.add_argument("--changed-files", default=None)
+    _add_changed_file_args(needs_smoke)
 
+
+def _add_run_tests_subparser(subparsers) -> None:
     tests = subparsers.add_parser("run-tests")
-    tests.add_argument("--base-ref", default=None)
-    tests.add_argument("--changed-files", default=None)
+    _add_changed_file_args(tests)
     tests.add_argument(
         "--mode", choices=["fast", "feature", "feature-only"], required=True
     )
 
-    e2e = subparsers.add_parser("run-e2e")
-    e2e.add_argument("--base-ref", default=None)
-    e2e.add_argument("--changed-files", default=None)
 
-    go_lint = subparsers.add_parser("run-go-lint")
-    go_lint.add_argument("--base-ref", default=None)
-    go_lint.add_argument("--changed-files", default=None)
-
-    rust_lint = subparsers.add_parser("run-rust-lint")
-    rust_lint.add_argument("--base-ref", default=None)
-    rust_lint.add_argument("--changed-files", default=None)
-
-    py_lint = subparsers.add_parser("run-python-lint")
-    py_lint.add_argument("--base-ref", default=None)
-    py_lint.add_argument("--changed-files", default=None)
-
-    subparsers.add_parser("validate")
-    return parser
+def _add_simple_changed_file_subparser(subparsers, name: str) -> None:
+    parser = subparsers.add_parser(name)
+    _add_changed_file_args(parser)
 
 
 def main() -> int:
@@ -202,6 +263,7 @@ def main() -> int:
         ),
         "run-rust-lint": lambda _args, files: run_rust_lint(files),
         "run-python-lint": lambda _args, files: run_python_lint(files),
+        "run-config-contract-lint": lambda _args, _files: run_reference_config_lint(),
     }
     handler = handlers.get(args.command)
     if handler is None:

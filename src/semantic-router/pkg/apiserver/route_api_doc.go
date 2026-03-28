@@ -35,6 +35,7 @@ type OpenAPIServer struct {
 type OpenAPIPath struct {
 	Get    *OpenAPIOperation `json:"get,omitempty"`
 	Post   *OpenAPIOperation `json:"post,omitempty"`
+	Patch  *OpenAPIOperation `json:"patch,omitempty"`
 	Put    *OpenAPIOperation `json:"put,omitempty"`
 	Delete *OpenAPIOperation `json:"delete,omitempty"`
 }
@@ -107,14 +108,16 @@ var endpointRegistry = []EndpointMetadata{
 	{Path: "/info/classifier", Method: "GET", Description: "Get classifier information and status"},
 	{Path: "/v1/models", Method: "GET", Description: "OpenAI-compatible model listing"},
 	{Path: "/metrics/classification", Method: "GET", Description: "Get classification metrics and statistics"},
-	{Path: "/config/classification", Method: "GET", Description: "Get classification configuration"},
-	{Path: "/config/classification", Method: "PUT", Description: "Update classification configuration"},
-	{Path: "/config/system-prompts", Method: "GET", Description: "Get system prompt configuration (requires explicit enablement)"},
-	{Path: "/config/system-prompts", Method: "PUT", Description: "Update system prompt configuration (requires explicit enablement)"},
+	{Path: "/config/kbs", Method: "GET", Description: "List configured knowledge bases"},
+	{Path: "/config/kbs", Method: "POST", Description: "Create a managed knowledge base"},
+	{Path: "/config/kbs/{name}", Method: "GET", Description: "Read a knowledge base"},
+	{Path: "/config/kbs/{name}", Method: "PUT", Description: "Update a managed knowledge base"},
+	{Path: "/config/kbs/{name}", Method: "DELETE", Description: "Delete a managed knowledge base"},
 	{Path: "/config/router", Method: "GET", Description: "Get the current router config as JSON"},
-	{Path: "/config/deploy", Method: "POST", Description: "Deploy a new router config (validates, backs up, writes, triggers hot-reload)"},
-	{Path: "/config/rollback", Method: "POST", Description: "Rollback to a previous config version"},
-	{Path: "/config/versions", Method: "GET", Description: "List available config backup versions"},
+	{Path: "/config/router", Method: "PATCH", Description: "Merge a router config update (validates, backs up, writes, triggers hot-reload)"},
+	{Path: "/config/router", Method: "PUT", Description: "Replace the router config (validates, backs up, writes, triggers hot-reload)"},
+	{Path: "/config/router/rollback", Method: "POST", Description: "Rollback to a previous router config version"},
+	{Path: "/config/router/versions", Method: "GET", Description: "List available router config backup versions"},
 }
 
 // taskTypeRegistry is a centralized registry of all supported task types
@@ -127,20 +130,16 @@ var taskTypeRegistry = []TaskTypeInfo{
 
 // handleAPIOverview handles GET /api/v1 for API discovery
 func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, _ *http.Request) {
-	// Build endpoints list from registry, filtering out disabled endpoints
+	// Build endpoints list from registry.
 	endpoints := make([]EndpointInfo, 0, len(endpointRegistry))
 	for _, metadata := range endpointRegistry {
-		// Filter out system prompt endpoints if they are disabled
-		if !s.enableSystemPromptAPI && (metadata.Path == "/config/system-prompts") {
-			continue
-		}
 		endpoints = append(endpoints, EndpointInfo(metadata))
 	}
 
 	response := APIOverviewResponse{
-		Service:     "Semantic Router Classification API",
+		Service:     "Semantic Router Apiserver",
 		Version:     "v1",
-		Description: "API for intent classification, PII detection, and security analysis",
+		Description: "HTTP router apiserver for classification utilities, config management, and service introspection",
 		Endpoints:   endpoints,
 		TaskTypes:   taskTypeRegistry,
 		Links: map[string]string{
@@ -161,14 +160,14 @@ func (s *ClassificationAPIServer) generateOpenAPISpec() OpenAPISpec {
 	spec := OpenAPISpec{
 		OpenAPI: "3.0.0",
 		Info: OpenAPIInfo{
-			Title:       "Semantic Router Classification API",
-			Description: "API for intent classification, PII detection, and security analysis",
+			Title:       "Semantic Router Apiserver",
+			Description: "HTTP router apiserver for classification utilities, config management, and service introspection",
 			Version:     "v1",
 		},
 		Servers: []OpenAPIServer{
 			{
 				URL:         "/",
-				Description: "Classification API Server",
+				Description: "Router Apiserver",
 			},
 		},
 		Paths: make(map[string]OpenAPIPath),
@@ -176,11 +175,6 @@ func (s *ClassificationAPIServer) generateOpenAPISpec() OpenAPISpec {
 
 	// Generate paths from endpoint registry
 	for _, endpoint := range endpointRegistry {
-		// Filter out system prompt endpoints if they are disabled
-		if !s.enableSystemPromptAPI && endpoint.Path == "/config/system-prompts" {
-			continue
-		}
-
 		path, ok := spec.Paths[endpoint.Path]
 		if !ok {
 			path = OpenAPIPath{}
@@ -224,8 +218,8 @@ func (s *ClassificationAPIServer) generateOpenAPISpec() OpenAPISpec {
 			},
 		}
 
-		// Add request body for POST and PUT methods
-		if endpoint.Method == "POST" || endpoint.Method == "PUT" {
+		// Add request body for mutating methods.
+		if endpoint.Method == "POST" || endpoint.Method == "PATCH" || endpoint.Method == "PUT" {
 			operation.RequestBody = &OpenAPIRequestBody{
 				Required: true,
 				Content: map[string]OpenAPIMedia{
@@ -244,6 +238,8 @@ func (s *ClassificationAPIServer) generateOpenAPISpec() OpenAPISpec {
 			path.Get = operation
 		case "POST":
 			path.Post = operation
+		case "PATCH":
+			path.Patch = operation
 		case "PUT":
 			path.Put = operation
 		case "DELETE":

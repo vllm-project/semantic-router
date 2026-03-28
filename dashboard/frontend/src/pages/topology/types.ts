@@ -12,18 +12,21 @@ export type SignalType =
   | 'preference'
   | 'language'
   | 'context'
+  | 'structure'
   | 'complexity'
   | 'modality'
   | 'authz'
   | 'jailbreak'
   | 'pii'
+  | 'kb'
+  | 'projection'
 
 export interface SignalConfig {
   type: SignalType
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | GenericSignalConfig
+  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | StructureSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | KBSignalConfig | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -45,6 +48,38 @@ export interface DomainSignalConfig {
 export interface ContextSignalConfig {
   min_tokens?: string
   max_tokens?: string
+}
+
+export interface StructureSourceConfig {
+  type: string
+  pattern?: string
+  keywords?: string[]
+  case_sensitive?: boolean
+  sequences?: string[][]
+}
+
+export interface StructureFeatureConfig {
+  type: string
+  source?: StructureSourceConfig
+}
+
+export interface NumericPredicateConfig {
+  gt?: number
+  gte?: number
+  lt?: number
+  lte?: number
+}
+
+export interface StructureSignalConfig {
+  feature?: StructureFeatureConfig
+  predicate?: NumericPredicateConfig
+}
+
+export interface StructureRuleDefinition {
+  name: string
+  description?: string
+  feature: StructureFeatureConfig
+  predicate?: NumericPredicateConfig
 }
 
 export interface ComplexitySignalConfig {
@@ -71,6 +106,15 @@ export interface PIISignalConfig {
   include_history?: boolean
 }
 
+export interface KBSignalConfig {
+  kb: string
+  target: {
+    kind: 'label' | 'group'
+    value: string
+  }
+  match?: 'best' | 'threshold'
+}
+
 export interface GenericSignalConfig {
   [key: string]: unknown
 }
@@ -88,12 +132,26 @@ export interface DecisionConfig {
 
 export interface RuleCombination {
   operator: 'AND' | 'OR' | 'NOT'
-  conditions: RuleCondition[]
+  conditions: RuleNode[]
 }
 
 export interface RuleCondition {
   type: SignalType
   name: string
+}
+
+export type RuleNode = RuleCombination | RuleCondition
+
+export interface RawRuleNode {
+  type?: string
+  name?: string
+  operator?: string
+  conditions?: RawRuleNode[]
+}
+
+export interface RawRuleCombination {
+  operator?: string
+  conditions?: RawRuleNode[]
 }
 
 // ============== Algorithm Types ==============
@@ -150,6 +208,7 @@ export type PluginType =
   | 'hallucination'
   | 'router_replay'
   | 'fast_response'
+  | 'tools'
 
 export interface PluginConfig {
   type: PluginType
@@ -249,6 +308,7 @@ export interface MatchedSignal {
   type: SignalType
   name: string
   matched: boolean
+  value?: number
   confidence?: number
   score?: number
   reason?: string
@@ -288,14 +348,19 @@ export interface FilterState {
 
 // ============== Config Data (from API) ==============
 export interface ConfigData {
-  bert_model?: {
-    model_id?: string
-    threshold?: number
+  embedding_models?: {
+    bert_model_path?: string
+    mmbert_model_path?: string
     use_cpu?: boolean
+    embedding_config?: {
+      top_k?: number
+      min_score_threshold?: number
+    }
   }
   prompt_guard?: {
     enabled: boolean
     model_id?: string
+    model_ref?: string
     use_modernbert?: boolean
     threshold?: number
     use_vllm?: boolean
@@ -309,6 +374,7 @@ export interface ConfigData {
     pii_model?: {
       enabled?: boolean
       model_id?: string
+      model_ref?: string
       use_modernbert?: boolean
       threshold?: number
     }
@@ -355,6 +421,7 @@ export interface ConfigData {
     min_tokens?: string
     max_tokens?: string
   }>
+  structure_rules?: StructureRuleDefinition[]
   complexity_rules?: Array<{
     name: string
     threshold?: number
@@ -395,6 +462,26 @@ export interface ConfigData {
     include_history?: boolean
     description?: string
   }>
+  kb?: Array<{
+    name: string
+    kb: string
+    target: {
+      kind: 'label' | 'group'
+      value: string
+    }
+    match?: 'best' | 'threshold'
+    description?: string
+  }>
+  projections?: {
+    mappings?: Array<{
+      name: string
+      source: string
+      method?: string
+      outputs?: Array<{
+        name: string
+      }>
+    }>
+  }
   // Legacy format
   categories?: Array<{
     name: string
@@ -454,6 +541,7 @@ export interface ConfigData {
       min_tokens?: string
       max_tokens?: string
     }>
+    structure?: StructureRuleDefinition[]
     complexity?: Array<{
       name: string
       threshold?: number
@@ -491,18 +579,22 @@ export interface ConfigData {
       include_history?: boolean
       description?: string
     }>
+    kb?: Array<{
+      name: string
+      kb: string
+      target: {
+        kind: 'label' | 'group'
+        value: string
+      }
+      match?: 'best' | 'threshold'
+      description?: string
+    }>
   }
   decisions?: Array<{
     name: string
     description?: string
     priority?: number
-    rules?: {
-      operator?: string
-      conditions?: Array<{
-        type: string
-        name: string
-      }>
-    }
+    rules?: RawRuleCombination
     algorithm?: {
       type: string
       confidence?: {
@@ -530,10 +622,53 @@ export interface ConfigData {
     }>
   }>
   providers?: {
+    defaults?: {
+      default_model?: string
+    }
     models?: Array<{
       name: string
       reasoning_family?: string
     }>
-    default_model?: string
+  }
+  routing?: {
+    modelCards?: Array<{
+      name: string
+    }>
+    signals?: ConfigData['signals']
+    projections?: ConfigData['projections']
+    decisions?: ConfigData['decisions']
+  }
+  global?: {
+    router?: {
+      strategy?: 'priority' | 'confidence'
+    }
+    stores?: {
+      semantic_cache?: {
+        enabled?: boolean
+        backend_type?: string
+        similarity_threshold?: number
+        ttl_seconds?: number
+      }
+    }
+    model_catalog?: {
+      modules?: {
+        prompt_guard?: {
+          enabled?: boolean
+          model_id?: string
+          model_ref?: string
+          threshold?: number
+          use_modernbert?: boolean
+          use_vllm?: boolean
+        }
+        classifier?: {
+          pii?: {
+            model_id?: string
+            model_ref?: string
+            threshold?: number
+            enabled?: boolean
+          }
+        }
+      }
+    }
   }
 }

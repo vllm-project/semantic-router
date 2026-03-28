@@ -1,7 +1,7 @@
 ---
 name: maintainer-issue-pr-management
 category: support
-description: Maintainer workflow for GitHub issue and pull-request creation, updates, triage labels, and closeout metadata.
+description: Manages GitHub issue and pull-request lifecycle including creation, updates, triage labelling, and closeout metadata using canonical templates and repository taxonomy. Use when a maintainer asks to create, update, close, or triage GitHub issues or PRs, or when issue creation requires codebase analysis for scope, labels, or acceptance criteria.
 ---
 
 # Maintainer Issue And PR Management
@@ -40,12 +40,8 @@ description: Maintainer workflow for GitHub issue and pull-request creation, upd
 ## Must Read
 
 - [AGENTS.md](../../../../AGENTS.md)
-- [docs/agent/README.md](../../../../docs/agent/README.md)
-- [docs/agent/governance.md](../../../../docs/agent/governance.md)
 - [CONTRIBUTING.md](../../../../CONTRIBUTING.md)
 - [.github/PULL_REQUEST_TEMPLATE.md](../../../../.github/PULL_REQUEST_TEMPLATE.md)
-- [.github/ISSUE_TEMPLATE/001_feature_request.yaml](../../../../.github/ISSUE_TEMPLATE/001_feature_request.yaml)
-- [.github/ISSUE_TEMPLATE/002_bug_report.yaml](../../../../.github/ISSUE_TEMPLATE/002_bug_report.yaml)
 - [.prowlabels.yaml](../../../../.prowlabels.yaml)
 
 ## Workflow
@@ -68,6 +64,11 @@ description: Maintainer workflow for GitHub issue and pull-request creation, upd
    - PR titles must use the classified prefixes from `.github/PULL_REQUEST_TEMPLATE.md`, adding multiple prefixes when the change spans categories.
    - Commits intended for PRs must use `git commit -s`.
    - Commit messages do not need to repeat the PR title prefixes unless the maintainer explicitly wants them.
+
+## Gotchas
+
+- Do not draft labels, validation summaries, or scope from memory; inspect the current templates, labels, and repo state first.
+- If an issue or PR exposes real architecture debt or multi-loop execution needs, put that state in the indexed debt or plan docs instead of hiding it only in the ticket text.
 
 ## Standard Commands
 

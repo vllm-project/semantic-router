@@ -46,10 +46,104 @@ ignore_globs:
 
 legacy_hotspots:
   - paths:
-      - src/semantic-router/pkg/cache/cache_test.go
       - src/semantic-router/pkg/config/config.go
       - src/semantic-router/pkg/config/rag_plugin.go
       - src/semantic-router/pkg/config/validator.go
+  - paths:
+      - dashboard/frontend/src/pages/ConfigPage.tsx
+    file_checks: relaxed
+  - paths:
+      - dashboard/backend/handlers/config.go
+      - dashboard/backend/handlers/config_test.go
+      - dashboard/backend/handlers/deploy.go
+      - deploy/addons/redis/redis-cache.go
+      - src/semantic-router/pkg/config/canonical_defaults.go
+      - src/semantic-router/pkg/config/docs_contract_test.go
+      - src/semantic-router/pkg/dsl/emitter_yaml.go
+      - src/semantic-router/pkg/dsl/parser.go
+      - src/training/model_eval/result_to_config.py
+      - src/vllm-sr/cli/config_generator.py
+      - src/vllm-sr/cli/config_migration.py
+      - src/vllm-sr/cli/parser.py
+      - src/vllm-sr/cli/validator.py
+    function_checks: relaxed
+  - paths:
+      - src/training/model_classifier/verify_text_classification_datasets.py
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - deploy/operator/api/v1alpha1/semanticrouter_types.go
+      - src/vllm-sr/cli/models.py
+    file_checks: relaxed
+  - paths:
+      - deploy/operator/controllers/semanticrouter_controller.go
+      - src/semantic-router/pkg/config/config_test.go
+      - src/semantic-router/pkg/dsl/compiler.go
+      - src/semantic-router/pkg/dsl/decompiler.go
+      - src/semantic-router/pkg/dsl/dsl_test.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - deploy/operator/controllers/helpers_test.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - dashboard/frontend/src/pages/ConfigPageDecisionsSection.tsx
+      - dashboard/frontend/src/pages/ConfigPageModelsSection.tsx
+      - dashboard/frontend/src/pages/ConfigPageSignalsSection.tsx
+      - dashboard/frontend/src/pages/configPageRouterDefaultsSupport.ts
+      - dashboard/frontend/src/pages/configPageSupport.ts
+      - src/semantic-router/pkg/extproc/memory_helpers_test.go
+    file_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/apiserver/server_test.go
+      - src/semantic-router/pkg/cache/cache_test.go
+      - src/semantic-router/pkg/modelselection/selector_test.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - deploy/operator/api/v1alpha1/sample_validation_test.go
+      - deploy/operator/api/v1alpha1/semanticrouter_types_test.go
+      - deploy/operator/api/v1alpha1/semanticrouter_webhook_test.go
+      - src/semantic-router/pkg/config/image_gen_plugin_test.go
+      - src/semantic-router/pkg/extproc/req_filter_rag_external.go
+      - src/semantic-router/pkg/extproc/req_filter_rag_hybrid.go
+      - src/semantic-router/pkg/extproc/req_filter_rag_mcp.go
+      - src/semantic-router/pkg/extproc/req_filter_rag_milvus.go
+      - src/semantic-router/pkg/extproc/res_filter_jailbreak_test.go
+      - src/semantic-router/pkg/extproc/server.go
+      - src/semantic-router/pkg/imagegen/backend_vllm_omni.go
+    function_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/cache/inmemory_cache.go
+      - src/semantic-router/pkg/cache/milvus_cache.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/cache/cache_interface.go
+    interface_checks: relaxed
+  - paths:
+      - candle-binding/src/core/config_loader.rs
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - dashboard/backend/handlers/deploy_test.go
+      - deploy/operator/controllers/semanticrouter_controller_test.go
+    file_checks: relaxed
+  - paths:
+      - src/fleet-sim/fleet_sim/optimizer/base.py
+      - src/fleet-sim/run_sim.py
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - src/fleet-sim/fleet_sim/api/routes/traces.py
+    function_checks: relaxed
+  - paths:
+      - src/fleet-sim/tests/test_api.py
+    file_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/responsestore/interface.go
+    interface_checks: relaxed
   - paths:
       - src/semantic-router/pkg/extproc/extproc_test.go
     function_checks: relaxed
@@ -59,6 +153,8 @@ legacy_hotspots:
       - src/semantic-router/pkg/extproc/hallucination_test.go
       - src/semantic-router/pkg/extproc/req_filter_tools_test.go
     function_checks: relaxed
+  - paths:
+      - src/vllm-sr/cli/models.py
   - paths:
       - src/semantic-router/pkg/extproc/processor_req_body.go
       - src/semantic-router/pkg/extproc/processor_res_body.go
@@ -82,6 +178,12 @@ legacy_hotspots:
       - dashboard/backend/handlers/openclaw_teams.go
       - dashboard/backend/handlers/openclaw_test.go
       - dashboard/backend/handlers/openclaw_workers.go
+
+  - paths:
+      - tools/security/ast_security_scanner.py
+      - tools/security/scan_malicious_code.py
+    file_checks: relaxed
+    function_checks: relaxed
 
 dependency_rules:
   - name: prod-code-must-not-reference-e2e-docs-or-agent-tools

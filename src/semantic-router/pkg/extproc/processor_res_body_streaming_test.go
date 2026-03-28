@@ -1,12 +1,9 @@
 package extproc
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 )
 
 // TestParseStreamingChunk tests the parseStreamingChunk function
@@ -90,114 +87,3 @@ func TestParseStreamingChunk_MalformedJSON(t *testing.T) {
 	// Content should not change
 	assert.Equal(t, "Existing content", ctx.StreamingContent)
 }
-
-func TestCacheReconstructedStreamingResponseUsesAddEntry(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{Cache: mockCache}
-	ctx := &RequestContext{
-		RequestID:    "req-1",
-		RequestModel: "test-model",
-		RequestQuery: "hello",
-	}
-
-	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
-	assert.NoError(t, err)
-	assert.True(t, mockCache.addEntryCalled)
-	assert.False(t, mockCache.updateCalled)
-	assert.JSONEq(t, `{}`, string(mockCache.addEntryRequestBody))
-}
-
-func TestCacheReconstructedStreamingResponseFallsBackToUpdate(t *testing.T) {
-	mockCache := &mockStreamingCache{addEntryErr: errors.New("boom")}
-	router := &OpenAIRouter{Cache: mockCache}
-	ctx := &RequestContext{
-		RequestID:           "req-1",
-		RequestModel:        "test-model",
-		RequestQuery:        "hello",
-		OriginalRequestBody: []byte(`{"messages":[]}`),
-	}
-
-	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
-	assert.NoError(t, err)
-	assert.True(t, mockCache.addEntryCalled)
-	assert.True(t, mockCache.updateCalled)
-	assert.JSONEq(t, `{"messages":[]}`, string(mockCache.addEntryRequestBody))
-}
-
-func TestCacheReconstructedStreamingResponseUpdatesWithoutQueryMetadata(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{Cache: mockCache}
-	ctx := &RequestContext{RequestID: "req-1"}
-
-	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
-	assert.NoError(t, err)
-	assert.False(t, mockCache.addEntryCalled)
-	assert.True(t, mockCache.updateCalled)
-}
-
-func TestCacheReconstructedStreamingResponseSkipsWithoutRequestID(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{Cache: mockCache}
-	ctx := &RequestContext{RequestModel: "test-model", RequestQuery: "hello"}
-
-	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
-	assert.NoError(t, err)
-	assert.False(t, mockCache.addEntryCalled)
-	assert.False(t, mockCache.updateCalled)
-}
-
-type mockStreamingCache struct {
-	addEntryCalled      bool
-	updateCalled        bool
-	addEntryRequestBody []byte
-	addEntryErr         error
-	updateErr           error
-}
-
-func (m *mockStreamingCache) IsEnabled() bool { return true }
-
-func (m *mockStreamingCache) CheckConnection() error { return nil }
-
-func (m *mockStreamingCache) AddPendingRequest(
-	_ string,
-	_ string,
-	_ string,
-	_ []byte,
-	_ int,
-) error {
-	return nil
-}
-
-func (m *mockStreamingCache) UpdateWithResponse(_ string, _ []byte, _ int) error {
-	m.updateCalled = true
-	return m.updateErr
-}
-
-func (m *mockStreamingCache) AddEntry(
-	_ string,
-	_ string,
-	_ string,
-	requestBody []byte,
-	_ []byte,
-	_ int,
-) error {
-	m.addEntryCalled = true
-	m.addEntryRequestBody = append([]byte(nil), requestBody...)
-	return m.addEntryErr
-}
-
-func (m *mockStreamingCache) FindSimilar(_ string, _ string) ([]byte, bool, error) {
-	return nil, false, nil
-}
-
-func (m *mockStreamingCache) FindSimilarWithThreshold(
-	_ string,
-	_ string,
-	_ float32,
-) ([]byte, bool, error) {
-	return nil, false, nil
-}
-
-func (m *mockStreamingCache) Close() error { return nil }
-
-func (m *mockStreamingCache) GetStats() cache.CacheStats { return cache.CacheStats{} }

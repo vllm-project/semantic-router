@@ -15,12 +15,12 @@ func TestNewVLLMOmniBackend(t *testing.T) {
 	cfg := &config.ImageGenPluginConfig{
 		Backend:        "vllm_omni",
 		TimeoutSeconds: 30,
-		BackendConfig: &config.VLLMOmniImageGenConfig{
+		BackendConfig: config.MustStructuredPayload(&config.VLLMOmniImageGenConfig{
 			BaseURL:           "http://localhost:8001",
 			Model:             "Qwen/Qwen-Image",
 			NumInferenceSteps: 50,
 			CFGScale:          4.0,
-		},
+		}),
 	}
 
 	backend, err := NewVLLMOmniBackend(cfg)
@@ -75,10 +75,10 @@ func TestVLLMOmniBackend_GenerateImage(t *testing.T) {
 	cfg := &config.ImageGenPluginConfig{
 		Backend:        "vllm_omni",
 		TimeoutSeconds: 10,
-		BackendConfig: &config.VLLMOmniImageGenConfig{
+		BackendConfig: config.MustStructuredPayload(&config.VLLMOmniImageGenConfig{
 			BaseURL: server.URL,
 			Model:   "Qwen/Qwen-Image",
-		},
+		}),
 	}
 
 	backend, err := NewVLLMOmniBackend(cfg)
@@ -118,9 +118,9 @@ func TestVLLMOmniBackend_HealthCheck(t *testing.T) {
 	cfg := &config.ImageGenPluginConfig{
 		Backend:        "vllm_omni",
 		TimeoutSeconds: 5,
-		BackendConfig: &config.VLLMOmniImageGenConfig{
+		BackendConfig: config.MustStructuredPayload(&config.VLLMOmniImageGenConfig{
 			BaseURL: server.URL,
-		},
+		}),
 	}
 
 	backend, err := NewVLLMOmniBackend(cfg)

@@ -82,20 +82,39 @@ curl http://localhost:8090/health
 **Router config (`config-mcp-classifier.yaml`):**
 
 ```yaml
-classifier:
-  category_model:
-    model_id: ""  # Empty = use MCP
-  
-  mcp_category_model:
-    enabled: true
-    transport_type: "http"
-    url: "http://localhost:8090/mcp"
-    # tool_name: optional - auto-discovers classification tool if not specified
-    threshold: 0.6
-    timeout_seconds: 30
+version: v0.3
 
-categories: []  # Loaded dynamically from MCP
-default_model: openai/gpt-oss-20b
+providers:
+  defaults:
+    default_model: openai/gpt-oss-20b
+  models:
+    - name: openai/gpt-oss-20b
+      provider_model_id: openai/gpt-oss-20b
+      api_format: openai
+      backend_refs:
+        - name: default-backend
+          endpoint: 127.0.0.1:8000
+          protocol: http
+          type: chat
+
+routing:
+  modelCards:
+    - name: openai/gpt-oss-20b
+  signals:
+    domains: []  # Loaded dynamically from MCP categories
+  decisions: []
+
+global:
+  model_catalog:
+    modules:
+      classifier:
+        mcp:
+          enabled: true
+          transport_type: "http"
+          url: "http://localhost:8090/mcp"
+          # tool_name: optional - auto-discovers classification tool if not specified
+          threshold: 0.6
+          timeout_seconds: 30
 ```
 
 **Tool Auto-Discovery:**

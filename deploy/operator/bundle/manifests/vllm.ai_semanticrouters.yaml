@@ -1060,22 +1060,6 @@ spec:
                             type: object
                         type: object
                     type: object
-                  bert_model:
-                    description: BERT model configuration
-                    properties:
-                      model_id:
-                        default: models/mom-embedding-light
-                        type: string
-                      threshold:
-                        default: "0.6"
-                        description: Threshold for embedding similarity (0.0-1.0).
-                          Stored as string to avoid float precision issues.
-                        pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
-                        type: string
-                      use_cpu:
-                        default: true
-                        type: boolean
-                    type: object
                   classifier:
                     description: Classifier configuration
                     properties:
@@ -1184,7 +1168,7 @@ spec:
                       jailbreak_mapping_path:
                         type: string
                       model_id:
-                        default: models/mom-jailbreak-classifier
+                        default: models/mmbert32k-jailbreak-detector-merged
                         type: string
                       threshold:
                         default: "0.7"

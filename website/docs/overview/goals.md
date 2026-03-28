@@ -18,7 +18,9 @@ In traditional LLM routing, we only look at the user's query text. But there's s
 - **Quality signals**: Does this query need fact-checking? Is the user giving feedback?
 - **User signals**: What are the user's preferences? What's their satisfaction level?
 
-**Our solution**: A comprehensive signal extraction system that captures 9 types of request signals from requests, responses, and context.
+**Our solution**: A comprehensive signal extraction system that captures 14
+maintained signal families from requests, responses, users, and runtime
+context.
 
 ### 2. How to combine the signals?
 
@@ -27,7 +29,8 @@ Having multiple signals is great, but how do we use them together to make better
 - Should we route to the math model if we detect **both** math keywords **and** math domain?
 - Should we enable fact-checking if we detect **either** a factual question **or** a sensitive domain?
 
-**Our solution**: A flexible decision engine with AND/OR operators that lets you combine signals in powerful ways.
+**Our solution**: A reusable signal catalog plus projection coordination and
+AND/OR decision logic that lets you combine signals without duplicating policy.
 
 ### 3. How to collaborate more efficiently?
 
@@ -58,7 +61,8 @@ The system should learn and improve over time:
 - Collect user feedback to improve signal detection
 - Build a self-learning system that gets smarter with use
 
-**Our solution**: Comprehensive observability and feedback collection that feeds back into the signal extraction and decision engine.
+**Our solution**: Comprehensive observability and feedback collection that
+feeds back into signal extraction, projection tuning, and decision policy.
 
 ## The Vision
 
@@ -68,7 +72,8 @@ We envision a future where:
 - **Multiple models collaborate seamlessly**, each contributing their strengths
 - **Security is built-in**, not bolted on
 - **Systems learn and improve** from every interaction
-- **Collective intelligence emerges** from the combination of signals, decisions, and feedback
+- **Collective intelligence emerges** from the combination of signals,
+  projections, decisions, and feedback
 
 ## Why This Matters
 
@@ -94,6 +99,6 @@ We envision a future where:
 
 Learn more about the core concepts:
 
-- [What is Semantic Router?](semantic-router-overview.md) - Understanding semantic routing
-- [What is Collective Intelligence?](collective-intelligence.md) - How signals create intelligence
-- [What is Signal-Driven Decision?](signal-driven-decisions.md) - Deep dive into the decision engine
+- [What is Semantic Router?](semantic-router-overview) - Understanding semantic routing
+- [What is Collective Intelligence?](collective-intelligence) - How signals create intelligence
+- [What is Signal-Driven Decision?](signal-driven-decisions) - Deep dive into the decision engine

@@ -1,22 +1,23 @@
 import type { Listener } from "@/types/config";
+import type { DSLFieldObject } from "@/types/dsl";
 
 export type EditableListener = Listener & { timeout: string };
 
 export const DEFAULT_LISTENER_PORT = 8899;
 
 export function getObj(
-  fields: Record<string, unknown>,
+  fields: DSLFieldObject,
   key: string,
-): Record<string, unknown> {
+): DSLFieldObject {
   const value = fields[key];
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
+    return value as DSLFieldObject;
   }
   return {};
 }
 
 export function getBool(
-  obj: Record<string, unknown>,
+  obj: DSLFieldObject,
   key: string,
   def = false,
 ): boolean {
@@ -25,7 +26,7 @@ export function getBool(
 }
 
 export function getStr(
-  obj: Record<string, unknown>,
+  obj: DSLFieldObject,
   key: string,
   def = "",
 ): string {
@@ -36,7 +37,7 @@ export function getStr(
 }
 
 export function getNum(
-  obj: Record<string, unknown>,
+  obj: DSLFieldObject,
   key: string,
   def = 0,
 ): number {
@@ -50,7 +51,7 @@ export function getNum(
 }
 
 export function getListeners(
-  fields: Record<string, unknown>,
+  fields: DSLFieldObject,
   key: string,
 ): EditableListener[] {
   const value = fields[key];
@@ -61,7 +62,7 @@ export function getListeners(
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
         return null;
       }
-      const obj = entry as Record<string, unknown>;
+      const obj = entry as DSLFieldObject;
       const port = getNum(obj, "port", DEFAULT_LISTENER_PORT + index);
       return {
         name: getStr(obj, "name", `http-${port}`),

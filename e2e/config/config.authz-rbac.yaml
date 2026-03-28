@@ -1,0 +1,157 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: Qwen/Qwen2.5-7B-Instruct
+  models:
+    - name: Qwen/Qwen2.5-14B-Instruct
+      external_model_ids:
+        vllm: Qwen/Qwen2.5-14B-Instruct
+      backend_refs:
+        - name: vllm-14b
+          endpoint: 127.0.0.1:8000
+          weight: 1
+          type: vllm
+    - name: Qwen/Qwen2.5-7B-Instruct
+      external_model_ids:
+        vllm: Qwen/Qwen2.5-7B-Instruct
+      backend_refs:
+        - name: vllm-7b
+          endpoint: 127.0.0.1:8001
+          weight: 1
+          type: vllm
+routing:
+  decisions:
+    - name: admin_unrestricted
+      description: Admin users get 14B with reasoning
+      priority: 300
+      rules:
+        operator: AND
+        conditions:
+          - type: authz
+            name: admin
+      modelRefs:
+        - model: Qwen/Qwen2.5-14B-Instruct
+          use_reasoning: true
+        - model: Qwen/Qwen2.5-7B-Instruct
+          use_reasoning: false
+    - name: premium_complex
+      description: Premium users + complex queries get 14B
+      priority: 250
+      rules:
+        operator: AND
+        conditions:
+          - type: authz
+            name: premium_user
+          - type: keyword
+            name: complex_analysis
+      modelRefs:
+        - model: Qwen/Qwen2.5-14B-Instruct
+          use_reasoning: true
+    - name: premium_code
+      description: Premium users + code requests get 14B
+      priority: 240
+      rules:
+        operator: AND
+        conditions:
+          - type: authz
+            name: premium_user
+          - type: keyword
+            name: code_request
+      modelRefs:
+        - model: Qwen/Qwen2.5-14B-Instruct
+          use_reasoning: false
+    - name: premium_default
+      description: Premium users simple queries get 7B
+      priority: 150
+      rules:
+        operator: AND
+        conditions:
+          - type: authz
+            name: premium_user
+      modelRefs:
+        - model: Qwen/Qwen2.5-7B-Instruct
+          use_reasoning: false
+    - name: free_default
+      description: Free users get 7B
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: authz
+            name: free_user
+      modelRefs:
+        - model: Qwen/Qwen2.5-7B-Instruct
+          use_reasoning: false
+  signals:
+    keywords:
+      - name: complex_analysis
+        operator: OR
+        keywords:
+          - analyze
+          - reasoning
+          - think step by step
+          - explain why
+          - compare
+          - evaluate
+      - name: code_request
+        operator: OR
+        keywords:
+          - write code
+          - implement
+          - function
+          - algorithm
+          - debug
+          - refactor
+    role_bindings:
+      - name: admin-binding
+        description: Platform admins — full model access
+        subjects:
+          - kind: Group
+            name: platform-admins
+        role: admin
+      - name: premium-binding
+        description: Premium tier users
+        subjects:
+          - kind: Group
+            name: premium-tier
+        role: premium_user
+      - name: free-binding
+        description: Free tier users
+        subjects:
+          - kind: Group
+            name: free-tier
+        role: free_user
+  modelCards:
+    - name: Qwen/Qwen2.5-14B-Instruct
+      param_size: 14b
+      description: Qwen2.5 14B — high-capability model for admin and premium users
+      capabilities:
+        - chat
+        - code
+        - reasoning
+        - math
+      quality_score: 0.9
+    - name: Qwen/Qwen2.5-7B-Instruct
+      param_size: 7b
+      description: Qwen2.5 7B — efficient model for free tier and simple queries
+      capabilities:
+        - chat
+        - code
+      quality_score: 0.7
+global:
+  router:
+    strategy: priority
+    clear_route_cache: true
+  services:
+    authz:
+      fail_open: true
+  stores:
+    semantic_cache:
+      enabled: false
+      embedding_model: mmbert
+    memory:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert
+  integrations: {}

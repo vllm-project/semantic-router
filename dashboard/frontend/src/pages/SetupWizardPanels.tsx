@@ -174,7 +174,7 @@ export function ModelStepPanel({
                     onChange={(event) =>
                       onUpdateModel(model.id, "name", event.target.value)
                     }
-                    placeholder="openai/gpt-oss-120b"
+                    placeholder="qwen/qwen3.5-rocm"
                     aria-invalid={hasNameError}
                   />
                   {hasNameError && (

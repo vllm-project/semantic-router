@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strings"
@@ -25,6 +26,10 @@ func EmitYAML(input string) ([]byte, []error) {
 
 // EmitYAMLFromConfig marshals a RouterConfig to YAML bytes.
 func EmitYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
+	if cfg != nil && len(cfg.KnowledgeBases) > 0 {
+		canonical := config.CanonicalConfigFromRouterConfig(cfg)
+		return yaml.Marshal(canonical)
+	}
 	return yaml.Marshal(cfg)
 }
 
@@ -32,6 +37,10 @@ func EmitYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
 // that matches the config.yaml format used by vllm-serve.
 // This is the inverse of normalizeYAML.
 func EmitUserYAML(cfg *config.RouterConfig) ([]byte, error) {
+	if cfg != nil && len(cfg.KnowledgeBases) > 0 {
+		canonical := config.CanonicalConfigFromRouterConfig(cfg)
+		return yaml.Marshal(canonical)
+	}
 	// First marshal to flat YAML, then restructure via map manipulation.
 	flatBytes, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -60,11 +69,13 @@ func denormalizeSignals(raw map[string]interface{}) {
 		"preference_rules":    "preferences",
 		"language_rules":      "language",
 		"context_rules":       "context",
+		"structure_rules":     "structure",
 		"complexity_rules":    "complexity",
 		"modality_rules":      "modality",
 		"role_bindings":       "authz",
 		"jailbreak":           "jailbreak",
 		"pii":                 "pii",
+		"kb":                  "kb",
 	}
 
 	signals := make(map[string]interface{})
@@ -81,6 +92,22 @@ func denormalizeSignals(raw map[string]interface{}) {
 	}
 }
 
+type endpointInfo struct {
+	name     string
+	address  string
+	port     int
+	weight   interface{}
+	protocol string
+	epType   string
+	apiKey   string
+}
+
+type modelEntry struct {
+	name      string
+	endpoints []endpointInfo
+	config    map[string]interface{}
+}
+
 // denormalizeProviders groups vllm_endpoints + model_config into a nested "providers" section
 // and reconstructs the user-friendly "models" list.
 func denormalizeProviders(raw map[string]interface{}) {
@@ -95,8 +122,8 @@ func denormalizeProviders(raw map[string]interface{}) {
 		if len(models) > 0 {
 			providers["models"] = models
 		}
-		delete(raw, "vllm_endpoints")
 	}
+	delete(raw, "vllm_endpoints")
 	delete(raw, "model_config")
 
 	// Hoist simple keys into providers
@@ -116,140 +143,120 @@ func denormalizeProviders(raw map[string]interface{}) {
 // normalizeYAML creates endpoint names as "{modelName}_{epName}".
 // We group by modelName and reconstruct endpoints with address:port → "endpoint" field.
 func buildModelsFromEndpoints(endpoints []interface{}, modelConfigRaw map[string]interface{}) []interface{} {
-	// Group endpoints by model name (extracted from endpoint name pattern: modelName_epName)
-	type endpointInfo struct {
-		name     string
-		address  string
-		port     int
-		weight   interface{}
-		protocol string
-		epType   string
-		apiKey   string
-	}
+	modelMap, modelOrder := collectModelEntries(endpoints)
+	mergeModelConfig(modelMap, &modelOrder, modelConfigRaw)
+	return buildUserModels(modelMap, modelOrder)
+}
 
-	type modelEntry struct {
-		name      string
-		endpoints []endpointInfo
-		config    map[string]interface{}
-	}
-
+func collectModelEntries(endpoints []interface{}) (map[string]*modelEntry, []string) {
 	modelMap := make(map[string]*modelEntry)
 	var modelOrder []string
-
 	for _, ep := range endpoints {
-		epMap, ok := ep.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		fullName, _ := epMap["name"].(string)
-		address, _ := epMap["address"].(string)
-		port := toInt(epMap["port"])
-		weight := epMap["weight"]
-		protocol, _ := epMap["protocol"].(string)
-		epType, _ := epMap["type"].(string)
-		apiKey, _ := epMap["api_key"].(string)
-		model, _ := epMap["model"].(string)
-
-		// Determine model name and original endpoint name.
-		// normalizeYAML sets name = modelName + "_" + epName
-		// and stores model = modelName.
-		modelName := model
-		epName := "vllm_endpoint"
-		if modelName == "" {
-			// Fallback: try to extract from fullName pattern modelName_epName
-			modelName, epName = splitEndpointName(fullName)
-		} else if strings.HasPrefix(fullName, modelName+"_") {
-			epName = fullName[len(modelName)+1:]
-		}
-
-		if modelName == "" {
-			continue
-		}
-
-		me, exists := modelMap[modelName]
-		if !exists {
-			me = &modelEntry{name: modelName}
-			modelMap[modelName] = me
-			modelOrder = append(modelOrder, modelName)
-		}
-		me.endpoints = append(me.endpoints, endpointInfo{
-			name:     epName,
-			address:  address,
-			port:     port,
-			weight:   weight,
-			protocol: protocol,
-			epType:   epType,
-			apiKey:   apiKey,
-		})
+		addEndpointToModelMap(modelMap, &modelOrder, ep)
 	}
+	return modelMap, modelOrder
+}
 
-	// Merge model_config data
+func addEndpointToModelMap(modelMap map[string]*modelEntry, modelOrder *[]string, ep interface{}) {
+	epMap, ok := ep.(map[string]interface{})
+	if !ok {
+		return
+	}
+	fullName, _ := epMap["name"].(string)
+	modelName, epName := deriveModelAndEndpointNames(epMap, fullName)
+	if modelName == "" {
+		return
+	}
+	me := ensureModelEntry(modelMap, modelOrder, modelName)
+	me.endpoints = append(me.endpoints, endpointInfo{
+		name:     epName,
+		address:  toString(epMap["address"]),
+		port:     toInt(epMap["port"]),
+		weight:   epMap["weight"],
+		protocol: toString(epMap["protocol"]),
+		epType:   toString(epMap["type"]),
+		apiKey:   toString(epMap["api_key"]),
+	})
+}
+
+func deriveModelAndEndpointNames(epMap map[string]interface{}, fullName string) (string, string) {
+	modelName := toString(epMap["model"])
+	epName := "vllm_endpoint"
+	if modelName == "" {
+		return splitEndpointName(fullName)
+	}
+	if strings.HasPrefix(fullName, modelName+"_") {
+		epName = fullName[len(modelName)+1:]
+	}
+	return modelName, epName
+}
+
+func ensureModelEntry(modelMap map[string]*modelEntry, modelOrder *[]string, modelName string) *modelEntry {
+	if me, ok := modelMap[modelName]; ok {
+		return me
+	}
+	me := &modelEntry{name: modelName}
+	modelMap[modelName] = me
+	*modelOrder = append(*modelOrder, modelName)
+	return me
+}
+
+func mergeModelConfig(modelMap map[string]*modelEntry, modelOrder *[]string, modelConfigRaw map[string]interface{}) {
 	for modelName, mcRaw := range modelConfigRaw {
 		mc, ok := mcRaw.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		me, exists := modelMap[modelName]
-		if !exists {
-			me = &modelEntry{name: modelName}
-			modelMap[modelName] = me
-			modelOrder = append(modelOrder, modelName)
-		}
-		me.config = mc
+		ensureModelEntry(modelMap, modelOrder, modelName).config = mc
 	}
+}
 
-	// Build output
-	var models []interface{}
+func buildUserModels(modelMap map[string]*modelEntry, modelOrder []string) []interface{} {
+	models := make([]interface{}, 0, len(modelOrder))
 	for _, modelName := range modelOrder {
-		me := modelMap[modelName]
-		m := map[string]interface{}{
-			"name": me.name,
-		}
-
-		// Add model_config fields (reasoning_family, param_size, etc.)
-		if me.config != nil {
-			for k, v := range me.config {
-				if k == "preferred_endpoints" {
-					continue // Don't emit this in nested format
-				}
-				if !isZeroValue(v) {
-					m[k] = v
-				}
-			}
-		}
-
-		// Build endpoints list
-		if len(me.endpoints) > 0 {
-			var epList []interface{}
-			for _, ep := range me.endpoints {
-				epOut := map[string]interface{}{
-					"name": ep.name,
-				}
-				endpoint := ep.address
-				if ep.port != 0 {
-					endpoint = fmt.Sprintf("%s:%d", ep.address, ep.port)
-				}
-				epOut["endpoint"] = endpoint
-				if ep.weight != nil && !isZeroValue(ep.weight) {
-					epOut["weight"] = ep.weight
-				}
-				if ep.protocol != "" && ep.protocol != "http" {
-					epOut["protocol"] = ep.protocol
-				}
-				if ep.epType != "" {
-					epOut["type"] = ep.epType
-				}
-				if ep.apiKey != "" {
-					epOut["api_key"] = ep.apiKey
-				}
-				epList = append(epList, epOut)
-			}
-			m["endpoints"] = epList
-		}
-
-		models = append(models, m)
+		models = append(models, buildUserModelEntry(modelMap[modelName]))
 	}
 	return models
+}
+
+func buildUserModelEntry(me *modelEntry) map[string]interface{} {
+	m := map[string]interface{}{"name": me.name}
+	for k, v := range me.config {
+		if k == "preferred_endpoints" || isZeroValue(v) {
+			continue
+		}
+		m[k] = v
+	}
+	if endpoints := buildUserEndpoints(me.endpoints); len(endpoints) > 0 {
+		m["endpoints"] = endpoints
+	}
+	return m
+}
+
+func buildUserEndpoints(endpoints []endpointInfo) []interface{} {
+	epList := make([]interface{}, 0, len(endpoints))
+	for _, ep := range endpoints {
+		epOut := map[string]interface{}{"name": ep.name}
+		endpoint := ep.address
+		if ep.port != 0 {
+			endpoint = fmt.Sprintf("%s:%d", ep.address, ep.port)
+		}
+		epOut["endpoint"] = endpoint
+		if ep.weight != nil && !isZeroValue(ep.weight) {
+			epOut["weight"] = ep.weight
+		}
+		if ep.protocol != "" && ep.protocol != "http" {
+			epOut["protocol"] = ep.protocol
+		}
+		if ep.epType != "" {
+			epOut["type"] = ep.epType
+		}
+		if ep.apiKey != "" {
+			epOut["api_key"] = ep.apiKey
+		}
+		epList = append(epList, epOut)
+	}
+	return epList
 }
 
 // splitEndpointName tries to split "modelName_epName" back into parts.
@@ -263,10 +270,10 @@ func splitEndpointName(fullName string) (string, string) {
 }
 
 // pruneZeroValueInfra removes infrastructure config sections that are all zero values.
-// These are config sections not representable in DSL (embedding_models, bert_model, etc.)
+// These are config sections not representable in DSL (embedding_models, classifiers, etc.)
 func pruneZeroValueInfra(raw map[string]interface{}) {
 	infraKeys := []string{
-		"embedding_models", "bert_model", "classifier",
+		"embedding_models", "classifier",
 		"prompt_guard", "hallucination_mitigation",
 		"feedback_detector", "modality_detector",
 		"semantic_cache", "memory", "response_api",
@@ -349,6 +356,13 @@ func toInt(v interface{}) int {
 		return int(val)
 	}
 	return 0
+}
+
+func toString(v interface{}) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // EmitUserYAMLOrdered emits YAML in user-friendly format with a controlled key order
@@ -496,7 +510,7 @@ func EmitCRD(cfg *config.RouterConfig, name, namespace string) ([]byte, error) {
 // buildCRDConfigSpec constructs the CRD spec.config map from RouterConfig.
 // It mirrors the Operator's ConfigSpec structure:
 //   - decisions, strategy, complexity_rules, reasoning_families, default_reasoning_effort
-//   - bert_model, classifier, prompt_guard, semantic_cache, tools, observability, api
+//   - embedding_models, classifier, prompt_guard, semantic_cache, tools, observability, api
 //   - Signal rules not in ConfigSpec are included as extra keys for completeness
 func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	// Marshal the full RouterConfig to a flat map first
@@ -517,7 +531,6 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	moveKey(flat, configSpec, "default_model")
 
 	// Infrastructure configs that ConfigSpec supports
-	moveKey(flat, configSpec, "bert_model")
 	moveKey(flat, configSpec, "embedding_models")
 	moveKey(flat, configSpec, "classifier")
 	moveKey(flat, configSpec, "prompt_guard")
@@ -531,8 +544,9 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	signalKeys := []string{
 		"keyword_rules", "embedding_rules", "categories",
 		"fact_check_rules", "user_feedback_rules", "preference_rules",
-		"language_rules", "context_rules", "modality_rules",
-		"role_bindings", "jailbreak", "pii",
+		"language_rules", "context_rules", "structure_rules",
+		"modality_rules", "role_bindings", "jailbreak", "pii",
+		"kb",
 	}
 	for _, key := range signalKeys {
 		moveKey(flat, configSpec, key)
@@ -603,44 +617,86 @@ func moveKey(src, dst map[string]interface{}, key string) {
 	}
 }
 
-// EmitHelm wraps a RouterConfig into a Helm values.yaml structure compatible
-// with the semantic-router Helm chart (deploy/helm/semantic-router/).
-//
-// The chart's ConfigMap template renders `.Values.config` as the routing config
-// (config.yaml), so we nest the RouterConfig under a `config:` key and prune
-// infrastructure zero values just like EmitUserYAML does for clean output.
+// EmitHelm emits a Helm values fragment that only carries the DSL-owned routing
+// surface under the chart's canonical `config:` key.
 func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
-	flatBytes, err := yaml.Marshal(cfg)
-	if err != nil {
-		return nil, err
-	}
-	var raw map[string]interface{}
-	if err := yaml.Unmarshal(flatBytes, &raw); err != nil {
-		return nil, err
+	type helmValuesConfig struct {
+		Version string                  `yaml:"version"`
+		Routing config.CanonicalRouting `yaml:"routing"`
 	}
 
-	// Remove zero-value infrastructure sections
-	pruneZeroValueInfra(raw)
-
-	// Remove strategy if empty
-	if v, ok := raw["strategy"]; ok {
-		if s, ok := v.(string); ok && s == "" {
-			delete(raw, "strategy")
-		}
-	}
-
-	// Wrap in Helm values structure
 	values := map[string]interface{}{
-		"config": raw,
+		"config": helmValuesConfig{
+			Version: "v0.3",
+			Routing: config.CanonicalRoutingFromRouterConfig(cfg),
+		},
 	}
 
-	// Build ordered output
 	doc := &yaml.Node{Kind: yaml.DocumentNode}
 	mapNode := &yaml.Node{Kind: yaml.MappingNode}
 	addKeyValue(mapNode, "config", values["config"])
 	doc.Content = append(doc.Content, mapNode)
 
 	return yaml.Marshal(doc)
+}
+
+// MergeRoutingIntoBase takes the DSL-compiled RouterConfig and a base YAML
+// document (containing version, listeners, providers), replaces the routing
+// section with the compiled one, and emits a complete canonical config YAML.
+func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, error) {
+	var base map[string]interface{}
+	if err := yaml.Unmarshal(baseYAML, &base); err != nil {
+		return nil, fmt.Errorf("failed to parse base YAML: %w", err)
+	}
+
+	routingBytes, err := yaml.Marshal(config.CanonicalRoutingFromRouterConfig(cfg))
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal routing: %w", err)
+	}
+	var routing interface{}
+	if err := yaml.Unmarshal(routingBytes, &routing); err != nil {
+		return nil, fmt.Errorf("failed to re-parse routing: %w", err)
+	}
+
+	base["routing"] = routing
+
+	doc := &yaml.Node{Kind: yaml.DocumentNode}
+	mapNode := &yaml.Node{Kind: yaml.MappingNode}
+	canonicalOrder := []string{"version", "listeners", "providers", "routing", "global"}
+	added := make(map[string]bool)
+	for _, key := range canonicalOrder {
+		if v, ok := base[key]; ok {
+			addKeyValue(mapNode, key, v)
+			added[key] = true
+		}
+	}
+	var remaining []string
+	for k := range base {
+		if !added[k] {
+			remaining = append(remaining, k)
+		}
+	}
+	sort.Strings(remaining)
+	for _, key := range remaining {
+		addKeyValue(mapNode, key, base[key])
+	}
+	doc.Content = append(doc.Content, mapNode)
+	return marshalYAMLIndent2(doc)
+}
+
+// marshalYAMLIndent2 encodes a yaml.Node with 2-space indentation to match
+// the project's yamllint configuration.
+func marshalYAMLIndent2(node *yaml.Node) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(node); err != nil {
+		return nil, err
+	}
+	if err := enc.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // pruneZeroValues recursively removes zero-value entries from a nested map.

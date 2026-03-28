@@ -59,11 +59,10 @@ spec:
           from huggingface_hub import snapshot_download
 
           models = [
-              ("LLM-Semantic-Router/category_classifier_modernbert-base_model", "category_classifier_modernbert-base_model"),
-              ("LLM-Semantic-Router/pii_classifier_modernbert-base_model", "pii_classifier_modernbert-base_model"),
-              ("LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model", "jailbreak_classifier_modernbert-base_model"),
-              ("LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_presidio_token_model"),
-              ("sentence-transformers/{{EMBEDDING_MODEL}}", "{{EMBEDDING_MODEL}}")
+              ("llm-semantic-router/mmbert32k-intent-classifier-merged", "mmbert32k-intent-classifier-merged"),
+              ("llm-semantic-router/mmbert32k-pii-detector-merged", "mmbert32k-pii-detector-merged"),
+              ("llm-semantic-router/mmbert32k-jailbreak-detector-merged", "mmbert32k-jailbreak-detector-merged"),
+              ("{{EMBEDDING_MODEL_REPO}}", "{{EMBEDDING_MODEL}}")
           ]
 
           cache_dir = "/app/cache/hf"
@@ -180,7 +179,8 @@ spec:
           value: "/tmp/home"
         volumeMounts:
         - name: config-volume
-          mountPath: /app/config
+          mountPath: /app/config/config.yaml
+          subPath: config.yaml
           readOnly: true
         - name: models-volume
           mountPath: /app/models

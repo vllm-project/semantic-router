@@ -1,0 +1,70 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: openai/gpt-oss-120b
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+    - name: openai/gpt-oss-120b
+      backend_refs:
+        - name: test-endpoint
+          endpoint: 0.0.0.0:8000
+          weight: 1
+routing:
+  decisions:
+    - name: default_decision
+      description: Default catch-all decision
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: other
+      modelRefs:
+        - model: openai/gpt-oss-120b
+          use_reasoning: false
+  signals:
+    domains:
+      - name: other
+        description: General knowledge and miscellaneous topics
+        mmlu_categories:
+          - other
+  modelCards:
+    - name: openai/gpt-oss-120b
+global:
+  router:
+    strategy: priority
+  services:
+    response_api:
+      enabled: true
+      store_backend: redis
+      ttl_seconds: 86400
+      redis:
+        address: localhost:6379
+        password: ''
+        db: 0
+        key_prefix: 'sr:'
+        pool_size: 10
+        min_idle_conns: 2
+        max_retries: 3
+        dial_timeout: 5
+        read_timeout: 3
+        write_timeout: 3
+        cluster_mode: false
+        tls_enabled: false
+  stores:
+    semantic_cache:
+      enabled: true
+      backend_type: memory
+      similarity_threshold: 0.8
+      max_entries: 1000
+      ttl_seconds: 3600
+      embedding_model: mmbert
+    memory:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert
+  integrations: {}

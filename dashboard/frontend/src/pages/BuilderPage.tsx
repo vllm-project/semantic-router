@@ -7,6 +7,7 @@ import React, {
 } from "react";
 
 import { useDSLStore } from "@/stores/dslStore";
+import type { DSLFieldObject } from "@/types/dsl";
 import type { EditorMode } from "@/types/dsl";
 import type { RouteInput } from "@/lib/dslMutations";
 
@@ -48,19 +49,27 @@ const BuilderPage: React.FC = () => {
     setMode,
     importYaml,
     loadFromRouter,
+    mutateModel,
+    addModel,
+    deleteModel,
     mutateSignal,
     addSignal,
     deleteSignal,
+    mutateProjectionPartition,
+    addProjectionPartition,
+    deleteProjectionPartition,
+    mutateProjectionScore,
+    addProjectionScore,
+    deleteProjectionScore,
+    mutateProjectionMapping,
+    addProjectionMapping,
+    deleteProjectionMapping,
     mutatePlugin,
     addPlugin,
     deletePlugin,
-    mutateBackend,
-    addBackend,
-    deleteBackend,
     deleteRoute,
     mutateRoute,
     addRoute,
-    mutateGlobal,
     requestDeploy,
     executeDeploy,
     dismissDeploy,
@@ -77,11 +86,13 @@ const BuilderPage: React.FC = () => {
 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [sections, setSections] = useState<SectionState>({
+    models: true,
     signals: true,
+    projectionPartitions: true,
+    projectionScores: true,
+    projectionMappings: true,
     routes: true,
     plugins: true,
-    backends: true,
-    global: true,
   });
   const [addingEntity, setAddingEntity] = useState<EntityKind | null>(null);
   const [outputPanelOpen, setOutputPanelOpen] = useState(true);
@@ -109,6 +120,7 @@ const BuilderPage: React.FC = () => {
   const importTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const autoLoadedDefaultConfigRef = useRef(false);
+  const autoLoadingDefaultConfigRef = useRef(false);
 
   // Initialize WASM on mount
   useEffect(() => {
@@ -148,8 +160,20 @@ const BuilderPage: React.FC = () => {
   const handleDeleteEntity = useCallback(
     (kind: EntityKind, name: string, subType?: string) => {
       switch (kind) {
+        case "model":
+          deleteModel(name);
+          break;
         case "signal":
           if (subType) deleteSignal(subType, name);
+          break;
+        case "projection-partition":
+          deleteProjectionPartition(name);
+          break;
+        case "projection-score":
+          deleteProjectionScore(name);
+          break;
+        case "projection-mapping":
+          deleteProjectionMapping(name);
           break;
         case "route":
           deleteRoute(name);
@@ -157,38 +181,73 @@ const BuilderPage: React.FC = () => {
         case "plugin":
           if (subType) deletePlugin(name, subType);
           break;
-        case "backend":
-          if (subType) deleteBackend(subType, name);
-          break;
       }
       setSelection(null);
     },
-    [deleteSignal, deleteRoute, deletePlugin, deleteBackend],
+    [
+      deleteModel,
+      deleteSignal,
+      deleteProjectionPartition,
+      deleteProjectionScore,
+      deleteProjectionMapping,
+      deleteRoute,
+      deletePlugin,
+    ],
+  );
+
+  const handleUpdateModelFields = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      mutateModel(name, fields);
+    },
+    [mutateModel],
+  );
+
+  const handleAddModel = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      addModel(name, fields);
+      setSelection({ kind: "model", name });
+      setAddingEntity(null);
+    },
+    [addModel],
   );
 
   const handleUpdateSignalFields = useCallback(
-    (signalType: string, name: string, fields: Record<string, unknown>) => {
+    (signalType: string, name: string, fields: DSLFieldObject) => {
       mutateSignal(signalType, name, fields);
     },
     [mutateSignal],
   );
 
   const handleUpdatePluginFields = useCallback(
-    (name: string, pluginType: string, fields: Record<string, unknown>) => {
+    (name: string, pluginType: string, fields: DSLFieldObject) => {
       mutatePlugin(name, pluginType, fields);
     },
     [mutatePlugin],
   );
 
-  const handleUpdateBackendFields = useCallback(
-    (backendType: string, name: string, fields: Record<string, unknown>) => {
-      mutateBackend(backendType, name, fields);
+  const handleUpdateProjectionPartitionFields = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      mutateProjectionPartition(name, fields);
     },
-    [mutateBackend],
+    [mutateProjectionPartition],
+  );
+
+  const handleUpdateProjectionScoreFields = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      mutateProjectionScore(name, fields);
+    },
+    [mutateProjectionScore],
+  );
+
+  const handleUpdateProjectionMappingFields = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      mutateProjectionMapping(name, fields);
+    },
+    [mutateProjectionMapping],
   );
 
   const handleAddSignal = useCallback(
-    (signalType: string, name: string, fields: Record<string, unknown>) => {
+    (signalType: string, name: string, fields: DSLFieldObject) => {
       addSignal(signalType, name, fields);
       setSelection({ kind: "signal", name });
       setAddingEntity(null);
@@ -197,7 +256,7 @@ const BuilderPage: React.FC = () => {
   );
 
   const handleAddPlugin = useCallback(
-    (name: string, pluginType: string, fields: Record<string, unknown>) => {
+    (name: string, pluginType: string, fields: DSLFieldObject) => {
       addPlugin(name, pluginType, fields);
       setSelection({ kind: "plugin", name });
       setAddingEntity(null);
@@ -205,13 +264,31 @@ const BuilderPage: React.FC = () => {
     [addPlugin],
   );
 
-  const handleAddBackend = useCallback(
-    (backendType: string, name: string, fields: Record<string, unknown>) => {
-      addBackend(backendType, name, fields);
-      setSelection({ kind: "backend", name });
+  const handleAddProjectionPartition = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      addProjectionPartition(name, fields);
+      setSelection({ kind: "projection-partition", name });
       setAddingEntity(null);
     },
-    [addBackend],
+    [addProjectionPartition],
+  );
+
+  const handleAddProjectionScore = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      addProjectionScore(name, fields);
+      setSelection({ kind: "projection-score", name });
+      setAddingEntity(null);
+    },
+    [addProjectionScore],
+  );
+
+  const handleAddProjectionMapping = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      addProjectionMapping(name, fields);
+      setSelection({ kind: "projection-mapping", name });
+      setAddingEntity(null);
+    },
+    [addProjectionMapping],
   );
 
   const handleUpdateRoute = useCallback(
@@ -219,13 +296,6 @@ const BuilderPage: React.FC = () => {
       mutateRoute(name, input);
     },
     [mutateRoute],
-  );
-
-  const handleUpdateGlobalFields = useCallback(
-    (fields: Record<string, unknown>) => {
-      mutateGlobal(fields);
-    },
-    [mutateGlobal],
   );
 
   const handleAddRoute = useCallback(
@@ -262,7 +332,7 @@ const BuilderPage: React.FC = () => {
       setImportError(null);
     } catch {
       setImportError(
-        "Failed to decompile YAML. Make sure it is valid router config YAML.",
+        "Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.",
       );
     }
   }, [importText, importYaml, compile]);
@@ -350,8 +420,17 @@ const BuilderPage: React.FC = () => {
 
   // On first entry, load current router config and compile it by default.
   useEffect(() => {
-    if (!wasmReady || autoLoadedDefaultConfigRef.current) return;
-    autoLoadedDefaultConfigRef.current = true;
+    if (
+      !wasmReady ||
+      readonlyLoading ||
+      dslSource.trim() ||
+      autoLoadedDefaultConfigRef.current ||
+      autoLoadingDefaultConfigRef.current
+    ) {
+      return;
+    }
+
+    autoLoadingDefaultConfigRef.current = true;
     let cancelled = false;
     const loadDefaultConfig = async () => {
       setLoadingFromRouter(true);
@@ -360,6 +439,7 @@ const BuilderPage: React.FC = () => {
         await loadFromRouter();
         if (!cancelled) {
           compile();
+          autoLoadedDefaultConfigRef.current = true;
         }
       } catch (err) {
         console.error(
@@ -367,6 +447,7 @@ const BuilderPage: React.FC = () => {
           err,
         );
       } finally {
+        autoLoadingDefaultConfigRef.current = false;
         if (!cancelled) {
           setLoadingFromRouter(false);
         }
@@ -376,15 +457,17 @@ const BuilderPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [wasmReady, loadFromRouter, compile]);
+  }, [wasmReady, readonlyLoading, dslSource, loadFromRouter, compile]);
 
   // Diagnostic counts
   const errorCount = diagnostics.filter((d) => d.level === "error").length;
+  const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0;
   const signalCount = ast?.signals?.length ?? symbols?.signals?.length ?? 0;
+  const projectionPartitionCount = ast?.projectionPartitions?.length ?? 0;
+  const projectionScoreCount = ast?.projectionScores?.length ?? 0;
+  const projectionMappingCount = ast?.projectionMappings?.length ?? 0;
   const routeCount = ast?.routes?.length ?? symbols?.routes?.length ?? 0;
   const pluginCount = ast?.plugins?.length ?? symbols?.plugins?.length ?? 0;
-  const backendCount = ast?.backends?.length ?? symbols?.backends?.length ?? 0;
-  const hasGlobal = !!ast?.global;
   const isValid = errorCount === 0 && wasmReady;
   const lineCount = dslSource.split("\n").length;
 
@@ -392,16 +475,20 @@ const BuilderPage: React.FC = () => {
   const selectedEntity = useMemo(() => {
     if (!selection || !ast) return null;
     switch (selection.kind) {
+      case "model":
+        return ast.models?.find((m) => m.name === selection.name) ?? null;
       case "signal":
         return ast.signals?.find((s) => s.name === selection.name) ?? null;
+      case "projection-partition":
+        return ast.projectionPartitions?.find((partition) => partition.name === selection.name) ?? null;
+      case "projection-score":
+        return ast.projectionScores?.find((score) => score.name === selection.name) ?? null;
+      case "projection-mapping":
+        return ast.projectionMappings?.find((mapping) => mapping.name === selection.name) ?? null;
       case "route":
         return ast.routes?.find((r) => r.name === selection.name) ?? null;
       case "plugin":
         return ast.plugins?.find((p) => p.name === selection.name) ?? null;
-      case "backend":
-        return ast.backends?.find((b) => b.name === selection.name) ?? null;
-      case "global":
-        return ast.global ?? null;
       default:
         return null;
     }
@@ -452,24 +539,31 @@ const BuilderPage: React.FC = () => {
               sections={sections}
               onToggleSection={toggleSection}
               selectedEntity={selectedEntity}
+              modelCount={modelCount}
               signalCount={signalCount}
+              projectionPartitionCount={projectionPartitionCount}
+              projectionScoreCount={projectionScoreCount}
+              projectionMappingCount={projectionMappingCount}
               routeCount={routeCount}
               pluginCount={pluginCount}
-              backendCount={backendCount}
-              hasGlobal={hasGlobal}
               wasmReady={wasmReady}
               wasmError={wasmError}
               addingEntity={addingEntity}
               onSetAddingEntity={setAddingEntity}
               onDeleteEntity={handleDeleteEntity}
+              onUpdateModelFields={handleUpdateModelFields}
               onUpdateSignalFields={handleUpdateSignalFields}
+              onUpdateProjectionPartitionFields={handleUpdateProjectionPartitionFields}
+              onUpdateProjectionScoreFields={handleUpdateProjectionScoreFields}
+              onUpdateProjectionMappingFields={handleUpdateProjectionMappingFields}
               onUpdatePluginFields={handleUpdatePluginFields}
-              onUpdateBackendFields={handleUpdateBackendFields}
+              onAddModel={handleAddModel}
               onAddSignal={handleAddSignal}
+              onAddProjectionPartition={handleAddProjectionPartition}
+              onAddProjectionScore={handleAddProjectionScore}
+              onAddProjectionMapping={handleAddProjectionMapping}
               onAddPlugin={handleAddPlugin}
-              onAddBackend={handleAddBackend}
               onUpdateRoute={handleUpdateRoute}
-              onUpdateGlobalFields={handleUpdateGlobalFields}
               onAddRoute={handleAddRoute}
               errorCount={errorCount}
               isValid={isValid}
@@ -519,10 +613,10 @@ const BuilderPage: React.FC = () => {
       <BuilderStatusBar
         isValid={isValid}
         errorCount={errorCount}
+        modelCount={modelCount}
         signalCount={signalCount}
         routeCount={routeCount}
         pluginCount={pluginCount}
-        backendCount={backendCount}
         lineCount={lineCount}
         mode={mode}
       />

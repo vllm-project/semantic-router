@@ -28,7 +28,7 @@ func main() {
 		Enabled:             true,
 		SimilarityThreshold: 0.85,
 		TTLSeconds:          3600, // Entries expire after 1 hour
-		BackendConfigPath:   "../../config/semantic-cache/redis.yaml",
+		BackendConfigPath:   "../../examples/runtime/semantic-cache/redis.yaml",
 	}
 
 	// Create cache backend

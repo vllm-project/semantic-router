@@ -15,7 +15,7 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 **Requirements:**
 
 - **Python**: 3.10 or higher
-- **Container Runtime**: Docker or Podman (required for running the router container)
+- **Container Runtime**: Docker (required for running the router container)
 
 ## Quick Start
 
@@ -30,7 +30,7 @@ The installer:
 - Detects Python 3.10 or newer
 - Installs `vllm-sr` into `~/.local/share/vllm-sr`
 - Writes a launcher to `~/.local/bin/vllm-sr`
-- Prepares Docker or Podman for `vllm-sr serve` unless you opt out
+- Prepares Docker for `vllm-sr serve` unless you opt out
 - Starts `vllm-sr serve` automatically and opens the dashboard when possible
 - Prints dashboard access and remote-server hints if a browser cannot be opened
 
@@ -40,8 +40,8 @@ Useful variants:
 # Install only the CLI
 curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli
 
-# Pin local serve mode to Podman
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime podman
+# Skip runtime bootstrap and start Docker yourself later
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
 
 # Force the first launch onto the AMD/ROCm path
 curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --platform amd
@@ -54,6 +54,31 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime sk
 ```
 
 If `~/.local/bin` is not already on your `PATH`, the installer prints the export line to add it.
+
+### Agent install (OpenClaw and similar agents)
+
+Use the agent flow when another local agent should perform the install on your behalf. Keep the same supported installer, but tell the agent to use the no-launch path so it does not auto-start `vllm-sr serve` or open a browser during the handoff.
+
+Preferred long-term path: publish or install the repo-managed `openclaw-vsr-bridge` skill from this repository (`dashboard/backend/skillpacks/openclaw-vsr-bridge/SKILL.md`). Until that registry entry exists, use the hosted prompt files below so homepage and agent copy stay short.
+
+Hosted prompt files:
+
+- CLI-only prompt: [https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md](https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md)
+- Install-and-bridge prompt: [https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md](https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md)
+
+CLI-only prompt:
+
+```text
+Fetch and follow https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md.
+```
+
+Install-and-bridge prompt:
+
+```text
+Fetch and follow https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md.
+```
+
+The hosted Markdown files still point back to the same supported installer. OpenClaw handoff still happens later through the bridge skill or `vllm-sr config import --from openclaw`, not through a second installer.
 
 Windows users should use the manual PyPI flow below.
 
@@ -88,6 +113,7 @@ The router will:
 
 - Automatically download required ML models (~1.5GB, one-time)
 - Start the dashboard on port 8700
+- Start the `vllm-sr-sim` sidecar on port 8810
 - Start Envoy proxy on port 8888 after activation
 - Start the semantic router service after activation
 - Enable metrics on port 9190
@@ -129,10 +155,11 @@ vllm-sr dashboard
 # View logs
 vllm-sr logs router        # Router logs
 vllm-sr logs envoy         # Envoy logs
+vllm-sr logs simulator     # Fleet simulator sidecar logs
 vllm-sr logs router -f     # Follow logs
 
 # Check status
-vllm-sr status
+vllm-sr status             # Includes simulator sidecar state
 
 # Stop the router
 vllm-sr stop
@@ -145,14 +172,11 @@ vllm-sr stop
 If you prefer to edit YAML directly instead of using the dashboard setup flow:
 
 ```bash
-# Generate a lean advanced sample in the current directory
-vllm-sr init
-
-# Validate it before serving
-vllm-sr validate
+# Validate your canonical config before serving
+vllm-sr validate config.yaml
 ```
 
-`vllm-sr init` is optional. It generates an advanced sample and `.vllm-sr/router-defaults.yaml` for YAML-first users. `router-defaults.yaml` contains advanced runtime defaults and is not required for first-run dashboard setup.
+`vllm-sr init` was removed in v0.3. Create `config.yaml` directly with the canonical `version/listeners/providers/routing/global` layout, migrate an older file with `vllm-sr config migrate --config old-config.yaml`, or import supported OpenClaw model providers with `vllm-sr config import --from openclaw`.
 
 ### HuggingFace Settings
 
@@ -210,23 +234,23 @@ See the **[Kubernetes Operator Guide](k8s/operator)** for complete documentation
 
 ### Other Kubernetes Deployment Options
 
-- **[Istio Integration](k8s/istio.md)** - Service mesh deployment
-- **[AI Gateway](k8s/ai-gateway.md)** - Gateway API integration
-- **[Production Stack](k8s/production-stack.md)** - Complete production setup
-- **[Dynamo](k8s/dynamo.md)** - Dynamic configuration management
+- **[Istio Integration](k8s/istio)** - Service mesh deployment
+- **[AI Gateway](k8s/ai-gateway)** - Gateway API integration
+- **[Production Stack](k8s/production-stack)** - Complete production setup
+- **[Dynamo](k8s/dynamo)** - Dynamic configuration management
 
 ## Docker Compose
 
 For local development and testing:
 
-- **[Docker Compose](docker-compose.md)** - Quick local deployment
+- **[Docker Compose](docker-compose)** - Quick local deployment
 
 ## Next Steps
 
-- **[Configuration Guide](configuration.md)** - Advanced routing and signal configuration
+- **[Configuration Guide](configuration)** - Advanced routing and signal configuration
 - **[Kubernetes Operator](k8s/operator)** - Production Kubernetes deployment
-- **[API Documentation](../api/router.md)** - Complete API reference
-- **[Tutorials](../tutorials/intelligent-route/keyword-routing.md)** - Learn by example
+- **[API Documentation](../api/router)** - Complete API reference
+- **[Tutorials](../tutorials/signal/overview)** - Learn by example
 
 ## Getting Help
 

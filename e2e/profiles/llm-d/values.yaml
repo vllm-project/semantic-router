@@ -1,222 +1,214 @@
 # Profile revision 2025-11-21: math -> phi4-mini; cs/default -> llama3-8b; removed global HTTPRoute catch-all.
 config:
-  # Allow Envoy to re-run route matching after Semantic Router sets x-selected-model.
-  # Without this, Gateway API routes that depend on that header won't be chosen and return 404.
-  clear_route_cache: true
-  default_model: llama3-8b
-  # Enable domain classification to return the x-vsr-selected-category header
-  # Using LoRA models for better performance with auto-detection
-  classifier:
-    category_model:
-      model_id: "models/mom-domain-classifier"
-      use_modernbert: false  # MoM uses LoRA-based model
-      threshold: 0.6
-      use_cpu: true
-      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
-    pii_model:
-      model_id: ""
-      threshold: 1.0
-      use_modernbert: false
-      pii_mapping_path: ""
-  # All 14 categories from LoRA intent classifier
-  categories:
-    - name: business
-      description: "Business management, marketing, entrepreneurship"
-    - name: philosophy
-      description: "Ethics, logic, metaphysics, epistemology"
-    - name: biology
-      description: "Genetics, evolution, ecology, anatomy"
-    - name: health
-      description: "Medicine, nutrition, fitness, diseases"
-    - name: computer science
-      description: "Computer networks, programming, systems"
-    - name: engineering
-      description: "Mechanical, electrical, civil engineering"
-    - name: psychology
-      description: "Behavior, cognition, mental health"
-    - name: math
-      description: "Mathematics, arithmetic, calculation"
-    - name: chemistry
-      description: "Chemical reactions, compounds, periodic table"
-    - name: physics
-      description: "Mechanics, thermodynamics, quantum physics"
-    - name: history
-      description: "Historical events, civilizations, wars"
-    - name: law
-      description: "Legal systems, regulations, court procedures"
-    - name: economics
-      description: "Microeconomics, macroeconomics, financial markets"
-    - name: other
-      description: "General knowledge and miscellaneous topics"
-
-  decisions:
-    # Decision names match E2E test expectations (*_decision format)
-    - name: math_decision
-      priority: 100
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: phi4-mini
-          use_reasoning: false
-
-    - name: computer_science_decision
-      priority: 100
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: computer science
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    - name: physics_decision
-      priority: 50
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: physics
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    - name: chemistry_decision
-      priority: 50
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: chemistry
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    - name: biology_decision
-      priority: 50
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: biology
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    - name: engineering_decision
-      priority: 50
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: engineering
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    - name: health_decision
-      priority: 50
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: health
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    - name: psychology_decision
-      priority: 40
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: psychology
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    - name: economics_decision
-      priority: 40
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: economics
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    - name: business_decision
-      priority: 40
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    - name: history_decision
-      priority: 40
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: history
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    - name: philosophy_decision
-      priority: 40
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: philosophy
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    - name: law_decision
-      priority: 40
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: law
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-    # Default fallback
-    - name: other_decision
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
-
-  semantic_cache:
-    enabled: false
-  prompt_guard:
-    enabled: false
-  tools:
-    enabled: false
-  bert_model:
-    model_id: models/mom-embedding-light
-    threshold: 0.6
-    use_cpu: true
-
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: llama3-8b
+    models:
+      - name: llama3-8b
+        backend_refs:
+          - name: llama3-8b-service
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: phi4-mini
+        backend_refs:
+          - name: phi4-mini-service
+            endpoint: phi4-mini.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      # Decision names match E2E test expectations (*_decision format)
+      - name: math_decision
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: phi4-mini
+            use_reasoning: false
+      - name: computer_science_decision
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: computer science
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      - name: physics_decision
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: physics
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      - name: chemistry_decision
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: chemistry
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      - name: biology_decision
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: biology
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      - name: engineering_decision
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: engineering
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      - name: health_decision
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: health
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      - name: psychology_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: psychology
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      - name: economics_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: economics
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      - name: business_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      - name: history_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: history
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      - name: philosophy_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: philosophy
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      - name: law_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: law
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+      # Default fallback
+      - name: other_decision
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: llama3-8b
+            use_reasoning: false
+    signals:
+      domains:
+        - name: business
+          description: Business management, marketing, entrepreneurship
+        - name: philosophy
+          description: Ethics, logic, metaphysics, epistemology
+        - name: biology
+          description: Genetics, evolution, ecology, anatomy
+        - name: health
+          description: Medicine, nutrition, fitness, diseases
+        - name: computer science
+          description: Computer networks, programming, systems
+        - name: engineering
+          description: Mechanical, electrical, civil engineering
+        - name: psychology
+          description: Behavior, cognition, mental health
+        - name: math
+          description: Mathematics, arithmetic, calculation
+        - name: chemistry
+          description: Chemical reactions, compounds, periodic table
+        - name: physics
+          description: Mechanics, thermodynamics, quantum physics
+        - name: history
+          description: Historical events, civilizations, wars
+        - name: law
+          description: Legal systems, regulations, court procedures
+        - name: economics
+          description: Microeconomics, macroeconomics, financial markets
+        - name: other
+          description: General knowledge and miscellaneous topics
+    modelCards:
+      - name: llama3-8b
+      - name: phi4-mini
+  global:
+    model_catalog:
+      kbs: []
+    router:
+      clear_route_cache: true
+    stores:
+      semantic_cache:
+        enabled: false
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations:
+      tools:
+        enabled: false
 # Keep consistent with the default chart: initContainer, model downloads, and PVC use chart defaults
 image:
   pullPolicy: IfNotPresent

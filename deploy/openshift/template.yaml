@@ -83,7 +83,12 @@ objects:
             value: /app/lib
           volumeMounts:
           - name: config-volume
-            mountPath: /app/config
+            mountPath: /app/config/config.yaml
+            subPath: config.yaml
+            readOnly: true
+          - name: config-volume
+            mountPath: /app/config/tools_db.json
+            subPath: tools_db.json
             readOnly: true
           - name: models-volume
             mountPath: /app/models
@@ -229,10 +234,10 @@ objects:
     config.yaml: "server:\n  port: 50051\n  secure: ${SECURE_MODE}\n\nmetrics:\n \
       \ enabled: true\n  port: 9190\n\nclassification:\n  api:\n    enabled: true\n\
       \    port: 8080\n\n  router:\n    category:\n      enabled: true\n      model_path:\
-      \ \"models/mom-domain-classifier\"\n\n    pii:\n      enabled:\
-      \ true\n      model_path: \"models/pii_classifier_modernbert-base_model\"\n\n\
-      \    jailbreak:\n      enabled: true\n      model_path: \"models/mom-jailbreak-classifier\"\
-      \n\n    pii_token:\n      enabled: true\n      model_path: \"models/pii_classifier_modernbert-base_presidio_token_model\"\
+      \ \"models/mmbert32k-intent-classifier-merged\"\n\n    pii:\n      enabled:\
+      \ true\n      model_path: \"models/mmbert32k-pii-detector-merged\"\n\n\
+      \    jailbreak:\n      enabled: true\n      model_path: \"models/mmbert32k-jailbreak-detector-merged\"\
+      \n\n    pii_token:\n      enabled: true\n      model_path: \"models/mmbert32k-pii-detector-merged\"\
       \n\n  tools:\n    enabled: true\n    database_path: \"/app/config/tools_db.json\"\
       \n\nlogging:\n  level: ${LOG_LEVEL}\n  format: \"json\"\n\ncache:\n  enabled:\
       \ true\n  ttl: \"5m\"\n"

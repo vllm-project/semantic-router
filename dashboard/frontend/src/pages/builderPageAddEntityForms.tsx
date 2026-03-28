@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
+import type { DSLFieldObject, DSLFieldValue } from "@/types/dsl";
 import {
   BACKEND_TYPES,
   getSignalFieldSchema,
@@ -15,29 +16,82 @@ import {
   CustomSelect,
   FieldEditor,
   GenericFieldsEditor,
+  ModelIcon,
   PluginIcon,
   SignalIcon,
 } from "./builderPageFormPrimitives";
 import { PluginSchemaEditor } from "./builderPageSharedDslEditors";
 
+const AddModelForm: React.FC<{
+  onAdd: (name: string, fields: DSLFieldObject) => void;
+  onCancel: () => void;
+}> = ({ onAdd, onCancel }) => {
+  const [name, setName] = useState("");
+  const [fields, setFields] = useState<DSLFieldObject>({});
+
+  const handleSubmit = useCallback(() => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onAdd(trimmed, fields);
+  }, [name, fields, onAdd]);
+
+  return (
+    <div className={styles.editorPanel}>
+      <div className={styles.editorHeader}>
+        <div className={styles.editorTitle}>
+          <ModelIcon className={styles.statIcon} />
+          New Model
+        </div>
+        <div className={styles.editorActions}>
+          <button className={styles.toolbarBtn} onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            className={styles.toolbarBtnPrimary}
+            onClick={handleSubmit}
+            disabled={!name.trim()}
+          >
+            Create
+          </button>
+        </div>
+      </div>
+
+      <div className={styles.fieldGroup}>
+        <label className={styles.fieldLabel}>
+          Name <span style={{ color: "var(--color-danger)" }}>*</span>
+        </label>
+        <input
+          className={styles.fieldInput}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder='e.g. "qwen3:32b"'
+          autoFocus
+        />
+      </div>
+
+      <GenericFieldsEditor fields={fields} onUpdate={setFields} />
+    </div>
+  );
+};
+
 const AddSignalForm: React.FC<{
   onAdd: (
     signalType: string,
     name: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
   onCancel: () => void;
 }> = ({ onAdd, onCancel }) => {
   const [signalType, setSignalType] = useState<SignalType>("domain");
   const [name, setName] = useState("");
   const schema = useMemo(() => getSignalFieldSchema(signalType), [signalType]);
-  const [fields, setFields] = useState<Record<string, unknown>>({});
+  const [fields, setFields] = useState<DSLFieldObject>({});
 
   useEffect(() => {
     setFields({});
   }, [signalType]);
 
-  const updateField = useCallback((key: string, value: unknown) => {
+  const updateField = useCallback((key: string, value: DSLFieldValue) => {
     setFields((previous) => ({ ...previous, [key]: value }));
   }, []);
 
@@ -109,7 +163,7 @@ const AddSignalForm: React.FC<{
               key={field.key}
               schema={field}
               value={fields[field.key]}
-              onChange={(value) => updateField(field.key, value)}
+              onChange={(value) => updateField(field.key, value as DSLFieldValue)}
             />
           ))}
         </div>
@@ -122,13 +176,13 @@ const AddPluginForm: React.FC<{
   onAdd: (
     name: string,
     pluginType: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
   onCancel: () => void;
 }> = ({ onAdd, onCancel }) => {
   const [pluginType, setPluginType] = useState<string>(PLUGIN_TYPES[0]);
   const [name, setName] = useState("");
-  const [fields, setFields] = useState<Record<string, unknown>>({
+  const [fields, setFields] = useState<DSLFieldObject>({
     enabled: true,
   });
 
@@ -212,13 +266,13 @@ const AddBackendForm: React.FC<{
   onAdd: (
     backendType: string,
     name: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
   onCancel: () => void;
 }> = ({ onAdd, onCancel }) => {
   const [backendType, setBackendType] = useState<string>(BACKEND_TYPES[0]);
   const [name, setName] = useState("");
-  const [fields, setFields] = useState<Record<string, unknown>>({});
+  const [fields, setFields] = useState<DSLFieldObject>({});
 
   const handleSubmit = useCallback(() => {
     const trimmed = name.trim().replace(/\s+/g, "_");
@@ -276,4 +330,4 @@ const AddBackendForm: React.FC<{
   );
 };
 
-export { AddBackendForm, AddPluginForm, AddSignalForm };
+export { AddBackendForm, AddModelForm, AddPluginForm, AddSignalForm };

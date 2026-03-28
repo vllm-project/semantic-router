@@ -25,40 +25,7 @@ class TestServeIntegration(CLITestBase):
     CONTAINER_STARTUP_TIMEOUT = 120
 
     def _create_minimal_config(self, port: int = 8888) -> str:
-        """Create a lean active config without requiring `vllm-sr init`."""
-        config_path = os.path.join(self.test_dir, "config.yaml")
-        config_content = f"""version: v0.1
-
-listeners:
-  - name: "test-listener"
-    address: "0.0.0.0"
-    port: {port}
-    timeout: "60s"
-
-decisions:
-  - name: "default-route"
-    description: "Default route for integration testing"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions: []
-    modelRefs:
-      - model: "test-model"
-        use_reasoning: false
-
-providers:
-  models:
-    - name: "test-model"
-      endpoints:
-        - name: "primary"
-          weight: 100
-          endpoint: "host.docker.internal:8000/v1"
-          protocol: "http"
-  default_model: "test-model"
-"""
-        with open(config_path, "w") as f:
-            f.write(config_content)
-        return config_path
+        return self.write_minimal_canonical_config(port=port)
 
     def _start_serve_background(
         self, env: dict[str, str] | None = None
@@ -92,7 +59,13 @@ providers:
 
         if serve_process.poll() is not None:
             stdout, stderr = serve_process.communicate()
-            self.fail(f"Serve crashed: {stderr[:500] or stdout[:500]}")
+            if self.wait_for_container_running(timeout=self.CONTAINER_STARTUP_TIMEOUT):
+                print("  ✓ Serve command completed after launching the runtime")
+                return
+            self.fail(
+                "Serve exited before the runtime was ready: "
+                f"{stderr[:500] or stdout[:500]}"
+            )
 
         print(
             f"  Waiting for container (timeout: {self.CONTAINER_STARTUP_TIMEOUT}s)..."
@@ -112,7 +85,7 @@ providers:
         ensure_models_dir: bool = False,
     ):
         """Start one background serve session and clean it up automatically."""
-        self._create_minimal_config()
+        self.write_minimal_canonical_config()
         if ensure_models_dir:
             os.makedirs(os.path.join(self.test_dir, "models"), exist_ok=True)
 
@@ -201,7 +174,7 @@ providers:
         """Verify the logs command returns container output for one service."""
         time.sleep(5)
         service_failures: list[str] = []
-        for service in ("router", "envoy", "dashboard"):
+        for service in ("router", "envoy", "dashboard", "simulator"):
             return_code, stdout, stderr = self.run_cli(["logs", service])
             output = stdout + stderr
             if return_code == 0 and output.strip():
@@ -248,6 +221,47 @@ providers:
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
+    def test_fleet_sim_sidecar_contracts(self):
+        """Test that serve starts the simulator sidecar and exposes its health."""
+        self.print_test_header(
+            "Fleet Sim Sidecar Integration Test",
+            "Verifies serve starts vllm-sr-sim, wires TARGET_FLEET_SIM_URL, and exposes /healthz",
+        )
+
+        with self._running_serve():
+            if not self.wait_for_container_running(
+                timeout=60, container_name=self.SIM_CONTAINER_NAME
+            ):
+                self.fail("Fleet simulator sidecar did not reach running state")
+
+            return_code, stdout, stderr = self.inspect_container(
+                "{{.Config.Env}}",
+                container_name=self.resolve_runtime_inspect_container_name(),
+            )
+            if return_code != 0:
+                self.fail(f"router container inspect failed: {stderr}")
+            self.assertIn(
+                "TARGET_FLEET_SIM_URL=http://vllm-sr-sim-container:8000",
+                stdout,
+            )
+
+            with urllib_request.urlopen(
+                "http://localhost:8810/healthz", timeout=10
+            ) as response:
+                body = response.read().decode("utf-8")
+                self.assertEqual(response.status, 200)
+                self.assertIn('"service":"vllm-sr-sim"', body.replace(" ", ""))
+
+            print("  ✓ Simulator sidecar is running")
+            print("  ✓ Router container received TARGET_FLEET_SIM_URL")
+            print("  ✓ Simulator health endpoint responded on localhost:8810")
+
+        self.print_test_result(True, "Fleet simulator sidecar contracts verified")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
     def test_stop_terminates_container(self):
         """Test that vllm-sr stop actually stops the container."""
         self.print_test_header(
@@ -282,7 +296,7 @@ providers:
         )
 
         # Step 1: Create a lean active config
-        self._create_minimal_config()
+        self.write_minimal_canonical_config()
 
         # Step 2: Try to serve with fake image and never policy
         fake_image = "fake-nonexistent-image:doesnotexist12345"
@@ -315,7 +329,7 @@ providers:
 
         try:
             # Step 1: Create a lean active config
-            self._create_minimal_config()
+            self.write_minimal_canonical_config()
 
             # Step 2: Run serve briefly with always policy
             # We use run_cli with a short timeout - if it accepts the flag, test passes

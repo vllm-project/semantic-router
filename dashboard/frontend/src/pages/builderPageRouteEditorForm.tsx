@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import ExpressionBuilder from "@/components/ExpressionBuilder";
 import { useDSLStore } from "@/stores/dslStore";
-import type { ASTRouteDecl } from "@/types/dsl";
+import type { ASTRouteDecl, DSLFieldObject } from "@/types/dsl";
 import {
   ALGORITHM_DESCRIPTIONS,
   ALGORITHM_TYPES,
@@ -45,9 +45,7 @@ const RouteEditorForm: React.FC<{
   const [description, setDescription] = useState(route.description ?? "");
   const [priority, setPriority] = useState(route.priority);
   const [whenExpr, setWhenExpr] = useState(() =>
-    route.when
-      ? serializeBoolExpr(route.when as unknown as Record<string, unknown>)
-      : "",
+    serializeBoolExpr(route.when),
   );
   const [models, setModels] = useState<RouteModelInput[]>(() =>
     route.models.map(astModelToInput),
@@ -64,9 +62,7 @@ const RouteEditorForm: React.FC<{
     setDescription(route.description ?? "");
     setPriority(route.priority);
     setWhenExpr(
-      route.when
-        ? serializeBoolExpr(route.when as unknown as Record<string, unknown>)
-        : "",
+      serializeBoolExpr(route.when),
     );
     setModels(route.models.map(astModelToInput));
     setAlgorithm(astAlgoToInput(route.algorithm));
@@ -125,7 +121,7 @@ const RouteEditorForm: React.FC<{
   }, []);
 
   const updatePluginFields = useCallback(
-    (pluginName: string, fields: Record<string, unknown>) => {
+    (pluginName: string, fields: DSLFieldObject) => {
       setPlugins((prev) =>
         prev.map((p) => (p.name === pluginName ? { ...p, fields } : p)),
       );
@@ -239,7 +235,7 @@ const RouteEditorForm: React.FC<{
             value={whenExpr}
             onChange={setWhenExpr}
             initialAstExpr={
-              route.when as unknown as Record<string, unknown> | null
+              route.when
             }
             availableSignals={availableSignals}
           />

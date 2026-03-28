@@ -1,78 +1,10 @@
 # semantic-router
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: latest](https://img.shields.io/badge/AppVersion-latest-informational?style=flat-square)
+![Version: 0.2.0](https://img.shields.io/badge/Version-0.2.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: latest](https://img.shields.io/badge/AppVersion-latest-informational?style=flat-square)
 
 A Helm chart for deploying Semantic Router - an intelligent routing system for LLM applications
 
 **Homepage:** <https://github.com/vllm-project/semantic-router>
-
-## Dependencies and one-click deployment
-
-This Helm chart supports deploying the full semantic-router stack via dependencies, including semantic cache and observability components. Dependencies are disabled by default; enable them as needed.
-
-### Dependency toggles (`values.yaml`)
-
-- Semantic cache dependency (Redis or Milvus)
-- Response API dependency (Milvus or Redis)
-- Observability dependency (Jaeger / Prometheus / Grafana)
-
-> Note: The Redis storage backend for the Response API is not implemented yet. Enabling it will cause startup failures.
-
-### Example
-
-```
-dependencies:
-  semanticCache:
-    redis:
-      enabled: true
-  responseApi:
-    milvus:
-      enabled: true
-  observability:
-    jaeger:
-      enabled: true
-    prometheus:
-      enabled: true
-    grafana:
-      enabled: true
-```
-
-## CRD Management
-
-This Helm chart includes Custom Resource Definitions (CRDs) in the `crds/` directory:
-
-- `vllm.ai_intelligentpools.yaml` - IntelligentPool CRD
-- `vllm.ai_intelligentroutes.yaml` - IntelligentRoute CRD
-
-### Generating CRDs
-
-CRDs are automatically generated from Go type definitions using `controller-gen`. To regenerate CRDs:
-
-```bash
-# From the repository root
-make generate-crd
-```
-
-This command will:
-
-1. Generate CRDs from `src/semantic-router/pkg/apis/vllm.ai/v1alpha1` types
-2. Output to `deploy/kubernetes/crds/`
-3. Copy to `deploy/helm/semantic-router/crds/` for Helm chart
-
-### CRD Installation
-
-CRDs in the `crds/` directory are automatically installed by Helm:
-
-- Installed **before** other resources during `helm install`
-- **Not managed** by Helm (no Helm labels/annotations)
-- **Not updated** during `helm upgrade` (must be updated manually)
-- **Not deleted** during `helm uninstall` (protects custom resources)
-
-To manually update CRDs:
-
-```bash
-kubectl apply -f deploy/helm/semantic-router/crds/
-```
 
 ## Maintainers
 
@@ -82,197 +14,225 @@ kubectl apply -f deploy/helm/semantic-router/crds/
 
 ## Source Code
 
-- <https://github.com/vllm-project/semantic-router>
+* <https://github.com/vllm-project/semantic-router>
+
+## Requirements
+
+| Repository | Name | Version |
+|------------|------|---------|
+| https://charts.bitnami.com/bitnami | semantic-cache-redis(redis) | >=0.0.0 |
+| https://charts.bitnami.com/bitnami | response-api-redis(redis) | >=0.0.0 |
+| https://grafana.github.io/helm-charts | grafana | >=0.0.0 |
+| https://jaegertracing.github.io/helm-charts | jaeger | >=0.0.0 |
+| https://milvus-io.github.io/milvus-helm/ | semantic-cache-milvus(milvus) | >=0.0.0 |
+| https://prometheus-community.github.io/helm-charts | prometheus | >=0.0.0 |
 
 ## Values
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | affinity | object | `{}` |  |
-| args[0] | string | `"--secure=true"` |  |
+| args[0] | string | `"--secure=false"` |  |
 | autoscaling.enabled | bool | `false` | Enable horizontal pod autoscaling |
 | autoscaling.maxReplicas | int | `10` | Maximum number of replicas |
 | autoscaling.minReplicas | int | `1` | Minimum number of replicas |
 | autoscaling.targetCPUUtilizationPercentage | int | `80` | Target CPU utilization percentage |
-| config.api.batch_classification.concurrency_threshold | int | `5` |  |
-| config.api.batch_classification.max_batch_size | int | `100` |  |
-| config.api.batch_classification.max_concurrency | int | `8` |  |
-| config.api.batch_classification.metrics.detailed_goroutine_tracking | bool | `true` |  |
-| config.api.batch_classification.metrics.duration_buckets[0] | float | `0.001` |  |
-| config.api.batch_classification.metrics.duration_buckets[10] | int | `5` |  |
-| config.api.batch_classification.metrics.duration_buckets[11] | int | `10` |  |
-| config.api.batch_classification.metrics.duration_buckets[12] | int | `30` |  |
-| config.api.batch_classification.metrics.duration_buckets[1] | float | `0.005` |  |
-| config.api.batch_classification.metrics.duration_buckets[2] | float | `0.01` |  |
-| config.api.batch_classification.metrics.duration_buckets[3] | float | `0.025` |  |
-| config.api.batch_classification.metrics.duration_buckets[4] | float | `0.05` |  |
-| config.api.batch_classification.metrics.duration_buckets[5] | float | `0.1` |  |
-| config.api.batch_classification.metrics.duration_buckets[6] | float | `0.25` |  |
-| config.api.batch_classification.metrics.duration_buckets[7] | float | `0.5` |  |
-| config.api.batch_classification.metrics.duration_buckets[8] | int | `1` |  |
-| config.api.batch_classification.metrics.duration_buckets[9] | float | `2.5` |  |
-| config.api.batch_classification.metrics.enabled | bool | `true` |  |
-| config.api.batch_classification.metrics.high_resolution_timing | bool | `false` |  |
-| config.api.batch_classification.metrics.sample_rate | float | `1` |  |
-| config.api.batch_classification.metrics.size_buckets[0] | int | `1` |  |
-| config.api.batch_classification.metrics.size_buckets[1] | int | `2` |  |
-| config.api.batch_classification.metrics.size_buckets[2] | int | `5` |  |
-| config.api.batch_classification.metrics.size_buckets[3] | int | `10` |  |
-| config.api.batch_classification.metrics.size_buckets[4] | int | `20` |  |
-| config.api.batch_classification.metrics.size_buckets[5] | int | `50` |  |
-| config.api.batch_classification.metrics.size_buckets[6] | int | `100` |  |
-| config.api.batch_classification.metrics.size_buckets[7] | int | `200` |  |
-| config.bert_model.model_id | string | `"models/all-MiniLM-L12-v2"` |  |
-| config.bert_model.threshold | float | `0.6` |  |
-| config.bert_model.use_cpu | bool | `true` |  |
-| config.categories[0].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[0].model_scores[0].score | float | `0.7` |  |
-| config.categories[0].model_scores[0].use_reasoning | bool | `false` |  |
-| config.categories[0].name | string | `"business"` |  |
-| config.categories[0].system_prompt | string | `"You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."` |  |
-| config.categories[10].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[10].model_scores[0].score | float | `0.7` |  |
-| config.categories[10].model_scores[0].use_reasoning | bool | `true` |  |
-| config.categories[10].name | string | `"physics"` |  |
-| config.categories[10].system_prompt | string | `"You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."` |  |
-| config.categories[11].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[11].model_scores[0].score | float | `0.6` |  |
-| config.categories[11].model_scores[0].use_reasoning | bool | `false` |  |
-| config.categories[11].name | string | `"computer science"` |  |
-| config.categories[11].system_prompt | string | `"You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."` |  |
-| config.categories[12].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[12].model_scores[0].score | float | `0.5` |  |
-| config.categories[12].model_scores[0].use_reasoning | bool | `false` |  |
-| config.categories[12].name | string | `"philosophy"` |  |
-| config.categories[12].system_prompt | string | `"You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates."` |  |
-| config.categories[13].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[13].model_scores[0].score | float | `0.7` |  |
-| config.categories[13].model_scores[0].use_reasoning | bool | `false` |  |
-| config.categories[13].name | string | `"engineering"` |  |
-| config.categories[13].system_prompt | string | `"You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."` |  |
-| config.categories[1].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[1].model_scores[0].score | float | `0.4` |  |
-| config.categories[1].model_scores[0].use_reasoning | bool | `false` |  |
-| config.categories[1].name | string | `"law"` |  |
-| config.categories[1].system_prompt | string | `"You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."` |  |
-| config.categories[2].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[2].model_scores[0].score | float | `0.6` |  |
-| config.categories[2].model_scores[0].use_reasoning | bool | `false` |  |
-| config.categories[2].name | string | `"psychology"` |  |
-| config.categories[2].semantic_cache_enabled | bool | `true` |  |
-| config.categories[2].semantic_cache_similarity_threshold | float | `0.92` |  |
-| config.categories[2].system_prompt | string | `"You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."` |  |
-| config.categories[3].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[3].model_scores[0].score | float | `0.9` |  |
-| config.categories[3].model_scores[0].use_reasoning | bool | `false` |  |
-| config.categories[3].name | string | `"biology"` |  |
-| config.categories[3].system_prompt | string | `"You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems."` |  |
-| config.categories[4].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[4].model_scores[0].score | float | `0.6` |  |
-| config.categories[4].model_scores[0].use_reasoning | bool | `true` |  |
-| config.categories[4].name | string | `"chemistry"` |  |
-| config.categories[4].system_prompt | string | `"You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."` |  |
-| config.categories[5].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[5].model_scores[0].score | float | `0.7` |  |
-| config.categories[5].model_scores[0].use_reasoning | bool | `false` |  |
-| config.categories[5].name | string | `"history"` |  |
-| config.categories[5].system_prompt | string | `"You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."` |  |
-| config.categories[6].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[6].model_scores[0].score | float | `0.7` |  |
-| config.categories[6].model_scores[0].use_reasoning | bool | `false` |  |
-| config.categories[6].name | string | `"other"` |  |
-| config.categories[6].semantic_cache_enabled | bool | `true` |  |
-| config.categories[6].semantic_cache_similarity_threshold | float | `0.75` |  |
-| config.categories[6].system_prompt | string | `"You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."` |  |
-| config.categories[7].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[7].model_scores[0].score | float | `0.5` |  |
-| config.categories[7].model_scores[0].use_reasoning | bool | `false` |  |
-| config.categories[7].name | string | `"health"` |  |
-| config.categories[7].semantic_cache_enabled | bool | `true` |  |
-| config.categories[7].semantic_cache_similarity_threshold | float | `0.95` |  |
-| config.categories[7].system_prompt | string | `"You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."` |  |
-| config.categories[8].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[8].model_scores[0].score | float | `1` |  |
-| config.categories[8].model_scores[0].use_reasoning | bool | `false` |  |
-| config.categories[8].name | string | `"economics"` |  |
-| config.categories[8].system_prompt | string | `"You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses."` |  |
-| config.categories[9].model_scores[0].model | string | `"qwen3"` |  |
-| config.categories[9].model_scores[0].score | float | `1` |  |
-| config.categories[9].model_scores[0].use_reasoning | bool | `true` |  |
-| config.categories[9].name | string | `"math"` |  |
-| config.categories[9].system_prompt | string | `"You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."` |  |
-| config.classifier.category_model.category_mapping_path | string | `"models/category_classifier_modernbert-base_model/category_mapping.json"` |  |
-| config.classifier.category_model.model_id | string | `"models/category_classifier_modernbert-base_model"` |  |
-| config.classifier.category_model.threshold | float | `0.6` |  |
-| config.classifier.category_model.use_cpu | bool | `true` |  |
-| config.classifier.category_model.use_modernbert | bool | `true` |  |
-| config.classifier.pii_model.model_id | string | `"models/pii_classifier_modernbert-base_presidio_token_model"` |  |
-| config.classifier.pii_model.pii_mapping_path | string | `"models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"` |  |
-| config.classifier.pii_model.threshold | float | `0.7` |  |
-| config.classifier.pii_model.use_cpu | bool | `true` |  |
-| config.classifier.pii_model.use_modernbert | bool | `true` |  |
-| config.default_model | string | `"qwen3"` |  |
-| config.default_reasoning_effort | string | `"high"` |  |
-| config.model_config.qwen3.pii_policy.allow_by_default | bool | `true` |  |
-| config.model_config.qwen3.preferred_endpoints[0] | string | `"endpoint1"` |  |
-| config.model_config.qwen3.reasoning_family | string | `"qwen3"` |  |
-| config.observability.tracing.enabled | bool | `true` |  |
-| config.observability.tracing.exporter.endpoint | string | `"jaeger:4317"` |  |
-| config.observability.tracing.exporter.insecure | bool | `true` |  |
-| config.observability.tracing.exporter.type | string | `"otlp"` |  |
-| config.observability.tracing.provider | string | `"opentelemetry"` |  |
-| config.observability.tracing.resource.deployment_environment | string | `"development"` |  |
-| config.observability.tracing.resource.service_name | string | `"vllm-semantic-router"` |  |
-| config.observability.tracing.resource.service_version | string | `"v0.1.0"` |  |
-| config.observability.tracing.sampling.rate | float | `1` |  |
-| config.observability.tracing.sampling.type | string | `"always_on"` |  |
-| config.prompt_guard.enabled | bool | `true` |  |
-| config.prompt_guard.jailbreak_mapping_path | string | `"models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"` |  |
-| config.prompt_guard.model_id | string | `"models/jailbreak_classifier_modernbert-base_model"` |  |
-| config.prompt_guard.threshold | float | `0.7` |  |
-| config.prompt_guard.use_cpu | bool | `true` |  |
-| config.prompt_guard.use_modernbert | bool | `true` |  |
-| config.reasoning_families.deepseek.parameter | string | `"thinking"` |  |
-| config.reasoning_families.deepseek.type | string | `"chat_template_kwargs"` |  |
-| config.reasoning_families.gpt-oss.parameter | string | `"reasoning_effort"` |  |
-| config.reasoning_families.gpt-oss.type | string | `"reasoning_effort"` |  |
-| config.reasoning_families.gpt.parameter | string | `"reasoning_effort"` |  |
-| config.reasoning_families.gpt.type | string | `"reasoning_effort"` |  |
-| config.reasoning_families.qwen3.parameter | string | `"enable_thinking"` |  |
-| config.reasoning_families.qwen3.type | string | `"chat_template_kwargs"` |  |
-| config.semantic_cache.backend_type | string | `"memory"` |  |
-| config.semantic_cache.enabled | bool | `true` |  |
-| config.semantic_cache.eviction_policy | string | `"fifo"` |  |
-| config.semantic_cache.max_entries | int | `1000` |  |
-| config.semantic_cache.similarity_threshold | float | `0.8` |  |
-| config.semantic_cache.ttl_seconds | int | `3600` |  |
-| config.tools.enabled | bool | `true` |  |
-| config.tools.fallback_to_empty | bool | `true` |  |
-| config.tools.similarity_threshold | float | `0.2` |  |
-| config.tools.tools_db_path | string | `"config/tools_db.json"` |  |
-| config.tools.top_k | int | `3` |  |
-| config.vllm_endpoints[0].address | string | `"172.28.0.20"` |  |
-| config.vllm_endpoints[0].name | string | `"endpoint1"` |  |
-| config.vllm_endpoints[0].port | int | `8002` |  |
-| config.vllm_endpoints[0].weight | int | `1` |  |
+| config.global.integrations.tools.enabled | bool | `true` |  |
+| config.global.integrations.tools.fallback_to_empty | bool | `true` |  |
+| config.global.integrations.tools.similarity_threshold | float | `0.2` |  |
+| config.global.integrations.tools.tools_db_path | string | `"config/tools_db.json"` |  |
+| config.global.integrations.tools.top_k | int | `3` |  |
+| config.global.model_catalog.embeddings.semantic.bert_model_path | string | `"models/mom-embedding-light"` |  |
+| config.global.model_catalog.embeddings.semantic.embedding_config.min_score_threshold | float | `0.6` |  |
+| config.global.model_catalog.embeddings.semantic.use_cpu | bool | `true` |  |
+| config.global.model_catalog.system.domain_classifier | string | `"models/mmbert32k-intent-classifier-merged"` |  |
+| config.global.model_catalog.system.pii_classifier | string | `"models/mmbert32k-pii-detector-merged"` |  |
+| config.global.model_catalog.system.prompt_guard | string | `"models/mmbert32k-jailbreak-detector-merged"` |  |
+| config.global.model_catalog.modules.classifier.domain.category_mapping_path | string | `"models/mmbert32k-intent-classifier-merged/category_mapping.json"` |  |
+| config.global.model_catalog.modules.classifier.domain.model_ref | string | `"domain_classifier"` |  |
+| config.global.model_catalog.modules.classifier.domain.threshold | float | `0.6` |  |
+| config.global.model_catalog.modules.classifier.domain.use_cpu | bool | `true` |  |
+| config.global.model_catalog.modules.classifier.domain.use_modernbert | bool | `false` |  |
+| config.global.model_catalog.modules.classifier.pii.model_ref | string | `"pii_classifier"` |  |
+| config.global.model_catalog.modules.classifier.pii.pii_mapping_path | string | `"models/mmbert32k-pii-detector-merged/pii_type_mapping.json"` |  |
+| config.global.model_catalog.modules.classifier.pii.threshold | float | `0.7` |  |
+| config.global.model_catalog.modules.classifier.pii.use_cpu | bool | `true` |  |
+| config.global.model_catalog.modules.classifier.pii.use_modernbert | bool | `false` |  |
+| config.global.model_catalog.modules.prompt_guard.enabled | bool | `true` |  |
+| config.global.model_catalog.modules.prompt_guard.jailbreak_mapping_path | string | `"models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"` |  |
+| config.global.model_catalog.modules.prompt_guard.model_ref | string | `"prompt_guard"` |  |
+| config.global.model_catalog.modules.prompt_guard.threshold | float | `0.7` |  |
+| config.global.model_catalog.modules.prompt_guard.use_cpu | bool | `true` |  |
+| config.global.model_catalog.modules.prompt_guard.use_modernbert | bool | `false` |  |
+| config.global.services.api.batch_classification.concurrency_threshold | int | `5` |  |
+| config.global.services.api.batch_classification.max_batch_size | int | `100` |  |
+| config.global.services.api.batch_classification.max_concurrency | int | `8` |  |
+| config.global.services.api.batch_classification.metrics.detailed_goroutine_tracking | bool | `true` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[0] | float | `0.001` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[10] | int | `5` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[11] | int | `10` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[12] | int | `30` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[1] | float | `0.005` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[2] | float | `0.01` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[3] | float | `0.025` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[4] | float | `0.05` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[5] | float | `0.1` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[6] | float | `0.25` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[7] | float | `0.5` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[8] | int | `1` |  |
+| config.global.services.api.batch_classification.metrics.duration_buckets[9] | float | `2.5` |  |
+| config.global.services.api.batch_classification.metrics.enabled | bool | `true` |  |
+| config.global.services.api.batch_classification.metrics.high_resolution_timing | bool | `false` |  |
+| config.global.services.api.batch_classification.metrics.sample_rate | float | `1` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[0] | int | `1` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[1] | int | `2` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[2] | int | `5` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[3] | int | `10` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[4] | int | `20` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[5] | int | `50` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[6] | int | `100` |  |
+| config.global.services.api.batch_classification.metrics.size_buckets[7] | int | `200` |  |
+| config.global.services.observability.tracing.enabled | bool | `false` |  |
+| config.global.services.observability.tracing.exporter.endpoint | string | `"jaeger:4317"` |  |
+| config.global.services.observability.tracing.exporter.insecure | bool | `true` |  |
+| config.global.services.observability.tracing.exporter.type | string | `"otlp"` |  |
+| config.global.services.observability.tracing.provider | string | `"opentelemetry"` |  |
+| config.global.services.observability.tracing.resource.deployment_environment | string | `"development"` |  |
+| config.global.services.observability.tracing.resource.service_name | string | `"vllm-semantic-router"` |  |
+| config.global.services.observability.tracing.resource.service_version | string | `""` |  |
+| config.global.services.observability.tracing.sampling.rate | float | `1` |  |
+| config.global.services.observability.tracing.sampling.type | string | `"always_on"` |  |
+| config.global.services.response_api.enabled | bool | `false` |  |
+| config.global.services.response_api.max_responses | int | `1000` |  |
+| config.global.services.response_api.store_backend | string | `"memory"` |  |
+| config.global.services.response_api.ttl_seconds | int | `86400` |  |
+| config.global.stores.semantic_cache.backend_type | string | `"memory"` |  |
+| config.global.stores.semantic_cache.enabled | bool | `true` |  |
+| config.global.stores.semantic_cache.eviction_policy | string | `"fifo"` |  |
+| config.global.stores.semantic_cache.max_entries | int | `1000` |  |
+| config.global.stores.semantic_cache.similarity_threshold | float | `0.8` |  |
+| config.global.stores.semantic_cache.ttl_seconds | int | `3600` |  |
+| config.listeners[0].address | string | `"0.0.0.0"` |  |
+| config.listeners[0].name | string | `"grpc-50051"` |  |
+| config.listeners[0].port | int | `50051` |  |
+| config.listeners[0].timeout | string | `"300s"` |  |
+| config.listeners[1].address | string | `"0.0.0.0"` |  |
+| config.listeners[1].name | string | `"http-8080"` |  |
+| config.listeners[1].port | int | `8080` |  |
+| config.listeners[1].timeout | string | `"300s"` |  |
+| config.providers.defaults.default_model | string | `"replace-with-your-model"` |  |
+| config.providers.defaults.default_reasoning_effort | string | `"high"` |  |
+| config.providers.defaults.reasoning_families.deepseek.parameter | string | `"thinking"` |  |
+| config.providers.defaults.reasoning_families.deepseek.type | string | `"chat_template_kwargs"` |  |
+| config.providers.defaults.reasoning_families.gpt-oss.parameter | string | `"reasoning_effort"` |  |
+| config.providers.defaults.reasoning_families.gpt-oss.type | string | `"reasoning_effort"` |  |
+| config.providers.defaults.reasoning_families.gpt.parameter | string | `"reasoning_effort"` |  |
+| config.providers.defaults.reasoning_families.gpt.type | string | `"reasoning_effort"` |  |
+| config.providers.defaults.reasoning_families.qwen3.parameter | string | `"enable_thinking"` |  |
+| config.providers.defaults.reasoning_families.qwen3.type | string | `"chat_template_kwargs"` |  |
+| config.providers.models[0].backend_refs[0].endpoint | string | `"replace-with-your-vllm-service:8000"` |  |
+| config.providers.models[0].backend_refs[0].name | string | `"primary"` |  |
+| config.providers.models[0].backend_refs[0].protocol | string | `"http"` |  |
+| config.providers.models[0].backend_refs[0].weight | int | `100` |  |
+| config.providers.models[0].name | string | `"replace-with-your-model"` |  |
+| config.providers.models[0].provider_model_id | string | `"replace-with-your-model"` |  |
+| config.routing.decisions[0].description | string | `"Default route for every request while you wire real backends."` |  |
+| config.routing.decisions[0].modelRefs[0].model | string | `"replace-with-your-model"` |  |
+| config.routing.decisions[0].modelRefs[0].use_reasoning | bool | `false` |  |
+| config.routing.decisions[0].name | string | `"default-route"` |  |
+| config.routing.decisions[0].priority | int | `100` |  |
+| config.routing.decisions[0].rules.conditions | list | `[]` |  |
+| config.routing.decisions[0].rules.operator | string | `"AND"` |  |
+| config.routing.modelCards[0].name | string | `"replace-with-your-model"` |  |
+| config.routing.signals.domains[0].description | string | `"Catch-all domain"` |  |
+| config.routing.signals.domains[0].mmlu_categories[0] | string | `"other"` |  |
+| config.routing.signals.domains[0].name | string | `"general"` |  |
+| config.version | string | `"v0.3"` |  |
+| dependencies.observability.grafana.adminPassword | string | `"admin"` |  |
+| dependencies.observability.grafana.adminUser | string | `"admin"` |  |
+| dependencies.observability.grafana.enabled | bool | `false` |  |
+| dependencies.observability.jaeger.enabled | bool | `false` |  |
+| dependencies.observability.jaeger.otlpGrpcPort | int | `4317` |  |
+| dependencies.observability.jaeger.serviceName | string | `""` |  |
+| dependencies.observability.prometheus.enabled | bool | `false` |  |
+| dependencies.responseApi.milvus.conversationCollection | string | `"semantic_router_conversations"` |  |
+| dependencies.responseApi.milvus.database | string | `"semantic_router_cache"` |  |
+| dependencies.responseApi.milvus.enabled | bool | `false` |  |
+| dependencies.responseApi.milvus.host | string | `""` |  |
+| dependencies.responseApi.milvus.port | int | `19530` |  |
+| dependencies.responseApi.milvus.responseCollection | string | `"semantic_router_responses"` |  |
+| dependencies.responseApi.redis.database | int | `0` |  |
+| dependencies.responseApi.redis.enabled | bool | `false` |  |
+| dependencies.responseApi.redis.host | string | `""` |  |
+| dependencies.responseApi.redis.password | string | `""` |  |
+| dependencies.responseApi.redis.port | int | `6379` |  |
+| dependencies.responseApi.redis.timeout | int | `30` |  |
+| dependencies.responseApi.redis.tls.enabled | bool | `false` |  |
+| dependencies.semanticCache.milvus.auth.enabled | bool | `false` |  |
+| dependencies.semanticCache.milvus.auth.password | string | `""` |  |
+| dependencies.semanticCache.milvus.auth.username | string | `""` |  |
+| dependencies.semanticCache.milvus.collection.description | string | `"Semantic cache for LLM request-response pairs"` |  |
+| dependencies.semanticCache.milvus.collection.index.params.efConstruction | int | `64` |  |
+| dependencies.semanticCache.milvus.collection.index.params.m | int | `16` |  |
+| dependencies.semanticCache.milvus.collection.index.type | string | `"HNSW"` |  |
+| dependencies.semanticCache.milvus.collection.metricType | string | `"IP"` |  |
+| dependencies.semanticCache.milvus.collection.name | string | `"semantic_cache"` |  |
+| dependencies.semanticCache.milvus.collection.vectorFieldName | string | `"embedding"` |  |
+| dependencies.semanticCache.milvus.database | string | `"semantic_router_cache"` |  |
+| dependencies.semanticCache.milvus.development.autoCreateCollection | bool | `true` |  |
+| dependencies.semanticCache.milvus.development.dropCollectionOnStartup | bool | `false` |  |
+| dependencies.semanticCache.milvus.development.verboseErrors | bool | `true` |  |
+| dependencies.semanticCache.milvus.enabled | bool | `false` |  |
+| dependencies.semanticCache.milvus.host | string | `""` |  |
+| dependencies.semanticCache.milvus.port | int | `19530` |  |
+| dependencies.semanticCache.milvus.search.params.ef | int | `64` |  |
+| dependencies.semanticCache.milvus.search.topk | int | `10` |  |
+| dependencies.semanticCache.milvus.timeout | int | `30` |  |
+| dependencies.semanticCache.milvus.tls.enabled | bool | `false` |  |
+| dependencies.semanticCache.redis.database | int | `0` |  |
+| dependencies.semanticCache.redis.development.autoCreateIndex | bool | `true` |  |
+| dependencies.semanticCache.redis.development.dropIndexOnStartup | bool | `false` |  |
+| dependencies.semanticCache.redis.development.verboseErrors | bool | `true` |  |
+| dependencies.semanticCache.redis.enabled | bool | `false` |  |
+| dependencies.semanticCache.redis.host | string | `""` |  |
+| dependencies.semanticCache.redis.index.indexType | string | `"HNSW"` |  |
+| dependencies.semanticCache.redis.index.metricType | string | `"COSINE"` |  |
+| dependencies.semanticCache.redis.index.name | string | `"semantic_cache_idx"` |  |
+| dependencies.semanticCache.redis.index.params.efConstruction | int | `64` |  |
+| dependencies.semanticCache.redis.index.params.m | int | `16` |  |
+| dependencies.semanticCache.redis.index.prefix | string | `"doc:"` |  |
+| dependencies.semanticCache.redis.index.vectorFieldName | string | `"embedding"` |  |
+| dependencies.semanticCache.redis.password | string | `""` |  |
+| dependencies.semanticCache.redis.port | int | `6379` |  |
+| dependencies.semanticCache.redis.search.topk | int | `1` |  |
+| dependencies.semanticCache.redis.timeout | int | `30` |  |
+| dependencies.semanticCache.redis.tls.enabled | bool | `false` |  |
 | env[0].name | string | `"LD_LIBRARY_PATH"` |  |
 | env[0].value | string | `"/app/lib"` |  |
+| env[1].name | string | `"HF_TOKEN"` |  |
+| env[1].valueFrom.secretKeyRef.key | string | `"token"` |  |
+| env[1].valueFrom.secretKeyRef.name | string | `"hf-token-secret"` |  |
+| env[1].valueFrom.secretKeyRef.optional | bool | `true` |  |
+| env[2].name | string | `"HUGGINGFACE_HUB_TOKEN"` |  |
+| env[2].valueFrom.secretKeyRef.key | string | `"token"` |  |
+| env[2].valueFrom.secretKeyRef.name | string | `"hf-token-secret"` |  |
+| env[2].valueFrom.secretKeyRef.optional | bool | `true` |  |
+| extraVolumeMounts | list | `[]` |  |
+| extraVolumes | list | `[]` |  |
 | fullnameOverride | string | `""` | Override the full name of the chart |
+| global.imageRegistry | string | `""` | Optional registry prefix applied to all images (e.g., mirror in China such as registry.cn-hangzhou.aliyuncs.com) |
 | global.namespace | string | `""` | Namespace for all resources (if not specified, uses Release.Namespace) |
-| global.imageRegistry | string | `""` | Optional registry prefix applied to all images (e.g., mirror registry in China) |
+| grafana.image.tag | string | `"11.5.1"` |  |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.repository | string | `"ghcr.io/vllm-project/semantic-router/extproc"` | Image repository |
-| image.tag | string | `"latest"` | Image tag (overrides the image tag whose default is the chart appVersion) |
+| image.tag | string | `""` | Image tag (overrides the image tag whose default is the chart appVersion) |
 | imagePullSecrets | list | `[]` | Image pull secrets for private registries |
 | ingress.annotations | object | `{}` | Ingress annotations |
 | ingress.className | string | `""` | Ingress class name |
 | ingress.enabled | bool | `false` | Enable ingress |
 | ingress.hosts | list | `[{"host":"semantic-router.local","paths":[{"path":"/","pathType":"Prefix","servicePort":8080}]}]` | Ingress hosts configuration |
 | ingress.tls | list | `[]` | Ingress TLS configuration |
-| initContainer.enabled | bool | `true` | Enable init container |
-| initContainer.image | object | `{ "repository": "ghcr.io/vllm-project/semantic-router/model-downloader", "tag": "" (defaults to chart appVersion), "pullPolicy": "IfNotPresent" }` | Init container image |
-| initContainer.models | list | `[{"name":"all-MiniLM-L12-v2","repo":"sentence-transformers/all-MiniLM-L12-v2"},{"name":"category_classifier_modernbert-base_model","repo":"LLM-Semantic-Router/category_classifier_modernbert-base_model"},{"name":"pii_classifier_modernbert-base_model","repo":"LLM-Semantic-Router/pii_classifier_modernbert-base_model"},{"name":"jailbreak_classifier_modernbert-base_model","repo":"LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model"},{"name":"pii_classifier_modernbert-base_presidio_token_model","repo":"LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model"}]` | Models to download |
-| initContainer.resources | object | `{"limits":{"cpu":"1000m","memory":"2Gi"},"requests":{"cpu":"500m","memory":"1Gi"}}` | Resource limits for init container |
+| jaeger.allInOne.image.tag | string | `"latest"` |  |
 | livenessProbe.enabled | bool | `true` | Enable liveness probe |
 | livenessProbe.failureThreshold | int | `5` | Failure threshold |
 | livenessProbe.initialDelaySeconds | int | `30` | Initial delay seconds |
@@ -288,16 +248,23 @@ kubectl apply -f deploy/helm/semantic-router/crds/
 | persistence.storageClassName | string | `"standard"` | Storage class name (use "-" for default storage class) |
 | podAnnotations | object | `{}` |  |
 | podSecurityContext | object | `{}` |  |
+| prometheus.server.image.tag | string | `"v2.53.0"` |  |
+| rbac.create | bool | `true` | Create RBAC resources (ClusterRole and ClusterRoleBinding) |
 | readinessProbe.enabled | bool | `true` | Enable readiness probe |
 | readinessProbe.failureThreshold | int | `5` | Failure threshold |
 | readinessProbe.initialDelaySeconds | int | `30` | Initial delay seconds |
 | readinessProbe.periodSeconds | int | `30` | Period seconds |
 | readinessProbe.timeoutSeconds | int | `10` | Timeout seconds |
 | replicaCount | int | `1` | Number of replicas for the deployment |
-| resources.limits | object | `{"cpu":"2","memory":"6Gi"}` | Resource limits |
+| resources.limits | object | `{"cpu":"2","memory":"7Gi"}` | Resource limits |
 | resources.requests | object | `{"cpu":"1","memory":"3Gi"}` | Resource requests |
+| response-api-redis.architecture | string | `"standalone"` |  |
+| response-api-redis.auth.enabled | bool | `false` |  |
 | securityContext.allowPrivilegeEscalation | bool | `false` | Allow privilege escalation |
 | securityContext.runAsNonRoot | bool | `false` | Run as non-root user |
+| semantic-cache-milvus.cluster.enabled | bool | `false` |  |
+| semantic-cache-redis.architecture | string | `"standalone"` |  |
+| semantic-cache-redis.auth.enabled | bool | `false` |  |
 | service.api.port | int | `8080` | HTTP API port number |
 | service.api.protocol | string | `"TCP"` | HTTP API protocol |
 | service.api.targetPort | int | `8080` | HTTP API target port |
@@ -312,6 +279,10 @@ kubectl apply -f deploy/helm/semantic-router/crds/
 | serviceAccount.annotations | object | `{}` | Annotations to add to the service account |
 | serviceAccount.create | bool | `true` | Specifies whether a service account should be created |
 | serviceAccount.name | string | `""` | The name of the service account to use |
+| startupProbe.enabled | bool | `true` | Enable startup probe |
+| startupProbe.failureThreshold | int | `360` | Failure threshold (360 * 10s = 60 minutes total timeout for model downloads) |
+| startupProbe.periodSeconds | int | `10` | Period seconds |
+| startupProbe.timeoutSeconds | int | `5` | Timeout seconds |
 | tolerations | list | `[]` |  |
 | toolsDb[0].category | string | `"weather"` |  |
 | toolsDb[0].description | string | `"Get current weather information, temperature, conditions, forecast for any location, city, or place. Check weather today, now, current conditions, temperature, rain, sun, cloudy, hot, cold, storm, snow"` |  |

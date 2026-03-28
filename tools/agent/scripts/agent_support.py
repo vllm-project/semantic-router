@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -172,6 +173,21 @@ def run_test_commands(commands: list[str], label: str) -> int:
     return 0
 
 
+def run_reference_config_lint() -> int:
+    module_root = REPO_ROOT / "src" / "semantic-router"
+    command = [
+        "go",
+        "test",
+        "./pkg/config/...",
+        "-run",
+        "TestReferenceConfig",
+        "-count=1",
+    ]
+    print(f"+ {' '.join(command)} (cwd={module_root})")
+    result = subprocess.run(command, cwd=module_root, check=False)
+    return result.returncode
+
+
 def group_files_by_module(
     changed_files: list[str], manifest_name: str, extensions: set[str]
 ) -> dict[Path, list[Path]]:
@@ -256,13 +272,8 @@ def run_go_lint(changed_files: list[str], base_ref: str | None = None) -> int:
     return 0
 
 
-def run_rust_lint(changed_files: list[str]) -> int:
-    grouped = group_files_by_module(changed_files, "Cargo.toml", {".rs"})
-    if not grouped:
-        print("No changed Rust files detected.")
-        return 0
-
-    base_flags = [
+def rust_clippy_base_flags() -> list[str]:
+    return [
         "--all-targets",
         "--",
         "-D",
@@ -274,13 +285,108 @@ def run_rust_lint(changed_files: list[str]) -> int:
         "-W",
         "clippy::too_many_arguments",
     ]
+
+
+def resolve_rust_span_path(crate_root: Path, file_name: str) -> Path:
+    span_path = Path(file_name)
+    if span_path.is_absolute():
+        return span_path.resolve()
+    return (crate_root / span_path).resolve()
+
+
+def collect_changed_rust_messages(
+    crate_root: Path, changed_paths: set[Path], stdout: str
+) -> tuple[list[str], list[str], bool]:
+    relevant_messages: list[str] = []
+    parse_failures: list[str] = []
+    saw_compiler_message = False
+
+    for line in stdout.splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            parse_failures.append(line)
+            continue
+
+        if payload.get("reason") != "compiler-message":
+            continue
+        saw_compiler_message = True
+        message = payload.get("message", {})
+        spans = message.get("spans", [])
+        if not spans:
+            continue
+
+        span_paths = {
+            resolve_rust_span_path(crate_root, file_name)
+            for span in spans
+            if (file_name := span.get("file_name"))
+        }
+        if span_paths.isdisjoint(changed_paths):
+            continue
+
+        rendered = message.get("rendered")
+        if rendered:
+            relevant_messages.append(rendered.rstrip())
+            continue
+        relevant_messages.append(json.dumps(message, sort_keys=True))
+
+    return relevant_messages, parse_failures, saw_compiler_message
+
+
+def build_rust_clippy_command(crate_root: Path) -> list[str]:
+    command = ["cargo", "clippy", "--message-format=json"]
+    if crate_root.name == "candle-binding":
+        command.append("--no-default-features")
+    command.extend(rust_clippy_base_flags())
+    return command
+
+
+def run_rust_clippy_for_crate(crate_root: Path, changed_paths: set[Path]) -> int:
+    command = build_rust_clippy_command(crate_root)
+    print(f"+ {' '.join(command)} (cwd={crate_root})")
+    result = subprocess.run(
+        command,
+        cwd=crate_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    relevant_messages, parse_failures, saw_compiler_message = (
+        collect_changed_rust_messages(crate_root, changed_paths, result.stdout)
+    )
+    if relevant_messages:
+        sys.stderr.write("\n".join(relevant_messages) + "\n")
+        return 1
+
+    if result.returncode != 0:
+        if result.stderr:
+            sys.stderr.write(result.stderr)
+        if parse_failures and not saw_compiler_message:
+            sys.stderr.write("\n".join(parse_failures) + "\n")
+            return result.returncode
+        print(
+            "Ignoring crate-wide Rust clippy findings outside the changed-file set "
+            f"for {crate_root.relative_to(REPO_ROOT)}."
+        )
+        return 0
+
+    if result.stderr:
+        sys.stderr.write(result.stderr)
+    return 0
+
+
+def run_rust_lint(changed_files: list[str]) -> int:
+    grouped = group_files_by_module(changed_files, "Cargo.toml", {".rs"})
+    if not grouped:
+        print("No changed Rust files detected.")
+        return 0
+
     for crate_root in sorted(grouped):
-        command = ["cargo", "clippy"]
-        if crate_root.name == "candle-binding":
-            command.append("--no-default-features")
-        command.extend(base_flags)
-        print(f"+ {' '.join(command)} (cwd={crate_root})")
-        subprocess.run(command, cwd=crate_root, check=True)
+        changed_paths = {path.resolve() for path in grouped[crate_root]}
+        if run_rust_clippy_for_crate(crate_root, changed_paths) != 0:
+            return 1
     return 0
 
 

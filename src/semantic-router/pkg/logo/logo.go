@@ -6,30 +6,27 @@ import (
 
 // ANSI color codes
 const (
-	colorReset  = "\033[0m"
-	colorOrange = "\033[38;2;254;181;22m" // #FEB516 - vLLM V left side
-	colorBlue   = "\033[38;2;48;162;255m" // #30A2FF - vLLM V right side
-	colorWhite  = "\033[97m"              // White - for LLM and SR
+	colorReset = "\033[0m"
+	colorWhite = "\033[97m"
+	colorMuted = "\033[38;2;145;158;171m"
 )
 
-// PrintVLLMLogo prints the vLLM SR logo with colors
-func PrintVLLMLogo() {
-	// Logo design: vLLM SR
-	// v = left side orange, right side blue
-	// LLM SR = white
-	logo := []string{
+func buildVLLMLogoLines() []string {
+	return []string{
 		"",
-		colorOrange + `##` + colorWhite + `          ` + colorBlue + `##` + colorWhite + `  ##        ##        ##      ##    ######    ########` + colorReset,
-		colorOrange + ` ##` + colorWhite + `        ` + colorBlue + `##` + colorWhite + `   ##        ##        ###    ###   ##    ##   ##    ##` + colorReset,
-		colorOrange + `  ##` + colorWhite + `      ` + colorBlue + `##` + colorWhite + `    ##        ##        ####  ####   ##         ##    ##` + colorReset,
-		colorOrange + `   ##` + colorWhite + `    ` + colorBlue + `##` + colorWhite + `     ##        ##        ## #### ##    ####     ########` + colorReset,
-		colorOrange + `    ##` + colorWhite + `  ` + colorBlue + `##` + colorWhite + `      ##        ##        ##  ##  ##       ##    ##  ##` + colorReset,
-		colorOrange + `     ##` + colorBlue + `##` + colorWhite + `       ##        ##        ##      ##   ##    ##   ##   ##` + colorReset,
-		colorOrange + `      ` + colorBlue + `##` + colorWhite + `        ########  ########  ##      ##    ######    ##    ##` + colorReset,
+		colorWhite + `       █     █     █▄   ▄█` + colorReset,
+		colorWhite + ` ▄▄ ▄█ █     █     █ ▀▄▀ █` + colorReset,
+		colorWhite + `  █▄█▀ █     █     █     █` + colorReset,
+		colorWhite + `   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀` + colorReset,
+		colorWhite + `  Semantic Router` + colorReset,
+		colorMuted + `  local runtime` + colorReset,
 		"",
 	}
+}
 
-	for _, line := range logo {
+// PrintVLLMLogo prints the vLLM Semantic Router serve banner.
+func PrintVLLMLogo() {
+	for _, line := range buildVLLMLogoLines() {
 		fmt.Println(line)
 	}
 }

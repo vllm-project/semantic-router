@@ -6,7 +6,7 @@ Unified dashboard that brings together Configuration Management, an Interactive 
 
 - Single landing page for new/existing users
 - Embed Observability (Grafana/Prometheus) via iframes behind a single backend proxy for auth and CORS/CSP control
-- Read-only configuration viewer powered by the existing Semantic Router Classification API
+- Read-only configuration viewer powered by the existing Semantic Router router apiserver
 - Environment-agnostic: consistent URLs and behavior for local dev, Compose, and K8s
 
 ## What’s already in this repo (reused)
@@ -18,7 +18,7 @@ Unified dashboard that brings together Configuration Management, an Interactive 
   - Provisioned datasource and dashboard in `tools/observability/`
 - Router metrics and API
   - Metrics at `:9190/metrics` (Prometheus format)
-  - Classification API on `:8080` with endpoints like `GET /api/v1`, `GET /config/classification`
+  - Router apiserver on `:8080` with endpoints like `GET /api/v1`, `GET /config/router`
 
 These are sufficient to embed and proxy—no need to duplicate core functionality.
 
@@ -45,7 +45,7 @@ Pages:
 Features:
 
 - 🌓 Dark/Light theme toggle with localStorage persistence (default: light)
-- � Collapsible sidebar with quick section navigation (Models, Prompt Guard, Similarity Cache, Intelligent Routing, Topology, Tools Selection, Observability, Classification API)
+- � Collapsible sidebar with quick section navigation (Models, Prompt Guard, Similarity Cache, Intelligent Routing, Topology, Tools Selection, Observability, Router Apiserver)
 - �📱 Responsive design
 - ⚡ Fast navigation with React Router
 - 🎨 Modern UI inspired by vLLM website design
@@ -53,7 +53,7 @@ Features:
 
 Config editing:
 
-- The Config page includes edit/add modals for multiple sections (Models, Endpoints, Prompt Guard, Similarity Cache, Categories, Reasoning Families, Tools, Observability, Batch Classification API).
+- The Config page includes edit/add modals for multiple sections (Models, Endpoints, Prompt Guard, Similarity Cache, Categories, Reasoning Families, Tools, Observability, Batch Classification Settings).
 - Backend supports read/write operations:
   - `GET /api/router/config/all` returns the current config (YAML parsed and served as JSON).
   - `POST /api/router/config/update` updates the config file on disk (writes YAML). Requires the process to have write permission to the specified config path.
@@ -79,7 +79,7 @@ Read-only dashboard mode:
   - Frontend hides add/edit/delete actions and shows a read-only banner
   - Backend rejects write APIs with `403 Forbidden` for:
     - `POST /api/router/config/update`
-    - `POST /api/router/config/defaults/update`
+    - `POST /api/router/config/global/update`
 
 ### Backend (Go HTTP Server)
 
@@ -87,7 +87,7 @@ Read-only dashboard mode:
 - Reverse proxy with auth/cors/csp controls:
   - `GET /embedded/grafana/*` → Grafana
   - `GET /embedded/prometheus/*` → Prometheus (optional link-outs)
-  - `GET /api/router/*` → Router Classification API (`:8080`)
+  - `GET /api/router/*` → Router apiserver (`:8080`)
   - `GET /metrics/router` → Router `/metrics` (optional aggregation later)
   - `GET /api/router/config/all` → Returns your `config.yaml` as JSON (parsed from YAML)
   - `POST /api/router/config/update` → Updates your `config.yaml` (writes YAML)

@@ -1,0 +1,15 @@
+routing:
+  signals:
+    role_bindings:
+      - name: admin
+        description: Requests from platform administrators.
+        role: admin
+        subjects:
+          - kind: Group
+            name: platform-admins
+      - name: premium_user
+        description: Requests from paid end users.
+        role: premium_user
+        subjects:
+          - kind: Group
+            name: premium-tier

@@ -21,11 +21,11 @@ var _ = Describe("Response Jailbreak Filter", func() {
 			Plugins: []config.DecisionPlugin{
 				{
 					Type: "response_jailbreak",
-					Configuration: map[string]interface{}{
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
 						"enabled":   enabled,
 						"threshold": 0.5,
 						"action":    action,
-					},
+					}),
 				},
 			},
 		}
@@ -91,9 +91,9 @@ var _ = Describe("Response Jailbreak Filter", func() {
 				Plugins: []config.DecisionPlugin{
 					{
 						Type: "response_jailbreak",
-						Configuration: map[string]interface{}{
+						Configuration: config.MustStructuredPayload(map[string]interface{}{
 							"enabled": true,
-						},
+						}),
 					},
 				},
 			}

@@ -49,34 +49,37 @@ Adjust hyperparameters via the **Advanced Settings** panel, then click **Train M
 
 Define routing decisions — each with a name, priority, algorithm, domain conditions, and target model names. Click **Generate Config** to produce a deployment-ready `ml-model-selection-values.yaml`.
 
-The generated YAML follows the semantic-router config schema. Merge the `model_selection` and `decisions` sections into your main `config.yaml`, or use it as a standalone config file for the router.
+The generated YAML follows the semantic-router config schema. Merge `global.router.model_selection` and `routing.decisions` into your main `config.yaml`, or use it as a standalone config file for the router.
 
 ### Example Generated Config
 
 ```yaml
 config:
-  model_selection:
-    enabled: true
-    ml:
-      models_path: /data/ml-pipeline/ml-train
-      embedding_dim: 1024
-      knn:
-        k: 5
-        pretrained_path: /data/ml-pipeline/ml-train/knn_model.json
-  strategy: priority
-  decisions:
-    - name: math-decision
-      priority: 100
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: math
-      algorithm:
-        type: knn
-      modelRefs:
-        - model: llama3.2:3b
-          use_reasoning: false
+  global:
+    router:
+      strategy: priority
+      model_selection:
+        enabled: true
+        ml:
+          models_path: /data/ml-pipeline/ml-train
+          embedding_dim: 1024
+          knn:
+            k: 5
+            pretrained_path: /data/ml-pipeline/ml-train/knn_model.json
+  routing:
+    decisions:
+      - name: math-decision
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: math
+        algorithm:
+          type: knn
+        modelRefs:
+          - model: llama3.2:3b
+            use_reasoning: false
 ```
 
 ## Configuration
@@ -86,96 +89,103 @@ config:
 Enable ML-based model selection in your `config.yaml`:
 
 ```yaml
-# Enable ML model selection
-model_selection:
-  ml:
-    enabled: true
-    models_path: ".cache/ml-models"  # Path to trained model files
-
-# Embedding model for query representation
-embedding_models:
-  qwen3_model_path: "models/mom-embedding-pro"  # Qwen3-Embedding-0.6B
+global:
+  router:
+    model_selection:
+      enabled: true
+      ml:
+        models_path: ".cache/ml-models"  # Path to trained model files
+  stores:
+    semantic_cache:
+      embedding_model: mmbert  # uses models/mom-embedding-ultra by default
 ```
 
-### Per-Decision Algorithm Configuration
+### Per-Decision Algorithm Selection
 
-Configure different algorithms for different decision types:
+Use `routing.decisions[].algorithm.type` to choose which trained ML selector a decision should use. Shared selector tuning belongs under `global.router.model_selection.ml`, not under the decision itself.
 
 ```yaml
-decisions:
+global:
+  router:
+    model_selection:
+      enabled: true
+      ml:
+        models_path: ".cache/ml-models"
+        knn:
+          k: 5
+        svm:
+          kernel: "rbf"
+          gamma: 1.0
+        kmeans:
+          num_clusters: 8
+        mlp:
+          device: "cuda"
+routing:
+  decisions:
   # Math queries - use KNN for quality-weighted selection
-  - name: "math_decision"
-    description: "Mathematics and quantitative reasoning"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "math"
-    algorithm:
-      type: "knn"
-      knn:
-        k: 5
-    modelRefs:
-      - model: "llama-3.2-1b"
-      - model: "llama-3.2-3b"
-      - model: "mistral-7b"
+    - name: "math_decision"
+      description: "Mathematics and quantitative reasoning"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "math"
+      algorithm:
+        type: "knn"
+      modelRefs:
+        - model: "llama-3.2-1b"
+        - model: "llama-3.2-3b"
+        - model: "mistral-7b"
 
   # Coding queries - use SVM for clear boundaries
-  - name: "code_decision"
-    description: "Programming and software development"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "computer science"
-    algorithm:
-      type: "svm"
-      svm:
-        kernel: "rbf"
-        gamma: 1.0
-    modelRefs:
-      - model: "codellama-7b"
-      - model: "llama-3.2-3b"
-      - model: "mistral-7b"
+    - name: "code_decision"
+      description: "Programming and software development"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      algorithm:
+        type: "svm"
+      modelRefs:
+        - model: "codellama-7b"
+        - model: "llama-3.2-3b"
+        - model: "mistral-7b"
 
   # General queries - use KMeans for efficiency
-  - name: "general_decision"
-    description: "General knowledge queries"
-    priority: 50
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "other"
-    algorithm:
-      type: "kmeans"
-      kmeans:
-        num_clusters: 8
-    modelRefs:
-      - model: "llama-3.2-1b"
-      - model: "llama-3.2-3b"
-      - model: "mistral-7b"
+    - name: "general_decision"
+      description: "General knowledge queries"
+      priority: 50
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "other"
+      algorithm:
+        type: "kmeans"
+      modelRefs:
+        - model: "llama-3.2-1b"
+        - model: "llama-3.2-3b"
+        - model: "mistral-7b"
 
   # High-throughput queries - use MLP with GPU acceleration
-  - name: "gpu_accelerated_decision"
-    description: "High-volume inference with GPU"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "engineering"
-    algorithm:
-      type: "mlp"
-      mlp:
-        device: "cuda"  # or "cpu", "metal"
-    modelRefs:
-      - model: "llama-3.2-1b"
-      - model: "llama-3.2-3b"
-      - model: "mistral-7b"
-      - model: "codellama-7b"
+    - name: "gpu_accelerated_decision"
+      description: "High-volume inference with GPU"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "engineering"
+      algorithm:
+        type: "mlp"
+      modelRefs:
+        - model: "llama-3.2-1b"
+        - model: "llama-3.2-3b"
+        - model: "mistral-7b"
+        - model: "codellama-7b"
 ```
 
 ### Algorithm Parameters
@@ -183,38 +193,46 @@ decisions:
 #### KNN Parameters
 
 ```yaml
-algorithm:
-  type: "knn"
-  knn:
-    k: 5  # Number of neighbors (default: 5)
+global:
+  router:
+    model_selection:
+      ml:
+        knn:
+          k: 5  # Number of neighbors (default: 5)
 ```
 
 #### KMeans Parameters
 
 ```yaml
-algorithm:
-  type: "kmeans"
-  kmeans:
-    num_clusters: 8  # Number of clusters (default: 8)
+global:
+  router:
+    model_selection:
+      ml:
+        kmeans:
+          num_clusters: 8  # Number of clusters (default: 8)
 ```
 
 #### SVM Parameters
 
 ```yaml
-algorithm:
-  type: "svm"
-  svm:
-    kernel: "rbf"   # Kernel type: rbf, linear (default: rbf)
-    gamma: 1.0      # RBF kernel gamma (default: 1.0)
+global:
+  router:
+    model_selection:
+      ml:
+        svm:
+          kernel: "rbf"   # Kernel type: rbf, linear (default: rbf)
+          gamma: 1.0      # RBF kernel gamma (default: 1.0)
 ```
 
 #### MLP Parameters
 
 ```yaml
-algorithm:
-  type: "mlp"
-  mlp:
-    device: "cuda"  # Device: cpu, cuda, metal (default: cpu)
+global:
+  router:
+    model_selection:
+      ml:
+        mlp:
+          device: "cuda"  # Device: cpu, cuda, metal (default: cpu)
 ```
 
 The MLP (Multi-Layer Perceptron) algorithm uses a neural network classifier with GPU acceleration via the [Candle](https://github.com/huggingface/candle) Rust framework. It provides high-throughput inference suitable for production deployments with GPU resources.

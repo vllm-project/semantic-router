@@ -9,6 +9,7 @@ export {
 export {
   BackendIcon,
   GlobalIcon,
+  ModelIcon,
   PluginIcon,
   RouteIcon,
   SignalIcon,

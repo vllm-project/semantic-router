@@ -104,13 +104,16 @@ oc exec deployment/semantic-router -c semantic-router -- \
 Contains **placeholder IPs** that get replaced:
 
 ```yaml
-vllm_endpoints:
-  - name: "model-a-endpoint"
-    address: "172.30.64.134"  # PLACEHOLDER - replaced at deploy time
-    port: 8000
-  - name: "model-b-endpoint"
-    address: "172.30.116.177"  # PLACEHOLDER - replaced at deploy time
-    port: 8001
+providers:
+  models:
+    - name: "Model-A"
+      backend_refs:
+        - name: "model-a-endpoint"
+          endpoint: "172.30.64.134:8000"  # PLACEHOLDER - replaced at deploy time
+    - name: "Model-B"
+      backend_refs:
+        - name: "model-b-endpoint"
+          endpoint: "172.30.116.177:8001"  # PLACEHOLDER - replaced at deploy time
 ```
 
 ### Generated: ConfigMap
@@ -118,13 +121,16 @@ vllm_endpoints:
 Contains **actual ClusterIPs** discovered during deployment:
 
 ```yaml
-vllm_endpoints:
-  - name: "model-a-endpoint"
-    address: "172.30.64.134"  # Actual ClusterIP from cluster
-    port: 8000
-  - name: "model-b-endpoint"
-    address: "172.30.116.177"  # Actual ClusterIP from cluster
-    port: 8001
+providers:
+  models:
+    - name: "Model-A"
+      backend_refs:
+        - name: "model-a-endpoint"
+          endpoint: "172.30.64.134:8000"  # Actual ClusterIP from cluster
+    - name: "Model-B"
+      backend_refs:
+        - name: "model-b-endpoint"
+          endpoint: "172.30.116.177:8001"  # Actual ClusterIP from cluster
 ```
 
 ## Testing on Different Clusters

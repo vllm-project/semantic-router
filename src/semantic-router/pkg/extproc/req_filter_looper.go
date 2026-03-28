@@ -27,6 +27,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+func isLooperAlgorithmType(algorithmType string) bool {
+	switch algorithmType {
+	case "confidence", "ratings", "remom":
+		return true
+	default:
+		return false
+	}
+}
+
 // isLooperRequest checks if the incoming request is from looper (internal request)
 // If so, extproc should skip plugin processing to avoid recursion
 func (r *OpenAIRouter) isLooperRequest(ctx *RequestContext) bool {
@@ -39,10 +48,13 @@ func (r *OpenAIRouter) isLooperRequest(ctx *RequestContext) bool {
 // - Decision has at least one ModelRef (ReMoM supports single model) AND
 // - Looper endpoint is configured in router config
 func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
-	if decision == nil {
+	if decision == nil || r.Config == nil {
 		return false
 	}
 	if decision.Algorithm == nil {
+		return false
+	}
+	if !isLooperAlgorithmType(decision.Algorithm.Type) {
 		return false
 	}
 
@@ -79,14 +91,21 @@ func (r *OpenAIRouter) handleLooperExecution(
 	// Create looper based on algorithm type
 	l := looper.Factory(&r.Config.Looper, decision.Algorithm.Type)
 
-	// Build looper request
+	// Build looper request.
+	// Response API requests always return JSON, so force non-streaming in the
+	// looper to get a JSON body that TranslateResponse can parse. The
+	// Response API layer handles its own streaming format separately.
+	streaming := reqCtx.ExpectStreamingResponse
+	if isResponseAPIRequest(reqCtx) {
+		streaming = false
+	}
 	looperReq := &looper.Request{
 		OriginalRequest: openAIRequest,
 		ModelRefs:       decision.ModelRefs,
 		ModelParams:     r.getModelParams(),
 		Algorithm:       decision.Algorithm,
-		IsStreaming:     reqCtx.ExpectStreamingResponse,
-		DecisionName:    decision.Name, // Pass decision name for extproc lookup
+		IsStreaming:     streaming,
+		DecisionName:    decision.Name,
 	}
 
 	// Execute looper
@@ -117,6 +136,28 @@ func (r *OpenAIRouter) handleLooperExecution(
 
 	// Attach response body to router replay record
 	r.attachRouterReplayResponse(reqCtx, resp.Body, true)
+
+	// Memory auto_store: the normal response body pipeline (where
+	// scheduleResponseMemoryStore runs) is bypassed by ImmediateResponse.
+	// Trigger it here while resp.Body is still in Chat Completions format
+	// (extractAssistantResponseText parses Chat Completions). The
+	// ResponseAPICtx on reqCtx provides the ConversationID and user message
+	// needed by extractMemoryInfo / extractCurrentUserMessage.
+	r.scheduleResponseMemoryStore(reqCtx, resp.Body)
+
+	// Response API back-translation: the looper executes against Chat
+	// Completions endpoints directly, so resp.Body is in Chat Completions
+	// format. If the original client request was a Response API request,
+	// translate the response back before returning to the client.
+	if isResponseAPIRequest(reqCtx) && r.ResponseAPIFilter != nil {
+		translated, err := r.ResponseAPIFilter.TranslateResponse(ctx, reqCtx.ResponseAPICtx, resp.Body)
+		if err != nil {
+			logging.Errorf("[Looper] Response API translation failed: %v", err)
+		} else {
+			resp.Body = translated
+			logging.Infof("[Looper] Translated looper response to Response API format")
+		}
+	}
 
 	// Create immediate response with detailed headers
 	return r.createLooperResponse(resp, reqCtx), nil

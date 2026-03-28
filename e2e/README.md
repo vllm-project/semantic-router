@@ -16,23 +16,24 @@ The framework follows a **separation of concerns** design:
 
 Standard CI-backed profiles:
 
-- **ai-gateway**: Baseline router contract for routing, safety, cache, and decision behavior
+- **kubernetes**: Baseline router contract for routing, safety, cache, and decision behavior
 - **aibrix**: AIBrix control-plane and gateway coverage plus a minimal router smoke path
 - **routing-strategies**: Keyword, entropy, and fallback routing behavior
 - **dynamic-config**: Kubernetes CRD-based routing and embedding-signal behavior
 - **llm-d**: LLM-D inference-gateway health plus a minimal router smoke path
 - **istio**: Istio service mesh sidecar, traffic, mTLS, and tracing behavior
 - **production-stack**: HA, load-balancing, failover, and throughput behavior
-- **response-api**: Responses API endpoints with the in-memory store
-- **response-api-redis**: Responses API endpoints with Redis storage backend and TTL coverage
-- **response-api-redis-cluster**: Responses API endpoints with Redis Cluster backend and TTL coverage
+- **response-api**: Responses API coverage across memory, Redis, and Redis Cluster backends under one CI check
 - **ml-model-selection**: ML-based model-selection behavior
 - **multi-endpoint**: Environment-specific routing and safety policy behavior
 - **authz-rbac**: Authz-driven routing and per-user rate limiting
 - **streaming**: Streamed request-body and streaming-cache behavior
+- **dashboard**: Dashboard API surface — health, status, config read, deploy preview, config versions, and input validation
 
 Manual-only profiles:
 
+- **response-api-redis**: Responses API endpoints with Redis storage backend and TTL coverage for direct backend debugging
+- **response-api-redis-cluster**: Responses API endpoints with Redis Cluster backend and TTL coverage for direct backend debugging
 - **dynamo**: NVIDIA Dynamo deployment, batching, and GPU-health coverage
 - **rag-hybrid-search**: Llama Stack-backed RAG vector-store and hybrid-search coverage
 
@@ -40,18 +41,19 @@ Manual-only profiles:
 
 | Profile | Shared baseline | Unique contract |
 |---------|------------------|-----------------|
-| `ai-gateway` | Full router contract | Baseline ownership for generic router behavior |
+| `kubernetes` | Full router contract | Baseline ownership for generic router behavior |
 | `aibrix` | `chat-completions-request` | AIBrix control-plane and gateway health |
 | `routing-strategies` | none | Routing-strategy-specific behavior |
 | `dynamic-config` | `chat-completions-request` | CRD and embedding-signal routing |
 | `llm-d` | `chat-completions-request` | llm-d inference-gateway health |
 | `istio` | `chat-completions-request` | Sidecar, traffic, mTLS, and tracing |
 | `production-stack` | `chat-completions-request` | HA, failover, load-balancing, throughput |
-| `response-api*` | none | Responses API storage/backend behavior |
+| `response-api` | none | Responses API behavior across memory, Redis, and Redis Cluster backends |
 | `ml-model-selection` | `chat-completions-request`, `domain-classify` | ML selector behavior |
 | `multi-endpoint` | `chat-completions-request` | Environment-specific safety policies |
 | `authz-rbac` | `chat-completions-request` | Authz and rate-limiting behavior |
 | `streaming` | none | Streaming request-body and SSE cache behavior |
+| `dashboard` | none | Dashboard HTTP API contract |
 | `dynamo` | none | GPU and batching behavior |
 | `rag-hybrid-search` | none | RAG vector-store and hybrid-search behavior |
 
@@ -87,7 +89,7 @@ e2e/
 │   ├── plugin_config_variations.go    # Signal-decision: Plugin configs
 │   └── embedding_signal_routing.go    # Signal-decision: Embedding signals
 ├── profiles/
-│   ├── ai-gateway/       # AI Gateway test profile
+│   ├── ai-gateway/       # Kubernetes baseline profile implementation
 │   │   └── profile.go    # Profile definition and environment setup
 │   ├── aibrix/           # AIBrix test profile
 │   │   └── profile.go
@@ -174,7 +176,7 @@ All test cases:
 make e2e-deps
 ```
 
-### Run all tests with default profile (ai-gateway)
+### Run all tests with default profile (kubernetes)
 
 ```bash
 make e2e-test
@@ -185,12 +187,13 @@ make e2e-test
 ```bash
 make vllm-sr-test-integration
 make memory-test-integration
+make e2e-test-response-api-suite
 ```
 
 ### Run specific profile
 
 ```bash
-make e2e-test E2E_PROFILE=ai-gateway
+make e2e-test E2E_PROFILE=kubernetes
 make e2e-test E2E_PROFILE=production-stack
 ```
 
@@ -204,16 +207,16 @@ make e2e-test-specific E2E_TESTS="chat-completions-progressive-stress"
 make e2e-test-specific E2E_TESTS="chat-completions-request,chat-completions-progressive-stress"
 
 # Or run directly with the binary
-./bin/e2e -profile ai-gateway -tests chat-completions-progressive-stress -verbose
+./bin/e2e -profile kubernetes -tests chat-completions-progressive-stress -verbose
 
 # Run multiple specific test cases with the binary
-./bin/e2e -profile ai-gateway -tests "chat-completions-request,chat-completions-progressive-stress"
+./bin/e2e -profile kubernetes -tests "chat-completions-request,chat-completions-progressive-stress"
 ```
 
 ### Run with custom options
 
 ```bash
-# Keep cluster after test
+# Keep cluster and deployed profile after test
 make e2e-test E2E_KEEP_CLUSTER=true
 
 # Use existing cluster
@@ -226,13 +229,13 @@ make e2e-test E2E_VERBOSE=false
 make e2e-test E2E_PARALLEL=true
 
 # Combine multiple options
-make e2e-test E2E_PROFILE=ai-gateway E2E_KEEP_CLUSTER=true E2E_VERBOSE=true
+make e2e-test E2E_PROFILE=kubernetes E2E_KEEP_CLUSTER=true E2E_VERBOSE=true
 ```
 
 ### Debug mode
 
 ```bash
-# Run tests with debug mode (keeps cluster and enables verbose logging)
+# Run tests with debug mode (keeps cluster, deployed profile, and enables verbose logging)
 make e2e-test-debug
 ```
 
@@ -263,13 +266,13 @@ make e2e-cleanup
 
 ```bash
 # Setup only
-./bin/e2e -profile ai-gateway -setup-only -keep-cluster -verbose
+./bin/e2e -profile kubernetes -setup-only -keep-cluster -verbose
 
 # Run tests only (assumes environment is already deployed)
-./bin/e2e -profile ai-gateway -skip-setup -use-existing-cluster -verbose
+./bin/e2e -profile kubernetes -skip-setup -use-existing-cluster -verbose
 
 # Run specific tests only
-./bin/e2e -profile ai-gateway -skip-setup -use-existing-cluster -tests "chat-completions-request"
+./bin/e2e -profile kubernetes -skip-setup -use-existing-cluster -tests "chat-completions-request"
 ```
 
 ### Test Reports
@@ -288,10 +291,10 @@ The following environment variables can be used to customize test execution:
 
 | Variable | Description | Default | Example |
 |----------|-------------|---------|---------|
-| `E2E_PROFILE` | Test profile to run | `ai-gateway` | `make e2e-test E2E_PROFILE=ai-gateway` |
+| `E2E_PROFILE` | Test profile to run | `kubernetes` | `make e2e-test E2E_PROFILE=kubernetes` |
 | `E2E_CLUSTER_NAME` | Kind cluster name | `semantic-router-e2e` | `make e2e-test E2E_CLUSTER_NAME=my-cluster` |
 | `E2E_IMAGE_TAG` | Docker image tag | `e2e-test` | `make e2e-test E2E_IMAGE_TAG=v1.0.0` |
-| `E2E_KEEP_CLUSTER` | Keep cluster after tests | `false` | `make e2e-test E2E_KEEP_CLUSTER=true` |
+| `E2E_KEEP_CLUSTER` | Keep cluster and deployed profile after tests | `false` | `make e2e-test E2E_KEEP_CLUSTER=true` |
 | `E2E_USE_EXISTING_CLUSTER` | Use existing cluster | `false` | `make e2e-test E2E_USE_EXISTING_CLUSTER=true` |
 | `E2E_VERBOSE` | Enable verbose logging | `true` | `make e2e-test E2E_VERBOSE=false` |
 | `E2E_PARALLEL` | Run tests in parallel | `false` | `make e2e-test E2E_PARALLEL=true` |
@@ -302,6 +305,7 @@ The following environment variables can be used to customize test execution:
 **Note**:
 
 - When `E2E_SETUP_ONLY=true` is set, the cluster is automatically kept (no need to set `E2E_KEEP_CLUSTER=true`)
+- When `E2E_KEEP_CLUSTER=true` is set, the profile teardown is also skipped so you can reuse the environment with `E2E_USE_EXISTING_CLUSTER=true E2E_SKIP_SETUP=true`
 - When using the binary directly (`./bin/e2e`), use command-line flags instead:
 
 - `-profile` instead of `E2E_PROFILE`
@@ -318,7 +322,7 @@ The following environment variables can be used to customize test execution:
 Example:
 
 ```bash
-./bin/e2e -profile ai-gateway -keep-cluster -verbose -tests "chat-completions-request"
+./bin/e2e -profile kubernetes -keep-cluster -verbose -tests "chat-completions-request"
 ```
 
 ## Adding New Test Profiles
@@ -328,7 +332,7 @@ Example:
 3. Register test cases using the test case registry
 4. Add profile-specific deployment configurations
 
-See `profiles/ai-gateway/` for a complete example.
+See `profiles/ai-gateway/` for the kubernetes profile implementation example.
 
 ## Key Concepts
 
@@ -474,7 +478,7 @@ The `embedding-signal-routing` test validates the `IntelligentRoute` CRD with `E
 **Profile Support:**
 
 - ✅ `dynamic-config` profile (uses CRDs)
-- ❌ `ai-gateway` profile (uses static YAML config)
+- ❌ `kubernetes` profile (uses static YAML config)
 - ❌ `aibrix` profile (uses static YAML config)
 
 **Requirements:**
@@ -661,13 +665,13 @@ func init() {
 }
 ```
 
-See `profiles/ai-gateway/` for a complete example.
+See `profiles/ai-gateway/` for the kubernetes profile implementation example.
 
 ## Profile Details
 
 ### Istio Profile
 
-The Istio profile owns service-mesh-specific assertions plus a single shared router smoke request. The full generic router contract lives in `ai-gateway`, so the Istio environment no longer replays the entire baseline suite.
+The Istio profile owns service-mesh-specific assertions plus a single shared router smoke request. The full generic router contract lives in `kubernetes`, so the Istio environment no longer replays the entire baseline suite.
 
 **What it Tests:**
 
@@ -718,7 +722,7 @@ The Istio profile owns service-mesh-specific assertions plus a single shared rou
 
 **Coverage ownership:**
 
-- `ai-gateway` owns the baseline router contract
+- `kubernetes` owns the baseline router contract
 - `istio` keeps only mesh-specific assertions and the smoke request that proves traffic still flows through the mesh
 
 **Usage:**

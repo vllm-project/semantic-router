@@ -2,14 +2,9 @@ package extproc
 
 import (
 	"context"
-	"strings"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/promptcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
@@ -39,265 +34,27 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
-	// Determine text to use for evaluation
-	evaluationText := userContent
-	if evaluationText == "" && len(nonUserMessages) > 0 {
-		evaluationText = strings.Join(nonUserMessages, " ")
-	}
-
-	if evaluationText == "" {
+	signalInput := r.prepareSignalEvaluationInput(userContent, nonUserMessages)
+	if signalInput.evaluationText == "" {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
-	// For context token counting, we need to include ALL messages (user + non-user)
-	// This ensures multi-turn conversations are properly counted
-	var allMessagesText string
-	if userContent != "" && len(nonUserMessages) > 0 {
-		// Combine user content with all non-user messages for full context
-		allMessages := make([]string, 0, len(nonUserMessages)+1)
-		allMessages = append(allMessages, nonUserMessages...)
-		allMessages = append(allMessages, userContent)
-		allMessagesText = strings.Join(allMessages, " ")
-	} else if userContent != "" {
-		allMessagesText = userContent
-	} else {
-		allMessagesText = strings.Join(nonUserMessages, " ")
-	}
-
-	// Prompt compression: reduce long prompts before signal extraction to cut
-	// inference latency (attention is O(n²) for SDPA, O(n) for FA — but still
-	// linear in sequence length). Compression preserves classification fidelity
-	// by using TextRank + position weighting + TF-IDF scoring.
-	//
-	// Signals listed in skip_signals (default: jailbreak, pii) always receive
-	// the original uncompressed text because they need every token.
-	compressedText := evaluationText
-	var skipCompressionSignals map[string]bool
-	if r.Config.PromptCompression.Enabled && r.Config.PromptCompression.MaxTokens > 0 {
-		cfg := buildCompressionConfig(r.Config.PromptCompression)
-		origTokens := promptcompression.CountTokensApprox(evaluationText)
-		if r.Config.PromptCompression.MinLength > 0 && len(evaluationText) <= r.Config.PromptCompression.MinLength {
-			logging.Infof("[PromptCompression] Skipped: %d chars <= min_length threshold %d", len(evaluationText), r.Config.PromptCompression.MinLength)
-		} else if origTokens > cfg.MaxTokens {
-			result := promptcompression.Compress(evaluationText, cfg)
-			logging.Infof("[PromptCompression] Compressed evaluationText: %d -> %d tokens (ratio=%.2f, kept %d sentences)",
-				result.OriginalTokens, result.CompressedTokens, result.Ratio, len(result.KeptIndices))
-			compressedText = result.Compressed
-			skipCompressionSignals = r.Config.PromptCompression.SkipSignalsSet()
-		}
-	}
-
-	// Start signal evaluation span (Layer 1)
-	signalStart := time.Now()
-	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
-
-	// Evaluate all signals first to get detailed signal information.
-	// Pass both compressed and original text: signals in skipCompressionSignals
-	// (e.g. jailbreak, pii) use the original; others use the compressed text.
-	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(compressedText, allMessagesText, nonUserMessages, ctx.Headers, false, ctx.RequestImageURL, evaluationText, skipCompressionSignals)
+	signals, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, nonUserMessages, ctx)
 	if authzErr != nil {
-		signalSpan.End()
-		// Authz failure is a hard error — do not silently bypass.
-		// Propagate the error to the caller, which returns 403 to the client.
-		logging.Errorf("[Signal Evaluation] Authz evaluation failed: %v", authzErr)
 		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
 
-	signalLatency := time.Since(signalStart).Milliseconds()
-
-	// Store signal results in context for response headers
-	ctx.VSRMatchedKeywords = signals.MatchedKeywordRules
-	ctx.VSRMatchedEmbeddings = signals.MatchedEmbeddingRules
-	ctx.VSRMatchedDomains = signals.MatchedDomainRules
-	ctx.VSRMatchedFactCheck = signals.MatchedFactCheckRules
-	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
-	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
-	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
-	ctx.VSRMatchedContext = signals.MatchedContextRules
-	ctx.VSRContextTokenCount = signals.TokenCount
-	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
-	ctx.VSRMatchedModality = signals.MatchedModalityRules
-	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
-	ctx.VSRMatchedJailbreak = signals.MatchedJailbreakRules
-	ctx.VSRMatchedPII = signals.MatchedPIIRules
-
-	// Store jailbreak/PII detection metadata from signal results
-	if signals.JailbreakDetected {
-		ctx.JailbreakDetected = signals.JailbreakDetected
-		ctx.JailbreakType = signals.JailbreakType
-		ctx.JailbreakConfidence = signals.JailbreakConfidence
-	}
-	if signals.PIIDetected {
-		ctx.PIIDetected = signals.PIIDetected
-		ctx.PIIEntities = signals.PIIEntities
+	result, fallbackModel := r.runDecisionEngine(originalModel, ctx, signals)
+	if result == nil {
+		return "", 0.0, entropy.ReasoningDecision{}, fallbackModel, nil
 	}
 
-	// Set fact-check context fields from signal results
-	// This replaces the old performFactCheckClassification call to avoid duplicate computation
-	r.setFactCheckFromSignals(ctx, signals.MatchedFactCheckRules)
-
-	// Set modality classification on context from signal results for response headers
-	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
-
-	// Log signal evaluation results
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, modality=%v, jailbreak=%v, pii=%v",
-		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
-		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules, signals.MatchedModalityRules, signals.MatchedJailbreakRules, signals.MatchedPIIRules)
-
-	// Set signal span attributes
-	allMatchedRules := []string{}
-	allMatchedRules = append(allMatchedRules, signals.MatchedKeywordRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedEmbeddingRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedDomainRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedFactCheckRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedUserFeedbackRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedJailbreakRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
-
-	// End signal evaluation span
-	tracing.EndSignalSpan(signalSpan, allMatchedRules, 1.0, signalLatency)
-	ctx.TraceContext = signalCtx
-
-	// Process user feedback signals to automatically update Elo ratings
-	// This implements "automatic scoring by signals" as requested
-	r.processUserFeedbackForElo(signals.MatchedUserFeedbackRules, originalModel, ctx)
-
-	// Perform decision evaluation using pre-computed signals
-	// This is ALWAYS done when decisions are configured, regardless of model type,
-	// because plugins (e.g., hallucination detection) depend on the matched decision
-
-	// Start decision evaluation span (Layer 2)
-	decisionStart := time.Now()
-	decisionCtx, decisionSpan := tracing.StartDecisionSpan(ctx.TraceContext, "decision_evaluation")
-
-	result, err := r.Classifier.EvaluateDecisionWithEngine(signals)
-	decisionLatency := time.Since(decisionStart).Seconds()
-
-	// Record decision evaluation metrics
-	metrics.RecordDecisionEvaluation(decisionLatency)
-
-	if err != nil {
-		logging.Errorf("Decision evaluation error: %v", err)
-		// End decision span with error
-		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
-		ctx.TraceContext = decisionCtx
-		if r.Config.IsAutoModelName(originalModel) {
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
-		}
-		return "", 0.0, entropy.ReasoningDecision{}, "", nil
-	}
-
-	if result == nil || result.Decision == nil {
-		// End decision span with no match
-		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
-		ctx.TraceContext = decisionCtx
-		if r.Config.IsAutoModelName(originalModel) {
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
-		}
-		return "", 0.0, entropy.ReasoningDecision{}, "", nil
-	}
-
-	// Record decision match with confidence
-	metrics.RecordDecisionMatch(result.Decision.Name, result.Confidence)
-
-	// End decision span with success
-	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, r.Config.Strategy)
-	ctx.TraceContext = decisionCtx
-
-	// Store the selected decision in context for later use (e.g., plugins, header mutations)
-	// This is critical for hallucination detection and other per-decision plugins
-	ctx.VSRSelectedDecision = result.Decision
-
-	// Set router replay plugin config from per-decision plugin if configured
-	if pluginCfg := result.Decision.GetRouterReplayConfig(); pluginCfg != nil && pluginCfg.Enabled {
-		ctx.RouterReplayPluginConfig = pluginCfg
-	}
-
-	// Extract domain category from matched rules (for VSRSelectedCategory header)
-	// MatchedRules contains rule names like "domain:math", "keyword:thinking", etc.
-	// We extract the first domain rule as the category
-	categoryName := ""
-	for _, rule := range result.MatchedRules {
-		if strings.HasPrefix(rule, "domain:") {
-			categoryName = strings.TrimPrefix(rule, "domain:")
-			break
-		}
-	}
-	// Store category in context for response headers
-	ctx.VSRSelectedCategory = categoryName
-
-	// Note: VSRMatchedKeywords is already set from signals.MatchedKeywordRules (line 61)
-	// We should NOT overwrite it with result.MatchedKeywords which contains actual keywords
-	// The header should show rule names, not the actual matched keywords
-
-	decisionName = result.Decision.Name
-	evaluationConfidence = result.Confidence
-	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
-	logging.Infof("Decision Evaluation Result: decision=%s, category=%s, confidence=%.3f, matched_rules=%v",
-		decisionName, categoryName, evaluationConfidence, result.MatchedRules)
-
-	// Model selection only happens for auto models
-	// When a specific model is requested, we keep it but still apply decision plugins
-	if !r.Config.IsAutoModelName(originalModel) {
-		logging.Infof("Model %s explicitly specified, keeping original model (decision %s plugins will be applied)",
-			originalModel, decisionName)
-		return decisionName, evaluationConfidence, reasoningDecision, "", nil
-	}
-
-	// Select best model from the decision's ModelRefs using configured selection algorithm
-	if len(result.Decision.ModelRefs) > 0 {
-		// Use advanced model selection (Elo, RouterDC, AutoMix, Hybrid, or Static)
-		// Pass decision's algorithm config for per-decision algorithm override
-		// Pass categoryName for ML selectors to create feature vectors with category one-hot encoding
-		selectedModelRef, usedMethod := r.selectModelFromCandidates(result.Decision.ModelRefs, decisionName, userContent, result.Decision.Algorithm, categoryName)
-
-		// Use LoRA name if specified, otherwise use the base model name
-		selectedModel = selectedModelRef.Model
-		if selectedModelRef.LoRAName != "" {
-			selectedModel = selectedModelRef.LoRAName
-			logging.Infof("Selected model from decision %s: %s (LoRA adapter for base model %s) using %s selection",
-				decisionName, selectedModel, selectedModelRef.Model, usedMethod)
-		} else {
-			logging.Infof("Selected model from decision %s: %s using %s selection",
-				decisionName, selectedModel, usedMethod)
-		}
-		ctx.VSRSelectedModel = selectedModel
-		ctx.VSRSelectionMethod = usedMethod
-
-		// Determine reasoning mode from the selected model's configuration
-		if selectedModelRef.UseReasoning != nil {
-			useReasoning := *selectedModelRef.UseReasoning
-			reasoningDecision = entropy.ReasoningDecision{
-				UseReasoning:     useReasoning,
-				Confidence:       evaluationConfidence,
-				DecisionReason:   "decision_engine_evaluation",
-				FallbackStrategy: "decision_based_routing",
-				TopCategories: []entropy.CategoryProbability{
-					{
-						Category:    decisionName,
-						Probability: float32(evaluationConfidence),
-					},
-				},
-			}
-			if useReasoning {
-				ctx.VSRReasoningMode = "on"
-			} else {
-				ctx.VSRReasoningMode = "off"
-			}
-			// Note: ReasoningEffort is handled separately in req_filter_reason.go
-		}
-	} else {
-		// No model refs in decision, use default model
-		selectedModel = r.Config.DefaultModel
-		ctx.VSRSelectedModel = selectedModel
-		ctx.VSRSelectionMethod = "default"
-		logging.Infof("No model refs in decision %s, using default model: %s", decisionName, selectedModel)
-	}
-
+	decisionName, evaluationConfidence, reasoningDecision, selectedModel = r.finalizeDecisionEvaluation(
+		result,
+		originalModel,
+		userContent,
+		ctx,
+	)
 	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, nil
 }
 
@@ -374,38 +131,11 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 // Per-decision algorithm is the primary configuration (aligned with looper pattern).
 // Defaults to static selection if no algorithm is specified.
 func (r *OpenAIRouter) getSelectionMethod(algorithm *config.AlgorithmConfig) selection.SelectionMethod {
-	// Check per-decision algorithm (aligned with looper pattern)
 	if algorithm != nil && algorithm.Type != "" {
-		switch algorithm.Type {
-		case "elo":
-			return selection.MethodElo
-		case "router_dc":
-			return selection.MethodRouterDC
-		case "automix":
-			return selection.MethodAutoMix
-		case "hybrid":
-			return selection.MethodHybrid
-		case "rl_driven":
-			return selection.MethodRLDriven
-		case "gmtrouter":
-			return selection.MethodGMTRouter
-		case "latency_aware":
-			return selection.MethodLatencyAware
-		case "static":
-			return selection.MethodStatic
-		case "knn":
-			return selection.MethodKNN
-		case "kmeans":
-			return selection.MethodKMeans
-		case "svm":
-			return selection.MethodSVM
-		case "confidence", "ratings":
-			// These are looper algorithms, not selection algorithms
-			// Fall through to default
+		if method, ok := selectionMethodByAlgorithmType[algorithm.Type]; ok {
+			return method
 		}
 	}
-
-	// Default to static selection (use first model)
 	return selection.MethodStatic
 }
 
@@ -509,23 +239,4 @@ func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, m
 			logging.Warnf("[AutoFeedback] Failed to update Elo: %v", err)
 		}
 	}
-}
-
-// buildCompressionConfig translates the YAML config into the promptcompression
-// package's Config struct, applying defaults for omitted fields.
-func buildCompressionConfig(pc config.PromptCompressionConfig) promptcompression.Config {
-	cfg := promptcompression.DefaultConfig(pc.MaxTokens)
-	if pc.TextRankWeight > 0 {
-		cfg.TextRankWeight = pc.TextRankWeight
-	}
-	if pc.PositionWeight > 0 {
-		cfg.PositionWeight = pc.PositionWeight
-	}
-	if pc.TFIDFWeight > 0 {
-		cfg.TFIDFWeight = pc.TFIDFWeight
-	}
-	if pc.PositionDepth > 0 {
-		cfg.PositionDepth = pc.PositionDepth
-	}
-	return cfg
 }

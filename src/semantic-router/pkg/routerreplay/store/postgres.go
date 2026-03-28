@@ -145,11 +145,30 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 			hallucination_detected BOOLEAN DEFAULT FALSE,
 			hallucination_confidence REAL DEFAULT 0,
 			hallucination_spans JSONB,
+			prompt_tokens INTEGER,
+			completion_tokens INTEGER,
+			total_tokens INTEGER,
+			actual_cost DOUBLE PRECISION,
+			baseline_cost DOUBLE PRECISION,
+			cost_savings DOUBLE PRECISION,
+			currency VARCHAR(32),
+			baseline_model VARCHAR(255),
 			created_at TIMESTAMP DEFAULT NOW()
 		);
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt_tokens INTEGER;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS completion_tokens INTEGER;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS total_tokens INTEGER;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS actual_cost DOUBLE PRECISION;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS baseline_cost DOUBLE PRECISION;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS cost_savings DOUBLE PRECISION;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS currency VARCHAR(32);
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS baseline_model VARCHAR(255);
 		CREATE INDEX IF NOT EXISTS idx_%s_timestamp ON %s (timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_%s_created_at ON %s (created_at);
-	`, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName)
+	`, p.tableName,
+		p.tableName, p.tableName, p.tableName, p.tableName,
+		p.tableName, p.tableName, p.tableName, p.tableName,
+		p.tableName, p.tableName, p.tableName, p.tableName)
 
 	_, err := p.db.ExecContext(ctx, query)
 	return err
@@ -203,8 +222,10 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 			from_cache, streaming, request_body_truncated, response_body_truncated,
 			guardrails_enabled, jailbreak_enabled, pii_enabled,
 			rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
-			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
+			prompt_tokens, completion_tokens, total_tokens,
+			actual_cost, baseline_cost, cost_savings, currency, baseline_model
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
 	`, p.tableName)
 
 	fn := func() error {
@@ -216,6 +237,9 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 			record.GuardrailsEnabled, record.JailbreakEnabled, record.PIIEnabled,
 			record.RAGEnabled, record.RAGBackend, record.RAGContextLength, record.RAGSimilarityScore,
 			record.HallucinationEnabled, record.HallucinationDetected, record.HallucinationConfidence, hallucinationSpansJSON,
+			nullableIntArg(record.PromptTokens), nullableIntArg(record.CompletionTokens), nullableIntArg(record.TotalTokens),
+			nullableFloat64Arg(record.ActualCost), nullableFloat64Arg(record.BaselineCost), nullableFloat64Arg(record.CostSavings),
+			nullableStringArg(record.Currency), nullableStringArg(record.BaselineModel),
 		)
 		return err
 	}
@@ -250,13 +274,23 @@ func (p *PostgresStore) Get(ctx context.Context, id string) (Record, bool, error
 		       from_cache, streaming, request_body_truncated, response_body_truncated,
 		       guardrails_enabled, jailbreak_enabled, pii_enabled,
 		       rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
-		       hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans
+		       hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
+		       prompt_tokens, completion_tokens, total_tokens,
+		       actual_cost, baseline_cost, cost_savings, currency, baseline_model
 		FROM %s WHERE id = $1
 	`, p.tableName)
 
 	var record Record
 	var signalsJSON []byte
 	var hallucinationSpansJSON []byte
+	var promptTokens sql.NullInt64
+	var completionTokens sql.NullInt64
+	var totalTokens sql.NullInt64
+	var actualCost sql.NullFloat64
+	var baselineCost sql.NullFloat64
+	var costSavings sql.NullFloat64
+	var currency sql.NullString
+	var baselineModel sql.NullString
 
 	err := p.db.QueryRowContext(ctx, query, id).Scan(
 		&record.ID, &record.Timestamp, &record.RequestID, &record.Decision, &record.Category,
@@ -266,6 +300,8 @@ func (p *PostgresStore) Get(ctx context.Context, id string) (Record, bool, error
 		&record.GuardrailsEnabled, &record.JailbreakEnabled, &record.PIIEnabled,
 		&record.RAGEnabled, &record.RAGBackend, &record.RAGContextLength, &record.RAGSimilarityScore,
 		&record.HallucinationEnabled, &record.HallucinationDetected, &record.HallucinationConfidence, &hallucinationSpansJSON,
+		&promptTokens, &completionTokens, &totalTokens,
+		&actualCost, &baselineCost, &costSavings, &currency, &baselineModel,
 	)
 
 	if err == sql.ErrNoRows {
@@ -285,6 +321,7 @@ func (p *PostgresStore) Get(ctx context.Context, id string) (Record, bool, error
 			record.HallucinationSpans = nil
 		}
 	}
+	assignUsageCostFields(&record, promptTokens, completionTokens, totalTokens, actualCost, baselineCost, costSavings, currency, baselineModel)
 
 	return record, true, nil
 }
@@ -299,7 +336,9 @@ func (p *PostgresStore) List(ctx context.Context) ([]Record, error) {
 		       from_cache, streaming, request_body_truncated, response_body_truncated,
 		       guardrails_enabled, jailbreak_enabled, pii_enabled,
 		       rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
-		       hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans
+		       hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
+		       prompt_tokens, completion_tokens, total_tokens,
+		       actual_cost, baseline_cost, cost_savings, currency, baseline_model
 		FROM %s
 		ORDER BY timestamp DESC
 		LIMIT 10000
@@ -316,6 +355,14 @@ func (p *PostgresStore) List(ctx context.Context) ([]Record, error) {
 		var record Record
 		var signalsJSON []byte
 		var hallucinationSpansJSON []byte
+		var promptTokens sql.NullInt64
+		var completionTokens sql.NullInt64
+		var totalTokens sql.NullInt64
+		var actualCost sql.NullFloat64
+		var baselineCost sql.NullFloat64
+		var costSavings sql.NullFloat64
+		var currency sql.NullString
+		var baselineModel sql.NullString
 
 		err := rows.Scan(
 			&record.ID, &record.Timestamp, &record.RequestID, &record.Decision, &record.Category,
@@ -325,6 +372,8 @@ func (p *PostgresStore) List(ctx context.Context) ([]Record, error) {
 			&record.GuardrailsEnabled, &record.JailbreakEnabled, &record.PIIEnabled,
 			&record.RAGEnabled, &record.RAGBackend, &record.RAGContextLength, &record.RAGSimilarityScore,
 			&record.HallucinationEnabled, &record.HallucinationDetected, &record.HallucinationConfidence, &hallucinationSpansJSON,
+			&promptTokens, &completionTokens, &totalTokens,
+			&actualCost, &baselineCost, &costSavings, &currency, &baselineModel,
 		)
 		if err != nil {
 			continue // Skip malformed records
@@ -337,6 +386,7 @@ func (p *PostgresStore) List(ctx context.Context) ([]Record, error) {
 		if len(hallucinationSpansJSON) > 0 {
 			_ = json.Unmarshal(hallucinationSpansJSON, &record.HallucinationSpans)
 		}
+		assignUsageCostFields(&record, promptTokens, completionTokens, totalTokens, actualCost, baselineCost, costSavings, currency, baselineModel)
 
 		records = append(records, record)
 	}
@@ -491,6 +541,59 @@ func (p *PostgresStore) UpdateHallucinationStatus(ctx context.Context, id string
 	return fn()
 }
 
+// UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
+func (p *PostgresStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
+	//nolint:gosec // tableName is validated during store creation
+	query := fmt.Sprintf(`
+		UPDATE %s
+		SET prompt_tokens = $2,
+		    completion_tokens = $3,
+		    total_tokens = $4,
+		    actual_cost = $5,
+		    baseline_cost = $6,
+		    cost_savings = $7,
+		    currency = $8,
+		    baseline_model = $9
+		WHERE id = $1
+	`, p.tableName)
+
+	fn := func() error {
+		result, err := p.db.ExecContext(
+			ctx,
+			query,
+			id,
+			nullableIntArg(usage.PromptTokens),
+			nullableIntArg(usage.CompletionTokens),
+			nullableIntArg(usage.TotalTokens),
+			nullableFloat64Arg(usage.ActualCost),
+			nullableFloat64Arg(usage.BaselineCost),
+			nullableFloat64Arg(usage.CostSavings),
+			nullableStringArg(usage.Currency),
+			nullableStringArg(usage.BaselineModel),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to update usage cost: %w", err)
+		}
+
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return fmt.Errorf("record with ID %s not found", id)
+		}
+
+		return nil
+	}
+
+	if p.asyncWrites {
+		p.asyncChan <- asyncOp{fn: fn}
+		return nil
+	}
+
+	return fn()
+}
+
 // cleanupOldRecords removes records older than the TTL.
 func (p *PostgresStore) cleanupOldRecords(ctx context.Context) error {
 	if p.ttl == 0 {
@@ -513,4 +616,70 @@ func (p *PostgresStore) Close() error {
 		close(p.done)
 	}
 	return p.db.Close()
+}
+
+func nullableIntArg(value *int) interface{} {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func nullableFloat64Arg(value *float64) interface{} {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func nullableStringArg(value *string) interface{} {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func assignUsageCostFields(
+	record *Record,
+	promptTokens sql.NullInt64,
+	completionTokens sql.NullInt64,
+	totalTokens sql.NullInt64,
+	actualCost sql.NullFloat64,
+	baselineCost sql.NullFloat64,
+	costSavings sql.NullFloat64,
+	currency sql.NullString,
+	baselineModel sql.NullString,
+) {
+	if promptTokens.Valid {
+		value := int(promptTokens.Int64)
+		record.PromptTokens = &value
+	}
+	if completionTokens.Valid {
+		value := int(completionTokens.Int64)
+		record.CompletionTokens = &value
+	}
+	if totalTokens.Valid {
+		value := int(totalTokens.Int64)
+		record.TotalTokens = &value
+	}
+	if actualCost.Valid {
+		value := actualCost.Float64
+		record.ActualCost = &value
+	}
+	if baselineCost.Valid {
+		value := baselineCost.Float64
+		record.BaselineCost = &value
+	}
+	if costSavings.Valid {
+		value := costSavings.Float64
+		record.CostSavings = &value
+	}
+	if currency.Valid {
+		value := currency.String
+		record.Currency = &value
+	}
+	if baselineModel.Valid {
+		value := baselineModel.String
+		record.BaselineModel = &value
+	}
 }

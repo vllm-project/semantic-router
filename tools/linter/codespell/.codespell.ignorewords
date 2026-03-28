@@ -55,5 +55,18 @@ critcal
 admi
 # Frontend identifier names (not spelling errors)
 currentY
+curRect
 # Academic citation names (not spelling errors)
 Brin
+# Fleet simulator notation, citation names, and local abbreviations
+nD
+Joo
+ROUGE
+Mor
+Parth
+sav
+# Mathematical/CS terms (not spelling errors)
+disjointness
+# Intentional typos for config unknown-field validation tests (validate_test.go)
+wieght
+naem

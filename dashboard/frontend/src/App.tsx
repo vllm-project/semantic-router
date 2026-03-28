@@ -18,14 +18,20 @@ import TopologyPage from './pages/TopologyPage'
 import TracingPage from './pages/TracingPage'
 import StatusPage from './pages/StatusPage'
 import LogsPage from './pages/LogsPage'
-import ReplayPage from './pages/ReplayPage'
 import EvaluationPage from './pages/EvaluationPage'
 import MLSetupPage from './pages/MLSetupPage'
 import RatingsPage from './pages/RatingsPage'
 import BuilderPage from './pages/BuilderPage'
 import DashboardPage from './pages/DashboardPage'
+import FleetSimOverviewPage from './pages/FleetSimOverviewPage'
+import FleetSimWorkloadsPage from './pages/FleetSimWorkloadsPage'
+import FleetSimFleetsPage from './pages/FleetSimFleetsPage'
+import FleetSimRunsPage from './pages/FleetSimRunsPage'
 import OpenClawPage from './pages/OpenClawPage'
 import UsersPage from './pages/UsersPage'
+import InsightsPage from './pages/InsightsPage'
+import TaxonomyPage, { type KnowledgeBaseView } from './pages/TaxonomyPage'
+import KnowledgeMapPage from './pages/KnowledgeMapPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { SetupProvider, useSetup } from './contexts/SetupContext'
@@ -34,30 +40,50 @@ import SetupWizardPage from './pages/SetupWizardPage'
 import OnboardingGuide from './components/OnboardingGuide'
 import LoginPage from './pages/LoginPage'
 import AuthTransitionPage from './pages/AuthTransitionPage'
+import { canAccessMLSetup } from './utils/accessControl'
 
 const ConfigSectionRoute: React.FC<{
   configSection: ConfigSection
   setConfigSection: (section: ConfigSection) => void
 }> = ({ configSection, setConfigSection }) => {
   const { section } = useParams<{ section: string }>()
+  const normalized = section?.toLowerCase() ?? ''
+  const redirectToKnowledgeBases =
+    normalized === 'classifiers' ||
+    normalized === 'taxonomy-classifiers' ||
+    normalized === 'knowledge-bases' ||
+    normalized === 'kbs'
 
   useEffect(() => {
-    if (!section) return
+    if (!section) {
+      if (configSection !== 'global-config') {
+        setConfigSection('global-config')
+      }
+      return
+    }
 
-    const normalized = section.toLowerCase()
     const sectionMap: Record<string, ConfigSection> = {
+      global: 'global-config',
+      'global-config': 'global-config',
+      'router-config': 'global-config',
       signals: 'signals',
+      projections: 'projections',
       routes: 'decisions',
       decisions: 'decisions',
       endpoints: 'models',
       models: 'models',
+      mcp: 'mcp',
     }
 
     const mapped = sectionMap[normalized]
     if (mapped && mapped !== configSection) {
       setConfigSection(mapped)
     }
-  }, [section, configSection, setConfigSection])
+  }, [section, normalized, configSection, setConfigSection])
+
+  if (redirectToKnowledgeBases) {
+    return <Navigate to="/knowledge-bases/bases" replace />
+  }
 
   return (
     <Layout
@@ -67,6 +93,45 @@ const ConfigSectionRoute: React.FC<{
       <ConfigPage activeSection={configSection} />
     </Layout>
   )
+}
+
+const KnowledgeBaseRoute: React.FC<{
+  configSection: ConfigSection
+  setConfigSection: (section: ConfigSection) => void
+}> = ({ configSection, setConfigSection }) => {
+  const { view } = useParams<{ view: string }>()
+  const normalized = (view?.toLowerCase() ?? 'bases') as KnowledgeBaseView
+  const activeView: KnowledgeBaseView = ['bases', 'groups', 'labels'].includes(normalized)
+    ? normalized
+    : 'bases'
+
+  if (view && activeView !== normalized) {
+    return <Navigate to={`/knowledge-bases/${activeView}`} replace />
+  }
+
+  return (
+    <Layout
+      configSection={configSection}
+      onConfigSectionChange={(nextSection) => setConfigSection(nextSection as ConfigSection)}
+    >
+      <TaxonomyPage activeView={activeView} />
+    </Layout>
+  )
+}
+
+const LegacyTaxonomyRedirect: React.FC = () => {
+  const { view } = useParams<{ view: string }>()
+  const normalized = view?.toLowerCase() ?? 'classifiers'
+  const viewMap: Record<string, KnowledgeBaseView> = {
+    classifiers: 'bases',
+    bases: 'bases',
+    'knowledge-bases': 'bases',
+    tiers: 'groups',
+    categories: 'labels',
+    exemplars: 'labels',
+  }
+  const nextView = viewMap[normalized] ?? 'bases'
+  return <Navigate to={`/knowledge-bases/${nextView}`} replace />
 }
 
 const SetupStatusPage: React.FC<{
@@ -164,7 +229,9 @@ const AuthenticatedShell: React.FC = () => {
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
-  const [configSection, setConfigSection] = useState<ConfigSection>('models')
+  const { user } = useAuth()
+  const [configSection, setConfigSection] = useState<ConfigSection>('global-config')
+  const canUseMLSetup = canAccessMLSetup(user)
 
   if (isLoading) {
     return (
@@ -244,6 +311,22 @@ const AppRouter: React.FC = () => {
                 />
               }
             />
+            <Route path="/knowledge-bases" element={<Navigate to="/knowledge-bases/bases" replace />} />
+            <Route
+              path="/knowledge-bases/:name/map"
+              element={<KnowledgeMapPage />}
+            />
+            <Route
+              path="/knowledge-bases/:view"
+              element={
+                <KnowledgeBaseRoute
+                  configSection={configSection}
+                  setConfigSection={setConfigSection}
+                />
+              }
+            />
+            <Route path="/taxonomy" element={<Navigate to="/knowledge-bases/bases" replace />} />
+            <Route path="/taxonomy/:view" element={<LegacyTaxonomyRedirect />} />
             <Route
               path="/playground"
               element={
@@ -303,13 +386,13 @@ const AppRouter: React.FC = () => {
               }
             />
             <Route
-              path="/replay"
+              path="/insights"
               element={
                 <Layout
                   configSection={configSection}
                   onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
                 >
-                  <ReplayPage />
+                  <InsightsPage />
                 </Layout>
               }
             />
@@ -327,12 +410,16 @@ const AppRouter: React.FC = () => {
             <Route
               path="/ml-setup"
               element={
-                <Layout
-                  configSection={configSection}
-                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-                >
-                  <MLSetupPage />
-                </Layout>
+                canUseMLSetup ? (
+                  <Layout
+                    configSection={configSection}
+                    onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                  >
+                    <MLSetupPage />
+                  </Layout>
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
               }
             />
             <Route
@@ -343,6 +430,50 @@ const AppRouter: React.FC = () => {
                   onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
                 >
                   <RatingsPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/fleet-sim"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <FleetSimOverviewPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/fleet-sim/workloads"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <FleetSimWorkloadsPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/fleet-sim/fleets"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <FleetSimFleetsPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/fleet-sim/runs"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <FleetSimRunsPage />
                 </Layout>
               }
             />

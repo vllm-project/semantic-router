@@ -255,10 +255,10 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 				Plugins: []config.DecisionPlugin{
 					{
 						Type: "hallucination",
-						Configuration: map[string]interface{}{
+						Configuration: config.MustStructuredPayload(map[string]interface{}{
 							"enabled":              enabled,
 							"hallucination_action": action,
-						},
+						}),
 					},
 				},
 			}
@@ -339,9 +339,9 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 				Plugins: []config.DecisionPlugin{
 					{
 						Type: "hallucination",
-						Configuration: map[string]interface{}{
+						Configuration: config.MustStructuredPayload(map[string]interface{}{
 							"enabled": false,
-						},
+						}),
 					},
 				},
 			}
@@ -354,9 +354,9 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 				Plugins: []config.DecisionPlugin{
 					{
 						Type: "hallucination",
-						Configuration: map[string]interface{}{
+						Configuration: config.MustStructuredPayload(map[string]interface{}{
 							"enabled": true,
-						},
+						}),
 					},
 				},
 			}
@@ -383,9 +383,9 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 				Plugins: []config.DecisionPlugin{
 					{
 						Type: "hallucination",
-						Configuration: map[string]interface{}{
+						Configuration: config.MustStructuredPayload(map[string]interface{}{
 							"enabled": true,
-						},
+						}),
 					},
 				},
 			}
@@ -398,10 +398,10 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 				Plugins: []config.DecisionPlugin{
 					{
 						Type: "hallucination",
-						Configuration: map[string]interface{}{
+						Configuration: config.MustStructuredPayload(map[string]interface{}{
 							"enabled":              true,
 							"hallucination_action": "header",
-						},
+						}),
 					},
 				},
 			}
@@ -414,10 +414,10 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 				Plugins: []config.DecisionPlugin{
 					{
 						Type: "hallucination",
-						Configuration: map[string]interface{}{
+						Configuration: config.MustStructuredPayload(map[string]interface{}{
 							"enabled":              true,
 							"hallucination_action": "body",
-						},
+						}),
 					},
 				},
 			}
@@ -430,10 +430,10 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 				Plugins: []config.DecisionPlugin{
 					{
 						Type: "hallucination",
-						Configuration: map[string]interface{}{
+						Configuration: config.MustStructuredPayload(map[string]interface{}{
 							"enabled":              true,
 							"hallucination_action": "none",
-						},
+						}),
 					},
 				},
 			}

@@ -1,0 +1,119 @@
+version: v0.3
+listeners:
+  - name: http-8888
+    address: 0.0.0.0
+    port: 8888
+    timeout: 300s
+providers:
+  defaults:
+    default_model: qwen3
+  models:
+    - name: qwen3
+      provider_model_id: qwen3
+      backend_refs:
+        - name: llm_katan
+          weight: 1
+          endpoint: host.docker.internal:8000
+          protocol: http
+routing:
+  modelCards:
+    - name: qwen3
+      modality: text
+  signals:
+    domains:
+      - name: general
+        description: General queries for memory testing
+        mmlu_categories: [other]
+    keywords:
+      - name: no_memory_trigger
+        operator: OR
+        keywords: [NOMEM_MARKER]
+      - name: custom_threshold_trigger
+        operator: OR
+        keywords: [THRESHOLD_MARKER]
+  decisions:
+    # Triggered by NOMEM_MARKER keyword. Memory explicitly disabled so retrieval
+    # is skipped even though global memory.enabled=true.
+    - name: no_memory_route
+      description: Route with memory explicitly disabled for per-decision testing
+      priority: 200
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: no_memory_trigger
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a helpful assistant. Memory access is disabled for this route.
+            mode: insert
+        - type: memory
+          configuration:
+            enabled: false
+
+    # Triggered by THRESHOLD_MARKER keyword. Memory enabled with similarity_threshold=0.99
+    # (near-impossible to match), overriding the global default of 0.45.
+    - name: custom_threshold_route
+      description: Route with high similarity threshold for per-decision testing
+      priority: 150
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: custom_threshold_trigger
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a helpful assistant with strict memory matching.
+            mode: insert
+        - type: memory
+          configuration:
+            enabled: true
+            retrieval_limit: 5
+            similarity_threshold: 0.99
+            auto_store: true
+
+    - name: default_route
+      description: Default route for memory testing
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: general
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
+            mode: insert
+        - type: memory
+          configuration:
+            enabled: true
+            retrieval_limit: 5
+            similarity_threshold: 0.45
+            auto_store: true
+global:
+  stores:
+    memory:
+      enabled: true
+      auto_store: true
+      milvus:
+        address: host.docker.internal:19530
+        collection: memory_test_ci
+        dimension: 384
+      embedding_model: mmbert
+      default_retrieval_limit: 5
+      default_similarity_threshold: 0.45
+    semantic_cache:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert

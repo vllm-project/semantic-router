@@ -6,13 +6,10 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
-	"time"
 
-	"gopkg.in/yaml.v3"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // deployMu ensures only one deploy operation at a time
@@ -27,6 +24,9 @@ type DeployRequest struct {
 	YAML string `json:"yaml"`
 	// DSL is the original DSL source (archived for audit trail)
 	DSL string `json:"dsl,omitempty"`
+	// BaseYAML is the full canonical config imported into the builder, if any.
+	// Routing-only fragments are ignored as merge bases.
+	BaseYAML string `json:"baseYaml,omitempty"`
 }
 
 // DeployResponse is the JSON response for a deploy operation
@@ -71,10 +71,7 @@ func DeployPreviewHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		// Validate the incoming YAML
-		yamlBytes := []byte(req.YAML)
-		var yamlMap interface{}
-		if err := yaml.Unmarshal(yamlBytes, &yamlMap); err != nil {
+		if _, err := decodeYAMLTaggedBytes[routingFragmentDocument]([]byte(req.YAML)); err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]string{
@@ -84,28 +81,24 @@ func DeployPreviewHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		// Read current config
 		currentData, err := os.ReadFile(configPath)
+		currentForDiffBytes := currentData
 		if err != nil {
-			currentData = []byte("# No existing config\n")
+			currentForDiffBytes = []byte("# No existing config\n")
 		}
 
-		// Compute merged preview (same logic as deployDirectWrite)
-		previewBytes := yamlBytes
-		if len(currentData) > 0 {
-			existingMap := make(map[string]interface{})
-			if err := yaml.Unmarshal(currentData, &existingMap); err == nil {
-				newMap := make(map[string]interface{})
-				if err := yaml.Unmarshal(yamlBytes, &newMap); err == nil {
-					merged := deepMerge(existingMap, newMap)
-					if mergedYAML, err := yaml.Marshal(merged); err == nil {
-						previewBytes = mergedYAML
-					}
-				}
-			}
+		previewBytes, err := mergeDeployPayload(currentData, req)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error":   "deploy_preview_error",
+				"message": err.Error(),
+			})
+			return
 		}
 
-		currentForDiff := canonicalizeYAMLForDiff(currentData)
+		currentForDiff := canonicalizeYAMLForDiff(currentForDiffBytes)
 		previewForDiff := canonicalizeYAMLForDiff(previewBytes)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -204,7 +197,7 @@ func ConfigVersionsHandler(configPath string) http.HandlerFunc {
 	}
 }
 
-// ==================== Deploy: write config.yaml + regenerate router-config.yaml ====================
+// ==================== Deploy: write canonical config.yaml ====================
 
 func deployDirectWrite(w http.ResponseWriter, configPath string, configDir string, req DeployRequest) {
 	// Acquire deploy lock (only one deploy at a time)
@@ -219,10 +212,8 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	}
 	defer deployMu.Unlock()
 
-	// Step 1: Validate the YAML parses correctly
-	yamlBytes := []byte(req.YAML)
-	var yamlMap interface{}
-	if err := yaml.Unmarshal(yamlBytes, &yamlMap); err != nil {
+	fragmentBytes := []byte(req.YAML)
+	if _, err := decodeYAMLTaggedBytes[routingFragmentDocument](fragmentBytes); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -232,46 +223,38 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 		return
 	}
 
-	// Step 2: Deep merge with existing config (same as UpdateConfigHandler)
 	existingData, err := os.ReadFile(configPath)
-	if err == nil && len(existingData) > 0 {
-		existingMap := make(map[string]interface{})
-		if err := yaml.Unmarshal(existingData, &existingMap); err == nil {
-			newMap := make(map[string]interface{})
-			if err := yaml.Unmarshal(yamlBytes, &newMap); err == nil {
-				merged := deepMerge(existingMap, newMap)
-				if mergedYAML, err := yaml.Marshal(merged); err == nil {
-					yamlBytes = mergedYAML
-				}
-			}
-		}
+	if err != nil {
+		existingData = nil
+	}
+
+	// Step 2: Deep merge the routing fragment into the deploy base.
+	yamlBytes, err := mergeDeployPayload(existingData, req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_merge_error",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	if _, err := routerconfig.ParseYAMLBytes(yamlBytes); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_validation_error",
+			"message": fmt.Sprintf("Merged config validation failed: %v", err),
+		})
+		return
 	}
 
 	// Step 3: Create backup of current config
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
-		log.Printf("Warning: failed to create backup directory: %v", err)
-	}
-
-	version := time.Now().Format("20060102-150405")
-
-	if len(existingData) > 0 {
-		backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-		if err := os.WriteFile(backupFile, existingData, 0o644); err != nil {
-			log.Printf("Warning: failed to create backup: %v", err)
-		} else {
-			log.Printf("[Deploy] Config backup created: %s", backupFile)
-		}
-	}
+	version := createConfigBackup(configDir, existingData)
 
 	// Step 4: Archive DSL source (for audit trail)
-	if req.DSL != "" {
-		dslDir := filepath.Join(configDir, ".vllm-sr")
-		dslFile := filepath.Join(dslDir, "config.dsl")
-		if err := os.WriteFile(dslFile, []byte(req.DSL), 0o644); err != nil {
-			log.Printf("Warning: failed to archive DSL source: %v", err)
-		}
-	}
+	archiveDeployDSL(configDir, req.DSL)
 
 	// Step 5: Atomic write to config.yaml
 	if err := writeConfigAtomically(configPath, yamlBytes); err != nil {
@@ -282,17 +265,13 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	log.Printf("[Deploy] Config written to %s: version=%s, size=%d bytes", configPath, version, len(yamlBytes))
 
 	// Step 6: Propagate the new config to the managed runtime before returning.
-	if err := propagateConfigToRuntime(configPath, configDir); err != nil {
-		if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, existingData); restoreErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to apply deployed config to runtime: %v. Failed to restore previous config: %v", err, restoreErr), http.StatusInternalServerError)
-			return
-		}
-		http.Error(w, fmt.Sprintf("Failed to apply deployed config to runtime: %v. Previous config restored.", err), http.StatusInternalServerError)
+	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
+		http.Error(w, formatRuntimeApplyError("Failed to apply deployed config to runtime", err), http.StatusInternalServerError)
 		return
 	}
 
 	// Step 7: Clean up old backups (keep only maxBackups most recent)
-	cleanupBackups(backupDir)
+	cleanupBackups(configBackupDir(configDir))
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(DeployResponse{
@@ -300,6 +279,130 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 		Version: version,
 		Message: "Config deployed successfully. Router and Envoy have been updated.",
 	})
+}
+
+func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
+	fragmentBytes := []byte(req.YAML)
+	baseData, err := resolveDeployBaseYAML(currentData, req.BaseYAML)
+	if err != nil {
+		return nil, err
+	}
+	if len(baseData) == 0 {
+		return fragmentBytes, nil
+	}
+
+	baseConfig, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](baseData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse deploy base config: %w", err)
+	}
+
+	fragmentConfig, err := decodeYAMLTaggedBytes[routingFragmentDocument](fragmentBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse compiled routing fragment: %w", err)
+	}
+
+	baseConfig.Routing = mergeCanonicalRouting(baseConfig.Routing, fragmentConfig.Routing)
+	mergedYAML, err := marshalYAMLBytes(baseConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal merged config: %w", err)
+	}
+	return mergedYAML, nil
+}
+
+func mergeCanonicalRouting(base, patch routerconfig.CanonicalRouting) routerconfig.CanonicalRouting {
+	merged := base
+	if len(patch.ModelCards) > 0 {
+		merged.ModelCards = patch.ModelCards
+	}
+	merged.Signals = mergeCanonicalSignals(base.Signals, patch.Signals)
+	if len(patch.Decisions) > 0 {
+		merged.Decisions = patch.Decisions
+	}
+	return merged
+}
+
+func mergeCanonicalSignals(base, patch routerconfig.CanonicalSignals) routerconfig.CanonicalSignals {
+	merged := base
+	if len(patch.Keywords) > 0 {
+		merged.Keywords = patch.Keywords
+	}
+	if len(patch.Embeddings) > 0 {
+		merged.Embeddings = patch.Embeddings
+	}
+	if len(patch.Domains) > 0 {
+		merged.Domains = patch.Domains
+	}
+	if len(patch.FactCheck) > 0 {
+		merged.FactCheck = patch.FactCheck
+	}
+	if len(patch.UserFeedbacks) > 0 {
+		merged.UserFeedbacks = patch.UserFeedbacks
+	}
+	if len(patch.Preferences) > 0 {
+		merged.Preferences = patch.Preferences
+	}
+	if len(patch.Language) > 0 {
+		merged.Language = patch.Language
+	}
+	if len(patch.Context) > 0 {
+		merged.Context = patch.Context
+	}
+	if len(patch.Complexity) > 0 {
+		merged.Complexity = patch.Complexity
+	}
+	if len(patch.Modality) > 0 {
+		merged.Modality = patch.Modality
+	}
+	if len(patch.RoleBindings) > 0 {
+		merged.RoleBindings = patch.RoleBindings
+	}
+	if len(patch.Jailbreak) > 0 {
+		merged.Jailbreak = patch.Jailbreak
+	}
+	if len(patch.PII) > 0 {
+		merged.PII = patch.PII
+	}
+	return merged
+}
+
+func resolveDeployBaseYAML(currentData []byte, providedBase string) ([]byte, error) {
+	if strings.TrimSpace(providedBase) == "" {
+		return currentData, nil
+	}
+
+	providedBaseBytes := []byte(providedBase)
+	if _, err := parseYAMLDocument(providedBaseBytes); err != nil {
+		return nil, fmt.Errorf("invalid imported base config: %w", err)
+	}
+	looksLikeFullBase, err := looksLikeFullCanonicalDeployBase(providedBaseBytes)
+	if err != nil {
+		return nil, fmt.Errorf("invalid imported base config: %w", err)
+	}
+	if !looksLikeFullBase {
+		return currentData, nil
+	}
+	return providedBaseBytes, nil
+}
+
+func looksLikeFullCanonicalDeployBase(raw []byte) (bool, error) {
+	doc, err := parseYAMLDocument(raw)
+	if err != nil {
+		return false, err
+	}
+	root, err := documentMappingNode(doc)
+	if err != nil {
+		return false, err
+	}
+	if mappingValueNode(root, "routing") == nil {
+		return false, nil
+	}
+
+	for _, key := range []string{"version", "listeners", "providers", "global"} {
+		if mappingValueNode(root, key) != nil {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir string, version string) {
@@ -316,10 +419,7 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 	defer deployMu.Unlock()
 
 	// Find backup file
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-
-	backupData, err := os.ReadFile(backupFile)
+	backupData, err := readConfigBackup(configDir, version)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -331,8 +431,7 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 	}
 
 	// Validate backup YAML syntax
-	var yamlCheck interface{}
-	if unmarshalErr := yaml.Unmarshal(backupData, &yamlCheck); unmarshalErr != nil {
+	if _, unmarshalErr := parseYAMLDocument(backupData); unmarshalErr != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -343,12 +442,7 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 	}
 
 	// Back up current config before rollback
-	currentVersion := time.Now().Format("20060102-150405")
-	existingData, err := os.ReadFile(configPath)
-	if err == nil && len(existingData) > 0 {
-		preRollbackFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", currentVersion))
-		_ = os.WriteFile(preRollbackFile, existingData, 0o644)
-	}
+	existingData := snapshotCurrentConfigBeforeRollback(configPath, configDir)
 
 	// Atomic write to config.yaml
 	if err := writeConfigAtomically(configPath, backupData); err != nil {
@@ -358,12 +452,8 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 
 	log.Printf("[Rollback] Config rolled back to version %s, written to %s", version, configPath)
 
-	if err := propagateConfigToRuntime(configPath, configDir); err != nil {
-		if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, existingData); restoreErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to apply rolled back config to runtime: %v. Failed to restore previous config: %v", err, restoreErr), http.StatusInternalServerError)
-			return
-		}
-		http.Error(w, fmt.Sprintf("Failed to apply rolled back config to runtime: %v. Previous config restored.", err), http.StatusInternalServerError)
+	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
+		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -373,95 +463,6 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 		Version: version,
 		Message: fmt.Sprintf("Rolled back to version %s. Router and Envoy have been updated.", version),
 	})
-}
-
-func versionsLocalList(w http.ResponseWriter, configPath string) {
-	configDir := filepath.Dir(configPath)
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-
-	versions := []ConfigVersion{}
-
-	entries, err := os.ReadDir(backupDir)
-	if err != nil {
-		// No backups yet, return empty list
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(versions)
-		return
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "config.") || !strings.HasSuffix(entry.Name(), ".yaml") {
-			continue
-		}
-
-		// Extract version from filename: config.20060102-150405.yaml
-		name := entry.Name()
-		versionStr := strings.TrimPrefix(name, "config.")
-		versionStr = strings.TrimSuffix(versionStr, ".yaml")
-
-		// Parse timestamp for display
-		t, err := time.Parse("20060102-150405", versionStr)
-		timestamp := versionStr
-		if err == nil {
-			timestamp = t.Format("2006-01-02 15:04:05")
-		}
-
-		versions = append(versions, ConfigVersion{
-			Version:   versionStr,
-			Timestamp: timestamp,
-			Source:    "dsl",
-			Filename:  name,
-		})
-	}
-
-	// Sort by version descending (newest first)
-	sort.Slice(versions, func(i, j int) bool {
-		return versions[i].Version > versions[j].Version
-	})
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(versions)
-}
-
-// deepMerge recursively merges src into dst. For map values, it recurses;
-// for slices and scalars, src overwrites dst. dst is modified in place.
-func deepMerge(dst, src map[string]interface{}) map[string]interface{} {
-	for key, srcVal := range src {
-		if dstVal, exists := dst[key]; exists {
-			// Both sides are maps → recurse
-			if dstMap, ok := dstVal.(map[string]interface{}); ok {
-				if srcMap, ok := srcVal.(map[string]interface{}); ok {
-					dst[key] = deepMerge(dstMap, srcMap)
-					continue
-				}
-			}
-			// Also handle map[interface{}]interface{} from yaml.v2
-			if dstMap, ok := toStringKeyMap(dstVal); ok {
-				if srcMap, ok := toStringKeyMap(srcVal); ok {
-					dst[key] = deepMerge(dstMap, srcMap)
-					continue
-				}
-			}
-		}
-		// Non-map or new key → overwrite
-		dst[key] = srcVal
-	}
-	return dst
-}
-
-// toStringKeyMap converts map[interface{}]interface{} (yaml.v2) to map[string]interface{}
-func toStringKeyMap(v interface{}) (map[string]interface{}, bool) {
-	switch m := v.(type) {
-	case map[string]interface{}:
-		return m, true
-	case map[interface{}]interface{}:
-		result := make(map[string]interface{}, len(m))
-		for k, val := range m {
-			result[fmt.Sprintf("%v", k)] = val
-		}
-		return result, true
-	}
-	return nil, false
 }
 
 // canonicalizeYAMLForDiff converts YAML into a normalized representation so
@@ -475,76 +476,17 @@ func canonicalizeYAMLForDiff(raw []byte) string {
 		return text
 	}
 
-	var parsed interface{}
-	if err := yaml.Unmarshal(raw, &parsed); err != nil {
-		return text
-	}
-
-	normalized := normalizeYAMLValue(parsed)
-	canonical, err := yaml.Marshal(normalized)
-	if err != nil {
-		return text
-	}
-	return string(canonical)
-}
-
-func normalizeYAMLValue(v interface{}) interface{} {
-	switch value := v.(type) {
-	case map[string]interface{}:
-		normalized := make(map[string]interface{}, len(value))
-		for key, item := range value {
-			normalized[key] = normalizeYAMLValue(item)
-		}
-		return normalized
-	case map[interface{}]interface{}:
-		normalized := make(map[string]interface{}, len(value))
-		for key, item := range value {
-			normalized[fmt.Sprintf("%v", key)] = normalizeYAMLValue(item)
-		}
-		return normalized
-	case []interface{}:
-		normalized := make([]interface{}, len(value))
-		for i, item := range value {
-			normalized[i] = normalizeYAMLValue(item)
-		}
-		return normalized
-	default:
-		return value
-	}
-}
-
-// cleanupBackups removes old backups beyond maxBackups
-func cleanupBackups(backupDir string) {
-	entries, err := os.ReadDir(backupDir)
-	if err != nil {
-		return
-	}
-
-	// Filter yaml backup files
-	var backups []os.DirEntry
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "config.") && strings.HasSuffix(entry.Name(), ".yaml") {
-			backups = append(backups, entry)
+	if looksLikeFullBase, err := looksLikeFullCanonicalDeployBase(raw); err == nil && looksLikeFullBase {
+		if configData, decodeErr := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](raw); decodeErr == nil {
+			if canonical, marshalErr := marshalYAMLBytes(configData); marshalErr == nil {
+				return string(canonical)
+			}
 		}
 	}
-
-	if len(backups) <= maxBackups {
-		return
-	}
-
-	// Sort by name ascending (oldest first since names contain timestamps)
-	sort.Slice(backups, func(i, j int) bool {
-		return backups[i].Name() < backups[j].Name()
-	})
-
-	// Remove oldest backups
-	toRemove := len(backups) - maxBackups
-	for i := 0; i < toRemove; i++ {
-		path := filepath.Join(backupDir, backups[i].Name())
-		if err := os.Remove(path); err != nil {
-			log.Printf("Warning: failed to remove old backup %s: %v", path, err)
-		} else {
-			log.Printf("Removed old backup: %s", backups[i].Name())
+	if fragment, err := decodeYAMLTaggedBytes[routingFragmentDocument](raw); err == nil {
+		if canonical, marshalErr := marshalYAMLBytes(fragment); marshalErr == nil {
+			return string(canonical)
 		}
 	}
+	return text
 }

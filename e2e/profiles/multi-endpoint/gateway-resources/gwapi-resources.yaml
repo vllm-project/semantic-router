@@ -53,7 +53,7 @@ spec:
     bufferLimit: 50Mi
 ---
 # AIGatewayRoute — routes model aliases to the correct backend
-# The semantic router sets x-ai-eg-model header after resolving MoM -> alias.
+# Envoy AI Gateway sets x-ai-eg-model after extracting the request model.
 # Each alias maps to its own backend (Dev or Prod).
 apiVersion: aigateway.envoyproxy.io/v1alpha1
 kind: AIGatewayRoute

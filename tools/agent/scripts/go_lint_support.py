@@ -11,10 +11,6 @@ from pathlib import Path
 
 
 def resolve_golangci_lint(repo_root: Path) -> str:
-    binary = shutil.which("golangci-lint")
-    if binary:
-        return binary
-
     result = subprocess.run(
         ["go", "env", "GOPATH"],
         cwd=repo_root,
@@ -26,6 +22,10 @@ def resolve_golangci_lint(repo_root: Path) -> str:
         candidate = Path(result.stdout.strip()) / "bin" / "golangci-lint"
         if candidate.exists():
             return str(candidate)
+
+    binary = shutil.which("golangci-lint")
+    if binary:
+        return binary
     return "golangci-lint"
 
 

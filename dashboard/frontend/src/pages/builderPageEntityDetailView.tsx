@@ -1,28 +1,34 @@
 import React from "react";
 
 import type {
-  ASTBackendDecl,
+  ASTModelDecl,
+  ASTProjectionPartitionDecl,
+  ASTProjectionMappingDecl,
+  ASTProjectionScoreDecl,
   ASTPluginDecl,
   ASTRouteDecl,
   ASTSignalDecl,
+  DSLFieldObject,
 } from "@/types/dsl";
 import type { RouteInput } from "@/lib/dslMutations";
-import { useDSLStore } from "@/stores/dslStore";
 
 import styles from "./BuilderPage.module.css";
 import {
-  BackendIcon,
   GenericFieldsEditor,
-  GlobalIcon,
+  ModelIcon,
   PluginIcon,
   RouteIcon,
   SignalIcon,
 } from "./builderPageFormPrimitives";
 import {
-  GlobalSettingsEditor,
   PluginSchemaEditor,
   SignalEditorForm,
 } from "./builderPageEntityForms";
+import {
+  ProjectionMappingEditorForm,
+  ProjectionPartitionEditorForm,
+  ProjectionScoreEditorForm,
+} from "./builderPageProjectionEditors";
 import { RouteEditorForm } from "./builderPageRouteForms";
 import type {
   AvailablePlugin,
@@ -35,25 +41,31 @@ import type {
 interface EntityDetailViewProps {
   selection: Selection;
   entity: BuilderSelectedEntity;
-  ast: ReturnType<typeof useDSLStore.getState>["ast"];
   onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void;
   onUpdateSignalFields: (
     signalType: string,
     name: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
+  ) => void;
+  onUpdateProjectionPartitionFields: (
+    name: string,
+    fields: DSLFieldObject,
+  ) => void;
+  onUpdateProjectionScoreFields: (
+    name: string,
+    fields: DSLFieldObject,
+  ) => void;
+  onUpdateProjectionMappingFields: (
+    name: string,
+    fields: DSLFieldObject,
   ) => void;
   onUpdatePluginFields: (
     name: string,
     pluginType: string,
-    fields: Record<string, unknown>,
+    fields: DSLFieldObject,
   ) => void;
-  onUpdateBackendFields: (
-    backendType: string,
-    name: string,
-    fields: Record<string, unknown>,
-  ) => void;
+  onUpdateModelFields: (name: string, fields: DSLFieldObject) => void;
   onUpdateRoute: (name: string, input: RouteInput) => void;
-  onUpdateGlobalFields: (fields: Record<string, unknown>) => void;
   availableSignals: AvailableSignal[];
   availablePlugins: AvailablePlugin[];
   availableModels: string[];
@@ -63,13 +75,14 @@ interface EntityDetailViewProps {
 const EntityDetailView: React.FC<EntityDetailViewProps> = ({
   selection,
   entity,
-  ast,
   onDeleteEntity,
+  onUpdateModelFields,
   onUpdateSignalFields,
+  onUpdateProjectionPartitionFields,
+  onUpdateProjectionScoreFields,
+  onUpdateProjectionMappingFields,
   onUpdatePluginFields,
-  onUpdateBackendFields,
   onUpdateRoute,
-  onUpdateGlobalFields,
   availableSignals,
   availablePlugins,
   availableModels,
@@ -97,9 +110,7 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
       ? entity.signalType
       : "pluginType" in entity
         ? entity.pluginType
-        : "backendType" in entity
-          ? entity.backendType
-          : undefined;
+        : undefined;
 
   return (
     <div className={styles.editorPanel}>
@@ -123,6 +134,9 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
           </svg>
         </button>
         <div className={styles.editorTitle}>
+          {selection.kind === "model" && (
+            <ModelIcon className={styles.statIcon} />
+          )}
           {selection.kind === "signal" && (
             <SignalIcon className={styles.statIcon} />
           )}
@@ -132,37 +146,43 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
           {selection.kind === "plugin" && (
             <PluginIcon className={styles.statIcon} />
           )}
-          {selection.kind === "backend" && (
-            <BackendIcon className={styles.statIcon} />
-          )}
-          {selection.kind === "global" && (
-            <GlobalIcon className={styles.statIcon} />
-          )}
-          {"name" in entity ? entity.name : "Global Settings"}
+          {"name" in entity ? entity.name : "Entity"}
           {"signalType" in entity && (
             <span className={styles.editorBadge}>{entity.signalType}</span>
+          )}
+          {"semantics" in entity && (
+            <span className={styles.editorBadge}>projection partition</span>
+          )}
+          {"source" in entity && !("signalType" in entity) && !("pluginType" in entity) && (
+            <span className={styles.editorBadge}>projection mapping</span>
+          )}
+          {"inputs" in entity && !("signalType" in entity) && (
+            <span className={styles.editorBadge}>projection score</span>
           )}
           {"pluginType" in entity && (
             <span className={styles.editorBadge}>{entity.pluginType}</span>
           )}
-          {"backendType" in entity && (
-            <span className={styles.editorBadge}>{entity.backendType}</span>
-          )}
         </div>
-        {selection.kind !== "global" && (
-          <div className={styles.editorActions}>
-            <button
-              className={styles.toolbarBtnDanger}
-              onClick={() =>
-                onDeleteEntity(selection.kind, selection.name, subType)
-              }
-              title="Delete this entity"
-            >
-              Delete
-            </button>
-          </div>
-        )}
+        <div className={styles.editorActions}>
+          <button
+            className={styles.toolbarBtnDanger}
+            onClick={() => onDeleteEntity(selection.kind, selection.name, subType)}
+            title="Delete this entity"
+          >
+            Delete
+          </button>
+        </div>
       </div>
+
+      {/* Editable Model form */}
+      {selection.kind === "model" && "fields" in entity && (
+        <GenericFieldsEditor
+          fields={(entity as ASTModelDecl).fields}
+          onUpdate={(fields) =>
+            onUpdateModelFields((entity as ASTModelDecl).name, fields)
+          }
+        />
+      )}
 
       {/* Editable Signal form */}
       {selection.kind === "signal" && "signalType" in entity && (
@@ -178,13 +198,47 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
         />
       )}
 
+      {selection.kind === "projection-partition" && "members" in entity && (
+        <ProjectionPartitionEditorForm
+          partition={entity as ASTProjectionPartitionDecl}
+          onUpdate={(fields) =>
+            onUpdateProjectionPartitionFields(
+              (entity as ASTProjectionPartitionDecl).name,
+              fields,
+            )
+          }
+        />
+      )}
+
+      {selection.kind === "projection-score" && (
+        <ProjectionScoreEditorForm
+          score={entity as ASTProjectionScoreDecl}
+          onUpdate={(fields) =>
+            onUpdateProjectionScoreFields(
+              (entity as ASTProjectionScoreDecl).name,
+              fields,
+            )
+          }
+        />
+      )}
+
+      {selection.kind === "projection-mapping" && (
+        <ProjectionMappingEditorForm
+          mapping={entity as ASTProjectionMappingDecl}
+          onUpdate={(fields) =>
+            onUpdateProjectionMappingFields(
+              (entity as ASTProjectionMappingDecl).name,
+              fields,
+            )
+          }
+        />
+      )}
+
       {/* Editable Plugin form */}
       {selection.kind === "plugin" && "pluginType" in entity && (
         <PluginSchemaEditor
           pluginType={(entity as ASTPluginDecl).pluginType}
-          fields={
-            "fields" in entity ? (entity.fields as Record<string, unknown>) : {}
-          }
+          fields={"fields" in entity ? entity.fields : {}}
           onUpdate={(fields) =>
             onUpdatePluginFields(
               (entity as ASTPluginDecl).name,
@@ -193,22 +247,6 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
             )
           }
           buffered
-        />
-      )}
-
-      {/* Editable Backend form */}
-      {selection.kind === "backend" && "backendType" in entity && (
-        <GenericFieldsEditor
-          fields={
-            "fields" in entity ? (entity.fields as Record<string, unknown>) : {}
-          }
-          onUpdate={(fields) =>
-            onUpdateBackendFields(
-              (entity as ASTBackendDecl).backendType,
-              (entity as ASTBackendDecl).name,
-              fields,
-            )
-          }
         />
       )}
 
@@ -222,27 +260,6 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
           availableSignals={availableSignals}
           availablePlugins={availablePlugins}
           availableModels={availableModels}
-        />
-      )}
-
-      {/* Editable Global form — structured sections */}
-      {selection.kind === "global" && (
-        <GlobalSettingsEditor
-          fields={
-            "fields" in entity ? (entity.fields as Record<string, unknown>) : {}
-          }
-          onUpdate={onUpdateGlobalFields}
-          endpoints={
-            ast?.backends?.filter(
-              (b) =>
-                b.backendType === "vllm_endpoint" ||
-                b.backendType === "provider_profile",
-            ) ?? []
-          }
-          onSelectEndpoint={() => {
-            onBack();
-            setTimeout(() => onBack(), 0);
-          }}
         />
       )}
     </div>

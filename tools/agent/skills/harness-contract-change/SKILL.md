@@ -1,7 +1,7 @@
 ---
 name: harness-contract-change
 category: primary
-description: Use when changing the repository's agent contract, docs index, manifests, validation scripts, or contributor-facing harness wrappers.
+description: Modifies the repository's agent contract including AGENTS.md, docs index, manifests, validation scripts, and contributor-facing harness wrappers. Use when updating agent documentation, changing repo manifests, editing validation scripts, modifying CI/workflow classification, or updating contributor-facing guides like README.md, CONTRIBUTING.md, or the PR template.
 ---
 
 # Harness Contract Change
@@ -26,13 +26,24 @@ description: Use when changing the repository's agent contract, docs index, mani
 - The edit would create a second conflicting source of truth instead of updating the canonical one
 - The rule change cannot be enforced or validated in the same change
 
+## Workflow
+
+1. Read agent README, governance docs, and execution-plan guidance for current contract state
+2. Modify agent contract docs, manifests, validation scripts, or contributor wrappers
+3. Run `make agent-validate` to check alignment between docs and manifests
+4. Run `make agent-ci-gate CHANGED_FILES="..."` to verify all surfaces pass
+5. Record any durable code/spec divergence as indexed debt entries
+
+## Gotchas
+
+- Do not add a prose-only harness rule when the same invariant can be enforced in manifests, scripts, or CI.
+- When routing, validation, or contributor workflow changes, update the executable layer and the human-readable layer in the same patch.
+
 ## Must Read
 
 - [docs/agent/README.md](../../../../docs/agent/README.md)
 - [docs/agent/governance.md](../../../../docs/agent/governance.md)
 - [docs/agent/plans/README.md](../../../../docs/agent/plans/README.md)
-- [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
-- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 
 ## Standard Commands
 

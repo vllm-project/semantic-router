@@ -59,7 +59,6 @@ func createSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 		EvictionPolicy:      cache.EvictionPolicyType(semanticCacheCfg.EvictionPolicy),
 		Redis:               semanticCacheCfg.Redis,
 		Milvus:              semanticCacheCfg.Milvus,
-		BackendConfigPath:   semanticCacheCfg.BackendConfigPath,
 		EmbeddingModel:      detectSemanticCacheEmbeddingModel(cfg),
 	}
 
@@ -117,9 +116,8 @@ func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
 }
 
 func createToolsDatabase(cfg *config.RouterConfig) *tools.ToolsDatabase {
-	bertModelCfg := cfg.BertModel
 	embeddingModels := cfg.EmbeddingModels
-	toolsThreshold := bertModelCfg.Threshold
+	toolsThreshold := embeddingModels.MinSimilarityThreshold()
 	if cfg.Tools.SimilarityThreshold != nil {
 		toolsThreshold = *cfg.Tools.SimilarityThreshold
 	}
@@ -127,8 +125,8 @@ func createToolsDatabase(cfg *config.RouterConfig) *tools.ToolsDatabase {
 	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 		SimilarityThreshold: toolsThreshold,
 		Enabled:             cfg.Tools.Enabled,
-		ModelType:           embeddingModels.HNSWConfig.ModelType,
-		TargetDimension:     embeddingModels.HNSWConfig.TargetDimension,
+		ModelType:           embeddingModels.EmbeddingConfig.ModelType,
+		TargetDimension:     embeddingModels.EmbeddingConfig.TargetDimension,
 	})
 
 	if toolsDatabase.IsEnabled() {

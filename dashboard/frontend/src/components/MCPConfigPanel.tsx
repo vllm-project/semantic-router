@@ -23,9 +23,13 @@ import {
 
 interface MCPConfigPanelProps {
   onClose?: () => void
+  embedded?: boolean
 }
 
-export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose }) => {
+export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({
+  onClose,
+  embedded = false,
+}) => {
   const { isReadonly } = useReadonly()
   const {
     servers,
@@ -143,27 +147,42 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose }) => {
 
   if (loading) {
     return (
-      <div className={styles.panel}>
-        <div className={styles.header}>
-          <h2>🔌 MCP Servers & Tools</h2>
-          {onClose && <button className={styles.closeBtn} onClick={onClose}>×</button>}
-        </div>
+      <div className={`${styles.panel} ${embedded ? styles.embeddedPanel : ''}`}>
+        {!embedded && (
+          <div className={styles.header}>
+            <h2>🔌 MCP Servers & Tools</h2>
+            {onClose && <button className={styles.closeBtn} onClick={onClose}>×</button>}
+          </div>
+        )}
         <div className={styles.loading}>Loading...</div>
       </div>
     )
   }
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.header}>
-        <h2>🔌 MCP Servers & Tools</h2>
-        <div className={styles.headerActions}>
+    <div className={`${styles.panel} ${embedded ? styles.embeddedPanel : ''}`}>
+      {!embedded && (
+        <div className={styles.header}>
+          <h2>🔌 MCP Servers & Tools</h2>
+          <div className={styles.headerActions}>
+            <button className={styles.refreshBtn} onClick={() => refreshServers()} title="Refresh">
+              ↻
+            </button>
+            {onClose && <button className={styles.closeBtn} onClick={onClose}>×</button>}
+          </div>
+        </div>
+      )}
+
+      {embedded && (
+        <div className={styles.embeddedToolbar}>
+          <div className={styles.embeddedSummary}>
+            {totalToolsCount} tools ({mcpToolsCount} from MCP, {builtInCount} built-in) • {connectedCount} connected servers
+          </div>
           <button className={styles.refreshBtn} onClick={() => refreshServers()} title="Refresh">
             ↻
           </button>
-          {onClose && <button className={styles.closeBtn} onClick={onClose}>×</button>}
         </div>
-      </div>
+      )}
 
       {error && <div className={styles.error}>{error}</div>}
 
@@ -211,9 +230,11 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose }) => {
         >
           + Add MCP Server
         </button>
-        <div className={styles.summary}>
-          {totalToolsCount} tools ({mcpToolsCount} from MCP, {builtInCount} built-in) • {connectedCount} connected servers
-        </div>
+        {!embedded && (
+          <div className={styles.summary}>
+            {totalToolsCount} tools ({mcpToolsCount} from MCP, {builtInCount} built-in) • {connectedCount} connected servers
+          </div>
+        )}
       </div>
 
       {(showAddDialog || editingServer) && (

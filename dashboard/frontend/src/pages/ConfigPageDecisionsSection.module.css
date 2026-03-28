@@ -1,0 +1,206 @@
+.editorList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.editorCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: rgba(6, 10, 9, 0.36);
+  min-width: 0;
+}
+
+.editorGridTwo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  align-items: start;
+}
+
+.editorGridConditions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.editorInput,
+.editorSelect,
+.editorTextarea {
+  width: 100%;
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: rgba(2, 5, 5, 0.62);
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.editorTextarea {
+  resize: vertical;
+  min-height: 5.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.editorControlLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.editorControlLabelText {
+  color: var(--color-text-secondary);
+  font-size: 0.77rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.editorMetaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.editorCheckbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.editorCheckbox input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.editorButtonSecondary {
+  width: fit-content;
+  padding: 0.55rem 0.8rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.editorButtonDanger {
+  width: fit-content;
+  padding: 0.55rem 0.8rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 105, 97, 0.28);
+  background: rgba(255, 105, 97, 0.08);
+  color: #ffd0ca;
+  font-weight: 600;
+}
+
+.editorButtonSecondary:hover,
+.editorButtonDanger:hover {
+  filter: brightness(1.08);
+}
+
+.viewStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.viewCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(0, 212, 255, 0.14);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.viewHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.viewTitle {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.viewBadgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.viewBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 212, 255, 0.18);
+  background: rgba(0, 212, 255, 0.08);
+  color: var(--color-accent-cyan);
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.viewMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.75rem;
+}
+
+.viewMetaRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.viewMetaLabel {
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.viewMetaValue {
+  color: var(--color-text);
+  font-size: 0.84rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .editorGridConditions,
+  .editorGridTwo,
+  .viewMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .editorMetaRow,
+  .viewHeading {
+    align-items: flex-start;
+  }
+}

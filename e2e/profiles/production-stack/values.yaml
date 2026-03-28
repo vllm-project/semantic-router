@@ -1,395 +1,354 @@
-# Semantic Router Configuration for Production Stack
-# Minimal configuration for HA/LB/Monitoring tests
 config:
-  # Allow Envoy to re-run route matching after Semantic Router sets x-selected-model
-  clear_route_cache: true
-  default_model: general-expert
-
-  # Model configuration - base model with LoRA adapters
-  model_config:
-    "base-model":
-      reasoning_family: "qwen3"
-      loras:
-        - name: "science-expert"
-          description: "Specialized for science domains"
-        - name: "social-expert"
-          description: "Optimized for social sciences"
-        - name: "math-expert"
-          description: "Fine-tuned for mathematics"
-        - name: "law-expert"
-          description: "Specialized for legal questions"
-        - name: "humanities-expert"
-          description: "Optimized for humanities"
-        - name: "general-expert"
-          description: "General-purpose adapter"
-
-  # Jailbreak and PII detection (signal layer, inline into IntelligentRouting)
-  jailbreak:
-    - name: "jailbreak_standard"
-      threshold: 0.7
-      include_history: false
-      description: "Standard jailbreak detection"
-
-  pii:
-    - name: "pii_deny_all"
-      threshold: 0.9
-      include_history: false
-      description: "Block all PII"
-
-  # --- Prompt Guard (global defaults) ---
-  prompt_guard:
-    enabled: true
-    use_modernbert: false
-    model_id: "models/mom-jailbreak-classifier"
-    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-    threshold: 0.7
-    use_cpu: true
-
-  # Classifier configuration - required for domain-classify test
-  # Using LoRA models for better performance with auto-detection
-  classifier:
-    category_model:
-      model_id: models/mom-domain-classifier
-      use_modernbert: false  # MoM uses LoRA-based model
-      threshold: 0.6
-      use_cpu: true
-      category_mapping_path: models/mom-domain-classifier/category_mapping.json
-    pii_model:
-      # Required for pii-detection test
-      model_id: models/mom-pii-classifier
-      use_modernbert: false
-      threshold: 0.9
-      use_cpu: true
-      pii_mapping_path: models/mom-pii-classifier/pii_type_mapping.json
-
-  # Categories required for domain-classify test cases
-  categories:
-    - name: business
-      description: "Business, corporate strategy, management, finance"
-    - name: philosophy
-      description: "Philosophical traditions, ethics, logic"
-    - name: biology
-      description: "Molecular biology, genetics, cell biology"
-    - name: health
-      description: "Anatomy, physiology, diseases, treatments"
-    - name: computer science
-      description: "Algorithms, data structures, programming"
-    - name: engineering
-      description: "Engineering disciplines, design, problem-solving"
-    - name: psychology
-      description: "Cognitive processes, behavioral patterns"
-    - name: math
-      description: "Mathematics, algebra, calculus, geometry"
-    - name: chemistry
-      description: "Chemical reactions, molecular structures"
-    - name: physics
-      description: "Physical laws, mechanics, thermodynamics"
-    - name: history
-      description: "Historical events, time periods, cultures"
-    - name: law
-      description: "Legal principles, case law, statutory interpretation"
-    - name: economics
-      description: "Microeconomics, macroeconomics, financial markets"
-    - name: other
-      description: "General knowledge and miscellaneous topics"
-
-  # Decisions for routing requests based on classified domain
-  decisions:
-    # ── Security layer (priority 1000+) ──
-    - name: block_jailbreak
-      description: "Block jailbreak attempts"
-      priority: 1000
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "jailbreak"
-            name: "jailbreak_standard"
-      plugins:
-        - type: "fast_response"
-          configuration:
-            message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
-
-    - name: block_pii
-      description: "Block requests containing PII"
-      priority: 999
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "pii"
-            name: "pii_deny_all"
-      plugins:
-        - type: "fast_response"
-          configuration:
-            message: "Your request contains personal information that cannot be processed."
-
-    # ── Domain routing (priority 100) ──
-    - name: business_decision
-      description: "Business domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "business"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-
-    - name: philosophy_decision
-      description: "Philosophy domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "philosophy"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-
-    - name: biology_decision
-      description: "Biology domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "biology"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-
-    - name: health_decision
-      description: "Health domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "health"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-
-    - name: computer_science_decision
-      description: "Computer science domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "computer science"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-
-    - name: engineering_decision
-      description: "Engineering domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "engineering"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-
-    - name: psychology_decision
-      description: "Psychology domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "psychology"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-
-    - name: math_decision
-      description: "Math domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "math"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: true
-      plugins:
-
-
-    - name: chemistry_decision
-      description: "Chemistry domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "chemistry"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: true
-      plugins:
-
-
-    - name: physics_decision
-      description: "Physics domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "physics"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: true
-      plugins:
-
-
-    - name: history_decision
-      description: "History domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "history"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-
-    - name: law_decision
-      description: "Law domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "law"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-
-    - name: economics_decision
-      description: "Economics domain queries"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "economics"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-
-    - name: default_decision
-      description: "Default route for all requests"
-      priority: 1
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "other"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-      plugins:
-
-        - type: "semantic-cache"
-          configuration:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: general-expert
+      reasoning_families:
+        qwen3:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+      default_reasoning_effort: high
+    models:
+      - name: base-model
+        reasoning_family: qwen3
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      - name: block_jailbreak
+        description: Block jailbreak attempts
+        priority: 1000
+        rules:
+          operator: OR
+          conditions:
+            - type: jailbreak
+              name: jailbreak_standard
+        plugins:
+          - type: fast_response
+            configuration:
+              message: I'm sorry, but I cannot process this request as it appears to violate our usage policies.
+      - name: block_pii
+        description: Block requests containing PII
+        priority: 999
+        rules:
+          operator: OR
+          conditions:
+            - type: pii
+              name: pii_deny_all
+        plugins:
+          - type: fast_response
+            configuration:
+              message: Your request contains personal information that cannot be processed.
+      - name: business_decision
+        description: Business domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins: null
+      - name: philosophy_decision
+        description: Philosophy domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: philosophy
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins: null
+      - name: biology_decision
+        description: Biology domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: biology
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins: null
+      - name: health_decision
+        description: Health domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: health
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins: null
+      - name: computer_science_decision
+        description: Computer science domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: computer science
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins: null
+      - name: engineering_decision
+        description: Engineering domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: engineering
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins: null
+      - name: psychology_decision
+        description: Psychology domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: psychology
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins: null
+      - name: math_decision
+        description: Math domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: true
+        plugins: null
+      - name: chemistry_decision
+        description: Chemistry domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: chemistry
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: true
+        plugins: null
+      - name: physics_decision
+        description: Physics domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: physics
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: true
+        plugins: null
+      - name: history_decision
+        description: History domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: history
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins: null
+      - name: law_decision
+        description: Law domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: law
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins: null
+      - name: economics_decision
+        description: Economics domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: economics
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins: null
+      - name: default_decision
+        description: Default route for all requests
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: semantic-cache
+            configuration:
+              enabled: true
+              similarity_threshold: 0.8
+    signals:
+      domains:
+        - name: business
+          description: Business, corporate strategy, management, finance
+        - name: philosophy
+          description: Philosophical traditions, ethics, logic
+        - name: biology
+          description: Molecular biology, genetics, cell biology
+        - name: health
+          description: Anatomy, physiology, diseases, treatments
+        - name: computer science
+          description: Algorithms, data structures, programming
+        - name: engineering
+          description: Engineering disciplines, design, problem-solving
+        - name: psychology
+          description: Cognitive processes, behavioral patterns
+        - name: math
+          description: Mathematics, algebra, calculus, geometry
+        - name: chemistry
+          description: Chemical reactions, molecular structures
+        - name: physics
+          description: Physical laws, mechanics, thermodynamics
+        - name: history
+          description: Historical events, time periods, cultures
+        - name: law
+          description: Legal principles, case law, statutory interpretation
+        - name: economics
+          description: Microeconomics, macroeconomics, financial markets
+        - name: other
+          description: General knowledge and miscellaneous topics
+      jailbreak:
+        - name: jailbreak_standard
+          threshold: 0.7
+          include_history: false
+          description: Standard jailbreak detection
+      pii:
+        - name: pii_deny_all
+          threshold: 0.9
+          include_history: false
+          description: Block all PII
+    modelCards:
+      - name: base-model
+        loras:
+          - name: science-expert
+            description: Specialized for science domains
+          - name: social-expert
+            description: Optimized for social sciences
+          - name: math-expert
+            description: Fine-tuned for mathematics
+          - name: law-expert
+            description: Specialized for legal questions
+          - name: humanities-expert
+            description: Optimized for humanities
+          - name: general-expert
+            description: General-purpose adapter
+      - name: general-expert
+  global:
+    model_catalog:
+      kbs: []
+    router:
+      clear_route_cache: true
+      strategy: priority
+    services:
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+          metrics:
             enabled: true
-            similarity_threshold: 0.8
-
-  strategy: "priority"
-
-  # BERT model for embeddings
-  bert_model:
-    model_id: models/mom-embedding-light
-    threshold: 0.6
-    use_cpu: true
-
-  # Semantic cache - required for semantic-cache test
-  semantic_cache:
-    enabled: true
-    backend_type: "memory"
-    similarity_threshold: 0.8
-    max_entries: 1000
-    ttl_seconds: 3600
-    eviction_policy: "fifo"
-    use_hnsw: true
-    hnsw_m: 16
-    hnsw_ef_construction: 200
-    embedding_model: "bert"
-
-  # Tools - disabled (not needed for production-stack tests)
-  tools:
-    enabled: false
-
-  # Reasoning family configurations
-  reasoning_families:
-    qwen3:
-      type: "chat_template_kwargs"
-      parameter: "enable_thinking"
-
-  default_reasoning_effort: high
-
-  # API Configuration
-  api:
-    batch_classification:
-      max_batch_size: 100
-      concurrency_threshold: 5
-      max_concurrency: 8
-      metrics:
+            detailed_goroutine_tracking: true
+            high_resolution_timing: false
+            sample_rate: 1.0
+            duration_buckets:
+              - 0.001
+              - 0.005
+              - 0.01
+              - 0.025
+              - 0.05
+              - 0.1
+              - 0.25
+              - 0.5
+              - 1
+              - 2.5
+              - 5
+              - 10
+              - 30
+            size_buckets:
+              - 1
+              - 2
+              - 5
+              - 10
+              - 20
+              - 50
+              - 100
+              - 200
+      observability:
+        tracing:
+          enabled: false
+    stores:
+      semantic_cache:
         enabled: true
-        detailed_goroutine_tracking: true
-        high_resolution_timing: false
-        sample_rate: 1.0
-        duration_buckets:
-          [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
-        size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
-
-  # Observability Configuration
-  observability:
-    tracing:
-      enabled: false
-
-# Keep consistent with the default chart: initContainer, model downloads, and PVC use chart defaults
+        backend_type: memory
+        similarity_threshold: 0.8
+        max_entries: 1000
+        ttl_seconds: 3600
+        eviction_policy: fifo
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations:
+      tools:
+        enabled: false
+resources:
+  limits:
+    memory: "10Gi"
+    cpu: "4"
+  requests:
+    memory: "5Gi"
+    cpu: "1"
 image:
   pullPolicy: IfNotPresent

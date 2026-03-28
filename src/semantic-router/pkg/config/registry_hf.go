@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -43,12 +44,12 @@ type hfModelAPIResponse struct {
 }
 
 type hfModelCardData struct {
-	BaseModel   any      `json:"base_model"`
-	License     string   `json:"license"`
-	Language    any      `json:"language"`
-	Tags        []string `json:"tags"`
-	Datasets    any      `json:"datasets"`
-	PipelineTag string   `json:"pipeline_tag"`
+	BaseModel   hfStringList `json:"base_model"`
+	License     string       `json:"license"`
+	Language    hfStringList `json:"language"`
+	Tags        []string     `json:"tags"`
+	Datasets    hfStringList `json:"datasets"`
+	PipelineTag string       `json:"pipeline_tag"`
 }
 
 type hfSafetensorsInfo struct {
@@ -65,6 +66,45 @@ type hfModelConfig struct {
 
 type hfTokenizerConfig struct {
 	ModelMaxLength int `json:"model_max_length"`
+}
+
+type hfStringList struct {
+	Values []string
+}
+
+func (v *hfStringList) UnmarshalJSON(data []byte) error {
+	if v == nil || bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil
+	}
+
+	var single string
+	if err := json.Unmarshal(data, &single); err == nil {
+		if strings.TrimSpace(single) == "" {
+			v.Values = nil
+		} else {
+			v.Values = []string{single}
+		}
+		return nil
+	}
+
+	var many []string
+	if err := json.Unmarshal(data, &many); err == nil {
+		v.Values = filterEmptyStrings(many)
+		return nil
+	}
+
+	return fmt.Errorf("unsupported string-or-list payload: %s", string(data))
+}
+
+func (v hfStringList) Slice() []string {
+	return cloneStrings(v.Values)
+}
+
+func (v hfStringList) First() string {
+	if len(v.Values) == 0 {
+		return ""
+	}
+	return v.Values[0]
 }
 
 var defaultRegistryCardResolver = newModelRegistryCardResolver()
@@ -139,20 +179,19 @@ func (r *modelRegistryCardResolver) lookup(repoID string) (ModelRegistryInfo, bo
 }
 
 func (r *modelRegistryCardResolver) fetch(repoID string) (ModelRegistryInfo, bool) {
-	apiResp, err := r.fetchJSON(fmt.Sprintf("%s/api/models/%s", strings.TrimSuffix(r.baseURL, "/"), repoID), &hfModelAPIResponse{})
+	api, err := fetchRegistryJSON[hfModelAPIResponse](r, fmt.Sprintf("%s/api/models/%s", strings.TrimSuffix(r.baseURL, "/"), repoID))
 	if err != nil {
 		return ModelRegistryInfo{}, false
 	}
 
-	api := apiResp.(*hfModelAPIResponse)
 	info := ModelRegistryInfo{
 		RepoID:       firstNonEmpty(api.ID, api.ModelID, repoID),
 		ModelCardURL: fmt.Sprintf("%s/%s", strings.TrimSuffix(r.baseURL, "/"), firstNonEmpty(api.ID, api.ModelID, repoID)),
 		PipelineTag:  firstNonEmpty(api.CardData.PipelineTag, api.PipelineTag),
-		BaseModel:    firstString(normalizeStringList(api.CardData.BaseModel)...),
+		BaseModel:    api.CardData.BaseModel.First(),
 		License:      api.CardData.License,
-		Languages:    normalizeStringList(api.CardData.Language),
-		Datasets:     normalizeStringList(api.CardData.Datasets),
+		Languages:    api.CardData.Language.Slice(),
+		Datasets:     api.CardData.Datasets.Slice(),
 	}
 
 	if len(api.CardData.Tags) > 0 {
@@ -169,7 +208,7 @@ func (r *modelRegistryCardResolver) fetch(repoID string) (ModelRegistryInfo, boo
 	}
 
 	var cfg hfModelConfig
-	if err := r.fetchJSONInto(fmt.Sprintf("%s/%s/raw/main/config.json", strings.TrimSuffix(r.baseURL, "/"), repoID), &cfg); err == nil {
+	if err := fetchRegistryJSONInto(r, fmt.Sprintf("%s/%s/raw/main/config.json", strings.TrimSuffix(r.baseURL, "/"), repoID), &cfg); err == nil {
 		info.EmbeddingDim = cfg.HiddenSize
 		info.NumClasses = maxInt(cfg.NumLabels, len(cfg.ID2Label), len(cfg.Label2ID))
 		if plausibleModelContext(cfg.MaxPositionEmbeddings) {
@@ -178,7 +217,7 @@ func (r *modelRegistryCardResolver) fetch(repoID string) (ModelRegistryInfo, boo
 	}
 
 	var tokenizer hfTokenizerConfig
-	if err := r.fetchJSONInto(fmt.Sprintf("%s/%s/raw/main/tokenizer_config.json", strings.TrimSuffix(r.baseURL, "/"), repoID), &tokenizer); err == nil {
+	if err := fetchRegistryJSONInto(r, fmt.Sprintf("%s/%s/raw/main/tokenizer_config.json", strings.TrimSuffix(r.baseURL, "/"), repoID), &tokenizer); err == nil {
 		if plausibleModelContext(tokenizer.ModelMaxLength) {
 			info.MaxContextLength = tokenizer.ModelMaxLength
 		}
@@ -187,15 +226,16 @@ func (r *modelRegistryCardResolver) fetch(repoID string) (ModelRegistryInfo, boo
 	return info, true
 }
 
-func (r *modelRegistryCardResolver) fetchJSON(rawURL string, target any) (any, error) {
-	if err := r.fetchJSONInto(rawURL, target); err != nil {
+func fetchRegistryJSON[T any](resolver *modelRegistryCardResolver, rawURL string) (*T, error) {
+	var target T
+	if err := fetchRegistryJSONInto(resolver, rawURL, &target); err != nil {
 		return nil, err
 	}
-	return target, nil
+	return &target, nil
 }
 
-func (r *modelRegistryCardResolver) fetchJSONInto(rawURL string, target any) error {
-	resp, err := r.client.Get(rawURL)
+func fetchRegistryJSONInto[T any](resolver *modelRegistryCardResolver, rawURL string, target *T) error {
+	resp, err := resolver.client.Get(rawURL)
 	if err != nil {
 		return err
 	}
@@ -363,26 +403,20 @@ func mergeOrderedStrings(primary []string, fallback []string) []string {
 	return merged
 }
 
-func normalizeStringList(value any) []string {
-	switch typed := value.(type) {
-	case string:
-		if typed == "" {
-			return nil
-		}
-		return []string{typed}
-	case []any:
-		values := make([]string, 0, len(typed))
-		for _, item := range typed {
-			if str, ok := item.(string); ok && str != "" {
-				values = append(values, str)
-			}
-		}
-		return values
-	case []string:
-		return cloneStrings(typed)
-	default:
+func filterEmptyStrings(values []string) []string {
+	if len(values) == 0 {
 		return nil
 	}
+
+	filtered := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		filtered = append(filtered, value)
+	}
+	return filtered
 }
 
 func formatParameterCount(total int64) string {
@@ -414,10 +448,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func firstString(values ...string) string {
-	return firstNonEmpty(values...)
 }
 
 func maxInt(values ...int) int {

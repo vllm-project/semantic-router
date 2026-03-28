@@ -1,11 +1,18 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Dict, Any, List
+from cli.config_contract import (
+    build_projection_reference_index,
+    build_signal_reference_index,
+    is_signal_condition_type,
+    signal_reference_exists,
+)
 from cli.models import (
     UserConfig,
     PluginType,
     SemanticCachePluginConfig,
     FastResponsePluginConfig,
+    ToolsPluginConfig,
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
     HallucinationPluginConfig,
@@ -14,10 +21,10 @@ from cli.models import (
     RAGPluginConfig,
 )
 from pydantic import ValidationError as PydanticValidationError
-from cli.utils import getLogger
+from cli.utils import get_logger
 from cli.consts import EXTERNAL_API_MODEL_FORMATS
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 class ValidationError:
@@ -206,92 +213,32 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
     """
     errors = []
 
-    # Build signal name index
-    signal_names = set()
-    if config.signals:
-        for signal in config.signals.keywords:
-            signal_names.add(signal.name)
-        for signal in config.signals.embeddings:
-            signal_names.add(signal.name)
-        if config.signals.domains:
-            for signal in config.signals.domains:
-                signal_names.add(signal.name)
-        if config.signals.fact_check:
-            for signal in config.signals.fact_check:
-                signal_names.add(signal.name)
-        if config.signals.user_feedbacks:
-            for signal in config.signals.user_feedbacks:
-                signal_names.add(signal.name)
-        if config.signals.preferences:
-            for signal in config.signals.preferences:
-                signal_names.add(signal.name)
-        if config.signals.language:
-            for signal in config.signals.language:
-                signal_names.add(signal.name)
-        if config.signals.context:
-            for signal in config.signals.context:
-                signal_names.add(signal.name)
-        if config.signals.complexity:
-            for signal in config.signals.complexity:
-                # Complexity outputs are referenced as "<name>:<level>" in decisions.
-                signal_names.add(f"{signal.name}:easy")
-                signal_names.add(f"{signal.name}:medium")
-                signal_names.add(f"{signal.name}:hard")
-        if config.signals.jailbreak:
-            for signal in config.signals.jailbreak:
-                signal_names.add(signal.name)
-        if config.signals.pii:
-            for signal in config.signals.pii:
-                signal_names.add(signal.name)
-        if config.signals.modality:
-            for signal in config.signals.modality:
-                signal_names.add(signal.name)
-        if config.signals.role_bindings:
-            for signal in config.signals.role_bindings:
-                signal_names.add(signal.name)
+    signal_names = build_signal_reference_index(config.signals)
+    projection_names = build_projection_reference_index(config.routing.projections)
 
     # Check decision conditions
     for decision in config.decisions:
         for condition in _iter_condition_nodes(decision.rules.conditions):
-            if condition.type in [
-                "keyword",
-                "embedding",
-                "domain",
-                "fact_check",
-                "user_feedback",
-                "preference",
-                "language",
-                "context",
-                "complexity",
-                "modality",
-                "authz",
-                "jailbreak",
-                "pii",
-            ]:
-                ref_name = condition.name
-
-                if condition.type == "complexity":
-                    # Complexity conditions are referenced as "<name>:<level>".
-                    # Validate the full reference to avoid false negatives.
-                    if ref_name not in signal_names:
-                        errors.append(
-                            ValidationError(
-                                f"Decision '{decision.name}' references unknown signal '{condition.name}'",
-                                field=f"decisions.{decision.name}.rules.conditions",
-                            )
-                        )
+            if (condition.type or "").strip().lower() == "projection":
+                if condition.name in projection_names:
                     continue
-
-                # Backward-compatible handling for other signal types.
-                if ":" in ref_name:
-                    ref_name = ref_name.split(":")[0]
-                if ref_name not in signal_names:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references unknown signal '{condition.name}'",
-                            field=f"decisions.{decision.name}.rules.conditions",
-                        )
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' references unknown projection '{condition.name}'",
+                        field=f"decisions.{decision.name}.rules.conditions",
                     )
+                )
+                continue
+            if not is_signal_condition_type(condition.type):
+                continue
+            if signal_reference_exists(signal_names, condition.type, condition.name):
+                continue
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision.name}' references unknown signal '{condition.name}'",
+                    field=f"decisions.{decision.name}.rules.conditions",
+                )
+            )
 
     return errors
 
@@ -348,129 +295,87 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
     """
     errors = []
 
-    # Build model name index
-    model_names = {model.name for model in config.providers.models}
+    provider_model_names = {model.name for model in config.providers.models}
+    routing_cards = {card.name: card for card in config.routing.model_cards}
+    routing_model_names = set(routing_cards.keys())
+
+    for model in config.providers.models:
+        if model.name not in routing_model_names:
+            errors.append(
+                ValidationError(
+                    f"Provider model '{model.name}' is missing from routing.modelCards",
+                    field=f"providers.models.{model.name}",
+                )
+            )
+
+    for model in config.providers.models:
+        if (
+            model.reasoning_family
+            and model.reasoning_family not in config.providers.reasoning_families
+        ):
+            errors.append(
+                ValidationError(
+                    f"Provider model '{model.name}' references unknown reasoning family '{model.reasoning_family}'",
+                    field=f"providers.models.{model.name}.reasoning_family",
+                )
+            )
 
     # Check decision model references
     for decision in config.decisions:
         for model_ref in decision.modelRefs:
-            if model_ref.model not in model_names:
+            if model_ref.model not in provider_model_names:
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' references unknown model '{model_ref.model}'",
                         field=f"decisions.{decision.name}.modelRefs",
                     )
                 )
+                continue
+            if model_ref.model not in routing_model_names:
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' references model '{model_ref.model}' without a routing.modelCards entry",
+                        field=f"decisions.{decision.name}.modelRefs",
+                    )
+                )
+                continue
+            if model_ref.lora_name:
+                declared_loras = {
+                    adapter.name
+                    for adapter in (routing_cards[model_ref.model].loras or [])
+                    if adapter.name
+                }
+                if not declared_loras:
+                    errors.append(
+                        ValidationError(
+                            f"Decision '{decision.name}' references LoRA '{model_ref.lora_name}' for model '{model_ref.model}', "
+                            "but routing.modelCards declares no loras for that model",
+                            field=f"decisions.{decision.name}.modelRefs",
+                        )
+                    )
+                elif model_ref.lora_name not in declared_loras:
+                    errors.append(
+                        ValidationError(
+                            f"Decision '{decision.name}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
+                            field=f"decisions.{decision.name}.modelRefs",
+                        )
+                    )
 
     # Check default model
-    if config.providers.default_model not in model_names:
+    if config.providers.default_model not in provider_model_names:
         errors.append(
             ValidationError(
                 f"Default model '{config.providers.default_model}' not found in models",
-                field="providers.default_model",
+                field="providers.defaults.default_model",
             )
         )
-
-    return errors
-
-
-def validate_merged_config(merged_config: Dict[str, Any]) -> List[ValidationError]:
-    """
-    Validate the merged router configuration.
-
-    Args:
-        merged_config: Merged configuration dictionary
-
-    Returns:
-        list: List of validation errors
-    """
-    errors = []
-
-    # Validate required fields
-    required_fields = [
-        "vllm_endpoints",
-        "model_config",
-        "default_model",
-        "decisions",
-        "categories",
-    ]
-    for field in required_fields:
-        if field not in merged_config:
-            errors.append(
-                ValidationError(f"Missing required field: {field}", field=field)
-            )
-
-    # Validate endpoints
-    if "vllm_endpoints" in merged_config:
-        endpoints = merged_config["vllm_endpoints"]
-
-        # Check if all models use external API backends (no vLLM endpoints needed)
-        all_external_api = False
-        if "model_config" in merged_config and merged_config["model_config"]:
-            all_external_api = all(
-                model_cfg.get("api_format") in EXTERNAL_API_MODEL_FORMATS
-                for model_cfg in merged_config["model_config"].values()
-                if isinstance(model_cfg, dict)
-            )
-
-        if not endpoints and not all_external_api:
-            errors.append(
-                ValidationError("No vLLM endpoints configured", field="vllm_endpoints")
-            )
-
-        # Check for duplicate endpoint names
-        endpoint_names = set()
-        for endpoint in endpoints:
-            if endpoint["name"] in endpoint_names:
-                errors.append(
-                    ValidationError(
-                        f"Duplicate endpoint name: {endpoint['name']}",
-                        field="vllm_endpoints",
-                    )
-                )
-            endpoint_names.add(endpoint["name"])
-
-    # Validate categories
-    if "categories" in merged_config:
-        categories = merged_config["categories"]
-        if not categories:
-            has_domain_conditions = any(
-                condition.get("type") == "domain"
-                for decision in merged_config.get("decisions", [])
-                for condition in _iter_merged_condition_nodes(
-                    decision.get("rules", {}).get("conditions", [])
-                )
-            )
-            if has_domain_conditions:
-                errors.append(
-                    ValidationError(
-                        "No categories configured or auto-generated",
-                        field="categories",
-                    )
-                )
-
-    # Validate contrastive preference classifier prerequisites
-    classifier_cfg = merged_config.get("classifier", {})
-    preference_cfg = (
-        classifier_cfg.get("preference_model", {}) if classifier_cfg else {}
-    )
-    if preference_cfg.get("embedding_model"):
-        embedding_cfg = merged_config.get("embedding_models", {}) or {}
-        has_unified_models = any(
-            embedding_cfg.get(key)
-            for key in (
-                "qwen3_model_path",
-                "gemma_model_path",
-                "mmbert_model_path",
+    elif config.providers.default_model not in routing_model_names:
+        errors.append(
+            ValidationError(
+                f"Default model '{config.providers.default_model}' not found in routing.modelCards",
+                field="providers.defaults.default_model",
             )
         )
-        if not has_unified_models:
-            errors.append(
-                ValidationError(
-                    "preference_model.use_contrastive=true requires an embedding model path (qwen3_model_path, gemma_model_path, or mmbert_model_path)",
-                    field="embedding_models",
-                )
-            )
 
     return errors
 
@@ -497,6 +402,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
+        PluginType.TOOLS.value: ToolsPluginConfig,
     }
 
     for decision in config.decisions:
@@ -595,22 +501,15 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
         if algo_type == "router_dc":
             # Warn if require_descriptions is true but models lack descriptions
             if algo.router_dc and algo.router_dc.require_descriptions:
+                routing_cards = {card.name: card for card in config.routing.model_cards}
                 for model_ref in decision.modelRefs:
-                    # Find model config
-                    model = next(
-                        (
-                            m
-                            for m in config.providers.models
-                            if m.name == model_ref.model
-                        ),
-                        None,
-                    )
-                    if model and not model.description:
+                    model_card = routing_cards.get(model_ref.model)
+                    if model_card is not None and not model_card.description:
                         errors.append(
                             ValidationError(
                                 f"Decision '{decision.name}' uses router_dc with require_descriptions=true, "
-                                f"but model '{model.name}' has no description",
-                                field=f"providers.models.{model.name}.description",
+                                f"but model '{model_ref.model}' has no description",
+                                field=f"routing.modelCards.{model_ref.model}.description",
                             )
                         )
 

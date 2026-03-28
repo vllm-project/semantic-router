@@ -106,9 +106,11 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
 
-	// Update status to running
-	if err := r.db.UpdateTaskStatus(taskID, models.StatusRunning, ""); err != nil {
-		return fmt.Errorf("failed to update task status: %w", err)
+	// Update status to running when the caller has not already transitioned the task.
+	if task.Status != models.StatusRunning {
+		if err := r.db.UpdateTaskStatus(taskID, models.StatusRunning, ""); err != nil {
+			return fmt.Errorf("failed to update task status: %w", err)
+		}
 	}
 
 	r.sendProgress(taskID, 0, "Starting evaluation", "Initializing evaluation task")
@@ -122,6 +124,7 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 
 	totalDimensions := len(task.Config.Dimensions)
 	completedDimensions := 0
+	var runErrors []string
 
 	for _, dimension := range task.Config.Dimensions {
 		select {
@@ -150,6 +153,8 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 			switch dimension {
 			case models.DimensionDomain, models.DimensionFactCheck, models.DimensionUserFeedback:
 				result, runErr = r.runSignalEvaluation(ctx, taskID, task.Config, string(dimension), dataset, taskOutputDir)
+			case models.DimensionAccuracy:
+				result, runErr = r.runSystemEvaluation(ctx, taskID, task.Config, dataset, taskOutputDir)
 			default:
 				log.Printf("Unknown dimension: %s", dimension)
 				continue
@@ -157,6 +162,7 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 
 			if runErr != nil {
 				log.Printf("Error running %s evaluation on dataset %s: %v", dimension, dataset, runErr)
+				runErrors = append(runErrors, fmt.Sprintf("%s/%s: %v", dimension, dataset, runErr))
 				// Continue with other datasets
 				continue
 			}
@@ -174,6 +180,14 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 		completedDimensions++
 		progress := (completedDimensions * 100) / totalDimensions
 		r.sendProgress(taskID, progress, step, fmt.Sprintf("Completed %s evaluation", dimension))
+	}
+
+	if len(runErrors) > 0 {
+		errorMessage := strings.Join(runErrors, "\n")
+		if err := r.db.UpdateTaskStatus(taskID, models.StatusFailed, errorMessage); err != nil {
+			return fmt.Errorf("failed to update task status after evaluation errors: %w", err)
+		}
+		return fmt.Errorf("evaluation task failed:\n%s", errorMessage)
 	}
 
 	r.sendProgress(taskID, 100, "Completed", "All evaluations finished")
@@ -208,6 +222,8 @@ func getDefaultDataset(dimension models.EvaluationDimension) string {
 		return "fact-check-en"
 	case models.DimensionUserFeedback:
 		return "feedback-en"
+	case models.DimensionAccuracy:
+		return "mmlu-pro"
 	default:
 		return "default"
 	}
@@ -222,7 +238,7 @@ func (r *Runner) runSignalEvaluation(ctx context.Context, taskID string, cfg mod
 
 	// Build command arguments
 	args := []string{
-		"src/training/model_eval/signal_eval.py",
+		r.modelEvalScriptPath("signal_eval.py"),
 		"--dataset", datasetID,
 		"--endpoint", endpoint,
 		"--output", outputPath,
@@ -239,7 +255,7 @@ func (r *Runner) runSignalEvaluation(ctx context.Context, taskID string, cfg mod
 
 	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath is configured at startup, not user input
 	cmd.Dir = r.projectRoot
-	cmd.Env = append(os.Environ(), "PYTHONPATH="+r.projectRoot)
+	cmd.Env = r.pythonEnv()
 
 	r.activeProcesses.Store(taskID, cmd)
 	defer r.activeProcesses.Delete(taskID)
@@ -264,6 +280,63 @@ func (r *Runner) runSignalEvaluation(ctx context.Context, taskID string, cfg mod
 	}, nil
 }
 
+// runSystemEvaluation runs system-level (MoM) evaluation, e.g. MMLU-Pro accuracy against an endpoint.
+func (r *Runner) runSystemEvaluation(ctx context.Context, taskID string, cfg models.EvaluationConfig, datasetID, outputDir string) (*models.EvaluationResult, error) {
+	// Only mmlu-pro is supported for accuracy dimension
+	if datasetID != "mmlu-pro" {
+		log.Printf("Unsupported system eval dataset: %s, using mmlu-pro", datasetID)
+		datasetID = "mmlu-pro"
+	}
+
+	outDir := filepath.Join(outputDir, "system_eval_accuracy")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create output dir: %w", err)
+	}
+
+	endpoint := strings.TrimSuffix(cfg.Endpoint, "/")
+	samplesPerCat := cfg.SamplesPerCat
+	if samplesPerCat <= 0 {
+		samplesPerCat = 5
+	}
+	args := []string{
+		r.modelEvalScriptPath("mmlu_pro_vllm_eval.py"),
+		"--endpoint", endpoint,
+		"--output-dir", outDir,
+		"--samples-per-category", fmt.Sprintf("%d", samplesPerCat),
+	}
+	if cfg.Concurrent > 0 {
+		args = append(args, "--concurrent-requests", fmt.Sprintf("%d", cfg.Concurrent))
+	}
+	if cfg.Model != "" {
+		args = append(args, "--models", cfg.Model)
+	}
+
+	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath is configured at startup
+	cmd.Dir = r.projectRoot
+	cmd.Env = r.pythonEnv()
+
+	r.activeProcesses.Store(taskID, cmd)
+	defer r.activeProcesses.Delete(taskID)
+
+	_, err := r.runCommandWithProgress(ctx, cmd, taskID, "accuracy")
+	if err != nil {
+		return nil, fmt.Errorf("system evaluation failed: %w", err)
+	}
+
+	metrics, err := ParseMMLUProOutput(outDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse system evaluation output: %w", err)
+	}
+
+	return &models.EvaluationResult{
+		TaskID:         taskID,
+		Dimension:      models.DimensionAccuracy,
+		DatasetName:    datasetID,
+		Metrics:        metrics,
+		RawResultsPath: outDir,
+	}, nil
+}
+
 // runCommandWithProgress executes a command and captures output with progress updates.
 func (r *Runner) runCommandWithProgress(ctx context.Context, cmd *exec.Cmd, taskID, dimension string) (string, error) {
 	stdout, err := cmd.StdoutPipe()
@@ -283,39 +356,15 @@ func (r *Runner) runCommandWithProgress(ctx context.Context, cmd *exec.Cmd, task
 	var output strings.Builder
 	var errOutput strings.Builder
 
-	// Helper to parse tqdm progress from a line
-	parseProgress := func(line string) {
-		// tqdm format: " 50%|████████  | 25/50 [00:30<00:30, 1.00it/s]"
-		// Also handle: "50%|..."
-		if strings.Contains(line, "%|") || strings.Contains(line, "% |") {
-			// Find percentage - look for number followed by %
-			for i := 0; i < len(line); i++ {
-				if line[i] == '%' && i > 0 {
-					// Find the start of the number
-					start := i - 1
-					for start > 0 && (line[start-1] >= '0' && line[start-1] <= '9') {
-						start--
-					}
-					if start < i {
-						var percent int
-						_, _ = fmt.Sscanf(line[start:i], "%d", &percent)
-						if percent > 0 && percent <= 100 {
-							r.sendProgress(taskID, percent, dimension, fmt.Sprintf("Processing: %d%%", percent))
-						}
-					}
-					break
-				}
-			}
-		}
-	}
-
 	// Read stdout
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
 			output.WriteString(line + "\n")
-			parseProgress(line)
+			if pct, ok := tqdmPercentFromLine(line); ok {
+				r.sendProgress(taskID, pct, dimension, fmt.Sprintf("Processing: %d%%", pct))
+			}
 		}
 	}()
 
@@ -325,7 +374,9 @@ func (r *Runner) runCommandWithProgress(ctx context.Context, cmd *exec.Cmd, task
 		for scanner.Scan() {
 			line := scanner.Text()
 			errOutput.WriteString(line + "\n")
-			parseProgress(line)
+			if pct, ok := tqdmPercentFromLine(line); ok {
+				r.sendProgress(taskID, pct, dimension, fmt.Sprintf("Processing: %d%%", pct))
+			}
 		}
 	}()
 
@@ -337,6 +388,19 @@ func (r *Runner) runCommandWithProgress(ctx context.Context, cmd *exec.Cmd, task
 	}
 
 	return output.String(), nil
+}
+
+func (r *Runner) modelEvalScriptPath(scriptName string) string {
+	return filepath.Join(r.projectRoot, "src", "training", "model_eval", scriptName)
+}
+
+func (r *Runner) pythonEnv() []string {
+	pythonPath := r.projectRoot
+	if existing := os.Getenv("PYTHONPATH"); existing != "" {
+		pythonPath += string(os.PathListSeparator) + existing
+	}
+
+	return append(os.Environ(), "PYTHONPATH="+pythonPath)
 }
 
 // saveHistoricalMetrics saves key metrics to the history table.
@@ -431,6 +495,14 @@ func GetAvailableDatasets() map[string][]models.DatasetInfo {
 				Description: "User Feedback (English) - 4-class detection",
 				Dimension:   models.DimensionUserFeedback,
 				Level:       models.LevelRouter,
+			},
+		},
+		string(models.DimensionAccuracy): {
+			{
+				Name:        "mmlu-pro",
+				Description: "MMLU-Pro system accuracy via chat completions endpoint",
+				Dimension:   models.DimensionAccuracy,
+				Level:       models.LevelMoM,
 			},
 		},
 	}

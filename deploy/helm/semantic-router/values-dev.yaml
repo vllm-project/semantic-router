@@ -1,0 +1,51 @@
+# Development profile — optimised for quick iteration on a local or small cluster.
+
+replicaCount: 1
+
+image:
+  pullPolicy: IfNotPresent
+
+resources:
+  limits:
+    memory: "8Gi"
+    cpu: "2"
+  requests:
+    memory: "2Gi"
+    cpu: "500m"
+
+persistence:
+  enabled: true
+  storageClassName: ""
+  size: 5Gi
+
+dashboard:
+  enabled: true
+
+autoscaling:
+  enabled: false
+
+startupProbe:
+  failureThreshold: 180  # 30 minutes for dev clusters with slow networks
+
+livenessProbe:
+  initialDelaySeconds: 15
+  periodSeconds: 30
+  failureThreshold: 10
+
+readinessProbe:
+  initialDelaySeconds: 15
+  periodSeconds: 15
+  failureThreshold: 5
+
+prometheus:
+  prometheus-node-exporter:
+    enabled: false
+
+dependencies:
+  observability:
+    jaeger:
+      enabled: true
+    prometheus:
+      enabled: true
+    grafana:
+      enabled: true

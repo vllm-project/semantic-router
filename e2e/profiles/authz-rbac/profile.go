@@ -67,8 +67,9 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 // GetTestCases returns the list of test cases for this profile.
 func (p *Profile) GetTestCases() []string {
 	return []string{
-		"chat-completions-request",
+		"chat-completions-request-authz",
 		"ratelimit-limitor",
+		"authz-rbac-routing",
 	}
 }
 

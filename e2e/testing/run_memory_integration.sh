@@ -9,12 +9,19 @@ CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-docker}"
 DOCKER_REGISTRY="${DOCKER_REGISTRY:-ghcr.io/vllm-project/semantic-router}"
 DOCKER_TAG="${DOCKER_TAG:-latest}"
 VLLM_SR_IMAGE="${VLLM_SR_IMAGE:-ghcr.io/vllm-project/semantic-router/vllm-sr:latest}"
+VLLM_SR_STACK_NAME="${VLLM_SR_STACK_NAME:-vllm-sr}"
+if [[ "${VLLM_SR_STACK_NAME}" == "vllm-sr" ]]; then
+    VLLM_SR_NETWORK="${VLLM_SR_NETWORK:-vllm-sr-network}"
+else
+    VLLM_SR_NETWORK="${VLLM_SR_NETWORK:-${VLLM_SR_STACK_NAME}-vllm-sr-network}"
+fi
 
 TEST_DIR="${MEMORY_TEST_DIR:-$(mktemp -d -t vsr-memory-test-XXXXXX)}"
 PID_FILE="${TEST_DIR}/serve.pid"
 SERVE_LOG="${TEST_DIR}/serve.log"
 CONFIG_FILE="${TEST_DIR}/config.yaml"
 KEEP_TEST_DIR="${KEEP_MEMORY_TEST_DIR:-0}"
+ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-http://localhost:8080/health}"
 
 VLLM_SR_PID=""
 
@@ -85,9 +92,17 @@ HF_HUB_ENABLE_HF_TRANSFER=1 \
 python3 -c "from huggingface_hub import snapshot_download; snapshot_download('sentence-transformers/all-MiniLM-L12-v2', local_dir='${TEST_DIR}/models/mom-embedding-light', local_dir_use_symlinks=False)"
 
 make -C "${REPO_ROOT}" start-milvus
-cp "${REPO_ROOT}/config/testing/config.memory-user.yaml" "${CONFIG_FILE}"
+cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
+python3 -c 'from pathlib import Path; path = Path("'"${CONFIG_FILE}"'"); path.write_text(path.read_text().replace("host.docker.internal:8000", "llm-katan:8000"))'
 
-"${CONTAINER_RUNTIME}" run -d --name llm-katan --network host \
+if ! "${CONTAINER_RUNTIME}" network inspect "${VLLM_SR_NETWORK}" >/dev/null 2>&1; then
+    "${CONTAINER_RUNTIME}" network create "${VLLM_SR_NETWORK}" >/dev/null
+fi
+
+"${CONTAINER_RUNTIME}" run -d --name llm-katan \
+    --network "${VLLM_SR_NETWORK}" \
+    --network-alias llm-katan \
+    -p 8000:8000 \
     "${DOCKER_REGISTRY}/llm-katan:${DOCKER_TAG}" \
     llm-katan --model dummy --host 0.0.0.0 --port 8000 --served-model-name qwen3 --backend echo >/dev/null
 
@@ -127,9 +142,9 @@ fi
 VLLM_SR_PID="$(cat "${PID_FILE}")"
 
 for _ in $(seq 1 180); do
-    http_code="$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/health 2>/dev/null || echo "000")"
+    http_code="$(curl -s -o /dev/null -w "%{http_code}" "${ROUTER_API_HEALTH_URL}" 2>/dev/null || echo "000")"
     if [[ "${http_code}" == "200" ]]; then
-        echo "vllm-sr ready"
+        echo "vllm-sr router API ready"
         break
     fi
 
@@ -142,9 +157,9 @@ for _ in $(seq 1 180); do
     sleep 2
 done
 
-http_code="$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/health 2>/dev/null || echo "000")"
+http_code="$(curl -s -o /dev/null -w "%{http_code}" "${ROUTER_API_HEALTH_URL}" 2>/dev/null || echo "000")"
 if [[ "${http_code}" != "200" ]]; then
-    echo "vllm-sr did not become healthy"
+    echo "vllm-sr router API did not become healthy"
     cat "${SERVE_LOG}" || true
     exit 1
 fi
@@ -152,6 +167,7 @@ fi
 cd "${REPO_ROOT}/e2e/testing"
 PYTHONUNBUFFERED=1 \
 ROUTER_ENDPOINT=http://localhost:8888 \
+ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
 MILVUS_ADDRESS=localhost:19530 \
 MILVUS_COLLECTION=memory_test_ci \
 python3 09-memory-features-test.py

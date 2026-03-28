@@ -7,6 +7,7 @@ interface ReadonlyContextType {
   isLoading: boolean
   platform: string
   envoyUrl: string
+  fleetSimEnabled: boolean
 }
 
 const ReadonlyContext = createContext<ReadonlyContextType>({
@@ -14,6 +15,7 @@ const ReadonlyContext = createContext<ReadonlyContextType>({
   isLoading: true,
   platform: '',
   envoyUrl: '',
+  fleetSimEnabled: false,
 })
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -29,6 +31,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
   const [isLoading, setIsLoading] = useState(true)
   const [platform, setPlatform] = useState('')
   const [envoyUrl, setEnvoyUrl] = useState('')
+  const [fleetSimEnabled, setFleetSimEnabled] = useState(false)
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -41,6 +44,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
           const platformValue = data.platform || ''
           setPlatform(platformValue)
           setEnvoyUrl(data.envoyUrl || '')
+          setFleetSimEnabled(Boolean(data.fleetSimEnabled))
           // Preload platform-specific assets immediately
           preloadPlatformAssets(platformValue)
         }
@@ -55,7 +59,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
   }, [token])
 
   return (
-    <ReadonlyContext.Provider value={{ isReadonly, isLoading, platform, envoyUrl }}>
+    <ReadonlyContext.Provider value={{ isReadonly, isLoading, platform, envoyUrl, fleetSimEnabled }}>
       {children}
     </ReadonlyContext.Provider>
   )

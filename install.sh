@@ -117,7 +117,7 @@ print_install_plan() {
         requested_runtime="auto -> docker/colima"
         ;;
       linux)
-        requested_runtime="auto -> podman"
+        requested_runtime="auto -> docker"
         ;;
     esac
   fi
@@ -158,7 +158,7 @@ print_install_plan() {
 
 usage() {
   cat <<'EOF'
-Usage: install.sh [--mode cli|serve] [--runtime auto|docker|podman|skip]
+Usage: install.sh [--mode cli|serve] [--runtime auto|docker|skip]
                   [--install-root PATH] [--bin-dir PATH] [--pip-spec SPEC]
                   [--python PATH] [--platform PLATFORM] [--no-launch]
 
@@ -168,10 +168,10 @@ links a launcher into ~/.local/bin by default.
 Options:
   --mode cli|serve         Install the CLI only, or prepare a local runtime for
                            `vllm-sr serve` as well. Default: serve
-  --runtime auto|docker|podman|skip
+  --runtime auto|docker|skip
                            Runtime strategy for serve mode. Default: auto
                            macOS auto -> docker via colima
-                           Linux auto -> podman
+                           Linux auto -> docker
   --install-root PATH      Installation root. Default:
                            ~/.local/share/vllm-sr
   --bin-dir PATH           Launcher directory. Default: ~/.local/bin
@@ -465,11 +465,6 @@ detect_existing_runtime() {
     return
   fi
 
-  if podman_ready; then
-    printf 'podman\n'
-    return
-  fi
-
   return 1
 }
 
@@ -524,9 +519,6 @@ describe_runtime_dependency_plan() {
     darwin:docker)
       printf 'docker, colima via Homebrew\n'
       ;;
-    darwin:podman)
-      printf 'podman via Homebrew\n'
-      ;;
     linux:docker)
       pkg_manager="$(detect_linux_pkg_manager || true)"
       case "$pkg_manager" in
@@ -541,23 +533,6 @@ describe_runtime_dependency_plan() {
           ;;
         *)
           printf 'docker required (install manually)\n'
-          ;;
-      esac
-      ;;
-    linux:podman)
-      pkg_manager="$(detect_linux_pkg_manager || true)"
-      case "$pkg_manager" in
-        apt-get)
-          printf 'podman, uidmap, slirp4netns via apt-get\n'
-          ;;
-        dnf)
-          printf 'podman via dnf\n'
-          ;;
-        yum)
-          printf 'podman via yum\n'
-          ;;
-        *)
-          printf 'podman required (install manually)\n'
           ;;
       esac
       ;;
@@ -604,20 +579,14 @@ install_python() {
 }
 
 create_launcher() {
-  local launcher_path runtime_env_path executable_path
+  local launcher_path executable_path
   launcher_path="$BIN_DIR/vllm-sr"
-  runtime_env_path="$INSTALL_ROOT/runtime.env"
   executable_path="$INSTALL_ROOT/venv/bin/vllm-sr"
 
   mkdir -p "$BIN_DIR"
   cat >"$launcher_path" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-
-if [ -f "$runtime_env_path" ]; then
-  # shellcheck disable=SC1090
-  . "$runtime_env_path"
-fi
 
 exec "$executable_path" "\$@"
 EOF
@@ -660,10 +629,6 @@ docker_ready() {
   has_cmd docker && docker info >/dev/null 2>&1
 }
 
-podman_ready() {
-  has_cmd podman && podman info >/dev/null 2>&1
-}
-
 choose_runtime_preference() {
   if [ "$REQUESTED_RUNTIME" != "auto" ]; then
     printf '%s\n' "$REQUESTED_RUNTIME"
@@ -675,7 +640,7 @@ choose_runtime_preference() {
       printf 'docker\n'
       ;;
     linux)
-      printf 'podman\n'
+      printf 'docker\n'
       ;;
   esac
 }
@@ -687,41 +652,6 @@ install_macos_docker_runtime() {
   step "Starting Colima"
   colima start
   done_step "Docker + Colima runtime is ready"
-}
-
-install_macos_podman_runtime() {
-  ensure_homebrew
-  step "Installing Podman via Homebrew"
-  brew install podman
-  if ! podman machine inspect >/dev/null 2>&1; then
-    step "Initializing Podman machine"
-    podman machine init
-  fi
-  step "Starting Podman machine"
-  podman machine start
-  done_step "Podman runtime is ready"
-}
-
-install_linux_podman_runtime() {
-  local pkg_manager
-  pkg_manager="$(detect_linux_pkg_manager)" || die \
-    "No supported Linux package manager found. Install Podman manually and re-run the installer."
-
-  step "Installing Podman"
-  case "$pkg_manager" in
-    apt-get)
-      run_as_root apt-get update
-      run_as_root apt-get install -y podman uidmap slirp4netns
-      ;;
-    dnf)
-      run_as_root dnf install -y podman
-      ;;
-    yum)
-      run_as_root yum install -y podman
-      ;;
-  esac
-
-  done_step "Podman runtime is ready"
 }
 
 install_linux_docker_runtime() {
@@ -755,17 +685,7 @@ install_linux_docker_runtime() {
 }
 
 write_runtime_env() {
-  local runtime_env_path
-  runtime_env_path="$INSTALL_ROOT/runtime.env"
-
-  case "$SELECTED_RUNTIME" in
-    podman)
-      printf 'export CONTAINER_RUNTIME=podman\n' >"$runtime_env_path"
-      ;;
-    docker|'')
-      rm -f "$runtime_env_path"
-      ;;
-  esac
+  rm -f "$INSTALL_ROOT/runtime.env"
 }
 
 ensure_runtime() {
@@ -780,13 +700,6 @@ ensure_runtime() {
     SELECTED_RUNTIME="docker"
     write_runtime_env
     done_step "Using existing Docker runtime"
-    return
-  fi
-
-  if podman_ready; then
-    SELECTED_RUNTIME="podman"
-    write_runtime_env
-    done_step "Using existing Podman runtime"
     return
   fi
 
@@ -807,19 +720,6 @@ ensure_runtime() {
           fi
           ;;
       esac
-      ;;
-    podman)
-      case "$OS_NAME" in
-        darwin)
-          install_macos_podman_runtime
-          podman_ready || die "Podman is installed but not reachable. Try running 'podman machine start' and then 'vllm-sr serve'."
-          ;;
-        linux)
-          install_linux_podman_runtime
-          podman_ready || die "Podman is installed but not reachable from the current shell."
-          ;;
-      esac
-      SELECTED_RUNTIME="podman"
       ;;
     *)
       die "Unsupported runtime selection: $(choose_runtime_preference)"
@@ -948,9 +848,6 @@ print_next_steps() {
         printf '  start        vllm-sr serve\n'
       fi
       printf '  open         vllm-sr dashboard\n'
-      if [ "$SELECTED_RUNTIME" = "podman" ]; then
-        printf '  runtime env  %s/runtime.env\n' "$INSTALL_ROOT"
-      fi
     fi
   fi
   printf '\n'
@@ -1019,10 +916,10 @@ validate_args() {
   esac
 
   case "$REQUESTED_RUNTIME" in
-    auto|docker|podman|skip)
+    auto|docker|skip)
       ;;
     *)
-      die "--runtime must be one of: auto, docker, podman, skip"
+      die "--runtime must be one of: auto, docker, skip"
       ;;
   esac
 

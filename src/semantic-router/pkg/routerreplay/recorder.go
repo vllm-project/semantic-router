@@ -15,6 +15,7 @@ const (
 type (
 	Signal        = store.Signal
 	RoutingRecord = store.Record
+	UsageCost     = store.UsageCost
 )
 
 type Recorder struct {
@@ -107,6 +108,11 @@ func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
 func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string) error {
 	ctx := context.Background()
 	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans)
+}
+
+func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
+	ctx := context.Background()
+	return r.storage.UpdateUsageCost(ctx, id, usage)
 }
 
 // GetRecord returns a copy of the record with the given ID.
@@ -211,6 +217,31 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 		if len(r.HallucinationSpans) > 0 {
 			fields["hallucination_spans"] = r.HallucinationSpans
 		}
+	}
+
+	if r.PromptTokens != nil {
+		fields["prompt_tokens"] = *r.PromptTokens
+	}
+	if r.CompletionTokens != nil {
+		fields["completion_tokens"] = *r.CompletionTokens
+	}
+	if r.TotalTokens != nil {
+		fields["total_tokens"] = *r.TotalTokens
+	}
+	if r.ActualCost != nil {
+		fields["actual_cost"] = *r.ActualCost
+	}
+	if r.BaselineCost != nil {
+		fields["baseline_cost"] = *r.BaselineCost
+	}
+	if r.CostSavings != nil {
+		fields["cost_savings"] = *r.CostSavings
+	}
+	if r.Currency != nil {
+		fields["currency"] = *r.Currency
+	}
+	if r.BaselineModel != nil {
+		fields["baseline_model"] = *r.BaselineModel
 	}
 
 	return fields

@@ -27,10 +27,12 @@ on:
       # Per-profile e2e change detection
       e2e_istio:
         value: ${{ jobs.filter.outputs.e2e_istio }}
-      e2e_ai_gateway:
-        value: ${{ jobs.filter.outputs.e2e_ai_gateway }}
+      e2e_kubernetes:
+        value: ${{ jobs.filter.outputs.e2e_kubernetes }}
       e2e_aibrix:
         value: ${{ jobs.filter.outputs.e2e_aibrix }}
+      e2e_dashboard:
+        value: ${{ jobs.filter.outputs.e2e_dashboard }}
       e2e_dynamic_config:
         value: ${{ jobs.filter.outputs.e2e_dynamic_config }}
       e2e_llm_d:
@@ -73,8 +75,9 @@ jobs:
       agent_exec: ${{ steps.changes.outputs.agent_exec }}
       # Per-profile e2e outputs
       e2e_istio: ${{ steps.changes.outputs.e2e_istio }}
-      e2e_ai_gateway: ${{ steps.changes.outputs.e2e_ai_gateway }}
+      e2e_kubernetes: ${{ steps.changes.outputs.e2e_kubernetes }}
       e2e_aibrix: ${{ steps.changes.outputs.e2e_aibrix }}
+      e2e_dashboard: ${{ steps.changes.outputs.e2e_dashboard }}
       e2e_dynamic_config: ${{ steps.changes.outputs.e2e_dynamic_config }}
       e2e_llm_d: ${{ steps.changes.outputs.e2e_llm_d }}
       e2e_routing_strategies: ${{ steps.changes.outputs.e2e_routing_strategies }}
@@ -140,11 +143,19 @@ jobs:
               - 'AGENTS.md'
               - 'docs/agent/**'
               - 'tools/agent/skills/**'
+              - 'src/fleet-sim/AGENTS.md'
+              - 'src/fleet-sim/fleet_sim/optimizer/AGENTS.md'
               - 'src/vllm-sr/cli/AGENTS.md'
               - 'src/semantic-router/pkg/config/AGENTS.md'
+              - 'src/semantic-router/pkg/classification/AGENTS.md'
               - 'src/semantic-router/pkg/extproc/AGENTS.md'
+              - 'deploy/operator/api/v1alpha1/AGENTS.md'
+              - 'deploy/operator/controllers/AGENTS.md'
+              - 'dashboard/frontend/src/AGENTS.md'
               - 'dashboard/frontend/src/pages/AGENTS.md'
               - 'dashboard/frontend/src/components/AGENTS.md'
+              - 'dashboard/backend/handlers/AGENTS.md'
+              - 'e2e/testcases/AGENTS.md'
               - '.github/copilot-instructions.md'
               - '.github/PULL_REQUEST_TEMPLATE.md'
               - '.github/ISSUE_TEMPLATE/**'
@@ -162,12 +173,16 @@ jobs:
             e2e_istio:
               - 'e2e/profiles/istio/**'
               - 'deploy/kubernetes/istio/**'
-            e2e_ai_gateway:
+            e2e_kubernetes:
               - 'e2e/profiles/ai-gateway/**'
               - 'deploy/kubernetes/ai-gateway/**'
             e2e_aibrix:
               - 'e2e/profiles/aibrix/**'
               - 'deploy/kubernetes/aibrix/**'
+            e2e_dashboard:
+              - 'e2e/profiles/dashboard/**'
+              - 'e2e/testcases/dashboard_*.go'
+              - 'deploy/kubernetes/observability/dashboard/**'
             e2e_dynamic_config:
               - 'e2e/profiles/dynamic-config/**'
             e2e_llm_d:
@@ -178,11 +193,16 @@ jobs:
               - 'deploy/kubernetes/routing-strategies/**'
             e2e_production_stack:
               - 'e2e/profiles/production-stack/**'
+              - 'deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml'
+              - 'deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml'
             e2e_response_api:
               - 'e2e/profiles/response-api/**'
+              - 'e2e/profiles/response-api-redis/**'
+              - 'e2e/profiles/response-api-redis-cluster/**'
+              - 'deploy/kubernetes/response-api/**'
             e2e_response_api_redis:
               - 'e2e/profiles/response-api-redis/**'
-              - 'deploy/kubernetes/response-api/**'
+              - 'deploy/kubernetes/response-api/redis.yaml'
             e2e_response_api_redis_cluster:
               - 'e2e/profiles/response-api-redis-cluster/**'
               - 'deploy/kubernetes/response-api/redis-cluster.yaml'
@@ -193,12 +213,12 @@ jobs:
               - 'ml-binding/**'
             e2e_multi_endpoint:
               - 'e2e/profiles/multi-endpoint/**'
-              - 'config/testing/config.multi-endpoint.yaml'
+              - 'e2e/config/config.multi-endpoint.yaml'
               - 'scripts/multi-endpoint/**'
             e2e_authz_rbac:
               - 'e2e/profiles/authz-rbac/**'
-              - 'config/testing/config.authz-rbac.yaml'
-              - 'config/testing/authz-profile-*.yaml'
+              - 'e2e/config/config.authz-rbac.yaml'
+              - 'e2e/config/authz-profile-*.yaml'
               - 'src/semantic-router/pkg/classification/authz*.go'
               - 'src/semantic-router/pkg/authz/**'
             e2e_streaming:

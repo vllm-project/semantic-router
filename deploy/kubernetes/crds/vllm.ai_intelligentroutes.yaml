@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.20.1
   name: intelligentroutes.vllm.ai
 spec:
   group: vllm.ai
@@ -134,13 +134,16 @@ spec:
                             x-kubernetes-preserve-unknown-fields: true
                           type:
                             description: Type is the plugin type (semantic-cache,
-                              jailbreak, pii, system_prompt, header_mutation)
+                              jailbreak, pii, system_prompt, header_mutation, hallucination,
+                              router_replay)
                             enum:
                             - semantic-cache
                             - jailbreak
                             - pii
                             - system_prompt
                             - header_mutation
+                            - hallucination
+                            - router_replay
                             type: string
                         required:
                         - type
@@ -165,16 +168,21 @@ spec:
                             description: SignalCondition defines a single signal condition
                             properties:
                               name:
-                                description: Name is the name of the signal to reference
+                                description: |-
+                                  Name is the name of the signal to reference
+                                  For fact_check type, use "needs_fact_check" to match queries that need fact verification
                                 maxLength: 100
                                 minLength: 1
                                 type: string
                               type:
-                                description: Type defines the type of signal (keyword/embedding/domain)
+                                description: Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure)
                                 enum:
                                 - keyword
                                 - embedding
                                 - domain
+                                - fact_check
+                                - context
+                                - structure
                                 type: string
                             required:
                             - name
@@ -184,11 +192,13 @@ spec:
                           minItems: 1
                           type: array
                         operator:
-                          description: Operator defines the logical operator for combining
-                            conditions (AND/OR)
+                          description: |-
+                            Operator defines the logical operator for combining conditions (AND/OR/NOT)
+                            NOT uses NOR semantics: matches only when none of the conditions match.
                           enum:
                           - AND
                           - OR
+                          - NOT
                           type: string
                       required:
                       - conditions
@@ -205,6 +215,40 @@ spec:
               signals:
                 description: Signals defines signal extraction rules for routing decisions
                 properties:
+                  contextRules:
+                    description: |-
+                      FactCheckRules defines fact-check rules for signal classification
+                      Similar to KeywordRules and EmbeddingRules, but based on ML model classification
+                      Each rule has a name that can be referenced in decision conditions
+                    items:
+                      description: ContextRule defines a rule for context-based (token
+                        count) classification
+                      properties:
+                        description:
+                          description: Description provides human-readable explanation
+                          maxLength: 500
+                          type: string
+                        maxTokens:
+                          description: MaxTokens is the maximum token count (supports
+                            K/M suffixes)
+                          pattern: ^[0-9]+(\.[0-9]+)?[KMkm]?$
+                          type: string
+                        minTokens:
+                          description: MinTokens is the minimum token count (supports
+                            K/M suffixes)
+                          pattern: ^[0-9]+(\.[0-9]+)?[KMkm]?$
+                          type: string
+                        name:
+                          description: Name is the signal name (e.g., "high_token_count")
+                          maxLength: 100
+                          minLength: 1
+                          type: string
+                      required:
+                      - maxTokens
+                      - minTokens
+                      - name
+                      type: object
+                    type: array
                   domains:
                     description: Domains defines MMLU domain categories for classification
                     items:
@@ -267,6 +311,27 @@ spec:
                       type: object
                     maxItems: 100
                     type: array
+                  factCheckRules:
+                    items:
+                      description: |-
+                        FactCheckRule defines a rule for fact-check signal classification
+                        The classifier determines if a query needs fact verification based on the ML model
+                        Predefined signal names: "needs_fact_check", "no_fact_check_needed"
+                        Threshold is read from hallucination_mitigation.fact_check_model.threshold
+                      properties:
+                        description:
+                          description: Description provides human-readable explanation
+                            of when this signal is triggered
+                          type: string
+                        name:
+                          description: |-
+                            Name is the signal name that can be referenced in decision rules
+                            e.g., "needs_fact_check" or "no_fact_check_needed"
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
                   keywords:
                     description: Keywords defines keyword-based signal extraction
                       rules
@@ -303,6 +368,60 @@ spec:
                       - keywords
                       - name
                       - operator
+                      type: object
+                    maxItems: 100
+                    type: array
+                  structure:
+                    description: Structure defines request-shape routing signals.
+                    items:
+                      properties:
+                        description:
+                          type: string
+                        feature:
+                          properties:
+                            source:
+                              properties:
+                                caseSensitive:
+                                  type: boolean
+                                keywords:
+                                  items:
+                                    type: string
+                                  type: array
+                                pattern:
+                                  type: string
+                                sequences:
+                                  items:
+                                    items:
+                                      type: string
+                                    type: array
+                                  type: array
+                                type:
+                                  type: string
+                              required:
+                              - type
+                              type: object
+                            type:
+                              type: string
+                          required:
+                          - source
+                          - type
+                          type: object
+                        name:
+                          type: string
+                        predicate:
+                          properties:
+                            gt:
+                              type: number
+                            gte:
+                              type: number
+                            lt:
+                              type: number
+                            lte:
+                              type: number
+                          type: object
+                      required:
+                      - feature
+                      - name
                       type: object
                     maxItems: 100
                     type: array

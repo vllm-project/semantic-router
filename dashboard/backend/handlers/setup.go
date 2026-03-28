@@ -8,17 +8,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
-
-const setupModeKey = "setup"
 
 type SetupStateResponse struct {
 	SetupMode    bool `json:"setupMode"`
@@ -31,16 +26,16 @@ type SetupStateResponse struct {
 }
 
 type SetupConfigRequest struct {
-	Config map[string]interface{} `json:"config"`
+	Config json.RawMessage `json:"config"`
 }
 
 type SetupValidateResponse struct {
-	Valid       bool                   `json:"valid"`
-	Config      map[string]interface{} `json:"config,omitempty"`
-	Models      int                    `json:"models"`
-	Decisions   int                    `json:"decisions"`
-	Signals     int                    `json:"signals"`
-	CanActivate bool                   `json:"canActivate"`
+	Valid       bool            `json:"valid"`
+	Config      json.RawMessage `json:"config,omitempty"`
+	Models      int             `json:"models"`
+	Decisions   int             `json:"decisions"`
+	Signals     int             `json:"signals"`
+	CanActivate bool            `json:"canActivate"`
 }
 
 type SetupActivateResponse struct {
@@ -54,12 +49,18 @@ type SetupImportRemoteRequest struct {
 }
 
 type SetupImportRemoteResponse struct {
-	Config      map[string]interface{} `json:"config"`
-	Models      int                    `json:"models"`
-	Decisions   int                    `json:"decisions"`
-	Signals     int                    `json:"signals"`
-	CanActivate bool                   `json:"canActivate"`
-	SourceURL   string                 `json:"sourceUrl"`
+	Config      json.RawMessage `json:"config"`
+	Models      int             `json:"models"`
+	Decisions   int             `json:"decisions"`
+	Signals     int             `json:"signals"`
+	CanActivate bool            `json:"canActivate"`
+	SourceURL   string          `json:"sourceUrl"`
+}
+
+type setupConfigSummary struct {
+	Models    int
+	Decisions int
+	Signals   int
 }
 
 func SetupStateHandler(configPath string) http.HandlerFunc {
@@ -69,22 +70,21 @@ func SetupStateHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		configMap, err := loadConfigMap(configPath)
+		configFile, err := readSetupConfigFile(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		models := countConfiguredModels(configMap)
-		decisions := countConfiguredDecisions(configMap)
+		summary := summarizeSetupConfig(&configFile.CanonicalConfig)
 		resp := SetupStateResponse{
-			SetupMode:    hasSetupMode(configMap),
-			ListenerPort: firstListenerPort(configMap),
-			Models:       models,
-			Decisions:    decisions,
-			HasModels:    models > 0,
-			HasDecisions: decisions > 0,
-			CanActivate:  models > 0 && decisions > 0,
+			SetupMode:    hasSetupMode(configFile),
+			ListenerPort: firstListenerPort(configFile),
+			Models:       summary.Models,
+			Decisions:    summary.Decisions,
+			HasModels:    summary.Models > 0,
+			HasDecisions: summary.Decisions > 0,
+			CanActivate:  summary.Models > 0 && summary.Decisions > 0,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -107,20 +107,24 @@ func SetupValidateHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		if err := validateSetupCandidate(candidate); err != nil {
-			http.Error(w, fmt.Sprintf("Setup validation failed: %v", err), http.StatusBadRequest)
+		if validationErr := validateSetupCandidate(configPath, candidate); validationErr != nil {
+			http.Error(w, fmt.Sprintf("Setup validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
 
-		models := countConfiguredModels(candidate)
-		decisions := countConfiguredDecisions(candidate)
+		summary := summarizeSetupConfig(&candidate.CanonicalConfig)
+		configJSON, err := rawJSONMessage(candidate.CanonicalConfig)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to encode validated config: %v", err), http.StatusInternalServerError)
+			return
+		}
 		resp := SetupValidateResponse{
 			Valid:       true,
-			Config:      candidate,
-			Models:      models,
-			Decisions:   decisions,
-			Signals:     countConfiguredSignals(candidate),
-			CanActivate: models > 0 && decisions > 0,
+			Config:      configJSON,
+			Models:      summary.Models,
+			Decisions:   summary.Decisions,
+			Signals:     summary.Signals,
+			CanActivate: summary.Models > 0 && summary.Decisions > 0,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -153,10 +157,12 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 			return
 		}
 
-		if validationErr := validateSetupCandidate(candidate); validationErr != nil {
+		if validationErr := validateSetupCandidate(configPath, candidate); validationErr != nil {
 			http.Error(w, fmt.Sprintf("Setup activation validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
+
+		ensureSetupGlobalDefaults(candidate)
 
 		if !deployMu.TryLock() {
 			w.Header().Set("Content-Type", "application/json")
@@ -169,40 +175,40 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 		}
 		defer deployMu.Unlock()
 
-		yamlData, err := yaml.Marshal(candidate)
+		yamlData, err := marshalYAMLBytes(candidate.CanonicalConfig)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to convert config to YAML: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		if err := backupCurrentConfig(configPath, configDir); err != nil {
-			log.Printf("Warning: failed to back up current config before setup activation: %v", err)
+		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {
+			log.Printf("Warning: failed to back up current config before setup activation: %v", backupErr)
 		}
 
 		tmpConfigFile := configPath + ".tmp"
-		if err := os.WriteFile(tmpConfigFile, yamlData, 0o644); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
+		if writeErr := os.WriteFile(tmpConfigFile, yamlData, 0o644); writeErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
 			return
 		}
-		if err := os.Rename(tmpConfigFile, configPath); err != nil {
-			if writeErr := os.WriteFile(configPath, yamlData, 0o644); writeErr != nil {
-				http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
+		if renameErr := os.Rename(tmpConfigFile, configPath); renameErr != nil {
+			if fallbackWriteErr := os.WriteFile(configPath, yamlData, 0o644); fallbackWriteErr != nil {
+				http.Error(w, fmt.Sprintf("Failed to write config: %v", fallbackWriteErr), http.StatusInternalServerError)
 				return
 			}
 		}
 
-		outputDir := filepath.Join(configDir, ".vllm-sr")
-		if err := os.MkdirAll(outputDir, 0o755); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to create output directory: %v", err), http.StatusInternalServerError)
+		if _, parseErr := routerconfig.Parse(configPath); parseErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to validate activated config: %v", parseErr), http.StatusInternalServerError)
 			return
 		}
 
-		if _, err := generateRouterConfigWithPython(configPath, outputDir); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to generate router config during activation: %v", err), http.StatusInternalServerError)
+		effectiveConfigPath, err := syncRuntimeConfigForCurrentRuntime(configPath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to sync runtime config: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		if err := restartSetupManagedServices(); err != nil {
+		if err := restartSetupRuntimeServices(configPath, effectiveConfigPath); err != nil {
 			log.Printf("Warning: failed to restart router/envoy after activation: %v", err)
 		}
 
@@ -210,11 +216,20 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 		if err := json.NewEncoder(w).Encode(SetupActivateResponse{
 			Status:    "success",
 			SetupMode: false,
-			Message:   "Setup activated successfully. Router and Envoy are restarting.",
+			Message:   "Setup activated successfully. Router and Envoy are starting.",
 		}); err != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		}
 	}
+}
+
+func ensureSetupGlobalDefaults(configFile *setupConfigFile) {
+	if configFile == nil || configFile.Global != nil {
+		return
+	}
+
+	defaults := routerconfig.DefaultCanonicalGlobal()
+	configFile.Global = &defaults
 }
 
 func SetupImportRemoteHandler(configPath string) http.HandlerFunc {
@@ -267,23 +282,31 @@ func SetupImportRemoteHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		remoteConfig, err := parseSetupConfigMap(body)
+		remoteConfig, err := parseSetupCanonicalConfig(body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		models := countConfiguredModels(remoteConfig)
-		decisions := countConfiguredDecisions(remoteConfig)
-		signals := countConfiguredSignals(remoteConfig)
+		if validationErr := validateSetupCandidate(configPath, remoteConfig); validationErr != nil {
+			http.Error(w, fmt.Sprintf("remote config validation failed: %v", validationErr), http.StatusBadRequest)
+			return
+		}
+
+		summary := summarizeSetupConfig(&remoteConfig.CanonicalConfig)
+		configJSON, err := rawJSONMessage(remoteConfig.CanonicalConfig)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to encode remote config: %v", err), http.StatusInternalServerError)
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(SetupImportRemoteResponse{
-			Config:      remoteConfig,
-			Models:      models,
-			Decisions:   decisions,
-			Signals:     signals,
-			CanActivate: models > 0 && decisions > 0,
+			Config:      configJSON,
+			Models:      summary.Models,
+			Decisions:   summary.Decisions,
+			Signals:     summary.Signals,
+			CanActivate: summary.Models > 0 && summary.Decisions > 0,
 			SourceURL:   importURL,
 		}); err != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
@@ -291,116 +314,121 @@ func SetupImportRemoteHandler(configPath string) http.HandlerFunc {
 	}
 }
 
-func loadConfigMap(configPath string) (map[string]interface{}, error) {
-	data, err := os.ReadFile(configPath)
+func hasSetupMode(configFile *setupConfigFile) bool {
+	return configFile != nil && configFile.Setup != nil && configFile.Setup.Mode
+}
+
+func summarizeSetupConfig(configData *routerconfig.CanonicalConfig) setupConfigSummary {
+	cfg, err := parseSetupRouterConfig(configData)
+	if err != nil {
+		return summarizeSetupConfigFallback(configData)
+	}
+
+	routing := routerconfig.CanonicalRoutingFromRouterConfig(cfg)
+	return setupConfigSummary{
+		Models:    len(routing.ModelCards),
+		Decisions: len(routing.Decisions),
+		Signals:   countCanonicalSignals(routing.Signals),
+	}
+}
+
+func parseSetupRouterConfig(configData *routerconfig.CanonicalConfig) (*routerconfig.RouterConfig, error) {
+	yamlData, err := marshalYAMLBytes(configData)
 	if err != nil {
 		return nil, err
 	}
-
-	result := make(map[string]interface{})
-	if err := yaml.Unmarshal(data, &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return routerconfig.ParseYAMLBytes(yamlData)
 }
 
-func hasSetupMode(configMap map[string]interface{}) bool {
-	setupData, ok := configMap[setupModeKey].(map[string]interface{})
-	if !ok {
-		return false
+func summarizeSetupConfigFallback(configData *routerconfig.CanonicalConfig) setupConfigSummary {
+	return setupConfigSummary{
+		Models:    countConfiguredModelsFallback(configData),
+		Decisions: countConfiguredDecisionsFallback(configData),
+		Signals:   countConfiguredSignalsFallback(configData),
 	}
-	enabled, _ := setupData["mode"].(bool)
-	return enabled
 }
 
-func countConfiguredModels(configMap map[string]interface{}) int {
-	if providers, ok := configMap["providers"].(map[string]interface{}); ok {
-		if models, ok := providers["models"].([]interface{}); ok {
-			return len(models)
-		}
-	}
-	if modelConfig, ok := configMap["model_config"].(map[string]interface{}); ok {
-		return len(modelConfig)
-	}
-	return 0
-}
-
-func countConfiguredDecisions(configMap map[string]interface{}) int {
-	decisions, ok := configMap["decisions"].([]interface{})
-	if !ok {
+func countConfiguredModelsFallback(configData *routerconfig.CanonicalConfig) int {
+	if configData == nil {
 		return 0
 	}
-	return len(decisions)
+	if len(configData.Routing.ModelCards) > 0 {
+		return len(configData.Routing.ModelCards)
+	}
+	return len(configData.Providers.Models)
 }
 
-func countConfiguredSignals(configMap map[string]interface{}) int {
-	signals, ok := configMap["signals"].(map[string]interface{})
-	if !ok {
+func countConfiguredDecisionsFallback(configData *routerconfig.CanonicalConfig) int {
+	if configData == nil {
 		return 0
 	}
-
-	total := 0
-	for _, raw := range signals {
-		if entries, ok := raw.([]interface{}); ok {
-			total += len(entries)
-		}
-	}
-
-	return total
+	return len(configData.Routing.Decisions)
 }
 
-func firstListenerPort(configMap map[string]interface{}) int {
-	listeners, ok := configMap["listeners"].([]interface{})
-	if !ok || len(listeners) == 0 {
+func countConfiguredSignalsFallback(configData *routerconfig.CanonicalConfig) int {
+	if configData == nil {
 		return 0
 	}
-
-	listener, ok := listeners[0].(map[string]interface{})
-	if !ok {
-		return 0
-	}
-
-	switch port := listener["port"].(type) {
-	case int:
-		return port
-	case int64:
-		return int(port)
-	case float64:
-		return int(port)
-	default:
-		return 0
-	}
+	return countCanonicalSignals(configData.Routing.Signals)
 }
 
-func buildSetupCandidateConfig(configPath string, bodyReader interface{ Read([]byte) (int, error) }) (map[string]interface{}, error) {
-	configMap, err := loadBootstrapConfig(configPath)
+func countCanonicalSignals(signals routerconfig.CanonicalSignals) int {
+	return len(signals.Keywords) +
+		len(signals.Embeddings) +
+		len(signals.Domains) +
+		len(signals.FactCheck) +
+		len(signals.UserFeedbacks) +
+		len(signals.Preferences) +
+		len(signals.Language) +
+		len(signals.Context) +
+		len(signals.Complexity) +
+		len(signals.Modality) +
+		len(signals.RoleBindings) +
+		len(signals.Jailbreak) +
+		len(signals.PII)
+}
+
+func firstListenerPort(configFile *setupConfigFile) int {
+	if configFile == nil || len(configFile.Listeners) == 0 {
+		return 0
+	}
+	return configFile.Listeners[0].Port
+}
+
+func buildSetupCandidateConfig(configPath string, bodyReader io.Reader) (*setupConfigFile, error) {
+	configFile, err := loadBootstrapConfig(configPath)
 	if err != nil {
 		return nil, err
 	}
 
 	var req SetupConfigRequest
-	if err := json.NewDecoder(bodyReader).Decode(&req); err != nil {
-		return nil, fmt.Errorf("invalid request body: %w", err)
+	if decodeErr := json.NewDecoder(bodyReader).Decode(&req); decodeErr != nil {
+		return nil, fmt.Errorf("invalid request body: %w", decodeErr)
 	}
 	if len(req.Config) == 0 {
 		return nil, fmt.Errorf("config is required")
 	}
 
-	merged := deepMerge(configMap, req.Config)
-	delete(merged, setupModeKey)
-	return merged, nil
+	requestConfig, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](req.Config)
+	if err != nil {
+		return nil, fmt.Errorf("invalid config payload: %w", err)
+	}
+
+	merged := *configFile
+	merged.CanonicalConfig = mergeSetupCanonicalConfig(configFile.CanonicalConfig, requestConfig)
+	merged.Setup = nil
+	return &merged, nil
 }
 
-func loadBootstrapConfig(configPath string) (map[string]interface{}, error) {
-	configMap, err := loadConfigMap(configPath)
+func loadBootstrapConfig(configPath string) (*setupConfigFile, error) {
+	configFile, err := readSetupConfigFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read existing config: %w", err)
 	}
-	if !hasSetupMode(configMap) {
+	if !hasSetupMode(configFile) {
 		return nil, fmt.Errorf("setup mode is not active for this workspace")
 	}
-	return configMap, nil
+	return configFile, nil
 }
 
 func normalizeRemoteConfigURL(rawValue string) (string, error) {
@@ -423,25 +451,42 @@ func normalizeRemoteConfigURL(rawValue string) (string, error) {
 	return parsed.String(), nil
 }
 
-func parseSetupConfigMap(raw []byte) (map[string]interface{}, error) {
-	parsed := make(map[string]interface{})
-	if err := yaml.Unmarshal(raw, &parsed); err != nil {
+func parseSetupCanonicalConfig(raw []byte) (*setupConfigFile, error) {
+	parsed, err := decodeYAMLTaggedBytes[setupConfigFile](raw)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse remote config: %w", err)
 	}
-	if len(parsed) == 0 {
+	if parsed.Version == "" &&
+		len(parsed.Listeners) == 0 &&
+		len(parsed.Providers.Models) == 0 &&
+		parsed.Global == nil &&
+		len(parsed.Routing.ModelCards) == 0 &&
+		len(parsed.Routing.Decisions) == 0 &&
+		countCanonicalSignals(parsed.Routing.Signals) == 0 {
 		return nil, fmt.Errorf("remote config is empty")
 	}
-	delete(parsed, setupModeKey)
-	return parsed, nil
+	parsed.Setup = nil
+	return &parsed, nil
 }
 
-func validateSetupCandidate(configMap map[string]interface{}) error {
-	yamlData, err := yaml.Marshal(configMap)
+func validateSetupCandidate(configPath string, configData *setupConfigFile) error {
+	if configData == nil {
+		return fmt.Errorf("config is required")
+	}
+	if err := validateCanonicalEndpointRefs(configData.CanonicalConfig); err != nil {
+		return err
+	}
+
+	yamlData, err := marshalYAMLBytes(configData.CanonicalConfig)
 	if err != nil {
 		return err
 	}
 
-	tempConfigFile, err := os.CreateTemp("", "vllm-sr-setup-*.yaml")
+	tempDir := filepath.Dir(filepath.Clean(configPath))
+	if tempDir == "." || tempDir == "" {
+		tempDir = ""
+	}
+	tempConfigFile, err := os.CreateTemp(tempDir, "vllm-sr-setup-*.yaml")
 	if err != nil {
 		return err
 	}
@@ -463,25 +508,41 @@ func validateSetupCandidate(configMap map[string]interface{}) error {
 	}
 	if len(parsedConfig.VLLMEndpoints) > 0 {
 		for _, endpoint := range parsedConfig.VLLMEndpoints {
+			if endpoint.ProviderProfileName != "" && endpoint.Address == "" {
+				continue
+			}
 			if endpointErr := validateEndpointAddress(endpoint.Address); endpointErr != nil {
 				return endpointErr
 			}
 		}
 	}
 
-	tempOutputDir, err := os.MkdirTemp("", "vllm-sr-setup-out-*")
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = os.RemoveAll(tempOutputDir)
-	}()
-
-	if _, generateErr := generateRouterConfigWithPython(tempConfigPath, tempOutputDir); generateErr != nil {
-		return generateErr
-	}
-
 	return nil
+}
+
+func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerconfig.CanonicalConfig {
+	merged := base
+	if patch.Version != "" {
+		merged.Version = patch.Version
+	}
+	if len(patch.Listeners) > 0 {
+		merged.Listeners = patch.Listeners
+	}
+	if len(patch.Providers.Models) > 0 ||
+		patch.Providers.Defaults.DefaultModel != "" ||
+		len(patch.Providers.Defaults.ReasoningFamilies) > 0 ||
+		patch.Providers.Defaults.DefaultReasoningEffort != "" {
+		merged.Providers = patch.Providers
+	}
+	if len(patch.Routing.ModelCards) > 0 ||
+		len(patch.Routing.Decisions) > 0 ||
+		countCanonicalSignals(patch.Routing.Signals) > 0 {
+		merged.Routing = patch.Routing
+	}
+	if patch.Global != nil {
+		merged.Global = patch.Global
+	}
+	return merged
 }
 
 func backupCurrentConfig(configPath string, configDir string) error {
@@ -504,20 +565,29 @@ func backupCurrentConfig(configPath string, configDir string) error {
 	return nil
 }
 
-func restartSetupManagedServices() error {
-	if _, err := exec.LookPath("supervisorctl"); err != nil {
-		return nil
+func restartSetupManagedServices(effectiveConfigPath string) error {
+	if err := refreshManagedSplitEnvoyConfig(effectiveConfigPath); err != nil {
+		return err
 	}
 
 	for _, service := range []string{"router", "envoy"} {
-		cmd := exec.Command("supervisorctl", "restart", service)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			startCmd := exec.Command("supervisorctl", "start", service)
-			if startOutput, startErr := startCmd.CombinedOutput(); startErr != nil {
-				return fmt.Errorf("%s restart failed: %s / start failed: %s", service, string(output), string(startOutput))
-			}
+		if err := restartManagedService(service, 20*time.Second); err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+func restartSetupRuntimeServices(configPath string, effectiveConfigPath string) error {
+	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
+		return restartSetupManagedServices(effectiveConfigPath)
+	}
+
+	if getDockerContainerStatus(managedContainerNameForService("router")) == "not found" &&
+		getDockerContainerStatus(managedContainerNameForService("envoy")) == "not found" {
+		return nil
+	}
+
+	return restartSetupManagedServices(effectiveConfigPath)
 }

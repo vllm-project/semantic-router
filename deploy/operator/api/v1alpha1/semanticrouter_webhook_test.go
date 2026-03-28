@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"testing"
 
 	networkingv1 "k8s.io/api/networking/v1"
@@ -497,7 +498,7 @@ func TestValidateCreate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := tt.sr.ValidateCreate()
+			_, err := tt.sr.ValidateCreate(context.Background(), tt.sr)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateCreate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -580,7 +581,7 @@ func TestValidateUpdate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := tt.sr.ValidateUpdate(old)
+			_, err := tt.sr.ValidateUpdate(context.Background(), old, tt.sr)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateUpdate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -597,7 +598,7 @@ func TestValidateDelete(t *testing.T) {
 		Spec: SemanticRouterSpec{},
 	}
 
-	_, err := sr.ValidateDelete()
+	_, err := sr.ValidateDelete(context.Background(), sr)
 	if err != nil {
 		t.Errorf("ValidateDelete() should always succeed, got error: %v", err)
 	}

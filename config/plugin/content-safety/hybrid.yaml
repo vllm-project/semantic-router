@@ -1,0 +1,14 @@
+plugins:
+  - type: jailbreak
+    configuration:
+      enabled: true
+      threshold: 0.6
+  - type: pii
+    configuration:
+      enabled: true
+      pii_types_allowed: []
+  - type: response_jailbreak
+    configuration:
+      enabled: true
+      threshold: 0.8
+      action: annotate

@@ -2,6 +2,9 @@ package dsl
 
 import (
 	"fmt"
+	"strings"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -46,20 +49,86 @@ func (c *Compiler) compile() {
 	// 2. Compile signals
 	c.compileSignals()
 
-	// 3. Compile routes (decisions)
+	// 3. Compile projection partitions
+	c.compileProjectionPartitions()
+
+	// 4. Compile projections
+	c.compileProjectionScores()
+	c.compileProjectionMappings()
+
+	// 5. Compile top-level model catalog
+	c.compileModels()
+
+	// 6. Compile routes (decisions)
 	c.compileRoutes()
+}
 
-	// 4. Compile backends
-	c.compileBackends()
+func (c *Compiler) compileProjectionPartitions() {
+	for _, partitionDecl := range c.prog.ProjectionPartitions {
+		c.validateSoftmaxDomainProjectionPartition(partitionDecl)
+		partition := config.ProjectionPartition{
+			Name:        partitionDecl.Name,
+			Semantics:   partitionDecl.Semantics,
+			Temperature: partitionDecl.Temperature,
+			Members:     partitionDecl.Members,
+			Default:     partitionDecl.Default,
+		}
+		c.config.Projections.Partitions = append(c.config.Projections.Partitions, partition)
+	}
+}
 
-	// 5. Compile global settings
-	if c.prog.Global != nil {
-		c.compileGlobal()
+func (c *Compiler) compileProjectionScores() {
+	for _, scoreDecl := range c.prog.ProjectionScores {
+		score := config.ProjectionScore{
+			Name:   scoreDecl.Name,
+			Method: scoreDecl.Method,
+			Inputs: make([]config.ProjectionScoreInput, 0, len(scoreDecl.Inputs)),
+		}
+		for _, inputDecl := range scoreDecl.Inputs {
+			score.Inputs = append(score.Inputs, config.ProjectionScoreInput{
+				Type:        inputDecl.SignalType,
+				Name:        inputDecl.SignalName,
+				KB:          inputDecl.KB,
+				Metric:      inputDecl.Metric,
+				Weight:      inputDecl.Weight,
+				ValueSource: inputDecl.ValueSource,
+				Match:       inputDecl.Match,
+				Miss:        inputDecl.Miss,
+			})
+		}
+		c.config.Projections.Scores = append(c.config.Projections.Scores, score)
+	}
+}
+
+func (c *Compiler) compileProjectionMappings() {
+	for _, mappingDecl := range c.prog.ProjectionMappings {
+		mapping := config.ProjectionMapping{
+			Name:   mappingDecl.Name,
+			Source: mappingDecl.Source,
+			Method: mappingDecl.Method,
+		}
+		if mappingDecl.Calibration != nil {
+			mapping.Calibration = &config.ProjectionMappingCalibration{
+				Method: mappingDecl.Calibration.Method,
+				Slope:  mappingDecl.Calibration.Slope,
+			}
+		}
+		for _, outputDecl := range mappingDecl.Outputs {
+			mapping.Outputs = append(mapping.Outputs, config.ProjectionMappingOutput{
+				Name: outputDecl.Name,
+				LT:   outputDecl.LT,
+				LTE:  outputDecl.LTE,
+				GT:   outputDecl.GT,
+				GTE:  outputDecl.GTE,
+			})
+		}
+		c.config.Projections.Mappings = append(c.config.Projections.Mappings, mapping)
 	}
 }
 
 // ---------- Signals ----------
 
+//nolint:cyclop // Flat dispatch keeps signal-type ownership explicit at the compile entrypoint.
 func (c *Compiler) compileSignals() {
 	for _, s := range c.prog.Signals {
 		switch s.SignalType {
@@ -79,6 +148,8 @@ func (c *Compiler) compileSignals() {
 			c.compileLanguageSignal(s)
 		case "context":
 			c.compileContextSignal(s)
+		case "structure":
+			c.compileStructureSignal(s)
 		case "complexity":
 			c.compileComplexitySignal(s)
 		case "modality":
@@ -89,6 +160,8 @@ func (c *Compiler) compileSignals() {
 			c.compileJailbreakSignal(s)
 		case "pii":
 			c.compilePIISignal(s)
+		case "kb":
+			c.compileKBSignal(s)
 		default:
 			c.addError(s.Pos, "unknown signal type %q", s.SignalType)
 		}
@@ -148,6 +221,20 @@ func (c *Compiler) compileDomainSignal(s *SignalDecl) {
 		cat.Description = v
 	}
 	if v, ok := getStringArrayField(s.Fields, "mmlu_categories"); ok {
+		for _, mmluCategory := range v {
+			if config.IsSupportedRoutingDomainName(mmluCategory) {
+				continue
+			}
+			c.addError(
+				s.Pos,
+				"SIGNAL domain %q has unsupported mmlu_categories value %q (supported: %s)%s",
+				s.Name,
+				mmluCategory,
+				strings.Join(config.SupportedRoutingDomainNames(), ", "),
+				compileDomainSuggestionSuffix(mmluCategory),
+			)
+			return
+		}
 		cat.MMLUCategories = v
 	}
 	c.config.Categories = append(c.config.Categories, cat)
@@ -174,6 +261,12 @@ func (c *Compiler) compilePreferenceSignal(s *SignalDecl) {
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v
 	}
+	if v, ok := getStringArrayField(s.Fields, "examples"); ok {
+		rule.Examples = v
+	}
+	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
+		rule.Threshold = v
+	}
 	c.config.PreferenceRules = append(c.config.PreferenceRules, rule)
 }
 
@@ -197,6 +290,29 @@ func (c *Compiler) compileContextSignal(s *SignalDecl) {
 		rule.Description = v
 	}
 	c.config.ContextRules = append(c.config.ContextRules, rule)
+}
+
+func (c *Compiler) compileStructureSignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode structure signal %q: %v", s.Name, err)
+		return
+	}
+
+	var rule config.StructureRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode structure signal %q: %v", s.Name, err)
+		return
+	}
+	rule.Name = s.Name
+	if err := config.ValidateStructureRuleContract(rule); err != nil {
+		c.addError(s.Pos, "%v", err)
+		return
+	}
+	c.config.StructureRules = append(c.config.StructureRules, rule)
 }
 
 func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
@@ -278,6 +394,26 @@ func (c *Compiler) compilePIISignal(s *SignalDecl) {
 	c.config.PIIRules = append(c.config.PIIRules, rule)
 }
 
+func (c *Compiler) compileKBSignal(s *SignalDecl) {
+	rule := config.KBSignalRule{Name: s.Name}
+	if v, ok := getStringField(s.Fields, "kb"); ok {
+		rule.KB = v
+	}
+	if target, ok := s.Fields["target"].(ObjectValue); ok {
+		if kind, ok := getStringField(target.Fields, "kind"); ok {
+			rule.Target.Kind = kind
+		}
+		if value, ok := getStringField(target.Fields, "value"); ok {
+			rule.Target.Value = value
+		}
+	}
+	if v, ok := getStringField(s.Fields, "match"); ok {
+		rule.Match = v
+	}
+	c.config.KBRules = append(c.config.KBRules, rule)
+}
+
+//nolint:gocognit,nestif // Legacy schema decoding stays localized until the authz signal surface is extracted.
 func (c *Compiler) compileAuthzSignal(s *SignalDecl) {
 	rb := config.RoleBinding{Name: s.Name}
 	if v, ok := getStringField(s.Fields, "role"); ok {
@@ -307,12 +443,14 @@ func (c *Compiler) compileAuthzSignal(s *SignalDecl) {
 
 // ---------- Routes (Decisions) ----------
 
+//nolint:gocognit,cyclop // Route lowering owns the DSL-to-config translation in one place.
 func (c *Compiler) compileRoutes() {
 	for _, r := range c.prog.Routes {
 		decision := config.Decision{
 			Name:        r.Name,
 			Description: r.Description,
 			Priority:    r.Priority,
+			Tier:        r.Tier,
 		}
 
 		// Compile WHEN expression → RuleNode tree.
@@ -353,17 +491,14 @@ func (c *Compiler) compileRoutes() {
 			}
 			decision.ModelRefs = append(decision.ModelRefs, ref)
 
-			// Populate model_config for metadata fields (param_size, reasoning_family)
-			if m.ParamSize != "" || m.ReasoningFamily != "" {
+			// Populate model_config for route-local model metadata fields.
+			if m.ParamSize != "" {
 				if c.config.ModelConfig == nil {
 					c.config.ModelConfig = make(map[string]config.ModelParams)
 				}
 				mc := c.config.ModelConfig[m.Model]
 				if m.ParamSize != "" {
 					mc.ParamSize = m.ParamSize
-				}
-				if m.ReasoningFamily != "" {
-					mc.ReasoningFamily = m.ReasoningFamily
 				}
 				c.config.ModelConfig[m.Model] = mc
 			}
@@ -448,6 +583,7 @@ func (c *Compiler) flattenBoolExpr(
 	return []config.RuleNode{c.compileBoolExpr(expr)}
 }
 
+//nolint:cyclop // The supported algorithm surface is intentionally enumerated here.
 func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	algo := &config.AlgorithmConfig{
 		Type: spec.AlgoType,
@@ -495,6 +631,7 @@ func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	return algo
 }
 
+//nolint:nestif // Nested object decoding mirrors the DSL object shape.
 func (c *Compiler) compileConfidenceAlgo(fields map[string]Value) *config.ConfidenceAlgorithmConfig {
 	cfg := &config.ConfidenceAlgorithmConfig{}
 	if v, ok := getStringField(fields, "confidence_method"); ok {
@@ -715,8 +852,17 @@ func (c *Compiler) compilePluginRef(ref *PluginRef) *config.DecisionPlugin {
 	return c.buildDecisionPlugin(ref.Name, fields)
 }
 
+//nolint:gocognit,cyclop,funlen // Plugin decoding remains centralized so type-specific payload wiring stays consistent.
 func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Value) *config.DecisionPlugin {
 	dp := &config.DecisionPlugin{Type: pluginType}
+	setPluginConfig := func(value interface{}) {
+		payload, err := config.NewStructuredPayload(value)
+		if err != nil {
+			c.addError(Position{}, "failed to encode plugin %q configuration: %v", pluginType, err)
+			return
+		}
+		dp.Configuration = payload
+	}
 
 	switch pluginType {
 	case "system_prompt":
@@ -730,7 +876,7 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getStringField(fields, "mode"); ok {
 			cfg.Mode = v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "semantic_cache", "semantic-cache":
 		dp.Type = "semantic-cache" // normalize to config convention
@@ -741,7 +887,7 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getFloat32Field(fields, "similarity_threshold"); ok {
 			cfg.SimilarityThreshold = &v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "hallucination":
 		cfg := config.HallucinationPluginConfig{}
@@ -754,7 +900,7 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getStringField(fields, "hallucination_action"); ok {
 			cfg.HallucinationAction = v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "memory":
 		cfg := config.MemoryPluginConfig{}
@@ -770,15 +916,15 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getBoolField(fields, "auto_store"); ok {
 			cfg.AutoStore = &v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "rag":
 		cfg := c.compileRAGPlugin(fields)
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "header_mutation":
 		cfg := config.HeaderMutationPluginConfig{}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "router_replay":
 		cfg := config.RouterReplayPluginConfig{}
@@ -797,7 +943,7 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getIntField(fields, "max_body_bytes"); ok {
 			cfg.MaxBodyBytes = v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "image_gen":
 		cfg := config.ImageGenPluginConfig{}
@@ -807,14 +953,33 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		if v, ok := getStringField(fields, "backend"); ok {
 			cfg.Backend = v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
 
 	case "fast_response":
 		cfg := config.FastResponsePluginConfig{}
 		if v, ok := getStringField(fields, "message"); ok {
 			cfg.Message = v
 		}
-		dp.Configuration = cfg
+		setPluginConfig(cfg)
+
+	case "tools":
+		cfg := config.ToolsPluginConfig{}
+		if v, ok := getBoolField(fields, "enabled"); ok {
+			cfg.Enabled = v
+		}
+		if v, ok := getStringField(fields, "mode"); ok {
+			cfg.Mode = v
+		}
+		if v, ok := getBoolField(fields, "semantic_selection"); ok {
+			cfg.SemanticSelection = &v
+		}
+		if values, ok := getStringArrayField(fields, "allow_tools"); ok {
+			cfg.AllowTools = values
+		}
+		if values, ok := getStringArrayField(fields, "block_tools"); ok {
+			cfg.BlockTools = values
+		}
+		setPluginConfig(cfg)
 
 	default:
 		c.addError(Position{}, "unknown plugin type %q", pluginType)
@@ -824,6 +989,7 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 	return dp
 }
 
+//nolint:nestif // Nested backend_config decoding mirrors the DSL object shape.
 func (c *Compiler) compileRAGPlugin(fields map[string]Value) config.RAGPluginConfig {
 	cfg := config.RAGPluginConfig{}
 	if v, ok := getBoolField(fields, "enabled"); ok {
@@ -847,7 +1013,12 @@ func (c *Compiler) compileRAGPlugin(fields map[string]Value) config.RAGPluginCon
 	// backend_config is a nested object
 	if obj, ok := fields["backend_config"]; ok {
 		if ov, ok := obj.(ObjectValue); ok {
-			cfg.BackendConfig = fieldsToMap(ov.Fields)
+			payload, err := config.NewStructuredPayload(fieldsToMap(ov.Fields))
+			if err != nil {
+				c.addError(Position{}, "failed to encode rag backend_config: %v", err)
+			} else {
+				cfg.BackendConfig = payload
+			}
 		}
 	}
 	return cfg
@@ -877,412 +1048,6 @@ func compileComposerObj(ov ObjectValue) config.RuleCombination {
 		}
 	}
 	return rc
-}
-
-// ---------- Backends ----------
-
-func (c *Compiler) compileBackends() {
-	for _, b := range c.prog.Backends {
-		switch b.BackendType {
-		case "vllm_endpoint":
-			c.compileVLLMEndpoint(b)
-		case "provider_profile":
-			c.compileProviderProfile(b)
-		case "embedding_model":
-			c.compileEmbeddingModel(b)
-		case "semantic_cache":
-			c.compileSemanticCacheBackend(b)
-		case "memory":
-			c.compileMemoryBackend(b)
-		case "response_api":
-			c.compileResponseAPIBackend(b)
-		default:
-			c.addError(b.Pos, "unknown backend type %q", b.BackendType)
-		}
-	}
-}
-
-func (c *Compiler) compileVLLMEndpoint(b *BackendDecl) {
-	ep := config.VLLMEndpoint{Name: b.Name}
-	if v, ok := getStringField(b.Fields, "address"); ok {
-		ep.Address = v
-	}
-	if v, ok := getIntField(b.Fields, "port"); ok {
-		ep.Port = v
-	}
-	if v, ok := getIntField(b.Fields, "weight"); ok {
-		ep.Weight = v
-	}
-	if v, ok := getStringField(b.Fields, "type"); ok {
-		ep.Type = v
-	}
-	if v, ok := getStringField(b.Fields, "api_key"); ok {
-		ep.APIKey = v
-	}
-	if v, ok := getStringField(b.Fields, "provider_profile"); ok {
-		ep.ProviderProfileName = v
-	}
-	if v, ok := getStringField(b.Fields, "model"); ok {
-		ep.Model = v
-	}
-	if v, ok := getStringField(b.Fields, "protocol"); ok {
-		ep.Protocol = v
-	}
-	c.config.VLLMEndpoints = append(c.config.VLLMEndpoints, ep)
-}
-
-func (c *Compiler) compileProviderProfile(b *BackendDecl) {
-	if c.config.ProviderProfiles == nil {
-		c.config.ProviderProfiles = make(map[string]config.ProviderProfile)
-	}
-	pp := config.ProviderProfile{}
-	if v, ok := getStringField(b.Fields, "type"); ok {
-		pp.Type = v
-	}
-	if v, ok := getStringField(b.Fields, "base_url"); ok {
-		pp.BaseURL = v
-	}
-	if v, ok := getStringField(b.Fields, "auth_header"); ok {
-		pp.AuthHeader = v
-	}
-	if v, ok := getStringField(b.Fields, "auth_prefix"); ok {
-		pp.AuthPrefix = v
-	}
-	if v, ok := getStringField(b.Fields, "api_version"); ok {
-		pp.APIVersion = v
-	}
-	if v, ok := getStringField(b.Fields, "chat_path"); ok {
-		pp.ChatPath = v
-	}
-	if obj, ok := b.Fields["extra_headers"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			pp.ExtraHeaders = make(map[string]string)
-			for k, v := range ov.Fields {
-				if sv, ok := v.(StringValue); ok {
-					pp.ExtraHeaders[k] = sv.V
-				}
-			}
-		}
-	}
-	c.config.ProviderProfiles[b.Name] = pp
-}
-
-func (c *Compiler) compileEmbeddingModel(b *BackendDecl) {
-	if v, ok := getStringField(b.Fields, "mmbert_model_path"); ok {
-		c.config.EmbeddingModels.MmBertModelPath = v
-	}
-	if v, ok := getStringField(b.Fields, "bert_model_path"); ok {
-		c.config.EmbeddingModels.BertModelPath = v
-	}
-	if v, ok := getBoolField(b.Fields, "use_cpu"); ok {
-		c.config.EmbeddingModels.UseCPU = v
-	}
-	if obj, ok := b.Fields["hnsw_config"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			hnsw := &config.HNSWConfig{}
-			if v, ok := getStringField(ov.Fields, "model_type"); ok {
-				hnsw.ModelType = v
-			}
-			if v, ok := getBoolField(ov.Fields, "preload_embeddings"); ok {
-				hnsw.PreloadEmbeddings = v
-			}
-			if v, ok := getIntField(ov.Fields, "target_dimension"); ok {
-				hnsw.TargetDimension = v
-			}
-			if v, ok := getFloat32Field(ov.Fields, "min_score_threshold"); ok {
-				hnsw.MinScoreThreshold = v
-			}
-			if v, ok := getBoolField(ov.Fields, "enable_soft_matching"); ok {
-				hnsw.EnableSoftMatching = &v
-			}
-			c.config.EmbeddingModels.HNSWConfig = *hnsw
-		}
-	}
-}
-
-func (c *Compiler) compileSemanticCacheBackend(b *BackendDecl) {
-	if v, ok := getBoolField(b.Fields, "enabled"); ok {
-		c.config.SemanticCache.Enabled = v
-	}
-	if v, ok := getStringField(b.Fields, "backend_type"); ok {
-		c.config.SemanticCache.BackendType = v
-	}
-	if v, ok := getFloat32Field(b.Fields, "similarity_threshold"); ok {
-		c.config.SemanticCache.SimilarityThreshold = &v
-	}
-	if v, ok := getIntField(b.Fields, "max_entries"); ok {
-		c.config.SemanticCache.MaxEntries = v
-	}
-	if v, ok := getIntField(b.Fields, "ttl_seconds"); ok {
-		c.config.SemanticCache.TTLSeconds = v
-	}
-	if v, ok := getStringField(b.Fields, "eviction_policy"); ok {
-		c.config.SemanticCache.EvictionPolicy = v
-	}
-}
-
-func (c *Compiler) compileMemoryBackend(b *BackendDecl) {
-	if v, ok := getBoolField(b.Fields, "enabled"); ok {
-		c.config.Memory.Enabled = v
-	}
-	if v, ok := getBoolField(b.Fields, "auto_store"); ok {
-		c.config.Memory.AutoStore = v
-	}
-	if v, ok := getIntField(b.Fields, "default_retrieval_limit"); ok {
-		c.config.Memory.DefaultRetrievalLimit = v
-	}
-	if v, ok := getFloat32Field(b.Fields, "default_similarity_threshold"); ok {
-		c.config.Memory.DefaultSimilarityThreshold = v
-	}
-}
-
-func (c *Compiler) compileResponseAPIBackend(b *BackendDecl) {
-	if v, ok := getBoolField(b.Fields, "enabled"); ok {
-		c.config.ResponseAPI.Enabled = v
-	}
-	if v, ok := getStringField(b.Fields, "store_backend"); ok {
-		c.config.ResponseAPI.StoreBackend = v
-	}
-	if v, ok := getIntField(b.Fields, "ttl_seconds"); ok {
-		c.config.ResponseAPI.TTLSeconds = v
-	}
-	if v, ok := getIntField(b.Fields, "max_responses"); ok {
-		c.config.ResponseAPI.MaxResponses = v
-	}
-}
-
-// ---------- Global ----------
-
-func (c *Compiler) compileGlobal() {
-	g := c.prog.Global.Fields
-
-	// listeners
-	if obj, ok := g["listeners"]; ok {
-		c.config.Listeners = c.compileListeners(obj, c.prog.Global.Pos)
-	}
-
-	if v, ok := getStringField(g, "default_model"); ok {
-		c.config.DefaultModel = v
-	}
-	if v, ok := getStringField(g, "strategy"); ok {
-		c.config.Strategy = v
-	}
-	if v, ok := getStringField(g, "default_reasoning_effort"); ok {
-		c.config.DefaultReasoningEffort = v
-	}
-
-	// prompt_guard
-	if obj, ok := g["prompt_guard"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			if v, ok := getBoolField(ov.Fields, "enabled"); ok {
-				c.config.PromptGuard.Enabled = v
-			}
-			if v, ok := getFloat32Field(ov.Fields, "threshold"); ok {
-				c.config.PromptGuard.Threshold = v
-			}
-		}
-	}
-
-	// observability
-	if obj, ok := g["observability"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			c.compileObservability(ov.Fields)
-		}
-	}
-
-	// model_selection
-	if obj, ok := g["model_selection"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			if v, ok := getBoolField(ov.Fields, "enabled"); ok {
-				c.config.ModelSelection.Enabled = v
-			}
-			if v, ok := getStringField(ov.Fields, "method"); ok {
-				c.config.ModelSelection.Method = v
-			}
-		}
-	}
-
-	// looper
-	if obj, ok := g["looper"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			if v, ok := getStringField(ov.Fields, "endpoint"); ok {
-				c.config.Looper.Endpoint = v
-			}
-			if v, ok := getIntField(ov.Fields, "timeout_seconds"); ok {
-				c.config.Looper.TimeoutSeconds = v
-			}
-		}
-	}
-
-	// authz
-	if obj, ok := g["authz"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			if v, ok := getBoolField(ov.Fields, "fail_open"); ok {
-				c.config.Authz.FailOpen = v
-			}
-		}
-	}
-
-	// ratelimit
-	if obj, ok := g["ratelimit"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			if v, ok := getBoolField(ov.Fields, "fail_open"); ok {
-				c.config.RateLimit.FailOpen = v
-			}
-		}
-	}
-
-	// hallucination_mitigation
-	if obj, ok := g["hallucination_mitigation"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			if v, ok := getBoolField(ov.Fields, "enabled"); ok {
-				c.config.HallucinationMitigation.Enabled = v
-			}
-			if v, ok := getStringField(ov.Fields, "on_hallucination_detected"); ok {
-				c.config.HallucinationMitigation.OnHallucinationDetected = v
-			}
-			if sub, ok := ov.Fields["fact_check_model"]; ok {
-				if sv, ok := sub.(ObjectValue); ok {
-					if v, ok := getFloat32Field(sv.Fields, "threshold"); ok {
-						c.config.HallucinationMitigation.FactCheckModel.Threshold = v
-					}
-				}
-			}
-			if sub, ok := ov.Fields["hallucination_model"]; ok {
-				if sv, ok := sub.(ObjectValue); ok {
-					if v, ok := getFloat32Field(sv.Fields, "threshold"); ok {
-						c.config.HallucinationMitigation.HallucinationModel.Threshold = v
-					}
-				}
-			}
-			if sub, ok := ov.Fields["nli_model"]; ok {
-				if sv, ok := sub.(ObjectValue); ok {
-					if v, ok := getFloat32Field(sv.Fields, "threshold"); ok {
-						c.config.HallucinationMitigation.NLIModel.Threshold = v
-					}
-				}
-			}
-		}
-	}
-
-	// reasoning_families
-	if obj, ok := g["reasoning_families"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			families := make(map[string]config.ReasoningFamilyConfig)
-			for familyName, familyVal := range ov.Fields {
-				if fv, ok := familyVal.(ObjectValue); ok {
-					var rfc config.ReasoningFamilyConfig
-					if t, ok := getStringField(fv.Fields, "type"); ok {
-						rfc.Type = t
-					}
-					if p, ok := getStringField(fv.Fields, "parameter"); ok {
-						rfc.Parameter = p
-					}
-					families[familyName] = rfc
-				}
-			}
-			if len(families) > 0 {
-				c.config.ReasoningFamilies = families
-			}
-		}
-	}
-}
-
-func (c *Compiler) compileListeners(value Value, pos Position) []config.Listener {
-	av, ok := value.(ArrayValue)
-	if !ok {
-		c.addError(pos, "GLOBAL listeners must be an array of listener objects")
-		return nil
-	}
-
-	listeners := make([]config.Listener, 0, len(av.Items))
-	for i, item := range av.Items {
-		ov, ok := item.(ObjectValue)
-		if !ok {
-			c.addError(pos, "GLOBAL listeners[%d] must be an object", i)
-			continue
-		}
-
-		listener := config.Listener{}
-		if v, ok := getStringField(ov.Fields, "name"); ok && v != "" {
-			listener.Name = v
-		} else {
-			c.addError(pos, "GLOBAL listeners[%d].name is required", i)
-		}
-		if v, ok := getStringField(ov.Fields, "address"); ok && v != "" {
-			listener.Address = v
-		} else {
-			c.addError(pos, "GLOBAL listeners[%d].address is required", i)
-		}
-		if v, ok := getIntField(ov.Fields, "port"); ok && v > 0 {
-			listener.Port = v
-		} else {
-			c.addError(pos, "GLOBAL listeners[%d].port must be a positive integer", i)
-		}
-		if v, ok := getStringField(ov.Fields, "timeout"); ok {
-			listener.Timeout = v
-		}
-
-		listeners = append(listeners, listener)
-	}
-
-	return listeners
-}
-
-func (c *Compiler) compileObservability(fields map[string]Value) {
-	if obj, ok := fields["metrics"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			if v, ok := getBoolField(ov.Fields, "enabled"); ok {
-				c.config.Observability.Metrics.Enabled = &v
-			}
-		}
-	}
-	if obj, ok := fields["tracing"]; ok {
-		if ov, ok := obj.(ObjectValue); ok {
-			if v, ok := getBoolField(ov.Fields, "enabled"); ok {
-				c.config.Observability.Tracing.Enabled = v
-			}
-			if v, ok := getStringField(ov.Fields, "provider"); ok {
-				c.config.Observability.Tracing.Provider = v
-			}
-			if expObj, ok := ov.Fields["exporter"]; ok {
-				if ev, ok := expObj.(ObjectValue); ok {
-					if v, ok := getStringField(ev.Fields, "type"); ok {
-						c.config.Observability.Tracing.Exporter.Type = v
-					}
-					if v, ok := getStringField(ev.Fields, "endpoint"); ok {
-						c.config.Observability.Tracing.Exporter.Endpoint = v
-					}
-					if v, ok := getBoolField(ev.Fields, "insecure"); ok {
-						c.config.Observability.Tracing.Exporter.Insecure = v
-					}
-				}
-			}
-			if sampObj, ok := ov.Fields["sampling"]; ok {
-				if sv, ok := sampObj.(ObjectValue); ok {
-					if v, ok := getStringField(sv.Fields, "type"); ok {
-						c.config.Observability.Tracing.Sampling.Type = v
-					}
-					if v, ok := getFloat64Field(sv.Fields, "rate"); ok {
-						c.config.Observability.Tracing.Sampling.Rate = v
-					}
-				}
-			}
-			if resObj, ok := ov.Fields["resource"]; ok {
-				if rv, ok := resObj.(ObjectValue); ok {
-					if v, ok := getStringField(rv.Fields, "service_name"); ok {
-						c.config.Observability.Tracing.Resource.ServiceName = v
-					}
-					if v, ok := getStringField(rv.Fields, "service_version"); ok {
-						c.config.Observability.Tracing.Resource.ServiceVersion = v
-					}
-					if v, ok := getStringField(rv.Fields, "deployment_environment"); ok {
-						c.config.Observability.Tracing.Resource.DeploymentEnvironment = v
-					}
-				}
-			}
-		}
-	}
 }
 
 // ---------- Error helpers ----------
@@ -1362,6 +1127,66 @@ func getStringArrayField(fields map[string]Value, key string) ([]string, bool) {
 		}
 	}
 	return nil, false
+}
+
+func compileDomainSuggestionSuffix(value string) string {
+	suggestion := config.SuggestSupportedRoutingDomainName(value)
+	if suggestion == "" || suggestion == value {
+		return ""
+	}
+	return fmt.Sprintf("; did you mean %q?", suggestion)
+}
+
+func (c *Compiler) validateSoftmaxDomainProjectionPartition(
+	partition *ProjectionPartitionDecl,
+) {
+	if partition.Semantics != "softmax_exclusive" {
+		return
+	}
+	for _, member := range partition.Members {
+		signal := c.findSignalDeclByName(member)
+		if signal == nil || signal.SignalType != "domain" {
+			continue
+		}
+		mmluCategories := getMMLUCategories(signal)
+		if len(mmluCategories) == 0 {
+			if config.IsSupportedRoutingDomainName(signal.Name) {
+				continue
+			}
+			c.addError(
+				partition.Pos,
+				"PROJECTION partition %q member %q must use a supported routing domain name (%s) or declare mmlu_categories explicitly%s",
+				partition.Name,
+				member,
+				strings.Join(config.SupportedRoutingDomainNames(), ", "),
+				compileDomainSuggestionSuffix(member),
+			)
+			continue
+		}
+		for _, value := range mmluCategories {
+			if config.IsSupportedRoutingDomainName(value) {
+				continue
+			}
+			c.addError(
+				partition.Pos,
+				"PROJECTION partition %q member %q has unsupported mmlu_categories value %q (supported: %s)%s",
+				partition.Name,
+				member,
+				value,
+				strings.Join(config.SupportedRoutingDomainNames(), ", "),
+				compileDomainSuggestionSuffix(value),
+			)
+		}
+	}
+}
+
+func (c *Compiler) findSignalDeclByName(name string) *SignalDecl {
+	for _, signal := range c.prog.Signals {
+		if signal.Name == name {
+			return signal
+		}
+	}
+	return nil
 }
 
 func getIntArrayField(fields map[string]Value, key string) ([]int, bool) {

@@ -16,6 +16,11 @@ const DEFAULT_DSL = `# Welcome to the Signal DSL Editor
 # Press Ctrl+Enter to compile, Ctrl+Shift+F to format
 #
 # Example:
+# MODEL "gpt-4o" {
+#   modality: "text"
+#   capabilities: ["general", "reasoning"]
+# }
+#
 # SIGNAL keyword math_terms {
 #   keywords: ["calculus", "algebra", "geometry"]
 #   operator: "OR"
@@ -167,12 +172,13 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
         monaco.editor.setModelLanguage(model, DSL_LANGUAGE_ID)
       }
 
-      // Load default content if empty
-      if (!dslSource) {
+      // The standalone editor gets a starter template; the Builder page must
+      // stay empty until its router-backed import fills the store.
+      if (!embedded && !useDSLStore.getState().dslSource.trim()) {
         setDslSource(DEFAULT_DSL)
       }
     },
-    [dslSource, setDslSource],
+    [embedded, setDslSource],
   )
 
   const handleEditorChange = useCallback(
@@ -273,7 +279,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
       setImportText('')
       setImportError(null)
     } catch {
-      setImportError('Failed to decompile YAML. Make sure it is valid router config YAML.')
+      setImportError('Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.')
     }
   }, [importText, importYaml])
 
@@ -370,7 +376,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
           className={styles.toolbarBtn}
           onClick={handleOpenImport}
           disabled={!wasmReady}
-          title="Import from YAML config"
+          title="Import routing from YAML config"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
@@ -446,7 +452,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
           <Editor
             height="100%"
             defaultLanguage={DSL_LANGUAGE_ID}
-            defaultValue={dslSource || DEFAULT_DSL}
+            defaultValue={embedded ? dslSource : dslSource || DEFAULT_DSL}
             value={dslSource}
             theme="signal-dsl-dark"
             onChange={handleEditorChange}
@@ -644,7 +650,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
             </div>
             <div className={styles.modalBody}>
               <p className={styles.modalHint}>
-                Paste a router config YAML below, load from a file, or fetch from a URL. It will be decompiled into DSL.
+                Paste a full router config YAML or routing fragment below, load from a file, or fetch from a URL. Only the routing section will be decompiled into DSL.
               </p>
               <div className={styles.importUrlRow}>
                 <input

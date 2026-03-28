@@ -16,13 +16,16 @@ export interface ModelDraft {
 
 interface BuiltModel {
   name: string;
-  endpoints: Array<{
+  provider_model_id: string;
+  backend_refs: Array<{
     name: string;
     weight: number;
-    endpoint: string;
+    endpoint?: string;
     protocol: "http" | "https";
+    base_url?: string;
+    provider?: "openai" | "anthropic";
+    api_key?: string;
   }>;
-  access_key?: string;
   api_format?: "anthropic";
 }
 
@@ -52,7 +55,7 @@ export const PROVIDER_OPTIONS: ProviderOption[] = [
     label: "Local vLLM",
     description:
       "Best for first-run with a local or self-hosted OpenAI-compatible endpoint.",
-    placeholder: "http://vllm-gpt-oss-120b:8000",
+    placeholder: "vllm:8000",
   },
   {
     id: "openai-compatible",
@@ -77,7 +80,7 @@ export const SETUP_STEP_LABELS: ReadonlyArray<[string, string]> = [
 ];
 
 export const DEFAULT_REMOTE_SETUP_CONFIG_URL =
-  "https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/amd/config.yaml";
+  "https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/balance.yaml";
 
 export function createSetupConfigCounts(
   overrides: Partial<SetupConfigCounts> = {},
@@ -94,9 +97,9 @@ export function createSetupConfigCounts(
 export function createModelDraft(seed: number): ModelDraft {
   return {
     id: `model-${Date.now()}-${seed}`,
-    name: "openai/gpt-oss-120b",
+    name: "qwen/qwen3.5-rocm",
     providerKind: "vllm",
-    baseUrl: "http://vllm-gpt-oss-120b:8000",
+    baseUrl: "vllm:8000",
     accessKey: "",
     endpointName: "primary",
   };
@@ -255,18 +258,31 @@ export function buildSetupConfig(
     const endpointName =
       model.endpointName.trim() ||
       `${slugify(model.name) || `model-${index + 1}`}-primary`;
+    const apiKey = model.accessKey.trim() || undefined;
+    const trimmedBaseUrl = model.baseUrl.trim().replace(/\/$/, "");
+    const backendRef: BuiltModel["backend_refs"][number] =
+      model.providerKind === "vllm"
+        ? {
+            name: endpointName,
+            weight: 100,
+            endpoint,
+            protocol,
+            api_key: apiKey,
+          }
+        : {
+            name: endpointName,
+            weight: 100,
+            protocol,
+            base_url: trimmedBaseUrl,
+            provider:
+              model.providerKind === "anthropic" ? "anthropic" : "openai",
+            api_key: apiKey,
+          };
 
     return {
       name: model.name.trim(),
-      endpoints: [
-        {
-          name: endpointName,
-          weight: 100,
-          endpoint,
-          protocol,
-        },
-      ],
-      access_key: model.accessKey.trim() || undefined,
+      provider_model_id: model.name.trim(),
+      backend_refs: [backendRef],
       api_format: model.providerKind === "anthropic" ? "anthropic" : undefined,
     };
   });
@@ -300,9 +316,17 @@ export function buildSetupConfig(
   const config: Record<string, unknown> = {
     providers: {
       models: builtModels,
-      default_model: defaultModel.name,
+      defaults: {
+        default_model: defaultModel.name,
+      },
     },
-    decisions: [catchAllDecision],
+    routing: {
+      modelCards: builtModels.map((model) => ({
+        name: model.name,
+        modality: "text",
+      })),
+      decisions: [catchAllDecision],
+    },
   };
 
   return config;
@@ -317,7 +341,7 @@ export function maskSecrets(config: Record<string, unknown> | null): string {
     config,
     (key, value) => {
       if (
-        key === "access_key" &&
+        (key === "api_key" || key === "access_key") &&
         typeof value === "string" &&
         value.length > 0
       ) {

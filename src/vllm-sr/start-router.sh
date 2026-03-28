@@ -1,48 +1,31 @@
 #!/bin/bash
 # Start script for router service
-# Generates router configuration and starts the router
+# Starts the router directly from canonical config.yaml
 
 set -e
 
 CONFIG_FILE="${1:-/app/config.yaml}"
-OUTPUT_DIR="${2:-/app/.vllm-sr}"
-
-echo "Generating router configuration..."
+echo "Starting router from canonical config..."
 echo "  Config file: $CONFIG_FILE"
-echo "  Output dir: $OUTPUT_DIR"
 
-# Create output directory
-mkdir -p "$OUTPUT_DIR"
-
-# Generate router config using Python
-python3 - "$CONFIG_FILE" "$OUTPUT_DIR" << 'EOF'
-import sys
-from pathlib import Path
-from cli.commands.serve import generate_router_config, copy_defaults_reference
-
-config_file = sys.argv[1]
-output_dir = sys.argv[2]
-
+# Preserve setup-mode behavior from the legacy supervisord entrypoint.
+if python3 -c "
+import sys, yaml
 try:
-    # Generate router config
-    router_config_path = generate_router_config(config_file, output_dir, force=True)
-    print(f"✓ Generated router config: {router_config_path}")
-
-    # Copy defaults for reference
-    defaults_path = copy_defaults_reference(output_dir)
-    print(f"✓ Copied defaults: {defaults_path}")
-except Exception as e:
-    print(f"ERROR: Failed to generate config: {e}", file=sys.stderr)
-    import traceback
-    traceback.print_exc()
+    data = yaml.safe_load(open('$CONFIG_FILE')) or {}
+    setup = data.get('setup')
+    sys.exit(0 if isinstance(setup, dict) and setup.get('mode') else 1)
+except Exception:
     sys.exit(1)
-EOF
+"; then
+    echo "Setup mode enabled: router disabled"
+    exec sleep infinity
+fi
 
 # Start router
 echo "Starting router..."
 exec /usr/local/bin/router \
-    -config="$OUTPUT_DIR/router-config.yaml" \
+    -config="$CONFIG_FILE" \
     -port=50051 \
     -enable-api=true \
     -api-port=8080
-

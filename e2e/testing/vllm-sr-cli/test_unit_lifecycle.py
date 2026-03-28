@@ -10,10 +10,6 @@ This test validates lifecycle management commands:
 Signed-off-by: vLLM-SR Team
 """
 
-import os
-import subprocess
-import sys
-import time
 import unittest
 
 from cli_test_base import CLITestBase
@@ -82,10 +78,10 @@ class TestVllmSRStatus(CLITestBase):
             "Validates that status can query envoy, router, or dashboard individually",
         )
 
-        services = ["envoy", "router", "dashboard"]
+        services = ["envoy", "router", "dashboard", "simulator"]
 
         for service in services:
-            return_code, stdout, stderr = self.run_cli(["status", service])
+            return_code, _stdout, stderr = self.run_cli(["status", service])
 
             # Should succeed (even if not running)
             self.assertEqual(return_code, 0, f"status {service} failed: {stderr}")
@@ -113,7 +109,7 @@ class TestVllmSRLogs(CLITestBase):
         output = (stdout + stderr).lower()
 
         # Should mention valid service options or show error
-        service_options = ["envoy", "router", "dashboard"]
+        service_options = ["envoy", "router", "dashboard", "simulator"]
         mentioned = any(svc in output for svc in service_options)
 
         print(f"  Return code: {return_code}")
@@ -155,10 +151,10 @@ class TestVllmSRLogs(CLITestBase):
             "Validates that logs accepts envoy, router, and dashboard",
         )
 
-        services = ["envoy", "router", "dashboard"]
+        services = ["envoy", "router", "dashboard", "simulator"]
 
         for service in services:
-            return_code, stdout, stderr = self.run_cli(["logs", service])
+            _return_code, stdout, stderr = self.run_cli(["logs", service])
 
             # Even if container not running, command structure should be valid
             output = (stdout + stderr).lower()
@@ -188,13 +184,13 @@ class TestVllmSRLogs(CLITestBase):
         # We'll use a very short timeout since follow would hang
 
         # Test with --follow
-        return_code, stdout, stderr = self.run_cli(
+        _return_code, stdout, stderr = self.run_cli(
             ["logs", "router", "--follow"],
             timeout=5,  # Short timeout to avoid hanging
         )
 
         # Test with -f
-        return_code_short, stdout_short, stderr_short = self.run_cli(
+        _return_code_short, stdout_short, stderr_short = self.run_cli(
             ["logs", "router", "-f"],
             timeout=5,
         )
@@ -256,7 +252,7 @@ class TestVllmSRStop(CLITestBase):
         )
 
         # Run stop - should not require any arguments
-        return_code, stdout, stderr = self.run_cli(["stop"])
+        _return_code, stdout, stderr = self.run_cli(["stop"])
 
         # Should not fail with "missing argument" errors
         output = (stdout + stderr).lower()
@@ -306,7 +302,7 @@ class TestVllmSRDashboard(CLITestBase):
         )
 
         # The flag should be recognized
-        return_code, stdout, stderr = self.run_cli(["dashboard", "--no-open"])
+        _return_code, stdout, stderr = self.run_cli(["dashboard", "--no-open"])
 
         output = (stdout + stderr).lower()
 
@@ -328,8 +324,7 @@ class TestVllmSRConfig(CLITestBase):
             "Validates that 'vllm-sr config envoy' outputs envoy config",
         )
 
-        # First init to create config.yaml
-        self.run_cli(["init", "--force"])
+        self.write_minimal_canonical_config()
 
         # Run config envoy
         return_code, stdout, stderr = self.run_cli(["config", "envoy"])
@@ -352,8 +347,7 @@ class TestVllmSRConfig(CLITestBase):
             "Validates that 'vllm-sr config router' outputs router config",
         )
 
-        # First init to create config.yaml
-        self.run_cli(["init", "--force"])
+        self.write_minimal_canonical_config()
 
         # Run config router
         return_code, stdout, stderr = self.run_cli(["config", "router"])

@@ -21,6 +21,7 @@ import (
 
 	routev1 "github.com/openshift/api/route/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -38,6 +39,10 @@ func reconcileRoute(ctx context.Context, c client.Client, scheme *runtime.Scheme
 
 	// Check if Route creation enabled
 	if sr.Spec.OpenShift == nil || sr.Spec.OpenShift.Routes == nil || !sr.Spec.OpenShift.Routes.Enabled {
+		if !isOpenShift {
+			return nil
+		}
+
 		// Delete Route if exists
 		return deleteRouteIfExists(ctx, c, sr)
 	}
@@ -135,12 +140,17 @@ func deleteRouteIfExists(ctx context.Context, c client.Client, sr *vllmv1alpha1.
 	route := &routev1.Route{}
 	err := c.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, route)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if errors.IsNotFound(err) || meta.IsNoMatchError(err) || runtime.IsNotRegisteredError(err) {
 			return nil // Already deleted
 		}
 		return err
 	}
 
 	logger.Info("Deleting Route", "name", route.Name)
-	return c.Delete(ctx, route)
+	err = c.Delete(ctx, route)
+	if err != nil && !errors.IsNotFound(err) && !meta.IsNoMatchError(err) && !runtime.IsNotRegisteredError(err) {
+		return err
+	}
+
+	return nil
 }

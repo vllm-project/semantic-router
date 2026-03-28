@@ -61,7 +61,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [dashboard, extproc, extproc-rocm, llm-katan, vllm-sr, vllm-sr-rocm]
+        image: [dashboard, extproc, extproc-rocm, llm-katan, vllm-sr, vllm-sr-rocm, vllm-sr-sim]
       fail-fast: false
 
     steps:
@@ -73,7 +73,8 @@ jobs:
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
           sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo docker image prune --all --force
+          sudo apt-get clean
+          sudo docker system prune -af --volumes || true
           echo "After cleanup:"
           df -h
 
@@ -112,6 +113,9 @@ jobs:
           elif [ "${{ matrix.image }}" = "vllm-sr" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./src/vllm-sr/Dockerfile" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.image }}" = "vllm-sr-sim" ]; then
+            echo "context=." >> $GITHUB_OUTPUT
+            echo "dockerfile=./src/fleet-sim/Dockerfile" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "vllm-sr-rocm" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./src/vllm-sr/Dockerfile.rocm" >> $GITHUB_OUTPUT
@@ -135,7 +139,9 @@ jobs:
           file: ${{ steps.build-params.outputs.dockerfile }}
           platforms: linux/amd64
           push: false
-          load: true
+          # PR validation only needs the build to succeed; loading large ROCm
+          # images into the Docker daemon doubles disk usage on GitHub runners.
+          load: false
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.image }}-amd64
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-amd64,ignore-error=true
@@ -182,7 +188,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [dashboard, extproc, llm-katan, vllm-sr]
+        image: [dashboard, extproc, llm-katan, vllm-sr, vllm-sr-sim]
         platform: [linux/amd64, linux/arm64]
       fail-fast: false
 
@@ -248,6 +254,9 @@ jobs:
           elif [ "${{ matrix.image }}" = "vllm-sr" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./src/vllm-sr/Dockerfile" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.image }}" = "vllm-sr-sim" ]; then
+            echo "context=." >> $GITHUB_OUTPUT
+            echo "dockerfile=./src/fleet-sim/Dockerfile" >> $GITHUB_OUTPUT
           fi
 
       - name: Generate per-platform tag
@@ -548,7 +557,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [dashboard, extproc, llm-katan, vllm-sr]
+        image: [dashboard, extproc, llm-katan, vllm-sr, vllm-sr-sim]
       fail-fast: false
 
     steps:

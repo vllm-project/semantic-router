@@ -53,6 +53,7 @@ Thumbs.db
 # Project specific
 bin/
 tools/bin/
+.vllm-sr-sim/
 
 # Model files (too large for git)
 *.pt
@@ -80,6 +81,9 @@ tools/bin/
 models
 # Exception for Go models package in dashboard backend
 !dashboard/backend/models/
+# Exception for the fleet-sim Python model catalog package
+!src/fleet-sim/fleet_sim/models/
+!src/fleet-sim/fleet_sim/models/**
 
 # Training data
 wikipedia_data/
@@ -136,6 +140,9 @@ test-results/
 # augment editor rules
 .augment
 
+# Local agent harness artifacts
+.agent-harness/
+
 # Claude Code configuration (should not be committed)
 CLAUDE.md
 
@@ -190,6 +197,7 @@ FactCHD_dataset/
 *.safetensors
 
 .vllm-sr/
+.codex-go-cache/
 
 # AWS deployment files (contain instance IPs and IDs)
 src/training/cache_embeddings/aws/vllm-instance-*.txt

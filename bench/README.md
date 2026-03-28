@@ -60,12 +60,12 @@ reasoning-mode-eval --datasets mmlu gpqa truthfulqa --samples-per-category 10
 - **Token Usage Ratio**: `completion_tokens / prompt_tokens`
 - **Time per Output Token**: Response time efficiency metric (ms)
 
-**Automated vSR Config Generation:**
+**Automated vSR Canonical Patch Generation:**
 
-The benchmark automatically generates vLLM Semantic Router (vSR) model configuration based on evaluation results:
+The benchmark automatically generates a canonical v0.3 patch that can be merged into `config/config.yaml`:
 
 ```bash
-# Generate vSR config with reasoning family specification
+# Generate a ready-to-merge canonical patch with reasoning family specification
 reasoning-mode-eval \
   --datasets mmlu gpqa \
   --model qwen3-14b \
@@ -75,23 +75,32 @@ reasoning-mode-eval \
 
 **Output includes:**
 
-- `vsr_model_config.yaml` - Ready-to-use YAML config snippet for `config/config.yaml`
-- `vsr_model_config_recommendation.json` - Detailed performance analysis and recommendations
+- `vsr_canonical_patch.yaml` - Ready-to-merge canonical YAML patch
+- `vsr_canonical_patch_recommendation.json` - Detailed performance analysis, merge guidance, and recommendations
 - Automatic recommendation based on accuracy vs. cost/latency trade-offs
 
-**Example generated config:**
+**Example generated patch:**
 
 ```yaml
-model_config:
-  qwen3-14b:
-    reasoning_family: qwen3
+providers:
+  defaults:
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+    - name: qwen3-14b
+      reasoning_family: qwen3
+routing:
+  modelCards:
+    - name: qwen3-14b
 ```
 
 **Supported reasoning families:**
 
-- `qwen3` - For Qwen-3 models with `chat_template_kwargs`
-- `deepseek` - For DeepSeek-R1 models with `thinking` parameter
-- `gpt-oss` - For GPT-OSS models with `reasoning_effort`
+- `qwen3` - Emits `chat_template_kwargs.enable_thinking`
+- `deepseek` - Emits `chat_template_kwargs.thinking`
+- `gpt-oss` - Emits `reasoning_effort`
 
 ### Python API
 
@@ -177,8 +186,8 @@ results/  # Created locally when running benchmarks
 │   └── RESEARCH_SUMMARY.md
 └── reasoning_mode_eval/                  # Issue #42 evaluation results
     ├── reasoning_mode_eval_summary.json  # Full evaluation summary with all metrics
-    ├── vsr_model_config.yaml             # Ready-to-use vSR config snippet
-    ├── vsr_model_config_recommendation.json  # Detailed recommendation & analysis
+    ├── vsr_canonical_patch.yaml          # Ready-to-merge canonical patch
+    ├── vsr_canonical_patch_recommendation.json  # Detailed recommendation & analysis
     ├── REASONING_MODE_EVALUATION_REPORT.md   # Human-readable report
     ├── plots/
     │   ├── MMLU-Pro_overall_comparison.png
@@ -191,48 +200,65 @@ results/  # Created locally when running benchmarks
         └── reasoning_mode_results.csv
 ```
 
-## 🚀 Using Generated vSR Config in Production
+## 🚀 Using Generated vSR Patch in Production
 
-After running the reasoning mode evaluation, integrate the generated configuration into your semantic-router deployment:
+After running the reasoning mode evaluation, merge the generated canonical patch into your semantic-router deployment:
 
 ### 1. Review the Recommendation
 
 ```bash
 # Check the detailed recommendation
-cat results/reasoning_mode_eval/vsr_model_config_recommendation.json
+cat results/reasoning_mode_eval/vsr_canonical_patch_recommendation.json
 
-# View the generated config
-cat results/reasoning_mode_eval/vsr_model_config.yaml
+# View the generated patch
+cat results/reasoning_mode_eval/vsr_canonical_patch.yaml
 ```
 
 ### 2. Integrate into config.yaml
 
-Copy the generated `model_config` section to your `config/config.yaml`:
+Merge the generated patch into the existing `providers.defaults.reasoning_families` and `routing.modelCards` sections of `config/config.yaml`:
 
 ```yaml
 # config/config.yaml
 
-model_config:
-  qwen3-14b:
-    reasoning_family: qwen3  # From generated config
-    preferred_endpoints: ["endpoint1"]  # Optional: your endpoint configuration
+providers:
+  defaults:
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+    - name: qwen3-14b
+      reasoning_family: qwen3
+
+routing:
+  modelCards:
+    - name: qwen3-14b
 ```
 
-### 3. Enable Reasoning for Categories (Optional)
+### 3. Enable Reasoning in Routes (Optional)
 
-To enable reasoning mode for specific categories, update your intelligent routing configuration:
+To enable reasoning mode for specific routes, update `routing.decisions[].modelRefs[]` and optionally set a provider-wide default effort:
 
 ```yaml
 # config/config.yaml
 
-default_reasoning_effort: "medium"  # or "low", "high"
+providers:
+  defaults:
+    default_reasoning_effort: medium
 
-# OR enable per-category
-categories:
-  - name: math
-    reasoning_enabled: true  # Enable reasoning for complex math queries
-  - name: casual
-    reasoning_enabled: false  # Disable for casual conversations
+routing:
+  decisions:
+    - name: math_reasoning_route
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: math
+      modelRefs:
+        - model: qwen3-14b
+          use_reasoning: true
+          reasoning_effort: high
 ```
 
 ### 4. End-to-End Pipeline Example
@@ -250,9 +276,12 @@ reasoning-mode-eval \
 cat results/reasoning_mode_eval/REASONING_MODE_EVALUATION_REPORT.md
 
 # 3. If recommendation is positive, merge generated config
-cp results/reasoning_mode_eval/vsr_model_config.yaml config/model_config_addition.yaml
+cp results/reasoning_mode_eval/vsr_canonical_patch.yaml /tmp/vsr_canonical_patch.yaml
 
-# 4. Update your main config.yaml with the new model_config section
+# 4. Merge the patch into config/config.yaml
+#    - add providers.defaults.reasoning_families entries if missing
+#    - update the matching routing.modelCards entry for the evaluated model
+#    - enable use_reasoning in the relevant routing.decisions modelRefs
 
 # 5. Restart semantic-router with updated config
 kubectl rollout restart deployment semantic-router  # For K8s

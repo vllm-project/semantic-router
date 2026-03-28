@@ -1,145 +1,176 @@
 ---
 translation:
-  source_commit: "b5ce25d"
+  source_commit: "ab2aa160"
   source_file: "docs/overview/collective-intelligence.md"
   outdated: false
-is_mtpe: true
 sidebar_position: 3
 ---
 
-# 什么是 Collective Intelligence？
+# 什么是集体智能？
 
-**Collective Intelligence** 是指当多个模型、signal 和 decision 过程作为一个统一系统协同工作时产生的涌现智能。
+**集体智能**是指多个模型、信号与决策过程作为统一系统协同工作时，所涌现出的智能。
 
-## 核心理念
+## 核心思想
 
-就像专家团队比任何个人专家都能更好地解决问题一样，专门的 LLM 系统比任何单一模型都能提供更好的结果。
+正如专家团队能比任何单一专家更好地解决问题，一组专用 LLM 也能比单一模型提供更优结果。
 
-### 传统方法：单一模型
+### 传统做法：单模型
 
 ```
 用户查询 → 单一 LLM → 响应
 ```
 
-**局限性**：
+**局限**：
 
-- 一个模型试图擅长所有事情
-- 没有专业化或优化
-- 简单和复杂的任务使用相同的模型
-- 不从模式中学习
+- 一个模型试图面面俱到
+- 缺少专精与优化
+- 简单与复杂任务用同一模型
+- 难以从模式中持续学习
 
-### 集体智能方法：模型系统
+### 集体智能：模型系统
 
 ```
-用户查询 → Signal Extraction → Decision Engine → 最佳模型 → 响应
-              ↓          ↓            ↓
-           8 种 signal 类型   AND/OR 规则   专业化模型
-              ↓          ↓            ↓
-           上下文分析     智能选择      Plugin Chain
+用户查询 → 信号提取 → 投影协调 → 决策引擎 → 插件 + 模型分发 → 响应
+              ↓                    ↓                         ↓                         ↓
+        14 类信号族           分区 / 打分 / 映射           布尔策略               专用模型
 ```
 
 **优势**：
 
-- 每个模型专注于它最擅长的事情
-- 系统从所有交互的模式中学习
-- 基于多种信号的自适应路由
-- 信号融合带来的涌现智能
+- 各模型专注所长
+- 系统从全量交互中学习模式
+- 基于多信号的自适应路由
+- 信号融合带来涌现能力
 
-## 集体智能如何涌现
+## 集体智能如何产生
 
-### 1. Signal 多样性
+### 1. 信号多样性
 
-不同的 signal 捕获智能的不同方面：
+不同信号刻画智能的不同侧面：
 
-| 信号类型 | 智能方面 |
-|------------|-------------------|
-| **keyword** | 模式识别 |
-| **embedding** | 语义理解 |
-| **domain** | 知识分类 |
-| **fact_check** | 真理验证需求 |
-| **user_feedback** | 用户满意度 |
-| **preference** | 意图匹配 |
-| **language** | 多语言检测 |
+| 信号族分组 | 智能侧面 |
+| ---------- | -------- |
+| **启发式**（`authz`、`context`、`keyword`、`language`、`structure`） | 快速的请求形态、区域与策略门禁 |
+| **学习型**（`complexity`、`domain`、`embedding`、`modality`、`fact-check`、`jailbreak`、`pii`、`preference`、`user-feedback`） | 语义、安全、模态与偏好理解 |
 
-**Collective 效益**：signal 的组合提供了比任何单一 signal 更丰富的理解。
+**集体收益**：多信号组合比单一信号理解更丰富。
 
-### 2. Decision 融合
+### 2. 投影协调
 
-Signal 使用逻辑运算符进行组合：
+当路由器把信号协调成可复用的中间事实时，价值更大：
 
 ```yaml
-# 示例：具有多种信号的数学路由
+projections:
+  partitions:
+    - name: balance_domain_partition
+      semantics: exclusive
+      members: [mathematics, coding, creative]
+      default: creative
+  scores:
+    - name: reasoning_pressure
+      method: weighted_sum
+      inputs:
+        - type: complexity
+          name: hard
+          weight: 0.6
+        - type: embedding
+          name: math_intent
+          weight: 0.4
+  mappings:
+    - name: reasoning_band
+      source: reasoning_pressure
+      method: threshold_bands
+      outputs:
+        - name: balance_reasoning
+          gte: 0.5
+```
+
+**集体收益**：投影将多条较弱或竞争性的信号转化为可复用的命名路由事实，供多条决策共用。
+
+### 3. 决策融合
+
+信号通过逻辑运算符组合：
+
+```yaml
+# 示例：多信号数学路由
 decisions:
   - name: advanced_math
     rules:
       operator: "AND"
       conditions:
-        - type: "keyword"
-          name: "math_keywords"
         - type: "domain"
           name: "mathematics"
-        - type: "embedding"
-          name: "math_intent"
+        - type: "projection"
+          name: "balance_reasoning"
 ```
 
-**Collective 效益**：多个 signal 共同投票比任何单一 signal 做出更准确的决策。
+**集体收益**：多信号「共同投票」比单一信号更准确。
 
-### 3. 模型专业化
+### 4. 模型专精
 
-不同的模型贡献其优势：
+不同模型贡献各自强项：
 
 ```yaml
 modelRefs:
-  - model: qwen-math      # 最擅长数学推理
+  - model: qwen-math # 数学推理
     weight: 1.0
-  - model: deepseek-coder # 最擅长代码生成
+  - model: deepseek-coder # 代码生成
     weight: 1.0
-  - model: claude-creative # 最擅长创意写作
+  - model: claude-creative # 创意写作
     weight: 1.0
 ```
 
-**Collective 效益**：系统级智能通过路由到正确的专家而涌现。
+**集体收益**：系统级智能来自把查询交给合适的专家。
 
-### 4. Plugin 协作
+### 5. 插件协作
 
-Plugin 协同工作以增强响应：
+插件协同增强响应：
 
 ```yaml
-plugins:
-  - type: "semantic-cache"    # 速度优化
-  - type: "jailbreak"         # 安全层
-  - type: "pii"               # 隐私保护
-  - type: "system_prompt"     # 上下文注入
-  - type: "hallucination"     # 质量保证
+routing:
+  decisions:
+    - name: "protected-route"
+      plugins:
+        - type: "semantic-cache" # 加速
+        - type: "jailbreak" # 安全
+        - type: "pii" # 隐私
+        - type: "system_prompt" # 上下文
+        - type: "hallucination" # 质量
 ```
 
-**Collective 效益**：多层处理创建了一个更健壮和安全的系统。
+**集体收益**：多层处理使系统更稳健、更安全。
 
-## 真实世界示例
-
-让我们看看实际中的 Collective Intelligence：
+## 实例
 
 ### 用户查询
 
 ```
-"证明 2 的平方根是无理数"
+"Prove that the square root of 2 is irrational"
 ```
 
 ### 信号提取
 
 ```yaml
 signals_detected:
-  keyword: ["prove", "square root", "irrational"]  # 检测到数学关键词
-  embedding: 0.89                                   # 与数学查询的高度相似性
-  domain: "mathematics"                             # MMLU 分类
-  fact_check: true                                  # 证明需要验证
+  keyword: ["prove", "square root", "irrational"] # 数学关键词
+  embedding: 0.89 # 与数学查询高相似
+  domain: "mathematics" # MMLU 分类
+  fact_check: true # 证明需要核验
 ```
 
-### 决策过程
+### 投影协调
+
+```yaml
+projection_outputs:
+  balance_domain_partition: "mathematics"
+  balance_reasoning: true
+```
+
+### 决策
 
 ```yaml
 decision_made: "advanced_math"
-reason: "All math signals agree (keyword + embedding + domain)" # 所有数学信号一致
+reason: "数学领域且投影指示推理压力"
 confidence: 0.95
 ```
 
@@ -147,56 +178,56 @@ confidence: 0.95
 
 ```yaml
 selected_model: "qwen-math"
-reason: "Specialized in mathematical proofs" # 专注于数学证明
+reason: "擅长数学证明"
 ```
 
 ### 插件链
 
 ```yaml
 plugins_applied:
-  - semantic-cache: "Cache miss, proceeding" # 缓存未命中，继续
-  - jailbreak: "No adversarial patterns detected" # 未检测到对抗性模式
-  - system_prompt: "Added: 'Provide rigorous mathematical proof'" # 已添加：'提供严格的数学证明'
-  - hallucination: "Enabled for fact verification" # 启用以进行事实验证
+  - semantic-cache: "未命中缓存，继续"
+  - jailbreak: "未检测到对抗模式"
+  - system_prompt: "追加：请给出严格数学证明"
+  - hallucination: "启用事实核验"
 ```
 
 ### 结果
 
 - **准确**：路由到数学专家
-- **快速**：首先检查缓存
-- **安全**：验证无越狱尝试
-- **高质量**：启用了幻觉检测
+- **快**：先查缓存
+- **安全**：确认无越狱企图
+- **高质量**：启用幻觉检测
 
-**这就是 Collective Intelligence**：没有任何单一组件做出决策。智能从 signal、rule、model 和 plugin 的协作中涌现。
+**这就是集体智能**：并非由单一组件拍板，而是信号、投影、规则、模型与插件协作涌现出的决策。
 
-## Collective Intelligence 的优势
+## 集体智能的收益
 
-### 1. 更好的准确性
+### 1. 更高准确率
 
-- 多种 signal 减少误报
-- 专业化模型在其领域表现更好
-- Signal 融合捕获边缘情况
+- 多信号降低误报
+- 专用模型在各自领域表现更好
+- 信号融合覆盖更多边界情况
 
-### 2. 提高鲁棒性
+### 2. 更强鲁棒性
 
-- 即使一个 signal 失败，系统仍能继续工作
-- 多层安全提供纵深防御
-- Fallback 机制确保可靠性
+- 某一信号失效时系统仍可工作
+- 多层安全形成纵深防御
+- 回退机制保障可用性
 
 ### 3. 持续学习
 
-- 系统从所有交互的模式中学习
-- Feedback signal 改进未来的路由
-- Collective knowledge 随时间增长
+- 从全量交互中学习模式
+- 反馈信号改进后续路由
+- 集体知识随时间增长
 
 ### 4. 涌现能力
 
-- 系统可以处理单一组件未设计处理的情况
-- 新模式从 signal 组合中涌现
-- 智能随系统复杂性扩展
+- 可处理并非为单点设计的场景
+- 新模式从信号组合中涌现
+- 智能随系统复杂度扩展
 
 ## 下一步
 
-- [什么是 Signal-Driven Decision？](signal-driven-decisions.md) - 深入解 Decision Engine
-- [配置指南](../installation/configuration.md) - 设置您自己的 Collective Intelligence 系统
-- [智能路由教程](../tutorials/intelligent-route/keyword-routing.md) - 学习配置 signal
+- [什么是信号驱动决策？](signal-driven-decisions) — 深入决策引擎
+- [配置指南](../installation/configuration) — 搭建自己的集体智能系统
+- [信号教程](../tutorials/signal/overview) — 学习配置信号与决策

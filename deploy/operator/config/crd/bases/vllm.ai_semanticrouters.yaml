@@ -1001,7 +1001,12 @@ spec:
                     type: integer
                 type: object
               config:
-                description: Configuration for the semantic router
+                description: |-
+                  Configuration overrides merged into the canonical v0.3 config.yaml.
+                  Router-wide runtime overrides land under config.global.router/services/stores/
+                  integrations/model_catalog, with model-backed modules nested under
+                  config.global.model_catalog.modules. Provider defaults land under
+                  config.providers.defaults.
                 properties:
                   api:
                     description: API configuration
@@ -1051,22 +1056,6 @@ spec:
                                 type: array
                             type: object
                         type: object
-                    type: object
-                  bert_model:
-                    description: BERT model configuration
-                    properties:
-                      model_id:
-                        default: models/mom-embedding-light
-                        type: string
-                      threshold:
-                        default: "0.6"
-                        description: Threshold for embedding similarity (0.0-1.0).
-                          Stored as string to avoid float precision issues.
-                        pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
-                        type: string
-                      use_cpu:
-                        default: true
-                        type: boolean
                     type: object
                   classifier:
                     description: Classifier configuration
@@ -1304,13 +1293,8 @@ spec:
                   embedding_models:
                     description: Embedding models configuration (qwen3, gemma, mmbert)
                     properties:
-                      gemma_model_path:
-                        description: |-
-                          Path to EmbeddingGemma-300M model directory
-                          Gemma provides 8K context and fast embeddings (768 dimensions)
-                        type: string
-                      hnsw_config:
-                        description: HNSW configuration for embedding-based classification
+                      embedding_config:
+                        description: Embedding configuration for embedding-based classification
                         properties:
                           enable_soft_matching:
                             default: true
@@ -1360,6 +1344,11 @@ spec:
                             - 22
                             type: integer
                         type: object
+                      gemma_model_path:
+                        description: |-
+                          Path to EmbeddingGemma-300M model directory
+                          Gemma provides 8K context and fast embeddings (768 dimensions)
+                        type: string
                       mmbert_model_path:
                         description: |-
                           Path to mmBERT 2D Matryoshka embedding model directory
@@ -1438,7 +1427,7 @@ spec:
                       jailbreak_mapping_path:
                         type: string
                       model_id:
-                        default: models/mom-jailbreak-classifier
+                        default: models/mmbert32k-jailbreak-detector-merged
                         type: string
                       threshold:
                         default: "0.7"
@@ -1471,18 +1460,19 @@ spec:
                         default: memory
                         description: |-
                           BackendType specifies the cache backend to use
-                          Options: "memory" (default), "redis", "milvus", "hybrid"
+                          Options: "memory" (default), "redis", "valkey", "milvus", "hybrid"
                         enum:
                         - memory
                         - redis
+                        - valkey
                         - milvus
                         - hybrid
                         type: string
                       embedding_model:
-                        default: bert
+                        default: mmbert
                         description: |-
                           EmbeddingModel specifies which embedding model to use for semantic similarity
-                          Options: "bert" (default), "qwen3", "gemma", "mmbert"
+                          Options: "mmbert" (default), "bert", "qwen3", "gemma"
                         enum:
                         - bert
                         - qwen3
@@ -1996,6 +1986,180 @@ spec:
                         description: TTLSeconds is the time-to-live for cache entries
                           in seconds
                         type: integer
+                      valkey:
+                        description: Valkey configuration (required when backend_type
+                          is "valkey")
+                        properties:
+                          connection:
+                            description: Connection settings for Valkey server
+                            properties:
+                              database:
+                                default: 0
+                                description: Database is the Valkey database number
+                                  to use
+                                minimum: 0
+                                type: integer
+                              host:
+                                description: |-
+                                  Host is the Valkey server hostname or IP address
+                                  Example: "valkey.default.svc.cluster.local"
+                                type: string
+                              password:
+                                description: Password for Valkey authentication (plaintext
+                                  - consider using PasswordSecretRef instead)
+                                type: string
+                              password_secret_ref:
+                                description: |-
+                                  PasswordSecretRef references a Secret containing the Valkey password
+                                  Preferred over plaintext Password field for security
+                                properties:
+                                  key:
+                                    description: The key of the secret to select from.  Must
+                                      be a valid secret key.
+                                    type: string
+                                  name:
+                                    default: ""
+                                    description: |-
+                                      Name of the referent.
+                                      This field is effectively required, but due to backwards compatibility is
+                                      allowed to be empty. Instances of this type with an empty value here are
+                                      almost certainly wrong.
+                                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                    type: string
+                                  optional:
+                                    description: Specify whether the Secret or its
+                                      key must be defined
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              port:
+                                default: 6379
+                                description: Port is the Valkey server port
+                                maximum: 65535
+                                minimum: 1
+                                type: integer
+                              timeout:
+                                default: 30
+                                description: Timeout for Valkey operations in seconds
+                                minimum: 0
+                                type: integer
+                              tls:
+                                description: TLS configuration for secure Valkey connections
+                                properties:
+                                  ca_file:
+                                    description: CAFile is the path to CA certificate
+                                      file
+                                    type: string
+                                  cert_file:
+                                    description: CertFile is the path to client certificate
+                                      file
+                                    type: string
+                                  enabled:
+                                    default: false
+                                    description: Enabled controls whether to use TLS
+                                      for Valkey connection
+                                    type: boolean
+                                  key_file:
+                                    description: KeyFile is the path to client key
+                                      file
+                                    type: string
+                                type: object
+                            type: object
+                          development:
+                            description: Development settings for Valkey cache
+                            properties:
+                              auto_create_index:
+                                default: true
+                                description: AutoCreateIndex automatically creates
+                                  the index if it doesn't exist
+                                type: boolean
+                              drop_index_on_startup:
+                                default: false
+                                description: DropIndexOnStartup clears the index when
+                                  router starts (for testing)
+                                type: boolean
+                              verbose_errors:
+                                default: true
+                                description: VerboseErrors includes detailed error
+                                  messages in logs
+                                type: boolean
+                            type: object
+                          index:
+                            description: Index settings for Valkey vector search
+                            properties:
+                              index_type:
+                                default: HNSW
+                                description: |-
+                                  IndexType specifies the index algorithm
+                                  Options: "HNSW" (recommended), "FLAT"
+                                enum:
+                                - HNSW
+                                - FLAT
+                                type: string
+                              name:
+                                default: semantic_cache_idx
+                                description: Name of the Valkey index
+                                type: string
+                              params:
+                                description: Params for HNSW index
+                                properties:
+                                  M:
+                                    default: 16
+                                    description: |-
+                                      M is the number of bi-directional links per node
+                                      Higher values = better recall, more memory
+                                    minimum: 2
+                                    type: integer
+                                  efConstruction:
+                                    default: 64
+                                    description: |-
+                                      EfConstruction is the size of dynamic candidate list during construction
+                                      Higher values = better quality, slower indexing
+                                    minimum: 1
+                                    type: integer
+                                type: object
+                              prefix:
+                                default: 'doc:'
+                                description: Prefix for Valkey keys
+                                type: string
+                              vector_field:
+                                description: VectorField configuration for embeddings
+                                properties:
+                                  dimension:
+                                    description: |-
+                                      Dimension of the embedding vectors
+                                      For BERT: 384, for Qwen3: 1024, for Gemma: 768
+                                    minimum: 1
+                                    type: integer
+                                  metric_type:
+                                    default: COSINE
+                                    description: |-
+                                      MetricType for vector similarity
+                                      Options: "COSINE", "IP" (inner product), "L2" (Euclidean)
+                                    enum:
+                                    - COSINE
+                                    - IP
+                                    - L2
+                                    type: string
+                                  name:
+                                    default: embedding
+                                    description: Name of the vector field
+                                    type: string
+                                type: object
+                            type: object
+                          search:
+                            description: Search settings for Valkey queries
+                            properties:
+                              topk:
+                                default: 1
+                                description: TopK is the number of results to return
+                                  from vector search
+                                minimum: 1
+                                type: integer
+                            type: object
+                        type: object
                     type: object
                   strategy:
                     description: Decision routing strategy ("priority" for priority-based
@@ -3105,8 +3269,10 @@ spec:
                   type: object
                 type: array
               vllmEndpoints:
-                description: VLLMEndpoints configuration - generates vllm_endpoints
-                  and model_config in config.yaml
+                description: |-
+                  VLLMEndpoints is a Kubernetes-native backend discovery adapter.
+                  It generates canonical config.providers.models[].backend_refs
+                  and config.routing.modelCards entries.
                 items:
                   description: VLLMEndpointSpec defines a vLLM model backend endpoint
                   properties:
@@ -3151,13 +3317,36 @@ spec:
                       required:
                       - type
                       type: object
+                    loras:
+                      description: LoRAs declares the LoRA adapters exposed for this
+                        logical model in routing.modelCards.
+                      items:
+                        description: LoRAAdapterSpec defines one LoRA adapter exposed
+                          by a VLLMEndpoint model.
+                        properties:
+                          description:
+                            description: Description provides a short human-readable
+                              summary for UI and docs surfaces.
+                            maxLength: 500
+                            type: string
+                          name:
+                            description: Name is the unique adapter identifier referenced
+                              by decision.modelRefs[].lora_name.
+                            maxLength: 100
+                            minLength: 1
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      maxItems: 50
+                      type: array
                     model:
                       description: Model name as reported by vLLM (e.g., "Model-A",
                         "llama3-8b")
                       minLength: 1
                       type: string
                     name:
-                      description: Name of the endpoint (used in model_config.preferred_endpoints)
+                      description: Name of the backend ref generated under config.providers.models[].backend_refs
                       minLength: 1
                       type: string
                     reasoningFamily:

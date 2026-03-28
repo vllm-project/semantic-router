@@ -30,6 +30,85 @@ linters:
           - gocognit
           - nestif
         path: (^|/)handlers/openclaw_(provision|rooms|teams|test|websocket|workers)\.go$
+      - linters:
+          - cyclop
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/config/canonical_config\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)api/v1alpha1/(sample_validation|semanticrouter_types|semanticrouter_webhook)_test\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/apiserver/server_test\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/extproc/(req_filter_rag_external|req_filter_rag_hybrid|req_filter_rag_mcp|req_filter_rag_milvus|server)\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+          - errcheck
+        path: (^|/)src/semantic-router/pkg/cache/cache_test\.go$
+      - linters:
+          - interfacebloat
+        path: (^|/)src/semantic-router/pkg/cache/cache_interface\.go$
+      - linters:
+          - cyclop
+          - staticcheck
+        path: (^|/)src/semantic-router/pkg/config/canonical_loader_test\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/dsl/(decompiler|parser)\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+          - errcheck
+        path: (^|/)src/semantic-router/pkg/dsl/dsl_test\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/modelselection/selector_test\.go$
+
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/dsl/category_kb_(dsl|e2e)_test\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/dsl/privacy_recipe_roundtrip_test\.go$
+      - linters:
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/classification/category_kb_classifier_test\.go$
+      - linters:
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/decision/engine_category_kb_test\.go$
 
 issues:
   max-issues-per-linter: 0

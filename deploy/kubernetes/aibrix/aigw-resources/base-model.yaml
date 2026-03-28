@@ -16,6 +16,8 @@ spec:
       labels:
         model.aibrix.ai/name: vllm-llama3-8b-instruct
     spec:
+      # These simulators are shared by HA/load E2E profiles, so they must not
+      # receive traffic until the HTTP endpoint is actually serving.
       containers:
       - name: vllm-sim
         image: ghcr.io/llm-d/llm-d-inference-sim:v0.5.0
@@ -47,6 +49,26 @@ spec:
         - containerPort: 8000
           name: http
           protocol: TCP
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 2
+          failureThreshold: 30
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
         resources:
           requests:
             cpu: 10m

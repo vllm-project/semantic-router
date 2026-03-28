@@ -3,7 +3,7 @@
 Provides common utilities for testing CLI commands including:
 - Subprocess execution helpers
 - Temporary directory management
-- Docker/Podman container cleanup
+- Docker container cleanup
 - Logging and assertion helpers
 
 Signed-off-by: vLLM-SR Team
@@ -16,18 +16,29 @@ import tempfile
 import time
 import unittest
 from contextlib import suppress
+from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
+import yaml
+
 HTTP_STATUS_OK = 200
-SUPPORTED_CONTAINER_RUNTIMES = ("docker", "podman")
 
 
 class CLITestBase(unittest.TestCase):
     """Base class for vLLM-SR CLI tests."""
 
-    # Container name used by vllm-sr
+    # Legacy single-container runtime name used by older local serve flows.
     CONTAINER_NAME = "vllm-sr-container"
+    ROUTER_CONTAINER_NAME = "vllm-sr-router-container"
+    ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
+    DASHBOARD_CONTAINER_NAME = "vllm-sr-dashboard-container"
+    SIM_CONTAINER_NAME = "vllm-sr-sim-container"
+    AUXILIARY_CONTAINER_NAMES = (
+        "vllm-sr-grafana",
+        "vllm-sr-prometheus",
+        "vllm-sr-jaeger",
+    )
 
     # Default timeout for CLI commands
     DEFAULT_TIMEOUT = 60
@@ -70,21 +81,30 @@ class CLITestBase(unittest.TestCase):
 
     @classmethod
     def _detect_container_runtime(cls) -> str:
-        """Detect available container runtime (docker or podman)."""
+        """Detect the required Docker runtime for CLI tests."""
         # Check for explicit environment variable
         env_runtime = os.getenv("CONTAINER_RUNTIME")
         normalized_runtime = (env_runtime or "").lower()
-        if normalized_runtime in SUPPORTED_CONTAINER_RUNTIMES and shutil.which(
-            normalized_runtime
-        ):
-            return normalized_runtime
+        if normalized_runtime:
+            if normalized_runtime != "docker":
+                raise RuntimeError(
+                    f"CONTAINER_RUNTIME={normalized_runtime} is unsupported; "
+                    "CLI tests require Docker"
+                )
+            if shutil.which("docker"):
+                return "docker"
+            raise RuntimeError(
+                "CONTAINER_RUNTIME=docker was requested but docker is not in PATH"
+            )
 
         # Auto-detect
         if shutil.which("docker"):
             return "docker"
         if shutil.which("podman"):
-            return "podman"
-        raise RuntimeError("Neither docker nor podman found in PATH")
+            raise RuntimeError(
+                "Podman is installed but unsupported; CLI tests require Docker"
+            )
+        raise RuntimeError("Docker not found in PATH")
 
     @staticmethod
     def _run_subprocess(
@@ -110,12 +130,66 @@ class CLITestBase(unittest.TestCase):
     def _cleanup_container(cls):
         """Stop and remove any existing vllm-sr container."""
         runtime = cls.container_runtime
-        for command in (
-            [runtime, "stop", cls.CONTAINER_NAME],
-            [runtime, "rm", "-f", cls.CONTAINER_NAME],
-        ):
-            with suppress(Exception):
-                cls._run_subprocess(command, timeout=30)
+        managed_container_names = (
+            cls.CONTAINER_NAME,
+            cls.ROUTER_CONTAINER_NAME,
+            cls.ENVOY_CONTAINER_NAME,
+            cls.DASHBOARD_CONTAINER_NAME,
+            cls.SIM_CONTAINER_NAME,
+            *cls.AUXILIARY_CONTAINER_NAMES,
+        )
+        for container_name in managed_container_names:
+            for command in (
+                [runtime, "stop", container_name],
+                [runtime, "rm", "-f", container_name],
+            ):
+                with suppress(Exception):
+                    cls._run_subprocess(command, timeout=30)
+
+    def _explicit_container_status(self, container_name: str) -> str:
+        """Get the status of one managed container."""
+        try:
+            result = self._run_subprocess(
+                [
+                    self.container_runtime,
+                    "ps",
+                    "-a",
+                    "--filter",
+                    f"name={container_name}",
+                    "--format",
+                    "{{.Status}}",
+                ],
+                timeout=10,
+            )
+            status = result.stdout.strip()
+            if not status:
+                return "not found"
+            if "Up" in status:
+                return "running"
+            if "Exited" in status:
+                return "exited"
+            if "Paused" in status:
+                return "paused"
+            return "unknown"
+        except Exception as e:
+            print(f"Failed to get container status: {e}")
+            return "error"
+
+    def _runtime_container_names(self) -> tuple[str, ...]:
+        """Return managed runtime containers in inspect/priority order."""
+        return (
+            self.CONTAINER_NAME,
+            self.ROUTER_CONTAINER_NAME,
+            self.DASHBOARD_CONTAINER_NAME,
+            self.ENVOY_CONTAINER_NAME,
+        )
+
+    def resolve_runtime_inspect_container_name(self) -> str:
+        """Pick the best runtime container for inspect/log assertions."""
+        for container_name in self._runtime_container_names():
+            if self._explicit_container_status(container_name) != "not found":
+                return container_name
+        return self.CONTAINER_NAME
 
     def run_cli(
         self,
@@ -129,7 +203,7 @@ class CLITestBase(unittest.TestCase):
         Run a vllm-sr CLI command.
 
         Args:
-            args: CLI arguments (e.g., ["init", "--force"])
+            args: CLI arguments (e.g., ["serve", "--config", "config.yaml"])
             timeout: Command timeout in seconds
             env: Additional environment variables
             capture_output: Whether to capture stdout/stderr
@@ -178,45 +252,105 @@ class CLITestBase(unittest.TestCase):
             print(f"Command failed with exception: {e}")
             return -1, "", str(e)
 
-    def container_status(self) -> str:
+    def write_minimal_canonical_config(
+        self,
+        *,
+        port: int = 8888,
+        model_name: str = "test-model",
+        endpoint: str = "host.docker.internal:8000",
+    ) -> str:
+        """Write a minimal runnable canonical v0.3 config into the temp workspace."""
+        config_path = Path(self.test_dir) / "config.yaml"
+        config = {
+            "version": "v0.3",
+            "listeners": [
+                {
+                    "name": "test-listener",
+                    "address": "0.0.0.0",
+                    "port": port,
+                    "timeout": "60s",
+                }
+            ],
+            "providers": {
+                "defaults": {
+                    "default_model": model_name,
+                    "default_reasoning_effort": "medium",
+                },
+                "models": [
+                    {
+                        "name": model_name,
+                        "provider_model_id": model_name,
+                        "backend_refs": [
+                            {
+                                "name": "primary",
+                                "weight": 100,
+                                "endpoint": endpoint,
+                                "protocol": "http",
+                            }
+                        ],
+                    }
+                ],
+            },
+            "routing": {
+                "modelCards": [{"name": model_name}],
+                "decisions": [
+                    {
+                        "name": "default-route",
+                        "description": "Default route for CLI test coverage",
+                        "priority": 100,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [{"model": model_name, "use_reasoning": False}],
+                    }
+                ],
+            },
+        }
+        config_path.write_text(
+            yaml.safe_dump(config, sort_keys=False),
+            encoding="utf-8",
+        )
+        return str(config_path)
+
+    def container_status(self, container_name: str | None = None) -> str:
         """
-        Get the status of the vllm-sr container.
+        Get the status of a managed container.
 
         Returns:
             'running', 'exited', 'paused', 'not found', or 'error'
         """
-        try:
-            result = self._run_subprocess(
-                [
-                    self.container_runtime,
-                    "ps",
-                    "-a",
-                    "--filter",
-                    f"name={self.CONTAINER_NAME}",
-                    "--format",
-                    "{{.Status}}",
-                ],
-                timeout=10,
-            )
-            status = result.stdout.strip()
-            if not status:
-                return "not found"
-            if "Up" in status:
-                return "running"
-            if "Exited" in status:
-                return "exited"
-            if "Paused" in status:
-                return "paused"
-            return "unknown"
-        except Exception as e:
-            print(f"Failed to get container status: {e}")
-            return "error"
+        if container_name is not None:
+            return self._explicit_container_status(container_name)
 
-    def wait_for_container_running(self, timeout: int = 60) -> bool:
+        statuses = {
+            name: self._explicit_container_status(name)
+            for name in self._runtime_container_names()
+        }
+        if statuses[self.CONTAINER_NAME] != "not found":
+            return statuses[self.CONTAINER_NAME]
+
+        split_statuses = [
+            statuses[self.ROUTER_CONTAINER_NAME],
+            statuses[self.DASHBOARD_CONTAINER_NAME],
+            statuses[self.ENVOY_CONTAINER_NAME],
+        ]
+        if any(status == "running" for status in split_statuses):
+            return "running"
+        if any(status == "exited" for status in split_statuses):
+            return "exited"
+        if any(status == "paused" for status in split_statuses):
+            return "paused"
+        if any(status == "error" for status in split_statuses):
+            return "error"
+        if any(status != "not found" for status in split_statuses):
+            return "unknown"
+        return "not found"
+
+    def wait_for_container_running(
+        self, timeout: int = 60, container_name: str | None = None
+    ) -> bool:
         """Wait for container to be in running state."""
         start = time.time()
         while time.time() - start < timeout:
-            status = self.container_status()
+            status = self.container_status(container_name=container_name)
             if status == "running":
                 return True
             if status == "exited":
@@ -264,7 +398,7 @@ class CLITestBase(unittest.TestCase):
                     "logs",
                     "--tail",
                     str(tail),
-                    self.CONTAINER_NAME,
+                    self.resolve_runtime_inspect_container_name(),
                 ],
                 timeout=10,
             )
@@ -273,16 +407,20 @@ class CLITestBase(unittest.TestCase):
             return f"Failed to get logs: {e}"
 
     def inspect_container(
-        self, format_string: str, timeout: int = 10
+        self,
+        format_string: str,
+        timeout: int = 10,
+        container_name: str | None = None,
     ) -> tuple[int, str, str]:
-        """Inspect the vllm-sr container with the active runtime."""
+        """Inspect a managed container with the active runtime."""
+        container_name = container_name or self.resolve_runtime_inspect_container_name()
         result = self._run_subprocess(
             [
                 self.container_runtime,
                 "inspect",
                 "--format",
                 format_string,
-                self.CONTAINER_NAME,
+                container_name,
             ],
             timeout=timeout,
         )

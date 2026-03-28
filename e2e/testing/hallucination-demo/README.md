@@ -92,7 +92,7 @@ python3 e2e/testing/hallucination-demo/mock_vllm_toolcall.py --port 8002
 python3 e2e/testing/hallucination-demo/mock_web_search.py --port 8003
 
 # Start router
-./bin/router -config=config/testing/config.hallucination.yaml
+./bin/router -config=e2e/config/config.hallucination.yaml
 
 # Run client
 python3 e2e/testing/hallucination-demo/chat_client.py \

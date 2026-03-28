@@ -1,6 +1,6 @@
 ---
 name: vllm-semantic-router-harness
-description: Use for any task inside the vLLM Semantic Router repository. It bridges native skill discovery into the repo harness entrypoint, canonical agent-report routing flow, repo-local skill registry, and validation commands without duplicating the canonical rules.
+description: Bridges native skill discovery into the vLLM Semantic Router repository harness, routing tasks through the canonical agent-report flow, repo-local skill registry, and validation commands. Use when starting any task inside the vLLM Semantic Router repository to resolve the correct primary skill, read canonical docs, and run harness validation.
 ---
 
 # vLLM Semantic Router Harness

@@ -5,9 +5,12 @@ import {
   TestQueryResult,
   MatchedSignal,
   SignalType,
+  RuleNode,
   RuleCombination,
   KeywordSignalConfig,
 } from '../types'
+import { SIGNAL_COLORS, SIGNAL_ICONS, SIGNAL_TYPES } from '../constants'
+import { collectRuleSignalTypes, isRuleCombination } from './ruleTree'
 
 /**
  * Simulate signal matching for a test query (frontend-only)
@@ -77,7 +80,9 @@ export async function simulateSignalMatching(
     })
 
   // 3. Other signal types - mark as "needs backend verification"
-  const backendOnlyTypes: SignalType[] = ['embedding', 'domain', 'fact_check', 'user_feedback', 'preference']
+  const backendOnlyTypes: SignalType[] = SIGNAL_TYPES.filter(
+    (type) => type !== 'keyword' && type !== 'language'
+  )
   backendOnlyTypes.forEach(type => {
     topology.signals
       .filter(s => s.type === type)
@@ -113,8 +118,8 @@ export async function simulateSignalMatching(
       matchedModels = decision.modelRefs.map(r => r.model)
 
       // Build highlighted path
-      decision.rules.conditions.forEach(cond => {
-        highlightedPath.push(`signal-group-${cond.type}`)
+      collectRuleSignalTypes(decision.rules).forEach(type => {
+        highlightedPath.push(`signal-group-${type}`)
       })
       highlightedPath.push(`decision-${decision.name}`)
       if (decision.algorithm) {
@@ -150,14 +155,7 @@ function evaluateRules(rules: RuleCombination, matchedSignals: MatchedSignal[]):
     return true // No conditions = always match (default decision)
   }
 
-  const conditionResults = rules.conditions.map(cond => {
-    const signal = matchedSignals.find(s => s.type === cond.type && s.name === cond.name)
-    // If signal needs backend, we can't evaluate accurately - assume false for safety
-    if (signal?.needsBackend) {
-      return false
-    }
-    return signal?.matched ?? false
-  })
+  const conditionResults = rules.conditions.map(cond => evaluateRuleNode(cond, matchedSignals))
 
   if (rules.operator === 'AND') {
     return conditionResults.every(r => r)
@@ -169,46 +167,29 @@ function evaluateRules(rules: RuleCombination, matchedSignals: MatchedSignal[]):
   }
 }
 
+function evaluateRuleNode(rule: RuleNode, matchedSignals: MatchedSignal[]): boolean {
+  if (!isRuleCombination(rule)) {
+    const signal = matchedSignals.find(s => s.type === rule.type && s.name === rule.name)
+    if (signal?.needsBackend) {
+      return false
+    }
+
+    return signal?.matched ?? false
+  }
+
+  return evaluateRules(rule, matchedSignals)
+}
+
 /**
  * Get signal icon by type
  */
 export function getSignalIcon(type: SignalType): string {
-  const icons: Record<SignalType, string> = {
-    keyword: '🔑',
-    embedding: '📐',
-    domain: '🎯',
-    fact_check: '✓',
-    user_feedback: '💬',
-    preference: '⚙️',
-    language: '🌐',
-    context: '📏',
-    complexity: '🧠',
-    modality: '🖼️',
-    authz: '🔐',
-    jailbreak: '🛡️',
-    pii: '🔒',
-  }
-  return icons[type] || '❓'
+  return SIGNAL_ICONS[type] || '❓'
 }
 
 /**
  * Get signal color by type
  */
 export function getSignalColor(type: SignalType): string {
-  const colors: Record<SignalType, string> = {
-    keyword: '#4CAF50',
-    embedding: '#2196F3',
-    domain: '#9C27B0',
-    fact_check: '#FF9800',
-    user_feedback: '#E91E63',
-    preference: '#00BCD4',
-    language: '#795548',
-    context: '#607D8B', // Blue Grey
-    complexity: '#4299e1', // Blue
-    modality: '#8B5CF6', // Violet
-    authz: '#059669', // Emerald
-    jailbreak: '#EF4444', // Red
-    pii: '#F59E0B', // Amber
-  }
-  return colors[type] || '#607D8B'
+  return SIGNAL_COLORS[type]?.background || '#607D8B'
 }

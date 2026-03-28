@@ -74,7 +74,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
-	docker build --platform linux/$(ARCH) -t ${IMG} .
+	docker build --platform linux/$(ARCH) -f Dockerfile -t ${IMG} ../..
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
@@ -82,11 +82,11 @@ docker-push: ## Push docker image with the manager.
 
 .PHONY: docker-buildx
 docker-buildx: ## Build and push multi-platform docker image with the manager.
-	docker buildx build --platform $(PLATFORMS) --push -t ${IMG} .
+	docker buildx build --platform $(PLATFORMS) --push -f Dockerfile -t ${IMG} ../..
 
 .PHONY: podman-build
 podman-build: ## Build podman image with the manager.
-	podman build --platform linux/$(ARCH) -t ${IMG} .
+	podman build --platform linux/$(ARCH) -f Dockerfile -t ${IMG} ../..
 
 .PHONY: podman-push
 podman-push: ## Push podman image with the manager.

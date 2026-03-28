@@ -3,9 +3,12 @@
 ## `cpu-local`
 
 - Build with `make vllm-sr-dev`
+- Local runtime defaults to the split router/envoy/dashboard topology
+- Split local runtime still uses the router compatibility image by default
+- Only if that local router compatibility image is already up to date, you can reuse it with `make vllm-sr-dev SKIP_COMPAT_IMAGE=1`
 - Start with `vllm-sr serve --image-pull-policy never`
 - Use this for the default local Docker workflow
-- Default smoke config: [config.agent-smoke.cpu.yaml](../../config/testing/config.agent-smoke.cpu.yaml)
+- Default smoke config: [config.agent-smoke.cpu.yaml](../../e2e/config/config.agent-smoke.cpu.yaml)
 - If you need a non-default config, run `make agent-serve-local ENV=cpu AGENT_SERVE_CONFIG=<config>`
 - For isolated parallel local stacks, add `AGENT_STACK_NAME=<name>` and `AGENT_PORT_OFFSET=<n>`, for example:
   `make agent-serve-local ENV=cpu AGENT_STACK_NAME=lane-a AGENT_PORT_OFFSET=0`
@@ -15,13 +18,16 @@
 ## `amd-local`
 
 - Build with `make vllm-sr-dev VLLM_SR_PLATFORM=amd`
+- Local runtime defaults to the split router/envoy/dashboard topology
+- Split local runtime still uses the router compatibility image by default
+- Only if that local router compatibility image is already up to date, you can reuse it with `make vllm-sr-dev VLLM_SR_PLATFORM=amd SKIP_COMPAT_IMAGE=1`
 - Start with `vllm-sr serve --image-pull-policy never --platform amd`
 - Use this for ROCm/AMD validation and platform-default image checks
-- Default smoke config: [config.agent-smoke.amd.yaml](../../config/testing/config.agent-smoke.amd.yaml)
+- Default smoke config: [config.agent-smoke.amd.yaml](../../e2e/config/config.agent-smoke.amd.yaml)
 - If you need a non-default config, run `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=<config>`
 - The same `AGENT_STACK_NAME=<name>` and `AGENT_PORT_OFFSET=<n>` overrides work for isolated AMD-local stacks
 - For real AMD model deployment and backend container setup, read [deploy/amd/README.md](../../deploy/amd/README.md)
-- Use [deploy/amd/config.yaml](../../deploy/amd/config.yaml) as the reference YAML-first AMD routing profile
+- Use [deploy/recipes/balance.yaml](../../deploy/recipes/balance.yaml) as the reference YAML-first AMD routing profile
 - See [amd-local.md](amd-local.md)
 
 ## `ci-k8s`

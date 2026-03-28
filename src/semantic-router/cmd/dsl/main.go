@@ -11,17 +11,18 @@ import (
 const usage = `Usage: sr-dsl <command> [options]
 
 Commands:
-  compile    Compile DSL to YAML/CRD
-  decompile  Convert YAML config to DSL
+  compile    Compile routing DSL to YAML/CRD
+  decompile  Convert YAML config to routing-only DSL
   validate   Validate a DSL file
   fmt        Format a DSL file
 
 Examples:
-  sr-dsl compile config.dsl -o config.yaml
-  sr-dsl compile config.dsl --format crd -o router-config.yaml
-  sr-dsl decompile config.yaml -o config.dsl
+  sr-dsl compile -o config.yaml --base providers.yaml privacy-router.dsl
+  sr-dsl compile -o config.yaml config.dsl
+  sr-dsl compile --format crd -o semanticrouter.yaml config.dsl
+  sr-dsl decompile -o config.dsl config.yaml
   sr-dsl validate config.dsl
-  sr-dsl fmt config.dsl
+  sr-dsl fmt -o formatted.dsl config.dsl
 `
 
 func main() {
@@ -55,6 +56,7 @@ func runCompile() {
 	fs := flag.NewFlagSet("compile", flag.ExitOnError)
 	output := fs.String("o", "", "Output file path (default: stdout)")
 	format := fs.String("format", "yaml", "Output format: yaml, crd")
+	base := fs.String("base", "", "Base YAML config with infrastructure (version, listeners, providers); merged with compiled routing to produce a complete config")
 	crdName := fs.String("name", "router", "CRD resource name (for --format crd)")
 	crdNamespace := fs.String("namespace", "", "CRD namespace (for --format crd, default: \"default\")")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -64,12 +66,12 @@ func runCompile() {
 
 	if fs.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "Error: input file required")
-		fmt.Fprintln(os.Stderr, "Usage: sr-dsl compile <input.dsl> [-o output.yaml] [--format yaml|crd]")
+		fmt.Fprintln(os.Stderr, "Usage: sr-dsl compile [-o output.yaml] [--base providers.yaml] [--format yaml|crd] <input.dsl>")
 		os.Exit(1)
 	}
 
 	inputPath := fs.Arg(0)
-	if err := dsl.CLICompile(inputPath, *output, *format, *crdName, *crdNamespace); err != nil {
+	if err := dsl.CLICompile(inputPath, *output, *format, *crdName, *crdNamespace, *base); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
 	}
@@ -86,7 +88,7 @@ func runDecompile() {
 
 	if fs.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "Error: input file required")
-		fmt.Fprintln(os.Stderr, "Usage: sr-dsl decompile <input.yaml> [-o output.dsl]")
+		fmt.Fprintln(os.Stderr, "Usage: sr-dsl decompile [-o output.dsl] <input.yaml>")
 		os.Exit(1)
 	}
 
@@ -112,7 +114,7 @@ func runValidate() {
 	}
 
 	inputPath := fs.Arg(0)
-	errCount := dsl.CLIValidate(inputPath, os.Stdout)
+	errCount := dsl.CLIValidateWithRunner(inputPath, os.Stdout, buildNativeTestBlockRunner)
 	if errCount > 0 {
 		os.Exit(1)
 	}
@@ -129,7 +131,7 @@ func runFormat() {
 
 	if fs.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "Error: input file required")
-		fmt.Fprintln(os.Stderr, "Usage: sr-dsl fmt <input.dsl> [-o output.dsl]")
+		fmt.Fprintln(os.Stderr, "Usage: sr-dsl fmt [-o output.dsl] <input.dsl>")
 		os.Exit(1)
 	}
 

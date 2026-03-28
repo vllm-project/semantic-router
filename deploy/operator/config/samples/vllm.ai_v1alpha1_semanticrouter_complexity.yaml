@@ -47,13 +47,12 @@ spec:
 
   # Semantic router configuration
   config:
-    # Embedding models for classification
     embedding_models:
-      qwen3_model_path: "models/mom-embedding-pro"
+      mmbert_model_path: "models/mom-embedding-ultra"
       use_cpu: true
 
-      hnsw_config:
-        model_type: "qwen3"
+      embedding_config:
+        model_type: "mmbert"
         preload_embeddings: true
         enable_soft_matching: true
         min_score_threshold: "0.5"
@@ -140,7 +139,7 @@ spec:
     semantic_cache:
       enabled: true
       backend_type: "memory"
-      embedding_model: "qwen3"
+      embedding_model: "mmbert"
       similarity_threshold: "0.85"
       max_entries: 5000
       ttl_seconds: 7200

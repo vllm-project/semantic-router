@@ -53,8 +53,7 @@ spec:
     bufferLimit: 50Mi
 ---
 # AIGatewayRoute — routes RBAC-resolved model selections to backends.
-# After the semantic router evaluates authz role bindings, it sets the
-# x-ai-eg-model header to the selected model (14B or 7B).
+# Envoy AI Gateway extracts the request model into the x-ai-eg-model header.
 # Each model maps to its own backend tier.
 apiVersion: aigateway.envoyproxy.io/v1alpha1
 kind: AIGatewayRoute

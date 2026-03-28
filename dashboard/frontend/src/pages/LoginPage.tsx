@@ -57,7 +57,7 @@ const BOOTSTRAP_STEPS: BootstrapStep[] = [
 ];
 
 const LoginPage: React.FC = () => {
-  const { setupState, isLoading: setupLoading } = useSetup();
+  const { setupState, isLoading: setupLoading, refreshSetupState } = useSetup();
   const { isAuthenticated, isLoading, login, setSession } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -81,6 +81,15 @@ const LoginPage: React.FC = () => {
   const targetAfterLogin = resolvePostAuthTarget(isFirstServe, from);
   const isBootstrapMode = bootstrapStatus === "enabled";
   const currentStep = BOOTSTRAP_STEPS[bootstrapStepIndex] ?? BOOTSTRAP_STEPS[0];
+
+  const navigateAfterAuth = async (fallbackSetupMode: boolean) => {
+    const nextSetupState = await refreshSetupState();
+    const nextTarget = resolvePostAuthTarget(
+      nextSetupState?.setupMode ?? fallbackSetupMode,
+      from,
+    );
+    navigate(buildAuthTransitionPath(nextTarget), { replace: true });
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -130,7 +139,7 @@ const LoginPage: React.FC = () => {
     setPending(true);
     try {
       await login(loginEmail.trim(), loginPassword);
-      navigate(buildAuthTransitionPath(targetAfterLogin), { replace: true });
+      await navigateAfterAuth(isFirstServe);
     } catch (err) {
       setError(
         err instanceof Error
@@ -184,7 +193,7 @@ const LoginPage: React.FC = () => {
         user?: { id: string; email: string; name: string; role?: string };
       };
       setSession(payload.token, payload.user ?? null);
-      navigate(buildAuthTransitionPath(targetAfterLogin), { replace: true });
+      await navigateAfterAuth(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Register failed.");
     } finally {
@@ -202,7 +211,7 @@ const LoginPage: React.FC = () => {
     [bootstrapStepIndex],
   );
 
-  if (isAuthenticated && !isLoading && !setupLoading) {
+  if (isAuthenticated && !isLoading && !setupLoading && !pending) {
     return <Navigate to={targetAfterLogin} replace />;
   }
 

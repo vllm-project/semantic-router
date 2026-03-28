@@ -2,11 +2,11 @@
 
 import sys
 
-from cli.parser import parse_user_config, ConfigParseError
-from cli.validator import validate_user_config, print_validation_errors
-from cli.utils import getLogger
+from cli.parser import ConfigParseError, parse_user_config
+from cli.utils import get_logger
+from cli.validator import print_validation_errors, validate_user_config
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
 def validate_command(config_path: str):
@@ -26,7 +26,7 @@ def validate_command(config_path: str):
     try:
         user_config = parse_user_config(config_path)
     except ConfigParseError as e:
-        log.error(f"\n❌ Configuration parsing failed:")
+        log.error("\n❌ Configuration parsing failed:")
         log.error(f"{e}")
         sys.exit(1)
 
@@ -50,6 +50,8 @@ def validate_command(config_path: str):
         if user_config.signals.fact_check:
             log.info(f"  Fact check signals: {len(user_config.signals.fact_check)}")
         log.info(f"  Domains: {len(user_config.signals.domains)}")
+        if user_config.signals.structure:
+            log.info(f"  Structure signals: {len(user_config.signals.structure)}")
     else:
         log.info(
             "  Signals: None (catch-all routing is supported; domain categories will auto-generate when needed)"

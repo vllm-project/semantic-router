@@ -29,3 +29,77 @@ max-branches = 12
 max-returns = 8
 max-statements = 50
 max-nested-blocks = 4
+
+[lint.per-file-ignores]
+"tools/security/*.py" = [
+  "C901",     # complexity is inherent to pattern-matching scanners
+  "N806",     # constant-like variables inside functions (STRING_TYPES)
+  "PLC0415",  # lazy imports for optional tree-sitter
+  "PLR0912",  # many branches for pattern dispatch
+  "PLR0915",  # many statements in orchestrator functions
+  "PLR2004",  # threshold magic numbers are readable inline
+  "PLW0603",  # global for module-level allowlist cache
+  "PLW1510",  # subprocess.run without check= (intentional)
+  "PLW2901",  # loop var reassignment (line = line.strip())
+]
+"src/vllm-sr/cli/models.py" = ["I001", "N815", "PLC0415", "SIM114", "UP006", "UP035", "UP045"]
+"src/vllm-sr/cli/parser.py" = ["B904", "C901", "F541", "I001", "PLR0912", "UP006", "UP015", "UP035"]
+"src/vllm-sr/cli/validator.py" = ["C901", "F401", "I001", "PLR2004", "PLR0912", "RUF013", "SIM102", "UP006", "UP035"]
+"src/vllm-sr/cli/config_migration.py" = ["C901", "PLR0911", "PLR0912", "PLR0915"]
+"src/vllm-sr/cli/config_generator.py" = ["C901", "PLR0912", "PLR0915"]
+"src/vllm-sr/cli/commands/show_config.py" = ["C901", "PLR0912", "PLR0915"]
+# Fleet-sim is now maintained under src/, but the subtree still carries its
+# legacy local style/lint contract. Track convergence to the shared Ruff gate in TD016.
+"src/fleet-sim/**/*.py" = [
+  "B007",
+  "B008",
+  "B904",
+  "B905",
+  "C901",
+  "E402",
+  "E741",
+  "F401",
+  "F821",
+  "F841",
+  "N802",
+  "N803",
+  "N806",
+  "N812",
+  "N814",
+  "PLC0415",
+  "PLR0912",
+  "PLR0915",
+  "PLR2004",
+  "PLW1510",
+  "PLW2901",
+  "RUF001",
+  "RUF002",
+  "RUF003",
+  "RUF005",
+  "RUF012",
+  "RUF022",
+  "RUF046",
+  "SIM105",
+  "SIM108",
+  "SIM115",
+]
+"tools/agent/scripts/tuning/engine.py" = [
+  "C901",     # check_regression_weight complexity is inherent
+  "E402",     # re-exports at bottom of module (after all definitions)
+  "F401",     # re-exported names appear unused locally
+  "PLR0912",  # many branches in regression checking
+  "PLR2004",  # threshold/weight magic numbers are readable inline
+  "SIM102",   # nested ifs mirror the trace-tree dispatch pattern
+]
+"tools/agent/scripts/tuning/engine_selection.py" = [
+  "C901",     # complexity is inherent to batch fix & selection logic
+  "PLR0912",  # many branches in batch structural fix and selection
+  "PLR2004",  # threshold/weight magic numbers are readable inline
+]
+"tools/agent/scripts/tuning/scenarios/*.py" = ["PLR2004"]
+"tools/agent/scripts/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
+"src/vllm-sr/tests/*.py" = ["PLR2004"]
+"src/vllm-sr/tests/test_config_template.py" = ["E402", "UP015"]
+"src/vllm-sr/tests/test_latency_validation.py" = ["I001"]
+"src/vllm-sr/tests/test_plugin_parsing.py" = ["I001", "RUF043"]
+"src/vllm-sr/tests/test_setup_bootstrap.py" = ["I001", "UP015"]
