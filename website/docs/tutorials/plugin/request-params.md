@@ -24,18 +24,18 @@ Model routing can restrict which backend serves a request, but clients can still
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins`:
+Use this fragment under `routing.decisions[].plugins` (list of plugin entries):
 
 ```yaml
-plugin:
-  type: request_params
-  configuration:
-    blocked_params:
-      - logprobs
-      - top_logprobs
-    max_tokens_limit: 500
-    max_n: 1
-    strip_unknown: true
+plugins:
+  - type: request_params
+    configuration:
+      blocked_params:
+        - logprobs
+        - top_logprobs
+      max_tokens_limit: 500
+      max_n: 1
+      strip_unknown: true
 ```
 
 In DSL, the same plugin can appear as:

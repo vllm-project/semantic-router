@@ -2,12 +2,16 @@ package extproc
 
 import (
 	"encoding/json"
+	"math"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
+// allowedTopLevelFields mirrors common OpenAI Chat Completions top-level keys. When strip_unknown
+// is enabled, fields not listed here are removed; extend this map when the router adds support for
+// new documented request fields.
 var allowedTopLevelFields = map[string]bool{
 	"model":             true,
 	"messages":          true,
@@ -90,7 +94,7 @@ func capIntField(
 	fieldName string,
 	limit *int,
 	decisionName string,
-	recordMetric func(string, int, int),
+	recordMetric func(string),
 ) bool {
 	if limit == nil {
 		return false
@@ -100,20 +104,31 @@ func capIntField(
 		return false
 	}
 	original, ok := toInt(val)
-	if !ok || original <= *limit {
+	if !ok {
+		if fv, isFloat := val.(float64); isFloat && fv != math.Trunc(fv) {
+			delete(body, fieldName)
+			logging.Warnf("Removed non-integer %s (fractional JSON number) for decision '%s'", fieldName, decisionName)
+			return true
+		}
+		return false
+	}
+	if original <= *limit {
 		return false
 	}
 	body[fieldName] = *limit
 	logging.Debugf("Capped %s from %d to %d for decision '%s'", fieldName, original, *limit, decisionName)
-	recordMetric(decisionName, original, *limit)
+	recordMetric(decisionName)
 	return true
 }
 
-// toInt converts a JSON numeric value to an int.
-// JSON numbers from json.Unmarshal are always float64.
+// toInt converts a JSON numeric value to an int. float64 values must be whole numbers
+// (no fractional part); otherwise returns false so callers cannot bypass caps via truncation.
 func toInt(val interface{}) (int, bool) {
 	switch v := val.(type) {
 	case float64:
+		if v != math.Trunc(v) {
+			return 0, false
+		}
 		return int(v), true
 	case int:
 		return v, true

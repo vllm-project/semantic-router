@@ -7,9 +7,8 @@ import (
 )
 
 // DecisionPlugin represents a plugin configuration for a decision.
-// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak",
-// "pii", "system_prompt", "header_mutation", "hallucination",
-// "response_jailbreak", "router_replay", "memory", "fast_response", "tools", "request_params".
+// Type is the plugin identifier; the authoritative supported set is registered in
+// routing_surface_catalog (and DSL/compiler surfaces), not duplicated here.
 type DecisionPlugin struct {
 	Type string `yaml:"type" json:"type"`
 

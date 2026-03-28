@@ -1,8 +1,6 @@
 package metrics
 
 import (
-	"fmt"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -16,12 +14,14 @@ var (
 		[]string{"decision", "param"},
 	)
 
+	// Capped counters intentionally omit original/capped as label values to avoid unbounded
+	// Prometheus cardinality from arbitrary client-supplied numbers.
 	RequestParamsMaxTokensCapped = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "sr_request_params_max_tokens_capped_total",
 			Help: "Total number of times max_tokens was capped",
 		},
-		[]string{"decision", "original", "capped"},
+		[]string{"decision"},
 	)
 
 	RequestParamsMaxNCapped = promauto.NewCounterVec(
@@ -29,7 +29,7 @@ var (
 			Name: "sr_request_params_max_n_capped_total",
 			Help: "Total number of times n was capped",
 		},
-		[]string{"decision", "original", "capped"},
+		[]string{"decision"},
 	)
 
 	RequestParamsUnknownFieldStripped = promauto.NewCounterVec(
@@ -45,12 +45,12 @@ func RecordBlockedParam(decision, param string) {
 	RequestParamsBlocked.WithLabelValues(decision, param).Inc()
 }
 
-func RecordMaxTokensCapped(decision string, original, capped int) {
-	RequestParamsMaxTokensCapped.WithLabelValues(decision, fmt.Sprintf("%d", original), fmt.Sprintf("%d", capped)).Inc()
+func RecordMaxTokensCapped(decision string) {
+	RequestParamsMaxTokensCapped.WithLabelValues(decision).Inc()
 }
 
-func RecordMaxNCapped(decision string, original, capped int) {
-	RequestParamsMaxNCapped.WithLabelValues(decision, fmt.Sprintf("%d", original), fmt.Sprintf("%d", capped)).Inc()
+func RecordMaxNCapped(decision string) {
+	RequestParamsMaxNCapped.WithLabelValues(decision).Inc()
 }
 
 func RecordUnknownFieldStripped(decision, field string) {

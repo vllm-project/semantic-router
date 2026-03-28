@@ -23,10 +23,10 @@ func TestBuildRequestParamsMutationsNilDecision(t *testing.T) {
 func TestBuildRequestParamsMutationsBlockedAndCaps(t *testing.T) {
 	r := &OpenAIRouter{}
 	payload, err := config.NewStructuredPayload(map[string]interface{}{
-		"blocked_params":     []string{"logprobs", "custom_evil_field"},
-		"max_tokens_limit":   500,
-		"max_n":              1,
-		"strip_unknown":      true,
+		"blocked_params":   []string{"logprobs", "custom_evil_field"},
+		"max_tokens_limit": 500,
+		"max_n":            1,
+		"strip_unknown":    true,
 	})
 	if err != nil {
 		t.Fatal(err)
