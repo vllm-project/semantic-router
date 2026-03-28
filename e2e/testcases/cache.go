@@ -129,8 +129,12 @@ func verifyUserScopedCacheBehavior(ctx context.Context, localPort string, verbos
 	// Keep the prompt free of long digit strings: request-side PII classification can set
 	// PIIDetected and skip semantic-cache writes (HasPersonalizedContext), which breaks
 	// same-user hit expectations. Uniqueness is carried in x-authz-user-id only.
+	//
+	// Use a psychology prompt: the kubernetes ai-gateway profile enables semantic-cache on
+	// psychology_decision and health_decision, but not on biology_decision (see
+	// e2e/profiles/ai-gateway/values.yaml).
 	queryID := time.Now().UnixNano()
-	question := "Explain mitosis versus meiosis in one sentence."
+	question := "What is cognitive dissonance in one sentence?"
 	firstUserID := fmt.Sprintf("cache-user-a-%d", queryID)
 	secondUserID := fmt.Sprintf("cache-user-b-%d", queryID)
 
