@@ -29,6 +29,26 @@ func TestCacheScopeUserID_UsesFallbackWhenAuthMissing(t *testing.T) {
 	assert.Equal(t, "fallback-user", cacheScopeUserID(ctx))
 }
 
+func TestCacheScopeUserID_UsesOpenAIUserFieldWhenEnvBody(t *testing.T) {
+	t.Setenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY", "true")
+	ctx := &RequestContext{
+		Headers: map[string]string{},
+		OriginalRequestBody: []byte(`{"model":"MoM","messages":[{"role":"user","content":"hi"}],"user":"body-user"}`),
+	}
+	assert.Equal(t, "body-user", cacheScopeUserID(ctx))
+}
+
+func TestCacheScopeUserID_AuthHeaderWinsOverBody(t *testing.T) {
+	t.Setenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY", "true")
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			headers.AuthzUserID: "hdr-user",
+		},
+		OriginalRequestBody: []byte(`{"user":"body-user"}`),
+	}
+	assert.Equal(t, "hdr-user", cacheScopeUserID(ctx))
+}
+
 // =============================================================================
 // extractUserID Tests (Common to both dev and prod builds)
 // =============================================================================

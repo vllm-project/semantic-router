@@ -278,6 +278,9 @@ func sendChatRequestForUser(ctx context.Context, question, localPort, userID str
 			{"role": "user", "content": question},
 		},
 	}
+	if userID != "" {
+		requestBody["user"] = userID
+	}
 
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {

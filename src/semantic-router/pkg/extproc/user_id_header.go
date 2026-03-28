@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 
@@ -31,17 +32,37 @@ func authHeaderUserID(ctx *RequestContext) string {
 	return headerValueCI(ctx, headers.AuthzUserID)
 }
 
+func chatCompletionUserFieldFromBody(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var req struct {
+		User string `json:"user"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(req.User)
+}
+
 // cacheScopeUserID resolves the user id used only for semantic-cache key scoping.
 // It prefers the trusted auth header, then optionally a fallback header name from
 // SEMANTIC_CACHE_FALLBACK_USER_HEADER (intended for E2E when the gateway strips
-// x-authz-user-id before extproc). Do not set that env in production.
+// x-authz-user-id before extproc). When SEMANTIC_CACHE_E2E_USER_FROM_BODY is "true",
+// the OpenAI Chat Completions "user" field is used as a last resort (kubernetes E2E only).
+// Do not set these env vars in production.
 func cacheScopeUserID(ctx *RequestContext) string {
 	if u := authHeaderUserID(ctx); u != "" {
 		return u
 	}
 	fallback := strings.TrimSpace(os.Getenv("SEMANTIC_CACHE_FALLBACK_USER_HEADER"))
-	if fallback == "" {
-		return ""
+	if fallback != "" {
+		if u := headerValueCI(ctx, fallback); u != "" {
+			return u
+		}
 	}
-	return headerValueCI(ctx, fallback)
+	if strings.TrimSpace(os.Getenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY")) == "true" {
+		return chatCompletionUserFieldFromBody(ctx.OriginalRequestBody)
+	}
+	return ""
 }

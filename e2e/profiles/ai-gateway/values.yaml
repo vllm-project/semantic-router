@@ -518,3 +518,5 @@ resources:
 extraEnv:
   - name: SEMANTIC_CACHE_FALLBACK_USER_HEADER
     value: "x-vsr-e2e-cache-user"
+  - name: SEMANTIC_CACHE_E2E_USER_FROM_BODY
+    value: "true"
