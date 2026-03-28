@@ -1625,6 +1625,12 @@ func TestCompileAllPluginTypes(t *testing.T) {
 			body:       `enabled: true backend: "dall-e-3"`,
 			verifyType: "image_gen",
 		},
+		{
+			name:       "request_params",
+			pluginType: "request_params",
+			body:       `blocked_params: ["logprobs", "top_logprobs"] max_tokens_limit: 500 max_n: 1 strip_unknown: true`,
+			verifyType: "request_params",
+		},
 	}
 
 	for _, tc := range pluginTests {
