@@ -15,13 +15,11 @@ func TestDecisionWillPersonalize(t *testing.T) {
 	tests := []struct {
 		name string
 		ctx  *RequestContext
-		cfg  *config.RouterConfig
 		want bool
 	}{
 		{
 			name: "no decision — not personalized",
 			ctx:  &RequestContext{},
-			cfg:  &config.RouterConfig{},
 			want: false,
 		},
 		{
@@ -33,7 +31,6 @@ func TestDecisionWillPersonalize(t *testing.T) {
 					},
 				},
 			},
-			cfg:  &config.RouterConfig{},
 			want: true,
 		},
 		{
@@ -45,7 +42,6 @@ func TestDecisionWillPersonalize(t *testing.T) {
 					},
 				},
 			},
-			cfg:  &config.RouterConfig{},
 			want: false,
 		},
 		{
@@ -57,32 +53,27 @@ func TestDecisionWillPersonalize(t *testing.T) {
 					},
 				},
 			},
-			cfg:  &config.RouterConfig{},
 			want: true,
 		},
 		{
-			name: "global memory enabled",
+			name: "global memory enabled — not checked by decisionWillPersonalize",
 			ctx: &RequestContext{
 				VSRSelectedDecision: &config.Decision{},
 			},
-			cfg: &config.RouterConfig{
-				Memory: config.MemoryConfig{Enabled: true},
-			},
-			want: true,
+			want: false,
 		},
 		{
 			name: "no plugins — not personalized",
 			ctx: &RequestContext{
 				VSRSelectedDecision: &config.Decision{},
 			},
-			cfg:  &config.RouterConfig{},
 			want: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, decisionWillPersonalize(tt.ctx, tt.cfg))
+			assert.Equal(t, tt.want, decisionWillPersonalize(tt.ctx))
 		})
 	}
 }
