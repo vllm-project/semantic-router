@@ -823,3 +823,35 @@ func TestDependencyType_Constants(t *testing.T) {
 		t.Errorf("DependencyEmbeddingFunc = %q, want %q", DependencyEmbeddingFunc, "embedding_function")
 	}
 }
+
+func TestSupportedAlgorithms_Tier(t *testing.T) {
+	tests := []struct {
+		name     string
+		selector Selector
+	}{
+		{"static", NewStaticSelector(DefaultStaticConfig())},
+		{"elo", NewEloSelector(DefaultEloConfig())},
+		{"router_dc", NewRouterDCSelector(DefaultRouterDCConfig())},
+		{"latency_aware", NewLatencyAwareSelector(nil)},
+		{"hybrid", NewHybridSelector(DefaultHybridConfig())},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tier := tt.selector.Tier(); tier != TierSupported {
+				t.Errorf("%s.Tier() = %q, want %q", tt.name, tier, TierSupported)
+			}
+
+			deps := tt.selector.ExternalDependencies()
+			if deps == nil {
+				t.Errorf("%s.ExternalDependencies() returned nil, want non-nil (empty slice is fine)", tt.name)
+			}
+
+			for _, dep := range deps {
+				if dep.Type == DependencyExternalService && dep.Required {
+					t.Errorf("%s: supported algorithm should not have required external service dependency: %s", tt.name, dep.Name)
+				}
+			}
+		})
+	}
+}

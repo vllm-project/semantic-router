@@ -228,3 +228,13 @@ func (s *LatencyAwareSelector) UpdateFeedback(ctx context.Context, feedback *Fee
 	_ = feedback
 	return nil
 }
+
+// Tier returns the production readiness tier
+func (l *LatencyAwareSelector) Tier() AlgorithmTier {
+	return TierSupported
+}
+
+// ExternalDependencies returns external dependencies (none for latency-aware)
+func (l *LatencyAwareSelector) ExternalDependencies() []Dependency {
+	return []Dependency{}
+}
