@@ -418,7 +418,9 @@ def _parse_generated_category(generated_text: str) -> str:
     return predicted_category
 
 
-def _load_and_configure_model(model_name, lora_rank, lora_alpha, lora_dropout, device_str):
+def _load_and_configure_model(
+    model_name, lora_rank, lora_alpha, lora_dropout, device_str
+):
     logger.info(f"Loading Qwen3 model: {model_name}")
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
@@ -465,15 +467,15 @@ def _load_and_configure_model(model_name, lora_rank, lora_alpha, lora_dropout, d
     return model, tokenizer, device
 
 
-def _create_training_args(output_dir, num_epochs, batch_size, learning_rate, num_workers):
+def _create_training_args(
+    output_dir, num_epochs, batch_size, learning_rate, num_workers
+):
     return TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=1,
-        gradient_accumulation_steps=max(
-            1, 16 // batch_size
-        ),
+        gradient_accumulation_steps=max(1, 16 // batch_size),
         learning_rate=learning_rate,
         weight_decay=0.01,
         logging_dir=f"{output_dir}/logs",
@@ -529,7 +531,9 @@ def _save_model_and_mapping(trainer, tokenizer, output_dir, dataset_loader):
     logger.info(f"Model saved to: {output_dir}")
 
 
-def _evaluate_generative_accuracy(model, tokenizer, val_texts, val_labels, num_test_samples):
+def _evaluate_generative_accuracy(
+    model, tokenizer, val_texts, val_labels, num_test_samples
+):
     model.eval()
 
     correct = 0
@@ -643,7 +647,9 @@ def main(
         mlm=False,  # Causal LM, not masked LM
     )
 
-    training_args = _create_training_args(output_dir, num_epochs, batch_size, learning_rate, num_workers)
+    training_args = _create_training_args(
+        output_dir, num_epochs, batch_size, learning_rate, num_workers
+    )
 
     # Create trainer (no compute_metrics needed since prediction_loss_only=True)
     # Real accuracy will be computed at the end using actual generation
