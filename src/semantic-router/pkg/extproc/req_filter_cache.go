@@ -41,14 +41,6 @@ func decisionWillPersonalize(ctx *RequestContext, cfg *config.RouterConfig) bool
 
 // handleCaching handles cache lookup and storage with category-specific settings
 func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
-	// Skip entire cache path for decisions that will inject user-specific context.
-	// Both reads (would serve stale generic answers) and writes (would leak
-	// personalized data) are wrong when RAG or memory is enabled.
-	if decisionWillPersonalize(ctx, r.Config) {
-		logging.Debugf("[Cache] Skipping cache for decision '%s': RAG or memory enabled", categoryName)
-		return nil, false
-	}
-
 	if ctx.LooperRequest {
 		return r.handleLooperCacheSkip(ctx, categoryName)
 	}
@@ -61,6 +53,14 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
+
+	// Skip entire cache path for decisions that will inject user-specific context.
+	// Both reads (would serve stale generic answers) and writes (would leak
+	// personalized data) are wrong when RAG or memory is enabled.
+	if decisionWillPersonalize(ctx, r.Config) {
+		logging.Debugf("[Cache] Skipping cache for decision '%s': RAG or memory enabled", categoryName)
+		return nil, false
+	}
 
 	if skip, reason := r.shouldSkipSemanticCache(ctx, ctx.RequestQuery); skip {
 		logging.Infof("[Cache] Skipping semantic cache lookup and write for personalized request: reason=%s decision=%s",
