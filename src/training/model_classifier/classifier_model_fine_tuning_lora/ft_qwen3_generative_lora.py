@@ -1,47 +1,12 @@
 """
-MMLU-Pro Category Classification with Qwen3 Generative Fine-tuning + LoRA
-Fine-tunes Qwen3-0.6B as an instruction-following model to GENERATE category labels.
+MMLU-Pro Category Classification with Qwen3 Generative Fine-tuning + LoRA.
 
-**CORRECT APPROACH**: Uses Qwen3 as a generative model (text-to-text)
-   - Qwen3 generates category names as text
-   - Standard causal language modeling (how Qwen3 was pre-trained)
-   - Instruction-tuning format (like ChatGPT/Claude)
-   - Expected accuracy: 70-85% (much better than classification head approach!)
-
-🎯 **How it works**:
-   Input:  "Classify this question: What is corporate law? Category:"
-   Output: "law"
-
-   The model learns to generate the category name as text, which is natural for a
-   causal language model!
+Fine-tunes Qwen3-0.6B as an instruction-following model to GENERATE category labels
+using standard causal language modeling with LoRA adapters.
 
 Usage:
-    # Train with recommended parameters (150 samples per category = ~2100 total)
-    python ft_qwen3_generative_lora.py --mode train --epochs 8 --lora-rank 16 --max-samples-per-category 150
-
-    # Test with specific GPU
-    python ft_qwen3_generative_lora.py --mode train --epochs 8 --gpu-id 2
-
-    # Adjust batch size based on GPU memory (default: 4)
-    python ft_qwen3_generative_lora.py --mode train --batch-size 8 --epochs 5
-
-    # Quick test (10 samples per category = ~140 total)
-    python ft_qwen3_generative_lora.py --mode train --epochs 1 --max-samples-per-category 10
-
-    # Inference
+    python ft_qwen3_generative_lora.py --mode train --epochs 8 --lora-rank 16
     python ft_qwen3_generative_lora.py --mode test --model-path qwen3_generative_classifier
-
-Model:
-    - Qwen/Qwen3-0.6B (752M params, 28 layers, 32k context)
-    - Fine-tuned with LoRA on instruction-following format
-    - Generates category labels as text (natural for decoder models!)
-
-Dataset:
-    - TIGER-Lab/MMLU-Pro: 14 category academic question classification
-    - Formatted as instruction-following pairs
-    - Categories: biology, business, chemistry, computer science, economics,
-                  engineering, health, history, law, math, other, philosophy,
-                  physics, psychology
 """
 
 import json
@@ -118,15 +83,7 @@ A:"""
 
 def get_qwen3_target_modules() -> list[str]:
     """Get LoRA target modules for Qwen3 architecture."""
-    return [
-        "q_proj",  # Query projection
-        "k_proj",  # Key projection
-        "v_proj",  # Value projection
-        "o_proj",  # Output projection
-        "gate_proj",  # MLP gate
-        "up_proj",  # MLP up
-        "down_proj",  # MLP down
-    ]
+    return ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 
 
 class MMLU_Dataset:  # noqa: N801
@@ -138,12 +95,7 @@ class MMLU_Dataset:  # noqa: N801
         self.id2label = {}
 
     def load_huggingface_dataset(self, max_samples_per_category=150):
-        """Load the MMLU-Pro dataset from HuggingFace with balanced sampling.
-
-        Args:
-            max_samples_per_category: Maximum number of samples to take from each category.
-                                     Default: 150 per category (14 categories = ~2100 total)
-        """
+        """Load the MMLU-Pro dataset from HuggingFace with balanced sampling."""
         logger.info(f"Loading dataset from HuggingFace: {self.dataset_name}")
 
         try:
@@ -201,11 +153,7 @@ class MMLU_Dataset:  # noqa: N801
             raise
 
     def prepare_datasets(self, max_samples_per_category=150):
-        """Prepare train/validation/test datasets.
-
-        Args:
-            max_samples_per_category: Maximum samples per category (default: 150)
-        """
+        """Prepare train/validation/test datasets."""
         texts, labels = self.load_huggingface_dataset(max_samples_per_category)
 
         # Create label mapping
@@ -245,21 +193,7 @@ class MMLU_Dataset:  # noqa: N801
 def format_instruction(
     question: str, category: str | None = None
 ) -> list[dict[str, str]]:
-    """
-    Format a question-category pair as chat messages for proper instruction fine-tuning.
-
-    Uses Qwen3's ChatML format with special tokens to separate user input from assistant output.
-    This ensures the model only trains on generating the category name (1-2 tokens), not the
-    entire instruction (~200+ tokens), resulting in 100x more efficient training!
-
-    Args:
-        question: The question text
-        category: The category label (None for inference)
-
-    Returns:
-        List of message dicts with 'role' and 'content' keys
-        Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
-    """
+    """Format a question-category pair as chat messages for instruction fine-tuning."""
     instruction = INSTRUCTION_TEMPLATE.format(question=question)
 
     # User message (the instruction/question)
@@ -276,16 +210,7 @@ def format_instruction(
 def create_generative_dataset(
     texts: list[str], labels: list[str], tokenizer, max_length=512
 ):
-    """
-    Create dataset in chat format for proper instruction fine-tuning.
-
-    Uses tokenizer.apply_chat_template() to format messages with special tokens.
-    This ensures:
-    - User input (instruction) and assistant output (category) are properly separated
-    - Model trains ONLY on the category name (1-2 tokens), not the instruction (200+ tokens)
-    - Training efficiency: Focuses 100% of gradient updates on classification tokens
-    - Inference format matches training format exactly
-    """
+    """Create dataset in chat format for instruction fine-tuning."""
     input_ids_list = []
     labels_list = []
     attention_mask_list = []
@@ -346,14 +271,7 @@ def create_generative_dataset(
 
 
 def compute_metrics_generative(eval_pred, tokenizer, label2id):
-    """
-    Compute metrics for generative classification during training.
-
-    Since we can't do actual generation during training (too slow),
-    we compute a proxy metric: token-level accuracy at the answer position.
-
-    This checks if the model predicts the correct category token.
-    """
+    """Compute token-level accuracy at the answer position during training."""
     import numpy as np  # noqa: PLC0415
 
     predictions, labels = eval_pred
@@ -601,12 +519,7 @@ def main(
     output_dir: str | None = None,
     gpu_id: int | None = None,
 ):
-    """Main training function for generative Qwen3 classification.
-
-    Args:
-        max_samples_per_category: Maximum samples per category (default: 150).
-                                 With 14 categories, this gives ~2100 total samples.
-    """
+    """Main training function for generative Qwen3 classification."""
     logger.info("Starting Qwen3 Generative Classification Fine-tuning")
     logger.info("Training Qwen3 to GENERATE category labels (instruction-following)")
 

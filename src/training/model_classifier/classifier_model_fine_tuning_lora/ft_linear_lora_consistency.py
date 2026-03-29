@@ -167,11 +167,70 @@ CHAR_CONFUSIONS = {
 }
 
 
-def apply_typo(text: str, prob: float = 0.20) -> str:  # noqa: C901, PLR0912, PLR0915
-    """
-    Apply realistic typos to text with given probability per word.
-    Enhanced version with more realistic typo patterns.
-    """
+_AUG_TYPES = ["keyboard", "swap", "delete", "vowel", "substitute", "double"]
+_AUG_WEIGHTS = [0.35, 0.25, 0.20, 0.10, 0.05, 0.05]
+
+
+def _replace_char_preserve_case(word_list, word_lower_list, idx, new_char):
+    """Replace a character at idx, preserving the original case."""
+    if word_list[idx].isupper():
+        new_char = new_char.upper()
+    word_list[idx] = new_char
+    word_lower_list[idx] = new_char.lower()
+
+
+def _apply_single_augmentation(aug_type, word_list, word_lower_list):
+    """Apply one augmentation of the given type to word_list in place."""
+    if aug_type == "swap" and len(word_list) > 2:  # noqa: PLR2004
+        idx = random.randint(0, len(word_list) - 2)
+        word_list[idx], word_list[idx + 1] = word_list[idx + 1], word_list[idx]
+        word_lower_list[idx], word_lower_list[idx + 1] = (
+            word_lower_list[idx + 1],
+            word_lower_list[idx],
+        )
+        return
+
+    if aug_type == "delete" and len(word_list) > 3:  # noqa: PLR2004
+        idx = random.randint(1, len(word_list) - 2)
+        word_list.pop(idx)
+        word_lower_list.pop(idx)
+        return
+
+    if aug_type == "keyboard":
+        idx = random.randint(0, len(word_list) - 1)
+        char = word_lower_list[idx]
+        if char in KEYBOARD_ADJACENT:
+            new_char = random.choice(KEYBOARD_ADJACENT[char])
+            _replace_char_preserve_case(word_list, word_lower_list, idx, new_char)
+        return
+
+    if aug_type == "vowel":
+        vowels = [i for i, c in enumerate(word_lower_list) if c in "aeiou"]
+        if not vowels:
+            return
+        idx = random.choice(vowels)
+        char = word_lower_list[idx]
+        if char in VOWEL_SUBS:
+            new_char = random.choice(VOWEL_SUBS[char])
+            _replace_char_preserve_case(word_list, word_lower_list, idx, new_char)
+        return
+
+    if aug_type == "substitute":
+        idx = random.randint(0, len(word_list) - 1)
+        char = word_lower_list[idx]
+        if char in CHAR_CONFUSIONS:
+            new_char = random.choice(CHAR_CONFUSIONS[char])
+            _replace_char_preserve_case(word_list, word_lower_list, idx, new_char)
+        return
+
+    if aug_type == "double":
+        idx = random.randint(0, len(word_list) - 1)
+        word_list.insert(idx, word_list[idx])
+        word_lower_list.insert(idx, word_lower_list[idx])
+
+
+def apply_typo(text: str, prob: float = 0.20) -> str:
+    """Apply realistic typos to text with given probability per word."""
     if not text or len(text) < 3:  # noqa: PLR2004
         return text
 
@@ -179,23 +238,17 @@ def apply_typo(text: str, prob: float = 0.20) -> str:  # noqa: C901, PLR0912, PL
     result = []
 
     for word in words:
-        word_lower = word.lower()
-
-        # Skip if too short or not alphabetic
         if len(word) < 3 or not word.isalpha():  # noqa: PLR2004
             result.append(word)
             continue
 
-        # Skip with probability
         if random.random() >= prob:
             result.append(word)
             continue
 
-        # Check for common typo patterns first (more realistic)
+        word_lower = word.lower()
         if word_lower in COMMON_TYPOS and random.random() < 0.3:  # noqa: PLR2004
-            # Use common typo pattern
             typo = COMMON_TYPOS[word_lower]
-            # Preserve capitalization
             if word[0].isupper():
                 typo = typo.capitalize()
             result.append(typo)
@@ -204,7 +257,6 @@ def apply_typo(text: str, prob: float = 0.20) -> str:  # noqa: C901, PLR0912, PL
         word_list = list(word)
         word_lower_list = [c.lower() for c in word_list]
 
-        # Decide number of typos (1-2 for longer words)
         num_typos = (
             1 if len(word) < 6 else (1 if random.random() < 0.7 else 2)  # noqa: PLR2004
         )
@@ -212,80 +264,8 @@ def apply_typo(text: str, prob: float = 0.20) -> str:  # noqa: C901, PLR0912, PL
         for _ in range(num_typos):
             if len(word_list) < 3:  # noqa: PLR2004
                 break
-
-            # Choose augmentation type with weighted probabilities
-            # More realistic typos are more common
-            aug_weights = [
-                ("keyboard", 0.35),  # Most common - keyboard mistakes
-                ("swap", 0.25),  # Common - transposition
-                ("delete", 0.20),  # Common - missing character
-                ("vowel", 0.10),  # Less common - vowel confusion
-                ("substitute", 0.05),  # Less common - character substitution
-                ("double", 0.05),  # Least common - double character
-            ]
-
-            aug_type = random.choices(
-                [w[0] for w in aug_weights], weights=[w[1] for w in aug_weights]
-            )[0]
-
-            if aug_type == "swap" and len(word_list) > 2:  # noqa: PLR2004
-                # Character swap (common typo)
-                idx = random.randint(0, len(word_list) - 2)
-                word_list[idx], word_list[idx + 1] = word_list[idx + 1], word_list[idx]
-                word_lower_list[idx], word_lower_list[idx + 1] = (
-                    word_lower_list[idx + 1],
-                    word_lower_list[idx],
-                )
-
-            elif aug_type == "delete" and len(word_list) > 3:  # noqa: PLR2004
-                # Delete character (common - missing key)
-                idx = random.randint(1, len(word_list) - 2)  # Avoid first/last
-                word_list.pop(idx)
-                word_lower_list.pop(idx)
-
-            elif aug_type == "keyboard":
-                # Keyboard adjacent mistake (most realistic)
-                idx = random.randint(0, len(word_list) - 1)
-                char = word_lower_list[idx]
-                if char in KEYBOARD_ADJACENT:
-                    new_char = random.choice(KEYBOARD_ADJACENT[char])
-                    # Preserve case
-                    if word_list[idx].isupper():
-                        new_char = new_char.upper()
-                    word_list[idx] = new_char
-                    word_lower_list[idx] = new_char.lower()
-
-            elif aug_type == "vowel":
-                # Vowel substitution (common mistake)
-                vowels = [i for i, c in enumerate(word_lower_list) if c in "aeiou"]
-                if vowels:
-                    idx = random.choice(vowels)
-                    char = word_lower_list[idx]
-                    if char in VOWEL_SUBS:
-                        new_char = random.choice(VOWEL_SUBS[char])
-                        # Preserve case
-                        if word_list[idx].isupper():
-                            new_char = new_char.upper()
-                        word_list[idx] = new_char
-                        word_lower_list[idx] = new_char
-
-            elif aug_type == "substitute":
-                # Character confusion (less common)
-                idx = random.randint(0, len(word_list) - 1)
-                char = word_lower_list[idx]
-                if char in CHAR_CONFUSIONS:
-                    new_char = random.choice(CHAR_CONFUSIONS[char])
-                    # Preserve case
-                    if word_list[idx].isupper():
-                        new_char = new_char.upper()
-                    word_list[idx] = new_char
-                    word_lower_list[idx] = new_char.lower()
-
-            elif aug_type == "double":
-                # Double character (typing too fast)
-                idx = random.randint(0, len(word_list) - 1)
-                word_list.insert(idx, word_list[idx])
-                word_lower_list.insert(idx, word_lower_list[idx])
+            aug_type = random.choices(_AUG_TYPES, weights=_AUG_WEIGHTS)[0]
+            _apply_single_augmentation(aug_type, word_list, word_lower_list)
 
         result.append("".join(word_list))
 
@@ -481,6 +461,20 @@ def data_collator(features):
     return batch
 
 
+def _save_consistency_artifacts(trainer, tokenizer, output_dir, label2id, id2label):
+    """Save model, tokenizer, and label mappings after consistency training."""
+    trainer.save_model(output_dir)
+    tokenizer.save_pretrained(output_dir)
+
+    mapping = {"category_to_idx": label2id, "idx_to_category": id2label}
+    with open(os.path.join(output_dir, "label_mapping.json"), "w") as f:
+        json.dump(mapping, f, indent=2)
+    with open(os.path.join(output_dir, "category_mapping.json"), "w") as f:
+        json.dump(mapping, f, indent=2)
+
+    logger.info(f"Model saved to: {output_dir}")
+
+
 def main(
     model_name: str = "bert-base-uncased",
     lora_rank: int = 16,
@@ -498,17 +492,14 @@ def main(
     logger.info("=" * 60)
     logger.info("CONSISTENCY TRAINING FOR TYPO ROBUSTNESS")
     logger.info("=" * 60)
-    logger.info(f"Model: {model_name}")
-    logger.info(f"Epochs: {epochs}")
-    logger.info(f"Max samples: {max_samples}")
-    logger.info(f"Typo probability: {typo_prob}")
-    logger.info(f"Consistency weight: {consistency_weight}")
+    logger.info(f"Model: {model_name}, Epochs: {epochs}, Max samples: {max_samples}")
+    logger.info(
+        f"Typo probability: {typo_prob}, Consistency weight: {consistency_weight}"
+    )
 
-    # Load data
     texts, labels, label2id = load_mmlu_dataset(max_samples)
     id2label = {v: k for k, v in label2id.items()}
 
-    # Split data
     train_texts, val_texts, train_labels, val_labels = train_test_split(
         texts, labels, test_size=0.15, random_state=42, stratify=labels
     )
@@ -516,19 +507,15 @@ def main(
     logger.info(f"Training samples: {len(train_texts)}")
     logger.info(f"Validation samples: {len(val_texts)}")
 
-    # Create model
     model, tokenizer = create_model(model_name, len(label2id), lora_rank, lora_alpha)
 
-    # Create datasets
     train_dataset = ConsistencyDataset(train_texts, train_labels, tokenizer, typo_prob)
     val_dataset = ConsistencyDataset(val_texts, val_labels, tokenizer, typo_prob)
 
-    # Output directory
     if output_dir is None:
         output_dir = f"consistency_classifier_{model_name}_r{lora_rank}"
     os.makedirs(output_dir, exist_ok=True)
 
-    # Training arguments
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=epochs,
@@ -545,11 +532,10 @@ def main(
         max_grad_norm=1.0,
         lr_scheduler_type="cosine",
         warmup_ratio=0.1,
-        bf16=True,  # Use bf16 for L4 GPUs
-        remove_unused_columns=False,  # CRITICAL: Keep our custom columns
+        bf16=True,
+        remove_unused_columns=False,
     )
 
-    # Create trainer
     trainer = ConsistencyTrainer(
         consistency_weight=consistency_weight,
         model=model,
@@ -559,24 +545,11 @@ def main(
         data_collator=data_collator,
     )
 
-    # Train
     logger.info("Starting consistency training...")
     trainer.train()
 
-    # Save model
-    trainer.save_model(output_dir)
-    tokenizer.save_pretrained(output_dir)
+    _save_consistency_artifacts(trainer, tokenizer, output_dir, label2id, id2label)
 
-    # Save label mapping
-    mapping = {"category_to_idx": label2id, "idx_to_category": id2label}
-    with open(os.path.join(output_dir, "label_mapping.json"), "w") as f:
-        json.dump(mapping, f, indent=2)
-    with open(os.path.join(output_dir, "category_mapping.json"), "w") as f:
-        json.dump(mapping, f, indent=2)
-
-    logger.info(f"Model saved to: {output_dir}")
-
-    # Merge for Rust compatibility
     logger.info("Merging LoRA adapter for Rust inference...")
     merged_dir = f"{output_dir}_rust"
     merge_lora_model(output_dir, merged_dir, model_name, label2id, id2label)
