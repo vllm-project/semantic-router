@@ -401,8 +401,22 @@ func (e *EloSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) er
 		return fmt.Errorf("either winner_model or loser_model is required")
 	}
 
-	// Update global ratings under a single lock hold to prevent data races.
-	// The entire read-old, update, read-new cycle must be atomic.
+	e.updateGlobalRatings(feedback)
+
+	if e.config.CategoryWeighted && feedback.DecisionName != "" {
+		e.updateCategoryRatings(feedback)
+	}
+
+	logging.Infof("[EloSelector] Updated ratings: winner=%s, loser=%s, tie=%v",
+		feedback.WinnerModel, feedback.LoserModel, feedback.Tie)
+
+	e.persistRatings()
+
+	return nil
+}
+
+// updateGlobalRatings updates global Elo ratings and records metrics.
+func (e *EloSelector) updateGlobalRatings(feedback *Feedback) {
 	var winnerOldElo, loserOldElo float64
 	var globalWinnerStats, globalLoserStats ModelRating
 	var hasGlobalWinner bool
@@ -427,7 +441,6 @@ func (e *EloSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) er
 	}
 	e.globalMu.Unlock()
 
-	// Record metrics for global ratings (outside lock)
 	if hasGlobalWinner {
 		RecordFeedbackMetrics(&FeedbackMetrics{
 			Winner:       feedback.WinnerModel,
@@ -442,71 +455,68 @@ func (e *EloSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) er
 			LoserStats:   globalLoserStats,
 		})
 	}
+}
 
-	// Update category ratings if applicable
-	if e.config.CategoryWeighted && feedback.DecisionName != "" {
-		var catWinnerOldElo, catLoserOldElo float64
-		var catWinnerStats, catLoserStats ModelRating
-		var hasCatWinner bool
+// updateCategoryRatings updates category-specific Elo ratings and records metrics.
+func (e *EloSelector) updateCategoryRatings(feedback *Feedback) {
+	var catWinnerOldElo, catLoserOldElo float64
+	var catWinnerStats, catLoserStats ModelRating
+	var hasCatWinner bool
 
-		e.categoryMu.Lock()
-		catRatings := e.categoryRatings[feedback.DecisionName]
-		if catRatings == nil {
-			catRatings = make(map[string]*ModelRating)
-			e.categoryRatings[feedback.DecisionName] = catRatings
-		}
-		if r := catRatings[feedback.WinnerModel]; r != nil {
-			catWinnerOldElo = r.Rating
-		} else {
-			catWinnerOldElo = e.config.InitialRating
-		}
-		if r := catRatings[feedback.LoserModel]; r != nil {
-			catLoserOldElo = r.Rating
-		} else {
-			catLoserOldElo = e.config.InitialRating
-		}
-		e.updateRatingLocked(feedback, catRatings)
-		if r := catRatings[feedback.WinnerModel]; r != nil {
-			hasCatWinner = true
-			catWinnerStats = *r
-		}
-		if r := catRatings[feedback.LoserModel]; r != nil {
-			catLoserStats = *r
-		}
-		e.categoryMu.Unlock()
+	e.categoryMu.Lock()
+	catRatings := e.categoryRatings[feedback.DecisionName]
+	if catRatings == nil {
+		catRatings = make(map[string]*ModelRating)
+		e.categoryRatings[feedback.DecisionName] = catRatings
+	}
+	if r := catRatings[feedback.WinnerModel]; r != nil {
+		catWinnerOldElo = r.Rating
+	} else {
+		catWinnerOldElo = e.config.InitialRating
+	}
+	if r := catRatings[feedback.LoserModel]; r != nil {
+		catLoserOldElo = r.Rating
+	} else {
+		catLoserOldElo = e.config.InitialRating
+	}
+	e.updateRatingLocked(feedback, catRatings)
+	if r := catRatings[feedback.WinnerModel]; r != nil {
+		hasCatWinner = true
+		catWinnerStats = *r
+	}
+	if r := catRatings[feedback.LoserModel]; r != nil {
+		catLoserStats = *r
+	}
+	e.categoryMu.Unlock()
 
-		if hasCatWinner {
-			RecordFeedbackMetrics(&FeedbackMetrics{
-				Winner:       feedback.WinnerModel,
-				Loser:        feedback.LoserModel,
-				Category:     feedback.DecisionName,
-				IsTie:        feedback.Tie,
-				WinnerOldElo: catWinnerOldElo,
-				WinnerNewElo: catWinnerStats.Rating,
-				LoserOldElo:  catLoserOldElo,
-				LoserNewElo:  catLoserStats.Rating,
-				WinnerStats:  catWinnerStats,
-				LoserStats:   catLoserStats,
-			})
+	if hasCatWinner {
+		RecordFeedbackMetrics(&FeedbackMetrics{
+			Winner:       feedback.WinnerModel,
+			Loser:        feedback.LoserModel,
+			Category:     feedback.DecisionName,
+			IsTie:        feedback.Tie,
+			WinnerOldElo: catWinnerOldElo,
+			WinnerNewElo: catWinnerStats.Rating,
+			LoserOldElo:  catLoserOldElo,
+			LoserNewElo:  catLoserStats.Rating,
+			WinnerStats:  catWinnerStats,
+			LoserStats:   catLoserStats,
+		})
+	}
+}
+
+// persistRatings marks storage as dirty for auto-save, or saves immediately for single updates.
+func (e *EloSelector) persistRatings() {
+	if e.storage == nil {
+		return
+	}
+	if fileStorage, ok := e.storage.(*FileEloStorage); ok {
+		fileStorage.MarkDirty()
+	} else {
+		if err := e.storage.SaveAllRatings(e.getAllRatingsForStorage()); err != nil {
+			logging.Warnf("[EloSelector] Failed to save ratings to storage: %v", err)
 		}
 	}
-
-	logging.Infof("[EloSelector] Updated ratings: winner=%s, loser=%s, tie=%v",
-		feedback.WinnerModel, feedback.LoserModel, feedback.Tie)
-
-	// Mark storage as dirty for auto-save, or save immediately for single updates
-	if e.storage != nil {
-		if fileStorage, ok := e.storage.(*FileEloStorage); ok {
-			fileStorage.MarkDirty()
-		} else {
-			// For non-file storage, save immediately
-			if err := e.storage.SaveAllRatings(e.getAllRatingsForStorage()); err != nil {
-				logging.Warnf("[EloSelector] Failed to save ratings to storage: %v", err)
-			}
-		}
-	}
-
-	return nil
 }
 
 // updateRatingLocked performs the actual Elo rating update directly on the given ratings map.
