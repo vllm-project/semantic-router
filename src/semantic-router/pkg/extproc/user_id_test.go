@@ -32,7 +32,7 @@ func TestCacheScopeUserID_UsesFallbackWhenAuthMissing(t *testing.T) {
 func TestCacheScopeUserID_UsesOpenAIUserFieldWhenEnvBody(t *testing.T) {
 	t.Setenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY", "true")
 	ctx := &RequestContext{
-		Headers: map[string]string{},
+		Headers:             map[string]string{},
 		OriginalRequestBody: []byte(`{"model":"MoM","messages":[{"role":"user","content":"hi"}],"user":"body-user"}`),
 	}
 	assert.Equal(t, "body-user", cacheScopeUserID(ctx))
