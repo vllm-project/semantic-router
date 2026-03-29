@@ -624,7 +624,7 @@ def main(
     logger.info(f"Categories: {len(dataset_loader.label2id)}")
 
     # Load tokenizer and model
-    model, tokenizer, device = _load_and_configure_model(
+    model, tokenizer, _device = _load_and_configure_model(
         model_name, lora_rank, lora_alpha, lora_dropout, device_str
     )
 
