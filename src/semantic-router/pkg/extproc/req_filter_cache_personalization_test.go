@@ -103,9 +103,10 @@ func TestUpdateResponseCacheUpdatesWhenGlobalMemoryHasNoUserID(t *testing.T) {
 	mockCache := &mockPersonalizationCache{}
 	router, decision := newCachePersonalizationTestRouter(mockCache, true)
 	ctx := &RequestContext{
-		RequestID:           "req-memory-no-user",
-		RequestQuery:        "what is my budget?",
-		VSRSelectedDecision: decision,
+		RequestID:               "req-memory-no-user",
+		RequestQuery:            "what is my budget?",
+		VSRSelectedDecision:     decision,
+		VSRSelectedDecisionName: decision.Name,
 	}
 
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
