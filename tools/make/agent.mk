@@ -39,7 +39,33 @@ agent-help: ## Show help for agent-specific targets
 agent-bootstrap: ## Install agent validation tooling
 	@$(LOG_TARGET)
 	@echo "Installing agent Python tooling..."
-	@python3 -m pip install -r tools/agent/requirements.txt
+	@VENV_ACTIVE=0; \
+	if python3 -c "import venv" 2>/dev/null && python3 -m venv --help >/dev/null 2>&1; then \
+		if [ -d ".agent_venv" ] && [ -f ".agent_venv/bin/activate" ]; then \
+			. .agent_venv/bin/activate; \
+			VENV_ACTIVE=1; \
+		elif python3 -m venv .agent_venv >/dev/null 2>&1; then \
+			. .agent_venv/bin/activate; \
+			VENV_ACTIVE=1; \
+			echo "Created venv at .agent_venv (PEP 668 / Homebrew compatible)"; \
+		else \
+			echo "venv creation failed, installing globally (PEP 668 may apply)"; \
+		fi; \
+	else \
+		echo "venv not available, installing globally (PEP 668 may apply)"; \
+	fi; \
+	if [ "$$VENV_ACTIVE" = "1" ]; then \
+		pip install --upgrade pip >/dev/null 2>&1 && \
+		pip install -r tools/agent/requirements.txt; \
+	else \
+		if ! python3 -m pip install --user -r tools/agent/requirements.txt 2>/dev/null; then \
+			echo "Global pip install failed, retrying without --user"; \
+			if ! python3 -m pip install -r tools/agent/requirements.txt 2>/dev/null; then \
+				echo "Python dependencies installation failed. Please ensure pip is available."; \
+				exit 1; \
+			fi; \
+		fi; \
+	fi
 	@if command -v npm >/dev/null 2>&1; then \
 		npm install -g markdownlint-cli@0.43.0 >/dev/null 2>&1 || true; \
 	fi
@@ -47,7 +73,21 @@ agent-bootstrap: ## Install agent validation tooling
 		GOLANGCI_BIN="$$(go env GOPATH)/bin/golangci-lint"; \
 		if [ ! -x "$$GOLANGCI_BIN" ] || ! "$$GOLANGCI_BIN" version 2>/dev/null | grep -q " $(AGENT_GOLANGCI_LINT_VERSION) "; then \
 			echo "Installing golangci-lint v$(AGENT_GOLANGCI_LINT_VERSION)..."; \
-			go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(AGENT_GOLANGCI_LINT_VERSION); \
+			TIMEOUT_CMD=""; \
+			if command -v timeout >/dev/null 2>&1; then \
+				TIMEOUT_CMD="timeout"; \
+			elif command -v gtimeout >/dev/null 2>&1; then \
+				TIMEOUT_CMD="gtimeout"; \
+			fi; \
+			if [ -n "$$TIMEOUT_CMD" ]; then \
+				if ! "$$TIMEOUT_CMD" 60 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(AGENT_GOLANGCI_LINT_VERSION) 2>/dev/null; then \
+					echo "golangci-lint installation timed out or failed, skipping"; \
+				fi; \
+			else \
+				if ! go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(AGENT_GOLANGCI_LINT_VERSION) 2>/dev/null; then \
+					echo "golangci-lint installation failed; you can retry manually with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(AGENT_GOLANGCI_LINT_VERSION)"; \
+				fi; \
+			fi; \
 		fi; \
 	fi
 	@if command -v rustup >/dev/null 2>&1; then \
