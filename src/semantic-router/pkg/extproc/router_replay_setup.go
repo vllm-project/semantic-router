@@ -84,6 +84,9 @@ func createReplayStore(
 ) (store.Storage, error) {
 	switch backend {
 	case "memory":
+		logging.Warnf("Router replay store_backend is set to %q — all replay records "+
+			"will be lost on router restart. Use \"postgres\" or \"redis\" for durable storage in production.",
+			"memory")
 		return createReplayMemoryStore(decisionName, pluginCfg, globalCfg), nil
 	case "redis":
 		return createReplayRedisStore(decisionName, globalCfg)

@@ -294,6 +294,12 @@ type ResponseAPIRedisConfig struct {
 	ConfigPath       string   `yaml:"config_path,omitempty" json:"config_path,omitempty"`
 }
 
+// RouterReplayConfig controls routing-decision replay record storage.
+// StoreBackend defaults to "postgres" for durable, SQL-queryable storage
+// that survives router restarts. Supported backends: "postgres", "redis",
+// "milvus", "memory". Use "redis" for lightweight deployments that already
+// run Redis. Set to "memory" only for local development — all replay
+// records are lost when the router process exits.
 type RouterReplayConfig struct {
 	StoreBackend string                      `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
 	TTLSeconds   int                         `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`

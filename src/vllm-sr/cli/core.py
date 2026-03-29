@@ -32,6 +32,7 @@ from cli.runtime_lifecycle import (
 )
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.runtime_topology import resolve_runtime_topology
+from cli.storage_backends import provision_storage_backends
 from cli.utils import get_logger, load_config
 
 log = get_logger(__name__)
@@ -79,7 +80,8 @@ def start_vllm_sr(
     print_vllm_logo()
     source_config_file = source_config_file or config_file
     runtime_config_file = runtime_config_file or config_file
-    listeners = load_config(source_config_file).get("listeners", [])
+    user_config = load_config(source_config_file) or {}
+    listeners = user_config.get("listeners", [])
     if not listeners:
         log.error("No listeners configured in config.yaml")
         raise SystemExit(1)
@@ -92,6 +94,11 @@ def start_vllm_sr(
     shared_network_name = stack_layout.network_name
     state_root_dir = _resolve_state_root_dir(source_config_file, env_vars)
     ensure_shared_network(shared_network_name)
+
+    started_backends = provision_storage_backends(
+        user_config, shared_network_name, stack_layout
+    )
+
     observability_network_name = start_observability_stack(
         enable_observability,
         shared_network_name,
@@ -137,13 +144,7 @@ def start_vllm_sr(
     if maybe_finish_setup_mode(setup_mode, dashboard_disabled, stack_layout):
         return
 
-    wait_for_router_health(stack_layout)
-    for service in ("router", "envoy"):
-        ensure_runtime_container_not_exited(
-            stack_layout.service_container_name(service)
-        )
-    if not dashboard_disabled:
-        ensure_runtime_container_not_exited(stack_layout.dashboard_container_name)
+    _wait_and_verify_runtime(stack_layout, dashboard_disabled)
     recover_openclaw_containers(state_root_dir, env_vars, shared_network_name)
     log_runtime_summary(
         listeners,
@@ -151,7 +152,19 @@ def start_vllm_sr(
         dashboard_disabled,
         enable_observability,
         fleet_sim_enabled,
+        started_backends=started_backends,
     )
+
+
+def _wait_and_verify_runtime(stack_layout, dashboard_disabled):
+    """Wait for health check and verify core runtime containers are still running."""
+    wait_for_router_health(stack_layout)
+    for service in ("router", "envoy"):
+        ensure_runtime_container_not_exited(
+            stack_layout.service_container_name(service)
+        )
+    if not dashboard_disabled:
+        ensure_runtime_container_not_exited(stack_layout.dashboard_container_name)
 
 
 def stop_vllm_sr():
@@ -200,6 +213,13 @@ def stop_vllm_sr():
             stop_message=f"Stopping {container_name}...",
             stopped_message=f"{container_name} stopped",
         )
+    for container_name in _storage_container_names(stack_layout):
+        _stop_managed_container(
+            container_name,
+            container_statuses[container_name],
+            stop_message=f"Stopping {container_name}...",
+            stopped_message=f"{container_name} stopped",
+        )
     if (
         runtime_stopped
         and container_statuses[stack_layout.container_name] == "not found"
@@ -213,6 +233,7 @@ def _managed_container_statuses(stack_layout: RuntimeStackLayout) -> dict[str, s
         *_runtime_container_names(stack_layout),
         stack_layout.fleet_sim_container_name,
         *_observability_container_names(stack_layout),
+        *_storage_container_names(stack_layout),
     ]
     return {
         container_name: docker_container_status(container_name)
@@ -293,6 +314,10 @@ def _observability_container_names(stack_layout: RuntimeStackLayout) -> tuple[st
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
     )
+
+
+def _storage_container_names(stack_layout: RuntimeStackLayout) -> tuple[str, ...]:
+    return stack_layout.storage_container_names
 
 
 def _remove_runtime_network(network_name: str) -> None:
