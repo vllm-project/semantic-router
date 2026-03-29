@@ -21,7 +21,7 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if ctx.RequestID == "" || responseBody == nil {
 		return
 	}
-	decisionName := decisionNameForCacheScope(ctx)
+	decisionName := ctx.VSRSelectedDecisionName
 	if !r.semanticCacheEnabledForScope(decisionName) {
 		return
 	}
@@ -145,7 +145,7 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 	ctx *RequestContext,
 	reconstructedJSON []byte,
 ) error {
-	decisionName := decisionNameForCacheScope(ctx)
+	decisionName := ctx.VSRSelectedDecisionName
 	if !r.semanticCacheEnabledForScope(decisionName) {
 		return nil
 	}

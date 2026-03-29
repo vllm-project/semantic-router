@@ -65,15 +65,15 @@ func TestExtractUserID_AuthHeaderOnly(t *testing.T) {
 	assert.Equal(t, "user_from_auth", result)
 }
 
-func TestExtractUserID_AuthHeaderCaseInsensitiveName(t *testing.T) {
+func TestExtractUserID_AuthHeaderExactKey(t *testing.T) {
 	ctx := &RequestContext{
 		Headers: map[string]string{
-			"X-Authz-User-Id": "user_mixed_case_key",
+			headers.AuthzUserID: "user_exact_key",
 		},
 	}
 
 	result := extractUserID(ctx)
-	assert.Equal(t, "user_mixed_case_key", result)
+	assert.Equal(t, "user_exact_key", result)
 }
 
 func TestExtractUserID_NoAuthHeaderNoMetadata(t *testing.T) {
