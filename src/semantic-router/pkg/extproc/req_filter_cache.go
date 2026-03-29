@@ -7,7 +7,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -15,13 +14,14 @@ import (
 )
 
 // decisionWillPersonalize checks whether the matched decision is configured
-// with plugins (RAG, memory) that inject user-specific context. When true,
-// we skip the entire cache path — both reads and writes — because:
+// with per-decision plugins (RAG, memory) that inject user-specific context.
+// When true, we skip the entire cache path — both reads and writes — because:
 //   - reads would serve a generic cached answer instead of the personalized one
 //   - writes would cache a personalized answer that could leak to other users
 //
-// This avoids orphaned pending cache entries and unnecessary embedding work.
-func decisionWillPersonalize(ctx *RequestContext, cfg *config.RouterConfig) bool {
+// Global memory is NOT checked here; the more granular shouldSkipSemanticCache
+// handles global memory with user-ID awareness to preserve cache for anonymous traffic.
+func decisionWillPersonalize(ctx *RequestContext) bool {
 	d := ctx.VSRSelectedDecision
 	if d == nil {
 		return false
@@ -29,12 +29,8 @@ func decisionWillPersonalize(ctx *RequestContext, cfg *config.RouterConfig) bool
 	if ragCfg := d.GetRAGConfig(); ragCfg != nil && ragCfg.Enabled {
 		return true
 	}
-	// Per-decision memory plugin takes priority over global setting.
 	if memCfg := d.GetMemoryConfig(); memCfg != nil {
 		return memCfg.Enabled
-	}
-	if cfg != nil && cfg.Memory.Enabled {
-		return true
 	}
 	return false
 }
@@ -57,7 +53,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	// Skip entire cache path for decisions that will inject user-specific context.
 	// Both reads (would serve stale generic answers) and writes (would leak
 	// personalized data) are wrong when RAG or memory is enabled.
-	if decisionWillPersonalize(ctx, r.Config) {
+	if decisionWillPersonalize(ctx) {
 		logging.Debugf("[Cache] Skipping cache for decision '%s': RAG or memory enabled", categoryName)
 		return nil, false
 	}
