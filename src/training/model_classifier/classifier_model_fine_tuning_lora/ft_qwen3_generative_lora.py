@@ -394,7 +394,197 @@ def compute_metrics_generative(eval_pred, tokenizer, label2id):
     }
 
 
-def main(  # noqa: C901, PLR0912, PLR0915
+def _parse_generated_category(generated_text: str) -> str:
+    generated_text = (
+        generated_text.replace("<think>", "").replace("</think>", "").strip()
+    )
+    answer_text = generated_text.split("\n")[0].strip().strip(".,!?;:").lower()
+
+    predicted_category = "unknown"
+    for category in REQUIRED_CATEGORIES:
+        if answer_text.startswith(category.lower()):
+            predicted_category = category.lower()
+            break
+
+    if predicted_category == "unknown" and answer_text:
+        words = answer_text.split()
+        if len(words) >= 2:  # noqa: PLR2004
+            predicted_category = " ".join(words[:2])
+        elif len(words) == 1:
+            predicted_category = words[0]
+        else:
+            predicted_category = answer_text
+
+    return predicted_category
+
+
+def _load_and_configure_model(model_name, lora_rank, lora_alpha, lora_dropout, device_str):
+    logger.info(f"Loading Qwen3 model: {model_name}")
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+
+    logger.info("Using F32 dtype for training (more stable than BF16)")
+
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.float32,
+        trust_remote_code=True,
+        low_cpu_mem_usage=True,
+    )
+
+    device = torch.device(device_str)
+    model = model.to(device)
+
+    model.config.use_cache = False
+    model.gradient_checkpointing_enable()
+    model.enable_input_require_grads()
+
+    target_modules = get_qwen3_target_modules()
+    peft_config = LoraConfig(
+        task_type=TaskType.CAUSAL_LM,
+        inference_mode=False,
+        r=lora_rank,
+        lora_alpha=lora_alpha,
+        lora_dropout=lora_dropout,
+        target_modules=target_modules,
+        bias="none",
+    )
+
+    model = get_peft_model(model, peft_config)
+    model.print_trainable_parameters()
+
+    model.train()
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            logger.info(f"Trainable: {name}")
+            break
+
+    return model, tokenizer, device
+
+
+def _create_training_args(output_dir, num_epochs, batch_size, learning_rate, num_workers):
+    return TrainingArguments(
+        output_dir=output_dir,
+        num_train_epochs=num_epochs,
+        per_device_train_batch_size=batch_size,
+        per_device_eval_batch_size=1,
+        gradient_accumulation_steps=max(
+            1, 16 // batch_size
+        ),
+        learning_rate=learning_rate,
+        weight_decay=0.01,
+        logging_dir=f"{output_dir}/logs",
+        logging_steps=10,
+        eval_strategy="no",
+        save_strategy="no",
+        save_total_limit=1,
+        warmup_ratio=0.1,
+        lr_scheduler_type="cosine",
+        bf16=False,
+        fp16=False,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        dataloader_num_workers=num_workers,
+        remove_unused_columns=False,
+        max_grad_norm=1.0,
+        optim="adamw_torch",
+        prediction_loss_only=True,
+        dataloader_pin_memory=False,
+        auto_find_batch_size=False,
+    )
+
+
+def _setup_gpu(gpu_id):
+    device_str, selected_gpu = set_gpu_device(
+        gpu_id=gpu_id, auto_select=(gpu_id is None)
+    )
+    logger.info(f"Using device: {device_str} (GPU {selected_gpu})")
+
+    # CRITICAL: Set CUDA_VISIBLE_DEVICES early to prevent DataParallel from using other GPUs
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(selected_gpu)
+    # After setting CUDA_VISIBLE_DEVICES, GPU will be referred to as cuda:0
+    device_str = "cuda:0"
+    logger.info(f"Set CUDA_VISIBLE_DEVICES={selected_gpu}, using device: {device_str}")
+
+    clear_gpu_memory()
+    log_memory_usage("Pre-training")
+    return device_str
+
+
+def _save_model_and_mapping(trainer, tokenizer, output_dir, dataset_loader):
+    trainer.save_model(output_dir)
+    tokenizer.save_pretrained(output_dir)
+
+    label_mapping = {
+        "label2id": dataset_loader.label2id,
+        "id2label": dataset_loader.id2label,
+        "instruction_template": INSTRUCTION_TEMPLATE,
+    }
+    with open(os.path.join(output_dir, "label_mapping.json"), "w") as f:
+        json.dump(label_mapping, f, indent=2)
+
+    logger.info(f"Model saved to: {output_dir}")
+
+
+def _evaluate_generative_accuracy(model, tokenizer, val_texts, val_labels, num_test_samples):
+    model.eval()
+
+    correct = 0
+    total = 0
+
+    logger.info(f"Testing on {num_test_samples} validation samples...")
+
+    for i in range(num_test_samples):
+        question = val_texts[i]
+        true_category = val_labels[i]
+
+        messages = format_instruction(question, category=None)
+
+        prompt = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+        )
+
+        inputs = tokenizer(
+            prompt, return_tensors="pt", max_length=512, truncation=True
+        ).to(model.device)
+
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=10,
+                temperature=0.1,
+                do_sample=False,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=[
+                    tokenizer.eos_token_id,
+                    tokenizer.convert_tokens_to_ids("<|im_end|>"),
+                ],
+            )
+
+        generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
+        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+
+        predicted_category = _parse_generated_category(generated_text)
+
+        is_correct = predicted_category == true_category.lower()
+        if is_correct:
+            correct += 1
+        total += 1
+
+        if i < 5 or i >= num_test_samples - 5:  # noqa: PLR2004
+            logger.info(f"\n[{i+1}/{num_test_samples}] Question: {question[:100]}...")
+            logger.info(f"  True: {true_category}")
+            logger.info(f"  Predicted: {predicted_category}")
+            logger.info(f"  {'CORRECT' if is_correct else '✗ WRONG'}")
+
+    accuracy = (correct / total * 100) if total > 0 else 0
+    return correct, total, accuracy
+
+
+def main(
     model_name: str = "Qwen/Qwen3-0.6B",
     lora_rank: int = 16,
     lora_alpha: int = 32,
@@ -416,20 +606,7 @@ def main(  # noqa: C901, PLR0912, PLR0915
     logger.info("Starting Qwen3 Generative Classification Fine-tuning")
     logger.info("Training Qwen3 to GENERATE category labels (instruction-following)")
 
-    # GPU selection using utility function
-    device_str, selected_gpu = set_gpu_device(
-        gpu_id=gpu_id, auto_select=(gpu_id is None)
-    )
-    logger.info(f"Using device: {device_str} (GPU {selected_gpu})")
-
-    # CRITICAL: Set CUDA_VISIBLE_DEVICES early to prevent DataParallel from using other GPUs
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(selected_gpu)
-    # After setting CUDA_VISIBLE_DEVICES, GPU will be referred to as cuda:0
-    device_str = "cuda:0"
-    logger.info(f"Set CUDA_VISIBLE_DEVICES={selected_gpu}, using device: {device_str}")
-
-    clear_gpu_memory()
-    log_memory_usage("Pre-training")
+    device_str = _setup_gpu(gpu_id)
 
     # Load dataset
     dataset_loader = MMLU_Dataset()
@@ -443,59 +620,9 @@ def main(  # noqa: C901, PLR0912, PLR0915
     logger.info(f"Categories: {len(dataset_loader.label2id)}")
 
     # Load tokenizer and model
-    logger.info(f"Loading Qwen3 model: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-
-    # Set padding token
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-
-    # Load model for causal LM with memory optimization
-    # Use F32 for training (more stable), will convert to BF16 for Candle inference later
-    logger.info("Using F32 dtype for training (more stable than BF16)")
-
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.float32,
-        trust_remote_code=True,
-        low_cpu_mem_usage=True,
+    model, tokenizer, device = _load_and_configure_model(
+        model_name, lora_rank, lora_alpha, lora_dropout, device_str
     )
-
-    # Move to GPU using device from set_gpu_device utility
-    # Device is now cuda:0 after CUDA_VISIBLE_DEVICES is set
-    device = torch.device(device_str)
-    model = model.to(device)
-
-    # Prepare model for training
-    model.config.use_cache = False  # Required for training
-
-    # Enable gradient checkpointing for memory efficiency
-    model.gradient_checkpointing_enable()
-    model.enable_input_require_grads()  # Required for gradient checkpointing with LoRA
-
-    # Create LoRA configuration
-    target_modules = get_qwen3_target_modules()
-    peft_config = LoraConfig(
-        task_type=TaskType.CAUSAL_LM,  # Correct task type for generation
-        inference_mode=False,
-        r=lora_rank,
-        lora_alpha=lora_alpha,
-        lora_dropout=lora_dropout,
-        target_modules=target_modules,
-        bias="none",
-    )
-
-    # Apply LoRA
-    model = get_peft_model(model, peft_config)
-    model.print_trainable_parameters()
-
-    # Ensure model is in training mode and enable gradients
-    model.train()
-    for name, param in model.named_parameters():
-        if param.requires_grad:
-            logger.info(f"Trainable: {name}")
-            break  # Just log first one to verify
 
     # Prepare datasets in generative format
     logger.info("Formatting dataset for instruction-following...")
@@ -516,38 +643,7 @@ def main(  # noqa: C901, PLR0912, PLR0915
         mlm=False,  # Causal LM, not masked LM
     )
 
-    # Training arguments (optimized for memory and stability)
-    # Note: batch_size is configurable via function parameter
-    training_args = TrainingArguments(
-        output_dir=output_dir,
-        num_train_epochs=num_epochs,
-        per_device_train_batch_size=batch_size,  # Configurable via parameter
-        per_device_eval_batch_size=1,  # Reduce eval batch size to save memory
-        gradient_accumulation_steps=max(
-            1, 16 // batch_size
-        ),  # Maintain effective batch size of 16, minimum 1
-        learning_rate=learning_rate,
-        weight_decay=0.01,
-        logging_dir=f"{output_dir}/logs",
-        logging_steps=10,
-        eval_strategy="no",  # Skip eval during training (saves 10+ minutes)
-        save_strategy="no",  # Don't save intermediate checkpoints (saves disk space!)
-        save_total_limit=1,  # Keep only 1 checkpoint
-        warmup_ratio=0.1,
-        lr_scheduler_type="cosine",
-        bf16=False,  # Use F32 for training (more stable)
-        fp16=False,  # Use F32 for training (more stable)
-        gradient_checkpointing=True,  # Enable to save memory (trades compute for memory)
-        gradient_checkpointing_kwargs={"use_reentrant": False},  # Better for BF16
-        dataloader_num_workers=num_workers,  # Configurable workers (0=single process, 2-4=multiprocessing)
-        remove_unused_columns=False,  # Keep all columns
-        max_grad_norm=1.0,  # Gradient clipping for stability
-        optim="adamw_torch",  # Use PyTorch AdamW
-        prediction_loss_only=True,  # Only compute loss, don't collect predictions (saves memory!)
-        # Memory optimizations
-        dataloader_pin_memory=False,  # Disable pin memory to save GPU memory
-        auto_find_batch_size=False,  # Don't auto-adjust batch size
-    )
+    training_args = _create_training_args(output_dir, num_epochs, batch_size, learning_rate, num_workers)
 
     # Create trainer (no compute_metrics needed since prediction_loss_only=True)
     # Real accuracy will be computed at the end using actual generation
@@ -562,109 +658,18 @@ def main(  # noqa: C901, PLR0912, PLR0915
     logger.info("Starting training...")
     trainer.train()
 
-    # Save model
-    trainer.save_model(output_dir)
-    tokenizer.save_pretrained(output_dir)
-
-    # Save label mapping
-    label_mapping = {
-        "label2id": dataset_loader.label2id,
-        "id2label": dataset_loader.id2label,
-        "instruction_template": INSTRUCTION_TEMPLATE,
-    }
-    with open(os.path.join(output_dir, "label_mapping.json"), "w") as f:
-        json.dump(label_mapping, f, indent=2)
-
-    logger.info(f"Model saved to: {output_dir}")
+    _save_model_and_mapping(trainer, tokenizer, output_dir, dataset_loader)
 
     # Test generation on MMLU-Pro validation data
     logger.info("\n" + "=" * 50)
     logger.info("Testing generation on MMLU-Pro validation data:")
     logger.info("=" * 50)
 
-    model.eval()
+    num_test_samples = min(200, len(val_texts))
+    correct, total, accuracy = _evaluate_generative_accuracy(
+        model, tokenizer, val_texts, val_labels, num_test_samples
+    )
 
-    # Use validation data for testing
-    num_test_samples = min(200, len(val_texts))  # Test on 200 samples
-    correct = 0
-    total = 0
-
-    logger.info(f"Testing on {num_test_samples} validation samples...")
-
-    for i in range(num_test_samples):
-        question = val_texts[i]
-        true_category = val_labels[i]
-
-        # Format using chat template
-        messages = format_instruction(question, category=None)
-
-        # Apply chat template with generation prompt
-        # This adds <|im_start|>assistant\n to prompt the model to respond
-        # Disable thinking mode for direct classification output
-        prompt = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
-        )
-
-        inputs = tokenizer(
-            prompt, return_tensors="pt", max_length=512, truncation=True
-        ).to(model.device)
-
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=10,
-                temperature=0.1,
-                do_sample=False,  # Greedy decoding for evaluation
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=[
-                    tokenizer.eos_token_id,
-                    tokenizer.convert_tokens_to_ids("<|im_end|>"),
-                ],
-            )
-
-        # Decode only the generated part (skip the input prompt)
-        generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
-        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-
-        # Remove thinking tokens that Qwen3 generates
-        generated_text = (
-            generated_text.replace("<think>", "").replace("</think>", "").strip()
-        )
-
-        # With chat template, model generates just the category directly
-        # Clean up answer (take first line, remove punctuation at end)
-        answer_text = generated_text.split("\n")[0].strip().strip(".,!?;:").lower()
-
-        # Match against known categories (handle multi-word categories like "computer science")
-        predicted_category = "unknown"
-        for category in REQUIRED_CATEGORIES:
-            if answer_text.startswith(category.lower()):
-                predicted_category = category.lower()
-                break
-
-        # If no match, take first 2 words (for "computer science" etc)
-        if predicted_category == "unknown" and answer_text:
-            words = answer_text.split()
-            if len(words) >= 2:  # noqa: PLR2004
-                predicted_category = " ".join(words[:2])
-            elif len(words) == 1:
-                predicted_category = words[0]
-            else:
-                predicted_category = answer_text
-
-        is_correct = predicted_category == true_category.lower()
-        if is_correct:
-            correct += 1
-        total += 1
-
-        # Log first 5 and last 5 examples
-        if i < 5 or i >= num_test_samples - 5:  # noqa: PLR2004
-            logger.info(f"\n[{i+1}/{num_test_samples}] Question: {question[:100]}...")
-            logger.info(f"  True: {true_category}")
-            logger.info(f"  Predicted: {predicted_category}")
-            logger.info(f"  {'CORRECT' if is_correct else '✗ WRONG'}")
-
-    accuracy = (correct / total * 100) if total > 0 else 0
     logger.info("\n" + "=" * 50)
     logger.info(f"Validation Accuracy: {correct}/{total} = {accuracy:.2f}%")
     logger.info("=" * 50)
@@ -746,29 +751,7 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
             generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
             generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
 
-            # Remove thinking tokens that Qwen3 generates
-            generated_text = (
-                generated_text.replace("<think>", "").replace("</think>", "").strip()
-            )
-
-            # With chat template, model generates just the category directly
-            # Clean up and match against known categories
-            answer_text = generated_text.split("\n")[0].strip().strip(".,!?;:").lower()
-
-            category = "unknown"
-            for cat in REQUIRED_CATEGORIES:
-                if answer_text.startswith(cat.lower()):
-                    category = cat
-                    break
-
-            # If no match, take first 2 words
-            if category == "unknown" and answer_text:
-                words = answer_text.split()
-                category = (
-                    " ".join(words[:2])
-                    if len(words) >= 2  # noqa: PLR2004
-                    else words[0] if words else "unknown"
-                )
+            category = _parse_generated_category(generated_text)
 
             print(f"\nQuestion: {example}")
             print(f"Generated: {generated_text[:50]}...")
