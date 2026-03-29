@@ -962,6 +962,22 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		}
 		setPluginConfig(cfg)
 
+	case "request_params":
+		cfg := config.RequestParamsPluginConfig{}
+		if v, ok := getStringArrayField(fields, "blocked_params"); ok {
+			cfg.BlockedParams = v
+		}
+		if v, ok := getIntField(fields, "max_tokens_limit"); ok {
+			cfg.MaxTokensLimit = &v
+		}
+		if v, ok := getIntField(fields, "max_n"); ok {
+			cfg.MaxN = &v
+		}
+		if v, ok := getBoolField(fields, "strip_unknown"); ok {
+			cfg.StripUnknown = v
+		}
+		setPluginConfig(cfg)
+
 	case "tools":
 		cfg := config.ToolsPluginConfig{}
 		if v, ok := getBoolField(fields, "enabled"); ok {

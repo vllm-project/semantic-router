@@ -158,6 +158,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/fast-response',
                 'tutorials/plugin/header-mutation',
                 'tutorials/plugin/image-gen',
+                'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
                 'tutorials/plugin/tools',
               ],
