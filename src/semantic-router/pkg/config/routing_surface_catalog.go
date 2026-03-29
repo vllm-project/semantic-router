@@ -15,6 +15,7 @@ const (
 	DecisionPluginRAG               = "rag"
 	DecisionPluginImageGen          = "image_gen"
 	DecisionPluginFastResponse      = "fast_response"
+	DecisionPluginRequestParams     = "request_params"
 )
 
 var supportedSignalTypes = []string{
@@ -44,6 +45,7 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginMemory,
 	DecisionPluginPII,
 	DecisionPluginRAG,
+	DecisionPluginRequestParams,
 	DecisionPluginResponseJailbreak,
 	DecisionPluginRouterReplay,
 	DecisionPluginSemanticCache,

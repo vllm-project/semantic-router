@@ -659,6 +659,14 @@ routing:
         - type: fast_response
           configuration:
             message: The primary model is saturated, so a lightweight response was returned immediately.
+        - type: request_params
+          configuration:
+            blocked_params:
+              - logprobs
+              - top_logprobs
+            max_tokens_limit: 8192
+            max_n: 4
+            strip_unknown: false
 
     - name: support_router_dc_route
       description: Embedding-driven support route that escalates only when the derived projection band says the request is not a simple support query.
