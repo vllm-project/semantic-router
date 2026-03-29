@@ -17,10 +17,10 @@ func TestHandleCachingSkipsCacheForRAGEnabledDecision(t *testing.T) {
 		false,
 		config.DecisionPlugin{
 			Type: "rag",
-			Configuration: map[string]interface{}{
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
 				"enabled": true,
 				"backend": "milvus",
-			},
+			}),
 		},
 	)
 	ctx := &RequestContext{
@@ -120,10 +120,10 @@ func TestCacheReconstructedStreamingResponseSkipsWhenDecisionUsesRAG(t *testing.
 		false,
 		config.DecisionPlugin{
 			Type: "rag",
-			Configuration: map[string]interface{}{
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
 				"enabled": true,
 				"backend": "milvus",
-			},
+			}),
 		},
 	)
 	ctx := &RequestContext{
@@ -150,9 +150,9 @@ func newCachePersonalizationTestRouter(
 		Plugins: append([]config.DecisionPlugin{
 			{
 				Type: "semantic-cache",
-				Configuration: map[string]interface{}{
+				Configuration: config.MustStructuredPayload(map[string]interface{}{
 					"enabled": true,
-				},
+				}),
 			},
 		}, extraPlugins...),
 	}
