@@ -802,3 +802,24 @@ func TestEloSelector_SelectionFollowsRatings(t *testing.T) {
 		t.Errorf("expected high-rated, got %s", result.SelectedModel)
 	}
 }
+
+func TestAlgorithmTier_Constants(t *testing.T) {
+	if TierSupported != AlgorithmTier("supported") {
+		t.Errorf("TierSupported = %q, want %q", TierSupported, "supported")
+	}
+	if TierExperimental != AlgorithmTier("experimental") {
+		t.Errorf("TierExperimental = %q, want %q", TierExperimental, "experimental")
+	}
+}
+
+func TestDependencyType_Constants(t *testing.T) {
+	if DependencyExternalService != DependencyType("external_service") {
+		t.Errorf("DependencyExternalService = %q, want %q", DependencyExternalService, "external_service")
+	}
+	if DependencyPretrainedModel != DependencyType("pretrained_model") {
+		t.Errorf("DependencyPretrainedModel = %q, want %q", DependencyPretrainedModel, "pretrained_model")
+	}
+	if DependencyEmbeddingFunc != DependencyType("embedding_function") {
+		t.Errorf("DependencyEmbeddingFunc = %q, want %q", DependencyEmbeddingFunc, "embedding_function")
+	}
+}
