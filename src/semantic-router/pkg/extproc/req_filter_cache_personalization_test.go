@@ -172,6 +172,7 @@ func newCachePersonalizationTestRouter(
 }
 
 type mockPersonalizationCache struct {
+	cache.SimilarityTracker
 	addPendingCalled  bool
 	findSimilarCalled bool
 	updateCalled      bool
