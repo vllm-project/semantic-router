@@ -1,3 +1,10 @@
+---
+translation:
+  source_commit: "043cee97"
+  source_file: "docs/training/training-overview.md"
+  outdated: false
+---
+
 # 模型训练概览
 
 Semantic Router 依赖多个专门的分类模型来做出智能路由决策。本节全面概述了训练过程、使用的数据集以及每个模型在路由流程中的作用。
