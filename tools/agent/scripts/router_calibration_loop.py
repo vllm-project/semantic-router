@@ -15,7 +15,6 @@ from router_calibration_support import (
     deploy_config,
     evaluate_probes,
     fetch_router_snapshot,
-    refresh_runtime_classification,
     run_validate,
     wait_for_router_ready,
     write_json,
@@ -55,20 +54,11 @@ def cmd_deploy(args: argparse.Namespace) -> int:
         timeout_seconds=args.ready_timeout,
         interval_seconds=args.ready_interval,
     )
-    refresh_state = None
-    if not args.skip_runtime_refresh_barrier:
-        refresh_state = refresh_runtime_classification(args.router_url)
-        ready_state = wait_for_router_ready(
-            args.router_url,
-            timeout_seconds=args.ready_timeout,
-            interval_seconds=args.ready_interval,
-        )
     if args.output:
         write_json(
             Path(args.output),
             {
                 "deploy": response,
-                "runtime_refresh": refresh_state,
                 "ready": ready_state,
             },
         )
@@ -77,7 +67,6 @@ def cmd_deploy(args: argparse.Namespace) -> int:
             json.dumps(
                 {
                     "deploy": response,
-                    "runtime_refresh": refresh_state,
                     "ready": ready_state,
                 },
                 indent=2,
@@ -122,7 +111,6 @@ def cmd_run(args: argparse.Namespace) -> int:
         write_json(report_dir / "validate.json", validate_result)
 
     deploy_result = None
-    refresh_result = None
     ready_result = None
     if yaml_path is not None:
         deploy_result = deploy_config(args.router_url, yaml_path, dsl_path)
@@ -133,15 +121,6 @@ def cmd_run(args: argparse.Namespace) -> int:
             interval_seconds=args.ready_interval,
         )
         write_json(report_dir / "ready-after-deploy.json", ready_result)
-        if not args.skip_runtime_refresh_barrier:
-            refresh_result = refresh_runtime_classification(args.router_url)
-            write_json(report_dir / "runtime-refresh.json", refresh_result)
-            ready_result = wait_for_router_ready(
-                args.router_url,
-                timeout_seconds=args.ready_timeout,
-                interval_seconds=args.ready_interval,
-            )
-            write_json(report_dir / "ready-after-runtime-refresh.json", ready_result)
 
     snapshot_after = fetch_router_snapshot(args.router_url)
     write_json(report_dir / "snapshot-after.json", snapshot_after)
@@ -168,7 +147,6 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "pre_decision_success_rate": pre_eval["decision_success_rate"],
                 "post_decision_success_rate": post_eval["decision_success_rate"],
                 "deploy_version": (deploy_result or {}).get("version"),
-                "runtime_refresh_applied": refresh_result is not None,
                 "ready_phase": ((ready_result or {}).get("payload") or {}).get("phase"),
                 "validate_ok": (validate_result or {}).get("valid"),
             },
@@ -231,11 +209,6 @@ def add_deploy_subparser(subparsers: argparse._SubParsersAction) -> None:
         default=5.0,
         help="Polling interval in seconds for GET /ready after deploy",
     )
-    deploy.add_argument(
-        "--skip-runtime-refresh-barrier",
-        action="store_true",
-        help="Skip the /config/classification echo-back refresh barrier after deploy",
-    )
     deploy.add_argument("--output", help="Optional JSON output path")
     deploy.set_defaults(func=cmd_deploy)
 
@@ -285,11 +258,6 @@ def add_run_subparser(subparsers: argparse._SubParsersAction) -> None:
         type=float,
         default=5.0,
         help="Polling interval in seconds for GET /ready after deploy",
-    )
-    run.add_argument(
-        "--skip-runtime-refresh-barrier",
-        action="store_true",
-        help="Skip the /config/classification echo-back refresh barrier after deploy",
     )
     run.set_defaults(func=cmd_run)
 

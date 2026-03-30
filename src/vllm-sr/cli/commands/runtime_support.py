@@ -55,7 +55,6 @@ ALGORITHM_HINTS = {
 AMD_OVERRIDE_PREVIEW_LIMIT = 8
 AMD_GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
     ("global", "model_catalog", "embeddings", "semantic", "use_cpu"),
-    ("global", "model_catalog", "embeddings", "bert", "use_cpu"),
     ("global", "model_catalog", "modules", "prompt_guard", "use_cpu"),
     ("global", "model_catalog", "modules", "classifier", "domain", "use_cpu"),
     ("global", "model_catalog", "modules", "classifier", "pii", "use_cpu"),
@@ -328,7 +327,7 @@ def apply_runtime_mode_env_vars(
         env_vars[SETUP_MODE_ENV] = "true"
         env_vars[DASHBOARD_SETUP_MODE_ENV] = "true"
         log.info(
-            "Setup mode: starting dashboard-first bootstrap flow without router/envoy"
+            "Setup mode: starting dashboard-first bootstrap flow with router/envoy on standby"
         )
 
     if platform:

@@ -27,6 +27,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.addComplexityClassifier,
 		b.addContrastiveJailbreakClassifiers,
 		b.addAuthzClassifier,
+		b.addKBClassifiers,
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
@@ -256,6 +257,31 @@ func (c *Classifier) initializeRequiredRuntimeClassifiers() error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (b *classifierOptionBuilder) addKBClassifiers() error {
+	if len(b.cfg.KnowledgeBases) == 0 {
+		return nil
+	}
+	modelType := strings.ToLower(strings.TrimSpace(b.cfg.EmbeddingConfig.ModelType))
+	if modelType == "" {
+		modelType = "qwen3"
+	}
+	classifiers := make(map[string]*KnowledgeBaseClassifier, len(b.cfg.KnowledgeBases))
+	for _, kb := range b.cfg.KnowledgeBases {
+		classifier, err := NewKnowledgeBaseClassifier(kb, modelType, b.cfg.ConfigBaseDir)
+		if err != nil {
+			logging.Warnf("[KnowledgeBase:%s] Failed to create classifier: %v (kb signals for this KB disabled)", kb.Name, err)
+			continue
+		}
+		classifiers[kb.Name] = classifier
+		logging.Infof("[KnowledgeBase:%s] Initialized with %d labels", kb.Name, classifier.LabelCount())
+	}
+	if len(classifiers) == 0 {
+		return nil
+	}
+	b.options = append(b.options, withKBClassifiers(classifiers))
 	return nil
 }
 

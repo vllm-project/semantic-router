@@ -377,7 +377,11 @@ def resolve_skill(changed_files: list[str], env_name: str | None) -> SkillResolu
     primary = resolve_primary_skill(changed_files)
     context = resolve_context(changed_files)
     impacted_surfaces = resolve_impacted_surfaces(changed_files)
-    fragment_names = list(primary.get("fragments", []))
+    fragment_names = resolve_active_fragments(
+        primary,
+        impacted_surfaces,
+        skill_lookup,
+    )
 
     if env_name:
         env = resolve_environment(env_name)
@@ -418,10 +422,35 @@ def resolve_skill(changed_files: list[str], env_name: str | None) -> SkillResolu
     )
 
 
+def resolve_active_fragments(
+    primary: dict,
+    impacted_surfaces: list[str],
+    skill_lookup: dict[str, dict],
+) -> list[str]:
+    active_fragments: list[str] = []
+    impacted_surface_set = set(impacted_surfaces)
+    if primary.get("auto_surface_fragments"):
+        for fragment_name, fragment in skill_lookup.items():
+            if fragment.get("category") != "fragments":
+                continue
+            owned_surfaces = set(fragment.get("owned_surfaces", []))
+            if not owned_surfaces or owned_surfaces.intersection(impacted_surface_set):
+                active_fragments.append(fragment_name)
+        return unique_preserve_order(active_fragments)
+
+    for fragment_name in primary.get("fragments", []):
+        fragment = skill_lookup.get(fragment_name)
+        if fragment is None:
+            continue
+        owned_surfaces = set(fragment.get("owned_surfaces", []))
+        if not owned_surfaces or owned_surfaces.intersection(impacted_surface_set):
+            active_fragments.append(fragment_name)
+    return unique_preserve_order(active_fragments)
+
+
 def build_validation_commands(
     env: EnvironmentResolution, context: ResolvedContext
 ) -> list[str]:
-    _, _, e2e_map, _, _ = load_manifests()
     commands = [*context.fast_tests, *context.feature_tests]
     if context.requires_local_smoke and env.local_env:
         commands.extend(
@@ -431,13 +460,6 @@ def build_validation_commands(
                 "make agent-smoke-local",
             ]
         )
-    for profile in context.local_e2e_profiles:
-        commands.append(f"make e2e-test E2E_PROFILE={profile} E2E_VERBOSE=true")
-    for suite_name in context.workflow_integration_suites:
-        suite = e2e_map.get("workflow_suite_rules", {}).get(suite_name, {})
-        local_command = suite.get("local_command")
-        if local_command:
-            commands.append(local_command)
     return unique_preserve_order(commands)
 
 

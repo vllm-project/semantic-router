@@ -25,6 +25,8 @@ CONTEXT_PACK_SECTIONS = (
     "resume_refs",
 )
 
+RESUME_REF_EXECUTION_PLAN_POLICIES = {"always", "long_horizon"}
+
 
 class ContextPackBuilder:
     """Deduplicate context references while preserving a task-first section order."""
@@ -121,21 +123,26 @@ def build_context_pack(
         f"context-map:env:{env.manifest_env}",
     )
     add_matching_local_rules(builder, changed_files, repo_manifest)
-    add_context_map_refs(
-        builder,
-        "resume_refs",
-        context_map.get("defaults", {}).get("resume_refs", []),
-        "context-map:defaults.resume_refs",
-    )
-    add_context_map_refs(
-        builder,
-        "resume_refs",
-        context_map.get("skills", {})
-        .get(skill.primary_skill, {})
-        .get("resume_refs", []),
-        f"context-map:skill:{skill.primary_skill}.resume_refs",
-    )
+    if should_include_resume_refs(context):
+        add_context_map_refs(
+            builder,
+            "resume_refs",
+            context_map.get("defaults", {}).get("resume_refs", []),
+            "context-map:defaults.resume_refs",
+        )
+        add_context_map_refs(
+            builder,
+            "resume_refs",
+            context_map.get("skills", {})
+            .get(skill.primary_skill, {})
+            .get("resume_refs", []),
+            f"context-map:skill:{skill.primary_skill}.resume_refs",
+        )
     return builder.build()
+
+
+def should_include_resume_refs(context) -> bool:
+    return context.execution_plan_policy in RESUME_REF_EXECUTION_PLAN_POLICIES
 
 
 def add_matching_local_rules(

@@ -76,6 +76,10 @@ func (c *Classifier) buildSignalDispatchers(
 			config.SignalTypePII, "PII",
 			func() { c.evaluatePIISignal(results, mu, textForSignal(config.SignalTypePII), nonUserMessages) },
 		},
+		{
+			config.SignalTypeKB, "KB",
+			func() { c.evaluateKBSignals(results, mu, textForSignal(config.SignalTypeKB)) },
+		},
 	}
 }
 

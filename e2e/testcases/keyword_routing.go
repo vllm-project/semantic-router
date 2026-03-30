@@ -1,11 +1,9 @@
 package testcases
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"reflect"
@@ -20,7 +18,7 @@ import (
 func init() {
 	pkgtestcases.Register("keyword-routing", pkgtestcases.TestCase{
 		Description: "Test keyword routing accuracy and verify matched keywords",
-		Tags:        []string{"ai-gateway", "routing", "keyword"},
+		Tags:        []string{"kubernetes", "routing", "keyword"},
 		Fn:          testKeywordRouting,
 	})
 }
@@ -141,79 +139,30 @@ func testSingleKeywordRouting(ctx context.Context, testCase KeywordRoutingCase, 
 		ExpectedKeywords: testCase.MatchedKeywords,
 	}
 
-	// Create chat completion request
-	requestBody := map[string]interface{}{
-		"model": "MoM",
-		"messages": []map[string]string{
-			{"role": "user", "content": testCase.Query},
-		},
-	}
-
-	jsonData, err := json.Marshal(requestBody)
+	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Query, 30*time.Second)
 	if err != nil {
-		result.Error = fmt.Sprintf("failed to marshal request: %v", err)
+		result.Error = err.Error()
 		return result
 	}
 
-	// Send request
-	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to create request: %v", err)
-		return result
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to send request: %v", err)
-		return result
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-
-		// Log detailed error information including headers
-		var errorMsg strings.Builder
-		errorMsg.WriteString(fmt.Sprintf("Unexpected status code: %d\n", resp.StatusCode))
-		errorMsg.WriteString(fmt.Sprintf("Response body: %s\n", string(bodyBytes)))
-		errorMsg.WriteString("Response headers:\n")
-		errorMsg.WriteString(formatResponseHeaders(resp.Header))
-
-		result.Error = errorMsg.String()
-
-		// Print detailed error to console for debugging
-		if verbose {
-			fmt.Printf("[Test] ✗ HTTP %d Error for test case: %s\n", resp.StatusCode, testCase.Name)
-			fmt.Printf("  Query: %s\n", testCase.Query)
-			fmt.Printf("  Expected category: %s\n", testCase.ExpectedCategory)
-			fmt.Printf("  Response Headers:\n%s", formatResponseHeaders(resp.Header))
-			fmt.Printf("  Response Body: %s\n", string(bodyBytes))
-		}
-
+	if response.StatusCode != http.StatusOK {
+		result.Error = formatUnexpectedChatCompletionStatus(response)
+		logUnexpectedChatCompletionStatus(verbose, response, "test case: "+testCase.Name,
+			"Query: "+testCase.Query,
+			"Expected category: "+testCase.ExpectedCategory)
 		return result
 	}
 
-	// Extract routing headers
-	// For keyword routing, use x-vsr-selected-decision since x-vsr-selected-category
-	// is only set for domain-based routing. The decision name format is "{category}_decision"
-	decision := resp.Header.Get("x-vsr-selected-decision")
+	decision := response.Headers.Get("x-vsr-selected-decision")
 	if decision != "" {
-		// Extract category from decision name (e.g., "urgent_request_decision" -> "urgent_request")
 		result.ActualCategory = strings.TrimSuffix(decision, "_decision")
 	} else {
-		// Fallback to x-vsr-selected-category for domain-based routing
-		result.ActualCategory = resp.Header.Get("x-vsr-selected-category")
+		result.ActualCategory = response.Headers.Get("x-vsr-selected-category")
 	}
 
-	// Parse matched keywords from header (assuming comma-separated)
-	keywordsHeader := resp.Header.Get("x-vsr-matched-keywords")
+	keywordsHeader := response.Headers.Get("x-vsr-matched-keywords")
 	if keywordsHeader != "" {
 		result.ActualKeywords = strings.Split(keywordsHeader, ",")
-		// Trim whitespace from each keyword
 		for i, kw := range result.ActualKeywords {
 			result.ActualKeywords[i] = strings.TrimSpace(kw)
 		}
@@ -221,32 +170,24 @@ func testSingleKeywordRouting(ctx context.Context, testCase KeywordRoutingCase, 
 		result.ActualKeywords = []string{}
 	}
 
-	// Parse confidence from header
 	result.ExpectedConfidence = testCase.ExpectedConfidence
-	confidenceHeader := resp.Header.Get("x-vsr-selected-confidence")
+	confidenceHeader := response.Headers.Get("x-vsr-selected-confidence")
 	if confidenceHeader != "" {
 		if parsed, err := strconv.ParseFloat(confidenceHeader, 64); err == nil {
 			result.ActualConfidence = parsed
 		}
 	}
 
-	// Check if category is correct
-	result.Correct = (result.ActualCategory == testCase.ExpectedCategory)
-
-	// Check if matched keywords are correct
-	// For empty expected keywords, also expect empty actual keywords
+	result.Correct = result.ActualCategory == testCase.ExpectedCategory
 	if len(testCase.MatchedKeywords) == 0 && len(result.ActualKeywords) == 0 {
 		result.KeywordsMatch = true
 	} else {
-		// Compare keyword lists (order-independent)
 		result.KeywordsMatch = keywordListsMatch(testCase.MatchedKeywords, result.ActualKeywords)
 	}
 
-	// Check confidence (allow 0.1 tolerance for floating point comparison)
 	if testCase.ExpectedConfidence == 0.0 {
 		result.ConfidenceMatch = result.ActualConfidence == 0.0
 	} else {
-		// For positive confidence, we expect at least 0.5 (minimum match confidence)
 		result.ConfidenceMatch = result.ActualConfidence >= 0.5
 	}
 

@@ -57,6 +57,9 @@ def _build_backend(target: str | None, **k8s_kwargs):
 def _execute_serve(
     config: str,
     image: str | None,
+    router_image: str | None,
+    envoy_image: str | None,
+    dashboard_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
@@ -99,8 +102,13 @@ def _execute_serve(
     )
     backend.deploy(
         config_file=str(effective_config_path.absolute()),
+        source_config_file=str(config_path.absolute()),
+        runtime_config_file=str(effective_config_path.absolute()),
         env_vars=env_vars,
         image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        dashboard_image=dashboard_image,
         pull_policy=image_pull_policy,
         enable_observability=not minimal and not setup_mode,
     )
@@ -116,6 +124,21 @@ def _execute_serve(
     "--image",
     default=None,
     help=f"Docker image to use (default: {VLLM_SR_DOCKER_IMAGE_DEFAULT})",
+)
+@click.option(
+    "--router-image",
+    default=None,
+    help="Docker image for the router container (Docker target only; defaults to --image or VLLM_SR_IMAGE)",
+)
+@click.option(
+    "--envoy-image",
+    default=None,
+    help="Docker image for the Envoy container (Docker target only; defaults to --image or VLLM_SR_IMAGE)",
+)
+@click.option(
+    "--dashboard-image",
+    default=None,
+    help="Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE)",
 )
 @click.option(
     "--image-pull-policy",
@@ -175,6 +198,9 @@ def _execute_serve(
 def serve(
     config: str,
     image: str | None,
+    router_image: str | None,
+    envoy_image: str | None,
+    dashboard_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
@@ -194,7 +220,7 @@ def serve(
     DEPLOYMENT TARGETS:
 
     \b
-    docker  - Local Docker / Podman deployment (default)
+    docker  - Local Docker deployment (default)
     k8s     - Kubernetes deployment via Helm
 
     MODEL SELECTION ALGORITHMS:
@@ -239,10 +265,14 @@ def serve(
 
         # Platform branding (for AMD deployments)
         vllm-sr serve --platform amd
+
     """
     _execute_serve(
         config,
         image,
+        router_image,
+        envoy_image,
+        dashboard_image,
         image_pull_policy,
         readonly,
         minimal,

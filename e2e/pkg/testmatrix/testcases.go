@@ -5,7 +5,7 @@ var RouterSmoke = []string{
 	"chat-completions-request",
 }
 
-// BaselineRouterContract is the canonical full router contract owned by ai-gateway.
+// BaselineRouterContract is the canonical full router contract owned by the kubernetes baseline profile.
 var BaselineRouterContract = []string{
 	"chat-completions-request",
 	"apiserver-runtime-config-endpoints",

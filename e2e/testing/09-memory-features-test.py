@@ -60,10 +60,14 @@ def run_tests():
     print("=" * 60)
 
     router_endpoint = os.environ.get("ROUTER_ENDPOINT", "http://localhost:8888")
+    router_health_endpoint = os.environ.get(
+        "ROUTER_HEALTH_ENDPOINT", f"{router_endpoint}/health"
+    )
     print(f"Router endpoint: {router_endpoint}")
+    print(f"Router health endpoint: {router_health_endpoint}")
 
     try:
-        response = requests.get(f"{router_endpoint}/health", timeout=10)
+        response = requests.get(router_health_endpoint, timeout=10)
         if response.status_code == HTTP_OK:
             print("✅ Router is healthy")
         else:

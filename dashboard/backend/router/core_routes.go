@@ -47,6 +47,8 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config) {
 	mux.HandleFunc("/api/router/config/global/raw/update", handlers.UpdateGlobalConfigYAMLHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/defaults", handlers.RouterDefaultsHandler(cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/defaults/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir, cfg.ReadonlyMode))
+	mux.HandleFunc("/api/router/config/kbs", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode))
+	mux.HandleFunc("/api/router/config/kbs/", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode))
 	log.Printf("Global config API endpoints registered: /api/router/config/global, /api/router/config/global/update, /api/router/config/global/raw, /api/router/config/global/raw/update (legacy aliases: /api/router/config/defaults, /api/router/config/defaults/update)")
 }
 
@@ -159,11 +161,80 @@ func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
 }
 
 func resolveEvaluationProjectRoot(cfg *config.Config) string {
-	projectRoot := filepath.Dir(cfg.ConfigDir)
-	if _, err := os.Stat(filepath.Join(cfg.ConfigDir, "bench")); err == nil {
-		return cfg.ConfigDir
+	for _, candidate := range evaluationProjectRootCandidates(cfg) {
+		if root := findEvaluationProjectRoot(candidate); root != "" {
+			return root
+		}
 	}
+
+	projectRoot := filepath.Dir(cfg.ConfigDir)
+	if projectRoot != "" && projectRoot != "." {
+		return projectRoot
+	}
+
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+
 	return projectRoot
+}
+
+func evaluationProjectRootCandidates(cfg *config.Config) []string {
+	candidates := []string{
+		cfg.ConfigDir,
+		filepath.Dir(cfg.ConfigDir),
+		cfg.AbsConfigPath,
+	}
+
+	if wd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, wd)
+	}
+
+	return candidates
+}
+
+func findEvaluationProjectRoot(start string) string {
+	if start == "" {
+		return ""
+	}
+
+	info, err := os.Stat(start)
+	if err != nil {
+		return ""
+	}
+
+	dir := filepath.Clean(start)
+	if !info.IsDir() {
+		dir = filepath.Dir(dir)
+	}
+
+	for {
+		if isEvaluationProjectRoot(dir) {
+			return dir
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+func isEvaluationProjectRoot(dir string) bool {
+	requiredPaths := []string{
+		"AGENTS.md",
+		filepath.Join("dashboard", "backend"),
+		filepath.Join("src", "training", "model_eval", "mmlu_pro_vllm_eval.py"),
+	}
+
+	for _, relPath := range requiredPaths {
+		if _, err := os.Stat(filepath.Join(dir, relPath)); err != nil {
+			return false
+		}
+	}
+
+	return true
 }
 
 func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config) {

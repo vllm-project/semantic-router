@@ -30,7 +30,7 @@ var mockVLLMLocalImages = []framework.LocalImageBuild{
 }
 
 func init() {
-	register("ai-gateway", func() framework.Profile { return aigateway.NewProfile() }, framework.ProfileCapabilities{})
+	register("kubernetes", func() framework.Profile { return aigateway.NewProfile() }, framework.ProfileCapabilities{})
 	register("aibrix", func() framework.Profile { return aibrix.NewProfile() }, framework.ProfileCapabilities{})
 	register("authz-rbac", func() framework.Profile { return authzrbac.NewProfile() }, framework.ProfileCapabilities{})
 	register("dashboard", func() framework.Profile { return dashboard.NewProfile() }, framework.ProfileCapabilities{})

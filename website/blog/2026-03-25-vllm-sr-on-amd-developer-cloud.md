@@ -11,7 +11,7 @@ tags: [amd, rocm, deployment, hardware, vllm, semantic-router]
 
 </div>
 
-Running vLLM Semantic Router on AMD Developer Cloud is not just about bringing up one more inference endpoint. It is about turning it into a routed multi-tier system that can classify requests, choose a semantic lane, and make replay and Insights immediately useful.
+Running [vLLM Semantic Router](https://vllm-semantic-router.com) on AMD Developer Cloud is not just about bringing up one more inference endpoint. It is about turning it into a routed multi-tier system that can classify requests, choose a semantic lane, and make replay and Insights immediately useful.
 
 This post walks through the practical path: start the ROCm backend on an AMD Developer Cloud instance, install vLLM-SR, import the reference profile, and validate the deployment end to end.
 
@@ -73,17 +73,17 @@ This architecture opens up a particularly interesting opportunity for AMD, becau
 
 The most immediate opportunity is intelligent routing. A single ROCm backend on AMD Developer Cloud can serve as the physical execution layer for multiple logical lanes. That means teams can prototype a Mixture-of-Models experience, cost-aware routing, replay-driven debugging, and tiered product behavior without first standing up a large multi-backend fleet.
 
-In the AMD reference profile, the cheapest, medium, complex, reasoning, and premium lanes all resolve onto one self-hosted Qwen backend. The router still gives you differentiated behavior because the policy lives in signals, projections, and decisions, not only in the number of containers you run.
+In the AMD reference profile, the cheapest, medium, complex, reasoning, and premium lanes all resolve onto different models. The router still gives you differentiated behavior because the policy lives in signals, projections, and decisions, not only in the number of containers you run.
 
 ### 2. Privacy Routing and Local-First Governance
 
-The second opportunity is privacy routing. This repository already includes a maintained privacy recipe that keeps PII, private code, internal documents, and suspicious prompts on a local lane while only escalating clearly non-sensitive reasoning work when policy allows it. That pattern is especially meaningful on AMD because it supports a local-first deployment story: keep sensitive traffic on infrastructure you control, audit every decision, and make cloud escalation a governed exception instead of the default.
+The second opportunity is privacy routing, that keeps PII, private code, internal documents, and suspicious prompts on a local lane while only escalating clearly non-sensitive reasoning work when policy allows it. That pattern is especially meaningful on AMD because it supports a local-first deployment story: keep sensitive traffic on infrastructure you control, audit every decision, and make cloud escalation a governed exception instead of the default.
 
 For enterprises, that means AMD-backed deployments can become the trusted default lane for internal copilots, regulated workloads, or hybrid private AI systems. For developers, it means privacy is not just a hosting choice; it becomes a routing policy.
 
 ### 3. Personal AI and Local Personal Agents
 
-The third opportunity is personal AI. Once routing, privacy, and reasoning are expressed as policy, an AMD-hosted stack can support assistants that feel more personal and more controlled. A personal AI system can keep ordinary tasks, memory-aware follow-ups, and private context on a local lane, while only escalating special cases when explicitly permitted.
+The third opportunity is personal AI like deploying a personal model on AMD AI MAX+ and connecting to external Models as needed. Once routing, privacy, and reasoning are expressed as policy, an AMD-hosted stack can support assistants that feel more personal and more controlled. A personal AI system can keep ordinary tasks, memory-aware follow-ups, and private context on a local lane, while only escalating special cases when explicitly permitted.
 
 That makes AMD interesting not only for enterprise infrastructure, but also for self-hosted assistants, home-lab AI, and local-first personal workflows. The important point is that Semantic Router lets the system distinguish between “keep this local,” “this is cheap and routine,” and “this needs deeper reasoning,” instead of treating all personal AI traffic as one undifferentiated workload.
 

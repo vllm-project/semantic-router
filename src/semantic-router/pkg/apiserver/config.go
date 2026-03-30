@@ -13,9 +13,9 @@ type ClassificationAPIServer struct {
 	classificationSvc     classificationService
 	config                *config.RouterConfig
 	runtimeConfig         *liveRuntimeConfig
-	configPath            string // path to the router config file (for deploy/rollback)
+	configPath            string // path to the router config file (for read/update/rollback)
 	memoryStore           memory.Store
-	enableSystemPromptAPI bool
+	knowledgeBaseMapCache *knowledgeBaseMapCache
 }
 
 type (

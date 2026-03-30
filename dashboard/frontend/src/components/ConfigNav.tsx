@@ -20,43 +20,43 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
   const sections = [
     {
       id: 'global-config' as ConfigSection,
-      icon: '⚙️',
+      icon: 'GC',
       title: 'Global Config',
       description: 'Global runtime overrides, services, stores & model catalog'
     },
     {
       id: 'models' as ConfigSection,
-      icon: '🤖',
+      icon: 'ML',
       title: 'Models',
       description: 'Provider models and endpoints'
     },
     {
       id: 'decisions' as ConfigSection,
-      icon: '🔀',
+      icon: 'DC',
       title: 'Decisions',
       description: 'Routing rules with priorities & plugins'
     },
     {
       id: 'signals' as ConfigSection,
-      icon: '📡',
+      icon: 'SG',
       title: 'Signals',
       description: 'Keywords, embeddings, domains & preferences'
     },
     {
       id: 'projections' as ConfigSection,
-      icon: '🧭',
+      icon: 'PJ',
       title: 'Projections',
       description: 'Partitions, scores & derived routing bands'
     },
     {
       id: 'mcp' as ConfigSection,
-      icon: '🔌',
+      icon: 'MP',
       title: 'MCP Servers & Tools',
       description: 'MCP servers and all available tools'
     },
     {
       id: 'topology' as ConfigSection,
-      icon: '🗺️',
+      icon: 'TP',
       title: 'Topology',
       description: 'Visualize signal-driven routing flow'
     }

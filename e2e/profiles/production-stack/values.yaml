@@ -285,6 +285,8 @@ config:
             description: General-purpose adapter
       - name: general-expert
   global:
+    model_catalog:
+      kbs: []
     router:
       clear_route_cache: true
       strategy: priority
@@ -333,9 +335,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert

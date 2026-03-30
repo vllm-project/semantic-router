@@ -1108,10 +1108,10 @@ spec:
           embedding_model: mmbert
           # HNSW in-memory configuration
           hnsw:
-        use_hnsw: true
-        hnsw_m: 32
-        hnsw_ef_construction: 128
-        max_memory_entries: 5000
+            use_hnsw: true
+            hnsw_m: 32
+            hnsw_ef_construction: 128
+            max_memory_entries: 5000
 
       # Milvus persistent storage (same config as milvus backend)
       milvus:
@@ -1832,5 +1832,5 @@ kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
 
 - [Configure semantic router features](../configuration)
 - [Set up monitoring and observability](../../tutorials/global/api-and-observability)
-- [Explore other deployment options](../installation.md)
+- [Explore other deployment options](/docs/installation)
 - [Join the community](../../community/overview)

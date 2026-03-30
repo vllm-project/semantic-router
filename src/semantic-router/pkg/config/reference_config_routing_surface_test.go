@@ -16,6 +16,7 @@ var referenceSignalKeyByType = map[string]string{
 	SignalTypePII:          "pii",
 	SignalTypePreference:   "preferences",
 	SignalTypeStructure:    "structure",
+	SignalTypeKB:           "kb",
 	SignalTypeUserFeedback: "user_feedbacks",
 }
 
@@ -83,6 +84,7 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertPluginConfigCoverage(t, pluginsByType["hallucination"], reflect.TypeOf(HallucinationPluginConfig{}), "hallucination")
 	assertPluginConfigCoverage(t, pluginsByType["response_jailbreak"], reflect.TypeOf(ResponseJailbreakPluginConfig{}), "response_jailbreak")
 	assertPluginConfigCoverage(t, pluginsByType["router_replay"], reflect.TypeOf(RouterReplayPluginConfig{}), "router_replay")
+	assertPluginConfigCoverage(t, pluginsByType["request_params"], reflect.TypeOf(RequestParamsPluginConfig{}), "request_params")
 	requirePluginConfigKeys(t, pluginsByType["jailbreak"], "jailbreak", "enabled", "threshold")
 	requirePluginConfigKeys(t, pluginsByType["pii"], "pii", "enabled", "threshold", "pii_types_allowed")
 }

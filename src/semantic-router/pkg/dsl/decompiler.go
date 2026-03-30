@@ -10,12 +10,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// Decompile converts runtime config into the routing-only DSL contract.
+// Decompile converts runtime config into the DSL contract.
 func Decompile(cfg *config.RouterConfig) (string, error) {
 	return DecompileRouting(cfg)
 }
 
-// DecompileToAST converts runtime config into a routing-only DSL AST Program.
+// DecompileToAST converts runtime config into a DSL AST Program.
 func DecompileToAST(cfg *config.RouterConfig) *Program {
 	return DecompileRoutingToAST(cfg)
 }
@@ -235,6 +235,18 @@ func (d *decompiler) decompileSignals() {
 		}
 		if pii.Description != "" {
 			d.write("  description: %q\n", pii.Description)
+		}
+		d.write("}\n\n")
+	}
+
+	for _, kb := range d.cfg.KBRules {
+		d.write("SIGNAL kb %s {\n", quoteName(kb.Name))
+		if kb.KB != "" {
+			d.write("  kb: %q\n", kb.KB)
+		}
+		d.write("  target: { kind: %q, value: %q }\n", kb.Target.Kind, kb.Target.Value)
+		if kb.Match != "" {
+			d.write("  match: %q\n", kb.Match)
 		}
 		d.write("}\n\n")
 	}
@@ -542,6 +554,43 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		}
 		if cfg.Message != "" {
 			fmt.Fprintf(&sb, "    message: %q\n", cfg.Message)
+		}
+	case "request_params":
+		cfg, ok := decodePluginConfig[config.RequestParamsPluginConfig](p)
+		if !ok {
+			break
+		}
+		if len(cfg.BlockedParams) > 0 {
+			fmt.Fprintf(&sb, "    blocked_params: %s\n", formatStringArray(cfg.BlockedParams))
+		}
+		if cfg.MaxTokensLimit != nil {
+			fmt.Fprintf(&sb, "    max_tokens_limit: %d\n", *cfg.MaxTokensLimit)
+		}
+		if cfg.MaxN != nil {
+			fmt.Fprintf(&sb, "    max_n: %d\n", *cfg.MaxN)
+		}
+		if cfg.StripUnknown {
+			fmt.Fprintf(&sb, "    strip_unknown: true\n")
+		}
+	case "tools":
+		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
+		if !ok {
+			break
+		}
+		if cfg.Enabled {
+			fmt.Fprintf(&sb, "    enabled: true\n")
+		}
+		if cfg.Mode != "" {
+			fmt.Fprintf(&sb, "    mode: %q\n", cfg.Mode)
+		}
+		if cfg.SemanticSelection != nil {
+			fmt.Fprintf(&sb, "    semantic_selection: %v\n", *cfg.SemanticSelection)
+		}
+		if len(cfg.AllowTools) > 0 {
+			fmt.Fprintf(&sb, "    allow_tools: %s\n", formatStringArray(cfg.AllowTools))
+		}
+		if len(cfg.BlockTools) > 0 {
+			fmt.Fprintf(&sb, "    block_tools: %s\n", formatStringArray(cfg.BlockTools))
 		}
 	case "rag":
 		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
@@ -1120,6 +1169,21 @@ func (d *decompiler) piiToSignal(pii *config.PIIRule) *SignalDecl {
 	return &SignalDecl{SignalType: "pii", Name: pii.Name, Fields: fields}
 }
 
+func (d *decompiler) kbSignalToDecl(rule *config.KBSignalRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.KB != "" {
+		fields["kb"] = StringValue{V: rule.KB}
+	}
+	fields["target"] = ObjectValue{Fields: map[string]Value{
+		"kind":  StringValue{V: rule.Target.Kind},
+		"value": StringValue{V: rule.Target.Value},
+	}}
+	if rule.Match != "" {
+		fields["match"] = StringValue{V: rule.Match}
+	}
+	return &SignalDecl{SignalType: "kb", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	route := &RouteDecl{
 		Name:        dec.Name,
@@ -1351,8 +1415,16 @@ func formatProjectionScoreInputs(inputs []config.ProjectionScoreInput) string {
 	for _, input := range inputs {
 		fields := []string{
 			fmt.Sprintf("type: %q", input.Type),
-			fmt.Sprintf("name: %q", input.Name),
 			fmt.Sprintf("weight: %g", input.Weight),
+		}
+		if input.Name != "" {
+			fields = append(fields, fmt.Sprintf("name: %q", input.Name))
+		}
+		if input.KB != "" {
+			fields = append(fields, fmt.Sprintf("kb: %q", input.KB))
+		}
+		if input.Metric != "" {
+			fields = append(fields, fmt.Sprintf("metric: %q", input.Metric))
 		}
 		if input.ValueSource != "" {
 			fields = append(fields, fmt.Sprintf("value_source: %q", input.ValueSource))
@@ -1574,6 +1646,47 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		}
 		if cfg.Message != "" {
 			fields["message"] = StringValue{V: cfg.Message}
+		}
+	case "request_params":
+		cfg, ok := decodePluginConfig[config.RequestParamsPluginConfig](p)
+		if !ok {
+			return fields
+		}
+		if len(cfg.BlockedParams) > 0 {
+			var items []Value
+			for _, s := range cfg.BlockedParams {
+				items = append(items, StringValue{V: s})
+			}
+			fields["blocked_params"] = ArrayValue{Items: items}
+		}
+		if cfg.MaxTokensLimit != nil {
+			fields["max_tokens_limit"] = IntValue{V: *cfg.MaxTokensLimit}
+		}
+		if cfg.MaxN != nil {
+			fields["max_n"] = IntValue{V: *cfg.MaxN}
+		}
+		if cfg.StripUnknown {
+			fields["strip_unknown"] = BoolValue{V: true}
+		}
+	case "tools":
+		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
+		if !ok {
+			return fields
+		}
+		if cfg.Enabled {
+			fields["enabled"] = BoolValue{V: true}
+		}
+		if cfg.Mode != "" {
+			fields["mode"] = StringValue{V: cfg.Mode}
+		}
+		if cfg.SemanticSelection != nil {
+			fields["semantic_selection"] = BoolValue{V: *cfg.SemanticSelection}
+		}
+		if len(cfg.AllowTools) > 0 {
+			fields["allow_tools"] = stringsToArray(cfg.AllowTools)
+		}
+		if len(cfg.BlockTools) > 0 {
+			fields["block_tools"] = stringsToArray(cfg.BlockTools)
 		}
 	case "rag":
 		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)

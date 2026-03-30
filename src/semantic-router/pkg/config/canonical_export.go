@@ -69,6 +69,7 @@ func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
 		RoleBindings:  append([]RoleBinding(nil), cfg.RoleBindings...),
 		Jailbreak:     append([]JailbreakRule(nil), cfg.JailbreakRules...),
 		PII:           append([]PIIRule(nil), cfg.PIIRules...),
+		KB:            append([]KBSignalRule(nil), cfg.KBRules...),
 	}
 }
 
@@ -173,6 +174,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 				FeedbackDetector:       cfg.FeedbackDetector.ModelID,
 			},
 			External: append([]ExternalModelConfig(nil), cfg.ExternalModels...),
+			KBs:      append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
 			Modules: CanonicalModelModules{
 				PromptCompression: cfg.PromptCompression,
 				PromptGuard: CanonicalPromptGuardModule{

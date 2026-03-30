@@ -40,10 +40,12 @@ var pluginTutorialBuckets = map[string]string{
 	"memory":             "retrieval-and-memory",
 	"pii":                "safety-and-generation",
 	"rag":                "retrieval-and-memory",
+	"request-params":     "response-and-mutation",
 	"response-jailbreak": "safety-and-generation",
 	"router-replay":      "retrieval-and-memory",
 	"semantic-cache":     "retrieval-and-memory",
 	"system-prompt":      "response-and-mutation",
+	"tools":              "response-and-mutation",
 }
 
 var retiredPluginTutorialDocs = []string{

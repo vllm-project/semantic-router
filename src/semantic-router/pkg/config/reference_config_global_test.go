@@ -49,7 +49,6 @@ func assertReferenceConfigAPIServiceCoverage(t testingT, api map[string]interfac
 
 func assertReferenceConfigResponseAPIServiceCoverage(t testingT, responseAPI map[string]interface{}) {
 	assertMapCoversStructFields(t, responseAPI, reflect.TypeOf(ResponseAPIConfig{}), "global.services.response_api")
-	assertMapCoversStructFields(t, mustMapAt(t, responseAPI, "milvus"), reflect.TypeOf(ResponseAPIMilvusConfig{}), "global.services.response_api.milvus")
 	assertMapCoversStructFields(t, mustMapAt(t, responseAPI, "redis"), reflect.TypeOf(ResponseAPIRedisConfig{}), "global.services.response_api.redis")
 }
 
@@ -151,6 +150,7 @@ func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[stri
 	assertReferenceConfigEmbeddingCatalogCoverage(t, mustMapAt(t, modelCatalog, "embeddings"))
 	assertMapCoversStructFields(t, mustMapAt(t, modelCatalog, "system"), reflect.TypeOf(CanonicalSystemModels{}), "global.model_catalog.system")
 	assertReferenceConfigExternalCatalogCoverage(t, mustSliceAt(t, modelCatalog, "external"))
+	assertReferenceConfigKnowledgeBaseCoverage(t, mustSliceAt(t, modelCatalog, "kbs"))
 	assertReferenceConfigModelModuleCoverage(t, mustMapAt(t, modelCatalog, "modules"))
 }
 
@@ -172,6 +172,16 @@ func assertReferenceConfigExternalCatalogCoverage(t testingT, external []interfa
 		collectChildMapsFromSlice(t, external, "llm_endpoint", "global.model_catalog.external"),
 		reflect.TypeOf(ClassifierVLLMEndpoint{}),
 		"global.model_catalog.external[].llm_endpoint",
+	)
+}
+
+func assertReferenceConfigKnowledgeBaseCoverage(t testingT, kbs []interface{}) {
+	assertSliceUnionCoversStructFields(t, kbs, reflect.TypeOf(KnowledgeBaseConfig{}), "global.model_catalog.kbs")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, kbs, "source", "global.model_catalog.kbs"),
+		reflect.TypeOf(KnowledgeBaseSource{}),
+		"global.model_catalog.kbs[].source",
 	)
 }
 

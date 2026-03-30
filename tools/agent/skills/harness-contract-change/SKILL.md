@@ -28,7 +28,7 @@ description: Modifies the repository's agent contract including AGENTS.md, docs 
 
 ## Workflow
 
-1. Read agent README, governance docs, and tech debt register for current contract state
+1. Read agent README, governance docs, and execution-plan guidance for current contract state
 2. Modify agent contract docs, manifests, validation scripts, or contributor wrappers
 3. Run `make agent-validate` to check alignment between docs and manifests
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to verify all surfaces pass
@@ -44,8 +44,6 @@ description: Modifies the repository's agent contract including AGENTS.md, docs 
 - [docs/agent/README.md](../../../../docs/agent/README.md)
 - [docs/agent/governance.md](../../../../docs/agent/governance.md)
 - [docs/agent/plans/README.md](../../../../docs/agent/plans/README.md)
-- [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
-- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 
 ## Standard Commands
 

@@ -8,6 +8,7 @@ import {
   filterLayoutMenuSections,
   hasActiveLayoutMenuSection,
   isLayoutMenuItemActive,
+  KNOWLEDGE_BASE_MENU_SECTIONS,
   MANAGER_MENU_SECTIONS,
   PRIMARY_NAV_LINKS,
   SECONDARY_NAV_LINKS,
@@ -53,6 +54,9 @@ const Layout: React.FC<LayoutProps> = ({
     ANALYSIS_OPERATIONS_MENU_SECTIONS,
     item => canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'
   )
+  const systemMenuSections = fleetSimEnabled
+    ? [...analysisOperationsMenuSections, ...FLEET_SIM_MENU_SECTIONS]
+    : analysisOperationsMenuSections
   const accountName = user?.name?.trim() || 'Account'
   const accountEmail = user?.email?.trim() || 'Session pending'
   const accountPermissions = user?.permissions ?? []
@@ -64,20 +68,18 @@ const Layout: React.FC<LayoutProps> = ({
     isConfigPage,
     configSection
   )
+  const isKnowledgeBaseActive = hasActiveLayoutMenuSection(
+    KNOWLEDGE_BASE_MENU_SECTIONS,
+    location.pathname,
+    isConfigPage,
+    configSection
+  ) || location.pathname.startsWith('/knowledge-bases/')
   const isAnalysisOpsActive = hasActiveLayoutMenuSection(
-    analysisOperationsMenuSections,
+    systemMenuSections,
     location.pathname,
     isConfigPage,
     configSection
   )
-  const isFleetSimActive = fleetSimEnabled
-    ? hasActiveLayoutMenuSection(
-        FLEET_SIM_MENU_SECTIONS,
-        location.pathname,
-        isConfigPage,
-        configSection
-      )
-    : false
 
   const closeMenus = () => {
     setOpenDropdown(null)
@@ -262,40 +264,34 @@ const Layout: React.FC<LayoutProps> = ({
                   ? renderDropdownMenu(managerMenuSections, styles.dropdownMenu, 'Manager')
                   : null}
               </div>
-              {fleetSimEnabled ? (
-                <div className={styles.navDropdown}>
-                  <button
-                    type="button"
-                    aria-expanded={openDropdown === 'fleetSim'}
-                    aria-haspopup="menu"
-                    className={`${styles.navLink} ${isFleetSimActive ? styles.navLinkActive : ''}`}
+              <div className={styles.navDropdown}>
+                <button
+                  type="button"
+                  aria-expanded={openDropdown === 'knowledgeBase'}
+                  aria-haspopup="menu"
+                  className={`${styles.navLink} ${isKnowledgeBaseActive ? styles.navLinkActive : ''}`}
                   onClick={(e) => {
                     e.stopPropagation()
-                    toggleDropdown('fleetSim')
+                    toggleDropdown('knowledgeBase')
                   }}
                 >
-                  Simulator
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      className={`${styles.dropdownArrow} ${openDropdown === 'fleetSim' ? styles.dropdownArrowOpen : ''}`}
-                    >
-                      <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  {openDropdown === 'fleetSim'
-                    ? renderDropdownMenu(
-                        FLEET_SIM_MENU_SECTIONS,
-                        styles.dropdownMenu,
-                        'Simulator'
-                      )
-                    : null}
-                </div>
-              ) : null}
+                  Knowledge
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    className={`${styles.dropdownArrow} ${openDropdown === 'knowledgeBase' ? styles.dropdownArrowOpen : ''}`}
+                  >
+                    <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {openDropdown === 'knowledgeBase'
+                  ? renderDropdownMenu(KNOWLEDGE_BASE_MENU_SECTIONS, styles.dropdownMenu, 'Knowledge')
+                  : null}
+              </div>
               <div className={styles.navDropdown}>
                 <button
                   type="button"
@@ -322,7 +318,7 @@ const Layout: React.FC<LayoutProps> = ({
                 </button>
                 {openDropdown === 'analysisOps'
                   ? renderDropdownMenu(
-                      analysisOperationsMenuSections,
+                      systemMenuSections,
                       styles.dropdownMenuRight,
                       'System'
                     )
@@ -419,8 +415,8 @@ const Layout: React.FC<LayoutProps> = ({
               </NavLink>
             ))}
             {renderMobileMenuSection('Manager', managerMenuSections)}
-            {fleetSimEnabled ? renderMobileMenuSection('Simulator', FLEET_SIM_MENU_SECTIONS) : null}
-            {renderMobileMenuSection('System', analysisOperationsMenuSections)}
+            {renderMobileMenuSection('Knowledge', KNOWLEDGE_BASE_MENU_SECTIONS)}
+            {renderMobileMenuSection('System', systemMenuSections)}
           </div>
         ) : null}
       </header>

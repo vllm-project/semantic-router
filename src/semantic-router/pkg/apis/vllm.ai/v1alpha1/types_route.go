@@ -295,9 +295,9 @@ type ModelRef struct {
 
 // DecisionPlugin defines a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type is the plugin type (semantic-cache, jailbreak, pii, system_prompt, header_mutation, hallucination, router_replay)
+	// Type is the plugin type (semantic-cache, jailbreak, pii, system_prompt, header_mutation, hallucination, router_replay, tools)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=semantic-cache;jailbreak;pii;system_prompt;header_mutation;hallucination;router_replay
+	// +kubebuilder:validation:Enum=semantic-cache;jailbreak;pii;system_prompt;header_mutation;hallucination;router_replay;tools
 	Type string `json:"type" yaml:"type"`
 
 	// Configuration is the plugin-specific configuration as a raw JSON object

@@ -107,9 +107,6 @@ type StoreConfig struct {
 	// Memory backend configuration
 	Memory MemoryStoreConfig `yaml:"memory,omitempty"`
 
-	// Milvus backend configuration
-	Milvus MilvusStoreConfig `yaml:"milvus,omitempty"`
-
 	// Redis backend configuration
 	Redis RedisStoreConfig `yaml:"redis,omitempty"`
 }
@@ -120,9 +117,6 @@ type StoreBackendType string
 const (
 	// MemoryStoreType is the in-memory store backend.
 	MemoryStoreType StoreBackendType = "memory"
-
-	// MilvusStoreType is the Milvus store backend.
-	MilvusStoreType StoreBackendType = "milvus"
 
 	// RedisStoreType is the Redis store backend.
 	RedisStoreType StoreBackendType = "redis"
@@ -135,24 +129,6 @@ type MemoryStoreConfig struct {
 
 	// MaxConversations is the maximum number of conversations to store.
 	MaxConversations int `yaml:"max_conversations"`
-}
-
-// MilvusStoreConfig contains configuration for the Milvus store.
-type MilvusStoreConfig struct {
-	// Address is the Milvus server address (e.g., "localhost:19530").
-	Address string `yaml:"address"`
-
-	// Database is the Milvus database name.
-	Database string `yaml:"database,omitempty"`
-
-	// ResponseCollection is the collection name for responses.
-	ResponseCollection string `yaml:"response_collection"`
-
-	// ConversationCollection is the collection name for conversations.
-	ConversationCollection string `yaml:"conversation_collection"`
-
-	// ConfigPath is the path to additional Milvus configuration.
-	ConfigPath string `yaml:"config_path,omitempty"`
 }
 
 // RedisStoreConfig contains configuration for the Redis store.

@@ -143,6 +143,10 @@ const (
 	// Example: "pii_strict,pii_moderate"
 	VSRMatchedPII = "x-vsr-matched-pii"
 
+	// VSRMatchedKB contains comma-separated list of matched knowledge-base signal names.
+	// Example: "privacy_policy,security_containment"
+	VSRMatchedKB = "x-vsr-matched-kb"
+
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"
 	VSRMatchedProjection = "x-vsr-matched-projection"
@@ -239,6 +243,10 @@ const (
 
 	// UserVertexAIKey carries the user's Vertex AI OAuth token, injected by the auth backend.
 	UserVertexAIKey = "x-user-vertex-ai-key"
+
+	// UserMiniMaxKey carries the user's MiniMax API key, injected by the auth backend.
+	// Used by the ext_proc when routing requests to MiniMax models.
+	UserMiniMaxKey = "x-user-minimax-key"
 
 	// AuthzUserID is the default header for the authenticated user's identity.
 	// Default for Authorino (K8s Secret metadata.name).
