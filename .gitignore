@@ -12,6 +12,7 @@ target/
 *.pyz
 __pycache__/
 .venv/
+.venv-agent/
 pii_env/
 
 # Python build artifacts
