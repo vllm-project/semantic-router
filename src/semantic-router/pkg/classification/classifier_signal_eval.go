@@ -241,6 +241,7 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 		userGroups := ParseUserGroups(headers[c.authzUserGroupsHeader])
 
 		authzResult, err := c.authzClassifier.Classify(userID, userGroups)
+		authzResult, err = applyAuthzFailOpenOnClassifyError(c.authzFailOpen, userID, authzResult, err)
 		elapsed := time.Since(start)
 		latencySeconds := elapsed.Seconds()
 

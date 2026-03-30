@@ -96,6 +96,9 @@ spec:
       backendRequest: 60s
 ---
 # EnvoyPatchPolicy to add ExtProc filter for semantic-router
+# Also strips client-supplied identity headers before JWT/auth processing
+# SECURITY: Identity headers (x-authz-user-id, x-authz-user-groups) must only come
+# from validated auth backends (JWT, Authorino, etc.), not from client requests.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyPatchPolicy
 metadata:
@@ -103,10 +106,29 @@ metadata:
   namespace: default
 spec:
   jsonPatches:
+  # Add header removal filter BEFORE ext_proc to strip client-supplied identity headers
+  # This prevents header spoofing attacks - identity headers should only come from validated JWT
   - name: default/semantic-router/http
     operation:
       op: add
       path: /default_filter_chain/filters/0/typed_config/http_filters/0
+      value:
+        name: envoy.filters.http.lua
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+          inlineCode: |
+            function envoy_on_request(request_handle)
+              -- Remove client-supplied identity headers to prevent spoofing
+              -- These headers should only be set by validated auth backends (JWT, Authorino, etc.)
+              request_handle:headers():remove("x-authz-user-id")
+              request_handle:headers():remove("x-authz-user-groups")
+            end
+    type: type.googleapis.com/envoy.config.listener.v3.Listener
+  # Add ExtProc filter for semantic-router
+  - name: default/semantic-router/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/1
       value:
         name: semantic-router-extproc
         typedConfig:
