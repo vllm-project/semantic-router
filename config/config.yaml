@@ -1534,16 +1534,6 @@ global:
         embedding_model: all-MiniLM-L6-v2
         request_timeout_seconds: 30
         search_type: hybrid
-      valkey:
-        host: valkey
-        port: 6379
-        database: 0
-        password: valkey-secret
-        connect_timeout: 5
-        collection_prefix: "vsr_vs_"
-        metric_type: COSINE
-        index_m: 16
-        index_ef_construction: 200
 
   integrations:
     tools:
