@@ -292,20 +292,18 @@ func TestDecisionWillPersonalize_RAGEnabled(t *testing.T) {
 	}
 
 	ctx := &RequestContext{VSRSelectedDecision: &decision}
-	assert.True(t, decisionWillPersonalize(ctx, &config.RouterConfig{}))
+	assert.True(t, decisionWillPersonalize(ctx))
 }
 
-func TestDecisionWillPersonalize_MemoryEnabled(t *testing.T) {
+func TestDecisionWillPersonalize_GlobalMemoryNotChecked(t *testing.T) {
 	decision := config.Decision{
 		Name:      "mem-dec",
 		ModelRefs: []config.ModelRef{{Model: "m"}},
 	}
 
-	cfg := &config.RouterConfig{}
-	cfg.Memory.Enabled = true
-
 	ctx := &RequestContext{VSRSelectedDecision: &decision}
-	assert.True(t, decisionWillPersonalize(ctx, cfg))
+	assert.False(t, decisionWillPersonalize(ctx),
+		"global memory is handled by shouldSkipSemanticCache, not decisionWillPersonalize")
 }
 
 func TestDecisionWillPersonalize_NoPersonalization(t *testing.T) {
@@ -315,12 +313,12 @@ func TestDecisionWillPersonalize_NoPersonalization(t *testing.T) {
 	}
 
 	ctx := &RequestContext{VSRSelectedDecision: &decision}
-	assert.False(t, decisionWillPersonalize(ctx, &config.RouterConfig{}))
+	assert.False(t, decisionWillPersonalize(ctx))
 }
 
 func TestDecisionWillPersonalize_NilDecision(t *testing.T) {
 	ctx := &RequestContext{VSRSelectedDecision: nil}
-	assert.False(t, decisionWillPersonalize(ctx, &config.RouterConfig{}))
+	assert.False(t, decisionWillPersonalize(ctx))
 }
 
 func TestDecisionWillPersonalize_PerDecisionMemoryDisabledOverridesGlobal(t *testing.T) {
@@ -334,12 +332,9 @@ func TestDecisionWillPersonalize_PerDecisionMemoryDisabledOverridesGlobal(t *tes
 		},
 	}
 
-	cfg := &config.RouterConfig{}
-	cfg.Memory.Enabled = true
-
 	ctx := &RequestContext{VSRSelectedDecision: &decision}
-	assert.False(t, decisionWillPersonalize(ctx, cfg),
-		"per-decision memory disabled must override global enabled")
+	assert.False(t, decisionWillPersonalize(ctx),
+		"per-decision memory disabled must return false")
 }
 
 // --- RAG plugin resolution tests ---

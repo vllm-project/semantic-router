@@ -7,7 +7,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -15,13 +14,14 @@ import (
 )
 
 // decisionWillPersonalize checks whether the matched decision is configured
-// with plugins (RAG, memory) that inject user-specific context. When true,
-// we skip the entire cache path — both reads and writes — because:
+// with per-decision plugins (RAG, memory) that inject user-specific context.
+// When true, we skip the entire cache path — both reads and writes — because:
 //   - reads would serve a generic cached answer instead of the personalized one
 //   - writes would cache a personalized answer that could leak to other users
 //
-// This avoids orphaned pending cache entries and unnecessary embedding work.
-func decisionWillPersonalize(ctx *RequestContext, cfg *config.RouterConfig) bool {
+// Global memory is NOT checked here; the more granular shouldSkipSemanticCache
+// handles global memory with user-ID awareness to preserve cache for anonymous traffic.
+func decisionWillPersonalize(ctx *RequestContext) bool {
 	d := ctx.VSRSelectedDecision
 	if d == nil {
 		return false
@@ -29,26 +29,14 @@ func decisionWillPersonalize(ctx *RequestContext, cfg *config.RouterConfig) bool
 	if ragCfg := d.GetRAGConfig(); ragCfg != nil && ragCfg.Enabled {
 		return true
 	}
-	// Per-decision memory plugin takes priority over global setting.
 	if memCfg := d.GetMemoryConfig(); memCfg != nil {
 		return memCfg.Enabled
-	}
-	if cfg != nil && cfg.Memory.Enabled {
-		return true
 	}
 	return false
 }
 
 // handleCaching handles cache lookup and storage with category-specific settings
 func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
-	// Skip entire cache path for decisions that will inject user-specific context.
-	// Both reads (would serve stale generic answers) and writes (would leak
-	// personalized data) are wrong when RAG or memory is enabled.
-	if decisionWillPersonalize(ctx, r.Config) {
-		logging.Debugf("[Cache] Skipping cache for decision '%s': RAG or memory enabled", categoryName)
-		return nil, false
-	}
-
 	if ctx.LooperRequest {
 		return r.handleLooperCacheSkip(ctx, categoryName)
 	}
@@ -61,6 +49,20 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
+
+	// Skip entire cache path for decisions that will inject user-specific context.
+	// Both reads (would serve stale generic answers) and writes (would leak
+	// personalized data) are wrong when RAG or memory is enabled.
+	if decisionWillPersonalize(ctx) {
+		logging.Debugf("[Cache] Skipping cache for decision '%s': RAG or memory enabled", categoryName)
+		return nil, false
+	}
+
+	if skip, reason := r.shouldSkipSemanticCache(ctx, ctx.RequestQuery); skip {
+		logging.Infof("[Cache] Skipping semantic cache lookup and write for personalized request: reason=%s decision=%s",
+			reason, categoryName)
+		return nil, false
+	}
 
 	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
 
@@ -85,6 +87,12 @@ func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName s
 	}
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
+
+	if skip, reason := r.shouldSkipSemanticCache(ctx, ctx.RequestQuery); skip {
+		logging.Infof("[Cache] Skipping semantic cache write for personalized looper request: reason=%s decision=%s",
+			reason, categoryName)
+		return nil, false
+	}
 
 	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
 	r.storePendingCacheRequest(ctx, categoryName, requestModel, requestQuery, cacheEnabled)
@@ -170,4 +178,70 @@ func (r *OpenAIRouter) performCacheLookup(
 	ctx.TraceContext = spanCtx
 
 	return nil, false
+}
+
+func (r *OpenAIRouter) shouldSkipSemanticCache(ctx *RequestContext, requestQuery string) (bool, string) {
+	if r == nil || r.Config == nil {
+		return false, ""
+	}
+
+	if decisionUsesRAG(ctx) {
+		return true, "rag"
+	}
+
+	if r.requestCanUsePersonalMemory(ctx, requestQuery) {
+		return true, "memory"
+	}
+
+	return false, ""
+}
+
+func decisionUsesRAG(ctx *RequestContext) bool {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return false
+	}
+
+	ragConfig := ctx.VSRSelectedDecision.GetRAGConfig()
+	return ragConfig != nil && ragConfig.Enabled
+}
+
+func (r *OpenAIRouter) requestCanUsePersonalMemory(ctx *RequestContext, requestQuery string) bool {
+	if ctx == nil {
+		return false
+	}
+	if !r.memoryEnabledForRequest(ctx) {
+		return false
+	}
+	if extractUserID(ctx) == "" {
+		return false
+	}
+	if requestQuery == "" {
+		return false
+	}
+	return ShouldSearchMemory(ctx, requestQuery)
+}
+
+func (r *OpenAIRouter) memoryEnabledForRequest(ctx *RequestContext) bool {
+	if ctx != nil && ctx.VSRSelectedDecision != nil {
+		memoryConfig := ctx.VSRSelectedDecision.GetMemoryConfig()
+		if memoryConfig != nil {
+			return memoryConfig.Enabled
+		}
+	}
+	return r.Config.Memory.Enabled
+}
+
+func (r *OpenAIRouter) shouldSkipSemanticCacheWrite(ctx *RequestContext) (bool, string) {
+	requestQuery := ""
+	if ctx != nil {
+		requestQuery = ctx.RequestQuery
+		if ctx.RAGRetrievedContext != "" {
+			return true, "rag_context"
+		}
+		if ctx.MemoryContext != "" {
+			return true, "memory_context"
+		}
+	}
+
+	return r.shouldSkipSemanticCache(ctx, requestQuery)
 }

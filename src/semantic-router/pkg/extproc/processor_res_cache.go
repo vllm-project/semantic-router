@@ -21,6 +21,11 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if ctx.RequestID == "" || responseBody == nil {
 		return
 	}
+	if skip, reason := r.shouldSkipSemanticCacheWrite(ctx); skip {
+		logging.Infof("Skipping cache update for personalized response: request_id=%s decision=%s reason=%s",
+			ctx.RequestID, ctx.VSRSelectedDecisionName, reason)
+		return
+	}
 	if !r.semanticCacheEnabledForScope(ctx.VSRSelectedDecisionName) {
 		return
 	}
@@ -145,6 +150,12 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 	reconstructedJSON []byte,
 ) error {
 	if !r.semanticCacheEnabledForScope(ctx.VSRSelectedDecisionName) {
+		return nil
+	}
+
+	if skip, reason := r.shouldSkipSemanticCacheWrite(ctx); skip {
+		logging.Infof("Skipping streaming cache update for personalized response: request_id=%s decision=%s reason=%s",
+			ctx.RequestID, ctx.VSRSelectedDecisionName, reason)
 		return nil
 	}
 
