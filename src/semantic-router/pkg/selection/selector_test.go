@@ -930,3 +930,30 @@ func TestAutoMixSelector_DependenciesWithVerifier(t *testing.T) {
 		t.Error("AutoMix with self-verification should declare verifier external service dependency")
 	}
 }
+
+func TestRegistry_AllSelectors_HaveTier(t *testing.T) {
+	factory := NewFactory(DefaultModelSelectionConfig())
+	registry := factory.CreateAll()
+
+	expectedTiers := map[SelectionMethod]AlgorithmTier{
+		MethodStatic:       TierSupported,
+		MethodElo:          TierSupported,
+		MethodRouterDC:     TierSupported,
+		MethodLatencyAware: TierSupported,
+		MethodHybrid:       TierSupported,
+		MethodAutoMix:      TierExperimental,
+		MethodRLDriven:     TierExperimental,
+		MethodGMTRouter:    TierExperimental,
+	}
+
+	for method, expectedTier := range expectedTiers {
+		selector, ok := registry.Get(method)
+		if !ok {
+			t.Errorf("Registry missing selector for method %q", method)
+			continue
+		}
+		if tier := selector.Tier(); tier != expectedTier {
+			t.Errorf("%s.Tier() = %q, want %q", method, tier, expectedTier)
+		}
+	}
+}
