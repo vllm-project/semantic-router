@@ -163,7 +163,6 @@ func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, questio
 }
 
 func sendChatRequest(ctx context.Context, question, localPort string, verbose bool) (*http.Response, error) {
-	// Create chat completion request
 	requestBody := map[string]interface{}{
 		"model": "MoM",
 		"messages": []map[string]string{
@@ -176,7 +175,6 @@ func sendChatRequest(ctx context.Context, question, localPort string, verbose bo
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Send request
 	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -190,7 +188,6 @@ func sendChatRequest(ctx context.Context, question, localPort string, verbose bo
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
-	// Check response status
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
