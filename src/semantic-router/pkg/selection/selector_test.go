@@ -855,3 +855,78 @@ func TestSupportedAlgorithms_Tier(t *testing.T) {
 		})
 	}
 }
+
+func TestExperimentalAlgorithms_Tier(t *testing.T) {
+	tests := []struct {
+		name     string
+		selector Selector
+	}{
+		{"automix", NewAutoMixSelector(DefaultAutoMixConfig())},
+		{"rl_driven", NewRLDrivenSelector(DefaultRLDrivenConfig())},
+		{"gmtrouter", NewGMTRouterSelector(DefaultGMTRouterConfig())},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tier := tt.selector.Tier(); tier != TierExperimental {
+				t.Errorf("%s.Tier() = %q, want %q", tt.name, tier, TierExperimental)
+			}
+
+			deps := tt.selector.ExternalDependencies()
+			if deps == nil {
+				t.Errorf("%s.ExternalDependencies() returned nil, want non-nil", tt.name)
+			}
+		})
+	}
+}
+
+func TestMLAdapterAlgorithms_Tier(t *testing.T) {
+	methods := []SelectionMethod{MethodKNN, MethodKMeans, MethodSVM, MethodMLP}
+
+	for _, method := range methods {
+		t.Run(string(method), func(t *testing.T) {
+			adapter := NewMLSelectorAdapter(nil, method)
+
+			if tier := adapter.Tier(); tier != TierExperimental {
+				t.Errorf("%s.Tier() = %q, want %q", method, tier, TierExperimental)
+			}
+
+			deps := adapter.ExternalDependencies()
+			if deps == nil {
+				t.Errorf("%s.ExternalDependencies() returned nil, want non-nil", method)
+			}
+
+			foundPretrained := false
+			for _, dep := range deps {
+				if dep.Type == DependencyPretrainedModel {
+					foundPretrained = true
+					break
+				}
+			}
+			if !foundPretrained {
+				t.Errorf("%s: expected at least one pretrained_model dependency", method)
+			}
+		})
+	}
+}
+
+func TestAutoMixSelector_DependenciesWithVerifier(t *testing.T) {
+	cfg := DefaultAutoMixConfig()
+	cfg.EnableSelfVerification = true
+	cfg.VerifierServerURL = "http://localhost:8090"
+	selector := NewAutoMixSelector(cfg)
+
+	deps := selector.ExternalDependencies()
+	foundVerifier := false
+	for _, dep := range deps {
+		if dep.Type == DependencyExternalService && strings.Contains(dep.Name, "Verifier") {
+			foundVerifier = true
+			if dep.HealthURL != "http://localhost:8090/health" {
+				t.Errorf("Verifier HealthURL = %q, want %q", dep.HealthURL, "http://localhost:8090/health")
+			}
+		}
+	}
+	if !foundVerifier {
+		t.Error("AutoMix with self-verification should declare verifier external service dependency")
+	}
+}

@@ -389,6 +389,25 @@ func (g *GMTRouterSelector) UpdateFeedback(ctx context.Context, feedback *Feedba
 	return nil
 }
 
+// Tier returns the production readiness tier
+func (g *GMTRouterSelector) Tier() AlgorithmTier {
+	return TierExperimental
+}
+
+// ExternalDependencies returns external dependencies for GMTRouter
+func (g *GMTRouterSelector) ExternalDependencies() []Dependency {
+	deps := []Dependency{}
+	if g.config.StoragePath != "" {
+		deps = append(deps, Dependency{
+			Name:        "Pre-trained graph model",
+			Type:        DependencyPretrainedModel,
+			Description: "Heterogeneous graph model weights (arXiv:2511.08590)",
+			Required:    false,
+		})
+	}
+	return deps
+}
+
 // addInteraction adds an interaction record to user state
 func (g *GMTRouterSelector) addInteraction(userID string, record InteractionRecord) {
 	g.userMu.Lock()
