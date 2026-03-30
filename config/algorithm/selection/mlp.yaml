@@ -1,0 +1,5 @@
+algorithm:
+  type: mlp
+  mlp:
+    device: cuda
+    pretrained_path: .cache/ml-models/mlp_model.json

@@ -2,31 +2,53 @@
 
 ## Overview
 
-`static` is the simplest selection algorithm: the route keeps its candidate list, and the selection policy stays fixed.
+`static` is the simplest selection algorithm: the route keeps its candidate list, and the selection policy stays fixed. The first candidate in `modelRefs` always wins.
 
 It aligns to `config/algorithm/selection/static.yaml`.
 
 ## Key Advantages
 
+- **Zero overhead**: No computation, no state, no external dependencies.
 - Deterministic and easy to reason about.
 - No learned selector state or runtime tuning.
 - Good default when the candidate order is already intentional.
 
-## What Problem Does It Solve?
+## Algorithm Principle
 
-Sometimes the route just needs a stable winner policy without extra scoring logic. `static` makes that explicit instead of leaving selection behavior implicit.
+Static selection is trivial — return the first candidate model from the `modelRefs` list:
+
+```
+SelectionResult {
+  SelectedModel: modelRefs[0].model,
+  Score: 1.0,
+  Confidence: 1.0,
+  Method: "static",
+  Reasoning: "Static selection: using first candidate"
+}
+```
+
+## Select Flow
+
+```mermaid
+flowchart TD
+    A[Request arrives] --> B[Decision matched]
+    B --> C[algorithm.type = static]
+    C --> D[Return modelRefs, 0,]
+    D --> E[SelectionResult with score=1.0]
+```
 
 ## When to Use
 
-- one candidate should always win after the route matches
-- model ordering is already curated outside the algorithm layer
-- you want the simplest possible route-local selection policy
+- One candidate should always win after the route matches.
+- Model ordering is already curated outside the algorithm layer.
+- You want the simplest possible route-local selection policy.
+- No learning or adaptation is needed.
 
 ## Configuration
-
-Use this fragment inside `routing.decisions[].algorithm`:
 
 ```yaml
 algorithm:
   type: static
 ```
+
+No additional parameters. The selected model is always the first entry in `modelRefs`.
