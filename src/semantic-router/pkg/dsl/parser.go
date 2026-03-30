@@ -184,7 +184,7 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 		}
 	}
 	if hasDirectRoutes && treeCount > 0 {
-		errs = append(errs, fmt.Errorf("DECISION_TREE declarations cannot be mixed with ROUTE declarations in the same DSL program"))
+		errs = append(errs, fmt.Errorf("DECISION_TREE and ROUTE declarations cannot coexist in the same program. Use only DECISION_TREE (for if/else conditional logic) or only ROUTE (for priority-based routing with WHEN clauses), not both"))
 	}
 	return prog, errs
 }
@@ -381,6 +381,8 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			route.Algorithm = rawToAlgo(item.Algorithm)
 		case item.Plugin != nil:
 			route.Plugins = append(route.Plugins, rawToPluginRef(item.Plugin))
+		case item.Description != nil:
+			route.Description = unquote(*item.Description)
 		}
 	}
 
@@ -398,7 +400,7 @@ func rawToModelDecl(r *rawModelDecl) *ModelDecl {
 func rawToPlugin(r *rawPluginDecl) *PluginDecl {
 	return &PluginDecl{
 		Name:       unquoteIdent(r.Name),
-		PluginType: r.PluginType,
+		PluginType: normalizePluginName(r.PluginType),
 		Fields:     entriesToMap(r.Fields),
 		Pos:        posFromLexer(r.Pos),
 	}
@@ -406,13 +408,19 @@ func rawToPlugin(r *rawPluginDecl) *PluginDecl {
 
 func rawToPluginRef(r *rawPluginRef) *PluginRef {
 	ref := &PluginRef{
-		Name: unquoteIdent(r.Name),
+		Name: normalizePluginName(unquoteIdent(r.Name)),
 		Pos:  posFromLexer(r.Pos),
 	}
 	if len(r.Fields) > 0 {
 		ref.Fields = entriesToMap(r.Fields)
 	}
 	return ref
+}
+
+// normalizePluginName converts hyphens to underscores so LLMs don't need to
+// remember whether it's "semantic-cache" or "semantic_cache".
+func normalizePluginName(name string) string {
+	return strings.ReplaceAll(name, "-", "_")
 }
 
 func rawToAlgo(r *rawAlgoSpec) *AlgoSpec {

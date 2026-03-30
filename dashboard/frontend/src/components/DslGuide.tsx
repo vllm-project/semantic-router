@@ -216,6 +216,9 @@ const SIGNAL_DESCRIPTIONS: Record<string, string> = {
   complexity: 'Estimate query difficulty via embedding similarity',
   modality: 'Detect multi-modal input (text, image, audio)',
   authz: 'Authorization-based routing (RBAC)',
+  jailbreak: 'Detect jailbreak attempts via classifier or contrastive methods',
+  pii: 'Detect personally identifiable information in queries',
+  kb: 'Knowledge base signal for taxonomy-driven classification',
 }
 
 const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
@@ -324,6 +327,8 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
               <thead><tr><th>Clause</th><th>Required</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>PRIORITY</code></td><td>Yes</td><td>Integer priority (higher = matched first)</td></tr>
+                <tr><td><code>TIER</code></td><td>No</td><td>Integer tier grouping for route classification</td></tr>
+                <tr><td><code>DESCRIPTION</code></td><td>No</td><td>Route description (can also be set in header)</td></tr>
                 <tr><td><code>WHEN</code></td><td>No</td><td>Boolean expression of signal references</td></tr>
                 <tr><td><code>MODEL</code></td><td>Yes</td><td>One or more model references with attributes</td></tr>
                 <tr><td><code>ALGORITHM</code></td><td>No</td><td>Model selection algorithm with config</td></tr>
@@ -425,12 +430,28 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
               <span>Define a route</span>
             </div>
             <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>DECISION_TREE &lt;name&gt; {'{ IF ... ELSE ... }'}</code>
+              <span>Define if/else conditional routing logic</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>PROJECTION &lt;score|mapping|partition&gt; &lt;name&gt; {'{ ... }'}</code>
+              <span>Declare a signal projection</span>
+            </div>
+            <div className={styles.cheatItem}>
               <code className={styles.cheatSyntax}>PLUGIN &lt;name&gt; &lt;type&gt; {'{ ... }'}</code>
               <span>Declare a plugin template</span>
             </div>
             <div className={styles.cheatItem}>
               <code className={styles.cheatSyntax}>PRIORITY &lt;number&gt;</code>
-              <span>Route priority (inside ROUTE)</span>
+              <span>Route priority (higher = matched first)</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>TIER &lt;number&gt;</code>
+              <span>Tier grouping (inside ROUTE)</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>DESCRIPTION &quot;text&quot;</code>
+              <span>Route description (inside ROUTE body)</span>
             </div>
             <div className={styles.cheatItem}>
               <code className={styles.cheatSyntax}>WHEN &lt;bool_expr&gt;</code>
