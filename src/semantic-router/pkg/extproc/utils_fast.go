@@ -12,11 +12,12 @@ import (
 // FastExtractResult holds fields extracted from the request body via gjson
 // without allocating the full OpenAI SDK struct.
 type FastExtractResult struct {
-	Model           string
-	Stream          bool
-	UserContent     string
-	NonUserMessages []string
-	FirstImageURL   string
+	Model             string
+	Stream            bool
+	UserContent       string
+	PriorUserMessages []string
+	NonUserMessages   []string
+	FirstImageURL     string
 }
 
 // extractContentFast extracts model, stream, message content, and the first
@@ -54,10 +55,16 @@ func extractContentFast(body []byte) (*FastExtractResult, error) {
 
 		switch role {
 		case "user":
-			r.UserContent = text
 			if r.FirstImageURL == "" {
 				r.FirstImageURL = extractImageURLFromContent(msg.Get("content"))
 			}
+			if text == "" {
+				return true
+			}
+			if r.UserContent != "" {
+				r.PriorUserMessages = append(r.PriorUserMessages, r.UserContent)
+			}
+			r.UserContent = text
 		case "system", "assistant":
 			if text != "" {
 				r.NonUserMessages = append(r.NonUserMessages, text)

@@ -61,10 +61,10 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	fast *FastExtractResult,
 	ctx *RequestContext,
 ) (requestDecisionState, *ext_proc.ProcessingResponse) {
+	history := signalConversationHistoryFromFastExtract(fast)
 	decisionName, _, reasoningDecision, selectedModel, authzErr := r.performDecisionEvaluation(
 		originalModel,
-		fast.UserContent,
-		fast.NonUserMessages,
+		history,
 		ctx,
 	)
 	if authzErr != nil {

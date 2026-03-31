@@ -19,10 +19,10 @@ const paperCount = researchPapers.length
 const heroStats = [
   {
     label: translate({ id: 'homepage.stats.signals.label', message: 'Signals' }),
-    value: '15',
+    value: '16',
     description: translate({
       id: 'homepage.stats.signals.description',
-      message: '15 signal families across 5 heuristic and 10 learned detectors, including knowledge base routing.',
+      message: '16 signal families across 5 heuristic and 11 learned detectors, including knowledge base routing and history-aware reasks.',
     }),
   },
   {
@@ -58,7 +58,7 @@ const capabilityCards: CapabilityCard[] = [
     title: translate({ id: 'homepage.capabilities.signal.title', message: 'Signal extraction' }),
     text: translate({
       id: 'homepage.capabilities.signal.text',
-      message: 'Heuristic rules, learned classifiers, and knowledge base signals turn raw requests into typed routing state.',
+      message: 'Heuristic rules, learned classifiers, history-aware reasks, and knowledge base signals turn raw requests into typed routing state.',
     }),
   },
   {
@@ -122,7 +122,7 @@ const encoderTracks = [
     label: 'EMBED',
     text: translate({
       id: 'homepage.aiTech.track.embedding',
-      message: 'Embedding and rerank paths for semantic cache, knowledge base routing, and candidate scoring.',
+      message: 'Embedding and rerank paths for semantic cache, knowledge base routing, reask similarity scoring, and candidate ranking.',
     }),
   },
 ]

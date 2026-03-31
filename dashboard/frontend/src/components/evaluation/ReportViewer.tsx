@@ -229,7 +229,7 @@ function ResultCard({ result }: ResultCardProps) {
         )}
       </div>
 
-      {(result.dimension === 'domain' || result.dimension === 'fact_check' || result.dimension === 'user_feedback') && (
+      {(result.dimension === 'domain' || result.dimension === 'fact_check' || result.dimension === 'user_feedback' || result.dimension === 'reask') && (
         <SignalEvalDetails metrics={result.metrics} />
       )}
 

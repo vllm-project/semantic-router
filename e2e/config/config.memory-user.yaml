@@ -102,6 +102,11 @@ routing:
             similarity_threshold: 0.45
             auto_store: true
 global:
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+      ttl_seconds: 86400
   stores:
     memory:
       enabled: true

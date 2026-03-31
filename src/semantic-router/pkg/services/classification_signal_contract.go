@@ -1,7 +1,6 @@
 package services
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -16,6 +15,7 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeDomain:       func(target *MatchedSignals) *[]string { return &target.Domains },
 	config.SignalTypeFactCheck:    func(target *MatchedSignals) *[]string { return &target.FactCheck },
 	config.SignalTypeUserFeedback: func(target *MatchedSignals) *[]string { return &target.UserFeedback },
+	config.SignalTypeReask:        func(target *MatchedSignals) *[]string { return &target.Reask },
 	config.SignalTypePreference:   func(target *MatchedSignals) *[]string { return &target.Preferences },
 	config.SignalTypeLanguage:     func(target *MatchedSignals) *[]string { return &target.Language },
 	config.SignalTypeContext:      func(target *MatchedSignals) *[]string { return &target.Context },
@@ -31,8 +31,9 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 
 // IntentRequest represents a request for intent classification
 type IntentRequest struct {
-	Text    string         `json:"text"`
-	Options *IntentOptions `json:"options,omitempty"`
+	Text     string          `json:"text"`
+	Messages []IntentMessage `json:"messages,omitempty"`
+	Options  *IntentOptions  `json:"options,omitempty"`
 }
 
 // IntentOptions contains options for intent classification
@@ -51,6 +52,7 @@ type MatchedSignals struct {
 	Domains      []string `json:"domains,omitempty"`
 	FactCheck    []string `json:"fact_check,omitempty"`
 	UserFeedback []string `json:"user_feedback,omitempty"`
+	Reask        []string `json:"reask,omitempty"`
 	Preferences  []string `json:"preferences,omitempty"`
 	Language     []string `json:"language,omitempty"`
 	Context      []string `json:"context,omitempty"`
@@ -81,7 +83,7 @@ type EvalDecisionResult struct {
 
 // EvalResponse represents the eval classification response with comprehensive signal information.
 type EvalResponse struct {
-	OriginalText      string                                  `json:"original_text"` // The original query text
+	OriginalText      string                                  `json:"original_text"` // The evaluated user turn or fallback query text
 	DecisionResult    *EvalDecisionResult                     `json:"decision_result,omitempty"`
 	EvalTrace         []decision.DecisionTrace                `json:"eval_trace,omitempty"`         // Per-decision evaluation trace (when ?trace=true)
 	RecommendedModels []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs
@@ -143,19 +145,29 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 // ClassifyIntentForEval performs intent classification specifically for evaluation scenarios
 // This method forces evaluation of all signals and returns comprehensive signal information
 func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalResponse, error) {
-	if req.Text == "" {
-		return nil, fmt.Errorf("text cannot be empty")
+	input, err := req.resolveSignalInput()
+	if err != nil {
+		return nil, err
 	}
 
 	if s.classifier == nil {
 		return &EvalResponse{
-			OriginalText: req.Text,
+			OriginalText: input.evaluationText,
 			Metrics:      &classification.SignalMetricsCollection{},
 		}, nil
 	}
 
 	wantTrace := req.Options != nil && req.Options.Trace
-	signals := s.classifier.EvaluateAllSignalsWithForceOption(req.Text, true)
+	signals := s.classifier.EvaluateAllSignalsWithContext(
+		input.evaluationText,
+		input.contextText,
+		input.currentUserText,
+		input.priorUserMessages,
+		input.nonUserMessages,
+		true,
+		"",
+		nil,
+	)
 
 	var decisionResult *decision.DecisionResult
 	var traces []decision.DecisionTrace
@@ -175,7 +187,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 		}
 	}
 
-	resp := s.buildEvalResponse(req.Text, signals, decisionResult)
+	resp := s.buildEvalResponse(input.evaluationText, signals, decisionResult)
 	resp.EvalTrace = traces
 	return resp, nil
 }
@@ -191,6 +203,7 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		Domains:      signals.MatchedDomainRules,
 		FactCheck:    signals.MatchedFactCheckRules,
 		UserFeedback: signals.MatchedUserFeedbackRules,
+		Reask:        signals.MatchedReaskRules,
 		Preferences:  signals.MatchedPreferenceRules,
 		Language:     signals.MatchedLanguageRules,
 		Context:      signals.MatchedContextRules,
@@ -301,6 +314,7 @@ func (s *ClassificationService) getUnmatchedSignals(signals *classification.Sign
 	collectUnmatchedRuleNames(&unmatched.Domains, cfg.Categories, signals.MatchedDomainRules, func(category config.Category) string { return category.Name })
 	collectUnmatchedRuleNames(&unmatched.FactCheck, cfg.FactCheckRules, signals.MatchedFactCheckRules, func(rule config.FactCheckRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.UserFeedback, cfg.UserFeedbackRules, signals.MatchedUserFeedbackRules, func(rule config.UserFeedbackRule) string { return rule.Name })
+	collectUnmatchedRuleNames(&unmatched.Reask, cfg.ReaskRules, signals.MatchedReaskRules, func(rule config.ReaskRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.Preferences, cfg.PreferenceRules, signals.MatchedPreferenceRules, func(rule config.PreferenceRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.Language, cfg.LanguageRules, signals.MatchedLanguageRules, func(rule config.LanguageRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.Context, cfg.ContextRules, signals.MatchedContextRules, func(rule config.ContextRule) string { return rule.Name })

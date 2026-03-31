@@ -565,6 +565,7 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		config.SignalTypeDomain,
 		config.SignalTypeFactCheck,
 		config.SignalTypeUserFeedback,
+		config.SignalTypeReask,
 		config.SignalTypePreference,
 		config.SignalTypeLanguage,
 		config.SignalTypeContext,

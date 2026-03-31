@@ -43,6 +43,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeDomain, c.Config.Categories, func(r config.Category) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeFactCheck, c.Config.FactCheckRules, func(r config.FactCheckRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeUserFeedback, c.Config.UserFeedbackRules, func(r config.UserFeedbackRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeReask, c.Config.ReaskRules, func(r config.ReaskRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypePreference, c.Config.PreferenceRules, func(r config.PreferenceRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeLanguage, c.Config.LanguageRules, func(r config.LanguageRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeContext, c.Config.ContextRules, func(r config.ContextRule) string { return r.Name })
@@ -77,6 +78,7 @@ type SignalResults struct {
 	MatchedDomainRules       []string
 	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
 	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
+	MatchedReaskRules        []string // History-aware repeated-question dissatisfaction signals
 	MatchedPreferenceRules   []string // Route preference names matched via external LLM
 	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
 	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
@@ -116,6 +118,7 @@ type SignalMetricsCollection struct {
 	Domain       SignalMetrics `json:"domain"`
 	FactCheck    SignalMetrics `json:"fact_check"`
 	UserFeedback SignalMetrics `json:"user_feedback"`
+	Reask        SignalMetrics `json:"reask"`
 	Preference   SignalMetrics `json:"preference"`
 	Language     SignalMetrics `json:"language"`
 	Context      SignalMetrics `json:"context"`
@@ -199,7 +202,7 @@ func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
 // EvaluateAllSignals evaluates all signal types and returns SignalResults
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
-	return c.EvaluateAllSignalsWithContext(text, text, nil, false, "", nil)
+	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, "", nil)
 }
 
 // EvaluateAllSignalsWithHeaders evaluates all signal types including the authz signal.
@@ -216,7 +219,7 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 // Optional trailing arguments (positional after imageURL):
 //   - uncompressedText (string): original text before prompt compression
 //   - skipCompressionSignals (map[string]bool): signal types that must use uncompressedText
-func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, nonUserMessages []string, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
+func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
 	var uncompressedText string
 	var skipCompressionSignals map[string]bool
 	if len(extra) >= 2 {
@@ -227,7 +230,7 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 			skipCompressionSignals = m
 		}
 	}
-	results := c.EvaluateAllSignalsWithContext(text, contextText, nonUserMessages, forceEvaluateAll, uncompressedText, skipCompressionSignals, imageURL)
+	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, forceEvaluateAll, uncompressedText, skipCompressionSignals, imageURL)
 
 	// Evaluate authz signal if role bindings are configured and the signal type is used
 	usedSignals := c.getUsedSignals()
@@ -275,7 +278,7 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 // EvaluateAllSignalsWithForceOption evaluates signals with option to force evaluate all
 // forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
 func (c *Classifier) EvaluateAllSignalsWithForceOption(text string, forceEvaluateAll bool) *SignalResults {
-	return c.EvaluateAllSignalsWithContext(text, text, nil, forceEvaluateAll, "", nil)
+	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, forceEvaluateAll, "", nil)
 }
 
 // EvaluateDecisionWithEngine evaluates all decisions using pre-computed signals
@@ -296,9 +299,9 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		return nil, nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v",
+	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
-		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
+		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedReaskRules, signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules, signals.MatchedContextRules, signals.MatchedStructureRules,
 		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedAuthzRules,
 		signals.MatchedJailbreakRules, signals.MatchedPIIRules, signals.MatchedKBRules)
@@ -317,6 +320,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		DomainRules:       signals.MatchedDomainRules,
 		FactCheckRules:    signals.MatchedFactCheckRules,
 		UserFeedbackRules: signals.MatchedUserFeedbackRules,
+		ReaskRules:        signals.MatchedReaskRules,
 		PreferenceRules:   signals.MatchedPreferenceRules,
 		LanguageRules:     signals.MatchedLanguageRules,
 		ContextRules:      signals.MatchedContextRules,

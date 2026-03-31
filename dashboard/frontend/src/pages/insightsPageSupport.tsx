@@ -24,6 +24,7 @@ const SIGNAL_TINTS: Record<string, string> = {
   domain: 'rgba(147, 51, 234, 0.14)',
   fact_check: 'rgba(34, 197, 94, 0.15)',
   user_feedback: 'rgba(236, 72, 153, 0.12)',
+  reask: 'rgba(251, 191, 36, 0.14)',
   preference: 'rgba(234, 179, 8, 0.15)',
   language: 'rgba(59, 130, 246, 0.15)',
   context: 'rgba(168, 85, 247, 0.14)',
@@ -331,6 +332,7 @@ export function collectSignals(signals: Signal): string[] {
   if (signals.domain?.length) allSignals.push(...signals.domain)
   if (signals.fact_check?.length) allSignals.push(...signals.fact_check)
   if (signals.user_feedback?.length) allSignals.push(...signals.user_feedback)
+  if (signals.reask?.length) allSignals.push(...signals.reask)
   if (signals.preference?.length) allSignals.push(...signals.preference)
   if (signals.language?.length) allSignals.push(...signals.language)
   if (signals.context?.length) allSignals.push(...signals.context)
@@ -356,6 +358,7 @@ function buildSignalFields(signals: Signal): ViewField[] {
     ['domain', 'Domain matches'],
     ['fact_check', 'Fact check results'],
     ['user_feedback', 'User feedback'],
+    ['reask', 'Reask'],
     ['preference', 'Preference signals'],
     ['language', 'Language signals'],
     ['context', 'Context signals'],

@@ -30,6 +30,7 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-matched-domains',
   'x-vsr-matched-fact-check',
   'x-vsr-matched-user-feedback',
+  'x-vsr-matched-reask',
   'x-vsr-matched-preference',
   'x-vsr-matched-language',
   'x-vsr-matched-context',

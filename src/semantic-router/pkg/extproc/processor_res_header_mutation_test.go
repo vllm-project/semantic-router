@@ -20,6 +20,7 @@ func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *tes
 		VSRMatchedAuthz:      []string{"authz:premium"},
 		VSRMatchedJailbreak:  []string{"jailbreak:block"},
 		VSRMatchedPII:        []string{"pii:email"},
+		VSRMatchedReask:      []string{"likely_dissatisfied"},
 		VSRMatchedProjection: []string{"balance_reasoning"},
 	}
 
@@ -36,5 +37,6 @@ func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *tes
 	assert.Equal(t, "authz:premium", headerMap[headers.VSRMatchedAuthz])
 	assert.Equal(t, "jailbreak:block", headerMap[headers.VSRMatchedJailbreak])
 	assert.Equal(t, "pii:email", headerMap[headers.VSRMatchedPII])
+	assert.Equal(t, "likely_dissatisfied", headerMap[headers.VSRMatchedReask])
 	assert.Equal(t, "balance_reasoning", headerMap[headers.VSRMatchedProjection])
 }

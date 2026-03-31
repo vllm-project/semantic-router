@@ -24,6 +24,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.addEmbeddingClassifier,
 		b.addContextClassifier,
 		b.addStructureClassifier,
+		b.addReaskClassifier,
 		b.addComplexityClassifier,
 		b.addContrastiveJailbreakClassifiers,
 		b.addAuthzClassifier,
@@ -90,6 +91,19 @@ func (b *classifierOptionBuilder) addStructureClassifier() error {
 		return err
 	}
 	b.options = append(b.options, withStructureClassifier(structureClassifier))
+	return nil
+}
+
+func (b *classifierOptionBuilder) addReaskClassifier() error {
+	if len(b.cfg.ReaskRules) == 0 {
+		return nil
+	}
+	reaskClassifier, err := NewReaskClassifier(b.cfg.ReaskRules, b.defaultEmbeddingModelType())
+	if err != nil {
+		logging.Errorf("Failed to create reask classifier: %v", err)
+		return err
+	}
+	b.options = append(b.options, withReaskClassifier(reaskClassifier))
 	return nil
 }
 

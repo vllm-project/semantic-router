@@ -30,6 +30,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'User Feedback',
     description: 'Based on user feedback patterns',
   },
+  'x-vsr-matched-reask': {
+    label: 'Reask',
+    description: 'Detected repeated-question dissatisfaction across recent user turns',
+  },
   'x-vsr-matched-preference': {
     label: 'Preference',
     description: 'User preference match',

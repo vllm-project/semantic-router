@@ -142,6 +142,7 @@ func composerLeafMatches(signals *SignalResults) map[string][]string {
 		"domain":        signals.MatchedDomainRules,
 		"fact_check":    signals.MatchedFactCheckRules,
 		"user_feedback": signals.MatchedUserFeedbackRules,
+		"reask":         signals.MatchedReaskRules,
 		"preference":    signals.MatchedPreferenceRules,
 		"language":      signals.MatchedLanguageRules,
 		"context":       signals.MatchedContextRules,

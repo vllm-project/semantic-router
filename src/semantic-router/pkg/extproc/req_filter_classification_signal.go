@@ -14,27 +14,31 @@ type signalEvaluationInput struct {
 	allMessagesText        string
 	compressedText         string
 	skipCompressionSignals map[string]bool
+	currentUserText        string
+	priorUserMessages      []string
 }
 
-func (r *OpenAIRouter) prepareSignalEvaluationInput(userContent string, nonUserMessages []string) signalEvaluationInput {
+func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHistory) signalEvaluationInput {
 	input := signalEvaluationInput{
-		evaluationText:  userContent,
-		compressedText:  userContent,
-		allMessagesText: strings.Join(nonUserMessages, " "),
+		evaluationText:    history.currentUserMessage,
+		compressedText:    history.currentUserMessage,
+		allMessagesText:   strings.Join(history.nonUserMessages, " "),
+		currentUserText:   history.currentUserMessage,
+		priorUserMessages: append([]string(nil), history.priorUserMessages...),
 	}
 
-	if input.evaluationText == "" && len(nonUserMessages) > 0 {
-		input.evaluationText = strings.Join(nonUserMessages, " ")
+	if input.evaluationText == "" && len(history.nonUserMessages) > 0 {
+		input.evaluationText = strings.Join(history.nonUserMessages, " ")
 		input.compressedText = input.evaluationText
 	}
 
-	if userContent != "" && len(nonUserMessages) > 0 {
-		allMessages := make([]string, 0, len(nonUserMessages)+1)
-		allMessages = append(allMessages, nonUserMessages...)
-		allMessages = append(allMessages, userContent)
+	if history.currentUserMessage != "" && len(history.nonUserMessages) > 0 {
+		allMessages := make([]string, 0, len(history.nonUserMessages)+1)
+		allMessages = append(allMessages, history.nonUserMessages...)
+		allMessages = append(allMessages, history.currentUserMessage)
 		input.allMessagesText = strings.Join(allMessages, " ")
-	} else if userContent != "" {
-		input.allMessagesText = userContent
+	} else if history.currentUserMessage != "" {
+		input.allMessagesText = history.currentUserMessage
 	}
 
 	if input.evaluationText == "" {
@@ -75,6 +79,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedDomains = signals.MatchedDomainRules
 	ctx.VSRMatchedFactCheck = signals.MatchedFactCheckRules
 	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
+	ctx.VSRMatchedReask = signals.MatchedReaskRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
@@ -109,6 +114,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedDomainRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedFactCheckRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedUserFeedbackRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedReaskRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedContextRules...)
