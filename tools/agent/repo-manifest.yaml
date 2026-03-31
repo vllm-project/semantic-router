@@ -141,6 +141,7 @@ docs:
   - docs/agent/plans/pl-0020-local-runtime-topology-separation.md
   - docs/agent/plans/pl-0021-local-runtime-three-image-rollout.md
   - docs/agent/plans/pl-0022-dev-integration-consolidation-loop.md
+  - docs/agent/plans/pl-0023-dashboard-dsl-natural-language-mode-loop.md
   - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
@@ -185,6 +186,7 @@ docs:
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
   - docs/agent/adr/adr-0002-tech-debt-index-and-entry-directory.md
+  - docs/agent/adr/adr-0003-dashboard-dsl-natural-language-mode.md
   - docs/agent/change-surfaces.md
   - docs/agent/repo-map.md
   - docs/agent/environments.md
@@ -339,6 +341,9 @@ doc_governance:
     - path: docs/agent/plans/pl-0022-dev-integration-consolidation-loop.md
       steward: agent-contract
       freshness: update at the start and end of each dev integration consolidation loop and after each completed loop task
+    - path: docs/agent/plans/pl-0023-dashboard-dsl-natural-language-mode-loop.md
+      steward: dashboard
+      freshness: update at the start and end of each dashboard NL-to-DSL implementation loop and after each completed loop task
     - path: docs/agent/state-taxonomy-and-inventory.md
       steward: agent-contract
       freshness: update when the runtime or dashboard state inventory, durability taxonomy, or persistence guidance changes materially
@@ -471,6 +476,9 @@ doc_governance:
     - path: docs/agent/adr/adr-0002-tech-debt-index-and-entry-directory.md
       steward: agent-contract
       freshness: update only if the tech debt documentation model changes materially
+    - path: docs/agent/adr/adr-0003-dashboard-dsl-natural-language-mode.md
+      steward: dashboard
+      freshness: update only if the dashboard NL-to-DSL architecture decision changes materially
     - path: docs/agent/change-surfaces.md
       steward: agent-contract
       freshness: update when surfaces or their mappings change
