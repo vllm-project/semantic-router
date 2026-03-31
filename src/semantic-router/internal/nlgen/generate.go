@@ -1,9 +1,11 @@
-package dsl
+package nlgen
 
 import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
 )
 
 // LLMClient is the interface for calling a language model.
@@ -95,7 +97,6 @@ func GenerateFromNL(ctx context.Context, client LLMClient, instruction string, o
 
 	result := &NLResult{}
 
-	// Initial generation
 	messages := []ChatMessage{
 		{Role: "system", Content: SystemPrompt},
 		{Role: "user", Content: BuildNLPrompt(instruction)},
@@ -121,7 +122,7 @@ func GenerateFromNL(ctx context.Context, client LLMClient, instruction string, o
 			return result, nil
 		}
 
-		prog, parseErrors := Parse(sanitized)
+		prog, parseErrors := dsl.Parse(sanitized)
 		if len(parseErrors) > 0 {
 			errMsg := formatErrors(parseErrors)
 			result.ParseError = errMsg
@@ -138,15 +139,14 @@ func GenerateFromNL(ctx context.Context, client LLMClient, instruction string, o
 			return result, nil
 		}
 
-		// Parse succeeded -- run validation for warnings
-		diags := ValidateAST(prog)
+		diags := dsl.ValidateAST(prog)
 		for _, d := range diags {
 			result.Warnings = append(result.Warnings, d.String())
 		}
 		result.ParseError = ""
 
 		if cfg.format && !containsDecisionTree(sanitized) {
-			formatted, fmtErr := Format(sanitized)
+			formatted, fmtErr := dsl.Format(sanitized)
 			if fmtErr == nil {
 				result.DSL = formatted
 			} else {

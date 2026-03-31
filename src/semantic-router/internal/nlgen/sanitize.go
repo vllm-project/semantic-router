@@ -1,4 +1,4 @@
-package dsl
+package nlgen
 
 import (
 	"strings"
@@ -24,17 +24,14 @@ func SanitizeLLMOutput(raw string) string {
 		return ""
 	}
 
-	// Strip markdown code fences: ```dsl ... ```, ```text ... ```, or bare ``` ... ```
 	if extracted := extractFromCodeFence(raw); extracted != "" {
 		raw = extracted
 	}
 
-	// Find the first top-level DSL keyword and trim leading prose.
 	if idx := findFirstKeyword(raw); idx > 0 {
 		raw = raw[idx:]
 	}
 
-	// Trim trailing prose after the last closing brace at depth 0.
 	if idx := findLastTopLevelClose(raw); idx >= 0 && idx < len(raw)-1 {
 		raw = raw[:idx+1]
 	}
@@ -43,7 +40,6 @@ func SanitizeLLMOutput(raw string) string {
 }
 
 func extractFromCodeFence(s string) string {
-	// Find opening fence: ``` optionally followed by a language tag
 	fenceStart := -1
 	for i := 0; i < len(s)-2; i++ {
 		if s[i] == '`' && s[i+1] == '`' && s[i+2] == '`' {
@@ -55,16 +51,14 @@ func extractFromCodeFence(s string) string {
 		return ""
 	}
 
-	// Skip past the opening ``` and any language tag on the same line
 	contentStart := fenceStart + 3
 	for contentStart < len(s) && s[contentStart] != '\n' {
 		contentStart++
 	}
 	if contentStart < len(s) {
-		contentStart++ // skip the newline
+		contentStart++
 	}
 
-	// Find closing fence
 	fenceEnd := -1
 	for i := contentStart; i < len(s)-2; i++ {
 		if s[i] == '`' && s[i+1] == '`' && s[i+2] == '`' {
@@ -86,11 +80,9 @@ func findFirstKeyword(s string) int {
 		if idx < 0 {
 			continue
 		}
-		// Verify word boundary: not preceded by an ident char
 		if idx > 0 && isIdentPart(rune(s[idx-1])) {
 			continue
 		}
-		// Not followed by an ident char (except for identifiers that start the next token)
 		end := idx + len(kw)
 		if end < len(s) && isIdentPart(rune(s[end])) {
 			continue
@@ -139,4 +131,10 @@ func findLastTopLevelClose(s string) int {
 		}
 	}
 	return lastClose
+}
+
+// isIdentPart returns true if ch is valid in a DSL identifier.
+func isIdentPart(ch rune) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+		(ch >= '0' && ch <= '9') || ch == '_' || ch == '-' || ch == '.' || ch == '/'
 }

@@ -1,10 +1,12 @@
-package dsl
+package nlgen
 
 import (
 	"context"
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
 )
 
 // mockLLMClient returns canned responses for testing the NL pipeline.
@@ -81,9 +83,7 @@ func TestGenerateFromNL_FencedOutput(t *testing.T) {
 func TestGenerateFromNL_RepairLoop(t *testing.T) {
 	client := &mockLLMClient{
 		responses: []string{
-			// First attempt: broken DSL
 			"ROUTE math {\n  PRIORITY 100\n  WHEN domain(\"math\")\n",
-			// Second attempt (repair): valid DSL
 			"SIGNAL domain math {\n  description: \"Math\"\n}\n\nROUTE math {\n  PRIORITY 100\n  WHEN domain(\"math\")\n  MODEL \"qwen\"\n}\n\nROUTE default {\n  PRIORITY 1\n  MODEL \"qwen\"\n}",
 		},
 	}
@@ -98,7 +98,6 @@ func TestGenerateFromNL_RepairLoop(t *testing.T) {
 	if result.ParseError != "" {
 		t.Errorf("unexpected parse error after repair: %s", result.ParseError)
 	}
-	// Verify repair prompt included schema reference
 	if len(client.calls) < 2 {
 		t.Fatal("expected at least 2 LLM calls")
 	}
@@ -194,12 +193,9 @@ func TestGenerateFromNL_SystemPromptContainsSchema(t *testing.T) {
 type NLEvalCase struct {
 	Name        string
 	Instruction string
-	// MustContain are substrings that must appear in the generated DSL.
-	MustContain []string
-	// MustNotContain are substrings that must NOT appear in the generated DSL.
+	MustContain    []string
 	MustNotContain []string
-	// MustParse requires the output to parse without errors.
-	MustParse bool
+	MustParse      bool
 }
 
 // NLEvalResult records the outcome of running one eval case.
@@ -212,7 +208,6 @@ type NLEvalResult struct {
 }
 
 // RunNLEval runs the eval harness against a set of test cases using the given LLM client.
-// It returns per-case results and an aggregate pass rate.
 func RunNLEval(ctx context.Context, client LLMClient, cases []NLEvalCase, opts ...NLOption) ([]NLEvalResult, float64) {
 	results := make([]NLEvalResult, len(cases))
 	passed := 0
@@ -357,8 +352,6 @@ ROUTE default {
 }
 
 func TestFewShotExamplesParse(t *testing.T) {
-	// Split the few-shot corpus into individual examples and verify each parses.
-	// The examples are separated by "# Example N:" headers.
 	examples := splitFewShotExamples(FewShotExamples)
 	if len(examples) == 0 {
 		t.Fatal("no examples found in FewShotExamples")
@@ -369,7 +362,7 @@ func TestFewShotExamplesParse(t *testing.T) {
 		if example == "" {
 			continue
 		}
-		_, errs := Parse(example)
+		_, errs := dsl.Parse(example)
 		if len(errs) > 0 {
 			t.Errorf("few-shot example %d failed to parse: %v\n---\n%s\n---", i+1, errs, example)
 		}
@@ -384,7 +377,6 @@ func splitFewShotExamples(corpus string) []string {
 		if part == "" {
 			continue
 		}
-		// Skip the header line ("N: ...")
 		if idx := strings.Index(part, "\n"); idx >= 0 {
 			code := strings.TrimSpace(part[idx+1:])
 			if code != "" {

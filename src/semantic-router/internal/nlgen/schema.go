@@ -1,4 +1,4 @@
-package dsl
+package nlgen
 
 // SchemaReference is the complete DSL grammar reference injected into the
 // system prompt when generating DSL from natural language. It serves as

@@ -1,105 +1,14 @@
 //go:build live
 
-package dsl
+package nlgen
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 	"testing"
 	"time"
 )
-
-// vllmClient implements LLMClient for OpenAI-compatible vLLM endpoints.
-type vllmClient struct {
-	baseURL string
-	apiKey  string
-	model   string
-}
-
-func (c *vllmClient) ChatCompletion(ctx context.Context, req ChatCompletionRequest) (string, error) {
-	type message struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-	}
-	type chatReq struct {
-		Model       string    `json:"model"`
-		Messages    []message `json:"messages"`
-		Temperature float64   `json:"temperature"`
-		MaxTokens   int       `json:"max_tokens"`
-	}
-
-	msgs := make([]message, len(req.Messages))
-	for i, m := range req.Messages {
-		msgs[i] = message{Role: m.Role, Content: m.Content}
-	}
-
-	body := chatReq{
-		Model:       c.model,
-		Messages:    msgs,
-		Temperature: req.Temperature,
-		MaxTokens:   req.MaxTokens,
-	}
-	bodyJSON, err := json.Marshal(body)
-	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v1/chat/completions", bytes.NewReader(bodyJSON))
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if c.apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return "", fmt.Errorf("http request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read response: %w", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	type choice struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	}
-	type chatResp struct {
-		Choices []choice `json:"choices"`
-	}
-
-	var result chatResp
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return "", fmt.Errorf("unmarshal response: %w", err)
-	}
-	if len(result.Choices) == 0 {
-		return "", fmt.Errorf("no choices in response")
-	}
-
-	return result.Choices[0].Message.Content, nil
-}
-
-func getEnvOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
 
 var nlTestCases = []struct {
 	name        string
@@ -126,6 +35,13 @@ var nlTestCases = []struct {
 		instruction: "Route queries containing words like 'urgent', 'emergency', or 'critical' to gpt-4o. Route queries with 'billing' or 'invoice' keywords to a billing model. Default to qwen2.5:3b.",
 		mustContain: []string{"keyword", "MODEL"},
 	},
+}
+
+func getEnvOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 // Environment variables for live tests:
@@ -160,11 +76,7 @@ func TestNLLive(t *testing.T) {
 
 	for _, m := range models {
 		t.Run(m.name, func(t *testing.T) {
-			client := &vllmClient{
-				baseURL: m.baseURL,
-				apiKey:  apiKey,
-				model:   m.model,
-			}
+			client := NewOpenAIClient(m.baseURL, m.model, apiKey)
 
 			for _, tc := range nlTestCases {
 				t.Run(tc.name, func(t *testing.T) {
