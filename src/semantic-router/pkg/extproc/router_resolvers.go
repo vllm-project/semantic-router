@@ -280,6 +280,7 @@ func buildLocalRateLimitRules(rulesCfg []config.RateLimitRule) []ratelimit.Rule 
 func buildRedisLimiterProvider(cfg *config.RouterConfig, providerCfg config.RateLimitProviderConfig) ratelimit.Provider {
 	client := redis.NewClient(&redis.Options{
 		Addr: providerCfg.Address,
+		DB:   providerCfg.DB,
 	})
 
 	rules := make([]ratelimit.RedisLimiterRule, 0, len(providerCfg.Rules))
