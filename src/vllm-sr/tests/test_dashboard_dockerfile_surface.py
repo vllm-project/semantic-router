@@ -27,6 +27,14 @@ def test_dashboard_dockerfile_copies_router_dsl_package_for_backend_builds() -> 
     assert (
         "COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/" in content
     )
+    assert (
+        "COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/"
+        in content
+    )
+    assert (
+        "COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/"
+        in content
+    )
 
 
 def test_vllm_sr_dockerfile_copies_router_dsl_package_for_dashboard_builder() -> None:
@@ -35,11 +43,29 @@ def test_vllm_sr_dockerfile_copies_router_dsl_package_for_dashboard_builder() ->
     assert (
         "COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/" in content
     )
+    assert (
+        "COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/"
+        in content
+    )
+    assert (
+        "COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/"
+        in content
+    )
 
 
-def test_vllm_sr_rocm_dockerfile_copies_router_dsl_package_for_dashboard_builder() -> None:
+def test_vllm_sr_rocm_dockerfile_copies_router_dsl_package_for_dashboard_builder() -> (
+    None
+):
     content = VLLM_SR_ROCM_DOCKERFILE.read_text(encoding="utf-8")
 
     assert (
         "COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/" in content
+    )
+    assert (
+        "COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/"
+        in content
+    )
+    assert (
+        "COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/"
+        in content
     )
