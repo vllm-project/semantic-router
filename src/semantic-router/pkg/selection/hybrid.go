@@ -478,13 +478,3 @@ func (h *HybridSelector) InitializeFromConfig(modelConfig map[string]config.Mode
 		"model_count": len(modelConfig),
 	})
 }
-
-// Tier returns the production readiness tier
-func (h *HybridSelector) Tier() AlgorithmTier {
-	return TierSupported
-}
-
-// ExternalDependencies returns external dependencies (none for hybrid)
-func (h *HybridSelector) ExternalDependencies() []Dependency {
-	return []Dependency{}
-}

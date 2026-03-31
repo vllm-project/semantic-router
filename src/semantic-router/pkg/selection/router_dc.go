@@ -485,13 +485,3 @@ func (r *RouterDCSelector) GetModelEmbeddings() map[string][]float32 {
 	}
 	return result
 }
-
-// Tier returns the production readiness tier
-func (r *RouterDCSelector) Tier() AlgorithmTier {
-	return TierSupported
-}
-
-// ExternalDependencies returns external dependencies (none requiring external services)
-func (r *RouterDCSelector) ExternalDependencies() []Dependency {
-	return []Dependency{}
-}

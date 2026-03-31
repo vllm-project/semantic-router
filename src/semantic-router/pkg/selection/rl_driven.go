@@ -422,26 +422,6 @@ func (r *RLDrivenSelector) Method() SelectionMethod {
 	return MethodRLDriven
 }
 
-// Tier returns the production readiness tier
-func (r *RLDrivenSelector) Tier() AlgorithmTier {
-	return TierExperimental
-}
-
-// ExternalDependencies returns external dependencies for RL-driven selection
-func (r *RLDrivenSelector) ExternalDependencies() []Dependency {
-	deps := []Dependency{}
-	if r.config.EnableLLMRouting && r.config.RouterR1ServerURL != "" {
-		deps = append(deps, Dependency{
-			Name:        "Router-R1 Server",
-			Type:        DependencyExternalService,
-			Description: "LLM-as-Router for advanced routing decisions (arXiv:2506.09033)",
-			HealthURL:   r.config.RouterR1ServerURL + "/health",
-			Required:    false,
-		})
-	}
-	return deps
-}
-
 // SetModelCost sets the cost for a model (for cost-aware exploration)
 func (r *RLDrivenSelector) SetModelCost(model string, costPer1M float64) {
 	r.costMu.Lock()
@@ -621,8 +601,7 @@ func (r *RLDrivenSelector) Select(ctx context.Context, selCtx *SelectionContext)
 	logging.Infof("[RLDrivenSelector] Selected %s (score=%.4f, confidence=%.2f)",
 		selectedModel.Model, selectedScore, confidence)
 
-	// Record metrics
-	RecordRLSelection(selectedModel.Model, selCtx.DecisionName, selCtx.UserID, selectedScore)
+	RecordRLSelection(selectedModel.Model, selCtx.DecisionName, selCtx.UserID, r.Tier(), selectedScore)
 
 	return &SelectionResult{
 		SelectedModel: selectedModel.Model,
@@ -696,8 +675,7 @@ func (r *RLDrivenSelector) selectWithRouterR1(ctx context.Context, selCtx *Selec
 	logging.Infof("[RLDrivenSelector] Router-R1 selected %s (thinking: %s)",
 		selectedModel.Model, truncateString(response.Thinking, 100))
 
-	// Record metrics
-	RecordRLSelection(selectedModel.Model, selCtx.DecisionName, selCtx.UserID, 1.0)
+	RecordRLSelection(selectedModel.Model, selCtx.DecisionName, selCtx.UserID, r.Tier(), 1.0)
 
 	return &SelectionResult{
 		SelectedModel: selectedModel.Model,

@@ -22,13 +22,7 @@ import (
 )
 
 func TestInitializeMetrics(t *testing.T) {
-	// Initialize metrics
 	InitializeMetrics()
-
-	// Verify metrics are enabled
-	if !IsMetricsEnabled() {
-		t.Error("Metrics should be enabled after initialization")
-	}
 
 	// Verify metric pointers are not nil
 	if ModelSelectionTotal == nil {
@@ -70,18 +64,10 @@ func TestRecordSelection(t *testing.T) {
 	InitializeMetrics()
 
 	// Should not panic
-	RecordSelection("elo", "tech", "llama3.2:3b", 0.85)
-	RecordSelection("router_dc", "finance", "phi4", 0.72)
-	RecordSelection("hybrid", "general", "gemma3:27b", 0.91)
-}
-
-func TestRecordSelectionFull(t *testing.T) {
-	InitializeMetrics()
-
-	// Should not panic
-	RecordSelectionFull(MethodElo, "llama3.2:3b", "tech", 0.85, 0.92, 5*time.Millisecond)
-	RecordSelectionFull(MethodRouterDC, "phi4", "finance", 0.72, 0.88, 3*time.Millisecond)
-	RecordSelectionFull(MethodHybrid, "gemma3:27b", "general", 0.91, 0.95, 10*time.Millisecond)
+	RecordSelection("elo", "tech", "llama3.2:3b", TierSupported, 0.85)
+	RecordSelection("router_dc", "finance", "phi4", TierSupported, 0.72)
+	RecordSelection("hybrid", "general", "gemma3:27b", TierSupported, 0.91)
+	RecordSelection("automix", "general", "gemma3:27b", TierExperimental, 0.91)
 }
 
 func TestRecordEloRating(t *testing.T) {
@@ -200,7 +186,7 @@ func TestRecordHybridSelection(t *testing.T) {
 	}
 
 	// Should not panic
-	RecordHybridSelection("llama3.2:3b", "tech", componentChoices, 0.85, 0.92, 10*time.Millisecond)
+	RecordHybridSelection("llama3.2:3b", "tech", componentChoices, TierSupported, 0.85, 0.92, 10*time.Millisecond)
 }
 
 func TestCalculateAgreementRatio(t *testing.T) {
@@ -330,6 +316,20 @@ func TestMetricsBeforeInitialization(t *testing.T) {
 	// (The actual metrics package handles this via nil checks)
 }
 
+// requireGlobalRatings fetches ratings for the given models and fails if any are nil.
+func requireGlobalRatings(t *testing.T, sel *EloSelector, models ...string) []*ModelRating {
+	t.Helper()
+	ratings := make([]*ModelRating, len(models))
+	for i, m := range models {
+		r := sel.getGlobalRating(m)
+		if r == nil {
+			t.Fatalf("Rating for %s should not be nil", m)
+		}
+		ratings[i] = r
+	}
+	return ratings
+}
+
 // TestFullFeedbackFlowMetrics is an integration test that simulates the complete
 // feedback flow and verifies that all metrics are properly updated.
 // This test covers issue #1093 requirements for evolution tracking.
@@ -345,97 +345,48 @@ func TestFullFeedbackFlowMetrics(t *testing.T) {
 	}
 	selector := NewEloSelector(eloConfig)
 
-	// Initialize models with ratings
-	selector.setGlobalRating("model-a", &ModelRating{Model: "model-a", Rating: 1500})
-	selector.setGlobalRating("model-b", &ModelRating{Model: "model-b", Rating: 1500})
-	selector.setGlobalRating("model-c", &ModelRating{Model: "model-c", Rating: 1500})
+	for _, m := range []string{"model-a", "model-b", "model-c"} {
+		selector.setGlobalRating(m, &ModelRating{Model: m, Rating: 1500})
+	}
 
 	ctx := t.Context()
 
-	// Step 1: Simulate feedback - model-a wins over model-b
-	feedback1 := &Feedback{
-		WinnerModel:  "model-a",
-		LoserModel:   "model-b",
-		Tie:          false,
-		DecisionName: "test-category",
-	}
-	err := selector.UpdateFeedback(ctx, feedback1)
+	// Feedback 1: model-a beats model-b
+	err := selector.UpdateFeedback(ctx, &Feedback{
+		WinnerModel: "model-a", LoserModel: "model-b", DecisionName: "test-category",
+	})
 	if err != nil {
 		t.Fatalf("UpdateFeedback failed: %v", err)
 	}
-	t.Log("Feedback 1: model-a beats model-b")
 
-	// Step 2: Verify Elo ratings changed
-	ratingA := selector.getGlobalRating("model-a")
-	ratingB := selector.getGlobalRating("model-b")
-	if ratingA == nil || ratingB == nil {
-		t.Fatal("Ratings should not be nil")
+	r := requireGlobalRatings(t, selector, "model-a", "model-b")
+	if r[0].Rating <= 1500.0 {
+		t.Errorf("Winner rating should increase: got %.2f", r[0].Rating)
 	}
-	if ratingA.Rating <= 1500.0 {
-		t.Errorf("Winner rating should increase: got %.2f, want > 1500", ratingA.Rating)
-	}
-	if ratingB.Rating >= 1500.0 {
-		t.Errorf("Loser rating should decrease: got %.2f, want < 1500", ratingB.Rating)
-	}
-	t.Logf("After feedback 1: model-a=%.2f, model-b=%.2f", ratingA.Rating, ratingB.Rating)
-
-	// Step 3: Simulate more feedback to show evolution
-	feedback2 := &Feedback{
-		WinnerModel:  "model-a",
-		LoserModel:   "model-c",
-		Tie:          false,
-		DecisionName: "test-category",
-	}
-	_ = selector.UpdateFeedback(ctx, feedback2)
-	t.Log("Feedback 2: model-a beats model-c")
-
-	feedback3 := &Feedback{
-		WinnerModel:  "model-b",
-		LoserModel:   "model-c",
-		Tie:          false,
-		DecisionName: "test-category",
-	}
-	_ = selector.UpdateFeedback(ctx, feedback3)
-	t.Log("Feedback 3: model-b beats model-c")
-
-	// Step 4: Verify final ratings show clear ranking
-	finalA := selector.getGlobalRating("model-a")
-	finalB := selector.getGlobalRating("model-b")
-	finalC := selector.getGlobalRating("model-c")
-
-	if finalA == nil || finalB == nil || finalC == nil {
-		t.Fatal("Final ratings should not be nil")
+	if r[1].Rating >= 1500.0 {
+		t.Errorf("Loser rating should decrease: got %.2f", r[1].Rating)
 	}
 
-	t.Logf("Final ratings: model-a=%.2f, model-b=%.2f, model-c=%.2f",
-		finalA.Rating, finalB.Rating, finalC.Rating)
+	// More feedback to establish ranking A > B > C
+	_ = selector.UpdateFeedback(ctx, &Feedback{
+		WinnerModel: "model-a", LoserModel: "model-c", DecisionName: "test-category",
+	})
+	_ = selector.UpdateFeedback(ctx, &Feedback{
+		WinnerModel: "model-b", LoserModel: "model-c", DecisionName: "test-category",
+	})
 
-	if !(finalA.Rating > finalB.Rating && finalB.Rating > finalC.Rating) {
+	final := requireGlobalRatings(t, selector, "model-a", "model-b", "model-c")
+	if !(final[0].Rating > final[1].Rating && final[1].Rating > final[2].Rating) {
 		t.Errorf("Rating order should be A > B > C, got A=%.2f, B=%.2f, C=%.2f",
-			finalA.Rating, finalB.Rating, finalC.Rating)
+			final[0].Rating, final[1].Rating, final[2].Rating)
 	}
 
-	// Step 5: Verify metrics were recorded (check they don't panic and are callable)
-	RecordEloRating("model-a", "test-category", finalA.Rating)
-	RecordEloRating("model-b", "test-category", finalB.Rating)
-	RecordEloRating("model-c", "test-category", finalC.Rating)
-
-	// Step 6: Verify feedback metrics were recorded
-	RecordFeedback("model-a", "model-b", false, "test-category")
-	RecordFeedback("model-a", "model-c", false, "test-category")
-	RecordFeedback("model-b", "model-c", false, "test-category")
-
-	// Step 7: Verify rating change metrics
-	RecordRatingChange("model-a", "test-category", 1500.0, finalA.Rating, "win")
-	RecordRatingChange("model-b", "test-category", 1500.0, finalB.Rating, "mixed")
-	RecordRatingChange("model-c", "test-category", 1500.0, finalC.Rating, "loss")
-
-	t.Log("Full feedback flow test passed - Elo evolution verified!")
-	t.Log("   - Feedback processed (3 events)")
-	t.Log("   - Ratings evolved correctly (A > B > C)")
-	t.Log("   - llm_model_elo_rating metrics recorded")
-	t.Log("   - llm_model_feedback_total metrics recorded")
-	t.Log("   - llm_model_rating_change metrics recorded")
+	// Verify metric recording functions don't panic
+	for _, m := range []string{"model-a", "model-b", "model-c"} {
+		rating := selector.getGlobalRating(m)
+		RecordEloRating(m, "test-category", rating.Rating)
+		RecordRatingChange(m, "test-category", 1500.0, rating.Rating, "test")
+	}
 }
 
 // TestAutoMixSpecificMetrics verifies that AutoMix-specific metrics work correctly
@@ -497,86 +448,59 @@ func TestAllMethodEvolutionMetrics(t *testing.T) {
 	InitializeMetrics()
 	ctx := t.Context()
 
-	t.Log("=== Testing Evolution Metrics for ALL Selection Methods ===")
-
-	// 1. Elo evolution (already covered, but verify again)
-	t.Log("\n1. ELO EVOLUTION:")
-	eloSelector := NewEloSelector(DefaultEloConfig())
-	eloSelector.setGlobalRating("elo-model-a", &ModelRating{Model: "elo-model-a", Rating: 1500})
-	eloSelector.setGlobalRating("elo-model-b", &ModelRating{Model: "elo-model-b", Rating: 1500})
-
-	err := eloSelector.UpdateFeedback(ctx, &Feedback{
-		WinnerModel: "elo-model-a", LoserModel: "elo-model-b", DecisionName: "test",
-	})
-	if err != nil {
-		t.Fatalf("Elo feedback failed: %v", err)
-	}
-	rA := eloSelector.getGlobalRating("elo-model-a")
-	rB := eloSelector.getGlobalRating("elo-model-b")
-	t.Logf("   elo-model-a: %.2f, elo-model-b: %.2f", rA.Rating, rB.Rating)
-	if rA.Rating <= rB.Rating {
-		t.Error("   ❌ Elo evolution failed")
-	} else {
-		t.Log("   Elo evolution works")
-	}
-
-	// 2. AutoMix evolution
-	t.Log("\n2. AUTOMIX EVOLUTION:")
-	autoMixSelector := NewAutoMixSelector(DefaultAutoMixConfig())
-	autoMixSelector.SetCapability("automix-model-a", &ModelCapability{
-		Model: "automix-model-a", VerificationProb: 0.7, AvgQuality: 0.8,
-	})
-	autoMixSelector.SetCapability("automix-model-b", &ModelCapability{
-		Model: "automix-model-b", VerificationProb: 0.7, AvgQuality: 0.8,
-	})
-
-	// Submit feedback to evolve AutoMix
-	err = autoMixSelector.UpdateFeedback(ctx, &Feedback{
-		WinnerModel: "automix-model-a", LoserModel: "automix-model-b", DecisionName: "test",
-	})
-	if err != nil {
-		t.Fatalf("AutoMix feedback failed: %v", err)
-	}
-	caps := autoMixSelector.GetCapabilities()
-	capA := caps["automix-model-a"]
-	capB := caps["automix-model-b"]
-	if capA != nil && capB != nil {
-		t.Logf("   automix-model-a: verification=%.2f, quality=%.2f", capA.VerificationProb, capA.AvgQuality)
-		t.Logf("   automix-model-b: verification=%.2f, quality=%.2f", capB.VerificationProb, capB.AvgQuality)
-		if capA.VerificationProb > capB.VerificationProb {
-			t.Log("   AutoMix evolution works")
-		} else {
-			t.Log("   ⚠️ AutoMix evolution shows equal values (expected after 1 feedback)")
+	t.Run("elo_evolution", func(t *testing.T) {
+		eloSelector := NewEloSelector(DefaultEloConfig())
+		eloSelector.setGlobalRating("elo-model-a", &ModelRating{Model: "elo-model-a", Rating: 1500})
+		eloSelector.setGlobalRating("elo-model-b", &ModelRating{Model: "elo-model-b", Rating: 1500})
+		err := eloSelector.UpdateFeedback(ctx, &Feedback{
+			WinnerModel: "elo-model-a", LoserModel: "elo-model-b", DecisionName: "test",
+		})
+		if err != nil {
+			t.Fatalf("Elo feedback failed: %v", err)
 		}
-	}
-
-	// 3. RouterDC evolution
-	t.Log("\n3. ROUTERDC EVOLUTION:")
-	routerDCSelector := NewRouterDCSelector(DefaultRouterDCConfig())
-
-	// Submit feedback to evolve RouterDC affinity
-	err = routerDCSelector.UpdateFeedback(ctx, &Feedback{
-		Query:       "test query about technology",
-		WinnerModel: "routerdc-model-a", LoserModel: "routerdc-model-b", DecisionName: "test",
+		rA := eloSelector.getGlobalRating("elo-model-a")
+		rB := eloSelector.getGlobalRating("elo-model-b")
+		if rA.Rating <= rB.Rating {
+			t.Errorf("Winner should have higher rating: A=%.2f, B=%.2f", rA.Rating, rB.Rating)
+		}
 	})
-	if err != nil {
-		t.Fatalf("RouterDC feedback failed: %v", err)
-	}
-	t.Log("   Affinity updated for routerdc-model-a (winner)")
-	t.Log("   RouterDC evolution works")
 
-	// 4. Hybrid component agreement
-	t.Log("\n4. HYBRID COMPONENT AGREEMENT:")
-	RecordComponentAgreement(0.75)
-	RecordComponentAgreement(1.0)
-	RecordComponentAgreement(0.5)
-	t.Log("   Component agreement metrics recorded")
+	t.Run("automix_evolution", func(t *testing.T) {
+		autoMixSelector := NewAutoMixSelector(DefaultAutoMixConfig())
+		autoMixSelector.SetCapability("automix-model-a", &ModelCapability{
+			Model: "automix-model-a", VerificationProb: 0.7, AvgQuality: 0.8,
+		})
+		autoMixSelector.SetCapability("automix-model-b", &ModelCapability{
+			Model: "automix-model-b", VerificationProb: 0.7, AvgQuality: 0.8,
+		})
+		err := autoMixSelector.UpdateFeedback(ctx, &Feedback{
+			WinnerModel: "automix-model-a", LoserModel: "automix-model-b", DecisionName: "test",
+		})
+		if err != nil {
+			t.Fatalf("AutoMix feedback failed: %v", err)
+		}
+		caps := autoMixSelector.GetCapabilities()
+		if caps["automix-model-a"] == nil || caps["automix-model-b"] == nil {
+			t.Fatal("Capabilities should not be nil after feedback")
+		}
+	})
 
-	t.Log("\n=== ALL METHOD EVOLUTION METRICS VERIFIED ===")
-	t.Log("   Elo: llm_model_elo_rating, llm_model_feedback_total, llm_model_rating_change")
-	t.Log("   AutoMix: llm_model_automix_verification_prob, llm_model_automix_quality, llm_model_automix_success_rate")
-	t.Log("   RouterDC: llm_model_routerdc_similarity, llm_model_routerdc_affinity")
-	t.Log("   Hybrid: llm_model_selection_component_agreement")
+	t.Run("routerdc_evolution", func(t *testing.T) {
+		routerDCSelector := NewRouterDCSelector(DefaultRouterDCConfig())
+		err := routerDCSelector.UpdateFeedback(ctx, &Feedback{
+			Query:       "test query about technology",
+			WinnerModel: "routerdc-model-a", LoserModel: "routerdc-model-b", DecisionName: "test",
+		})
+		if err != nil {
+			t.Fatalf("RouterDC feedback failed: %v", err)
+		}
+	})
+
+	t.Run("hybrid_component_agreement", func(t *testing.T) {
+		RecordComponentAgreement(0.75)
+		RecordComponentAgreement(1.0)
+		RecordComponentAgreement(0.5)
+	})
 }
 
 func TestRecordSelectionWithTier(t *testing.T) {

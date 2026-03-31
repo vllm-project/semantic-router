@@ -143,206 +143,216 @@ var (
 // Metrics are registered with promauto and automatically exposed at /metrics endpoint.
 func InitializeMetrics() {
 	metricsInitOnce.Do(func() {
-		ModelSelectionTotal = promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "llm_model_selection_total",
-				Help: "Total number of model selections by method and selected model",
-			},
-			[]string{"method", "model", "decision", "tier"},
-		)
-
-		ModelSelectionDuration = promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "llm_model_selection_duration_seconds",
-				Help:    "Duration of model selection operations in seconds",
-				Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1},
-			},
-			[]string{"method", "tier"},
-		)
-
-		ModelSelectionScore = promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "llm_model_selection_score",
-				Help:    "Score of selected models (normalized 0-1)",
-				Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
-			},
-			[]string{"method", "model"},
-		)
-
-		ModelSelectionConfidence = promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "llm_model_selection_confidence",
-				Help:    "Confidence score distribution of model selections",
-				Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
-			},
-			[]string{"method", "tier"},
-		)
-
-		ModelEloRating = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_elo_rating",
-				Help: "Current Elo rating for models by category (enables evolution tracking)",
-			},
-			[]string{"model", "category"},
-		)
-
-		ModelFeedbackTotal = promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "llm_model_feedback_total",
-				Help: "Total feedback events (wins/losses/ties) by model pair and category",
-			},
-			[]string{"winner", "loser", "is_tie", "category"},
-		)
-
-		ModelRatingChange = promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name: "llm_model_rating_change",
-				Help: "Distribution of Elo rating changes during feedback updates",
-				// Buckets cover typical Elo K-factor based changes (-32 to +32)
-				Buckets: []float64{-32, -24, -16, -8, -4, -2, 0, 2, 4, 8, 16, 24, 32},
-			},
-			[]string{"model", "category", "feedback_type"},
-		)
-
-		ModelSelectionHistory = promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "llm_model_selection_history",
-				Help: "Selection count over time by algorithm type (for trend analysis)",
-			},
-			[]string{"method", "decision"},
-		)
-
-		ComponentAgreement = promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "llm_model_selection_component_agreement",
-				Help:    "Agreement ratio between hybrid selector components (1.0 = all agree)",
-				Buckets: []float64{0.0, 0.25, 0.5, 0.75, 1.0},
-			},
-			[]string{},
-		)
-
-		ModelComparisons = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_comparisons_total",
-				Help: "Total number of comparisons a model has participated in",
-			},
-			[]string{"model", "category"},
-		)
-
-		ModelWinRate = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_win_rate",
-				Help: "Win rate for each model (wins / total comparisons)",
-			},
-			[]string{"model", "category"},
-		)
-
-		// --- AutoMix-specific metrics ---
-		AutoMixVerificationProb = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_automix_verification_prob",
-				Help: "Learned verification probability per model (evolves with feedback)",
-			},
-			[]string{"model"},
-		)
-
-		AutoMixQuality = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_automix_quality",
-				Help: "Learned average quality score per model (evolves with feedback)",
-			},
-			[]string{"model"},
-		)
-
-		AutoMixSuccessRate = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_automix_success_rate",
-				Help: "Query success rate per model (success_count / total_count)",
-			},
-			[]string{"model"},
-		)
-
-		// --- RouterDC-specific metrics ---
-		RouterDCSimilarity = promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "llm_model_routerdc_similarity",
-				Help:    "Distribution of query-model similarity scores",
-				Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
-			},
-			[]string{"model"},
-		)
-
-		RouterDCAffinity = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_routerdc_affinity",
-				Help: "Learned query-model affinity from feedback (evolves with feedback)",
-			},
-			[]string{"model"},
-		)
-
-		// --- RL-Driven-specific metrics ---
-		RLDrivenBetaAlpha = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_rl_beta_alpha",
-				Help: "Beta distribution Alpha parameter (success count + prior)",
-			},
-			[]string{"model", "category"},
-		)
-
-		RLDrivenBetaBeta = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_rl_beta_beta",
-				Help: "Beta distribution Beta parameter (failure count + prior)",
-			},
-			[]string{"model", "category"},
-		)
-
-		RLDrivenWinProb = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_rl_win_probability",
-				Help: "Estimated win probability from Beta distribution mean",
-			},
-			[]string{"model", "category"},
-		)
-
-		RLDrivenExploration = promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "llm_model_rl_exploration_total",
-				Help: "Count of exploration vs exploitation selections",
-			},
-			[]string{"decision_type"},
-		)
-
-		RLDrivenPersonalizedSelections = promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "llm_model_rl_personalized_selections_total",
-				Help: "Count of personalized selections per model and category",
-			},
-			[]string{"model", "category"},
-		)
-
-		RLDrivenImplicitFeedback = promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "llm_model_rl_implicit_feedback_total",
-				Help: "Count of implicit feedback signals by type",
-			},
-			[]string{"feedback_type"},
-		)
-
-		ModelSelectionDependencyHealth = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_selection_dependency_health",
-				Help: "External dependency reachability (1=healthy, 0=unreachable)",
-			},
-			[]string{"method", "dependency", "type"},
-		)
-
+		registerCoreMetrics()
+		registerAlgorithmMetrics()
 		metricsEnabled = true
-
-		// Pre-initialize metrics with placeholder labels so they appear in /metrics
-		// Prometheus Vec metrics only appear after WithLabelValues is called
 		preInitializeMetrics()
 	})
+}
+
+func registerCoreMetrics() {
+	registerSelectionMetrics()
+	registerFeedbackAndTrackingMetrics()
+}
+
+func registerSelectionMetrics() {
+	ModelSelectionTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_selection_total",
+			Help: "Total number of model selections by method and selected model",
+		},
+		[]string{"method", "model", "decision", "tier"},
+	)
+
+	ModelSelectionDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_model_selection_duration_seconds",
+			Help:    "Duration of model selection operations in seconds",
+			Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1},
+		},
+		[]string{"method", "tier"},
+	)
+
+	ModelSelectionScore = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_model_selection_score",
+			Help:    "Score of selected models (normalized 0-1)",
+			Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
+		},
+		[]string{"method", "model"},
+	)
+
+	ModelSelectionConfidence = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_model_selection_confidence",
+			Help:    "Confidence score distribution of model selections",
+			Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
+		},
+		[]string{"method", "tier"},
+	)
+
+	ModelSelectionDependencyHealth = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_model_selection_dependency_health",
+			Help: "External dependency reachability (1=healthy, 0=unreachable)",
+		},
+		[]string{"method", "dependency", "type"},
+	)
+}
+
+func registerFeedbackAndTrackingMetrics() {
+	ModelEloRating = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_model_elo_rating",
+			Help: "Current Elo rating for models by category (enables evolution tracking)",
+		},
+		[]string{"model", "category"},
+	)
+
+	ModelFeedbackTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_feedback_total",
+			Help: "Total feedback events (wins/losses/ties) by model pair and category",
+		},
+		[]string{"winner", "loser", "is_tie", "category"},
+	)
+
+	ModelRatingChange = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "llm_model_rating_change",
+			Help: "Distribution of Elo rating changes during feedback updates",
+			// Buckets cover typical Elo K-factor based changes (-32 to +32)
+			Buckets: []float64{-32, -24, -16, -8, -4, -2, 0, 2, 4, 8, 16, 24, 32},
+		},
+		[]string{"model", "category", "feedback_type"},
+	)
+
+	ModelSelectionHistory = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_selection_history",
+			Help: "Selection count over time by algorithm type (for trend analysis)",
+		},
+		[]string{"method", "decision"},
+	)
+
+	ComponentAgreement = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_model_selection_component_agreement",
+			Help:    "Agreement ratio between hybrid selector components (1.0 = all agree)",
+			Buckets: []float64{0.0, 0.25, 0.5, 0.75, 1.0},
+		},
+		[]string{},
+	)
+
+	ModelComparisons = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_model_comparisons_total",
+			Help: "Total number of comparisons a model has participated in",
+		},
+		[]string{"model", "category"},
+	)
+
+	ModelWinRate = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_model_win_rate",
+			Help: "Win rate for each model (wins / total comparisons)",
+		},
+		[]string{"model", "category"},
+	)
+}
+
+func registerAlgorithmMetrics() {
+	// AutoMix-specific metrics
+	AutoMixVerificationProb = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_model_automix_verification_prob",
+			Help: "Learned verification probability per model (evolves with feedback)",
+		},
+		[]string{"model"},
+	)
+
+	AutoMixQuality = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_model_automix_quality",
+			Help: "Learned average quality score per model (evolves with feedback)",
+		},
+		[]string{"model"},
+	)
+
+	AutoMixSuccessRate = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_model_automix_success_rate",
+			Help: "Query success rate per model (success_count / total_count)",
+		},
+		[]string{"model"},
+	)
+
+	// RouterDC-specific metrics
+	RouterDCSimilarity = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_model_routerdc_similarity",
+			Help:    "Distribution of query-model similarity scores",
+			Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
+		},
+		[]string{"model"},
+	)
+
+	RouterDCAffinity = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_model_routerdc_affinity",
+			Help: "Learned query-model affinity from feedback (evolves with feedback)",
+		},
+		[]string{"model"},
+	)
+
+	// RL-Driven-specific metrics
+	RLDrivenBetaAlpha = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_model_rl_beta_alpha",
+			Help: "Beta distribution Alpha parameter (success count + prior)",
+		},
+		[]string{"model", "category"},
+	)
+
+	RLDrivenBetaBeta = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_model_rl_beta_beta",
+			Help: "Beta distribution Beta parameter (failure count + prior)",
+		},
+		[]string{"model", "category"},
+	)
+
+	RLDrivenWinProb = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_model_rl_win_probability",
+			Help: "Estimated win probability from Beta distribution mean",
+		},
+		[]string{"model", "category"},
+	)
+
+	RLDrivenExploration = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_rl_exploration_total",
+			Help: "Count of exploration vs exploitation selections",
+		},
+		[]string{"decision_type"},
+	)
+
+	RLDrivenPersonalizedSelections = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_rl_personalized_selections_total",
+			Help: "Count of personalized selections per model and category",
+		},
+		[]string{"model", "category"},
+	)
+
+	RLDrivenImplicitFeedback = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_rl_implicit_feedback_total",
+			Help: "Count of implicit feedback signals by type",
+		},
+		[]string{"feedback_type"},
+	)
 }
 
 // preInitializeMetrics initializes metrics with placeholder values so they appear in /metrics
@@ -400,30 +410,16 @@ func IsMetricsEnabled() bool {
 	return metricsEnabled
 }
 
-// RecordSelection records a basic model selection event
-func RecordSelection(method string, decision string, model string, score float64) {
+// RecordSelection records a basic model selection event with tier label.
+func RecordSelection(method string, decision string, model string, tier AlgorithmTier, score float64) {
 	if !metricsEnabled {
 		return
 	}
 
-	ModelSelectionTotal.WithLabelValues(method, model, decision, "").Inc()
+	tierStr := string(tier)
+	ModelSelectionTotal.WithLabelValues(method, model, decision, tierStr).Inc()
 	ModelSelectionScore.WithLabelValues(method, model).Observe(score)
 	ModelSelectionHistory.WithLabelValues(method, decision).Inc()
-}
-
-// RecordSelectionFull records a model selection event with all metrics
-func RecordSelectionFull(method SelectionMethod, model string, decision string, score, confidence float64, duration time.Duration) {
-	if !metricsEnabled {
-		return
-	}
-
-	methodStr := string(method)
-
-	ModelSelectionTotal.WithLabelValues(methodStr, model, decision, "").Inc()
-	ModelSelectionDuration.WithLabelValues(methodStr, "").Observe(duration.Seconds())
-	ModelSelectionScore.WithLabelValues(methodStr, model).Observe(score)
-	ModelSelectionConfidence.WithLabelValues(methodStr, "").Observe(confidence)
-	ModelSelectionHistory.WithLabelValues(methodStr, decision).Inc()
 }
 
 // RecordEloRating records the current Elo rating for a model in a category
@@ -608,15 +604,13 @@ func calculateAgreementRatio(choices []string) float64 {
 }
 
 // RecordHybridSelection records metrics for a hybrid selection including component agreement
-func RecordHybridSelection(selectedModel string, decision string, componentChoices map[string]string, score, confidence float64, duration time.Duration) {
+func RecordHybridSelection(selectedModel string, decision string, componentChoices map[string]string, tier AlgorithmTier, score, confidence float64, duration time.Duration) {
 	if !metricsEnabled {
 		return
 	}
 
-	// Record standard selection metrics
-	RecordSelectionFull(MethodHybrid, selectedModel, decision, score, confidence, duration)
+	RecordSelectionWithTier(MethodHybrid, selectedModel, decision, tier, score, confidence, duration)
 
-	// Calculate and record component agreement
 	if len(componentChoices) > 1 {
 		choices := make([]string, 0, len(componentChoices))
 		for _, model := range componentChoices {
@@ -677,7 +671,7 @@ func RecordRouterDCAffinity(model string, affinity float64) {
 // --- RL-Driven metrics recording functions ---
 
 // RecordRLSelection records a RL-driven model selection event
-func RecordRLSelection(model, category, userID string, score float64) {
+func RecordRLSelection(model, category, userID string, tier AlgorithmTier, score float64) {
 	if !metricsEnabled {
 		return
 	}
@@ -686,11 +680,11 @@ func RecordRLSelection(model, category, userID string, score float64) {
 		category = "_global"
 	}
 
-	ModelSelectionTotal.WithLabelValues("rl_driven", model, category, "experimental").Inc()
+	tierStr := string(tier)
+	ModelSelectionTotal.WithLabelValues("rl_driven", model, category, tierStr).Inc()
 	ModelSelectionScore.WithLabelValues("rl_driven", model).Observe(score)
 	ModelSelectionHistory.WithLabelValues("rl_driven", category).Inc()
 
-	// Track personalized selections
 	if userID != "" {
 		RLDrivenPersonalizedSelections.WithLabelValues(model, category).Inc()
 	}

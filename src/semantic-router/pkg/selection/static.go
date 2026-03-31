@@ -163,16 +163,6 @@ func (s *StaticSelector) UpdateFeedback(ctx context.Context, feedback *Feedback)
 	return nil
 }
 
-// Tier returns the production readiness tier
-func (s *StaticSelector) Tier() AlgorithmTier {
-	return TierSupported
-}
-
-// ExternalDependencies returns external dependencies (none for static)
-func (s *StaticSelector) ExternalDependencies() []Dependency {
-	return []Dependency{}
-}
-
 // getModelNames extracts model names from ModelRef slice
 func getModelNames(models []config.ModelRef) []string {
 	names := make([]string, len(models))

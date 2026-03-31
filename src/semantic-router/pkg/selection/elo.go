@@ -767,13 +767,3 @@ func (e *EloSelector) GetLeaderboard(category string) []*ModelRating {
 
 	return ratings
 }
-
-// Tier returns the production readiness tier
-func (e *EloSelector) Tier() AlgorithmTier {
-	return TierSupported
-}
-
-// ExternalDependencies returns external dependencies (none for Elo)
-func (e *EloSelector) ExternalDependencies() []Dependency {
-	return []Dependency{}
-}

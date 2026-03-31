@@ -391,26 +391,6 @@ func (a *AutoMixSelector) UpdateFeedback(ctx context.Context, feedback *Feedback
 	return nil
 }
 
-// Tier returns the production readiness tier
-func (a *AutoMixSelector) Tier() AlgorithmTier {
-	return TierExperimental
-}
-
-// ExternalDependencies returns external dependencies for AutoMix
-func (a *AutoMixSelector) ExternalDependencies() []Dependency {
-	deps := []Dependency{}
-	if a.config.EnableSelfVerification && a.config.VerifierServerURL != "" {
-		deps = append(deps, Dependency{
-			Name:        "AutoMix Verifier Server",
-			Type:        DependencyExternalService,
-			Description: "LLM-based entailment verification for self-verification (arXiv:2310.12963)",
-			HealthURL:   a.config.VerifierServerURL + "/health",
-			Required:    true,
-		})
-	}
-	return deps
-}
-
 // computeExpectedValue calculates the expected value of using a model
 // V(model) = R(model) + γ * E[V(s') | escalation possible]
 func (a *AutoMixSelector) computeExpectedValue(model string, selCtx *SelectionContext) float64 {

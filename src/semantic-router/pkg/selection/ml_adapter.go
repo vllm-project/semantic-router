@@ -113,23 +113,6 @@ func (a *MLSelectorAdapter) UpdateFeedback(ctx context.Context, feedback *Feedba
 	return nil
 }
 
-// Tier returns the production readiness tier
-func (a *MLSelectorAdapter) Tier() AlgorithmTier {
-	return TierExperimental
-}
-
-// ExternalDependencies returns external dependencies for ML selectors
-func (a *MLSelectorAdapter) ExternalDependencies() []Dependency {
-	return []Dependency{
-		{
-			Name:        fmt.Sprintf("Pre-trained %s model", a.method),
-			Type:        DependencyPretrainedModel,
-			Description: fmt.Sprintf("Pre-trained model artifacts for %s selection", a.method),
-			Required:    true,
-		},
-	}
-}
-
 // GetMLSelector returns the underlying ML selector for direct access (e.g., for training).
 func (a *MLSelectorAdapter) GetMLSelector() modelselection.Selector {
 	return a.mlSelector
