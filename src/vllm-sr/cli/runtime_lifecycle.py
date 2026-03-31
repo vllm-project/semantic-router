@@ -323,6 +323,7 @@ def log_runtime_summary(
     dashboard_disabled: bool,
     enable_observability: bool,
     fleet_sim_enabled: bool,
+    started_backends: set[str] | None = None,
 ) -> None:
     """Print the local endpoints and common follow-up commands."""
     log.info("=" * 60)
@@ -340,6 +341,14 @@ def log_runtime_summary(
     log.info(f"  - Metrics: {stack_layout.metrics_url}")
     if fleet_sim_enabled:
         log.info(f"  - Fleet Sim: {stack_layout.fleet_sim_url}")
+
+    if started_backends:
+        log.info("")
+        log.info("Storage:")
+        if "redis" in started_backends:
+            log.info(f"  - Redis: {stack_layout.redis_url}")
+        if "postgres" in started_backends:
+            log.info(f"  - Postgres: {stack_layout.postgres_url}")
 
     if enable_observability:
         log.info("")
