@@ -208,3 +208,5 @@ src/training/cache_embeddings/aws/vllm-inventory-*.ini
 grafana/
 grafana-data/
 prometheus-data/
+src/semantic-router/.cache/
+src/semantic-router/.cache/
