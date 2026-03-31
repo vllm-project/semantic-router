@@ -54,22 +54,37 @@ func chatCompletionUserFieldFromBody(body []byte) string {
 // Do not set these env vars in production.
 func cacheScopeUserID(ctx *RequestContext) string {
 	if u := authHeaderUserID(ctx); u != "" {
-		logging.Debugf("[CacheScopeUserID] resolved from auth header: %s", u)
+		logging.ComponentDebugEvent("extproc", "cache_scope_user_resolved", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"source":     "auth_header",
+		})
 		return u
 	}
 	fallback := strings.TrimSpace(os.Getenv("SEMANTIC_CACHE_FALLBACK_USER_HEADER"))
 	if fallback != "" {
 		if u := headerValueCI(ctx, fallback); u != "" {
-			logging.Debugf("[CacheScopeUserID] resolved from fallback header %s: %s", fallback, u)
+			logging.ComponentDebugEvent("extproc", "cache_scope_user_resolved", map[string]interface{}{
+				"request_id":      ctx.RequestID,
+				"source":          "fallback_header",
+				"fallback_header": fallback,
+			})
 			return u
 		}
 	}
 	if strings.TrimSpace(os.Getenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY")) == "true" {
 		u := chatCompletionUserFieldFromBody(ctx.OriginalRequestBody)
-		logging.Debugf("[CacheScopeUserID] resolved from body user field: %q", u)
-		return u
+		if u != "" {
+			logging.ComponentDebugEvent("extproc", "cache_scope_user_resolved", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"source":     "body_user_field",
+			})
+			return u
+		}
 	}
-	logging.Debugf("[CacheScopeUserID] no user ID resolved (auth=%q, fallback_env=%q, body_env=%q)",
-		authHeaderUserID(ctx), fallback, os.Getenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY"))
+	logging.ComponentDebugEvent("extproc", "cache_scope_user_missing", map[string]interface{}{
+		"request_id":            ctx.RequestID,
+		"fallback_header":       fallback,
+		"body_fallback_enabled": strings.TrimSpace(os.Getenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY")) == "true",
+	})
 	return ""
 }

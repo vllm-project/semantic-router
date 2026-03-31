@@ -48,7 +48,7 @@ func (c *Classifier) classifyModality(text string, detectionConfig *config.Modal
 func (c *Classifier) classifyModalityByClassifier(text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
 	result, err := candle_binding.ClassifyMmBert32KModality(text)
 	if err == nil {
-		logging.Infof("[ModalitySignal] Classifier: %s (confidence=%.3f) for prompt: %.80s",
+		logging.Debugf("[ModalitySignal] Classifier: %s (confidence=%.3f) for prompt: %.80s",
 			result.Modality, result.Confidence, text)
 		return ModalityClassificationResult{
 			Modality:   result.Modality,
@@ -87,13 +87,13 @@ func (c *Classifier) classifyModalityByKeyword(text string, cfg *config.Modality
 	if len(cfg.BothKeywords) > 0 {
 		for _, kw := range cfg.BothKeywords {
 			if strings.Contains(lowerContent, strings.ToLower(kw)) {
-				logging.Infof("[ModalitySignal] Keyword: BOTH detected (image + both_keyword %q) for: %.80s", kw, text)
+				logging.Debugf("[ModalitySignal] Keyword: BOTH detected (image + both_keyword %q) for: %.80s", kw, text)
 				return ModalityClassificationResult{Modality: "BOTH", Confidence: 0.75, Method: "keyword"}
 			}
 		}
 	}
 
-	logging.Infof("[ModalitySignal] Keyword: DIFFUSION detected for: %.80s", text)
+	logging.Debugf("[ModalitySignal] Keyword: DIFFUSION detected for: %.80s", text)
 	return ModalityClassificationResult{Modality: "DIFFUSION", Confidence: 0.8, Method: "keyword"}
 }
 
@@ -105,7 +105,7 @@ func (c *Classifier) classifyModalityHybrid(text string, cfg *config.ModalityDet
 	// Try classifier first
 	classifierResult, err := candle_binding.ClassifyMmBert32KModality(text)
 	if err == nil && classifierResult.Confidence >= confThreshold {
-		logging.Infof("[ModalitySignal] Hybrid(classifier): %s (confidence=%.3f, threshold=%.2f) for: %.80s",
+		logging.Debugf("[ModalitySignal] Hybrid(classifier): %s (confidence=%.3f, threshold=%.2f) for: %.80s",
 			classifierResult.Modality, classifierResult.Confidence, confThreshold, text)
 		return ModalityClassificationResult{
 			Modality:   classifierResult.Modality,
@@ -139,7 +139,7 @@ func (c *Classifier) classifyModalityHybrid(text string, cfg *config.ModalityDet
 			}
 		}
 
-		logging.Infof("[ModalitySignal] Hybrid(keyword-override): %s (classifier=%s@%.3f too low) for: %.80s",
+		logging.Debugf("[ModalitySignal] Hybrid(keyword-override): %s (classifier=%s@%.3f too low) for: %.80s",
 			keywordResult.Modality, classifierResult.Modality, classifierResult.Confidence, text)
 		return ModalityClassificationResult{
 			Modality:   keywordResult.Modality,
@@ -245,7 +245,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("classification error: %w", err)
 	}
 
-	logging.Infof("Classification result: class=%d, confidence=%.4f, entropy_available=%t",
+	logging.Debugf("Classification result: class=%d, confidence=%.4f, entropy_available=%t",
 		result.Class, result.Confidence, len(result.Probabilities) > 0)
 
 	// Get category names for all classes and translate to generic names when configured
@@ -290,7 +290,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 			fallbackCategory = "other"
 		}
 
-		logging.Infof("Classification confidence (%.4f) below threshold (%.4f), falling back to category: %s",
+		logging.Debugf("Classification confidence (%.4f) below threshold (%.4f), falling back to category: %s",
 			result.Confidence, c.Config.CategoryModel.Threshold, fallbackCategory)
 
 		// Record the fallback category as a signal match
@@ -318,7 +318,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 	// Record the category as a signal match
 	metrics.RecordSignalMatch(config.SignalTypeKeyword, genericCategory)
 
-	logging.Infof("Classified as category: %s (mmlu=%s), reasoning_decision: use=%t, confidence=%.3f, reason=%s",
+	logging.Debugf("Classified as category: %s (mmlu=%s), reasoning_decision: use=%t, confidence=%.3f, reason=%s",
 		genericCategory, categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
 
 	return genericCategory, float64(result.Confidence), reasoningDecision, nil

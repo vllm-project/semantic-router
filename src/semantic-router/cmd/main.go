@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
@@ -37,6 +38,7 @@ func main() {
 	loadToolsDatabaseIfReady(server, embeddingModelsInitialized)
 	startAPIServerIfEnabled(opts)
 	markRouterReady(startupWriter)
+	logStartupSummary(cfg, opts, embeddingModelsInitialized)
 	startKubernetesControllerIfNeeded(cfg, opts.kubeconfig, opts.namespace)
 	startExtProcServerOrFatal(server, startupWriter)
 }
@@ -70,7 +72,13 @@ func ensureModelsDownloaded(cfg *config.RouterConfig, startupWriter *startupstat
 		}
 
 		if err := startupWriter.Write(state); err != nil {
-			logging.Warnf("Failed to persist model download progress: %v", err)
+			logging.ComponentWarnEvent("router", "model_download_progress_persist_failed", map[string]interface{}{
+				"phase":             state.Phase,
+				"downloading_model": state.DownloadingModel,
+				"ready_models":      state.ReadyModels,
+				"total_models":      state.TotalModels,
+				"error":             err.Error(),
+			})
 		}
 	}
 
@@ -83,7 +91,10 @@ func applyKubernetesConfigUpdate(newConfig *config.RouterConfig) error {
 	}
 
 	replaceKubernetesRuntimeConfig(newConfig)
-	logging.Infof("Configuration updated from Kubernetes CRDs")
+	logging.ComponentEvent("router", "kubernetes_config_applied", map[string]interface{}{
+		"config_source":  newConfig.ConfigSource,
+		"decision_count": len(newConfig.Decisions),
+	})
 	return nil
 }
 
@@ -91,9 +102,10 @@ func applyKubernetesConfigUpdate(newConfig *config.RouterConfig) error {
 func startKubernetesController(staticConfig *config.RouterConfig, kubeconfig, namespace string) {
 	// Import k8s package here to avoid import errors when k8s dependencies are not available
 	// This is a lazy import pattern
-	logging.Infof("Initializing Kubernetes controller for namespace: %s", namespace)
-
-	logging.Infof("Starting Kubernetes controller for namespace: %s", namespace)
+	logging.ComponentEvent("router", "kubernetes_controller_starting", map[string]interface{}{
+		"namespace":      namespace,
+		"has_kubeconfig": kubeconfig != "",
+	})
 
 	controller, err := k8s.NewController(k8s.ControllerConfig{
 		Namespace:      namespace,
@@ -102,11 +114,41 @@ func startKubernetesController(staticConfig *config.RouterConfig, kubeconfig, na
 		OnConfigUpdate: applyKubernetesConfigUpdate,
 	})
 	if err != nil {
-		logging.Fatalf("Failed to create Kubernetes controller: %v", err)
+		logging.ComponentFatalEvent("router", "kubernetes_controller_create_failed", map[string]interface{}{
+			"namespace": namespace,
+			"error":     err.Error(),
+		})
 	}
 
 	ctx := context.Background()
 	if err := controller.Start(ctx); err != nil {
-		logging.Fatalf("Kubernetes controller error: %v", err)
+		logging.ComponentFatalEvent("router", "kubernetes_controller_failed", map[string]interface{}{
+			"namespace": namespace,
+			"error":     err.Error(),
+		})
 	}
+}
+
+// logStartupSummary emits a single structured log line summarizing the router
+// startup state — making it trivial for agents and log aggregators to determine
+// what the router is serving and on which ports.
+func logStartupSummary(cfg *config.RouterConfig, opts runtimeOptions, embeddingModelsReady bool) {
+	decisionNames := make([]string, 0, len(cfg.Decisions))
+	for _, d := range cfg.Decisions {
+		decisionNames = append(decisionNames, d.Name)
+	}
+
+	logging.ComponentEvent("router", "startup_complete", map[string]interface{}{
+		"extproc_port":        opts.port,
+		"api_port":            opts.apiPort,
+		"metrics_port":        opts.metricsPort,
+		"secure":              opts.secure,
+		"config_source":       cfg.ConfigSource,
+		"decisions":           strings.Join(decisionNames, ","),
+		"embedding_ready":     embeddingModelsReady,
+		"sem_cache_enabled":   cfg.Enabled,
+		"model_selection":     cfg.ModelSelection.Enabled,
+		"authz_providers":     len(cfg.Authz.Providers),
+		"ratelimit_providers": len(cfg.RateLimit.Providers),
+	})
 }

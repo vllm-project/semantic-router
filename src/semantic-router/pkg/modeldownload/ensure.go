@@ -18,7 +18,7 @@ func EnsureModelsForConfigWithProgress(
 	cfg *config.RouterConfig,
 	reporter ProgressReporter,
 ) error {
-	logging.Infof("Installing required models...")
+	logging.ComponentEvent("router", "required_models_check_started", map[string]interface{}{})
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
@@ -32,7 +32,10 @@ func EnsureModelsForConfigWithProgress(
 			TotalModels: 0,
 			Message:     "No local models configured. Skipping model download.",
 		})
-		logging.Infof("No local models configured, skipping model download (API-only mode)")
+		logging.ComponentEvent("router", "required_models_check_skipped", map[string]interface{}{
+			"reason": "no_local_models_configured",
+			"mode":   "api_only",
+		})
 		return nil
 	}
 
@@ -47,18 +50,17 @@ func EnsureModelsForConfigWithProgress(
 	if downloadConfig.HFToken == "" {
 		maskedToken = "<not set>"
 	}
-	logging.Infof(
-		"HF_ENDPOINT: %s; HF_TOKEN: %s; HF_HOME: %s",
-		downloadConfig.HFEndpoint,
-		maskedToken,
-		downloadConfig.HFHome,
-	)
+	logging.ComponentDebugEvent("router", "huggingface_download_config_loaded", map[string]interface{}{
+		"hf_endpoint": downloadConfig.HFEndpoint,
+		"hf_token":    maskedToken,
+		"hf_home":     downloadConfig.HFHome,
+	})
 
 	if err := EnsureModelsWithProgress(specs, downloadConfig, reporter); err != nil {
 		return fmt.Errorf("failed to download models: %w", err)
 	}
 
-	logging.Infof("All required models are ready")
+	logging.ComponentEvent("router", "required_models_ready", map[string]interface{}{})
 	return nil
 }
 
@@ -68,11 +70,10 @@ func logModelRegistry(registry map[string]string) {
 		uniqueModels[repoID] = true
 	}
 
-	logging.Infof(
-		"MoM Families: %d unique models (total %d registry aliases)",
-		len(uniqueModels),
-		len(registry),
-	)
+	logging.ComponentDebugEvent("router", "model_registry_summary", map[string]interface{}{
+		"unique_models":    len(uniqueModels),
+		"registry_aliases": len(registry),
+	})
 	logging.Debugf("Registry Details:")
 	for localPath, repoID := range registry {
 		logging.Debugf("  %s -> %s", localPath, repoID)

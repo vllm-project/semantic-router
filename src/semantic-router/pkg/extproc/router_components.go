@@ -20,10 +20,9 @@ func loadClassifierMappings(cfg *config.RouterConfig) (*classifierMappings, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to load category mapping: %w", err)
 		}
-		logging.Infof(
-			"Loaded category mapping with %d categories",
-			mappings.categoryMapping.GetCategoryCount(),
-		)
+		logging.ComponentEvent("extproc", "category_mapping_loaded", map[string]interface{}{
+			"count": mappings.categoryMapping.GetCategoryCount(),
+		})
 	}
 
 	if cfg.PIIMappingPath != "" {
@@ -31,7 +30,9 @@ func loadClassifierMappings(cfg *config.RouterConfig) (*classifierMappings, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
 		}
-		logging.Infof("Loaded PII mapping with %d PII types", mappings.piiMapping.GetPIITypeCount())
+		logging.ComponentEvent("extproc", "pii_mapping_loaded", map[string]interface{}{
+			"count": mappings.piiMapping.GetPIITypeCount(),
+		})
 	}
 
 	if cfg.IsPromptGuardEnabled() {
@@ -39,10 +40,9 @@ func loadClassifierMappings(cfg *config.RouterConfig) (*classifierMappings, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to load jailbreak mapping: %w", err)
 		}
-		logging.Infof(
-			"Loaded jailbreak mapping with %d jailbreak types",
-			mappings.jailbreakMapping.GetJailbreakTypeCount(),
-		)
+		logging.ComponentEvent("extproc", "jailbreak_mapping_loaded", map[string]interface{}{
+			"count": mappings.jailbreakMapping.GetJailbreakTypeCount(),
+		})
 	}
 
 	return mappings, nil
@@ -72,17 +72,16 @@ func createSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 	}
 
 	if semanticCache.IsEnabled() {
-		logging.Infof(
-			"Semantic cache enabled with backend: %s with threshold: %.4f, TTL: %d s",
-			cacheConfig.BackendType,
-			cacheConfig.SimilarityThreshold,
-			cacheConfig.TTLSeconds,
-		)
-		if cacheConfig.BackendType == cache.InMemoryCacheType {
-			logging.Infof("In-memory cache max entries: %d", cacheConfig.MaxEntries)
-		}
+		logging.ComponentEvent("extproc", "semantic_cache_initialized", map[string]interface{}{
+			"backend":              cacheConfig.BackendType,
+			"similarity_threshold": cacheConfig.SimilarityThreshold,
+			"ttl_seconds":          cacheConfig.TTLSeconds,
+			"max_entries":          cacheConfig.MaxEntries,
+		})
 	} else {
-		logging.Infof("Semantic cache is disabled")
+		logging.ComponentEvent("extproc", "semantic_cache_disabled", map[string]interface{}{
+			"backend": cacheConfig.BackendType,
+		})
 	}
 
 	return semanticCache, nil
@@ -98,19 +97,17 @@ func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
 
 	switch {
 	case embeddingModels.MmBertModelPath != "":
-		logging.Infof("Auto-selected mmbert for semantic cache (from embedding_models.mmbert_model_path)")
 		return "mmbert"
 	case embeddingModels.MultiModalModelPath != "":
-		logging.Infof("Auto-selected multimodal for semantic cache (from embedding_models.multimodal_model_path)")
 		return "multimodal"
 	case embeddingModels.Qwen3ModelPath != "":
-		logging.Infof("Auto-selected qwen3 for semantic cache (from embedding_models.qwen3_model_path)")
 		return "qwen3"
 	case embeddingModels.GemmaModelPath != "":
-		logging.Infof("Auto-selected gemma for semantic cache (from embedding_models.gemma_model_path)")
 		return "gemma"
 	default:
-		logging.Warnf("No embedding models configured, falling back to bert for semantic cache")
+		logging.ComponentWarnEvent("extproc", "semantic_cache_embedding_fallback", map[string]interface{}{
+			"fallback_model": "bert",
+		})
 		return "bert"
 	}
 }
@@ -130,13 +127,12 @@ func createToolsDatabase(cfg *config.RouterConfig) *tools.ToolsDatabase {
 	})
 
 	if toolsDatabase.IsEnabled() {
-		logging.Infof(
-			"Tools database enabled with threshold: %.4f, top-k: %d",
-			toolsThreshold,
-			cfg.Tools.TopK,
-		)
+		logging.ComponentEvent("extproc", "tools_database_initialized", map[string]interface{}{
+			"similarity_threshold": toolsThreshold,
+			"top_k":                cfg.Tools.TopK,
+		})
 	} else {
-		logging.Infof("Tools database is disabled")
+		logging.ComponentEvent("extproc", "tools_database_disabled", map[string]interface{}{})
 	}
 
 	return toolsDatabase
@@ -157,7 +153,6 @@ func createRouterClassifier(
 	}
 
 	services.NewClassificationService(classifier, cfg)
-	logging.Infof("Global classification service initialized with legacy classifier")
 	return classifier, nil
 }
 
@@ -168,10 +163,16 @@ func createResponseAPIFilter(cfg *config.RouterConfig) *ResponseAPIFilter {
 
 	responseStore, err := createResponseStore(cfg)
 	if err != nil {
-		logging.Warnf("Failed to create response store: %v, Response API will be disabled", err)
+		logging.ComponentWarnEvent("extproc", "response_api_store_init_failed", map[string]interface{}{
+			"backend":              cfg.ResponseAPI.StoreBackend,
+			"error":                err.Error(),
+			"response_api_enabled": false,
+		})
 		return nil
 	}
 
-	logging.Infof("Response API enabled with %s backend", cfg.ResponseAPI.StoreBackend)
+	logging.ComponentEvent("extproc", "response_api_initialized", map[string]interface{}{
+		"backend": cfg.ResponseAPI.StoreBackend,
+	})
 	return NewResponseAPIFilter(responseStore)
 }

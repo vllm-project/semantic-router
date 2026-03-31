@@ -235,7 +235,9 @@ func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.Mod
 		a.valueMu.Unlock()
 	}
 
-	logging.Infof("[AutoMix] Initialized capabilities for %d models", len(a.capabilities))
+	logging.ComponentDebugEvent("selection", "automix_capabilities_initialized", map[string]interface{}{
+		"models": len(a.capabilities),
+	})
 }
 
 // Select chooses the best model using POMDP-based cost-quality optimization

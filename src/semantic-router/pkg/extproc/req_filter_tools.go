@@ -366,7 +366,7 @@ func clearToolChoiceWhenNoTools(openAIRequest *openai.ChatCompletionNewParams) b
 		return false
 	}
 
-	logging.Infof("[ToolsPlugin] Clearing tool_choice because no tools are present in the upstream request")
+	logging.Debugf("[ToolsPlugin] Clearing tool_choice because no tools are present in the upstream request")
 	openAIRequest.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{}
 	return true
 }

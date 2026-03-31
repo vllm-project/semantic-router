@@ -201,9 +201,8 @@ func (r *OpenAIRouter) updateStreamingCacheEntry(
 	ttlSeconds int,
 ) error {
 	if err := r.Cache.UpdateWithResponse(requestID, reconstructedJSON, ttlSeconds); err != nil {
-		logging.Errorf("Error caching streaming response with UpdateWithResponse: %v", err)
+		logging.Errorf("Cache update failed for streaming %s: %v", requestID, err)
 		return err
 	}
-	logging.Infof("Successfully cached streaming response (via UpdateWithResponse) for request ID: %s", requestID)
 	return nil
 }

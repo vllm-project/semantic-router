@@ -836,7 +836,9 @@ func (g *GMTRouterSelector) loadState() {
 	if err := json.Unmarshal(data, &g.userStates); err != nil {
 		logging.Warnf("[GMTRouter] Failed to unmarshal state: %v", err)
 	} else {
-		logging.Infof("[GMTRouter] Loaded state with %d users", len(g.userStates))
+		logging.ComponentDebugEvent("selection", "gmt_router_state_loaded", map[string]interface{}{
+			"users": len(g.userStates),
+		})
 	}
 }
 

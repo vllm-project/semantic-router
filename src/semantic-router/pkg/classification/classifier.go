@@ -229,11 +229,11 @@ func (c *Classifier) initializeCategoryClassifier() error {
 		return fmt.Errorf("not enough categories for classification, need at least 2, got %d", numClasses)
 	}
 
-	logging.Infof("🔧 Initializing Intent/Category Classifier:")
-	logging.Infof("Model: %s", c.Config.CategoryModel.ModelID)
-	logging.Infof("Mapping: %s", c.Config.CategoryMappingPath)
-	logging.Infof("Classes: %d", numClasses)
-	logging.Infof("CPU Mode: %v", c.Config.CategoryModel.UseCPU)
+	logging.ComponentEvent("classifier", "category_classifier_init_started", map[string]interface{}{
+		"model_ref": c.Config.CategoryModel.ModelID,
+		"classes":   numClasses,
+		"use_cpu":   c.Config.CategoryModel.UseCPU,
+	})
 
 	return c.categoryInitializer.Init(c.Config.CategoryModel.ModelID, c.Config.CategoryModel.UseCPU, numClasses)
 }
@@ -269,13 +269,10 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 	// Skip initialization if using vLLM (no Candle model to initialize)
 	if c.Config.PromptGuard.UseVLLM {
 		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
-		logging.Infof("Initializing Jailbreak Detector (vLLM mode):")
-		if externalCfg != nil {
-			logging.Infof("External Model: %s", externalCfg.ModelName)
-			logging.Infof("Endpoint: %s", externalCfg.ModelEndpoint.Address)
-		}
-		logging.Infof("Mapping: %s", c.Config.PromptGuard.JailbreakMappingPath)
-		logging.Infof("Using vLLM for jailbreak detection, skipping Candle initialization")
+		logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
+			"mode":      "vllm",
+			"model_ref": externalCfg.ModelName,
+		})
 		return nil
 	}
 
@@ -289,11 +286,12 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		return fmt.Errorf("not enough jailbreak types for classification, need at least 2, got %d", numClasses)
 	}
 
-	logging.Infof("Initializing Jailbreak Detector:")
-	logging.Infof("Model: %s", c.Config.PromptGuard.ModelID)
-	logging.Infof("Mapping: %s", c.Config.PromptGuard.JailbreakMappingPath)
-	logging.Infof("Classes: %d", numClasses)
-	logging.Infof("CPU Mode: %v", c.Config.PromptGuard.UseCPU)
+	logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
+		"mode":      "candle",
+		"model_ref": c.Config.PromptGuard.ModelID,
+		"classes":   numClasses,
+		"use_cpu":   c.Config.PromptGuard.UseCPU,
+	})
 
 	return c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses)
 }
@@ -321,7 +319,7 @@ func (c *Classifier) CheckForJailbreakWithThreshold(text string, threshold float
 	if err != nil {
 		return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
 	}
-	logging.Infof("Jailbreak classification result: %v", result)
+	logging.Debugf("Jailbreak classification result: %v", result)
 
 	// Get the jailbreak type name from the class index
 	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(result.Class)
@@ -334,9 +332,6 @@ func (c *Classifier) CheckForJailbreakWithThreshold(text string, threshold float
 
 	if isJailbreak {
 		logging.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, threshold: %.3f)",
-			jailbreakType, result.Confidence, threshold)
-	} else {
-		logging.Infof("BENIGN: '%s' (confidence: %.3f, threshold: %.3f)",
 			jailbreakType, result.Confidence, threshold)
 	}
 
@@ -402,11 +397,11 @@ func (c *Classifier) initializePIIClassifier() error {
 		return fmt.Errorf("not enough PII types for classification, need at least 2, got %d", numPIIClasses)
 	}
 
-	logging.Infof("Initializing PII Detector:")
-	logging.Infof("Model: %s", c.Config.PIIModel.ModelID)
-	logging.Infof("Mapping: %s", c.Config.PIIMappingPath)
-	logging.Infof("Classes: %d", numPIIClasses)
-	logging.Infof("CPU Mode: %v", c.Config.PIIModel.UseCPU)
+	logging.ComponentEvent("classifier", "pii_detector_init_started", map[string]interface{}{
+		"model_ref": c.Config.PIIModel.ModelID,
+		"classes":   numPIIClasses,
+		"use_cpu":   c.Config.PIIModel.UseCPU,
+	})
 
 	// Pass numClasses to support auto-detection
 	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, numPIIClasses)

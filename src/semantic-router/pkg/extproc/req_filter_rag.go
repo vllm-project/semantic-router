@@ -83,7 +83,7 @@ func (r *OpenAIRouter) executeRAGPlugin(ctx *RequestContext, decisionName string
 		case "skip":
 			fallthrough
 		default:
-			logging.Infof("RAG retrieval failed (on_failure=skip), continuing without context: %v", err)
+		logging.Debugf("RAG retrieval failed (on_failure=skip): %v", err)
 			ctx.RAGRetrievedContext = "" // Clear any partial context
 		}
 		return nil
@@ -112,7 +112,7 @@ func (r *OpenAIRouter) executeRAGPlugin(ctx *RequestContext, decisionName string
 		return nil
 	}
 
-	logging.Infof("RAG plugin executed successfully: backend=%s, context_len=%d, latency=%.3fs",
+	logging.Debugf("RAG plugin executed: backend=%s, context_len=%d, latency=%.3fs",
 		ragConfig.Backend, len(retrievedContext), latency)
 
 	return nil
@@ -208,7 +208,7 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 	if len([]rune(retrievedContext)) > maxLength {
 		runes := []rune(retrievedContext)
 		retrievedContext = string(runes[:maxLength]) + "..."
-		logging.Infof("RAG context truncated to %d characters", maxLength)
+		logging.Debugf("RAG context truncated to %d chars", maxLength)
 	}
 
 	switch injectionMode {
@@ -272,7 +272,7 @@ func (r *OpenAIRouter) injectAsToolRole(messages []interface{}, context string, 
 	ctx.HasToolsForFactCheck = true
 	ctx.ToolResultsContext = context // Store for hallucination detection
 
-	logging.Infof("Injected RAG context as tool role message (%d chars)", len(context))
+	logging.Debugf("Injected RAG context as tool role (%d chars)", len(context))
 	return nil
 }
 
@@ -331,7 +331,7 @@ func (r *OpenAIRouter) injectAsSystemPrompt(messages []interface{}, context stri
 	// Note: For system_prompt mode, we don't set HasToolsForFactCheck
 	// as context is in system prompt, not tool messages
 
-	logging.Infof("Injected RAG context into system prompt (%d chars)", len(context))
+	logging.Debugf("Injected RAG context into system prompt (%d chars)", len(context))
 	return nil
 }
 

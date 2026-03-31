@@ -474,5 +474,7 @@ func (h *HybridSelector) InitializeFromConfig(modelConfig map[string]config.Mode
 		}
 	}
 
-	logging.Infof("[HybridSelector] Initialized from config with %d models", len(modelConfig))
+	logging.ComponentDebugEvent("selection", "hybrid_selector_initialized", map[string]interface{}{
+		"models": len(modelConfig),
+	})
 }

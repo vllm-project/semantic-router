@@ -70,3 +70,25 @@ func TestDetectRouterRuntimeStatusReady(t *testing.T) {
 		t.Fatalf("expected runtime to be ready")
 	}
 }
+
+func TestDetectRouterRuntimeStatusStructuredEvents(t *testing.T) {
+	logContent := strings.Join([]string{
+		`{"event":"required_models_check_started","component":"router"}`,
+		`{"msg":"models/mmbert32k-jailbreak-detector-merged (ready)"}`,
+		`{"event":"required_models_ready","component":"router"}`,
+		`{"event":"embedding_models_init_started","component":"router"}`,
+		`{"event":"embedding_models_initialized","component":"router"}`,
+		`{"event":"startup_complete","component":"router"}`,
+	}, "\n")
+
+	runtime := detectRouterRuntimeStatus(logContent, true)
+	if runtime == nil {
+		t.Fatalf("expected router runtime status")
+	}
+	if runtime.Phase != "ready" {
+		t.Fatalf("expected ready phase, got %q", runtime.Phase)
+	}
+	if !runtime.Ready {
+		t.Fatalf("expected runtime to be ready")
+	}
+}

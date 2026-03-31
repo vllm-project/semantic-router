@@ -301,7 +301,9 @@ func (f *Factory) CreateAll() *Registry {
 	latencyAwareSelector := NewLatencyAwareSelector(nil)
 	registry.Register(MethodLatencyAware, latencyAwareSelector)
 
-	logging.Infof("[SelectionFactory] Created all selectors: static, elo, router_dc, automix, hybrid, knn, kmeans, svm, mlp, rl_driven, gmtrouter, latency_aware")
+	logging.ComponentDebugEvent("selection", "selector_registry_created", map[string]interface{}{
+		"methods": []string{"static", "elo", "router_dc", "automix", "hybrid", "knn", "kmeans", "svm", "mlp", "rl_driven", "gmtrouter", "latency_aware"},
+	})
 	return registry
 }
 

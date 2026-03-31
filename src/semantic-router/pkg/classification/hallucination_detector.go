@@ -231,8 +231,6 @@ func (d *HallucinationDetector) InitializeNLI() error {
 	}
 
 	d.nliInitialized = true
-	logging.Infof("NLI model initialized successfully")
-
 	return nil
 }
 

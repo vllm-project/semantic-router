@@ -20,8 +20,12 @@ func (r *OpenAIRouter) buildHeaderMutations(decision *config.Decision) ([]*corev
 		return nil, nil
 	}
 
-	logging.Debugf("Building header mutations for decision %s: add=%d, update=%d, delete=%d",
-		decision.Name, len(headerConfig.Add), len(headerConfig.Update), len(headerConfig.Delete))
+	logging.ComponentDebugEvent("extproc", "header_mutations_prepared", map[string]interface{}{
+		"decision":     decision.Name,
+		"add_count":    len(headerConfig.Add),
+		"update_count": len(headerConfig.Update),
+		"delete_count": len(headerConfig.Delete),
+	})
 
 	var setHeaders []*corev3.HeaderValueOption
 	var removeHeaders []string
@@ -34,7 +38,6 @@ func (r *OpenAIRouter) buildHeaderMutations(decision *config.Decision) ([]*corev
 				RawValue: []byte(headerPair.Value),
 			},
 		})
-		logging.Debugf("Adding header: %s=%s", headerPair.Name, headerPair.Value)
 	}
 
 	// Apply updates (modify existing headers - in Envoy this is the same as set)
@@ -45,13 +48,11 @@ func (r *OpenAIRouter) buildHeaderMutations(decision *config.Decision) ([]*corev
 				RawValue: []byte(headerPair.Value),
 			},
 		})
-		logging.Debugf("Updating header: %s=%s", headerPair.Name, headerPair.Value)
 	}
 
 	// Apply deletions
 	for _, headerName := range headerConfig.Delete {
 		removeHeaders = append(removeHeaders, headerName)
-		logging.Debugf("Deleting header: %s", headerName)
 	}
 
 	return setHeaders, removeHeaders

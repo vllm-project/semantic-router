@@ -145,8 +145,12 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 			}
 			kc.regexRules = append(kc.regexRules, preppedRule)
 			kc.ruleOrder = append(kc.ruleOrder, ruleRef{method: "regex", name: rule.Name})
-			logging.Infof("Keyword rule %q using regex method (keywords=%d, fuzzy=%v)",
-				rule.Name, len(rule.Keywords), rule.FuzzyMatch)
+			logging.ComponentDebugEvent("classifier", "keyword_rule_registered", map[string]interface{}{
+				"rule":     rule.Name,
+				"method":   "regex",
+				"keywords": len(rule.Keywords),
+				"fuzzy":    rule.FuzzyMatch,
+			})
 		}
 	}
 

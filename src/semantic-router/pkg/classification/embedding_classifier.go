@@ -123,7 +123,9 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 		modelType:           optConfig.ModelType, // Use configured model type
 	}
 
-	logging.Infof("EmbeddingClassifier initialized with model type: %s", c.modelType)
+	logging.ComponentDebugEvent("classifier", "embedding_classifier_initialized", map[string]interface{}{
+		"model_type": c.modelType,
+	})
 
 	// If preloading is enabled, compute all candidate embeddings at startup
 	if optConfig.PreloadEmbeddings {
@@ -227,8 +229,13 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 	}
 
 	elapsed := time.Since(startTime)
-	logging.Infof("[Embedding Signal] Preloaded %d/%d candidate embeddings using model %s in %v (workers: %d)",
-		successCount, len(candidates), modelType, elapsed, numWorkers)
+	logging.ComponentDebugEvent("classifier", "embedding_candidates_preloaded", map[string]interface{}{
+		"success_count":   successCount,
+		"candidate_count": len(candidates),
+		"model_type":      modelType,
+		"workers":         numWorkers,
+		"latency_ms":      elapsed.Milliseconds(),
+	})
 
 	if firstError != nil {
 		return firstError
@@ -424,14 +431,14 @@ func (c *EmbeddingClassifier) findAllMatchedRules(candidateSimilarities map[stri
 
 	// Phase 2: No hard matches — check if soft matching is enabled
 	if c.optimizationConfig.EnableSoftMatching == nil || !*c.optimizationConfig.EnableSoftMatching {
-		logging.Infof("No hard match found and soft matching is disabled")
+		logging.Debugf("No hard match found and soft matching is disabled")
 		return nil
 	}
 
 	softMatches := make([]MatchedRule, 0, len(scoredRules))
 	for _, rule := range scoredRules {
 		if rule.Score >= c.optimizationConfig.MinScoreThreshold {
-			logging.Infof("Soft match found: rule=%q, score=%.4f (min_threshold=%.3f)",
+			logging.Debugf("Soft match found: rule=%q, score=%.4f (min_threshold=%.3f)",
 				rule.Name, rule.Score, c.optimizationConfig.MinScoreThreshold)
 			softMatches = append(softMatches, MatchedRule{
 				RuleName: rule.Name,
@@ -442,7 +449,7 @@ func (c *EmbeddingClassifier) findAllMatchedRules(candidateSimilarities map[stri
 	}
 
 	if len(softMatches) == 0 {
-		logging.Infof("No match found (best score below min_threshold=%.3f)", c.optimizationConfig.MinScoreThreshold)
+		logging.Debugf("No match found (best score below min_threshold=%.3f)", c.optimizationConfig.MinScoreThreshold)
 		return nil
 	}
 
@@ -467,7 +474,7 @@ func (c *EmbeddingClassifier) scoreRules(candidateSimilarities map[string]float3
 		}
 
 		aggregatedScore := c.aggregateScoresForRule(similarities, rule.AggregationMethodConfiged)
-		logging.Infof("Rule %q: aggregated_score=%.4f, threshold=%.3f, matched=%v (method=%s, candidates=%d)",
+		logging.Debugf("Rule %q: aggregated_score=%.4f, threshold=%.3f, matched=%v (method=%s, candidates=%d)",
 			rule.Name, aggregatedScore, rule.SimilarityThreshold,
 			aggregatedScore >= rule.SimilarityThreshold,
 			rule.AggregationMethodConfiged, len(similarities))
@@ -497,7 +504,7 @@ func (c *EmbeddingClassifier) sortAndLimitMatches(matches []MatchedRule) []Match
 		return matches
 	}
 
-	logging.Infof("Embedding matches limited to top_k=%d (available=%d)", topK, len(matches))
+	logging.Debugf("Embedding matches limited to top_k=%d (available=%d)", topK, len(matches))
 	return matches[:topK]
 }
 

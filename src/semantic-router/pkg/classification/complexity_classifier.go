@@ -67,7 +67,9 @@ func NewComplexityClassifier(rules []config.ComplexityRule, modelType string) (*
 func (c *ComplexityClassifier) preloadCandidateEmbeddings() error {
 	startTime := time.Now()
 
-	logging.Infof("[Complexity Signal] Preloading embeddings for hard/easy candidates using model: %s with concurrent processing...", c.modelType)
+	logging.ComponentDebugEvent("classifier", "complexity_embeddings_preload_started", map[string]interface{}{
+		"model_type": c.modelType,
+	})
 
 	type candidateTask struct {
 		ruleName  string

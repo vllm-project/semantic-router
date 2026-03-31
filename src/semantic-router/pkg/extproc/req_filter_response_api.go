@@ -109,10 +109,7 @@ func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (
 			respCtx.HasImageGenerationTool = true
 			respCtx.ImageGenToolParams = req.Tools[i].ExtractImageGenParams()
 			if respCtx.ImageGenToolParams != nil {
-				logging.Infof("Response API: Detected image_generation tool (model=%s, size=%s, quality=%s)",
-					respCtx.ImageGenToolParams.Model, respCtx.ImageGenToolParams.Size, respCtx.ImageGenToolParams.Quality)
-			} else {
-				logging.Warnf("Response API: Detected image_generation tool but ImageGenToolParams is nil")
+				logging.Debugf("Response API: image_generation tool (model=%s, size=%s)", respCtx.ImageGenToolParams.Model, respCtx.ImageGenToolParams.Size)
 			}
 			break
 		}
@@ -126,14 +123,11 @@ func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (
 			// Continue without history - don't fail the request
 		}
 		respCtx.ConversationHistory = history
-		logging.Infof("Response API: Fetched %d messages from conversation history", len(history))
 	}
 
 	// Determine ConversationID early for consistent tracking across the request lifecycle.
 	// This ensures memory extraction can correctly track turns per conversation.
 	respCtx.ConversationID = f.determineConversationID(&req, respCtx.ConversationHistory)
-	logging.Infof("Response API: ConversationID=%s (source: %s)",
-		respCtx.ConversationID, f.getConversationIDSource(&req, respCtx.ConversationHistory))
 
 	// Translate to Chat Completions request
 	completionReq, err := f.translator.TranslateToCompletionRequest(&req, respCtx.ConversationHistory)
@@ -149,9 +143,6 @@ func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (
 
 	// Store translated body in context for later use
 	respCtx.TranslatedBody = translatedBody
-
-	logging.Infof("Response API: Translated request (model=%s, previous_id=%s, history_len=%d)",
-		req.Model, req.PreviousResponseID, len(respCtx.ConversationHistory))
 
 	return respCtx, translatedBody, nil
 }
@@ -207,8 +198,6 @@ func (f *ResponseAPIFilter) TranslateResponse(ctx context.Context, respCtx *Resp
 		stored := f.toStoredResponse(respCtx.OriginalRequest, responseAPIResp)
 		if err := f.store.StoreResponse(ctx, stored); err != nil {
 			logging.Warnf("Response API: Failed to store response: %v", err)
-		} else {
-			logging.Infof("Response API: Stored response %s", responseAPIResp.ID)
 		}
 	}
 
@@ -219,7 +208,6 @@ func (f *ResponseAPIFilter) TranslateResponse(ctx context.Context, respCtx *Resp
 		return body, nil
 	}
 
-	logging.Infof("Response API: Translated response (id=%s, status=%s)", responseAPIResp.ID, responseAPIResp.Status)
 	return translatedBody, nil
 }
 
@@ -288,7 +276,6 @@ func (f *ResponseAPIFilter) HandleGetResponse(ctx context.Context, responseID st
 	stored, err := f.store.GetResponse(ctx, responseID)
 	if err != nil {
 		if errors.Is(err, responsestore.ErrNotFound) {
-			logging.Infof("Response API: Response not found: %s", responseID)
 			return createResponseAPIError(404, "Response not found: "+responseID), nil
 		}
 		logging.Errorf("Response API: Error getting response %s: %v", responseID, err)
@@ -305,7 +292,6 @@ func (f *ResponseAPIFilter) HandleGetResponse(ctx context.Context, responseID st
 		return createResponseAPIError(500, "Error serializing response"), nil
 	}
 
-	logging.Infof("Response API: Retrieved response %s", responseID)
 	return createImmediateJSONResponse(200, body), nil
 }
 
@@ -319,7 +305,6 @@ func (f *ResponseAPIFilter) HandleDeleteResponse(ctx context.Context, responseID
 	err := f.store.DeleteResponse(ctx, responseID)
 	if err != nil {
 		if errors.Is(err, responsestore.ErrNotFound) {
-			logging.Infof("Response API: Response not found for deletion: %s", responseID)
 			return createResponseAPIError(404, "Response not found: "+responseID), nil
 		}
 		logging.Errorf("Response API: Error deleting response %s: %v", responseID, err)
@@ -339,7 +324,6 @@ func (f *ResponseAPIFilter) HandleDeleteResponse(ctx context.Context, responseID
 		return createResponseAPIError(500, "Error serializing response"), nil
 	}
 
-	logging.Infof("Response API: Deleted response %s", responseID)
 	return createImmediateJSONResponse(200, body), nil
 }
 
@@ -353,7 +337,6 @@ func (f *ResponseAPIFilter) HandleGetInputItems(ctx context.Context, responseID 
 	stored, err := f.store.GetResponse(ctx, responseID)
 	if err != nil {
 		if errors.Is(err, responsestore.ErrNotFound) {
-			logging.Infof("Response API: Response not found: %s", responseID)
 			return createResponseAPIError(404, "Response not found: "+responseID), nil
 		}
 		logging.Errorf("Response API: Error getting response %s: %v", responseID, err)
@@ -383,7 +366,6 @@ func (f *ResponseAPIFilter) HandleGetInputItems(ctx context.Context, responseID 
 		return createResponseAPIError(500, "Error serializing response"), nil
 	}
 
-	logging.Infof("Response API: Retrieved %d input items for response %s", len(inputItems), responseID)
 	return createImmediateJSONResponse(200, body), nil
 }
 

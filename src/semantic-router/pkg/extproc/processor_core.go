@@ -47,7 +47,7 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 
 // Process implements the ext_proc calls
 func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
-	logging.Infof("Processing at stage [init]")
+	logging.Debugf("Processing at stage [init]")
 
 	// Initialize request context
 	ctx := &RequestContext{
@@ -60,15 +60,15 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			// Mark streaming as aborted if it was a streaming response
 			// This prevents caching incomplete responses
 			if ctx.IsStreamingResponse && !ctx.StreamingComplete {
-				ctx.StreamingAborted = true
-				logging.Infof("Streaming response aborted before completion, will not cache")
-			}
+					ctx.StreamingAborted = true
+					logging.Debugf("Streaming response aborted before completion, will not cache")
+				}
 
-			// Handle EOF - this indicates the client has closed the stream gracefully
-			if errors.Is(err, io.EOF) {
-				logging.Infof("Stream ended gracefully")
-				return nil
-			}
+				// Handle EOF - this indicates the client has closed the stream gracefully
+				if errors.Is(err, io.EOF) {
+					logging.Debugf("Stream ended gracefully")
+					return nil
+				}
 
 			// Handle gRPC status-based cancellations/timeouts
 			if s, ok := status.FromError(err); ok {
@@ -84,11 +84,11 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 
 			// Handle context cancellation from the server-side context
 			if errors.Is(err, context.Canceled) {
-				logging.Infof("Stream canceled gracefully")
+				logging.Debugf("Stream canceled gracefully")
 				return nil
 			}
 			if errors.Is(err, context.DeadlineExceeded) {
-				logging.Infof("Stream deadline exceeded")
+				logging.Debugf("Stream deadline exceeded")
 				metrics.RecordRequestError(ctx.RequestModel, "timeout")
 				return nil
 			}

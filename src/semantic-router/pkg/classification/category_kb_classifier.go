@@ -167,8 +167,12 @@ func (c *KnowledgeBaseClassifier) preloadEmbeddings() error {
 		c.labels[res.ref.label].Embeddings[res.ref.index] = res.embedding
 	}
 
-	logging.Infof("[KnowledgeBase:%s] Preloaded embeddings for %d exemplars across %d labels in %v",
-		c.rule.Name, len(refs)-failCount, len(c.labels), time.Since(startTime))
+	logging.ComponentDebugEvent("classifier", "knowledge_base_embeddings_preloaded", map[string]interface{}{
+		"knowledge_base": c.rule.Name,
+		"exemplars":      len(refs) - failCount,
+		"labels":         len(c.labels),
+		"latency_ms":     time.Since(startTime).Milliseconds(),
+	})
 	return nil
 }
 
