@@ -28,10 +28,35 @@ func createModelSelectorRegistry(cfg *config.RouterConfig) *selection.Registry {
 
 	registry := selectionFactory.CreateAll()
 	selection.GlobalRegistry = registry
+
+	// Collect algorithm methods actually configured in decisions
+	configuredMethods := collectConfiguredAlgorithmMethods(cfg)
+
+	// Warn about experimental algorithms and check dependency health
+	selection.WarnExperimentalAlgorithms(registry, configuredMethods)
+	selection.CheckDependencyHealth(registry, configuredMethods)
+
 	logging.ComponentEvent("extproc", "model_selection_registry_initialized", map[string]interface{}{
 		"mode": "per_decision_algorithm_config",
 	})
 	return registry
+}
+
+func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.SelectionMethod {
+	seen := make(map[string]bool)
+	var methods []selection.SelectionMethod
+
+	for _, decision := range cfg.IntelligentRouting.Decisions {
+		if decision.Algorithm == nil || decision.Algorithm.Type == "" {
+			continue
+		}
+		if !seen[decision.Algorithm.Type] {
+			seen[decision.Algorithm.Type] = true
+			methods = append(methods, selection.SelectionMethod(decision.Algorithm.Type))
+		}
+	}
+
+	return methods
 }
 
 func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelectionConfig {
