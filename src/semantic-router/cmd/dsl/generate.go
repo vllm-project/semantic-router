@@ -13,6 +13,10 @@ import (
 )
 
 func runGenerate() {
+	os.Exit(doGenerate())
+}
+
+func doGenerate() int {
 	fs := flag.NewFlagSet("generate", flag.ExitOnError)
 	apiURL := fs.String("api-url", envOrDefault("VLLM_API_URL", ""), "LLM API base URL (env: VLLM_API_URL)")
 	model := fs.String("model", envOrDefault("VLLM_MODEL", ""), "Model name (env: VLLM_MODEL)")
@@ -24,16 +28,16 @@ func runGenerate() {
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	if *apiURL == "" {
 		fmt.Fprintln(os.Stderr, "Error: --api-url or VLLM_API_URL is required")
-		os.Exit(1)
+		return 1
 	}
 	if *model == "" {
 		fmt.Fprintln(os.Stderr, "Error: --model or VLLM_MODEL is required")
-		os.Exit(1)
+		return 1
 	}
 
 	instruction := strings.Join(fs.Args(), " ")
@@ -41,14 +45,14 @@ func runGenerate() {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading stdin: %s\n", err)
-			os.Exit(1)
+			return 1
 		}
 		instruction = strings.TrimSpace(string(data))
 	}
 	if instruction == "" {
 		fmt.Fprintln(os.Stderr, "Error: instruction required (positional arg or stdin)")
 		fmt.Fprintln(os.Stderr, "Usage: sr-dsl generate [options] \"natural language description\"")
-		os.Exit(1)
+		return 1
 	}
 
 	client := nlgen.NewOpenAIClient(*apiURL, *model, *apiKey)
@@ -62,7 +66,7 @@ func runGenerate() {
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	if result.ParseError != "" {
@@ -76,14 +80,16 @@ func runGenerate() {
 	}
 
 	if *output != "" {
-		if err := os.WriteFile(*output, []byte(result.DSL+"\n"), 0644); err != nil {
+		if err := os.WriteFile(*output, []byte(result.DSL+"\n"), 0o644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing output: %s\n", err)
-			os.Exit(1)
+			return 1
 		}
 		fmt.Fprintf(os.Stderr, "Wrote DSL to %s\n", *output)
 	} else {
 		fmt.Println(result.DSL)
 	}
+
+	return 0
 }
 
 func envOrDefault(key, def string) string {

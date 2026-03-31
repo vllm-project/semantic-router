@@ -42,7 +42,7 @@ func (c *OpenAIClient) ChatCompletion(ctx context.Context, req ChatCompletionReq
 
 	msgs := make([]message, len(req.Messages))
 	for i, m := range req.Messages {
-		msgs[i] = message{Role: m.Role, Content: m.Content}
+		msgs[i] = message(m)
 	}
 
 	body := chatReq{
