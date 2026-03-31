@@ -201,7 +201,8 @@ class TestConfigTranslator:
         config.write_text(yaml.safe_dump({"listeners": []}))
 
         values = translate_config_to_helm_values(
-            str(config), env_vars={"SR_LOG_LEVEL": "debug", "SR_LOG_ENCODING": "console"}
+            str(config),
+            env_vars={"SR_LOG_LEVEL": "debug", "SR_LOG_ENCODING": "console"},
         )
         env_entries = {entry["name"]: entry["value"] for entry in values["env"]}
 

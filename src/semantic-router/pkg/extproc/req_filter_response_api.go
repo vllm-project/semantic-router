@@ -153,46 +153,75 @@ func (f *ResponseAPIFilter) TranslateResponse(ctx context.Context, respCtx *Resp
 		return body, nil
 	}
 
-	// Check if this is an error response (contains "error" field)
-	var errorCheck map[string]interface{}
-	if err := json.Unmarshal(body, &errorCheck); err == nil {
-		if _, hasError := errorCheck["error"]; hasError {
-			logging.Warnf("Response API: Backend returned error response, passing through")
-			return body, nil
-		}
-	}
-
-	// Parse Chat Completions response
-	var completionResp responseapi.ChatCompletionResponse
-	if err := json.Unmarshal(body, &completionResp); err != nil {
-		logging.Errorf("Response API: Failed to parse completion response: %v", err)
-		return body, nil // Return original on parse error
-	}
-
-	// Validate that we have a valid completion response
-	if completionResp.ID == "" && len(completionResp.Choices) == 0 {
-		logging.Warnf("Response API: Invalid completion response (no id or choices), passing through")
+	if isResponseAPIErrorBody(body) {
+		logging.Warnf("Response API: Backend returned error response, passing through")
 		return body, nil
 	}
 
-	// Translate to Response API format
+	completionResp, ok := parseChatCompletionResponse(body)
+	if !ok {
+		return body, nil
+	}
+
+	responseAPIResp := f.buildTranslatedResponse(respCtx, completionResp)
+	f.maybeStoreTranslatedResponse(ctx, respCtx, responseAPIResp)
+
+	translatedBody, ok := marshalTranslatedResponse(body, responseAPIResp)
+	if !ok {
+		return body, nil
+	}
+
+	return translatedBody, nil
+}
+
+func isResponseAPIErrorBody(body []byte) bool {
+	var errorCheck map[string]interface{}
+	if err := json.Unmarshal(body, &errorCheck); err != nil {
+		return false
+	}
+	_, hasError := errorCheck["error"]
+	return hasError
+}
+
+func parseChatCompletionResponse(body []byte) (*responseapi.ChatCompletionResponse, bool) {
+	var completionResp responseapi.ChatCompletionResponse
+	if err := json.Unmarshal(body, &completionResp); err != nil {
+		logging.Errorf("Response API: Failed to parse completion response: %v", err)
+		return nil, false
+	}
+
+	if completionResp.ID == "" && len(completionResp.Choices) == 0 {
+		logging.Warnf("Response API: Invalid completion response (no id or choices), passing through")
+		return nil, false
+	}
+
+	return &completionResp, true
+}
+
+func (f *ResponseAPIFilter) buildTranslatedResponse(
+	respCtx *ResponseAPIContext,
+	completionResp *responseapi.ChatCompletionResponse,
+) *responseapi.ResponseAPIResponse {
 	responseAPIResp := f.translator.TranslateToResponseAPIResponse(
 		respCtx.OriginalRequest,
-		&completionResp,
+		completionResp,
 		respCtx.PreviousResponseID,
 	)
 
-	// Override ID with pre-generated ID
 	responseAPIResp.ID = respCtx.GeneratedResponseID
 
-	// Use the ConversationID determined during request translation.
-	// This ensures consistent ConversationID across the request lifecycle,
-	// which is critical for memory extraction turn tracking.
 	if respCtx.ConversationID != "" {
 		responseAPIResp.ConversationID = respCtx.ConversationID
 	}
 
-	// Store response if enabled
+	return responseAPIResp
+}
+
+func (f *ResponseAPIFilter) maybeStoreTranslatedResponse(
+	ctx context.Context,
+	respCtx *ResponseAPIContext,
+	responseAPIResp *responseapi.ResponseAPIResponse,
+) {
 	shouldStore := respCtx.OriginalRequest.Store == nil || *respCtx.OriginalRequest.Store
 	if shouldStore && f.store.IsEnabled() {
 		stored := f.toStoredResponse(respCtx.OriginalRequest, responseAPIResp)
@@ -200,15 +229,19 @@ func (f *ResponseAPIFilter) TranslateResponse(ctx context.Context, respCtx *Resp
 			logging.Warnf("Response API: Failed to store response: %v", err)
 		}
 	}
+}
 
-	// Marshal Response API response
+func marshalTranslatedResponse(
+	originalBody []byte,
+	responseAPIResp *responseapi.ResponseAPIResponse,
+) ([]byte, bool) {
 	translatedBody, err := json.Marshal(responseAPIResp)
 	if err != nil {
 		logging.Errorf("Response API: Failed to marshal response: %v", err)
-		return body, nil
+		return originalBody, false
 	}
 
-	return translatedBody, nil
+	return translatedBody, true
 }
 
 // toStoredResponse converts request and response to a StoredResponse for storage.
@@ -432,17 +465,6 @@ func (f *ResponseAPIFilter) determineConversationID(req *responseapi.ResponseAPI
 
 	// Priority 3: Generate new ConversationID (new conversation)
 	return responseapi.GenerateConversationID()
-}
-
-// getConversationIDSource returns a string describing where the ConversationID came from (for logging).
-func (f *ResponseAPIFilter) getConversationIDSource(req *responseapi.ResponseAPIRequest, history []*responseapi.StoredResponse) string {
-	if req.ConversationID != "" {
-		return "request"
-	}
-	if len(history) > 0 && history[0].ConversationID != "" {
-		return "history"
-	}
-	return "generated"
 }
 
 // createResponseAPIError creates an error response in OpenAI format.

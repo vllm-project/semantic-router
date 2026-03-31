@@ -57,104 +57,164 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 	for {
 		req, err := stream.Recv()
 		if err != nil {
-			// Mark streaming as aborted if it was a streaming response
-			// This prevents caching incomplete responses
-			if ctx.IsStreamingResponse && !ctx.StreamingComplete {
-					ctx.StreamingAborted = true
-					logging.Debugf("Streaming response aborted before completion, will not cache")
-				}
+			return r.handleProcessReceiveError(ctx, err)
+		}
 
-				// Handle EOF - this indicates the client has closed the stream gracefully
-				if errors.Is(err, io.EOF) {
-					logging.Debugf("Stream ended gracefully")
-					return nil
-				}
-
-			// Handle gRPC status-based cancellations/timeouts
-			if s, ok := status.FromError(err); ok {
-				switch s.Code() {
-				case codes.Canceled:
-					return nil
-				case codes.DeadlineExceeded:
-					logging.Infof("Stream deadline exceeded")
-					metrics.RecordRequestError(ctx.RequestModel, "timeout")
-					return nil
-				}
-			}
-
-			// Handle context cancellation from the server-side context
-			if errors.Is(err, context.Canceled) {
-				logging.Debugf("Stream canceled gracefully")
-				return nil
-			}
-			if errors.Is(err, context.DeadlineExceeded) {
-				logging.Debugf("Stream deadline exceeded")
-				metrics.RecordRequestError(ctx.RequestModel, "timeout")
-				return nil
-			}
-
-			logging.Errorf("Error receiving request: %v", err)
+		if err := r.handleProcessRequest(stream, req, ctx); err != nil {
 			return err
 		}
-
-		switch v := req.Request.(type) {
-		case *ext_proc.ProcessingRequest_RequestHeaders:
-			response, err := r.handleRequestHeaders(v, ctx)
-			if err != nil {
-				logging.Errorf("handleRequestHeaders failed: %v", err)
-				return err
-			}
-			if err := sendResponse(stream, response, "request header"); err != nil {
-				logging.Errorf("sendResponse for headers failed: %v", err)
-				return err
-			}
-
-		case *ext_proc.ProcessingRequest_RequestBody:
-			response, err := r.handleRequestBodyDispatch(v, ctx)
-			if err != nil {
-				logging.Errorf("handleRequestBody failed: %v", err)
-				return err
-			}
-			if err := sendResponse(stream, response, "request body"); err != nil {
-				logging.Errorf("sendResponse for body failed: %v", err)
-				return err
-			}
-
-		case *ext_proc.ProcessingRequest_ResponseHeaders:
-			response, err := r.handleResponseHeaders(v, ctx)
-			if err != nil {
-				return err
-			}
-			if err := sendResponse(stream, response, "response header"); err != nil {
-				return err
-			}
-
-		case *ext_proc.ProcessingRequest_ResponseBody:
-			response, err := r.handleResponseBody(v, ctx)
-			if err != nil {
-				return err
-			}
-			if err := sendResponse(stream, response, "response body"); err != nil {
-				return err
-			}
-
-		default:
-			logging.Warnf("Unknown request type: %v", v)
-
-			// For unknown message types, create a body response with CONTINUE status
-			response := &ext_proc.ProcessingResponse{
-				Response: &ext_proc.ProcessingResponse_RequestBody{
-					RequestBody: &ext_proc.BodyResponse{
-						Response: &ext_proc.CommonResponse{
-							Status: ext_proc.CommonResponse_CONTINUE,
-						},
-					},
-				},
-			}
-
-			if err := sendResponse(stream, response, "unknown"); err != nil {
-				return err
-			}
-		}
 	}
+}
+
+func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error) error {
+	if ctx.IsStreamingResponse && !ctx.StreamingComplete {
+		ctx.StreamingAborted = true
+		logging.Debugf("Streaming response aborted before completion, will not cache")
+	}
+
+	if errors.Is(err, io.EOF) {
+		logging.Debugf("Stream ended gracefully")
+		return nil
+	}
+
+	if handled := handleProcessStatusError(ctx, err); handled {
+		return nil
+	}
+
+	if handled := handleProcessContextError(ctx, err); handled {
+		return nil
+	}
+
+	logging.Errorf("Error receiving request: %v", err)
+	return err
+}
+
+func handleProcessStatusError(ctx *RequestContext, err error) bool {
+	s, ok := status.FromError(err)
+	if !ok {
+		return false
+	}
+
+	switch s.Code() {
+	case codes.Canceled:
+		return true
+	case codes.DeadlineExceeded:
+		recordProcessTimeout(ctx)
+		return true
+	default:
+		return false
+	}
+}
+
+func handleProcessContextError(ctx *RequestContext, err error) bool {
+	if errors.Is(err, context.Canceled) {
+		logging.Debugf("Stream canceled gracefully")
+		return true
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		recordProcessTimeout(ctx)
+		return true
+	}
+	return false
+}
+
+func recordProcessTimeout(ctx *RequestContext) {
+	logging.Infof("Stream deadline exceeded")
+	metrics.RecordRequestError(ctx.RequestModel, "timeout")
+}
+
+func (r *OpenAIRouter) handleProcessRequest(
+	stream ext_proc.ExternalProcessor_ProcessServer,
+	req *ext_proc.ProcessingRequest,
+	ctx *RequestContext,
+) error {
+	switch v := req.Request.(type) {
+	case *ext_proc.ProcessingRequest_RequestHeaders:
+		return r.processRequestHeaders(stream, v, ctx)
+	case *ext_proc.ProcessingRequest_RequestBody:
+		return r.processRequestBody(stream, v, ctx)
+	case *ext_proc.ProcessingRequest_ResponseHeaders:
+		return r.processResponseHeaders(stream, v, ctx)
+	case *ext_proc.ProcessingRequest_ResponseBody:
+		return r.processResponseBody(stream, v, ctx)
+	default:
+		return processUnknownRequest(stream, v)
+	}
+}
+
+func (r *OpenAIRouter) processRequestHeaders(
+	stream ext_proc.ExternalProcessor_ProcessServer,
+	v *ext_proc.ProcessingRequest_RequestHeaders,
+	ctx *RequestContext,
+) error {
+	response, err := r.handleRequestHeaders(v, ctx)
+	if err != nil {
+		logging.Errorf("handleRequestHeaders failed: %v", err)
+		return err
+	}
+	if err := sendResponse(stream, response, "request header"); err != nil {
+		logging.Errorf("sendResponse for headers failed: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (r *OpenAIRouter) processRequestBody(
+	stream ext_proc.ExternalProcessor_ProcessServer,
+	v *ext_proc.ProcessingRequest_RequestBody,
+	ctx *RequestContext,
+) error {
+	response, err := r.handleRequestBodyDispatch(v, ctx)
+	if err != nil {
+		logging.Errorf("handleRequestBody failed: %v", err)
+		return err
+	}
+	if err := sendResponse(stream, response, "request body"); err != nil {
+		logging.Errorf("sendResponse for body failed: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (r *OpenAIRouter) processResponseHeaders(
+	stream ext_proc.ExternalProcessor_ProcessServer,
+	v *ext_proc.ProcessingRequest_ResponseHeaders,
+	ctx *RequestContext,
+) error {
+	response, err := r.handleResponseHeaders(v, ctx)
+	if err != nil {
+		return err
+	}
+	return sendResponse(stream, response, "response header")
+}
+
+func (r *OpenAIRouter) processResponseBody(
+	stream ext_proc.ExternalProcessor_ProcessServer,
+	v *ext_proc.ProcessingRequest_ResponseBody,
+	ctx *RequestContext,
+) error {
+	response, err := r.handleResponseBody(v, ctx)
+	if err != nil {
+		return err
+	}
+	return sendResponse(stream, response, "response body")
+}
+
+func processUnknownRequest(
+	stream ext_proc.ExternalProcessor_ProcessServer,
+	request interface{},
+) error {
+	logging.Warnf("Unknown request type: %v", request)
+
+	response := &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_RequestBody{
+			RequestBody: &ext_proc.BodyResponse{
+				Response: &ext_proc.CommonResponse{
+					Status: ext_proc.CommonResponse_CONTINUE,
+				},
+			},
+		},
+	}
+
+	return sendResponse(stream, response, "unknown")
 }

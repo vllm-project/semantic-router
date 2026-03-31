@@ -51,9 +51,7 @@ func (r *OpenAIRouter) buildHeaderMutations(decision *config.Decision) ([]*corev
 	}
 
 	// Apply deletions
-	for _, headerName := range headerConfig.Delete {
-		removeHeaders = append(removeHeaders, headerName)
-	}
+	removeHeaders = append(removeHeaders, headerConfig.Delete...)
 
 	return setHeaders, removeHeaders
 }
