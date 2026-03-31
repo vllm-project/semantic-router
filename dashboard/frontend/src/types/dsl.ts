@@ -237,6 +237,41 @@ export interface ConfigVersion {
   filename: string
 }
 
+// ---------- Natural Language Builder ----------
+
+export type BuilderNLConnectionMode = 'default' | 'custom'
+export type BuilderNLProviderKind = 'vllm' | 'openai-compatible' | 'anthropic'
+
+export interface BuilderNLConnection {
+  providerKind: BuilderNLProviderKind
+  modelName: string
+  baseUrl: string
+  accessKey?: string
+  endpointName?: string
+}
+
+export interface BuilderNLGenerateRequest {
+  prompt: string
+  currentDsl?: string
+  connectionMode: BuilderNLConnectionMode
+  customConnection?: BuilderNLConnection
+}
+
+export interface BuilderNLReview {
+  ready: boolean
+  summary: string
+  warnings: string[]
+  checks: string[]
+}
+
+export interface BuilderNLGenerateResponse {
+  dsl: string
+  baseYaml: string
+  summary: string
+  suggestedTestQuery?: string
+  review: BuilderNLReview
+}
+
 // ---------- Editor State ----------
 
 export type EditorMode = 'dsl' | 'visual' | 'nl'

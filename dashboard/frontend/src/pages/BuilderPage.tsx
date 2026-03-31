@@ -17,6 +17,7 @@ import { BuilderDeployConfirmModal, BuilderDeployToast, BuilderDragOverlay } fro
 import { VisualMode } from "./builderPageVisualShell";
 import { BuilderGuideDrawer } from "./builderPageGuideDrawer";
 import { BuilderImportModal } from "./builderPageImportModal";
+import { BuilderNaturalLanguagePanel } from "./builderPageNaturalLanguagePanel";
 import { BuilderOutputPanel } from "./builderPageOutputPanel";
 import { useResizableWidth } from "./builderPageResizeHooks";
 import { BuilderStatusBar } from "./builderPageStatusBar";
@@ -81,6 +82,14 @@ const BuilderPage: React.FC = () => {
     deployPreviewMerged,
     deployPreviewLoading,
     deployPreviewError,
+    nlGenerating,
+    nlGenerateError,
+    nlSummary,
+    nlSuggestedTestQuery,
+    nlReview,
+    nlLastPrompt,
+    generateFromNaturalLanguage,
+    clearNaturalLanguageResult,
   } = useDSLStore();
   const { isReadonly, isLoading: readonlyLoading } = useReadonly();
 
@@ -576,24 +585,19 @@ const BuilderPage: React.FC = () => {
             </div>
           )}
           {mode === "nl" && (
-            <div className={styles.nlPlaceholder}>
-              <div className={styles.nlPlaceholderIcon}>🤖</div>
-              <div className={styles.nlPlaceholderTitle}>
-                Natural Language Mode
-              </div>
-              <div>
-                Describe your routing configuration in plain English and let AI
-                generate DSL for you.
-              </div>
-              <div
-                style={{
-                  fontSize: "var(--text-xs)",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                Coming soon — Phase 6
-              </div>
-            </div>
+            <BuilderNaturalLanguagePanel
+              currentDsl={dslSource}
+              diagnostics={diagnostics}
+              generating={nlGenerating}
+              error={nlGenerateError}
+              summary={nlSummary}
+              suggestedTestQuery={nlSuggestedTestQuery}
+              review={nlReview}
+              lastPrompt={nlLastPrompt}
+              onGenerate={generateFromNaturalLanguage}
+              onClearResult={clearNaturalLanguageResult}
+              onModeSwitch={handleModeSwitch}
+            />
           )}
         </div>
 

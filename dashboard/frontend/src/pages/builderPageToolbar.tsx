@@ -112,9 +112,9 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
           DSL
         </button>
         <button
-          className={styles.modeBtn}
-          disabled
-          title="Natural Language mode — coming soon"
+          className={mode === "nl" ? styles.modeBtnActive : styles.modeBtn}
+          onClick={() => onModeSwitch("nl")}
+          title="Natural Language mode"
         >
           <svg
             width="12"
@@ -150,13 +150,9 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
       <div className={styles.toolbarRight}>
         <button
           className={styles.toolbarBtnPrimary}
-          onClick={mode !== "nl" ? onImport : undefined}
-          disabled={!wasmReady || mode === "nl"}
-          title={
-            mode === "nl"
-              ? "Import Config is not available in NL mode (coming soon)"
-              : "Import router config"
-          }
+          onClick={onImport}
+          disabled={!wasmReady}
+          title="Import router config"
         >
           <svg
             width="12"

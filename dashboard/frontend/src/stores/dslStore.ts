@@ -35,6 +35,8 @@ import {
 } from '@/lib/dslMutations'
 import type { RouteInput } from '@/lib/dslMutations'
 import type {
+  BuilderNLGenerateRequest,
+  BuilderNLGenerateResponse,
   EditorMode,
   CompileResult,
   ValidateResult,
@@ -56,6 +58,20 @@ interface DeployStatusResponse {
 
 let validateTimer: ReturnType<typeof setTimeout> | null = null
 const VALIDATE_DEBOUNCE_MS = 300
+
+async function readErrorMessage(response: Response): Promise<string> {
+  const body = await response.text()
+  if (!body) {
+    return `HTTP ${response.status}: ${response.statusText}`
+  }
+
+  try {
+    const parsed = JSON.parse(body) as { error?: string; message?: string }
+    return parsed.message || parsed.error || body
+  } catch {
+    return body
+  }
+}
 
 // ---------- Initial state ----------
 
@@ -83,6 +99,12 @@ const initialState: DSLState = {
   deployPreviewMerged: '',
   deployPreviewLoading: false,
   deployPreviewError: null,
+  nlGenerating: false,
+  nlGenerateError: null,
+  nlSummary: '',
+  nlSuggestedTestQuery: '',
+  nlReview: null,
+  nlLastPrompt: '',
 }
 
 // ---------- Store ----------
@@ -680,6 +702,77 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     } catch {
       // silently fail
     }
+  },
+
+  async generateFromNaturalLanguage(input: BuilderNLGenerateRequest) {
+    const prompt = input.prompt.trim()
+    if (!prompt) {
+      set({ nlGenerateError: 'Describe the routing behavior you want to build.' })
+      return
+    }
+
+    set({
+      nlGenerating: true,
+      nlGenerateError: null,
+      nlSummary: '',
+      nlSuggestedTestQuery: '',
+      nlReview: null,
+    })
+
+    try {
+      const response = await fetch('/api/router/config/nl/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...input,
+          prompt,
+          currentDsl: input.currentDsl?.trim() || '',
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response))
+      }
+
+      const data = await response.json() as BuilderNLGenerateResponse
+      set({
+        dslSource: data.dsl,
+        baseConfigYaml: data.baseYaml || get().baseConfigYaml,
+        dirty: false,
+        diagnostics: [],
+        compileError: null,
+        ast: null,
+        symbols: null,
+        yamlOutput: '',
+        crdOutput: '',
+        nlGenerating: false,
+        nlGenerateError: null,
+        nlSummary: data.summary || '',
+        nlSuggestedTestQuery: data.suggestedTestQuery || '',
+        nlReview: data.review,
+        nlLastPrompt: prompt,
+      })
+
+      const state = get()
+      if (state.wasmReady && data.dsl.trim()) {
+        state.compile()
+      }
+    } catch (err) {
+      set({
+        nlGenerating: false,
+        nlGenerateError: err instanceof Error ? err.message : String(err),
+      })
+    }
+  },
+
+  clearNaturalLanguageResult() {
+    set({
+      nlGenerateError: null,
+      nlSummary: '',
+      nlSuggestedTestQuery: '',
+      nlReview: null,
+      nlLastPrompt: '',
+    })
   },
 }))
 
