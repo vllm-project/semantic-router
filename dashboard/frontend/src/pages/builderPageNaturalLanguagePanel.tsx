@@ -13,6 +13,7 @@ import type {
 } from "@/types/dsl";
 
 import { BuilderNaturalLanguageProgress } from "./builderPageNaturalLanguageProgress";
+import { BuilderNaturalLanguageResultCard } from "./builderPageNaturalLanguageResultCard";
 import styles from "./builderPageNaturalLanguagePanel.module.css";
 
 interface BuilderNaturalLanguagePanelProps {
@@ -117,13 +118,6 @@ const BuilderNaturalLanguagePanel: React.FC<
   const activeProvider =
     PROVIDER_OPTIONS.find((item) => item.id === providerKind) ??
     PROVIDER_OPTIONS[0];
-  const stagedDiagnostics = stagedDraft?.validation.diagnostics ?? [];
-  const stagedErrorCount = stagedDraft?.validation.errorCount ?? 0;
-  const stagedWarningCount = stagedDiagnostics.filter(
-    (item) => item.level !== "error",
-  ).length;
-  const stagedReviewWarnings = stagedDraft?.review.warnings ?? [];
-  const stagedReviewChecks = stagedDraft?.review.checks ?? [];
   const stagedCompiledOutput = useMemo(() => {
     if (!stagedDraft) {
       return { yaml: "", crd: "", error: "" };
@@ -336,21 +330,23 @@ const BuilderNaturalLanguagePanel: React.FC<
     <div className={styles.container}>
       <section className={styles.headerCard}>
         <div>
-          <div className={styles.kicker}>Builder AI</div>
-          <h2 className={styles.title}>Natural language drafts</h2>
+          <div className={styles.kicker}>Shared nlgen</div>
+          <h2 className={styles.title}>Natural language to DSL</h2>
           <p className={styles.subtitle}>
-            Generate a staged DSL draft, inspect repository validation results,
-            then apply it into Builder only when you are ready.
+            Describe a routing requirement in plain language. Builder now runs
+            the shared schema-grounded NL→DSL pipeline first, then stages the
+            resulting draft only after repository checks finish.
           </p>
         </div>
         <div className={styles.headerMeta}>
           <span className={styles.badge}>
-            Preferred target: `{preferredTargetModelName}`
+            Generator: `{activeGeneratorModelName || DEFAULT_GENERATION_MODEL}`
           </span>
+          <span className={styles.badge}>Draft target: `{preferredTargetModelName}`</span>
           {liveModelCards.length > 0 ? (
             <div className={styles.modelCardGroup}>
               <span className={styles.badgeMuted}>
-                Live model cards: {liveModelCards.length}
+                Live route models: {liveModelCards.length}
               </span>
               <div className={styles.modelCardList}>
                 {liveModelCards.map((modelName) => (
@@ -362,13 +358,13 @@ const BuilderNaturalLanguagePanel: React.FC<
             </div>
           ) : (
             <span className={styles.badgeMuted}>
-              No live router model cards are loaded yet, so Builder will fall
-              back to `{FALLBACK_TARGET_MODEL}`.
+              No live router model cards are loaded yet, so Builder will fall back
+              to `{FALLBACK_TARGET_MODEL}` for draft route references.
             </span>
           )}
           <span className={styles.badgeMuted}>
             {hasContextDsl
-              ? `Live Builder context: ${contextLineCount} lines`
+              ? `Live Builder context: ${contextLineCount} lines available`
               : "No live Builder DSL loaded yet"}
           </span>
           <span className={styles.badgeMuted}>
@@ -380,443 +376,297 @@ const BuilderNaturalLanguagePanel: React.FC<
       <BuilderNaturalLanguageProgress
         generating={generating}
         progressEvents={progressEvents}
+        stagedDraft={stagedDraft}
       />
 
       <div className={styles.contentStack}>
         <section className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
-              <h3 className={styles.cardTitle}>Describe the routing change</h3>
+              <h3 className={styles.cardTitle}>Prompt and runtime</h3>
               <p className={styles.sectionHint}>
-                Keep the request concrete. Mention routes, signals, priorities,
-                and fallback behavior.
+                Keep the request concrete. Mention route intent, signals,
+                priorities, and fallback behavior, then choose which runtime
+                should execute the shared generation call.
               </p>
             </div>
           </div>
 
-          <div className={styles.presetGrid}>
-            {promptPresets.map((item) => (
-              <button
-                key={item}
-                className={styles.presetBtn}
-                onClick={() => setPrompt(item)}
-                type="button"
-              >
-                {item}
-              </button>
-            ))}
-          </div>
+          <div className={styles.composerGrid}>
+            <div className={styles.composerPrimary}>
+              <div>
+                <div className={styles.resultLabel}>Routing request</div>
+                <div className={styles.composerTitle}>
+                  Describe the routing intent
+                </div>
+                <div className={styles.composerText}>
+                  Write the same kind of request you would pass to
+                  `sr-dsl generate`: what routes should exist, how they should
+                  match, and what fallback behavior should remain.
+                </div>
+              </div>
 
-          <label className={styles.label} htmlFor="builder-nl-prompt">
-            Request
-          </label>
-          <textarea
-            id="builder-nl-prompt"
-            className={styles.textarea}
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder={`Example: create a high-priority route for urgent customer escalations, add a multilingual support route, and keep a general fallback route to ${preferredTargetModelName}.`}
-          />
+              <div className={styles.presetGrid}>
+                {promptPresets.map((item) => (
+                  <button
+                    key={item}
+                    className={styles.presetBtn}
+                    onClick={() => setPrompt(item)}
+                    type="button"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
 
-          <div className={styles.contextPanel}>
-            <label className={styles.checkboxRow}>
-              <input
-                checked={useCurrentDslContext}
-                disabled={!hasContextDsl}
-                onChange={(event) => setUseCurrentDslContext(event.target.checked)}
-                type="checkbox"
+              <label className={styles.label} htmlFor="builder-nl-prompt">
+                Request
+              </label>
+              <textarea
+                id="builder-nl-prompt"
+                className={styles.textarea}
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder={`Example: add multilingual routing for Chinese and English prompts, then keep a general fallback route to ${preferredTargetModelName}.`}
               />
-              <span>
-                Reuse the live Builder DSL as editing context
-                {hasContextDsl ? "." : " (no live Builder DSL is loaded yet)."}
-              </span>
-            </label>
-            <div className={styles.contextMeta}>
-              {hasContextDsl
-                ? `${contextLineCount} lines from the live Builder draft will be sent as context, but the live draft will not be replaced until you apply the staged result.`
-                : "Generation will start from an empty Builder draft."}
-            </div>
-          </div>
 
-          <div className={styles.sectionHeader}>
-            <div>
-              <h3 className={styles.cardTitle}>Generation connection</h3>
-              <p className={styles.sectionHint}>
-                This controls which model generates the draft. It does not
-                silently rewrite deploy-time provider config.
-              </p>
-            </div>
-          </div>
-
-          <div className={styles.segmented}>
-            <button
-              className={
-                connectionMode === "default"
-                  ? styles.segmentActive
-                  : styles.segment
-              }
-              onClick={() => setConnectionMode("default")}
-              type="button"
-            >
-              Default runtime
-            </button>
-            <button
-              className={
-                connectionMode === "custom"
-                  ? styles.segmentActive
-                  : styles.segment
-              }
-              onClick={() => setConnectionMode("custom")}
-              type="button"
-            >
-              Custom connection
-            </button>
-          </div>
-
-          {connectionMode === "default" ? (
-            <div className={styles.infoCard}>
-              <div className={styles.infoTitle}>Use the current router runtime</div>
-              <div className={styles.infoText}>
-                Builder will call the configured runtime gateway with
-                `{DEFAULT_GENERATION_MODEL}` to create the draft. The generated
-                DSL still reuses the current router model cards and prefers
-                `{preferredTargetModelName}` for route references.
-              </div>
-            </div>
-          ) : (
-            <div className={styles.formGrid}>
-              <div className={styles.fieldGroup}>
-                <label className={styles.label} htmlFor="builder-nl-provider">
-                  Provider type
-                </label>
-                <select
-                  id="builder-nl-provider"
-                  className={styles.select}
-                  value={providerKind}
-                  onChange={(event) =>
-                    setProviderKind(event.target.value as BuilderNLProviderKind)
-                  }
-                >
-                  {PROVIDER_OPTIONS.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-                <div className={styles.helpText}>{activeProvider.description}</div>
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.label} htmlFor="builder-nl-model">
-                  Generation model
-                </label>
-                <input
-                  id="builder-nl-model"
-                  className={styles.input}
-                  value={modelName}
-                  onChange={(event) => setModelName(event.target.value)}
-                  placeholder="gpt-4o-mini"
-                />
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.label} htmlFor="builder-nl-baseurl">
-                  Base URL
-                </label>
-                <input
-                  id="builder-nl-baseurl"
-                  className={styles.input}
-                  value={baseUrl}
-                  onChange={(event) => setBaseUrl(event.target.value)}
-                  placeholder={activeProvider.placeholder}
-                />
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.label} htmlFor="builder-nl-endpoint">
-                  Endpoint name
-                </label>
-                <input
-                  id="builder-nl-endpoint"
-                  className={styles.input}
-                  value={endpointName}
-                  onChange={(event) => setEndpointName(event.target.value)}
-                  placeholder="nl-custom"
-                />
-              </div>
-
-              <div className={`${styles.fieldGroup} ${styles.fullSpan}`}>
-                <label className={styles.label} htmlFor="builder-nl-key">
-                  Access key
-                </label>
-                <input
-                  id="builder-nl-key"
-                  className={styles.input}
-                  type="password"
-                  value={accessKey}
-                  onChange={(event) => setAccessKey(event.target.value)}
-                  placeholder="Optional unless the endpoint requires authentication"
-                />
-              </div>
-            </div>
-          )}
-
-          {(error || verifyError) && (
-            <div className={styles.errorBox}>{error || verifyError}</div>
-          )}
-
-          {verifyResult && (
-            <div className={styles.verifyBox}>
-              <div className={styles.verifyTitle}>Connection verified</div>
-              <div className={styles.verifyText}>{verifyResult.summary}</div>
-              <div className={styles.verifyMeta}>
-                {verifyResult.modelName
-                  ? `Generator: ${verifyResult.modelName}`
-                  : `Generator: ${activeGeneratorModelName || DEFAULT_GENERATION_MODEL}`}
-                {verifyResult.targetModelName
-                  ? ` · Draft target: ${verifyResult.targetModelName}`
-                  : ""}
-                {verifyResult.endpoint ? ` · Endpoint: ${verifyResult.endpoint}` : ""}
-              </div>
-            </div>
-          )}
-
-          <div className={styles.actionRow}>
-            <button
-              className={styles.secondaryBtn}
-              disabled={verifying}
-              onClick={() => {
-                void handleVerify();
-              }}
-              type="button"
-            >
-              {verifying ? "Verifying…" : "Verify connection"}
-            </button>
-            <button
-              className={styles.primaryBtn}
-              disabled={generating || !prompt.trim()}
-              onClick={() => {
-                void handleGenerate();
-              }}
-              type="button"
-            >
-              {generating ? "Generating draft…" : "Generate staged draft"}
-            </button>
-            <button
-              className={styles.ghostBtn}
-              onClick={() => onModeSwitch("dsl")}
-              type="button"
-            >
-              Open live DSL editor
-            </button>
-          </div>
-        </section>
-
-        <section className={styles.card}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <h3 className={styles.cardTitle}>Staged draft</h3>
-              <p className={styles.sectionHint}>
-                Review the generated draft before it replaces the live Builder
-                DSL.
-              </p>
-            </div>
-            {stagedDraft && (
-              <button
-                className={styles.ghostBtn}
-                onClick={onDiscardDraft}
-                type="button"
-              >
-                Discard
-              </button>
-            )}
-          </div>
-
-          {stagedDraft ? (
-            <>
-              <div className={styles.summaryCard}>
-                <div className={styles.resultLabel}>Request</div>
-                <div className={styles.requestPreview}>{stagedDraft.prompt}</div>
-                <div className={styles.summaryDivider} />
-                <div className={styles.resultLabel}>Summary</div>
-                <div className={styles.resultText}>
-                  {stagedDraft.summary || "Draft generated."}
-                </div>
-              </div>
-
-              <div className={styles.statusGrid}>
-                <div className={styles.statusCard}>
-                  <div className={styles.resultLabel}>Draft validation</div>
-                  <div
-                    className={
-                      stagedDraft.validation.ready
-                        ? styles.statusOk
-                        : styles.statusWarn
+              <div className={styles.contextPanel}>
+                <label className={styles.checkboxRow}>
+                  <input
+                    checked={useCurrentDslContext}
+                    disabled={!hasContextDsl}
+                    onChange={(event) =>
+                      setUseCurrentDslContext(event.target.checked)
                     }
-                  >
-                    {stagedDraft.validation.ready
-                      ? "Repository validation passed"
-                      : `${stagedErrorCount} validation error${stagedErrorCount === 1 ? "" : "s"}`}
+                    type="checkbox"
+                  />
+                  <span>
+                    Reuse the live Builder DSL as context
+                    {hasContextDsl ? "." : " (no live Builder DSL is loaded yet)."}
+                  </span>
+                </label>
+                <div className={styles.contextMeta}>
+                  {hasContextDsl
+                    ? `${contextLineCount} lines from the live Builder draft will be supplied as context, but the live draft stays unchanged until you apply the staged result.`
+                    : "Generation will start from an empty Builder draft."}
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.composerSecondary}>
+              <div>
+                <div className={styles.resultLabel}>Generation runtime</div>
+                <div className={styles.composerTitle}>
+                  Choose how the shared model call runs
+                </div>
+                <div className={styles.composerText}>
+                  This controls only the generation runtime. It does not rewrite
+                  deploy-time provider config or the live Builder state.
+                </div>
+              </div>
+
+              <div className={styles.runtimeSummaryGrid}>
+                <div className={styles.runtimeSummaryCard}>
+                  <div className={styles.resultLabel}>Generator</div>
+                  <div className={styles.runtimeSummaryValue}>
+                    `{activeGeneratorModelName || DEFAULT_GENERATION_MODEL}`
                   </div>
-                  <div className={styles.statusMeta}>
-                    {stagedDraft.validation.ready
-                      ? stagedWarningCount > 0
-                        ? `${stagedWarningCount} warning${stagedWarningCount === 1 ? "" : "s"} still deserve a review.`
-                        : "No validation blockers were reported for this staged draft."
-                      : "The staged draft is preserved here for inspection and optional manual repair."}
+                  <div className={styles.runtimeSummaryText}>
+                    The model used for the actual NL→DSL generation call.
                   </div>
                 </div>
-
-                <div className={styles.statusCard}>
-                  <div className={styles.resultLabel}>Readiness review</div>
-                  <div
-                    className={
-                      stagedDraft.review.ready
-                        ? styles.statusOk
-                        : styles.statusWarn
-                    }
-                  >
-                    {stagedDraft.review.ready
-                      ? "Ready for Builder apply"
-                      : "Manual review recommended"}
+                <div className={styles.runtimeSummaryCard}>
+                  <div className={styles.resultLabel}>Draft target</div>
+                  <div className={styles.runtimeSummaryValue}>
+                    `{preferredTargetModelName}`
                   </div>
-                  <div className={styles.statusMeta}>
-                    {stagedDraft.review.summary}
+                  <div className={styles.runtimeSummaryText}>
+                    The preferred live router model referenced by generated
+                    routes.
                   </div>
                 </div>
               </div>
 
-              {stagedDraft.validation.compileError && (
-                <div className={styles.resultBlock}>
-                  <div className={styles.resultLabel}>Compile error</div>
-                  <div className={styles.errorText}>
-                    {stagedDraft.validation.compileError}
-                  </div>
-                </div>
-              )}
-
-              {stagedDiagnostics.length > 0 && (
-                <div className={styles.resultBlock}>
-                  <div className={styles.resultLabel}>Validation findings</div>
-                  <ul className={styles.list}>
-                    {stagedDiagnostics.slice(0, 6).map((item, index) => (
-                      <li key={`${item.message}-${index}`}>
-                        <strong>{item.level}</strong>: {item.message}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {stagedReviewWarnings.length > 0 && (
-                <div className={styles.resultBlock}>
-                  <div className={styles.resultLabel}>Review warnings</div>
-                  <ul className={styles.list}>
-                    {stagedReviewWarnings.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {stagedReviewChecks.length > 0 && (
-                <div className={styles.resultBlock}>
-                  <div className={styles.resultLabel}>Checks completed</div>
-                  <ul className={styles.listMuted}>
-                    {stagedReviewChecks.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {stagedDraft.suggestedTestQuery && (
-                <div className={styles.resultBlock}>
-                  <div className={styles.resultLabel}>Suggested test prompt</div>
-                  <div className={styles.testQuery}>
-                    {stagedDraft.suggestedTestQuery}
-                  </div>
-                </div>
-              )}
-
-              <div className={styles.resultBlock}>
-                <div className={styles.previewHeader}>
-                  <div>
-                    <div className={styles.resultLabel}>Draft outputs</div>
-                    <div className={styles.previewCaption}>
-                      Inspect the staged DSL and generated outputs before you
-                      apply anything into the live Builder state.
-                    </div>
-                  </div>
-                  <div className={styles.previewActions}>
-                    <div className={styles.previewTabRow}>
-                      {draftPreviewOptions.map((option) => (
-                        <button
-                          className={
-                            option.key === activeDraftPreview?.key
-                              ? styles.segmentActive
-                              : styles.segment
-                          }
-                          key={option.key}
-                          onClick={() => setPreviewTab(option.key)}
-                          type="button"
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      className={styles.ghostBtn}
-                      disabled={!activeDraftPreview?.content}
-                      onClick={handleCopyPreview}
-                      type="button"
-                    >
-                      {copiedPreview === activeDraftPreview?.key
-                        ? "Copied"
-                        : `Copy ${activeDraftPreview?.label ?? "output"}`}
-                    </button>
-                  </div>
-                </div>
-
-                {activeDraftPreview?.content ? (
-                  <pre className={styles.preview}>{activeDraftPreview.content}</pre>
-                ) : (
-                  <div className={styles.previewEmpty}>
-                    {activeDraftPreview?.emptyText ||
-                      "No staged draft output is available yet."}
-                  </div>
-                )}
-              </div>
-
-              <div className={styles.applyRow}>
+              <div className={styles.segmented}>
                 <button
-                  className={styles.primaryBtn}
-                  onClick={onApplyDraft}
+                  className={
+                    connectionMode === "default"
+                      ? styles.segmentActive
+                      : styles.segment
+                  }
+                  onClick={() => setConnectionMode("default")}
                   type="button"
                 >
-                  {stagedDraft.validation.ready
-                    ? "Apply draft to Builder"
-                    : "Open draft in Builder for repair"}
+                  Default runtime
                 </button>
                 <button
+                  className={
+                    connectionMode === "custom"
+                      ? styles.segmentActive
+                      : styles.segment
+                  }
+                  onClick={() => setConnectionMode("custom")}
+                  type="button"
+                >
+                  Custom connection
+                </button>
+              </div>
+
+              {connectionMode === "default" ? (
+                <div className={styles.infoCard}>
+                  <div className={styles.infoTitle}>Use the current runtime</div>
+                  <div className={styles.infoText}>
+                    Builder will call the configured runtime gateway with
+                    `{DEFAULT_GENERATION_MODEL}` to run the shared nlgen pipeline.
+                    The generated DSL still prefers `{preferredTargetModelName}`
+                    and the currently loaded router model cards for route
+                    references.
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.formGrid}>
+                  <div className={styles.fieldGroup}>
+                    <label className={styles.label} htmlFor="builder-nl-provider">
+                      Provider type
+                    </label>
+                    <select
+                      id="builder-nl-provider"
+                      className={styles.select}
+                      value={providerKind}
+                      onChange={(event) =>
+                        setProviderKind(event.target.value as BuilderNLProviderKind)
+                      }
+                    >
+                      {PROVIDER_OPTIONS.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className={styles.helpText}>{activeProvider.description}</div>
+                  </div>
+
+                  <div className={styles.fieldGroup}>
+                    <label className={styles.label} htmlFor="builder-nl-model">
+                      Generation model
+                    </label>
+                    <input
+                      id="builder-nl-model"
+                      className={styles.input}
+                      value={modelName}
+                      onChange={(event) => setModelName(event.target.value)}
+                      placeholder="gpt-4o-mini"
+                    />
+                  </div>
+
+                  <div className={styles.fieldGroup}>
+                    <label className={styles.label} htmlFor="builder-nl-baseurl">
+                      Base URL
+                    </label>
+                    <input
+                      id="builder-nl-baseurl"
+                      className={styles.input}
+                      value={baseUrl}
+                      onChange={(event) => setBaseUrl(event.target.value)}
+                      placeholder={activeProvider.placeholder}
+                    />
+                  </div>
+
+                  <div className={styles.fieldGroup}>
+                    <label className={styles.label} htmlFor="builder-nl-endpoint">
+                      Endpoint name
+                    </label>
+                    <input
+                      id="builder-nl-endpoint"
+                      className={styles.input}
+                      value={endpointName}
+                      onChange={(event) => setEndpointName(event.target.value)}
+                      placeholder="nl-custom"
+                    />
+                  </div>
+
+                  <div className={`${styles.fieldGroup} ${styles.fullSpan}`}>
+                    <label className={styles.label} htmlFor="builder-nl-key">
+                      Access key
+                    </label>
+                    <input
+                      id="builder-nl-key"
+                      className={styles.input}
+                      type="password"
+                      value={accessKey}
+                      onChange={(event) => setAccessKey(event.target.value)}
+                      placeholder="Optional unless the endpoint requires authentication"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {(error || verifyError) && (
+                <div className={styles.errorBox}>{error || verifyError}</div>
+              )}
+
+              {verifyResult && (
+                <div className={styles.verifyBox}>
+                  <div className={styles.verifyTitle}>Runtime verified</div>
+                  <div className={styles.verifyText}>{verifyResult.summary}</div>
+                  <div className={styles.verifyMeta}>
+                    {verifyResult.modelName
+                      ? `Generator: ${verifyResult.modelName}`
+                      : `Generator: ${activeGeneratorModelName || DEFAULT_GENERATION_MODEL}`}
+                    {verifyResult.targetModelName
+                      ? ` · Draft target: ${verifyResult.targetModelName}`
+                      : ""}
+                    {verifyResult.endpoint
+                      ? ` · Endpoint: ${verifyResult.endpoint}`
+                      : ""}
+                  </div>
+                </div>
+              )}
+
+              <div className={styles.actionRow}>
+                <button
                   className={styles.secondaryBtn}
+                  disabled={verifying}
+                  onClick={() => {
+                    void handleVerify();
+                  }}
+                  type="button"
+                >
+                  {verifying ? "Verifying runtime…" : "Verify runtime"}
+                </button>
+                <button
+                  className={styles.primaryBtn}
+                  disabled={generating || !prompt.trim()}
+                  onClick={() => {
+                    void handleGenerate();
+                  }}
+                  type="button"
+                >
+                  {generating ? "Generating DSL…" : "Generate DSL"}
+                </button>
+                <button
+                  className={styles.ghostBtn}
                   onClick={() => onModeSwitch("dsl")}
                   type="button"
                 >
-                  Open live DSL editor
+                  Open live Builder draft
                 </button>
               </div>
-            </>
-          ) : (
-            <div className={styles.emptyState}>
-              <div className={styles.emptyTitle}>No staged draft yet</div>
-              <div className={styles.emptyText}>
-                Generate a draft to inspect repository validation and the staged
-                readiness review before you touch the live Builder state.
-              </div>
             </div>
-          )}
+          </div>
         </section>
+
+        <BuilderNaturalLanguageResultCard
+          stagedDraft={stagedDraft}
+          draftPreviewOptions={draftPreviewOptions}
+          activeDraftPreview={activeDraftPreview}
+          copiedPreview={copiedPreview}
+          onPreviewTabChange={setPreviewTab}
+          onCopyPreview={handleCopyPreview}
+          onApplyDraft={onApplyDraft}
+          onDiscardDraft={onDiscardDraft}
+          onModeSwitch={onModeSwitch}
+        />
       </div>
     </div>
   );

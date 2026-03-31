@@ -122,6 +122,80 @@
   min-width: 0;
 }
 
+.composerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+  gap: var(--spacing-lg);
+  align-items: start;
+}
+
+.composerPrimary,
+.composerSecondary,
+.resultMain,
+.resultSidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  min-width: 0;
+}
+
+.composerTitle,
+.progressSectionTitle,
+.resultStatusTitle,
+.attemptCardTitle {
+  color: var(--color-text);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.composerText,
+.progressSectionText,
+.resultStatusText,
+.runtimeSummaryText,
+.flowNodeDescription,
+.flowNodeMessage,
+.flowNodeNote,
+.attemptCardText,
+.attemptPhaseText {
+  color: var(--color-text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.runtimeSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.runtimeSummaryCard,
+.resultMetaCard,
+.flowNode,
+.attemptCard,
+.handoffNode {
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.runtimeSummaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.95rem 1rem;
+}
+
+.runtimeSummaryValue {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  font-weight: 700;
+  word-break: break-word;
+}
+
 .card {
   display: flex;
   flex-direction: column;
@@ -381,6 +455,134 @@
     radial-gradient(circle at top right, rgba(118, 185, 0, 0.08), transparent 34%),
     linear-gradient(180deg, rgba(16, 20, 16, 0.18), rgba(16, 20, 16, 0.05)),
     var(--color-bg-secondary);
+}
+
+.progressSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.progressSectionLead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.progressTrack {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.flowNode,
+.handoffNode {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  min-width: 0;
+  padding: 1rem;
+}
+
+.flowNodeIcon,
+.handoffNodeIcon,
+.attemptPhaseIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 15px;
+  color: #d7f6bf;
+  background: rgba(118, 185, 0, 0.14);
+  border: 1px solid rgba(118, 185, 0, 0.24);
+  flex-shrink: 0;
+}
+
+.flowNodeIcon svg,
+.handoffNodeIcon svg,
+.attemptPhaseIcon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.flowNodeBody,
+.handoffNodeBody,
+.attemptPhaseBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  min-width: 0;
+}
+
+.flowNodeHeader,
+.handoffNodeHeader,
+.attemptCardHeader,
+.attemptPhaseHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.flowNodeTitle,
+.attemptPhaseTitle {
+  color: var(--color-text);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.flowNodeMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-top: 0.1rem;
+}
+
+.attemptStack {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.attemptCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: 1rem;
+}
+
+.attemptPhaseList {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.attemptPhaseRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  min-width: 0;
+  padding: 0.75rem 0.8rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.handoffGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.consoleToggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
 }
 
 .consoleMeta {
@@ -865,6 +1067,53 @@
     var(--color-bg-secondary);
 }
 
+.resultStatusBanner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.resultStatusReady {
+  background:
+    linear-gradient(180deg, rgba(52, 211, 153, 0.12), rgba(52, 211, 153, 0.04)),
+    var(--color-bg-secondary);
+  border-color: rgba(52, 211, 153, 0.22);
+}
+
+.resultStatusWarn {
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04)),
+    var(--color-bg-secondary);
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.resultStatusMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.resultLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.95fr);
+  gap: var(--spacing-lg);
+  align-items: start;
+}
+
+.resultMetaCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 1rem;
+}
+
 .resultLabel {
   font-size: 0.72rem;
   font-weight: 700;
@@ -1009,6 +1258,10 @@
     grid-template-columns: 1fr;
   }
 
+  .composerGrid,
+  .resultLayout,
+  .progressTrack,
+  .handoffGrid,
   .processSummaryGrid {
     grid-template-columns: 1fr;
   }
@@ -1025,6 +1278,7 @@
   }
 
   .formGrid,
+  .runtimeSummaryGrid,
   .statusGrid {
     grid-template-columns: 1fr;
   }
