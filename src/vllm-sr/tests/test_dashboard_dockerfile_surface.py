@@ -17,3 +17,11 @@ def test_dashboard_dockerfile_retries_runtime_apk_installs() -> None:
         "apk_add_with_retry ca-certificates curl docker-cli py3-pip python3 su-exec wget"
         in content
     )
+
+
+def test_dashboard_dockerfile_copies_router_dsl_package_for_backend_builds() -> None:
+    content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
+
+    assert (
+        "COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/" in content
+    )
