@@ -9,8 +9,9 @@
 ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM rust:1.90 AS rust-cross-builder
 
-# Install cross-compilation dependencies
+# Install cross-compilation dependencies (both directions: amd64 <-> arm64)
 RUN dpkg --add-architecture arm64 && \
+    dpkg --add-architecture amd64 && \
     apt-get update && apt-get install -y \
     make \
     build-essential \
@@ -22,6 +23,10 @@ RUN dpkg --add-architecture arm64 && \
     g++-aarch64-linux-gnu \
     libc6-dev-arm64-cross \
     binutils-aarch64-linux-gnu \
+    gcc-x86-64-linux-gnu \
+    g++-x86-64-linux-gnu \
+    libc6-dev-amd64-cross \
+    binutils-x86-64-linux-gnu \
     libssl-dev:arm64 \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -29,13 +34,19 @@ RUN dpkg --add-architecture arm64 && \
 # Install cross-compilation Rust target
 RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
 
-# Configure cross-compilation environment
+# Configure cross-compilation environment (arm64 target)
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
 ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
 ENV AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
 ENV STRIP_aarch64_unknown_linux_gnu=aarch64-linux-gnu-strip
 ENV OBJCOPY_aarch64_unknown_linux_gnu=aarch64-linux-gnu-objcopy
+
+# Configure cross-compilation environment (x86_64 target)
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc
+ENV CC_x86_64_unknown_linux_gnu=x86_64-linux-gnu-gcc
+ENV CXX_x86_64_unknown_linux_gnu=x86_64-linux-gnu-g++
+ENV AR_x86_64_unknown_linux_gnu=x86_64-linux-gnu-ar
 
 # Configure OpenSSL for cross-compilation
 ENV PKG_CONFIG_ALLOW_CROSS=1
@@ -97,6 +108,7 @@ ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM rust:1.90 AS onnx-cross-builder
 
 RUN dpkg --add-architecture arm64 && \
+    dpkg --add-architecture amd64 && \
     apt-get update && apt-get install -y \
     make \
     build-essential \
@@ -108,6 +120,10 @@ RUN dpkg --add-architecture arm64 && \
     g++-aarch64-linux-gnu \
     libc6-dev-arm64-cross \
     binutils-aarch64-linux-gnu \
+    gcc-x86-64-linux-gnu \
+    g++-x86-64-linux-gnu \
+    libc6-dev-amd64-cross \
+    binutils-x86-64-linux-gnu \
     libssl-dev:arm64 \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -120,6 +136,10 @@ ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
 ENV AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
 ENV STRIP_aarch64_unknown_linux_gnu=aarch64-linux-gnu-strip
 ENV OBJCOPY_aarch64_unknown_linux_gnu=aarch64-linux-gnu-objcopy
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc
+ENV CC_x86_64_unknown_linux_gnu=x86_64-linux-gnu-gcc
+ENV CXX_x86_64_unknown_linux_gnu=x86_64-linux-gnu-g++
+ENV AR_x86_64_unknown_linux_gnu=x86_64-linux-gnu-ar
 ENV PKG_CONFIG_ALLOW_CROSS=1
 ENV PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
 ENV OPENSSL_DIR=/usr
@@ -178,12 +198,19 @@ FROM --platform=$BUILDPLATFORM rust:1.90 AS ml-cross-builder
 ARG TARGETARCH
 
 RUN dpkg --add-architecture arm64 && \
+    dpkg --add-architecture amd64 && \
     apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
+    lld \
+    clang \
+    binutils \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
     libc6-dev-arm64-cross \
+    gcc-x86-64-linux-gnu \
+    g++-x86-64-linux-gnu \
+    libc6-dev-amd64-cross \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
@@ -191,6 +218,9 @@ RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
 ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc
+ENV CC_x86_64_unknown_linux_gnu=x86_64-linux-gnu-gcc
+ENV CXX_x86_64_unknown_linux_gnu=x86_64-linux-gnu-g++
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
 WORKDIR /app
@@ -229,12 +259,19 @@ FROM --platform=$BUILDPLATFORM rust:1.90 AS nlp-cross-builder
 ARG TARGETARCH
 
 RUN dpkg --add-architecture arm64 && \
+    dpkg --add-architecture amd64 && \
     apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
+    lld \
+    clang \
+    binutils \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
     libc6-dev-arm64-cross \
+    gcc-x86-64-linux-gnu \
+    g++-x86-64-linux-gnu \
+    libc6-dev-amd64-cross \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
@@ -242,6 +279,9 @@ RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
 ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc
+ENV CC_x86_64_unknown_linux_gnu=x86_64-linux-gnu-gcc
+ENV CXX_x86_64_unknown_linux_gnu=x86_64-linux-gnu-g++
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
 WORKDIR /app
@@ -277,11 +317,14 @@ RUN cd nlp-binding && \
 ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM golang:1.24 AS go-builder
 
-# Install cross-compilation tools for Go
+# Install cross-compilation tools for Go (both directions: amd64 <-> arm64)
 RUN dpkg --add-architecture arm64 && \
+    dpkg --add-architecture amd64 && \
     apt-get update && apt-get install -y \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
+    gcc-x86-64-linux-gnu \
+    g++-x86-64-linux-gnu \
     libssl-dev:arm64 \
     libssl-dev \
     file \
@@ -385,9 +428,12 @@ RUN mkdir -p bin && cd src/semantic-router && \
         GOOS=linux GOARCH=arm64 \
         go build -ldflags="-w -s" -o ../../bin/router-candle ./cmd; \
     else \
-        echo "Building candle binary for AMD64..." && \
+        echo "Building candle binary for AMD64 with cross-compilation..." && \
+        CC=x86_64-linux-gnu-gcc \
+        CXX=x86_64-linux-gnu-g++ \
         CGO_CFLAGS="-I/app/candle-binding" \
         CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lcandle_semantic_router -lml_semantic_router -lnlp_binding" \
+        GOOS=linux GOARCH=amd64 \
         go build -ldflags="-w -s" -o ../../bin/router-candle ./cmd; \
     fi
 
@@ -409,26 +455,29 @@ RUN cd src/semantic-router && \
     if [ "$TARGETARCH" = "arm64" ]; then \
         echo "Skipping onnx router build on arm64."; \
     else \
-        echo "Building onnx binary for AMD64..." && \
+        echo "Building onnx binary for AMD64 with cross-compilation..." && \
+        CC=x86_64-linux-gnu-gcc \
+        CXX=x86_64-linux-gnu-g++ \
         CGO_CFLAGS="-I/app/onnx-binding" \
         CGO_LDFLAGS="-L/app/onnx-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
+        GOOS=linux GOARCH=amd64 \
         go build -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o ../../bin/router-onnx ./cmd; \
     fi
 
 # ============================================================================
 # Final stage: runtime image (candle on all platforms, onnx binary on amd64 only)
 # ============================================================================
-FROM quay.io/centos/centos:stream10
+FROM debian:bookworm-slim
 
 # Install runtime dependencies including OpenSSL, Python and HuggingFace CLI
-RUN dnf update -y && \
-    dnf install -y \
-    openssl-libs \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libssl3 \
     python3 \
     python3-pip \
     ca-certificates && \
-    dnf clean all && \
-    pip3 install --no-cache-dir huggingface_hub[cli]
+    rm -rf /var/lib/apt/lists/* && \
+    pip3 install --no-cache-dir --break-system-packages huggingface_hub[cli]
 
 WORKDIR /app
 
