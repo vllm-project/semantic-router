@@ -957,3 +957,24 @@ func TestRegistry_AllSelectors_HaveTier(t *testing.T) {
 		}
 	}
 }
+
+func TestSelect_PopulatesTier(t *testing.T) {
+	// Setup registry with a static selector
+	factory := NewFactory(DefaultModelSelectionConfig())
+	GlobalRegistry = factory.CreateAll()
+
+	candidates := createCandidateModels("model-a", "model-b")
+	selCtx := &SelectionContext{
+		Query:           "test query",
+		CandidateModels: candidates,
+	}
+
+	result, err := Select(context.Background(), MethodStatic, selCtx)
+	if err != nil {
+		t.Fatalf("Select failed: %v", err)
+	}
+
+	if result.Tier != TierSupported {
+		t.Errorf("Select(MethodStatic) result.Tier = %q, want %q", result.Tier, TierSupported)
+	}
+}

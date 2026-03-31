@@ -311,8 +311,14 @@ func Select(ctx context.Context, method SelectionMethod, selCtx *SelectionContex
 			Score:         1.0,
 			Confidence:    1.0,
 			Method:        MethodStatic,
+			Tier:          TierSupported,
 			Reasoning:     "No selector available, using first candidate",
 		}, nil
 	}
-	return selector.Select(ctx, selCtx)
+	result, err := selector.Select(ctx, selCtx)
+	if err != nil {
+		return nil, err
+	}
+	result.Tier = selector.Tier()
+	return result, nil
 }
