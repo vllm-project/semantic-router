@@ -34,6 +34,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		"kmeans":        filepath.Join("selection", "kmeans.yaml"),
 		"knn":           filepath.Join("selection", "knn.yaml"),
 		"latency_aware": filepath.Join("selection", "latency-aware.yaml"),
+		"mlp":           filepath.Join("selection", "mlp.yaml"),
 		"ratings":       filepath.Join("looper", "ratings.yaml"),
 		"remom":         filepath.Join("looper", "remom.yaml"),
 		"rl_driven":     filepath.Join("selection", "rl-driven.yaml"),
