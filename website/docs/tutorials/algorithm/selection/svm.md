@@ -28,6 +28,7 @@ With the **RBF (Radial Basis Function) kernel**:
 $$K(x_i, x_j) = \exp(-\gamma \|x_i - x_j\|^2)$$
 
 Where:
+
 - $\gamma$ controls the kernel width (default 1.0)
 - $C$ is the regularization parameter
 - $\phi(x)$ is the implicit feature map from the kernel trick

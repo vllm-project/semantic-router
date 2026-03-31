@@ -311,8 +311,16 @@ func (c *KnowledgeBaseClassifier) Classify(text string) (*KBClassifyResult, erro
 	metricValues := c.computeMetricValues(labelScores, groupScores, bestScore, bestMatchedScore)
 
 	elapsed := time.Since(startTime)
-	logging.Infof("[KnowledgeBase:%s] Classified in %v: best_label=%s (%.3f), best_matched_label=%s (%.3f), best_group=%s, best_matched_group=%s",
-		c.rule.Name, elapsed, bestLabel, bestScore, bestMatchedLabel, bestMatchedScore, bestGroup, bestMatchedGroup)
+	logging.ComponentDebugEvent("classifier", "knowledge_base_classification_completed", map[string]interface{}{
+		"knowledge_base":          c.rule.Name,
+		"latency_ms":              elapsed.Milliseconds(),
+		"best_label":              bestLabel,
+		"best_similarity":         bestScore,
+		"best_matched_label":      bestMatchedLabel,
+		"best_matched_similarity": bestMatchedScore,
+		"best_group":              bestGroup,
+		"best_matched_group":      bestMatchedGroup,
+	})
 
 	return &KBClassifyResult{
 		BestLabel:             bestLabel,

@@ -231,8 +231,10 @@ func (g *GMTRouterSelector) InitializeFromConfig(modelConfig map[string]config.M
 		g.loadState()
 	}
 
-	logging.Infof("[GMTRouter] Initialized with %d LLM nodes, personalization=%v",
-		len(g.llmEmbeddings), g.config.EnablePersonalization)
+	logging.ComponentDebugEvent("selection", "gmt_router_initialized", map[string]interface{}{
+		"llm_nodes":       len(g.llmEmbeddings),
+		"personalization": g.config.EnablePersonalization,
+	})
 }
 
 // Select chooses the best model using graph-based preference learning

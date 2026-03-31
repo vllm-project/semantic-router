@@ -27,6 +27,7 @@ After each pairwise comparison, ratings are updated:
 $$R_A' = R_A + K \cdot (S_A - E_A)$$
 
 Where:
+
 - $K$ is the learning rate (`k_factor`, default 32)
 - $S_A$ is the actual outcome (1 = win, 0 = loss, 0.5 = tie)
 - $E_A = P(A \succ B)$ is the expected score

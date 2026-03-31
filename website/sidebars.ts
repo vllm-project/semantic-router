@@ -28,7 +28,7 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Installation',
+      label: 'Quickstart',
       items: [
         'installation/installation',
         'installation/configuration',

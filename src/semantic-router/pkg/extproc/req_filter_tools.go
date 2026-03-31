@@ -46,13 +46,19 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 
 	switch toolsCfg.EffectiveMode() {
 	case config.ToolsPluginModeNone:
-		logging.Infof("[ToolsPlugin] Decision %q has mode=none, stripping all tools", ctx.VSRSelectedDecision.Name)
+		logging.ComponentDebugEvent("extproc", "tools_stripped", map[string]interface{}{
+			"decision": ctx.VSRSelectedDecision.Name,
+			"mode":     "none",
+		})
 		openAIRequest.Tools = nil
 		return r.updateRequestWithTools(openAIRequest, response, ctx)
 	case config.ToolsPluginModeFiltered:
 		openAIRequest.Tools = filterToolsByDecisionPolicy(openAIRequest.Tools, toolsCfg.AllowTools, toolsCfg.BlockTools)
 		if openAIRequest.ToolChoice.OfAuto.Value != "auto" {
-			logging.Infof("[ToolsPlugin] Decision %q filtered explicit tools to %d entries", ctx.VSRSelectedDecision.Name, len(openAIRequest.Tools))
+			logging.ComponentDebugEvent("extproc", "tools_filtered", map[string]interface{}{
+				"decision":        ctx.VSRSelectedDecision.Name,
+				"remaining_tools": len(openAIRequest.Tools),
+			})
 			return r.updateRequestWithTools(openAIRequest, response, ctx)
 		}
 	case config.ToolsPluginModePassthrough:

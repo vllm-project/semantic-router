@@ -116,8 +116,12 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 				return nil, fmt.Errorf("failed to add BM25 rule %q: %w", rule.Name, err)
 			}
 			kc.ruleOrder = append(kc.ruleOrder, ruleRef{method: "bm25", name: rule.Name})
-			logging.Infof("Keyword rule %q using BM25 method (threshold=%.2f, keywords=%d)",
-				rule.Name, threshold, len(rule.Keywords))
+			logging.ComponentDebugEvent("classifier", "keyword_rule_registered", map[string]interface{}{
+				"rule":      rule.Name,
+				"method":    "bm25",
+				"threshold": threshold,
+				"keywords":  len(rule.Keywords),
+			})
 
 		case "ngram":
 			threshold := rule.NgramThreshold
@@ -135,8 +139,13 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 				return nil, fmt.Errorf("failed to add N-gram rule %q: %w", rule.Name, err)
 			}
 			kc.ruleOrder = append(kc.ruleOrder, ruleRef{method: "ngram", name: rule.Name})
-			logging.Infof("Keyword rule %q using N-gram method (threshold=%.2f, arity=%d, keywords=%d)",
-				rule.Name, threshold, arity, len(rule.Keywords))
+			logging.ComponentDebugEvent("classifier", "keyword_rule_registered", map[string]interface{}{
+				"rule":      rule.Name,
+				"method":    "ngram",
+				"threshold": threshold,
+				"arity":     arity,
+				"keywords":  len(rule.Keywords),
+			})
 
 		case "regex":
 			preppedRule, err := prepRegexRule(rule)

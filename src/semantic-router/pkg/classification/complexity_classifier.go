@@ -48,11 +48,10 @@ func NewComplexityClassifier(rules []config.ComplexityRule, modelType string) (*
 		hasImageCandidates:  config.HasImageCandidatesInRules(rules),
 	}
 
-	if c.hasImageCandidates {
-		logging.Infof("ComplexityClassifier initialized with model type: %s + multimodal (image candidates detected)", c.modelType)
-	} else {
-		logging.Infof("ComplexityClassifier initialized with model type: %s", c.modelType)
-	}
+	logging.ComponentDebugEvent("classifier", "complexity_classifier_initialized", map[string]interface{}{
+		"model_type":           c.modelType,
+		"has_image_candidates": c.hasImageCandidates,
+	})
 
 	if err := c.preloadCandidateEmbeddings(); err != nil {
 		logging.Warnf("Failed to preload complexity candidate embeddings: %v", err)
@@ -108,7 +107,9 @@ func (c *ComplexityClassifier) preloadCandidateEmbeddings() error {
 	}
 
 	if len(tasks) == 0 {
-		logging.Infof("[Complexity Signal] No candidates to preload")
+		logging.ComponentDebugEvent("classifier", "complexity_embeddings_preload_skipped", map[string]interface{}{
+			"reason": "no_candidates",
+		})
 		return nil
 	}
 
@@ -212,8 +213,13 @@ func (c *ComplexityClassifier) preloadCandidateEmbeddings() error {
 	}
 
 	elapsed := time.Since(startTime)
-	logging.Infof("[Complexity Signal] Preloaded %d/%d complexity embeddings (text+image hard/easy candidates) using model %s in %v (workers: %d)",
-		successCount, len(tasks), c.modelType, elapsed, numWorkers)
+	logging.ComponentDebugEvent("classifier", "complexity_embeddings_preloaded", map[string]interface{}{
+		"success_count":   successCount,
+		"candidate_count": len(tasks),
+		"model_type":      c.modelType,
+		"workers":         numWorkers,
+		"latency_ms":      elapsed.Milliseconds(),
+	})
 
 	if firstError != nil {
 		return firstError
@@ -340,18 +346,28 @@ func (c *ComplexityClassifier) ClassifyWithImage(query string, imageURL string) 
 		}
 
 		if hasImage {
-			logging.Infof("Complexity rule '%s': text_signal=%.3f, image_signal=%.3f (src=%s), fused=%s(%.3f), difficulty=%s",
-				rule.Name, textSignal, imageSignal,
-				func() string {
+			logging.ComponentDebugEvent("classifier", "complexity_rule_evaluated", map[string]interface{}{
+				"rule":         rule.Name,
+				"text_signal":  textSignal,
+				"image_signal": imageSignal,
+				"image_source": func() string {
 					if mmImageEmbedding != nil {
 						return "screenshot"
 					}
 					return "mm_text"
 				}(),
-				signalSource, difficultySignal, difficulty)
+				"fused_source":      signalSource,
+				"difficulty_signal": difficultySignal,
+				"difficulty":        difficulty,
+			})
 		} else {
-			logging.Infof("Complexity rule '%s': hard_sim=%.3f, easy_sim=%.3f, signal=%.3f, difficulty=%s",
-				rule.Name, maxHardSim, maxEasySim, difficultySignal, difficulty)
+			logging.ComponentDebugEvent("classifier", "complexity_rule_evaluated", map[string]interface{}{
+				"rule":              rule.Name,
+				"hard_similarity":   maxHardSim,
+				"easy_similarity":   maxEasySim,
+				"difficulty_signal": difficultySignal,
+				"difficulty":        difficulty,
+			})
 		}
 
 		matchedRules = append(matchedRules, fmt.Sprintf("%s:%s", rule.Name, difficulty))

@@ -58,16 +58,18 @@ func ensureStreamingState(ctx *RequestContext) {
 
 func (r *OpenAIRouter) finalizeStreamingResponse(ctx *RequestContext) {
 	ctx.StreamingComplete = true
-	logging.Infof("Streaming response completed, attempting to cache")
+	logging.ComponentDebugEvent("extproc", "streaming_response_finalized", map[string]interface{}{
+		"model":            ctx.RequestModel,
+		"attempting_cache": true,
+	})
 
 	if ctx.RequestModel != "" && !ctx.StartTime.IsZero() {
 		completionLatency := time.Since(ctx.StartTime).Seconds()
 		metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency)
-		logging.Infof(
-			"Recorded completion latency for streaming response: model=%s, latency=%.3fs",
-			ctx.RequestModel,
-			completionLatency,
-		)
+		logging.ComponentDebugEvent("extproc", "streaming_completion_latency_recorded", map[string]interface{}{
+			"model":                 ctx.RequestModel,
+			"completion_latency_ms": time.Since(ctx.StartTime).Milliseconds(),
+		})
 	}
 
 	if err := r.cacheStreamingResponse(ctx); err != nil {

@@ -7,6 +7,7 @@
 It aligns to `config/algorithm/selection/rl-driven.yaml`.
 
 **Papers**:
+
 - [Router-R1: Routing with Reinforcement Learning](https://arxiv.org/abs/2506.09033) — multi-round RL routing with reward structure
 - [GMTRouter: Personalized LLM Router](https://arxiv.org/abs/2511.08590) — GNN-based personalized routing (related)
 
@@ -31,6 +32,7 @@ At each request, a sample is drawn for each candidate model, and the model with 
 $$m^* = \arg\max_m \theta_m$$
 
 After feedback, the distribution is updated:
+
 - **Win**: $\alpha_m \leftarrow \alpha_m + 1$
 - **Loss**: $\beta_m \leftarrow \beta_m + 1$
 - **Tie**: $\alpha_m \leftarrow \alpha_m + 0.5,\ \beta_m \leftarrow \beta_m + 0.5$
