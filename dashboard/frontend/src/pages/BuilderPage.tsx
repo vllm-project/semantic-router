@@ -33,6 +33,7 @@ const BuilderPage: React.FC = () => {
     diagnostics,
     symbols,
     ast,
+    baseConfigYaml,
     wasmReady,
     wasmError,
     loading,
@@ -472,6 +473,12 @@ const BuilderPage: React.FC = () => {
   const validationErrorCount = diagnostics.filter((d) => d.level === "error").length;
   const errorCount = validationErrorCount + (compileError ? 1 : 0);
   const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0;
+  const currentModelNames = useMemo(() => {
+    const rawNames = ast?.models?.map((model) => model.name) ?? symbols?.models ?? [];
+    return Array.from(
+      new Set(rawNames.map((name) => name.trim()).filter(Boolean)),
+    );
+  }, [ast?.models, symbols?.models]);
   const signalCount = ast?.signals?.length ?? symbols?.signals?.length ?? 0;
   const projectionPartitionCount = ast?.projectionPartitions?.length ?? 0;
   const projectionScoreCount = ast?.projectionScores?.length ?? 0;
@@ -590,6 +597,8 @@ const BuilderPage: React.FC = () => {
           {mode === "nl" && (
             <BuilderNaturalLanguagePanel
               currentDsl={dslSource}
+              baseConfigYaml={baseConfigYaml}
+              currentModelNames={currentModelNames}
               generating={nlGenerating}
               error={nlGenerateError}
               progressEvents={nlProgressEvents}
@@ -608,6 +617,7 @@ const BuilderPage: React.FC = () => {
           yamlOutput={yamlOutput}
           crdOutput={crdOutput}
           dslSource={dslSource}
+          dslTabLabel={mode === "nl" ? "Live DSL" : "DSL"}
           compileError={compileError}
           onDragStart={handleDragStart}
           onOpen={() => setOutputPanelOpen(true)}

@@ -13,6 +13,7 @@
 
 .headerCard,
 .card,
+.consoleCard,
 .infoCard,
 .summaryCard,
 .statusCard,
@@ -62,6 +63,31 @@
   flex-direction: column;
   gap: 0.625rem;
   min-width: 0;
+}
+
+.modelCardGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.modelCardList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.modelCardChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .badge,
@@ -371,6 +397,12 @@
   flex-wrap: wrap;
 }
 
+.consoleTimestamp {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
 .consoleRunning,
 .consoleIdle,
 .consolePhase,
@@ -420,6 +452,237 @@
   background: #0e1410;
 }
 
+.processSpotlight {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.9rem;
+  align-items: start;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(118, 185, 0, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(118, 185, 0, 0.12), transparent 45%),
+    linear-gradient(180deg, rgba(118, 185, 0, 0.08), rgba(118, 185, 0, 0.02)),
+    #111913;
+}
+
+.processSpotlightIcon,
+.processNodeIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  color: #d7f6bf;
+  background: rgba(118, 185, 0, 0.14);
+  border: 1px solid rgba(118, 185, 0, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.processSpotlightIcon {
+  width: 52px;
+  height: 52px;
+}
+
+.processNodeIcon {
+  width: 42px;
+  height: 42px;
+}
+
+.processSpotlightIcon svg,
+.processNodeIcon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.processSpotlightBody,
+.processNodeBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.processSpotlightBody {
+  gap: 0.45rem;
+}
+
+.processSpotlightEyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(215, 246, 191, 0.78);
+}
+
+.processSpotlightTitle,
+.processNodeTitle {
+  color: #f4fff1;
+  font-weight: 700;
+}
+
+.processSpotlightTitle {
+  font-size: 1rem;
+}
+
+.processSpotlightText,
+.processNodeText {
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.processSpotlightText {
+  color: #dbe8d8;
+}
+
+.processSpotlightMeta,
+.processNodeMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.processLoading {
+  position: relative;
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.processLoadingBar {
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(118, 185, 0, 0), rgba(118, 185, 0, 0.95), rgba(223, 255, 191, 0.92));
+  animation: processProgress 1.4s ease-in-out infinite;
+}
+
+@keyframes processProgress {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  100% {
+    transform: translateX(240%);
+  }
+}
+
+.processTimeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.processNode {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.pendingNode {
+  opacity: 0.72;
+}
+
+.runningNode {
+  border-color: rgba(118, 185, 0, 0.28);
+  background: linear-gradient(180deg, rgba(118, 185, 0, 0.08), rgba(118, 185, 0, 0.02));
+}
+
+.completedNode {
+  border-color: rgba(52, 211, 153, 0.22);
+}
+
+.warningNode {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.02));
+}
+
+.errorNode {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.08), rgba(248, 113, 113, 0.02));
+}
+
+.processNodeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.processNodeText {
+  margin-top: 0.35rem;
+  color: #cfdecf;
+  font-size: 0.82rem;
+}
+
+.processStatusPill,
+.processEventLevel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.processStatusPending {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-muted);
+}
+
+.processStatusRunning,
+.processEventInfo {
+  background: rgba(118, 185, 0, 0.14);
+  color: #d7f6bf;
+}
+
+.processStatusCompleted,
+.processEventSuccess {
+  background: rgba(52, 211, 153, 0.14);
+  color: #9df6cf;
+}
+
+.processStatusWarning,
+.processEventWarning {
+  background: rgba(245, 158, 11, 0.14);
+  color: #ffd68a;
+}
+
+.processStatusError,
+.processEventError {
+  background: rgba(248, 113, 113, 0.14);
+  color: #ffb2b2;
+}
+
+.consoleDivider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+}
+
+.consoleLogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.consoleLogHint {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
 .consoleList {
   display: flex;
   flex-direction: column;
@@ -460,6 +723,7 @@
 
 .consoleMessage {
   color: #e7efe7;
+  font-size: 0.84rem;
   line-height: 1.55;
   word-break: break-word;
 }
@@ -656,5 +920,9 @@
   .actionRow,
   .applyRow {
     flex-direction: column;
+  }
+
+  .processSpotlight {
+    grid-template-columns: 1fr;
   }
 }

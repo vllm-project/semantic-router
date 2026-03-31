@@ -10,6 +10,7 @@ interface BuilderOutputPanelProps {
   yamlOutput: string;
   crdOutput: string;
   dslSource: string;
+  dslTabLabel?: string;
   compileError: string | null;
   onDragStart: (event: React.MouseEvent) => void;
   onOpen: () => void;
@@ -22,6 +23,7 @@ const BuilderOutputPanel: React.FC<BuilderOutputPanelProps> = ({
   yamlOutput,
   crdOutput,
   dslSource,
+  dslTabLabel = "DSL",
   compileError,
   onDragStart,
   onOpen,
@@ -127,7 +129,7 @@ const BuilderOutputPanel: React.FC<BuilderOutputPanelProps> = ({
             }
             onClick={() => setOutputTab("dsl")}
           >
-            DSL
+            {dslTabLabel}
           </button>
           <div
             style={{
@@ -203,7 +205,7 @@ const BuilderOutputPanel: React.FC<BuilderOutputPanelProps> = ({
               <div className={styles.emptyIcon}>&#9889;</div>
               <div>
                 {outputTab === "dsl" ? (
-                  "DSL source is empty"
+                  `${dslTabLabel} source is empty`
                 ) : (
                   <>
                     Press <strong>Compile</strong> to generate{" "}

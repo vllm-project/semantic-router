@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestParseBuilderNLGenerationOutputFromJSONFence(t *testing.T) {
@@ -35,7 +37,6 @@ func TestGenerateBuilderNLDraftRepairsInvalidDSL(t *testing.T) {
 	responses := []string{
 		`{"dsl":"MODEL \"MoM\" {\n  modality: \"text\"\n\nROUTE broken_route {\n  PRIORITY 100\n  MODEL \"MoM\" (reasoning = false)\n}","summary":"Initial draft needs repair.","suggestedTestQuery":"urgent billing escalation"}`,
 		`{"dsl":"MODEL \"MoM\" {\n  param_size: \"7b\"\n  modality: \"text\"\n}\n\nROUTE fallback_route (description = \"Fallback\") {\n  PRIORITY 100\n  MODEL \"MoM\" (reasoning = false)\n}","summary":"Added a fallback route.","suggestedTestQuery":"urgent billing escalation"}`,
-		`{"ready":true,"summary":"The staged DSL now contains a valid fallback route that matches the request.","warnings":[],"checks":["Builder alias preserved","Fallback route included"]}`,
 	}
 
 	var callCount atomic.Int32
@@ -68,14 +69,17 @@ func TestGenerateBuilderNLDraftRepairsInvalidDSL(t *testing.T) {
 		t.Fatalf("expected generation to succeed, got error: %v", err)
 	}
 
-	if got := callCount.Load(); got != 3 {
-		t.Fatalf("expected generation + repair + review requests, got %d", got)
+	if got := callCount.Load(); got != 2 {
+		t.Fatalf("expected generation + repair requests, got %d", got)
 	}
 	if !resp.Validation.Ready {
 		t.Fatalf("expected repaired draft to validate successfully, got %#v", resp.Validation)
 	}
 	if !resp.Review.Ready {
-		t.Fatalf("expected AI review to pass, got %#v", resp.Review)
+		t.Fatalf("expected readiness review to pass, got %#v", resp.Review)
+	}
+	if !strings.Contains(resp.Review.Summary, "ready for Builder apply") {
+		t.Fatalf("unexpected readiness review summary: %q", resp.Review.Summary)
 	}
 	if !strings.Contains(resp.DSL, `ROUTE fallback_route`) {
 		t.Fatalf("expected repaired DSL to contain fallback_route, got:\n%s", resp.DSL)
@@ -94,7 +98,6 @@ func TestGenerateBuilderNLDraftCustomConnectionDoesNotMutateBaseYAML(t *testing.
 
 	responses := []string{
 		`{"dsl":"MODEL \"MoM\" { param_size: \"7b\" modality: \"text\" }\nROUTE fallback_route { PRIORITY 100 MODEL \"MoM\" (reasoning = false) }","summary":"Added a fallback route.","suggestedTestQuery":"hello"}`,
-		`{"ready":true,"summary":"The staged DSL is ready.","warnings":[],"checks":["Fallback route included"]}`,
 	}
 
 	var callCount atomic.Int32
@@ -126,6 +129,9 @@ func TestGenerateBuilderNLDraftCustomConnectionDoesNotMutateBaseYAML(t *testing.
 	if !resp.Validation.Ready {
 		t.Fatalf("expected staged draft to validate, got %#v", resp.Validation)
 	}
+	if got := callCount.Load(); got != 1 {
+		t.Fatalf("expected one generation request without an extra review pass, got %d", got)
+	}
 	if !strings.Contains(resp.BaseYAML, "default_model: test-model") {
 		t.Fatalf("expected base YAML to keep the existing default model, got:\n%s", resp.BaseYAML)
 	}
@@ -150,7 +156,7 @@ func TestBuilderNLVerifyHandlerReportsResolvedEndpoint(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	BuilderNLVerifyHandler("")(w, req)
+	BuilderNLVerifyHandler("", "")(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -174,13 +180,96 @@ func TestBuilderNLVerifyHandlerReportsResolvedEndpoint(t *testing.T) {
 	}
 }
 
+func TestGenerateBuilderNLDraftDefaultRuntimeUsesMoMGeneratorAndRouterTarget(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	var payload openAIChatRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			http.Error(w, "unexpected path", http.StatusNotFound)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("expected request body to decode, got error: %v", err)
+		}
+		writeBuilderNLTestChatResponse(t, w, `{"dsl":"MODEL \"test-model\" {\n  modality: \"text\"\n}\n\nROUTE default_route {\n  PRIORITY 100\n  MODEL \"test-model\" (reasoning = false)\n}","summary":"Uses the configured router default model.","suggestedTestQuery":"business routing"}`)
+	}))
+	defer server.Close()
+
+	resp, err := generateBuilderNLDraft(context.Background(), configPath, server.URL, BuilderNLGenerateRequest{
+		Prompt:         "Create a default business route.",
+		ConnectionMode: builderNLConnectionModeDefault,
+	})
+	if err != nil {
+		t.Fatalf("expected generation to succeed, got error: %v", err)
+	}
+
+	if payload.Model != builderNLFallbackModelAlias {
+		t.Fatalf("expected default generation model to stay %q, got %q", builderNLFallbackModelAlias, payload.Model)
+	}
+	if len(payload.Messages) < 2 {
+		t.Fatalf("expected system and user messages, got %#v", payload.Messages)
+	}
+	if !strings.Contains(payload.Messages[1].Content, "Preferred target model for route references: test-model") {
+		t.Fatalf("expected prompt to preserve the router target model, got:\n%s", payload.Messages[1].Content)
+	}
+	if !resp.Validation.Ready {
+		t.Fatalf("expected staged draft to validate, got %#v", resp.Validation)
+	}
+	if !strings.Contains(resp.DSL, `MODEL "test-model"`) {
+		t.Fatalf("expected generated DSL to target the router default model, got:\n%s", resp.DSL)
+	}
+}
+
+func TestBuilderNLVerifyHandlerDefaultRuntimeUsesMoMGenerator(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	var payload openAIChatRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("expected verify request body to decode, got error: %v", err)
+		}
+		writeBuilderNLTestChatResponse(t, w, "Connection verified.")
+	}))
+	defer server.Close()
+
+	body := `{"connectionMode":"default"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/nl/verify", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	BuilderNLVerifyHandler(configPath, server.URL)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp BuilderNLVerifyResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("expected JSON response, got error: %v", err)
+	}
+	if payload.Model != builderNLFallbackModelAlias {
+		t.Fatalf("expected verify to use %q as the generation model, got %q", builderNLFallbackModelAlias, payload.Model)
+	}
+	if resp.ModelName != builderNLFallbackModelAlias {
+		t.Fatalf("expected verify response model name to stay %q, got %q", builderNLFallbackModelAlias, resp.ModelName)
+	}
+	if resp.TargetModelName != "test-model" {
+		t.Fatalf("expected verify response target model to use the router default model, got %q", resp.TargetModelName)
+	}
+	if resp.Endpoint != server.URL+"/v1/chat/completions" {
+		t.Fatalf("unexpected resolved endpoint: %q", resp.Endpoint)
+	}
+}
+
 func TestBuilderNLGenerateStreamHandlerEmitsProgressAndResult(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
 	responses := []string{
 		`{"dsl":"MODEL \"MoM\" { param_size: \"7b\" modality: \"text\" }\nROUTE staged_route { PRIORITY 100 MODEL \"MoM\" (reasoning = false) }","summary":"Added a staged route.","suggestedTestQuery":"hello"}`,
-		`{"ready":true,"summary":"The staged DSL is ready.","warnings":[],"checks":["Fallback route included"]}`,
 	}
 
 	var callCount atomic.Int32
@@ -215,12 +304,52 @@ func TestBuilderNLGenerateStreamHandlerEmitsProgressAndResult(t *testing.T) {
 	if !strings.Contains(streamBody, `"phase":"validate"`) {
 		t.Fatalf("expected validate progress event in stream body, got:\n%s", streamBody)
 	}
+	if !strings.Contains(streamBody, `"phase":"review"`) {
+		t.Fatalf("expected review progress event in stream body, got:\n%s", streamBody)
+	}
 	if !strings.Contains(streamBody, "event: result") {
 		t.Fatalf("expected final result event in stream body, got:\n%s", streamBody)
 	}
 	if !strings.Contains(streamBody, "staged_route") {
 		t.Fatalf("expected staged DSL payload in stream result, got:\n%s", streamBody)
 	}
+	if got := callCount.Load(); got != 1 {
+		t.Fatalf("expected one generation request in stream handler, got %d", got)
+	}
+}
+
+func TestBuilderNLDraftTargetModelNameUsesConfigDefaultModel(t *testing.T) {
+	config := (&CanonicalTestConfigBuilder{
+		DefaultModel: "router-default",
+		ModelCards:   []string{"router-default", "backup"},
+		ProviderModels: []string{
+			"router-default",
+			"backup",
+		},
+	}).Build()
+
+	target := builderNLDraftTargetModelName(config)
+	if target != "router-default" {
+		t.Fatalf("expected target model to prefer providers.defaults.default_model, got %q", target)
+	}
+}
+
+type CanonicalTestConfigBuilder struct {
+	DefaultModel   string
+	ModelCards     []string
+	ProviderModels []string
+}
+
+func (b *CanonicalTestConfigBuilder) Build() *routerconfig.CanonicalConfig {
+	config := &routerconfig.CanonicalConfig{}
+	config.Providers.Defaults.DefaultModel = b.DefaultModel
+	for _, name := range b.ModelCards {
+		config.Routing.ModelCards = append(config.Routing.ModelCards, routerconfig.RoutingModel{Name: name})
+	}
+	for _, name := range b.ProviderModels {
+		config.Providers.Models = append(config.Providers.Models, routerconfig.CanonicalProviderModel{Name: name})
+	}
+	return config
 }
 
 func writeBuilderNLTestChatResponse(t *testing.T, w http.ResponseWriter, content string) {

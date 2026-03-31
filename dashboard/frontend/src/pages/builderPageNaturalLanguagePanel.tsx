@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import type {
   BuilderNLConnectionMode,
@@ -10,10 +10,13 @@ import type {
   EditorMode,
 } from "@/types/dsl";
 
+import { BuilderNaturalLanguageProgress } from "./builderPageNaturalLanguageProgress";
 import styles from "./builderPageNaturalLanguagePanel.module.css";
 
 interface BuilderNaturalLanguagePanelProps {
   currentDsl: string;
+  baseConfigYaml: string;
+  currentModelNames: string[];
   generating: boolean;
   error: string | null;
   progressEvents: BuilderNLProgressEvent[];
@@ -50,16 +53,32 @@ const PROVIDER_OPTIONS: Array<{
   },
 ];
 
-const PROMPT_PRESETS = [
-  "Route urgent billing issues to a higher-priority route, then send everything else to MoM.",
-  "Create separate routes for code debugging, math tutoring, and general chat.",
-  "Add multilingual routing so Chinese and English prompts get their own routes before a general fallback.",
-];
+const DEFAULT_GENERATION_MODEL = "MoM";
+const FALLBACK_TARGET_MODEL = DEFAULT_GENERATION_MODEL;
+
+function extractDefaultModelName(baseConfigYaml: string): string | null {
+  const match = baseConfigYaml.match(
+    /^\s*default_model:\s*(?:"([^"]+)"|'([^']+)'|([^\n#]+))/m,
+  );
+  const candidate = match?.[1] ?? match?.[2] ?? match?.[3] ?? "";
+  const trimmed = candidate.trim();
+  return trimmed || null;
+}
+
+function buildPromptPresets(targetModelName: string): string[] {
+  return [
+    `Route urgent billing issues to a higher-priority route, then send everything else to ${targetModelName}.`,
+    `Create separate routes for code debugging, math tutoring, and general chat, with a general fallback to ${targetModelName}.`,
+    `Add multilingual routing so Chinese and English prompts get their own routes before a general fallback to ${targetModelName}.`,
+  ];
+}
 
 const BuilderNaturalLanguagePanel: React.FC<
   BuilderNaturalLanguagePanelProps
 > = ({
   currentDsl,
+  baseConfigYaml,
+  currentModelNames,
   generating,
   error,
   progressEvents,
@@ -84,7 +103,6 @@ const BuilderNaturalLanguagePanel: React.FC<
     null,
   );
   const [verifyError, setVerifyError] = useState<string | null>(null);
-  const consoleRef = useRef<HTMLDivElement | null>(null);
 
   const hasContextDsl = currentDsl.trim().length > 0;
   const contextLineCount = hasContextDsl ? currentDsl.split("\n").length : 0;
@@ -96,12 +114,26 @@ const BuilderNaturalLanguagePanel: React.FC<
   const stagedWarningCount = stagedDiagnostics.filter(
     (item) => item.level !== "error",
   ).length;
-  const previewText = useMemo(() => {
-    if (!stagedDraft?.dsl.trim()) {
-      return "";
-    }
-    return stagedDraft.dsl.trim().split("\n").slice(0, 24).join("\n");
-  }, [stagedDraft]);
+  const liveModelCards = useMemo(
+    () =>
+      Array.from(
+        new Set(currentModelNames.map((name) => name.trim()).filter(Boolean)),
+      ),
+    [currentModelNames],
+  );
+  const preferredTargetModelName = useMemo(() => {
+    return (
+      extractDefaultModelName(baseConfigYaml) ??
+      liveModelCards[0] ??
+      FALLBACK_TARGET_MODEL
+    );
+  }, [baseConfigYaml, liveModelCards]);
+  const promptPresets = useMemo(
+    () => buildPromptPresets(preferredTargetModelName),
+    [preferredTargetModelName],
+  );
+  const activeGeneratorModelName =
+    connectionMode === "default" ? DEFAULT_GENERATION_MODEL : modelName.trim();
   const connectionFingerprint = useMemo(
     () =>
       JSON.stringify({
@@ -119,16 +151,6 @@ const BuilderNaturalLanguagePanel: React.FC<
     setVerifyResult(null);
     setVerifyError(null);
   }, [connectionFingerprint]);
-
-  useEffect(() => {
-    if (!consoleRef.current) {
-      return;
-    }
-    consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
-  }, [progressEvents]);
-
-  const latestProgressEvent =
-    progressEvents.length > 0 ? progressEvents[progressEvents.length - 1] : null;
 
   const handleGenerate = async () => {
     await onGenerate({
@@ -211,7 +233,28 @@ const BuilderNaturalLanguagePanel: React.FC<
           </p>
         </div>
         <div className={styles.headerMeta}>
-          <span className={styles.badge}>Draft target: `MoM`</span>
+          <span className={styles.badge}>
+            Preferred target: `{preferredTargetModelName}`
+          </span>
+          {liveModelCards.length > 0 ? (
+            <div className={styles.modelCardGroup}>
+              <span className={styles.badgeMuted}>
+                Live model cards: {liveModelCards.length}
+              </span>
+              <div className={styles.modelCardList}>
+                {liveModelCards.map((modelName) => (
+                  <span className={styles.modelCardChip} key={modelName}>
+                    `{modelName}`
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <span className={styles.badgeMuted}>
+              No live router model cards are loaded yet, so Builder will fall
+              back to `{FALLBACK_TARGET_MODEL}`.
+            </span>
+          )}
           <span className={styles.badgeMuted}>
             {hasContextDsl
               ? `Live Builder context: ${contextLineCount} lines`
@@ -236,7 +279,7 @@ const BuilderNaturalLanguagePanel: React.FC<
           </div>
 
           <div className={styles.presetGrid}>
-            {PROMPT_PRESETS.map((item) => (
+            {promptPresets.map((item) => (
               <button
                 key={item}
                 className={styles.presetBtn}
@@ -256,7 +299,7 @@ const BuilderNaturalLanguagePanel: React.FC<
             className={styles.textarea}
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Example: create a high-priority route for urgent customer escalations, add a multilingual support route, and keep a general fallback route to MoM."
+            placeholder={`Example: create a high-priority route for urgent customer escalations, add a multilingual support route, and keep a general fallback route to ${preferredTargetModelName}.`}
           />
 
           <div className={styles.contextPanel}>
@@ -318,8 +361,10 @@ const BuilderNaturalLanguagePanel: React.FC<
             <div className={styles.infoCard}>
               <div className={styles.infoTitle}>Use the current router runtime</div>
               <div className={styles.infoText}>
-                Builder will call the configured runtime gateway and ask it to
-                generate DSL that targets the `MoM` Builder alias by default.
+                Builder will call the configured runtime gateway with
+                `{DEFAULT_GENERATION_MODEL}` to create the draft. The generated
+                DSL still reuses the current router model cards and prefers
+                `{preferredTargetModelName}` for route references.
               </div>
             </div>
           ) : (
@@ -410,8 +455,11 @@ const BuilderNaturalLanguagePanel: React.FC<
               <div className={styles.verifyText}>{verifyResult.summary}</div>
               <div className={styles.verifyMeta}>
                 {verifyResult.modelName
-                  ? `Model: ${verifyResult.modelName}`
-                  : "Model: current runtime default"}
+                  ? `Generator: ${verifyResult.modelName}`
+                  : `Generator: ${activeGeneratorModelName || DEFAULT_GENERATION_MODEL}`}
+                {verifyResult.targetModelName
+                  ? ` · Draft target: ${verifyResult.targetModelName}`
+                  : ""}
                 {verifyResult.endpoint ? ` · Endpoint: ${verifyResult.endpoint}` : ""}
               </div>
             </div>
@@ -447,68 +495,14 @@ const BuilderNaturalLanguagePanel: React.FC<
             </button>
           </div>
 
-          <section className={styles.consoleCard}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <h3 className={styles.cardTitle}>Live console</h3>
-                <p className={styles.sectionHint}>
-                  Watch the internal Builder NL flow while the request is
-                  running so the page does not look stalled.
-                </p>
-              </div>
-              <div className={styles.consoleMeta}>
-                {latestProgressEvent ? (
-                  <>
-                    <span
-                      className={
-                        generating ? styles.consoleRunning : styles.consoleIdle
-                      }
-                    >
-                      {generating ? "Streaming progress" : "Last event"}
-                    </span>
-                    <span className={styles.consolePhase}>
-                      {latestProgressEvent.phase}
-                    </span>
-                  </>
-                ) : (
-                  <span className={styles.consoleIdle}>Idle</span>
-                )}
-              </div>
-            </div>
-
-            <div className={styles.consoleViewport} ref={consoleRef}>
-              {progressEvents.length > 0 ? (
-                <div className={styles.consoleList}>
-                  {progressEvents.map((event, index) => (
-                    <div className={styles.consoleRow} key={`${event.timestamp}-${index}`}>
-                      <div className={styles.consoleTime}>
-                        {new Date(event.timestamp).toLocaleTimeString()}
-                      </div>
-                      <div className={styles.consoleMessageBlock}>
-                        <div className={styles.consoleLine}>
-                          <span className={styles.consolePhase}>{event.phase}</span>
-                          {event.attempt ? (
-                            <span className={styles.consoleAttempt}>
-                              attempt {event.attempt}
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className={styles.consoleMessage}>{event.message}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className={styles.consoleEmpty}>
-                  Send a Builder request to stream generation, validation, and
-                  review progress here.
-                </div>
-              )}
-            </div>
-          </section>
         </section>
 
         <aside className={styles.rail}>
+          <BuilderNaturalLanguageProgress
+            generating={generating}
+            progressEvents={progressEvents}
+          />
+
           <section className={styles.card}>
             <div className={styles.sectionHeader}>
               <div>
@@ -565,7 +559,7 @@ const BuilderNaturalLanguagePanel: React.FC<
                   </div>
 
                   <div className={styles.statusCard}>
-                    <div className={styles.resultLabel}>AI review</div>
+                    <div className={styles.resultLabel}>Readiness review</div>
                     <div
                       className={
                         stagedDraft.review.ready
@@ -651,7 +645,7 @@ const BuilderNaturalLanguagePanel: React.FC<
                     onClick={() => onModeSwitch("dsl")}
                     type="button"
                   >
-                    Keep live Builder DSL
+                    Open live DSL editor
                   </button>
                 </div>
               </>
@@ -659,28 +653,10 @@ const BuilderNaturalLanguagePanel: React.FC<
               <div className={styles.emptyState}>
                 <div className={styles.emptyTitle}>No staged draft yet</div>
                 <div className={styles.emptyText}>
-                  Generate a draft to inspect repository validation, AI review,
-                  and the DSL preview before you touch the live Builder state.
+                  Generate a draft to inspect repository validation and the
+                  staged readiness review before you touch the live Builder
+                  state.
                 </div>
-              </div>
-            )}
-          </section>
-
-          <section className={styles.card}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <h3 className={styles.cardTitle}>Draft preview</h3>
-                <p className={styles.sectionHint}>
-                  A compact view of the staged DSL waiting to be applied.
-                </p>
-              </div>
-            </div>
-
-            {previewText ? (
-              <pre className={styles.preview}>{previewText}</pre>
-            ) : (
-              <div className={styles.previewEmpty}>
-                The staged DSL preview will appear here after generation.
               </div>
             )}
           </section>

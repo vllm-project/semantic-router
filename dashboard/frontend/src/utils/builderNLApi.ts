@@ -46,6 +46,56 @@ export async function generateBuilderNLDraftStreaming(
   let eventData = "";
   let finalResult: BuilderNLGenerateResponse | null = null;
 
+  const dispatchEvent = () => {
+    if (!eventData) {
+      eventType = "";
+      return;
+    }
+
+    if (eventType === "progress") {
+      onProgress(JSON.parse(eventData) as BuilderNLProgressEvent);
+    } else if (eventType === "result") {
+      finalResult = JSON.parse(eventData) as BuilderNLGenerateResponse;
+    } else if (eventType === "error") {
+      const payload = JSON.parse(eventData) as { message?: string };
+      throw new Error(payload.message || "Builder NL generation failed");
+    }
+
+    eventType = "";
+    eventData = "";
+  };
+
+  const processBuffer = (final = false) => {
+    const lines = buffer.split("\n");
+    buffer = final ? "" : lines.pop() || "";
+
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/\r$/, "");
+      if (line.startsWith(":")) {
+        continue;
+      }
+
+      if (line.startsWith("event:")) {
+        eventType = line.slice(6).trim();
+        continue;
+      }
+
+      if (line.startsWith("data:")) {
+        const chunk = line.slice(5).trimStart();
+        eventData = eventData ? `${eventData}\n${chunk}` : chunk;
+        continue;
+      }
+
+      if (line === "") {
+        dispatchEvent();
+      }
+    }
+
+    if (final) {
+      dispatchEvent();
+    }
+  };
+
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -54,36 +104,10 @@ export async function generateBuilderNLDraftStreaming(
       }
 
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (line.startsWith("event:")) {
-          eventType = line.slice(6).trim();
-          continue;
-        }
-
-        if (line.startsWith("data:")) {
-          const chunk = line.slice(5).trim();
-          eventData = eventData ? `${eventData}\n${chunk}` : chunk;
-          continue;
-        }
-
-        if (line === "" && eventData) {
-          if (eventType === "progress") {
-            onProgress(JSON.parse(eventData) as BuilderNLProgressEvent);
-          } else if (eventType === "result") {
-            finalResult = JSON.parse(eventData) as BuilderNLGenerateResponse;
-          } else if (eventType === "error") {
-            const payload = JSON.parse(eventData) as { message?: string };
-            throw new Error(payload.message || "Builder NL generation failed");
-          }
-
-          eventType = "";
-          eventData = "";
-        }
-      }
+      processBuffer();
     }
+    buffer += decoder.decode();
+    processBuffer(true);
   } finally {
     reader.releaseLock();
   }

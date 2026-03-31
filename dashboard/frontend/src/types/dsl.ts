@@ -302,6 +302,7 @@ export interface BuilderNLVerifyResponse {
   connectionMode: BuilderNLConnectionMode
   providerKind?: BuilderNLProviderKind
   modelName?: string
+  targetModelName?: string
   endpoint?: string
 }
 
