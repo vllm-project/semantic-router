@@ -14,7 +14,7 @@ import (
 
 func TestBuildBuilderNLTaskContextIncludesSharedHints(t *testing.T) {
 	contextBlock := buildBuilderNLTaskContext(
-		"Add multilingual routing before a fallback route.",
+		"Add a dedicated fallback route before general chat.",
 		`MODEL "qwen/qwen3.5-rocm" { modality: "text" }`,
 		"qwen/qwen3.5-rocm",
 		[]string{"qwen/qwen3.5-rocm", "google/gemini-2.5-flash-lite"},
@@ -204,7 +204,7 @@ ROUTE broken_route {
 
 	var progressEvents []BuilderNLProgressEvent
 	resp, err := generateBuilderNLDraftWithProgress(context.Background(), configPath, "", BuilderNLGenerateRequest{
-		Prompt:         "Add multilingual routing before a fallback route.",
+		Prompt:         "Add a dedicated fallback route before general chat.",
 		ConnectionMode: builderNLConnectionModeCustom,
 		CustomConnection: &builderNLConnection{
 			ProviderKind: builderNLProviderOpenAICompatible,

@@ -23,17 +23,16 @@ const (
 )
 
 var (
-	NewOpenAIClient       = internal.NewOpenAIClient
-	WithTemperature       = internal.WithTemperature
-	WithMaxTokens         = internal.WithMaxTokens
-	WithMaxRetries        = internal.WithMaxRetries
-	WithValidation        = internal.WithValidation
-	WithFormat            = internal.WithFormat
-	WithTaskContext       = internal.WithTaskContext
-	WithAttemptOffset     = internal.WithAttemptOffset
-	WithProgressReporter  = internal.WithProgressReporter
-	SanitizeLLMOutput     = internal.SanitizeLLMOutput
-	NormalizeGeneratedDSL = internal.NormalizeGeneratedDSL
+	NewOpenAIClient      = internal.NewOpenAIClient
+	WithTemperature      = internal.WithTemperature
+	WithMaxTokens        = internal.WithMaxTokens
+	WithMaxRetries       = internal.WithMaxRetries
+	WithValidation       = internal.WithValidation
+	WithFormat           = internal.WithFormat
+	WithTaskContext      = internal.WithTaskContext
+	WithAttemptOffset    = internal.WithAttemptOffset
+	WithProgressReporter = internal.WithProgressReporter
+	SanitizeLLMOutput    = internal.SanitizeLLMOutput
 )
 
 func GenerateFromNL(ctx context.Context, client LLMClient, instruction string, opts ...NLOption) (*NLResult, error) {

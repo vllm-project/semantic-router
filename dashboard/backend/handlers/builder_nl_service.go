@@ -412,7 +412,6 @@ func buildBuilderNLTaskContext(
 		fmt.Sprintf("Known current router model cards: %s", builderNLKnownModelList(knownModelNames)),
 		"Preserve unrelated valid declarations from the current DSL unless the request clearly replaces them.",
 		"Do not emit YAML, providers/global blocks, or deploy-time endpoint configuration.",
-		"When language-based routing is needed, declare SIGNAL language entries and guard routes with WHEN language(\"...\").",
 	}
 	if trimmedDSL := strings.TrimSpace(currentDSL); trimmedDSL != "" {
 		lines = append(lines, "Current Builder DSL context:\n"+trimmedDSL)

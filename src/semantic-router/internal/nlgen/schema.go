@@ -444,33 +444,6 @@ ROUTE default {
   PRIORITY 1
   MODEL "qwen2.5:7b"
 }
-
-# Example 8: Multilingual routing with a general fallback
-
-SIGNAL language zh {
-  description: "Chinese prompts"
-}
-
-SIGNAL language en {
-  description: "English prompts"
-}
-
-ROUTE zh_route {
-  PRIORITY 220
-  WHEN language("zh")
-  MODEL "qwen2.5:7b"
-}
-
-ROUTE en_route {
-  PRIORITY 210
-  WHEN language("en")
-  MODEL "qwen2.5:7b"
-}
-
-ROUTE multilingual_fallback {
-  PRIORITY 1
-  MODEL "qwen2.5:3b"
-}
 `
 
 // SystemPrompt is the system message used when generating DSL from natural

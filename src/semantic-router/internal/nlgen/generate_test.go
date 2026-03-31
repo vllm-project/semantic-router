@@ -248,41 +248,6 @@ ROUTE fallback {
 	}
 }
 
-func TestNormalizeGeneratedDSLRepairsLanguageConditionPattern(t *testing.T) {
-	source := `MODEL "qwen/qwen3.5-rocm" {
-  modality: "text"
-}
-
-ROUTE zh_route (description = "Route Chinese prompts.") {
-  PRIORITY 200
-  CONDITION "language: zh"
-  MODEL "qwen/qwen3.5-rocm" (reasoning = false)
-}
-
-ROUTE default_route (description = "Fallback route.") {
-  PRIORITY 100
-  MODEL "qwen/qwen3.5-rocm" (reasoning = false)
-}`
-
-	normalized, notes := NormalizeGeneratedDSL(source)
-	if len(notes) == 0 {
-		t.Fatalf("expected normalization notes, got none")
-	}
-	if strings.Contains(normalized, "CONDITION") {
-		t.Fatalf("expected CONDITION to be rewritten, got:\n%s", normalized)
-	}
-	if !strings.Contains(normalized, `WHEN language("zh")`) {
-		t.Fatalf("expected WHEN language guard, got:\n%s", normalized)
-	}
-	if !strings.Contains(normalized, `SIGNAL language zh {`) {
-		t.Fatalf("expected missing SIGNAL language declaration to be inserted, got:\n%s", normalized)
-	}
-
-	if _, parseErrors := dsl.Parse(normalized); len(parseErrors) > 0 {
-		t.Fatalf("expected normalized draft to parse, got %v\nDSL:\n%s", parseErrors, normalized)
-	}
-}
-
 // ---------- Eval Harness ----------
 
 // NLEvalCase defines one test case for the NL-to-DSL eval harness.

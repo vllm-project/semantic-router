@@ -198,12 +198,6 @@ func runGeneration(
 		result.RawOutput = raw
 
 		sanitized := SanitizeLLMOutput(raw)
-		normalized, notes := NormalizeGeneratedDSL(sanitized)
-		if len(notes) > 0 {
-			result.Warnings = appendUniqueWarnings(result.Warnings, notes...)
-			reportProgress(cfg, "parse", attemptNumber, "Normalized common DSL mistakes before parsing.")
-		}
-		sanitized = normalized
 
 		if !cfg.validate {
 			result.DSL = formatIfNeeded(cfg, sanitized)
@@ -243,7 +237,6 @@ func validateAndFormat(result *NLResult, cfg *nlConfig, instruction string, sani
 	}
 
 	reportProgress(cfg, "parse", attemptNumber, "Parsed the generated DSL successfully.")
-	result.Warnings = filterOutDiagnosticWarnings(result.Warnings)
 	diags := dsl.ValidateAST(prog)
 	for _, d := range diags {
 		result.Warnings = appendUniqueWarnings(result.Warnings, d.String())
@@ -343,16 +336,6 @@ func appendUniqueWarnings(existing []string, warnings ...string) []string {
 		}
 		seen[warning] = struct{}{}
 		result = append(result, warning)
-	}
-	return result
-}
-
-func filterOutDiagnosticWarnings(warnings []string) []string {
-	result := make([]string, 0, len(warnings))
-	for _, warning := range warnings {
-		if strings.HasPrefix(warning, "normalized: ") {
-			result = append(result, warning)
-		}
 	}
 	return result
 }

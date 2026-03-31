@@ -73,7 +73,7 @@ function buildPromptPresets(targetModelName: string): string[] {
   return [
     `Route urgent billing issues to a higher-priority route, then send everything else to ${targetModelName}.`,
     `Create separate routes for code debugging, math tutoring, and general chat, with a general fallback to ${targetModelName}.`,
-    `Add multilingual routing so Chinese and English prompts get their own routes before a general fallback to ${targetModelName}.`,
+    `Create a premium support route with a faster model, then keep a general fallback to ${targetModelName}.`,
   ];
 }
 
@@ -427,7 +427,7 @@ const BuilderNaturalLanguagePanel: React.FC<
                 className={styles.textarea}
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
-                placeholder={`Example: add multilingual routing for Chinese and English prompts, then keep a general fallback route to ${preferredTargetModelName}.`}
+                placeholder={`Example: add a premium support route, then keep a general fallback route to ${preferredTargetModelName}.`}
               />
 
               <div className={styles.contextPanel}>
