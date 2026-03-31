@@ -11,6 +11,7 @@ import (
 	"net/url"
 	pathpkg "path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,9 +32,18 @@ const (
 	builderNLProviderAnthropic        builderNLProviderKind = "anthropic"
 
 	builderNLFallbackModelAlias = "MoM"
-	builderNLRepairMaxAttempts  = 2
-	builderNLModelCallTimeout   = 90 * time.Second
+	builderNLRepairMaxAttempts  = 1
+	builderNLModelCallTimeout   = 60 * time.Second
 	builderNLHeartbeatInterval  = 5 * time.Second
+)
+
+var (
+	builderNLRouteConditionPattern     = regexp.MustCompile(`(?m)^([ \t]*)(?:CONDITION|WHEN)\s+"language\s*[:=]\s*([A-Za-z0-9_.-]+)"\s*$`)
+	builderNLConditionKeywordPattern   = regexp.MustCompile(`(?m)^([ \t]*)CONDITION\b`)
+	builderNLLanguageSignalDeclPattern = regexp.MustCompile(`(?m)^\s*SIGNAL\s+language\s+(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_-]*))\b`)
+	builderNLLanguageSignalRefPattern  = regexp.MustCompile(`language\("([^"]+)"\)`)
+	builderNLFirstRoutePattern         = regexp.MustCompile(`(?m)^ROUTE\b`)
+	builderNLDslIdentifierPattern      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 )
 
 type BuilderNLGenerateRequest struct {
@@ -426,6 +436,8 @@ func buildBuilderNLGenerationPrompts(
 		"Return ONLY valid JSON with keys dsl, summary, suggestedTestQuery.",
 		"The dsl value must be plain DSL source without markdown fences.",
 		"Use Builder-compatible syntax only: MODEL, SIGNAL, ROUTE, PLUGIN, PRIORITY, WHEN, MODEL refs, ALGORITHM, and PLUGIN refs.",
+		"Never emit CONDITION inside a ROUTE block. Route predicates must use WHEN <bool_expr>.",
+		"If a route uses language(\"name\") in WHEN, add a matching SIGNAL language name declaration unless it already exists in the current DSL.",
 		"Connection settings live outside the DSL, so never emit YAML or providers/global blocks.",
 		"Always include at least one MODEL declaration and one ROUTE declaration.",
 		fmt.Sprintf("Prefer existing router model cards before inventing new model names. The preferred fallback or default route model is %q.", preferredTarget),
@@ -444,6 +456,9 @@ func buildBuilderNLGenerationPrompts(
 		fmt.Sprintf("Known current router model cards: %s", builderNLKnownModelList(knownModelNames)),
 		"Use short descriptions, add a sensible fallback route when the request implies one, and prefer deterministic priorities.",
 		"Do not invent provider wiring or deploy-time endpoint config inside the DSL.",
+		"For multilingual routing, use SIGNAL language declarations plus WHEN language(\"...\") route guards.",
+		"Valid language-routing example:",
+		builderNLLanguageRoutingExample(preferredTarget),
 		"Route request:",
 		request,
 		"",
@@ -468,6 +483,8 @@ func buildBuilderNLRepairPrompts(
 		"You repair vLLM Semantic Router Builder DSL using repository validation errors.",
 		"Return ONLY valid JSON with keys dsl, summary, suggestedTestQuery.",
 		"The dsl value must be plain DSL source without markdown fences.",
+		"Never emit CONDITION inside a ROUTE block. Rewrite route predicates to WHEN <bool_expr>.",
+		"If a route uses language(\"name\") in WHEN, add a matching SIGNAL language name declaration unless it already exists.",
 		"Fix the validation and compile problems without adding unrelated features.",
 	}, "\n")
 
@@ -485,6 +502,9 @@ func buildBuilderNLRepairPrompts(
 		"",
 		"Repository validation findings:",
 		builderNLValidationSummary(validation),
+		"",
+		"Valid language-routing example:",
+		builderNLLanguageRoutingExample(strings.TrimSpace(targetModelName)),
 		"",
 		`JSON response shape: {"dsl":"...","summary":"...","suggestedTestQuery":"..."}`,
 	}, "\n")
@@ -506,6 +526,35 @@ func builderNLKnownModelList(knownModelNames []string) string {
 	return strings.Join(knownModelNames, ", ")
 }
 
+func builderNLLanguageRoutingExample(targetModelName string) string {
+	targetModel := strings.TrimSpace(targetModelName)
+	if targetModel == "" {
+		targetModel = builderNLFallbackModelAlias
+	}
+
+	return strings.Join([]string{
+		`SIGNAL language zh { description: "Chinese prompts" }`,
+		`SIGNAL language en { description: "English prompts" }`,
+		"",
+		`ROUTE zh_route (description = "Route Chinese prompts before the fallback.") {`,
+		`  PRIORITY 220`,
+		`  WHEN language("zh")`,
+		fmt.Sprintf(`  MODEL %q (reasoning = false)`, targetModel),
+		`}`,
+		"",
+		`ROUTE en_route (description = "Route English prompts before the fallback.") {`,
+		`  PRIORITY 210`,
+		`  WHEN language("en")`,
+		fmt.Sprintf(`  MODEL %q (reasoning = false)`, targetModel),
+		`}`,
+		"",
+		`ROUTE default_route (description = "General fallback route.") {`,
+		`  PRIORITY 100`,
+		fmt.Sprintf(`  MODEL %q (reasoning = false)`, targetModel),
+		`}`,
+	}, "\n")
+}
+
 func generateValidatedBuilderNLDraft(
 	ctx context.Context,
 	envoyURL string,
@@ -524,6 +573,8 @@ func generateValidatedBuilderNLDraft(
 	systemPrompt, userPrompt := buildBuilderNLGenerationPrompts(prompt, currentDSL, targetModelName, knownModelNames, connectionMode)
 	var lastGenerated builderNLLLMOutput
 	var lastValidation BuilderNLValidation
+	lastValidationSignature := ""
+	lastDraftSignature := ""
 
 	for attempt := 0; attempt <= builderNLRepairMaxAttempts; attempt++ {
 		attemptNumber := attempt + 1
@@ -543,12 +594,25 @@ func generateValidatedBuilderNLDraft(
 			reportBuilderNLProgress(reporter, "parse", builderNLProgressError, fmt.Sprintf("Model output could not be parsed as a Builder draft: %s", parseErr), attemptNumber)
 			return builderNLLLMOutput{}, BuilderNLValidation{}, fmt.Errorf("failed to parse generated DSL draft: %w", parseErr)
 		}
+		if normalizedDSL, normalizationNotes := normalizeBuilderNLDraftSyntax(generated.DSL); normalizedDSL != generated.DSL {
+			generated.DSL = normalizedDSL
+			message := "Applied Builder DSL quick fixes before validation."
+			if len(normalizationNotes) > 0 {
+				message = "Applied Builder DSL quick fixes before validation: " + strings.Join(normalizationNotes, " ")
+			}
+			reportBuilderNLProgress(reporter, "parse", builderNLProgressInfo, message, attemptNumber)
+		}
 		reportBuilderNLProgress(reporter, "parse", builderNLProgressSuccess, "Parsed model output into a candidate DSL draft.", attemptNumber)
 
 		reportBuilderNLProgress(reporter, "validate", builderNLProgressInfo, "Running repository parse, validate, and compile checks against the staged draft.", attemptNumber)
 		validation := validateBuilderNLDraft(generated.DSL)
+		validationSignature := builderNLValidationSignature(validation)
+		sameValidationAsPrevious := attempt > 0 && validationSignature != "" && validationSignature == lastValidationSignature
+		sameDraftAsPrevious := attempt > 0 && strings.TrimSpace(generated.DSL) != "" && strings.TrimSpace(generated.DSL) == lastDraftSignature
 		lastGenerated = generated
 		lastValidation = validation
+		lastValidationSignature = validationSignature
+		lastDraftSignature = strings.TrimSpace(generated.DSL)
 		if validation.Ready {
 			reportBuilderNLProgress(reporter, "validate", builderNLProgressSuccess, "Repository validation passed for the staged draft.", attemptNumber)
 			if formatted := strings.TrimSpace(validation.formattedDSL()); formatted != "" {
@@ -565,6 +629,16 @@ func generateValidatedBuilderNLDraft(
 			builderNLValidationProgressMessage(validation, attemptNumber),
 			attemptNumber,
 		)
+		if sameValidationAsPrevious || sameDraftAsPrevious {
+			reportBuilderNLProgress(
+				reporter,
+				"repair",
+				builderNLProgressWarning,
+				"Repair findings were unchanged from the previous attempt, so Builder stopped early instead of spending another slow retry.",
+				attemptNumber,
+			)
+			return lastGenerated, lastValidation, nil
+		}
 
 		if attempt == builderNLRepairMaxAttempts {
 			reportBuilderNLProgress(reporter, "repair", builderNLProgressWarning, "Repair budget exhausted; preserving the latest staged draft for manual repair.", attemptNumber)
@@ -655,6 +729,125 @@ func validateBuilderNLDraft(source string) BuilderNLValidation {
 	return validation
 }
 
+func normalizeBuilderNLDraftSyntax(source string) (string, []string) {
+	normalized := strings.TrimSpace(source)
+	if normalized == "" {
+		return source, nil
+	}
+
+	var notes []string
+	if builderNLRouteConditionPattern.MatchString(normalized) {
+		normalized = builderNLRouteConditionPattern.ReplaceAllString(normalized, `${1}WHEN language("${2}")`)
+		notes = append(notes, `rewrote quoted language CONDITION clauses into valid WHEN language("...") guards.`)
+	}
+	if builderNLConditionKeywordPattern.MatchString(normalized) {
+		normalized = builderNLConditionKeywordPattern.ReplaceAllString(normalized, `${1}WHEN`)
+		notes = append(notes, "rewrote CONDITION into WHEN for route predicates.")
+	}
+
+	normalized, missingSignals := ensureBuilderNLLanguageSignals(normalized)
+	if len(missingSignals) > 0 {
+		notes = append(notes, fmt.Sprintf("added %d missing SIGNAL language declaration(s) to match the generated WHEN clauses.", len(missingSignals)))
+	}
+
+	if strings.TrimSpace(normalized) == strings.TrimSpace(source) {
+		return source, nil
+	}
+	return normalized, uniqueBuilderNLNotes(notes)
+}
+
+func ensureBuilderNLLanguageSignals(source string) (string, []string) {
+	existingSignals := make(map[string]struct{})
+	for _, match := range builderNLLanguageSignalDeclPattern.FindAllStringSubmatch(source, -1) {
+		name := strings.TrimSpace(match[1])
+		if name == "" {
+			name = strings.TrimSpace(match[2])
+		}
+		if name == "" {
+			continue
+		}
+		existingSignals[strings.ToLower(name)] = struct{}{}
+	}
+
+	var missing []string
+	seenMissing := make(map[string]struct{})
+	for _, match := range builderNLLanguageSignalRefPattern.FindAllStringSubmatch(source, -1) {
+		name := strings.TrimSpace(match[1])
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, ok := existingSignals[key]; ok {
+			continue
+		}
+		if _, ok := seenMissing[key]; ok {
+			continue
+		}
+		seenMissing[key] = struct{}{}
+		missing = append(missing, name)
+	}
+	if len(missing) == 0 {
+		return source, nil
+	}
+
+	declarations := make([]string, 0, len(missing))
+	for _, name := range missing {
+		declarations = append(
+			declarations,
+			fmt.Sprintf(`SIGNAL language %s { description: %q }`, builderNLDslName(name), builderNLLanguageDescription(name)),
+		)
+	}
+	block := strings.Join(declarations, "\n\n")
+
+	if routeIndex := builderNLFirstRoutePattern.FindStringIndex(source); routeIndex != nil {
+		prefix := strings.TrimRight(source[:routeIndex[0]], "\n")
+		suffix := strings.TrimLeft(source[routeIndex[0]:], "\n")
+		if prefix == "" {
+			return block + "\n\n" + suffix, missing
+		}
+		return prefix + "\n\n" + block + "\n\n" + suffix, missing
+	}
+	return strings.TrimRight(source, "\n") + "\n\n" + block + "\n", missing
+}
+
+func builderNLDslName(name string) string {
+	if builderNLDslIdentifierPattern.MatchString(name) {
+		return name
+	}
+	return strconv.Quote(name)
+}
+
+func builderNLLanguageDescription(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "zh", "zh-cn", "zh-hans", "zh-hant", "chinese":
+		return "Chinese prompts"
+	case "en", "en-us", "en-gb", "english":
+		return "English prompts"
+	default:
+		return fmt.Sprintf("%s prompts", strings.TrimSpace(name))
+	}
+}
+
+func uniqueBuilderNLNotes(notes []string) []string {
+	if len(notes) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(notes))
+	var result []string
+	for _, note := range notes {
+		note = strings.TrimSpace(note)
+		if note == "" {
+			continue
+		}
+		if _, ok := seen[note]; ok {
+			continue
+		}
+		seen[note] = struct{}{}
+		result = append(result, note)
+	}
+	return result
+}
+
 func convertBuilderNLDiagnostics(diags []dsl.Diagnostic) []BuilderNLDiagnostic {
 	result := make([]BuilderNLDiagnostic, len(diags))
 	for i, diag := range diags {
@@ -721,10 +914,40 @@ func builderNLValidationWarnings(validation BuilderNLValidation) []string {
 
 func builderNLValidationProgressMessage(validation BuilderNLValidation, attempt int) string {
 	message := fmt.Sprintf("Validation attempt %d found %d error(s).", attempt, validation.ErrorCount)
-	if strings.TrimSpace(validation.CompileError) != "" {
-		message += " Compile step also reported an error."
+	if firstFinding := builderNLPrimaryValidationFinding(validation); firstFinding != "" {
+		message += " First blocker: " + firstFinding
 	}
 	return message
+}
+
+func builderNLValidationSignature(validation BuilderNLValidation) string {
+	return strings.TrimSpace(builderNLValidationSummary(validation))
+}
+
+func builderNLPrimaryValidationFinding(validation BuilderNLValidation) string {
+	if firstCompileLine := builderNLFirstSummaryLine(validation.CompileError); firstCompileLine != "" {
+		return firstCompileLine
+	}
+	for _, diag := range validation.Diagnostics {
+		if line := builderNLFirstSummaryLine(diag.Message); line != "" {
+			return line
+		}
+	}
+	return ""
+}
+
+func builderNLFirstSummaryLine(raw string) string {
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if len(line) > 160 {
+			return line[:157] + "..."
+		}
+		return line
+	}
+	return ""
 }
 
 func (v BuilderNLValidation) formattedDSL() string {

@@ -30,6 +30,42 @@ func TestParseBuilderNLGenerationOutputFromJSONFence(t *testing.T) {
 	}
 }
 
+func TestNormalizeBuilderNLDraftSyntaxRepairsLanguageConditionPattern(t *testing.T) {
+	source := `MODEL "qwen/qwen3.5-rocm" {
+  modality: "text"
+}
+
+ROUTE zh_route (description = "Route Chinese prompts.") {
+  PRIORITY 200
+  CONDITION "language: zh"
+  MODEL "qwen/qwen3.5-rocm" (reasoning = false)
+}
+
+ROUTE default_route (description = "Fallback route.") {
+  PRIORITY 100
+  MODEL "qwen/qwen3.5-rocm" (reasoning = false)
+}`
+
+	normalized, notes := normalizeBuilderNLDraftSyntax(source)
+	if len(notes) == 0 {
+		t.Fatalf("expected normalization notes, got none")
+	}
+	if strings.Contains(normalized, "CONDITION") {
+		t.Fatalf("expected CONDITION to be rewritten, got:\n%s", normalized)
+	}
+	if !strings.Contains(normalized, `WHEN language("zh")`) {
+		t.Fatalf("expected WHEN language guard, got:\n%s", normalized)
+	}
+	if !strings.Contains(normalized, `SIGNAL language zh {`) {
+		t.Fatalf("expected missing SIGNAL language declaration to be inserted, got:\n%s", normalized)
+	}
+
+	validation := validateBuilderNLDraft(normalized)
+	if !validation.Ready {
+		t.Fatalf("expected normalized draft to validate, got %#v\nDSL:\n%s", validation, normalized)
+	}
+}
+
 func TestGenerateBuilderNLDraftRepairsInvalidDSL(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
@@ -150,6 +186,60 @@ func TestGenerateBuilderNLDraftWithProgressReportsRepairAttempts(t *testing.T) {
 	}
 	if !sawValidateAttemptTwo {
 		t.Fatalf("expected progress stream to report validation for attempt 2, got %#v", progressEvents)
+	}
+}
+
+func TestGenerateBuilderNLDraftStopsEarlyWhenRepairFindingsRepeat(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	repeatedInvalidDSL := `{"dsl":"MODEL \"MoM\" {\n  modality: \"text\"\n\nROUTE broken_route {\n  PRIORITY 100\n  MODEL \"MoM\" (reasoning = false)\n}","summary":"Still broken.","suggestedTestQuery":"hello"}`
+
+	var callCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount.Add(1)
+		writeBuilderNLTestChatResponse(t, w, repeatedInvalidDSL)
+	}))
+	defer server.Close()
+
+	var progressEvents []BuilderNLProgressEvent
+	resp, err := generateBuilderNLDraftWithProgress(context.Background(), configPath, "", BuilderNLGenerateRequest{
+		Prompt:         "Add multilingual routing before a fallback route.",
+		ConnectionMode: builderNLConnectionModeCustom,
+		CustomConnection: &builderNLConnection{
+			ProviderKind: builderNLProviderOpenAICompatible,
+			ModelName:    "gpt-4o-mini",
+			BaseURL:      server.URL,
+		},
+	}, func(event BuilderNLProgressEvent) {
+		progressEvents = append(progressEvents, event)
+	})
+	if err != nil {
+		t.Fatalf("expected generation to return a staged draft for manual repair, got error: %v", err)
+	}
+
+	if resp.Validation.Ready {
+		t.Fatalf("expected repeated invalid draft to remain blocked, got %#v", resp.Validation)
+	}
+	if got := callCount.Load(); got != 2 {
+		t.Fatalf("expected generation plus one repair call before early stop, got %d", got)
+	}
+
+	var sawEarlyStop bool
+	var sawBudgetExhausted bool
+	for _, event := range progressEvents {
+		if strings.Contains(event.Message, "stopped early instead of spending another slow retry") {
+			sawEarlyStop = true
+		}
+		if strings.Contains(event.Message, "Repair budget exhausted") {
+			sawBudgetExhausted = true
+		}
+	}
+	if !sawEarlyStop {
+		t.Fatalf("expected repeated findings to trigger an early-stop progress event, got %#v", progressEvents)
+	}
+	if sawBudgetExhausted {
+		t.Fatalf("expected early-stop to happen before repair budget exhaustion, got %#v", progressEvents)
 	}
 }
 

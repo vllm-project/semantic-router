@@ -130,6 +130,7 @@ const BuilderPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const autoLoadedDefaultConfigRef = useRef(false);
   const autoLoadingDefaultConfigRef = useRef(false);
+  const isNaturalLanguageMode = mode === "nl";
 
   // Initialize WASM on mount
   useEffect(() => {
@@ -147,6 +148,14 @@ const BuilderPage: React.FC = () => {
       parseAST();
     }
   }, [mode, wasmReady, dslSource, parseAST]);
+
+  useEffect(() => {
+    if (!isNaturalLanguageMode) {
+      return;
+    }
+    setGuideOpen(false);
+    setOutputPanelOpen(false);
+  }, [isNaturalLanguageMode]);
 
   const toggleSection = useCallback((key: keyof SectionState) => {
     setSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -531,8 +540,9 @@ const BuilderPage: React.FC = () => {
               ? "Checking deploy permissions..."
               : undefined
         }
+        showBuilderSecondaryActions={!isNaturalLanguageMode}
         guideOpen={guideOpen}
-        outputPanelOpen={outputPanelOpen}
+        outputPanelOpen={!isNaturalLanguageMode && outputPanelOpen}
         onModeSwitch={handleModeSwitch}
         onImport={handleOpenImport}
         onCompile={compile}
@@ -612,18 +622,20 @@ const BuilderPage: React.FC = () => {
           )}
         </div>
 
-        <BuilderOutputPanel
-          open={outputPanelOpen}
-          width={outputWidth}
-          yamlOutput={yamlOutput}
-          crdOutput={crdOutput}
-          dslSource={dslSource}
-          dslTabLabel={mode === "nl" ? "Live DSL" : "DSL"}
-          compileError={compileError}
-          onDragStart={handleDragStart}
-          onOpen={() => setOutputPanelOpen(true)}
-          onClose={() => setOutputPanelOpen(false)}
-        />
+        {!isNaturalLanguageMode ? (
+          <BuilderOutputPanel
+            open={outputPanelOpen}
+            width={outputWidth}
+            yamlOutput={yamlOutput}
+            crdOutput={crdOutput}
+            dslSource={dslSource}
+            dslTabLabel="DSL"
+            compileError={compileError}
+            onDragStart={handleDragStart}
+            onOpen={() => setOutputPanelOpen(true)}
+            onClose={() => setOutputPanelOpen(false)}
+          />
+        ) : null}
       </div>
 
       <BuilderStatusBar
@@ -670,7 +682,7 @@ const BuilderPage: React.FC = () => {
       />
 
       <BuilderGuideDrawer
-        open={guideOpen}
+        open={!isNaturalLanguageMode && guideOpen}
         width={guideWidth}
         isDragging={isGuideDragging}
         onClose={() => setGuideOpen(false)}

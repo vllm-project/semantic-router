@@ -14,6 +14,7 @@ interface BuilderToolbarProps {
   deploying: boolean;
   deployDisabled: boolean;
   deployDisabledReason?: string;
+  showBuilderSecondaryActions?: boolean;
   guideOpen: boolean;
   outputPanelOpen: boolean;
   onModeSwitch: (mode: EditorMode) => void;
@@ -37,6 +38,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
   deploying,
   deployDisabled,
   deployDisabledReason,
+  showBuilderSecondaryActions = true,
   guideOpen,
   outputPanelOpen,
   onModeSwitch,
@@ -218,68 +220,72 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
           </svg>
           {deploying ? "Deploying…" : "Deploy"}
         </button>
-        <button
-          className={styles.toolbarBtn}
-          onClick={onFormat}
-          disabled={!wasmReady || !dslSource.trim()}
-          title="Format DSL"
-        >
-          Format
-        </button>
-        <button
-          className={styles.toolbarBtn}
-          onClick={onValidate}
-          disabled={!wasmReady || !dslSource.trim()}
-          title="Validate"
-        >
-          Validate
-        </button>
-        <span className={styles.divider} />
-        <button
-          className={guideOpen ? styles.toolbarBtnActive : styles.toolbarBtn}
-          onClick={onToggleGuide}
-          title={guideOpen ? "Close DSL Guide" : "Open DSL Guide"}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path
-              d="M2 2h9a2 2 0 012 2v10l-3-2H2V2z"
-              strokeLinejoin="round"
-            />
-            <path d="M5 6h5M5 9h3" strokeLinecap="round" />
-          </svg>
-          Guide
-        </button>
-        <button
-          className={
-            outputPanelOpen ? styles.toolbarBtnActive : styles.toolbarBtn
-          }
-          onClick={onToggleOutput}
-          title={outputPanelOpen ? "Hide Output Panel" : "Show Output Panel"}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <rect x="1" y="1" width="14" height="14" rx="2" />
-            <path d="M10 1v14" />
-          </svg>
-          Output
-        </button>
-        <span className={styles.divider} />
-        <button className={styles.toolbarBtnDanger} onClick={onReset} title="Reset">
-          Reset
-        </button>
+        {showBuilderSecondaryActions ? (
+          <>
+            <button
+              className={styles.toolbarBtn}
+              onClick={onFormat}
+              disabled={!wasmReady || !dslSource.trim()}
+              title="Format DSL"
+            >
+              Format
+            </button>
+            <button
+              className={styles.toolbarBtn}
+              onClick={onValidate}
+              disabled={!wasmReady || !dslSource.trim()}
+              title="Validate"
+            >
+              Validate
+            </button>
+            <span className={styles.divider} />
+            <button
+              className={guideOpen ? styles.toolbarBtnActive : styles.toolbarBtn}
+              onClick={onToggleGuide}
+              title={guideOpen ? "Close DSL Guide" : "Open DSL Guide"}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path
+                  d="M2 2h9a2 2 0 012 2v10l-3-2H2V2z"
+                  strokeLinejoin="round"
+                />
+                <path d="M5 6h5M5 9h3" strokeLinecap="round" />
+              </svg>
+              Guide
+            </button>
+            <button
+              className={
+                outputPanelOpen ? styles.toolbarBtnActive : styles.toolbarBtn
+              }
+              onClick={onToggleOutput}
+              title={outputPanelOpen ? "Hide Output Panel" : "Show Output Panel"}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <rect x="1" y="1" width="14" height="14" rx="2" />
+                <path d="M10 1v14" />
+              </svg>
+              Output
+            </button>
+            <span className={styles.divider} />
+            <button className={styles.toolbarBtnDanger} onClick={onReset} title="Reset">
+              Reset
+            </button>
+          </>
+        ) : null}
       </div>
     </div>
   );

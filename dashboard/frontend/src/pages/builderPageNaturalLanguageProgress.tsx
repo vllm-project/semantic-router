@@ -219,10 +219,10 @@ function resolveEventStatus(
 }
 
 function summarizeAttempt(summary: BuilderNLAttemptSummary): string {
-  if (summary.latestHeartbeatEvent) {
+  if (isHeartbeatEvent(summary.latestEvent) && summary.latestHeartbeatEvent) {
     return summary.latestHeartbeatEvent.message;
   }
-  return summary.latestEvent.message;
+  return summary.latestStableEvent.message;
 }
 
 function buildAttemptSummary(
