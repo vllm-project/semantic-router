@@ -173,7 +173,7 @@ interface DSLActions {
   /** Generate DSL from a natural-language request and optional custom model connection. */
   generateFromNaturalLanguage(input: BuilderNLGenerateRequest): Promise<void>
 
-  /** Apply the staged NL draft into the live Builder editor and open the DSL mode. */
+  /** Apply the staged NL draft into the live Builder editor while preserving the current deploy base YAML. */
   applyNaturalLanguageDraft(): void
 
   /** Clear the staged NL draft and any related review state. */

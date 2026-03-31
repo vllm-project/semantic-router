@@ -742,6 +742,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     })
 
     try {
+      const liveBaseYaml = get().baseConfigYaml
       const data = await generateBuilderNLDraftStreaming({
         ...input,
         prompt,
@@ -750,7 +751,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       const stagedDraft: BuilderNLStagedDraft = {
         prompt,
         dsl: data.dsl,
-        baseYaml: data.baseYaml || get().baseConfigYaml,
+        baseYaml: liveBaseYaml.trim() ? liveBaseYaml : (data.baseYaml || ''),
         summary: data.summary || '',
         suggestedTestQuery: data.suggestedTestQuery || '',
         review: normalizeBuilderNLReview(data.review),
@@ -779,10 +780,13 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   applyNaturalLanguageDraft() {
     const stagedDraft = get().nlStagedDraft
     if (!stagedDraft) return
+    const liveBaseYaml = get().baseConfigYaml
 
     set({
       dslSource: stagedDraft.dsl,
-      baseConfigYaml: stagedDraft.baseYaml,
+      // Keep the live deploy base intact so global/providers/listeners do not
+      // get replaced by the staged NL draft handoff payload.
+      baseConfigYaml: liveBaseYaml.trim() ? liveBaseYaml : stagedDraft.baseYaml,
       dirty: false,
       diagnostics: [],
       compileError: null,

@@ -236,6 +236,10 @@ const BuilderNaturalLanguageResultCard: React.FC<
               Open live Builder draft
             </button>
           </div>
+          <div className={styles.applyNote}>
+            Applying the staged DSL keeps the current Builder base YAML intact,
+            including global, provider, and listener settings.
+          </div>
         </>
       ) : (
         <div className={styles.emptyState}>
