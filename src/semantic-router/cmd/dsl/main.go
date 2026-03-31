@@ -15,6 +15,7 @@ Commands:
   decompile  Convert YAML config to routing-only DSL
   validate   Validate a DSL file
   fmt        Format a DSL file
+  generate   Generate DSL from natural language using an LLM
 
 Examples:
   sr-dsl compile -o config.yaml --base providers.yaml privacy-router.dsl
@@ -23,6 +24,7 @@ Examples:
   sr-dsl decompile -o config.dsl config.yaml
   sr-dsl validate config.dsl
   sr-dsl fmt -o formatted.dsl config.dsl
+  sr-dsl generate --api-url http://localhost:8090 --model Qwen2.5-72B "Route math to qwen-math, default to qwen2.5:3b"
 `
 
 func main() {
@@ -43,6 +45,8 @@ func main() {
 		runValidate()
 	case "fmt", "format":
 		runFormat()
+	case "generate":
+		runGenerate()
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:

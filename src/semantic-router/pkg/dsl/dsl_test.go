@@ -5216,7 +5216,7 @@ DECISION_TREE routing_policy {
 	}
 	found := false
 	for _, err := range errs {
-		if strings.Contains(err.Error(), "cannot be mixed with ROUTE") {
+		if strings.Contains(err.Error(), "DECISION_TREE and ROUTE") {
 			found = true
 		}
 	}

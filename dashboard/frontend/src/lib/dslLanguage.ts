@@ -57,8 +57,9 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
   ignoreCase: false,
 
   keywords: [
-    'SIGNAL', 'ROUTE', 'PLUGIN',
-    'PRIORITY', 'WHEN', 'MODEL', 'ALGORITHM',
+    'SIGNAL', 'ROUTE', 'PLUGIN', 'PROJECTION', 'DECISION_TREE', 'TEST',
+    'PRIORITY', 'WHEN', 'MODEL', 'ALGORITHM', 'TIER', 'DESCRIPTION',
+    'IF', 'ELSE',
   ],
 
   operators: ['AND', 'OR', 'NOT'],
@@ -66,11 +67,13 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
   signalTypes: [
     'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
     'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
+    'jailbreak', 'pii', 'kb',
   ],
 
   pluginTypes: [
-    'jailbreak', 'pii', 'semantic_cache', 'memory', 'system_prompt',
+    'semantic_cache', 'memory', 'system_prompt',
     'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen', 'tools',
+    'fast_response', 'request_params',
   ],
 
   algoTypes: [
@@ -97,23 +100,23 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
       [/\b(true|false)\b/, 'constant.language'],
 
       // Top-level keywords (SIGNAL, ROUTE, etc.)
-      [/\b(SIGNAL|ROUTE|PLUGIN)\b/, 'keyword'],
+      [/\b(SIGNAL|ROUTE|PLUGIN|PROJECTION|DECISION_TREE|TEST)\b/, 'keyword'],
 
-      // Route sub-keywords
-      [/\b(PRIORITY|WHEN|MODEL|ALGORITHM)\b/, 'keyword'],
+      // Route/block sub-keywords
+      [/\b(PRIORITY|WHEN|MODEL|ALGORITHM|TIER|DESCRIPTION|IF|ELSE)\b/, 'keyword'],
 
       // Boolean operators
       [/\b(AND|OR|NOT)\b/, 'keyword.operator'],
 
       // Signal types (after SIGNAL keyword)
       [
-        /\b(keyword|embedding|domain|fact_check|user_feedback|preference|language|context|structure|complexity|modality|authz)\b/,
+        /\b(keyword|embedding|domain|fact_check|user_feedback|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb)\b/,
         'type',
       ],
 
       // Plugin types
       [
-        /\b(jailbreak|pii|semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools)\b/,
+        /\b(semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools|fast_response|request_params)\b/,
         'type.plugin',
       ],
 
@@ -188,7 +191,11 @@ const KEYWORD_SUGGESTIONS = [
   { label: 'SIGNAL', insertText: 'SIGNAL ${1:keyword} ${2:name} {\n\t$0\n}', detail: 'Signal declaration' },
   { label: 'ROUTE', insertText: 'ROUTE ${1:name} (description = "${2:desc}") {\n\tPRIORITY ${3:10}\n\tWHEN ${4:condition}\n\tMODEL "${5:model}"\n\t$0\n}', detail: 'Route declaration' },
   { label: 'PLUGIN', insertText: 'PLUGIN ${1:name} ${2:type} {\n\t$0\n}', detail: 'Plugin template' },
-  { label: 'PRIORITY', insertText: 'PRIORITY ${1:10}', detail: 'Route priority (1-100)' },
+  { label: 'PROJECTION', insertText: 'PROJECTION ${1|score,mapping,partition|} ${2:name} {\n\t$0\n}', detail: 'Projection declaration (score, mapping, or partition)' },
+  { label: 'DECISION_TREE', insertText: 'DECISION_TREE ${1:name} {\n\tIF ${2:condition} {\n\t\tMODEL "${3:model}"\n\t} ELSE {\n\t\tMODEL "${4:fallback}"\n\t}\n}', detail: 'Decision tree with if/else branching' },
+  { label: 'PRIORITY', insertText: 'PRIORITY ${1:10}', detail: 'Route priority (higher = matched first)' },
+  { label: 'TIER', insertText: 'TIER ${1:1}', detail: 'Route tier grouping' },
+  { label: 'DESCRIPTION', insertText: 'DESCRIPTION "${1:description}"', detail: 'Route description' },
   { label: 'WHEN', insertText: 'WHEN ${1:condition}', detail: 'Route condition' },
   { label: 'MODEL', insertText: 'MODEL "${1:model-name}"', detail: 'Model reference' },
   { label: 'ALGORITHM', insertText: 'ALGORITHM ${1:confidence} {\n\t$0\n}', detail: 'Algorithm block' },
@@ -210,11 +217,12 @@ const SIGNAL_TYPE_SUGGESTIONS = [
   { label: 'complexity', detail: 'Query complexity signal' },
   { label: 'modality', detail: 'Input modality signal' },
   { label: 'authz', detail: 'Authorization signal' },
+  { label: 'jailbreak', detail: 'Jailbreak detection signal' },
+  { label: 'pii', detail: 'PII detection signal' },
+  { label: 'kb', detail: 'Knowledge base signal' },
 ]
 
 const PLUGIN_TYPE_SUGGESTIONS = [
-  { label: 'jailbreak', detail: 'Jailbreak detection plugin' },
-  { label: 'pii', detail: 'PII detection/masking plugin' },
   { label: 'semantic_cache', detail: 'Semantic caching plugin' },
   { label: 'memory', detail: 'Conversation memory plugin' },
   { label: 'system_prompt', detail: 'System prompt injection plugin' },
@@ -224,6 +232,8 @@ const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'rag', detail: 'RAG (Retrieval Augmented Generation) plugin' },
   { label: 'image_gen', detail: 'Image generation plugin' },
   { label: 'tools', detail: 'Route-local tool policy and semantic selection plugin' },
+  { label: 'fast_response', detail: 'Short-circuit fixed response plugin' },
+  { label: 'request_params', detail: 'Request parameter mutation plugin' },
 ]
 
 const ALGO_TYPE_SUGGESTIONS = [
@@ -266,7 +276,7 @@ function getCompletionContext(model: monacoNs.editor.ITextModel, position: monac
   for (let ln = position.lineNumber; ln >= Math.max(1, position.lineNumber - 5); ln--) {
     const line = model.getLineContent(ln).trim()
     if (/^WHEN\b/.test(line)) return 'when-expr'
-    if (/^(PRIORITY|MODEL|ALGORITHM|PLUGIN|\}|ROUTE)\b/.test(line)) break
+    if (/^(PRIORITY|MODEL|ALGORITHM|PLUGIN|TIER|DESCRIPTION|\}|ROUTE|DECISION_TREE)\b/.test(line)) break
   }
 
   return 'default'
