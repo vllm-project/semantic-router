@@ -146,80 +146,72 @@ func truncateBody(body []byte, maxBytes int) (string, bool) {
 	return string(body[:maxBytes]), true
 }
 
-func LogFields(r RoutingRecord, event string) map[string]interface{} {
-	fields := map[string]interface{}{
-		"event":           event,
-		"replay_id":       r.ID,
-		"decision":        r.Decision,
-		"category":        r.Category,
-		"original_model":  r.OriginalModel,
-		"selected_model":  r.SelectedModel,
-		"reasoning_mode":  r.ReasoningMode,
-		"request_id":      r.RequestID,
-		"timestamp":       r.Timestamp,
-		"from_cache":      r.FromCache,
-		"streaming":       r.Streaming,
-		"response_status": r.ResponseStatus,
-		"signals": map[string]interface{}{
-			"keyword":       r.Signals.Keyword,
-			"embedding":     r.Signals.Embedding,
-			"domain":        r.Signals.Domain,
-			"fact_check":    r.Signals.FactCheck,
-			"user_feedback": r.Signals.UserFeedback,
-			"reask":         r.Signals.Reask,
-			"preference":    r.Signals.Preference,
-			"language":      r.Signals.Language,
-			"context":       r.Signals.Context,
-			"complexity":    r.Signals.Complexity,
-		},
+func logSignalFields(signals Signal) map[string]interface{} {
+	return map[string]interface{}{
+		"keyword":       signals.Keyword,
+		"embedding":     signals.Embedding,
+		"domain":        signals.Domain,
+		"fact_check":    signals.FactCheck,
+		"user_feedback": signals.UserFeedback,
+		"reask":         signals.Reask,
+		"preference":    signals.Preference,
+		"language":      signals.Language,
+		"context":       signals.Context,
+		"complexity":    signals.Complexity,
+	}
+}
+
+func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
+	if !r.GuardrailsEnabled && !r.JailbreakEnabled && !r.PIIEnabled {
+		return
 	}
 
-	// Guardrails
-	if r.GuardrailsEnabled || r.JailbreakEnabled || r.PIIEnabled {
-		fields["guardrails_enabled"] = r.GuardrailsEnabled
-		fields["jailbreak_enabled"] = r.JailbreakEnabled
-		fields["pii_enabled"] = r.PIIEnabled
+	fields["guardrails_enabled"] = r.GuardrailsEnabled
+	fields["jailbreak_enabled"] = r.JailbreakEnabled
+	fields["pii_enabled"] = r.PIIEnabled
 
-		// Jailbreak detection results (request-level)
-		if r.JailbreakDetected {
-			fields["jailbreak_detected"] = r.JailbreakDetected
-			fields["jailbreak_type"] = r.JailbreakType
-			fields["jailbreak_confidence"] = r.JailbreakConfidence
-		}
+	if r.JailbreakDetected {
+		fields["jailbreak_detected"] = r.JailbreakDetected
+		fields["jailbreak_type"] = r.JailbreakType
+		fields["jailbreak_confidence"] = r.JailbreakConfidence
+	}
+	if r.ResponseJailbreakDetected {
+		fields["response_jailbreak_detected"] = r.ResponseJailbreakDetected
+		fields["response_jailbreak_type"] = r.ResponseJailbreakType
+		fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
+	}
+	if r.PIIDetected {
+		fields["pii_detected"] = r.PIIDetected
+		fields["pii_entities"] = r.PIIEntities
+		fields["pii_blocked"] = r.PIIBlocked
+	}
+}
 
-		// Response jailbreak detection results
-		if r.ResponseJailbreakDetected {
-			fields["response_jailbreak_detected"] = r.ResponseJailbreakDetected
-			fields["response_jailbreak_type"] = r.ResponseJailbreakType
-			fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
-		}
-
-		// PII detection results
-		if r.PIIDetected {
-			fields["pii_detected"] = r.PIIDetected
-			fields["pii_entities"] = r.PIIEntities
-			fields["pii_blocked"] = r.PIIBlocked
-		}
+func appendRAGLogFields(fields map[string]interface{}, r RoutingRecord) {
+	if !r.RAGEnabled {
+		return
 	}
 
-	// RAG
-	if r.RAGEnabled {
-		fields["rag_enabled"] = r.RAGEnabled
-		fields["rag_backend"] = r.RAGBackend
-		fields["rag_context_length"] = r.RAGContextLength
-		fields["rag_similarity_score"] = r.RAGSimilarityScore
+	fields["rag_enabled"] = r.RAGEnabled
+	fields["rag_backend"] = r.RAGBackend
+	fields["rag_context_length"] = r.RAGContextLength
+	fields["rag_similarity_score"] = r.RAGSimilarityScore
+}
+
+func appendHallucinationLogFields(fields map[string]interface{}, r RoutingRecord) {
+	if !r.HallucinationEnabled {
+		return
 	}
 
-	// Hallucination detection
-	if r.HallucinationEnabled {
-		fields["hallucination_enabled"] = r.HallucinationEnabled
-		fields["hallucination_detected"] = r.HallucinationDetected
-		fields["hallucination_confidence"] = r.HallucinationConfidence
-		if len(r.HallucinationSpans) > 0 {
-			fields["hallucination_spans"] = r.HallucinationSpans
-		}
+	fields["hallucination_enabled"] = r.HallucinationEnabled
+	fields["hallucination_detected"] = r.HallucinationDetected
+	fields["hallucination_confidence"] = r.HallucinationConfidence
+	if len(r.HallucinationSpans) > 0 {
+		fields["hallucination_spans"] = r.HallucinationSpans
 	}
+}
 
+func appendUsageCostLogFields(fields map[string]interface{}, r RoutingRecord) {
 	if r.PromptTokens != nil {
 		fields["prompt_tokens"] = *r.PromptTokens
 	}
@@ -244,6 +236,28 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 	if r.BaselineModel != nil {
 		fields["baseline_model"] = *r.BaselineModel
 	}
+}
 
+func LogFields(r RoutingRecord, event string) map[string]interface{} {
+	fields := map[string]interface{}{
+		"event":           event,
+		"replay_id":       r.ID,
+		"decision":        r.Decision,
+		"category":        r.Category,
+		"original_model":  r.OriginalModel,
+		"selected_model":  r.SelectedModel,
+		"reasoning_mode":  r.ReasoningMode,
+		"request_id":      r.RequestID,
+		"timestamp":       r.Timestamp,
+		"from_cache":      r.FromCache,
+		"streaming":       r.Streaming,
+		"response_status": r.ResponseStatus,
+		"signals":         logSignalFields(r.Signals),
+	}
+
+	appendGuardrailLogFields(fields, r)
+	appendRAGLogFields(fields, r)
+	appendHallucinationLogFields(fields, r)
+	appendUsageCostLogFields(fields, r)
 	return fields
 }

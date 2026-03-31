@@ -8,106 +8,84 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+func signalSkipClassifier(decisions ...config.Decision) *classification.Classifier {
+	return &classification.Classifier{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: decisions,
+			},
+		},
+	}
+}
+
+func signalSkipDecision(
+	name string,
+	operator string,
+	conditions ...config.RuleCondition,
+) config.Decision {
+	return config.Decision{
+		Name: name,
+		Rules: config.RuleCombination{
+			Operator:   operator,
+			Conditions: conditions,
+		},
+	}
+}
+
+func signalSkipCondition(signalType string, name string) config.RuleCondition {
+	return config.RuleCondition{Type: signalType, Name: name}
+}
+
 var _ = Describe("Signal Skip Optimization", func() {
-	Context("when analyzing used signals", func() {
-		It("should correctly identify used signal types from decisions", func() {
-			cfg := &config.RouterConfig{
-				IntelligentRouting: config.IntelligentRouting{
-					Decisions: []config.Decision{
-						{
-							Name: "test_decision_1",
-							Rules: config.RuleCombination{
-								Operator: "AND",
-								Conditions: []config.RuleCondition{
-									{Type: config.SignalTypeKeyword, Name: "math_keywords"},
-									{Type: config.SignalTypeDomain, Name: "mathematics"},
-								},
-							},
-						},
-						{
-							Name: "test_decision_2",
-							Rules: config.RuleCombination{
-								Operator: "OR",
-								Conditions: []config.RuleCondition{
-									{Type: config.SignalTypeUserFeedback, Name: "wrong_answer"},
-									{Type: config.SignalTypePreference, Name: "code_generation"},
-								},
-							},
-						},
-					},
-				},
-			}
+	It("should correctly identify used signal types from decisions", func() {
+		classifier := signalSkipClassifier(
+			signalSkipDecision(
+				"test_decision_1",
+				"AND",
+				signalSkipCondition(config.SignalTypeKeyword, "math_keywords"),
+				signalSkipCondition(config.SignalTypeDomain, "mathematics"),
+			),
+			signalSkipDecision(
+				"test_decision_2",
+				"OR",
+				signalSkipCondition(config.SignalTypeUserFeedback, "wrong_answer"),
+				signalSkipCondition(config.SignalTypePreference, "code_generation"),
+			),
+		)
 
-			classifier := &classification.Classifier{
-				Config: cfg,
-			}
+		results := classifier.EvaluateAllSignals("test query")
+		Expect(results).NotTo(BeNil())
+	})
 
-			// Call EvaluateAllSignals to trigger signal analysis
-			// We expect it to skip embedding and fact_check signals
-			results := classifier.EvaluateAllSignals("test query")
+	It("should skip all signals when no decisions are configured", func() {
+		classifier := signalSkipClassifier()
 
-			// Verify results structure is initialized
-			// Note: In Go, uninitialized slices are nil, which is expected
-			Expect(results).NotTo(BeNil())
-		})
+		results := classifier.EvaluateAllSignals("test query")
+		Expect(results).NotTo(BeNil())
+		Expect(len(results.MatchedKeywordRules)).To(Equal(0))
+		Expect(len(results.MatchedEmbeddingRules)).To(Equal(0))
+		Expect(len(results.MatchedDomainRules)).To(Equal(0))
+		Expect(len(results.MatchedFactCheckRules)).To(Equal(0))
+		Expect(len(results.MatchedUserFeedbackRules)).To(Equal(0))
+		Expect(len(results.MatchedPreferenceRules)).To(Equal(0))
+	})
 
-		It("should skip all signals when no decisions are configured", func() {
-			cfg := &config.RouterConfig{
-				IntelligentRouting: config.IntelligentRouting{
-					Decisions: []config.Decision{},
-				},
-			}
+	It("should handle decisions with all signal types", func() {
+		classifier := signalSkipClassifier(
+			signalSkipDecision(
+				"comprehensive_decision",
+				"OR",
+				signalSkipCondition(config.SignalTypeKeyword, "test_keyword"),
+				signalSkipCondition(config.SignalTypeEmbedding, "test_embedding"),
+				signalSkipCondition(config.SignalTypeDomain, "test_domain"),
+				signalSkipCondition(config.SignalTypeFactCheck, "needs_fact_check"),
+				signalSkipCondition(config.SignalTypeUserFeedback, "satisfied"),
+				signalSkipCondition(config.SignalTypeReask, "likely_dissatisfied"),
+				signalSkipCondition(config.SignalTypePreference, "test_preference"),
+			),
+		)
 
-			classifier := &classification.Classifier{
-				Config: cfg,
-			}
-
-			// Call EvaluateAllSignals - should skip all signals
-			results := classifier.EvaluateAllSignals("test query")
-
-			// Verify results structure is initialized
-			// All slices should be empty (nil or zero-length)
-			Expect(results).NotTo(BeNil())
-			Expect(len(results.MatchedKeywordRules)).To(Equal(0))
-			Expect(len(results.MatchedEmbeddingRules)).To(Equal(0))
-			Expect(len(results.MatchedDomainRules)).To(Equal(0))
-			Expect(len(results.MatchedFactCheckRules)).To(Equal(0))
-			Expect(len(results.MatchedUserFeedbackRules)).To(Equal(0))
-			Expect(len(results.MatchedPreferenceRules)).To(Equal(0))
-		})
-
-		It("should handle decisions with all signal types", func() {
-			cfg := &config.RouterConfig{
-				IntelligentRouting: config.IntelligentRouting{
-					Decisions: []config.Decision{
-						{
-							Name: "comprehensive_decision",
-							Rules: config.RuleCombination{
-								Operator: "OR",
-								Conditions: []config.RuleCondition{
-									{Type: config.SignalTypeKeyword, Name: "test_keyword"},
-									{Type: config.SignalTypeEmbedding, Name: "test_embedding"},
-									{Type: config.SignalTypeDomain, Name: "test_domain"},
-									{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"},
-									{Type: config.SignalTypeUserFeedback, Name: "satisfied"},
-									{Type: config.SignalTypeReask, Name: "likely_dissatisfied"},
-									{Type: config.SignalTypePreference, Name: "test_preference"},
-								},
-							},
-						},
-					},
-				},
-			}
-
-			classifier := &classification.Classifier{
-				Config: cfg,
-			}
-
-			// Call EvaluateAllSignals - should evaluate all signal types
-			results := classifier.EvaluateAllSignals("test query")
-
-			// Verify results structure is initialized
-			Expect(results).NotTo(BeNil())
-		})
+		results := classifier.EvaluateAllSignals("test query")
+		Expect(results).NotTo(BeNil())
 	})
 })
