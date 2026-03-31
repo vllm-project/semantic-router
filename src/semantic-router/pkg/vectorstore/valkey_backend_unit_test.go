@@ -19,6 +19,7 @@ package vectorstore
 import (
 	"encoding/binary"
 	"math"
+	"strconv"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -174,6 +175,36 @@ var _ = Describe("ValkeyBackend parseSearchResults", func() {
 		Expect(r[0].FileID).To(Equal("f1"))
 		Expect(r[0].Score).To(BeNumerically("~", 0.9, 0.01))
 	})
+	It("all five RETURN fields populated", func() {
+		result := []interface{}{int64(1), map[string]interface{}{
+			"key:1": map[string]interface{}{
+				"file_id":         "file-abc",
+				"filename":        "report.pdf",
+				"content":         "quarterly results",
+				"chunk_index":     "3",
+				"vector_distance": "0.4",
+			},
+		}}
+		r, err := vb.parseSearchResults(result, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r).To(HaveLen(1))
+		Expect(r[0].FileID).To(Equal("file-abc"))
+		Expect(r[0].Filename).To(Equal("report.pdf"))
+		Expect(r[0].Content).To(Equal("quarterly results"))
+		Expect(r[0].ChunkIndex).To(Equal(3))
+		Expect(r[0].Score).To(BeNumerically("~", 0.8, 0.01)) // COSINE: 1 - 0.4/2
+	})
+	It("non-zero chunk_index parsed correctly", func() {
+		result := []interface{}{int64(1), map[string]interface{}{
+			"key:1": map[string]interface{}{
+				"file_id": "f1", "filename": "a.txt", "content": "chunk",
+				"chunk_index": "7", "vector_distance": "0.1",
+			},
+		}}
+		r, err := vb.parseSearchResults(result, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r[0].ChunkIndex).To(Equal(7))
+	})
 	It("filter below threshold", func() {
 		result := []interface{}{int64(1), map[string]interface{}{
 			"key:1": map[string]interface{}{"file_id": "f1", "content": "hello", "vector_distance": "1.6"},
@@ -195,13 +226,38 @@ var _ = Describe("ValkeyBackend parseSearchResults", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(r).To(BeEmpty())
 	})
-	It("multiple results", func() {
+	It("multiple results sorted descending by score", func() {
 		result := []interface{}{int64(2), map[string]interface{}{
-			"key:1": map[string]interface{}{"file_id": "f1", "content": "hello", "vector_distance": "0.1", "chunk_index": "0"},
-			"key:2": map[string]interface{}{"file_id": "f2", "content": "world", "vector_distance": "0.4", "chunk_index": "1"},
+			"key:1": map[string]interface{}{"file_id": "f1", "filename": "a.txt", "content": "hello", "vector_distance": "0.1", "chunk_index": "0"},
+			"key:2": map[string]interface{}{"file_id": "f2", "filename": "b.txt", "content": "world", "vector_distance": "0.4", "chunk_index": "1"},
 		}}
 		r, err := vb.parseSearchResults(result, 0)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(r).To(HaveLen(2))
+		// Results must be sorted best-first regardless of map iteration order.
+		Expect(r[0].Score).To(BeNumerically(">=", r[1].Score))
+	})
+})
+
+// extractKeysFromSearchResult is the building block for DeleteByFileID pagination.
+// DeleteByFileID always searches at LIMIT 0 (offset 0) and loops until the
+// result is empty — so after each batch is deleted, the remaining documents
+// shift to offset 0 and are found on the next iteration.
+var _ = Describe("ValkeyBackend extractKeysFromSearchResult pagination boundary", func() {
+	It("empty-page result (totalCount=0, no keys) stops iteration", func() {
+		// Simulates the FT.SEARCH response when no matching documents remain.
+		Expect(extractKeysFromSearchResult([]interface{}{int64(0)})).To(BeNil())
+	})
+	It("count>0 but no document entries also stops iteration", func() {
+		// Edge case: totalCount non-zero but array has only the count element.
+		Expect(extractKeysFromSearchResult([]interface{}{int64(5)})).To(BeNil())
+	})
+	It("full page returns all keys so the loop continues", func() {
+		raw := make([]interface{}, 1001)
+		raw[0] = int64(1000)
+		for i := 1; i <= 1000; i++ {
+			raw[i] = "key:" + strconv.Itoa(i)
+		}
+		Expect(extractKeysFromSearchResult(raw)).To(HaveLen(1000))
 	})
 })

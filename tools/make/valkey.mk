@@ -175,6 +175,18 @@ run-valkey-vectorstore-example-no-container: rust ## Run the Valkey vector store
 		go run ../../deploy/addons/valkey/valkey-vectorstore.go
 
 # ---------------------------------------------------------------------------
+# Deprecated / Compatibility Aliases
+# ---------------------------------------------------------------------------
+
+# run-valkey-example was renamed to run-valkey-cache-example; keep the old
+# name as a forwarding alias so existing scripts don't break.
+run-valkey-example: run-valkey-cache-example ## [Deprecated] Use run-valkey-cache-example
+
+# Aliases matching the target names cited in the PR description.
+test-valkey-vectorstore-external: test-valkey-vectorstore-no-container ## Alias for test-valkey-vectorstore-no-container
+run-valkey-example-external: run-valkey-vectorstore-example-no-container ## Alias for run-valkey-vectorstore-example-no-container
+
+# ---------------------------------------------------------------------------
 # Verification & Utilities
 # ---------------------------------------------------------------------------
 

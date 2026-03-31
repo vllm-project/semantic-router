@@ -178,6 +178,36 @@ var _ = Describe("ValkeyBackend integ insert and delete", func() {
 		defer cleanupCollection(ctx, backend, vsID)
 		Expect(backend.DeleteByFileID(ctx, vsID, "bad;chars")).To(HaveOccurred())
 	})
+	// Verify that DeleteByFileID pages through results correctly by inserting
+	// more chunks than the page size (1000).  This exercises the second-page
+	// path where the loop fetches a partial page and then an empty page.
+	It("paginated delete removes all chunks across multiple pages", func() {
+		const totalChunks = 1100 // > pageSize (1000) to force a second page
+		vsID := "integ_paged_del_" + uniqueSuffix()
+		Expect(backend.CreateCollection(ctx, vsID, 3)).NotTo(HaveOccurred())
+		defer cleanupCollection(ctx, backend, vsID)
+
+		chunks := make([]EmbeddedChunk, totalChunks)
+		for i := 0; i < totalChunks; i++ {
+			chunks[i] = EmbeddedChunk{
+				ID:       fmt.Sprintf("pc%d", i),
+				FileID:   "bigfile",
+				Filename: "big.txt",
+				Content:  fmt.Sprintf("chunk %d", i),
+				// All vectors point in the same direction so insertion is fast.
+				Embedding: normalizeVec([]float32{1, 0, 0}),
+			}
+		}
+		Expect(backend.InsertChunks(ctx, vsID, chunks)).NotTo(HaveOccurred())
+		time.Sleep(2 * time.Second) // allow index to catch up
+
+		Expect(backend.DeleteByFileID(ctx, vsID, "bigfile")).NotTo(HaveOccurred())
+		time.Sleep(500 * time.Millisecond)
+
+		results, err := backend.Search(ctx, vsID, normalizeVec([]float32{1, 0, 0}), totalChunks, 0, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(results).To(BeEmpty())
+	})
 })
 
 // ---------------------------------------------------------------------------
@@ -232,13 +262,16 @@ var _ = Describe("ValkeyBackend integ Search", func() {
 			Expect(r[0].Score).To(BeNumerically(">=", r[1].Score))
 		}
 	})
-	It("all fields populated", func() {
-		r, err := backend.Search(ctx, vsID, normalizeVec([]float32{1, 0, 0}), 1, 0, nil)
+	It("all fields populated including ChunkIndex", func() {
+		// Search for the chunk closest to {0,1,0} — that is c2 with ChunkIndex=1.
+		r, err := backend.Search(ctx, vsID, normalizeVec([]float32{0, 1, 0}), 1, 0, nil)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(r).To(HaveLen(1))
 		Expect(r[0].FileID).To(Equal("f1"))
 		Expect(r[0].Filename).To(Equal("doc.txt"))
 		Expect(r[0].Content).NotTo(BeEmpty())
 		Expect(r[0].Score).To(BeNumerically(">", 0))
+		Expect(r[0].ChunkIndex).To(Equal(1)) // verifies chunk_index is in the RETURN list
 	})
 	It("empty collection", func() {
 		emptyVS := "integ_empty_" + uniqueSuffix()

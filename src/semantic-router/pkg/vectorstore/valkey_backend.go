@@ -322,30 +322,34 @@ func (v *ValkeyBackend) DeleteByFileID(ctx context.Context, vectorStoreID string
 
 	idxName := v.indexName(vectorStoreID)
 
-	// Search for all chunks with this file_id.
-	// Avoid NOCONTENT and RETURN 0 — valkey-glide v2 cannot parse those response
-	// formats (BulkString error). Use RETURN 1 with a lightweight field instead,
-	// which produces the standard map-based response that valkey-glide expects.
-	searchCmd := []string{
-		"FT.SEARCH", idxName,
-		fmt.Sprintf("@file_id:{%s}", escapeTagValue(fileID)),
-		"RETURN", "1", "id",
-		"LIMIT", "0", "10000",
-	}
+	// Delete all chunks in batches of pageSize until none remain.
+	// We always search at LIMIT 0 (offset 0): once a batch is deleted, the
+	// remaining documents shift to the front of the result set, so re-scanning
+	// from offset 0 is the only correct approach when deleting between pages.
+	const pageSize = 1000
 
-	result, err := v.client.CustomCommand(ctx, searchCmd)
-	if err != nil {
-		return fmt.Errorf("failed to search for file %s in %s: %w", fileID, vectorStoreID, err)
-	}
+	for {
+		searchCmd := []string{
+			"FT.SEARCH", idxName,
+			fmt.Sprintf("@file_id:{%s}", escapeTagValue(fileID)),
+			"RETURN", "1", "id",
+			"LIMIT", "0", strconv.Itoa(pageSize),
+		}
 
-	keys := extractKeysFromSearchResult(result)
-	if len(keys) == 0 {
-		return nil
-	}
+		result, err := v.client.CustomCommand(ctx, searchCmd)
+		if err != nil {
+			return fmt.Errorf("failed to search for file %s in %s: %w", fileID, vectorStoreID, err)
+		}
 
-	_, err = v.client.Del(ctx, keys)
-	if err != nil {
-		return fmt.Errorf("failed to delete chunks for file %s from %s: %w", fileID, vectorStoreID, err)
+		keys := extractKeysFromSearchResult(result)
+		if len(keys) == 0 {
+			break
+		}
+
+		_, err = v.client.Del(ctx, keys)
+		if err != nil {
+			return fmt.Errorf("failed to delete chunks for file %s from %s: %w", fileID, vectorStoreID, err)
+		}
 	}
 
 	return nil
@@ -372,13 +376,15 @@ func (v *ValkeyBackend) Search(
 		}
 	}
 
-	// Build KNN query with AS alias, following the same pattern as the Valkey cache backend (PR #1540).
+	// Build KNN query with AS alias. The filter expression is wrapped in parentheses
+	// so it can be either "*" (match-all) or a field predicate like "@file_id:{...}".
 	// valkey-glide returns the aliased field in the per-document field map.
 	query := fmt.Sprintf("(%s)=>[KNN %d @embedding $BLOB AS vector_distance]", filterExpr, topK)
 
 	searchCmd := []string{
 		"FT.SEARCH", idxName, query,
 		"PARAMS", "2", "BLOB", string(embeddingBytes),
+		"RETURN", "5", "file_id", "filename", "content", "chunk_index", "vector_distance",
 		"LIMIT", "0", strconv.Itoa(topK),
 		"DIALECT", "2",
 	}

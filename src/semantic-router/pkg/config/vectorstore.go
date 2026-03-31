@@ -99,7 +99,7 @@ type LlamaStackVectorStoreConfig struct {
 }
 
 // ValkeyVectorStoreConfig holds configuration for the Valkey vector store backend.
-// Flat structure matching the pattern of MilvusConfig and LlamaStackVectorStoreConfig.
+// This is the dedicated configuration struct used by the vector_store.valkey config block.
 type ValkeyVectorStoreConfig struct {
 	// Host is the Valkey server hostname (default "localhost").
 	Host string `json:"host" yaml:"host"`
