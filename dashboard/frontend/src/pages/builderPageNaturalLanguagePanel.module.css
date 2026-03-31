@@ -115,15 +115,7 @@
   color: var(--color-text-secondary);
 }
 
-.workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.88fr);
-  gap: var(--spacing-lg);
-  align-items: start;
-  min-height: 0;
-}
-
-.rail {
+.contentStack {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
@@ -568,9 +560,13 @@
 }
 
 .processTimeline {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(188px, 1fr);
   gap: 0.7rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+  scrollbar-gutter: stable;
 }
 
 .processNode {
@@ -582,6 +578,24 @@
   border-radius: var(--radius-md);
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.02);
+  min-width: 188px;
+  position: relative;
+}
+
+.processNode::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -0.45rem;
+  width: 0.9rem;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-50%);
+}
+
+.processNode:last-child::after {
+  display: none;
 }
 
 .pendingNode {
@@ -609,9 +623,9 @@
 
 .processNodeHeader {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.6rem;
   flex-wrap: wrap;
 }
 
@@ -619,6 +633,10 @@
   margin-top: 0.35rem;
   color: #cfdecf;
   font-size: 0.82rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .processStatusPill,
@@ -884,7 +902,6 @@
 }
 
 @media (max-width: 1180px) {
-  .workspace,
   .headerCard {
     grid-template-columns: 1fr;
   }
@@ -924,5 +941,9 @@
 
   .processSpotlight {
     grid-template-columns: 1fr;
+  }
+
+  .processTimeline {
+    grid-auto-columns: minmax(220px, 220px);
   }
 }

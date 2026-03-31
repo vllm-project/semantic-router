@@ -38,7 +38,9 @@ import type { RouteInput } from '@/lib/dslMutations'
 import type {
   BuilderNLGenerateRequest,
   BuilderNLProgressEvent,
+  BuilderNLReview,
   BuilderNLStagedDraft,
+  BuilderNLValidation,
   EditorMode,
   CompileResult,
   ValidateResult,
@@ -60,6 +62,26 @@ interface DeployStatusResponse {
 
 let validateTimer: ReturnType<typeof setTimeout> | null = null
 const VALIDATE_DEBOUNCE_MS = 300
+
+function normalizeBuilderNLReview(review: BuilderNLReview | undefined): BuilderNLReview {
+  return {
+    ready: review?.ready ?? false,
+    summary: review?.summary ?? '',
+    warnings: Array.isArray(review?.warnings) ? review.warnings : [],
+    checks: Array.isArray(review?.checks) ? review.checks : [],
+  }
+}
+
+function normalizeBuilderNLValidation(
+  validation: BuilderNLValidation | undefined,
+): BuilderNLValidation {
+  return {
+    ready: validation?.ready ?? false,
+    diagnostics: Array.isArray(validation?.diagnostics) ? validation.diagnostics : [],
+    errorCount: typeof validation?.errorCount === 'number' ? validation.errorCount : 0,
+    compileError: validation?.compileError || undefined,
+  }
+}
 
 // ---------- Initial state ----------
 
@@ -731,8 +753,8 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         baseYaml: data.baseYaml || get().baseConfigYaml,
         summary: data.summary || '',
         suggestedTestQuery: data.suggestedTestQuery || '',
-        review: data.review,
-        validation: data.validation,
+        review: normalizeBuilderNLReview(data.review),
+        validation: normalizeBuilderNLValidation(data.validation),
       }
       set({
         nlGenerating: false,

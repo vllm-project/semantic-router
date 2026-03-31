@@ -169,10 +169,10 @@ function resolvePhaseStatus(
   if (event.level === "warning") {
     return "warning";
   }
-  if (event.level === "success") {
+  if (event.level === "success" || event.level === "info") {
     return "completed";
   }
-  return generating && latestEvent != null ? "completed" : "pending";
+  return "pending";
 }
 
 function PhaseIcon({
@@ -327,8 +327,8 @@ const BuilderNaturalLanguageProgress: React.FC<
         <div>
           <h3 className={styles.cardTitle}>Live process</h3>
           <p className={styles.sectionHint}>
-            Track the staged Builder draft lifecycle with highlighted phases and
-            a raw event log.
+            Track the staged Builder draft lifecycle left to right, then use the
+            raw event log below for details.
           </p>
         </div>
         <div className={styles.consoleMeta}>

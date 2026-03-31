@@ -114,6 +114,8 @@ const BuilderNaturalLanguagePanel: React.FC<
   const stagedWarningCount = stagedDiagnostics.filter(
     (item) => item.level !== "error",
   ).length;
+  const stagedReviewWarnings = stagedDraft?.review.warnings ?? [];
+  const stagedReviewChecks = stagedDraft?.review.checks ?? [];
   const liveModelCards = useMemo(
     () =>
       Array.from(
@@ -266,7 +268,12 @@ const BuilderNaturalLanguagePanel: React.FC<
         </div>
       </section>
 
-      <div className={styles.workspace}>
+      <BuilderNaturalLanguageProgress
+        generating={generating}
+        progressEvents={progressEvents}
+      />
+
+      <div className={styles.contentStack}>
         <section className={styles.card}>
           <div className={styles.sectionHeader}>
             <div>
@@ -494,173 +501,164 @@ const BuilderNaturalLanguagePanel: React.FC<
               Open live DSL editor
             </button>
           </div>
-
         </section>
 
-        <aside className={styles.rail}>
-          <BuilderNaturalLanguageProgress
-            generating={generating}
-            progressEvents={progressEvents}
-          />
-
-          <section className={styles.card}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <h3 className={styles.cardTitle}>Staged draft</h3>
-                <p className={styles.sectionHint}>
-                  Review the generated draft before it replaces the live Builder
-                  DSL.
-                </p>
-              </div>
-              {stagedDraft && (
-                <button
-                  className={styles.ghostBtn}
-                  onClick={onDiscardDraft}
-                  type="button"
-                >
-                  Discard
-                </button>
-              )}
+        <section className={styles.card}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <h3 className={styles.cardTitle}>Staged draft</h3>
+              <p className={styles.sectionHint}>
+                Review the generated draft before it replaces the live Builder
+                DSL.
+              </p>
             </div>
+            {stagedDraft && (
+              <button
+                className={styles.ghostBtn}
+                onClick={onDiscardDraft}
+                type="button"
+              >
+                Discard
+              </button>
+            )}
+          </div>
 
-            {stagedDraft ? (
-              <>
-                <div className={styles.summaryCard}>
-                  <div className={styles.resultLabel}>Request</div>
-                  <div className={styles.requestPreview}>{stagedDraft.prompt}</div>
-                  <div className={styles.summaryDivider} />
-                  <div className={styles.resultLabel}>Summary</div>
-                  <div className={styles.resultText}>
-                    {stagedDraft.summary || "Draft generated."}
-                  </div>
+          {stagedDraft ? (
+            <>
+              <div className={styles.summaryCard}>
+                <div className={styles.resultLabel}>Request</div>
+                <div className={styles.requestPreview}>{stagedDraft.prompt}</div>
+                <div className={styles.summaryDivider} />
+                <div className={styles.resultLabel}>Summary</div>
+                <div className={styles.resultText}>
+                  {stagedDraft.summary || "Draft generated."}
                 </div>
+              </div>
 
-                <div className={styles.statusGrid}>
-                  <div className={styles.statusCard}>
-                    <div className={styles.resultLabel}>Draft validation</div>
-                    <div
-                      className={
-                        stagedDraft.validation.ready
-                          ? styles.statusOk
-                          : styles.statusWarn
-                      }
-                    >
-                      {stagedDraft.validation.ready
-                        ? "Repository validation passed"
-                        : `${stagedErrorCount} validation error${stagedErrorCount === 1 ? "" : "s"}`}
-                    </div>
-                    <div className={styles.statusMeta}>
-                      {stagedDraft.validation.ready
-                        ? stagedWarningCount > 0
-                          ? `${stagedWarningCount} warning${stagedWarningCount === 1 ? "" : "s"} still deserve a review.`
-                          : "No validation blockers were reported for this staged draft."
-                        : "The staged draft is preserved here for inspection and optional manual repair."}
-                    </div>
-                  </div>
-
-                  <div className={styles.statusCard}>
-                    <div className={styles.resultLabel}>Readiness review</div>
-                    <div
-                      className={
-                        stagedDraft.review.ready
-                          ? styles.statusOk
-                          : styles.statusWarn
-                      }
-                    >
-                      {stagedDraft.review.ready
-                        ? "Ready for Builder apply"
-                        : "Manual review recommended"}
-                    </div>
-                    <div className={styles.statusMeta}>
-                      {stagedDraft.review.summary}
-                    </div>
-                  </div>
-                </div>
-
-                {stagedDraft.validation.compileError && (
-                  <div className={styles.resultBlock}>
-                    <div className={styles.resultLabel}>Compile error</div>
-                    <div className={styles.errorText}>
-                      {stagedDraft.validation.compileError}
-                    </div>
-                  </div>
-                )}
-
-                {stagedDiagnostics.length > 0 && (
-                  <div className={styles.resultBlock}>
-                    <div className={styles.resultLabel}>Validation findings</div>
-                    <ul className={styles.list}>
-                      {stagedDiagnostics.slice(0, 6).map((item, index) => (
-                        <li key={`${item.message}-${index}`}>
-                          <strong>{item.level}</strong>: {item.message}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {stagedDraft.review.warnings.length > 0 && (
-                  <div className={styles.resultBlock}>
-                    <div className={styles.resultLabel}>Review warnings</div>
-                    <ul className={styles.list}>
-                      {stagedDraft.review.warnings.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {stagedDraft.review.checks.length > 0 && (
-                  <div className={styles.resultBlock}>
-                    <div className={styles.resultLabel}>Checks completed</div>
-                    <ul className={styles.listMuted}>
-                      {stagedDraft.review.checks.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {stagedDraft.suggestedTestQuery && (
-                  <div className={styles.resultBlock}>
-                    <div className={styles.resultLabel}>Suggested test prompt</div>
-                    <div className={styles.testQuery}>
-                      {stagedDraft.suggestedTestQuery}
-                    </div>
-                  </div>
-                )}
-
-                <div className={styles.applyRow}>
-                  <button
-                    className={styles.primaryBtn}
-                    onClick={onApplyDraft}
-                    type="button"
+              <div className={styles.statusGrid}>
+                <div className={styles.statusCard}>
+                  <div className={styles.resultLabel}>Draft validation</div>
+                  <div
+                    className={
+                      stagedDraft.validation.ready
+                        ? styles.statusOk
+                        : styles.statusWarn
+                    }
                   >
                     {stagedDraft.validation.ready
-                      ? "Apply draft to Builder"
-                      : "Open draft in Builder for repair"}
-                  </button>
-                  <button
-                    className={styles.secondaryBtn}
-                    onClick={() => onModeSwitch("dsl")}
-                    type="button"
-                  >
-                    Open live DSL editor
-                  </button>
+                      ? "Repository validation passed"
+                      : `${stagedErrorCount} validation error${stagedErrorCount === 1 ? "" : "s"}`}
+                  </div>
+                  <div className={styles.statusMeta}>
+                    {stagedDraft.validation.ready
+                      ? stagedWarningCount > 0
+                        ? `${stagedWarningCount} warning${stagedWarningCount === 1 ? "" : "s"} still deserve a review.`
+                        : "No validation blockers were reported for this staged draft."
+                      : "The staged draft is preserved here for inspection and optional manual repair."}
+                  </div>
                 </div>
-              </>
-            ) : (
-              <div className={styles.emptyState}>
-                <div className={styles.emptyTitle}>No staged draft yet</div>
-                <div className={styles.emptyText}>
-                  Generate a draft to inspect repository validation and the
-                  staged readiness review before you touch the live Builder
-                  state.
+
+                <div className={styles.statusCard}>
+                  <div className={styles.resultLabel}>Readiness review</div>
+                  <div
+                    className={
+                      stagedDraft.review.ready
+                        ? styles.statusOk
+                        : styles.statusWarn
+                    }
+                  >
+                    {stagedDraft.review.ready
+                      ? "Ready for Builder apply"
+                      : "Manual review recommended"}
+                  </div>
+                  <div className={styles.statusMeta}>
+                    {stagedDraft.review.summary}
+                  </div>
                 </div>
               </div>
-            )}
-          </section>
-        </aside>
+
+              {stagedDraft.validation.compileError && (
+                <div className={styles.resultBlock}>
+                  <div className={styles.resultLabel}>Compile error</div>
+                  <div className={styles.errorText}>
+                    {stagedDraft.validation.compileError}
+                  </div>
+                </div>
+              )}
+
+              {stagedDiagnostics.length > 0 && (
+                <div className={styles.resultBlock}>
+                  <div className={styles.resultLabel}>Validation findings</div>
+                  <ul className={styles.list}>
+                    {stagedDiagnostics.slice(0, 6).map((item, index) => (
+                      <li key={`${item.message}-${index}`}>
+                        <strong>{item.level}</strong>: {item.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {stagedReviewWarnings.length > 0 && (
+                <div className={styles.resultBlock}>
+                  <div className={styles.resultLabel}>Review warnings</div>
+                  <ul className={styles.list}>
+                    {stagedReviewWarnings.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {stagedReviewChecks.length > 0 && (
+                <div className={styles.resultBlock}>
+                  <div className={styles.resultLabel}>Checks completed</div>
+                  <ul className={styles.listMuted}>
+                    {stagedReviewChecks.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {stagedDraft.suggestedTestQuery && (
+                <div className={styles.resultBlock}>
+                  <div className={styles.resultLabel}>Suggested test prompt</div>
+                  <div className={styles.testQuery}>
+                    {stagedDraft.suggestedTestQuery}
+                  </div>
+                </div>
+              )}
+
+              <div className={styles.applyRow}>
+                <button
+                  className={styles.primaryBtn}
+                  onClick={onApplyDraft}
+                  type="button"
+                >
+                  {stagedDraft.validation.ready
+                    ? "Apply draft to Builder"
+                    : "Open draft in Builder for repair"}
+                </button>
+                <button
+                  className={styles.secondaryBtn}
+                  onClick={() => onModeSwitch("dsl")}
+                  type="button"
+                >
+                  Open live DSL editor
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyTitle}>No staged draft yet</div>
+              <div className={styles.emptyText}>
+                Generate a draft to inspect repository validation and the staged
+                readiness review before you touch the live Builder state.
+              </div>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
