@@ -78,6 +78,10 @@ flowchart TD
     J --> K
 ```
 
+## What Problem Does It Solve?
+
+Different users or tenants can prefer different models for similar tasks, so one global ranking is often too coarse. `gmtrouter` addresses that personalization problem by learning user-aware routing preferences from multi-turn interaction graphs.
+
 ## When to Use
 
 - The route should adapt to user or tenant history.

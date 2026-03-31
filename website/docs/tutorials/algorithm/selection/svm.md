@@ -51,6 +51,10 @@ flowchart TD
     I --> J[SelectionResult with margin confidence]
 ```
 
+## What Problem Does It Solve?
+
+Some workloads need a lightweight learned classifier with clearer decision boundaries than heuristic routing but less operational cost than deeper neural selectors. `svm` addresses that by learning margin-maximizing query-to-model boundaries over the routing features.
+
 ## When to Use
 
 - You have an SVM-based selector artifact for the route.

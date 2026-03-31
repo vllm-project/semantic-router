@@ -98,6 +98,10 @@ Feedback fields:
 | `user_id` | No | User identifier for per-user tracking |
 | `confidence` | No | Feedback confidence (0.0-1.0) |
 
+## What Problem Does It Solve?
+
+When model quality shifts over time, static priority lists and one-shot heuristics become stale. `elo` lets the router learn from pairwise feedback so candidate ranking reflects observed wins instead of frozen assumptions.
+
 ## When to Use
 
 - You collect route-level feedback or quality comparisons.

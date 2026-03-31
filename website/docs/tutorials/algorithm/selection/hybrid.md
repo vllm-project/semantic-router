@@ -58,6 +58,10 @@ The Hybrid selector internally instantiates three sub-selectors:
 
 Each component shares the same `SelectionContext` and runs independently.
 
+## What Problem Does It Solve?
+
+No single ranking signal is reliable for every workload: pure cost, pure similarity, or pure feedback each misses part of the routing picture. `hybrid` combines multiple selectors into one auditable score so routes can balance semantic fit, historical quality, and operational cost.
+
 ## When to Use
 
 - One route should combine several ranking signals.

@@ -39,6 +39,10 @@ flowchart TD
     I --> K
 ```
 
+## What Problem Does It Solve?
+
+Some routes need more than one candidate to participate in a response, but still need bounded fan-out and predictable aggregation behavior. `ratings` exposes that controlled multi-model coordination as router policy instead of custom orchestration in the caller.
+
 ## When to Use
 
 - More than one candidate should run inside the same route.

@@ -63,6 +63,10 @@ routing:
 
 When `use_capabilities: true`, capability tags are concatenated with descriptions to enrich embeddings.
 
+## What Problem Does It Solve?
+
+Some workloads are primarily semantic matching problems where the best model depends on the query meaning more than explicit heuristics. `router_dc` learns a query-to-model embedding space so routing follows semantic fit instead of only static priority or cost rules.
+
 ## When to Use
 
 - The best candidate depends on semantic similarity between prompt and model profile.

@@ -50,6 +50,10 @@ flowchart TD
     H --> I[Return SelectionResult]
 ```
 
+## What Problem Does It Solve?
+
+Some routing boundaries are non-linear and cannot be captured well by static ordering or simpler linear rules. `mlp` learns those more complex query-to-model boundaries from historical data while keeping inference inside the selection layer.
+
 ## When to Use
 
 - You need to capture complex non-linear patterns in query-to-model mapping.

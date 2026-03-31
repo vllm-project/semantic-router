@@ -17,6 +17,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"kmeans":        "selection",
 	"knn":           "selection",
 	"latency-aware": "selection",
+	"mlp":           "selection",
 	"ratings":       "looper",
 	"remom":         "looper",
 	"rl-driven":     "selection",

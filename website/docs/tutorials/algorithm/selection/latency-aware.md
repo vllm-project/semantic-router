@@ -44,6 +44,10 @@ flowchart TD
     J --> K[Return SelectionResult with latency metrics]
 ```
 
+## What Problem Does It Solve?
+
+Some routes care more about responsiveness than absolute model quality and need to honor runtime latency SLOs. `latency_aware` selects the fastest acceptable candidate using observed TTFT and TPOT statistics instead of static assumptions.
+
 ## When to Use
 
 - The route has multiple viable candidates but strict response-time goals.

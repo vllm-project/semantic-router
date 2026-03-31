@@ -48,6 +48,10 @@ flowchart TD
     M -- No --> N[Return last response with warning]
 ```
 
+## What Problem Does It Solve?
+
+Some routes should try cheaper candidates first and only pay for escalation when the current answer is not confident enough. `confidence` makes that sequential escalate-on-low-confidence policy explicit in router config instead of burying it in application code.
+
 ## When to Use
 
 - A route should escalate across several candidate models.

@@ -43,6 +43,10 @@ flowchart TD
     J --> K[SelectionResult with vote distribution]
 ```
 
+## What Problem Does It Solve?
+
+When routing should follow precedent from similar historical prompts, hand-written rules or fixed priorities lose useful local context. `knn` solves that by selecting models according to the nearest examples and their observed outcomes.
+
 ## When to Use
 
 - You have historical prompt-to-model assignment data.

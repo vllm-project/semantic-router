@@ -66,6 +66,10 @@ flowchart TD
     H -- No --> J[Return last response with warning]
 ```
 
+## What Problem Does It Solve?
+
+Some routes need dynamic cost-quality optimization instead of always picking the same model or applying a fixed heuristic cascade. `automix` keeps self-verification and escalation policy inside the router so it can spend more only when the expected quality gain is worth it.
+
 ## When to Use
 
 - One route has several candidate models with different cost and quality profiles.

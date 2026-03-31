@@ -27,6 +27,10 @@ SelectionResult {
 }
 ```
 
+## What Problem Does It Solve?
+
+Some routes already have an intentional candidate order and do not need extra ranking logic, learned state, or runtime metrics. `static` keeps selection deterministic and transparent by always taking the first configured candidate.
+
 ## Select Flow
 
 ```mermaid

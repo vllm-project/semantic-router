@@ -47,6 +47,10 @@ flowchart TD
     L --> M[SelectionResult with cluster ID]
 ```
 
+## What Problem Does It Solve?
+
+Some prompt traffic naturally falls into recurring regions where the same model tends to win, but per-request learned ranking would be unnecessary overhead. `kmeans` turns those recurring regions into cluster-to-model assignments for fast, stable routing.
+
 ## When to Use
 
 - Prompt traffic naturally groups into repeatable classes (e.g., math, coding, creative writing).

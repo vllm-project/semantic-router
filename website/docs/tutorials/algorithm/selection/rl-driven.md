@@ -100,6 +100,10 @@ flowchart LR
     H --> I
 ```
 
+## What Problem Does It Solve?
+
+Online routing often needs exploration, adaptation, or personalization that static rankings cannot provide. `rl_driven` keeps that learning policy inside the router so model choice can improve from rewards and user feedback over time.
+
 ## When to Use
 
 - The route should keep exploring candidate models online.

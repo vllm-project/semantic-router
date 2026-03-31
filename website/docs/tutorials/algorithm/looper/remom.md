@@ -58,6 +58,10 @@ flowchart TD
 | `equal` | Distribute calls equally across all candidate models |
 | `first_only` | All calls go to the first (highest-weight) model |
 
+## What Problem Does It Solve?
+
+Some tasks benefit from parallel exploration and later synthesis rather than one-shot selection of a single model. `remom` gives the router a breadth-controlled way to explore multiple reasoning paths and merge them into one final answer.
+
 ## When to Use
 
 - One route should coordinate multiple models over several passes.
