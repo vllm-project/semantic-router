@@ -578,3 +578,19 @@ func TestAllMethodEvolutionMetrics(t *testing.T) {
 	t.Log("   RouterDC: llm_model_routerdc_similarity, llm_model_routerdc_affinity")
 	t.Log("   Hybrid: llm_model_selection_component_agreement")
 }
+
+func TestRecordSelectionWithTier(t *testing.T) {
+	InitializeMetrics()
+
+	// Record a selection with tier - should not panic
+	RecordSelectionWithTier(MethodElo, "test-model", "test-decision", TierSupported, 0.8, 0.9, time.Millisecond)
+	RecordSelectionWithTier(MethodAutoMix, "test-model", "test-decision", TierExperimental, 0.7, 0.8, time.Millisecond)
+}
+
+func TestRecordDependencyHealth(t *testing.T) {
+	InitializeMetrics()
+
+	// Should not panic
+	RecordDependencyHealth("automix", "AutoMix Verifier Server", "external_service", false)
+	RecordDependencyHealth("elo", "", "", true)
+}

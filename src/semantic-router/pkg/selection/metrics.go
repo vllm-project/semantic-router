@@ -130,6 +130,10 @@ var (
 	// Labels: feedback_type (satisfied/need_clarification/wrong_answer/want_different)
 	RLDrivenImplicitFeedback *prometheus.CounterVec
 
+	// ModelSelectionDependencyHealth tracks external dependency reachability
+	// Labels: method, dependency, type
+	ModelSelectionDependencyHealth *prometheus.GaugeVec
+
 	metricsInitOnce sync.Once
 	metricsEnabled  bool
 )
@@ -144,7 +148,7 @@ func InitializeMetrics() {
 				Name: "llm_model_selection_total",
 				Help: "Total number of model selections by method and selected model",
 			},
-			[]string{"method", "model", "decision"},
+			[]string{"method", "model", "decision", "tier"},
 		)
 
 		ModelSelectionDuration = promauto.NewHistogramVec(
@@ -153,7 +157,7 @@ func InitializeMetrics() {
 				Help:    "Duration of model selection operations in seconds",
 				Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1},
 			},
-			[]string{"method"},
+			[]string{"method", "tier"},
 		)
 
 		ModelSelectionScore = promauto.NewHistogramVec(
@@ -171,7 +175,7 @@ func InitializeMetrics() {
 				Help:    "Confidence score distribution of model selections",
 				Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 			},
-			[]string{"method"},
+			[]string{"method", "tier"},
 		)
 
 		ModelEloRating = promauto.NewGaugeVec(
@@ -325,6 +329,14 @@ func InitializeMetrics() {
 			[]string{"feedback_type"},
 		)
 
+		ModelSelectionDependencyHealth = promauto.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "llm_model_selection_dependency_health",
+				Help: "External dependency reachability (1=healthy, 0=unreachable)",
+			},
+			[]string{"method", "dependency", "type"},
+		)
+
 		metricsEnabled = true
 
 		// Pre-initialize metrics with placeholder labels so they appear in /metrics
@@ -341,10 +353,10 @@ func preInitializeMetrics() {
 
 	// Initialize selection metrics for all methods
 	for _, method := range methods {
-		ModelSelectionTotal.WithLabelValues(method, "_init", "_init")
-		ModelSelectionDuration.WithLabelValues(method)
+		ModelSelectionTotal.WithLabelValues(method, "_init", "_init", "supported")
+		ModelSelectionDuration.WithLabelValues(method, "supported")
 		ModelSelectionScore.WithLabelValues(method, "_init")
-		ModelSelectionConfidence.WithLabelValues(method)
+		ModelSelectionConfidence.WithLabelValues(method, "supported")
 		ModelSelectionHistory.WithLabelValues(method, "_init")
 	}
 
@@ -378,6 +390,9 @@ func preInitializeMetrics() {
 	RLDrivenImplicitFeedback.WithLabelValues("need_clarification")
 	RLDrivenImplicitFeedback.WithLabelValues("wrong_answer")
 	RLDrivenImplicitFeedback.WithLabelValues("want_different")
+
+	// Initialize dependency health metric
+	ModelSelectionDependencyHealth.WithLabelValues("_init", "_init", "_init").Set(0)
 }
 
 // IsMetricsEnabled returns true if metrics have been initialized
@@ -391,7 +406,7 @@ func RecordSelection(method string, decision string, model string, score float64
 		return
 	}
 
-	ModelSelectionTotal.WithLabelValues(method, model, decision).Inc()
+	ModelSelectionTotal.WithLabelValues(method, model, decision, "").Inc()
 	ModelSelectionScore.WithLabelValues(method, model).Observe(score)
 	ModelSelectionHistory.WithLabelValues(method, decision).Inc()
 }
@@ -404,10 +419,10 @@ func RecordSelectionFull(method SelectionMethod, model string, decision string, 
 
 	methodStr := string(method)
 
-	ModelSelectionTotal.WithLabelValues(methodStr, model, decision).Inc()
-	ModelSelectionDuration.WithLabelValues(methodStr).Observe(duration.Seconds())
+	ModelSelectionTotal.WithLabelValues(methodStr, model, decision, "").Inc()
+	ModelSelectionDuration.WithLabelValues(methodStr, "").Observe(duration.Seconds())
 	ModelSelectionScore.WithLabelValues(methodStr, model).Observe(score)
-	ModelSelectionConfidence.WithLabelValues(methodStr).Observe(confidence)
+	ModelSelectionConfidence.WithLabelValues(methodStr, "").Observe(confidence)
 	ModelSelectionHistory.WithLabelValues(methodStr, decision).Inc()
 }
 
@@ -671,7 +686,7 @@ func RecordRLSelection(model, category, userID string, score float64) {
 		category = "_global"
 	}
 
-	ModelSelectionTotal.WithLabelValues("rl_driven", model, category).Inc()
+	ModelSelectionTotal.WithLabelValues("rl_driven", model, category, "experimental").Inc()
 	ModelSelectionScore.WithLabelValues("rl_driven", model).Observe(score)
 	ModelSelectionHistory.WithLabelValues("rl_driven", category).Inc()
 
@@ -742,4 +757,33 @@ func RecordRLImplicitFeedback(feedbackType string) {
 	}
 
 	RLDrivenImplicitFeedback.WithLabelValues(feedbackType).Inc()
+}
+
+// RecordSelectionWithTier records a model selection event with tier label
+func RecordSelectionWithTier(method SelectionMethod, model string, decision string, tier AlgorithmTier, score, confidence float64, duration time.Duration) {
+	if !metricsEnabled {
+		return
+	}
+
+	methodStr := string(method)
+	tierStr := string(tier)
+
+	ModelSelectionTotal.WithLabelValues(methodStr, model, decision, tierStr).Inc()
+	ModelSelectionDuration.WithLabelValues(methodStr, tierStr).Observe(duration.Seconds())
+	ModelSelectionScore.WithLabelValues(methodStr, model).Observe(score)
+	ModelSelectionConfidence.WithLabelValues(methodStr, tierStr).Observe(confidence)
+	ModelSelectionHistory.WithLabelValues(methodStr, decision).Inc()
+}
+
+// RecordDependencyHealth records the health status of an external dependency
+func RecordDependencyHealth(method string, dependency string, depType string, healthy bool) {
+	if !metricsEnabled {
+		return
+	}
+
+	val := 0.0
+	if healthy {
+		val = 1.0
+	}
+	ModelSelectionDependencyHealth.WithLabelValues(method, dependency, depType).Set(val)
 }
