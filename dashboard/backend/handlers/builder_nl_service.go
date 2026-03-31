@@ -1,22 +1,16 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
-	pathpkg "path"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
+	sharednlgen "github.com/vllm-project/semantic-router/src/semantic-router/pkg/nlgen"
 )
 
 type builderNLConnectionMode string
@@ -35,15 +29,6 @@ const (
 	builderNLRepairMaxAttempts  = 1
 	builderNLModelCallTimeout   = 60 * time.Second
 	builderNLHeartbeatInterval  = 5 * time.Second
-)
-
-var (
-	builderNLRouteConditionPattern     = regexp.MustCompile(`(?m)^([ \t]*)(?:CONDITION|WHEN)\s+"language\s*[:=]\s*([A-Za-z0-9_.-]+)"\s*$`)
-	builderNLConditionKeywordPattern   = regexp.MustCompile(`(?m)^([ \t]*)CONDITION\b`)
-	builderNLLanguageSignalDeclPattern = regexp.MustCompile(`(?m)^\s*SIGNAL\s+language\s+(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_-]*))\b`)
-	builderNLLanguageSignalRefPattern  = regexp.MustCompile(`language\("([^"]+)"\)`)
-	builderNLFirstRoutePattern         = regexp.MustCompile(`(?m)^ROUTE\b`)
-	builderNLDslIdentifierPattern      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 )
 
 type BuilderNLGenerateRequest struct {
@@ -129,6 +114,7 @@ type builderNLLLMOutput struct {
 	DSL                string
 	Summary            string
 	SuggestedTestQuery string
+	Warnings           []string
 }
 
 const (
@@ -221,13 +207,7 @@ func generateBuilderNLDraftWithProgress(
 				targetModelName,
 			)
 		}
-		reportBuilderNLProgress(
-			reporter,
-			"context",
-			builderNLProgressInfo,
-			contextMessage,
-			0,
-		)
+		reportBuilderNLProgress(reporter, "context", builderNLProgressInfo, contextMessage, 0)
 	} else {
 		contextMessage := fmt.Sprintf(
 			"No current router model cards were found; Builder will fall back to %q.",
@@ -239,14 +219,9 @@ func generateBuilderNLDraftWithProgress(
 				builderNLFallbackModelAlias,
 			)
 		}
-		reportBuilderNLProgress(
-			reporter,
-			"context",
-			builderNLProgressWarning,
-			contextMessage,
-			0,
-		)
+		reportBuilderNLProgress(reporter, "context", builderNLProgressWarning, contextMessage, 0)
 	}
+
 	generated, validation, err := generateValidatedBuilderNLDraft(
 		ctx,
 		envoyURL,
@@ -261,8 +236,7 @@ func generateBuilderNLDraftWithProgress(
 		return BuilderNLGenerateResponse{}, err
 	}
 
-	review := reviewValidatedBuilderNLDraft(targetModelName, validation, reporter)
-
+	review := reviewValidatedBuilderNLDraft(targetModelName, validation, generated.Warnings, reporter)
 	if validation.Ready {
 		reportBuilderNLProgress(reporter, "complete", builderNLProgressSuccess, "Staged draft is ready for Builder review and apply.", 0)
 	} else {
@@ -397,7 +371,6 @@ func builderNLConfiguredModelNames(config *routerconfig.CanonicalConfig) []strin
 	for _, model := range config.Providers.Models {
 		appendName(model.Name)
 	}
-
 	return names
 }
 
@@ -419,104 +392,34 @@ func builderNLConnectionModeOrDefault(mode builderNLConnectionMode) (builderNLCo
 	return mode, nil
 }
 
-func buildBuilderNLGenerationPrompts(
+func buildBuilderNLTaskContext(
 	request string,
 	currentDSL string,
 	targetModelName string,
 	knownModelNames []string,
 	connectionMode builderNLConnectionMode,
-) (string, string) {
+) string {
 	preferredTarget := strings.TrimSpace(targetModelName)
 	if preferredTarget == "" {
 		preferredTarget = builderNLFallbackModelAlias
 	}
 
-	systemPrompt := strings.Join([]string{
-		"You generate vLLM Semantic Router Builder DSL.",
-		"Return ONLY valid JSON with keys dsl, summary, suggestedTestQuery.",
-		"The dsl value must be plain DSL source without markdown fences.",
-		"Use Builder-compatible syntax only: MODEL, SIGNAL, ROUTE, PLUGIN, PRIORITY, WHEN, MODEL refs, ALGORITHM, and PLUGIN refs.",
-		"Never emit CONDITION inside a ROUTE block. Route predicates must use WHEN <bool_expr>.",
-		"If a route uses language(\"name\") in WHEN, add a matching SIGNAL language name declaration unless it already exists in the current DSL.",
-		"Connection settings live outside the DSL, so never emit YAML or providers/global blocks.",
-		"Always include at least one MODEL declaration and one ROUTE declaration.",
-		fmt.Sprintf("Prefer existing router model cards before inventing new model names. The preferred fallback or default route model is %q.", preferredTarget),
-		"Keep summaries concise and action-oriented.",
-	}, "\n")
-
-	contextBlock := "No current DSL is available. Build a fresh draft."
-	if strings.TrimSpace(currentDSL) != "" {
-		contextBlock = "Current DSL context (preserve unrelated valid declarations unless the request clearly replaces them):\n" + currentDSL
-	}
-
-	userPrompt := strings.Join([]string{
+	lines := []string{
+		fmt.Sprintf("Original Builder routing request: %s", strings.TrimSpace(request)),
 		fmt.Sprintf("Preferred target model for route references: %s", preferredTarget),
 		fmt.Sprintf("Connection mode: %s", connectionMode),
 		fmt.Sprintf("Fallback Builder alias only when no current router model is available: %s.", builderNLFallbackModelAlias),
 		fmt.Sprintf("Known current router model cards: %s", builderNLKnownModelList(knownModelNames)),
-		"Use short descriptions, add a sensible fallback route when the request implies one, and prefer deterministic priorities.",
-		"Do not invent provider wiring or deploy-time endpoint config inside the DSL.",
-		"For multilingual routing, use SIGNAL language declarations plus WHEN language(\"...\") route guards.",
-		"Valid language-routing example:",
-		builderNLLanguageRoutingExample(preferredTarget),
-		"Route request:",
-		request,
-		"",
-		contextBlock,
-		"",
-		"JSON response shape:",
-		`{"dsl":"...","summary":"...","suggestedTestQuery":"..."}`,
-	}, "\n")
-
-	return systemPrompt, userPrompt
-}
-
-func buildBuilderNLRepairPrompts(
-	request string,
-	currentDSL string,
-	targetModelName string,
-	connectionMode builderNLConnectionMode,
-	badDSL string,
-	validation BuilderNLValidation,
-) (string, string) {
-	systemPrompt := strings.Join([]string{
-		"You repair vLLM Semantic Router Builder DSL using repository validation errors.",
-		"Return ONLY valid JSON with keys dsl, summary, suggestedTestQuery.",
-		"The dsl value must be plain DSL source without markdown fences.",
-		"Never emit CONDITION inside a ROUTE block. Rewrite route predicates to WHEN <bool_expr>.",
-		"If a route uses language(\"name\") in WHEN, add a matching SIGNAL language name declaration unless it already exists.",
-		"Fix the validation and compile problems without adding unrelated features.",
-	}, "\n")
-
-	userPrompt := strings.Join([]string{
-		fmt.Sprintf("Preferred target model for route references: %s", strings.TrimSpace(targetModelName)),
-		fmt.Sprintf("Connection mode: %s", connectionMode),
-		"Original route request:",
-		request,
-		"",
-		"Current Builder DSL context:",
-		emptyBuilderNLContext(currentDSL),
-		"",
-		"Previous invalid DSL draft:",
-		badDSL,
-		"",
-		"Repository validation findings:",
-		builderNLValidationSummary(validation),
-		"",
-		"Valid language-routing example:",
-		builderNLLanguageRoutingExample(strings.TrimSpace(targetModelName)),
-		"",
-		`JSON response shape: {"dsl":"...","summary":"...","suggestedTestQuery":"..."}`,
-	}, "\n")
-
-	return systemPrompt, userPrompt
-}
-
-func emptyBuilderNLContext(currentDSL string) string {
-	if strings.TrimSpace(currentDSL) == "" {
-		return "No current DSL is available."
+		"Preserve unrelated valid declarations from the current DSL unless the request clearly replaces them.",
+		"Do not emit YAML, providers/global blocks, or deploy-time endpoint configuration.",
+		"When language-based routing is needed, declare SIGNAL language entries and guard routes with WHEN language(\"...\").",
 	}
-	return currentDSL
+	if trimmedDSL := strings.TrimSpace(currentDSL); trimmedDSL != "" {
+		lines = append(lines, "Current Builder DSL context:\n"+trimmedDSL)
+	} else {
+		lines = append(lines, "No current DSL is available. Build a fresh draft.")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func builderNLKnownModelList(knownModelNames []string) string {
@@ -524,35 +427,6 @@ func builderNLKnownModelList(knownModelNames []string) string {
 		return "(none found in the current router config)"
 	}
 	return strings.Join(knownModelNames, ", ")
-}
-
-func builderNLLanguageRoutingExample(targetModelName string) string {
-	targetModel := strings.TrimSpace(targetModelName)
-	if targetModel == "" {
-		targetModel = builderNLFallbackModelAlias
-	}
-
-	return strings.Join([]string{
-		`SIGNAL language zh { description: "Chinese prompts" }`,
-		`SIGNAL language en { description: "English prompts" }`,
-		"",
-		`ROUTE zh_route (description = "Route Chinese prompts before the fallback.") {`,
-		`  PRIORITY 220`,
-		`  WHEN language("zh")`,
-		fmt.Sprintf(`  MODEL %q (reasoning = false)`, targetModel),
-		`}`,
-		"",
-		`ROUTE en_route (description = "Route English prompts before the fallback.") {`,
-		`  PRIORITY 210`,
-		`  WHEN language("en")`,
-		fmt.Sprintf(`  MODEL %q (reasoning = false)`, targetModel),
-		`}`,
-		"",
-		`ROUTE default_route (description = "General fallback route.") {`,
-		`  PRIORITY 100`,
-		fmt.Sprintf(`  MODEL %q (reasoning = false)`, targetModel),
-		`}`,
-	}, "\n")
 }
 
 func generateValidatedBuilderNLDraft(
@@ -570,55 +444,83 @@ func generateValidatedBuilderNLDraft(
 		return builderNLLLMOutput{}, BuilderNLValidation{}, err
 	}
 
-	systemPrompt, userPrompt := buildBuilderNLGenerationPrompts(prompt, currentDSL, targetModelName, knownModelNames, connectionMode)
-	var lastGenerated builderNLLLMOutput
-	var lastValidation BuilderNLValidation
-	lastValidationSignature := ""
-	lastDraftSignature := ""
+	clientReq := BuilderNLGenerateRequest{
+		ConnectionMode:   connectionMode,
+		CustomConnection: req.CustomConnection,
+	}
+	client := newBuilderNLLLMClient(envoyURL, clientReq, reporter)
+	taskContext := buildBuilderNLTaskContext(prompt, currentDSL, targetModelName, knownModelNames, connectionMode)
 
-	for attempt := 0; attempt <= builderNLRepairMaxAttempts; attempt++ {
-		attemptNumber := attempt + 1
-		if attempt == 0 {
-			reportBuilderNLProgress(reporter, "generate", builderNLProgressInfo, fmt.Sprintf("Generation attempt %d/%d: requesting a draft from the model.", attemptNumber, builderNLRepairMaxAttempts+1), attemptNumber)
+	var (
+		attemptBase             int
+		lastGenerated           builderNLLLMOutput
+		lastValidation          BuilderNLValidation
+		lastValidationSignature string
+		lastDraftSignature      string
+		reviewDraft             string
+		reviewFeedback          string
+	)
+
+	progressReporter := func(event sharednlgen.ProgressEvent) {
+		client.setAttempt(event.Attempt)
+		forwardBuilderNLNLGenProgress(reporter, event)
+	}
+
+	for repairRound := 0; repairRound <= builderNLRepairMaxAttempts; repairRound++ {
+		var nlResult *sharednlgen.NLResult
+		if repairRound == 0 {
+			nlResult, err = sharednlgen.GenerateFromNL(
+				ctx,
+				client,
+				prompt,
+				sharednlgen.WithTaskContext(taskContext),
+				sharednlgen.WithProgressReporter(progressReporter),
+				sharednlgen.WithMaxRetries(builderNLRepairMaxAttempts),
+			)
 		} else {
-			reportBuilderNLProgress(reporter, "repair", builderNLProgressInfo, fmt.Sprintf("Repair attempt %d/%d: sending validation findings back to the model.", attemptNumber, builderNLRepairMaxAttempts+1), attemptNumber)
+			reportBuilderNLProgress(reporter, "repair", builderNLProgressInfo, "Preparing a shared repair prompt from repository validation findings.", attemptBase)
+			nlResult, err = sharednlgen.RepairFromFeedback(
+				ctx,
+				client,
+				prompt,
+				reviewDraft,
+				reviewFeedback,
+				sharednlgen.WithTaskContext(taskContext),
+				sharednlgen.WithProgressReporter(progressReporter),
+				sharednlgen.WithAttemptOffset(attemptBase),
+				sharednlgen.WithMaxRetries(0),
+			)
+		}
+		if err != nil {
+			return builderNLLLMOutput{}, BuilderNLValidation{}, err
 		}
 
-		content, callErr := callBuilderNLModel(ctx, envoyURL, req, systemPrompt, userPrompt, reporter, "model_call", attemptNumber)
-		if callErr != nil {
-			return builderNLLLMOutput{}, BuilderNLValidation{}, callErr
+		attemptBase += nlResult.Attempts
+		generated := builderNLLLMOutput{
+			DSL:                strings.TrimSpace(nlResult.DSL),
+			Summary:            builderNLDraftSummary(prompt, false),
+			SuggestedTestQuery: builderNLSuggestedTestQuery(prompt),
+			Warnings:           append([]string(nil), nlResult.Warnings...),
 		}
-
-		generated, parseErr := parseBuilderNLGenerationOutput(content)
-		if parseErr != nil {
-			reportBuilderNLProgress(reporter, "parse", builderNLProgressError, fmt.Sprintf("Model output could not be parsed as a Builder draft: %s", parseErr), attemptNumber)
-			return builderNLLLMOutput{}, BuilderNLValidation{}, fmt.Errorf("failed to parse generated DSL draft: %w", parseErr)
-		}
-		if normalizedDSL, normalizationNotes := normalizeBuilderNLDraftSyntax(generated.DSL); normalizedDSL != generated.DSL {
-			generated.DSL = normalizedDSL
-			message := "Applied Builder DSL quick fixes before validation."
-			if len(normalizationNotes) > 0 {
-				message = "Applied Builder DSL quick fixes before validation: " + strings.Join(normalizationNotes, " ")
-			}
-			reportBuilderNLProgress(reporter, "parse", builderNLProgressInfo, message, attemptNumber)
-		}
-		reportBuilderNLProgress(reporter, "parse", builderNLProgressSuccess, "Parsed model output into a candidate DSL draft.", attemptNumber)
-
-		reportBuilderNLProgress(reporter, "validate", builderNLProgressInfo, "Running repository parse, validate, and compile checks against the staged draft.", attemptNumber)
+		reportBuilderNLProgress(reporter, "validate", builderNLProgressInfo, "Running repository parse, validate, and compile checks against the staged draft.", attemptBase)
 		validation := validateBuilderNLDraft(generated.DSL)
+
 		validationSignature := builderNLValidationSignature(validation)
-		sameValidationAsPrevious := attempt > 0 && validationSignature != "" && validationSignature == lastValidationSignature
-		sameDraftAsPrevious := attempt > 0 && strings.TrimSpace(generated.DSL) != "" && strings.TrimSpace(generated.DSL) == lastDraftSignature
+		sameValidationAsPrevious := repairRound > 0 && validationSignature != "" && validationSignature == lastValidationSignature
+		sameDraftAsPrevious := repairRound > 0 && strings.TrimSpace(generated.DSL) != "" && strings.TrimSpace(generated.DSL) == lastDraftSignature
+
 		lastGenerated = generated
 		lastValidation = validation
 		lastValidationSignature = validationSignature
 		lastDraftSignature = strings.TrimSpace(generated.DSL)
+
 		if validation.Ready {
-			reportBuilderNLProgress(reporter, "validate", builderNLProgressSuccess, "Repository validation passed for the staged draft.", attemptNumber)
+			reportBuilderNLProgress(reporter, "validate", builderNLProgressSuccess, "Repository validation passed for the staged draft.", attemptBase)
 			if formatted := strings.TrimSpace(validation.formattedDSL()); formatted != "" {
-				reportBuilderNLProgress(reporter, "format", builderNLProgressSuccess, "Formatted the staged DSL after successful validation.", attemptNumber)
+				reportBuilderNLProgress(reporter, "format", builderNLProgressSuccess, "Formatted the staged DSL after successful validation.", attemptBase)
 				lastGenerated.DSL = formatted
 			}
+			lastGenerated.Summary = builderNLDraftSummary(prompt, true)
 			return lastGenerated, lastValidation, nil
 		}
 
@@ -626,8 +528,8 @@ func generateValidatedBuilderNLDraft(
 			reporter,
 			"validate",
 			builderNLProgressWarning,
-			builderNLValidationProgressMessage(validation, attemptNumber),
-			attemptNumber,
+			builderNLValidationProgressMessage(validation, attemptBase),
+			attemptBase,
 		)
 		if sameValidationAsPrevious || sameDraftAsPrevious {
 			reportBuilderNLProgress(
@@ -635,38 +537,70 @@ func generateValidatedBuilderNLDraft(
 				"repair",
 				builderNLProgressWarning,
 				"Repair findings were unchanged from the previous attempt, so Builder stopped early instead of spending another slow retry.",
-				attemptNumber,
+				attemptBase,
 			)
+			lastGenerated.Summary = builderNLDraftSummary(prompt, false)
 			return lastGenerated, lastValidation, nil
 		}
 
-		if attempt == builderNLRepairMaxAttempts {
-			reportBuilderNLProgress(reporter, "repair", builderNLProgressWarning, "Repair budget exhausted; preserving the latest staged draft for manual repair.", attemptNumber)
+		if repairRound == builderNLRepairMaxAttempts {
+			reportBuilderNLProgress(reporter, "repair", builderNLProgressWarning, "Repair budget exhausted; preserving the latest staged draft for manual repair.", attemptBase)
+			lastGenerated.Summary = builderNLDraftSummary(prompt, false)
 			return lastGenerated, lastValidation, nil
 		}
-		reportBuilderNLProgress(reporter, "repair", builderNLProgressInfo, "Preparing a repair prompt from the latest repository validation findings.", attemptNumber)
 
-		systemPrompt, userPrompt = buildBuilderNLRepairPrompts(
-			prompt,
-			currentDSL,
-			targetModelName,
-			connectionMode,
-			generated.DSL,
-			validation,
-		)
+		reviewDraft = generated.DSL
+		reviewFeedback = builderNLValidationSummary(validation)
 	}
 
+	lastGenerated.Summary = builderNLDraftSummary(prompt, lastValidation.Ready)
 	return lastGenerated, lastValidation, nil
+}
+
+func forwardBuilderNLNLGenProgress(reporter builderNLProgressReporter, event sharednlgen.ProgressEvent) {
+	if reporter == nil {
+		return
+	}
+	phase := strings.TrimSpace(event.Phase)
+	if phase == "" || phase == "complete" {
+		return
+	}
+	reportBuilderNLProgress(reporter, phase, builderNLProgressInfo, event.Message, event.Attempt)
+}
+
+func builderNLDraftSummary(prompt string, ready bool) string {
+	request := summarizeBuilderNLRequest(prompt)
+	if ready {
+		return fmt.Sprintf("Generated a staged Builder DSL draft for %s.", request)
+	}
+	return fmt.Sprintf("Generated a staged Builder DSL draft for %s, but repository validation still found issues.", request)
+}
+
+func summarizeBuilderNLRequest(prompt string) string {
+	trimmed := strings.TrimSpace(prompt)
+	if trimmed == "" {
+		return "the current request"
+	}
+	if len(trimmed) > 96 {
+		trimmed = trimmed[:93] + "..."
+	}
+	return strconvQuoteIfNeeded(trimmed)
+}
+
+func builderNLSuggestedTestQuery(prompt string) string {
+	return strings.TrimSpace(prompt)
 }
 
 func reviewValidatedBuilderNLDraft(
 	targetModelName string,
 	validation BuilderNLValidation,
+	generationWarnings []string,
 	reporter builderNLProgressReporter,
 ) BuilderNLReview {
-	reportBuilderNLProgress(reporter, "review", builderNLProgressInfo, "Building a readiness review from repository validation results.", 0)
+	reportBuilderNLProgress(reporter, "review", builderNLProgressInfo, "Building a readiness review from shared nlgen output and repository validation results.", 0)
 	if !validation.Ready {
 		warnings := builderNLValidationWarnings(validation)
+		warnings = uniqueBuilderNLStrings(append(warnings, generationWarnings...))
 		if len(warnings) == 0 {
 			warnings = []string{"Builder validation still needs manual attention before this draft should be applied."}
 		}
@@ -679,18 +613,47 @@ func reviewValidatedBuilderNLDraft(
 	}
 
 	checks := []string{
+		"Shared nlgen generation completed successfully.",
 		"Repository validation passed.",
 		"Compile pass completed without errors.",
 	}
 	if resolvedTarget := strings.TrimSpace(targetModelName); resolvedTarget != "" {
 		checks = append(checks, fmt.Sprintf("Preferred target model resolved from the current router config: %s.", resolvedTarget))
 	}
-	reportBuilderNLProgress(reporter, "review", builderNLProgressSuccess, "Readiness review completed from repository validation results.", 0)
+	reportBuilderNLProgress(reporter, "review", builderNLProgressSuccess, "Readiness review completed from shared nlgen output and repository validation results.", 0)
 	return BuilderNLReview{
-		Ready:   true,
-		Summary: "Repository validation passed; the staged draft is ready for Builder apply.",
-		Checks:  checks,
+		Ready:    true,
+		Summary:  "Repository validation passed; the staged draft is ready for Builder apply.",
+		Warnings: uniqueBuilderNLStrings(generationWarnings),
+		Checks:   checks,
 	}
+}
+
+func uniqueBuilderNLStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	var result []string
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func strconvQuoteIfNeeded(value string) string {
+	if strings.ContainsAny(value, " \t\n\"'") {
+		return fmt.Sprintf("%q", value)
+	}
+	return value
 }
 
 func validateBuilderNLDraft(source string) BuilderNLValidation {
@@ -719,133 +682,10 @@ func validateBuilderNLDraft(source string) BuilderNLValidation {
 	}
 	if validation.Ready {
 		if formatted, err := dsl.Format(source); err == nil {
-			validation.Diagnostics = diagnostics
-			validation.CompileError = ""
-			validation.ErrorCount = errorCount
-			validation.Ready = true
 			validation.draftDSL = formatted
 		}
 	}
 	return validation
-}
-
-func normalizeBuilderNLDraftSyntax(source string) (string, []string) {
-	normalized := strings.TrimSpace(source)
-	if normalized == "" {
-		return source, nil
-	}
-
-	var notes []string
-	if builderNLRouteConditionPattern.MatchString(normalized) {
-		normalized = builderNLRouteConditionPattern.ReplaceAllString(normalized, `${1}WHEN language("${2}")`)
-		notes = append(notes, `rewrote quoted language CONDITION clauses into valid WHEN language("...") guards.`)
-	}
-	if builderNLConditionKeywordPattern.MatchString(normalized) {
-		normalized = builderNLConditionKeywordPattern.ReplaceAllString(normalized, `${1}WHEN`)
-		notes = append(notes, "rewrote CONDITION into WHEN for route predicates.")
-	}
-
-	normalized, missingSignals := ensureBuilderNLLanguageSignals(normalized)
-	if len(missingSignals) > 0 {
-		notes = append(notes, fmt.Sprintf("added %d missing SIGNAL language declaration(s) to match the generated WHEN clauses.", len(missingSignals)))
-	}
-
-	if strings.TrimSpace(normalized) == strings.TrimSpace(source) {
-		return source, nil
-	}
-	return normalized, uniqueBuilderNLNotes(notes)
-}
-
-func ensureBuilderNLLanguageSignals(source string) (string, []string) {
-	existingSignals := make(map[string]struct{})
-	for _, match := range builderNLLanguageSignalDeclPattern.FindAllStringSubmatch(source, -1) {
-		name := strings.TrimSpace(match[1])
-		if name == "" {
-			name = strings.TrimSpace(match[2])
-		}
-		if name == "" {
-			continue
-		}
-		existingSignals[strings.ToLower(name)] = struct{}{}
-	}
-
-	var missing []string
-	seenMissing := make(map[string]struct{})
-	for _, match := range builderNLLanguageSignalRefPattern.FindAllStringSubmatch(source, -1) {
-		name := strings.TrimSpace(match[1])
-		if name == "" {
-			continue
-		}
-		key := strings.ToLower(name)
-		if _, ok := existingSignals[key]; ok {
-			continue
-		}
-		if _, ok := seenMissing[key]; ok {
-			continue
-		}
-		seenMissing[key] = struct{}{}
-		missing = append(missing, name)
-	}
-	if len(missing) == 0 {
-		return source, nil
-	}
-
-	declarations := make([]string, 0, len(missing))
-	for _, name := range missing {
-		declarations = append(
-			declarations,
-			fmt.Sprintf(`SIGNAL language %s { description: %q }`, builderNLDslName(name), builderNLLanguageDescription(name)),
-		)
-	}
-	block := strings.Join(declarations, "\n\n")
-
-	if routeIndex := builderNLFirstRoutePattern.FindStringIndex(source); routeIndex != nil {
-		prefix := strings.TrimRight(source[:routeIndex[0]], "\n")
-		suffix := strings.TrimLeft(source[routeIndex[0]:], "\n")
-		if prefix == "" {
-			return block + "\n\n" + suffix, missing
-		}
-		return prefix + "\n\n" + block + "\n\n" + suffix, missing
-	}
-	return strings.TrimRight(source, "\n") + "\n\n" + block + "\n", missing
-}
-
-func builderNLDslName(name string) string {
-	if builderNLDslIdentifierPattern.MatchString(name) {
-		return name
-	}
-	return strconv.Quote(name)
-}
-
-func builderNLLanguageDescription(name string) string {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "zh", "zh-cn", "zh-hans", "zh-hant", "chinese":
-		return "Chinese prompts"
-	case "en", "en-us", "en-gb", "english":
-		return "English prompts"
-	default:
-		return fmt.Sprintf("%s prompts", strings.TrimSpace(name))
-	}
-}
-
-func uniqueBuilderNLNotes(notes []string) []string {
-	if len(notes) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{}, len(notes))
-	var result []string
-	for _, note := range notes {
-		note = strings.TrimSpace(note)
-		if note == "" {
-			continue
-		}
-		if _, ok := seen[note]; ok {
-			continue
-		}
-		seen[note] = struct{}{}
-		result = append(result, note)
-	}
-	return result
 }
 
 func convertBuilderNLDiagnostics(diags []dsl.Diagnostic) []BuilderNLDiagnostic {
@@ -954,56 +794,90 @@ func (v BuilderNLValidation) formattedDSL() string {
 	return strings.TrimSpace(v.draftDSL)
 }
 
-func callBuilderNLModel(
+func verifyBuilderNLConnection(
 	ctx context.Context,
+	configPath string,
 	envoyURL string,
-	req BuilderNLGenerateRequest,
-	systemPrompt string,
-	userPrompt string,
-	reporter builderNLProgressReporter,
-	phase string,
-	attempt int,
-) (string, error) {
-	callCtx, cancel := context.WithTimeout(ctx, builderNLModelCallTimeout)
-	defer cancel()
+	req BuilderNLVerifyRequest,
+) (BuilderNLVerifyResponse, error) {
+	connectionMode, err := builderNLConnectionModeOrDefault(req.ConnectionMode)
+	if err != nil {
+		return BuilderNLVerifyResponse{}, err
+	}
 
-	return runBuilderNLModelCallWithProgress(callCtx, reporter, phase, attempt, func() (string, error) {
-		if req.ConnectionMode == builderNLConnectionModeCustom {
-			if req.CustomConnection == nil {
-				return "", fmt.Errorf("custom connection details are missing")
-			}
-			reportBuilderNLProgress(
-				reporter,
-				phase,
-				builderNLProgressInfo,
-				fmt.Sprintf(
-					"Calling custom %s generation model %q.",
-					req.CustomConnection.ProviderKind,
-					strings.TrimSpace(req.CustomConnection.ModelName),
-				),
-				attempt,
-			)
-			return callBuilderNLCustomConnection(callCtx, *req.CustomConnection, systemPrompt, userPrompt)
+	generateReq := BuilderNLGenerateRequest{
+		ConnectionMode:   connectionMode,
+		CustomConnection: req.CustomConnection,
+	}
+	targetModelName := ""
+	if strings.TrimSpace(configPath) != "" {
+		baseConfig, configErr := readBuilderNLBaseConfig(configPath)
+		if configErr != nil {
+			return BuilderNLVerifyResponse{}, configErr
 		}
-		if strings.TrimSpace(envoyURL) == "" {
-			return "", fmt.Errorf("default Builder AI connection is unavailable because Envoy is not configured")
+		targetModelName = builderNLDraftTargetModelName(baseConfig)
+	}
+
+	content, err := callBuilderNLMessages(
+		ctx,
+		envoyURL,
+		generateReq,
+		[]sharednlgen.ChatMessage{
+			{Role: "system", Content: "You verify that a Builder AI connection is reachable."},
+			{Role: "user", Content: "Reply with a short confirmation that the connection is working."},
+		},
+		nil,
+		"",
+		0,
+	)
+	if err != nil {
+		return BuilderNLVerifyResponse{}, err
+	}
+
+	response := BuilderNLVerifyResponse{
+		Ready:          true,
+		Summary:        strings.TrimSpace(content),
+		ConnectionMode: connectionMode,
+	}
+	if response.Summary == "" {
+		response.Summary = "Connection verified."
+	}
+
+	if connectionMode == builderNLConnectionModeCustom && req.CustomConnection != nil {
+		response.ProviderKind = req.CustomConnection.ProviderKind
+		response.ModelName = strings.TrimSpace(req.CustomConnection.ModelName)
+		response.TargetModelName = strings.TrimSpace(targetModelName)
+		response.Endpoint = builderNLConnectionEndpoint(envoyURL, generateReq)
+		return response, nil
+	}
+
+	response.ProviderKind = builderNLProviderOpenAICompatible
+	response.ModelName = builderNLFallbackModelAlias
+	response.TargetModelName = strings.TrimSpace(targetModelName)
+	if response.TargetModelName == "" {
+		response.TargetModelName = builderNLFallbackModelAlias
+	}
+	response.Endpoint = builderNLConnectionEndpoint(envoyURL, generateReq)
+	return response, nil
+}
+
+func builderNLConnectionEndpoint(envoyURL string, req BuilderNLGenerateRequest) string {
+	if req.ConnectionMode == builderNLConnectionModeCustom && req.CustomConnection != nil {
+		parsedBaseURL, err := normalizeBuilderNLBaseURL(req.CustomConnection.BaseURL, req.CustomConnection.ProviderKind)
+		if err != nil {
+			return strings.TrimSpace(req.CustomConnection.BaseURL)
 		}
-		reportBuilderNLProgress(
-			reporter,
-			phase,
-			builderNLProgressInfo,
-			fmt.Sprintf("Calling default Builder generator model %q through the runtime gateway.", builderNLFallbackModelAlias),
-			attempt,
-		)
-		return callBuilderNLOpenAICompatible(
-			callCtx,
-			strings.TrimRight(envoyURL, "/")+"/v1/chat/completions",
-			builderNLFallbackModelAlias,
-			"",
-			systemPrompt,
-			userPrompt,
-		)
-	})
+		switch req.CustomConnection.ProviderKind {
+		case builderNLProviderAnthropic:
+			return resolveBuilderNLAnthropicURL(parsedBaseURL)
+		default:
+			return resolveBuilderNLOpenAIURL(parsedBaseURL)
+		}
+	}
+	if strings.TrimSpace(envoyURL) == "" {
+		return ""
+	}
+	return strings.TrimRight(envoyURL, "/") + "/v1/chat/completions"
 }
 
 func runBuilderNLModelCallWithProgress(
@@ -1073,408 +947,4 @@ func runBuilderNLModelCallWithProgress(
 
 	reportBuilderNLProgress(reporter, phase, builderNLProgressSuccess, fmt.Sprintf("Model response received after %s.", time.Since(start).Round(time.Second)), attempt)
 	return content, nil
-}
-
-func callBuilderNLCustomConnection(
-	ctx context.Context,
-	conn builderNLConnection,
-	systemPrompt string,
-	userPrompt string,
-) (string, error) {
-	modelName := strings.TrimSpace(conn.ModelName)
-	if modelName == "" {
-		return "", fmt.Errorf("custom connection modelName is required")
-	}
-	parsedBaseURL, err := normalizeBuilderNLBaseURL(conn.BaseURL, conn.ProviderKind)
-	if err != nil {
-		return "", err
-	}
-
-	switch conn.ProviderKind {
-	case builderNLProviderVLLM, builderNLProviderOpenAICompatible:
-		return callBuilderNLOpenAICompatible(
-			ctx,
-			resolveBuilderNLOpenAIURL(parsedBaseURL),
-			modelName,
-			strings.TrimSpace(conn.AccessKey),
-			systemPrompt,
-			userPrompt,
-		)
-	case builderNLProviderAnthropic:
-		return callBuilderNLAnthropic(
-			ctx,
-			resolveBuilderNLAnthropicURL(parsedBaseURL),
-			modelName,
-			strings.TrimSpace(conn.AccessKey),
-			systemPrompt,
-			userPrompt,
-		)
-	default:
-		return "", fmt.Errorf("unsupported custom connection providerKind %q", conn.ProviderKind)
-	}
-}
-
-func resolveBuilderNLOpenAIURL(baseURL *url.URL) string {
-	candidate := *baseURL
-	path := strings.TrimRight(candidate.Path, "/")
-	switch {
-	case strings.HasSuffix(path, "/chat/completions"):
-		candidate.Path = path
-	case strings.HasSuffix(path, "/v1"):
-		candidate.Path = path + "/chat/completions"
-	default:
-		candidate.Path = pathpkg.Join(path, "/v1/chat/completions")
-	}
-	return candidate.String()
-}
-
-func resolveBuilderNLAnthropicURL(baseURL *url.URL) string {
-	candidate := *baseURL
-	path := strings.TrimRight(candidate.Path, "/")
-	switch {
-	case strings.HasSuffix(path, "/messages"):
-		candidate.Path = path
-	case strings.HasSuffix(path, "/v1"):
-		candidate.Path = path + "/messages"
-	default:
-		candidate.Path = pathpkg.Join(path, "/v1/messages")
-	}
-	return candidate.String()
-}
-
-func callBuilderNLOpenAICompatible(
-	ctx context.Context,
-	endpoint string,
-	modelName string,
-	accessKey string,
-	systemPrompt string,
-	userPrompt string,
-) (string, error) {
-	payload := openAIChatRequest{
-		Model: modelName,
-		Messages: []openAIChatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userPrompt},
-		},
-		Stream: false,
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal builder ai request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
-	if err != nil {
-		return "", fmt.Errorf("failed to create builder ai request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json")
-	if accessKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+accessKey)
-	}
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return "", fmt.Errorf("builder ai request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	trimmedBody := strings.TrimSpace(string(body))
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		if trimmedBody == "" {
-			trimmedBody = resp.Status
-		}
-		return "", fmt.Errorf("builder ai request failed: %s", trimmedBody)
-	}
-
-	var parsed openAIChatResponse
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("failed to decode builder ai response: %w", err)
-	}
-	if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
-		return "", fmt.Errorf("builder ai request failed: %s", parsed.Error.Message)
-	}
-	if len(parsed.Choices) == 0 {
-		return "", fmt.Errorf("builder ai request failed: empty response")
-	}
-	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
-	if content == "" {
-		return "", fmt.Errorf("builder ai request failed: empty response content")
-	}
-	return content, nil
-}
-
-func verifyBuilderNLConnection(
-	ctx context.Context,
-	configPath string,
-	envoyURL string,
-	req BuilderNLVerifyRequest,
-) (BuilderNLVerifyResponse, error) {
-	connectionMode, err := builderNLConnectionModeOrDefault(req.ConnectionMode)
-	if err != nil {
-		return BuilderNLVerifyResponse{}, err
-	}
-
-	generateReq := BuilderNLGenerateRequest{
-		ConnectionMode:   connectionMode,
-		CustomConnection: req.CustomConnection,
-	}
-	targetModelName := ""
-	if strings.TrimSpace(configPath) != "" {
-		baseConfig, configErr := readBuilderNLBaseConfig(configPath)
-		if configErr != nil {
-			return BuilderNLVerifyResponse{}, configErr
-		}
-		targetModelName = builderNLDraftTargetModelName(baseConfig)
-	}
-	content, err := callBuilderNLModel(
-		ctx,
-		envoyURL,
-		generateReq,
-		"You verify that a Builder AI connection is reachable.",
-		"Reply with a short confirmation that the connection is working.",
-		nil,
-		"",
-		0,
-	)
-	if err != nil {
-		return BuilderNLVerifyResponse{}, err
-	}
-
-	response := BuilderNLVerifyResponse{
-		Ready:          true,
-		Summary:        strings.TrimSpace(content),
-		ConnectionMode: connectionMode,
-	}
-	if response.Summary == "" {
-		response.Summary = "Connection verified."
-	}
-
-	if connectionMode == builderNLConnectionModeCustom && req.CustomConnection != nil {
-		response.ProviderKind = req.CustomConnection.ProviderKind
-		response.ModelName = strings.TrimSpace(req.CustomConnection.ModelName)
-		response.TargetModelName = strings.TrimSpace(targetModelName)
-		response.Endpoint = builderNLConnectionEndpoint(envoyURL, generateReq)
-		return response, nil
-	}
-
-	response.ProviderKind = builderNLProviderOpenAICompatible
-	response.ModelName = builderNLFallbackModelAlias
-	response.TargetModelName = strings.TrimSpace(targetModelName)
-	if response.TargetModelName == "" {
-		response.TargetModelName = builderNLFallbackModelAlias
-	}
-	response.Endpoint = builderNLConnectionEndpoint(envoyURL, generateReq)
-	return response, nil
-}
-
-func builderNLConnectionEndpoint(envoyURL string, req BuilderNLGenerateRequest) string {
-	if req.ConnectionMode == builderNLConnectionModeCustom && req.CustomConnection != nil {
-		parsedBaseURL, err := normalizeBuilderNLBaseURL(req.CustomConnection.BaseURL, req.CustomConnection.ProviderKind)
-		if err != nil {
-			return strings.TrimSpace(req.CustomConnection.BaseURL)
-		}
-		switch req.CustomConnection.ProviderKind {
-		case builderNLProviderAnthropic:
-			return resolveBuilderNLAnthropicURL(parsedBaseURL)
-		default:
-			return resolveBuilderNLOpenAIURL(parsedBaseURL)
-		}
-	}
-	if strings.TrimSpace(envoyURL) == "" {
-		return ""
-	}
-	return strings.TrimRight(envoyURL, "/") + "/v1/chat/completions"
-}
-
-func callBuilderNLAnthropic(
-	ctx context.Context,
-	endpoint string,
-	modelName string,
-	accessKey string,
-	systemPrompt string,
-	userPrompt string,
-) (string, error) {
-	if accessKey == "" {
-		return "", fmt.Errorf("anthropic custom connection requires an accessKey")
-	}
-	payload := anthropicRequest{
-		Model:     modelName,
-		MaxTokens: 4096,
-		System:    systemPrompt,
-		Messages: []anthropicMessageRequest{{
-			Role:    "user",
-			Content: userPrompt,
-		}},
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal anthropic builder ai request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
-	if err != nil {
-		return "", fmt.Errorf("failed to create anthropic builder ai request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json")
-	httpReq.Header.Set("x-api-key", accessKey)
-	httpReq.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return "", fmt.Errorf("anthropic builder ai request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	trimmedBody := strings.TrimSpace(string(body))
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		if trimmedBody == "" {
-			trimmedBody = resp.Status
-		}
-		return "", fmt.Errorf("anthropic builder ai request failed: %s", trimmedBody)
-	}
-
-	var parsed anthropicResponse
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("failed to decode anthropic builder ai response: %w", err)
-	}
-	if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
-		return "", fmt.Errorf("anthropic builder ai request failed: %s", parsed.Error.Message)
-	}
-	for _, part := range parsed.Content {
-		if strings.TrimSpace(part.Text) != "" {
-			return strings.TrimSpace(part.Text), nil
-		}
-	}
-	return "", fmt.Errorf("anthropic builder ai request failed: empty response content")
-}
-
-func parseBuilderNLGenerationOutput(raw string) (builderNLLLMOutput, error) {
-	payload, err := parseBuilderNLJSONObject(raw)
-	if err != nil {
-		dsl := sanitizeBuilderNLDsl(extractMarkdownFence(raw, "dsl"))
-		if dsl == "" {
-			dsl = sanitizeBuilderNLDsl(extractMarkdownFence(raw, ""))
-		}
-		if dsl == "" {
-			return builderNLLLMOutput{}, err
-		}
-		return builderNLLLMOutput{
-			DSL:     dsl,
-			Summary: "Generated DSL draft from natural-language request.",
-		}, nil
-	}
-
-	dsl := sanitizeBuilderNLDsl(stringFromPayload(payload, "dsl", "dsl_source", "code"))
-	if dsl == "" {
-		dsl = sanitizeBuilderNLDsl(extractMarkdownFence(raw, "dsl"))
-	}
-	if dsl == "" {
-		return builderNLLLMOutput{}, fmt.Errorf("generated payload did not include a DSL draft")
-	}
-
-	summary := stringFromPayload(payload, "summary", "notes")
-	if strings.TrimSpace(summary) == "" {
-		summary = "Generated DSL draft from natural-language request."
-	}
-
-	return builderNLLLMOutput{
-		DSL:                dsl,
-		Summary:            strings.TrimSpace(summary),
-		SuggestedTestQuery: strings.TrimSpace(stringFromPayload(payload, "suggestedTestQuery", "suggested_test_query", "exampleQuery")),
-	}, nil
-}
-
-func parseBuilderNLJSONObject(raw string) (map[string]any, error) {
-	candidates := []string{strings.TrimSpace(raw)}
-	if fencedJSON := extractMarkdownFence(raw, "json"); fencedJSON != "" {
-		candidates = append(candidates, fencedJSON)
-	}
-	if objectJSON := extractFirstJSONObject(raw); objectJSON != "" {
-		candidates = append(candidates, objectJSON)
-	}
-
-	for _, candidate := range candidates {
-		if strings.TrimSpace(candidate) == "" {
-			continue
-		}
-		var parsed map[string]any
-		if err := json.Unmarshal([]byte(candidate), &parsed); err == nil {
-			return parsed, nil
-		}
-	}
-	return nil, fmt.Errorf("no valid JSON object found in model response")
-}
-
-func extractMarkdownFence(raw string, language string) string {
-	pattern := "```"
-	if language != "" {
-		pattern += language
-	}
-	re := regexp.MustCompile("(?s)" + regexp.QuoteMeta(pattern) + "\\s*(.*?)```")
-	matches := re.FindStringSubmatch(raw)
-	if len(matches) == 2 {
-		return strings.TrimSpace(matches[1])
-	}
-	if language == "" {
-		fallback := regexp.MustCompile("(?s)```[a-zA-Z-]*\\s*(.*?)```")
-		matches = fallback.FindStringSubmatch(raw)
-		if len(matches) == 2 {
-			return strings.TrimSpace(matches[1])
-		}
-	}
-	return ""
-}
-
-func extractFirstJSONObject(raw string) string {
-	start := -1
-	depth := 0
-	inString := false
-	escaped := false
-	for index, r := range raw {
-		switch {
-		case escaped:
-			escaped = false
-		case r == '\\':
-			escaped = true
-		case r == '"':
-			inString = !inString
-		case inString:
-			continue
-		case r == '{':
-			if depth == 0 {
-				start = index
-			}
-			depth++
-		case r == '}':
-			if depth == 0 {
-				continue
-			}
-			depth--
-			if depth == 0 && start >= 0 {
-				return strings.TrimSpace(raw[start : index+1])
-			}
-		}
-	}
-	return ""
-}
-
-func sanitizeBuilderNLDsl(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	trimmed = strings.TrimPrefix(trimmed, "```dsl")
-	trimmed = strings.TrimPrefix(trimmed, "```")
-	trimmed = strings.TrimSuffix(trimmed, "```")
-	return strings.TrimSpace(trimmed)
-}
-
-func stringFromPayload(payload map[string]any, keys ...string) string {
-	for _, key := range keys {
-		if value, ok := payload[key]; ok {
-			if text, ok := value.(string); ok {
-				return text
-			}
-		}
-	}
-	return ""
 }

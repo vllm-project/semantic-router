@@ -1,6 +1,9 @@
 package nlgen
 
 import (
+	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -14,6 +17,15 @@ var dslTopLevelKeywords = []string{
 	"PLUGIN",
 	"TEST",
 }
+
+var (
+	routeLanguageConditionPattern = regexp.MustCompile(`(?m)^([ \t]*)(?:CONDITION|WHEN)\s+"language\s*[:=]\s*([A-Za-z0-9_.-]+)"\s*$`)
+	conditionKeywordPattern       = regexp.MustCompile(`(?m)^([ \t]*)CONDITION\b`)
+	languageSignalDeclPattern     = regexp.MustCompile(`(?m)^\s*SIGNAL\s+language\s+(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_-]*))\b`)
+	languageSignalRefPattern      = regexp.MustCompile(`language\("([^"]+)"\)`)
+	firstRoutePattern             = regexp.MustCompile(`(?m)^ROUTE\b`)
+	dslIdentifierPattern          = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
+)
 
 // SanitizeLLMOutput extracts valid DSL text from raw LLM output.
 // It strips markdown code fences, leading prose, and trailing commentary,
@@ -37,6 +49,35 @@ func SanitizeLLMOutput(raw string) string {
 	}
 
 	return strings.TrimSpace(raw)
+}
+
+// NormalizeGeneratedDSL repairs common LLM mistakes while keeping the shared
+// NL-to-DSL pipeline prompt/repair behavior canonical across callers.
+func NormalizeGeneratedDSL(source string) (string, []string) {
+	normalized := strings.TrimSpace(source)
+	if normalized == "" {
+		return source, nil
+	}
+
+	var notes []string
+	if routeLanguageConditionPattern.MatchString(normalized) {
+		normalized = routeLanguageConditionPattern.ReplaceAllString(normalized, `${1}WHEN language("${2}")`)
+		notes = append(notes, `normalized: rewrote quoted language CONDITION clauses into valid WHEN language("...") guards.`)
+	}
+	if conditionKeywordPattern.MatchString(normalized) {
+		normalized = conditionKeywordPattern.ReplaceAllString(normalized, `${1}WHEN`)
+		notes = append(notes, "normalized: rewrote CONDITION into WHEN for route predicates.")
+	}
+
+	normalized, missingSignals := ensureLanguageSignals(normalized)
+	if len(missingSignals) > 0 {
+		notes = append(notes, fmt.Sprintf("normalized: added %d missing SIGNAL language declaration(s) to match generated WHEN clauses.", len(missingSignals)))
+	}
+
+	if strings.TrimSpace(normalized) == strings.TrimSpace(source) {
+		return source, nil
+	}
+	return normalized, uniqueNotes(notes)
 }
 
 // findTripleBacktick returns the index of the first "```" at or after pos, or -1.
@@ -151,6 +192,95 @@ func findLastTopLevelClose(s string) int {
 		i++
 	}
 	return lastClose
+}
+
+func ensureLanguageSignals(source string) (string, []string) {
+	existingSignals := make(map[string]struct{})
+	for _, match := range languageSignalDeclPattern.FindAllStringSubmatch(source, -1) {
+		name := strings.TrimSpace(match[1])
+		if name == "" {
+			name = strings.TrimSpace(match[2])
+		}
+		if name == "" {
+			continue
+		}
+		existingSignals[strings.ToLower(name)] = struct{}{}
+	}
+
+	var missing []string
+	seenMissing := make(map[string]struct{})
+	for _, match := range languageSignalRefPattern.FindAllStringSubmatch(source, -1) {
+		name := strings.TrimSpace(match[1])
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, ok := existingSignals[key]; ok {
+			continue
+		}
+		if _, ok := seenMissing[key]; ok {
+			continue
+		}
+		seenMissing[key] = struct{}{}
+		missing = append(missing, name)
+	}
+	if len(missing) == 0 {
+		return source, nil
+	}
+
+	declarations := make([]string, 0, len(missing))
+	for _, name := range missing {
+		declarations = append(declarations, fmt.Sprintf(`SIGNAL language %s { description: %q }`, dslName(name), languageDescription(name)))
+	}
+	block := strings.Join(declarations, "\n\n")
+
+	if routeIndex := firstRoutePattern.FindStringIndex(source); routeIndex != nil {
+		prefix := strings.TrimRight(source[:routeIndex[0]], "\n")
+		suffix := strings.TrimLeft(source[routeIndex[0]:], "\n")
+		if prefix == "" {
+			return block + "\n\n" + suffix, missing
+		}
+		return prefix + "\n\n" + block + "\n\n" + suffix, missing
+	}
+	return strings.TrimRight(source, "\n") + "\n\n" + block + "\n", missing
+}
+
+func dslName(name string) string {
+	if dslIdentifierPattern.MatchString(name) {
+		return name
+	}
+	return strconv.Quote(name)
+}
+
+func languageDescription(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "zh", "zh-cn", "zh-hans", "zh-hant", "chinese":
+		return "Chinese prompts"
+	case "en", "en-us", "en-gb", "english":
+		return "English prompts"
+	default:
+		return fmt.Sprintf("%s prompts", strings.TrimSpace(name))
+	}
+}
+
+func uniqueNotes(notes []string) []string {
+	if len(notes) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(notes))
+	var result []string
+	for _, note := range notes {
+		note = strings.TrimSpace(note)
+		if note == "" {
+			continue
+		}
+		if _, ok := seen[note]; ok {
+			continue
+		}
+		seen[note] = struct{}{}
+		result = append(result, note)
+	}
+	return result
 }
 
 // isIdentPart returns true if ch is valid in a DSL identifier.

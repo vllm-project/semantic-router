@@ -12,57 +12,23 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestParseBuilderNLGenerationOutputFromJSONFence(t *testing.T) {
-	raw := "```json\n{\"dsl\":\"MODEL \\\"MoM\\\" {\\n  modality: \\\"text\\\"\\n}\\n\\nROUTE default_route (description = \\\"Fallback\\\") {\\n  PRIORITY 100\\n  MODEL \\\"MoM\\\" (reasoning = false)\\n}\",\"summary\":\"Added a fallback route.\",\"suggestedTestQuery\":\"hello world\"}\n```"
+func TestBuildBuilderNLTaskContextIncludesSharedHints(t *testing.T) {
+	contextBlock := buildBuilderNLTaskContext(
+		"Add multilingual routing before a fallback route.",
+		`MODEL "qwen/qwen3.5-rocm" { modality: "text" }`,
+		"qwen/qwen3.5-rocm",
+		[]string{"qwen/qwen3.5-rocm", "google/gemini-2.5-flash-lite"},
+		builderNLConnectionModeDefault,
+	)
 
-	parsed, err := parseBuilderNLGenerationOutput(raw)
-	if err != nil {
-		t.Fatalf("expected parse to succeed, got error: %v", err)
+	if !strings.Contains(contextBlock, "Preferred target model for route references: qwen/qwen3.5-rocm") {
+		t.Fatalf("expected target model hint in shared context, got:\n%s", contextBlock)
 	}
-	if parsed.DSL == "" {
-		t.Fatalf("expected non-empty DSL output")
+	if !strings.Contains(contextBlock, "Known current router model cards: qwen/qwen3.5-rocm, google/gemini-2.5-flash-lite") {
+		t.Fatalf("expected known model cards in shared context, got:\n%s", contextBlock)
 	}
-	if parsed.Summary != "Added a fallback route." {
-		t.Fatalf("unexpected summary: %q", parsed.Summary)
-	}
-	if parsed.SuggestedTestQuery != "hello world" {
-		t.Fatalf("unexpected suggested test query: %q", parsed.SuggestedTestQuery)
-	}
-}
-
-func TestNormalizeBuilderNLDraftSyntaxRepairsLanguageConditionPattern(t *testing.T) {
-	source := `MODEL "qwen/qwen3.5-rocm" {
-  modality: "text"
-}
-
-ROUTE zh_route (description = "Route Chinese prompts.") {
-  PRIORITY 200
-  CONDITION "language: zh"
-  MODEL "qwen/qwen3.5-rocm" (reasoning = false)
-}
-
-ROUTE default_route (description = "Fallback route.") {
-  PRIORITY 100
-  MODEL "qwen/qwen3.5-rocm" (reasoning = false)
-}`
-
-	normalized, notes := normalizeBuilderNLDraftSyntax(source)
-	if len(notes) == 0 {
-		t.Fatalf("expected normalization notes, got none")
-	}
-	if strings.Contains(normalized, "CONDITION") {
-		t.Fatalf("expected CONDITION to be rewritten, got:\n%s", normalized)
-	}
-	if !strings.Contains(normalized, `WHEN language("zh")`) {
-		t.Fatalf("expected WHEN language guard, got:\n%s", normalized)
-	}
-	if !strings.Contains(normalized, `SIGNAL language zh {`) {
-		t.Fatalf("expected missing SIGNAL language declaration to be inserted, got:\n%s", normalized)
-	}
-
-	validation := validateBuilderNLDraft(normalized)
-	if !validation.Ready {
-		t.Fatalf("expected normalized draft to validate, got %#v\nDSL:\n%s", validation, normalized)
+	if !strings.Contains(contextBlock, "Current Builder DSL context:") {
+		t.Fatalf("expected current DSL context section, got:\n%s", contextBlock)
 	}
 }
 
@@ -71,8 +37,22 @@ func TestGenerateBuilderNLDraftRepairsInvalidDSL(t *testing.T) {
 	configPath := createValidTestConfig(t, tempDir)
 
 	responses := []string{
-		`{"dsl":"MODEL \"MoM\" {\n  modality: \"text\"\n\nROUTE broken_route {\n  PRIORITY 100\n  MODEL \"MoM\" (reasoning = false)\n}","summary":"Initial draft needs repair.","suggestedTestQuery":"urgent billing escalation"}`,
-		`{"dsl":"MODEL \"MoM\" {\n  param_size: \"7b\"\n  modality: \"text\"\n}\n\nROUTE fallback_route (description = \"Fallback\") {\n  PRIORITY 100\n  MODEL \"MoM\" (reasoning = false)\n}","summary":"Added a fallback route.","suggestedTestQuery":"urgent billing escalation"}`,
+		`MODEL "MoM" {
+  modality: "text"
+
+ROUTE broken_route {
+  PRIORITY 100
+  MODEL "MoM" (reasoning = false)
+}`,
+		`MODEL "MoM" {
+  param_size: "7b"
+  modality: "text"
+}
+
+ROUTE fallback_route (description = "Fallback") {
+  PRIORITY 100
+  MODEL "MoM" (reasoning = false)
+}`,
 	}
 
 	var callCount atomic.Int32
@@ -123,7 +103,7 @@ func TestGenerateBuilderNLDraftRepairsInvalidDSL(t *testing.T) {
 	if strings.Contains(resp.DSL, `ROUTE broken_route`) {
 		t.Fatalf("expected invalid draft to be replaced during repair, got:\n%s", resp.DSL)
 	}
-	if resp.SuggestedTestQuery != "urgent billing escalation" {
+	if resp.SuggestedTestQuery != "Create a fallback route for urgent billing escalation requests." {
 		t.Fatalf("unexpected suggested test query: %q", resp.SuggestedTestQuery)
 	}
 }
@@ -133,8 +113,22 @@ func TestGenerateBuilderNLDraftWithProgressReportsRepairAttempts(t *testing.T) {
 	configPath := createValidTestConfig(t, tempDir)
 
 	responses := []string{
-		`{"dsl":"MODEL \"MoM\" {\n  modality: \"text\"\n\nROUTE broken_route {\n  PRIORITY 100\n  MODEL \"MoM\" (reasoning = false)\n}","summary":"Initial draft needs repair.","suggestedTestQuery":"urgent billing escalation"}`,
-		`{"dsl":"MODEL \"MoM\" {\n  param_size: \"7b\"\n  modality: \"text\"\n}\n\nROUTE fallback_route (description = \"Fallback\") {\n  PRIORITY 100\n  MODEL \"MoM\" (reasoning = false)\n}","summary":"Added a fallback route.","suggestedTestQuery":"urgent billing escalation"}`,
+		`MODEL "MoM" {
+  modality: "text"
+
+ROUTE broken_route {
+  PRIORITY 100
+  MODEL "MoM" (reasoning = false)
+}`,
+		`MODEL "MoM" {
+  param_size: "7b"
+  modality: "text"
+}
+
+ROUTE fallback_route (description = "Fallback") {
+  PRIORITY 100
+  MODEL "MoM" (reasoning = false)
+}`,
 	}
 
 	var callCount atomic.Int32
@@ -193,7 +187,13 @@ func TestGenerateBuilderNLDraftStopsEarlyWhenRepairFindingsRepeat(t *testing.T) 
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
-	repeatedInvalidDSL := `{"dsl":"MODEL \"MoM\" {\n  modality: \"text\"\n\nROUTE broken_route {\n  PRIORITY 100\n  MODEL \"MoM\" (reasoning = false)\n}","summary":"Still broken.","suggestedTestQuery":"hello"}`
+	repeatedInvalidDSL := `MODEL "MoM" {
+  modality: "text"
+
+ROUTE broken_route {
+  PRIORITY 100
+  MODEL "MoM" (reasoning = false)
+}`
 
 	var callCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -221,8 +221,8 @@ func TestGenerateBuilderNLDraftStopsEarlyWhenRepairFindingsRepeat(t *testing.T) 
 	if resp.Validation.Ready {
 		t.Fatalf("expected repeated invalid draft to remain blocked, got %#v", resp.Validation)
 	}
-	if got := callCount.Load(); got != 2 {
-		t.Fatalf("expected generation plus one repair call before early stop, got %d", got)
+	if got := callCount.Load(); got != 3 {
+		t.Fatalf("expected shared parse repair plus one repository repair call before early stop, got %d", got)
 	}
 
 	var sawEarlyStop bool
@@ -248,7 +248,15 @@ func TestGenerateBuilderNLDraftCustomConnectionDoesNotMutateBaseYAML(t *testing.
 	configPath := createValidTestConfig(t, tempDir)
 
 	responses := []string{
-		`{"dsl":"MODEL \"MoM\" { param_size: \"7b\" modality: \"text\" }\nROUTE fallback_route { PRIORITY 100 MODEL \"MoM\" (reasoning = false) }","summary":"Added a fallback route.","suggestedTestQuery":"hello"}`,
+		`MODEL "MoM" {
+  param_size: "7b"
+  modality: "text"
+}
+
+ROUTE fallback_route {
+  PRIORITY 100
+  MODEL "MoM" (reasoning = false)
+}`,
 	}
 
 	var callCount atomic.Int32
@@ -344,7 +352,14 @@ func TestGenerateBuilderNLDraftDefaultRuntimeUsesMoMGeneratorAndRouterTarget(t *
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Fatalf("expected request body to decode, got error: %v", err)
 		}
-		writeBuilderNLTestChatResponse(t, w, `{"dsl":"MODEL \"test-model\" {\n  modality: \"text\"\n}\n\nROUTE default_route {\n  PRIORITY 100\n  MODEL \"test-model\" (reasoning = false)\n}","summary":"Uses the configured router default model.","suggestedTestQuery":"business routing"}`)
+		writeBuilderNLTestChatResponse(t, w, `MODEL "test-model" {
+  modality: "text"
+}
+
+ROUTE default_route {
+  PRIORITY 100
+  MODEL "test-model" (reasoning = false)
+}`)
 	}))
 	defer server.Close()
 
@@ -420,7 +435,15 @@ func TestBuilderNLGenerateStreamHandlerEmitsProgressAndResult(t *testing.T) {
 	configPath := createValidTestConfig(t, tempDir)
 
 	responses := []string{
-		`{"dsl":"MODEL \"MoM\" { param_size: \"7b\" modality: \"text\" }\nROUTE staged_route { PRIORITY 100 MODEL \"MoM\" (reasoning = false) }","summary":"Added a staged route.","suggestedTestQuery":"hello"}`,
+		`MODEL "MoM" {
+  param_size: "7b"
+  modality: "text"
+}
+
+ROUTE staged_route {
+  PRIORITY 100
+  MODEL "MoM" (reasoning = false)
+}`,
 	}
 
 	var callCount atomic.Int32
