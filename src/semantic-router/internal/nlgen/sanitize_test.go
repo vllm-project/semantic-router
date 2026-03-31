@@ -48,6 +48,11 @@ func TestSanitizeLLMOutput(t *testing.T) {
 			input: "Here:\n```\nSIGNAL domain math {\n  description: \"math\"\n}\n\nROUTE math {\n  PRIORITY 100\n  WHEN domain(\"math\")\n  MODEL \"qwen\"\n}\n```\nDone!",
 			want:  "SIGNAL domain math {\n  description: \"math\"\n}\n\nROUTE math {\n  PRIORITY 100\n  WHEN domain(\"math\")\n  MODEL \"qwen\"\n}",
 		},
+		{
+			name:  "keyword inside quoted string in prose",
+			input: "He said \"use the SIGNAL keyword\" to define signals.\n\nSIGNAL domain math {\n  description: \"math\"\n}",
+			want:  "SIGNAL domain math {\n  description: \"math\"\n}",
+		},
 	}
 
 	for _, tt := range tests {

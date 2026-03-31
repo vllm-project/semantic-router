@@ -73,25 +73,53 @@ func extractFromCodeFence(s string) string {
 	return strings.TrimSpace(s[contentStart:fenceEnd])
 }
 
+// findFirstKeyword scans s for the first occurrence of a top-level DSL keyword
+// that is NOT inside a quoted string or comment. This prevents false matches on
+// prose like: He said "use the SIGNAL keyword" before starting.
 func findFirstKeyword(s string) int {
-	best := -1
-	for _, kw := range dslTopLevelKeywords {
-		idx := strings.Index(s, kw)
-		if idx < 0 {
+	inString := false
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+
+		if ch == '"' && !inString {
+			inString = true
 			continue
 		}
-		if idx > 0 && isIdentPart(rune(s[idx-1])) {
+		if inString {
+			if ch == '\\' {
+				i++
+				continue
+			}
+			if ch == '"' {
+				inString = false
+			}
 			continue
 		}
-		end := idx + len(kw)
-		if end < len(s) && isIdentPart(rune(s[end])) {
+		if ch == '#' {
+			for i < len(s) && s[i] != '\n' {
+				i++
+			}
 			continue
 		}
-		if best < 0 || idx < best {
-			best = idx
+
+		for _, kw := range dslTopLevelKeywords {
+			if i+len(kw) > len(s) {
+				continue
+			}
+			if s[i:i+len(kw)] != kw {
+				continue
+			}
+			if i > 0 && isIdentPart(rune(s[i-1])) {
+				continue
+			}
+			end := i + len(kw)
+			if end < len(s) && isIdentPart(rune(s[end])) {
+				continue
+			}
+			return i
 		}
 	}
-	return best
+	return -1
 }
 
 func findLastTopLevelClose(s string) int {

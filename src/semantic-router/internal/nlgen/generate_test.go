@@ -191,8 +191,8 @@ func TestGenerateFromNL_SystemPromptContainsSchema(t *testing.T) {
 
 // NLEvalCase defines one test case for the NL-to-DSL eval harness.
 type NLEvalCase struct {
-	Name        string
-	Instruction string
+	Name           string
+	Instruction    string
 	MustContain    []string
 	MustNotContain []string
 	MustParse      bool

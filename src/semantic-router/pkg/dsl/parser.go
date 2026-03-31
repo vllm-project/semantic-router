@@ -417,10 +417,28 @@ func rawToPluginRef(r *rawPluginRef) *PluginRef {
 	return ref
 }
 
-// normalizePluginName converts hyphens to underscores so LLMs don't need to
-// remember whether it's "semantic-cache" or "semantic_cache".
+// knownInlinePluginAliases maps hyphenated plugin type names to their canonical
+// underscore form. Only known inline types are normalized; template names pass
+// through unchanged so "PLUGIN my-template system_prompt {}" keeps its name.
+var knownInlinePluginAliases = map[string]string{
+	"semantic-cache":     "semantic_cache",
+	"system-prompt":      "system_prompt",
+	"header-mutation":    "header_mutation",
+	"router-replay":      "router_replay",
+	"image-gen":          "image_gen",
+	"fast-response":      "fast_response",
+	"request-params":     "request_params",
+	"response-jailbreak": "response_jailbreak",
+}
+
+// normalizePluginName converts known hyphenated plugin type aliases to their
+// canonical underscore form. Unknown names (e.g. template references) are
+// returned unchanged.
 func normalizePluginName(name string) string {
-	return strings.ReplaceAll(name, "-", "_")
+	if canonical, ok := knownInlinePluginAliases[name]; ok {
+		return canonical
+	}
+	return name
 }
 
 func rawToAlgo(r *rawAlgoSpec) *AlgoSpec {

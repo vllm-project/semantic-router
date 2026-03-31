@@ -121,7 +121,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
 export const PLUGIN_TYPES = [
   'semantic_cache', 'memory', 'system_prompt',
   'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen',
-  'fast_response', 'tools', 'request_params', 'response_jailbreak',
+  'fast_response', 'tools', 'request_params',
 ] as const
 
 export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
@@ -136,7 +136,6 @@ export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
   fast_response: 'Short-circuit and return a fixed response without calling upstream models',
   tools: 'Route-local tool filtering and semantic tool selection',
   request_params: 'Mutate request parameters before forwarding to the model',
-  response_jailbreak: 'Detect jailbreak content in model responses',
 }
 
 export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
@@ -207,12 +206,10 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
       ]
     case 'request_params':
       return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-      ]
-    case 'response_jailbreak':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        { key: 'threshold', label: 'Threshold', type: 'number', placeholder: '0.8', description: 'Minimum confidence for response jailbreak detection' },
+        { key: 'blocked_params', label: 'Blocked Params', type: 'string[]', placeholder: 'Parameter name to block', description: 'Request body parameters to strip before forwarding' },
+        { key: 'max_tokens_limit', label: 'Max Tokens Limit', type: 'number', placeholder: '4096', description: 'Maximum allowed value for max_tokens' },
+        { key: 'max_n', label: 'Max N', type: 'number', placeholder: '1', description: 'Maximum allowed value for n (number of completions)' },
+        { key: 'strip_unknown', label: 'Strip Unknown', type: 'boolean', description: 'Remove fields not in the OpenAI spec' },
       ]
     default:
       return [
