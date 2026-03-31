@@ -96,7 +96,6 @@ func GenerateFromNL(ctx context.Context, client LLMClient, instruction string, o
 	}
 
 	result := &NLResult{}
-
 	messages := []ChatMessage{
 		{Role: "system", Content: SystemPrompt},
 		{Role: "user", Content: BuildNLPrompt(instruction)},
@@ -113,7 +112,6 @@ func GenerateFromNL(ctx context.Context, client LLMClient, instruction string, o
 		if err != nil {
 			return nil, fmt.Errorf("LLM call failed (attempt %d): %w", attempt+1, err)
 		}
-
 		result.RawOutput = raw
 		sanitized := SanitizeLLMOutput(raw)
 
@@ -122,51 +120,50 @@ func GenerateFromNL(ctx context.Context, client LLMClient, instruction string, o
 			return result, nil
 		}
 
-		prog, parseErrors := dsl.Parse(sanitized)
-		if len(parseErrors) > 0 {
-			errMsg := formatErrors(parseErrors)
-			result.ParseError = errMsg
-
-			if attempt < cfg.maxRetries {
-				messages = []ChatMessage{
-					{Role: "system", Content: SystemPrompt},
-					{Role: "user", Content: BuildRepairPrompt(sanitized, errMsg)},
-				}
-				continue
-			}
-
-			result.DSL = sanitized
+		done, next := validateAndFormat(result, &cfg, sanitized, attempt)
+		if done {
 			return result, nil
 		}
-
-		diags := dsl.ValidateAST(prog)
-		for _, d := range diags {
-			result.Warnings = append(result.Warnings, d.String())
-		}
-		result.ParseError = ""
-
-		if cfg.format && !containsDecisionTree(sanitized) {
-			formatted, fmtErr := dsl.Format(sanitized)
-			if fmtErr == nil {
-				result.DSL = formatted
-			} else {
-				result.DSL = sanitized
-			}
-		} else {
-			result.DSL = sanitized
-		}
-
-		return result, nil
+		messages = next
 	}
 
 	return result, nil
 }
 
-// containsDecisionTree checks if the DSL source contains a DECISION_TREE block.
-// Format() compiles decision trees into equivalent ROUTE blocks, which destroys
-// the user's intended structure. We skip formatting in this case.
-func containsDecisionTree(source string) bool {
-	return strings.Contains(source, "DECISION_TREE")
+// validateAndFormat parses and validates the sanitized DSL output.
+// Returns (true, nil) if the result is final, or (false, repairMessages) to retry.
+func validateAndFormat(result *NLResult, cfg *nlConfig, sanitized string, attempt int) (bool, []ChatMessage) {
+	prog, parseErrors := dsl.Parse(sanitized)
+	if len(parseErrors) > 0 {
+		errMsg := formatErrors(parseErrors)
+		result.ParseError = errMsg
+
+		if attempt < cfg.maxRetries {
+			return false, []ChatMessage{
+				{Role: "system", Content: SystemPrompt},
+				{Role: "user", Content: BuildRepairPrompt(sanitized, errMsg)},
+			}
+		}
+		result.DSL = sanitized
+		return true, nil
+	}
+
+	diags := dsl.ValidateAST(prog)
+	for _, d := range diags {
+		result.Warnings = append(result.Warnings, d.String())
+	}
+	result.ParseError = ""
+	result.DSL = formatIfNeeded(cfg, sanitized)
+	return true, nil
+}
+
+func formatIfNeeded(cfg *nlConfig, sanitized string) string {
+	if cfg.format && !strings.Contains(sanitized, "DECISION_TREE") {
+		if formatted, err := dsl.Format(sanitized); err == nil {
+			return formatted
+		}
+	}
+	return sanitized
 }
 
 func formatErrors(errs []error) string {

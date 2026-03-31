@@ -39,85 +39,93 @@ func SanitizeLLMOutput(raw string) string {
 	return strings.TrimSpace(raw)
 }
 
-func extractFromCodeFence(s string) string {
-	fenceStart := -1
-	for i := 0; i < len(s)-2; i++ {
+// findTripleBacktick returns the index of the first "```" at or after pos, or -1.
+func findTripleBacktick(s string, pos int) int {
+	for i := pos; i < len(s)-2; i++ {
 		if s[i] == '`' && s[i+1] == '`' && s[i+2] == '`' {
-			fenceStart = i
-			break
+			return i
 		}
 	}
+	return -1
+}
+
+func extractFromCodeFence(s string) string {
+	fenceStart := findTripleBacktick(s, 0)
 	if fenceStart < 0 {
 		return ""
 	}
 
 	contentStart := fenceStart + 3
-	for contentStart < len(s) && s[contentStart] != '\n' {
-		contentStart++
-	}
-	if contentStart < len(s) {
-		contentStart++
-	}
-
-	fenceEnd := -1
-	for i := contentStart; i < len(s)-2; i++ {
-		if s[i] == '`' && s[i+1] == '`' && s[i+2] == '`' {
-			fenceEnd = i
-			break
-		}
+	if nl := strings.IndexByte(s[contentStart:], '\n'); nl >= 0 {
+		contentStart += nl + 1
+	} else {
+		contentStart = len(s)
 	}
 
+	fenceEnd := findTripleBacktick(s, contentStart)
 	if fenceEnd < 0 {
 		return strings.TrimSpace(s[contentStart:])
 	}
 	return strings.TrimSpace(s[contentStart:fenceEnd])
 }
 
+// skipQuotedOrComment advances index i past a quoted string or line comment.
+// Returns the new index and true if something was skipped.
+func skipQuotedOrComment(s string, i int) (int, bool) {
+	ch := s[i]
+	if ch == '"' {
+		i++
+		for i < len(s) {
+			if s[i] == '\\' {
+				i += 2
+				continue
+			}
+			if s[i] == '"' {
+				return i + 1, true
+			}
+			i++
+		}
+		return i, true
+	}
+	if ch == '#' {
+		for i < len(s) && s[i] != '\n' {
+			i++
+		}
+		return i, true
+	}
+	return i, false
+}
+
+// matchKeywordAt checks whether a top-level DSL keyword starts at position i
+// as a whole word. Returns true if matched.
+func matchKeywordAt(s string, i int) bool {
+	for _, kw := range dslTopLevelKeywords {
+		if i+len(kw) > len(s) || s[i:i+len(kw)] != kw {
+			continue
+		}
+		if i > 0 && isIdentPart(rune(s[i-1])) {
+			continue
+		}
+		if end := i + len(kw); end < len(s) && isIdentPart(rune(s[end])) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 // findFirstKeyword scans s for the first occurrence of a top-level DSL keyword
-// that is NOT inside a quoted string or comment. This prevents false matches on
-// prose like: He said "use the SIGNAL keyword" before starting.
+// that is NOT inside a quoted string or comment.
 func findFirstKeyword(s string) int {
-	inString := false
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-
-		if ch == '"' && !inString {
-			inString = true
+	for i := 0; i < len(s); {
+		if next, skipped := skipQuotedOrComment(s, i); skipped {
+			i = next
 			continue
 		}
-		if inString {
-			if ch == '\\' {
-				i++
-				continue
-			}
-			if ch == '"' {
-				inString = false
-			}
-			continue
-		}
-		if ch == '#' {
-			for i < len(s) && s[i] != '\n' {
-				i++
-			}
-			continue
-		}
-
-		for _, kw := range dslTopLevelKeywords {
-			if i+len(kw) > len(s) {
-				continue
-			}
-			if s[i:i+len(kw)] != kw {
-				continue
-			}
-			if i > 0 && isIdentPart(rune(s[i-1])) {
-				continue
-			}
-			end := i + len(kw)
-			if end < len(s) && isIdentPart(rune(s[end])) {
-				continue
-			}
+		if matchKeywordAt(s, i) {
 			return i
 		}
+		i++
 	}
 	return -1
 }
@@ -125,38 +133,22 @@ func findFirstKeyword(s string) int {
 func findLastTopLevelClose(s string) int {
 	depth := 0
 	lastClose := -1
-	inString := false
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if ch == '"' && !inString {
-			inString = true
+
+	for i := 0; i < len(s); {
+		if next, skipped := skipQuotedOrComment(s, i); skipped {
+			i = next
 			continue
 		}
-		if inString {
-			if ch == '\\' {
-				i++
-				continue
-			}
-			if ch == '"' {
-				inString = false
-			}
-			continue
-		}
-		if ch == '#' {
-			for i < len(s) && s[i] != '\n' {
-				i++
-			}
-			continue
-		}
-		if ch == '{' {
+		switch s[i] {
+		case '{':
 			depth++
-		}
-		if ch == '}' {
+		case '}':
 			depth--
 			if depth == 0 {
 				lastClose = i
 			}
 		}
+		i++
 	}
 	return lastClose
 }
