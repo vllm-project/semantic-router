@@ -13,6 +13,7 @@
 
 import { create } from 'zustand'
 import { wasmBridge } from '@/lib/wasm'
+import { generateBuilderNLDraftStreaming } from '@/utils/builderNLApi'
 import {
   updateModel,
   addModel as addModelMut,
@@ -36,7 +37,8 @@ import {
 import type { RouteInput } from '@/lib/dslMutations'
 import type {
   BuilderNLGenerateRequest,
-  BuilderNLGenerateResponse,
+  BuilderNLProgressEvent,
+  BuilderNLStagedDraft,
   EditorMode,
   CompileResult,
   ValidateResult,
@@ -58,20 +60,6 @@ interface DeployStatusResponse {
 
 let validateTimer: ReturnType<typeof setTimeout> | null = null
 const VALIDATE_DEBOUNCE_MS = 300
-
-async function readErrorMessage(response: Response): Promise<string> {
-  const body = await response.text()
-  if (!body) {
-    return `HTTP ${response.status}: ${response.statusText}`
-  }
-
-  try {
-    const parsed = JSON.parse(body) as { error?: string; message?: string }
-    return parsed.message || parsed.error || body
-  } catch {
-    return body
-  }
-}
 
 // ---------- Initial state ----------
 
@@ -101,10 +89,18 @@ const initialState: DSLState = {
   deployPreviewError: null,
   nlGenerating: false,
   nlGenerateError: null,
-  nlSummary: '',
-  nlSuggestedTestQuery: '',
-  nlReview: null,
-  nlLastPrompt: '',
+  nlStagedDraft: null,
+  nlProgressEvents: [],
+}
+
+function appendBuilderNLProgress(
+  set: (partial: Partial<DSLStore> | ((state: DSLStore) => Partial<DSLStore>)) => void,
+  event: BuilderNLProgressEvent,
+) {
+  console.log(`[builder-nl][${event.phase}] ${event.message}`)
+  set((state) => ({
+    nlProgressEvents: [...state.nlProgressEvents.slice(-79), event],
+  }))
 }
 
 // ---------- Store ----------
@@ -714,64 +710,79 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     set({
       nlGenerating: true,
       nlGenerateError: null,
-      nlSummary: '',
-      nlSuggestedTestQuery: '',
-      nlReview: null,
+      nlStagedDraft: null,
+      nlProgressEvents: [{
+        phase: 'request',
+        level: 'info',
+        message: 'Sending Builder NL request to the streaming backend.',
+        timestamp: Date.now(),
+      }],
     })
 
     try {
-      const response = await fetch('/api/router/config/nl/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...input,
-          prompt,
-          currentDsl: input.currentDsl?.trim() || '',
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response))
+      const data = await generateBuilderNLDraftStreaming({
+        ...input,
+        prompt,
+        currentDsl: input.currentDsl?.trim() || '',
+      }, (event) => appendBuilderNLProgress(set, event))
+      const stagedDraft: BuilderNLStagedDraft = {
+        prompt,
+        dsl: data.dsl,
+        baseYaml: data.baseYaml || get().baseConfigYaml,
+        summary: data.summary || '',
+        suggestedTestQuery: data.suggestedTestQuery || '',
+        review: data.review,
+        validation: data.validation,
       }
-
-      const data = await response.json() as BuilderNLGenerateResponse
       set({
-        dslSource: data.dsl,
-        baseConfigYaml: data.baseYaml || get().baseConfigYaml,
-        dirty: false,
-        diagnostics: [],
-        compileError: null,
-        ast: null,
-        symbols: null,
-        yamlOutput: '',
-        crdOutput: '',
         nlGenerating: false,
         nlGenerateError: null,
-        nlSummary: data.summary || '',
-        nlSuggestedTestQuery: data.suggestedTestQuery || '',
-        nlReview: data.review,
-        nlLastPrompt: prompt,
+        nlStagedDraft: stagedDraft,
       })
-
-      const state = get()
-      if (state.wasmReady && data.dsl.trim()) {
-        state.compile()
-      }
     } catch (err) {
+      appendBuilderNLProgress(set, {
+        phase: 'error',
+        level: 'error',
+        message: err instanceof Error ? err.message : String(err),
+        timestamp: Date.now(),
+      })
       set({
         nlGenerating: false,
         nlGenerateError: err instanceof Error ? err.message : String(err),
+        nlStagedDraft: null,
       })
     }
   },
 
-  clearNaturalLanguageResult() {
+  applyNaturalLanguageDraft() {
+    const stagedDraft = get().nlStagedDraft
+    if (!stagedDraft) return
+
+    set({
+      dslSource: stagedDraft.dsl,
+      baseConfigYaml: stagedDraft.baseYaml,
+      dirty: false,
+      diagnostics: [],
+      compileError: null,
+      ast: null,
+      symbols: null,
+      yamlOutput: '',
+      crdOutput: '',
+      mode: 'dsl',
+      nlGenerateError: null,
+      nlStagedDraft: null,
+    })
+
+    const state = get()
+    if (state.wasmReady && stagedDraft.dsl.trim()) {
+      state.compile()
+    }
+  },
+
+  discardNaturalLanguageDraft() {
     set({
       nlGenerateError: null,
-      nlSummary: '',
-      nlSuggestedTestQuery: '',
-      nlReview: null,
-      nlLastPrompt: '',
+      nlStagedDraft: null,
     })
   },
 }))

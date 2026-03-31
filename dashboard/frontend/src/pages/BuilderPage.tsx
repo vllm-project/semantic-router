@@ -84,12 +84,11 @@ const BuilderPage: React.FC = () => {
     deployPreviewError,
     nlGenerating,
     nlGenerateError,
-    nlSummary,
-    nlSuggestedTestQuery,
-    nlReview,
-    nlLastPrompt,
+    nlProgressEvents,
+    nlStagedDraft,
     generateFromNaturalLanguage,
-    clearNaturalLanguageResult,
+    applyNaturalLanguageDraft,
+    discardNaturalLanguageDraft,
   } = useDSLStore();
   const { isReadonly, isLoading: readonlyLoading } = useReadonly();
 
@@ -162,7 +161,8 @@ const BuilderPage: React.FC = () => {
     },
     [setMode, wasmReady, dslSource, parseAST],
   );
-  const deployDisabled = readonlyLoading || isReadonly;
+  const hasPendingNLDraft = nlStagedDraft !== null;
+  const deployDisabled = readonlyLoading || isReadonly || hasPendingNLDraft;
 
   // --- Entity CRUD handlers ---
 
@@ -469,7 +469,8 @@ const BuilderPage: React.FC = () => {
   }, [wasmReady, readonlyLoading, dslSource, loadFromRouter, compile]);
 
   // Diagnostic counts
-  const errorCount = diagnostics.filter((d) => d.level === "error").length;
+  const validationErrorCount = diagnostics.filter((d) => d.level === "error").length;
+  const errorCount = validationErrorCount + (compileError ? 1 : 0);
   const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0;
   const signalCount = ast?.signals?.length ?? symbols?.signals?.length ?? 0;
   const projectionPartitionCount = ast?.projectionPartitions?.length ?? 0;
@@ -517,6 +518,8 @@ const BuilderPage: React.FC = () => {
         deployDisabledReason={
           isReadonly
             ? "Deploy is unavailable in read-only mode"
+            : hasPendingNLDraft
+              ? "Apply or discard the staged NL draft before deploying the live Builder config"
             : readonlyLoading
               ? "Checking deploy permissions..."
               : undefined
@@ -587,15 +590,13 @@ const BuilderPage: React.FC = () => {
           {mode === "nl" && (
             <BuilderNaturalLanguagePanel
               currentDsl={dslSource}
-              diagnostics={diagnostics}
               generating={nlGenerating}
               error={nlGenerateError}
-              summary={nlSummary}
-              suggestedTestQuery={nlSuggestedTestQuery}
-              review={nlReview}
-              lastPrompt={nlLastPrompt}
+              progressEvents={nlProgressEvents}
+              stagedDraft={nlStagedDraft}
               onGenerate={generateFromNaturalLanguage}
-              onClearResult={clearNaturalLanguageResult}
+              onApplyDraft={applyNaturalLanguageDraft}
+              onDiscardDraft={discardNaturalLanguageDraft}
               onModeSwitch={handleModeSwitch}
             />
           )}

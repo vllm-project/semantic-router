@@ -257,11 +257,52 @@ export interface BuilderNLGenerateRequest {
   customConnection?: BuilderNLConnection
 }
 
+export interface BuilderNLVerifyRequest {
+  connectionMode: BuilderNLConnectionMode
+  customConnection?: BuilderNLConnection
+}
+
 export interface BuilderNLReview {
   ready: boolean
   summary: string
   warnings: string[]
   checks: string[]
+}
+
+export type BuilderNLProgressLevel = 'info' | 'success' | 'warning' | 'error'
+
+export interface BuilderNLProgressEvent {
+  phase: string
+  level: BuilderNLProgressLevel
+  message: string
+  attempt?: number
+  timestamp: number
+}
+
+export interface BuilderNLValidation {
+  ready: boolean
+  diagnostics: Diagnostic[]
+  errorCount: number
+  compileError?: string
+}
+
+export interface BuilderNLStagedDraft {
+  prompt: string
+  dsl: string
+  baseYaml: string
+  summary: string
+  suggestedTestQuery?: string
+  review: BuilderNLReview
+  validation: BuilderNLValidation
+}
+
+export interface BuilderNLVerifyResponse {
+  ready: boolean
+  summary: string
+  connectionMode: BuilderNLConnectionMode
+  providerKind?: BuilderNLProviderKind
+  modelName?: string
+  endpoint?: string
 }
 
 export interface BuilderNLGenerateResponse {
@@ -270,6 +311,7 @@ export interface BuilderNLGenerateResponse {
   summary: string
   suggestedTestQuery?: string
   review: BuilderNLReview
+  validation: BuilderNLValidation
 }
 
 // ---------- Editor State ----------
