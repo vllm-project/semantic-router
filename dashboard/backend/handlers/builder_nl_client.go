@@ -18,6 +18,7 @@ import (
 type builderNLLLMClient struct {
 	envoyURL       string
 	req            BuilderNLGenerateRequest
+	runtimeOptions builderNLRuntimeOptions
 	reporter       builderNLProgressReporter
 	currentAttempt atomic.Int64
 }
@@ -25,12 +26,14 @@ type builderNLLLMClient struct {
 func newBuilderNLLLMClient(
 	envoyURL string,
 	req BuilderNLGenerateRequest,
+	runtimeOptions builderNLRuntimeOptions,
 	reporter builderNLProgressReporter,
 ) *builderNLLLMClient {
 	return &builderNLLLMClient{
-		envoyURL: envoyURL,
-		req:      req,
-		reporter: reporter,
+		envoyURL:       envoyURL,
+		req:            req,
+		runtimeOptions: runtimeOptions,
+		reporter:       reporter,
 	}
 }
 
@@ -45,7 +48,7 @@ func (c *builderNLLLMClient) ChatCompletion(ctx context.Context, req sharednlgen
 	if attempt <= 0 {
 		attempt = 1
 	}
-	return callBuilderNLMessages(ctx, c.envoyURL, c.req, req.Messages, c.reporter, "model_call", attempt)
+	return callBuilderNLMessages(ctx, c.envoyURL, c.req, c.runtimeOptions, req, c.reporter, "model_call", attempt)
 }
 
 func safeBuilderNLAttempt(value int64) int {
@@ -62,15 +65,19 @@ func callBuilderNLMessages(
 	ctx context.Context,
 	envoyURL string,
 	req BuilderNLGenerateRequest,
-	messages []sharednlgen.ChatMessage,
+	runtimeOptions builderNLRuntimeOptions,
+	chatReq sharednlgen.ChatCompletionRequest,
 	reporter builderNLProgressReporter,
 	phase string,
 	attempt int,
 ) (string, error) {
-	callCtx, cancel := context.WithTimeout(ctx, builderNLModelCallTimeout)
+	if chatReq.MaxTokens <= 0 {
+		chatReq.MaxTokens = builderNLDefaultMaxTokens
+	}
+	callCtx, cancel := context.WithTimeout(ctx, runtimeOptions.Timeout)
 	defer cancel()
 
-	return runBuilderNLModelCallWithProgress(callCtx, reporter, phase, attempt, func() (string, error) {
+	return runBuilderNLModelCallWithProgress(callCtx, reporter, phase, attempt, runtimeOptions.Timeout, func() (string, error) {
 		connectionMode, err := builderNLConnectionModeOrDefault(req.ConnectionMode)
 		if err != nil {
 			return "", err
@@ -91,7 +98,7 @@ func callBuilderNLMessages(
 				),
 				attempt,
 			)
-			return callBuilderNLCustomConnectionMessages(callCtx, *req.CustomConnection, messages)
+			return callBuilderNLCustomConnectionMessages(callCtx, *req.CustomConnection, chatReq)
 		}
 
 		if strings.TrimSpace(envoyURL) == "" {
@@ -109,7 +116,7 @@ func callBuilderNLMessages(
 			strings.TrimRight(envoyURL, "/")+"/v1/chat/completions",
 			builderNLFallbackModelAlias,
 			"",
-			messages,
+			chatReq,
 		)
 	})
 }
@@ -117,7 +124,7 @@ func callBuilderNLMessages(
 func callBuilderNLCustomConnectionMessages(
 	ctx context.Context,
 	conn builderNLConnection,
-	messages []sharednlgen.ChatMessage,
+	chatReq sharednlgen.ChatCompletionRequest,
 ) (string, error) {
 	modelName := strings.TrimSpace(conn.ModelName)
 	if modelName == "" {
@@ -135,7 +142,7 @@ func callBuilderNLCustomConnectionMessages(
 			resolveBuilderNLOpenAIURL(parsedBaseURL),
 			modelName,
 			strings.TrimSpace(conn.AccessKey),
-			messages,
+			chatReq,
 		)
 	case builderNLProviderAnthropic:
 		return callBuilderNLAnthropicMessages(
@@ -143,7 +150,7 @@ func callBuilderNLCustomConnectionMessages(
 			resolveBuilderNLAnthropicURL(parsedBaseURL),
 			modelName,
 			strings.TrimSpace(conn.AccessKey),
-			messages,
+			chatReq,
 		)
 	default:
 		return "", fmt.Errorf("unsupported custom connection providerKind %q", conn.ProviderKind)
@@ -183,12 +190,17 @@ func callBuilderNLOpenAICompatibleMessages(
 	endpoint string,
 	modelName string,
 	accessKey string,
-	messages []sharednlgen.ChatMessage,
+	chatReq sharednlgen.ChatCompletionRequest,
 ) (string, error) {
 	payload := openAIChatRequest{
-		Model:    modelName,
-		Messages: buildOpenAIChatMessages(messages),
-		Stream:   false,
+		Model:     modelName,
+		Messages:  buildOpenAIChatMessages(chatReq.Messages),
+		Stream:    false,
+		MaxTokens: chatReq.MaxTokens,
+	}
+	if chatReq.Temperature >= 0 {
+		temperature := chatReq.Temperature
+		payload.Temperature = &temperature
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -256,7 +268,7 @@ func callBuilderNLAnthropicMessages(
 	endpoint string,
 	modelName string,
 	accessKey string,
-	messages []sharednlgen.ChatMessage,
+	chatReq sharednlgen.ChatCompletionRequest,
 ) (string, error) {
 	if accessKey == "" {
 		return "", fmt.Errorf("anthropic custom connection requires an accessKey")
@@ -264,7 +276,7 @@ func callBuilderNLAnthropicMessages(
 
 	var systemParts []string
 	var anthropicMessages []anthropicMessageRequest
-	for _, message := range messages {
+	for _, message := range chatReq.Messages {
 		role := strings.TrimSpace(strings.ToLower(message.Role))
 		content := strings.TrimSpace(message.Content)
 		if content == "" {
@@ -288,7 +300,7 @@ func callBuilderNLAnthropicMessages(
 
 	payload := anthropicRequest{
 		Model:     modelName,
-		MaxTokens: 4096,
+		MaxTokens: chatReq.MaxTokens,
 		System:    strings.Join(systemParts, "\n\n"),
 		Messages:  anthropicMessages,
 	}

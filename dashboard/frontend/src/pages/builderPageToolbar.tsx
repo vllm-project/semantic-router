@@ -116,7 +116,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
         <button
           className={mode === "nl" ? styles.modeBtnActive : styles.modeBtn}
           onClick={() => onModeSwitch("nl")}
-          title="Natural language to DSL mode"
+          title="Natural language mode"
         >
           <svg
             width="12"
@@ -129,7 +129,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
             <path d="M2 4h12M2 8h9M2 12h6" strokeLinecap="round" />
             <circle cx="13" cy="11" r="2" />
           </svg>
-          NL→DSL
+          NL
         </button>
       </div>
 

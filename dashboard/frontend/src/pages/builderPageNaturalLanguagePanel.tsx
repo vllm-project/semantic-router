@@ -8,12 +8,25 @@ import type {
   BuilderNLProgressEvent,
   BuilderNLProviderKind,
   BuilderNLStagedDraft,
+  BuilderNLVerifyRequest,
   BuilderNLVerifyResponse,
   EditorMode,
 } from "@/types/dsl";
 
 import { BuilderNaturalLanguageProgress } from "./builderPageNaturalLanguageProgress";
 import { BuilderNaturalLanguageResultCard } from "./builderPageNaturalLanguageResultCard";
+import {
+  DEFAULT_GENERATION_MODEL,
+  DEFAULT_GENERATION_TEMPERATURE,
+  DEFAULT_REPAIR_BUDGET,
+  DEFAULT_TIMEOUT_SECONDS,
+  FALLBACK_TARGET_MODEL,
+  PROVIDER_OPTIONS,
+  buildPromptPresets,
+  extractDefaultModelName,
+  normalizeOptionalFloat,
+  normalizeOptionalInteger,
+} from "./builderPageNaturalLanguagePanelSupport";
 import styles from "./builderPageNaturalLanguagePanel.module.css";
 
 interface BuilderNaturalLanguagePanelProps {
@@ -29,52 +42,6 @@ interface BuilderNaturalLanguagePanelProps {
   onApplyDraft: () => void;
   onDiscardDraft: () => void;
   onModeSwitch: (mode: EditorMode) => void;
-}
-
-const PROVIDER_OPTIONS: Array<{
-  id: BuilderNLProviderKind;
-  label: string;
-  description: string;
-  placeholder: string;
-}> = [
-  {
-    id: "vllm",
-    label: "Local vLLM",
-    description: "Use a self-hosted OpenAI-compatible vLLM endpoint.",
-    placeholder: "http://localhost:8000",
-  },
-  {
-    id: "openai-compatible",
-    label: "OpenAI-compatible API",
-    description: "Use any chat-completions compatible endpoint.",
-    placeholder: "https://api.openai.com",
-  },
-  {
-    id: "anthropic",
-    label: "Anthropic Messages API",
-    description: "Call Anthropic-compatible message endpoints directly.",
-    placeholder: "https://api.anthropic.com",
-  },
-];
-
-const DEFAULT_GENERATION_MODEL = "MoM";
-const FALLBACK_TARGET_MODEL = DEFAULT_GENERATION_MODEL;
-
-function extractDefaultModelName(baseConfigYaml: string): string | null {
-  const match = baseConfigYaml.match(
-    /^\s*default_model:\s*(?:"([^"]+)"|'([^']+)'|([^\n#]+))/m,
-  );
-  const candidate = match?.[1] ?? match?.[2] ?? match?.[3] ?? "";
-  const trimmed = candidate.trim();
-  return trimmed || null;
-}
-
-function buildPromptPresets(targetModelName: string): string[] {
-  return [
-    `Route urgent billing issues to a higher-priority route, then send everything else to ${targetModelName}.`,
-    `Create separate routes for code debugging, math tutoring, and general chat, with a general fallback to ${targetModelName}.`,
-    `Create a premium support route with a faster model, then keep a general fallback to ${targetModelName}.`,
-  ];
 }
 
 const BuilderNaturalLanguagePanel: React.FC<
@@ -103,6 +70,13 @@ const BuilderNaturalLanguagePanel: React.FC<
   const [baseUrl, setBaseUrl] = useState("");
   const [accessKey, setAccessKey] = useState("");
   const [endpointName, setEndpointName] = useState("nl-custom");
+  const [temperature, setTemperature] = useState(
+    String(DEFAULT_GENERATION_TEMPERATURE),
+  );
+  const [maxRetries, setMaxRetries] = useState(String(DEFAULT_REPAIR_BUDGET));
+  const [timeoutSeconds, setTimeoutSeconds] = useState(
+    String(DEFAULT_TIMEOUT_SECONDS),
+  );
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<BuilderNLVerifyResponse | null>(
     null,
@@ -165,6 +139,9 @@ const BuilderNaturalLanguagePanel: React.FC<
   );
   const activeGeneratorModelName =
     connectionMode === "default" ? DEFAULT_GENERATION_MODEL : modelName.trim();
+  const normalizedTemperature = normalizeOptionalFloat(temperature);
+  const normalizedMaxRetries = normalizeOptionalInteger(maxRetries);
+  const normalizedTimeoutSeconds = normalizeOptionalInteger(timeoutSeconds);
   const connectionFingerprint = useMemo(
     () =>
       JSON.stringify({
@@ -174,8 +151,17 @@ const BuilderNaturalLanguagePanel: React.FC<
         baseUrl: baseUrl.trim(),
         endpointName: endpointName.trim(),
         accessKey: accessKey.trim(),
+        timeoutSeconds: normalizedTimeoutSeconds,
       }),
-    [accessKey, baseUrl, connectionMode, endpointName, modelName, providerKind],
+    [
+      accessKey,
+      baseUrl,
+      connectionMode,
+      endpointName,
+      modelName,
+      normalizedTimeoutSeconds,
+      providerKind,
+    ],
   );
 
   useEffect(() => {
@@ -262,6 +248,9 @@ const BuilderNaturalLanguagePanel: React.FC<
       prompt,
       currentDsl: useCurrentDslContext ? currentDsl : "",
       connectionMode,
+      temperature: normalizedTemperature,
+      maxRetries: normalizedMaxRetries,
+      timeoutSeconds: normalizedTimeoutSeconds,
       customConnection:
         connectionMode === "custom"
           ? {
@@ -281,22 +270,24 @@ const BuilderNaturalLanguagePanel: React.FC<
     setVerifyResult(null);
 
     try {
+      const verifyRequest: BuilderNLVerifyRequest = {
+        connectionMode,
+        timeoutSeconds: normalizedTimeoutSeconds,
+        customConnection:
+          connectionMode === "custom"
+            ? {
+                providerKind,
+                modelName,
+                baseUrl,
+                accessKey,
+                endpointName,
+              }
+            : undefined,
+      };
       const response = await fetch("/api/router/config/nl/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          connectionMode,
-          customConnection:
-            connectionMode === "custom"
-              ? {
-                  providerKind,
-                  modelName,
-                  baseUrl,
-                  accessKey,
-                  endpointName,
-                }
-              : undefined,
-        }),
+        body: JSON.stringify(verifyRequest),
       });
 
       const body = await response.text();
@@ -331,11 +322,10 @@ const BuilderNaturalLanguagePanel: React.FC<
       <section className={styles.headerCard}>
         <div>
           <div className={styles.kicker}>Shared nlgen</div>
-          <h2 className={styles.title}>Natural language to DSL</h2>
+          <h2 className={styles.title}>Natural language</h2>
           <p className={styles.subtitle}>
-            Describe a routing requirement in plain language. Builder now runs
-            the shared schema-grounded NL→DSL pipeline first, then stages the
-            resulting draft only after repository checks finish.
+            Describe the routing change. Builder stages the draft only after the
+            shared generation call and repository checks finish.
           </p>
         </div>
         <div className={styles.headerMeta}>
@@ -345,9 +335,7 @@ const BuilderNaturalLanguagePanel: React.FC<
           <span className={styles.badge}>Draft target: `{preferredTargetModelName}`</span>
           {liveModelCards.length > 0 ? (
             <div className={styles.modelCardGroup}>
-              <span className={styles.badgeMuted}>
-                Live route models: {liveModelCards.length}
-              </span>
+              <span className={styles.badgeMuted}>Live route models</span>
               <div className={styles.modelCardList}>
                 {liveModelCards.map((modelName) => (
                   <span className={styles.modelCardChip} key={modelName}>
@@ -362,14 +350,6 @@ const BuilderNaturalLanguagePanel: React.FC<
               to `{FALLBACK_TARGET_MODEL}` for draft route references.
             </span>
           )}
-          <span className={styles.badgeMuted}>
-            {hasContextDsl
-              ? `Live Builder context: ${contextLineCount} lines available`
-              : "No live Builder DSL loaded yet"}
-          </span>
-          <span className={styles.badgeMuted}>
-            Live Builder state stays untouched until you apply the staged draft.
-          </span>
         </div>
       </section>
 
@@ -427,7 +407,7 @@ const BuilderNaturalLanguagePanel: React.FC<
                 className={styles.textarea}
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
-                placeholder={`Example: add a premium support route, then keep a general fallback route to ${preferredTargetModelName}.`}
+                placeholder={`Example: add domain routes for computer science and math, then keep a general fallback to ${preferredTargetModelName}.`}
               />
 
               <div className={styles.contextPanel}>
@@ -483,6 +463,18 @@ const BuilderNaturalLanguagePanel: React.FC<
                   <div className={styles.runtimeSummaryText}>
                     The preferred live router model referenced by generated
                     routes.
+                  </div>
+                </div>
+                <div className={styles.runtimeSummaryCard}>
+                  <div className={styles.resultLabel}>Runtime knobs</div>
+                  <div className={styles.runtimeSummaryValue}>
+                    {normalizedTemperature ?? DEFAULT_GENERATION_TEMPERATURE} ·{" "}
+                    {normalizedMaxRetries ?? DEFAULT_REPAIR_BUDGET} ·{" "}
+                    {normalizedTimeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS}s
+                  </div>
+                  <div className={styles.runtimeSummaryText}>
+                    Temperature, repair budget, and per-call timeout for the
+                    shared generation runtime.
                   </div>
                 </div>
               </div>
@@ -600,6 +592,79 @@ const BuilderNaturalLanguagePanel: React.FC<
                   </div>
                 </div>
               )}
+
+              <div className={styles.formGrid}>
+                <div className={styles.fieldGroup}>
+                  <label
+                    className={styles.label}
+                    htmlFor="builder-nl-temperature"
+                  >
+                    Temperature
+                  </label>
+                  <input
+                    id="builder-nl-temperature"
+                    className={styles.input}
+                    inputMode="decimal"
+                    type="number"
+                    min="0"
+                    max="2"
+                    step="0.05"
+                    value={temperature}
+                    onChange={(event) => setTemperature(event.target.value)}
+                  />
+                  <div className={styles.helpText}>
+                    Default {DEFAULT_GENERATION_TEMPERATURE}. Lower is more
+                    deterministic.
+                  </div>
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label
+                    className={styles.label}
+                    htmlFor="builder-nl-max-retries"
+                  >
+                    Repair budget
+                  </label>
+                  <input
+                    id="builder-nl-max-retries"
+                    className={styles.input}
+                    inputMode="numeric"
+                    type="number"
+                    min="0"
+                    max="4"
+                    step="1"
+                    value={maxRetries}
+                    onChange={(event) => setMaxRetries(event.target.value)}
+                  />
+                  <div className={styles.helpText}>
+                    Default {DEFAULT_REPAIR_BUDGET}. Applies to shared parse
+                    retries and staged-draft repair rounds.
+                  </div>
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label
+                    className={styles.label}
+                    htmlFor="builder-nl-timeout-seconds"
+                  >
+                    Timeout (seconds)
+                  </label>
+                  <input
+                    id="builder-nl-timeout-seconds"
+                    className={styles.input}
+                    inputMode="numeric"
+                    type="number"
+                    min="30"
+                    max="600"
+                    step="5"
+                    value={timeoutSeconds}
+                    onChange={(event) => setTimeoutSeconds(event.target.value)}
+                  />
+                  <div className={styles.helpText}>
+                    Default {DEFAULT_TIMEOUT_SECONDS}s per model call.
+                  </div>
+                </div>
+              </div>
 
               {(error || verifyError) && (
                 <div className={styles.errorBox}>{error || verifyError}</div>

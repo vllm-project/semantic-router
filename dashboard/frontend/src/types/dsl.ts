@@ -255,11 +255,15 @@ export interface BuilderNLGenerateRequest {
   currentDsl?: string
   connectionMode: BuilderNLConnectionMode
   customConnection?: BuilderNLConnection
+  temperature?: number
+  maxRetries?: number
+  timeoutSeconds?: number
 }
 
 export interface BuilderNLVerifyRequest {
   connectionMode: BuilderNLConnectionMode
   customConnection?: BuilderNLConnection
+  timeoutSeconds?: number
 }
 
 export interface BuilderNLReview {
