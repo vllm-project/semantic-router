@@ -476,7 +476,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 	valkeyConfig.Connection.Port = 6379
 	valkeyConfig.Connection.Database = 0
 
-	valkeyConfig.Index.Name = "test_flat_idx"
+	valkeyConfig.Index.Name = fmt.Sprintf("test_flat_idx_%d", time.Now().UnixNano())
 	valkeyConfig.Index.Prefix = "flat:"
 	valkeyConfig.Index.VectorField.Name = "embedding"
 	valkeyConfig.Index.VectorField.Dimension = 384
@@ -608,7 +608,7 @@ func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
 	valkeyConfig.Connection.Port = 6379
 	valkeyConfig.Connection.Database = 0
 
-	valkeyConfig.Index.Name = "test_l2_idx"
+	valkeyConfig.Index.Name = fmt.Sprintf("test_l2_idx_%d", time.Now().UnixNano())
 	valkeyConfig.Index.Prefix = "l2:"
 	valkeyConfig.Index.VectorField.Name = "embedding"
 	valkeyConfig.Index.VectorField.Dimension = 384
@@ -657,7 +657,7 @@ func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
 	valkeyConfig.Connection.Port = 6379
 	valkeyConfig.Connection.Database = 0
 
-	valkeyConfig.Index.Name = "test_ip_idx"
+	valkeyConfig.Index.Name = fmt.Sprintf("test_ip_idx_%d", time.Now().UnixNano())
 	valkeyConfig.Index.Prefix = "ip:"
 	valkeyConfig.Index.VectorField.Name = "embedding"
 	valkeyConfig.Index.VectorField.Dimension = 384

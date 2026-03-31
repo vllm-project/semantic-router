@@ -15,6 +15,7 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -46,6 +47,8 @@ type MilvusCacheOptions struct {
 }
 
 // NewMilvusCache initializes a new Milvus-backed semantic cache instance
+//
+//nolint:funlen
 func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	if !options.Enabled {
 		logging.Debugf("MilvusCache: disabled, returning stub")
@@ -82,7 +85,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		defer cancel()
 		logging.Debugf("MilvusCache: connection timeout set to %s", timeout)
 	}
-	milvusClient, err := client.NewGrpcClient(dialCtx, connectionString)
+	milvusClient, err := milvuslifecycle.ConnectGRPC(dialCtx, connectionString, 0)
 	if err != nil {
 		logging.Debugf("MilvusCache: failed to connect: %v", err)
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
@@ -107,7 +110,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	// Test connection using the new CheckConnection method
 	if err := cache.CheckConnection(); err != nil {
 		logging.Debugf("MilvusCache: connection check failed: %v", err)
-		milvusClient.Close()
+		_ = milvusClient.Close() // best-effort close
 		return nil, err
 	}
 	logging.Debugf("MilvusCache: successfully connected to Milvus")
@@ -116,7 +119,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	logging.Debugf("MilvusCache: initializing collection '%s'", milvusConfig.Collection.Name)
 	if err := cache.initializeCollection(); err != nil {
 		logging.Debugf("MilvusCache: failed to initialize collection: %v", err)
-		milvusClient.Close()
+		_ = milvusClient.Close() // best-effort close
 		return nil, fmt.Errorf("failed to initialize collection: %w", err)
 	}
 	logging.Debugf("MilvusCache: initialization complete")
@@ -125,6 +128,8 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 }
 
 // loadMilvusConfig reads and parses the Milvus configuration from file (Deprecated)
+//
+//nolint:cyclop,funlen
 func loadMilvusConfig(configPath string) (*config.MilvusConfig, error) {
 	if configPath == "" {
 		return nil, fmt.Errorf("milvus config path is required")
@@ -213,7 +218,6 @@ func (c *MilvusCache) initializeCollection() error {
 			logging.Debugf("MilvusCache: failed to drop collection: %v", err)
 			return fmt.Errorf("failed to drop collection: %w", err)
 		}
-		hasCollection = false
 		logging.Debugf("MilvusCache: dropped existing collection '%s' for development", c.collectionName)
 		logging.LogEvent("collection_dropped", map[string]interface{}{
 			"backend":    "milvus",
@@ -222,17 +226,14 @@ func (c *MilvusCache) initializeCollection() error {
 		})
 	}
 
-	// Create collection if it doesn't exist
-	if !hasCollection {
-		fmt.Printf("[DEBUG] Collection '%s' does not exist. AutoCreateCollection=%v\n",
+	if err := milvuslifecycle.EnsureCollectionLoaded(ctx, c.client, c.collectionName, func(innerCtx context.Context) error {
+		logging.Debugf("MilvusCache: collection '%s' does not exist. AutoCreateCollection=%v",
 			c.collectionName, c.config.Development.AutoCreateCollection)
 		if !c.config.Development.AutoCreateCollection {
 			return fmt.Errorf("collection %s does not exist and auto-creation is disabled", c.collectionName)
 		}
-
-		if err := c.createCollection(); err != nil {
-			logging.Debugf("MilvusCache: failed to create collection: %v", err)
-			return fmt.Errorf("failed to create collection: %w", err)
+		if err := c.createCollection(innerCtx); err != nil {
+			return err
 		}
 		logging.Debugf("MilvusCache: created new collection '%s' with dimension %d",
 			c.collectionName, c.config.Collection.VectorField.Dimension)
@@ -241,15 +242,11 @@ func (c *MilvusCache) initializeCollection() error {
 			"collection": c.collectionName,
 			"dimension":  c.config.Collection.VectorField.Dimension,
 		})
+		return nil
+	}); err != nil {
+		logging.Debugf("MilvusCache: failed to ensure/load collection: %v", err)
+		return fmt.Errorf("failed to ensure/load collection: %w", err)
 	}
-
-	// Load collection into memory for queries
-	logging.Debugf("MilvusCache: loading collection '%s' into memory", c.collectionName)
-	if err := c.client.LoadCollection(ctx, c.collectionName, false); err != nil {
-		logging.Debugf("MilvusCache: failed to load collection: %v", err)
-		return fmt.Errorf("failed to load collection: %w", err)
-	}
-	logging.Debugf("MilvusCache: collection loaded successfully")
 
 	return nil
 }
@@ -299,9 +296,7 @@ func (c *MilvusCache) getEmbedding(text string) ([]float32, error) {
 }
 
 // createCollection builds the Milvus collection with the appropriate schema
-func (c *MilvusCache) createCollection() error {
-	ctx := context.Background()
-
+func (c *MilvusCache) createCollection(ctx context.Context) error {
 	// Determine embedding dimension automatically
 	testEmbedding, err := c.getEmbedding("test")
 	if err != nil {
@@ -446,6 +441,8 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 }
 
 // UpdateWithResponse completes a pending request by adding the response
+//
+//nolint:gocognit,cyclop,funlen
 func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
@@ -571,6 +568,8 @@ func (c *MilvusCache) AddEntry(requestID string, model string, query string, req
 }
 
 // AddEntriesBatch stores multiple request-response pairs in the cache efficiently
+//
+//nolint:funlen
 func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	start := time.Now()
 
@@ -667,6 +666,8 @@ func (c *MilvusCache) Flush() error {
 }
 
 // addEntry handles the internal logic for storing entries in Milvus
+//
+//nolint:funlen
 func (c *MilvusCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	// Determine effective TTL: use provided value or fall back to cache default
 	effectiveTTL := ttlSeconds
@@ -752,6 +753,8 @@ func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, err
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
+//
+//nolint:cyclop,funlen
 func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
 	start := time.Now()
 
@@ -969,6 +972,8 @@ func isHexString(s string) bool {
 // GetByID retrieves a document from Milvus by its request ID
 // This is much more efficient than FindSimilar when you already know the ID
 // Used by hybrid cache to fetch documents after local HNSW search
+//
+//nolint:funlen,cyclop,nestif
 func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, error) {
 	start := time.Now()
 
@@ -1070,6 +1075,8 @@ func (c *MilvusCache) Close() error {
 //
 // If these parameters are empty/zero, the method uses the cache collection's configuration.
 // This allows RAG collections to use different configurations when needed.
+//
+//nolint:gocognit,cyclop,funlen,nestif
 func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string, queryEmbedding []float32, threshold float32, topK int, filterExpr string, contentField string, vectorFieldName string, metricType string, ef int) ([]string, []float32, error) {
 	if !c.enabled {
 		return nil, nil, fmt.Errorf("milvus cache is not enabled")
@@ -1179,6 +1186,8 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 }
 
 // GetStats provides current cache performance metrics
+//
+//nolint:nestif
 func (c *MilvusCache) GetStats() CacheStats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

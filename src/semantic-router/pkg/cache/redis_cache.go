@@ -73,10 +73,12 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		redisConfig.Connection.Host, redisConfig.Connection.Port, redisConfig.Index.Name)
 
 	// Establish connection to Redis server
-	logging.Debugf("RedisCache: connecting to Redis at %s:%d", redisConfig.Connection.Host, redisConfig.Connection.Port)
+	resolvedHost := normalizeLocalHostForContainerRuntimes(redisConfig.Connection.Host)
+	logging.Debugf("RedisCache: connecting to Redis at %s:%d (configured host=%s)",
+		resolvedHost, redisConfig.Connection.Port, redisConfig.Connection.Host)
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%d", redisConfig.Connection.Host, redisConfig.Connection.Port),
+		Addr:     fmt.Sprintf("%s:%d", resolvedHost, redisConfig.Connection.Port),
 		Password: redisConfig.Connection.Password,
 		DB:       redisConfig.Connection.Database,
 		Protocol: 2, // Use RESP2 protocol for compatibility
