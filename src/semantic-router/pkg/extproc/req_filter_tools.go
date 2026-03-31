@@ -46,19 +46,13 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 
 	switch toolsCfg.EffectiveMode() {
 	case config.ToolsPluginModeNone:
-		logging.ComponentDebugEvent("extproc", "tools_stripped", map[string]interface{}{
-			"decision": ctx.VSRSelectedDecision.Name,
-			"mode":     "none",
-		})
+		logging.Infof("[ToolsPlugin] Decision %q has mode=none, stripping all tools", ctx.VSRSelectedDecision.Name)
 		openAIRequest.Tools = nil
 		return r.updateRequestWithTools(openAIRequest, response, ctx)
 	case config.ToolsPluginModeFiltered:
 		openAIRequest.Tools = filterToolsByDecisionPolicy(openAIRequest.Tools, toolsCfg.AllowTools, toolsCfg.BlockTools)
 		if openAIRequest.ToolChoice.OfAuto.Value != "auto" {
-			logging.ComponentDebugEvent("extproc", "tools_filtered", map[string]interface{}{
-				"decision":        ctx.VSRSelectedDecision.Name,
-				"remaining_tools": len(openAIRequest.Tools),
-			})
+			logging.Infof("[ToolsPlugin] Decision %q filtered explicit tools to %d entries", ctx.VSRSelectedDecision.Name, len(openAIRequest.Tools))
 			return r.updateRequestWithTools(openAIRequest, response, ctx)
 		}
 	case config.ToolsPluginModePassthrough:
@@ -372,7 +366,7 @@ func clearToolChoiceWhenNoTools(openAIRequest *openai.ChatCompletionNewParams) b
 		return false
 	}
 
-	logging.Debugf("[ToolsPlugin] Clearing tool_choice because no tools are present in the upstream request")
+	logging.Infof("[ToolsPlugin] Clearing tool_choice because no tools are present in the upstream request")
 	openAIRequest.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{}
 	return true
 }

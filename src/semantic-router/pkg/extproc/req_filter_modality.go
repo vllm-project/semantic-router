@@ -185,7 +185,7 @@ func (r *OpenAIRouter) handleModalityFromDecision(ctx *RequestContext, openAIReq
 
 	switch result.Modality {
 	case ModalityAR:
-		logging.Debugf("[ModalityRouter] AR (method=%s) — passthrough", result.Method)
+		logging.Infof("[ModalityRouter] AR (method=%s) — passthrough", result.Method)
 		return nil, nil
 
 	case ModalityDiffusion:
@@ -221,7 +221,7 @@ func (r *OpenAIRouter) handleModalityFromDecision(ctx *RequestContext, openAIReq
 		}
 
 		// Fallback: parallel AR + diffusion calls
-		logging.Debugf("[ModalityRouter] BOTH: parallel AR + diffusion")
+		logging.Infof("[ModalityRouter] BOTH: parallel AR + diffusion")
 		if models.ARModel == "" {
 			return nil, fmt.Errorf("decision %q has no AR or omni model in modelRefs", decision.Name)
 		}
@@ -372,7 +372,7 @@ func (r *OpenAIRouter) executeOmni(ctx *RequestContext, cfg *config.RouterConfig
 	}
 
 	url := omniEndpoint + "/chat/completions"
-	logging.Debugf("[ModalityRouter] OMNI: calling endpoint %s (model=%s)", url, omniModel)
+	logging.Infof("[ModalityRouter] OMNI: calling endpoint %s (model=%s)", url, omniModel)
 
 	start := time.Now()
 	httpReq, err := http.NewRequestWithContext(ctx.TraceContext, http.MethodPost, url, bytes.NewReader(reqBody))
@@ -399,7 +399,7 @@ func (r *OpenAIRouter) executeOmni(ctx *RequestContext, cfg *config.RouterConfig
 		return nil, fmt.Errorf("omni endpoint returned status %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
 	}
 
-	logging.Debugf("[ModalityRouter] OMNI: responded in %.2fs (%d bytes)", latency, len(body))
+	logging.Infof("[ModalityRouter] OMNI: responded in %.2fs (%d bytes)", latency, len(body))
 
 	// Parse the omni response to extract text and image parts
 	var omniResp map[string]interface{}
@@ -505,7 +505,7 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, cfg *config.RouterConfig
 	}
 
 	url := arEndpoint + "/chat/completions"
-	logging.Debugf("[ModalityRouter] BOTH: calling AR endpoint %s (model=%s)", url, arModel)
+	logging.Infof("[ModalityRouter] BOTH: calling AR endpoint %s (model=%s)", url, arModel)
 
 	start := time.Now()
 	httpReq, err := http.NewRequestWithContext(ctx.TraceContext, http.MethodPost, url, bytes.NewReader(reqBody))
@@ -532,7 +532,7 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, cfg *config.RouterConfig
 		return nil, fmt.Errorf("AR endpoint returned status %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
 	}
 
-	logging.Debugf("[ModalityRouter] BOTH: AR responded in %.2fs (%d bytes)", latency, len(body))
+	logging.Infof("[ModalityRouter] BOTH: AR responded in %.2fs (%d bytes)", latency, len(body))
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -601,7 +601,7 @@ func (r *OpenAIRouter) generateImage(ctx *RequestContext, cfg *config.RouterConf
 	}
 
 	metrics.RecordImageGenRequest(backend.Name(), "success", latency)
-	logging.Debugf("[ModalityRouter] Generated image in %.2fs via %s", latency, backend.Name())
+	logging.Infof("[ModalityRouter] Generated image in %.2fs via %s", latency, backend.Name())
 
 	return &ImageGenResult{
 		ImageURL:      genResp.ImageURL,

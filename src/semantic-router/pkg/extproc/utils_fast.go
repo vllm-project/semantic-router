@@ -150,7 +150,7 @@ func addStreamFieldsFast(body []byte) []byte {
 	if err != nil {
 		return body
 	}
-	logging.Debugf("Added stream_options.include_usage=true for streaming request")
+	logging.Infof("Added stream_options.include_usage=true for streaming request")
 	return out
 }
 

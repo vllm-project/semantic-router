@@ -102,21 +102,11 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 
 	// Log based on what actually happened
 	if enabled && !reasoningApplied {
-		logging.ComponentDebugEvent("extproc", "reasoning_mode_unavailable", map[string]interface{}{
-			"model":   model,
-			"reason":  "no_reasoning_family_configured",
-			"enabled": enabled,
-		})
+		logging.Infof("No reasoning support for model: %s (no reasoning family configured)", model)
 	} else if reasoningApplied {
-		logging.ComponentDebugEvent("extproc", "reasoning_mode_applied", map[string]interface{}{
-			"model":   model,
-			"enabled": enabled,
-			"effort":  appliedEffort,
-		})
+		logging.Infof("Applied reasoning mode (enabled: %v) with effort (%s) to model: %s", enabled, appliedEffort, model)
 	} else {
-		logging.ComponentDebugEvent("extproc", "reasoning_mode_disabled", map[string]interface{}{
-			"model": model,
-		})
+		logging.Infof("Reasoning mode disabled for model: %s", model)
 	}
 
 	// Record metrics for template usage and effort when enabled

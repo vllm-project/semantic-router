@@ -461,10 +461,8 @@ func (r *RLDrivenSelector) InitializeFromConfig(modelConfig map[string]config.Mo
 	}
 	r.categoryMu.Unlock()
 
-	logging.ComponentDebugEvent("selection", "rl_driven_initialized", map[string]interface{}{
-		"models":     len(modelConfig),
-		"categories": len(categories),
-	})
+	logging.Infof("[RLDrivenSelector] Initialized with %d models, %d categories",
+		len(modelConfig), len(categories))
 }
 
 // Select chooses the best model using Thompson Sampling or Router-R1 LLM routing
@@ -1310,7 +1308,7 @@ func (r *RLDrivenSelector) loadFromStorage() error {
 		}
 	}
 
-	logging.ComponentDebugEvent("selection", "rl_driven_preferences_loaded", map[string]interface{}{})
+	logging.Infof("[RLDrivenSelector] Loaded preferences from storage")
 	return nil
 }
 

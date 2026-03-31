@@ -81,14 +81,9 @@ func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gem
 	}
 
 	if mmBertModelPath != "" {
-		logging.ComponentEvent("classifier", "keyword_embedding_classifier_initialized", map[string]interface{}{
-			"backend":    "mmbert_2d_matryoshka",
-			"model_type": "mmbert",
-		})
+		logging.Infof("Initialized KeywordEmbedding classifier with mmBERT 2D Matryoshka support")
 	} else {
-		logging.ComponentEvent("classifier", "keyword_embedding_classifier_initialized", map[string]interface{}{
-			"backend": "standard_embedding_models",
-		})
+		logging.Infof("Initialized KeywordEmbedding classifier")
 	}
 	return nil
 }
@@ -128,9 +123,7 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 		modelType:           optConfig.ModelType, // Use configured model type
 	}
 
-	logging.ComponentDebugEvent("classifier", "embedding_classifier_initialized", map[string]interface{}{
-		"model_type": c.modelType,
-	})
+	logging.Infof("EmbeddingClassifier initialized with model type: %s", c.modelType)
 
 	// If preloading is enabled, compute all candidate embeddings at startup
 	if optConfig.PreloadEmbeddings {
@@ -158,20 +151,15 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 	}
 
 	if len(uniqueCandidates) == 0 {
-		logging.ComponentDebugEvent("classifier", "embedding_candidates_preload_skipped", map[string]interface{}{
-			"reason": "no_candidates",
-		})
+		logging.Infof("No candidates to preload")
 		return nil
 	}
 
 	// Determine model type
 	modelType := c.getModelType()
 
-	logging.ComponentDebugEvent("classifier", "embedding_candidates_preload_started", map[string]interface{}{
-		"candidates": len(uniqueCandidates),
-		"model_type": modelType,
-		"dimension":  c.optimizationConfig.TargetDimension,
-	})
+	logging.Infof("[Embedding Signal] Preloading embeddings for %d unique candidates using model: %s (dimension: %d) with concurrent processing...",
+		len(uniqueCandidates), modelType, c.optimizationConfig.TargetDimension)
 
 	// Convert map to slice for concurrent processing
 	candidates := make([]string, 0, len(uniqueCandidates))
@@ -239,13 +227,8 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 	}
 
 	elapsed := time.Since(startTime)
-	logging.ComponentDebugEvent("classifier", "embedding_candidates_preloaded", map[string]interface{}{
-		"success_count":   successCount,
-		"candidate_count": len(candidates),
-		"model_type":      modelType,
-		"workers":         numWorkers,
-		"latency_ms":      elapsed.Milliseconds(),
-	})
+	logging.Infof("[Embedding Signal] Preloaded %d/%d candidate embeddings using model %s in %v (workers: %d)",
+		successCount, len(candidates), modelType, elapsed, numWorkers)
 
 	if firstError != nil {
 		return firstError
@@ -258,9 +241,7 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 func (c *EmbeddingClassifier) getModelType() string {
 	// Check for test override via environment variable
 	if model := os.Getenv("EMBEDDING_MODEL_OVERRIDE"); model != "" {
-		logging.ComponentDebugEvent("classifier", "embedding_model_override_detected", map[string]interface{}{
-			"model_type": model,
-		})
+		logging.Infof("Embedding model override from env: %s", model)
 		return model
 	}
 	// Use the configured model type from config
@@ -288,10 +269,7 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 		if err := initMultiModalModel(mmPath, c.Config.UseCPU); err != nil {
 			return fmt.Errorf("failed to initialize multimodal model for embedding_rules: %w", err)
 		}
-		logging.ComponentEvent("classifier", "keyword_embedding_classifier_initialized", map[string]interface{}{
-			"backend":   "multimodal",
-			"model_ref": mmPath,
-		})
+		logging.Infof("Initialized KeywordEmbedding classifier with multimodal model: %s", mmPath)
 		return nil
 	}
 
@@ -347,10 +325,8 @@ func (c *EmbeddingClassifier) ClassifyAll(text string) ([]MatchedRule, error) {
 		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
 	}
 	queryEmbedding := queryOutput.Embedding
-	logging.ComponentDebugEvent("classifier", "embedding_query_computed", map[string]interface{}{
-		"model_type": modelType,
-		"dimension":  len(queryEmbedding),
-	})
+
+	logging.Infof("Computed query embedding (model: %s, dimension: %d)", modelType, len(queryEmbedding))
 
 	// Step 2: Search all candidates once and get similarities
 	candidateSimilarities, err := c.searchAllCandidates(queryEmbedding)
@@ -358,21 +334,13 @@ func (c *EmbeddingClassifier) ClassifyAll(text string) ([]MatchedRule, error) {
 		return nil, err
 	}
 
-	candidateSearchLatency := time.Since(startTime)
-	logging.ComponentDebugEvent("classifier", "embedding_candidate_search_completed", map[string]interface{}{
-		"candidate_count": len(candidateSimilarities),
-		"latency_ms":      candidateSearchLatency.Milliseconds(),
-	})
+	logging.Infof("Computed %d candidate similarities in %v", len(candidateSimilarities), time.Since(startTime))
 
 	// Step 3: Aggregate scores per rule and find all matches
 	matched := c.findAllMatchedRules(candidateSimilarities)
 
 	elapsed := time.Since(startTime)
-	logging.ComponentDebugEvent("classifier", "embedding_classification_completed", map[string]interface{}{
-		"latency_ms":    elapsed.Milliseconds(),
-		"matched_rules": len(matched),
-		"total_rules":   len(c.rules),
-	})
+	logging.Infof("ClassifyAll completed in %v: %d rules matched out of %d", elapsed, len(matched), len(c.rules))
 
 	return matched, nil
 }
@@ -408,10 +376,7 @@ func (c *EmbeddingClassifier) searchAllCandidates(queryEmbedding []float32) (map
 	// 3. Embeddings are pre-loaded in memory, so it's just dot products (microseconds each)
 	// 4. Simpler and more reliable than tuning HNSW parameters
 
-	logging.ComponentDebugEvent("classifier", "embedding_candidate_search_started", map[string]interface{}{
-		"candidate_count": totalCandidates,
-		"method":          "brute_force",
-	})
+	logging.Infof("Computing similarities for all %d candidates (brute-force)", totalCandidates)
 
 	for candidate, embedding := range c.candidateEmbeddings {
 		sim := cosineSimilarity(queryEmbedding, embedding)
@@ -459,14 +424,14 @@ func (c *EmbeddingClassifier) findAllMatchedRules(candidateSimilarities map[stri
 
 	// Phase 2: No hard matches — check if soft matching is enabled
 	if c.optimizationConfig.EnableSoftMatching == nil || !*c.optimizationConfig.EnableSoftMatching {
-		logging.Debugf("No hard match found and soft matching is disabled")
+		logging.Infof("No hard match found and soft matching is disabled")
 		return nil
 	}
 
 	softMatches := make([]MatchedRule, 0, len(scoredRules))
 	for _, rule := range scoredRules {
 		if rule.Score >= c.optimizationConfig.MinScoreThreshold {
-			logging.Debugf("Soft match found: rule=%q, score=%.4f (min_threshold=%.3f)",
+			logging.Infof("Soft match found: rule=%q, score=%.4f (min_threshold=%.3f)",
 				rule.Name, rule.Score, c.optimizationConfig.MinScoreThreshold)
 			softMatches = append(softMatches, MatchedRule{
 				RuleName: rule.Name,
@@ -477,7 +442,7 @@ func (c *EmbeddingClassifier) findAllMatchedRules(candidateSimilarities map[stri
 	}
 
 	if len(softMatches) == 0 {
-		logging.Debugf("No match found (best score below min_threshold=%.3f)", c.optimizationConfig.MinScoreThreshold)
+		logging.Infof("No match found (best score below min_threshold=%.3f)", c.optimizationConfig.MinScoreThreshold)
 		return nil
 	}
 
@@ -502,7 +467,7 @@ func (c *EmbeddingClassifier) scoreRules(candidateSimilarities map[string]float3
 		}
 
 		aggregatedScore := c.aggregateScoresForRule(similarities, rule.AggregationMethodConfiged)
-		logging.Debugf("Rule %q: aggregated_score=%.4f, threshold=%.3f, matched=%v (method=%s, candidates=%d)",
+		logging.Infof("Rule %q: aggregated_score=%.4f, threshold=%.3f, matched=%v (method=%s, candidates=%d)",
 			rule.Name, aggregatedScore, rule.SimilarityThreshold,
 			aggregatedScore >= rule.SimilarityThreshold,
 			rule.AggregationMethodConfiged, len(similarities))
@@ -532,7 +497,7 @@ func (c *EmbeddingClassifier) sortAndLimitMatches(matches []MatchedRule) []Match
 		return matches
 	}
 
-	logging.Debugf("Embedding matches limited to top_k=%d (available=%d)", topK, len(matches))
+	logging.Infof("Embedding matches limited to top_k=%d (available=%d)", topK, len(matches))
 	return matches[:topK]
 }
 

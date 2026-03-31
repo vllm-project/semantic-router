@@ -26,82 +26,101 @@ type Config struct {
 // InitLogger initializes a global zap logger using the provided config.
 // It also redirects the standard library logger to zap and returns the logger.
 func InitLogger(cfg Config) (*zap.Logger, error) {
-	zcfg := zap.NewProductionConfig()
+	zcfg := buildZapConfig(cfg)
+	configureEncoder(&zcfg.EncoderConfig)
 
-	// Level
-	lvl := strings.ToLower(strings.TrimSpace(cfg.Level))
-	switch lvl {
-	case "", "info":
-		zcfg.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
-	case "debug":
-		zcfg.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
-	case "warn", "warning":
-		zcfg.Level = zap.NewAtomicLevelAt(zapcore.WarnLevel)
-	case "error":
-		zcfg.Level = zap.NewAtomicLevelAt(zapcore.ErrorLevel)
-	case "dpanic":
-		zcfg.Level = zap.NewAtomicLevelAt(zapcore.DPanicLevel)
-	case "panic":
-		zcfg.Level = zap.NewAtomicLevelAt(zapcore.PanicLevel)
-	case "fatal":
-		zcfg.Level = zap.NewAtomicLevelAt(zapcore.FatalLevel)
-	default:
-		zcfg.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
-	}
-
-	// Encoding
-	enc := strings.ToLower(strings.TrimSpace(cfg.Encoding))
-	if enc == "console" {
-		zcfg.Encoding = "console"
-	} else {
-		zcfg.Encoding = "json"
-	}
-
-	if cfg.Development {
-		zcfg = zap.NewDevelopmentConfig()
-		// Apply encoding override if specified
-		if enc != "" {
-			zcfg.Encoding = enc
-		}
-	}
-
-	// Common fields
-	zcfg.EncoderConfig.TimeKey = "ts"
-	// ISO 8601 with millisecond precision
-	zcfg.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02T15:04:05.000")
-	zcfg.EncoderConfig.MessageKey = "msg"
-	zcfg.EncoderConfig.LevelKey = "level"
-	zcfg.EncoderConfig.EncodeLevel = zapcore.LowercaseLevelEncoder
-	zcfg.EncoderConfig.CallerKey = "caller"
-	// Custom caller encoder: only filename:line (no package path)
-	zcfg.EncoderConfig.EncodeCaller = func(caller zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {
-		// Extract just the filename from the full path
-		// e.g., "pkg/modeldownload/downloader.go:82" -> "downloader.go:82"
-		file := caller.TrimmedPath()
-		// Find the last slash to get just filename
-		for i := len(file) - 1; i >= 0; i-- {
-			if file[i] == '/' {
-				file = file[i+1:]
-				break
-			}
-		}
-		enc.AppendString(file)
-	}
-
-	// Build logger
-	logger, err := zcfg.Build()
+	logger, err := buildLogger(zcfg, cfg.AddCaller)
 	if err != nil {
 		return nil, err
-	}
-
-	if cfg.AddCaller {
-		logger = logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
 	}
 
 	// Replace globals and redirect stdlib log
 	zap.ReplaceGlobals(logger)
 	_ = zap.RedirectStdLog(logger)
 
+	return logger, nil
+}
+
+func buildZapConfig(cfg Config) zap.Config {
+	enc := normalizeLogValue(cfg.Encoding)
+	if cfg.Development {
+		zcfg := zap.NewDevelopmentConfig()
+		if enc != "" {
+			zcfg.Encoding = enc
+		}
+		return zcfg
+	}
+
+	zcfg := zap.NewProductionConfig()
+	zcfg.Level = zap.NewAtomicLevelAt(resolveLogLevel(cfg.Level))
+	zcfg.Encoding = resolveLogEncoding(enc)
+	return zcfg
+}
+
+func resolveLogLevel(level string) zapcore.Level {
+	switch normalizeLogValue(level) {
+	case "", "info":
+		return zapcore.InfoLevel
+	case "debug":
+		return zapcore.DebugLevel
+	case "warn", "warning":
+		return zapcore.WarnLevel
+	case "error":
+		return zapcore.ErrorLevel
+	case "dpanic":
+		return zapcore.DPanicLevel
+	case "panic":
+		return zapcore.PanicLevel
+	case "fatal":
+		return zapcore.FatalLevel
+	default:
+		return zapcore.InfoLevel
+	}
+}
+
+func resolveLogEncoding(enc string) string {
+	if enc == "console" {
+		return "console"
+	}
+	return "json"
+}
+
+func normalizeLogValue(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func configureEncoder(cfg *zapcore.EncoderConfig) {
+	cfg.TimeKey = "ts"
+	// ISO 8601 with millisecond precision
+	cfg.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02T15:04:05.000")
+	cfg.MessageKey = "msg"
+	cfg.LevelKey = "level"
+	cfg.EncodeLevel = zapcore.LowercaseLevelEncoder
+	cfg.CallerKey = "caller"
+	cfg.EncodeCaller = encodeCallerFilenameOnly
+}
+
+func encodeCallerFilenameOnly(caller zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {
+	enc.AppendString(filenameFromPath(caller.TrimmedPath()))
+}
+
+func filenameFromPath(path string) string {
+	for i := len(path) - 1; i >= 0; i-- {
+		if path[i] == '/' {
+			return path[i+1:]
+		}
+	}
+	return path
+}
+
+func buildLogger(zcfg zap.Config, addCaller bool) (*zap.Logger, error) {
+	logger, err := zcfg.Build()
+	if err != nil {
+		return nil, err
+	}
+	if addCaller {
+		logger = logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
+	}
 	return logger, nil
 }
 

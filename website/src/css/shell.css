@@ -37,7 +37,19 @@
 }
 
 .navbar__items {
-  gap: 0.5rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 0.35rem;
+}
+
+.navbar__items--right {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.navbar__items > .navbar__item {
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 .navbar__link,
@@ -62,7 +74,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 2.55rem;
-  padding: 0.7rem 1.1rem;
+  padding: 0.7rem 0.95rem;
   border: 1px solid transparent;
   border-radius: 999px;
   font-size: 0.78rem;
