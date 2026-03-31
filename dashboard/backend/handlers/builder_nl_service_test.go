@@ -92,6 +92,67 @@ func TestGenerateBuilderNLDraftRepairsInvalidDSL(t *testing.T) {
 	}
 }
 
+func TestGenerateBuilderNLDraftWithProgressReportsRepairAttempts(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	responses := []string{
+		`{"dsl":"MODEL \"MoM\" {\n  modality: \"text\"\n\nROUTE broken_route {\n  PRIORITY 100\n  MODEL \"MoM\" (reasoning = false)\n}","summary":"Initial draft needs repair.","suggestedTestQuery":"urgent billing escalation"}`,
+		`{"dsl":"MODEL \"MoM\" {\n  param_size: \"7b\"\n  modality: \"text\"\n}\n\nROUTE fallback_route (description = \"Fallback\") {\n  PRIORITY 100\n  MODEL \"MoM\" (reasoning = false)\n}","summary":"Added a fallback route.","suggestedTestQuery":"urgent billing escalation"}`,
+	}
+
+	var callCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		index := int(callCount.Add(1)) - 1
+		if index >= len(responses) {
+			http.Error(w, "unexpected extra request", http.StatusInternalServerError)
+			return
+		}
+		writeBuilderNLTestChatResponse(t, w, responses[index])
+	}))
+	defer server.Close()
+
+	var progressEvents []BuilderNLProgressEvent
+	resp, err := generateBuilderNLDraftWithProgress(context.Background(), configPath, "", BuilderNLGenerateRequest{
+		Prompt:         "Create a fallback route for urgent billing escalation requests.",
+		ConnectionMode: builderNLConnectionModeCustom,
+		CustomConnection: &builderNLConnection{
+			ProviderKind: builderNLProviderOpenAICompatible,
+			ModelName:    "gpt-4o-mini",
+			BaseURL:      server.URL,
+		},
+	}, func(event BuilderNLProgressEvent) {
+		progressEvents = append(progressEvents, event)
+	})
+	if err != nil {
+		t.Fatalf("expected generation to succeed, got error: %v", err)
+	}
+
+	if !resp.Validation.Ready {
+		t.Fatalf("expected repaired draft to validate successfully, got %#v", resp.Validation)
+	}
+	if got := callCount.Load(); got != 2 {
+		t.Fatalf("expected generation + repair requests, got %d", got)
+	}
+
+	var sawRepairAttemptTwo bool
+	var sawValidateAttemptTwo bool
+	for _, event := range progressEvents {
+		if event.Attempt == 2 && event.Phase == "repair" {
+			sawRepairAttemptTwo = true
+		}
+		if event.Attempt == 2 && event.Phase == "validate" {
+			sawValidateAttemptTwo = true
+		}
+	}
+	if !sawRepairAttemptTwo {
+		t.Fatalf("expected progress stream to report repair attempt 2, got %#v", progressEvents)
+	}
+	if !sawValidateAttemptTwo {
+		t.Fatalf("expected progress stream to report validation for attempt 2, got %#v", progressEvents)
+	}
+}
+
 func TestGenerateBuilderNLDraftCustomConnectionDoesNotMutateBaseYAML(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)

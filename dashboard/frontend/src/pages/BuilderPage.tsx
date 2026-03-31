@@ -599,6 +599,7 @@ const BuilderPage: React.FC = () => {
               currentDsl={dslSource}
               baseConfigYaml={baseConfigYaml}
               currentModelNames={currentModelNames}
+              wasmReady={wasmReady}
               generating={nlGenerating}
               error={nlGenerateError}
               progressEvents={nlProgressEvents}

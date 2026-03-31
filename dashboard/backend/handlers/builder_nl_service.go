@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,6 +32,8 @@ const (
 
 	builderNLFallbackModelAlias = "MoM"
 	builderNLRepairMaxAttempts  = 2
+	builderNLModelCallTimeout   = 90 * time.Second
+	builderNLHeartbeatInterval  = 5 * time.Second
 )
 
 type BuilderNLGenerateRequest struct {
@@ -101,11 +104,13 @@ type BuilderNLGenerateResponse struct {
 }
 
 type BuilderNLProgressEvent struct {
-	Phase     string `json:"phase"`
-	Level     string `json:"level"`
-	Message   string `json:"message"`
-	Attempt   int    `json:"attempt,omitempty"`
-	Timestamp int64  `json:"timestamp"`
+	Phase          string `json:"phase"`
+	Level          string `json:"level"`
+	Message        string `json:"message"`
+	Attempt        int    `json:"attempt,omitempty"`
+	Kind           string `json:"kind,omitempty"`
+	ElapsedSeconds int    `json:"elapsedSeconds,omitempty"`
+	Timestamp      int64  `json:"timestamp"`
 }
 
 type builderNLProgressReporter func(BuilderNLProgressEvent)
@@ -271,16 +276,40 @@ func reportBuilderNLProgress(
 	message string,
 	attempt int,
 ) {
+	emitBuilderNLProgress(reporter, phase, level, message, attempt, "stage", 0)
+}
+
+func reportBuilderNLHeartbeat(
+	reporter builderNLProgressReporter,
+	phase string,
+	message string,
+	attempt int,
+	elapsedSeconds int,
+) {
+	emitBuilderNLProgress(reporter, phase, builderNLProgressInfo, message, attempt, "heartbeat", elapsedSeconds)
+}
+
+func emitBuilderNLProgress(
+	reporter builderNLProgressReporter,
+	phase string,
+	level string,
+	message string,
+	attempt int,
+	kind string,
+	elapsedSeconds int,
+) {
 	if reporter == nil {
 		return
 	}
 
 	reporter(BuilderNLProgressEvent{
-		Phase:     phase,
-		Level:     level,
-		Message:   strings.TrimSpace(message),
-		Attempt:   attempt,
-		Timestamp: time.Now().UnixMilli(),
+		Phase:          phase,
+		Level:          level,
+		Message:        strings.TrimSpace(message),
+		Attempt:        attempt,
+		Kind:           kind,
+		ElapsedSeconds: elapsedSeconds,
+		Timestamp:      time.Now().UnixMilli(),
 	})
 }
 
@@ -712,7 +741,10 @@ func callBuilderNLModel(
 	phase string,
 	attempt int,
 ) (string, error) {
-	return runBuilderNLModelCallWithProgress(ctx, reporter, phase, attempt, func() (string, error) {
+	callCtx, cancel := context.WithTimeout(ctx, builderNLModelCallTimeout)
+	defer cancel()
+
+	return runBuilderNLModelCallWithProgress(callCtx, reporter, phase, attempt, func() (string, error) {
 		if req.ConnectionMode == builderNLConnectionModeCustom {
 			if req.CustomConnection == nil {
 				return "", fmt.Errorf("custom connection details are missing")
@@ -728,7 +760,7 @@ func callBuilderNLModel(
 				),
 				attempt,
 			)
-			return callBuilderNLCustomConnection(ctx, *req.CustomConnection, systemPrompt, userPrompt)
+			return callBuilderNLCustomConnection(callCtx, *req.CustomConnection, systemPrompt, userPrompt)
 		}
 		if strings.TrimSpace(envoyURL) == "" {
 			return "", fmt.Errorf("default Builder AI connection is unavailable because Envoy is not configured")
@@ -741,7 +773,7 @@ func callBuilderNLModel(
 			attempt,
 		)
 		return callBuilderNLOpenAICompatible(
-			ctx,
+			callCtx,
 			strings.TrimRight(envoyURL, "/")+"/v1/chat/completions",
 			builderNLFallbackModelAlias,
 			"",
@@ -764,10 +796,16 @@ func runBuilderNLModelCallWithProgress(
 
 	start := time.Now()
 	done := make(chan struct{})
-	reportBuilderNLProgress(reporter, phase, builderNLProgressInfo, "Waiting for model response.", attempt)
+	reportBuilderNLProgress(
+		reporter,
+		phase,
+		builderNLProgressInfo,
+		fmt.Sprintf("Waiting for model response (timeout %s).", builderNLModelCallTimeout.Round(time.Second)),
+		attempt,
+	)
 
 	go func() {
-		ticker := time.NewTicker(2 * time.Second)
+		ticker := time.NewTicker(builderNLHeartbeatInterval)
 		defer ticker.Stop()
 
 		for {
@@ -778,7 +816,17 @@ func runBuilderNLModelCallWithProgress(
 				return
 			case <-ticker.C:
 				elapsed := int(time.Since(start).Seconds())
-				reportBuilderNLProgress(reporter, phase, builderNLProgressInfo, fmt.Sprintf("Still waiting for model response (%ds elapsed).", elapsed), attempt)
+				reportBuilderNLHeartbeat(
+					reporter,
+					phase,
+					fmt.Sprintf(
+						"Still waiting for model response (%ds elapsed of %ds timeout).",
+						elapsed,
+						int(builderNLModelCallTimeout.Seconds()),
+					),
+					attempt,
+					elapsed,
+				)
 			}
 		}
 	}()
@@ -786,7 +834,17 @@ func runBuilderNLModelCallWithProgress(
 	content, err := call()
 	close(done)
 	if err != nil {
-		reportBuilderNLProgress(reporter, phase, builderNLProgressError, fmt.Sprintf("Model call failed: %s", err), attempt)
+		if errors.Is(err, context.DeadlineExceeded) {
+			reportBuilderNLProgress(
+				reporter,
+				phase,
+				builderNLProgressError,
+				fmt.Sprintf("Model call timed out after %s.", builderNLModelCallTimeout.Round(time.Second)),
+				attempt,
+			)
+		} else {
+			reportBuilderNLProgress(reporter, phase, builderNLProgressError, fmt.Sprintf("Model call failed: %s", err), attempt)
+		}
 		return "", err
 	}
 

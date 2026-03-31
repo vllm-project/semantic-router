@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import type { BuilderNLProgressEvent } from "@/types/dsl";
 
@@ -27,6 +27,15 @@ interface BuilderNLPhaseMeta {
   key: BuilderNLPhaseKey;
   label: string;
   description: string;
+}
+
+interface BuilderNLAttemptSummary {
+  attempt: number;
+  events: BuilderNLProgressEvent[];
+  latestEvent: BuilderNLProgressEvent;
+  latestStableEvent: BuilderNLProgressEvent;
+  latestHeartbeatEvent: BuilderNLProgressEvent | null;
+  phaseEvents: Map<string, BuilderNLProgressEvent>;
 }
 
 const PROCESS_PHASES: BuilderNLPhaseMeta[] = [
@@ -82,6 +91,15 @@ const PROCESS_PHASES: BuilderNLPhaseMeta[] = [
   },
 ];
 
+const ATTEMPT_PHASE_KEYS: BuilderNLPhaseKey[] = [
+  "generate",
+  "model_call",
+  "parse",
+  "validate",
+  "format",
+  "repair",
+];
+
 function formatPhaseLabel(phase: string): string {
   return phase
     .split("_")
@@ -92,6 +110,22 @@ function formatPhaseLabel(phase: string): string {
 
 function formatTimestamp(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString();
+}
+
+function formatDuration(seconds: number | null): string {
+  if (seconds === null || Number.isNaN(seconds)) {
+    return "Not started";
+  }
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}m ${remainder}s`;
+}
+
+function isHeartbeatEvent(event: BuilderNLProgressEvent | undefined): boolean {
+  return event?.kind === "heartbeat";
 }
 
 function processStatusLabel(status: BuilderNLProcessStatus): string {
@@ -152,7 +186,7 @@ function eventLevelClassName(level: BuilderNLProgressEvent["level"]): string {
   }
 }
 
-function resolvePhaseStatus(
+function resolveEventStatus(
   event: BuilderNLProgressEvent | undefined,
   latestEvent: BuilderNLProgressEvent | null,
   generating: boolean,
@@ -163,7 +197,16 @@ function resolvePhaseStatus(
   if (event.level === "error") {
     return "error";
   }
-  if (latestEvent?.phase === event.phase && generating) {
+  if (isHeartbeatEvent(event)) {
+    return "running";
+  }
+  if (
+    generating &&
+    latestEvent &&
+    latestEvent.phase === event.phase &&
+    latestEvent.attempt === event.attempt &&
+    latestEvent.timestamp === event.timestamp
+  ) {
     return "running";
   }
   if (event.level === "warning") {
@@ -173,6 +216,41 @@ function resolvePhaseStatus(
     return "completed";
   }
   return "pending";
+}
+
+function summarizeAttempt(summary: BuilderNLAttemptSummary): string {
+  if (summary.latestHeartbeatEvent) {
+    return summary.latestHeartbeatEvent.message;
+  }
+  return summary.latestEvent.message;
+}
+
+function buildAttemptSummary(
+  attempt: number,
+  events: BuilderNLProgressEvent[],
+): BuilderNLAttemptSummary {
+  const phaseEvents = new Map<string, BuilderNLProgressEvent>();
+  let latestHeartbeatEvent: BuilderNLProgressEvent | null = null;
+
+  for (const event of events) {
+    phaseEvents.set(event.phase, event);
+    if (isHeartbeatEvent(event)) {
+      latestHeartbeatEvent = event;
+    }
+  }
+
+  const latestEvent = events[events.length - 1];
+  const latestStableEvent =
+    [...events].reverse().find((event) => !isHeartbeatEvent(event)) ?? latestEvent;
+
+  return {
+    attempt,
+    events,
+    latestEvent,
+    latestStableEvent,
+    latestHeartbeatEvent,
+    phaseEvents,
+  };
 }
 
 function PhaseIcon({
@@ -295,6 +373,7 @@ const BuilderNaturalLanguageProgress: React.FC<
   BuilderNaturalLanguageProgressProps
 > = ({ generating, progressEvents }) => {
   const consoleRef = useRef<HTMLDivElement | null>(null);
+  const [selectedAttempt, setSelectedAttempt] = useState<number | null>(null);
 
   useEffect(() => {
     if (!consoleRef.current) {
@@ -306,20 +385,159 @@ const BuilderNaturalLanguageProgress: React.FC<
   const latestProgressEvent =
     progressEvents.length > 0 ? progressEvents[progressEvents.length - 1] : null;
 
-  const phaseEvents = useMemo(() => {
+  const latestStableEvent = useMemo(() => {
+    return [...progressEvents].reverse().find((event) => !isHeartbeatEvent(event)) ?? null;
+  }, [progressEvents]);
+
+  const globalPhaseEvents = useMemo(() => {
     const byPhase = new Map<string, BuilderNLProgressEvent>();
     for (const event of progressEvents) {
-      byPhase.set(event.phase, event);
+      if (!event.attempt) {
+        byPhase.set(event.phase, event);
+      }
     }
     return byPhase;
   }, [progressEvents]);
 
-  const spotlightLabel = latestProgressEvent
-    ? formatPhaseLabel(latestProgressEvent.phase)
+  const attemptSummaries = useMemo(() => {
+    const byAttempt = new Map<number, BuilderNLProgressEvent[]>();
+    for (const event of progressEvents) {
+      const attempt = event.attempt ?? 0;
+      if (attempt <= 0) {
+        continue;
+      }
+      const events = byAttempt.get(attempt);
+      if (events) {
+        events.push(event);
+      } else {
+        byAttempt.set(attempt, [event]);
+      }
+    }
+
+    return Array.from(byAttempt.entries())
+      .sort(([left], [right]) => left - right)
+      .map(([attempt, events]) => buildAttemptSummary(attempt, events));
+  }, [progressEvents]);
+
+  useEffect(() => {
+    if (attemptSummaries.length === 0) {
+      setSelectedAttempt(null);
+      return;
+    }
+
+    setSelectedAttempt((current) => {
+      if (current && attemptSummaries.some((summary) => summary.attempt === current)) {
+        return current;
+      }
+      return attemptSummaries[attemptSummaries.length - 1].attempt;
+    });
+  }, [attemptSummaries]);
+
+  const selectedAttemptSummary = useMemo(() => {
+    if (attemptSummaries.length === 0) {
+      return null;
+    }
+    return (
+      attemptSummaries.find((summary) => summary.attempt === selectedAttempt) ??
+      attemptSummaries[attemptSummaries.length - 1]
+    );
+  }, [attemptSummaries, selectedAttempt]);
+
+  const requestEvent = globalPhaseEvents.get("request");
+  const contextEvent = globalPhaseEvents.get("context");
+  const reviewEvent = globalPhaseEvents.get("review");
+  const completeEvent = globalPhaseEvents.get("complete");
+
+  const firstEvent = progressEvents.length > 0 ? progressEvents[0] : null;
+  const elapsedSeconds =
+    firstEvent && latestProgressEvent
+      ? Math.max(0, Math.round((latestProgressEvent.timestamp - firstEvent.timestamp) / 1000))
+      : null;
+
+  const currentActivityEvent = latestProgressEvent ?? latestStableEvent;
+  const currentActivityLabel = currentActivityEvent
+    ? formatPhaseLabel(currentActivityEvent.phase)
     : "Waiting for request";
-  const spotlightDescription =
-    latestProgressEvent?.message ??
+  const currentActivityMessage =
+    currentActivityEvent?.message ??
     "Send a Builder request to stream generation, validation, repair, and review progress.";
+
+  const currentAttemptLabel =
+    selectedAttemptSummary !== null
+      ? `Attempt ${selectedAttemptSummary.attempt}`
+      : generating
+        ? "Preparing first attempt"
+        : "No model call yet";
+
+  const journeyNodes = useMemo(() => {
+    const items: Array<{
+      key: string;
+      label: string;
+      message: string;
+      phase: string;
+      event?: BuilderNLProgressEvent;
+      status: BuilderNLProcessStatus;
+      eyebrow?: string;
+    }> = [
+      {
+        key: "request",
+        label: "Request",
+        message: requestEvent?.message ?? "Accept the Builder NL request.",
+        phase: "request",
+        event: requestEvent,
+        status: resolveEventStatus(requestEvent, latestProgressEvent, generating),
+      },
+      {
+        key: "context",
+        label: "Context",
+        message: contextEvent?.message ?? "Load live router config and draft target.",
+        phase: "context",
+        event: contextEvent,
+        status: resolveEventStatus(contextEvent, latestProgressEvent, generating),
+      },
+    ];
+
+    for (const summary of attemptSummaries) {
+      items.push({
+        key: `attempt-${summary.attempt}`,
+        label: `Attempt ${summary.attempt}`,
+        message: summarizeAttempt(summary),
+        phase: summary.latestStableEvent.phase,
+        event: summary.latestEvent,
+        status: resolveEventStatus(summary.latestEvent, latestProgressEvent, generating),
+        eyebrow: formatPhaseLabel(summary.latestStableEvent.phase),
+      });
+    }
+
+    items.push(
+      {
+        key: "review",
+        label: "Review",
+        message: reviewEvent?.message ?? "Build the readiness review from validation.",
+        phase: "review",
+        event: reviewEvent,
+        status: resolveEventStatus(reviewEvent, latestProgressEvent, generating),
+      },
+      {
+        key: "complete",
+        label: "Complete",
+        message: completeEvent?.message ?? "Persist the staged result for Builder review.",
+        phase: "complete",
+        event: completeEvent,
+        status: resolveEventStatus(completeEvent, latestProgressEvent, generating),
+      },
+    );
+
+    return items;
+  }, [
+    attemptSummaries,
+    completeEvent,
+    contextEvent,
+    generating,
+    latestProgressEvent,
+    requestEvent,
+    reviewEvent,
+  ]);
 
   return (
     <section className={styles.consoleCard}>
@@ -327,23 +545,19 @@ const BuilderNaturalLanguageProgress: React.FC<
         <div>
           <h3 className={styles.cardTitle}>Live process</h3>
           <p className={styles.sectionHint}>
-            Track the staged Builder draft lifecycle left to right, then use the
-            raw event log below for details.
+            Follow the Builder draft loop left to right, then inspect the raw
+            stream below only when you need low-level details.
           </p>
         </div>
         <div className={styles.consoleMeta}>
           <span
             className={`${styles.processStatusPill} ${processStatusClassName(
               latestProgressEvent
-                ? resolvePhaseStatus(
-                    latestProgressEvent,
-                    latestProgressEvent,
-                    generating,
-                  )
+                ? resolveEventStatus(latestProgressEvent, latestProgressEvent, generating)
                 : "pending",
             )}`}
           >
-            {generating ? "Streaming" : latestProgressEvent ? "Latest event" : "Idle"}
+            {generating ? "Streaming" : latestProgressEvent ? "Completed" : "Idle"}
           </span>
           {latestProgressEvent ? (
             <span className={styles.consoleTimestamp}>
@@ -353,21 +567,34 @@ const BuilderNaturalLanguageProgress: React.FC<
         </div>
       </div>
 
-      <div className={styles.processSpotlight}>
-        <div className={styles.processSpotlightIcon}>
-          <PhaseIcon phase={latestProgressEvent?.phase ?? "request"} />
+      <div className={styles.processSummaryGrid}>
+        <div className={styles.processSummaryCard}>
+          <div className={styles.resultLabel}>Current activity</div>
+          <div className={styles.processSummaryValue}>{currentActivityLabel}</div>
+          <div className={styles.processSummaryText}>{currentActivityMessage}</div>
         </div>
-        <div className={styles.processSpotlightBody}>
-          <div className={styles.processSpotlightEyebrow}>Current stage</div>
-          <div className={styles.processSpotlightTitle}>{spotlightLabel}</div>
-          <div className={styles.processSpotlightText}>{spotlightDescription}</div>
+        <div className={styles.processSummaryCard}>
+          <div className={styles.resultLabel}>Attempt status</div>
+          <div className={styles.processSummaryValue}>{currentAttemptLabel}</div>
+          <div className={styles.processSummaryText}>
+            {attemptSummaries.length > 1
+              ? `${attemptSummaries.length} attempts have been recorded so far.`
+              : attemptSummaries.length === 1
+                ? "First-pass generation is in view."
+                : "The model loop has not started yet."}
+          </div>
         </div>
-        <div className={styles.processSpotlightMeta}>
-          {latestProgressEvent?.attempt ? (
-            <span className={styles.consoleAttempt}>
-              attempt {latestProgressEvent.attempt}
-            </span>
-          ) : null}
+        <div className={styles.processSummaryCard}>
+          <div className={styles.resultLabel}>Elapsed</div>
+          <div className={styles.processSummaryValue}>
+            {formatDuration(elapsedSeconds)}
+          </div>
+          <div className={styles.processSummaryText}>
+            {completeEvent?.message ??
+              (generating
+                ? "Streaming progress from the dashboard backend."
+                : "Waiting for the next Builder request.")}
+          </div>
         </div>
       </div>
 
@@ -377,55 +604,180 @@ const BuilderNaturalLanguageProgress: React.FC<
         </div>
       ) : null}
 
-      <div className={styles.processTimeline}>
-        {PROCESS_PHASES.map((phase) => {
-          const event = phaseEvents.get(phase.key);
-          const status = resolvePhaseStatus(event, latestProgressEvent, generating);
-
-          return (
-            <div
-              className={`${styles.processNode} ${processNodeClassName(status)}`}
-              key={phase.key}
-            >
-              <div className={styles.processNodeIcon}>
-                <PhaseIcon phase={phase.key} />
+      <div className={styles.processJourney}>
+        {journeyNodes.map((node) => (
+          <div
+            className={`${styles.processJourneyNode} ${processNodeClassName(node.status)}`}
+            key={node.key}
+          >
+            <div className={styles.processJourneyIcon}>
+              <PhaseIcon phase={node.phase} />
+            </div>
+            <div className={styles.processJourneyBody}>
+              <div className={styles.processJourneyHeader}>
+                <span className={styles.processJourneyLabel}>{node.label}</span>
+                <span
+                  className={`${styles.processStatusPill} ${processStatusClassName(node.status)}`}
+                >
+                  {processStatusLabel(node.status)}
+                </span>
               </div>
-              <div className={styles.processNodeBody}>
-                <div className={styles.processNodeHeader}>
-                  <span className={styles.processNodeTitle}>{phase.label}</span>
-                  <span
-                    className={`${styles.processStatusPill} ${processStatusClassName(status)}`}
-                  >
-                    {processStatusLabel(status)}
+              {node.eyebrow ? (
+                <div className={styles.processJourneyEyebrow}>{node.eyebrow}</div>
+              ) : null}
+              <div className={styles.processJourneyText}>{node.message}</div>
+              <div className={styles.processJourneyMeta}>
+                {node.event?.attempt ? (
+                  <span className={styles.consoleAttempt}>
+                    attempt {node.event.attempt}
                   </span>
-                </div>
-                <div className={styles.processNodeText}>
-                  {event?.message ?? phase.description}
-                </div>
-                <div className={styles.processNodeMeta}>
-                  {event?.attempt ? (
-                    <span className={styles.consoleAttempt}>
-                      attempt {event.attempt}
-                    </span>
-                  ) : null}
-                  {event ? (
-                    <span className={styles.consoleTimestamp}>
-                      {formatTimestamp(event.timestamp)}
-                    </span>
-                  ) : null}
-                </div>
+                ) : null}
+                {node.event ? (
+                  <span className={styles.consoleTimestamp}>
+                    {formatTimestamp(node.event.timestamp)}
+                  </span>
+                ) : null}
               </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
+
+      {attemptSummaries.length > 0 ? (
+        <>
+          <div className={styles.consoleDivider} />
+
+          <div className={styles.consoleLogHeader}>
+            <span className={styles.resultLabel}>Attempt breakdown</span>
+            <span className={styles.consoleLogHint}>
+              Each attempt keeps its own phase history, so repair loops no longer
+              collapse into one card.
+            </span>
+          </div>
+
+          {attemptSummaries.length > 1 ? (
+            <div className={styles.attemptTabRow}>
+              {attemptSummaries.map((summary) => {
+                const isActive = summary.attempt === selectedAttemptSummary?.attempt;
+                const status = resolveEventStatus(
+                  summary.latestEvent,
+                  latestProgressEvent,
+                  generating,
+                );
+                return (
+                  <button
+                    className={isActive ? styles.segmentActive : styles.segment}
+                    key={summary.attempt}
+                    onClick={() => setSelectedAttempt(summary.attempt)}
+                    type="button"
+                  >
+                    Attempt {summary.attempt}
+                    <span
+                      className={`${styles.processStatusPill} ${styles.processStatusInline} ${processStatusClassName(status)}`}
+                    >
+                      {processStatusLabel(status)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {selectedAttemptSummary ? (
+            <div className={styles.processAttemptCard}>
+              <div className={styles.processAttemptHeader}>
+                <div>
+                  <div className={styles.resultLabel}>
+                    Attempt {selectedAttemptSummary.attempt}
+                  </div>
+                  <div className={styles.processAttemptTitle}>
+                    {formatPhaseLabel(selectedAttemptSummary.latestStableEvent.phase)}
+                  </div>
+                  <div className={styles.processAttemptText}>
+                    {summarizeAttempt(selectedAttemptSummary)}
+                  </div>
+                </div>
+                <div className={styles.processAttemptMeta}>
+                  <span
+                    className={`${styles.processStatusPill} ${processStatusClassName(
+                      resolveEventStatus(
+                        selectedAttemptSummary.latestEvent,
+                        latestProgressEvent,
+                        generating,
+                      ),
+                    )}`}
+                  >
+                    {processStatusLabel(
+                      resolveEventStatus(
+                        selectedAttemptSummary.latestEvent,
+                        latestProgressEvent,
+                        generating,
+                      ),
+                    )}
+                  </span>
+                  <span className={styles.consoleTimestamp}>
+                    {formatTimestamp(selectedAttemptSummary.latestEvent.timestamp)}
+                  </span>
+                </div>
+              </div>
+
+              <div className={styles.processStepRail}>
+                {ATTEMPT_PHASE_KEYS.map((phaseKey) => {
+                  const phase = PROCESS_PHASES.find((item) => item.key === phaseKey)!;
+                  const event = selectedAttemptSummary.phaseEvents.get(phase.key);
+                  const status = resolveEventStatus(
+                    event,
+                    latestProgressEvent,
+                    generating,
+                  );
+                  return (
+                    <div
+                      className={`${styles.processStepNode} ${processNodeClassName(status)}`}
+                      key={phase.key}
+                    >
+                      <div className={styles.processNodeIcon}>
+                        <PhaseIcon phase={phase.key} />
+                      </div>
+                      <div className={styles.processNodeBody}>
+                        <div className={styles.processNodeHeader}>
+                          <span className={styles.processNodeTitle}>{phase.label}</span>
+                          <span
+                            className={`${styles.processStatusPill} ${processStatusClassName(status)}`}
+                          >
+                            {processStatusLabel(status)}
+                          </span>
+                        </div>
+                        <div className={styles.processNodeText}>
+                          {event?.message ?? phase.description}
+                        </div>
+                        <div className={styles.processNodeMeta}>
+                          {event?.elapsedSeconds ? (
+                            <span className={styles.consoleAttempt}>
+                              {formatDuration(event.elapsedSeconds)}
+                            </span>
+                          ) : null}
+                          {event ? (
+                            <span className={styles.consoleTimestamp}>
+                              {formatTimestamp(event.timestamp)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : null}
 
       <div className={styles.consoleDivider} />
 
       <div className={styles.consoleLogHeader}>
         <span className={styles.resultLabel}>Recent events</span>
         <span className={styles.consoleLogHint}>
-          Raw event stream for debugging stalls or retries.
+          Raw event stream for debugging stalls, timeouts, or retry behavior.
         </span>
       </div>
 
@@ -447,11 +799,16 @@ const BuilderNaturalLanguageProgress: React.FC<
                         event.level,
                       )}`}
                     >
-                      {event.level}
+                      {event.kind === "heartbeat" ? "heartbeat" : event.level}
                     </span>
                     {event.attempt ? (
                       <span className={styles.consoleAttempt}>
                         attempt {event.attempt}
+                      </span>
+                    ) : null}
+                    {event.elapsedSeconds ? (
+                      <span className={styles.consoleAttempt}>
+                        {formatDuration(event.elapsedSeconds)}
                       </span>
                     ) : null}
                   </div>

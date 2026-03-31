@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+
+import { wasmBridge } from "@/lib/wasm";
 
 import type {
   BuilderNLConnectionMode,
@@ -17,6 +19,7 @@ interface BuilderNaturalLanguagePanelProps {
   currentDsl: string;
   baseConfigYaml: string;
   currentModelNames: string[];
+  wasmReady: boolean;
   generating: boolean;
   error: string | null;
   progressEvents: BuilderNLProgressEvent[];
@@ -79,6 +82,7 @@ const BuilderNaturalLanguagePanel: React.FC<
   currentDsl,
   baseConfigYaml,
   currentModelNames,
+  wasmReady,
   generating,
   error,
   progressEvents,
@@ -103,6 +107,10 @@ const BuilderNaturalLanguagePanel: React.FC<
     null,
   );
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [previewTab, setPreviewTab] = useState<"dsl" | "yaml" | "crd" | "baseYaml">(
+    "dsl",
+  );
+  const [copiedPreview, setCopiedPreview] = useState<string | null>(null);
 
   const hasContextDsl = currentDsl.trim().length > 0;
   const contextLineCount = hasContextDsl ? currentDsl.split("\n").length : 0;
@@ -116,6 +124,33 @@ const BuilderNaturalLanguagePanel: React.FC<
   ).length;
   const stagedReviewWarnings = stagedDraft?.review.warnings ?? [];
   const stagedReviewChecks = stagedDraft?.review.checks ?? [];
+  const stagedCompiledOutput = useMemo(() => {
+    if (!stagedDraft) {
+      return { yaml: "", crd: "", error: "" };
+    }
+    if (!wasmReady) {
+      return {
+        yaml: "",
+        crd: "",
+        error: "The Builder compiler is still loading, so YAML and CRD previews are not ready yet.",
+      };
+    }
+
+    try {
+      const result = wasmBridge.compile(stagedDraft.dsl);
+      return {
+        yaml: result.yaml || "",
+        crd: result.crd || "",
+        error: result.error || "",
+      };
+    } catch (err) {
+      return {
+        yaml: "",
+        crd: "",
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }, [stagedDraft, wasmReady]);
   const liveModelCards = useMemo(
     () =>
       Array.from(
@@ -153,6 +188,80 @@ const BuilderNaturalLanguagePanel: React.FC<
     setVerifyResult(null);
     setVerifyError(null);
   }, [connectionFingerprint]);
+
+  useEffect(() => {
+    setPreviewTab("dsl");
+    setCopiedPreview(null);
+  }, [stagedDraft?.prompt, stagedDraft?.dsl, stagedDraft?.baseYaml]);
+
+  const draftPreviewOptions = useMemo(() => {
+    if (!stagedDraft) {
+      return [];
+    }
+
+    return [
+      {
+        key: "dsl" as const,
+        label: "DSL",
+        content: stagedDraft.dsl,
+        emptyText: "The staged DSL draft is empty.",
+      },
+      {
+        key: "yaml" as const,
+        label: "YAML",
+        content: stagedCompiledOutput.yaml,
+        emptyText:
+          stagedCompiledOutput.error ||
+          "No compiled YAML is available for this staged draft yet.",
+      },
+      {
+        key: "crd" as const,
+        label: "CRD",
+        content: stagedCompiledOutput.crd,
+        emptyText:
+          stagedCompiledOutput.error ||
+          "No CRD output is available for this staged draft yet.",
+      },
+      {
+        key: "baseYaml" as const,
+        label: "Base YAML",
+        content: stagedDraft.baseYaml,
+        emptyText: "No deploy base YAML is available for this staged draft.",
+      },
+    ];
+  }, [stagedCompiledOutput, stagedDraft]);
+  const activeDraftPreview =
+    draftPreviewOptions.find((option) => option.key === previewTab) ??
+    draftPreviewOptions[0];
+
+  const handleCopyPreview = useCallback(async () => {
+    if (!activeDraftPreview?.content) {
+      return;
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(activeDraftPreview.content);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = activeDraftPreview.content;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopiedPreview(activeDraftPreview.key);
+      window.setTimeout(() => {
+        setCopiedPreview((current) =>
+          current === activeDraftPreview.key ? null : current,
+        );
+      }, 1800);
+    } catch {
+      setCopiedPreview(null);
+    }
+  }, [activeDraftPreview]);
 
   const handleGenerate = async () => {
     await onGenerate({
@@ -629,6 +738,55 @@ const BuilderNaturalLanguagePanel: React.FC<
                   </div>
                 </div>
               )}
+
+              <div className={styles.resultBlock}>
+                <div className={styles.previewHeader}>
+                  <div>
+                    <div className={styles.resultLabel}>Draft outputs</div>
+                    <div className={styles.previewCaption}>
+                      Inspect the staged DSL and generated outputs before you
+                      apply anything into the live Builder state.
+                    </div>
+                  </div>
+                  <div className={styles.previewActions}>
+                    <div className={styles.previewTabRow}>
+                      {draftPreviewOptions.map((option) => (
+                        <button
+                          className={
+                            option.key === activeDraftPreview?.key
+                              ? styles.segmentActive
+                              : styles.segment
+                          }
+                          key={option.key}
+                          onClick={() => setPreviewTab(option.key)}
+                          type="button"
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className={styles.ghostBtn}
+                      disabled={!activeDraftPreview?.content}
+                      onClick={handleCopyPreview}
+                      type="button"
+                    >
+                      {copiedPreview === activeDraftPreview?.key
+                        ? "Copied"
+                        : `Copy ${activeDraftPreview?.label ?? "output"}`}
+                    </button>
+                  </div>
+                </div>
+
+                {activeDraftPreview?.content ? (
+                  <pre className={styles.preview}>{activeDraftPreview.content}</pre>
+                ) : (
+                  <div className={styles.previewEmpty}>
+                    {activeDraftPreview?.emptyText ||
+                      "No staged draft output is available yet."}
+                  </div>
+                )}
+              </div>
 
               <div className={styles.applyRow}>
                 <button

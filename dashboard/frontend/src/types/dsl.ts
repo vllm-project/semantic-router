@@ -276,6 +276,8 @@ export interface BuilderNLProgressEvent {
   level: BuilderNLProgressLevel
   message: string
   attempt?: number
+  kind?: 'stage' | 'heartbeat'
+  elapsedSeconds?: number
   timestamp: number
 }
 
