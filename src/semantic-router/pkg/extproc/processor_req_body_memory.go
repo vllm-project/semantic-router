@@ -191,7 +191,7 @@ func (r *OpenAIRouter) filterRetrievedMemories(
 		logging.Debugf("Memory: no memories found above threshold for user=%s", userID)
 		return nil
 	}
-	logging.Infof("Memory: found %d memories for user=%s", len(memories), userID)
+	logging.Debugf("Memory: found %d memories for user=%s", len(memories), userID)
 
 	var perDecisionReflection *config.MemoryReflectionConfig
 	if memoryPluginConfig != nil && memoryPluginConfig.Reflection != nil {
@@ -224,7 +224,7 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 	}
 
 	metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, "injected", 0)
-	logging.Infof("Memory: Injected %d memories into request (decision=%s, context_len=%d)",
+	logging.Debugf("Memory: Injected %d memories (decision=%s, context_len=%d)",
 		len(memories), ctx.VSRSelectedDecisionName, len(ctx.MemoryContext))
 	return injectedBody
 }

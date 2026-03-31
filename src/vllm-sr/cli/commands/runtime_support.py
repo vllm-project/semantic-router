@@ -29,6 +29,10 @@ PASSTHROUGH_ENV_RULES = (
     ("ANTHROPIC_API_KEY", True),
     ("OPENAI_API_KEY", True),
     ("OPENCLAW_BASE_IMAGE", False),
+    ("SR_LOG_LEVEL", False),
+    ("SR_LOG_ENCODING", False),
+    ("SR_LOG_DEVELOPMENT", False),
+    ("SR_LOG_ADD_CALLER", False),
 )
 
 ALGORITHM_TYPES = [
@@ -311,6 +315,7 @@ def apply_runtime_mode_env_vars(
     setup_mode: bool,
     platform: str | None,
     algorithm: str | None = None,
+    log_level: str | None = None,
 ) -> None:
     """Apply runtime-mode environment variables derived from CLI flags."""
     if minimal:
@@ -337,6 +342,11 @@ def apply_runtime_mode_env_vars(
 
     if algorithm:
         env_vars[RUNTIME_ALGORITHM_OVERRIDE_ENV] = algorithm.lower()
+
+    if log_level:
+        normalized_log_level = log_level.lower()
+        env_vars["SR_LOG_LEVEL"] = normalized_log_level
+        log.info(f"Router log level: {normalized_log_level}")
 
 
 def resolve_effective_config_path(

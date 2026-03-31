@@ -57,7 +57,9 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 func loadRouterConfig(configPath string) (*config.RouterConfig, error) {
 	globalCfg := config.Get()
 	if globalCfg != nil && globalCfg.ConfigSource == config.ConfigSourceKubernetes {
-		logging.Infof("Using Kubernetes-managed configuration")
+		logging.ComponentEvent("extproc", "router_config_using_kubernetes_source", map[string]interface{}{
+			"config_source": globalCfg.ConfigSource,
+		})
 		return globalCfg, nil
 	}
 
@@ -78,15 +80,18 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig) (*OpenAIRouter, error
 }
 
 func logLoadedRouterConfig(configPath string, cfg *config.RouterConfig) {
-	logging.Debugf("[NewOpenAIRouter] Parsed config from file: %s, decisions=%d", configPath, len(cfg.Decisions))
+	logging.ComponentDebugEvent("extproc", "router_config_loaded", map[string]interface{}{
+		"config_path":    configPath,
+		"decision_count": len(cfg.Decisions),
+	})
 	for i, decision := range cfg.Decisions {
-		logging.Debugf(
-			"[NewOpenAIRouter]   decision[%d]: name=%q, modelRefs=%d, priority=%d",
-			i,
-			decision.Name,
-			len(decision.ModelRefs),
-			decision.Priority,
-		)
+		logging.ComponentDebugEvent("extproc", "router_config_decision_loaded", map[string]interface{}{
+			"config_path": configPath,
+			"index":       i,
+			"name":        decision.Name,
+			"model_refs":  len(decision.ModelRefs),
+			"priority":    decision.Priority,
+		})
 	}
 }
 
@@ -97,7 +102,10 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	}
 
 	categoryDescriptions := cfg.GetCategoryDescriptions()
-	logging.Debugf("Category descriptions: %v", categoryDescriptions)
+	logging.ComponentDebugEvent("extproc", "category_descriptions_loaded", map[string]interface{}{
+		"count":        len(categoryDescriptions),
+		"descriptions": categoryDescriptions,
+	})
 
 	semanticCache, err := createSemanticCache(cfg)
 	if err != nil {
@@ -118,10 +126,14 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	rateLimiter := buildRateLimitResolver(cfg)
 
 	if credentialResolver != nil {
-		logging.Infof("Credential resolver initialized with providers: %v", credentialResolver.ProviderNames())
+		logging.ComponentEvent("extproc", "credential_resolver_initialized", map[string]interface{}{
+			"providers": credentialResolver.ProviderNames(),
+		})
 	}
 	if rateLimiter != nil {
-		logging.Infof("Rate limit resolver initialized with providers: %v", rateLimiter.ProviderNames())
+		logging.ComponentEvent("extproc", "rate_limit_resolver_initialized", map[string]interface{}{
+			"providers": rateLimiter.ProviderNames(),
+		})
 	}
 
 	return &routerComponents{

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import yaml
 from cli.commands.runtime_support import (
+    append_passthrough_env_vars,
     apply_runtime_mode_env_vars,
     configure_runtime_override_env_vars,
     resolve_effective_config_path,
@@ -35,6 +36,32 @@ def test_apply_runtime_mode_env_vars_skips_dashboard_readonly_in_minimal_mode():
 
     assert env_vars["DISABLE_DASHBOARD"] == "true"
     assert "DASHBOARD_READONLY" not in env_vars
+
+
+def test_apply_runtime_mode_env_vars_sets_router_log_level_when_requested():
+    env_vars: dict[str, str] = {}
+
+    apply_runtime_mode_env_vars(
+        env_vars=env_vars,
+        minimal=False,
+        readonly=False,
+        setup_mode=False,
+        platform=None,
+        log_level="DEBUG",
+    )
+
+    assert env_vars["SR_LOG_LEVEL"] == "debug"
+
+
+def test_append_passthrough_env_vars_includes_router_logging_settings(monkeypatch):
+    monkeypatch.setenv("SR_LOG_LEVEL", "debug")
+    monkeypatch.setenv("SR_LOG_ENCODING", "console")
+
+    env_vars: dict[str, str] = {}
+    append_passthrough_env_vars(env_vars)
+
+    assert env_vars["SR_LOG_LEVEL"] == "debug"
+    assert env_vars["SR_LOG_ENCODING"] == "console"
 
 
 def test_resolve_effective_config_path_applies_amd_gpu_defaults(tmp_path: Path):

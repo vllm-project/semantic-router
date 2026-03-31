@@ -6,7 +6,7 @@ translation:
   outdated: false
 ---
 
-# 安装
+# 快速开始
 
 本指南帮助您安装并运行 vLLM Semantic Router。路由器完全在 CPU 上运行，推理侧**不需要 GPU**。
 
@@ -38,51 +38,7 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 - 在可能的情况下自动启动 `vllm-sr serve` 并打开控制台
 - 若无法打开浏览器，则打印控制台访问方式与远程服务器提示
 
-常用变体：
-
-```bash
-# 仅安装 CLI
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli
-
-# 跳过运行时引导，稍后自行启动 Docker
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
-
-# 首次启动强制走 AMD/ROCm 路径
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --platform amd
-
-# 安装但不自动启动 serve 与控制台
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --no-launch
-
-# 跳过运行时引导，仅保留用户态安装步骤
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
-```
-
 若 `~/.local/bin` 尚未在 `PATH` 中，安装脚本会打印需要添加的 `export` 行。
-
-### 智能体安装（OpenClaw 及类似智能体）
-
-当需要由本地智能体代您执行安装时，请使用智能体流程。仍使用同一受支持的安装器，但应让智能体使用 **no-launch** 路径，以免在交接时自动启动 `vllm-sr serve` 或打开浏览器。
-
-长期推荐：从本仓库发布或安装由仓库维护的 `openclaw-vsr-bridge` skill（`dashboard/backend/skillpacks/openclaw-vsr-bridge/SKILL.md`）。在注册表条目就绪前，可使用下列托管提示文件，使首页与智能体文案保持简短。
-
-托管提示文件：
-
-- 仅 CLI 提示：[https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md](https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md)
-- 安装并桥接提示：[https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md](https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md)
-
-仅 CLI 提示：
-
-```text
-Fetch and follow https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md.
-```
-
-安装并桥接提示：
-
-```text
-Fetch and follow https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md.
-```
-
-托管 Markdown 仍指向同一受支持安装器。OpenClaw 的后续交接仍通过 bridge skill 或 `vllm-sr config import --from openclaw` 完成，而非第二套安装器。
 
 Windows 用户请使用下文手动 PyPI 流程。
 

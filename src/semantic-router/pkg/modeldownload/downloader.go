@@ -149,9 +149,17 @@ func EnsureModelsWithProgress(specs []ModelSpec, config DownloadConfig, reporter
 	// Log status of each model
 	for _, spec := range specs {
 		if missingPaths[spec.LocalPath] {
-			logging.Infof("✗ %s (need download)", spec.LocalPath)
+			logging.ComponentDebugEvent("router", "required_model_status", map[string]interface{}{
+				"model_ref":         spec.LocalPath,
+				"status":            "missing",
+				"requires_download": true,
+			})
 		} else {
-			logging.Infof("%s (ready)", spec.LocalPath)
+			logging.ComponentDebugEvent("router", "required_model_status", map[string]interface{}{
+				"model_ref":         spec.LocalPath,
+				"status":            "ready",
+				"requires_download": false,
+			})
 		}
 	}
 

@@ -115,19 +115,49 @@ func detectEmptyOrSetupRuntime(trimmed string, routerHealthy bool) *RouterRuntim
 }
 
 func parseRuntimeMarkers(trimmed string) routerRuntimeMarkers {
-	allReadyIdx := strings.LastIndex(trimmed, "All required models are ready")
-	apiOnlyIdx := strings.LastIndex(trimmed, "No local models configured, skipping model download (API-only mode)")
-	if apiOnlyIdx > allReadyIdx {
-		allReadyIdx = apiOnlyIdx
-	}
+	allReadyIdx := lastMarkerIndex(trimmed,
+		"All required models are ready",
+		`"event":"required_models_ready"`,
+		"No local models configured, skipping model download (API-only mode)",
+		`"event":"required_models_check_skipped"`,
+	)
 
 	return routerRuntimeMarkers{
-		installIdx:        strings.LastIndex(trimmed, "Installing required models..."),
-		allReadyIdx:       allReadyIdx,
-		embeddingInitIdx:  strings.LastIndex(trimmed, "Initializing embedding models:"),
-		embeddingReadyIdx: max(strings.LastIndex(trimmed, "Unified embedding models initialized successfully"), strings.LastIndex(trimmed, "No embedding models configured, skipping initialization")),
-		serverReadyIdx:    max(strings.LastIndex(trimmed, "Starting insecure LLM Router ExtProc server"), strings.LastIndex(trimmed, "Starting secure LLM Router ExtProc server")),
+		installIdx: lastMarkerIndex(trimmed,
+			"Installing required models...",
+			`"event":"required_models_check_started"`,
+		),
+		allReadyIdx: allReadyIdx,
+		embeddingInitIdx: lastMarkerIndex(trimmed,
+			"Initializing embedding models:",
+			`"event":"embedding_models_init_started"`,
+		),
+		embeddingReadyIdx: lastMarkerIndex(trimmed,
+			"Unified embedding models initialized successfully",
+			"No embedding models configured, skipping initialization",
+			`"event":"embedding_models_initialized"`,
+			`"event":"embedding_models_not_configured"`,
+		),
+		serverReadyIdx: lastMarkerIndex(trimmed,
+			"Starting insecure LLM Router ExtProc server",
+			"Starting secure LLM Router ExtProc server",
+			`"event":"server_starting"`,
+			`"event":"startup_complete"`,
+		),
 	}
+}
+
+func lastMarkerIndex(content string, markers ...string) int {
+	idx := -1
+	for _, marker := range markers {
+		if marker == "" {
+			continue
+		}
+		if found := strings.LastIndex(content, marker); found > idx {
+			idx = found
+		}
+	}
+	return idx
 }
 
 func runtimeDuringModelDownload(markers routerRuntimeMarkers, models modelDownloadSummary) *RouterRuntimeStatus {

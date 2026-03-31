@@ -176,18 +176,20 @@ func (r *OpenAIRouter) reportStreamingUsageMetrics(
 		float64(usage.PromptTokens),
 		float64(usage.CompletionTokens),
 	)
-	logging.Infof(
-		"Recorded token metrics for streaming response: model=%s, prompt=%d, completion=%d",
-		ctx.RequestModel,
-		usage.PromptTokens,
-		usage.CompletionTokens,
-	)
+	logging.ComponentDebugEvent("extproc", "streaming_token_metrics_recorded", map[string]interface{}{
+		"model":             ctx.RequestModel,
+		"prompt_tokens":     usage.PromptTokens,
+		"completion_tokens": usage.CompletionTokens,
+	})
 
 	if usage.CompletionTokens > 0 && !ctx.StartTime.IsZero() {
 		completionLatency := time.Since(ctx.StartTime).Seconds()
 		timePerToken := completionLatency / float64(usage.CompletionTokens)
 		metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
-		logging.Infof("Recorded TPOT for streaming response: model=%s, TPOT=%.4f", ctx.RequestModel, timePerToken)
+		logging.ComponentDebugEvent("extproc", "streaming_tpot_recorded", map[string]interface{}{
+			"model": ctx.RequestModel,
+			"tpot":  timePerToken,
+		})
 		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 	}
 

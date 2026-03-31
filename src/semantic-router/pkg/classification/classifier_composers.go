@@ -66,9 +66,15 @@ func (c *Classifier) filterComplexityByComposer(
 		// Evaluate composer conditions
 		if c.evaluateComposer(rule.Composer, allSignals) {
 			filtered = append(filtered, matched)
-			logging.Infof("Complexity rule '%s' passed composer filter", matched)
+			logging.ComponentDebugEvent("classifier", "complexity_rule_composer_evaluated", map[string]interface{}{
+				"rule":   matched,
+				"result": "passed",
+			})
 		} else {
-			logging.Infof("Complexity rule '%s' filtered out by composer", matched)
+			logging.ComponentDebugEvent("classifier", "complexity_rule_composer_evaluated", map[string]interface{}{
+				"rule":   matched,
+				"result": "filtered_out",
+			})
 		}
 	}
 
