@@ -257,3 +257,31 @@ func buildLocalRateLimitRules(rulesCfg []config.RateLimitRule) []ratelimit.Rule 
 	}
 	return rules
 }
+
+func buildRedisLimiterProvider(cfg *config.RouterConfig, providerCfg config.RateLimitProviderConfig) ratelimit.Provider {
+	client := redis.NewClient(&redis.Options{
+		Addr: providerCfg.Address,
+		DB:   providerCfg.DB,
+	})
+
+	rules := make([]ratelimit.RedisLimiterRule, 0, len(providerCfg.Rules))
+	for _, rule := range providerCfg.Rules {
+		rules = append(rules, ratelimit.RedisLimiterRule{
+			Name: rule.Name,
+			Match: ratelimit.RuleMatch{
+				User:  rule.Match.User,
+				Group: rule.Match.Group,
+				Model: rule.Match.Model,
+			},
+			TokensPerUnit: int64(rule.TokensPerUnit),
+			Unit:          ratelimit.ParseUnit(rule.Unit),
+		})
+	}
+
+	pricingFunc := func(model string) (float64, float64, string, bool) {
+		return cfg.GetModelPricing(model)
+	}
+
+	logging.Infof("RateLimit: redis-limiter provider at %s with %d rules", providerCfg.Address, len(rules))
+	return ratelimit.NewRedisLimiterProvider(client, rules, pricingFunc)
+}
