@@ -265,7 +265,7 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 		if !v.pluginNames[pr.Name] && !isInlinePluginType(pr.Name) {
 			fix := v.suggestPlugin(pr.Name)
 			v.addDiag(DiagWarning, pr.Pos,
-				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type. Supported inline types: system_prompt, semantic_cache, hallucination, memory, rag, tools, image_gen, fast_response, request_params, router_replay, header_mutation, jailbreak, pii, response_jailbreak. Define a template with PLUGIN %s <type> { ... } or use a supported type", pr.Name, pr.Name),
+				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type. Supported inline types: system_prompt, semantic_cache, hallucination, memory, rag, tools, image_gen, fast_response, request_params, router_replay, header_mutation, response_jailbreak. Define a template with PLUGIN %s <type> { ... } or use a supported type", pr.Name, pr.Name),
 				fix,
 			)
 		}

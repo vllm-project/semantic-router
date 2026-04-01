@@ -29,6 +29,9 @@ def test_start_vllm_sr_defaults_to_split_and_cleans_legacy_runtime_residue(
             "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}]
         },
     )
+    monkeypatch.setattr(
+        core, "provision_storage_backends", lambda *args, **kwargs: set()
+    )
     monkeypatch.setattr(core, "log_startup_banner", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         core,

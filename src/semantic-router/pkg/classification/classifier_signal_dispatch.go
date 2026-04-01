@@ -21,6 +21,7 @@ func (c *Classifier) buildSignalDispatchers(
 	currentUserText string,
 	priorUserMessages []string,
 	nonUserMessages []string,
+	hasPriorAssistantReply bool,
 	imgArg string,
 ) []signalDispatch {
 	return []signalDispatch{
@@ -42,7 +43,14 @@ func (c *Classifier) buildSignalDispatchers(
 		},
 		{
 			config.SignalTypeUserFeedback, "User feedback",
-			func() { c.evaluateUserFeedbackSignal(results, mu, textForSignal(config.SignalTypeUserFeedback)) },
+			func() {
+				c.evaluateUserFeedbackSignal(
+					results,
+					mu,
+					textForSignal(config.SignalTypeUserFeedback),
+					hasPriorAssistantReply,
+				)
+			},
 		},
 		{
 			config.SignalTypeReask, "Reask",

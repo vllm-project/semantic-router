@@ -15,6 +15,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const routerReplayTableName = "router_replay"
+
 func init() {
 	pkgtestcases.Register("router-replay-restart-recovery", pkgtestcases.TestCase{
 		Description: "Router Replay records stored in Postgres survive a semantic-router pod restart",
@@ -25,7 +27,7 @@ func init() {
 
 func testRouterReplayRestartRecovery(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing Router Replay: restart recovery (Redis persistence)")
+		fmt.Println("[Test] Testing Router Replay: restart recovery (Postgres persistence)")
 	}
 
 	recordID, err := triggerReplayRecordBeforeRestart(ctx, client, opts)
@@ -45,7 +47,7 @@ func testRouterReplayRestartRecovery(ctx context.Context, client *kubernetes.Cli
 }
 
 // triggerReplayRecordBeforeRestart sends a chat completion through the router,
-// waits for the replay record to appear, and confirms it is persisted in Redis.
+// waits for the replay record to appear, and confirms it is persisted in Postgres.
 func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (string, error) {
 	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
@@ -150,7 +152,7 @@ func assertPostgresReplayRecordStored(ctx context.Context, client *kubernetes.Cl
 		return nil
 	}
 
-	tableName := "router_replay_default_decision"
+	tableName := routerReplayTableName
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE id = '%s'", tableName, recordID)
 	output, err := execPsql(ctx, podName, opts.Verbose, query)
 	if err != nil {

@@ -234,6 +234,7 @@ func TestClassifierEvaluateAllSignalsWithContext_ReaskRecordsConfidenceAndStreak
 		[]string{"older-repeat", "recent-repeat"},
 		[]string{"assistant answer"},
 		true,
+		true,
 		"",
 		nil,
 	)
@@ -294,6 +295,7 @@ func TestClassifierEvaluateAllSignalsWithContext_ReaskRetainsOnlyPersistentTier(
 		[]string{"older-repeat", "recent-repeat"},
 		[]string{"assistant answer"},
 		true,
+		true,
 		"",
 		nil,
 	)
@@ -347,6 +349,7 @@ func TestClassifierEvaluateAllSignalsWithContext_ReaskIgnoresNonUserMessages(t *
 		"current",
 		nil,
 		[]string{"current", "current"},
+		false,
 		true,
 		"",
 		nil,

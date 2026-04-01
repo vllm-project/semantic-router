@@ -37,7 +37,7 @@ description: Calibrates routing changes against a live router endpoint with exec
 ## Workflow
 
 1. Start from executable probes, not prose examples.
-   - Prefer a machine-readable manifest. [`deploy/amd/balance.probes.yaml`](../../../../deploy/amd/balance.probes.yaml) is the default maintained example, not the only supported target.
+   - Prefer a machine-readable manifest. [`deploy/recipes/balance.probes.yaml`](../../../../deploy/recipes/balance.probes.yaml) is the default maintained example, not the only supported target.
    - The manifest should stay profile-generic: point to any owned routing YAML / DSL pair through `routing_assets`, and group probes by decision with multiple variants when robustness matters.
    - Treat each probe as both a test case and a specification fragment.
 2. Baseline the live router before editing policy.
@@ -76,7 +76,7 @@ description: Calibrates routing changes against a live router endpoint with exec
 
 - [AGENTS.md](../../../../AGENTS.md)
 - [deploy/amd/README.md](../../../../deploy/amd/README.md)
-- [deploy/amd/balance.probes.yaml](../../../../deploy/amd/balance.probes.yaml)
+- [deploy/recipes/balance.probes.yaml](../../../../deploy/recipes/balance.probes.yaml)
 - [tools/agent/scripts/router_calibration_loop.py](../../../../tools/agent/scripts/router_calibration_loop.py)
 
 ## Standard Commands
@@ -86,7 +86,7 @@ description: Calibrates routing changes against a live router endpoint with exec
 - `python3 tools/agent/scripts/router_calibration_loop.py run --router-url http://<router-host>:8080 --probes <profile>.probes.yaml --yaml <routing>.yaml --dsl <routing>.dsl`
 - `python3 tools/agent/scripts/router_calibration_loop.py deploy --router-url http://<router-host>:8080 --yaml <routing>.yaml --dsl <routing>.dsl --ready-timeout 300`
 - `make agent-report ENV=amd CHANGED_FILES="deploy/recipes/balance.yaml,deploy/recipes/balance.dsl,deploy/amd/README.md"`
-- `make agent-ci-gate CHANGED_FILES="tools/agent/skills/routing-calibration-loop/SKILL.md,tools/agent/scripts/router_calibration_loop.py,deploy/amd/balance.probes.yaml"`
+- `make agent-ci-gate CHANGED_FILES="tools/agent/skills/routing-calibration-loop/SKILL.md,tools/agent/scripts/router_calibration_loop.py,deploy/recipes/balance.probes.yaml"`
 
 ## Acceptance
 

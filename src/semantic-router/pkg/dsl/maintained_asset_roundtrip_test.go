@@ -62,7 +62,11 @@ func TestMaintainedBalanceRecipeUsesProjectionPartitionsAndTieredDecisions(t *te
 	assertMaintainedBalanceProjectionBands(t, cfg.Projections)
 	assertMaintainedBalanceDecisionTiers(t, cfg.Decisions)
 	assertMaintainedBalanceRoute(t, cfg.Decisions, "complex_agentic")
+	assertMaintainedBalanceRoute(t, cfg.Decisions, "complex_technical")
+	assertMaintainedBalanceRoute(t, cfg.Decisions, "reasoning_specialist")
 	assertMaintainedBalanceRoute(t, cfg.Decisions, "verified_health")
+	assertMaintainedBalanceRoute(t, cfg.Decisions, "verified_fast_qa")
+	assertMaintainedBalanceRoute(t, cfg.Decisions, "casual_chat")
 }
 
 func TestMaintainedBalanceRoutingAssetsStayInSync(t *testing.T) {
@@ -82,10 +86,9 @@ func TestMaintainedBalanceBaseRoutesExplicitlyExcludeVerifiedOverlay(t *testing.
 	cfg := mustLoadMaintainedBalanceRouterConfig(t, yamlPath)
 
 	for _, routeName := range []string{
-		"medium_business",
-		"medium_history",
-		"simple_fast_qa_en",
-		"simple_fast_qa_zh",
+		"medium_explainer",
+		"simple_fast_qa",
+		"simple_general",
 	} {
 		decision := mustFindMaintainedBalanceDecision(t, cfg.Decisions, routeName)
 		if !ruleTreeContainsNegatedSignal(&decision.Rules, config.SignalTypeProjection, "verification_required") {
@@ -120,7 +123,7 @@ func TestMaintainedBalanceWarningBudgetStaysBelowCeiling(t *testing.T) {
 		}
 	}
 
-	const maxWarnings = 88
+	const maxWarnings = 0
 	if warnings > maxWarnings {
 		t.Fatalf("expected maintained balance warning count <= %d after recipe guard tightening, got %d", maxWarnings, warnings)
 	}
@@ -231,8 +234,15 @@ func assertMaintainedBalanceProjectionBands(t *testing.T, projections config.Pro
 	for _, score := range projections.Scores {
 		scoreNames[score.Name] = true
 	}
-	if !scoreNames["difficulty_score"] || !scoreNames["verification_pressure"] {
-		t.Fatalf("expected balance projections to include difficulty_score and verification_pressure, got %v", scoreNames)
+	for _, name := range []string{
+		"difficulty_score",
+		"verification_pressure",
+		"feedback_correction_pressure",
+		"feedback_clarification_pressure",
+	} {
+		if !scoreNames[name] {
+			t.Fatalf("expected balance projections to include %q, got %v", name, scoreNames)
+		}
 	}
 
 	outputNames := make(map[string]bool)
@@ -247,6 +257,8 @@ func assertMaintainedBalanceProjectionBands(t *testing.T, projections config.Pro
 		"balance_complex",
 		"balance_reasoning",
 		"verification_required",
+		"feedback_correction_verified",
+		"feedback_clarification_overlay",
 	} {
 		if !outputNames[name] {
 			t.Fatalf("expected balance projections to emit %q, got %v", name, outputNames)
@@ -276,8 +288,20 @@ func assertMaintainedBalanceDSLMarkers(t *testing.T, dslPath, dslText string) {
 	if !strings.Contains(dslText, "PROJECTION mapping verification_band") {
 		t.Fatalf("%s must define the verification mapping", dslPath)
 	}
+	if !strings.Contains(dslText, "PROJECTION mapping feedback_correction_band") {
+		t.Fatalf("%s must define the feedback correction mapping", dslPath)
+	}
+	if !strings.Contains(dslText, "PROJECTION mapping feedback_clarification_band") {
+		t.Fatalf("%s must define the feedback clarification mapping", dslPath)
+	}
+	if !strings.Contains(dslText, "SIGNAL reask likely_dissatisfied") {
+		t.Fatalf("%s must define the maintained reask helper for clarification routing", dslPath)
+	}
 	if !strings.Contains(dslText, "ROUTE complex_agentic") {
 		t.Fatalf("%s must include the clawrouter-inspired complex_agentic route", dslPath)
+	}
+	if !strings.Contains(dslText, "ROUTE verified_fast_qa") {
+		t.Fatalf("%s must include the merged verified_fast_qa route", dslPath)
 	}
 }
 

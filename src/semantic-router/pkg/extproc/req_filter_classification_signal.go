@@ -16,6 +16,7 @@ type signalEvaluationInput struct {
 	skipCompressionSignals map[string]bool
 	currentUserText        string
 	priorUserMessages      []string
+	hasAssistantReply      bool
 }
 
 func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHistory) signalEvaluationInput {
@@ -25,6 +26,7 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		allMessagesText:   strings.Join(history.nonUserMessages, " "),
 		currentUserText:   history.currentUserMessage,
 		priorUserMessages: append([]string(nil), history.priorUserMessages...),
+		hasAssistantReply: history.hasAssistantReply,
 	}
 
 	if input.evaluationText == "" && len(history.nonUserMessages) > 0 {
@@ -92,6 +94,9 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedPII = signals.MatchedPIIRules
 	ctx.VSRMatchedKB = signals.MatchedKBRules
 	ctx.VSRMatchedProjection = signals.MatchedProjectionRules
+	ctx.VSRProjectionScores = cloneReplayFloat64Map(signals.ProjectionScores)
+	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
+	ctx.VSRSignalValues = cloneReplayFloat64Map(signals.SignalValues)
 
 	if signals.JailbreakDetected {
 		ctx.JailbreakDetected = signals.JailbreakDetected
@@ -105,6 +110,17 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 
 	r.setFactCheckFromSignals(ctx, signals.MatchedFactCheckRules)
 	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
+}
+
+func cloneReplayFloat64Map(values map[string]float64) map[string]float64 {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]float64, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func collectMatchedSignalRules(signals *classification.SignalResults) []string {

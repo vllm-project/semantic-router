@@ -19,7 +19,7 @@ Even if the request routed correctly, the generated answer may still need a fina
 ## When to Use
 
 - a route needs a final response-side jailbreak screen
-- output should be blocked or annotated before returning
+- output should be blocked or flagged via response headers before returning
 - request-side screening alone is not enough for the workload
 
 ## Configuration

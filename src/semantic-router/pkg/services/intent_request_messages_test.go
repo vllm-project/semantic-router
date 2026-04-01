@@ -47,6 +47,7 @@ func TestIntentRequestResolveSignalInput_UsesMessagesConversationHistory(t *test
 	assert.Equal(t, input.evaluationText, input.currentUserText)
 	assert.Equal(t, []string{"Explain inflation vs recession in plain English."}, input.priorUserMessages)
 	assert.Equal(t, []string{"You are a careful tutor.", "Inflation means prices rise over time."}, input.nonUserMessages)
+	assert.True(t, input.hasAssistantReply)
 	assert.Equal(
 		t,
 		"You are a careful tutor. Inflation means prices rise over time. That was not clear. Explain inflation vs recession in plain English.",
@@ -65,6 +66,7 @@ func TestIntentRequestResolveSignalInput_FallsBackToText(t *testing.T) {
 	assert.Equal(t, "Fallback single-turn request", input.currentUserText)
 	assert.Empty(t, input.priorUserMessages)
 	assert.Empty(t, input.nonUserMessages)
+	assert.False(t, input.hasAssistantReply)
 }
 
 func TestClassificationServiceClassifyIntentForEval_AcceptsMessagesWithoutText(t *testing.T) {

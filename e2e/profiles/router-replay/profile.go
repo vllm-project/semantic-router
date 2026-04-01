@@ -1,4 +1,4 @@
-package routerreplaypostgres
+package routerreplay
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	valuesFile       = "e2e/profiles/router-replay-postgres/values.yaml"
+	valuesFile       = "e2e/profiles/router-replay/values.yaml"
 	postgresManifest = "deploy/kubernetes/router-replay/postgres.yaml"
 )
 
@@ -17,16 +17,16 @@ var resourceManifests = []string{
 	"deploy/kubernetes/response-api/gwapi-resources.yaml",
 }
 
-// Profile implements the Router Replay Postgres test profile.
+// Profile implements the Router Replay test profile.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
 
-// NewProfile creates a new Router Replay Postgres profile.
+// NewProfile creates a new Router Replay profile.
 func NewProfile() *Profile {
 	return &Profile{
 		stack: gatewaystack.New(gatewaystack.Config{
-			Name:                     "router-replay-postgres",
+			Name:                     "router-replay",
 			SemanticRouterValuesFile: valuesFile,
 			PrerequisiteManifests:    []string{postgresManifest},
 			ResourceManifests:        resourceManifests,
@@ -36,7 +36,7 @@ func NewProfile() *Profile {
 
 // Name returns the profile name.
 func (p *Profile) Name() string {
-	return "router-replay-postgres"
+	return "router-replay"
 }
 
 // Description returns the profile description.

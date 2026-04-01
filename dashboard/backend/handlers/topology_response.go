@@ -198,6 +198,7 @@ func buildEvaluatedRule(decision routerconfig.Decision, matchedSignalNames map[s
 	rule := EvaluatedRule{
 		DecisionName: decision.Name,
 		RuleOperator: strings.ToUpper(decision.Rules.Operator),
+		Conditions:   []string{},
 		IsMatch:      false,
 		Priority:     decision.Priority,
 	}

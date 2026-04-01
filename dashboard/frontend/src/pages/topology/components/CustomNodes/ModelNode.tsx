@@ -17,13 +17,14 @@ interface ModelNodeData {
   decisionName: string
   fromDecisions?: string[]
   isHighlighted?: boolean
+  usageLabel?: string
   // New: aggregated modes from multiple decisions
   modes?: ModelMode[]
   hasMultipleModes?: boolean
 }
 
 export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
-  const { modelRef, decisionName, isHighlighted, modes, hasMultipleModes } = data
+  const { modelRef, decisionName, isHighlighted, usageLabel, modes, hasMultipleModes } = data
   const { model, lora_name, reasoning_family } = modelRef
 
   // Extract short model name
@@ -36,6 +37,7 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
   // Determine primary display mode
   const hasAnyReasoning = reasoningModes.length > 0
   const hasAnyStandard = standardModes.length > 0
+  const sourceText = usageLabel || decisionName
 
   // Node colors based on whether it has reasoning capability
   const colors = hasAnyReasoning
@@ -140,8 +142,8 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
       {/* Source Decisions */}
       <div className={styles.modelSource}>
         <span className={styles.sourceLabel}>from:</span>
-        <span className={styles.sourceName} title={decisionName}>
-          {decisionName.length > 30 ? decisionName.slice(0, 27) + '...' : decisionName}
+        <span className={styles.sourceName} title={sourceText}>
+          {sourceText.length > 30 ? sourceText.slice(0, 27) + '...' : sourceText}
         </span>
       </div>
 

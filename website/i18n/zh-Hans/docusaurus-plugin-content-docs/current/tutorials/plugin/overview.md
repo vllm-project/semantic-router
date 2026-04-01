@@ -56,6 +56,7 @@ routing:
 - [Fast Response](./fast-response)
 - [Header Mutation](./header-mutation)
 - [Image Generation](./image-gen)
+- [Request Parameters](./request-params)
 - [System Prompt](./system-prompt)
 - [Tools](./tools)
 
@@ -70,6 +71,4 @@ routing:
 
 - [Content Safety](./content-safety)
 - [Hallucination](./hallucination)
-- [Jailbreak](./jailbreak)
-- [PII](./pii)
 - [Response Jailbreak](./response-jailbreak)

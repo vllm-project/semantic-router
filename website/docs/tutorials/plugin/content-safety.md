@@ -2,7 +2,7 @@
 
 ## Overview
 
-`content-safety` is a reusable route-local safety bundle that combines multiple safety plugins in one fragment.
+`content-safety` is a reusable route-local safety bundle that combines supported safety-oriented plugins in one fragment.
 
 It aligns to `config/plugin/content-safety/hybrid.yaml`.
 
@@ -14,13 +14,13 @@ It aligns to `config/plugin/content-safety/hybrid.yaml`.
 
 ## What Problem Does It Solve?
 
-Some routes need more than one safety control at once. Instead of repeatedly hand-writing jailbreak, PII, and response screening plugins together, `content-safety` packages that chain into one reusable fragment.
+Some routes need more than one safety control at once. Instead of repeatedly hand-writing response screening, route-local guard prompts, and audit headers together, `content-safety` packages that chain into one reusable fragment.
 
 ## When to Use
 
 - a route needs several safety plugins together
 - you want one reusable moderation chain for multiple routes
-- the route should apply both request-side and response-side checks
+- the route should apply both route-local guidance and response-side screening
 
 ## Configuration
 
@@ -28,17 +28,19 @@ Use this fragment under `routing.decisions[].plugins`:
 
 ```yaml
 plugins:
-  - type: jailbreak
+  - type: system_prompt
     configuration:
       enabled: true
-      threshold: 0.6
-  - type: pii
+      mode: insert
+      system_prompt: Apply the platform safety policy before answering and clearly note when a request needs additional review.
+  - type: header_mutation
     configuration:
-      enabled: true
-      pii_types_allowed: []
+      add:
+        - name: X-Safety-Profile
+          value: standard
   - type: response_jailbreak
     configuration:
       enabled: true
       threshold: 0.8
-      action: annotate
+      action: header
 ```

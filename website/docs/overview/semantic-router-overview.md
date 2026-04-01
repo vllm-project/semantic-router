@@ -117,8 +117,7 @@ routing:
     - name: "guarded-route"
       plugins:
         - type: "semantic-cache" # Check cache first
-        - type: "jailbreak" # Detect adversarial prompts
-        - type: "pii" # Filter sensitive data
+        - type: "response_jailbreak" # Screen risky responses
         - type: "system_prompt" # Add context
         - type: "hallucination" # Verify facts
 ```
@@ -175,7 +174,7 @@ if (has_math_keywords AND is_math_domain) OR has_high_math_embedding: route_to_m
 **Plugins Applied**:
 
 - semantic-cache: Cache miss, proceed
-- jailbreak: No adversarial patterns
+- response_jailbreak: Output screening remains active
 - system_prompt: Added "Provide rigorous mathematical proof"
 - hallucination: Enabled for verification
 

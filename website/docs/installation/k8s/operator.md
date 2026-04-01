@@ -1,20 +1,21 @@
 ---
-sidebar_position: 8
+sidebar_position: 3
+sidebar_label: Install with Operator
 ---
 
-# Kubernetes Operator
+# Install with Operator
 
 The Semantic Router Operator provides a Kubernetes-native way to deploy and manage vLLM Semantic Router instances using Custom Resource Definitions (CRDs). It simplifies deployment, configuration, and lifecycle management across Kubernetes and OpenShift platforms.
 
 ## Features
 
-- **🚀 Declarative Deployment**: Define semantic router instances using Kubernetes CRDs
-- **🔄 Automatic Configuration**: Generates and manages ConfigMaps for semantic router configuration
-- **📦 Persistent Storage**: Manages PVCs for ML model storage with automatic lifecycle
-- **🔐 Platform Detection**: Automatically detects and configures for OpenShift or standard Kubernetes
-- **📊 Built-in Observability**: Metrics, tracing, and monitoring support out of the box
-- **🎯 Production Features**: HPA, ingress, service mesh integration, and pod disruption budgets
-- **🛡️ Secure by Default**: Drops all capabilities, prevents privilege escalation
+- **Declarative deployment**: Define semantic router instances using Kubernetes CRDs
+- **Automatic configuration**: Generates and manages ConfigMaps for semantic router configuration
+- **Persistent storage**: Manages PVCs for ML model storage with automatic lifecycle
+- **Platform detection**: Automatically detects and configures for OpenShift or standard Kubernetes
+- **Built-in observability**: Metrics, tracing, and monitoring support out of the box
+- **Production features**: HPA, ingress, service mesh integration, and pod disruption budgets
+- **Secure by default**: Drops all capabilities, prevents privilege escalation
 
 ## Prerequisites
 

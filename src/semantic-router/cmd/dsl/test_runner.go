@@ -82,6 +82,7 @@ func (r *nativeTestBlockRunner) EvaluateTestBlockQuery(query string) (*dsl.TestB
 		query,
 		nil,
 		nil,
+		false,
 		nil,
 		false,
 		"",

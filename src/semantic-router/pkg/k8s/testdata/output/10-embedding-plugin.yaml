@@ -56,8 +56,7 @@ routing:
         - model: deepseek-r1
           use_reasoning: false
       plugins:
-        - type: pii
-        - type: jailbreak
+        - type: fast_response
 global:
   router:
     config_source: kubernetes

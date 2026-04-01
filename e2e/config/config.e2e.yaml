@@ -42,12 +42,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: law_decision
       description: Legal questions and law-related topics
       priority: 100
@@ -59,17 +53,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: psychology_decision
       description: Psychology and mental health topics
       priority: 100
@@ -81,12 +64,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: biology_decision
       description: Biology and life sciences questions
       priority: 100
@@ -98,12 +75,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: chemistry_decision
       description: Chemistry and chemical sciences questions
       priority: 100
@@ -115,12 +86,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: true
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: history_decision
       description: Historical questions and cultural topics
       priority: 100
@@ -132,12 +97,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: health_decision
       description: Health and medical information queries
       priority: 100
@@ -149,17 +108,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: economics_decision
       description: Economics and financial topics
       priority: 100
@@ -171,17 +119,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: math_decision
       description: Mathematics and quantitative reasoning
       priority: 100
@@ -193,17 +130,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: true
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: physics_decision
       description: Physics and physical sciences
       priority: 100
@@ -215,17 +141,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: true
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: computer_science_decision
       description: Computer science and programming
       priority: 100
@@ -237,17 +152,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: philosophy_decision
       description: Philosophy and ethical questions
       priority: 100
@@ -259,12 +163,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: engineering_decision
       description: Engineering and technical problem-solving
       priority: 100
@@ -276,17 +174,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: general_decision
       description: General knowledge and miscellaneous topics
       priority: 50
@@ -298,17 +185,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: default_decision
       description: Default catch-all decision - blocks all PII for safety
       priority: 1
@@ -319,11 +195,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
   signals:
     domains:
       - name: business

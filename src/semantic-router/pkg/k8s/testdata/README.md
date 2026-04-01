@@ -94,29 +94,29 @@ testdata/
    - Plugins: semantic-cache, header_mutation
 
 9. **10-embedding-plugin.yaml** - Embedding + Plugins
-   - Use case: PII-protected sensitive data handling
-   - Plugins: pii (redaction), jailbreak protection
+   - Use case: Sensitive data handling with immediate user feedback
+   - Plugins: fast_response
 
 10. **11-domain-plugin.yaml** - Domain + Plugins
     - Use case: Legal advice with disclaimers
     - Plugins: system_prompt, semantic-cache
 
 11. **12-keyword-embedding-plugin.yaml** - Keyword + Embedding + Plugins
-    - Use case: Security queries with protection
-    - Plugins: jailbreak, system_prompt, header_mutation
+    - Use case: Security queries with expert guidance and audit headers
+    - Plugins: system_prompt, header_mutation
 
 12. **13-keyword-domain-plugin.yaml** - Keyword + Domain + Plugins
-    - Use case: Medical queries with PII protection
-    - Plugins: pii (hash mode), system_prompt, semantic-cache
+    - Use case: Medical queries with disclaimers and caching
+    - Plugins: system_prompt, semantic-cache
 
 13. **14-domain-embedding-plugin.yaml** - Domain + Embedding + Plugins
-    - Use case: Financial advice with comprehensive protection
-    - Plugins: pii, system_prompt, jailbreak, semantic-cache
+    - Use case: Financial advice with disclaimers and caching
+    - Plugins: system_prompt, semantic-cache
 
 14. **15-keyword-embedding-domain-plugin.yaml** - Keyword + Embedding + Domain + Plugins
-    - Use case: Enterprise compliance and legal queries with full protection
+    - Use case: Enterprise compliance and legal queries with route-local guidance
     - Signals: compliance/confidential keywords + business_analysis/legal_review embeddings + business/law/economics domains
-    - Plugins: pii (hash/mask modes), jailbreak, system_prompt, semantic-cache, header_mutation
+    - Plugins: system_prompt, semantic-cache, header_mutation
     - Multiple decisions with different plugin configurations
 
 15. **16-keyword-embedding-domain-no-plugin.yaml** - All signals, no plugins
@@ -127,8 +127,7 @@ testdata/
 ## Plugin Types Used
 
 - **semantic-cache**: Cache responses for similar queries
-- **pii**: Detect and redact/mask/hash PII entities
-- **jailbreak**: Detect and block jailbreak attempts
+- **fast_response**: Return an immediate route-local response without calling an upstream model
 - **system_prompt**: Inject custom system prompts
 - **header_mutation**: Add custom headers to requests
 

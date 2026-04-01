@@ -192,13 +192,6 @@ decisions:
       configuration:
         enabled: true
         similarity_threshold: 0.9  # Higher threshold for math
-    - type: "jailbreak"
-      configuration:
-        enabled: true
-    - type: "pii"
-      configuration:
-        enabled: true
-        threshold: 0.8
     - type: "system_prompt"
       configuration:
         enabled: true
@@ -459,13 +452,6 @@ decisions:
         configuration:
           enabled: true
           similarity_threshold: 0.9  # Higher for math
-      - type: "jailbreak"
-        configuration:
-          enabled: true
-      - type: "pii"
-        configuration:
-          enabled: true
-          threshold: 0.8
       - type: "system_prompt"
         configuration:
           enabled: true

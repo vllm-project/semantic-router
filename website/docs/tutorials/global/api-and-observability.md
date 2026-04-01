@@ -75,6 +75,7 @@ global:
   services:
     router_replay:
       store_backend: postgres     # default; SQL-queryable audit storage
+      enabled: true
       async_writes: true
       postgres:
         host: postgres
@@ -83,6 +84,8 @@ global:
         user: router
         password: router-secret
 ```
+
+`global.services.router_replay.enabled` is the router-wide default. When it is on, a decision captures replay unless that decision adds a route-local `router_replay` plugin with `enabled: false`.
 
 The `store_backend` field controls where routing-decision replay records are persisted. Available backends:
 

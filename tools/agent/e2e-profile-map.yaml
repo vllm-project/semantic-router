@@ -155,13 +155,13 @@ manual_profile_rules:
     paths:
       - e2e/profiles/response-api-redis-cluster/**
       - deploy/kubernetes/response-api/redis-cluster.yaml
-  router-replay-postgres:
+  router-replay:
     owner: e2e
-    coverage_role: router-replay-postgres-restart-recovery
+    coverage_role: router-replay-restart-recovery
     selection_mode: manual-only
     summary: Router Replay restart-recovery coverage with Postgres backend, validating that replay records survive pod restarts.
     paths:
-      - e2e/profiles/router-replay-postgres/**
+      - e2e/profiles/router-replay/**
       - deploy/kubernetes/router-replay/**
       - src/semantic-router/pkg/routerreplay/**
       - src/semantic-router/pkg/extproc/router_replay_setup.go

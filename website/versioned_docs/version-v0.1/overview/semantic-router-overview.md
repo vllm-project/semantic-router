@@ -88,8 +88,7 @@ Before and after model execution, plugins process the request/response:
 ```yaml
 plugins:
   - type: "semantic-cache"    # Check cache first
-  - type: "jailbreak"         # Detect adversarial prompts
-  - type: "pii"               # Filter sensitive data
+  - type: "response_jailbreak" # Screen risky responses
   - type: "system_prompt"     # Add context
   - type: "hallucination"     # Verify facts
 ```

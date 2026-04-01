@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { DataTable } from '../components/DataTable'
 import InsightsCharts from '../components/InsightsCharts'
 import TableHeader from '../components/TableHeader'
-import ViewModal from '../components/ViewModal'
-import { useReadonly } from '../contexts/ReadonlyContext'
 
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
-import { buildInsightsRecordSections, createInsightsTableColumns } from './insightsPageSupport'
+import {
+  fetchInsightsJSON,
+  isInsightsReplayUnavailableError,
+} from './insightsPageApi'
+import {
+  createInsightsTableColumns,
+  getInsightsRecordPath,
+} from './insightsPageSupport'
 import type {
   InsightsAggregateResponse,
   InsightsFilterType,
@@ -52,29 +58,19 @@ function buildReplayQueryString(filters: ReplayQueryFilters, pagination?: { limi
   return query ? `?${query}` : ''
 }
 
-async function fetchInsightsJSON<T>(url: string, label: string): Promise<T> {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${label}: ${response.status} ${response.statusText}`)
-  }
-  return (await response.json()) as T
-}
-
 export default function InsightsPage() {
-  const { isReadonly } = useReadonly()
+  const navigate = useNavigate()
   const [records, setRecords] = useState<InsightsRecord[]>([])
   const [aggregate, setAggregate] = useState<InsightsAggregateResponse | null>(null)
   const [totalRecords, setTotalRecords] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [replayUnavailable, setReplayUnavailable] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [filter, setFilter] = useState<InsightsFilterType>('all')
   const [decisionFilter, setDecisionFilter] = useState('all')
   const [modelFilter, setModelFilter] = useState('all')
-  const [viewModalOpen, setViewModalOpen] = useState(false)
-  const [selectedRecordForModal, setSelectedRecordForModal] = useState<InsightsRecord | null>(null)
-  const [modalLoading, setModalLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const requestSequenceRef = useRef(0)
   const tableColumns = useMemo(() => createInsightsTableColumns(), [])
@@ -121,15 +117,18 @@ export default function InsightsPage() {
       setTotalRecords(typeof listResponse.total === 'number' ? listResponse.total : listResponse.count)
       setAggregate(aggregateResponse)
       setError(null)
+      setReplayUnavailable(false)
     } catch (err) {
       if (requestSequenceRef.current !== requestSequence) {
         return
       }
 
+      const unavailable = isInsightsReplayUnavailableError(err)
       setRecords([])
       setTotalRecords(0)
       setAggregate(null)
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      setError(unavailable ? null : err instanceof Error ? err.message : 'Unknown error')
+      setReplayUnavailable(unavailable)
     } finally {
       if (requestSequenceRef.current === requestSequence) {
         setLoading(false)
@@ -185,29 +184,9 @@ export default function InsightsPage() {
     setCurrentPage(1)
   }, [])
 
-  const handleViewRecord = useCallback(async (record: InsightsRecord) => {
-    setModalLoading(true)
-    setViewModalOpen(true)
-
-    try {
-      const response = await fetch(`/api/router/v1/router_replay/${record.id}`)
-      if (response.ok) {
-        const freshRecord = (await response.json()) as InsightsRecord
-        setSelectedRecordForModal(freshRecord)
-      } else {
-        setSelectedRecordForModal(record)
-      }
-    } catch {
-      setSelectedRecordForModal(record)
-    } finally {
-      setModalLoading(false)
-    }
-  }, [])
-
-  const closeModal = useCallback(() => {
-    setViewModalOpen(false)
-    setSelectedRecordForModal(null)
-  }, [])
+  const handleViewRecord = useCallback((record: InsightsRecord) => {
+    navigate(getInsightsRecordPath(record.id))
+  }, [navigate])
 
   if (loading && !hasReplayData && records.length === 0) {
     return (
@@ -316,15 +295,29 @@ export default function InsightsPage() {
 
           {!hasReplayData && !loading ? (
             <div className={styles.emptyState}>
-              {error ? (
+              {replayUnavailable ? (
                 <div className={styles.emptyHint}>
-                  <p>Unable to load insights. If replay is disabled, enable the `router_replay` plugin and send traffic through the router.</p>
-                  <pre className={styles.configHint}>{`router_replay:
-  enabled: true
-  store_backend: memory  # or redis, postgres
-  max_records: 200
-  capture_request_body: true
-  capture_response_body: true`}</pre>
+                  <p>Insights stay empty until router replay is enabled and requests flow through the router.</p>
+                  <p className={styles.emptySubtext}>
+                    Enable `global.services.router_replay.enabled`, or override a specific decision with `router_replay.enabled: true`. Use `enabled: false` on a decision only when you need to turn replay off for that route.
+                  </p>
+                </div>
+              ) : error ? (
+                <div className={styles.emptyHint}>
+                  <p>Unable to load insights. If replay is disabled, enable router replay globally or on the affected decision, then send traffic through the router.</p>
+                  <pre className={styles.configHint}>{`global:
+  services:
+    router_replay:
+      enabled: true
+      store_backend: memory  # or redis, postgres, milvus
+
+routing:
+  decisions:
+    - name: some-route
+      plugins:
+        - type: router_replay
+          configuration:
+            enabled: false  # optional per-decision opt-out`}</pre>
                   <p className={styles.emptySubtext}>Then restart the router and send some requests.</p>
                 </div>
               ) : (
@@ -380,23 +373,6 @@ export default function InsightsPage() {
           </button>
         </div>
       ) : null}
-
-      <ViewModal
-        isOpen={viewModalOpen}
-        onClose={closeModal}
-        title={
-          modalLoading
-            ? 'Loading...'
-            : selectedRecordForModal?.request_id
-              ? `Record: ${selectedRecordForModal.request_id.substring(0, 8)}...`
-              : `Record: ${selectedRecordForModal?.decision || selectedRecordForModal?.id || ''}`
-        }
-        sections={
-          selectedRecordForModal
-            ? buildInsightsRecordSections(selectedRecordForModal, { isReadonly })
-            : []
-        }
-      />
     </ConfigPageManagerLayout>
   )
 }

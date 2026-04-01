@@ -55,7 +55,7 @@ routing:
           - biology
   decisions:
     - name: medical_query
-      description: Medical queries with PII protection
+      description: Medical queries with guided handling
       priority: 100
       rules:
         operator: AND
@@ -68,7 +68,6 @@ routing:
         - model: deepseek-r1
           use_reasoning: false
       plugins:
-        - type: pii
         - type: system_prompt
         - type: semantic-cache
 global:

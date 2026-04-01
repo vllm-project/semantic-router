@@ -281,6 +281,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       case 'PII':
         cfg.signals.pii = (cfg.signals.pii || []).filter(s => s.name !== targetName)
         break
+      case 'KB':
+        cfg.signals.kb = (cfg.signals.kb || []).filter(s => s.name !== targetName)
+        break
       default:
         break
     }

@@ -30,6 +30,7 @@ import FleetSimRunsPage from './pages/FleetSimRunsPage'
 import OpenClawPage from './pages/OpenClawPage'
 import UsersPage from './pages/UsersPage'
 import InsightsPage from './pages/InsightsPage'
+import InsightsRecordPage from './pages/InsightsRecordPage'
 import TaxonomyPage, { type KnowledgeBaseView } from './pages/TaxonomyPage'
 import KnowledgeMapPage from './pages/KnowledgeMapPage'
 import { ConfigSection } from './components/ConfigNav'
@@ -393,6 +394,17 @@ const AppRouter: React.FC = () => {
                   onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
                 >
                   <InsightsPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/insights/:recordId"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <InsightsRecordPage />
                 </Layout>
               }
             />

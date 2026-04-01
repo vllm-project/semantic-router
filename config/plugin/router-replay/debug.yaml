@@ -2,7 +2,7 @@ plugin:
   type: router_replay
   configuration:
     enabled: true
-    max_records: 5000
+    max_records: 10000
     capture_request_body: true
-    capture_response_body: false
-    max_body_bytes: 65536
+    capture_response_body: true
+    max_body_bytes: 4096
