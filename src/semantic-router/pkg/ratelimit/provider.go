@@ -63,7 +63,9 @@ type Decision struct {
 // TokenUsage represents actual token consumption from an LLM response,
 // following the OpenAI usage schema.
 type TokenUsage struct {
-	InputTokens  int
-	OutputTokens int
-	TotalTokens  int
+	InputTokens          int
+	OutputTokens         int
+	TotalTokens          int
+	CachedInputTokens    int
+	CacheCreationTokens  int
 }

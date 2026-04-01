@@ -99,6 +99,15 @@ func (c *RouterConfig) resolveModelConfig(modelName string) (ModelParams, bool) 
 	return ModelParams{}, false
 }
 
+// ModelPricingResult holds the full pricing breakdown for a model.
+type ModelPricingResult struct {
+	PromptPer1M     float64
+	CompletionPer1M float64
+	CacheReadPer1M  float64
+	CacheWritePer1M float64
+	Currency        string
+}
+
 // GetModelPricing returns pricing per 1M tokens and its currency for the given model.
 // The currency indicates the unit of the returned rates (e.g., "USD").
 // Accepts both short names ("claude-haiku-4-5") and provider model IDs
@@ -117,6 +126,28 @@ func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, c
 		}
 	}
 	return 0, 0, "", false
+}
+
+// GetModelPricingFull returns the complete pricing breakdown for a model,
+// including cache read/write rates for Anthropic prompt caching.
+func (c *RouterConfig) GetModelPricingFull(modelName string) (ModelPricingResult, bool) {
+	if modelConfig, okc := c.ModelConfig[modelName]; okc {
+		p := modelConfig.Pricing
+		if p.PromptPer1M != 0 || p.CompletionPer1M != 0 || p.Currency != "" {
+			cur := p.Currency
+			if cur == "" {
+				cur = "USD"
+			}
+			return ModelPricingResult{
+				PromptPer1M:     p.PromptPer1M,
+				CompletionPer1M: p.CompletionPer1M,
+				CacheReadPer1M:  p.CacheReadPer1M,
+				CacheWritePer1M: p.CacheWritePer1M,
+				Currency:        cur,
+			}, true
+		}
+	}
+	return ModelPricingResult{}, false
 }
 
 // GetMostExpensivePricedModel returns the configured model with the highest combined

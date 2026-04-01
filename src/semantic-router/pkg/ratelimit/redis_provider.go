@@ -16,6 +16,18 @@ import (
 // has no pricing configured.
 type ModelPricingFunc func(modelName string) (promptPer1M, completionPer1M float64, currency string, ok bool)
 
+// ModelPricingFullFunc returns the complete pricing breakdown for a model,
+// including cache read/write rates for prompt caching cost tracking.
+type ModelPricingFullFunc func(modelName string) (result ModelPricingRates, ok bool)
+
+// ModelPricingRates holds all per-1M-token rates needed for CEL cost calculation.
+type ModelPricingRates struct {
+	PromptPer1M     float64
+	CompletionPer1M float64
+	CacheReadPer1M  float64
+	CacheWritePer1M float64
+}
+
 // RedisLimiterRule defines a group-based budget rule for the redis-limiter.
 type RedisLimiterRule struct {
 	Name          string
@@ -31,10 +43,11 @@ type RedisLimiterRule struct {
 // Cost is expressed in CEL units (1 unit = $10⁻⁸) for consistency with
 // the Envoy AI Gateway's CEL cost formulas.
 type RedisLimiterProvider struct {
-	client       redis.Cmdable
-	rules        []RedisLimiterRule
-	pricingFunc  ModelPricingFunc
-	keyPrefix    string
+	client          redis.Cmdable
+	rules           []RedisLimiterRule
+	pricingFunc     ModelPricingFunc
+	pricingFullFunc ModelPricingFullFunc
+	keyPrefix       string
 }
 
 // RedisLimiterOption configures a RedisLimiterProvider.
@@ -44,6 +57,14 @@ type RedisLimiterOption func(*RedisLimiterProvider)
 func WithKeyPrefix(prefix string) RedisLimiterOption {
 	return func(p *RedisLimiterProvider) {
 		p.keyPrefix = prefix
+	}
+}
+
+// WithFullPricingFunc sets a pricing function that includes cache read/write rates.
+// When set, calculateCELCost uses this instead of the basic pricingFunc.
+func WithFullPricingFunc(fn ModelPricingFullFunc) RedisLimiterOption {
+	return func(p *RedisLimiterProvider) {
+		p.pricingFullFunc = fn
 	}
 }
 
@@ -195,8 +216,34 @@ func (p *RedisLimiterProvider) redisKey(userID string, unit time.Duration) strin
 //
 // The gateway's CEL formula uses per-token rates that are already in
 // $10⁻⁸ units. Model pricing in config is per-1M tokens in dollars, so:
-//   rate_per_token_in_cel = (dollars_per_1M / 1e6) × 1e8 = dollars_per_1M × 100
+//
+//	rate_per_token_in_cel = (dollars_per_1M / 1e6) × 1e8 = dollars_per_1M × 100
+//
+// When full pricing is available (cache_read_per_1m, cache_write_per_1m),
+// the formula matches the Envoy AI Gateway CEL expression:
+//
+//	input_tokens * inputRate + output_tokens * outputRate
+//	  + cached_input_tokens * cacheReadRate
+//	  + cache_creation_input_tokens * cacheWriteRate
 func (p *RedisLimiterProvider) calculateCELCost(model string, usage TokenUsage) int64 {
+	// Try full pricing first (includes cache rates)
+	if p.pricingFullFunc != nil {
+		rates, ok := p.pricingFullFunc(model)
+		if ok {
+			inputRate := int64(rates.PromptPer1M * 100)
+			outputRate := int64(rates.CompletionPer1M * 100)
+			cost := int64(usage.InputTokens)*inputRate + int64(usage.OutputTokens)*outputRate
+			if usage.CachedInputTokens > 0 && rates.CacheReadPer1M > 0 {
+				cost += int64(usage.CachedInputTokens) * int64(rates.CacheReadPer1M*100)
+			}
+			if usage.CacheCreationTokens > 0 && rates.CacheWritePer1M > 0 {
+				cost += int64(usage.CacheCreationTokens) * int64(rates.CacheWritePer1M*100)
+			}
+			return cost
+		}
+	}
+
+	// Fall back to basic pricing (input + output only)
 	if p.pricingFunc == nil {
 		return int64(usage.InputTokens + usage.OutputTokens)
 	}

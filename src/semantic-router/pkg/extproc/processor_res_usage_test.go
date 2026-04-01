@@ -81,7 +81,7 @@ func TestExtractStreamingUsage_WithAllFields(t *testing.T) {
 		},
 	}
 
-	usage := extractStreamingUsage(ctx)
+	usage, _ := extractStreamingUsage(ctx)
 
 	assert.Equal(t, int64(15), usage.PromptTokens)
 	assert.Equal(t, int64(25), usage.CompletionTokens)
@@ -96,7 +96,7 @@ func TestExtractStreamingUsage_NoUsageInMetadata(t *testing.T) {
 		},
 	}
 
-	usage := extractStreamingUsage(ctx)
+	usage, _ := extractStreamingUsage(ctx)
 
 	assert.Equal(t, int64(0), usage.PromptTokens)
 	assert.Equal(t, int64(0), usage.CompletionTokens)
@@ -112,7 +112,7 @@ func TestExtractStreamingUsage_PartialFields(t *testing.T) {
 		},
 	}
 
-	usage := extractStreamingUsage(ctx)
+	usage, _ := extractStreamingUsage(ctx)
 
 	assert.Equal(t, int64(10), usage.PromptTokens)
 	assert.Equal(t, int64(0), usage.CompletionTokens, "missing fields default to 0")
