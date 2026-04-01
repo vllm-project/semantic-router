@@ -467,7 +467,7 @@ RUN cd src/semantic-router && \
 # ============================================================================
 # Final stage: runtime image (candle on all platforms, onnx binary on amd64 only)
 # ============================================================================
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 # Install runtime dependencies including OpenSSL, Python and HuggingFace CLI
 RUN apt-get update && \
