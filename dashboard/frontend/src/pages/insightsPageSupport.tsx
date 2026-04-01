@@ -194,7 +194,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
     {
       key: 'signals',
       header: 'Signals',
-      width: '200px',
+      width: '180px',
       render: (row) => {
         const allSignals = collectSignals(row.signals)
         if (allSignals.length === 0) {
@@ -211,7 +211,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
     {
       key: 'tools',
       header: 'Tools',
-      width: '170px',
+      width: '120px',
       render: (row) => renderToolNamesCell(row),
     },
     {

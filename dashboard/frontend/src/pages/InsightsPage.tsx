@@ -334,6 +334,7 @@ routing:
               keyExtractor={(row) => row.id}
               onView={handleViewRecord}
               emptyMessage="No insight records match your current filters"
+              className={styles.insightsTable}
             />
           )}
         </section>
