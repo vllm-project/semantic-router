@@ -282,6 +282,20 @@ func buildRedisLimiterProvider(cfg *config.RouterConfig, providerCfg config.Rate
 		return cfg.GetModelPricing(model)
 	}
 
+	pricingFullFunc := func(model string) (ratelimit.ModelPricingRates, bool) {
+		result, ok := cfg.GetModelPricingFull(model)
+		if !ok {
+			return ratelimit.ModelPricingRates{}, false
+		}
+		return ratelimit.ModelPricingRates{
+			PromptPer1M:     result.PromptPer1M,
+			CompletionPer1M: result.CompletionPer1M,
+			CacheReadPer1M:  result.CacheReadPer1M,
+			CacheWritePer1M: result.CacheWritePer1M,
+		}, true
+	}
+
 	logging.Infof("RateLimit: redis-limiter provider at %s with %d rules", providerCfg.Address, len(rules))
-	return ratelimit.NewRedisLimiterProvider(client, rules, pricingFunc)
+	return ratelimit.NewRedisLimiterProvider(client, rules, pricingFunc,
+		ratelimit.WithFullPricingFunc(pricingFullFunc))
 }

@@ -14,8 +14,10 @@ import (
 )
 
 type responseUsageMetrics struct {
-	promptTokens     int
-	completionTokens int
+	promptTokens        int
+	completionTokens    int
+	cachedInputTokens   int
+	cacheCreationTokens int
 }
 
 // =====================================================================
@@ -38,9 +40,20 @@ func parseResponseUsage(responseBody []byte, model string) responseUsageMetrics 
 		return responseUsageMetrics{}
 	}
 
+	// Anthropic prompt caching fields (nested under usage.cache_read_input_tokens
+	// and usage.cache_creation_input_tokens in the Anthropic response format,
+	// or under prompt_tokens_details in the OpenAI format).
+	cachedInput := gjson.GetBytes(responseBody, "usage.cache_read_input_tokens")
+	if !cachedInput.Exists() {
+		cachedInput = gjson.GetBytes(responseBody, "usage.prompt_tokens_details.cached_tokens")
+	}
+	cacheCreation := gjson.GetBytes(responseBody, "usage.cache_creation_input_tokens")
+
 	return responseUsageMetrics{
-		promptTokens:     int(promptTokens.Int()),
-		completionTokens: int(completionTokens.Int()),
+		promptTokens:        int(promptTokens.Int()),
+		completionTokens:    int(completionTokens.Int()),
+		cachedInputTokens:   int(cachedInput.Int()),
+		cacheCreationTokens: int(cacheCreation.Int()),
 	}
 }
 
@@ -53,9 +66,11 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 
 	if r.RateLimiter != nil && ctx.RateLimitCtx != nil {
 		r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{
-			InputTokens:  usage.promptTokens,
-			OutputTokens: usage.completionTokens,
-			TotalTokens:  totalTokens,
+			InputTokens:         usage.promptTokens,
+			OutputTokens:        usage.completionTokens,
+			TotalTokens:         totalTokens,
+			CachedInputTokens:   usage.cachedInputTokens,
+			CacheCreationTokens: usage.cacheCreationTokens,
 		})
 	}
 
@@ -132,15 +147,22 @@ func (r *OpenAIRouter) recordResponseCost(
 // STREAMING
 // =====================================================================
 
-func extractStreamingUsage(ctx *RequestContext) openai.CompletionUsage {
+// streamingCacheUsage holds cache token counts extracted from streaming metadata.
+type streamingCacheUsage struct {
+	cachedInputTokens   int
+	cacheCreationTokens int
+}
+
+func extractStreamingUsage(ctx *RequestContext) (openai.CompletionUsage, streamingCacheUsage) {
 	usage := openai.CompletionUsage{
 		PromptTokens:     0,
 		CompletionTokens: 0,
 		TotalTokens:      0,
 	}
+	var cacheUsage streamingCacheUsage
 	usageMap, ok := ctx.StreamingMetadata["usage"].(map[string]interface{})
 	if !ok {
-		return usage
+		return usage, cacheUsage
 	}
 
 	if promptTokens, ok := usageMap["prompt_tokens"].(float64); ok {
@@ -152,18 +174,34 @@ func extractStreamingUsage(ctx *RequestContext) openai.CompletionUsage {
 	if totalTokens, ok := usageMap["total_tokens"].(float64); ok {
 		usage.TotalTokens = int64(totalTokens)
 	}
-	return usage
+	// Anthropic cache tokens
+	if v, ok := usageMap["cache_read_input_tokens"].(float64); ok {
+		cacheUsage.cachedInputTokens = int(v)
+	}
+	if v, ok := usageMap["cache_creation_input_tokens"].(float64); ok {
+		cacheUsage.cacheCreationTokens = int(v)
+	}
+	// OpenAI prompt_tokens_details.cached_tokens
+	if details, ok := usageMap["prompt_tokens_details"].(map[string]interface{}); ok {
+		if v, ok := details["cached_tokens"].(float64); ok && cacheUsage.cachedInputTokens == 0 {
+			cacheUsage.cachedInputTokens = int(v)
+		}
+	}
+	return usage, cacheUsage
 }
 
 func (r *OpenAIRouter) reportStreamingUsageMetrics(
 	ctx *RequestContext,
 	usage openai.CompletionUsage,
+	cacheUsage streamingCacheUsage,
 ) {
 	if r.RateLimiter != nil && ctx.RateLimitCtx != nil && (usage.PromptTokens > 0 || usage.CompletionTokens > 0) {
 		r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{
-			InputTokens:  int(usage.PromptTokens),
-			OutputTokens: int(usage.CompletionTokens),
-			TotalTokens:  int(usage.TotalTokens),
+			InputTokens:         int(usage.PromptTokens),
+			OutputTokens:        int(usage.CompletionTokens),
+			TotalTokens:         int(usage.TotalTokens),
+			CachedInputTokens:   cacheUsage.cachedInputTokens,
+			CacheCreationTokens: cacheUsage.cacheCreationTokens,
 		})
 	}
 
