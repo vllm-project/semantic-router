@@ -74,5 +74,21 @@ global:
 global:
   services:
     router_replay:
+      store_backend: postgres     # default; SQL-queryable audit storage
       async_writes: true
+      postgres:
+        host: postgres
+        port: 5432
+        database: vsr
+        user: router
+        password: router-secret
 ```
+
+The `store_backend` field controls where routing-decision replay records are persisted. Available backends:
+
+| Backend | Durability | Use case |
+|---------|-----------|----------|
+| `postgres` | Full SQL queryability, long-term audit retention | Production (default) |
+| `redis` | Survives router restart, shared across replicas | Lightweight deployments already running Redis |
+| `milvus` | Vector-searchable replay records | Semantic replay search |
+| `memory` | Lost on router restart | Local development only |

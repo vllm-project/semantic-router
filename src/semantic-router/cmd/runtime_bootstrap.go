@@ -574,6 +574,21 @@ func buildVectorStoreBackendConfigs(cfg *config.RouterConfig) vectorstore.Backen
 				SearchType:            lsCfg.SearchType,
 			},
 		}
+	case "valkey":
+		vCfg := cfg.VectorStore.Valkey
+		return vectorstore.BackendConfigs{
+			Valkey: vectorstore.ValkeyBackendConfig{
+				Host:             vCfg.Host,
+				Port:             vCfg.Port,
+				Password:         vCfg.Password,
+				Database:         vCfg.Database,
+				CollectionPrefix: vCfg.CollectionPrefix,
+				MetricType:       vCfg.MetricType,
+				IndexM:           vCfg.IndexM,
+				IndexEf:          vCfg.IndexEfConstruction,
+				ConnectTimeout:   vCfg.ConnectTimeout,
+			},
+		}
 	default:
 		return vectorstore.BackendConfigs{}
 	}

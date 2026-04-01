@@ -57,6 +57,8 @@ global:
       provider: milvus
 ```
 
+Supported backends: `memory`, `milvus`, `llama_stack`, `valkey`.
+
 ### Tools
 
 ```yaml

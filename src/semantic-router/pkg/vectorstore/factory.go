@@ -23,6 +23,7 @@ const (
 	BackendTypeMemory     = "memory"
 	BackendTypeMilvus     = "milvus"
 	BackendTypeLlamaStack = "llama_stack"
+	BackendTypeValkey     = "valkey"
 )
 
 // BackendConfigs aggregates configuration for all supported backends.
@@ -31,6 +32,7 @@ type BackendConfigs struct {
 	Memory     MemoryBackendConfig
 	Milvus     MilvusBackendConfig
 	LlamaStack LlamaStackBackendConfig
+	Valkey     ValkeyBackendConfig
 }
 
 // NewBackend creates a VectorStoreBackend based on the given type.
@@ -43,8 +45,10 @@ func NewBackend(backendType string, cfgs BackendConfigs) (VectorStoreBackend, er
 		return NewMilvusBackend(cfgs.Milvus)
 	case BackendTypeLlamaStack:
 		return NewLlamaStackBackend(cfgs.LlamaStack)
+	case BackendTypeValkey:
+		return NewValkeyBackend(cfgs.Valkey)
 	default:
-		return nil, fmt.Errorf("unsupported backend type: %s (supported: %s, %s, %s)",
-			backendType, BackendTypeMemory, BackendTypeMilvus, BackendTypeLlamaStack)
+		return nil, fmt.Errorf("unsupported backend type: %s (supported: %s, %s, %s, %s)",
+			backendType, BackendTypeMemory, BackendTypeMilvus, BackendTypeLlamaStack, BackendTypeValkey)
 	}
 }

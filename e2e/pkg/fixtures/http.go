@@ -24,6 +24,11 @@ func (r *HTTPResponse) DecodeJSON(v any) error {
 	return nil
 }
 
+// DoGETRequest sends a GET request and returns the raw HTTP response.
+func DoGETRequest(ctx context.Context, httpClient *http.Client, url string) (*HTTPResponse, error) {
+	return doJSONRequest(ctx, httpClient, http.MethodGet, url, nil, nil)
+}
+
 func doJSONRequest(
 	ctx context.Context,
 	httpClient *http.Client,
