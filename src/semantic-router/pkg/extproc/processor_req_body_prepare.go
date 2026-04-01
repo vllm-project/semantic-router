@@ -76,13 +76,20 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		return requestDecisionState{}, r.createErrorResponse(403, authzErr.Error())
 	}
 
-	metrics.RecordModelRequest(selectedModel)
+	// For rate limiting and metrics, use originalModel when the decision engine
+	// did not select a model (explicit model requests return selectedModel="").
+	rateLimitModel := selectedModel
+	if rateLimitModel == "" {
+		rateLimitModel = originalModel
+	}
+
+	metrics.RecordModelRequest(rateLimitModel)
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 		r.updateRouterReplayStatus(ctx, 200, false)
 		return requestDecisionState{}, resp
 	}
-	if resp := r.applyRateLimitAndCacheChecks(ctx, selectedModel, decisionName); resp != nil {
+	if resp := r.applyRateLimitAndCacheChecks(ctx, rateLimitModel, decisionName); resp != nil {
 		return requestDecisionState{}, resp
 	}
 	if ragErr := r.executeRAGPlugin(ctx, decisionName); ragErr != nil {

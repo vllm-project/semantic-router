@@ -108,6 +108,24 @@ type ModelPricingResult struct {
 	Currency        string
 }
 
+// resolveModelConfig looks up a model by name, falling back to a reverse
+// lookup through ExternalModelIDs (provider_model_id) when the name is not
+// a direct key in ModelConfig. This handles the case where the Envoy AI
+// Gateway rewrites the model field to the provider model ID.
+func (c *RouterConfig) resolveModelConfig(modelName string) (ModelParams, bool) {
+	if params, ok := c.ModelConfig[modelName]; ok {
+		return params, true
+	}
+	for _, params := range c.ModelConfig {
+		for _, extID := range params.ExternalModelIDs {
+			if extID == modelName {
+				return params, true
+			}
+		}
+	}
+	return ModelParams{}, false
+}
+
 // GetModelPricing returns pricing per 1M tokens and its currency for the given model.
 // The currency indicates the unit of the returned rates (e.g., "USD").
 // Accepts both short names ("claude-haiku-4-5") and provider model IDs
@@ -130,8 +148,9 @@ func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, c
 
 // GetModelPricingFull returns the complete pricing breakdown for a model,
 // including cache read/write rates for Anthropic prompt caching.
+// Accepts both short names and provider model IDs.
 func (c *RouterConfig) GetModelPricingFull(modelName string) (ModelPricingResult, bool) {
-	if modelConfig, okc := c.ModelConfig[modelName]; okc {
+	if modelConfig, okc := c.resolveModelConfig(modelName); okc {
 		p := modelConfig.Pricing
 		if p.PromptPer1M != 0 || p.CompletionPer1M != 0 || p.Currency != "" {
 			cur := p.Currency
