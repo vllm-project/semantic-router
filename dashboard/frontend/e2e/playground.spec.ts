@@ -390,12 +390,50 @@ test.describe('Playground Chat Component', () => {
 
     await page.getByPlaceholder('Ask me anything...').fill('Clear me');
     await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.getByText('Clear me')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-message-role="user"]').last()).toContainText('Clear me', { timeout: 10000 });
 
     await page.getByRole('button', { name: 'New conversation' }).click();
 
-    await expect(page.getByText('Clear me')).not.toBeVisible();
+    await expect(page.locator('[data-message-role="user"]').filter({ hasText: 'Clear me' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: /Hi there, I am MoM/i })).toBeVisible();
+  });
+
+  test('keeps streaming in the original session after switching away and shows progress when switching back', async ({ page }) => {
+    await mockStreamingChatFetch(page, [
+      chatStreamChunk({ role: 'assistant', content: '' }),
+      chatStreamChunk({ content: 'First visible chunk. ' }),
+      chatStreamChunk({ content: 'Continues while hidden. ' }),
+      chatStreamChunk({ content: 'Final background chunk.' }),
+      'data: [DONE]\n\n',
+    ], 250);
+
+    const input = page.getByPlaceholder('Ask me anything...');
+    const sessionAPrompt = 'Keep session A streaming';
+
+    await input.fill(sessionAPrompt);
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(page.getByText('First visible chunk.')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'New conversation' }).click();
+    await expect(page.getByRole('heading', { name: /Hi there, I am MoM/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Stop generating' })).toHaveCount(0);
+    await expect(page.getByText('First visible chunk.')).toHaveCount(0);
+
+    await page.waitForTimeout(900);
+
+    const sidebarShell = page.getByTestId('playground-sidebar-shell');
+    const sessionAButton = sidebarShell.getByRole('button', { name: sessionAPrompt });
+    if (await sessionAButton.count() === 0 || !(await sessionAButton.first().isVisible().catch(() => false))) {
+      await page.getByRole('button', { name: 'Open sidebar' }).click();
+    }
+
+    await expect(sessionAButton).toBeVisible();
+    await sessionAButton.click();
+
+    await expect(page.getByText('Continues while hidden.')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Final background chunk.')).toBeVisible({ timeout: 5000 });
   });
 
   test('sends message and receives response (mocked API)', async ({ page }) => {
@@ -715,20 +753,57 @@ test.describe('Playground Chat Component', () => {
     await input.fill('Third queued task');
     await page.getByRole('button', { name: 'Send message' }).click();
 
-    await expect(queue.getByTestId('playground-task-running')).toContainText('First queued task', { timeout: 5000 });
+    await expect(queue).toContainText('Second queued task');
+    await expect(queue).toContainText('Third queued task');
+    await expect(queue).not.toContainText('First queued task');
     await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['Second queued task', 'Third queued task']);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
 
     const restoredQueue = page.getByTestId('playground-task-queue');
-    await expect(restoredQueue.getByTestId('playground-task-running')).toContainText('Second queued task', { timeout: 10000 });
+    await expect(restoredQueue).toContainText('Third queued task', { timeout: 10000 });
+    await expect(restoredQueue).not.toContainText('Second queued task');
     await expect(restoredQueue).toContainText('Third queued task');
     await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['Third queued task']);
 
     const thirdQueuedTask = restoredQueue.locator('[data-testid^="playground-task-queue-item-"]').filter({ hasText: 'Third queued task' }).first();
     await thirdQueuedTask.getByRole('button', { name: /Remove queued task:/ }).click();
 
-    await expect(restoredQueue).not.toContainText('Third queued task');
+    await expect(restoredQueue).toHaveCount(0);
+    await expect.poll(() => readStoredQueuePrompts(page)).toEqual([]);
+  });
+
+  test('allows queued prompts to be edited from the overflow menu', async ({ page }) => {
+    let requestCount = 0;
+    await page.route('**/api/router/v1/chat/completions', async route => {
+      requestCount += 1;
+      await new Promise(resolve => setTimeout(resolve, 6000));
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: chatStreamBody('Streaming response for queued editing'),
+      });
+    });
+
+    const input = page.getByPlaceholder('Ask me anything...');
+    await input.fill('First queued task');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect.poll(() => requestCount).toBe(1);
+
+    await input.fill('Editable queued task');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    const queue = page.getByTestId('playground-task-queue');
+    const queuedTask = queue.locator('[data-testid^="playground-task-queue-item-"]').filter({ hasText: 'Editable queued task' }).first();
+
+    await queuedTask.getByRole('button', { name: /More actions for queued task:/ }).click();
+    await page.getByRole('menuitem', { name: 'Edit prompt' }).click();
+
+    await expect(input).toHaveValue('Editable queued task');
+    await expect(queue).toHaveCount(0);
     await expect.poll(() => readStoredQueuePrompts(page)).toEqual([]);
   });
 
@@ -758,7 +833,9 @@ test.describe('Playground Chat Component', () => {
     await input.fill('Third queued task');
     await page.getByRole('button', { name: 'Send message' }).click();
 
-    await expect(queue.getByTestId('playground-task-running')).toContainText('First queued task', { timeout: 5000 });
+    await expect(queue).toContainText('Second queued task');
+    await expect(queue).toContainText('Third queued task');
+    await expect(queue).not.toContainText('First queued task');
     const secondQueuedTask = queue.locator('[data-testid^="playground-task-queue-item-"]').filter({ hasText: 'Second queued task' }).first();
     const thirdQueuedTask = queue.locator('[data-testid^="playground-task-queue-item-"]').filter({ hasText: 'Third queued task' }).first();
 
