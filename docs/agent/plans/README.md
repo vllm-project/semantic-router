@@ -31,6 +31,7 @@ Typical examples:
 - private contributor reminders
 - durable architectural decisions that belong in ADRs
 - unresolved architecture gaps that belong in the debt register
+- local generated report or handoff artifacts under `.agent-harness/`
 
 ## Execution Plan Versus Other Governance Files
 
@@ -85,3 +86,16 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0009-fleet-sim-optimizer-and-operator-config-boundary-ratchet.md](pl-0009-fleet-sim-optimizer-and-operator-config-boundary-ratchet.md)
 - [pl-0010-extproc-response-and-dashboard-frontend-boundary-ratchet.md](pl-0010-extproc-response-and-dashboard-frontend-boundary-ratchet.md)
 - [pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md](pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md)
+- [pl-0012-dsl-conflict-free-routing-workstream.md](pl-0012-dsl-conflict-free-routing-workstream.md)
+- [pl-0013-openclaw-vsr-install-import-workstream.md](pl-0013-openclaw-vsr-install-import-workstream.md)
+- [pl-0014-structure-signal-family-implementation.md](pl-0014-structure-signal-family-implementation.md)
+- [pl-0015-agent-report-local-artifact-loop.md](pl-0015-agent-report-local-artifact-loop.md)
+- [pl-0016-harness-context-and-pr-parity-simplification.md](pl-0016-harness-context-and-pr-parity-simplification.md)
+- [pl-0017-taxonomy-classifier-platform-loop.md](pl-0017-taxonomy-classifier-platform-loop.md)
+- [pl-0018-generic-embedding-kb-workstream.md](pl-0018-generic-embedding-kb-workstream.md)
+- [pl-0019-wizmap-knowledge-map-integration.md](pl-0019-wizmap-knowledge-map-integration.md)
+- [pl-0020-local-runtime-topology-separation.md](pl-0020-local-runtime-topology-separation.md)
+- [pl-0021-local-runtime-three-image-rollout.md](pl-0021-local-runtime-three-image-rollout.md)
+- [pl-0022-dev-integration-consolidation-loop.md](pl-0022-dev-integration-consolidation-loop.md)
+- [pl-0023-dashboard-dsl-natural-language-mode-loop.md](pl-0023-dashboard-dsl-natural-language-mode-loop.md)
+- [pl-0024-balance-recipe-simplification-loop.md](pl-0024-balance-recipe-simplification-loop.md)

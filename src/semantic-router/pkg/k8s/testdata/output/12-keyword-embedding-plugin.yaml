@@ -54,7 +54,7 @@ routing:
         aggregation_method: max
   decisions:
     - name: security_alert
-      description: Security-related queries with jailbreak protection
+      description: Security-related queries with guided handling
       priority: 100
       rules:
         operator: AND
@@ -67,7 +67,6 @@ routing:
         - model: qwen-2.5-72b
           use_reasoning: false
       plugins:
-        - type: jailbreak
         - type: system_prompt
         - type: header_mutation
 global:
@@ -81,6 +80,9 @@ global:
   services:
     api:
       batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
         metrics:
           sample_rate: 1
           duration_buckets:

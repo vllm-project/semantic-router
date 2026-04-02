@@ -7,10 +7,9 @@ import (
 )
 
 // DecisionPlugin represents a plugin configuration for a decision.
+// Type is the plugin identifier; the authoritative supported set is registered in
+// routing_surface_catalog (and DSL/compiler surfaces), not duplicated here.
 type DecisionPlugin struct {
-	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak",
-	// "pii", "system_prompt", "header_mutation", "hallucination",
-	// "response_jailbreak", "router_replay", "memory", "fast_response".
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration stores the plugin payload as normalized structured bytes.
@@ -38,6 +37,19 @@ type MemoryPluginConfig struct {
 // FastResponsePluginConfig represents configuration for fast_response plugin.
 type FastResponsePluginConfig struct {
 	Message string `json:"message" yaml:"message"`
+}
+
+// RequestParamsPluginConfig represents configuration for request_params plugin.
+// This plugin validates and strips request body parameters per decision.
+type RequestParamsPluginConfig struct {
+	// BlockedParams is a list of parameters that should be blocked/stripped.
+	BlockedParams []string `json:"blocked_params,omitempty" yaml:"blocked_params,omitempty"`
+	// MaxTokensLimit sets the maximum allowed value for max_tokens.
+	MaxTokensLimit *int `json:"max_tokens_limit,omitempty" yaml:"max_tokens_limit,omitempty"`
+	// MaxN is the maximum allowed value for n (number of completions).
+	MaxN *int `json:"max_n,omitempty" yaml:"max_n,omitempty"`
+	// StripUnknown if true, removes fields not in the OpenAI spec.
+	StripUnknown bool `json:"strip_unknown,omitempty" yaml:"strip_unknown,omitempty"`
 }
 
 // SystemPromptPluginConfig represents configuration for system_prompt plugin.
@@ -154,6 +166,46 @@ func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
 func (d *Decision) GetFastResponseConfig() *FastResponsePluginConfig {
 	result := &FastResponsePluginConfig{}
 	return decodeDecisionPlugin(d, "fast_response", result)
+}
+
+// GetRequestParamsConfig returns the request_params plugin configuration.
+func (d *Decision) GetRequestParamsConfig() *RequestParamsPluginConfig {
+	result := &RequestParamsPluginConfig{}
+	return decodeDecisionPlugin(d, "request_params", result)
+}
+
+// IsRAGEnabledForDecision returns whether RAG is enabled for a specific decision.
+// Checks the per-decision RAG plugin config (enabled: true).
+func (c *RouterConfig) IsRAGEnabledForDecision(decisionName string) bool {
+	decision := c.GetDecisionByName(decisionName)
+	if decision == nil {
+		return false
+	}
+	ragConfig := decision.GetRAGConfig()
+	return ragConfig != nil && ragConfig.Enabled
+}
+
+// IsMemoryEnabledForDecision returns whether memory is enabled for a specific decision.
+// A decision has memory enabled if:
+//   - It has a per-decision memory plugin with enabled: true, OR
+//   - Global memory is enabled and the decision does NOT have a per-decision
+//     memory plugin that explicitly disables it.
+func (c *RouterConfig) IsMemoryEnabledForDecision(decisionName string) bool {
+	decision := c.GetDecisionByName(decisionName)
+	if decision == nil {
+		return c.Memory.Enabled
+	}
+	memConfig := decision.GetMemoryConfig()
+	if memConfig != nil {
+		return memConfig.Enabled
+	}
+	return c.Memory.Enabled
+}
+
+// HasPersonalizationPlugins returns true if the decision has RAG or memory
+// enabled, meaning cached responses would miss personalized context.
+func (c *RouterConfig) HasPersonalizationPlugins(decisionName string) bool {
+	return c.IsRAGEnabledForDecision(decisionName) || c.IsMemoryEnabledForDecision(decisionName)
 }
 
 func decodeDecisionPlugin[T any](d *Decision, pluginType string, result *T) *T {

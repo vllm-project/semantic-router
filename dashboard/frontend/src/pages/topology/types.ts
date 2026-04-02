@@ -9,21 +9,25 @@ export type SignalType =
   | 'domain'
   | 'fact_check'
   | 'user_feedback'
+  | 'reask'
   | 'preference'
   | 'language'
   | 'context'
+  | 'structure'
   | 'complexity'
   | 'modality'
   | 'authz'
   | 'jailbreak'
   | 'pii'
+  | 'kb'
+  | 'projection'
 
 export interface SignalConfig {
   type: SignalType
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | GenericSignalConfig
+  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | StructureSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | KBSignalConfig | ProjectionSignalConfig | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -45,6 +49,38 @@ export interface DomainSignalConfig {
 export interface ContextSignalConfig {
   min_tokens?: string
   max_tokens?: string
+}
+
+export interface StructureSourceConfig {
+  type: string
+  pattern?: string
+  keywords?: string[]
+  case_sensitive?: boolean
+  sequences?: string[][]
+}
+
+export interface StructureFeatureConfig {
+  type: string
+  source?: StructureSourceConfig
+}
+
+export interface NumericPredicateConfig {
+  gt?: number
+  gte?: number
+  lt?: number
+  lte?: number
+}
+
+export interface StructureSignalConfig {
+  feature?: StructureFeatureConfig
+  predicate?: NumericPredicateConfig
+}
+
+export interface StructureRuleDefinition {
+  name: string
+  description?: string
+  feature: StructureFeatureConfig
+  predicate?: NumericPredicateConfig
 }
 
 export interface ComplexitySignalConfig {
@@ -69,6 +105,27 @@ export interface PIISignalConfig {
   threshold?: number
   pii_types_allowed?: string[]
   include_history?: boolean
+}
+
+export interface KBSignalConfig {
+  kb: string
+  target: {
+    kind: 'label' | 'group'
+    value: string
+  }
+  match?: 'best' | 'threshold'
+}
+
+export interface ProjectionSignalInputRef {
+  type: SignalType
+  name: string
+}
+
+export interface ProjectionSignalConfig {
+  source: string
+  method: string
+  mapping: string
+  upstreamSignals: ProjectionSignalInputRef[]
 }
 
 export interface GenericSignalConfig {
@@ -159,11 +216,17 @@ export interface AutoMixConfig {
 // ============== Plugin Types ==============
 export type PluginType =
   | 'semantic-cache'
+  | 'memory'
   | 'system_prompt'
   | 'header_mutation'
   | 'hallucination'
   | 'router_replay'
+  | 'rag'
+  | 'image_gen'
   | 'fast_response'
+  | 'request_params'
+  | 'response_jailbreak'
+  | 'tools'
 
 export interface PluginConfig {
   type: PluginType
@@ -263,6 +326,7 @@ export interface MatchedSignal {
   type: SignalType
   name: string
   matched: boolean
+  value?: number
   confidence?: number
   score?: number
   reason?: string
@@ -360,6 +424,12 @@ export interface ConfigData {
     name: string
     description?: string
   }>
+  reask_rules?: Array<{
+    name: string
+    description?: string
+    threshold?: number
+    lookback_turns?: number
+  }>
   preference_rules?: Array<{
     name: string
     description?: string
@@ -375,6 +445,7 @@ export interface ConfigData {
     min_tokens?: string
     max_tokens?: string
   }>
+  structure_rules?: StructureRuleDefinition[]
   complexity_rules?: Array<{
     name: string
     threshold?: number
@@ -415,6 +486,42 @@ export interface ConfigData {
     include_history?: boolean
     description?: string
   }>
+  kb?: Array<{
+    name: string
+    kb: string
+    target: {
+      kind: 'label' | 'group'
+      value: string
+    }
+    match?: 'best' | 'threshold'
+    description?: string
+  }>
+  projections?: {
+    scores?: Array<{
+      name: string
+      method?: string
+      inputs?: Array<{
+        type: SignalType
+        name: string
+        weight?: number
+        value_source?: string
+        match?: number
+        miss?: number
+      }>
+    }>
+    mappings?: Array<{
+      name: string
+      source: string
+      method?: string
+      outputs?: Array<{
+        name: string
+        lt?: number
+        lte?: number
+        gt?: number
+        gte?: number
+      }>
+    }>
+  }
   // Legacy format
   categories?: Array<{
     name: string
@@ -459,6 +566,12 @@ export interface ConfigData {
       name: string
       description?: string
     }>
+    reasks?: Array<{
+      name: string
+      description?: string
+      threshold?: number
+      lookback_turns?: number
+    }>
     preferences?: Array<{
       name: string
       description?: string
@@ -474,6 +587,7 @@ export interface ConfigData {
       min_tokens?: string
       max_tokens?: string
     }>
+    structure?: StructureRuleDefinition[]
     complexity?: Array<{
       name: string
       threshold?: number
@@ -509,6 +623,16 @@ export interface ConfigData {
       threshold?: number
       pii_types_allowed?: string[]
       include_history?: boolean
+      description?: string
+    }>
+    kb?: Array<{
+      name: string
+      kb: string
+      target: {
+        kind: 'label' | 'group'
+        value: string
+      }
+      match?: 'best' | 'threshold'
       description?: string
     }>
   }
@@ -557,6 +681,7 @@ export interface ConfigData {
       name: string
     }>
     signals?: ConfigData['signals']
+    projections?: ConfigData['projections']
     decisions?: ConfigData['decisions']
   }
   global?: {

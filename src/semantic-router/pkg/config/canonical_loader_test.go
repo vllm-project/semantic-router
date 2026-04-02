@@ -115,6 +115,94 @@ global:
 	}
 }
 
+func TestParseYAMLBytesRejectsDeprecatedGlobalModelCatalogEmbeddingsBertLayout(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    default_model: qwen2.5:3b
+  models:
+    - name: qwen2.5:3b
+      backend_refs:
+        - endpoint: 127.0.0.1:11434
+routing:
+  modelCards:
+    - name: qwen2.5:3b
+  decisions:
+    - name: default-route
+      description: fallback
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: qwen2.5:3b
+global:
+  model_catalog:
+    embeddings:
+      bert:
+        model_id: models/mom-embedding-light
+        threshold: 0.6
+        use_cpu: true
+`)
+
+	_, err := ParseYAMLBytes(canonicalYAML)
+	if err == nil {
+		t.Fatal("expected deprecated global.model_catalog.embeddings.bert layout to be rejected")
+	}
+	if !strings.Contains(err.Error(), "global.model_catalog.embeddings.bert") {
+		t.Fatalf("expected error to mention global.model_catalog.embeddings.bert, got: %v", err)
+	}
+}
+
+func TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    default_model: qwen2.5:3b
+  models:
+    - name: qwen2.5:3b
+      backend_refs:
+        - endpoint: 127.0.0.1:11434
+routing:
+  modelCards:
+    - name: qwen2.5:3b
+  decisions:
+    - name: support-route
+      description: fallback
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelSelectionAlgorithm:
+        enabled: true
+        method: router_dc
+      modelRefs:
+        - model: qwen2.5:3b
+          use_reasoning: false
+global:
+  router:
+    strategy: priority
+`)
+
+	_, err := ParseYAMLBytes(canonicalYAML)
+	if err == nil {
+		t.Fatal("expected deprecated decision modelSelectionAlgorithm field to be rejected")
+	}
+	if !strings.Contains(err.Error(), "routing.decisions[0].modelSelectionAlgorithm") {
+		t.Fatalf("expected error to mention deprecated decision field, got: %v", err)
+	}
+}
+
 func TestParseYAMLBytesParsesNestedCanonicalModelCatalogModules(t *testing.T) {
 	canonicalYAML := []byte(`
 version: v0.3
@@ -259,11 +347,17 @@ global:
 	if !cfg.ResponseAPI.Enabled {
 		t.Fatal("expected sparse global override to preserve default response_api.enabled=true")
 	}
-	if cfg.ResponseAPI.StoreBackend != "memory" {
+	if cfg.ResponseAPI.StoreBackend != "redis" {
 		t.Fatalf("expected response api backend to keep default, got %q", cfg.ResponseAPI.StoreBackend)
 	}
 	if cfg.ResponseAPI.TTLSeconds != 86400 {
 		t.Fatalf("expected response api ttl default to be preserved, got %d", cfg.ResponseAPI.TTLSeconds)
+	}
+	if cfg.RouterReplay.StoreBackend != "postgres" {
+		t.Fatalf("expected router replay backend to keep default, got %q", cfg.RouterReplay.StoreBackend)
+	}
+	if cfg.RouterReplay.TTLSeconds != 2592000 {
+		t.Fatalf("expected router replay ttl default to be preserved, got %d", cfg.RouterReplay.TTLSeconds)
 	}
 	if !cfg.Memory.Enabled || !cfg.Memory.AutoStore {
 		t.Fatalf("expected memory override to still apply, got enabled=%v auto_store=%v", cfg.Memory.Enabled, cfg.Memory.AutoStore)

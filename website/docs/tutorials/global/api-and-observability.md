@@ -46,8 +46,17 @@ global:
   services:
     response_api:
       enabled: true
-      store_backend: memory
+      store_backend: redis        # default; use "memory" only for local development
+      redis:
+        address: "redis:6379"
 ```
+
+The `store_backend` field controls where response and conversation history is persisted. Available backends:
+
+| Backend | Durability | Use case |
+|---------|-----------|----------|
+| `redis` | Survives router restart, shared across replicas | Production (default) |
+| `memory` | Lost on router restart | Local development only |
 
 ### Observability
 
@@ -65,5 +74,24 @@ global:
 global:
   services:
     router_replay:
+      store_backend: postgres     # default; SQL-queryable audit storage
+      enabled: true
       async_writes: true
+      postgres:
+        host: postgres
+        port: 5432
+        database: vsr
+        user: router
+        password: router-secret
 ```
+
+`global.services.router_replay.enabled` is the router-wide default. When it is on, a decision captures replay unless that decision adds a route-local `router_replay` plugin with `enabled: false`.
+
+The `store_backend` field controls where routing-decision replay records are persisted. Available backends:
+
+| Backend | Durability | Use case |
+|---------|-----------|----------|
+| `postgres` | Full SQL queryability, long-term audit retention | Production (default) |
+| `redis` | Survives router restart, shared across replicas | Lightweight deployments already running Redis |
+| `milvus` | Vector-searchable replay records | Semantic replay search |
+| `memory` | Lost on router restart | Local development only |

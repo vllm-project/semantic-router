@@ -19,7 +19,7 @@ The API server previously followed router hot-reloads for classification behavio
 - [src/semantic-router/pkg/apiserver/runtime_config.go](../../../src/semantic-router/pkg/apiserver/runtime_config.go)
 - [src/semantic-router/pkg/apiserver/route_models.go](../../../src/semantic-router/pkg/apiserver/route_models.go)
 - [src/semantic-router/pkg/apiserver/route_model_info.go](../../../src/semantic-router/pkg/apiserver/route_model_info.go)
-- [src/semantic-router/pkg/apiserver/route_system_prompt.go](../../../src/semantic-router/pkg/apiserver/route_system_prompt.go)
+- [src/semantic-router/pkg/apiserver/route_router_config_update.go](../../../src/semantic-router/pkg/apiserver/route_router_config_update.go)
 - [src/semantic-router/pkg/apiserver/route_config_deploy.go](../../../src/semantic-router/pkg/apiserver/route_config_deploy.go)
 - [src/semantic-router/pkg/apiserver/runtime_state_test.go](../../../src/semantic-router/pkg/apiserver/runtime_state_test.go)
 - [e2e/testcases/apiserver_runtime_config_endpoints.go](../../../e2e/testcases/apiserver_runtime_config_endpoints.go)
@@ -45,6 +45,6 @@ The API server previously followed router hot-reloads for classification behavio
 ## Resolution
 
 - `src/semantic-router/pkg/apiserver/runtime_config.go` now owns the live runtime-config seam for apiserver reads and writes, with a startup fallback only when no resolver is available.
-- `src/semantic-router/pkg/apiserver/route_models.go`, `route_model_info.go`, and `route_system_prompt.go` now resolve runtime config through that seam instead of serving `s.config` directly.
-- `src/semantic-router/pkg/apiserver/runtime_state_test.go` adds stale-vs-live regression coverage for model list, classifier info, models info, and system-prompt update flows.
+- `src/semantic-router/pkg/apiserver/route_models.go`, `route_model_info.go`, and the router-config mutation handlers now resolve runtime config through that seam instead of serving `s.config` directly.
+- `src/semantic-router/pkg/apiserver/runtime_state_test.go` adds stale-vs-live regression coverage for model list, classifier info, and models info flows.
 - `e2e/testcases/apiserver_runtime_config_endpoints.go` adds a baseline ai-gateway contract that verifies the live model list and classifier-config endpoints through the deployed router API service.

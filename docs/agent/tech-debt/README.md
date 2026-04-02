@@ -83,12 +83,14 @@ Keep the numeric index unique within `docs/agent/tech-debt/`.
 - [TD026 Go Router Config Contract Knowledge Still Collapses Across Schema Families, Canonical Conversion, and Validation Hotspots](td-026-go-config-contract-boundary-collapse.md)
 - [TD027 Fleet Sim Optimizer and Public Surface Boundaries Still Collapse Analytical Sizing, DES Verification, and Export Policy](td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
 - [TD028 Operator Config Contract Still Collapses Across CRD Schema, Webhook Validation, Canonical Translation, and Sample Fixtures](td-028-operator-config-contract-boundary-collapse.md)
-- [TD029 Extproc Response Pipeline Phases Still Collapse Normalization, Streaming, Replay, and Response-Side Warnings](td-029-extproc-response-pipeline-phase-collapse.md)
 - [TD030 Dashboard Frontend Config and Interaction Surfaces Still Collapse Route Shell, Page Orchestration, and Large UI Containers](td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
 - [TD031 Router Runtime Bootstrap and Shared Service Registry Still Depend on Process-Wide Globals](td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md)
 - [TD032 Training and Evaluation Artifact Contracts Still Drift Across Dashboard, Runtime, and Scripts](td-032-training-evaluation-artifact-contract-drift.md)
 - [TD033 Native Binding Runtime Parity and Lifecycle Still Diverge Across Candle and ONNX Backends](td-033-native-binding-runtime-parity-and-lifecycle-gap.md)
 - [TD034 Runtime and Dashboard State Surfaces Still Lack a Coherent Durability, Recovery, and Telemetry Contract](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
+- [TD035 Projection Partition Default Coverage Contract Is No Longer Declarative Only](td-035-signal-group-default-coverage-contract-gap.md)
+- [TD036 Decision Tree Authoring Cannot Round-Trip Through Runtime Config](td-036-decision-tree-authoring-roundtrip-gap.md)
+- [TD037 Dev Integration Environment Ownership and Shared-Suite Topology Still Diverge Across CLI, Kind, and CI](td-037-dev-integration-env-ownership-and-shared-suite-topology.md)
 
 ## Architecture Review Coverage Map
 
@@ -107,9 +109,12 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
   - cross-stack console state durability, recovery, and telemetry semantics: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
 - Python CLI
   - local Docker versus Kubernetes workflow split: [TD004](td-004-python-cli-kubernetes-workflow-separation.md)
+  - dev integration environment ownership and shared-suite topology across Docker, Kind, and CI: [TD037](td-037-dev-integration-env-ownership-and-shared-suite-topology.md)
   - remaining config-adapter and weak-typing seams shared with dashboard/DSL helpers: [TD015](td-015-weakly-typed-config-and-dsl-contracts.md)
   - prior CLI config-contract consolidation work: [TD022](td-022-cli-config-contract-boundary-collapse.md)
   - workspace-backed local state versus durable product-state ownership: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
+- Test architecture and CI
+  - default dev integration flow, environment ownership, and PR matrix reduction for shared dashboard/core-routing coverage: [TD037](td-037-dev-integration-env-ownership-and-shared-suite-topology.md)
 - Training src
   - training or evaluation artifact drift across dashboard, runtime, and scripts: [TD032](td-032-training-evaluation-artifact-contract-drift.md)
 - Candle binding and ONNX binding
@@ -118,6 +123,8 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
 - Shared config, schema, contracts, utilities, and tooling
   - weakly typed or hybrid adapter seams in dashboard and DSL helpers: [TD015](td-015-weakly-typed-config-and-dsl-contracts.md)
   - operator-side contract ownership and canonical translation boundaries: [TD028](td-028-operator-config-contract-boundary-collapse.md)
+  - resolved projection-partition fallback and centroid-validation contract work: [TD035](td-035-signal-group-default-coverage-contract-gap.md)
+  - `DECISION_TREE` authoring still lowers away before runtime config and decompile, so tree-authored DSL cannot yet round-trip through canonical router config: [TD036](td-036-decision-tree-authoring-roundtrip-gap.md)
   - state taxonomy, durability ownership, and restart-aware telemetry across router/dashboard/CLI: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
   - resolved predecessor work for repo-wide canonical contract consolidation: [TD001](td-001-config-surface-fragmentation.md), [TD026](td-026-go-config-contract-boundary-collapse.md)
 
@@ -127,3 +134,4 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
 - [TD012 Canonical v0.3 Routing Contract Still Lacks a LoRA Catalog Surface](td-012-canonical-lora-catalog-gap.md)
 - [TD013 Legacy IntelligentPool and IntelligentRoute Controller Bypasses Canonical v0.3 Config](td-013-legacy-k8s-controller-bypasses-canonical-v0-3.md)
 - [TD014 Candle Binding Crate-Wide Clippy Gate Blocks Diff-Scoped Validation](td-014-candle-binding-crate-wide-clippy-gate.md)
+- [TD029 Extproc Response Pipeline Phases Still Collapse Normalization, Streaming, Replay, and Response-Side Warnings](td-029-extproc-response-pipeline-phase-collapse.md)

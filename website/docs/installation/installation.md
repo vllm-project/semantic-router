@@ -2,7 +2,7 @@
 sidebar_position: 2
 ---
 
-# Installation
+# Quickstart
 
 This guide will help you install and run the vLLM Semantic Router. The router runs entirely on CPU and does not require GPU for inference.
 
@@ -15,7 +15,7 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 **Requirements:**
 
 - **Python**: 3.10 or higher
-- **Container Runtime**: Docker or Podman (required for running the router container)
+- **Container Runtime**: Docker (required for running the router container)
 
 ## Quick Start
 
@@ -28,32 +28,19 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 The installer:
 
 - Detects Python 3.10 or newer
-- Installs `vllm-sr` into `~/.local/share/vllm-sr`
+- Installs the latest development `vllm-sr` release into `~/.local/share/vllm-sr`
 - Writes a launcher to `~/.local/bin/vllm-sr`
-- Prepares Docker or Podman for `vllm-sr serve` unless you opt out
+- Prepares Docker for `vllm-sr serve` unless you opt out
 - Starts `vllm-sr serve` automatically and opens the dashboard when possible
 - Prints dashboard access and remote-server hints if a browser cannot be opened
 
-Useful variants:
+If `~/.local/bin` is not already on your `PATH`, the installer prints the export line to add it.
+
+Need the latest stable release instead? Run:
 
 ```bash
-# Install only the CLI
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli
-
-# Pin local serve mode to Podman
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime podman
-
-# Force the first launch onto the AMD/ROCm path
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --platform amd
-
-# Install without auto-starting serve + dashboard
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --no-launch
-
-# Skip runtime bootstrap and keep only userland install steps
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --channel stable
 ```
-
-If `~/.local/bin` is not already on your `PATH`, the installer prints the export line to add it.
 
 Windows users should use the manual PyPI flow below.
 
@@ -64,7 +51,10 @@ Windows users should use the manual PyPI flow below.
 python -m venv vsr
 source vsr/bin/activate  # On Windows: vsr\Scripts\activate
 
-# Install from PyPI
+# Install the latest development release
+pip install --pre vllm-sr
+
+# Install the latest stable release instead
 pip install vllm-sr
 ```
 
@@ -151,7 +141,7 @@ If you prefer to edit YAML directly instead of using the dashboard setup flow:
 vllm-sr validate config.yaml
 ```
 
-`vllm-sr init` was removed in v0.3. Create `config.yaml` directly with the canonical `version/listeners/providers/routing/global` layout, or migrate an older file with `vllm-sr config migrate --config old-config.yaml`.
+`vllm-sr init` was removed in v0.3. Create `config.yaml` directly with the canonical `version/listeners/providers/routing/global` layout, migrate an older file with `vllm-sr config migrate --config old-config.yaml`, or import supported OpenClaw model providers with `vllm-sr config import --from openclaw`.
 
 ### HuggingFace Settings
 
@@ -171,48 +161,15 @@ vllm-sr serve
 # Use custom config file
 vllm-sr serve --config my-config.yaml
 
+# Set the router log level
+vllm-sr serve --log-level debug
+
 # Use custom Docker image
 vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest
 
 # Control image pull policy
 vllm-sr serve --image-pull-policy always
 ```
-
-## Kubernetes Deployment
-
-For production deployments on Kubernetes or OpenShift, use the **Kubernetes Operator**:
-
-### Quick Start with Operator
-
-```bash
-# Clone repository
-git clone https://github.com/vllm-project/semantic-router
-cd semantic-router/deploy/operator
-
-# Install CRDs and operator
-make install
-make deploy IMG=ghcr.io/vllm-project/semantic-router-operator:latest
-
-# Deploy a semantic router instance
-kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
-```
-
-**Benefits:**
-
-- ✅ Declarative configuration using Kubernetes CRDs
-- ✅ Automatic platform detection (OpenShift/Kubernetes)
-- ✅ Built-in high availability and scaling
-- ✅ Integrated monitoring and observability
-- ✅ Lifecycle management and upgrades
-
-See the **[Kubernetes Operator Guide](k8s/operator)** for complete documentation.
-
-### Other Kubernetes Deployment Options
-
-- **[Istio Integration](k8s/istio)** - Service mesh deployment
-- **[AI Gateway](k8s/ai-gateway)** - Gateway API integration
-- **[Production Stack](k8s/production-stack)** - Complete production setup
-- **[Dynamo](k8s/dynamo)** - Dynamic configuration management
 
 ## Docker Compose
 
@@ -222,8 +179,8 @@ For local development and testing:
 
 ## Next Steps
 
+- **[Install with Operator](k8s/operator)** - Deploy on Kubernetes or OpenShift with the operator
 - **[Configuration Guide](configuration)** - Advanced routing and signal configuration
-- **[Kubernetes Operator](k8s/operator)** - Production Kubernetes deployment
 - **[API Documentation](../api/router)** - Complete API reference
 - **[Tutorials](../tutorials/signal/overview)** - Learn by example
 

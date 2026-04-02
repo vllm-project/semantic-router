@@ -17,6 +17,7 @@ import { BuilderDeployConfirmModal, BuilderDeployToast, BuilderDragOverlay } fro
 import { VisualMode } from "./builderPageVisualShell";
 import { BuilderGuideDrawer } from "./builderPageGuideDrawer";
 import { BuilderImportModal } from "./builderPageImportModal";
+import { BuilderNaturalLanguagePanel } from "./builderPageNaturalLanguagePanel";
 import { BuilderOutputPanel } from "./builderPageOutputPanel";
 import { useResizableWidth } from "./builderPageResizeHooks";
 import { BuilderStatusBar } from "./builderPageStatusBar";
@@ -32,6 +33,7 @@ const BuilderPage: React.FC = () => {
     diagnostics,
     symbols,
     ast,
+    baseConfigYaml,
     wasmReady,
     wasmError,
     loading,
@@ -55,6 +57,15 @@ const BuilderPage: React.FC = () => {
     mutateSignal,
     addSignal,
     deleteSignal,
+    mutateProjectionPartition,
+    addProjectionPartition,
+    deleteProjectionPartition,
+    mutateProjectionScore,
+    addProjectionScore,
+    deleteProjectionScore,
+    mutateProjectionMapping,
+    addProjectionMapping,
+    deleteProjectionMapping,
     mutatePlugin,
     addPlugin,
     deletePlugin,
@@ -72,6 +83,13 @@ const BuilderPage: React.FC = () => {
     deployPreviewMerged,
     deployPreviewLoading,
     deployPreviewError,
+    nlGenerating,
+    nlGenerateError,
+    nlProgressEvents,
+    nlStagedDraft,
+    generateFromNaturalLanguage,
+    applyNaturalLanguageDraft,
+    discardNaturalLanguageDraft,
   } = useDSLStore();
   const { isReadonly, isLoading: readonlyLoading } = useReadonly();
 
@@ -79,6 +97,9 @@ const BuilderPage: React.FC = () => {
   const [sections, setSections] = useState<SectionState>({
     models: true,
     signals: true,
+    projectionPartitions: true,
+    projectionScores: true,
+    projectionMappings: true,
     routes: true,
     plugins: true,
   });
@@ -109,6 +130,7 @@ const BuilderPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const autoLoadedDefaultConfigRef = useRef(false);
   const autoLoadingDefaultConfigRef = useRef(false);
+  const isNaturalLanguageMode = mode === "nl";
 
   // Initialize WASM on mount
   useEffect(() => {
@@ -127,6 +149,14 @@ const BuilderPage: React.FC = () => {
     }
   }, [mode, wasmReady, dslSource, parseAST]);
 
+  useEffect(() => {
+    if (!isNaturalLanguageMode) {
+      return;
+    }
+    setGuideOpen(false);
+    setOutputPanelOpen(false);
+  }, [isNaturalLanguageMode]);
+
   const toggleSection = useCallback((key: keyof SectionState) => {
     setSections((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
@@ -134,6 +164,7 @@ const BuilderPage: React.FC = () => {
   const handleModeSwitch = useCallback(
     (newMode: EditorMode) => {
       setMode(newMode);
+      setOutputPanelOpen(newMode !== "nl");
       // When switching to visual, parse AST
       if (newMode === "visual" && wasmReady && dslSource.trim()) {
         parseAST();
@@ -141,7 +172,8 @@ const BuilderPage: React.FC = () => {
     },
     [setMode, wasmReady, dslSource, parseAST],
   );
-  const deployDisabled = readonlyLoading || isReadonly;
+  const hasPendingNLDraft = nlStagedDraft !== null;
+  const deployDisabled = readonlyLoading || isReadonly || hasPendingNLDraft;
 
   // --- Entity CRUD handlers ---
 
@@ -154,6 +186,15 @@ const BuilderPage: React.FC = () => {
         case "signal":
           if (subType) deleteSignal(subType, name);
           break;
+        case "projection-partition":
+          deleteProjectionPartition(name);
+          break;
+        case "projection-score":
+          deleteProjectionScore(name);
+          break;
+        case "projection-mapping":
+          deleteProjectionMapping(name);
+          break;
         case "route":
           deleteRoute(name);
           break;
@@ -163,7 +204,15 @@ const BuilderPage: React.FC = () => {
       }
       setSelection(null);
     },
-    [deleteModel, deleteSignal, deleteRoute, deletePlugin],
+    [
+      deleteModel,
+      deleteSignal,
+      deleteProjectionPartition,
+      deleteProjectionScore,
+      deleteProjectionMapping,
+      deleteRoute,
+      deletePlugin,
+    ],
   );
 
   const handleUpdateModelFields = useCallback(
@@ -196,6 +245,27 @@ const BuilderPage: React.FC = () => {
     [mutatePlugin],
   );
 
+  const handleUpdateProjectionPartitionFields = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      mutateProjectionPartition(name, fields);
+    },
+    [mutateProjectionPartition],
+  );
+
+  const handleUpdateProjectionScoreFields = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      mutateProjectionScore(name, fields);
+    },
+    [mutateProjectionScore],
+  );
+
+  const handleUpdateProjectionMappingFields = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      mutateProjectionMapping(name, fields);
+    },
+    [mutateProjectionMapping],
+  );
+
   const handleAddSignal = useCallback(
     (signalType: string, name: string, fields: DSLFieldObject) => {
       addSignal(signalType, name, fields);
@@ -212,6 +282,33 @@ const BuilderPage: React.FC = () => {
       setAddingEntity(null);
     },
     [addPlugin],
+  );
+
+  const handleAddProjectionPartition = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      addProjectionPartition(name, fields);
+      setSelection({ kind: "projection-partition", name });
+      setAddingEntity(null);
+    },
+    [addProjectionPartition],
+  );
+
+  const handleAddProjectionScore = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      addProjectionScore(name, fields);
+      setSelection({ kind: "projection-score", name });
+      setAddingEntity(null);
+    },
+    [addProjectionScore],
+  );
+
+  const handleAddProjectionMapping = useCallback(
+    (name: string, fields: DSLFieldObject) => {
+      addProjectionMapping(name, fields);
+      setSelection({ kind: "projection-mapping", name });
+      setAddingEntity(null);
+    },
+    [addProjectionMapping],
   );
 
   const handleUpdateRoute = useCallback(
@@ -383,9 +480,19 @@ const BuilderPage: React.FC = () => {
   }, [wasmReady, readonlyLoading, dslSource, loadFromRouter, compile]);
 
   // Diagnostic counts
-  const errorCount = diagnostics.filter((d) => d.level === "error").length;
+  const validationErrorCount = diagnostics.filter((d) => d.level === "error").length;
+  const errorCount = validationErrorCount + (compileError ? 1 : 0);
   const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0;
+  const currentModelNames = useMemo(() => {
+    const rawNames = ast?.models?.map((model) => model.name) ?? symbols?.models ?? [];
+    return Array.from(
+      new Set(rawNames.map((name) => name.trim()).filter(Boolean)),
+    );
+  }, [ast?.models, symbols?.models]);
   const signalCount = ast?.signals?.length ?? symbols?.signals?.length ?? 0;
+  const projectionPartitionCount = ast?.projectionPartitions?.length ?? 0;
+  const projectionScoreCount = ast?.projectionScores?.length ?? 0;
+  const projectionMappingCount = ast?.projectionMappings?.length ?? 0;
   const routeCount = ast?.routes?.length ?? symbols?.routes?.length ?? 0;
   const pluginCount = ast?.plugins?.length ?? symbols?.plugins?.length ?? 0;
   const isValid = errorCount === 0 && wasmReady;
@@ -399,6 +506,12 @@ const BuilderPage: React.FC = () => {
         return ast.models?.find((m) => m.name === selection.name) ?? null;
       case "signal":
         return ast.signals?.find((s) => s.name === selection.name) ?? null;
+      case "projection-partition":
+        return ast.projectionPartitions?.find((partition) => partition.name === selection.name) ?? null;
+      case "projection-score":
+        return ast.projectionScores?.find((score) => score.name === selection.name) ?? null;
+      case "projection-mapping":
+        return ast.projectionMappings?.find((mapping) => mapping.name === selection.name) ?? null;
       case "route":
         return ast.routes?.find((r) => r.name === selection.name) ?? null;
       case "plugin":
@@ -422,12 +535,15 @@ const BuilderPage: React.FC = () => {
         deployDisabledReason={
           isReadonly
             ? "Deploy is unavailable in read-only mode"
+            : hasPendingNLDraft
+              ? "Apply or discard the staged NL draft before deploying the live Builder config"
             : readonlyLoading
               ? "Checking deploy permissions..."
               : undefined
         }
+        showBuilderSecondaryActions={!isNaturalLanguageMode}
         guideOpen={guideOpen}
-        outputPanelOpen={outputPanelOpen}
+        outputPanelOpen={!isNaturalLanguageMode && outputPanelOpen}
         onModeSwitch={handleModeSwitch}
         onImport={handleOpenImport}
         onCompile={compile}
@@ -455,6 +571,9 @@ const BuilderPage: React.FC = () => {
               selectedEntity={selectedEntity}
               modelCount={modelCount}
               signalCount={signalCount}
+              projectionPartitionCount={projectionPartitionCount}
+              projectionScoreCount={projectionScoreCount}
+              projectionMappingCount={projectionMappingCount}
               routeCount={routeCount}
               pluginCount={pluginCount}
               wasmReady={wasmReady}
@@ -464,9 +583,15 @@ const BuilderPage: React.FC = () => {
               onDeleteEntity={handleDeleteEntity}
               onUpdateModelFields={handleUpdateModelFields}
               onUpdateSignalFields={handleUpdateSignalFields}
+              onUpdateProjectionPartitionFields={handleUpdateProjectionPartitionFields}
+              onUpdateProjectionScoreFields={handleUpdateProjectionScoreFields}
+              onUpdateProjectionMappingFields={handleUpdateProjectionMappingFields}
               onUpdatePluginFields={handleUpdatePluginFields}
               onAddModel={handleAddModel}
               onAddSignal={handleAddSignal}
+              onAddProjectionPartition={handleAddProjectionPartition}
+              onAddProjectionScore={handleAddProjectionScore}
+              onAddProjectionMapping={handleAddProjectionMapping}
               onAddPlugin={handleAddPlugin}
               onUpdateRoute={handleUpdateRoute}
               onAddRoute={handleAddRoute}
@@ -481,38 +606,37 @@ const BuilderPage: React.FC = () => {
             </div>
           )}
           {mode === "nl" && (
-            <div className={styles.nlPlaceholder}>
-              <div className={styles.nlPlaceholderIcon}>🤖</div>
-              <div className={styles.nlPlaceholderTitle}>
-                Natural Language Mode
-              </div>
-              <div>
-                Describe your routing configuration in plain English and let AI
-                generate DSL for you.
-              </div>
-              <div
-                style={{
-                  fontSize: "var(--text-xs)",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                Coming soon — Phase 6
-              </div>
-            </div>
+            <BuilderNaturalLanguagePanel
+              currentDsl={dslSource}
+              baseConfigYaml={baseConfigYaml}
+              currentModelNames={currentModelNames}
+              wasmReady={wasmReady}
+              generating={nlGenerating}
+              error={nlGenerateError}
+              progressEvents={nlProgressEvents}
+              stagedDraft={nlStagedDraft}
+              onGenerate={generateFromNaturalLanguage}
+              onApplyDraft={applyNaturalLanguageDraft}
+              onDiscardDraft={discardNaturalLanguageDraft}
+              onModeSwitch={handleModeSwitch}
+            />
           )}
         </div>
 
-        <BuilderOutputPanel
-          open={outputPanelOpen}
-          width={outputWidth}
-          yamlOutput={yamlOutput}
-          crdOutput={crdOutput}
-          dslSource={dslSource}
-          compileError={compileError}
-          onDragStart={handleDragStart}
-          onOpen={() => setOutputPanelOpen(true)}
-          onClose={() => setOutputPanelOpen(false)}
-        />
+        {!isNaturalLanguageMode ? (
+          <BuilderOutputPanel
+            open={outputPanelOpen}
+            width={outputWidth}
+            yamlOutput={yamlOutput}
+            crdOutput={crdOutput}
+            dslSource={dslSource}
+            dslTabLabel="DSL"
+            compileError={compileError}
+            onDragStart={handleDragStart}
+            onOpen={() => setOutputPanelOpen(true)}
+            onClose={() => setOutputPanelOpen(false)}
+          />
+        ) : null}
       </div>
 
       <BuilderStatusBar
@@ -559,7 +683,7 @@ const BuilderPage: React.FC = () => {
       />
 
       <BuilderGuideDrawer
-        open={guideOpen}
+        open={!isNaturalLanguageMode && guideOpen}
         width={guideWidth}
         isDragging={isGuideDragging}
         onClose={() => setGuideOpen(false)}

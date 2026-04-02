@@ -2201,7 +2201,9 @@ semantic_cache:
 			yamlContent := `
 api:
   batch_classification:
-    auto_unified_batching: true
+    max_batch_size: 64
+    concurrency_threshold: 5
+    max_concurrency: 8
     metrics:
       enabled: true
       detailed_goroutine_tracking: false
@@ -2217,6 +2219,9 @@ api:
 
 			// Verify batch classification configuration (zero-config auto-discovery)
 			batchConfig := cfg.API.BatchClassification
+			Expect(batchConfig.MaxBatchSize).To(Equal(64))
+			Expect(batchConfig.ConcurrencyThreshold).To(Equal(5))
+			Expect(batchConfig.MaxConcurrency).To(Equal(8))
 
 			// Verify metrics configuration
 			metricsConfig := batchConfig.Metrics
@@ -2234,7 +2239,7 @@ api:
 			yamlContent := `
 api:
   batch_classification:
-    auto_unified_batching: false
+    max_batch_size: 32
 `
 
 			var cfg RouterConfig
@@ -2243,6 +2248,9 @@ api:
 
 			// Verify that missing metrics configuration doesn't cause errors (zero-config)
 			batchConfig := cfg.API.BatchClassification
+			Expect(batchConfig.MaxBatchSize).To(Equal(32))
+			Expect(batchConfig.ConcurrencyThreshold).To(Equal(0))
+			Expect(batchConfig.MaxConcurrency).To(Equal(0))
 
 			// Metrics should have zero values (will be handled by defaults in application)
 			metricsConfig := batchConfig.Metrics
@@ -2254,6 +2262,7 @@ api:
 			yamlContent := `
 api:
   batch_classification:
+    concurrency_threshold: 3
     metrics:
       enabled: true
       sample_rate: 0.5
@@ -2263,6 +2272,7 @@ api:
 			err := yaml.Unmarshal([]byte(yamlContent), &cfg)
 			Expect(err).NotTo(HaveOccurred())
 
+			Expect(cfg.API.BatchClassification.ConcurrencyThreshold).To(Equal(3))
 			metricsConfig := cfg.API.BatchClassification.Metrics
 			Expect(metricsConfig.Enabled).To(BeTrue())
 			Expect(metricsConfig.SampleRate).To(Equal(0.5))
@@ -3395,7 +3405,7 @@ default_model: "test-model"
 			decision := &Decision{
 				Name: "test_decision",
 				Plugins: []DecisionPlugin{
-					{Type: "pii", Configuration: MustStructuredPayload(map[string]interface{}{"enabled": true})},
+					{Type: "system_prompt", Configuration: MustStructuredPayload(map[string]interface{}{"enabled": true})},
 				},
 			}
 
@@ -3576,7 +3586,7 @@ model_config:
 
 		Context("ProviderType", func() {
 			It("should return correct provider type", func() {
-				for _, t := range []string{"openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai"} {
+				for _, t := range []string{"openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai", "minimax"} {
 					pt, err := (&ProviderProfile{Type: t}).ProviderType()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(pt).To(Equal(t))
@@ -3624,6 +3634,11 @@ model_config:
 				Expect(err).NotTo(HaveOccurred())
 				Expect(h).To(Equal("Authorization"))
 				Expect(p).To(Equal("Bearer"))
+
+				h, p, err = (&ProviderProfile{Type: "minimax"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("Authorization"))
+				Expect(p).To(Equal("Bearer"))
 			})
 
 			It("should allow explicit overrides", func() {
@@ -3654,6 +3669,10 @@ model_config:
 				path, err = (&ProviderProfile{Type: "anthropic", BaseURL: "https://api.anthropic.com"}).ResolveChatPath()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/messages"))
+
+				path, err = (&ProviderProfile{Type: "minimax", BaseURL: "https://api.minimax.io"}).ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/chat/completions"))
 			})
 
 			It("should append api-version for azure-openai", func() {

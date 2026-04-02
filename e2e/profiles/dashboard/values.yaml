@@ -53,3 +53,7 @@ config:
 
   semantic_cache:
     enabled: false
+
+  global:
+    model_catalog:
+      kbs: []

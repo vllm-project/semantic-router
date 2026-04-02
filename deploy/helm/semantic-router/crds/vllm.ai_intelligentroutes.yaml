@@ -133,17 +133,23 @@ spec:
                               as a raw JSON object
                             x-kubernetes-preserve-unknown-fields: true
                           type:
-                            description: Type is the plugin type (semantic-cache,
-                              jailbreak, pii, system_prompt, header_mutation, hallucination,
-                              router_replay)
+                            description: Type is the plugin type (fast_response, hallucination,
+                              header_mutation, image_gen, memory, rag, request_params,
+                              response_jailbreak, router_replay, semantic-cache, system_prompt,
+                              tools)
                             enum:
-                            - semantic-cache
-                            - jailbreak
-                            - pii
-                            - system_prompt
-                            - header_mutation
+                            - fast_response
                             - hallucination
+                            - header_mutation
+                            - image_gen
+                            - memory
+                            - rag
+                            - request_params
+                            - response_jailbreak
                             - router_replay
+                            - semantic-cache
+                            - system_prompt
+                            - tools
                             type: string
                         required:
                         - type
@@ -175,13 +181,14 @@ spec:
                                 minLength: 1
                                 type: string
                               type:
-                                description: Type defines the type of signal (keyword/embedding/domain/fact_check/context)
+                                description: Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure)
                                 enum:
                                 - keyword
                                 - embedding
                                 - domain
                                 - fact_check
                                 - context
+                                - structure
                                 type: string
                             required:
                             - name
@@ -367,6 +374,60 @@ spec:
                       - keywords
                       - name
                       - operator
+                      type: object
+                    maxItems: 100
+                    type: array
+                  structure:
+                    description: Structure defines request-shape routing signals.
+                    items:
+                      properties:
+                        description:
+                          type: string
+                        feature:
+                          properties:
+                            source:
+                              properties:
+                                caseSensitive:
+                                  type: boolean
+                                keywords:
+                                  items:
+                                    type: string
+                                  type: array
+                                pattern:
+                                  type: string
+                                sequences:
+                                  items:
+                                    items:
+                                      type: string
+                                    type: array
+                                  type: array
+                                type:
+                                  type: string
+                              required:
+                              - type
+                              type: object
+                            type:
+                              type: string
+                          required:
+                          - source
+                          - type
+                          type: object
+                        name:
+                          type: string
+                        predicate:
+                          properties:
+                            gt:
+                              type: number
+                            gte:
+                              type: number
+                            lt:
+                              type: number
+                            lte:
+                              type: number
+                          type: object
+                      required:
+                      - feature
+                      - name
                       type: object
                     maxItems: 100
                     type: array

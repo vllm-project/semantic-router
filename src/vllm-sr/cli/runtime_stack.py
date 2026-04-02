@@ -24,6 +24,8 @@ DEFAULT_JAEGER_OTLP_PORT = 4318
 DEFAULT_JAEGER_UI_PORT = 16686
 DEFAULT_PROMETHEUS_PORT = 9090
 DEFAULT_GRAFANA_PORT = 3000
+DEFAULT_REDIS_PORT = 6379
+DEFAULT_POSTGRES_PORT = 5432
 
 STACK_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -33,11 +35,16 @@ class RuntimeStackLayout:
     stack_name: str
     port_offset: int
     container_name: str
+    router_container_name: str
+    envoy_container_name: str
+    dashboard_container_name: str
     fleet_sim_container_name: str
     network_name: str
     jaeger_container_name: str
     prometheus_container_name: str
     grafana_container_name: str
+    redis_container_name: str
+    postgres_container_name: str
     router_port: int
     metrics_port: int
     dashboard_port: int
@@ -47,14 +54,35 @@ class RuntimeStackLayout:
     jaeger_ui_port: int
     prometheus_port: int
     grafana_port: int
+    redis_port: int
+    postgres_port: int
 
     @property
     def dashboard_url(self) -> str:
         return f"http://localhost:{self.dashboard_port}"
 
     @property
+    def dashboard_service_url(self) -> str:
+        return f"http://{self.dashboard_container_name}:8700"
+
+    @property
     def metrics_url(self) -> str:
         return f"http://localhost:{self.metrics_port}/metrics"
+
+    @property
+    def router_api_service_url(self) -> str:
+        return f"http://{self.router_container_name}:8080"
+
+    @property
+    def router_metrics_service_url(self) -> str:
+        return f"http://{self.router_container_name}:9190/metrics"
+
+    @property
+    def envoy_admin_service_url(self) -> str:
+        return f"http://{self.envoy_container_name}:9901"
+
+    def envoy_listener_service_url(self, listener_port: int) -> str:
+        return f"http://{self.envoy_container_name}:{listener_port}"
 
     @property
     def jaeger_ui_url(self) -> str:
@@ -92,6 +120,42 @@ class RuntimeStackLayout:
     def otlp_service_endpoint(self) -> str:
         return f"http://{self.jaeger_container_name}:4317"
 
+    @property
+    def redis_url(self) -> str:
+        return f"localhost:{self.redis_port}"
+
+    @property
+    def postgres_url(self) -> str:
+        return f"localhost:{self.postgres_port}"
+
+    @property
+    def storage_container_names(self) -> tuple[str, ...]:
+        return (self.redis_container_name, self.postgres_container_name)
+
+    @property
+    def runtime_container_names(self) -> tuple[str, ...]:
+        return tuple(
+            dict.fromkeys(
+                (
+                    self.container_name,
+                    self.router_container_name,
+                    self.envoy_container_name,
+                    self.dashboard_container_name,
+                )
+            )
+        )
+
+    def service_container_name(self, service: str) -> str:
+        if service == "router":
+            return self.router_container_name
+        if service == "envoy":
+            return self.envoy_container_name
+        if service == "dashboard":
+            return self.dashboard_container_name
+        if service == "simulator":
+            return self.fleet_sim_container_name
+        raise KeyError(f"unknown runtime service: {service}")
+
 
 def resolve_runtime_stack(
     *, stack_name: str | None = None, port_offset: int | None = None
@@ -105,28 +169,43 @@ def resolve_runtime_stack(
 
     if resolved_stack_name == DEFAULT_STACK_NAME:
         container_name = VLLM_SR_DOCKER_NAME
+        router_container_name = "vllm-sr-router-container"
+        envoy_container_name = "vllm-sr-envoy-container"
+        dashboard_container_name = "vllm-sr-dashboard-container"
         fleet_sim_container_name = VLLM_SR_SIM_DOCKER_NAME
         network_name = f"{DEFAULT_STACK_NAME}-network"
         jaeger_container_name = f"{DEFAULT_STACK_NAME}-jaeger"
         prometheus_container_name = f"{DEFAULT_STACK_NAME}-prometheus"
         grafana_container_name = f"{DEFAULT_STACK_NAME}-grafana"
+        redis_container_name = f"{DEFAULT_STACK_NAME}-redis"
+        postgres_container_name = f"{DEFAULT_STACK_NAME}-postgres"
     else:
         container_name = f"{resolved_stack_name}-vllm-sr-container"
+        router_container_name = f"{resolved_stack_name}-vllm-sr-router-container"
+        envoy_container_name = f"{resolved_stack_name}-vllm-sr-envoy-container"
+        dashboard_container_name = f"{resolved_stack_name}-vllm-sr-dashboard-container"
         fleet_sim_container_name = f"{resolved_stack_name}-vllm-sr-sim"
         network_name = f"{resolved_stack_name}-vllm-sr-network"
         jaeger_container_name = f"{resolved_stack_name}-vllm-sr-jaeger"
         prometheus_container_name = f"{resolved_stack_name}-vllm-sr-prometheus"
         grafana_container_name = f"{resolved_stack_name}-vllm-sr-grafana"
+        redis_container_name = f"{resolved_stack_name}-vllm-sr-redis"
+        postgres_container_name = f"{resolved_stack_name}-vllm-sr-postgres"
 
     return RuntimeStackLayout(
         stack_name=resolved_stack_name,
         port_offset=resolved_port_offset,
         container_name=container_name,
+        router_container_name=router_container_name,
+        envoy_container_name=envoy_container_name,
+        dashboard_container_name=dashboard_container_name,
         fleet_sim_container_name=fleet_sim_container_name,
         network_name=network_name,
         jaeger_container_name=jaeger_container_name,
         prometheus_container_name=prometheus_container_name,
         grafana_container_name=grafana_container_name,
+        redis_container_name=redis_container_name,
+        postgres_container_name=postgres_container_name,
         router_port=DEFAULT_ROUTER_PORT + resolved_port_offset,
         metrics_port=DEFAULT_METRICS_PORT + resolved_port_offset,
         dashboard_port=DEFAULT_DASHBOARD_PORT + resolved_port_offset,
@@ -136,6 +215,8 @@ def resolve_runtime_stack(
         jaeger_ui_port=DEFAULT_JAEGER_UI_PORT + resolved_port_offset,
         prometheus_port=DEFAULT_PROMETHEUS_PORT + resolved_port_offset,
         grafana_port=DEFAULT_GRAFANA_PORT + resolved_port_offset,
+        redis_port=DEFAULT_REDIS_PORT + resolved_port_offset,
+        postgres_port=DEFAULT_POSTGRES_PORT + resolved_port_offset,
     )
 
 

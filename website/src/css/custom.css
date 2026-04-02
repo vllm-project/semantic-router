@@ -3,3 +3,4 @@
 @import './shell.css';
 @import './docs.css';
 @import './blog.css';
+@import 'katex/dist/katex.min.css';

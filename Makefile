@@ -15,10 +15,13 @@ _run:
 		-f tools/make/linter.mk \
 		-f tools/make/milvus.mk \
 		-f tools/make/redis.mk \
+		-f tools/make/valkey.mk \
 		-f tools/make/llama-stack.mk \
 		-f tools/make/models.mk \
 		-f tools/make/pre-commit.mk \
+		-f tools/make/security.mk \
 		-f tools/make/docker.mk \
+		-f tools/make/release.mk \
 		-f tools/make/agent.mk \
 		-f tools/make/dockerless.mk \
 		-f tools/make/kube.mk \

@@ -276,6 +276,44 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name: "valkey without config fails",
+			cache: &vllmv1alpha1.SemanticCacheConfig{
+				Enabled:     true,
+				BackendType: "valkey",
+				Valkey:      nil,
+			},
+			expectError: true,
+			errorMsg:    "valkey configuration required",
+		},
+		{
+			name: "valkey without host fails",
+			cache: &vllmv1alpha1.SemanticCacheConfig{
+				Enabled:     true,
+				BackendType: "valkey",
+				Valkey: &vllmv1alpha1.ValkeyCacheConfig{
+					Connection: vllmv1alpha1.ValkeyCacheConnection{
+						Host: "",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "valkey.connection.host is required",
+		},
+		{
+			name: "valkey with valid config succeeds",
+			cache: &vllmv1alpha1.SemanticCacheConfig{
+				Enabled:     true,
+				BackendType: "valkey",
+				Valkey: &vllmv1alpha1.ValkeyCacheConfig{
+					Connection: vllmv1alpha1.ValkeyCacheConnection{
+						Host: "valkey.default.svc",
+						Port: 6379,
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
 			name: "milvus without config fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
 				Enabled:     true,
@@ -497,6 +535,16 @@ func TestResolveSemanticCacheSecrets(t *testing.T) {
 		},
 	}
 
+	valkeySecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "valkey-credentials",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"password": []byte("valkey-password"),
+		},
+	}
+
 	milvusSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "milvus-credentials",
@@ -569,6 +617,44 @@ func TestResolveSemanticCacheSecrets(t *testing.T) {
 			},
 		},
 		{
+			name: "resolve valkey password from secret",
+			sr: &vllmv1alpha1.SemanticRouter{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-router",
+					Namespace: "default",
+				},
+				Spec: vllmv1alpha1.SemanticRouterSpec{
+					Config: vllmv1alpha1.ConfigSpec{
+						SemanticCache: &vllmv1alpha1.SemanticCacheConfig{
+							Enabled:     true,
+							BackendType: "valkey",
+							Valkey: &vllmv1alpha1.ValkeyCacheConfig{
+								Connection: vllmv1alpha1.ValkeyCacheConnection{
+									Host: "valkey.svc",
+									PasswordSecretRef: &corev1.SecretKeySelector{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "valkey-credentials",
+										},
+										Key: "password",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			secrets:     []runtime.Object{valkeySecret},
+			expectError: false,
+			checkFunc: func(t *testing.T, sr *vllmv1alpha1.SemanticRouter) {
+				if sr.Spec.Config.SemanticCache.Valkey.Connection.Password != "valkey-password" {
+					t.Errorf("Valkey password not resolved, got %q", sr.Spec.Config.SemanticCache.Valkey.Connection.Password)
+				}
+				if sr.Spec.Config.SemanticCache.Valkey.Connection.PasswordSecretRef != nil {
+					t.Errorf("PasswordSecretRef should be cleared after resolution")
+				}
+			},
+		},
+		{
 			name: "resolve milvus password from secret",
 			sr: &vllmv1alpha1.SemanticRouter{
 				ObjectMeta: metav1.ObjectMeta{
@@ -624,6 +710,35 @@ func TestResolveSemanticCacheSecrets(t *testing.T) {
 							BackendType: "redis",
 							Redis: &vllmv1alpha1.RedisCacheConfig{
 								Connection: vllmv1alpha1.RedisCacheConnection{
+									PasswordSecretRef: &corev1.SecretKeySelector{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "missing-secret",
+										},
+										Key: "password",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			secrets:     nil,
+			expectError: true,
+		},
+		{
+			name: "error if valkey secret not found",
+			sr: &vllmv1alpha1.SemanticRouter{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-router",
+					Namespace: "default",
+				},
+				Spec: vllmv1alpha1.SemanticRouterSpec{
+					Config: vllmv1alpha1.ConfigSpec{
+						SemanticCache: &vllmv1alpha1.SemanticCacheConfig{
+							Enabled:     true,
+							BackendType: "valkey",
+							Valkey: &vllmv1alpha1.ValkeyCacheConfig{
+								Connection: vllmv1alpha1.ValkeyCacheConnection{
 									PasswordSecretRef: &corev1.SecretKeySelector{
 										LocalObjectReference: corev1.LocalObjectReference{
 											Name: "missing-secret",

@@ -1,3 +1,28 @@
+# Authz-RBAC E2E Profile Values
+#
+# Demonstrates RBAC-based model routing using simulated user identity
+# headers. Different users are routed to different models based on
+# role bindings:
+#
+#   admin        → Qwen 14B (unrestricted, reasoning enabled)
+#   premium_user → Qwen 14B (complex) or 7B (simple)
+#   free_user    → Qwen 7B only
+#   (no role)    → Qwen 7B (default)
+#
+# Architecture:
+#   Client -> Envoy -> ext_proc (semantic router) -> vLLM endpoints
+#
+# Identity headers (x-authz-user-id, x-authz-user-groups) must come from
+# validated auth backends (JWT, Authorino, etc.), not from client requests.
+# SECURITY: The Envoy configuration strips any client-supplied identity headers
+# to prevent spoofing attacks. For e2e tests, use JWT tokens in the Authorization
+# header; Envoy validates the JWT and extracts claims into identity headers.
+#
+# Test Users:
+#   alice / platform-admins  → admin
+#   bob   / premium-tier     → premium_user
+#   carol / free-tier        → free_user
+
 replicaCount: 1
 image:
   repository: ghcr.io/vllm-project/semantic-router/extproc
@@ -6,6 +31,10 @@ image:
 service:
   type: ClusterIP
   port: 8080
+# E2E/Kind: avoid PVC for model storage — chart default enables persistence and
+# local-path provisioning can timeout or fail across CI runners; models use emptyDir.
+persistence:
+  enabled: false
 config:
   version: v0.3
   listeners: []
@@ -154,6 +183,8 @@ config:
           - code
         quality_score: 0.7
   global:
+    model_catalog:
+      kbs: []
     router:
       clear_route_cache: true
       strategy: priority

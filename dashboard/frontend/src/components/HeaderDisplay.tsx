@@ -14,6 +14,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Decision',
     type: 'info',
   },
+  'x-vsr-selected-modality': {
+    label: 'Modality',
+    type: 'info',
+  },
   'x-vsr-cache-hit': {
     label: 'Cache',
     type: 'success',
@@ -21,6 +25,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
   'x-vsr-selected-reasoning': {
     label: 'Reasoning',
     type: 'info',
+  },
+  'x-vsr-fast-response': {
+    label: 'Fast Response',
+    type: 'success',
   },
   'x-vsr-jailbreak-blocked': {
     label: 'Jailbreak Blocked',
@@ -58,6 +66,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'User Feedback',
     type: 'info',
   },
+  'x-vsr-matched-reask': {
+    label: 'Reask',
+    type: 'info',
+  },
   'x-vsr-matched-preference': {
     label: 'Preference',
     type: 'info',
@@ -70,6 +82,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Context',
     type: 'info',
   },
+  'x-vsr-matched-structure': {
+    label: 'Structure',
+    type: 'info',
+  },
   'x-vsr-context-token-count': {
     label: 'Context Count',
     type: 'info',
@@ -78,7 +94,35 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Complexity',
     type: 'info',
   },
+  'x-vsr-matched-modality': {
+    label: 'Modality',
+    type: 'info',
+  },
+  'x-vsr-matched-authz': {
+    label: 'Authz',
+    type: 'info',
+  },
+  'x-vsr-matched-jailbreak': {
+    label: 'Jailbreak Signal',
+    type: 'danger',
+  },
+  'x-vsr-matched-pii': {
+    label: 'PII Signal',
+    type: 'warning',
+  },
+  'x-vsr-matched-kb': {
+    label: 'Knowledge Base',
+    type: 'info',
+  },
+  'x-vsr-matched-projection': {
+    label: 'Projection',
+    type: 'info',
+  },
   // Looper headers
+  'x-vsr-looper-model': {
+    label: 'Final Model',
+    type: 'info',
+  },
   'x-vsr-looper-models-used': {
     label: 'Collaborative Models',
     type: 'success',
@@ -91,6 +135,23 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Algorithm',
     type: 'info',
   },
+}
+
+function shouldSummarizeHeaderValue(key: string, values: string[]): boolean {
+  return values.length > 1 && (key.startsWith('x-vsr-matched-') || key === 'x-vsr-looper-models-used')
+}
+
+function summarizeHeaderValue(key: string, rawValue: string): string {
+  const values = rawValue
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
+
+  if (!shouldSummarizeHeaderValue(key, values)) {
+    return rawValue
+  }
+
+  return `${values[0]} +${values.length - 1}`
 }
 
 const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
@@ -106,10 +167,11 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
       <div className={styles.headers}>
         {displayHeaders.map(([key, value]) => {
           const info = HEADER_INFO[key]
+          const displayValue = summarizeHeaderValue(key, value)
           return (
             <div key={key} className={`${styles.header} ${styles[info.type]}`} title={`${info.label}: ${value}`}>
               <span className={styles.label}>{info.label}</span>
-              <span className={styles.value}>{value}</span>
+              <span className={styles.value}>{displayValue}</span>
             </div>
           )
         })}

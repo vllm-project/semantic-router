@@ -21,6 +21,13 @@ const teamMembers: TeamMember[] = [
     memberType: 'maintainer',
   },
   {
+    name: 'Xunzhuo Liu',
+    role: 'Intelligent Routing',
+    company: 'vLLM',
+    avatar: '/img/team/xunzhuo.png',
+    memberType: 'maintainer',
+  },
+  {
     name: 'Chen Wang',
     role: 'Senior Staff Research Scientist',
     company: 'IBM',
@@ -32,13 +39,6 @@ const teamMembers: TeamMember[] = [
     role: 'Staff Research Scientist',
     company: 'IBM',
     avatar: '/img/team/yue.png',
-    memberType: 'maintainer',
-  },
-  {
-    name: 'Xunzhuo Liu',
-    role: 'Intelligent Routing',
-    company: 'vLLM',
-    avatar: '/img/team/xunzhuo.png',
     memberType: 'maintainer',
   },
   {
@@ -81,6 +81,13 @@ const teamMembers: TeamMember[] = [
     role: 'Software Engineer',
     company: 'Red Hat',
     avatar: 'https://avatars.githubusercontent.com/noalimoy',
+    memberType: 'committer',
+  },
+  {
+    name: 'Marina Koushnir',
+    role: 'Open Source Contributor',
+    company: 'Red Hat',
+    avatar: 'https://github.com/mkoushni.png',
     memberType: 'committer',
   },
   {

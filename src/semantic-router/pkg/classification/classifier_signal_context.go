@@ -2,6 +2,7 @@ package classification
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -44,13 +45,16 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeDomain:       c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil,
 		config.SignalTypeFactCheck:    len(c.Config.FactCheckRules) > 0 && c.IsFactCheckEnabled(),
 		config.SignalTypeUserFeedback: len(c.Config.UserFeedbackRules) > 0 && c.IsFeedbackDetectorEnabled(),
+		config.SignalTypeReask:        c.reaskClassifier != nil,
 		config.SignalTypePreference:   len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled(),
 		config.SignalTypeLanguage:     len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
 		config.SignalTypeContext:      c.contextClassifier != nil,
+		config.SignalTypeStructure:    c.structureClassifier != nil,
 		config.SignalTypeComplexity:   c.complexityClassifier != nil,
 		config.SignalTypeModality:     len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
 		config.SignalTypeJailbreak:    len(c.Config.JailbreakRules) > 0 && c.IsJailbreakEnabled(),
 		config.SignalTypePII:          len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
+		config.SignalTypeKB:           len(c.kbClassifiers) > 0,
 	}
 }
 
@@ -65,12 +69,13 @@ func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map
 	}
 }
 
-func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, nonUserMessages []string, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, imageURL ...string) *SignalResults {
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, imageURL ...string) *SignalResults {
+	defer c.enterSignalEvaluationLoadGate()()
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
 	if forceEvaluateAll {
 		usedSignals = c.getAllSignalTypes()
-		logging.Infof("[Signal Computation] Force evaluate all signals mode enabled")
+		logging.Debugf("[Signal Computation] Force evaluate all signals mode enabled")
 	} else {
 		usedSignals = c.getUsedSignals()
 	}
@@ -81,86 +86,23 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	results := &SignalResults{
 		Metrics:           &SignalMetricsCollection{},
 		SignalConfidences: make(map[string]float64),
+		SignalValues:      make(map[string]float64),
 	}
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-
 	imgArg := ""
 	if len(imageURL) > 0 {
 		imgArg = imageURL[0]
 	}
 
-	type signalDispatch struct {
-		signalType string
-		name       string
-		evaluate   func()
-	}
-
-	dispatchers := []signalDispatch{
-		{
-			config.SignalTypeKeyword, "Keyword",
-			func() { c.evaluateKeywordSignal(results, &mu, textForSignal(config.SignalTypeKeyword)) },
-		},
-		{
-			config.SignalTypeEmbedding, "Embedding",
-			func() { c.evaluateEmbeddingSignal(results, &mu, textForSignal(config.SignalTypeEmbedding)) },
-		},
-		{
-			config.SignalTypeDomain, "Domain",
-			func() { c.evaluateDomainSignal(results, &mu, textForSignal(config.SignalTypeDomain)) },
-		},
-		{
-			config.SignalTypeFactCheck, "Fact-check",
-			func() { c.evaluateFactCheckSignal(results, &mu, textForSignal(config.SignalTypeFactCheck)) },
-		},
-		{
-			config.SignalTypeUserFeedback, "User feedback",
-			func() { c.evaluateUserFeedbackSignal(results, &mu, textForSignal(config.SignalTypeUserFeedback)) },
-		},
-		{
-			config.SignalTypePreference, "Preference",
-			func() { c.evaluatePreferenceSignal(results, &mu, textForSignal(config.SignalTypePreference)) },
-		},
-		{
-			config.SignalTypeLanguage, "Language",
-			func() { c.evaluateLanguageSignal(results, &mu, textForSignal(config.SignalTypeLanguage)) },
-		},
-		{
-			config.SignalTypeContext, "Context",
-			func() { c.evaluateContextSignal(results, &mu, contextText) },
-		},
-		{
-			config.SignalTypeComplexity, "Complexity",
-			func() { c.evaluateComplexitySignal(results, &mu, textForSignal(config.SignalTypeComplexity), imgArg) },
-		},
-		{
-			config.SignalTypeModality, "Modality",
-			func() { c.evaluateModalitySignal(results, &mu, textForSignal(config.SignalTypeModality)) },
-		},
-		{
-			config.SignalTypeJailbreak, "Jailbreak",
-			func() {
-				c.evaluateJailbreakSignal(results, &mu, textForSignal(config.SignalTypeJailbreak), nonUserMessages)
-			},
-		},
-		{
-			config.SignalTypePII, "PII",
-			func() { c.evaluatePIISignal(results, &mu, textForSignal(config.SignalTypePII), nonUserMessages) },
-		},
-	}
-
-	for _, d := range dispatchers {
-		if isSignalTypeUsed(usedSignals, d.signalType) && ready[d.signalType] {
-			wg.Add(1)
-			go func() { defer wg.Done(); d.evaluate() }()
-		} else if !isSignalTypeUsed(usedSignals, d.signalType) {
-			logging.Infof("[Signal Computation] %s signal not used in any decision, skipping evaluation", d.name)
-		}
-	}
+	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, imgArg)
+	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
 
 	wg.Wait()
+	results = c.applySignalGroups(results)
 	results = c.applySignalComposers(results)
+	results = c.applyProjections(results)
 	return results
 }
 
@@ -177,7 +119,7 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 	results.Metrics.Keyword.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 	results.Metrics.Keyword.Confidence = 1.0 // Rule-based, always 1.0
 
-	logging.Infof("[Signal Computation] Keyword signal evaluation completed in %v", elapsed)
+	logging.Debugf("[Signal Computation] Keyword signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("keyword rule evaluation failed: %v", err)
 	} else if category != "" {
@@ -199,7 +141,7 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 	// Record metrics
 	results.Metrics.Embedding.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 
-	logging.Infof("[Signal Computation] Embedding signal evaluation completed in %v", elapsed)
+	logging.Debugf("[Signal Computation] Embedding signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("embedding rule evaluation failed: %v", err)
 	} else if len(matchedRules) > 0 {
@@ -224,7 +166,7 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 
 			results.SignalConfidences["embedding:"+mr.RuleName] = mr.Score
 
-			logging.Infof("[Signal Computation] Embedding match: rule=%q, score=%.4f, method=%s",
+			logging.Debugf("[Signal Computation] Embedding match: rule=%q, score=%.4f, method=%s",
 				mr.RuleName, mr.Score, mr.Method)
 		}
 		mu.Unlock()
@@ -236,7 +178,7 @@ func (c *Classifier) evaluateDomainSignal(results *SignalResults, mu *sync.Mutex
 	domainResult, err := c.categoryInference.ClassifyWithProbabilities(text)
 	if err != nil {
 		// Fall back to Classify() (top-1 only) when ClassifyWithProbabilities is unavailable.
-		logging.Infof("[Signal Computation] ClassifyWithProbabilities unavailable, falling back to Classify: %v", err)
+		logging.Debugf("[Signal Computation] ClassifyWithProbabilities unavailable, falling back to Classify: %v", err)
 		basicResult, basicErr := c.categoryInference.Classify(text)
 		if basicErr != nil {
 			err = basicErr
@@ -265,7 +207,7 @@ func (c *Classifier) evaluateDomainSignal(results *SignalResults, mu *sync.Mutex
 	if categoryName != "" && err == nil {
 		results.Metrics.Domain.Confidence = float64(domainResult.Confidence)
 	}
-	logging.Infof("[Signal Computation] Domain signal evaluation completed in %v", elapsed)
+	logging.Debugf("[Signal Computation] Domain signal evaluation completed in %v", elapsed)
 
 	if err != nil {
 		logging.Errorf("domain rule evaluation failed: %v", err)
@@ -302,7 +244,7 @@ func (c *Classifier) evaluateFactCheckSignal(results *SignalResults, mu *sync.Mu
 		results.Metrics.FactCheck.Confidence = float64(factCheckResult.Confidence)
 	}
 
-	logging.Infof("[Signal Computation] Fact-check signal evaluation completed in %v", elapsed)
+	logging.Debugf("[Signal Computation] Fact-check signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("fact-check rule evaluation failed: %v", err)
 	} else if factCheckResult != nil {
@@ -321,7 +263,12 @@ func (c *Classifier) evaluateFactCheckSignal(results *SignalResults, mu *sync.Mu
 	}
 }
 
-func (c *Classifier) evaluateUserFeedbackSignal(results *SignalResults, mu *sync.Mutex, text string) {
+func (c *Classifier) evaluateUserFeedbackSignal(results *SignalResults, mu *sync.Mutex, text string, hasPriorAssistantReply bool) {
+	if !shouldEvaluateUserFeedbackSignal(hasPriorAssistantReply) {
+		logging.Debugf("[Signal Computation] User feedback signal skipped: no prior assistant reply")
+		return
+	}
+
 	start := time.Now()
 	feedbackResult, err := c.ClassifyFeedback(text)
 	elapsed := time.Since(start)
@@ -342,7 +289,7 @@ func (c *Classifier) evaluateUserFeedbackSignal(results *SignalResults, mu *sync
 		results.Metrics.UserFeedback.Confidence = float64(feedbackResult.Confidence)
 	}
 
-	logging.Infof("[Signal Computation] User feedback signal evaluation completed in %v", elapsed)
+	logging.Debugf("[Signal Computation] User feedback signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("user feedback rule evaluation failed: %v", err)
 	} else if feedbackResult != nil {
@@ -359,6 +306,38 @@ func (c *Classifier) evaluateUserFeedbackSignal(results *SignalResults, mu *sync
 			}
 		}
 	}
+}
+
+func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
+	start := time.Now()
+	matchedRules, err := c.reaskClassifier.Classify(currentUserText, priorUserMessages)
+	elapsed := time.Since(start)
+
+	results.Metrics.Reask.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+
+	logging.Debugf("[Signal Computation] Reask signal evaluation completed in %v", elapsed)
+	if err != nil {
+		logging.Errorf("reask rule evaluation failed: %v", err)
+		return
+	}
+	if len(matchedRules) == 0 {
+		return
+	}
+
+	bestConfidence := 0.0
+	mu.Lock()
+	for _, match := range matchedRules {
+		if match.MinSimilarity > bestConfidence {
+			bestConfidence = match.MinSimilarity
+		}
+		metrics.RecordSignalExtraction(config.SignalTypeReask, match.RuleName, elapsed.Seconds())
+		metrics.RecordSignalMatch(config.SignalTypeReask, match.RuleName)
+		results.MatchedReaskRules = append(results.MatchedReaskRules, match.RuleName)
+		results.SignalConfidences["reask:"+match.RuleName] = match.MinSimilarity
+		results.SignalValues["reask:"+match.RuleName] = float64(match.MatchedTurns)
+	}
+	results.Metrics.Reask.Confidence = bestConfidence
+	mu.Unlock()
 }
 
 func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.Mutex, text string) {
@@ -385,8 +364,12 @@ func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.M
 		results.Metrics.Preference.Confidence = float64(preferenceResult.Confidence)
 	}
 
-	logging.Infof("[Signal Computation] Preference signal evaluation completed in %v", elapsed)
+	logging.Debugf("[Signal Computation] Preference signal evaluation completed in %v", elapsed)
 	if err != nil {
+		if errors.Is(err, ErrPreferenceBelowThreshold) {
+			logging.Debugf("preference rule did not match threshold: %v", err)
+			return
+		}
 		logging.Errorf("preference rule evaluation failed: %v", err)
 	} else if preferenceResult != nil {
 		// Check if this preference is defined in preference_rules
@@ -398,7 +381,7 @@ func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.M
 				mu.Lock()
 				results.MatchedPreferenceRules = append(results.MatchedPreferenceRules, rule.Name)
 				mu.Unlock()
-				logging.Infof("Preference rule matched: %s", rule.Name)
+				logging.Debugf("Preference rule matched: %s", rule.Name)
 				break
 			}
 		}
@@ -426,7 +409,7 @@ func (c *Classifier) evaluateLanguageSignal(results *SignalResults, mu *sync.Mut
 		results.Metrics.Language.Confidence = languageResult.Confidence
 	}
 
-	logging.Infof("[Signal Computation] Language signal evaluation completed in %v", elapsed)
+	logging.Debugf("[Signal Computation] Language signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("language rule evaluation failed: %v", err)
 	} else if languageResult != nil {
@@ -454,7 +437,7 @@ func (c *Classifier) evaluateContextSignal(results *SignalResults, mu *sync.Mute
 	results.Metrics.Context.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 	results.Metrics.Context.Confidence = 1.0 // Rule-based, always 1.0
 
-	logging.Infof("[Signal Computation] Context signal evaluation completed in %v (count=%d)", elapsed, count)
+	logging.Debugf("[Signal Computation] Context signal evaluation completed in %v (count=%d)", elapsed, count)
 	if err != nil {
 		logging.Errorf("context rule evaluation failed: %v", err)
 	} else {
@@ -481,7 +464,7 @@ func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.M
 	results.Metrics.Complexity.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 	results.Metrics.Complexity.Confidence = 1.0 // Rule-based, always 1.0
 
-	logging.Infof("[Signal Computation] Complexity signal evaluation completed in %v", elapsed)
+	logging.Debugf("[Signal Computation] Complexity signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("complexity rule evaluation failed: %v", err)
 	} else {
@@ -506,7 +489,7 @@ func (c *Classifier) evaluateModalitySignal(results *SignalResults, mu *sync.Mut
 	results.Metrics.Modality.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 	results.Metrics.Modality.Confidence = float64(modalityResult.Confidence)
 
-	logging.Infof("[Signal Computation] Modality signal evaluation completed in %v: %s (confidence=%.3f, method=%s)",
+	logging.Debugf("[Signal Computation] Modality signal evaluation completed in %v: %s (confidence=%.3f, method=%s)",
 		elapsed, signalName, modalityResult.Confidence, modalityResult.Method)
 
 	// Check if this signal name is defined in modality_rules
@@ -582,7 +565,7 @@ func (c *Classifier) evaluateJailbreakSignal(results *SignalResults, mu *sync.Mu
 	}
 
 	metrics.RecordSignalExtraction(config.SignalTypeJailbreak, "jailbreak_evaluated", latencySeconds)
-	logging.Infof("[Signal Computation] Jailbreak signal evaluation completed in %v", elapsed)
+	logging.Debugf("[Signal Computation] Jailbreak signal evaluation completed in %v", elapsed)
 }
 
 func (c *Classifier) evaluateJailbreakRule(rule config.JailbreakRule, jailbreakText string, nonUserMessages []string, jailbreakCache map[string]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
@@ -640,7 +623,7 @@ func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule,
 	results.SignalConfidences["jailbreak:"+rule.Name] = float64(confidence)
 	mu.Unlock()
 
-	logging.Infof("[Signal Computation] Contrastive jailbreak rule %q matched: score=%.4f threshold=%.4f worst_msg_idx=%d time=%v",
+	logging.Debugf("[Signal Computation] Contrastive jailbreak rule %q matched: score=%.4f threshold=%.4f worst_msg_idx=%d time=%v",
 		rule.Name, analysisResult.MaxScore, threshold, analysisResult.WorstMsgIndex, analysisResult.ProcessingTime)
 }
 
@@ -749,7 +732,7 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 	}
 
 	metrics.RecordSignalExtraction(config.SignalTypePII, "pii_evaluated", latencySeconds)
-	logging.Infof("[Signal Computation] PII signal evaluation completed in %v", elapsed)
+	logging.Debugf("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 }
 
 func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, piiCache map[string]cachedPIIResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
@@ -765,7 +748,7 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 		metrics.RecordSignalExtraction(config.SignalTypePII, rule.Name, time.Since(start).Seconds())
 		metrics.RecordSignalMatch(config.SignalTypePII, rule.Name)
 
-		logging.Infof("[Signal Computation] PII rule %q matched: denied_entities=%v", rule.Name, deniedEntities)
+		logging.Debugf("[Signal Computation] PII rule %q matched: denied_entities=%v", rule.Name, deniedEntities)
 
 		mu.Lock()
 		results.MatchedPIIRules = append(results.MatchedPIIRules, rule.Name)

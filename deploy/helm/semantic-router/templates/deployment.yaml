@@ -58,13 +58,30 @@ spec:
         - containerPort: {{ .Values.service.api.targetPort }}
           name: classify-api
           protocol: TCP
-        {{- with .Values.env }}
+        {{- if or .Values.env .Values.extraEnv }}
         env:
+        {{- with .Values.env }}
           {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.extraEnv }}
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.envFromSecrets }}
+        envFrom:
+          {{- range . }}
+          - secretRef:
+              name: {{ . }}
+          {{- end }}
         {{- end }}
         volumeMounts:
         - name: config-volume
-          mountPath: /app/config
+          mountPath: /app/config/config.yaml
+          subPath: config.yaml
+          readOnly: true
+        - name: config-volume
+          mountPath: /app/config/tools_db.json
+          subPath: tools_db.json
           readOnly: true
         {{- with .Values.extraVolumeMounts }}
         {{- toYaml . | nindent 8 }}

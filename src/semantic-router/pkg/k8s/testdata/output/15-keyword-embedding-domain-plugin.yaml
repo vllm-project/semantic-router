@@ -99,8 +99,6 @@ routing:
         - model: qwen-2.5-72b
           use_reasoning: false
       plugins:
-        - type: pii
-        - type: jailbreak
         - type: system_prompt
         - type: semantic-cache
         - type: header_mutation
@@ -120,7 +118,6 @@ routing:
         - model: qwen-2.5-72b
           use_reasoning: false
       plugins:
-        - type: pii
         - type: semantic-cache
         - type: header_mutation
     - name: general_business
@@ -149,6 +146,9 @@ global:
   services:
     api:
       batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
         metrics:
           sample_rate: 1
           duration_buckets:

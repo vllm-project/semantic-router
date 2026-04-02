@@ -89,6 +89,13 @@ export interface UserFeedbackSignal {
   description: string
 }
 
+export interface ReaskSignal {
+  name: string
+  description?: string
+  threshold?: number
+  lookback_turns?: number
+}
+
 export interface PreferenceSignal {
   name: string
   description: string
@@ -106,6 +113,33 @@ export interface ContextSignal {
   min_tokens: string
   max_tokens: string
   description?: string
+}
+
+export interface StructureSource {
+  type: string
+  pattern?: string
+  keywords?: string[]
+  case_sensitive?: boolean
+  sequences?: string[][]
+}
+
+export interface StructureFeature {
+  type: string
+  source: StructureSource
+}
+
+export interface NumericPredicate {
+  gt?: number
+  gte?: number
+  lt?: number
+  lte?: number
+}
+
+export interface StructureSignal {
+  name: string
+  description?: string
+  feature: StructureFeature
+  predicate?: NumericPredicate
 }
 
 export interface ComplexityCandidates {
@@ -170,9 +204,11 @@ export interface Signals {
   domains?: DomainSignal[]
   fact_check?: FactCheckSignal[]
   user_feedbacks?: UserFeedbackSignal[]
+  reasks?: ReaskSignal[]
   preferences?: PreferenceSignal[]
   language?: LanguageSignal[]
   context?: ContextSignal[]
+  structure?: StructureSignal[]
   complexity?: ComplexitySignal[]
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
@@ -185,7 +221,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'fact_check' | 'language' | 'context' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'reask' | 'embedding' | 'fact_check' | 'language' | 'context' | 'structure' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii' | 'projection'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string
@@ -206,7 +242,19 @@ export interface ModelRef {
 }
 
 export interface PluginConfig {
-  type: 'system_prompt' | 'semantic-cache' | 'hallucination' | 'header_mutation' | 'router_replay' | 'fast_response'
+  type:
+    | 'semantic-cache'
+    | 'memory'
+    | 'system_prompt'
+    | 'header_mutation'
+    | 'hallucination'
+    | 'router_replay'
+    | 'rag'
+    | 'image_gen'
+    | 'fast_response'
+    | 'tools'
+    | 'request_params'
+    | 'response_jailbreak'
   configuration: Record<string, unknown>
 }
 
@@ -414,9 +462,11 @@ export function hasFlatSignals(config: unknown): boolean {
     (Array.isArray(root?.categories) && root.categories.length > 0) ||
     (Array.isArray(root?.fact_check_rules) && root.fact_check_rules.length > 0) ||
     (Array.isArray(root?.user_feedback_rules) && root.user_feedback_rules.length > 0) ||
+    (Array.isArray(root?.reask_rules) && root.reask_rules.length > 0) ||
     (Array.isArray(root?.preference_rules) && root.preference_rules.length > 0) ||
     (Array.isArray(root?.language_rules) && root.language_rules.length > 0) ||
     (Array.isArray(root?.context_rules) && root.context_rules.length > 0) ||
+    (Array.isArray(root?.structure_rules) && root.structure_rules.length > 0) ||
     (Array.isArray(root?.complexity_rules) && root.complexity_rules.length > 0) ||
     (Array.isArray(root?.jailbreak) && root.jailbreak.length > 0) ||
     (Array.isArray(root?.pii) && root.pii.length > 0)

@@ -46,13 +46,61 @@ func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
 
 func validateDecisionPluginContracts(cfg *RouterConfig) error {
 	for _, decision := range cfg.Decisions {
+		if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
+			if err := toolsCfg.Validate(); err != nil {
+				return fmt.Errorf("decision '%s': %w", decision.Name, err)
+			}
+		}
+
 		if imageGenCfg := decision.GetImageGenConfig(); imageGenCfg != nil {
 			if err := imageGenCfg.Validate(); err != nil {
 				return fmt.Errorf("decision '%s': %w", decision.Name, err)
 			}
 		}
+
+		if err := validateDecisionRAGAndMemoryPlugins(cfg, &decision); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// validateDecisionRAGAndMemoryPlugins validates RAG config and warns about
+// cache + personalization conflicts for a single decision.
+func validateDecisionRAGAndMemoryPlugins(cfg *RouterConfig, decision *Decision) error {
+	ragCfg := decision.GetRAGConfig()
+	if ragCfg != nil {
+		if err := ragCfg.Validate(); err != nil {
+			return fmt.Errorf("decision '%s': RAG plugin: %w", decision.Name, err)
+		}
+	}
+
+	cacheCfg := decision.GetSemanticCacheConfig()
+	memCfg := decision.GetMemoryConfig()
+	cacheActive := cacheCfg != nil && cacheCfg.Enabled
+	ragActive := ragCfg != nil && ragCfg.Enabled
+	memActive := memCfg != nil && memCfg.Enabled
+	if !memActive && cfg.Memory.Enabled {
+		memActive = memCfg == nil
+	}
+	if cacheActive && (ragActive || memActive) {
+		logging.Warnf("Decision '%s': semantic-cache is enabled alongside %s. "+
+			"Cache reads will be automatically bypassed to preserve personalized responses. "+
+			"Cache writes still occur for observability. Remove the cache plugin if this is intentional.",
+			decision.Name, cachePersonalizationConflictDescription(ragActive, memActive))
+	}
+	return nil
+}
+
+func cachePersonalizationConflictDescription(ragActive, memActive bool) string {
+	switch {
+	case ragActive && memActive:
+		return "RAG and memory plugins"
+	case ragActive:
+		return "RAG plugin"
+	default:
+		return "memory plugin"
+	}
 }
 
 func hasLegacyLatencyRoutingConfig(cfg *RouterConfig) bool {

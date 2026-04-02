@@ -7,6 +7,7 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
 import ConfigPageModelsSection from './ConfigPageModelsSection'
 import ConfigPageSignalsSection from './ConfigPageSignalsSection'
+import ConfigPageProjectionsSection from './ConfigPageProjectionsSection'
 import ConfigPageDecisionsSection from './ConfigPageDecisionsSection'
 import ConfigPageMCPSection from './ConfigPageMCPSection'
 import {
@@ -253,11 +254,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       case 'User Feedback':
         cfg.signals.user_feedbacks = (cfg.signals.user_feedbacks || []).filter(s => s.name !== targetName)
         break
+      case 'Reask':
+        cfg.signals.reasks = (cfg.signals.reasks || []).filter(s => s.name !== targetName)
+        break
       case 'Language':
         cfg.signals.language = (cfg.signals.language || []).filter(s => s.name !== targetName)
         break
       case 'Context':
         cfg.signals.context = (cfg.signals.context || []).filter(s => s.name !== targetName)
+        break
+      case 'Structure':
+        cfg.signals.structure = (cfg.signals.structure || []).filter(s => s.name !== targetName)
         break
       case 'Complexity':
         cfg.signals.complexity = (cfg.signals.complexity || []).filter(s => s.name !== targetName)
@@ -273,6 +280,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         break
       case 'PII':
         cfg.signals.pii = (cfg.signals.pii || []).filter(s => s.name !== targetName)
+        break
+      case 'KB':
+        cfg.signals.kb = (cfg.signals.kb || []).filter(s => s.name !== targetName)
         break
       default:
         break
@@ -334,6 +344,16 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     />
   )
 
+  const renderProjectionsSection = () => (
+    <ConfigPageProjectionsSection
+      config={config}
+      isReadonly={isReadonly}
+      saveConfig={saveConfig}
+      openEditModal={openEditModal}
+      openViewModal={openViewModal}
+    />
+  )
+
   const renderModelsSection = () => (
     <ConfigPageModelsSection
       config={config}
@@ -374,6 +394,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         return renderSignalsSection()
       case 'decisions':
         return renderDecisionsSection()
+      case 'projections':
+        return renderProjectionsSection()
       case 'models':
         return renderModelsSection()
       case 'global-config':

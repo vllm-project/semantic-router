@@ -49,7 +49,9 @@ The plugin docs now mirror `config/plugin/` one page at a time.
 - [Fast Response](./fast-response)
 - [Header Mutation](./header-mutation)
 - [Image Generation](./image-gen)
+- [Request Parameters](./request-params)
 - [System Prompt](./system-prompt)
+- [Tools](./tools)
 
 ### Retrieval and Memory
 
@@ -62,6 +64,4 @@ The plugin docs now mirror `config/plugin/` one page at a time.
 
 - [Content Safety](./content-safety)
 - [Hallucination](./hallucination)
-- [Jailbreak](./jailbreak)
-- [PII](./pii)
 - [Response Jailbreak](./response-jailbreak)

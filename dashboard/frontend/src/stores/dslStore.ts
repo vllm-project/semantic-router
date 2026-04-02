@@ -13,6 +13,7 @@
 
 import { create } from 'zustand'
 import { wasmBridge } from '@/lib/wasm'
+import { generateBuilderNLDraftStreaming } from '@/utils/builderNLApi'
 import {
   updateModel,
   addModel as addModelMut,
@@ -20,6 +21,12 @@ import {
   updateSignal,
   addSignal as addSignalMut,
   deleteSignal as deleteSignalMut,
+  updateProjectionPartition as updateProjectionPartitionMut,
+  addProjectionPartition as addProjectionPartitionMut,
+  deleteProjectionPartition as deleteProjectionPartitionMut,
+  updateProjection as updateProjectionMut,
+  addProjection as addProjectionMut,
+  deleteProjection as deleteProjectionMut,
   updatePlugin,
   addPlugin as addPluginMut,
   deletePlugin as deletePluginMut,
@@ -29,200 +36,31 @@ import {
 } from '@/lib/dslMutations'
 import type { RouteInput } from '@/lib/dslMutations'
 import type {
-  Diagnostic,
+  BuilderNLGenerateRequest,
+  BuilderNLStagedDraft,
   EditorMode,
   CompileResult,
   ValidateResult,
-  SymbolTable,
-  ASTProgram,
-  DeployStep,
-  DeployResult,
-  ConfigVersion,
   DSLFieldObject,
 } from '@/types/dsl'
-
-interface DeployStatusService {
-  name?: string
-  healthy?: boolean
-}
-
-interface DeployStatusResponse {
-  overall?: string
-  services?: DeployStatusService[]
-}
-
-// ---------- Store State ----------
-
-interface DSLState {
-  // --- Editor content ---
-  dslSource: string
-  yamlOutput: string
-  crdOutput: string
-  diagnostics: Diagnostic[]
-  symbols: SymbolTable | null
-  /** Parsed AST from last successful parse (for Visual Builder) */
-  ast: ASTProgram | null
-  baseConfigYaml: string
-
-  // --- Runtime ---
-  wasmReady: boolean
-  wasmError: string | null
-  loading: boolean
-  compileError: string | null
-
-  // --- UI ---
-  mode: EditorMode
-  dirty: boolean
-  lastCompileAt: number | null
-
-  // --- Deploy ---
-  deploying: boolean
-  deployStep: DeployStep | null
-  deployResult: DeployResult | null
-  showDeployConfirm: boolean
-  configVersions: ConfigVersion[]
-
-  // --- Deploy Preview (diff) ---
-  deployPreviewCurrent: string
-  deployPreviewMerged: string
-  deployPreviewLoading: boolean
-  deployPreviewError: string | null
-}
-
-// ---------- Store Actions ----------
-
-interface DSLActions {
-  /** Initialize WASM runtime. Call once at app startup. */
-  initWasm(): Promise<void>
-
-  /** Update DSL source (e.g., on editor keystroke). Triggers debounced validation. */
-  setDslSource(source: string): void
-
-  /** Run full compile: DSL → YAML + CRD + diagnostics. */
-  compile(): void
-
-  /** Validate only (faster than compile, for real-time feedback). */
-  validate(): void
-
-  /** Parse DSL → AST + diagnostics + symbols (for Visual Builder). */
-  parseAST(): void
-
-  /** Decompile YAML → routing-only DSL (for import from existing config). */
-  decompile(yaml: string): string | null
-
-  /** Format the current DSL source. */
-  format(): void
-
-  /** Switch editor mode. */
-  setMode(mode: EditorMode): void
-
-  /** Reset editor state to initial values. */
-  reset(): void
-
-  /** Load DSL source without preserving an imported full-config deploy base. */
-  loadDsl(source: string): void
-
-  /** Load YAML and decompile only its routing section to DSL. */
-  importYaml(yaml: string): void
-
-  /** Fetch current router config YAML and decompile only its routing section to DSL. */
-  loadFromRouter(): Promise<void>
-
-  // --- Visual Builder mutations (Phase 2) ---
-
-  /** Update a model's fields in DSL source text, then re-parse AST. */
-  mutateModel(name: string, fields: DSLFieldObject): void
-
-  /** Add a new model to DSL source text, then re-parse AST. */
-  addModel(name: string, fields: DSLFieldObject): void
-
-  /** Delete a model from DSL source text, then re-parse AST. */
-  deleteModel(name: string): void
-
-  /** Update a signal's fields in DSL source text, then re-parse AST. */
-  mutateSignal(signalType: string, name: string, fields: DSLFieldObject): void
-
-  /** Add a new signal to DSL source text, then re-parse AST. */
-  addSignal(signalType: string, name: string, fields: DSLFieldObject): void
-
-  /** Delete a signal from DSL source text, then re-parse AST. */
-  deleteSignal(signalType: string, name: string): void
-
-  /** Update a plugin declaration's fields, then re-parse AST. */
-  mutatePlugin(name: string, pluginType: string, fields: DSLFieldObject): void
-
-  /** Add a new plugin declaration, then re-parse AST. */
-  addPlugin(name: string, pluginType: string, fields: DSLFieldObject): void
-
-  /** Delete a plugin declaration, then re-parse AST. */
-  deletePlugin(name: string, pluginType: string): void
-
-  /** Delete a route declaration, then re-parse AST. */
-  deleteRoute(name: string): void
-
-  /** Update a route declaration, then re-parse AST. */
-  mutateRoute(name: string, input: RouteInput): void
-
-  /** Add a new route, then re-parse AST. */
-  addRoute(name: string, input: RouteInput): void
-
-  // --- Deploy actions ---
-
-  /** Show deploy confirmation dialog. Compiles first if needed. Fetches preview diff. */
-  requestDeploy(): void
-
-  /** Execute the deploy (called after user confirms). */
-  executeDeploy(): Promise<void>
-
-  /** Cancel/dismiss deploy dialog. */
-  dismissDeploy(): void
-
-  /** Rollback to a specific version. */
-  rollback(version: string): Promise<void>
-
-  /** Fetch available config versions. */
-  fetchVersions(): Promise<void>
-}
-
-export type DSLStore = DSLState & DSLActions
+import type { DSLStore } from './dslStoreTypes'
+import {
+  appendBuilderNLProgress,
+  initialDSLState,
+  normalizeBuilderNLReview,
+  normalizeBuilderNLValidation,
+  type DeployStatusResponse,
+} from './dslStoreSupport'
 
 // ---------- Debounce helper ----------
 
 let validateTimer: ReturnType<typeof setTimeout> | null = null
 const VALIDATE_DEBOUNCE_MS = 300
 
-// ---------- Initial state ----------
-
-const initialState: DSLState = {
-  dslSource: '',
-  yamlOutput: '',
-  crdOutput: '',
-  diagnostics: [],
-  symbols: null,
-  ast: null,
-  baseConfigYaml: '',
-  wasmReady: false,
-  wasmError: null,
-  loading: false,
-  compileError: null,
-  mode: 'dsl',
-  dirty: false,
-  lastCompileAt: null,
-  deploying: false,
-  deployStep: null,
-  deployResult: null,
-  showDeployConfirm: false,
-  configVersions: [],
-  deployPreviewCurrent: '',
-  deployPreviewMerged: '',
-  deployPreviewLoading: false,
-  deployPreviewError: null,
-}
-
 // ---------- Store ----------
 
 export const useDSLStore = create<DSLStore>((set, get) => ({
-  ...initialState,
+  ...initialDSLState,
 
   async initWasm() {
     if (get().wasmReady) return
@@ -372,7 +210,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
 
   reset() {
     if (validateTimer) clearTimeout(validateTimer)
-    set({ ...initialState, wasmReady: get().wasmReady })
+    set({ ...initialDSLState, wasmReady: get().wasmReady })
   },
 
   loadDsl(source: string) {
@@ -466,6 +304,75 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   deleteSignal(signalType: string, name: string) {
     const { dslSource, wasmReady } = get()
     const newSrc = deleteSignalMut(dslSource, signalType, name)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  mutateProjectionPartition(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = updateProjectionPartitionMut(dslSource, name, fields)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  addProjectionPartition(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = addProjectionPartitionMut(dslSource, name, fields)
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  deleteProjectionPartition(name: string) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = deleteProjectionPartitionMut(dslSource, name)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  mutateProjectionScore(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = updateProjectionMut(dslSource, 'score', name, fields)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  addProjectionScore(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = addProjectionMut(dslSource, 'score', name, fields)
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  deleteProjectionScore(name: string) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = deleteProjectionMut(dslSource, 'score', name)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  mutateProjectionMapping(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = updateProjectionMut(dslSource, 'mapping', name, fields)
+    if (newSrc === dslSource) return
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  addProjectionMapping(name: string, fields: DSLFieldObject) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = addProjectionMut(dslSource, 'mapping', name, fields)
+    set({ dslSource: newSrc, dirty: true })
+    if (wasmReady) get().parseAST()
+  },
+
+  deleteProjectionMapping(name: string) {
+    const { dslSource, wasmReady } = get()
+    const newSrc = deleteProjectionMut(dslSource, 'mapping', name)
     if (newSrc === dslSource) return
     set({ dslSource: newSrc, dirty: true })
     if (wasmReady) get().parseAST()
@@ -745,6 +652,96 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     } catch {
       // silently fail
     }
+  },
+
+  async generateFromNaturalLanguage(input: BuilderNLGenerateRequest) {
+    const prompt = input.prompt.trim()
+    if (!prompt) {
+      set({ nlGenerateError: 'Describe the routing behavior you want to build.' })
+      return
+    }
+
+    set({
+      nlGenerating: true,
+      nlGenerateError: null,
+      nlStagedDraft: null,
+      nlProgressEvents: [{
+        phase: 'request',
+        level: 'info',
+        message: 'Sending Builder NL request to the streaming backend.',
+        timestamp: Date.now(),
+      }],
+    })
+
+    try {
+      const liveBaseYaml = get().baseConfigYaml
+      const data = await generateBuilderNLDraftStreaming({
+        ...input,
+        prompt,
+        currentDsl: input.currentDsl?.trim() || '',
+      }, (event) => appendBuilderNLProgress(set, event))
+      const stagedDraft: BuilderNLStagedDraft = {
+        prompt,
+        dsl: data.dsl,
+        baseYaml: liveBaseYaml.trim() ? liveBaseYaml : (data.baseYaml || ''),
+        summary: data.summary || '',
+        suggestedTestQuery: data.suggestedTestQuery || '',
+        review: normalizeBuilderNLReview(data.review),
+        validation: normalizeBuilderNLValidation(data.validation),
+      }
+      set({
+        nlGenerating: false,
+        nlGenerateError: null,
+        nlStagedDraft: stagedDraft,
+      })
+    } catch (err) {
+      appendBuilderNLProgress(set, {
+        phase: 'error',
+        level: 'error',
+        message: err instanceof Error ? err.message : String(err),
+        timestamp: Date.now(),
+      })
+      set({
+        nlGenerating: false,
+        nlGenerateError: err instanceof Error ? err.message : String(err),
+        nlStagedDraft: null,
+      })
+    }
+  },
+
+  applyNaturalLanguageDraft() {
+    const stagedDraft = get().nlStagedDraft
+    if (!stagedDraft) return
+    const liveBaseYaml = get().baseConfigYaml
+
+    set({
+      dslSource: stagedDraft.dsl,
+      // Keep the live deploy base intact so global/providers/listeners do not
+      // get replaced by the staged NL draft handoff payload.
+      baseConfigYaml: liveBaseYaml.trim() ? liveBaseYaml : stagedDraft.baseYaml,
+      dirty: false,
+      diagnostics: [],
+      compileError: null,
+      ast: null,
+      symbols: null,
+      yamlOutput: '',
+      crdOutput: '',
+      mode: 'dsl',
+      nlGenerateError: null,
+      nlStagedDraft: null,
+    })
+
+    const state = get()
+    if (state.wasmReady && stagedDraft.dsl.trim()) {
+      state.compile()
+    }
+  },
+
+  discardNaturalLanguageDraft() {
+    set({
+      nlGenerateError: null,
+      nlStagedDraft: null,
+    })
   },
 }))
 

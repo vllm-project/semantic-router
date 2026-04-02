@@ -14,6 +14,14 @@ if [ -f "$CONFIG_FILE_PATH" ]; then
     }
 fi
 
-# Switch to nonroot user and execute the dashboard backend
-# Using exec to replace shell process with dashboard-backend
-exec su-exec nonroot:nonroot "$@"
+# Switch to nonroot user and execute the dashboard backend.
+if command -v gosu >/dev/null 2>&1; then
+    exec gosu nonroot:nonroot "$@"
+fi
+
+if command -v su-exec >/dev/null 2>&1; then
+    exec su-exec nonroot:nonroot "$@"
+fi
+
+echo "Neither gosu nor su-exec is available" >&2
+exit 1

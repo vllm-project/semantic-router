@@ -106,6 +106,7 @@ func compile(_ js.Value, args []js.Value) interface{} {
 	// 2. Validate (includes lex + parse + reference + constraint checks).
 	diags, valErrs := dsl.Validate(dslSource)
 	diagnostics := convertDiagnostics(diags)
+	diagnostics = appendRuntimeValidationWarning(diagnostics, prog)
 
 	// 3. Compile DSL → RouterConfig.
 	cfg, compileErrs := dsl.Compile(dslSource)
@@ -159,8 +160,10 @@ func validate(_ js.Value, args []js.Value) interface{} {
 	}
 	dslSource := args[0].String()
 
+	prog, _ := dsl.Parse(dslSource)
 	diags, symbols, valErrs := dsl.ValidateWithSymbols(dslSource)
 	diagnostics := convertDiagnostics(diags)
+	diagnostics = appendRuntimeValidationWarning(diagnostics, prog)
 
 	errorCount := 0
 	for _, d := range diags {
@@ -246,6 +249,7 @@ func parseAST(_ js.Value, args []js.Value) interface{} {
 	// Validate (includes reference + constraint checks) + symbol table
 	diags, symbols, valErrs := dsl.ValidateWithSymbols(dslSource)
 	diagnostics := convertDiagnostics(diags)
+	diagnostics = appendRuntimeValidationWarning(diagnostics, prog)
 
 	errorCount := 0
 	for _, d := range diags {
@@ -310,6 +314,36 @@ func convertDiagnostics(diags []dsl.Diagnostic) []DiagnosticJSON {
 		}
 	}
 	return result
+}
+
+func appendRuntimeValidationWarning(diagnostics []DiagnosticJSON, prog *dsl.Program) []DiagnosticJSON {
+	if prog == nil {
+		return diagnostics
+	}
+	line, column := runtimeValidationWarningPosition(prog)
+	if line == 0 {
+		return diagnostics
+	}
+	return append(diagnostics, DiagnosticJSON{
+		Level:   dsl.DiagWarning.String(),
+		Message: runtimeValidationWarningMessage(prog),
+		Line:    line,
+		Column:  column,
+	})
+}
+
+func runtimeValidationWarningMessage(prog *dsl.Program) string {
+	if len(prog.TestBlocks) > 0 {
+		return "TEST blocks are parsed in browser validation but not executed against the native routing signal pipeline; run sr-dsl validate natively for runtime TEST checks"
+	}
+	return ""
+}
+
+func runtimeValidationWarningPosition(prog *dsl.Program) (int, int) {
+	if len(prog.TestBlocks) > 0 {
+		return prog.TestBlocks[0].Pos.Line, prog.TestBlocks[0].Pos.Column
+	}
+	return 0, 0
 }
 
 func marshalJSON(v interface{}) string {

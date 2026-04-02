@@ -40,12 +40,8 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
 ## Must Read
 
 - [AGENTS.md](../../../../AGENTS.md)
-- [docs/agent/README.md](../../../../docs/agent/README.md)
-- [docs/agent/governance.md](../../../../docs/agent/governance.md)
 - [CONTRIBUTING.md](../../../../CONTRIBUTING.md)
 - [.github/PULL_REQUEST_TEMPLATE.md](../../../../.github/PULL_REQUEST_TEMPLATE.md)
-- [.github/ISSUE_TEMPLATE/001_feature_request.yaml](../../../../.github/ISSUE_TEMPLATE/001_feature_request.yaml)
-- [.github/ISSUE_TEMPLATE/002_bug_report.yaml](../../../../.github/ISSUE_TEMPLATE/002_bug_report.yaml)
 - [.prowlabels.yaml](../../../../.prowlabels.yaml)
 
 ## Workflow
@@ -55,7 +51,7 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
    - If changed paths are known or can be estimated, run `make agent-report ENV=cpu|amd CHANGED_FILES="..."` to resolve the primary skill, impacted surfaces, and expected validation.
 2. Classify the artifact before writing.
    - Issues use the canonical issue templates as the schema for title and body.
-   - PRs use the canonical PR template as the schema for title, summary, impacted surfaces, skipped surfaces, debt entry, and validation fields.
+   - PRs use the canonical PR template as the schema for title, purpose, affected modules, test plan or results, and checklist expectations.
 3. Apply canonical labels and naming.
    - For issues, start from the template defaults such as `bug` or `feature request`.
    - Add maintainer labels from `.prowlabels.yaml`; today that taxonomy includes `area` labels and `priority` labels.
@@ -85,4 +81,4 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
 
 - Issue and PR management requests are grounded in the current repo state rather than memory
 - Issue drafts include the canonical title/body shape plus the correct default and maintainer-applied labels
-- PR drafts or updates include the canonical title classification, signoff expectation, summary fields, and validation results or blockers
+- PR drafts or updates include the canonical title classification, signoff expectation, affected-module context, and validation results or blockers

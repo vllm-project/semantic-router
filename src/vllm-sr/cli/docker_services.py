@@ -18,7 +18,7 @@ def docker_container_status(container_name):
     Get the status of a container.
 
     Returns:
-        'running', 'exited', 'paused', or 'not found'
+        'running', 'created', 'exited', 'paused', or 'not found'
     """
     runtime = get_container_runtime()
     try:
@@ -41,6 +41,8 @@ def docker_container_status(container_name):
             return "not found"
         if "Up" in status:
             return "running"
+        if "Created" in status:
+            return "created"
         if "Exited" in status:
             return "exited"
         if "Paused" in status:
@@ -310,6 +312,78 @@ def docker_start_grafana(
     return _run_service_start(cmd, "Grafana")
 
 
+def docker_start_redis(
+    network_name=None, stack_layout: RuntimeStackLayout | None = None
+):
+    """Start a Redis container for durable storage backends.
+
+    Reuses an already-running container to preserve data across router restarts.
+    """
+    runtime = get_container_runtime()
+    stack_layout = stack_layout or resolve_runtime_stack()
+    container_name = stack_layout.redis_container_name
+    network_name = network_name or stack_layout.network_name
+
+    if _reuse_running_storage_container(container_name, "Redis"):
+        return 0, "", ""
+
+    _replace_existing_container(container_name)
+    cmd = [
+        runtime,
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "--hostname",
+        "redis",
+        "--network",
+        network_name,
+        "-p",
+        f"{stack_layout.redis_port}:6379",
+        "redis:7-alpine",
+    ]
+    return _run_service_start(cmd, "Redis")
+
+
+def docker_start_postgres(
+    network_name=None, stack_layout: RuntimeStackLayout | None = None
+):
+    """Start a Postgres container for durable storage backends.
+
+    Reuses an already-running container to preserve data across router restarts.
+    """
+    runtime = get_container_runtime()
+    stack_layout = stack_layout or resolve_runtime_stack()
+    container_name = stack_layout.postgres_container_name
+    network_name = network_name or stack_layout.network_name
+
+    if _reuse_running_storage_container(container_name, "Postgres"):
+        return 0, "", ""
+
+    _replace_existing_container(container_name)
+    cmd = [
+        runtime,
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "--hostname",
+        "postgres",
+        "--network",
+        network_name,
+        "-e",
+        "POSTGRES_DB=vsr",
+        "-e",
+        "POSTGRES_USER=router",
+        "-e",
+        "POSTGRES_PASSWORD=router-secret",
+        "-p",
+        f"{stack_layout.postgres_port}:5432",
+        "postgres:16-alpine",
+    ]
+    return _run_service_start(cmd, "Postgres")
+
+
 def docker_start_fleet_sim(
     *,
     image: str | None = None,
@@ -404,6 +478,15 @@ def load_openclaw_registry(data_dir):
         return []
 
 
+def _reuse_running_storage_container(container_name: str, label: str) -> bool:
+    """Return True if the storage container is already running and should be reused."""
+    status = docker_container_status(container_name)
+    if status == "running":
+        log.info(f"{label} container already running, reusing to preserve data")
+        return True
+    return False
+
+
 def _replace_existing_container(container_name):
     status = docker_container_status(container_name)
     if status != "not found":
@@ -433,13 +516,14 @@ def _render_template_copy(
 def render_observability_template(
     template_text: str, stack_layout: RuntimeStackLayout
 ) -> str:
-    replacements = {
-        "vllm-sr-container": stack_layout.container_name,
-        "vllm-sr-prometheus": stack_layout.prometheus_container_name,
-        "vllm-sr-jaeger": stack_layout.jaeger_container_name,
-    }
+    replacements = (
+        ("vllm-sr-container:9190", f"{stack_layout.router_container_name}:9190"),
+        ("vllm-sr-container", stack_layout.container_name),
+        ("vllm-sr-prometheus", stack_layout.prometheus_container_name),
+        ("vllm-sr-jaeger", stack_layout.jaeger_container_name),
+    )
     rendered = template_text
-    for source, target in replacements.items():
+    for source, target in replacements:
         rendered = rendered.replace(source, target)
     return rendered
 

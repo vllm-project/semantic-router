@@ -27,7 +27,8 @@ func NewDeployer(kubeConfig string, verbose bool) *Deployer {
 	}
 }
 
-// Install installs a Helm chart
+// Install installs or upgrades a Helm chart (helm upgrade --install) so re-runs and CI
+// do not fail with "cannot reuse a name that is still in use" when the release exists.
 func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 	d.log("Installing Helm chart: %s/%s", opts.Namespace, opts.ReleaseName)
 
@@ -46,7 +47,8 @@ func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	args := []string{
-		"install", opts.ReleaseName, chart,
+		"upgrade", opts.ReleaseName, chart,
+		"--install",
 		"--namespace", opts.Namespace,
 		"--create-namespace",
 		"--kubeconfig", d.KubeConfig,
@@ -78,10 +80,10 @@ func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to install chart: %w", err)
+		return fmt.Errorf("failed to install/upgrade chart: %w", err)
 	}
 
-	d.log("Chart %s installed successfully", opts.ReleaseName)
+	d.log("Chart %s installed/upgraded successfully", opts.ReleaseName)
 	return nil
 }
 
@@ -110,6 +112,12 @@ func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef strin
 		return "", nil, fmt.Errorf("failed to copy chart to temp dir: %w", err)
 	}
 
+	// Ensure required Helm repositories are registered before building dependencies.
+	if err := d.ensureHelmRepos(ctx); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to add helm repos: %w", err)
+	}
+
 	// Build dependencies for local chart (creates charts/ and Chart.lock in temp copy).
 	cmd := exec.CommandContext(ctx, "helm", "dependency", "build", tmpChart)
 	if d.Verbose {
@@ -122,6 +130,37 @@ func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef strin
 	}
 
 	return tmpChart, cleanup, nil
+}
+
+var requiredHelmRepos = []struct{ name, url string }{
+	{"bitnami", "https://charts.bitnami.com/bitnami"},
+	{"milvus", "https://milvus-io.github.io/milvus-helm/"},
+	{"jaegertracing", "https://jaegertracing.github.io/helm-charts"},
+	{"prometheus-community", "https://prometheus-community.github.io/helm-charts"},
+	{"grafana", "https://grafana.github.io/helm-charts"},
+}
+
+func (d *Deployer) ensureHelmRepos(ctx context.Context) error {
+	for _, repo := range requiredHelmRepos {
+		cmd := exec.CommandContext(ctx, "helm", "repo", "add", repo.name, repo.url, "--force-update")
+		if d.Verbose {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+		}
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to add helm repo %s: %w", repo.name, err)
+		}
+	}
+
+	cmd := exec.CommandContext(ctx, "helm", "repo", "update")
+	if d.Verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+	if err := cmd.Run(); err != nil {
+		d.log("Warning: helm repo update failed: %v", err)
+	}
+	return nil
 }
 
 func copyDir(src, dst string) error {

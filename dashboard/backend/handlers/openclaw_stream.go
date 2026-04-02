@@ -54,7 +54,7 @@ func parseWorkerChatFallbackResponse(
 	if len(parsed.Choices) == 0 {
 		return "", statusCode, trimmedBody, fmt.Errorf("worker returned no choices")
 	}
-	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
+	content := extractOpenAIChatChoiceContent(parsed.Choices[0])
 	if content == "" {
 		return "", statusCode, trimmedBody, fmt.Errorf("worker returned empty content")
 	}

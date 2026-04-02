@@ -26,7 +26,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **Why this matters**: Multiple signals voting together make more accurate decisions than any single signal.
 
-## The 13 Signal Types
+## The 15 Signal Types
 
 ### 1. Keyword Signals
 
@@ -107,7 +107,26 @@ signals:
 
 **Example**: "That's wrong, try again" → Negative feedback detected
 
-### 6. Preference Signals
+### 6. Reask Signals
+
+- **What**: History-aware semantic similarity over recent user turns
+- **Latency**: 10-50ms
+- **Use Case**: Escalate after users repeat the same question without explicitly complaining
+
+```yaml
+signals:
+  reasks:
+    - name: "likely_dissatisfied"
+      threshold: 0.8
+      lookback_turns: 1
+    - name: "persistently_dissatisfied"
+      threshold: 0.8
+      lookback_turns: 2
+```
+
+**Example**: "Can you answer the same tax question again, but correctly this time?" → Reask detected
+
+### 7. Preference Signals
 
 - **What**: LLM-based route preference matching
 - **Latency**: 200-500ms
@@ -126,7 +145,7 @@ signals:
 
 **Example**: "Write a story about dragons" → Creative route preferred
 
-### 7. Language Signals
+### 8. Language Signals
 
 - **What**: Multi-language detection (100+ languages)
 - **Latency**: Less than 1ms
@@ -148,7 +167,7 @@ signals:
 - **Example 1**: "Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **Example 2**: "你好，世界" → Chinese (zh) → Chinese model
 
-### 8. Context Signals
+### 9. Context Signals
 
 - **What**: Token-count based routing for short/long request handling
 - **Latency**: 1ms (calculated during processing)
@@ -170,7 +189,7 @@ signals:
 
 **Example**: A request with 5,000 tokens → Matches "high_token_count" → Routes to `claude-3-opus`
 
-### 9. Complexity Signals
+### 10. Complexity Signals
 
 - **What**: Embedding-based query complexity classification (hard/easy/medium)
 - **Latency**: 50-100ms (embedding computation)
@@ -207,7 +226,7 @@ signals:
 4. Difficulty signal = max_hard_similarity - max_easy_similarity
 5. If signal > threshold: "hard", if signal < -threshold: "easy", else: "medium"
 
-### 10. Modality Signals
+### 11. Modality Signals
 
 - **What**: Classifies whether a prompt is text-only (AR), image-generation (DIFFUSION), or both (BOTH)
 - **Latency**: 50-100ms (inline model inference)
@@ -226,7 +245,7 @@ signals:
 
 **How it works**: The modality detector (configured under `modality_detector` in `inline_models`) uses a small classifier to decide whether the query calls for text, image, or both output modes. The result is emitted as a signal and referenced in decisions by the rule `name`.
 
-### 11. Authz Signals (RBAC)
+### 12. Authz Signals (RBAC)
 
 - **What**: Kubernetes-style RoleBinding pattern — maps users/groups to named roles that act as signals
 - **Latency**: &lt;1ms (reads from request headers, no model inference)
@@ -262,7 +281,7 @@ signals:
 
 > Subject names **must** match the values Authorino injects. User names come from the K8s Secret `metadata.name`; group names from the `authz-groups` annotation.
 
-### 12. Jailbreak Signals
+### 13. Jailbreak Signals
 
 - **What**: Adversarial prompt and jailbreak detection via two complementary methods: BERT classifier and contrastive embedding
 - **Latency**: 50–100ms (BERT classifier); 50–100ms (contrastive, after initialization)
@@ -289,7 +308,7 @@ signals:
 
 #### Method 2: Contrastive Embedding
 
-Scores each message by contrasting its embedding against a jailbreak knowledge base (KB) and a benign KB:
+Scores each message by contrasting its embedding against a jailbreak knowledge base and a benign knowledge base:
 
 ```
 score = max_similarity(input, jailbreak_kb) − max_similarity(input, benign_kb)
@@ -326,7 +345,7 @@ signals:
 
 > Requires `prompt_guard` for BERT method. Contrastive uses the global embedding model. See [Jailbreak](../tutorials/signal/learned/jailbreak).
 
-### 13. PII Signals
+### 14. PII Signals
 
 - **What**: ML-based detection of Personally Identifiable Information (PII) in user queries
 - **Latency**: 50–100ms (model inference, runs in parallel with other signals)
@@ -355,6 +374,45 @@ signals:
 - `include_history`: When `true`, all conversation messages are analysed
 
 > Requires the learned PII detector configuration. See [PII](../tutorials/signal/learned/pii).
+
+### 15. Knowledge Base Signals
+
+- **What**: Embedding-backed signals that bind labels or groups from a maintained knowledge base into named routing facts
+- **Latency**: 50-100ms after startup preparation
+- **Use Case**: Privacy, safety, preference, or emotion routing from one reusable exemplar package
+
+```yaml
+global:
+  model_catalog:
+    kbs:
+      - name: "privacy_knowledge_base"
+        source:
+          path: "kb/privacy/"
+          manifest: "labels.json"
+        threshold: 0.55
+        groups:
+          privacy_policy: ["proprietary_code", "internal_document", "pii"]
+
+signals:
+  kb:
+    - name: "privacy_policy"
+      kb: "privacy_knowledge_base"
+      target:
+        kind: "group"
+        value: "privacy_policy"
+      match: "threshold"
+```
+
+**Example**: "Review this internal design document locally only" → Matches the `privacy_policy` group in the maintained knowledge base → Decision routes to the local privacy lane
+
+**How it works**:
+
+1. Router startup loads the maintained knowledge base package from `global.model_catalog.kbs[]`
+2. The request is scored against the configured labels and groups
+3. `routing.signals.kb[]` binds the matched label or group into a reusable routing signal
+4. Decisions and projections consume that named fact like any other signal
+
+> See [Knowledge Base](../tutorials/signal/learned/kb) for the full signal contract and projection semantics.
 
 ## How Signals Combine
 
@@ -537,6 +595,6 @@ selected_model: "qwen-math"
 
 - [Configuration Guide](../installation/configuration) - Configure signals and decisions
 - [Signal Overview](../tutorials/signal/overview) - Learn the signal catalog
-- [Heuristic Signals](../tutorials/signal/overview#heuristic-signals) - Start with keyword, authz, context, language, and modality
-- [Learned Signals](../tutorials/signal/overview#learned-signals) - Add domain, embedding, safety, and feedback classifiers
+- [Heuristic Signals](../tutorials/signal/overview#heuristic-signals) - Start with keyword, authz, context, language, and structure
+- [Learned Signals](../tutorials/signal/overview#learned-signals) - Add domain, embedding, modality, safety, reask, and feedback classifiers
 - [Decision Overview](../tutorials/decision/overview) - Learn how signals map into route decisions

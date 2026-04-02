@@ -1,7 +1,8 @@
 """Pydantic models for vLLM Semantic Router configuration."""
 
-from typing import List, Dict, Any, Optional, Literal
 from enum import Enum
+from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field, model_validator
 
 from .algorithms import AlgorithmConfig, ModelRef
@@ -32,6 +33,72 @@ class EmbeddingSignal(BaseModel):
     threshold: float
     candidates: List[str]
     aggregation_method: str = "max"
+
+
+class ProjectionPartition(BaseModel):
+    """Partition metadata coordinating mutually exclusive routing signals."""
+
+    name: str
+    semantics: str
+    members: List[str]
+    temperature: Optional[float] = None
+    default: Optional[str] = None
+
+
+class ProjectionScoreInput(BaseModel):
+    """One weighted signal contribution to a derived projection score."""
+
+    type: str
+    name: Optional[str] = None
+    classifier: Optional[str] = None
+    metric: Optional[str] = None
+    weight: float
+    value_source: Optional[str] = None
+    match: Optional[float] = None
+    miss: Optional[float] = None
+
+
+class ProjectionScore(BaseModel):
+    """Weighted derived score over existing routing signals."""
+
+    name: str
+    method: str
+    inputs: List[ProjectionScoreInput]
+
+
+class ProjectionMappingCalibration(BaseModel):
+    """Confidence calibration for a projection mapping output band."""
+
+    method: str
+    slope: Optional[float] = None
+
+
+class ProjectionMappingOutput(BaseModel):
+    """One named threshold band emitted by a projection mapping."""
+
+    name: str
+    lt: Optional[float] = None
+    lte: Optional[float] = None
+    gt: Optional[float] = None
+    gte: Optional[float] = None
+
+
+class ProjectionMapping(BaseModel):
+    """Maps a derived score into named routing outputs."""
+
+    name: str
+    source: str
+    method: str
+    calibration: Optional[ProjectionMappingCalibration] = None
+    outputs: List[ProjectionMappingOutput]
+
+
+class Projections(BaseModel):
+    """Derived routing surfaces that sit alongside base signals."""
+
+    partitions: Optional[List[ProjectionPartition]] = []
+    scores: Optional[List[ProjectionScore]] = []
+    mappings: Optional[List[ProjectionMapping]] = []
 
 
 class Domain(BaseModel):
@@ -79,6 +146,53 @@ class ContextRule(BaseModel):
     min_tokens: str  # Supports suffixes: "1K", "1.5M", etc.
     max_tokens: str
     description: Optional[str] = None
+
+
+class StructureSource(BaseModel):
+    """Source selector for structure-based signals."""
+
+    type: str
+    pattern: Optional[str] = None
+    keywords: Optional[List[str]] = None
+    case_sensitive: bool = False
+    sequences: Optional[List[List[str]]] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class StructureFeature(BaseModel):
+    """Typed request-shape feature extractor."""
+
+    type: str
+    source: StructureSource
+
+    class Config:
+        extra = "forbid"
+
+
+class NumericPredicate(BaseModel):
+    """Numeric threshold predicate for structure signals."""
+
+    gt: Optional[float] = None
+    gte: Optional[float] = None
+    lt: Optional[float] = None
+    lte: Optional[float] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class StructureRule(BaseModel):
+    """Request-shape routing signal configuration."""
+
+    name: str
+    description: Optional[str] = None
+    feature: StructureFeature
+    predicate: Optional[NumericPredicate] = None
+
+    class Config:
+        extra = "forbid"
 
 
 class ComplexityCandidates(BaseModel):
@@ -164,6 +278,31 @@ class RoleBindingRule(BaseModel):
     description: Optional[str] = None
 
 
+class KBSignalTarget(BaseModel):
+    """Binding target for a named knowledge base."""
+
+    kind: Literal["label", "group"]
+    value: str
+
+
+class KBSignal(BaseModel):
+    """Knowledge-base signal bound to a named global KB instance."""
+
+    name: str
+    kb: str
+    target: KBSignalTarget
+    match: Optional[Literal["best", "threshold"]] = None
+
+
+class Reask(BaseModel):
+    """History-aware repeated-question dissatisfaction signal."""
+
+    name: str
+    description: Optional[str] = None
+    threshold: Optional[float] = None
+    lookback_turns: Optional[int] = None
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -172,14 +311,17 @@ class Signals(BaseModel):
     domains: Optional[List[Domain]] = []
     fact_check: Optional[List[FactCheck]] = []
     user_feedbacks: Optional[List[UserFeedback]] = []
+    reasks: Optional[List[Reask]] = []
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
     context: Optional[List[ContextRule]] = []
+    structure: Optional[List[StructureRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
     modality: Optional[List[ModalityRule]] = []
     role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
     pii: Optional[List[PIIRule]] = []
+    kb: Optional[List[KBSignal]] = []
 
 
 class Condition(BaseModel):
@@ -257,7 +399,11 @@ class PluginType(str, Enum):
     ROUTER_REPLAY = "router_replay"
     MEMORY = "memory"
     RAG = "rag"
+    IMAGE_GEN = "image_gen"
     FAST_RESPONSE = "fast_response"
+    REQUEST_PARAMS = "request_params"
+    RESPONSE_JAILBREAK = "response_jailbreak"
+    TOOLS = "tools"
 
 
 class SemanticCachePluginConfig(BaseModel):
@@ -279,6 +425,33 @@ class FastResponsePluginConfig(BaseModel):
     """Configuration for fast_response plugin."""
 
     message: str
+
+
+class RequestParamsPluginConfig(BaseModel):
+    """Configuration for request_params plugin."""
+
+    blocked_params: Optional[List[str]] = None
+    max_tokens_limit: Optional[int] = Field(default=None, ge=1)
+    max_n: Optional[int] = Field(default=None, ge=1)
+    strip_unknown: Optional[bool] = None
+
+
+class ResponseJailbreakPluginConfig(BaseModel):
+    """Configuration for response_jailbreak plugin."""
+
+    enabled: bool
+    threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    action: Optional[Literal["block", "header", "none"]] = None
+
+
+class ToolsPluginConfig(BaseModel):
+    """Configuration for tools plugin."""
+
+    enabled: bool
+    mode: Literal["none", "passthrough", "filtered"] = "passthrough"
+    semantic_selection: Optional[bool] = None
+    allow_tools: Optional[List[str]] = None
+    block_tools: Optional[List[str]] = None
 
 
 class SystemPromptPluginConfig(BaseModel):
@@ -324,12 +497,12 @@ class RouterReplayPluginConfig(BaseModel):
 
     enabled: bool = True
     max_records: int = Field(
-        default=200,
+        default=10000,
         gt=0,
-        description="Maximum records in memory (must be > 0, default: 200)",
+        description="Maximum records in memory (must be > 0, default: 10000)",
     )
-    capture_request_body: bool = False  # Capture request payloads
-    capture_response_body: bool = False  # Capture response payloads
+    capture_request_body: bool = True  # Capture request payloads
+    capture_response_body: bool = True  # Capture response payloads
     max_body_bytes: int = Field(
         default=4096,
         gt=0,
@@ -407,7 +580,7 @@ class RAGPluginConfig(BaseModel):
     # Optional: Context injection mode
     # - "tool_role": Inject as tool role messages (compatible with hallucination detection)
     # - "system_prompt": Prepend to system prompt
-    injection_mode: Optional[str] = Field(
+    injection_mode: Optional[Literal["tool_role", "system_prompt"]] = Field(
         default=None,
         description="Injection mode: tool_role (default) or system_prompt",
     )
@@ -423,7 +596,7 @@ class RAGPluginConfig(BaseModel):
     # - "skip": Continue without context (default)
     # - "block": Return error response
     # - "warn": Continue with warning header
-    on_failure: Optional[str] = Field(
+    on_failure: Optional[Literal["skip", "block", "warn"]] = Field(
         default=None,
         description="On failure: skip (default), block, or warn",
     )
@@ -472,6 +645,19 @@ class PluginConfig(BaseModel):
         elif hasattr(data.get("type"), "value"):
             data["type"] = data["type"].value
         return data
+
+
+class ImageGenPluginConfig(BaseModel):
+    """Configuration for image_gen plugin."""
+
+    enabled: bool
+    backend: str
+    backend_config: Optional[Dict[str, Any]] = None
+    modality_detection: Optional[Dict[str, Any]] = None
+    default_width: Optional[int] = Field(default=None, ge=1)
+    default_height: Optional[int] = Field(default=None, ge=1)
+    max_inference_steps: Optional[int] = Field(default=None, ge=1)
+    timeout_seconds: Optional[int] = Field(default=None, ge=1)
 
 
 class Decision(BaseModel):
@@ -599,41 +785,11 @@ class Routing(BaseModel):
 
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     signals: Signals = Field(default_factory=Signals)
+    projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
 
     class Config:
         populate_by_name = True
-
-
-class MemoryMilvusConfig(BaseModel):
-    """Milvus configuration for memory storage."""
-
-    address: str
-    collection: str = "agentic_memory"
-    dimension: int = 384
-
-
-class MemoryConfig(BaseModel):
-    """Agentic Memory configuration for cross-session memory.
-
-    Query rewriting and fact extraction are enabled by adding external_models
-    with role="memory_rewrite" or role="memory_extraction".
-    See global.model_catalog.external configuration for details.
-
-    The embedding_model is auto-detected from global.model_catalog.embeddings.semantic if not specified.
-    Priority: mmbert > bert > multimodal > qwen3 > gemma
-    """
-
-    enabled: bool = True
-    auto_store: bool = False  # Auto-store extracted facts after each response
-    milvus: Optional[MemoryMilvusConfig] = None
-    # Embedding model to use for memory vectors
-    # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
-    # If not set, auto-detected from global.model_catalog.embeddings.semantic (mmbert preferred)
-    embedding_model: Optional[str] = None
-    default_retrieval_limit: int = 5
-    default_similarity_threshold: float = 0.70
-    extraction_batch_size: int = 10  # Extract every N turns
 
 
 class EmbeddingModelsConfig(BaseModel):

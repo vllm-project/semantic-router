@@ -9,6 +9,11 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // Sample config for testing - uses raw config fallback since full parsing requires more dependencies
@@ -97,11 +102,11 @@ func setupTestConfig(t *testing.T) string {
 	return configPath
 }
 
-func setupMockRouterAPI(t *testing.T, response RouterIntentResponse) string {
+func setupMockRouterAPI(t *testing.T, response RouterEvalResponse) string {
 	t.Helper()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/classify/intent" {
+		if r.URL.Path != "/api/v1/eval" {
 			http.NotFound(w, r)
 			return
 		}
@@ -121,30 +126,14 @@ func TestTopologyTestQueryHandler_BasicDryRun(t *testing.T) {
 	configPath := setupTestConfig(t)
 	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
-	routerAPIURL := setupMockRouterAPI(t, RouterIntentResponse{
-		Classification: struct {
-			Category         string  `json:"category"`
-			Confidence       float64 `json:"confidence"`
-			ProcessingTimeMs int64   `json:"processing_time_ms"`
-		}{
-			Category:         "reasoning",
-			Confidence:       0.93,
-			ProcessingTimeMs: 7,
-		},
-		RecommendedModel: "gpt-4",
-		RoutingDecision:  "reasoning_decision",
-		MatchedSignals: &struct {
-			Keywords     []string `json:"keywords,omitempty"`
-			Embeddings   []string `json:"embeddings,omitempty"`
-			Domains      []string `json:"domains,omitempty"`
-			FactCheck    []string `json:"fact_check,omitempty"`
-			UserFeedback []string `json:"user_feedback,omitempty"`
-			Preferences  []string `json:"preferences,omitempty"`
-			Language     []string `json:"language,omitempty"`
-			Context      []string `json:"context,omitempty"`
-			Complexity   []string `json:"complexity,omitempty"`
-		}{
-			Keywords: []string{"thinking"},
+	routerAPIURL := setupMockRouterAPI(t, RouterEvalResponse{
+		RecommendedModels: []string{"gpt-4"},
+		RoutingDecision:   "reasoning_decision",
+		DecisionResult: &RouterEvalDecisionResult{
+			DecisionName: "reasoning_decision",
+			MatchedSignals: &RouterMatchedSignals{
+				Keywords: []string{"thinking"},
+			},
 		},
 	})
 
@@ -196,31 +185,15 @@ func TestTopologyTestQueryHandler_CodingQuery(t *testing.T) {
 	configPath := setupTestConfig(t)
 	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
-	routerAPIURL := setupMockRouterAPI(t, RouterIntentResponse{
-		Classification: struct {
-			Category         string  `json:"category"`
-			Confidence       float64 `json:"confidence"`
-			ProcessingTimeMs int64   `json:"processing_time_ms"`
-		}{
-			Category:         "coding",
-			Confidence:       0.91,
-			ProcessingTimeMs: 9,
-		},
-		RecommendedModel: "gpt-4",
-		RoutingDecision:  "coding_decision",
-		MatchedSignals: &struct {
-			Keywords     []string `json:"keywords,omitempty"`
-			Embeddings   []string `json:"embeddings,omitempty"`
-			Domains      []string `json:"domains,omitempty"`
-			FactCheck    []string `json:"fact_check,omitempty"`
-			UserFeedback []string `json:"user_feedback,omitempty"`
-			Preferences  []string `json:"preferences,omitempty"`
-			Language     []string `json:"language,omitempty"`
-			Context      []string `json:"context,omitempty"`
-			Complexity   []string `json:"complexity,omitempty"`
-		}{
-			Keywords: []string{"coding"},
-			Domains:  []string{"code"},
+	routerAPIURL := setupMockRouterAPI(t, RouterEvalResponse{
+		RecommendedModels: []string{"gpt-4"},
+		RoutingDecision:   "coding_decision",
+		DecisionResult: &RouterEvalDecisionResult{
+			DecisionName: "coding_decision",
+			MatchedSignals: &RouterMatchedSignals{
+				Keywords: []string{"coding"},
+				Domains:  []string{"code"},
+			},
 		},
 	})
 
@@ -255,6 +228,100 @@ func TestTopologyTestQueryHandler_CodingQuery(t *testing.T) {
 	// Check for keyword signals if any matched
 	t.Logf("Matched signals: %+v", result.MatchedSignals)
 	t.Logf("Matched decision: %s", result.MatchedDecision)
+}
+
+func TestTopologyTestQueryHandler_ProjectionAndExtendedSignals(t *testing.T) {
+	configPath := setupTestConfig(t)
+	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
+
+	routerAPIURL := setupMockRouterAPI(t, RouterEvalResponse{
+		RecommendedModels: []string{"gpt-4"},
+		RoutingDecision:   "reasoning_decision",
+		DecisionResult: &RouterEvalDecisionResult{
+			DecisionName: "reasoning_decision",
+			MatchedSignals: &RouterMatchedSignals{
+				Modality:   []string{"AR"},
+				Authz:      []string{"premium_tier"},
+				Jailbreak:  []string{"jailbreak:block"},
+				PII:        []string{"pii:email"},
+				KB:         []string{"privacy_policy"},
+				Projection: []string{"balance_reasoning"},
+			},
+		},
+	})
+
+	handler := TopologyTestQueryHandler(configPath, routerAPIURL)
+	reqBody := TestQueryRequest{
+		Query: "Reason carefully about this policy doc",
+		Mode:  TestQueryModeDryRun,
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/topology/test-query", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	var result TestQueryResult
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "modality", Name: "AR", Confidence: 1.0, Reason: "Modality signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "authz", Name: "premium_tier", Confidence: 1.0, Reason: "Authorization signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "jailbreak", Name: "jailbreak:block", Confidence: 1.0, Reason: "Jailbreak signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "pii", Name: "pii:email", Confidence: 1.0, Reason: "PII signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "kb", Name: "privacy_policy", Confidence: 1.0, Reason: "Knowledge base signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "projection", Name: "balance_reasoning", Confidence: 1.0, Reason: "Projection mapping matched"})
+	assert.Contains(t, result.HighlightedPath, "signal-group-kb")
+	assert.Contains(t, result.HighlightedPath, "signal-kb-privacy_policy")
+	assert.Contains(t, result.HighlightedPath, "signal-group-projection")
+	assert.Contains(t, result.HighlightedPath, "signal-projection-balance_reasoning")
+}
+
+func TestTopologyTestQueryHandler_StructureSignalIncludesComputedValue(t *testing.T) {
+	configPath := setupTestConfig(t)
+	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
+
+	routerAPIURL := setupMockRouterAPI(t, RouterEvalResponse{
+		RecommendedModels: []string{"gpt-4"},
+		RoutingDecision:   "reasoning_decision",
+		DecisionResult: &RouterEvalDecisionResult{
+			DecisionName: "reasoning_decision",
+			MatchedSignals: &RouterMatchedSignals{
+				Structure: []string{"many_questions"},
+			},
+		},
+		SignalConfidences: map[string]float64{"structure:many_questions": 1.0},
+		SignalValues:      map[string]float64{"structure:many_questions": 4},
+	})
+
+	handler := TopologyTestQueryHandler(configPath, routerAPIURL)
+	reqBody := TestQueryRequest{
+		Query: "Why? Why? Why? Why?",
+		Mode:  TestQueryModeDryRun,
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/topology/test-query", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	var result TestQueryResult
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	require.Len(t, result.MatchedSignals, 1)
+	require.Equal(t, "structure", result.MatchedSignals[0].Type)
+	require.Equal(t, "many_questions", result.MatchedSignals[0].Name)
+	require.NotNil(t, result.MatchedSignals[0].Value)
+	assert.Equal(t, 4.0, *result.MatchedSignals[0].Value)
+	assert.Equal(t, 1.0, result.MatchedSignals[0].Confidence)
+	assert.Contains(t, result.HighlightedPath, "signal-group-structure")
+	assert.Contains(t, result.HighlightedPath, "signal-structure-many_questions")
 }
 
 func TestTopologyTestQueryHandler_JailbreakDetection(t *testing.T) {
@@ -364,6 +431,41 @@ func TestTopologyTestQueryHandler_EvaluatedRules(t *testing.T) {
 	// Basic validation - routing latency should be >= 0 (can be 0 for very fast execution)
 	if result.RoutingLatency < 0 {
 		t.Errorf("Expected non-negative routing latency, got %d", result.RoutingLatency)
+	}
+}
+
+func TestBuildEvaluatedRule_EmptyConditionsSerializeAsEmptyArray(t *testing.T) {
+	rule := buildEvaluatedRule(
+		routerconfig.Decision{
+			Name:     "casual_chat",
+			Priority: 10,
+		},
+		map[string]bool{},
+	)
+
+	if rule.Conditions == nil {
+		t.Fatal("expected empty Conditions slice, got nil")
+	}
+	if len(rule.Conditions) != 0 {
+		t.Fatalf("expected no conditions, got %v", rule.Conditions)
+	}
+
+	payload, err := json.Marshal(rule)
+	if err != nil {
+		t.Fatalf("failed to marshal rule: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(payload, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal rule JSON: %v", err)
+	}
+
+	conditions, ok := parsed["conditions"].([]any)
+	if !ok {
+		t.Fatalf("expected conditions to serialize as JSON array, got %T (%v)", parsed["conditions"], parsed["conditions"])
+	}
+	if len(conditions) != 0 {
+		t.Fatalf("expected empty conditions array, got %v", conditions)
 	}
 }
 

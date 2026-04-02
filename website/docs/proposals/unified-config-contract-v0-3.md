@@ -65,6 +65,7 @@ DSL now owns only:
 
 - `routing.modelCards`
 - `routing.signals`
+- `routing.projections` for signal coordination and derived routing outputs
 - `routing.decisions`
 
 It no longer owns endpoints, API keys, listeners, or router-global runtime settings.
@@ -88,9 +89,10 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global:` only overrides what you need to change
 - `global.router` groups router-engine control knobs, including `config_source`
 - `global.services` groups shared APIs and runtime services
+- `global.services.router_replay.enabled` provides the router-wide replay default, while route-local `router_replay.enabled: false` is the explicit opt-out
 - `global.stores` groups storage-backed services
 - `global.integrations` groups helper runtime integrations
-- `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`
+- `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `classifiers`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`
 - `global.model_catalog.modules` is the home for router-owned module settings such as `prompt_compression`, `prompt_guard`, `classifier`, `hallucination_mitigation`, `feedback_detector`, and `modality_detector`
 - omitted fields keep the built-in default
 
@@ -149,6 +151,7 @@ The repo now has one public config story:
 - DSL is the routing-semantic view of that config
 - deployment bindings live in `providers.defaults` and `providers.models[]`
 - runtime overrides live in `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog`, with model-backed modules under `global.model_catalog.modules`
+- structure-signal `density` uses one built-in multilingual normalization path instead of exposing per-rule `normalize_by` choices
 - `global.router.config_source` is the canonical switch between file-backed config and Kubernetes CRD-backed reconciliation
 - built-in defaults live in the router
 - repo-owned sample assets are organized by `signal/decision/algorithm/plugin` fragments instead of parallel full-config examples

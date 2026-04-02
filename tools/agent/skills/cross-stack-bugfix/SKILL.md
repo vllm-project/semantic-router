@@ -13,7 +13,7 @@ description: Diagnoses and fixes bugs that span multiple layers (runtime, CLI, U
 
 ## Workflow
 
-1. Read change surfaces and feature-complete checklist to identify all impacted layers
+1. Read change surfaces to identify all impacted layers
 2. Diagnose the bug across affected surfaces (runtime, CLI, UI, platform, tests)
 3. Implement coordinated fixes across all impacted surfaces
 4. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to verify all surfaces are accounted for
@@ -27,9 +27,6 @@ description: Diagnoses and fixes bugs that span multiple layers (runtime, CLI, U
 ## Must Read
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
-- [docs/agent/feature-complete-checklist.md](../../../../docs/agent/feature-complete-checklist.md)
-- [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
-- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 
 ## Standard Commands
 

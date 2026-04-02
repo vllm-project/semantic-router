@@ -8,6 +8,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -25,39 +26,51 @@ func (r *OpenAIRouter) executeRAGPlugin(ctx *RequestContext, decisionName string
 		return nil
 	}
 
-	// Get decision
-	decision := ctx.VSRSelectedDecision
-	if decision == nil {
-		return nil // No decision, skip RAG
-	}
-
-	// Get RAG config
-	ragConfig := decision.GetRAGConfig()
-	if ragConfig == nil || !ragConfig.Enabled {
-		return nil // RAG not enabled for this decision
-	}
-
-	// Check minimum confidence threshold
-	if ragConfig.MinConfidenceThreshold != nil {
-		confidence := ctx.FactCheckConfidence
-		if confidence < *ragConfig.MinConfidenceThreshold {
-			logging.Debugf("RAG skipped: confidence %.3f < threshold %.3f",
-				confidence, *ragConfig.MinConfidenceThreshold)
-			return nil
-		}
+	ragConfig, shouldExecute := r.resolveRAGPluginConfig(ctx, decisionName)
+	if !shouldExecute {
+		return nil
 	}
 
 	// Start tracing
 	ragCtx, ragSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanRAGRetrieval)
 	defer ragSpan.End()
 
-	// Set base attributes
+	tracing.SetSpanAttributes(ragSpan, buildRAGSpanAttributes(decisionName, ragConfig)...)
+
+	retrievedContext, latency, err := r.retrieveRAGContext(ragCtx, ctx, ragSpan, ragConfig)
+	if err != nil {
+		return handleRAGRetrievalError(ctx, ragSpan, ragConfig, decisionName, err, latency)
+	}
+
+	return r.finalizeRAGRetrieval(ctx, ragSpan, ragConfig, decisionName, retrievedContext, latency)
+}
+
+// retrieveContext retrieves context from the configured backend
+func (r *OpenAIRouter) retrieveContext(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
+	if cached, found := r.getCachedRAGContext(ctx.UserContent, ragConfig); found {
+		return cached, nil
+	}
+
+	retrievedContext, err := r.retrieveContextFromBackend(traceCtx, ctx, ragConfig)
+	if err != nil {
+		return "", err
+	}
+
+	// Store backend info
+	ctx.RAGBackend = ragConfig.Backend
+
+	r.logEmptyRAGContext(ragConfig.Backend, ctx.UserContent, retrievedContext)
+	r.cacheRetrievedRAGContext(ctx.UserContent, retrievedContext, ragConfig)
+
+	return retrievedContext, nil
+}
+
+func buildRAGSpanAttributes(decisionName string, ragConfig *config.RAGPluginConfig) []attribute.KeyValue {
 	attributes := []attribute.KeyValue{
 		attribute.String("rag.backend", ragConfig.Backend),
 		attribute.String("rag.decision", decisionName),
 	}
 
-	// Add optional attributes if present
 	if ragConfig.SimilarityThreshold != nil {
 		attributes = append(attributes, attribute.Float64("rag.similarity_threshold", float64(*ragConfig.SimilarityThreshold)))
 	}
@@ -65,9 +78,15 @@ func (r *OpenAIRouter) executeRAGPlugin(ctx *RequestContext, decisionName string
 		attributes = append(attributes, attribute.Int("rag.top_k", *ragConfig.TopK))
 	}
 
-	tracing.SetSpanAttributes(ragSpan, attributes...)
+	return attributes
+}
 
-	// Perform retrieval
+func (r *OpenAIRouter) retrieveRAGContext(
+	ragCtx context.Context,
+	ctx *RequestContext,
+	ragSpan trace.Span,
+	ragConfig *config.RAGPluginConfig,
+) (string, float64, error) {
 	start := time.Now()
 	retrievedContext, err := r.retrieveContext(ragCtx, ctx, ragConfig)
 	latency := time.Since(start).Seconds()
@@ -78,38 +97,51 @@ func (r *OpenAIRouter) executeRAGPlugin(ctx *RequestContext, decisionName string
 		attribute.Bool("rag.success", err == nil),
 	)
 
-	if err != nil {
-		tracing.RecordError(ragSpan, err)
-		ragSpan.SetStatus(codes.Error, err.Error())
-		metrics.RecordRAGRetrieval(ragConfig.Backend, decisionName, "error", latency)
+	return retrievedContext, latency, err
+}
 
-		// Handle failure based on on_failure setting
-		onFailure := ragConfig.OnFailure
-		if onFailure == "" {
-			onFailure = "skip" // Default
-		}
+func handleRAGRetrievalError(
+	ctx *RequestContext,
+	ragSpan trace.Span,
+	ragConfig *config.RAGPluginConfig,
+	decisionName string,
+	err error,
+	latency float64,
+) error {
+	tracing.RecordError(ragSpan, err)
+	ragSpan.SetStatus(codes.Error, err.Error())
+	metrics.RecordRAGRetrieval(ragConfig.Backend, decisionName, "error", latency)
 
-		switch onFailure {
-		case "block":
-			logging.Errorf("RAG retrieval failed and on_failure=block: %v", err)
-			return fmt.Errorf("RAG retrieval failed: %w", err)
-		case "warn":
-			logging.Warnf("RAG retrieval failed (on_failure=warn): %v", err)
-			// Continue with warning - will be added to response headers
-			ctx.RAGRetrievedContext = "" // Clear any partial context
-		case "skip":
-			fallthrough
-		default:
-			logging.Infof("RAG retrieval failed (on_failure=skip), continuing without context: %v", err)
-			ctx.RAGRetrievedContext = "" // Clear any partial context
-		}
-		return nil
+	switch ragFailureMode(ragConfig) {
+	case "block":
+		logging.Errorf("RAG retrieval failed and on_failure=block: %v", err)
+		return fmt.Errorf("RAG retrieval failed: %w", err)
+	case "warn":
+		logging.Warnf("RAG retrieval failed (on_failure=warn): %v", err)
+	default:
+		logging.Debugf("RAG retrieval failed (on_failure=skip): %v", err)
 	}
 
-	// Record success metrics
-	tracing.SetSpanAttributes(ragSpan,
-		attribute.Int("rag.context_length", len(retrievedContext)),
-	)
+	ctx.RAGRetrievedContext = ""
+	return nil
+}
+
+func ragFailureMode(ragConfig *config.RAGPluginConfig) string {
+	if ragConfig.OnFailure != "" {
+		return ragConfig.OnFailure
+	}
+	return "skip"
+}
+
+func (r *OpenAIRouter) finalizeRAGRetrieval(
+	ctx *RequestContext,
+	ragSpan trace.Span,
+	ragConfig *config.RAGPluginConfig,
+	decisionName string,
+	retrievedContext string,
+	latency float64,
+) error {
+	tracing.SetSpanAttributes(ragSpan, attribute.Int("rag.context_length", len(retrievedContext)))
 	if ctx.RAGSimilarityScore > 0 {
 		tracing.SetSpanAttributes(ragSpan, attribute.Float64("rag.similarity_score", float64(ctx.RAGSimilarityScore)))
 	}
@@ -121,34 +153,42 @@ func (r *OpenAIRouter) executeRAGPlugin(ctx *RequestContext, decisionName string
 		metrics.RecordRAGSimilarityScore(ragConfig.Backend, decisionName, ctx.RAGSimilarityScore)
 	}
 
-	// Inject context into request
 	if err := r.injectRAGContext(ctx, retrievedContext, ragConfig); err != nil {
-		logging.Errorf("Failed to inject RAG context: %v", err)
-		// Don't fail the request, just log the error
+		logging.Errorf("[RAG] Failed to inject context for decision '%s' (backend=%s): %v",
+			decisionName, ragConfig.Backend, err)
+		metrics.RecordPluginExecution("rag", decisionName, "injection_error", 0)
 		return nil
 	}
 
-	logging.Infof("RAG plugin executed successfully: backend=%s, context_len=%d, latency=%.3fs",
+	logging.Debugf("RAG plugin executed: backend=%s, context_len=%d, latency=%.3fs",
 		ragConfig.Backend, len(retrievedContext), latency)
-
 	return nil
 }
 
-// retrieveContext retrieves context from the configured backend
-func (r *OpenAIRouter) retrieveContext(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
-	// Check cache first if enabled
-	if ragConfig.CacheResults {
-		if cached, found := r.getRAGCache(ctx.UserContent, ragConfig); found {
-			metrics.RecordRAGCacheHit(ragConfig.Backend)
-			logging.Debugf("RAG cache hit for query: %s", ctx.UserContent[:min(50, len(ctx.UserContent))])
-			return cached, nil
-		}
-		metrics.RecordRAGCacheMiss(ragConfig.Backend)
+func (r *OpenAIRouter) getCachedRAGContext(query string, ragConfig *config.RAGPluginConfig) (string, bool) {
+	if !ragConfig.CacheResults {
+		return "", false
 	}
 
-	// Perform retrieval based on backend type
-	var retrievedContext string
-	var err error
+	if cached, found := r.getRAGCache(query, ragConfig); found {
+		metrics.RecordRAGCacheHit(ragConfig.Backend)
+		logging.Debugf("RAG cache hit for query: %s", query[:min(50, len(query))])
+		return cached, true
+	}
+
+	metrics.RecordRAGCacheMiss(ragConfig.Backend)
+	return "", false
+}
+
+func (r *OpenAIRouter) retrieveContextFromBackend(
+	traceCtx context.Context,
+	ctx *RequestContext,
+	ragConfig *config.RAGPluginConfig,
+) (string, error) {
+	var (
+		retrievedContext string
+		err              error
+	)
 
 	switch ragConfig.Backend {
 	case "milvus":
@@ -168,18 +208,27 @@ func (r *OpenAIRouter) retrieveContext(traceCtx context.Context, ctx *RequestCon
 	}
 
 	if err != nil {
-		return "", err
-	}
-
-	// Store backend info
-	ctx.RAGBackend = ragConfig.Backend
-
-	// Cache result if enabled
-	if ragConfig.CacheResults && retrievedContext != "" {
-		r.setRAGCache(ctx.UserContent, retrievedContext, ragConfig)
+		return "", fmt.Errorf("backend %q retrieval failed: %w", ragConfig.Backend, err)
 	}
 
 	return retrievedContext, nil
+}
+
+func (r *OpenAIRouter) logEmptyRAGContext(backend string, query string, retrievedContext string) {
+	if retrievedContext == "" {
+		logging.Debugf("[RAG] Backend '%s' returned empty context for query: %s",
+			backend, query[:min(60, len(query))])
+	}
+}
+
+func (r *OpenAIRouter) cacheRetrievedRAGContext(
+	query string,
+	retrievedContext string,
+	ragConfig *config.RAGPluginConfig,
+) {
+	if ragConfig.CacheResults && retrievedContext != "" {
+		r.setRAGCache(query, retrievedContext, ragConfig)
+	}
 }
 
 // injectRAGContext injects retrieved context into the request
@@ -219,7 +268,7 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 	if len([]rune(retrievedContext)) > maxLength {
 		runes := []rune(retrievedContext)
 		retrievedContext = string(runes[:maxLength]) + "..."
-		logging.Infof("RAG context truncated to %d characters", maxLength)
+		logging.Debugf("RAG context truncated to %d chars", maxLength)
 	}
 
 	switch injectionMode {
@@ -283,7 +332,7 @@ func (r *OpenAIRouter) injectAsToolRole(messages []interface{}, context string, 
 	ctx.HasToolsForFactCheck = true
 	ctx.ToolResultsContext = context // Store for hallucination detection
 
-	logging.Infof("Injected RAG context as tool role message (%d chars)", len(context))
+	logging.Debugf("Injected RAG context as tool role (%d chars)", len(context))
 	return nil
 }
 
@@ -342,8 +391,38 @@ func (r *OpenAIRouter) injectAsSystemPrompt(messages []interface{}, context stri
 	// Note: For system_prompt mode, we don't set HasToolsForFactCheck
 	// as context is in system prompt, not tool messages
 
-	logging.Infof("Injected RAG context into system prompt (%d chars)", len(context))
+	logging.Debugf("Injected RAG context into system prompt (%d chars)", len(context))
 	return nil
+}
+
+// resolveRAGPluginConfig checks whether RAG should execute for the given
+// decision, performing early-exit checks and backend validation.
+func (r *OpenAIRouter) resolveRAGPluginConfig(ctx *RequestContext, decisionName string) (*config.RAGPluginConfig, bool) {
+	decision := ctx.VSRSelectedDecision
+	if decision == nil {
+		return nil, false
+	}
+
+	ragConfig := decision.GetRAGConfig()
+	if ragConfig == nil || !ragConfig.Enabled {
+		return nil, false
+	}
+
+	if ragConfig.Backend == "" {
+		logging.Warnf("[RAG] Decision '%s' has RAG enabled but no backend configured, skipping", decisionName)
+		metrics.RecordRAGRetrieval("unknown", decisionName, "config_error", 0)
+		return nil, false
+	}
+
+	if ragConfig.MinConfidenceThreshold != nil {
+		if ctx.FactCheckConfidence < *ragConfig.MinConfidenceThreshold {
+			logging.Debugf("RAG skipped: confidence %.3f < threshold %.3f",
+				ctx.FactCheckConfidence, *ragConfig.MinConfidenceThreshold)
+			return nil, false
+		}
+	}
+
+	return ragConfig, true
 }
 
 // Helper function

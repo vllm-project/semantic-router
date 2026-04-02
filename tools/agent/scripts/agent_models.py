@@ -85,8 +85,8 @@ class ResolvedContext:
             f"  Fast tests: {', '.join(self.fast_tests) or 'none'}",
             f"  Feature tests: {', '.join(self.feature_tests) or 'none'}",
             f"  Local smoke: {'required' if self.requires_local_smoke else 'not required'}",
-            f"  Local E2E profiles: {', '.join(self.local_e2e_profiles) or 'none'}",
-            "  Workflow integration suites: "
+            f"  Local E2E profiles (manual): {', '.join(self.local_e2e_profiles) or 'none'}",
+            "  Workflow integration suites (manual): "
             + (", ".join(self.workflow_integration_suites) or "none"),
             f"  CI E2E mode: {self.ci_e2e_mode}",
             f"  Failure policy: {self.failure_policy_summary()}",
@@ -172,7 +172,7 @@ class SkillResolution:
         lines = [
             "Agent Skill",
             f"  Primary skill: {self.primary_skill}",
-            f"  Fragment skills: {', '.join(self.fragment_skills) or 'none'}",
+            f"  Active fragments: {', '.join(self.fragment_skills) or 'none'}",
             f"  Impacted surfaces: {', '.join(self.impacted_surfaces) or 'none'}",
             f"  Required surfaces: {', '.join(self.required_surfaces) or 'none'}",
             "  Conditional surfaces hit: "
@@ -200,7 +200,30 @@ class ContextPack:
     local_rules: list[ContextReference] = field(default_factory=list)
     resume_refs: list[ContextReference] = field(default_factory=list)
 
-    def to_summary(self) -> str:
+    def to_summary(self, detail: str = "compact") -> str:
+        if detail == "full":
+            return self.to_full_summary()
+        return self.to_compact_summary()
+
+    def to_compact_summary(self) -> str:
+        lines = ["Context Pack"]
+        append_context_refs(lines, "Start here", self.start_here, limit=3)
+        append_context_refs(lines, "Must read", self.must_read, limit=4)
+        append_context_refs(lines, "Local rules", self.local_rules, limit=2)
+        hidden_sections: list[str] = []
+        if self.read_if_applicable:
+            hidden_sections.append("read-if-applicable")
+        if self.resume_refs:
+            hidden_sections.append("resume")
+        if hidden_sections:
+            lines.append(
+                "  Additional refs: "
+                + ", ".join(hidden_sections)
+                + " (use --context-detail full or --format json)"
+            )
+        return "\n".join(lines)
+
+    def to_full_summary(self) -> str:
         lines = ["Context Pack"]
         append_context_refs(lines, "Start here", self.start_here)
         append_context_refs(lines, "Must read", self.must_read)
@@ -211,13 +234,17 @@ class ContextPack:
 
 
 def append_context_refs(
-    lines: list[str], label: str, refs: list[ContextReference]
+    lines: list[str], label: str, refs: list[ContextReference], limit: int | None = None
 ) -> None:
     if not refs:
         return
     lines.append(f"  {label}:")
-    for ref in refs:
+    visible_refs = refs if limit is None else refs[:limit]
+    for ref in visible_refs:
         lines.append(f"    - {ref.path} :: {ref.reason}")
+    hidden_count = len(refs) - len(visible_refs)
+    if hidden_count > 0:
+        lines.append(f"    - ... {hidden_count} more")
 
 
 @dataclass
@@ -231,7 +258,7 @@ class AgentReport:
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
 
-    def to_summary(self) -> str:
+    def to_summary(self, context_detail: str = "compact") -> str:
         lines = [
             self.env.to_summary(),
             "",
@@ -239,7 +266,7 @@ class AgentReport:
             "",
             self.context.to_summary(),
             "",
-            self.context_pack.to_summary(),
+            self.context_pack.to_summary(detail=context_detail),
             "",
             "Validation Commands",
         ]

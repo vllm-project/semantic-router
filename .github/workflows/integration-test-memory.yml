@@ -69,17 +69,20 @@ jobs:
         if: always()
         run: |
           mkdir -p logs
-          
-          # Router logs (full)
-          docker exec vllm-sr-container cat /var/log/supervisor/router.log 2>&1 > logs/router.log || true
-          docker exec vllm-sr-container cat /var/log/supervisor/router-error.log 2>&1 > logs/router-error.log || true
-          
+
+          # Runtime logs (split topology first, legacy single-container fallback second)
+          docker logs vllm-sr-router-container 2>&1 > logs/router.log || \
+            docker exec vllm-sr-container cat /var/log/supervisor/router.log 2>&1 > logs/router.log || true
+          docker logs vllm-sr-envoy-container 2>&1 > logs/envoy.log || true
+          docker logs vllm-sr-dashboard-container 2>&1 > logs/dashboard.log || true
+          docker logs vllm-sr-container 2>&1 > logs/vllm-sr-container.log || true
+
           # llm-katan logs
           docker logs llm-katan 2>&1 > logs/llm-katan.log || true
-          
+
           # Milvus logs
           docker logs milvus-semantic-cache 2>&1 > logs/milvus.log || true
-          
+
           # Container status
           docker ps -a > logs/docker-status.txt || true
 
@@ -95,6 +98,6 @@ jobs:
         if: always()
         run: |
           vllm-sr stop || true
-          docker stop llm-katan vllm-sr-container 2>/dev/null || true
-          docker rm llm-katan vllm-sr-container 2>/dev/null || true
+          docker stop llm-katan vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container 2>/dev/null || true
+          docker rm llm-katan vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container 2>/dev/null || true
           make stop-milvus || true

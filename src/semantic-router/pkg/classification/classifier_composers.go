@@ -66,9 +66,15 @@ func (c *Classifier) filterComplexityByComposer(
 		// Evaluate composer conditions
 		if c.evaluateComposer(rule.Composer, allSignals) {
 			filtered = append(filtered, matched)
-			logging.Infof("Complexity rule '%s' passed composer filter", matched)
+			logging.ComponentDebugEvent("classifier", "complexity_rule_composer_evaluated", map[string]interface{}{
+				"rule":   matched,
+				"result": "passed",
+			})
 		} else {
-			logging.Infof("Complexity rule '%s' filtered out by composer", matched)
+			logging.ComponentDebugEvent("classifier", "complexity_rule_composer_evaluated", map[string]interface{}{
+				"rule":   matched,
+				"result": "filtered_out",
+			})
 		}
 	}
 
@@ -127,28 +133,28 @@ func (c *Classifier) evalComposerLeaf(
 	typ, name string,
 	signals *SignalResults,
 ) bool {
-	switch typ {
-	case "keyword":
-		return slices.Contains(signals.MatchedKeywordRules, name)
-	case "embedding":
-		return slices.Contains(signals.MatchedEmbeddingRules, name)
-	case "domain":
-		return slices.Contains(signals.MatchedDomainRules, name)
-	case "fact_check":
-		return slices.Contains(signals.MatchedFactCheckRules, name)
-	case "user_feedback":
-		return slices.Contains(signals.MatchedUserFeedbackRules, name)
-	case "preference":
-		return slices.Contains(signals.MatchedPreferenceRules, name)
-	case "language":
-		return slices.Contains(signals.MatchedLanguageRules, name)
-	case "context":
-		return slices.Contains(signals.MatchedContextRules, name)
-	case "modality":
-		return slices.Contains(signals.MatchedModalityRules, name)
-	default:
+	matchedSignals, ok := composerLeafMatches(signals)[typ]
+	if !ok {
 		logging.Warnf("Unknown composer condition type: %s", typ)
 		return false
+	}
+	return slices.Contains(matchedSignals, name)
+}
+
+func composerLeafMatches(signals *SignalResults) map[string][]string {
+	return map[string][]string{
+		"keyword":       signals.MatchedKeywordRules,
+		"embedding":     signals.MatchedEmbeddingRules,
+		"domain":        signals.MatchedDomainRules,
+		"fact_check":    signals.MatchedFactCheckRules,
+		"user_feedback": signals.MatchedUserFeedbackRules,
+		"reask":         signals.MatchedReaskRules,
+		"preference":    signals.MatchedPreferenceRules,
+		"language":      signals.MatchedLanguageRules,
+		"context":       signals.MatchedContextRules,
+		"structure":     signals.MatchedStructureRules,
+		"modality":      signals.MatchedModalityRules,
+		"kb":            signals.MatchedKBRules,
 	}
 }
 

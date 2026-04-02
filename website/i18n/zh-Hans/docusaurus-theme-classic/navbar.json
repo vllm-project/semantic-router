@@ -1,74 +1,74 @@
 {
   "title": {
-    "message": "vLLM Semantic Router",
+    "message": "vLLM-SR",
     "description": "The title in the navbar"
   },
   "logo.alt": {
-    "message": "vLLM Semantic Router Logo",
+    "message": "vLLM Semantic Router 标志",
     "description": "The alt text of navbar logo"
   },
-  "item.label.Documentation": {
+  "item.label.Docs": {
     "message": "文档",
-    "description": "Navbar item with label Documentation"
+    "description": "Navbar item with label Docs"
   },
-  "item.label.Publications": {
-    "message": "论文",
-    "description": "Navbar item with label Publications"
+  "item.label.About": {
+    "message": "项目",
+    "description": "Navbar item with label About"
+  },
+  "item.label.White Paper": {
+    "message": "白皮书",
+    "description": "Navbar item with label White Paper"
+  },
+  "item.label.Vision Paper": {
+    "message": "愿景论文",
+    "description": "Navbar item with label Vision Paper"
+  },
+  "item.label.Research": {
+    "message": "研究",
+    "description": "Navbar item with label Research"
   },
   "item.label.Blog": {
     "message": "博客",
     "description": "Navbar item with label Blog"
   },
-  "item.label.News": {
-    "message": "新闻",
-    "description": "Navbar item with label News"
-  },
-  "item.label.Roadmap": {
-    "message": "路线图",
-    "description": "Navbar item with label Roadmap"
-  },
   "item.label.Community": {
     "message": "社区",
     "description": "Navbar item with label Community"
+  },
+  "item.label.Governance": {
+    "message": "治理机制",
+    "description": "Navbar item with label Governance"
+  },
+  "item.label.Working Group": {
+    "message": "工作组",
+    "description": "Navbar item with label Working Group"
+  },
+  "item.label.Contributing Guide": {
+    "message": "参与指南",
+    "description": "Navbar item with label Contributing Guide"
+  },
+  "item.label.Code of Conduct": {
+    "message": "社区准则",
+    "description": "Navbar item with label Code of Conduct"
+  },
+  "item.label.GitHub Issues": {
+    "message": "问题反馈",
+    "description": "Navbar item with label GitHub Issues"
   },
   "item.label.GitHub": {
     "message": "GitHub",
     "description": "Navbar item with label GitHub"
   },
-  "item.label.🤗 Hugging Face": {
-    "message": "🤗 Hugging Face",
-    "description": "Navbar item with label 🤗 Hugging Face"
+  "item.label.Models": {
+    "message": "模型库",
+    "description": "Navbar item with label Models"
+  },
+  "item.label.Latest": {
+    "message": "最新版",
+    "description": "Navbar item with label Latest"
   },
   "item.label.v0.1": {
     "message": "v0.1",
     "description": "Navbar item with label v0.1"
-  },
-  "item.label.vLLM-SR Team": {
-    "message": "vLLM-SR 团队",
-    "description": "Navbar item with label vLLM-SR Team"
-  },
-  "item.label.Work Groups": {
-    "message": "工作小组",
-    "description": "Navbar item with label Work Groups"
-  },
-  "item.label.Membership Promotion": {
-    "message": "成员晋升",
-    "description": "Navbar item with label Membership Promotion"
-  },
-  "item.label.Contributing Guide": {
-    "message": "贡献指南",
-    "description": "Navbar item with label Contributing Guide"
-  },
-  "item.label.Code of Conduct": {
-    "message": "行为准则",
-    "description": "Navbar item with label Code of Conduct"
-  },
-  "item.label.GitHub Discussions": {
-    "message": "GitHub 讨论区",
-    "description": "Navbar item with label GitHub Discussions"
-  },
-  "item.label.GitHub Issues": {
-    "message": "GitHub Issues",
-    "description": "Navbar item with label GitHub Issues"
   }
 }

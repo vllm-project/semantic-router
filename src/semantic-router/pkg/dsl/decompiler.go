@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -9,12 +10,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// Decompile converts runtime config into the routing-only DSL contract.
+// Decompile converts runtime config into the DSL contract.
 func Decompile(cfg *config.RouterConfig) (string, error) {
 	return DecompileRouting(cfg)
 }
 
-// DecompileToAST converts runtime config into a routing-only DSL AST Program.
+// DecompileToAST converts runtime config into a DSL AST Program.
 func DecompileToAST(cfg *config.RouterConfig) *Program {
 	return DecompileRoutingToAST(cfg)
 }
@@ -107,10 +108,30 @@ func (d *decompiler) decompileSignals() {
 		d.write("}\n\n")
 	}
 
+	for _, rule := range d.cfg.ReaskRules {
+		d.write("SIGNAL reask %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		if rule.Threshold != 0 {
+			d.write("  threshold: %g\n", rule.Threshold)
+		}
+		if rule.LookbackTurns != 0 {
+			d.write("  lookback_turns: %d\n", rule.LookbackTurns)
+		}
+		d.write("}\n\n")
+	}
+
 	for _, pref := range d.cfg.PreferenceRules {
 		d.write("SIGNAL preference %s {\n", quoteName(pref.Name))
 		if pref.Description != "" {
 			d.write("  description: %q\n", pref.Description)
+		}
+		if len(pref.Examples) > 0 {
+			d.write("  examples: %s\n", formatStringArray(pref.Examples))
+		}
+		if pref.Threshold != 0 {
+			d.write("  threshold: %g\n", pref.Threshold)
 		}
 		d.write("}\n\n")
 	}
@@ -130,6 +151,18 @@ func (d *decompiler) decompileSignals() {
 		}
 		if ctx.MaxTokens != "" {
 			d.write("  max_tokens: %q\n", string(ctx.MaxTokens))
+		}
+		d.write("}\n\n")
+	}
+
+	for _, structure := range d.cfg.StructureRules {
+		d.write("SIGNAL structure %s {\n", quoteName(structure.Name))
+		if structure.Description != "" {
+			d.write("  description: %q\n", structure.Description)
+		}
+		d.write("  feature: %s\n", formatPluginConfigValue(structureFeatureToMap(structure.Feature)))
+		if structure.Predicate != nil {
+			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(structure.Predicate)))
 		}
 		d.write("}\n\n")
 	}
@@ -220,19 +253,59 @@ func (d *decompiler) decompileSignals() {
 		d.write("}\n\n")
 	}
 
-	for _, sg := range d.cfg.SignalGroups {
-		d.write("SIGNAL_GROUP %s {\n", quoteName(sg.Name))
-		if sg.Semantics != "" {
-			d.write("  semantics: %q\n", sg.Semantics)
+	for _, kb := range d.cfg.KBRules {
+		d.write("SIGNAL kb %s {\n", quoteName(kb.Name))
+		if kb.KB != "" {
+			d.write("  kb: %q\n", kb.KB)
 		}
-		if sg.Temperature != 0 {
-			d.write("  temperature: %v\n", sg.Temperature)
+		d.write("  target: { kind: %q, value: %q }\n", kb.Target.Kind, kb.Target.Value)
+		if kb.Match != "" {
+			d.write("  match: %q\n", kb.Match)
 		}
-		if len(sg.Members) > 0 {
-			d.write("  members: %s\n", formatStringArray(sg.Members))
+		d.write("}\n\n")
+	}
+
+	for _, partition := range d.cfg.Projections.Partitions {
+		d.write("PROJECTION partition %s {\n", quoteName(partition.Name))
+		if partition.Semantics != "" {
+			d.write("  semantics: %q\n", partition.Semantics)
 		}
-		if sg.Default != "" {
-			d.write("  default: %q\n", sg.Default)
+		if partition.Temperature != 0 {
+			d.write("  temperature: %v\n", partition.Temperature)
+		}
+		if len(partition.Members) > 0 {
+			d.write("  members: %s\n", formatStringArray(partition.Members))
+		}
+		if partition.Default != "" {
+			d.write("  default: %q\n", partition.Default)
+		}
+		d.write("}\n\n")
+	}
+
+	for _, score := range d.cfg.Projections.Scores {
+		d.write("PROJECTION score %s {\n", quoteName(score.Name))
+		if score.Method != "" {
+			d.write("  method: %q\n", score.Method)
+		}
+		if len(score.Inputs) > 0 {
+			d.write("  inputs: %s\n", formatProjectionScoreInputs(score.Inputs))
+		}
+		d.write("}\n\n")
+	}
+
+	for _, mapping := range d.cfg.Projections.Mappings {
+		d.write("PROJECTION mapping %s {\n", quoteName(mapping.Name))
+		if mapping.Source != "" {
+			d.write("  source: %q\n", mapping.Source)
+		}
+		if mapping.Method != "" {
+			d.write("  method: %q\n", mapping.Method)
+		}
+		if mapping.Calibration != nil {
+			d.write("  calibration: %s\n", formatProjectionMappingCalibration(mapping.Calibration))
+		}
+		if len(mapping.Outputs) > 0 {
+			d.write("  outputs: %s\n", formatProjectionMappingOutputs(mapping.Outputs))
 		}
 		d.write("}\n\n")
 	}
@@ -496,6 +569,43 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.Message != "" {
 			fmt.Fprintf(&sb, "    message: %q\n", cfg.Message)
 		}
+	case "request_params":
+		cfg, ok := decodePluginConfig[config.RequestParamsPluginConfig](p)
+		if !ok {
+			break
+		}
+		if len(cfg.BlockedParams) > 0 {
+			fmt.Fprintf(&sb, "    blocked_params: %s\n", formatStringArray(cfg.BlockedParams))
+		}
+		if cfg.MaxTokensLimit != nil {
+			fmt.Fprintf(&sb, "    max_tokens_limit: %d\n", *cfg.MaxTokensLimit)
+		}
+		if cfg.MaxN != nil {
+			fmt.Fprintf(&sb, "    max_n: %d\n", *cfg.MaxN)
+		}
+		if cfg.StripUnknown {
+			fmt.Fprintf(&sb, "    strip_unknown: true\n")
+		}
+	case "tools":
+		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
+		if !ok {
+			break
+		}
+		if cfg.Enabled {
+			fmt.Fprintf(&sb, "    enabled: true\n")
+		}
+		if cfg.Mode != "" {
+			fmt.Fprintf(&sb, "    mode: %q\n", cfg.Mode)
+		}
+		if cfg.SemanticSelection != nil {
+			fmt.Fprintf(&sb, "    semantic_selection: %v\n", *cfg.SemanticSelection)
+		}
+		if len(cfg.AllowTools) > 0 {
+			fmt.Fprintf(&sb, "    allow_tools: %s\n", formatStringArray(cfg.AllowTools))
+		}
+		if len(cfg.BlockTools) > 0 {
+			fmt.Fprintf(&sb, "    block_tools: %s\n", formatStringArray(cfg.BlockTools))
+		}
 	case "rag":
 		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
 		if !ok {
@@ -548,11 +658,41 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 			fmt.Fprintf(&sb, "    delete: %s\n", formatStringArray(cfg.Delete))
 		}
 	}
-	// Also handle raw payloads from config parsing.
+	// Preserve raw-only plugin keys, but do not duplicate typed fields that were
+	// already emitted above for known plugin contracts.
 	if rawMap, ok := normalizePluginConfigMap(p.Configuration); ok {
-		writePluginConfigMap(&sb, rawMap, "    ")
+		extraFields := filterPluginConfigMap(rawMap, knownPluginConfigKeys(p))
+		if len(extraFields) > 0 {
+			writePluginConfigMap(&sb, extraFields, "    ")
+		}
 	}
 	return sb.String()
+}
+
+func knownPluginConfigKeys(p *config.DecisionPlugin) map[string]struct{} {
+	fields := pluginConfigToFields(p)
+	if len(fields) == 0 {
+		return nil
+	}
+	keys := make(map[string]struct{}, len(fields))
+	for key := range fields {
+		keys[key] = struct{}{}
+	}
+	return keys
+}
+
+func filterPluginConfigMap(raw map[string]interface{}, omit map[string]struct{}) map[string]interface{} {
+	if len(raw) == 0 {
+		return nil
+	}
+	filtered := make(map[string]interface{}, len(raw))
+	for key, value := range raw {
+		if _, skip := omit[key]; skip {
+			continue
+		}
+		filtered[key] = value
+	}
+	return filtered
 }
 
 func decodePluginConfig[T any](p *config.DecisionPlugin) (*T, bool) {
@@ -610,6 +750,30 @@ func normalizePluginConfigValue(raw interface{}) interface{} {
 		normalized := make([]interface{}, len(typed))
 		for index, value := range typed {
 			normalized[index] = normalizePluginConfigValue(value)
+		}
+		return normalized
+	default:
+		return normalizePluginConfigReflectValue(raw)
+	}
+}
+
+func normalizePluginConfigReflectValue(raw interface{}) interface{} {
+	if raw == nil {
+		return nil
+	}
+	value := reflect.ValueOf(raw)
+	switch value.Kind() {
+	case reflect.Array, reflect.Slice:
+		normalized := make([]interface{}, value.Len())
+		for index := 0; index < value.Len(); index++ {
+			normalized[index] = normalizePluginConfigValue(value.Index(index).Interface())
+		}
+		return normalized
+	case reflect.Map:
+		normalized := make(map[string]interface{}, value.Len())
+		iter := value.MapRange()
+		for iter.Next() {
+			normalized[fmt.Sprintf("%v", iter.Key().Interface())] = normalizePluginConfigValue(iter.Value().Interface())
 		}
 		return normalized
 	default:
@@ -887,10 +1051,30 @@ func (d *decompiler) userFeedbackToSignal(uf *config.UserFeedbackRule) *SignalDe
 	return &SignalDecl{SignalType: "user_feedback", Name: uf.Name, Fields: fields}
 }
 
+func (d *decompiler) reaskToSignal(rule *config.ReaskRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	if rule.Threshold != 0 {
+		fields["threshold"] = FloatValue{V: float64(rule.Threshold)}
+	}
+	if rule.LookbackTurns != 0 {
+		fields["lookback_turns"] = IntValue{V: rule.LookbackTurns}
+	}
+	return &SignalDecl{SignalType: "reask", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) preferenceToSignal(pref *config.PreferenceRule) *SignalDecl {
 	fields := make(map[string]Value)
 	if pref.Description != "" {
 		fields["description"] = StringValue{V: pref.Description}
+	}
+	if len(pref.Examples) > 0 {
+		fields["examples"] = stringsToArray(pref.Examples)
+	}
+	if pref.Threshold != 0 {
+		fields["threshold"] = FloatValue{V: float64(pref.Threshold)}
 	}
 	return &SignalDecl{SignalType: "preference", Name: pref.Name, Fields: fields}
 }
@@ -912,6 +1096,18 @@ func (d *decompiler) contextToSignal(ctx *config.ContextRule) *SignalDecl {
 		fields["max_tokens"] = StringValue{V: string(ctx.MaxTokens)}
 	}
 	return &SignalDecl{SignalType: "context", Name: ctx.Name, Fields: fields}
+}
+
+func (d *decompiler) structureToSignal(rule *config.StructureRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	fields["feature"] = structureFeatureValue(rule.Feature)
+	if rule.Predicate != nil {
+		fields["predicate"] = structurePredicateValue(rule.Predicate)
+	}
+	return &SignalDecl{SignalType: "structure", Name: rule.Name, Fields: fields}
 }
 
 func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl {
@@ -999,6 +1195,21 @@ func (d *decompiler) piiToSignal(pii *config.PIIRule) *SignalDecl {
 		fields["description"] = StringValue{V: pii.Description}
 	}
 	return &SignalDecl{SignalType: "pii", Name: pii.Name, Fields: fields}
+}
+
+func (d *decompiler) kbSignalToDecl(rule *config.KBSignalRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.KB != "" {
+		fields["kb"] = StringValue{V: rule.KB}
+	}
+	fields["target"] = ObjectValue{Fields: map[string]Value{
+		"kind":  StringValue{V: rule.Target.Kind},
+		"value": StringValue{V: rule.Target.Value},
+	}}
+	if rule.Match != "" {
+		fields["match"] = StringValue{V: rule.Match}
+	}
+	return &SignalDecl{SignalType: "kb", Name: rule.Name, Fields: fields}
 }
 
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
@@ -1130,6 +1341,166 @@ func stringsToArray(items []string) ArrayValue {
 		vals[i] = StringValue{V: s}
 	}
 	return ArrayValue{Items: vals}
+}
+
+func structureFeatureValue(feature config.StructureFeature) ObjectValue {
+	fields := map[string]Value{
+		"type":   StringValue{V: feature.Type},
+		"source": structureSourceValue(feature.Source),
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func structureSourceValue(source config.StructureSource) ObjectValue {
+	fields := map[string]Value{
+		"type": StringValue{V: source.Type},
+	}
+	if source.Pattern != "" {
+		fields["pattern"] = StringValue{V: source.Pattern}
+	}
+	if len(source.Keywords) > 0 {
+		fields["keywords"] = stringsToArray(source.Keywords)
+	}
+	if source.CaseSensitive {
+		fields["case_sensitive"] = BoolValue{V: true}
+	}
+	if len(source.Sequences) > 0 {
+		items := make([]Value, 0, len(source.Sequences))
+		for _, sequence := range source.Sequences {
+			items = append(items, stringsToArray(sequence))
+		}
+		fields["sequences"] = ArrayValue{Items: items}
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func structurePredicateValue(predicate *config.NumericPredicate) ObjectValue {
+	fields := make(map[string]Value)
+	if predicate.GT != nil {
+		fields["gt"] = FloatValue{V: *predicate.GT}
+	}
+	if predicate.GTE != nil {
+		fields["gte"] = FloatValue{V: *predicate.GTE}
+	}
+	if predicate.LT != nil {
+		fields["lt"] = FloatValue{V: *predicate.LT}
+	}
+	if predicate.LTE != nil {
+		fields["lte"] = FloatValue{V: *predicate.LTE}
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func structureFeatureToMap(feature config.StructureFeature) map[string]interface{} {
+	values := map[string]interface{}{
+		"type":   feature.Type,
+		"source": structureSourceToMap(feature.Source),
+	}
+	return values
+}
+
+func structureSourceToMap(source config.StructureSource) map[string]interface{} {
+	values := map[string]interface{}{
+		"type": source.Type,
+	}
+	if source.Pattern != "" {
+		values["pattern"] = source.Pattern
+	}
+	if len(source.Keywords) > 0 {
+		values["keywords"] = source.Keywords
+	}
+	if source.CaseSensitive {
+		values["case_sensitive"] = true
+	}
+	if len(source.Sequences) > 0 {
+		values["sequences"] = source.Sequences
+	}
+	return values
+}
+
+func structurePredicateToMap(predicate *config.NumericPredicate) map[string]interface{} {
+	values := make(map[string]interface{})
+	if predicate == nil {
+		return values
+	}
+	if predicate.GT != nil {
+		values["gt"] = *predicate.GT
+	}
+	if predicate.GTE != nil {
+		values["gte"] = *predicate.GTE
+	}
+	if predicate.LT != nil {
+		values["lt"] = *predicate.LT
+	}
+	if predicate.LTE != nil {
+		values["lte"] = *predicate.LTE
+	}
+	return values
+}
+
+func formatProjectionScoreInputs(inputs []config.ProjectionScoreInput) string {
+	parts := make([]string, 0, len(inputs))
+	for _, input := range inputs {
+		fields := []string{
+			fmt.Sprintf("type: %q", input.Type),
+			fmt.Sprintf("weight: %g", input.Weight),
+		}
+		if input.Name != "" {
+			fields = append(fields, fmt.Sprintf("name: %q", input.Name))
+		}
+		if input.KB != "" {
+			fields = append(fields, fmt.Sprintf("kb: %q", input.KB))
+		}
+		if input.Metric != "" {
+			fields = append(fields, fmt.Sprintf("metric: %q", input.Metric))
+		}
+		if input.ValueSource != "" {
+			fields = append(fields, fmt.Sprintf("value_source: %q", input.ValueSource))
+		}
+		if input.Match != 0 {
+			fields = append(fields, fmt.Sprintf("match: %g", input.Match))
+		}
+		if input.Miss != 0 {
+			fields = append(fields, fmt.Sprintf("miss: %g", input.Miss))
+		}
+		parts = append(parts, "{ "+strings.Join(fields, ", ")+" }")
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+func formatProjectionMappingCalibration(calibration *config.ProjectionMappingCalibration) string {
+	if calibration == nil {
+		return "{}"
+	}
+	fields := make([]string, 0, 2)
+	if calibration.Method != "" {
+		fields = append(fields, fmt.Sprintf("method: %q", calibration.Method))
+	}
+	if calibration.Slope != 0 {
+		fields = append(fields, fmt.Sprintf("slope: %g", calibration.Slope))
+	}
+	return "{ " + strings.Join(fields, ", ") + " }"
+}
+
+func formatProjectionMappingOutputs(outputs []config.ProjectionMappingOutput) string {
+	parts := make([]string, 0, len(outputs))
+	for _, output := range outputs {
+		fields := []string{fmt.Sprintf("name: %q", output.Name)}
+		if output.GT != nil {
+			fields = append(fields, fmt.Sprintf("gt: %g", *output.GT))
+		}
+		if output.GTE != nil {
+			fields = append(fields, fmt.Sprintf("gte: %g", *output.GTE))
+		}
+		if output.LT != nil {
+			fields = append(fields, fmt.Sprintf("lt: %g", *output.LT))
+		}
+		if output.LTE != nil {
+			fields = append(fields, fmt.Sprintf("lte: %g", *output.LTE))
+		}
+		parts = append(parts, "{ "+strings.Join(fields, ", ")+" }")
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 // algorithmToFields converts an AlgorithmConfig into a map[string]Value for the AST.
@@ -1304,6 +1675,47 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.Message != "" {
 			fields["message"] = StringValue{V: cfg.Message}
 		}
+	case "request_params":
+		cfg, ok := decodePluginConfig[config.RequestParamsPluginConfig](p)
+		if !ok {
+			return fields
+		}
+		if len(cfg.BlockedParams) > 0 {
+			var items []Value
+			for _, s := range cfg.BlockedParams {
+				items = append(items, StringValue{V: s})
+			}
+			fields["blocked_params"] = ArrayValue{Items: items}
+		}
+		if cfg.MaxTokensLimit != nil {
+			fields["max_tokens_limit"] = IntValue{V: *cfg.MaxTokensLimit}
+		}
+		if cfg.MaxN != nil {
+			fields["max_n"] = IntValue{V: *cfg.MaxN}
+		}
+		if cfg.StripUnknown {
+			fields["strip_unknown"] = BoolValue{V: true}
+		}
+	case "tools":
+		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
+		if !ok {
+			return fields
+		}
+		if cfg.Enabled {
+			fields["enabled"] = BoolValue{V: true}
+		}
+		if cfg.Mode != "" {
+			fields["mode"] = StringValue{V: cfg.Mode}
+		}
+		if cfg.SemanticSelection != nil {
+			fields["semantic_selection"] = BoolValue{V: *cfg.SemanticSelection}
+		}
+		if len(cfg.AllowTools) > 0 {
+			fields["allow_tools"] = stringsToArray(cfg.AllowTools)
+		}
+		if len(cfg.BlockTools) > 0 {
+			fields["block_tools"] = stringsToArray(cfg.BlockTools)
+		}
 	case "rag":
 		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
 		if !ok {
@@ -1411,5 +1823,12 @@ func Format(input string) (string, error) {
 		return "", fmt.Errorf("compile errors: %v", compileErrs)
 	}
 
-	return DecompileRouting(cfg)
+	formatted, err := DecompileRouting(cfg)
+	if err != nil {
+		return "", err
+	}
+	if len(prog.TestBlocks) == 0 {
+		return formatted, nil
+	}
+	return appendFormattedTestBlocks(formatted, prog.TestBlocks), nil
 }

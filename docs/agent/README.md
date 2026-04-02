@@ -67,7 +67,11 @@ This directory is the human-readable system of record for the repository's agent
   - `make agent-validate`
   - `make agent-scorecard`
   - `make agent-report ENV=cpu CHANGED_FILES="..."`
-    - emits validation commands, loop policy, and a task-first context pack
+    - emits validation commands, loop policy, and a compact task-first context pack by default
+  - `make agent-pr-gate`
+    - reproduces the baseline PR requirements locally
+  - `make test-and-build-local`
+    - reproduces the CI `Test And Build` job locally
 
 ## Contributor Interface
 
@@ -76,7 +80,7 @@ This directory is the human-readable system of record for the repository's agent
   - contributor workflow, validation expectations, and the `git commit -s` signoff requirement
 - [../../.github/copilot-instructions.md](../../.github/copilot-instructions.md)
 - [../../.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md)
-  - PR title classification, required change summary and validation fields, and the review checklist
+  - PR title classification, affected-module context, required validation fields, and the review checklist
 - [../../.github/ISSUE_TEMPLATE/001_feature_request.yaml](../../.github/ISSUE_TEMPLATE/001_feature_request.yaml)
 - [../../.github/ISSUE_TEMPLATE/002_bug_report.yaml](../../.github/ISSUE_TEMPLATE/002_bug_report.yaml)
 - [../../.prowlabels.yaml](../../.prowlabels.yaml)

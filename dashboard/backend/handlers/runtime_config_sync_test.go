@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,7 +40,11 @@ global:
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/.vllm-sr/runtime-config.yaml")
 	t.Setenv("DASHBOARD_PLATFORM", "amd")
-	t.Setenv("VLLM_SR_PYTHON_BIN", "python")
+	pythonBinary := "python3"
+	if _, err := exec.LookPath(pythonBinary); err != nil {
+		pythonBinary = "python"
+	}
+	t.Setenv("VLLM_SR_PYTHON_BIN", pythonBinary)
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -73,6 +78,65 @@ global:
 	}
 }
 
+func TestSyncRuntimeConfigLocallyStagesKnowledgeBaseAssets(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	kbDir := filepath.Join(tempDir, "knowledge_bases")
+	if err := os.MkdirAll(kbDir, 0o755); err != nil {
+		t.Fatalf("mkdir kb dir: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(kbDir, "labels.json"),
+		[]byte(`{"labels":{"safe":{"exemplars":["hello"]}}}`),
+		0o644,
+	); err != nil {
+		t.Fatalf("write labels manifest: %v", err)
+	}
+
+	configYAML := `version: v0.3
+global:
+  model_catalog:
+    kbs:
+      - name: privacy_kb
+        source:
+          path: knowledge_bases/
+          manifest: labels.json
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/.vllm-sr/runtime-config.yaml")
+	pythonBinary := "python3"
+	if _, err := exec.LookPath(pythonBinary); err != nil {
+		pythonBinary = "python"
+	}
+	t.Setenv("VLLM_SR_PYTHON_BIN", pythonBinary)
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	t.Setenv("VLLM_SR_CLI_PATH", filepath.Join(repoRoot, "src", "vllm-sr"))
+
+	runtimePath, err := syncRuntimeConfigLocally(configPath)
+	if err != nil {
+		t.Fatalf("syncRuntimeConfigLocally returned error: %v", err)
+	}
+
+	runtimeData, err := os.ReadFile(runtimePath)
+	if err != nil {
+		t.Fatalf("read runtime config: %v", err)
+	}
+	if !contains(string(runtimeData), "path: knowledge_bases/privacy_kb") {
+		t.Fatalf("expected staged runtime KB path, got:\n%s", string(runtimeData))
+	}
+
+	stagedManifest := filepath.Join(tempDir, ".vllm-sr", "knowledge_bases", "privacy_kb", "labels.json")
+	if _, err := os.Stat(stagedManifest); err != nil {
+		t.Fatalf("expected staged knowledge base manifest, got %v", err)
+	}
+}
+
 func TestRuntimeSyncPythonBinaryRejectsNonPythonOverride(t *testing.T) {
 	t.Setenv("VLLM_SR_PYTHON_BIN", "/bin/sh")
 
@@ -82,5 +146,30 @@ func TestRuntimeSyncPythonBinaryRejectsNonPythonOverride(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unsupported runtime sync python binary") {
 		t.Fatalf("expected unsupported binary error, got %v", err)
+	}
+}
+
+func TestRuntimeSyncPythonBinaryPrefersVirtualEnvPython(t *testing.T) {
+	venvDir := t.TempDir()
+	pythonDir := filepath.Join(venvDir, "bin")
+	if err := os.MkdirAll(pythonDir, 0o755); err != nil {
+		t.Fatalf("create venv bin dir: %v", err)
+	}
+
+	pythonPath := filepath.Join(pythonDir, "python3")
+	script := "#!/bin/sh\nexit 0\n"
+	if err := os.WriteFile(pythonPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write venv python shim: %v", err)
+	}
+
+	t.Setenv("VIRTUAL_ENV", venvDir)
+	t.Setenv("VLLM_SR_PYTHON_BIN", "")
+
+	resolved, err := runtimeSyncPythonBinary()
+	if err != nil {
+		t.Fatalf("runtimeSyncPythonBinary returned error: %v", err)
+	}
+	if resolved != pythonPath {
+		t.Fatalf("expected virtualenv python %q, got %q", pythonPath, resolved)
 	}
 }

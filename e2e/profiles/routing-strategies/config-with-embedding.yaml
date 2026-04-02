@@ -41,10 +41,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: sensitive_data_decision
       description: Requests involving sensitive personal data
       priority: 150
@@ -60,14 +56,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information.
-        - type: jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.6
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: exclude_spam_decision
       description: Potential spam or suspicious requests
       priority: 150
@@ -83,10 +71,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a content moderation assistant. This request has been flagged as potential spam.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: regex_pattern_match_decision
       description: Structured data and pattern-based requests
       priority: 150
@@ -102,10 +86,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a technical assistant specialized in handling structured data and pattern-based requests.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: ai_decision
       description: Artificial intelligence and machine learning topics
       priority: 140
@@ -121,10 +101,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are an AI and machine learning expert. Provide detailed, technical explanations about artificial intelligence, neural networks, and related topics.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: data_science_decision
       description: Data science and analytics
       priority: 140
@@ -140,10 +116,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a data science expert. Provide insights on data analysis, statistical methods, and predictive modeling.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: programming_decision
       description: Programming and software development
       priority: 140
@@ -159,10 +131,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a programming expert. Help with code implementation, debugging, and software development best practices.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: business_decision
       description: Business and management related queries
       priority: 100
@@ -178,10 +146,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a senior business consultant and strategic advisor.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: math_decision
       description: Mathematics and quantitative reasoning
       priority: 100
@@ -197,10 +161,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a mathematics expert. Provide step-by-step solutions.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: computer_science_decision
       description: Computer science and programming
       priority: 100
@@ -216,10 +176,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a computer science expert.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: general_decision
       description: General knowledge and miscellaneous topics
       priority: 50
@@ -239,10 +195,6 @@ routing:
           configuration:
             enabled: true
             similarity_threshold: 0.75
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
   signals:
     keywords:
       - name: code_keywords
@@ -324,33 +276,18 @@ routing:
     domains:
       - name: urgent_request
         description: Urgent and time-sensitive requests
-        mmlu_categories:
-          - urgent_request
       - name: sensitive_data
         description: Requests involving sensitive personal data
-        mmlu_categories:
-          - sensitive_data
       - name: exclude_spam
         description: Potential spam or suspicious requests
-        mmlu_categories:
-          - exclude_spam
       - name: regex_pattern_match
         description: Structured data and pattern-based requests
-        mmlu_categories:
-          - regex_pattern_match
       - name: ai
         description: Artificial intelligence and machine learning topics
-        mmlu_categories:
-          - ai
-          - machine_learning
       - name: data_science
         description: Data science and analytics
-        mmlu_categories:
-          - data_science
       - name: programming
         description: Programming and software development
-        mmlu_categories:
-          - programming
       - name: business
         description: Business and management related queries
         mmlu_categories:
@@ -436,9 +373,6 @@ global:
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
-      use_hnsw: true
-      hnsw_m: 16
-      hnsw_ef_construction: 200
       embedding_model: mmbert
     memory:
       embedding_model: mmbert

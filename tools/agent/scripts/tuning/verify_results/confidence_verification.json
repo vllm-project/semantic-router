@@ -1,0 +1,147 @@
+{
+  "scenario": "confidence_threshold_tuning",
+  "method": "analytical_trace_diagnosis",
+  "pipeline": "offline_per_category_optimization",
+  "num_questions": 350,
+  "num_categories": 14,
+  "overall_accuracy_pct": 61.71,
+  "overall_escalation_pct": 60.29,
+  "strategy_counts": {
+    "ESCALATE": 5,
+    "SELECTIVE": 7,
+    "AVOID": 2
+  },
+  "baselines": {
+    "always_7b": 46.57,
+    "always_72b": 59.71
+  },
+  "per_category": {
+    "biology": {
+      "n": 25,
+      "strategy": "ESCALATE",
+      "threshold": 0.9999,
+      "accuracy_pct": 92.0,
+      "escalation_pct": 92.0,
+      "net_uplift": 6,
+      "baseline_pct": 68.0
+    },
+    "business": {
+      "n": 25,
+      "strategy": "SELECTIVE",
+      "threshold": 0.9793,
+      "accuracy_pct": 48.0,
+      "escalation_pct": 76.0,
+      "net_uplift": 3,
+      "baseline_pct": 36.0
+    },
+    "chemistry": {
+      "n": 25,
+      "strategy": "SELECTIVE",
+      "threshold": 0.9672,
+      "accuracy_pct": 48.0,
+      "escalation_pct": 52.0,
+      "net_uplift": 1,
+      "baseline_pct": 44.0
+    },
+    "computer science": {
+      "n": 25,
+      "strategy": "ESCALATE",
+      "threshold": 0.9991,
+      "accuracy_pct": 68.0,
+      "escalation_pct": 88.0,
+      "net_uplift": 9,
+      "baseline_pct": 32.0
+    },
+    "economics": {
+      "n": 25,
+      "strategy": "SELECTIVE",
+      "threshold": 0.9951,
+      "accuracy_pct": 60.0,
+      "escalation_pct": 68.0,
+      "net_uplift": 3,
+      "baseline_pct": 48.0
+    },
+    "engineering": {
+      "n": 25,
+      "strategy": "SELECTIVE",
+      "threshold": 0.948,
+      "accuracy_pct": 36.0,
+      "escalation_pct": 52.0,
+      "net_uplift": 2,
+      "baseline_pct": 28.0
+    },
+    "health": {
+      "n": 25,
+      "strategy": "AVOID",
+      "threshold": 0.0,
+      "accuracy_pct": 52.0,
+      "escalation_pct": 0.0,
+      "net_uplift": 0,
+      "baseline_pct": 52.0
+    },
+    "history": {
+      "n": 25,
+      "strategy": "AVOID",
+      "threshold": 0.0,
+      "accuracy_pct": 68.0,
+      "escalation_pct": 0.0,
+      "net_uplift": 0,
+      "baseline_pct": 68.0
+    },
+    "law": {
+      "n": 25,
+      "strategy": "SELECTIVE",
+      "threshold": 0.9898,
+      "accuracy_pct": 64.0,
+      "escalation_pct": 48.0,
+      "net_uplift": 3,
+      "baseline_pct": 52.0
+    },
+    "math": {
+      "n": 25,
+      "strategy": "SELECTIVE",
+      "threshold": 0.9736,
+      "accuracy_pct": 68.0,
+      "escalation_pct": 52.0,
+      "net_uplift": 7,
+      "baseline_pct": 40.0
+    },
+    "other": {
+      "n": 25,
+      "strategy": "ESCALATE",
+      "threshold": 1.0003,
+      "accuracy_pct": 84.0,
+      "escalation_pct": 100.0,
+      "net_uplift": 8,
+      "baseline_pct": 52.0
+    },
+    "philosophy": {
+      "n": 25,
+      "strategy": "ESCALATE",
+      "threshold": 1.0,
+      "accuracy_pct": 52.0,
+      "escalation_pct": 92.0,
+      "net_uplift": 3,
+      "baseline_pct": 40.0
+    },
+    "physics": {
+      "n": 25,
+      "strategy": "SELECTIVE",
+      "threshold": 0.9598,
+      "accuracy_pct": 44.0,
+      "escalation_pct": 24.0,
+      "net_uplift": 1,
+      "baseline_pct": 40.0
+    },
+    "psychology": {
+      "n": 25,
+      "strategy": "ESCALATE",
+      "threshold": 1.0006,
+      "accuracy_pct": 80.0,
+      "escalation_pct": 100.0,
+      "net_uplift": 7,
+      "baseline_pct": 52.0
+    }
+  },
+  "router_queries": 0
+}

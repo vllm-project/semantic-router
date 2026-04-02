@@ -37,7 +37,6 @@ global:
   stores:
     semantic_cache:
       similarity_threshold: 0.8
-      use_hnsw: true
 ```
 
 ### Memory
@@ -57,6 +56,8 @@ global:
     vector_store:
       provider: milvus
 ```
+
+Supported backends: `memory`, `milvus`, `llama_stack`, `valkey`.
 
 ### Tools
 

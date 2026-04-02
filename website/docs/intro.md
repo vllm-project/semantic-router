@@ -26,36 +26,33 @@ We use the project to answer a small set of hard systems questions:
 
 ## Core System
 
-### Signal-Driven Decision Engine
+### Signal and Projection Routing
 
-Captures and combines **9 types of request signals** to make intelligent routing decisions:
+Captures **16 maintained signal families** and coordinates them with reusable
+projections before route selection:
 
-| Signal Type | Description | Use Case |
-|------------|-------------|----------|
-| **keyword** | Pattern matching with AND/OR operators | Fast rule-based routing for specific terms |
-| **embedding** | Semantic similarity using embeddings | Intent detection and semantic understanding |
-| **domain** | MMLU domain classification (14 categories) | Academic and professional domain routing |
-| **fact_check** | ML-based fact-checking requirement detection | Identify queries needing fact verification |
-| **user_feedback** | User satisfaction and feedback classification | Handle follow-up messages and corrections |
-| **preference** | LLM-based route preference matching | Complex intent analysis via external LLM |
-| **language** | Multi-language detection (100+ languages) | Route queries to language-specific models |
-| **context** | Token-count based context classification | Route short/long context requests to suitable models |
-| **complexity** | Query difficulty classification (easy/medium/hard) | Match model capability to task difficulty |
+| Layer           | Components                                                                                                                                                               | Role                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| **Signals**     | `authz`, `context`, `keyword`, `language`, `structure`, `complexity`, `domain`, `embedding`, `kb`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `reask`, `user-feedback` | Extract reusable request, safety, follow-up, and preference facts |
+| **Projections** | `partitions`, `scores`, `mappings`                                                                                                                                       | Coordinate competing matches and emit named routing bands |
+| **Decisions**   | AND/OR policy rules over signals and projections                                                                                                                         | Select the active route and model candidates              |
 
-**How it works**: Signals are extracted from requests, combined using AND/OR operators in decision rules, and used to select the best model and configuration.
+**How it works**: Signals are extracted from requests, projections coordinate
+matched evidence, decision rules evaluate the resulting facts, and the chosen
+route drives plugins plus model dispatch.
 
 ### Plugin Chain Architecture
 
 Extensible plugin system for request/response processing:
 
-| Plugin Type | Description | Use Case |
-|------------|-------------|----------|
-| **semantic-cache** | Semantic similarity-based caching | Reduce latency and costs for similar queries |
-| **jailbreak** | Adversarial prompt detection | Block prompt injection and jailbreak attempts |
-| **pii** | Personally identifiable information detection | Protect sensitive data and ensure compliance |
-| **system_prompt** | Dynamic system prompt injection | Add context-aware instructions per route |
-| **header_mutation** | HTTP header manipulation | Control routing and backend behavior |
-| **hallucination** | Token-level hallucination detection | Real-time fact verification during generation |
+| Plugin Type         | Description                                   | Use Case                                      |
+| ------------------- | --------------------------------------------- | --------------------------------------------- |
+| **semantic-cache**  | Semantic similarity-based caching             | Reduce latency and costs for similar queries  |
+| **jailbreak**       | Adversarial prompt detection                  | Block prompt injection and jailbreak attempts |
+| **pii**             | Personally identifiable information detection | Protect sensitive data and ensure compliance  |
+| **system_prompt**   | Dynamic system prompt injection               | Add context-aware instructions per route      |
+| **header_mutation** | HTTP header manipulation                      | Control routing and backend behavior          |
+| **hallucination**   | Token-level hallucination detection           | Real-time fact verification during generation |
 
 **How it works**: Plugins form a processing chain, each plugin can inspect/modify requests and responses, with configurable enable/disable per decision.
 
@@ -93,7 +90,7 @@ Extensible plugin system for request/response processing:
 - [**Overview**](overview/goals) for project goals, semantic routing concepts, and collective intelligence.
 - [**Installation**](installation) for setup, deployment options, and configuration.
 - [**Fleet Simulator**](fleet-sim/overview) for planning GPU fleets, evaluating routing strategies, and reading the guide PDF.
-- [**Capacities**](tutorials/signal/overview) for signals, decisions, plugins, algorithms, and global controls.
+- [**Capacities**](tutorials/signal/overview) for signals, projections, decisions, plugins, algorithms, and global controls.
 - [**Proposals**](proposals/unified-config-contract-v0-3) for design work that has not yet been folded into the stable docs set.
 
 ## Contributing

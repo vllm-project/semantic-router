@@ -16,7 +16,10 @@ func (r *OpenAIRouter) handleModelsRequestHeaders(
 		return nil, nil
 	}
 
-	logging.Infof("Handling /v1/models request with path: %s", path)
+	logging.ComponentDebugEvent("extproc", "models_request_intercepted", map[string]interface{}{
+		"method": method,
+		"path":   path,
+	})
 	response, err := r.handleModelsRequest(path)
 	if err != nil {
 		return nil, err
@@ -36,7 +39,13 @@ func (r *OpenAIRouter) handleResponseAPIRequestHeaders(
 	if method == "GET" && strings.HasSuffix(path, "/input_items") {
 		responseID := extractResponseIDFromInputItemsPath(path)
 		if responseID != "" {
-			logging.Infof("Handling GET /v1/responses/%s/input_items", responseID)
+			logging.ComponentDebugEvent("extproc", "response_api_request_intercepted", map[string]interface{}{
+				"request_id":  ctx.RequestID,
+				"method":      method,
+				"path":        path,
+				"operation":   "get_input_items",
+				"response_id": responseID,
+			})
 			return r.ResponseAPIFilter.HandleGetInputItems(ctx.TraceContext, responseID)
 		}
 	}
@@ -44,7 +53,13 @@ func (r *OpenAIRouter) handleResponseAPIRequestHeaders(
 	if method == "GET" {
 		responseID := extractResponseIDFromPath(path)
 		if responseID != "" {
-			logging.Infof("Handling GET /v1/responses/%s", responseID)
+			logging.ComponentDebugEvent("extproc", "response_api_request_intercepted", map[string]interface{}{
+				"request_id":  ctx.RequestID,
+				"method":      method,
+				"path":        path,
+				"operation":   "get_response",
+				"response_id": responseID,
+			})
 			return r.ResponseAPIFilter.HandleGetResponse(ctx.TraceContext, responseID)
 		}
 	}
@@ -52,14 +67,25 @@ func (r *OpenAIRouter) handleResponseAPIRequestHeaders(
 	if method == "DELETE" {
 		responseID := extractResponseIDFromPath(path)
 		if responseID != "" {
-			logging.Infof("Handling DELETE /v1/responses/%s", responseID)
+			logging.ComponentDebugEvent("extproc", "response_api_request_intercepted", map[string]interface{}{
+				"request_id":  ctx.RequestID,
+				"method":      method,
+				"path":        path,
+				"operation":   "delete_response",
+				"response_id": responseID,
+			})
 			return r.ResponseAPIFilter.HandleDeleteResponse(ctx.TraceContext, responseID)
 		}
 	}
 
 	if method == "POST" {
 		ctx.ResponseAPICtx = &ResponseAPIContext{IsResponseAPIRequest: true}
-		logging.Infof("Detected Response API POST request: %s", path)
+		logging.ComponentDebugEvent("extproc", "response_api_request_detected", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"method":     method,
+			"path":       path,
+			"operation":  "create_response",
+		})
 	}
 
 	return nil, nil

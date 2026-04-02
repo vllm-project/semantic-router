@@ -72,9 +72,11 @@ SIGNAL_FAMILY_SPECS = (
         "user_feedback",
         "user_feedback_rules",
     ),
+    SignalFamilySpec("reasks", "reasks", "reask", "reask_rules"),
     SignalFamilySpec("preferences", "preferences", "preference", "preference_rules"),
     SignalFamilySpec("language", "language", "language", "language_rules"),
     SignalFamilySpec("context", "context", "context", "context_rules"),
+    SignalFamilySpec("structure", "structure", "structure", "structure_rules"),
     SignalFamilySpec(
         "complexity",
         "complexity",
@@ -86,6 +88,7 @@ SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("role_bindings", "role_bindings", "authz", "role_bindings"),
     SignalFamilySpec("jailbreak", "jailbreak", "jailbreak", "jailbreak"),
     SignalFamilySpec("pii", "pii", "pii", "pii"),
+    SignalFamilySpec("kb", "kb", "kb", "kb"),
 )
 
 LEGACY_SIGNAL_KEY_TO_CANONICAL = {
@@ -130,6 +133,21 @@ def build_signal_reference_index(signals: Any) -> set[str]:
                     names.add(f"{name}:{suffix}")
                 continue
             names.add(name)
+
+    return names
+
+
+def build_projection_reference_index(projections: Any) -> set[str]:
+    """Build the valid decision reference names for declared projection outputs."""
+    names: set[str] = set()
+    if not projections:
+        return names
+
+    for mapping in getattr(projections, "mappings", None) or []:
+        for output in getattr(mapping, "outputs", None) or []:
+            name = getattr(output, "name", None)
+            if name:
+                names.add(name)
 
     return names
 

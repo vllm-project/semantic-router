@@ -190,6 +190,8 @@ config:
           - math
         quality_score: 0.85
   global:
+    model_catalog:
+      kbs: []
     router:
       clear_route_cache: true
       strategy: priority
