@@ -56,4 +56,13 @@ global:
       classifier:
         preference:
           use_contrastive: false # optional override; default is true
+          prototype_scoring:
+            enabled: true
+            cluster_similarity_threshold: 0.9
+            max_prototypes: 8
+            best_weight: 0.75
+            top_m: 2
+            margin_threshold: 0.05
 ```
+
+In contrastive mode, the router embeds each preference rule's descriptions and examples, compresses them into representative prototypes when `prototype_scoring` is enabled, and compares the incoming request against those prototypes. `margin_threshold` lets you reject ambiguous winners instead of forcing a weak preference match.

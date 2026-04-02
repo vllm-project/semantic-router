@@ -1,4 +1,4 @@
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 
 import {
   buildChoicesArray,
@@ -28,63 +28,55 @@ type ExecuteTools = (
 ) => Promise<ToolResult[]>
 
 interface RunPlaygroundTaskOptions {
-  abortControllerRef: MutableRefObject<AbortController | null>
-  activeTaskRef: MutableRefObject<PlaygroundTask | null>
   buildTaskTools: (task: PlaygroundTask) => ToolDefinition[]
   clawManagementDisabled: boolean
+  clearConversationActiveTask: (conversationId: string, taskId: string) => void
   endpoint: string
   executeTools: ExecuteTools
   expandedToolCardCount: number
   generateId: () => string
   getConversationMessagesSnapshot: (conversationId: string) => Message[]
   getCurrentConversationId: () => string
-  isLoadingRef: MutableRefObject<boolean>
-  setActiveTask: Dispatch<SetStateAction<PlaygroundTask | null>>
-  setError: Dispatch<SetStateAction<string | null>>
-  setErrorConversationId: Dispatch<SetStateAction<string | null>>
+  registerAbortController: (conversationId: string, controller: AbortController | null) => void
+  setConversationError: (conversationId: string, error: string | null) => void
+  setConversationHeaderReveal: (
+    conversationId: string,
+    headers: Record<string, string> | null,
+    visible?: boolean
+  ) => void
+  setConversationThinking: (conversationId: string, visible: boolean) => void
   setExpandedToolCards: Dispatch<SetStateAction<Set<string>>>
-  setHeaderRevealConversationId: Dispatch<SetStateAction<string | null>>
-  setIsLoading: Dispatch<SetStateAction<boolean>>
-  setPendingHeaders: Dispatch<SetStateAction<Record<string, string> | null>>
-  setShowHeaderReveal: Dispatch<SetStateAction<boolean>>
-  setShowThinking: Dispatch<SetStateAction<boolean>>
   task: PlaygroundTask
   updateConversationMessages: UpdateConversationMessages
 }
 
 export const runPlaygroundTask = async ({
-  abortControllerRef,
-  activeTaskRef,
   buildTaskTools,
   clawManagementDisabled,
+  clearConversationActiveTask,
   endpoint,
   executeTools,
   expandedToolCardCount,
   generateId,
   getConversationMessagesSnapshot,
   getCurrentConversationId,
-  isLoadingRef,
-  setActiveTask,
-  setError,
-  setErrorConversationId,
+  registerAbortController,
+  setConversationError,
+  setConversationHeaderReveal,
+  setConversationThinking,
   setExpandedToolCards,
-  setHeaderRevealConversationId,
-  setIsLoading,
-  setPendingHeaders,
-  setShowHeaderReveal,
-  setShowThinking,
   task,
   updateConversationMessages,
 }: RunPlaygroundTaskOptions): Promise<void> => {
   const trimmedInput = task.prompt.trim()
   if (!trimmedInput) return
 
-  setError(null)
-  setErrorConversationId(null)
+  setConversationError(task.conversationId, null)
 
   const assistantMessageId = generateId()
   const responseHeaders: Record<string, string> = {}
   const latestThinkingProcessRef = { current: '' }
+  const abortController = new AbortController()
   const userMessage: Message = {
     id: generateId(),
     role: 'user',
@@ -100,17 +92,13 @@ export const runPlaygroundTask = async ({
   }
 
   updateConversationMessages(task.conversationId, prev => [...prev, userMessage, assistantMessage])
-  isLoadingRef.current = true
-  setIsLoading(true)
-  setPendingHeaders(null)
-  setHeaderRevealConversationId(null)
-  setShowHeaderReveal(false)
-  setShowThinking(true)
+  registerAbortController(task.conversationId, abortController)
+  setConversationHeaderReveal(task.conversationId, null)
+  setConversationThinking(task.conversationId, true)
 
   let cancelStreamingChoiceSync = () => {}
 
   try {
-    abortControllerRef.current = new AbortController()
     const activeTools = buildTaskTools(task)
     const chatMessages = buildChatMessages(
       getConversationMessagesSnapshot(task.conversationId),
@@ -122,7 +110,7 @@ export const runPlaygroundTask = async ({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
-      signal: abortControllerRef.current.signal,
+      signal: abortController.signal,
     })
 
     if (!response.ok) {
@@ -131,10 +119,12 @@ export const runPlaygroundTask = async ({
 
     Object.assign(responseHeaders, collectResponseHeaders(response))
     if (Object.keys(responseHeaders).length > 0) {
-      setPendingHeaders(responseHeaders)
-      setHeaderRevealConversationId(task.conversationId)
-      setShowThinking(false)
-      setShowHeaderReveal(task.conversationId === getCurrentConversationId())
+      setConversationHeaderReveal(
+        task.conversationId,
+        responseHeaders,
+        task.conversationId === getCurrentConversationId()
+      )
+      setConversationThinking(task.conversationId, false)
     }
 
     const choiceContents: Map<number, ChoiceAccumulator> = new Map()
@@ -292,9 +282,9 @@ export const runPlaygroundTask = async ({
 
     if (hasToolCalls) {
       await runToolLoop({
-        abortControllerRef,
         activeTools,
         assistantMessageId,
+        abortSignal: abortController.signal,
         endpoint,
         executeTools,
         expandedToolCardCount,
@@ -311,7 +301,7 @@ export const runPlaygroundTask = async ({
 
     const finalChoices: Choice[] | undefined = isRatingsMode ? buildChoicesArray(choiceContents) : undefined
     const finalThinkingProcess = latestThinkingProcessRef.current || getFirstChoice(choiceContents)?.reasoningContent || ''
-    setShowThinking(false)
+    setConversationThinking(task.conversationId, false)
     streamingChoiceSync.drain()
     updateConversationMessages(task.conversationId, prev =>
       prev.map(message =>
@@ -332,20 +322,14 @@ export const runPlaygroundTask = async ({
     if (err instanceof Error && err.name === 'AbortError') {
       return
     }
-    setError(err instanceof Error ? err.message : 'Unknown error')
-    setErrorConversationId(task.conversationId)
+    setConversationError(task.conversationId, err instanceof Error ? err.message : 'Unknown error')
     updateConversationMessages(task.conversationId, prev =>
       prev.filter(message => message.id !== assistantMessageId)
     )
   } finally {
     cancelStreamingChoiceSync()
-    isLoadingRef.current = false
-    setIsLoading(false)
-    setShowThinking(false)
-    if (activeTaskRef.current?.id === task.id) {
-      activeTaskRef.current = null
-    }
-    setActiveTask(current => (current?.id === task.id ? null : current))
-    abortControllerRef.current = null
+    setConversationThinking(task.conversationId, false)
+    clearConversationActiveTask(task.conversationId, task.id)
+    registerAbortController(task.conversationId, null)
   }
 }

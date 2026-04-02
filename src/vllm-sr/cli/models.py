@@ -199,6 +199,34 @@ class ComplexityCandidates(BaseModel):
     """Complexity candidates configuration."""
 
     candidates: List[str]
+    image_candidates: Optional[List[str]] = None
+
+
+class PrototypeScoringConfig(BaseModel):
+    """Prototype-bank construction and scoring controls for embedding-backed signals."""
+
+    enabled: Optional[bool] = None
+    cluster_similarity_threshold: Optional[float] = None
+    max_prototypes: Optional[int] = None
+    best_weight: Optional[float] = None
+    top_m: Optional[int] = None
+    margin_threshold: Optional[float] = None
+
+
+class EmbeddingClassifierConfig(BaseModel):
+    """Embedding classifier tuning, including prototype-aware label scoring controls."""
+
+    model_type: Optional[str] = None
+    preload_embeddings: Optional[bool] = None
+    target_dimension: Optional[int] = None
+    target_layer: Optional[int] = None
+    enable_soft_matching: Optional[bool] = None
+    top_k: Optional[int] = None
+    min_score_threshold: Optional[float] = None
+    prototype_scoring: Optional[PrototypeScoringConfig] = None
+
+    class Config:
+        extra = "allow"
 
 
 class ComplexityRule(BaseModel):
@@ -812,9 +840,9 @@ class EmbeddingModelsConfig(BaseModel):
         None,
         description="Path to BERT/MiniLM model (recommended for memory retrieval)",
     )
-    embedding_config: Optional[Dict[str, Any]] = Field(
+    embedding_config: Optional[EmbeddingClassifierConfig] = Field(
         default=None,
-        description="Embedding classifier tuning (model_type/target_dimension/top_k/etc.)",
+        description="Embedding classifier tuning (model_type/target_dimension/top_k/prototype_scoring/etc.)",
     )
     use_cpu: bool = Field(True, description="Use CPU for inference")
 

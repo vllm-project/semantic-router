@@ -1,4 +1,4 @@
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 
 import {
   consumeEventStream,
@@ -24,9 +24,9 @@ type ExecuteTools = (
 ) => Promise<ToolResult[]>
 
 interface RunToolLoopOptions {
-  abortControllerRef: MutableRefObject<AbortController | null>
   activeTools: ToolDefinition[]
   assistantMessageId: string
+  abortSignal?: AbortSignal
   endpoint: string
   executeTools: ExecuteTools
   expandedToolCardCount: number
@@ -45,9 +45,9 @@ interface RunToolLoopOptions {
 }
 
 export const runToolLoop = async ({
-  abortControllerRef,
   activeTools,
   assistantMessageId,
+  abortSignal,
   endpoint,
   executeTools,
   expandedToolCardCount,
@@ -92,7 +92,7 @@ export const runToolLoop = async ({
     )
 
     const toolResults = await executeTools(currentToolCalls, {
-      signal: abortControllerRef.current?.signal,
+      signal: abortSignal,
     })
 
     toolResults.forEach(result => {
@@ -146,7 +146,7 @@ export const runToolLoop = async ({
         tools: activeTools,
         tool_choice: 'auto',
       }),
-      signal: abortControllerRef.current?.signal,
+      signal: abortSignal,
     })
 
     if (!followUpResponse.ok) {

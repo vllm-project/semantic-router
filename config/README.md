@@ -22,6 +22,7 @@ Inside canonical `config.yaml`:
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
 - `global.services.router_replay.enabled` is the router-wide replay default; when it is on, decisions inherit replay capture unless a route-local `router_replay` plugin sets `enabled: false`
 - embedding fallback tuning such as `global.model_catalog.embeddings.semantic.embedding_config.top_k` lives under the router-owned model catalog, not under individual signal rules
+- prototype-aware exemplar compression and label scoring live alongside their owning signal families: `global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring`, `global.model_catalog.modules.classifier.preference.prototype_scoring`, `global.model_catalog.kbs[].prototype_scoring`, and `global.model_catalog.modules.complexity.prototype_scoring`
 - reusable startup-loaded knowledge bases live under `global.model_catalog.kbs[]`, while `routing.signals.kb[]` binds label/group matches into normal routing signals
 - `global.router.config_source` selects the router's steady-state config source; the exhaustive reference uses `file`, while Kubernetes CRD reconciliation uses `kubernetes`
 - router-owned model-backed module config lives under `global.model_catalog.modules`

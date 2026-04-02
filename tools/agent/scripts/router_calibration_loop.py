@@ -186,7 +186,7 @@ def add_eval_subparser(subparsers: argparse._SubParsersAction) -> None:
 
 def add_deploy_subparser(subparsers: argparse._SubParsersAction) -> None:
     deploy = subparsers.add_parser(
-        "deploy", help="Deploy a YAML config to the live router"
+        "deploy", help="Replace the live router config with a YAML document"
     )
     deploy.add_argument(
         "--router-url",
@@ -225,7 +225,7 @@ def add_validate_subparser(subparsers: argparse._SubParsersAction) -> None:
 
 def add_run_subparser(subparsers: argparse._SubParsersAction) -> None:
     run = subparsers.add_parser(
-        "run", help="Run snapshot -> eval -> validate -> deploy -> eval"
+        "run", help="Run snapshot -> eval -> validate -> replace-deploy -> eval"
     )
     run.add_argument(
         "--router-url",

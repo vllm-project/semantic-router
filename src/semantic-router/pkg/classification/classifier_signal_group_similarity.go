@@ -165,36 +165,66 @@ func (c *Classifier) embeddingRuleCentroid(
 
 func (c *EmbeddingClassifier) ensureCandidateEmbeddings() error {
 	if len(c.candidateEmbeddings) > 0 {
+		if len(c.rulePrototypeBanks) == 0 {
+			c.rebuildRulePrototypeBanks()
+		}
 		return nil
 	}
 	return c.preloadCandidateEmbeddings()
 }
 
 func (c *EmbeddingClassifier) ruleCentroid(rule config.EmbeddingRule) ([]float32, error) {
-	if len(rule.Candidates) == 0 {
-		return nil, fmt.Errorf("embedding rule %q has no candidates", rule.Name)
+	if centroid, ok := prototypeBankCentroid(c.rulePrototypeBanks[rule.Name]); ok {
+		return centroid, nil
 	}
 	if err := c.ensureCandidateEmbeddings(); err != nil {
 		return nil, err
 	}
+	return c.candidateRuleCentroid(rule)
+}
 
-	var centroid []float32
+func prototypeBankCentroid(bank *prototypeBank) ([]float32, bool) {
+	if bank == nil || len(bank.prototypes) == 0 {
+		return nil, false
+	}
+	embeddings := make([][]float32, 0, len(bank.prototypes))
+	for _, prototype := range bank.prototypes {
+		embeddings = append(embeddings, prototype.Embedding)
+	}
+	return averageEmbeddings(embeddings), true
+}
+
+func (c *EmbeddingClassifier) candidateRuleCentroid(rule config.EmbeddingRule) ([]float32, error) {
+	if len(rule.Candidates) == 0 {
+		return nil, fmt.Errorf("embedding rule %q has no candidates", rule.Name)
+	}
+
+	embeddings := make([][]float32, 0, len(rule.Candidates))
 	for _, candidate := range rule.Candidates {
 		embedding, ok := c.candidateEmbeddings[candidate]
 		if !ok {
 			return nil, fmt.Errorf("candidate %q has no embedding", candidate)
 		}
-		if centroid == nil {
-			centroid = make([]float32, len(embedding))
-		}
+		embeddings = append(embeddings, embedding)
+	}
+	return averageEmbeddings(embeddings), nil
+}
+
+func averageEmbeddings(embeddings [][]float32) []float32 {
+	if len(embeddings) == 0 {
+		return nil
+	}
+
+	centroid := make([]float32, len(embeddings[0]))
+	for _, embedding := range embeddings {
 		for i, value := range embedding {
 			centroid[i] += value
 		}
 	}
 
-	scale := float32(len(rule.Candidates))
+	scale := float32(len(embeddings))
 	for i := range centroid {
 		centroid[i] /= scale
 	}
-	return centroid, nil
+	return centroid
 }

@@ -163,6 +163,7 @@ func defaultCanonicalModelModules() CanonicalModelModules {
 	return CanonicalModelModules{
 		PromptGuard:             defaultPromptGuardModule(),
 		Classifier:              defaultClassifierModule(),
+		Complexity:              ComplexityModelConfig{}.WithDefaults(),
 		HallucinationMitigation: defaultHallucinationModule(),
 		FeedbackDetector:        defaultFeedbackDetectorModule(),
 	}
