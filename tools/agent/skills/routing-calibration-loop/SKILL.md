@@ -55,7 +55,7 @@ description: Calibrates routing changes against a live router endpoint with exec
    - Prefer manifest-owned assets as defaults, but allow explicit YAML / DSL overrides for any other routing profile.
    - Keep validation output with the loop artifacts so validator behavior can be reviewed alongside runtime eval output.
 6. Deploy durably and re-evaluate.
-   - Use `PATCH /config/router` for versioned merge updates that persist and hot-reload. Reserve `PUT /config/router` for explicit full-document replacement work.
+   - Use `PUT /config/router` for versioned full-document replacement so the live router exactly matches the canonical YAML being calibrated.
    - After every config update, wait for `GET /ready` to return `ready=true` before trusting `eval` results. Do not treat a successful update response as proof that router initialization has finished.
    - Re-run the same probe suite after deploy and compare before / after success rate and per-probe traces.
 7. Close the loop with structured reflection.
@@ -66,8 +66,7 @@ description: Calibrates routing changes against a live router endpoint with exec
 
 ## Gotchas
 
-- Do not default to `PUT /config/router` for maintained routing work. It is a full-document replace and will drop omitted config branches by design.
-- The calibration loop's default durable write path is `PATCH /config/router`, so partial maintained assets only change the branches they own.
+- The calibration loop now deploys with `PUT /config/router`, so the calibrated YAML must be a complete router document, not a partial merge fragment.
 - Do not declare success just because one crafted query passes. Probe quality is part of the task; decision-level robustness should be checked with multiple variants, not just one trigger phrase.
 - If runtime eval looks correct and validation still looks wrong, assume validator semantics may need work rather than forcing a worse route design.
 - If deploy succeeds but success rate regresses, capture the returned version and use the versions endpoint before continuing.

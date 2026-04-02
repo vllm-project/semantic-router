@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import ViewPanel, { type ViewPanelAction } from '../components/ViewPanel'
+import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { canAccessReplayFlowDetails } from '../utils/accessControl'
 
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
@@ -18,6 +20,7 @@ import type { InsightsRecord } from './insightsPageTypes'
 export default function InsightsRecordPage() {
   const navigate = useNavigate()
   const { recordId } = useParams<{ recordId: string }>()
+  const { user } = useAuth()
   const { isReadonly } = useReadonly()
   const [record, setRecord] = useState<InsightsRecord | null>(null)
   const [loading, setLoading] = useState(true)
@@ -143,7 +146,10 @@ export default function InsightsRecordPage() {
           {!loading && !error && record ? (
             <ViewPanel
               title={buildInsightsRecordTitle(record)}
-              sections={buildInsightsRecordSections(record, { isReadonly })}
+              sections={buildInsightsRecordSections(record, {
+                isReadonly,
+                canViewReplayFlowDetails: canAccessReplayFlowDetails(user),
+              })}
               onClose={() => navigate('/insights')}
               closeLabel="Back to Insights"
               actions={panelActions}

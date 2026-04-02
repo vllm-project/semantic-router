@@ -1585,6 +1585,13 @@ global:
           enable_soft_matching: true
           top_k: 1
           min_score_threshold: 0.45
+          prototype_scoring:
+            enabled: true
+            cluster_similarity_threshold: 0.9
+            max_prototypes: 8
+            best_weight: 0.75
+            top_m: 2
+            margin_threshold: 0.0
     system:
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
       domain_classifier: models/mmbert32k-intent-classifier-merged
@@ -1616,6 +1623,13 @@ global:
           path: kb/privacy/
           manifest: labels.json
         threshold: 0.55
+        prototype_scoring:
+          enabled: true
+          cluster_similarity_threshold: 0.9
+          max_prototypes: 8
+          best_weight: 0.75
+          top_m: 2
+          margin_threshold: 0.0
         label_thresholds:
           prompt_injection: 0.7
         groups:
@@ -1717,6 +1731,21 @@ global:
         preference:
           use_contrastive: true
           embedding_model: models/preference-encoder
+          prototype_scoring:
+            enabled: true
+            cluster_similarity_threshold: 0.9
+            max_prototypes: 8
+            best_weight: 0.75
+            top_m: 2
+            margin_threshold: 0.0
+      complexity:
+        prototype_scoring:
+          enabled: true
+          cluster_similarity_threshold: 0.9
+          max_prototypes: 6
+          best_weight: 0.75
+          top_m: 2
+          margin_threshold: 0.0
       hallucination_mitigation:
         enabled: true
         on_hallucination_detected: annotate

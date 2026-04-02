@@ -164,6 +164,12 @@ func assertReferenceConfigEmbeddingCatalogCoverage(t testingT, embeddings map[st
 		reflect.TypeOf(HNSWConfig{}),
 		"global.model_catalog.embeddings.semantic.embedding_config",
 	)
+	assertMapCoversStructFields(
+		t,
+		mustMapAt(t, embeddings, "semantic", "embedding_config", "prototype_scoring"),
+		reflect.TypeOf(PrototypeScoringConfig{}),
+		"global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring",
+	)
 }
 
 func assertReferenceConfigExternalCatalogCoverage(t testingT, external []interface{}) {
@@ -184,6 +190,12 @@ func assertReferenceConfigKnowledgeBaseCoverage(t testingT, kbs []interface{}) {
 		reflect.TypeOf(KnowledgeBaseSource{}),
 		"global.model_catalog.kbs[].source",
 	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, kbs, "prototype_scoring", "global.model_catalog.kbs"),
+		reflect.TypeOf(PrototypeScoringConfig{}),
+		"global.model_catalog.kbs[].prototype_scoring",
+	)
 }
 
 func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]interface{}) {
@@ -191,6 +203,7 @@ func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]int
 	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_compression"), reflect.TypeOf(PromptCompressionConfig{}), "global.model_catalog.modules.prompt_compression")
 	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_guard"), reflect.TypeOf(CanonicalPromptGuardModule{}), "global.model_catalog.modules.prompt_guard")
 	assertReferenceConfigClassifierModuleCoverage(t, mustMapAt(t, modules, "classifier"))
+	assertReferenceConfigComplexityModuleCoverage(t, mustMapAt(t, modules, "complexity"))
 	assertReferenceConfigHallucinationModuleCoverage(t, mustMapAt(t, modules, "hallucination_mitigation"))
 	assertMapCoversStructFields(t, mustMapAt(t, modules, "feedback_detector"), reflect.TypeOf(CanonicalFeedbackDetectorModule{}), "global.model_catalog.modules.feedback_detector")
 	assertMapCoversStructFields(t, mustMapAt(t, modules, "modality_detector"), reflect.TypeOf(ModalityDetectorConfig{}), "global.model_catalog.modules.modality_detector")
@@ -202,6 +215,22 @@ func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[st
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "mcp"), reflect.TypeOf(MCPCategoryModel{}), "global.model_catalog.modules.classifier.mcp")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "pii"), reflect.TypeOf(CanonicalPIIModule{}), "global.model_catalog.modules.classifier.pii")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "preference"), reflect.TypeOf(PreferenceModelConfig{}), "global.model_catalog.modules.classifier.preference")
+	assertMapCoversStructFields(
+		t,
+		mustMapAt(t, classifier, "preference", "prototype_scoring"),
+		reflect.TypeOf(PrototypeScoringConfig{}),
+		"global.model_catalog.modules.classifier.preference.prototype_scoring",
+	)
+}
+
+func assertReferenceConfigComplexityModuleCoverage(t testingT, complexity map[string]interface{}) {
+	assertMapCoversStructFields(t, complexity, reflect.TypeOf(ComplexityModelConfig{}), "global.model_catalog.modules.complexity")
+	assertMapCoversStructFields(
+		t,
+		mustMapAt(t, complexity, "prototype_scoring"),
+		reflect.TypeOf(PrototypeScoringConfig{}),
+		"global.model_catalog.modules.complexity.prototype_scoring",
+	)
 }
 
 func assertReferenceConfigHallucinationModuleCoverage(t testingT, hallucination map[string]interface{}) {

@@ -335,6 +335,24 @@ test.describe('Playground Chat Component', () => {
     await expect(assistantMessage.getByRole('link', { name: '[2]' })).toHaveAttribute('href', 'https://example.com/source-two');
   });
 
+  test('renders markdown while the response is still streaming', async ({ page }) => {
+    await mockStreamingChatFetch(page, [
+      chatStreamChunk({ role: 'assistant', content: '' }),
+      chatStreamChunk({ content: '# Live heading\n' }),
+      chatStreamChunk({ content: '\n\nStreaming body text keeps arriving.' }),
+      chatStreamChunk({ content: '\n\nMore markdown-friendly content follows.' }),
+      'data: [DONE]\n\n',
+    ], 500);
+
+    await page.getByPlaceholder('Ask me anything...').fill('Stream markdown formatting');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    const assistantMessage = page.locator('[data-message-role="assistant"]').last();
+
+    await expect(assistantMessage.getByRole('heading', { name: 'Live heading' })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
+  });
+
   test('does not send on Enter while IME composition is active', async ({ page }) => {
     let requestCount = 0;
     await page.route('**/api/router/v1/chat/completions', async route => {
@@ -853,6 +871,49 @@ test.describe('Playground Chat Component', () => {
 
     await expect(restoredQueue).toHaveCount(0);
     await expect.poll(() => readStoredQueuePrompts(page)).toEqual([]);
+  });
+
+  test('isolates queued work per conversation so a new conversation can run immediately', async ({ page }) => {
+    let requestCount = 0;
+    await page.route('**/api/router/v1/chat/completions', async route => {
+      requestCount += 1;
+      const body = route.request().postDataJSON() as { messages?: Array<{ role?: string; content?: string }> };
+      const prompt = [...(body.messages ?? [])]
+        .reverse()
+        .find(message => message.role === 'user')
+        ?.content ?? `Request ${requestCount}`;
+
+      const delayMs = prompt === 'A first task' ? 6000 : 600;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: chatStreamBody(`Response for ${prompt}`),
+      });
+    });
+
+    const input = page.getByPlaceholder('Ask me anything...');
+
+    await input.fill('A first task');
+    await input.press('Enter');
+    await expect.poll(() => requestCount).toBe(1);
+
+    await input.fill('A queued task');
+    await input.press('Enter');
+    await expect(page.getByTestId('playground-task-queue')).toContainText('A queued task');
+    await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['A queued task']);
+
+    await page.getByRole('button', { name: 'New conversation' }).click();
+    await input.fill('B direct task');
+    await input.press('Enter');
+
+    await expect.poll(() => requestCount).toBe(2);
+    await expect(page.getByText('Response for B direct task')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('playground-task-queue')).toHaveCount(0);
+    await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['A queued task']);
   });
 
   test('allows queued prompts to be edited from the overflow menu', async ({ page }) => {

@@ -69,9 +69,15 @@ global:
           enable_soft_matching: true
           top_k: 1
           min_score_threshold: 0.5
+          prototype_scoring:
+            enabled: true
+            cluster_similarity_threshold: 0.9
+            max_prototypes: 8
+            best_weight: 0.75
+            top_m: 2
+            margin_threshold: 0.05
 ```
 
-The router sorts embedding rules by aggregated similarity and emits at most `top_k`
-matches into routing. The default is `1`, so only the strongest embedding signal is
-returned unless you explicitly raise the limit. Set `top_k: 0` if you need the
-legacy "return every matched embedding rule" behavior.
+`prototype_scoring` compresses each embedding rule's candidate bank into a smaller set of representative prototypes, then scores the rule from those prototypes instead of relying on one flat candidate list forever.
+
+The router now scores every embedding rule first and only then applies `top_k` as an emission limit. The default is `1`, so only the strongest embedding signal is returned unless you explicitly raise the limit. Set `top_k: 0` if you need the legacy "return every matched embedding rule" behavior.
