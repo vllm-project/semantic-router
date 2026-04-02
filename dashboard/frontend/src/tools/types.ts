@@ -197,3 +197,64 @@ export interface OpenWebResult {
   length: number
   truncated: boolean
 }
+
+export interface CurrentTimeArgs {
+  timezone?: string
+  locale?: string
+}
+
+export interface CurrentTimeResult {
+  timezone: string
+  locale: string
+  iso: string
+  local_date: string
+  local_time: string
+  local_datetime: string
+  weekday: string
+  unix_ms: number
+  utc_offset?: string
+}
+
+export interface CalculateArgs {
+  expression: string
+}
+
+export interface CalculateResult {
+  expression: string
+  result: number
+  formatted_result: string
+}
+
+export interface WeatherArgs {
+  location: string
+  unit?: 'celsius' | 'fahrenheit'
+}
+
+export interface WeatherLocationResult {
+  name: string
+  admin1?: string
+  country?: string
+  latitude: number
+  longitude: number
+  timezone: string
+}
+
+export interface WeatherCurrentResult {
+  time: string
+  temperature: number
+  apparent_temperature?: number
+  temperature_unit: string
+  condition: string
+  weather_code: number
+  is_day: boolean
+  wind_speed?: number
+  wind_speed_unit?: string
+  wind_direction?: number
+  precipitation?: number
+  precipitation_unit?: string
+}
+
+export interface WeatherResult {
+  location: WeatherLocationResult
+  current: WeatherCurrentResult
+}

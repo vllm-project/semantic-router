@@ -435,6 +435,75 @@ test.describe('Playground Chat Component', () => {
     expect(toolMessage?.content).not.toBe('null');
   });
 
+  test('executes the built-in calculate tool and forwards the structured result', async ({ page }) => {
+    await page.evaluate(async () => {
+      const originalFetch = window.fetch.bind(window);
+      const encoder = new TextEncoder();
+      let completionRequestCount = 0;
+
+      const streamResponse = (chunks: string[]) => new Response(new ReadableStream({
+        start(controller) {
+          for (const chunk of chunks) {
+            controller.enqueue(encoder.encode(chunk));
+          }
+          controller.close();
+        },
+      }), {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+      });
+
+      window.fetch = async (input, init) => {
+        const url = typeof input === 'string'
+          ? input
+          : input instanceof Request
+            ? input.url
+            : String(input);
+
+        if (url.includes('/api/router/v1/chat/completions')) {
+          completionRequestCount += 1;
+
+          if (completionRequestCount === 1) {
+            return streamResponse([
+              'data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_calculate_1","type":"function","function":{"name":"calculate","arguments":"{\\"expression\\":\\"2 + 2 * 3\\"}"}}]}}]}\n\n',
+              'data: {"choices":[{"index":0,"finish_reason":"tool_calls"}]}\n\n',
+              'data: [DONE]\n\n',
+            ]);
+          }
+
+          if (completionRequestCount === 2) {
+            const requestBody = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+            (window as typeof window & { __lastCalculateFollowUp?: unknown }).__lastCalculateFollowUp = requestBody;
+
+            return streamResponse([
+              'data: {"choices":[{"index":0,"delta":{"content":"The answer is 8."}}]}\n\n',
+              'data: [DONE]\n\n',
+            ]);
+          }
+        }
+
+        return originalFetch(input, init);
+      };
+    });
+
+    await page.getByPlaceholder('Ask me anything...').fill('What is 2 + 2 * 3?');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(page.getByText('The answer is 8.')).toBeVisible({ timeout: 10000 });
+
+    const followUpRequest = await page.evaluate(() =>
+      (window as typeof window & { __lastCalculateFollowUp?: { messages?: Array<Record<string, unknown>> } }).__lastCalculateFollowUp
+    );
+
+    const toolMessage = followUpRequest?.messages?.find((message) => message.role === 'tool');
+
+    expect(toolMessage).toBeTruthy();
+    expect(typeof toolMessage?.content).toBe('string');
+    expect(toolMessage?.content).toContain('"formatted_result":"8"');
+  });
+
   test('handles API error gracefully', async ({ page }) => {
     // Mock API to return an error
     await page.route('**/api/router/v1/chat/completions', async (route) => {
