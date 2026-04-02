@@ -114,7 +114,7 @@ var keywordClassifierTests = []keywordClassifierTestCase{
 			{Name: "test-category-3", Operator: "NOR", Keywords: []string{"keyword5", "keyword6"}},
 		},
 	},
-	{
+	{ //nolint:gosec // G101: fake AWS key used intentionally in test
 		name:     "Explicit regex method matches AWS key pattern",
 		text:     "My AWS key is AKIAIOSFODNN7EXAMPLE and it should be caught",
 		expected: "secrets",

@@ -106,7 +106,7 @@ func TestHandleConfigRollbackReadsSourceBackupDirAndSyncsRuntimeOverride(t *test
 		if err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(runtimePath, data, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Clean(runtimePath), data, 0o644); err != nil { //nolint:gosec // G703: path from t.TempDir()
 			return "", err
 		}
 		return runtimePath, nil
@@ -183,7 +183,7 @@ func installRuntimeSyncMirrorRunner(t *testing.T, runtimePath string) {
 		if err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(runtimePath, data, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Clean(runtimePath), data, 0o644); err != nil { //nolint:gosec // G703: path from t.TempDir()
 			return "", err
 		}
 		return runtimePath, nil

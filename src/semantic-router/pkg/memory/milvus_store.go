@@ -372,12 +372,13 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		len(results), len(candidates))
 
 	// Update access tracking in background (reinforcement: S += 1, t = 0).
+	// Uses a detached context so tracking completes even if the request is cancelled.
 	if len(results) > 0 {
 		ids := make([]string, len(results))
 		for i, r := range results {
 			ids[i] = r.Memory.ID
 		}
-		go m.recordRetrievalBatch(ids)
+		go m.recordRetrievalBatch(ids) //nolint:gosec // G118: intentionally detached from request context
 	}
 
 	logging.Debugf("MilvusStore.Retrieve: %d results found", len(results))

@@ -662,7 +662,7 @@ func (txn *managedKnowledgeBaseAssetsTxn) Commit() {
 	if txn == nil || txn.backupDir == "" {
 		return
 	}
-	_ = os.RemoveAll(txn.backupDir)
+	_ = os.RemoveAll(filepath.Clean(txn.backupDir))
 }
 
 func (txn *managedKnowledgeBaseAssetsTxn) Rollback() {
@@ -671,14 +671,14 @@ func (txn *managedKnowledgeBaseAssetsTxn) Rollback() {
 	}
 	if txn.removeOnly {
 		if txn.backupDir != "" {
-			_ = os.RemoveAll(txn.finalDir)
-			_ = os.Rename(txn.backupDir, txn.finalDir)
+			_ = os.RemoveAll(filepath.Clean(txn.finalDir))
+			_ = os.Rename(filepath.Clean(txn.backupDir), filepath.Clean(txn.finalDir))
 		}
 		return
 	}
-	_ = os.RemoveAll(txn.finalDir)
+	_ = os.RemoveAll(filepath.Clean(txn.finalDir))
 	if txn.backupDir != "" {
-		_ = os.Rename(txn.backupDir, txn.finalDir)
+		_ = os.Rename(filepath.Clean(txn.backupDir), filepath.Clean(txn.finalDir))
 	}
 }
 

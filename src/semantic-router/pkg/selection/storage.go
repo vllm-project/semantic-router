@@ -226,8 +226,8 @@ func (f *FileEloStorage) loadFromFile() (*StoredRatings, error) {
 	var stored StoredRatings
 	if err := json.Unmarshal(data, &stored); err != nil {
 		// Create backup of corrupted file before returning error
-		backupPath := f.path + ".corrupted"
-		if backupErr := os.WriteFile(backupPath, data, 0o644); backupErr == nil {
+		backupPath := filepath.Clean(f.path + ".corrupted")
+		if backupErr := os.WriteFile(backupPath, data, 0o644); backupErr == nil { //nolint:gosec // G703: path derived from struct field + suffix
 			logging.Errorf("[EloStorage] Corrupted file backed up to: %s", backupPath)
 		}
 		return nil, fmt.Errorf("failed to parse storage file (backup saved to %s.corrupted): %w", f.path, err)

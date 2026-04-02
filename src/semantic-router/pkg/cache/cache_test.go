@@ -2411,7 +2411,7 @@ development:
 func getMilvusConfigPath() string {
 	// Check for environment variable first
 	if envPath := os.Getenv("MILVUS_CONFIG_PATH"); envPath != "" {
-		if _, err := os.Stat(envPath); err == nil {
+		if _, err := os.Stat(filepath.Clean(envPath)); err == nil {
 			return envPath
 		}
 	}
@@ -2455,10 +2455,10 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 			projectRoot = "."
 		}
 	}
-	resultsDir := filepath.Join(projectRoot, "benchmark_results", "hybrid_vs_milvus")
+	resultsDir := filepath.Clean(filepath.Join(projectRoot, "benchmark_results", "hybrid_vs_milvus"))
 	_ = os.MkdirAll(resultsDir, 0o755)
 	timestamp := time.Now().Format("20060102_150405")
-	csvPath := filepath.Join(resultsDir, fmt.Sprintf("results_%s.csv", timestamp))
+	csvPath := filepath.Clean(filepath.Join(resultsDir, fmt.Sprintf("results_%s.csv", timestamp)))
 	csvFile, err := os.Create(csvPath)
 	if err != nil {
 		b.Logf("Warning: Could not create CSV file at %s: %v", csvPath, err)

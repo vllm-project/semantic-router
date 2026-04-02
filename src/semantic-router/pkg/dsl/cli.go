@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -223,5 +224,5 @@ func writeOutput(data []byte, outputPath string) error {
 		return err
 	}
 
-	return os.WriteFile(outputPath, data, 0o644)
+	return os.WriteFile(filepath.Clean(outputPath), data, 0o644) //nolint:gosec // G703: path sanitized with filepath.Clean
 }

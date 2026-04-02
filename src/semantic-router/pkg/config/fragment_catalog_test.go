@@ -67,7 +67,7 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 			return nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) //nolint:gosec // G122: test walks static config tree, no symlink risk
 		if err != nil {
 			return err
 		}
@@ -94,7 +94,7 @@ func TestConfigFragmentsAvoidRetiredDomainAliases(t *testing.T) {
 			return nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) //nolint:gosec // G122: test walks static config tree, no symlink risk
 		if err != nil {
 			return err
 		}

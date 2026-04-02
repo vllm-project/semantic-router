@@ -675,7 +675,7 @@ func assertTutorialFilesContainRequiredSections(t *testing.T, root string) {
 		if info.IsDir() || filepath.Ext(path) != ".md" {
 			return nil
 		}
-		contentBytes, err := os.ReadFile(path)
+		contentBytes, err := os.ReadFile(path) //nolint:gosec // G122: test walks static doc tree, no symlink risk
 		if err != nil {
 			return err
 		}
@@ -722,7 +722,7 @@ func assertMarkdownTreeDoesNotContainAny(t *testing.T, root string, forbidden []
 		if info.IsDir() || filepath.Ext(path) != ".md" {
 			return nil
 		}
-		contentBytes, err := os.ReadFile(path)
+		contentBytes, err := os.ReadFile(path) //nolint:gosec // G122: test walks static doc tree, no symlink risk
 		if err != nil {
 			return err
 		}

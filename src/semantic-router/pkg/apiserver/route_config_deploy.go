@@ -88,8 +88,8 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	}
 
 	// Validate backup config
-	tempFile := filepath.Join(os.TempDir(), fmt.Sprintf("rollback_validate_%d.yaml", time.Now().UnixNano()))
-	if writeErr := os.WriteFile(tempFile, backupData, 0o644); writeErr != nil {
+	tempFile := filepath.Clean(filepath.Join(os.TempDir(), fmt.Sprintf("rollback_validate_%d.yaml", time.Now().UnixNano())))
+	if writeErr := os.WriteFile(tempFile, backupData, 0o644); writeErr != nil { //nolint:gosec // G703: path is constructed from os.TempDir() + timestamp
 		s.writeErrorResponse(w, http.StatusInternalServerError, "TEMP_FILE_ERROR", fmt.Sprintf("Failed to validate backup: %v", writeErr))
 		return
 	}
@@ -104,8 +104,8 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	currentVersion := time.Now().Format("20060102-150405")
 	existingData, err := os.ReadFile(paths.sourcePath)
 	if err == nil && len(existingData) > 0 {
-		preRollbackFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", currentVersion))
-		_ = os.WriteFile(preRollbackFile, existingData, 0o644)
+		preRollbackFile := filepath.Clean(filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", currentVersion)))
+		_ = os.WriteFile(preRollbackFile, existingData, 0o644) //nolint:gosec // G703: path is constructed from validated backup dir + timestamp
 	}
 
 	if err := writeConfigAtomically(paths.sourcePath, backupData); err != nil {

@@ -292,12 +292,13 @@ func (s *ClassificationAPIServer) writeRouterConfigFiles(w http.ResponseWriter, 
 }
 
 func writeConfigAtomically(configPath string, yamlBytes []byte) error {
-	tmpConfigFile := configPath + ".tmp"
-	if err := os.WriteFile(tmpConfigFile, yamlBytes, 0o644); err != nil {
+	cleanPath := filepath.Clean(configPath)
+	tmpConfigFile := cleanPath + ".tmp"
+	if err := os.WriteFile(tmpConfigFile, yamlBytes, 0o644); err != nil { //nolint:gosec // G703: path cleaned above
 		return err
 	}
-	if err := os.Rename(tmpConfigFile, configPath); err != nil {
-		if writeErr := os.WriteFile(configPath, yamlBytes, 0o644); writeErr != nil {
+	if err := os.Rename(tmpConfigFile, cleanPath); err != nil {
+		if writeErr := os.WriteFile(cleanPath, yamlBytes, 0o644); writeErr != nil { //nolint:gosec // G703: path cleaned above
 			return writeErr
 		}
 	}

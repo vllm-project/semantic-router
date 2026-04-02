@@ -209,5 +209,5 @@ func (s *ClassificationAPIServer) handleGetFileContent(w http.ResponseWriter, r 
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", record.Filename))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(content)
+	_, _ = w.Write(content) //nolint:gosec // G705: binary file download with application/octet-stream content type
 }

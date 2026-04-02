@@ -132,7 +132,7 @@ func TestHeaderInjectionProvider_CustomHeaders(t *testing.T) {
 	}
 	p := NewHeaderInjectionProvider(customMap)
 
-	reqHeaders := map[string]string{
+	reqHeaders := map[string]string{ //nolint:gosec // G101: test data, not real credentials
 		"x-custom-openai-token":    "sk-custom-openai",
 		"x-custom-anthropic-token": "sk-custom-anthropic",
 		"x-custom-gemini-token":    "sk-custom-gemini",
