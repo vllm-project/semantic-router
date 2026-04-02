@@ -15,6 +15,7 @@ import (
 type PreferenceResult struct {
 	Preference string  `json:"route"` // The matched route name
 	Confidence float32 `json:"confidence,omitempty"`
+	Margin     float32 `json:"margin,omitempty"`
 }
 
 // PreferenceClassifier handles route preference matching via external LLM
@@ -41,7 +42,11 @@ func NewPreferenceClassifier(externalCfg *config.ExternalModelConfig, rules []co
 	// Contrastive few-shot preference routing
 	if resolvedLocalCfg.ContrastiveEnabled() {
 		modelType := resolvedLocalCfg.EmbeddingModel
-		contrastive, err := NewContrastivePreferenceClassifier(rules, modelType)
+		contrastive, err := NewContrastivePreferenceClassifierWithConfig(
+			rules,
+			modelType,
+			resolvedLocalCfg.PrototypeScoring,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize contrastive preference classifier: %w", err)
 		}

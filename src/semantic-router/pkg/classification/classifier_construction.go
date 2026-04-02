@@ -128,7 +128,11 @@ func (b *classifierOptionBuilder) addComplexityClassifier() error {
 			return err
 		}
 	}
-	complexityClassifier, err := NewComplexityClassifier(b.cfg.ComplexityRules, modelType)
+	complexityClassifier, err := NewComplexityClassifier(
+		b.cfg.ComplexityRules,
+		modelType,
+		b.cfg.ComplexityModel.WithDefaults().PrototypeScoring,
+	)
 	if err != nil {
 		logging.ComponentErrorEvent("classifier", "complexity_classifier_create_failed", map[string]interface{}{
 			"model_type": modelType,

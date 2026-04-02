@@ -220,6 +220,7 @@ global:
           pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
           model_ref: pii_classifier
         preference: {}
+      complexity: {}
       hallucination_mitigation:
         fact_check:
           model_id: ""

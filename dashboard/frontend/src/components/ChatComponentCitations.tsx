@@ -36,7 +36,7 @@ const injectCitationLinks = (content: string, sources: SearchResult[]): string =
 export const ContentWithCitations = ({
   content,
   sources,
-  isStreaming = false
+  isStreaming = false,
 }: {
   content: string
   sources?: SearchResult[] | unknown
@@ -55,16 +55,12 @@ export const ContentWithCitations = ({
       return null
     }
 
-    if (isStreaming) {
-      return <div className={styles.streamingCitationContent}>{content}</div>
-    }
-
     const markdownContent = (!safeSources || safeSources.length === 0 || !/\[\d+\]/.test(content))
       ? content
       : injectCitationLinks(content, safeSources)
 
     return <MarkdownRenderer content={markdownContent} />
-  }, [content, isStreaming, safeSources])
+  }, [content, safeSources])
 
   return (
     <div className={styles.contentWithCitations} translate={translateAttr}>
